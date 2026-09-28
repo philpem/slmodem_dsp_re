@@ -260,6 +260,40 @@ x86_abs(int v)
  */
 
 /*
+ * ===========================================================================
+ * The destructor -- D2 at 0xd030 and D1 at 0xd0a0, 97 bytes each.
+ * ===========================================================================
+ *
+ * USER-DECLARED NOW, AND THE BLOB IS WHY.  This tree used to leave it
+ * implicit, and the comment below the definition explained `VPCMXF_Delete`
+ * on that basis -- but an implicit destructor is implicitly INLINE, and GCC
+ * 3.4 emits NO out-of-line copy of one (t_vpcmctor.cpp measured exactly
+ * that: no `_ZN12VPcmFloModemD` anywhere in our build).  The blob HAS both
+ * symbols, 97 bytes each, so the original DECLARED its destructor; the
+ * VPcmV34Main leaf pass claims the pair.
+ *
+ * The body is empty; the 97 bytes are the six member destructions the
+ * compiler generates, in reverse declaration order -- `entFilt`
+ * (GenericIIR<float, double> at +0x7f28), `sineWave` (+0x6f9c), `ansam`
+ * (+0x6f5c), `echoCanceller` (+0x6bd0), `v92modem` (+0x6124), `modem`
+ * (+0x1758) -- which is EXACTLY the blob's six calls in the blob's order.
+ * That agreement is the header's member modelling paying off: the six
+ * embedded objects are declared with their real types, so `{}` IS the
+ * original's destructor, whatever its body said.
+ *
+ * IT IS DEFINED IN THIS FILE AND NOT IN VpcmFloModem.cpp, because the TU is
+ * a codegen carrier: the blob's `VPCMXF_Delete` INLINES the destructor (six
+ * member-destructor relocations at 0xf6d5..0xf71b, no `D1` among them),
+ * which GCC only does for a same-TU definition -- exactly the relationship
+ * the original had, with both in VPcmV34Main.cpp.  Defined elsewhere,
+ * `VPCMXF_Delete` becomes one `call _ZN12VPcmFloModemD1Ev`: identical
+ * behaviour, the wrong six instructions.
+ */
+VPcmFloModem::~VPcmFloModem()
+{
+}
+
+/*
  * d110, d140, d170 -- 45 bytes each, and byte-identical bar the destination
  * and the string.  Note the SHAPE: the store happens first and unconditionally,
  * the diagnostic is a tail call, and the argument is re-widened from the byte
@@ -417,78 +451,6 @@ static double entFiltDen[VPCM_ENTFILT_TAPS] = {
  * well defined here for the same reason it is correct there -- `v92modem`
  * precedes `echoCanceller` in the class, so it is fully constructed.
  */
-VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
-			   _tagModemParameters *modemParams,
-			   unsigned int nSamples, V90ComputationalMode v90Mode,
-			   V92ComputationalMode v92Mode)
-	: v34Object(v34Obj),
-	  modem(side, modemParams, &dil, nSamples, v90Mode, 1),
-	  v92modem((V92ModemSide)(side == V90_MODEM_SIDE_ANALOG), modemParams,
-		   nSamples, &dil, v92Mode),
-	  echoCanceller(v92modem.parameters, nSamples, 199),
-	  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),
-	  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),
-	  entFilt(5, 5, entFiltDen, entFiltNum, 99)
-{
-	unsigned int i;
-
-	sysdep_memset(bitVector, 0, sizeof(bitVector));
-	nofBits = 0;
-
-	for (i = 0; i < sizeof(v34BaudAllow); i++)
-		v34BaudAllow[i] = v34initialbauds[i];
-
-	sweepCounter = 0;
-
-	sysdep_memset(cpBitVector, 0, sizeof(cpBitVector));
-
-	terminateJa = 0;
-	terminateCp = 0;
-	terminateCpNot = 0;
-	cpNotLoaded = 0;
-
-	/*
-	 * ZERO HERE AND TWO IN `VPCMXF_Create`, which re-writes five of these
-	 * same fields immediately after this constructor returns.  The two
-	 * functions disagree on this one byte and on `minNofTransmitSequences`
-	 * (0 here, 1 there), so the caller's values are what a constructed
-	 * modem actually starts with.  Both are reproduced as found.
-	 */
-	nofBitsPerSymbol = 0;
-
-	retrainLatch = 0;
-	minNofTransmitSequences = 0;
-	cpNofBits = 0;
-	nofTransmitSequences = 0;
-
-	qcVerifyState = 0;
-	qcTerminateRequested = 0;
-	qcSampleCount = 0;
-	verificationStatus = 0;
-
-	/*
-	 * `andb $0xfb,0x3(%edi)` at 0xfca5 -- bit 2 of `unnamed_0003`, and
-	 * the ONLY thing this constructor writes outside its own object.
-	 * modem_params.h's comment on that byte says "low 3 bits cleared",
-	 * which is `dp_runtime_create`'s doing; this clears one of the three
-	 * again.
-	 */
-	modemParams->unnamed_0003 &= (unsigned char)~0x04u;
-
-	sysdep_memset(block_6c0c, 0, sizeof(block_6c0c));
-
-	/*
-	 * The SAME `(side == analog)` the V92Modem got as its first argument,
-	 * computed once at 0xfab7 and kept in %esi across five calls.
-	 */
-	info0Layout = (side == V90_MODEM_SIDE_ANALOG);
-	pcmSessionType = 0;
-	progressState = 0;
-
-	byte_7f5c = 0;
-	ecMode = 0;
-	ecRampCounter = 0;
-}
 int
 VPcmFloModem::getV90JaBits(short *bits)
 {
@@ -2514,6 +2476,37 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
 	return n;
 }
 
+/* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char vpcmxfterm_off_dem[
+    ((int)__builtin_offsetof(VPcmFloModem, modem.demodulator) == 0x175c)
+    ? 1 : -1];
+#endif
+
+extern "C" void VPCMXF_SessionTermination(VPcmFloModem *self);
+
+/*
+ * `VPCMXF_Delete` is `if (p) { p->~VPcmFloModem(); sysdep_free(p); }`, and
+ * `_ZN12VPcmFloModemD1Ev` at 0xd0a0 is the SAME six calls in the same order,
+ * 0x61 bytes of it -- the destructor defined above, inlined here and emitted
+ * out of line, one source statement producing both.  A hand-written sequence
+ * here would give us a function with no `~VPcmFloModem` behind it.
+ */
+extern "C" void
+VPCMXF_Delete(VPcmFloModem *self)
+{
+	if (self != 0) {
+		self->~VPcmFloModem();
+		sysdep_free(self);
+	}
+}
+
+extern "C" void
+VPCMXF_SessionTermination(VPcmFloModem *self)
+{
+	self->modem.demodulator->sessionTermination();
+}
+
 /*
  * ===========================================================================
  * `VPcmFloModem::qcLineVerification` -- .text+0xf750, 0x30b = 779 bytes
@@ -2735,4 +2728,199 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 	*nbits = 0;			/* 0xf7ff */
 
 	return ret;
+}
+
+extern "C" VPcmFloModem *VPCMXF_Create(int digitalSide, void *v34Object,
+				       _tagModemParameters *dpRuntime,
+				       unsigned int durationMs, int mode);
+extern "C" void VPCMXF_Delete(VPcmFloModem *self);
+extern "C" VPcmFloModem *
+VPCMXF_Create(int digitalSide, void *v34Object,
+	      _tagModemParameters *dpRuntime, unsigned int durationMs,
+	      int mode)
+{
+	VPcmFloModem *self;
+	V90ModemSide side;
+	V90ComputationalMode v90Mode;
+	V92ComputationalMode v92Mode;
+	int maxDataBuffer;
+
+	side = (V90ModemSide)(digitalSide == 0);
+
+	if (digitalSide != 0)
+		maxDataBuffer = (int)(durationMs * 8.0 + 0.5);
+	else
+		maxDataBuffer = (int)(durationMs * 9.6 + 0.5);
+
+	/*
+	 * A two-bit mask and a four-arm switch: bit 0 is the V.90 mode and
+	 * bit 1 the V.92 one.  The object writes it as four arms and not as
+	 * two shifts -- `cmp $0x2` / `jg` / `cmp $0x3` / `dec` / `je` -- so
+	 * the source is a switch, and the `jg` is SIGNED, which is what makes
+	 * `mode` an `int`.  Anything outside 1..3, including a negative, is
+	 * the default and gives both modes zero.
+	 */
+	switch (mode) {
+	case 1:
+		v90Mode = (V90ComputationalMode)1;
+		v92Mode = (V92ComputationalMode)0;
+		break;
+	case 2:
+		v90Mode = (V90ComputationalMode)0;
+		v92Mode = (V92ComputationalMode)1;
+		break;
+	case 3:
+		v90Mode = (V90ComputationalMode)1;
+		v92Mode = (V92ComputationalMode)1;
+		break;
+	default:
+		v90Mode = (V90ComputationalMode)0;
+		v92Mode = (V92ComputationalMode)0;
+		break;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "VPCMXF_Create: side is %s, maxDataBuffer - %d\r\n",
+		    digitalSide != 0 ? "Digital" : "Analog", maxDataBuffer);
+
+	self = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem));
+	new (self) VPcmFloModem(v34Object, side, dpRuntime,
+				 (unsigned int)maxDataBuffer, v90Mode, v92Mode);
+
+	/* See the file comment: the object tests AFTER it constructs. */
+	if (self == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPCMXF_Create: new VPcmFloModem() failed.\n");
+		return 0;
+	}
+
+	self->trainConstel = 0;
+	self->rrnConstel = 0;
+	self->byte_173c = 0;
+	self->droppedToV34 = 0;
+	self->clr = 0;
+
+	self->v34BaudAllow[0] = 1;
+	self->v34BaudAllow[1] = 0;
+	self->v34BaudAllow[2] = 1;
+	self->v34BaudAllow[3] = 1;
+	self->v34BaudAllow[4] = 1;
+	self->v34BaudAllow[5] = 0;
+
+	self->nofBits = 0;
+	self->cpNofBits = 0;
+	/*
+	 * `bitPointer = 0;` BELONGS BELOW THE BAUD TABLE AND NOT BESIDE
+	 * `trainConstel`, AND THE POSITION IS DECODED RATHER THAN CHOSEN --
+	 * but only to within a run of six slots, so read the paragraph before
+	 * moving it back.
+	 *
+	 * It used to be the second statement of this block, which is where
+	 * the object's own store order puts it, and the compiler then hoisted
+	 * the `cpNofBits` store past it: 28 of 495 bytes differed and
+	 * `byteident --why` rejected at row 68, `%ax,0x1738(%ebx)` against
+	 * `%ax,0x7dcc(%ebx)`.  The three 16-bit zero stores -- `bitPointer`
+	 * (+0x1738), `nofBits` (+0x1736) and `cpNofBits` (+0x7dcc) -- came out
+	 * in a rotation of the source order, each taking its zero register in
+	 * emission order.
+	 *
+	 * Seventy cells were compiled with the period compiler: every position
+	 * of each of the three word stores in this 21-statement block (21 each)
+	 * and all 3! orders of the three among their own slots.  **Six reach
+	 * zero differing bytes and they are consecutive** -- `bitPointer`
+	 * anywhere after `cpNofBits` and before `nofTransmitSequences`.  The
+	 * two neighbours of that run are 4 bytes out and nothing else is below
+	 * 5, so the run's EDGES are sharp and its interior is not resolvable.
+	 *
+	 * So this decodes a FACT and not an order (refinement.md's rule 0):
+	 * the author wrote this store after the CP bit counters, not with the
+	 * flag byte at +0x173a.  The slot inside the run is ours; grouping it
+	 * with the other two 16-bit counters is the only reason it is here
+	 * rather than three lines lower.
+	 */
+	self->bitPointer = 0;
+	self->terminateJa = 0;
+	self->terminateCp = 0;
+	self->terminateCpNot = 0;
+	self->cpNotLoaded = 0;
+	self->nofBitsPerSymbol = 2;
+	self->nofTransmitSequences = 0;
+	self->minNofTransmitSequences = 1;
+
+	return self;
+}
+
+VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
+			   _tagModemParameters *modemParams,
+			   unsigned int nSamples, V90ComputationalMode v90Mode,
+			   V92ComputationalMode v92Mode)
+	: v34Object(v34Obj),
+	  modem(side, modemParams, &dil, nSamples, v90Mode, 1),
+	  v92modem((V92ModemSide)(side == V90_MODEM_SIDE_ANALOG), modemParams,
+		   nSamples, &dil, v92Mode),
+	  echoCanceller(v92modem.parameters, nSamples, 199),
+	  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),
+	  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),
+	  entFilt(5, 5, entFiltDen, entFiltNum, 99)
+{
+	unsigned int i;
+
+	sysdep_memset(bitVector, 0, sizeof(bitVector));
+	nofBits = 0;
+
+	for (i = 0; i < sizeof(v34BaudAllow); i++)
+		v34BaudAllow[i] = v34initialbauds[i];
+
+	sweepCounter = 0;
+
+	sysdep_memset(cpBitVector, 0, sizeof(cpBitVector));
+
+	terminateJa = 0;
+	terminateCp = 0;
+	terminateCpNot = 0;
+	cpNotLoaded = 0;
+
+	/*
+	 * ZERO HERE AND TWO IN `VPCMXF_Create`, which re-writes five of these
+	 * same fields immediately after this constructor returns.  The two
+	 * functions disagree on this one byte and on `minNofTransmitSequences`
+	 * (0 here, 1 there), so the caller's values are what a constructed
+	 * modem actually starts with.  Both are reproduced as found.
+	 */
+	nofBitsPerSymbol = 0;
+
+	retrainLatch = 0;
+	minNofTransmitSequences = 0;
+	cpNofBits = 0;
+	nofTransmitSequences = 0;
+
+	qcVerifyState = 0;
+	qcTerminateRequested = 0;
+	qcSampleCount = 0;
+	verificationStatus = 0;
+
+	/*
+	 * `andb $0xfb,0x3(%edi)` at 0xfca5 -- bit 2 of `unnamed_0003`, and
+	 * the ONLY thing this constructor writes outside its own object.
+	 * modem_params.h's comment on that byte says "low 3 bits cleared",
+	 * which is `dp_runtime_create`'s doing; this clears one of the three
+	 * again.
+	 */
+	modemParams->unnamed_0003 &= (unsigned char)~0x04u;
+
+	sysdep_memset(block_6c0c, 0, sizeof(block_6c0c));
+
+	/*
+	 * The SAME `(side == analog)` the V92Modem got as its first argument,
+	 * computed once at 0xfab7 and kept in %esi across five calls.
+	 */
+	info0Layout = (side == V90_MODEM_SIDE_ANALOG);
+	pcmSessionType = 0;
+	progressState = 0;
+
+	byte_7f5c = 0;
+	ecMode = 0;
+	ecRampCounter = 0;
 }

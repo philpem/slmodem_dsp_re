@@ -122,8 +122,9 @@
  },
  {
   "label": "the wanted rate starts at 0 rather than -1",
-  "find": "\tobj->rate_want = -1;",
-  "replace": "\tobj->rate_want = 0;"
+  "find": "\tobj->rate_now = 0;\n\tobj->rate_want = -1;",
+  "replace": "\tobj->rate_now = 0;\n\tobj->rate_want = 0;",
+  "why": "Anchor extended with the preceding `rate_now` store -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_want = -1;` also occurs in VPcmV34InitiateRateRenegotiation; this context makes it unique to VPcmV34Create.  The mutation is unchanged."
  },
  {
   "label": "the mark at +0x248 loses its low byte",
@@ -142,8 +143,9 @@
  },
  {
   "label": "+0x3558 is one less",
-  "find": "\tobj->echo_decay_fact = 0x7fdf;",
-  "replace": "\tobj->echo_decay_fact = 0x7fde;"
+  "find": "\tobj->echo_decay_start = 0x7d0;\n\t*(short *)(m + OB_FA248) = 0;\n\tobj->echo_decay_fact = 0x7fdf;",
+  "replace": "\tobj->echo_decay_start = 0x7d0;\n\t*(short *)(m + OB_FA248) = 0;\n\tobj->echo_decay_fact = 0x7fde;",
+  "why": "Anchor extended with the two preceding stores -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->echo_decay_fact = 0x7fdf;` also occurs in GetVPcmMinimalTxPowerReduction; this context makes it unique to VPcmV34Create.  The mutation is unchanged."
  },
  {
   "label": "the hardware entrance-filter test is inverted",

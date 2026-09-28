@@ -45,9 +45,10 @@
  },
  {
   "label": "reneg: case 5 no longer steps down",
-  "find": "\tcase 5:\n",
-  "replace": "\tcase 9:\n",
-  "fn": "VPcmV34InitiateRateRenegotiation"
+  "find": "\tcase 0:\n\tcase 2:\n\tcase 5:\n",
+  "replace": "\tcase 0:\n\tcase 2:\n\tcase 9:\n",
+  "fn": "VPcmV34InitiateRateRenegotiation",
+  "why": "Anchor extended with the two cases above it -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `\\tcase 5:` occurs five times; this two-case lead-in makes it unique to VPcmV34InitiateRateRenegotiation.  The mutation is unchanged."
  },
  {
   "label": "reneg: case 2 no longer steps down",
@@ -101,9 +102,10 @@
  },
  {
   "label": "reneg: default writes 0 rather than -1",
-  "find": "obj->rate_want = -1;",
-  "replace": "obj->rate_want = 0;",
-  "fn": "VPcmV34InitiateRateRenegotiation"
+  "find": "\tdefault:\n\t\tobj->rate_want = -1;\n\t\tbreak;\n\t}",
+  "replace": "\tdefault:\n\t\tobj->rate_want = 0;\n\t\tbreak;\n\t}",
+  "fn": "VPcmV34InitiateRateRenegotiation",
+  "why": "Anchor extended with its default arm and the switch close -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_want = -1;` also occurs in VPcmV34Create and vpcmcreate.json mutates it; this context makes it unique to the reneg switch.  The mutation is unchanged."
  },
  {
   "label": "hangup: session flag byte not written",
@@ -153,8 +155,9 @@
  },
  {
   "label": "hangup: skips rate_min",
-  "find": "\tobj->rate_min = 0;\n",
-  "replace": ""
+  "find": "\tobj->rate_want = 0;\n\tobj->rate_min = 0;\n\tobj->rate_max = 0;",
+  "replace": "\tobj->rate_want = 0;\n\tobj->rate_max = 0;",
+  "why": "Anchor extended with the two neighbour stores -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_min = 0;` also occurs in VPcmV34Create.  The mutation is unchanged."
  },
  {
   "label": "setv90: tx_flags mask ~0x4018 becomes ~0x4010",
@@ -230,13 +233,15 @@
  },
  {
   "label": "hangup: rx bad_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four",
-  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four"
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+  "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names.  The comment after the closing brace was not moved with the function into VPcmV34Main.cpp (F11432), so the old anchor matched zero times; the three clears and the closing brace are a unique sequence in the merged file.  The mutation is unchanged."
  },
  {
   "label": "hangup: rx good_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four",
-  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n}\n\n/*\n * Which of the four"
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n}\n",
+  "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names, same reason as the entry above.  The mutation is unchanged."
  },
  {
   "label": "reneg: rx bad_run not cleared",

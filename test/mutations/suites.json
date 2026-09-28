@@ -161,7 +161,7 @@
   "build/test/t_psd"
  ],
  "pulse": [
-  "src/call/pulse.c",
+  "src/call/call.c",
   "build/test/t_pulse"
  ],
  "resampler": [
@@ -237,7 +237,7 @@
   "build/test/t_v34datapump"
  ],
  "v34datapump_rrn": [
-  "src/pump/v34/v34pcmif.c",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34datapump"
  ],
  "v34diag": [
@@ -337,7 +337,7 @@
   "build/test/t_v34k56"
  ],
  "v34pcmif": [
-  "src/pump/v34/v34pcmif.c",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34pcmif"
  ],
  "v34pcmrates": [
@@ -601,7 +601,7 @@
   "build/test/t_v90modchain"
  ],
  "v90modemctor": [
-  "src/pump/v90/V90ModemCtor.cpp",
+  "src/pump/v90/V90Modem.cpp",
   "build/test/t_v90modemctor"
  ],
  "v90modemreset": [
@@ -1005,11 +1005,11 @@
   "build/test/t_vpcmtabs"
  ],
  "vpcmxfcreate": [
-  "src/pump/v90/VPcmXfCreate.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmctor"
  ],
  "vpcmxfterm": [
-  "src/pump/v90/VPcmXfTerm.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_v90demod"
  ],
  "mohdet": [
