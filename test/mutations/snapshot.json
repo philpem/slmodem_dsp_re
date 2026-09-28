@@ -221,7 +221,7 @@
    }
   },
   "dialer_grading": {
-   "key": "421d76236f5666bd9cba2df533e9e61045a5b51e61d40d68d4e5714536f89e9d",
+   "key": "07374bacb48927435bf06f2a72a6370d12e2727b88e8cf13d447d3aa002fdb99",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the 'got: %s' banner in IsDialStringInvalid": "caught",
@@ -722,7 +722,7 @@
    }
   },
   "fpmmtd": {
-   "key": "5d20ab55c5baa24c0c1e237357288207741e0d4399e214f7727bb1e4f933d865",
+   "key": "aa6ccb4eae42812916ec1bd075393193ac21bfdb3a3a0b5d622435ef4a78db6b",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "COEF_DC's output scale is one out": "caught",
@@ -730,7 +730,7 @@
    }
   },
   "fpmmtdlayout": {
-   "key": "86fb56617003eda3fc22a9c1f9af1e5b7a92515d827f248f57e604e7da05508f",
+   "key": "188321f5ba0ef8fd93b2f3d534122d9471f5c51bf64911c2b8adca28287a55ed",
    "summary": "2 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "COEF_DC's third coefficient is one out": "equivalent",
@@ -956,7 +956,7 @@
    }
   },
   "fpmtonetickstd": {
-   "key": "43940d36a49a50f5b2c58928bf0150613cf93bc3e783d7f3180218e14ee7da5d",
+   "key": "be59f383f4bfc09da704797b1ba14d34e2eb3839fdff75cd3936e6fd07b9c105",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reversal accounting uses four-sample ticks, making the 450 setting reverse too early": "caught",
@@ -1665,7 +1665,7 @@
    }
   },
   "v32c_fpctl": {
-   "key": "9e3abf9267fae24940c415bbd814dfa20872162f4c6df43cfba6ded74b34fc69",
+   "key": "260c55675819976deb457c9d25ba84abfaf4e3b732b2e5f03d95c4cf8d996367",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "an over-long cleaned block is clamped rather than reported as none": "caught",
@@ -1690,7 +1690,7 @@
    }
   },
   "v32ctad": {
-   "key": "da010122338dc0e3b7065f4b55df7a32e754fd3fab8b72f08f27c2e482d7fc1c",
+   "key": "cc9a9fa8bec7c19732ba480228de2b479ee0b5e0d10849d0fcade8ba5f5bb17c",
    "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the turnaround budget is charged only twice": "caught",
@@ -5132,7 +5132,7 @@
    }
   },
   "v34scrampair": {
-   "key": "e95dc3e5797c3aca1b15157f6e75c8188d9b50ac269f5c66eaf6fae7e933c701",
+   "key": "c3862dab6359d1d5755798fc9c709f2ecedde2bbf32c1e1c6c2283aea66a0c15",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the call and answer receive polynomials are exchanged": "caught",
@@ -5267,7 +5267,7 @@
    }
   },
   "v8detector": {
-   "key": "9db64ef33a1d42911068e852200ad4553c22b1b0477a805a8d5ea462e833e8d0",
+   "key": "678a29c93a88b125dc3f14bc14e8ee2752f3a86888f5a792fbb8c080af6c8a16",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the phase-reversal announcement": "caught",
@@ -5298,7 +5298,7 @@
    }
   },
   "v8dpstd": {
-   "key": "554922c4b35ffa1705b1152150c1976fa1cc06feb5b0350530bf7d75f1d00fa6",
+   "key": "abc3edd5b1d1ebebc9d9249c3f41b78aa27303ccd124ea8c60e63b5ad4ccf6ab",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "sensitivity to correcting the 12-second ANSam departure: configure the five-second nominal": "caught",
@@ -5307,7 +5307,7 @@
    }
   },
   "v8getbit": {
-   "key": "0667267959f234cdcdf34fc4cd6c22f5a0388a9113aa5d17f85544b161f08860",
+   "key": "46d25eccadb21c9ee34673fab7df86e03fd77387bc0b8484866f5c0ddb432725",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "normal v8_getbit emits the low end of the framed word instead of its next high-order bit": "caught",
@@ -5356,7 +5356,7 @@
    }
   },
   "v8hsrxstd": {
-   "key": "f87b56736ffb7e4481d5dae9b54df6dda2cfe5f33361c6216c9aa48ae1dd5267",
+   "key": "d5287bc282d565ff4e4a9396b86dec7411199c76f787834f76c483f11f8b48f1",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "CJ receiver accepts after one octet rather than the reproduced two-octet departure": "caught",
@@ -5393,7 +5393,7 @@
    }
   },
   "v8jmstd": {
-   "key": "352f2b1d0104022e2fc4a8bcb243df86e122a99cd24025d7e270f452a914ee58",
+   "key": "4df4c2add422e8e3486e41ebdd20b015e2371faf55fd4c8fb625e83588767fc0",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Table 7 clear-bit control: force caller-cellular b5 into every rebuilt JM access word": "caught",
@@ -5423,7 +5423,7 @@
    }
   },
   "v8seqstd": {
-   "key": "fa748b1e9a95c48ef70a0b86fb9940f8a049881c29bef18534a75e4efe813974",
+   "key": "433d1677f5add408a914512bf9d1f52eb8f32fc06bd15ea598f32741c279d1d3",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ext_word omits the Table 1 stop bit": "caught",
@@ -5465,7 +5465,7 @@
    }
   },
   "v8updparamsstd": {
-   "key": "6fe4dc36717d722743d9bd2b844db37c141af805b991cd549d266a91fb7a0d60",
+   "key": "055b02d7215976df634e18a9a52621970c1c9d614e43a51aa993713a4b4de8d2",
    "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit": "caught"
@@ -6426,7 +6426,7 @@
    }
   },
   "v90cpdrnstd": {
-   "key": "30fabb73f7e84fb4dd73050bf476bbfe66f4f491673ebc82b735dce13cf8ce55",
+   "key": "1e4fbbcc6dd4f808cde63bd404fd369a7a9b8fc05064318d64dafa020360528f",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the legal CP upper endpoint DRn=22 is capped at 21": "caught",
@@ -6966,7 +6966,7 @@
    }
   },
   "v90demodstd": {
-   "key": "a6fac2b0177ca956693decd855e9eb5568a6efb7e4e27e9220e6afea76fa0c64",
+   "key": "f9718173e3b58d6c28a72ce261b782b14cdb32d91b7b68c733aa373e06ff7201",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "V90 demodulator owner far tap is 22": "caught",
@@ -7719,7 +7719,7 @@
    }
   },
   "v90modstd": {
-   "key": "0457d94330d96997d722557e03a543360fc8299ceb9a117b93b269d94d495f51",
+   "key": "4c34a3cd17013eeb3a6b89cd55863c099f508d433b860c8e9c79aec54c3c0246",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "V90 modulator owner far tap is 22": "caught",
@@ -8855,7 +8855,7 @@
    }
   },
   "v90ratestd": {
-   "key": "a8eed4b9c136464174130ebecaa24a2a16726f8f1f4338c0e892e52e5a4511e8",
+   "key": "4e280a56b5a9be5bf165fcb2a89e261f38dd77e8624c241fd994a0a52e25ff26",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the legal middle rate D=30 is treated as unavailable": "caught",
@@ -9158,7 +9158,7 @@
    }
   },
   "v90sessionflag_p4d": {
-   "key": "e9e67d2d453f5bd8d21de26d67a58599f807ee1d6611a76960843de1f05d467e",
+   "key": "984e3a8f4b398016562ebbcf2ff2a45be07686afd58a4ecb13bb7ce88ca985b3",
    "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "phase 4 demodulator's subobject sits at +0x4c": "caught"
@@ -11493,7 +11493,7 @@
    }
   },
   "vpcmguard": {
-   "key": "57eacfda247594076375021c2c1cc394cda724e67c980fd150f9e0b8ce2e27c8",
+   "key": "087e6d99566a13351a214d3df089268b245b47c1d13f7133df290ef4cadb3bb0",
    "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the mute path is always taken, so the guard is never reached": "caught"
