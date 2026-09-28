@@ -641,7 +641,7 @@
    }
   },
   "fpmfserecv": {
-   "key": "675925117a7154eea6308de379f3991afea85ccc5f83c50c8455bc80548abaa6",
+   "key": "06cb0f97ed43e79e0867328149e07465b86eae852a7675107aa66fe126a9c9ac",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "a one-sample tail is dropped rather than stashed": "caught",
@@ -1545,7 +1545,7 @@
    }
   },
   "v22fp": {
-   "key": "f4cbfc3e11fe5f58944dd32dd4315fa62205ea8b61988e8affc9640b89799cbc",
+   "key": "7b10814512084d90f241f7f7f4f89e712e882d83a3386fa6d2ac33d024689ec7",
    "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the 2400 slicer is installed instead of the 1200 one": "caught",
