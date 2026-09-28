@@ -14,14 +14,13 @@
 /*
  * Maclaurin coefficients for e^x in Q14: entry i is 16384 / (i+1)!.
  *
- *   16384/1!  = 16384      16384/5!  = 136.5  -> 136
- *   16384/2!  =  8192      16384/6!  =  22.8  -> 23
- *   16384/3!  =  2730.7 -> 2730      16384/7! =  3.25 -> 3
- *   16384/4!  =   682.7 -> 683
+ *   16384/1!  = 16384      16384/4!  =   682.7 -> 683
+ *   16384/2!  =  8192      16384/5!  = 136.5  -> 136
+ *   16384/3!  =  2730.7 -> 2730      16384/6!  =  22.8  -> 23
  *
  * The rounding is inconsistent: 2730 and 136 are truncated (2730.67, 136.53)
  * while 683 and 23 are rounded up (682.67, 22.76).  No single rule reproduces
- * all seven, so these are kept as extracted rather than generated -- the
+ * all six, so these are kept as extracted rather than generated -- the
  * design is recovered, the exact arithmetic that produced the last bit is not.
  * The self-check below asserts each entry is within 1 of 16384/(i+1)!, which
  * is enough to catch a transcription error without pretending to a precision
@@ -29,17 +28,38 @@
  *
  * What the values do establish is the identity: FP_Pow is not a general power
  * function, it is exp().
+ *
+ * SIX ENTRIES, AND A SEVENTH READ PAST THEM.  The object's `Fact_FP` symbol is
+ * exactly 12 bytes -- six shorts -- but the loop runs SEVEN terms.  Its test
+ * is `cmp $0x5` against the OLD index at 0x07e1f9, so i=5 continues and i=6 is
+ * processed; the i=6 load at .rodata 0x06d2e therefore lands past the table,
+ * on the next symbol `IIRFilterScales[0]`, whose value is 3 (F11449).  That is
+ * a real over-read in the original.  Its RESULT is reproduced below as
+ * FP_POW_LAST_COEF rather than by the cross-translation-unit adjacency, which
+ * this tree cannot place and which would make the arithmetic depend on link
+ * order.  A seventh entry inside Fact_FP would change the symbol to 14 bytes,
+ * which the object says is wrong.
  */
 #define FP_POW_TERMS 7
+#define FP_POW_TABLE 6
 
-static const short fp_pow_coef[FP_POW_TERMS] = {
-	16384, 8192, 2730, 683, 136, 23, 3,
+static const short Fact_FP[FP_POW_TABLE] = {
+	16384, 8192, 2730, 683, 136, 23,
 };
+
+/* The object's out-of-bounds seventh term: IIRFilterScales[0]. */
+#define FP_POW_LAST_COEF 3
+
+static short
+fp_pow_coef(int i)
+{
+	return (i < FP_POW_TABLE) ? Fact_FP[i] : (short)FP_POW_LAST_COEF;
+}
 
 short
 FP_Pow_coefficient(int i)
 {
-	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef[i] : 0);
+	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef(i) : 0);
 }
 
 short
@@ -97,7 +117,7 @@ FP_Pow(int x)
 		 */
 		for (i = 0; i < FP_POW_TERMS; i++) {
 			int scaled = term >> 14;
-			int contribution = scaled * fp_pow_coef[i];
+			int contribution = scaled * fp_pow_coef(i);
 
 			term = scaled * x;
 			result += contribution;
@@ -111,7 +131,7 @@ FP_Pow(int x)
 		 * which keeps the low bits that the other path discards.
 		 */
 		for (i = 0; i < FP_POW_TERMS; i++) {
-			int product = term * fp_pow_coef[i];
+			int product = term * fp_pow_coef(i);
 			int contribution = product >> 14;
 
 			term = (term * x) >> 14;
