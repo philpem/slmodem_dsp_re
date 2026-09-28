@@ -128778,3 +128778,35 @@ whole-tree state and is left that way.
 boundary OK; `refcheck` 0 dangling / 0 stale; `git diff --check` clean.
 
 (2026-09-28)
+
+**ADDENDUM -- DOES THE DELTA MASK ATTRIBUTION EVIDENCE?  YES, AND THE
+RESIDUAL POINTS AT THE KNOWN OWNER-UNRESOLVED FAMILIES.**  With `.data` and
+`.rodata` no longer size-mismatched, the `.data` local brackets can be read for
+the symbols that are still absent.  Using the blob's `.data` LOCAL symbols
+(with their FILE owners) as brackets:
+
+    V32_MESG        @0x07240  between fsklpfcoeff600(DPSK.c)  and SnrToRetrainTable(V32stc.c)
+    FSEv32_decision @0x074cc  between fsklpfcoeff600(DPSK.c)  and SnrToRetrainTable(V32stc.c)
+    B103_CTL        @0x077c0  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    B103_CFG        @0x077cc  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    AGCb103_CFG     @0x077f4  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    v21_hibnd       @0x06fe0  between StateName(V34hshak.c)     and fsklpfcoeff600(DPSK.c)
+    v21_lobnd       @0x06f60  between StateName(V34hshak.c)     and fsklpfcoeff600(DPSK.c)
+
+`V32_MESG` and `FSEv32_decision` fall in the `V32RXTAB.c`/`V32TXTAB.c` span
+F11405 could not partition; `B103_CTL`/`B103_CFG`/`AGCb103_CFG` fall in the
+B103 slot (two of which ours already defines under the `_data` name).  So the
+residual is the *known* owner-unresolved data families, now with matched
+section sizes -- which is the precondition F11441 named.
+
+**AND `v21_hibnd`/`v21_lobnd` ARE NOT OUR `temp_v21_hibnd`/`temp_v21_lobnd`.**
+The blob's pair is 120 bytes each (60 shorts) and sits in the **V.34-family**
+`.data` region between `V34hshak.c`'s and `DPSK.c`'s locals; ours is a
+`static const short temp_v21_*[V8_V21_TAPS]` of **122 bytes each** in
+`V8Fsk.c`, emitted to `.rodata`.  Different size and a distant neighbourhood,
+so the name match is a coincidence and the blob's two symbols remain genuinely
+unreconstructed rather than merely renamed.  Both facts are recorded, not
+fixed: the owner is not established by a bracket this wide (AGENTS'
+weakest-evidence rule), and the size difference is the discriminator a later
+pass should use.
+(2026-09-28)
