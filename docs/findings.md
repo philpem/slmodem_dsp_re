@@ -129378,3 +129378,176 @@ green.  No anchor detached (`anchorcheck` 285 suites, 0 detached / 0
 non-unique).
 
 (2026-09-28)
+
+## F11451. D1101 and D1180 closed: the three `*_CFG_data` stubs are removed, and the six remaining extra data symbols are characterised by the object
+
+The "cheap data" list from the 2026-09-29 inventory had one real latent
+divergence (D1101) and two byte-identical duplicates (D1180).  All three are
+closed here; the other six extra data symbols are examined against the object
+and LEFT, each with the reason below.
+
+**D1101 -- `FPM_MTD_CFG_data` installed NULL where the object installs the
+bank.**  The object's `FPM_MTD_create(state, NULL)` arm is at 0x0a9179:
+
+    a9179:  a1 00 00 00 00   mov 0x0,%eax      <== R_386_32 FPM_MTD_CFG
+    a917e:  89 03            mov %eax,(%ebx)
+    a9180:  8b 35 04 00 00 00 mov 0x4,%esi     <== R_386_32 FPM_MTD_CFG
+    ...
+    a9189:  a1 08 00 00 00   mov 0x8,%eax      <== R_386_32 FPM_MTD_CFG
+
+-- three loads of `FPM_MTD_CFG` itself, whose `coeff` is the file-static
+`DEF_COEFS` at .data 0x81bc (verified in the object: ten shorts, all 10000).
+Our stub carried `coeff = NULL`.  `src/dsp/fpm_mtd.c`'s NULL arm and
+`src/pump/b103/B103prc.c:1154` now point at `FPM_MTD_CFG` and the stub is gone.
+The other two stubs, `FPM_FSD_CFG_data` and `FPM_FSM_CFG_data`, were
+`memcmp`-identical to the object's own symbols (D1180/D1230) and are removed
+the same way; `B103prc.c:1092/1093` point at `FPM_FSD_CFG`/`FPM_FSM_CFG`.
+`t_v21cfg.c` and `t_v21txcreate.c` lose their now-vacuous duplicate checks and
+keep the field-by-field comparison against `ref_FPM_*_CFG`.
+
+**MEASURED (GCC 3.4.2-r2, `make -j1 J=1 phase`).**
+
+    dataaudit   reference 762; candidate 774 -> 771
+                missing 0; extra 12 -> 9; size 5; section 0
+                candidate .rodata 460 -> 457
+    partialcmp  positioned bytes 67,013 -> 66,903
+                candidate delta -49,324 -> -49,356
+                NOBITS 2,836/2,812 unchanged; exact relocations 1,012 unchanged
+                exact symbols 394 unchanged; candidate symbols 2,995 -> 2,992
+    byteident   grade 0 844/1852, grade 0-or-1 895/1852 UNCHANGED
+    period differential 385 passed, 0 failed; phase boundary OK
+
+The partialcmp positioned-bytes column moves -110 and the candidate delta -32
+while every function byte is unchanged (exact symbols 394, exact relocations
+1,012).  That is the documented positional-column weakness: removing three
+`.rodata` objects shifts the section tail (F11450 records the same behaviour
+in the other direction).  The deciding gate is green.
+
+**THE SIX OTHER EXTRA DATA SYMBOLS, AGAINST THE OBJECT.**
+
+1. **`rc_banks` (160 B, `.rodata`, GLOBAL, FixedRC.c).**  The object has no
+   such table.  Its `RcFixed_Create` selects the bank by a `switch`:
+   `cmp $0x13,%ebx` / `ja` / `jmp *0x10f14(,%ebx,4)` (an `R_386_32` against
+   `.rodata`) with immediate filter pointers stored at each arm
+   (`movl $0x10c80,(%edi)` = `rc80to96filter`, ...).  The sixteen
+   `rc*to*filter` arrays DO exist in the object, as LOCAL `.rodata` objects at
+   0x0ef00..0x10fd0.  So the object proves our TABLE is a grouping the original
+   did not have, but removing it is a rewrite of `RcFixed_Create` from
+   table-index to switch (blob 170 instructions against ours 169), not a data
+   tidy.  LEFT; that rewrite is a SIZE-sweep candidate with its own finding.
+2. **`dpw_rate_pairs` (72 B, `.rodata`, LOCAL, dp_wrapper.c).**  The object has
+   no table: `dp_wrapper_create` folds the six pairs into per-constant
+   comparisons (`cmp $0x1f40` / `$0x2580` / `$0xbb80`, twelve `sete`/`test`
+   pairs around 0x5b3e..0x5b9b) rather than a loop over a table.  But the blob
+   is 178 instructions and ours 131 -- the table is not the whole difference,
+   so a table-to-if rewrite is not the missing statement and would be
+   hill-climbing on bytes.  LEFT, with the forty-seven-instruction gap named.
+3. **`alpha.0`, `bg.1`, `fmt.2` (V34hshak.c LOCALs).**  They are block statics
+   in `probe_template_db`, `hs_setstate` and `probe_de_ratio`, and the object
+   defines NONE of those helpers by name: it inlines them into `v34handshak`
+   (blob 61,541 B), so their constants land in that function's per-function
+   pool and no named object exists.  Not removable except by the inlining task
+   F11444/F11443.  LEFT.
+4. **`banks.0` (192 B, `.rodata`, LOCAL, Cadence.c).**  Block static in
+   `select_filter`; the object defines no `select_filter`, it is inlined into
+   `cadence_progress`.  Same shape as (3).  LEFT.
+5. **`FPM_cos_sign_ext` / `FPM_sin_sign_ext`** and **`dsplib_v34_blob_preemp`**
+   are deliberate (D392 and the debug switch) and were not touched.
+
+**MUTATION SUITES OWING A RE-RECORD.**  The whole-tree key re-stales all 287
+registered suites; of those, the suites whose SOURCE moved are **`fpmmtd`** and
+**`fpmmtdlayout`** (both `src/dsp/fpm_mtd.c`, per `test/mutations/suites.json`).
+`fpm_fsd.c`, `fpm_fsm.c` and `B103prc.c` are covered by no registered suite.
+No anchor detached.
+
+(2026-09-29)
+
+## F11452. `tools/bbalign.py`: a denominator-reporting instruction aligner, and the Lever-2 sweep it was built for
+
+**THE TOOL.**  `tools/bbalign.py SYMBOL` resolves the symbol to its candidate
+object the way `byteident.py` does, disassembles both sides, strips alignment
+padding with `byteident.py`'s own `_padding` predicate, and aligns them with
+`difflib`.  It reuses `byteident.body`/`insns`/`sizes`, so "an instruction" is
+one object to both tools (7773).  It prints the instruction counts on both
+sides, the signed gap, the per-opcode denominator, and -- with the default
+mnemonic-only axis -- the STRUCTURAL groups first (delete/insert/mnemonic-
+changing replace), because register allocation alone produces hundreds of
+full-text `replace` groups and buries the one that matters (7865, 7848).
+`--operands` switches to full-text alignment for statement-order and operand
+work.  `--self-test` scores a known-different symbol (`FPM_SDM_init`, must
+show non-equal opcodes) and a known-exact one (`RcFixed_Check_Combination`,
+must align with none) and refuses if either expectation fails, so a broken
+aligner cannot read as clean (F134).
+
+**THE SWEEP, AND WHAT IT MEASURED.**  Targets were taken from the inventory's
+ranked list, plus the whole-tree `byteident --near` ordering.  The result is
+that the listed large SIZE symbols are NOT bounded "missing/extra statement"
+differences:
+
+    symbol                                  blob insns  ours  delta  verdict
+    V90Equalizer::process                        2086   2048   -38   prologue cascade
+    V92ModulusEncoder::progress                  1184   1113   -71   body gap
+    V90Phase3Demodulator::getV90Decision          1994   1959   -35   body gap
+    V90Phase3Demodulator::getV92Decision          2076   1967  -109   body gap
+    V90AutoDigitalImpDetector::studyUrefHandler   1249   1173   -76   body gap
+    modulatevector                                807    712   -95   body gap
+    receiver                                      994    909   -85   body gap
+    VPcmV34Progress                              1581   1453  -128   body gap
+
+`V90Equalizer::process` localises to its PROLOGUE: the blob hoists
+`mov $0x1,%edx` before the frame setup and builds a 0xcc frame where ours is
+0xdc, then 181 structural groups follow -- a register-allocation cascade, not
+a statement.  The others are 35..128 missing instructions each, i.e. absent or
+differently-inlined blocks, not one statement.  Localising further is possible
+with `bbalign`, but no bounded statement domain contains them; DECLINED as
+Lever-2, with the instruction deltas above as the measurement.
+
+**TWO SMALL DELTA-1 SYMBOLS WERE ENUMERATED TO COMPLETION.**
+
+- **`V90Demodulator::reset` (`_ZN14V90Demodulator5resetEj`), delta -1, 6 bytes
+  differing.**  The divergence is at the two zero stores to +0x27c
+  (`noEnergyDuration`) and +0x270 (`word_270`) and at the address form of the
+  `agc.blockLen`/`agc.ref` stores: the blob keeps `&agc` in `%ebx` from the
+  `Agc::reset()` call argument and stores `0x18(%ebx)` / `0xc(%ebx)`, where
+  ours reloads through `%esi` (`0x64(%esi)` / `0x58(%esi)`).  The two-store
+  order was enumerated: source order `noEnergyDuration=0; word_270=0;` and its
+  swap BOTH emit `+0x270` then `+0x27c` -- a constant map, so the order is not
+  the variable.  The residual is the `%ebx`-vs-`%esi` address form, i.e. the
+  register allocation carried by the TU (lever 3), not a statement.  DECLINED.
+- **`v8_crc` (V8global.c), delta 0, 34 bytes differing.**  Object:
+  `movzwl 0x1e(%ecx),%eax; movswl %ax,%edx; shr $0x1f,%edx` -- the sign bit of
+  the CRC's low half.  Ours folds to `mov %eax,%edx; shr $0xf,%edx`.  Twelve
+  spellings were compiled on the period compiler and compared full-text:
+
+      A current  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = ((int)(short)crc) < 0 ? 1 : 0;        shr $0xf
+      C  int crc = (unsigned short)hs->crc;        same msb form   shr $0xf
+      F  unsigned int crc = hs->crc;               same msb form   shr $0xf
+      G  int crc = hs->crc;                        same msb form   shr $0xf
+      E  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = ((int)(short)hs->crc) < 0 ? 1 : 0;    shr $0xf
+      D  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = (int)(short)crc >> 31;                shr $0xf
+      H  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = (short)crc < 0 ? 1 : 0;               shr $0xf
+      I  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = ((int)(short)crc) < 0;                shr $0xf
+      J  int msb = ((int)(short)hs->crc) < 0 ? 1 : 0;
+                 unsigned int crc = (unsigned short)hs->crc;     EXACT
+      K  short scrc = hs->crc;
+                 unsigned int crc = (unsigned short)hs->crc;
+                 int msb = scrc < 0 ? 1 : 0;                     EXACT
+      L  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = ((int)crc << 16) < 0 ? 1 : 0;         EXACT
+      M  unsigned int crc = (unsigned short)hs->crc;
+                 int msb = (crc & 0x8000) ? 1 : 0;               EXACT
+
+  EIGHT map to the fold and FOUR reproduce the object's bytes.  The
+  enumerable fact is real and decoded -- the sign test is NOT the
+  range-foldable `(short)crc < 0` on the already-typed 32-bit `crc` local, so
+  the source derived `msb` from `hs->crc` itself or in a form GCC does not
+  fold -- but the preimage is NOT unique.  By F7782/the brief's uniqueness
+  rule this is recorded and NOT adopted; the four exact spellings above are
+  the domain for a reviewer.
+
+(2026-09-29)

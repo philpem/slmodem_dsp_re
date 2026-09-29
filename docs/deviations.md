@@ -11716,6 +11716,12 @@ latent rather than active.
 it is a behaviour change on a path with no coverage, so it wants its own
 differential test rather than a drive-by edit. *unmeasured.*
 
+**FIXED 2026-09-29 (F11451).**  The stub is deleted.  `FPM_MTD_create`'s NULL
+arm and `src/pump/b103/B103prc.c`'s `mtd = ...` both point at `FPM_MTD_CFG`,
+whose `coeff` is `DEF_COEFS`.  The object's own arm at 0x0a9179 -- three
+`R_386_32` loads of `FPM_MTD_CFG` -- is what the source now compiles to.
+`dataaudit` extra 12 -> 9; `make -j1 J=1 phase` 385 passed / 0 failed.
+
 ## D1102 ⚠ the V.27ter receiver's tables are in `src/fax/v27cfg.c`, not in the file that holds `V27RX_create`
 
 The fifty-six symbols `AGCv27_CFG`, `V27RX_MRF_FILT_2400` and the rest sit in
@@ -12087,6 +12093,13 @@ declaration in `include/dsplib/fpm_fsd.h`, and point its one reader --
 That file is `src/pump/**`, which this pass was fenced from. *measured: the two
 tables are byte-identical, so the duplicate costs 28 bytes of `.rodata` and
 nothing else.*
+
+**FIXED 2026-09-29 (F11451).**  The stub and its declaration are deleted;
+`src/pump/b103/B103prc.c`'s `fsd = ...` points at `FPM_FSD_CFG`.  The
+same commit removes D1230's `FPM_FSM_CFG_data` (eight bytes, same reason).  The
+`memcmp` checks in `t_v21cfg.c`/`t_v21txcreate.c` were vacuous once the
+duplicate was gone and are replaced by the surviving comparison against
+`ref_FPM_FSD_CFG`/`ref_FPM_FSM_CFG`.
 
 ## D1181 ⚠ `fpm_fsd_cfg`'s `f18`/`pad1a` are two `short` here and are probably one 32-bit slot
 
@@ -12532,6 +12545,10 @@ declaration in `include/dsplib/fpm_fsm.h`, and point its one reader --
 That file is `src/pump/**`, fenced from this pass exactly as `fpm_fsd_cfg.c`'s
 own fix was. *measured: the two tables are byte-identical, so the duplicate
 costs 8 bytes of `.rodata` and nothing else.*
+
+**FIXED 2026-09-29 (F11451).**  The stub and its declaration are deleted;
+`src/pump/b103/B103prc.c`'s `fsm = ...` points at `FPM_FSM_CFG`, in the same
+commit as D1101 and D1180.
 
 ## D1240 ⚠ `TxHdxDataV21` reports V21TX_STATUS_UNDERRUN and then immediately overwrites it with V21TX_STATUS_DATA, at the same call
 
