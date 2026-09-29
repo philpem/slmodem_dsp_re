@@ -291,9 +291,9 @@ test_values(void)
 
 	/*
 	 * `FPM_FSD_CFG` field by field.  This is the blob's own symbol; the
-	 * `FPM_FSD_CFG_data` stub beside it is D1180's duplicate and is
-	 * asserted equal to it below, which is the measurement that entry
-	 * rests on.
+	 * `FPM_FSD_CFG_data` stub that used to sit beside it was D1180's
+	 * duplicate and is now removed, so this comparison against the blob is
+	 * the whole measurement.
 	 */
 	diff_eq_int("FPM_FSD_CFG.fir_taps (%ld)", FPM_FSD_CFG.fir_taps,
 		    ref_FPM_FSD_CFG.fir_taps, 0);
@@ -322,13 +322,11 @@ test_values(void)
 		    FPM_FSD_CFG.iir == 0 && ref_FPM_FSD_CFG.iir == 0, 1, 0);
 
 	/*
-	 * D1180's claim, measured.  The `_data` stub and the object's own
-	 * symbol must hold identical values, or the duplicate is a divergence
-	 * rather than a redundancy.
+	 * D1180's duplicate is gone: `FPM_FSD_CFG` is the object's own symbol
+	 * and the field-by-field comparison above is the measurement.  There
+	 * is no second copy to compare against, and the anti-vacuity checks
+	 * below still stand.
 	 */
-	diff_eq_int("FPM_FSD_CFG_data equals FPM_FSD_CFG (%ld)",
-		    memcmp(&FPM_FSD_CFG_data, &FPM_FSD_CFG,
-			   sizeof(FPM_FSD_CFG)) == 0, 1, 0);
 
 	/*
 	 * Anti-vacuity.  Three of these tables would compare equal to a block

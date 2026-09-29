@@ -1089,8 +1089,8 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	dsp->rx_tone = 0;
 
 	/* Stage the modulator and demodulator configs. */
-	fsm = FPM_FSM_CFG_data;
-	fsd = FPM_FSD_CFG_data;
+	fsm = FPM_FSM_CFG;
+	fsd = FPM_FSD_CFG;
 
 	/*
 	 * Second switch: the transmit tones and the channel bandpass.  Note
@@ -1151,7 +1151,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	fsd.iir_len = 3;
 	FPM_FSD_init(&dsp->fsd, &fsd, fresh);
 
-	mtd = FPM_MTD_CFG_data;
+	mtd = FPM_MTD_CFG;
 	mtd.coeff = MTDb103_COEF;
 	mtd.tones = 2;
 	mtd.ratio = 0x3666;
