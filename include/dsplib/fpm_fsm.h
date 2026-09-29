@@ -34,13 +34,10 @@ struct fpm_fsm {
 	struct fpm_tone *tone;	/* +0x0c                                */
 };
 
-/* The library default: V.21 channel 2, full scale. */
-extern const struct fpm_fsm_cfg FPM_FSM_CFG_data;
-
 /*
- * The object's OWN name for the same table, `D` at .data:0x8198 -- see
- * `src/dsp/fpm_fsm_cfg.c` for the derivation and D1230 for why both still
- * exist.
+ * The library default: V.21 channel 2, full scale.  `FPM_FSM_CFG` is the
+ * object's OWN name for it, `D` at .data:0x8198; the `FPM_FSM_CFG_data` stub
+ * that used to accompany it was D1230 and has been removed.
  */
 extern struct fpm_fsm_cfg FPM_FSM_CFG;
 

@@ -140,20 +140,16 @@ test_shape(void)
 }
 
 /*
- * D1230.  Two objects the blob keeps as one: `FPM_FSM_CFG` (the object's own
- * name, referenced directly by `V21TX_create`) and `FPM_FSM_CFG_data` (this
- * tree's older stub, `src/pump/b103/b103fp.c`'s reader).  Must be
- * `memcmp`-identical or the duplicate is a divergence rather than a
- * redundancy -- `t_v21cfg.c` runs the same check for `FPM_FSD_CFG`/D1180.
+ * D1230.  `FPM_FSM_CFG` is the object's own symbol, referenced directly by
+ * `V21TX_create`; the `FPM_FSM_CFG_data` stub that used to sit beside it has
+ * been removed, so what remains to check is that ours equals the blob's own
+ * table.  `t_v21cfg.c` runs the same check for `FPM_FSD_CFG`/D1180.
  */
 static int
 test_fsm_cfg_duplicate(void)
 {
-	diff_begin("v21txcreate: FPM_FSM_CFG equals FPM_FSM_CFG_data (D1230)");
+	diff_begin("v21txcreate: FPM_FSM_CFG equals the blob's own (D1230)");
 
-	diff_eq_int("FPM_FSM_CFG_data equals FPM_FSM_CFG (%ld)",
-		    memcmp(&FPM_FSM_CFG_data, &FPM_FSM_CFG,
-			   sizeof(FPM_FSM_CFG)) == 0, 1, 0);
 	diff_eq_int("ours equals the blob's own FPM_FSM_CFG (%ld)",
 		    memcmp(&FPM_FSM_CFG, &ref_FPM_FSM_CFG,
 			   sizeof(FPM_FSM_CFG)) == 0, 1, 0);

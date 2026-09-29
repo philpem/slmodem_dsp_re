@@ -53,34 +53,19 @@ short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {
  * to the coefficient bank (R_386_32 into .data), which is why this is a
  * struct and not a short[].
  *
- * THE OBJECT'S OWN `FPM_MTD_CFG` IS NOW HERE, AND IT IS NOT `FPM_MTD_CFG_data`.
- * The two differ in exactly one field.  When this file was written the
- * coefficient bank the object points at -- `DEF_COEFS`, .data 0x81bc, file
- * static -- had no caller that needed it, so the stub below was given a NULL
- * `coeff` under its own name and the blob symbol was left unwritten.  The
- * three fax receiver constructors reference `FPM_MTD_CFG` directly, so it has
- * to exist, and a `src/` reference to an unwritten blob symbol cannot link at
- * all (F8492).
- *
- * BOTH ARE KEPT, DELIBERATELY, AND THAT IS A DEVIATION AND NOT A DESIGN.
- * `FPM_MTD_CFG_data` is read by `FPM_MTD_create` and by `B103FP_create`, and
- * unifying the two means editing `src/pump/b103/b103fp.c`, which is outside
- * this pass's scope.  The unification is not cosmetic: the object's
- * `FPM_MTD_create(state, NULL)` installs `DEF_COEFS`, and ours installs NULL,
- * so the copy that is reachable through a NULL `cfg` is the one that diverges.
- * No test covers that path today.  Recorded as D1101 and F9143; the fix is to
- * delete `FPM_MTD_CFG_data` and point its two readers at `FPM_MTD_CFG`.
+ * THE OBJECT'S OWN `FPM_MTD_CFG` IS HERE, AND IT IS THE ONLY ONE.  The
+ * coefficient bank it points at -- `DEF_COEFS`, .data 0x81bc, file static --
+ * is exactly what the object's own `FPM_MTD_create(state, NULL)` installs:
+ * the NULL arm at 0xa9179 loads the three dwords of `FPM_MTD_CFG` itself
+ * (three R_386_32 relocations against it) rather than a copy under another
+ * name.  This file used to carry a `FPM_MTD_CFG_data` stub with a NULL
+ * `coeff` beside it, written when `DEF_COEFS` was unwritten and a reference
+ * to it could not link (F8492); it made the reachable NULL-`cfg` arm install
+ * NULL where the object installs the bank.  Recorded as D1101 and F9143 and
+ * removed here.
  */
 
 #include "dsplib/fpm_mtd.h"
-
-const struct fpm_mtd_cfg FPM_MTD_CFG_data = {
-	.coeff = 0,		/* deliberately NULL -- see D1101 above */
-	.tones = 2,
-	.ratio = 24576,		/* 0.75 in Q15 */
-	.min_level = 246
-	/* f0a is zero */
-};
 
 /*
  * The bank `FPM_MTD_CFG` points at.  `d` in the object -- LOCAL and writable,
@@ -138,7 +123,7 @@ FPM_MTD_create(struct fpm_mtd *state, const struct fpm_mtd_cfg *cfg)
 		state->cfg.min_level = cfg->min_level;
 		state->cfg.f0a = cfg->f0a;
 	} else {
-		state->cfg = FPM_MTD_CFG_data;
+		state->cfg = FPM_MTD_CFG;
 	}
 
 	/* As elsewhere in fpm_*, buffers follow the object's ownership. */

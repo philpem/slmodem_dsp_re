@@ -33,7 +33,7 @@ struct fpm_mtd {
  * @brief Create or initialise a Multi-Tone Detector.
  *
  * Copies the first three words of @p cfg (or, if @p cfg is NULL,
- * `FPM_MTD_CFG_data`) into the state, allocates the two-per-tone
+ * `FPM_MTD_CFG`) into the state, allocates the two-per-tone
  * accumulator array when @p state was itself allocated here, and clears
  * every accumulator and the DC filter state.
  *
@@ -85,13 +85,10 @@ void FPM_MTD_delete(struct fpm_mtd *state);
 short FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count);
 
 /*
- * `FPM_MTD_CFG_data` is a STUB with a NULL `coeff`; `FPM_MTD_CFG` is the
- * object's own table, `D` at .data 0x81b0, whose `coeff` points at the
- * file-static `DEF_COEFS`.  They differ in that one field and both exist
- * today -- see D1101 at the top of `src/dsp/fpm_mtd.c` for why, and for
- * what removing the stub would take.
+ * `FPM_MTD_CFG` is the object's own table, `D` at .data 0x81b0, whose `coeff`
+ * points at the file-static `DEF_COEFS`; the object's `FPM_MTD_create(state,
+ * NULL)` installs it.  See D1101 at the top of `src/dsp/fpm_mtd.c`.
  */
-extern const struct fpm_mtd_cfg FPM_MTD_CFG_data;
 extern struct fpm_mtd_cfg FPM_MTD_CFG;
 
 #endif /* DSPLIB_FPM_MTD_H */
