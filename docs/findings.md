@@ -129280,3 +129280,101 @@ and the Dialer family (`t_dialer`, `t_dialercfg`, `t_dialerprog`, `t_dtmf`).
 No anchor detached (`anchorcheck` 0/0).
 
 (2026-09-28)
+
+## F11450. The seven remaining data gaps are closed: the Fact_FP over-read, the V34RX block statics, and the FixedRC mode 0/1 create path
+
+F11449 (q.v.) left **7 missing DATA symbols**, all content gaps.  This pass
+closes all seven -- `tools/dataaudit.py` MISSING **7 -> 0** -- and records for
+each the object evidence and what was reconstructed.  It reorders no code and
+changes no flag.  It DOES add the mode 0/1 create path to `FixedRC.c` and an
+over-read-preserving seventh term to `FP_math.c`; both are described below.
+
+**1. `Fact_FP` (FP_math.c) -- THE SEVENTH TERM IS A REAL OVER-READ.**  The
+object's symbol is exactly 12 bytes (six shorts:
+`{16384,8192,2730,683,136,23}`), but its loop runs SEVEN terms.  The bound is
+`cmp $0x5,%dx; jle` at 0x07e1f9, and `%dx` holds the **old** index, so i=5
+continues and i=6 is processed; the i=6 load at `.rodata 0x06d2e`
+(`movswl 0x6d22(%ebx,%ebx,1)`) is **past** the table, on the next symbol
+`IIRFilterScales[0]`, whose value is 3.  This tree had put that 3 *inside* the
+table, making it 14 bytes and hiding the over-read; the differential passed
+because the arithmetic agreed.  The fix declares six entries and reproduces
+the over-read's **result** through `FP_POW_LAST_COEF`, rather than the
+cross-translation-unit adjacency this tree cannot place.  Renamed
+`fp_pow_coef -> Fact_FP`.  A seventh entry inside the array would be the
+original defect in a different place.
+
+**2. `bpcoeff1.0`, `bpcoeff2.1`, `edelay.2` (V34RX.c) -- MEASURED: BLOCK
+STATICS ARE EMITTED UNREFERENCED.**  These are the timing IIR's poles
+(`22939/16384 = 1.4001`, `-16058/16384 = -0.9801`) and an unused scalar, and
+the object carries **no relocation** to any of them because GCC constant-folds
+the uses into `imul $0x599b` / `imul $0xffffc146`.  A controlled compile on
+the period compiler settles why they are in the object anyway:
+
+    file-scope, unreferenced   DROPPED
+    block-scope, unreferenced  EMITTED, as name.N
+
+So F11449's "an unused `static const` is dropped at -O3" is true for
+**file** scope only.  The `.N` suffix numbers block statics **per translation
+unit** in declaration order -- the counter is shared across the TU -- so the
+fix was to declare them block-scope in `rx_iir` (the function that inlined
+them) in source order `bpcoeff1, bpcoeff2, edelay`.  They first came out
+`.1/.2/.3` because this tree carried an EXTRA `over.0`: a `static const char
+over[]` debug format in `V34demodulate` where the object has the same text as
+a `.rodata.str1.4` **string literal** (`movl $0xd908, (%esp)` against
+`.rodata.str1.4`).  Passing the literal removed the extra and reset the
+numbering to `.0/.1/.2`.
+
+**3. `CI_b1` (174), `CI_b2` (30), `CI_bDroop` (6) (FixedRC.c) -- THE CREATE
+PATH RECONSTRUCTED, THE KIND-1 RESAMPLE RECORDED AS UNREACHABLE.**  These are
+file-scope statics, so unlike the block statics they need a reference to be
+emitted.  The object's only references are three pointer stores in
+`RcFixed_Create`'s mode 0/1 arm (`movl $0x10f0e,0x8(%ebp)`, `$0x10e60,0x14`,
+`$0x10e30,0x20` at 0x0b116b), reached from the jump table for modes 0 and 1.
+That path was reconstructed: the 40-byte `struct rc_kind1` (mode, three
+scratch pointers, the three table pointers, three delay positions),
+`RcFixed_Create`'s mode<=1 arm with the 6/174/30-byte allocations,
+`RcFixed_Reset`'s kind-1 clears (four bytes of each buffer, three positions)
+and `RcFixed_Delete`'s kind-1 frees, all read off the object.  Bytes are the
+object's `.rodata` at 0x10e30/0x10e60/0x10f0e, and the source order
+`CI_bDroop, CI_b1, CI_b2` reproduces the blob's reverse-emission address order
+(b2 lowest).
+
+**THE KIND-1 *RESAMPLE* CONVERSION IS NOT RECONSTRUCTED.**  It is the
+multi-stage delay-line machine at `RcFixed_Resample+0x215`, wrapping three
+positions at 2, 86 and 14 against `CI_bDroop`/`CI_b1`/`CI_b2`.  It is
+**unreachable through the module's API**: `RcFixed_Check_Combination` begins
+its scan at mode 2 and every call site (`dp_wrapper.c`, `call.c`, `voice.c`,
+`fax.c`) passes a literal 2..7.  `RcFixed_Resample` keeps its kind != 0
+early return, so a mode 0/1 handle produces nothing.  This is a **recorded
+deviation, not a silent one**: `t_rcresample`'s D3 section now asserts that
+both sides CREATE a mode 0/1 handle and that the reference CONVERTS while ours
+declines, rather than asserting the old "we decline to build at all".  What
+closes the data gap is the recovered create path; the conversion is named and
+left.
+
+**MEASURED (GCC 3.4.2-r2, `make -j1 J=1 phase`).**
+
+    dataaudit   reference 762 symbols; candidate 769 -> 774
+                missing 7 -> 0; extra 14 -> 12; size 5 -> 5; section 0
+    partialcmp  positioned bytes 67,300 -> 67,013 /943,398  (-287)
+                candidate delta -50,084 -> -49,324  (+760 closer)
+                exact symbols 394 unchanged; exact relocations 1,011 -> 1,012
+                NOBITS 2,812 unchanged
+    byteident   grade 0 844/1852 and grade 0-or-1 895/1852 UNCHANGED
+    period differential 385 passed, 0 failed; phase boundary OK
+
+The partialcmp **positioned-bytes column regresses by 287** while the
+candidate delta (total matched bytes) improves by 760.  That is the documented
+weakness of the positional column: adding real data whose `.rodata` placement
+is not byte-identical shifts the tail.  No function byte moved (`exact
+symbols` unchanged) and the deciding gate is green.
+
+**MUTATION SUITES OWING A RE-RECORD.**  The whole-tree key re-stales all 285
+registered suites; of those, the suite whose source moved is **`v34rx`
+(V34RX.c)**.  `FP_math.c` and `FixedRC.c` are covered by no registered
+mutation suite (`test/mutations/suites.json` carries neither as a source);
+their differential tests `t_fp_math`, `t_rcresample` and `t_fixedrc` were run
+green.  No anchor detached (`anchorcheck` 285 suites, 0 detached / 0
+non-unique).
+
+(2026-09-28)

@@ -158,10 +158,6 @@ void rxtiminginit(void *obj);
  */
 void rxinit(void *obj);
 
-/** The receive timing IIR's pole coefficients, Q14: 1.4001 and -0.9801, just inside the unit circle. */
-#define V34_RXTIMING_IIR_A1	0x599b
-#define V34_RXTIMING_IIR_A2	(-0x3eba)
-
 /**
  * @brief Resample the receive signal onto the recovered clock.
  *

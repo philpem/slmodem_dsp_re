@@ -28,6 +28,10 @@ main(void)
 	 * truncate, two round up -- so no single rule reproduces them.  Assert
 	 * each is within 1 of the ideal, which catches a transcription slip
 	 * without claiming a derivation we do not have.
+	 *
+	 * Seven EFFECTIVE terms: the stored Fact_FP table is six entries and
+	 * the seventh is the object's out-of-bounds read of the following
+	 * .rodata symbol, whose recovered value is 3 (F11449).
 	 */
 	diff_begin("FP_Pow coefficients");
 	for (i = 0; i < 7; i++) {
