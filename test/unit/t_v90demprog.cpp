@@ -819,6 +819,385 @@ run_progress(void)
 }
 
 /*
+ * STATE-BREADTH CONTROLS.
+ *
+ * The broad sweep above presents the `word_3c` dispatch arms only as far as
+ * the receive chain happens to produce them, and it leaves the rest of
+ * `progress`'s directly-readable state -- the BLL ladder, the AGC freeze, the
+ * two deadline counters, the common-tail energy detector -- at whatever the
+ * pairwise seed happened to write.  A surviving mutant in any of those sites
+ * is a statement that the fixture never presented the state the arm reads.
+ *
+ * These scenarios present that state at a stated boundary: each is a value the
+ * field really takes (a `V90BllState` the resampler enters, the P3 state 3 the
+ * AGC freeze is gated on, a deadline counter at its boundary) set directly and
+ * driven on both sides.  They are state-breadth fidelity probes, not
+ * end-to-end reachability evidence: the histories are synthetic, as the broad
+ * sweep's are, and the finding says so.  Each parameter the arm reads is
+ * given a DISTINCT value from its neighbour, so a mutant that reads the wrong
+ * one is observable rather than accidentally equal.
+ */
+#define P_AGC_ADAPT_DUR		0x068	/* int   */
+#define P_UNNAMED_06C		0x06c	/* float */
+#define P_UNNAMED_070		0x070	/* float */
+#define P_BLL_I2F_DUR		0x0f8	/* int   */
+#define P_BLL_F2S_DUR		0x0fc	/* int   */
+#define P_BLL_S2S2_DUR		0x100	/* int   */
+#define P_BLL_QC_I2F_DUR	0x104	/* int   */
+#define P_BLL_QC_F2M_DUR	0x108	/* int   */
+#define P_BLL_QC_M2S_DUR	0x10c	/* int   */
+#define P_UNNAMED_300		0x300	/* int   */
+#define P_UNNAMED_304		0x304	/* int   */
+#define P_ENERGY_THRESH		0x29c	/* float */
+#define P_NO_ENERGY_DUR		0x2a0	/* int   */
+#define P_MIN_DATA_DUR		0x478	/* int   */
+
+#define N_CTL	18
+
+/*
+ * The phase each scenario drives.  The ladder and AGC-freeze arms live in the
+ * phase-3 case (1); the phase-4 deadline in case 2; the data arm in case 3.
+ */
+static const int ctl_latch[N_CTL] = {
+	1, 1, 1, 1, 1, 1, 1, 1,	/* ladder + AGC freeze */
+	1, 1, 1, 1,			/* AGC freeze variants */
+	2, 3, 2, 2, 3, 4		/* phase-4, data, tail */
+};
+
+/* Input block length per scenario; the frame-phase arm reads what the chain
+ * actually produced, so a non-multiple of six is what exposes it. */
+static const unsigned int ctl_nofin[N_CTL] = {
+	48, 48, 48, 48, 48, 48, 48, 48,
+	48, 48, 48, 48,
+	48, 48, 48, 10, 14, 48
+};
+
+static void
+prog_ctl(int side, int ctl, int trial)
+{
+	V90Demodulator *d = D(side);
+	V90Resampler *r = &d->resampler;
+	V90Phase3Demodulator *p3 = P3(side);
+
+	/*
+	 * Six DISTINCT BLL thresholds, so a mutant that substitutes one for
+	 * another -- which is exactly what the ladder mutants do -- moves the
+	 * resulting state rather than agreeing by coincidence.
+	 */
+	set_int(side, P_BLL_I2F_DUR, 100);
+	set_int(side, P_BLL_F2S_DUR, 200);
+	set_int(side, P_BLL_S2S2_DUR, 300);
+	set_int(side, P_BLL_QC_I2F_DUR, 400);
+	set_int(side, P_BLL_QC_F2M_DUR, 500);
+	set_int(side, P_BLL_QC_M2S_DUR, 600);
+
+	/* Defaults every scenario overrides; a zero here is a state a mutant
+	 * that removes the store leaves behind, which is what makes it visible. */
+	p3->dilMaxUcode = 0;
+	p3->short_400 = 0;
+	p3->byte_3f9 = 0;
+	d->noEnergyDuration = 0;
+	d->word_260 = 0;
+
+	switch (ctl) {
+	case 0:		/* INITIAL -> FAST */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_INITIAL;
+		r->stateSamples = 101;
+		r->countStateSamples = 0;
+		break;
+	case 1:		/* FAST -> MEDIUM (the "SLOW" name is the arm's) */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FAST;
+		r->stateSamples = 201;
+		r->countStateSamples = 0;
+		break;
+	case 2:		/* SLOW -> SLOW2 */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_SLOW;
+		r->stateSamples = 301;
+		r->countStateSamples = 0;
+		break;
+	case 3:		/* QC INITIAL -> FAST */
+		d->quickConnect = 1;
+		r->bllState = V90_BLL_TRN1_QC_INITIAL;
+		r->stateSamples = 401;
+		r->countStateSamples = 0;
+		break;
+	case 4:		/* QC FAST -> MEDIUM */
+		d->quickConnect = 1;
+		r->bllState = V90_BLL_TRN1_QC_FAST;
+		r->stateSamples = 501;
+		r->countStateSamples = 0;
+		break;
+	case 5:		/* QC MEDIUM -> SLOW */
+		d->quickConnect = 1;
+		r->bllState = V90_BLL_TRN1_QC_MEDIUM;
+		r->stateSamples = 601;
+		r->countStateSamples = 0;
+		break;
+	case 6:		/* the ladder's comparison at EXACTLY the threshold */
+		d->quickConnect = 1;
+		r->bllState = V90_BLL_TRN1_QC_MEDIUM;
+		r->stateSamples = 600;
+		r->countStateSamples = 0;
+		break;
+	case 7:		/* stateSamples and countStateSamples disagree */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FAST;
+		r->stateSamples = 101;
+		r->countStateSamples = 999;
+		break;
+
+	/*
+	 * THE AGC FREEZE.  `phase3Demodulator->state == 3` and a sample count
+	 * past `AGC_ADAPTATION_DURATION`; `agc.alpha != 1.0` so the freeze is
+	 * not already done.  `dilMaxUcode` starts at 0 so the two ceiling arms
+	 * are observable.
+	 */
+	case 8:		/* deep arm: 0x06c > gain, and 0x06c*0.85 > gain */
+	case 9:		/* shallow arm: 0x06c <= gain */
+	case 10:	/* already frozen: alpha == 1.0 */
+	case 11:	/* extreme: gain < 0x070, so 0x300 -= 0x304 */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		p3->state = (Phase3DemodulatorState)3;
+		p3->samplesInState = 101;
+		set_int(side, P_AGC_ADAPT_DUR, 100);
+		d->agc.alpha = 0.5f;
+		d->agc.savedAlpha = 0.25f;
+		d->agc.gain = 1.0f;
+		d->agc.level = 0.5f;
+		d->agc.ref = 1.0f;
+		d->agc.acc = 0.0f;
+		d->agc.blockLen = 1000;
+		d->agc.count = 1000;
+		set_float(side, P_UNNAMED_06C, 2.0f);
+		set_float(side, P_UNNAMED_070, 0.5f);
+		set_int(side, P_UNNAMED_300, 1000);
+		set_int(side, P_UNNAMED_304, 7);
+		if (ctl == 9) {
+			d->agc.gain = 2.0f;
+			set_float(side, P_UNNAMED_06C, 1.0f);
+		} else if (ctl == 10) {
+			d->agc.alpha = 1.0f;
+		} else if (ctl == 11) {
+			d->agc.gain = 0.4f;
+			set_float(side, P_UNNAMED_06C, 0.5f);
+			set_float(side, P_UNNAMED_070, 0.6f);
+		}
+		break;
+
+	case 12:	/* phase 4 deadline at its boundary */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		d->phase4ElapsedSamples = 100 - PROG_IN;
+		d->phase4TimeoutDeadline = 100;
+		break;
+
+	case 13:	/* data-steady-state deadline at its boundary */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		d->samplesInPhase = 1000 - PROG_IN;
+		set_int(side, P_MIN_DATA_DUR, 1000);
+		break;
+
+	/*
+	 * THE COMMON TAIL.  A long block means `Agc::process` never reaches a
+	 * block boundary, so the level and gain the tail compares are exactly
+	 * the ones set here; the level is under the threshold and the gain is
+	 * over it, so `agc.level` and `agc.gain` name different answers.
+	 */
+	case 14:
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		d->energyDropDetectorArmed = 1;
+		d->agc.blockLen = 1000;
+		d->agc.count = 1000;
+		d->agc.gain = 1.0f;
+		d->agc.level = 0.4f;
+		set_float(side, P_ENERGY_THRESH, 0.7f);
+		set_int(side, P_NO_ENERGY_DUR, 1000);
+		break;
+
+	case 15:	/* frame phase over a non-multiple-of-six block */
+	case 17:
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		break;
+
+	case 16:	/* the demapper/descrambler buffers in the data arm */
+		d->quickConnect = 0;
+		r->bllState = V90_BLL_FROZEN;
+		r->stateSamples = 0;
+		r->countStateSamples = 0;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * The state-breadth sweep.  Same construction as the broad sweep, but each
+ * scenario presents one directly-readable state and the comparison includes
+ * the fields the broad sweep masks -- the resampler's integers, the phase 3
+ * demodulator's freeze outputs, the two per-sample buffers.
+ */
+static int
+run_state_controls(void)
+{
+	struct trial_args t;
+	int ctl, side, call;
+	unsigned int nofOut[2];
+
+	diff_begin("V90Demodulator::progress, state-breadth controls");
+
+	call = 0;
+	for (ctl = 0; ctl < N_CTL; ctl++) {
+		unsigned int i;
+
+		memset(&t, 0, sizeof t);
+		t.latch = (unsigned int)ctl_latch[ctl];
+		t.flag = (unsigned int)(ctl & 1);
+		t.eia6 = (ctl == 9) ? 1 : 6;
+		t.blockByte = 0;
+		t.pcmType = ctl & 1;
+		t.idx = ctl;
+
+		setup(6000 + ctl, &t);
+
+		for (i = 0; i < FIR_TAPS; i++)
+			fir_bank[i] = (i == 0) ? 1.0f : 0.0f;
+		for (i = 0; i < PROG_IN; i++)
+			prog_in[i] = (float)(int)((i + (unsigned)ctl) % 9u)
+				     * 0.25f;
+
+		for (side = 0; side < 2; side++) {
+			prog_wire(side, ctl);
+			prog_deep(side, ctl);
+		}
+
+		vr_ctor(&D(0)->resampler, PROG_PHASES, 1.0f, PROG_TAPS, 0.25f,
+			parm[0], 0.0f, 0);
+		ref_vr_ctor(&D(1)->resampler, PROG_PHASES, 1.0f, PROG_TAPS,
+			    0.25f, parm[1], 0.0f, 0);
+		equ_reset(equ[0], 2);
+		ref_equ_reset(equ[1], 2);
+		dm_ctor(dmp_[0], 6u, parm[0], &adid[0]);
+		ref_dm_ctor(dmp_[1], 6u, parm[1], &adid[1]);
+		dm_reset(dmp_[0], map1_[0]);
+		ref_dm_reset(dmp_[1], map1_[1]);
+		cd_ctor(cdz_[0], parm[0], &D(0)->preFilter,
+			&D(0)->constellationPower);
+		ref_cd_ctor(cdz_[1], parm[1], &D(1)->preFilter,
+			    &D(1)->constellationPower);
+		td_ctor(tdz_[0], parm[0], &D(0)->constellationPower);
+		ref_td_ctor(tdz_[1], parm[1], &D(1)->constellationPower);
+
+		for (side = 0; side < 2; side++) {
+			prog_ctl(side, ctl, ctl);
+			P3(side)->eventCode = 0;
+			P4D(side)->int_0028 = 0;
+			((V90Equalizer *)equ[side])->stateCount = 0x7f;
+		}
+		D(0)->word_3c = D(1)->word_3c = 0x7fu;
+
+		for (side = 0; side < 2; side++) {
+			memcpy(pre_dmp[side], dmp_[side], DMP_SLOT);
+			memcpy(pre_p4d[side], p4d_[side], P4D_SLOT);
+			memcpy(pre_ce[side], ce[side], CE_SLOT);
+			memcpy(pre_parm[side], parm[side], PARM_SLOT);
+			memcpy(pre_vr[side], &D(side)->resampler,
+			       sizeof pre_vr[side]);
+		}
+
+		set_level(0);
+		nofOut[0] = nofOut[1] = 0xa5a5a5a5u;
+		D(0)->progress(prog_out[0], nofOut[0], prog_in, ctl_nofin[ctl]);
+		ref_dem_progress(D(1), prog_out[1], &nofOut[1], prog_in,
+				 ctl_nofin[ctl]);
+
+		prog_snap(cmp_a, 0);
+		prog_snap(cmp_b, 1);
+		diff_eq_obj_(__FILE__, __LINE__, "ctl after progress",
+			     "V90Demodulator", cmp_a, cmp_b, DEM_SLOT, ctl);
+		diff_eq_int("ctl nofOut (%ld)", (long)nofOut[0],
+			    (long)nofOut[1], ctl);
+		CMP_FLOAT_BUF("ctl the resampled block", a248[0], a248[1],
+			      PROG_ARR, ctl);
+		CMP_FLOAT_BUF("ctl the equaliser float block", a254[0], a254[1],
+			      PROG_ARR, ctl);
+		diff_eq_int("ctl the equalised symbols (%ld)",
+			    memcmp(a250[0], a250[1], sizeof a250[0]) == 0, 1,
+			    ctl);
+		diff_eq_int("ctl the demapper bit block (%ld)",
+			    memcmp(a25c[0], a25c[1], sizeof a25c[0]) == 0, 1,
+			    ctl);
+		diff_eq_int("ctl the descrambled output (%ld)",
+			    memcmp(prog_out[0], prog_out[1],
+				   sizeof prog_out[0]) == 0, 1, ctl);
+		diff_eq_int("ctl bllState (%ld)",
+			    (long)D(0)->resampler.bllState,
+			    (long)D(1)->resampler.bllState, ctl);
+		diff_eq_int("ctl stateSamples (%ld)",
+			    (long)D(0)->resampler.stateSamples,
+			    (long)D(1)->resampler.stateSamples, ctl);
+		diff_eq_int("ctl countStateSamples (%ld)",
+			    (long)D(0)->resampler.countStateSamples,
+			    (long)D(1)->resampler.countStateSamples, ctl);
+		mask_cmp_(__FILE__, __LINE__, "ctl the resampler", "V90Resampler",
+			  (unsigned char *)&D(0)->resampler,
+			  (unsigned char *)&D(1)->resampler, pre_vr[0], pre_vr[1],
+			  sizeof(V90Resampler), vr_spans,
+			  sizeof vr_spans / sizeof vr_spans[0], ctl);
+		diff_eq_int("ctl p3 state (%ld)", (long)P3(0)->state,
+			    (long)P3(1)->state, ctl);
+		diff_eq_int("ctl p3 samplesInState (%ld)",
+			    (long)P3(0)->samplesInState,
+			    (long)P3(1)->samplesInState, ctl);
+		diff_eq_int("ctl p3 dilMaxUcode (%ld)",
+			    (long)P3(0)->dilMaxUcode, (long)P3(1)->dilMaxUcode,
+			    ctl);
+		diff_eq_int("ctl p3 short_400 (%ld)", (long)P3(0)->short_400,
+			    (long)P3(1)->short_400, ctl);
+		diff_eq_int("ctl p3 byte_3f9 (%ld)", (long)P3(0)->byte_3f9,
+			    (long)P3(1)->byte_3f9, ctl);
+		diff_eq_int("ctl p3 eventCode (%ld)", (long)P3(0)->eventCode,
+			    (long)P3(1)->eventCode, ctl);
+		diff_eq_int("ctl noEnergyDuration (%ld)",
+			    (long)D(0)->noEnergyDuration,
+			    (long)D(1)->noEnergyDuration, ctl);
+		mask_cmp(__FILE__, __LINE__, "ctl the demapper",
+			 "V90Demapper", dmp_[0], dmp_[1], pre_dmp[0],
+			 pre_dmp[1], DMP_SLOT, ctl);
+		mask_cmp(__FILE__, __LINE__, "ctl the phase 4 demodulator",
+			 "V90Phase4Demodulator", p4d_[0], p4d_[1],
+			 pre_p4d[0], pre_p4d[1], P4D_SLOT, ctl);
+		mask_cmp(__FILE__, __LINE__, "ctl the parameter block",
+			 "V90Parameters", parm[0], parm[1], pre_parm[0],
+			 pre_parm[1], PARM_SLOT, ctl);
+
+		vr_dtor(&D(0)->resampler);
+		ref_vr_dtor(&D(1)->resampler);
+		teardown();
+		call++;
+	}
+
+	diff_eq_int("every state-breadth scenario ran", call, N_CTL, 0);
+	return diff_end();
+}
+
+/*
  * A LEGAL PHASE-3 COMPOSITION, kept separate from the broad seeded sweep.
  * The old experiment changed the equaliser state to PHASE3 but left its
  * Phase-3 peer as random bytes.  Here each side constructs its own complete
@@ -1103,6 +1482,7 @@ main(void)
 	harness_float_tol_fixture_mixed(1.0e-6, 5.0e-5);
 
 	rc |= run_progress();
+	rc |= run_state_controls();
 	rc |= run_constructed_phase3();
 
 	return rc;

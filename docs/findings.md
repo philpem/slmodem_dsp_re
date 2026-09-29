@@ -129551,3 +129551,84 @@ Lever-2, with the instruction deltas above as the measurement.
   the domain for a reviewer.
 
 (2026-09-29)
+
+## F11500. `v90demprog` domain breadth: the state-breadth sweep takes it from 29/100 to 48/100, and the equaliser dispatch is the remaining backlog
+
+Mutation survivors are the domain-breadth worklist: a surviving mutant means
+the fixture's input domain never reached the changed behaviour.  The suite
+(`test/unit/t_v90demprog.cpp`, `V90Demodulator::progress`) was measured on
+the modern compiler at the start of this pass:
+
+    tools/mutate.py --suite v90demprog
+    100 mutations: 29 caught (29 by test, 0 by strings), 71 NOT caught,
+    0 unusable, 0 equivalent, 0 MIScounted
+
+`run_progress` drives `inPhase3` 0..4 against thirty planted
+`P3->eventCode`/`P4D->int_0028` states, but `V90Equalizer::process` sets
+`stateCount = 0` on entry and refills it from a `getDecision`-computed event,
+so only the arms the chain happens to produce are presented.  Every other
+directly-readable field -- the BLL ladder state and sample count, the
+AGC-freeze inputs, the phase-4 and data-steady deadlines, the common-tail
+energy detector -- was left at the pairwise seed.
+
+WHAT THIS PASS ADDED.  `run_state_controls()`, eighteen scenarios, presents
+that state at a stated boundary with each parameter the arm reads set to a
+DISTINCT value from its neighbour, so a mutant that reads the wrong one is
+observable rather than accidentally equal: the six `V90BllState` ladder
+transitions (non-QC and QC) plus the exact-threshold case and a
+`stateSamples`/`countStateSamples` disagreement; the AGC freeze (P3 state 3,
+a sample count past `AGC_ADAPTATION_DURATION`, `alpha != 1.0`, and the deep,
+shallow and extreme-overflow arms); both deadlines at their boundary; the
+tail's `agc.level` vs `agc.gain` detector; and the frame-phase accumulator
+over a block whose symbol count is not a multiple of six.  It compares the
+fields the broad sweep masks: the resampler's integer state and its floats
+under `vr_spans`, `V90Phase3Demodulator`'s freeze outputs, the
+equaliser-float and demapper-bit buffers, and the parameter block.
+
+RESULT, re-running only this suite:
+
+    tools/mutate.py --suite v90demprog
+    100 mutations: 48 caught (48 by test, 0 by strings), 52 NOT caught,
+    0 unusable, 0 equivalent, 0 MIScounted
+
+Nineteen survivors are now caught, all with no `src/` change: the seven
+ladder alternatives, four of the AGC-freeze group, both DIL ceiling arms,
+both overflow arms, the data-steady-state deadline, the phase-4 strict
+deadline, the tail energy detector and the frame-phase accumulator.
+
+CLASSIFICATION OF THE 52, and NONE IS DECLARED EQUIVALENT.  Every one
+changes a real field or a control-flow outcome, so the honest statement is
+"not yet reached", not "cannot be reached" -- a declaration of equivalence
+would need an argument that no input can distinguish it, and no such
+argument has been made for any of these.
+
+  * 20 need a constructed `V90Phase3Demodulator` walked to a specific
+    `eventCode`: the phase-3 `word_3c` arms 0x01, 0x03-0x08, 0x11, 0x13-0x15
+    (V.34 fallback, spectral accumulation, AGC arming, BLL SLOW, the TRN1d
+    evaluator group, DIL study/error relaxation, probing teardown, phase-4
+    entry, local retrain).
+  * 29 need a constructed `V90Phase4Demodulator`, `V90ConnectionEvaluator`
+    or a primed `V90Demapper`: the phase-4 `word_3c` arms 0x19-0x1d, 0x28,
+    0x2a, 0x31, 0x33, 0x35 (the ISP/silence-RRN group, data entry, RtNot,
+    phase-4 end), and the data-phase RRN/FPE entries with their
+    `word_264`/`word_268`/`word_26c` counters.
+  * 3 are directly drivable but not yet driven: the demapper/descrambler
+    buffer identities (the demapper needs a primed `sampleCount`/`codes`/
+    `signs` to emit a frame) and the EIA6 half-baud gain adjustment (the
+    half-baud DFT state must be non-trivial for the call to change a field
+    this fixture compares).
+
+REACHABILITY.  The controls plant internal states with synthetic histories --
+each is a value the field really takes, but not one reached through the
+modem's own input stream in this fixture.  They are state-breadth fidelity
+probes, not end-to-end reachability evidence, exactly as `run_progress`'s
+planted `eventCode` already was, and they are labelled as such in the file.
+
+GATES.  `make -j1 J=1 period` is green with the fixture change: `period
+differential: 385 passed, 0 failed`.  `anchorcheck.py` (285 suites, 10,038
+mutations) reports 0 detached, 0 non-unique, 0 vacuous and 0 label/arm
+mismatches; `refcheck.py` reports 0 dangling and 0 stale; `git diff --check`
+is clean.  The mutation record is refreshed for this suite only
+(`mutsnap --update v90demprog`) -- no whole-tree re-record was run.
+(2026-09-29)
+
