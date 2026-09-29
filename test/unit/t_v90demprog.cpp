@@ -556,6 +556,68 @@ prog_deep(int side, int trial)
 }
 
 /*
+ * PRIME THE DEMAPPER SO ITS DATA-ARM `process` ACTUALLY EMITS A FRAME.
+ *
+ * `V90Demapper::process` short-circuits to `nbits = 0` until
+ * `sampleCount >= V90DEMAPPER_FRAME`, and nothing in this fixture's receive
+ * chain feeds `hardDecision` -- the equaliser's own `demapper` peer is left as
+ * `v90demfix.h` seeded it, deliberately (see prog_wire).  So the data arm's
+ * `demapper->process` wrote nothing, the descrambler had no input, and the
+ * two buffer-identity mutations in the suite were unobservable.
+ *
+ * `hardDecision` is the demapper's own producer.  Six calls are exactly one
+ * whole V.90 frame and exactly the constructor's `levels = 6` sample capacity
+ * (`sampleCapacity`), so the seventh would be dropped; the frame is then
+ * pending when `process` runs.  Both sides are primed with the same values
+ * through their own objects, so the pending frame compares equal and only a
+ * mutation of the chain that CONSUMES it (or of where `process` writes it)
+ * moves a compared field.  The samples are a synthetic history, like the rest
+ * of this sweep's planted state: real values of the fields, not a sequence
+ * this fixture obtained from a line signal, and the finding says so.
+ */
+static void
+prime_demapper(int side)
+{
+	V90Demapper *dm = DMP(side);
+	unsigned int k;
+
+	for (k = 0; k < V90DEMAPPER_FRAME; k++)
+		dm->hardDecision((short)((int)(k * 9u + 4u) - 27));
+}
+
+/*
+ * DRIVE THE HALF-BAUD DFT TO COMPLETION, THROUGH ITS OWN PRODUCER.
+ *
+ * `ResamplerTiming::adjustHalfBaudBpfGain` returns immediately unless
+ * `dftDone` is set, and `dftDone` is latched only after 256 `SdHalfBaudDft`
+ * calls (`ResamplerTiming::SdHalfBaudDft`).  The AGC-freeze arm is the only
+ * caller in `progress`, and `V90Equalizer::process` drives the DFT only from
+ * `phase3Demod->state == 0 && byte_424`, which this fixture's seeded Phase-3
+ * peer does not satisfy -- so the latch was never set and the call was a
+ * no-op.  This is the same call `t_resampler.cpp` makes to complete the DFT.
+ *
+ * A cos pattern at the Fs/4 bin (the bin the accumulator is built on) with
+ * amplitude 800 leaves `dftMag` at 102400, which puts
+ * `adjustHalfBaudBpfGain`'s normalising factor at its 2.0 clamp, so a call
+ * that should not happen -- or one that should -- moves
+ * `normBPFhBaudB0coef` from 0.03981 to 0.07962, far outside the float
+ * tolerance.  Synthetic history, real field values; the finding says so.
+ */
+static void
+prime_half_baud_dft(int side)
+{
+	V90Resampler *r = &D(side)->resampler;
+	unsigned int k;
+
+	for (k = 0; k < 256u; k++) {
+		unsigned int ph = k & 3u;
+
+		r->SdHalfBaudDft(ph == 0u ? 800.0f
+				 : ph == 2u ? -800.0f : 0.0f);
+	}
+}
+
+/*
  * THE STATES, and every one of them is a `case` of one of the two `word_3c`
  * tables.  `progress` opens with `word_3c = equalizer->stateCount`, so the
  * arm is selected by planting the EQUALISER and not the demodulator -- which
@@ -668,6 +730,8 @@ run_progress(void)
 		ref_dm_ctor(dmp_[1], 6u, parm[1], &adid[1]);
 		dm_reset(dmp_[0], map1_[0]);
 		ref_dm_reset(dmp_[1], map1_[1]);
+		prime_demapper(0);
+		prime_demapper(1);
 		cd_ctor(cdz_[0], parm[0], &D(0)->preFilter,
 			&D(0)->constellationPower);
 		ref_cd_ctor(cdz_[1], parm[1], &D(1)->preFilter,
@@ -878,6 +942,15 @@ prog_ctl(int side, int ctl, int trial)
 	V90Demodulator *d = D(side);
 	V90Resampler *r = &d->resampler;
 	V90Phase3Demodulator *p3 = P3(side);
+
+	/*
+	 * The AGC-freeze group is the only one that reaches
+	 * `adjustHalfBaudBpfGain`; prime the half-baud DFT here, after the
+	 * resampler's constructor reset it, so the call has a non-trivial
+	 * magnitude to act on.
+	 */
+	if (ctl >= 8 && ctl <= 11)
+		prime_half_baud_dft(side);
 
 	/*
 	 * Six DISTINCT BLL thresholds, so a mutant that substitutes one for
@@ -1097,6 +1170,8 @@ run_state_controls(void)
 		ref_dm_ctor(dmp_[1], 6u, parm[1], &adid[1]);
 		dm_reset(dmp_[0], map1_[0]);
 		ref_dm_reset(dmp_[1], map1_[1]);
+		prime_demapper(0);
+		prime_demapper(1);
 		cd_ctor(cdz_[0], parm[0], &D(0)->preFilter,
 			&D(0)->constellationPower);
 		ref_cd_ctor(cdz_[1], parm[1], &D(1)->preFilter,

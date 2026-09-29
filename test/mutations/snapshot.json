@@ -6958,8 +6958,8 @@
    }
   },
   "v90demprog": {
-   "key": "5555e52d0180d236afe7a273f29022fe25be3d4953175b274ca2f60ed542edb4",
-   "summary": "100 mutations: 48 caught (48 by test, 0 by strings), 52 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1cfaa6e74b550b2a96f8326d485abf3cceee275472d0487fc101fb23a15d09bf",
+   "summary": "100 mutations: 51 caught (51 by test, 0 by strings), 49 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "RtNot moves the loop to TRN2": "uncaught",
     "a verdict other than 5 leaves 0x26 behind": "uncaught",
@@ -7011,8 +7011,8 @@
     "the alt-RBS flag is a store of ONE into +0xb2": "uncaught",
     "the data-steady-state deadline is >=, not >": "caught",
     "the data-steady-state entry is guarded on samplesInPhase, not phase4ElapsedSamples": "caught",
-    "the demapper is handed +0x25c and not +0x254": "uncaught",
-    "the descrambler reads what the demapper wrote, not the equaliser's block": "uncaught",
+    "the demapper is handed +0x25c and not +0x254": "caught",
+    "the descrambler reads what the demapper wrote, not the equaliser's block": "caught",
     "the energy-drop detector compares the AGC LEVEL": "caught",
     "the energy-drop detector runs only when energyDropDetectorArmed is set": "caught",
     "the equaliser is given the resampler's count and not the caller's": "caught",
@@ -7025,7 +7025,7 @@
     "the first three ladder steps are for a NON quick connect": "caught",
     "the frame phase advances by the equaliser's output count": "caught",
     "the frame phase wraps at six": "caught",
-    "the half-baud gain is adjusted only when EIA6 is absent": "uncaught",
+    "the half-baud gain is adjusted only when EIA6 is absent": "caught",
     "the input sample count is not accumulated into samplesInPhase": "caught",
     "the ladder's comparison is strict": "caught",
     "the last three ladder steps are for a QUICK connect": "caught",

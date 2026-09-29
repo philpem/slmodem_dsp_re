@@ -129632,3 +129632,52 @@ is clean.  The mutation record is refreshed for this suite only
 (`mutsnap --update v90demprog`) -- no whole-tree re-record was run.
 (2026-09-29)
 
+## F11501. `v90demprog` data-arm and half-baud priming: the three directly-drivable F11500 survivors are caught, 48/100 to 51/100
+
+F11500 left three group-(C) survivors "directly drivable but not yet driven": the
+demapper's output buffer (`array_25c` vs `array_254`), the descrambler's input
+(`array_25c` vs `array_250`), and the EIA6-gated half-baud gain adjustment.  All
+three are now caught.  The change is apparatus only -- `test/unit/t_v90demprog.cpp`
+-- with no `src/` edit.
+
+DEMAPPER / DESCRAMBLER.  `V90Demapper::process` returns `nbits = 0` while
+`sampleCount < V90DEMAPPER_FRAME` (6), and nothing in this fixture's chain fed
+`hardDecision`, so the data arm's `demapper->process` wrote nothing and the
+descrambler had no input -- both mutations were unobservable.  `prime_demapper()`
+appends exactly one frame with six `hardDecision` calls: the demapper's own
+producer, and exactly the constructor's `levels = 6` sample capacity.  The frame
+is then drained into `array_25c` by `progress`'s case 3/4, so a mutant that moves
+where `process` writes, or where the descrambler reads, moves `array_25c`,
+`array_254` and the descrambled output, all of which the fixture compares.
+
+HALF-BAUD DFT.  `ResamplerTiming::adjustHalfBaudBpfGain` returns immediately
+unless `dftDone`, and `dftDone` latches only after 256 `SdHalfBaudDft` calls.
+`progress` is the only caller, in the AGC-freeze arm, and `V90Equalizer::process`
+drives the DFT only from `phase3Demod->state == 0 && byte_424` -- which the
+fixture's seeded Phase-3 peer does not satisfy -- so the call was a no-op.
+`prime_half_baud_dft()` now drives the DFT to completion through `SdHalfBaudDft`
+itself, the same call `t_resampler.cpp` makes, on a cos pattern at the Fs/4 bin
+with amplitude 800.  `dftMag` lands at 102400, so an `adjustHalfBaudBpfGain` call
+moves `normBPFhBaudB0coef` from 0.03981 to its 0.07962 clamp -- far outside the
+float tolerance.
+
+REACHABILITY.  Both primed states are states the classes really reach from their
+own input paths (a six-sample frame; a completed 256-point DFT); the sample
+sequences are synthetic, like the state-breadth sweep's planted states, and are
+labelled so in the fixture.  No unproven or impossible state was fabricated.
+
+RESULT, re-running only this suite (modern tier, 100 mutations):
+
+    before: 48 caught (48 by test), 52 NOT caught
+    after:  51 caught (51 by test), 49 NOT caught
+
+and the per-mutation diff is exactly the three named targets; nothing else moved.
+Measured cost is ~13.5 min per full serial run of this suite on this host, not the
+4-6 min the brief estimated.
+
+GATES.  `make -j1 J=1 phase` green, `period differential: 385 passed, 0 failed`;
+`anchorcheck.py` 285 suites / 10,038 mutations, 0 detached, 0 non-unique, 0
+label/arm mismatches; `refcheck.py` 14,132 references, 0 dangling, 0 stale;
+`git diff --check` clean.  The mutation record is refreshed for this suite only
+(`mutsnap --update v90demprog`) -- no whole-tree re-record was run.  (2026-09-29)
+
