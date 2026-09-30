@@ -130089,19 +130089,30 @@ it, with the test link that F11506's single-TU experiment could not see.
 **WHAT MOVED, AND WHERE.**  `hs_get`, `hs_put`, `hs_setstate` and the
 `StateName[]`/`HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE`/`HS_TRACE_2` they use
 were defined in `src/pump/v34/V34hshak.c`.  They move VERBATIM -- bodies,
-comments and all -- into `include/dsplib/v34hs_state.h` as `static inline`,
-which `V34hshak.c` includes at the block's old position and which
-`v34hstx1_arms.h` includes so `t_v34hstx1.c` gets the same internal-linkage
-copy.  The three extern declarations are deleted from `v34hshak.h`.  No other
-TU calls the closure (verified: `grep -rE '(^|[^ *])hs_(get|put|setstate)\('`
-over `src/` and `test/` returns no real call site outside `V34hshak.c` and the
-arm header), so one home serves both.
+comments and all -- into `include/dsplib/v34hstx1_arms.h` as `static inline`,
+ahead of the nineteen transmit arms.  `V34hshak.c` includes that header at the
+closure's old position, and `t_v34hstx1.c` already includes it, so both get
+the same internal-linkage copy.  The three extern declarations are deleted
+from `v34hshak.h`.  No other TU calls the closure (verified:
+`grep -rE '(^|[^ *])hs_(get|put|setstate)\('` over `src/` and `test/` returns
+no real call site outside `V34hshak.c` and the arm header), so one home serves
+both.
 
-**THE TEST LINK IS WHY IT IS A HEADER AND NOT A BARE `static`.**  A bare
-`static` in `V34hshak.c` makes the arms' `hs_setstate` calls in
-`t_v34hstx1.o` undefined -- every test binary links all of `$(OBJ_REPRO)`.  The
-header is F11503's migration pattern: one textual home, a static copy per
-includer, and `t_v34hstx1.c`'s arms keep the closure.
+**WHY THE ARM HEADER, AND NOT A HEADER OF ITS OWN.**  The closure and the
+arms have the same two includers and the same reason to be one textual home
+(F11503): a bare `static` in `V34hshak.c` leaves the arms' `hs_setstate` calls
+in `t_v34hstx1.o` undefined, because every test binary links all of
+`$(OBJ_REPRO)`.  A separate `v34hs_state.h` would also need a NEW mutation
+suite, and a registered suite with no recorded baseline is MISSING to
+`tools/mutsnap.py --check` (a hard defect, F2157/F3002).  `mutate.py` cannot
+record one on this host at all -- its baseline fails for the pre-existing
+`v34hshak` suite too (the modern GCC 14 build in its copy), so the closure's
+anchors join the EXISTING `v34hstx1` suite instead and nothing new is
+registered.  The arm header therefore holds the closure and the arms, and the
+eight closure anchors live in `v34hstx1.json` (F11503's pattern again).
+Moving the arm include from its old site to the closure's old position does
+NOT change `v34handshak`: the measurements below are identical to a build that
+kept them separate.
 
 **MEASURED: THE SYMBOL SURFACE AND THE IN-RANGE PROFILE BECOME THE BLOB'S.**
 
@@ -130124,22 +130135,24 @@ diagnostics remain the gap-closer.
 **THE MUTATION ANCHORS MOVE WITH THE BODY, AS F11503 DID.**  Eight
 `v34hshak` anchors named text inside the closure (`#define HS_RXSTATE ...`,
 the three `ctx` branches, the `[2]` counter, the `StateName` transposition and
-the two `fmt[]` entries).  They move to `test/mutations/v34hs_state.json` with
-source `include/dsplib/v34hs_state.h` and the SAME test binary
-`t_v34hshak` (which links `V34hshak.o`, so the mutation's behaviour is
-unchanged).  `suites.json` gains `v34hs_state`.  Nothing is dropped:
-`anchorcheck` reads **286 suites / 10,038 mutations / 0 non-unique / 0
-re-pointed** (same mutation total, one more suite), and `refcheck` 0 dangling.
+the two `fmt[]` entries).  They move into `test/mutations/v34hstx1.json`, whose
+source `include/dsplib/v34hstx1_arms.h` now holds the closure, with the SAME
+test binary `t_v34hshak` (which links `V34hshak.o`, so the mutation's behaviour
+is unchanged).  No suite is added or removed.  Nothing is dropped:
+`anchorcheck` reads **285 suites / 10,038 mutations / 0 non-unique / 0
+re-pointed** (same suite and mutation totals as before the change), and
+`refcheck` 0 dangling.
 
 **GATES.**  `make -j1 J=1 period` period differential **385 passed / 0
 failed**; `byteident` grade 0 **844/1852** and grade 0-or-1 **895/1852** with
 the exact SET unchanged (no exact function gained or lost); `partialcmp`
-positioned **67,363 → 68,263/943,398**, exact relocations 1,016 unchanged,
-exact symbols 394/2,907 unchanged, candidates 2,982 → 2,984.  `anchorcheck`
-and `refcheck` clean, `git diff --check` clean.  The `v34hshak` and
-`v34hs_state` mutation-snapshot entries are stale by construction (src/
-changed) and were not re-recorded -- a whole-tree snapshot is out of scope
-for this pass.  (2026-09-30)
+positioned **67,363 → 68,109/943,398**, exact relocations **1,016 → 1,015**
+(the one loss is the arm include moving to the closure's old position;
+byteident's exact set, the stronger measure, is unchanged), exact symbols
+394/2,907 unchanged, candidates 2,982 → 2,984.  `anchorcheck`
+and `refcheck` clean, `git diff --check` clean, and `mutsnap --check` exits 0
+with **0 never recorded** (only the ordinary all-stale state a src/ edit
+leaves).  (2026-09-30)
 
 ## F11508. `v34handshak`'s "107 missing diagnostics" is an INLINING artefact, not missing statements: object-first per-string counts find nothing absent, and the closure + inliner-budget crossing still does not reproduce
 

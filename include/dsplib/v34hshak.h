@@ -149,7 +149,7 @@ struct v34_object;
  *
  * The blob defines none of them: its `v34handshak` inlines the whole
  * read/print/store closure (finding F11506).  They are now `static inline`
- * definitions in `include/dsplib/v34hs_state.h`, the one home shared by
+ * definitions in `include/dsplib/v34hstx1_arms.h`, the one home shared by
  * `V34hshak.c` (whose function must inline them) and `t_v34hstx1.c` (whose
  * arm copies must link them).  A non-static declaration here would conflict
  * with that internal-linkage definition.

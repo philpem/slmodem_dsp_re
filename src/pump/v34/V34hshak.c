@@ -1241,12 +1241,15 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 
 /*
  * The handshake's state names, the three machines that use them, and the
- * read/print/store closure that moves them: ONE `static inline` home, in
- * `v34hs_state.h`, shared with `t_v34hstx1.c` because the arms call
- * `hs_setstate`.  The bodies are unchanged; only their home and linkage
- * moved (F11506).
+ * read/print/store closure that moves them, followed by table 1's nineteen
+ * transmit arms.  They are ONE `static inline` home in
+ * `include/dsplib/v34hstx1_arms.h`, which puts both the closure and the arms
+ * in `v34handshak`'s own translation unit (so `-O3` inlines them, as the
+ * object did) and which `t_v34hstx1.c` includes for its own static copies.
+ * The closure's bodies are unchanged; only their home and linkage moved
+ * (F11506, F11507).
  */
-#include "dsplib/v34hs_state.h"
+#include "dsplib/v34hstx1_arms.h"
 
 /*
  * Bring the handshake up in one of five modes.
@@ -2785,9 +2788,6 @@ v34setuptxmit(void *objp)
 
 	txinit(obj);
 }
-
-#include "dsplib/v34hstx1_arms.h"
-
 
 /*
  * ---------------------------------------------------------------------------
