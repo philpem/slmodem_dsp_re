@@ -131142,3 +131142,321 @@ the expected census (identical to F11510's post-fix numbers, confirming master
 == the F11510 state).  `anchorcheck` **285 suites / 10,038 mutations / 0
 detached / 0 non-unique / 0 vacuous / 0 re-pointed**.  `refcheck` **14,177
 references, 0 dangling**.  `git diff --check` clean.  (2026-09-30)
+
+## F11516. Branch coverage now names its source CFG and missing measurements; the modern instrumented suite is not a passing equivalence gate
+
+At `4a1c18f2`, the handoff baseline was reproduced on the new machine:
+period **385 passed / 0 failed**; positional exact **844/1852**, five
+section-relocation unresolved, 46 register-allocation matches, grade 0-or-1
+**895/1852**, RELOC/BYTES/SIZE **2/79/876**. The modern coverage symbol tree
+reports **1792/1792** translated/drivable symbols referenced by fixtures,
+97.3% of blob text. Its 60 absent names are the previously recorded modern
+emission artifact, not new reconstruction work.
+
+`tools/branchcov.py`, exposed by `tools/debugcov.py --branches` and
+`make branchcov`, reads gcov JSON function/block/branch records. It joins
+only unique exact symbol names to the blob, retains each translation-unit
+instance, and reports unmatched/ambiguous names and missing runtime data.
+It refuses empty domains, missing notes, stale counters, and changed
+source/header/fixture/build-input fingerprints. The standalone report
+retains the associated differential run's separate verdict. It does **not**
+map source branches to blob instruction addresses: that mapping remains open.
+Optimisation and inlining make symbol correspondence insufficient to prove it.
+
+**Detector control.** A compiled two-arm integer function first reports
+**1/2** arms taken and then **2/2**, with the unexecuted block disappearing.
+Missing runtime data stays unknown, not zero executions. Five assertions pass
+in `python3 tools/branchcov.py --self-test`.
+
+**Measured source graph, GCC 13.3.0, gcov 13.3.0, binutils 2.42:** runtime data
+for **248/299** source TUs (assembly excluded); **1693/1852** unique blob
+names measured; **1713/1982** source function instances uniquely matched and
+measured, **269** unmatched and **0** ambiguous. Mapped source blocks executed
+**24075/25652**; branch arms taken **16265/18007**. The largest untaken-arm
+rows include `VPcmV34Progress` **240/325**, `V90Demodulator::progress`
+**201/303**, and `probeselect` **99/164**. These denominators describe the
+instrumented source graph, never the blob's graph or proved equivalence.
+
+**The instrumented differential stays red.** Of **385** expected fixtures,
+**345** pass, **13** return a declared nonzero result, **21** return an
+unexpected nonzero result, **5** are link-excused, and **1** is unbuilt without
+a declaration (`t_v90p4dperiod`, missing three `Descrambler<unsigned char,int>`
+methods). `t_queue` becomes linkable with instrumentation, then fails **52/340**
+checks in its signalling-NaN copy subtest. Coverage is still useful, but these
+are not successful differential measurements. The command exits nonzero and
+writes no successful portability count file. Build and per-fixture logs and
+verdicts live under `build-cov/`; `branches.json` retains the separate verdict.
+
+The scoped instrumented link mode accepts an available fixture without
+invalidating the ordinary modern link declaration. The default stale-entry
+check is unchanged. Three controls establish ordinary stale rejection,
+instrumented availability, and rejection of an unexplained link error.
+No source workaround, new allow-list entry, or tolerance was added.
+(2026-09-30)
+
+## F11517. A persistent period-guided V.90 differential target detects its planted counter change; its short Phase-3 input model plateaus at the seeds
+
+`make fuzz` now builds the 32-bit persistent driver in
+`test/fuzz/v90demprog.cpp`, sharing `t_v90demprog`'s constructed-child Phase-3
+fixture and normalized comparisons. Its 194-byte domain selects one of two
+session flavours, **1..4** calls of **48** samples, and signed fixed-point
+samples in **[-1,127/128]**. Allocation sizes and transition configuration are
+fixed. The receiver retains seeded fixture state and synthetic inactive peers:
+this is **synthetic component fidelity**, not public modem reachability.
+The normal fixture's two sessions and summary checks are preserved.
+
+`tools/fuzz_v90.py` records complete commands against `tc_out/.build-config`,
+uses the mandatory `DSPLIB_REPRODUCE_BUGS` define, and links both targets against
+the blob and period objects. One target is uninstrumented; the other adds GCC
+3.4 arc instrumentation only to `V90Demodulator.cpp`. **Every input executes
+in both.** A mismatch stops exploration, saves the input/results, and repeats
+standalone period replay. Persistent-only replay differences are distinguished
+from instrumentation-only differences. No mismatch is automatically tolerated
+or declared intentional. Build fingerprints and a per-output-directory lock
+prevent stale binaries or concurrent counter writers from giving plausible
+results. The controller preserves a current input before execution and imposes
+a per-case deadline, including when a target emits an incomplete output line.
+
+**Controls, all observed.** A/B/A uninstrumented cases pass with matching
+check/failure counts for repeated A; the three instrumented cases also pass.
+The period counter reset control gives identical complete vectors for repeated
+A, **23/635** counters hit, and a one-call B changes **21/635** counts.
+Three malformed frames exit 2 without a differential verdict. A planted
+partial-line/hanging process is stopped by the deadline. The parser checks
+GCC 3.4 record/header identity and rejects an empty counter domain.
+
+The isolated source copy changes `samplesInPhase += nofIn;` to
+`samplesInPhase = nofIn;` (the existing mutation-suite alternative).
+`two-call-counter.bin` catches it: **1 failure / 3937 checks**, receiver
+bytes **+56..+59** at input tag **0**. This is the **first** checkpoint, since
+the original fixture starts with a seeded counter; it is not evidence that a
+two-call lifecycle was required. The live reconstruction source was never
+mutated. Three regression seeds are stored in `test/fuzz/corpus/v90demprog/`.
+
+**Declared budget and result:** seed 1, three seeds plus 1000 generated cases,
+**1003 inputs / 26193938 checks** across both period targets, **0 divergences**.
+The union is **24/635 TU arc counters**, including **18/326** in `progress()`.
+These are instrumented counters, not every CFG edge. No generated input adds
+coverage beyond the seeds; the corpus remains three distinct inputs. The
+coverage-guided mechanism is running, but this sample-only short Phase-3 domain
+is insufficient for the missing state arms. **The 49 surviving mutations remain
+open.** The next work is a producer-driven lifecycle/input model for further
+arms, with fixture-validity evidence before extending the four-call bound or
+populating inactive peers. No tree-wide mutation retirement or equivalence
+proof is claimed. `docs/fuzzing.md` documents commands and scope.
+
+`make phase` passes: **385 period tests / 0 failures**, plus structural gates.
+No `src/` or `include/` change was made. (2026-09-30)
+
+## F11518. The historical three-jump handshake candidate still contains a fourth dispatch in an omitted helper; the next audit is a shared-exit source question
+
+A **single** historical control was reproduced, not a new flag search:
+F11513's `localonly` parameters, the landed hoist, and `always_inline` on
+`t72_measure`, `t3m_txblock`, `tx1_moh_hold`, `t41_after_guards`,
+`t46_info0_counting`, `t4_mp_sequence_end`, and `t41_marks_late`.
+Each definition was transformed exactly once in an isolated copy. Parameters:
+`inline-unit-growth=100000`, `max-inline-insns-auto=100`,
+`max-inline-insns-single=1000000`, `large-function-insns=10000000`, and
+`large-function-growth=100000`, on the recorded Gentoo GCC 3.4.2-r2 baseline
+with the mandatory reproduction define via `tools/experiment_toolchain.py`.
+
+**Controls before interpretation.** The initial comparison of a default-GNU89
+experiment with `period`'s GNU99 object was invalid and retained as such.
+An unchanged GNU99 control is byte-identical to the period object. The GNU89
+control matches all **63** authority function sizes, non-relocation bytes, and
+normalized relocation tuples; the canonical census is **56 exact / 7
+unresolved**, with those seven still unresolved. The reproduction define moves
+`dsplib_v34_blob_preemp` from BSS value 0 to DATA value 1, shifts `StateName`
+from data offset 0x200 to 0x220, adds 32 data bytes and removes four BSS bytes.
+Those differences are not an optimization finding.
+
+The candidate reproduces **49775 bytes / 9826 non-padding instructions /
+3 indirect jumps**. Raw disassembly has 9872 instructions; applying the
+existing padding predicate yields 9826, exactly the historical convention.
+The blob similarly has 12234 raw / **12199** non-padding instructions and
+**61541 bytes / 3 jumps**. The unmodified GNU89 function is **7108 bytes /
+1378 non-padding instructions**, whereas the GNU99 period one is **6501 /
+1302**. These compiler-dialect contexts must not be interchanged.
+
+**The new observation.** The candidate's remaining local helper calls are
+`t3c_txblock` once and `t46_chain_full` once, alongside the blob's retained
+`getbit` three times and `ApplyBulkDelay` twice. `t3c_txblock` is **1060 bytes /
+251 non-padding instructions** and contains another indirect table-2 jump at
+candidate address **0x48e0**, against `.rodata+0x470`. The parent's table-2
+copy is at **0x9881**, against `.rodata+0x770`; its other two indirect jumps
+are at 0x5513 and 0x6c91. Thus a three-jump **symbol** count does not establish
+one shared dispatch throughout the split handshake implementation: at least
+four relevant dispatches remain across the parent and its omitted helpers.
+`t46_chain_full` is **1899 bytes / 350 instructions**, with no indirect jump,
+and tail-jumps at **0x4d81** to `t3c_txblock`.
+
+Object-first `tools/dis.py` evidence bounds the corresponding blob chain head
+at **0x6adaf..0x6add0**, **6 instructions / 33 bytes**, then a shared dispatch
+tail at **0x6add0..0x6ade3**, **3 instructions / 19 bytes**, reaching **0x62af1**.
+These are bounded spans, not an exclusive allocation of the **11766-byte**
+function-size difference. Shared tails and absorbed callees make helper sizes
+non-additive. Source annotation validity also does not establish ownership:
+**873/873** distinct annotated instruction starts validate, while known
+interior address **0x628f5** is rejected. The lexical local closure has **135**
+of 141 static definitions; **75** carry address anchors and **60** do not.
+
+**Scope review / next discriminator:** examine a source form that joins the
+remaining `t3c` exits into the already-hoisted single dispatch, before assuming
+that forcing the two omitted bodies inline supplies missing code. Hold the
+historical control fixed and count relevant dispatches across helpers as well
+as the parent. This is an evidence-backed shared-exit hypothesis, not a flag
+matrix or a near-byte adoption. No source form was adopted; the F7782 recovery
+criterion was not met and no new exact-source claim is made. Reproducible local
+artifacts and complete compiler/assembler identity are in
+`build/frontier-v34-audit/{run.py,measure.py,manifest.json,measurement.json}`;
+invalid controls remain labelled there. Issue #22 remains open. (2026-09-30)
+
+## F11519. Sharing every terminal `t3c` exit removes the fourth reachable dispatch, but the exhausted four-cell domain has no byte preimage
+
+F11518's next discriminator was recorded in issue #22 before compilation. The
+declared domain crossed exactly two source forms — retained, and one audited
+shared-`t3c`-exit form — with two profiles: retained GNU89 flags, and the
+historical `localonly` parameters plus the original seven forced-inline
+definitions. All four cells used Gentoo GCC 3.4.2-r2, the complete baseline
+flags, and the mandatory `DSPLIB_REPRODUCE_BUGS` define. There was no threshold
+or spelling search.
+
+The source-family audit found **57** `t3c_txblock(obj)` sites. The exported
+`v34handshak_txblock` wrapper's immediate call stays. Fifty-one terminal calls
+inside static receive/microstate helpers are deferred; five direct calls in
+`v34handshak` and nine root-helper returns route to one label, which reads
+`HS_TXSTATE` into the existing frame and joins `micro_txblock`. Every replaced
+call is terminal after comments are removed; the special integer return from
+`t44_det_info_accept` remains propagated. The transform adds no global, field,
+signature, state word, or compiler flag. Its complete audit and generated
+sources are isolated under `build/frontier-v34-audit/shared-exit/`.
+
+| source / profile | `v34handshak` bytes | non-padding insns | reachable closure dispatches |
+| --- | ---: | ---: | ---: |
+| retained / retained | 7,108 | 1,378 | 3 |
+| retained / localonly+seven | 49,775 | 9,826 | 4 |
+| shared exits / retained | 6,839 | 1,352 | 3 |
+| shared exits / localonly+seven | 50,873 | 10,035 | 3 |
+| blob | 61,541 | 12,199 | 3 |
+
+Both unchanged controls reproduce their earlier objects byte for byte. The
+shared aggressive cell removes `t3c_txblock` from the reachable modem closure
+and leaves all three relevant indirect jumps inside `v34handshak`, establishing
+the predicted source-sharing mechanism. The exported standalone dispatch entry
+is preserved: `v34handshak_txblock` grows from a 9-byte wrapper to the 1,060-byte
+dispatch body, but it is not reachable from the modem closure. Counting only
+the parent had hidden this distinction in F11513.
+
+The full defined-global inventory is **55 symbols per cell: 28 T, 22 R, 5 D**.
+Every name and binding is preserved. All four cells retain the same four exact
+blob function names: `dftfreqinit`, `dftRetrainDetInit`,
+`dftnlinitNoiseBins`, and `dftnlinitSignalBins`; there are no gains or losses.
+The candidate remains **10,668 bytes / 2,164 non-padding instructions short**
+of the blob. Thus the fully enumerated family has zero target byte preimages.
+The shared-exit form is a mechanism control, not recovered source, and is not
+adopted under F7782.
+
+The initial smoke run covered only `t_v34hshak` and was explicitly insufficient.
+Both shared-source cells were then linked by replacing only the experimental TU
+in the period object set. A denominator check caught that `print-TESTS` lists
+only the **255 C fixtures**; the missing **130 C++ fixtures** were run separately
+from `print-CXXTESTS`. Results for each shared cell are **255/255 C plus 130/130
+C++ = 385/385 passed, 0 failed**, with per-fixture link and run logs retained.
+This proves behavioural equivalence over the current period suite, not source
+recovery.
+
+The residual call-boundary census supplies the next discriminator. The shared
+aggressive cell leaves two calls to `t46_chain_full`, whose body is 1,867 bytes,
+where the prior candidate left one 1,899-byte copy. It also calls the global
+`setupreceiver` twice while the blob calls it zero times: object-first spans at
+**0x64c04** and **0x6a0c8** inline its work and then call `rxinit` at
+**0x64c0e** and **0x6a0d2**. Correspondingly the candidate has one `rxinit`
+call against the blob's three, and six `detectorinit` calls against eight.
+Any next bounded source family therefore has to cross both the remaining local
+`t46_chain_full` boundary and the global `setupreceiver` inline boundary while
+preserving the exported `setupreceiver` symbol. Summing helper sizes still does
+not allocate the residual 10,668 bytes because inlining changes shared tails
+and callers. No further cells were run. (2026-09-30)
+
+## F11520. The two remaining evidenced inline boundaries explain most of the gap, but their exhausted four-cell family has no byte preimage
+
+F11519's discriminator was recorded in issue #22 before compilation. The
+shared-`t3c`-exit source and historical `localonly` plus seven forced-inline
+helpers were held fixed. The complete declared family crossed force-inlining
+`t46_chain_full` on/off with force-inlining the global `setupreceiver` on/off.
+Each on-cell changed only the definition attribute; the strong out-of-line
+`setupreceiver` export remained. All four cells compiled with Gentoo GCC
+3.4.2-r2, the complete period flags, GNU89 dialect, and the mandatory final
+`DSPLIB_REPRODUCE_BUGS` define.
+
+| `t46_chain_full` / `setupreceiver` | bytes | non-padding insns | closure dispatches |
+| --- | ---: | ---: | ---: |
+| off / off | 50,873 | 10,035 | 3 |
+| off / on | 52,695 | 10,351 | 3 |
+| on / off | 55,651 | 10,909 | 3 |
+| on / on | 57,426 | 11,225 | 3 |
+| blob | 61,541 | 12,199 | 3 |
+
+The off/off control reproduced F11519's object. `t46`-on removes both parent
+calls to that helper. `setupreceiver`-on removes both parent calls to the
+global while restoring the blob's three `rxinit` and eight `detectorinit`
+calls. Thus both object-first boundary predictions fired. Every cell preserves
+the same **55 defined globals: 28 T, 22 R, 5 D**, including `setupreceiver`,
+and the same four exact blob function names. The strongest cell remains
+**4,115 bytes / 974 non-padding instructions short**. The complete family has
+no target byte preimage and no source was adopted under F7782.
+
+Each of the four experimental objects was linked in place of only
+`V34hshak.o` and passed the complete period differential: **255/255 C plus
+130/130 C++ = 385/385, 0 failed per cell**. An initial runner invocation
+selected zero cells because it retained the preceding experiment's name
+filter; its empty denominator was rejected, the selector was corrected, and
+the reported four-cell run is the subsequent complete run. This is a harness
+correction, not an interpreted experimental result.
+
+Against the strongest cell, the remaining external-call count differences are
+now only `bitreverse` **6 versus 8**, `dsplibs_debug_printf` **262 versus 289**,
+`indicateJaTransmission` **2 versus 1**, `txmit` **16 versus 14**, and
+`v34handshakinit` **10 versus 11** (blob versus candidate). All other named
+call counts agree, including the two boundary families just tested. Those five
+differences bound the next object-first investigation; raw size alone does not
+justify another inline choice. Reproducible sources, objects, inventories,
+commands, compiler identity, and the complete gate log are under
+`build/frontier-v34-audit/two-boundary/`. (2026-09-30)
+
+## F11521. Disabling cross-jumping restores the blob's split Ja calls and reaches 60,910 bytes, but overshoots three other call families
+
+F11520 left two terminal source calls to `indicateJaTransmission` which the
+candidate merged into one, while the blob retains two calls at **0x64e52** and
+**0x68003** with distinct continuations. Issue #22 recorded a two-cell profile
+domain before compilation: hold the strongest F11520 source fixed, then cross
+the retained complete profile with that profile plus `-fno-crossjumping`.
+Both cells used Gentoo GCC 3.4.2-r2, GNU89, all established period flags, and
+the mandatory final `DSPLIB_REPRODUCE_BUGS` define. The retained control
+reproduced the saved F11520 object byte for byte.
+
+The prediction fires. The no-crossjumping cell restores **two**
+`indicateJaTransmission` calls and grows `v34handshak` from **57,426 bytes /
+11,225 non-padding instructions** to **60,910 / 11,848**, against the blob's
+**61,541 / 12,199**. All three cells retain three closure dispatches. This is
+the closest size control in the declared sequence, but it is still **631 bytes
+/ 351 instructions short**, not a byte preimage.
+
+The other call families reject a blanket profile conclusion. Against the blob,
+the no-crossjumping cell has `txmit` **17 versus 16**,
+`v34handshakinit` **13 versus 10**, `bitreverse` **8 versus 6**, and
+`dsplibs_debug_printf` **310 versus 262**. Thus suppressing every cross-jump
+restores the observed Ja split while preventing merges that the blob did make.
+It also loses `dftnlinitSignalBins` from the exact-name set, leaving three
+exact functions where the retained cell has four. Both cells preserve all
+**55 defined globals: 28 T, 22 R, 5 D**, with unchanged names and bindings.
+
+The changed cell passed the complete isolated period differential: **255/255 C
++ 130/130 C++ = 385/385, 0 failed**. It is a valid mechanism control, not
+recovered compiler provenance, and neither source nor profile is adopted under
+F7782. The result narrows the remaining problem to selective source-level tail
+sharing: the reconstructed source currently exposes some terminal paths to
+GCC's cross-jumper that the blob kept structurally distinct, while globally
+disabling the pass separates several paths the blob shared. Artifacts and the
+complete gate denominator are under `build/frontier-v34-audit/crossjump/`.
+(2026-09-30)
