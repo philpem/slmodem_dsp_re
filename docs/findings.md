@@ -130140,3 +130140,76 @@ and `refcheck` clean, `git diff --check` clean.  The `v34hshak` and
 `v34hs_state` mutation-snapshot entries are stale by construction (src/
 changed) and were not re-recorded -- a whole-tree snapshot is out of scope
 for this pass.  (2026-09-30)
+
+## F11508. `v34handshak`'s "107 missing diagnostics" is an INLINING artefact, not missing statements: object-first per-string counts find nothing absent, and the closure + inliner-budget crossing still does not reproduce
+
+F11506's next test was to reconstruct the diagnostic blocks the arm comments
+name -- "67, 24 and the table-2 arms first -- they are the 107-call deficit".
+Run object-first, that premise does not survive, and F11502's string-set
+result is confirmed at the level of the target's own translation unit.
+
+**METHOD.**  `tools/dis.py` over the blob's `v34handshak` range
+(`0x628f0..0x71955`) and over the whole rebuilt
+`build/tc_out/src_pump_v34_V34hshak.c.o`; every `movl $addend,(%esp) <==
+R_386_32 .rodata.str1.4/.str1.1` is decoded through the section header to the
+literal, and the per-string COUNTS are differenced.  Counts, not the set,
+because a string can exist once and be wanted at several sites.
+
+    distinct strings in the blob's v34handshak range   110
+    ... absent from our V34hshak TU                      3
+    ... and those three are the hs_setstate formats      all three
+
+The three "absent" strings are the `V34HSHAKE: {tx,rx,micro}state` formats,
+and they are not absent: our `hs_setstate` prints through its `fmt[3]` table,
+so the strings are reached by an `R_386_32` against the table and not
+directly from the `movl` at the call.  Every other blob-range string is
+present in our TU, which carries 140 distinct strings against the range's
+110 (ours still names arms the blob did not inline into the range).
+
+**THE PER-STRING DIFFERENCE IS THE WHOLE ANSWER.**  The only strings the blob
+uses MORE often than we do are:
+
+    V34HSHAKE: txstate ...       blob 60   ours 0   (fmt[] table, above)
+    V34HSHAKE: microstate ...    blob 53   ours 0   (fmt[] table, above)
+    V34HSHAKE: rxstate ...       blob 27   ours 0   (fmt[] table, above)
+    V34AGC, setup receiver gain  blob  3   ours 2   (a helper, inlined 3x)
+
+There is no string the blob range uses that our source omits, and no format
+string at all beyond the one F11502 already reconstructed.  So the "107" is
+not 107 missing statements: it is (a) 140 hs_setstate copies the blob inlined
+and constant-folded to direct string references where ours keeps the table
+index, and (b) the inliner budget keeping `v34FreezeEcho`, the `t3m_micro`
+arms and the `V34AGC` helper replaced by calls.  `V34AGC`'s third site is the
+same `rxinit` body inlined once more, not a site we lack.
+
+**THE NAMED "NOT RECONSTRUCTED" BLOCKS ARE ALREADY WRITTEN.**  Each address
+the arm comments list decodes to a string our tree already has, at a
+statement our tree already carries:
+
+    arm 67   0x646b5  "V34MP, Starting txmit MP again(%d), ..."  tx1_mp_reload
+             0x67254  "V34MP, MP detected, starting MP' txmit"   tx1_mp_sequence_end
+             0x6b410  "V34HSHAKE: txstate ..."                   hs_setstate
+    hold tail 0x68704 "End of current MOH msg: ..."              v34tx1_tx_dpsk
+             0x68b12/0x6c771/0x6a87e  txstate, 0x6c7db/0x6b06c  rxstate
+             0x6c760  "MOH: Illegal MH sequence ..."              MOH_ILLEGAL
+    0x68704's second ref      "V34AGC, setup receiver gain ..."  rxinit/V34SetupDemodulator
+
+The "WHAT IS NOT RECONSTRUCTED" comments in `v34hstx1_arms.h` (lines 1658 and
+1807) are therefore STALE -- they predate F11502's reconstruction of those
+strings, and F11502's own list already said so.  Reconstructing them would
+mean writing the same `dsplibs_debug_printf` twice, which is inventing a
+statement; per the rule that nothing wrong-but-plausible lands, it is
+declined.
+
+**THE CROSSING STILL DOES NOT REPRODUCE, SO NO SOURCE CONTROL IS ADOPTED.**
+With the F11507 `static inline` closure in place, F11504's four `--param`s
+give (single TU, GCC 3.4.2-r2):
+
+    v34handshak   blob 61,541 B / 12,199 insns
+                  ours 46,841 B /  9,453 insns, 14,700 bytes differ, 0 hs calls
+
+46,841 B is exactly F11506's predicted figure, and it is 2,746 instructions
+short.  The flag route costs 44 whole-tree exact symbols (F11504), so it is
+declined, and no source-side spelling of the inlining exists that closes the
+rest -- the missing content is not in the source.  The remaining lever is the
+object's own original profile (issue #22), not this pass.  (2026-09-30)

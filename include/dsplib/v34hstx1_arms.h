@@ -1655,10 +1655,13 @@ v34tx1_jtxmit(void *objp)
  * neither ends the sequence nor reaches +0x3590.
  *
  * ---------------------------------------------------------------------------
- * WHAT IS NOT RECONSTRUCTED, and it is finding F341's gap again.  Three blocks
- * here are entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and
- * 0x6b410 -- and none is written.  Every one is a diagnostic on the path where
- * the reader is reloaded or the transmit machine moves.
+ * THE THREE BLOCKS F341 FLAGGED ARE NOW WRITTEN (F11502, F11508).  They are
+ * entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and 0x6b410
+ * -- and each is a diagnostic on the path where the reader is reloaded or the
+ * transmit machine moves.  F11502 reconstructed 0x646b5 in `tx1_mp_reload`,
+ * 0x67254 in `tx1_mp_sequence_end` and 0x6b410 is `hs_setstate`'s own
+ * `txstate` print.  An object-first count of the blob range against this TU
+ * finds no blob string absent here (F11508), which is what retired the note.
  */
 
 /*
@@ -1804,11 +1807,13 @@ v34tx1_jtxmit(void *objp)
  * arithmetic.  Below it the arm simply leaves; at or above it the hold is
  * over and one of three things happens.
  *
- * WHAT IS NOT RECONSTRUCTED, and it is finding F341's gap again.  Fourteen
- * blocks here are entered only when `dsplibs_debug_level > 1` -- 0x68704,
- * 0x68b12, 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the seven
- * `cmpl $0x1` sites that guard them -- and none is written.  Every one is a
- * diagnostic on a state transition.
+ * THE FOURTEEN BLOCKS F341 FLAGGED ARE NOW WRITTEN (F11502, F11508).  They
+ * are entered only when `dsplibs_debug_level > 1` -- 0x68704, 0x68b12,
+ * 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the `cmpl $0x1` sites that
+ * guard them.  The seven that name a string live as `v34tx1_tx_dpsk`'s own
+ * "End of current MOH msg" print, the `MOH_ILLEGAL` message and `hs_setstate`;
+ * the rest are `hs_setstate`'s three formats.  The object-first count that
+ * retired the note is F11508.
  *
  * AND ONE PATH THAT WRITES ONE BYTE.  `moh_message` OUTSIDE 0..3 makes the
  * dispatch do NOTHING but clear its own one-shot at +0xabf8, and below the
