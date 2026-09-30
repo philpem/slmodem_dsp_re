@@ -264,6 +264,10 @@
   "src/pump/v34/V34hshak.c",
   "build/test/t_v34hshak"
  ],
+ "v34hs_state": [
+  "include/dsplib/v34hs_state.h",
+  "build/test/t_v34hshak"
+ ],
  "v34hsmst44": [
   "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsmst44"

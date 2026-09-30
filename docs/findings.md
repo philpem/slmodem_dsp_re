@@ -130080,3 +130080,63 @@ tree.  The two levers are coupled: the budget supplies the inlining the object
 did, the closure and diagnostics supply the statements our source omits.  The
 inline spelling to test is `static inline`, and the closure the object's
 evidence points at is `hs_*`, not the `tx1_*` arms of F11505.  (2026-09-30)
+
+## F11507. The `hs_*` closure gets ONE `static inline` home: the blob's symbol surface and in-range calls are recovered, and the target moves exactly the way F11506 predicted
+
+F11506 named the first lever and declined to land it alone.  This entry lands
+it, with the test link that F11506's single-TU experiment could not see.
+
+**WHAT MOVED, AND WHERE.**  `hs_get`, `hs_put`, `hs_setstate` and the
+`StateName[]`/`HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE`/`HS_TRACE_2` they use
+were defined in `src/pump/v34/V34hshak.c`.  They move VERBATIM -- bodies,
+comments and all -- into `include/dsplib/v34hs_state.h` as `static inline`,
+which `V34hshak.c` includes at the block's old position and which
+`v34hstx1_arms.h` includes so `t_v34hstx1.c` gets the same internal-linkage
+copy.  The three extern declarations are deleted from `v34hshak.h`.  No other
+TU calls the closure (verified: `grep -rE '(^|[^ *])hs_(get|put|setstate)\('`
+over `src/` and `test/` returns no real call site outside `V34hshak.c` and the
+arm header), so one home serves both.
+
+**THE TEST LINK IS WHY IT IS A HEADER AND NOT A BARE `static`.**  A bare
+`static` in `V34hshak.c` makes the arms' `hs_setstate` calls in
+`t_v34hstx1.o` undefined -- every test binary links all of `$(OBJ_REPRO)`.  The
+header is F11503's migration pattern: one textual home, a static copy per
+includer, and `t_v34hstx1.c`'s arms keep the closure.
+
+**MEASURED: THE SYMBOL SURFACE AND THE IN-RANGE PROFILE BECOME THE BLOB'S.**
+
+    v34handshak in-range        before      after       blob
+    hs_setstate calls              26          0           0
+    hs_get / hs_put symbols     3 GLOBALs    0           0 (nm)
+    dsplibs_debug_printf (PC32)    21         30         262
+    txmit (PC32)                    5          5          16
+    bytes                       7,341      6,500      61,541
+    instructions                1,539      1,289      12,199
+    54,200 differing          →  55,041 differing
+
+The 6,500 B is exactly the figure F11506's single-TU `static inline` control
+produced, so the whole-tree link changed nothing about the target.  The
+`-841` bytes are F11506's constant-folding: each inlined copy folds `off` and
+`fmt[(off - HS_MICROSTATE)/2]`, so inlining the closure SHRINKS the function.
+That is why this is a structural fix and not a byte-count win; the 107 missing
+diagnostics remain the gap-closer.
+
+**THE MUTATION ANCHORS MOVE WITH THE BODY, AS F11503 DID.**  Eight
+`v34hshak` anchors named text inside the closure (`#define HS_RXSTATE ...`,
+the three `ctx` branches, the `[2]` counter, the `StateName` transposition and
+the two `fmt[]` entries).  They move to `test/mutations/v34hs_state.json` with
+source `include/dsplib/v34hs_state.h` and the SAME test binary
+`t_v34hshak` (which links `V34hshak.o`, so the mutation's behaviour is
+unchanged).  `suites.json` gains `v34hs_state`.  Nothing is dropped:
+`anchorcheck` reads **286 suites / 10,038 mutations / 0 non-unique / 0
+re-pointed** (same mutation total, one more suite), and `refcheck` 0 dangling.
+
+**GATES.**  `make -j1 J=1 period` period differential **385 passed / 0
+failed**; `byteident` grade 0 **844/1852** and grade 0-or-1 **895/1852** with
+the exact SET unchanged (no exact function gained or lost); `partialcmp`
+positioned **67,363 → 68,263/943,398**, exact relocations 1,016 unchanged,
+exact symbols 394/2,907 unchanged, candidates 2,982 → 2,984.  `anchorcheck`
+and `refcheck` clean, `git diff --check` clean.  The `v34hshak` and
+`v34hs_state` mutation-snapshot entries are stale by construction (src/
+changed) and were not re-recorded -- a whole-tree snapshot is out of scope
+for this pass.  (2026-09-30)

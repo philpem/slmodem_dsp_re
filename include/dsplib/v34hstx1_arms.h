@@ -44,6 +44,7 @@
 #include "dsplib/v34filt.h"	/* V34EchoReportCoeff, V34SetupModulator */
 #include "dsplib/v34fsk.h"	/* struct v34_object, struct v34_ratecfg */
 #include "dsplib/v34hshak.h"	/* vect4, v90Phase34, k56FlexPhase34      */
+#include "dsplib/v34hs_state.h"	/* the arms' hs_setstate, static inline   */
 #include "dsplib/v34hstx1.h"
 #include "dsplib/v34info.h"	/* V34SetINFO0aBits                       */
 #include "dsplib/v34pcmif.h"	/* VPcmV34Report*OfEchoAdapt              */

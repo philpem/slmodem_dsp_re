@@ -144,41 +144,16 @@ extern "C" {
 
 struct v34_object;
 
-/**
- * @brief Read one of the handshake's three state words.
- * @param obj  The V.34 modem object.
- * @param off  One of #V34HS_MICROSTATE_OFF, #V34HS_RXSTATE_OFF, #V34HS_TXSTATE_OFF.
- * @return The word's current value.
- */
-short hs_get(const struct v34_object *obj, unsigned off);
-
-/**
- * @brief Store one of the handshake's three state words, unconditionally
- * and without a diagnostic.
- * @param obj  The V.34 modem object.
- * @param off  One of #V34HS_MICROSTATE_OFF, #V34HS_RXSTATE_OFF, #V34HS_TXSTATE_OFF.
- * @param v    The new value.
- */
-void hs_put(struct v34_object *obj, unsigned off, short v);
-
-/**
- * @brief Move one of the handshake's three state machines to a new state.
+/*
+ * `hs_get`, `hs_put` and `hs_setstate` are NO LONGER DECLARED HERE.
  *
- * Prints the object's state-transition diagnostic when debugging is on and
- * the value is actually changing, then stores the new value -- in that
- * order, matching the object. hs_put() is the version without the compare
- * and the diagnostic, for arms that need the store alone.
- *
- * This and hs_get()/hs_put() are shared (rather than duplicated per arm)
- * because `v34handshak` itself is being reconstructed one dispatch arm at a
- * time across several files, and all of them read and write these same
- * three words through the same diagnostic strings.
- *
- * @param obj   The V.34 modem object.
- * @param off   One of #V34HS_MICROSTATE_OFF, #V34HS_RXSTATE_OFF, #V34HS_TXSTATE_OFF.
- * @param next  The new state.
+ * The blob defines none of them: its `v34handshak` inlines the whole
+ * read/print/store closure (finding F11506).  They are now `static inline`
+ * definitions in `include/dsplib/v34hs_state.h`, the one home shared by
+ * `V34hshak.c` (whose function must inline them) and `t_v34hstx1.c` (whose
+ * arm copies must link them).  A non-static declaration here would conflict
+ * with that internal-linkage definition.
  */
-void hs_setstate(struct v34_object *obj, unsigned off, short next);
 
 /**
  * @brief Bring the handshake up.
