@@ -305,11 +305,11 @@
   "build/test/t_v34hstb1"
  ],
  "v34hstx1": [
-  "src/pump/v34/v34hstx1.cpp",
+  "include/dsplib/v34hstx1_arms.h",
   "build/test/t_v34hstx1"
  ],
  "v34hstx1_moved": [
-  "src/pump/v34/V34hshak.c",
+  "include/dsplib/v34hstx1_arms.h",
   "build/test/t_v34hstx1"
  ],
  "v34hstxblock": [

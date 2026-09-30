@@ -82,6 +82,7 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34hstx1.h"
+#include "dsplib/v34hstx1_arms.h"
 
 /* Companion fields, by offset in the object.  See src/pump/v34/v34hstx1.c. */
 #define TX1_RXFLAGS	0x0386		/* receiver +0x122                 */

@@ -129769,3 +129769,314 @@ follow-on this pass was told not to start before the diagnostics were resolved;
 the diagnostics are now resolved, and that migration remains.
 
 A partial reconstruction with the remainder named is the deliverable.  (2026-09-30)
+
+## F11503. The F11443/F11502 arm migration: the helper closure has ONE home, 19 GLOBALs go local, and the `v34handshak` gap turns out to be an INLINER BUDGET, not missing code
+
+The F11443/F11502 follow-on, executed.  All nineteen table-1 arms, their
+whole static helper closure and `getbit` now live in
+`include/dsplib/v34hstx1_arms.h`, included as a `static` copy by both
+`V34hshak.c` (so the arms are in `v34handshak`'s own translation unit) and
+the mutation driver `t_v34hstx1.c` (so the suites still call them).  Every
+arm and helper BODY is moved verbatim; only the home and linkage change.
+`src/pump/v34/v34hstx1.cpp` is deleted.
+
+**THE COLLISION IS RESOLVED BY ONE DEFINITION, ONE HOME.**  The four helpers
+defined in both files (`tx1_get`, `tx1_put`, `tx1_put_point`, `tx1_dpsk4`)
+and the twelve that only `V34hshak.c` had (`tx1_bitsource`,
+`tx1_mp_reload`, `tx1_mp_sequence_end`, `tx1_mp16`, `tx1_mp4`,
+`tx1_dpsk_tone`, `tx1_moh_cleardown/reinit/hold/on_hold/send`), plus
+`getbit`, are defined once in the header.  `V34hshak.c`'s duplicate
+definitions are removed; the source of `getbit`+helpers+the two in-TU arms
+(lines 2946..3541) is replaced by the include.  No rename was needed, which
+is why the F11443 anchor problem does not recur: the anchor text is
+byte-identical, it merely moved.
+
+**THE ANCHORS CONSOLIDATE TO ZERO DETACHED.**  `suites.json`'s `v34hstx1`
+(535 mutations) and `v34hstx1_moved` (241) both retarget from
+`v34hstx1.cpp`/`V34hshak.c` to the header.  Because the move is verbatim,
+every `find` still matches exactly once; `anchorcheck` reports **285
+suites / 10,038 mutations / 0 non-unique / 0 vacuous / 0 re-pointed**.
+Rule 1 (the `case V34HS_*` arm map) is now vacuous for these two suites
+because their source is a header with no dispatch; rule 2 (`"fn"`) still
+checks, and uniqueness -- the property F11443 broke -- is fully checked.
+This is the one measured cost of the consolidation, and it is stated rather
+than implied.
+
+**THE SYMBOL SURFACE IS FIXED.**  The blob defines no `v34tx1_*`; this tree
+exported nineteen GLOBALs.  After the move, fourteen of the seventeen
+`v34hstx1.cpp` arms are inlined away and the remaining five are LOCAL
+(`v34tx1_jtxmit`, `v34tx1_trnseg4`, `v34tx1_trnseg4a`, `v34tx1_tx_dpsk`,
+`v34tx1_xmitmp`), exactly the F11443 count.  `partialcmp` candidate symbols
+**2,992 -> 2,982**.
+
+**MEASURED, GCC 3.4.2-r2 `make -j1 J=1 phase` = 385 passed / 0 failed.**
+
+    partialcmp          before        after
+    positioned bytes    66,900        67,363   /943,398   (+463)
+    exact sections      70/92         70/92
+    ordered sections    63            63
+    exact relocations   1,012         1,016    /18,317    (+4)
+    exact symbols       394           394      /2,907
+    candidate symbols   2,992         2,982              (-10)
+    NOBITS              2,836/2,812   2,836/2,812
+    byteident grade 0   844/1,852     844/1,852
+    grade 0-or-1        895/1,852     895/1,852
+
+**THE UNEXPECTED RESULT: `v34handshak` GETS SMALLER, AND IT IS THE INLINER'S
+BUDGET.**  byteident `--why v34handshak`:
+
+    before   blob 12,199 insns; ours 1,757 insns; 52,855 bytes differ
+    after    blob 12,199 insns; ours 1,539 insns; 54,200 bytes differ
+
+The seventeen arms are now in the TU and fourteen inline, but the net
+instruction count FALLS.  The cause is not the arms -- it is that the arms'
+inlining consumes GCC 3.4.2's default inlining budget and DISPLACES the
+`t3m_micro*` table-2 arms that the baseline had inlined into `v34handshak`
+(`t3m_micro49/50/51/55/58/59` and `t3m_micro63` are emitted as local
+functions after the change and were inlined before).  Two controls:
+
+  * include the arms at the TOP, at line 2946, or immediately before
+    `v34handshak` -- the same shrink, from 8,686 to 7,337 bytes; placement
+    does not help;
+  * moving only the seventeen and leaving `getbit` and the in-TU arms in
+    `V34handshak.c` -- the same 7,337 bytes, so the scope does not help
+    either;
+  * append the inline-limit parameters to the recovered flags
+    (`--param large-function-growth=1000 --param large-function-insns=200000
+    --param max-inline-insns-single=20000 --param max-inline-insns-auto=20000`)
+    and ALL nineteen arms and every `t3m_micro` inline: `v34handshak`
+    becomes **48,606 bytes** against the blob's 61,541.
+
+So the obstruction is the inliner budget and NOT missing statements: the
+object's one 61,541-byte function has everything fused, and the recovered
+`-O3` flag set will not fuse this much.  This is issue #22's original-profile
+question, now with a sharp discriminator (`large-function-insns`), and it is
+NOT resolved here: changing the inline parameters is a flag change and the
+task bounds this pass to source and linkage.  The honest statement is that
+the migration buys the symbol surface (+463 positioned bytes, -10 candidates)
+and holds the tree grades, while the function it was aimed at regresses until
+the inline-limit question is settled.  The alternative reconstruction is the
+one F11443 did not consider: the original `v34handshak` may be a SINGLE
+function with the arm bodies written inline in its switch, in which case no
+inlining is needed and the arms header is the wrong shape.  That is the next
+discriminating experiment.
+
+**GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0
+failed**, boundary OK, one-definition 1 known duplicate (unchanged);
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean.  (2026-09-30)
+
+## F11504. `v34handshak`'s remaining gap is NOT closable by the inliner budget: every lever reproduces nothing, and the global parameter set costs 44 whole-tree exact symbols
+
+F11503 named the next discriminator for the arm migration's `v34handshak`
+regression: the GCC 3.4.2 inliner budget (`large-function-insns`), or a
+single-function source form.  This entry runs issue #22's crossed, bounded
+experiment over both, and the answer is that **no lever reproduces the
+object** and the one that gets closest is a whole-tree loss.
+
+**BASELINE CONTROL (retained `-O3` profile, `build/tc_out`).**  GCC 3.4.2-r2
+`/usr/i386-pc-linux-gnu/gcc-bin/3.4/gcc`, assembler GNU as 2.15.92.0.2.
+`byteident` grade 0 **844/1852** (45.6%), grade 0-or-1 **895/1852** (48.3%);
+`compare.py` **904** identical mnemonic sequences; `--ratchet` OK.  `byteident
+--why v34handshak` before any change: blob 12,199 insns / 61,541 B, ours 1,539
+insns / 7,341 B, **54,200 bytes differ**.  `partialcmp` is F11503's row
+(positioned 67,363/943,398; relocs 1,016/18,317; symbols 394/2,907; candidates
+2,982).  `anchorcheck` 285/10,038/0; `refcheck` 0 dangling.
+
+**THE RIG IS VALIDATED.**  A single-TU compile of `src/pump/v34/V34hshak.c`
+with the period flags only reproduces the committed object **byte for byte**
+(`md5sum` `c5e929ba…` both).  Every cell below is one compile of that TU;
+`--why v34handshak` reads it through a one-object `TC_OUT`.  The four inline
+parameters were also applied to the WHOLE tree (300/300 objects, 0 failed)
+because a local gain is not a global result.
+
+    cell                                                        v34handshak        tree exact
+    E1 baseline (committed source)                              7,341 B 1,539 i    844/1852
+    E2 --param large-function-growth=1000 large-function-insns=200000
+       max-inline-insns-single/auto=20000                       48,606 B 9,999 i   800/1844
+    E6 always_inline on the 42 arms (getbit excluded), baseline  18,513 B 4,095 i  (one TU)
+    E7 same + E2's params                                        45,885 B 10,019 i (one TU)
+
+**E2 IS A WHOLE-TREE LOSS, SO IT IS DECLINED.**  `TC_OUT=build/tc_out` and
+`TC_OUT=<params tree>` `--list-exact` differ by **44 losses and 0 gains**
+(844 -> 800), and the denominator falls 1852 -> 1844: the budget inlines eight
+symbols out of existence entirely.  The losses span the tree and are not
+`v34handshak`-adjacent -- `RxHdxStartV27`, `RxHdxScramV17`,
+`TxHdxStartV17/27/29`, `detector_delete`, `dtmf_progress`, `VPCMXF_Create`,
+`V90Resampler::reset`, both `V90Modem` ctor forms, the `V92ConvolutionEncoder`
+pair and the `V90ConnectionEvaluator`/`V90Phase4Modulator` members.  This is
+exactly #22's "helps the target but loses elsewhere", so no production flag
+changes.
+
+**EVEN UNLIMITED INLINING DOES NOT REPRODUCE, AND THE RESIDUAL IS STATEMENTS.**
+E2 inlines all nineteen arms and every `t3m_micro` (one local symbol remains)
+and still stops 12,935 B / 2,200 instructions short.  The relocation profile
+says the residual is not diagnostics: against the blob's in-range counts, E2
+emits **MORE** `dsplibs_debug_printf` (318 vs 262) and `dsplibs_debug_level`
+(343 vs 301), while emitting **fewer** instructions (9,999 vs 12,199) and
+calling `txmit` **twice as often** (32 vs 16).  So ~2,200 instructions of
+non-diagnostic code are absent and sixteen `txmit` call sites are duplicated in
+the arms.  The obstruction is the arm bodies' statement content, not only the
+budget; source-side `always_inline` (E6/E7) is bounded by the same ceiling and
+is also insufficient.
+
+**THE OBJECT IS A SINGLE FUSED FUNCTION, BUT THAT ALONE BUYS NOTHING.**
+`v34handshak` (0x628f0, 0xf065 B) has no local symbol inside its range and no
+`R_386_PC32` against `.text`; every PC32 in the range targets a named global.
+The arms are therefore inline-expanded bodies, not out-of-line calls -- the
+giant-function observation is real.  It is also not sufficient, because the
+missing statements do not appear by rewriting the factoring.  The recursive
+`getbit` (local `t` at 0x5eaf0, `0x5ec47` calls `0x5eaf0`) and `txmit`
+(global at 0x5d7b0) stay out-of-line in the blob too, which is why
+`always_inline` on `getbit` is rejected by 3.4.2 as recursive inlining -- its
+recursion is the object's own, so no `always_inline` form is available for it.
+
+**ONE CELL WAS INVALID AND IS EXCLUDED.**  Marking the extern `hs_setstate`
+`__attribute__((always_inline))` (E3) changed the function's size without a
+clean mechanism and is recorded as an invalid diagnostic, not a result; the
+blob inlines `hs_setstate` 140 times, and the extern/cross-declaration form was
+not controlled.
+
+**CONCLUSION.**  In the domain {E2, E6, E7} no source or flag cell reaches byte
+identity, and the closest (E2) is a whole-tree regression, so #22's rule
+declines it.  The migration's deliverable -- the nineteen spurious GLOBALs
+reduced to five LOCALs, `partialcmp` positioned bytes +463 and candidates -10,
+anchors 285/10,038/0 -- stands unchanged.  **Next discriminating test:** a
+per-arm statement audit of the arm bodies, driven by the `txmit` call
+multiplicity (32 vs 16) and the 2,200 missing non-diagnostic instructions, not
+another inliner-profile control.  (2026-09-30)
+
+## F11505. `static inline` on the tx1 arms and helper closure reproduces nothing: the keyword is inert on the helpers and costs the target on the arms
+
+F11504 left one spelling untried -- the prior pass tested
+`__attribute__((always_inline))` and declined it, but a human developer is far
+more likely to have written `static inline`, which GCC 3.4.2 may treat as a
+stronger hint than the plain `static` definitions the migrated
+`v34hstx1_arms.h` carries.  This entry enumerates that family; the answer is
+negative, and the natural spelling leaves the whole-tree grades untouched.
+
+**METHOD.**  The recovered Gentoo GCC 3.4.2-r2 toolchain and the tree's exact
+flags through `make tc`; the header is the only edited file, so `-MMD` rebuilds
+only `src_pump_v34_V34hshak.c.o`.  Exact command per object (period.mk):
+
+    gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+        -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
+        -Iinclude -D__SIZEOF_POINTER__=4 \
+        -include tools/toolchain/period_compat.h \
+        -o src_pump_v34_V34hshak.c.o src/pump/v34/V34hshak.c
+
+compiler gcc 3.4.2, assembler GNU as 2.15.92.0.2.  Baseline before any edit:
+`byteident` grade 0 **844/1852**, 0-or-1 **895/1852**; `--why v34handshak`
+blob 12,199 insns / 61,541 B, ours **1,539 insns / 7,341 B, 54,200 bytes
+differ**; `--list-exact` 844 names.
+
+**THE FAMILY, AND THE DENOMINATOR.**  42 definitions: the 19 `v34tx1_*`
+table-1 arms and the 23-member helper closure (`tx1_get`, `tx1_put`,
+`tx1_put_point`, `tx1_get_int`, `tx1_put_int`, `tx1_scramble2`,
+`tx1_ja_common`, `tx1_dpsk4`, `tx1_ts_scale`, `tx1_ts_snapshot`,
+`tx1_ts_rates`, `getbit`, `tx1_bitsource`, `tx1_mp_reload`,
+`tx1_mp_sequence_end`, `tx1_mp16`, `tx1_mp4`, `tx1_dpsk_tone`,
+`tx1_moh_cleardown`, `tx1_moh_reinit`, `tx1_moh_hold`, `tx1_moh_on_hold`,
+`tx1_moh_send`).  Each cell rewrote both sets or a named subset and printed
+the set it rewrote, so no cell ran over an empty domain.
+
+    cell                              v34handshak ours      tree grade 0  EXACT set
+    baseline (all static)             1,539 i  54,200 diff  844/1852     844
+    arms `static inline`              1,497 i  54,383 diff  844/1852     unchanged
+    helpers `static inline`           1,539 i  54,200 diff  844/1852     unchanged
+    both `static inline`              1,590 i  53,973 diff  844/1852     unchanged
+    plain `inline` (no static), both  1,688 i  53,556 diff  844/1852     unchanged
+    `always_inline` both less getbit  2,271 i  51,033 diff  844/1852     unchanged
+
+**THE HELPER CLOSURE IS INERT AND THE ARMS COST THE TARGET.**  `static inline`
+on the 23 helpers changes NOT ONE BYTE of `v34handshak` -- 1,539 insns / 54,200
+differ, identical to baseline -- so at `-O3` the keyword is not what decides
+whether a small helper is inlined, and the spelling a human would have written
+is unfalsifiable there.  On the arms it makes the target SMALLER (1,539 ->
+1,497 i): the arms inline under a hint that displaces the `t3m_micro` inlining
+F11504 named, the same budget interaction one lever down.  Both `static inline`
+is the only cell that moves the bytes the useful way (54,200 -> 53,973, -227 B,
++51 insns), and it is **DECLINED**: 227 of 54,200 bytes off a 12,199-instruction
+function is not its shape, and per F7782 a nearer byte count with no unique
+preimage is not recovered source.  **No cell changes the whole-tree grade
+counts or the EXACT set** -- all six stay at 844/1852 with the identical 844
+names -- so there is no whole-tree loss to weigh and none is a #22 profile
+finding.  `always_inline` must exclude `getbit`: 3.4.2 rejects recursive
+inlining on it outright, and the whole cell fails to compile if it is included
+(F11504).
+
+**THE PREMISE IS MEASURED FALSE.**  The hypothesis was that `inline` is a
+"much stronger hint" than plain `static`.  Over this closure it is not: the
+only spelling that reproduces the object's inlining is `always_inline`, and
+even it does not reproduce the object (2,271 i against 12,199), because the
+obstruction is not in the arms.  Findings F11505 and F11506 together say where
+it is.  Nothing is adopted.  (2026-09-30)
+
+## F11506. The `v34handshak` residual is the `hs_get`/`hs_put`/`hs_setstate` closure NOT inlined plus ~107 missing diagnostics -- not the arm bodies' statement content
+
+F11504 closed onto a per-arm statement audit and a `txmit`-multiplicity pointer
+("32 vs 16").  This entry runs that audit object-first and CORRECTS the
+diagnosis: the largest measured residual is a linkage difference the blob
+proves outright, the missing content is diagnostics, and the `txmit` clue does
+not survive an in-range count.
+
+**METHOD.**  `objdump -dr` over three objects, counting R_386_PC32 relocation
+targets WITHIN the `v34handshak` symbol range only -- the whole-object census
+mixes in every other function and is not a comparison.  The blob
+(`ref/slmodemd/dsplibs.o`, `v34handshak` at 0x628f0, 0xf065); E2 (F11504's
+unlimited-inline build, reproduced here single-TU with the four `--param`s,
+0xbdde = 48,606 B); our baseline (build/tc_out, 0x1cad = 7,341 B).
+
+    v34handshak in-range    baseline    E2        blob
+    hs_setstate calls           26      162           0
+    dsplibs_debug_printf        21      155         262
+    txmit                       10       16          16
+    hs_get / hs_put              0        0           0
+    (bytes)                  7,341   48,606      61,541
+
+**THE BLOB DEFINES NO `hs_setstate`, `hs_get` OR `hs_put` AT ALL.**  `nm` on
+`dsplibs.o` finds none of the three.  This tree defines all three as globals in
+`V34hshak.c` (`hs_get` 13 B, `hs_put` 18 B, `hs_setstate` 239 B, `T`) and
+declares them in `v34hshak.h`.  The blob's `v34handshak` therefore INLINES the
+whole closure -- zero calls -- which is what a `static inline` definition (or a
+macro) leaves behind.  Our E2 still CALLS `hs_setstate` 162 times, because the
+closure has external linkage.  So the reconstruction's linkage is the
+artefact: only `V34hshak.c` and the arm header it includes call the closure, so
+it is already file-local in fact and its `T` binding is a stale detail of the
+split the original comment at `V34hshak.c:1359` describes.
+
+**THE MISSING CONTENT IS DIAGNOSTICS.**  Against the blob, E2 is SHORT 107
+`dsplibs_debug_printf` call sites (155 vs 262).  The arms' own comments already
+record them: "WHAT IS NOT RECONSTRUCTED ... entered only when
+`dsplibs_debug_level > 1` ... and none is written" appears for 67, 24 and
+several table-2 arms.  This is statement content, but it is DIAGNOSTIC
+statement content, and it is where the 2,200-instruction deficit lives -- not
+in the transmitting statements of the arm bodies.
+
+**THE `txmit` CLUE IS RETIRED IN-RANGE.**  E2 calls `txmit` 16 times inside
+`v34handshak` and the blob also 16 -- equal, not doubled.  F11504's "32 vs 16"
+does not reproduce as an in-range count; it is a whole-object artefact of
+counting across a TU this tree has split, and it is not a
+duplicated-call-site signal.  The number to carry forward is the hs-closure and
+diagnostic profile above.
+
+**THE CLOSURE DIAGNOSTIC, AND WHY IT IS NOT AN ADOPTION.**  A single-TU
+compile of `V34hshak.c` with the three definitions changed to `static inline`
+(the header's `T` declaration conflict gives one warning, E3's shape, but the
+codegen is what we are reading): at baseline flags `v34handshak` becomes 6,500
+B with **0** hs calls; at E2's four `--param`s it becomes 46,841 B with 0 hs
+calls, `txmit` 16 and `dsplibs_debug_printf` 151.  Inlining the closure does
+not grow the function toward 61,541 -- it SHRINKS it, because the inlined
+copies constant-fold the constant `off` argument (the context selection and
+`fmt[(off - HS_MICROSTATE)/2]`).  So the closure is necessary to match the
+blob's symbol surface and in-range calls, but it is not sufficient, and on its
+own it moves the byte count AWAY.  **Not adopted**; the source is right
+structurally and wrong to land alone.
+
+**NEXT DISCRIMINATING TEST.**  Reconstruct the missing diagnostic blocks the
+arm comments name (67, 24 and the table-2 arms first -- they are the 107-call
+deficit), and land the `hs_get`/`hs_put`/`hs_setstate` closure as `static
+inline` in one home, crossing both with F11504's inline budget on the whole
+tree.  The two levers are coupled: the budget supplies the inlining the object
+did, the closure and diagnostics supply the statements our source omits.  The
+inline spelling to test is `static inline`, and the closure the object's
+evidence points at is `hs_*`, not the `tx1_*` arms of F11505.  (2026-09-30)
