@@ -130877,3 +130877,111 @@ compiler profile and belongs to #22 and not to a source spelling.
 
 **GATES.**  The experiment edits no `src/` in the landed change and no test; the
 source edits were reverted.  The branch is findings-only.  (2026-09-30)
+
+## F11514. The `v34handshak` byte regression is the retained-`-O3` inline equilibrium, not the shared dispatch: two arms cross the single-caller threshold, the TU `.text` shrinks, and every bounded spelling leaves the object unreached
+
+F11513 said the hoist alone "moves the target the wrong way" under the retained
+profile (6,469 -> 7,108 B) and left the question open.  The owner asked for the
+byte regression to be looked at.  **It is not the shared dispatch, and it is
+not removable by a source spelling.**  Under retained `-O3` the table-2 switch
+was never duplicated -- it is the out-of-line `t3m_txblock` in both forms -- so
+the hoist's only effects are the arms' terminal store and a TU-wide inliner
+regime shift.  Measured, single TU, recovered Gentoo gcc 3.4.2-r2, the
+F11512/F11513 rig (baseline object md5 `4269db6f...` reproduced first).
+
+**THE OBJECT'S REGION, READ FIRST.**  `0x62ae3` `mov 0xc0(%esp),%edi` /
+`0x62aea` `movzwl 0x3596(%edi),%ecx` / `0x62af1` `movswl %cx,%eax; sub $0x5`;
+`cmp $0x45` / `0x62afa` `ja 62a40` / `0x62b00` `jmp *0x2ee8(,%eax,4)` -- one
+indirect jump, case bodies at `0x62b07`, `0x62b15`, `0x62b2f`, `0x62b45`, and
+the `ja` default is the shared tail at `0x62a40`.  F11513 counts 134 edges into
+that one block (124 jumps, 1 fall-through, 9 to the tail) and three indirect
+jumps in the whole 61,541 B function.  Our *retained* `t3m_txblock` is 873 B and
+**byte-identical between baseline and hoist**: the shared dispatch and tail were
+already one out-of-line function, so there is nothing for the hoist to collapse
+at this profile.
+
+**WHERE THE +639 B IS, BY CENSUS.**  `nm -S` local-text deltas between the
+baseline and hoisted objects:
+
+    v34handshak                 6,469 -> 7,108   (+639, +103 insns by --why)
+    t3m_micro50                 1,119 -> absent (inlined into v34handshak)
+    t3m_micro63                 1,175 -> absent (inlined into v34handshak)
+    t3m_micro49/51/58           1,160/1,642/1,672 -> 1,176/1,651/1,688
+    hs_setstate                 absent -> 268      (inlined in baseline)
+    v34tx1_dataxmit             absent -> 169      (inlined in baseline)
+    v34tx1_txmd                 absent -> 616      (inlined in baseline)
+    TU .text                    81,082 -> 80,538   (-544)
+
+A call-target census of `v34handshak` confirms it: 7 out-of-line `t3m_micro*`
+calls at baseline, 5 in the hoist (`t3m_micro50` and `t3m_micro63` gone); the
+mnemonic delta is dominated by `mov` +61, with compares and short branches
+spread over the absorbed arm bodies.  **The regression is therefore a
+TU-level inline-equilibrium shift**: replacing each arm's terminal
+`t3m_txblock(f, E)` with `f->tx = (E)` and adding a frame field moved two
+single-caller arms below GCC 3.4.2's inline threshold while three other bodies
+(`hs_setstate`, `v34tx1_dataxmit`, `v34tx1_txmd`) crossed the other way.  It is
+not a longer branch sequence, not the indirect-jump table, and not per-arm
+prologue/epilogue.  The whole TU's `.text` gets *smaller*; only the symbol grows.
+
+**BOUNDED SPELLING FAMILY (single TU, retained flags).**  Each cell scored
+`v34handshak` and the whole-tree exact set:
+
+    cell                                             v34handshak    jmp*  exact set
+    baseline control (duplicated terminal calls)     6,469 B 1,275   2     (control)
+    H  goto + `frame.tx` (LANDED)                    7,108 B 1,378   2     0 gain/0 loss
+    S  switch `break` + `frame.tx`                   7,108 B 1,378   2     0 gain/0 loss
+    F1 `frame.tx` typed `int`                        7,114 B 1,377   2     0 gain/0 loss
+    F2 `frame.tx` declared first                     7,108 B 1,378   2     0 gain/0 loss
+    R  arms `return short`, local `tx` (no frame)     7,003 B 1,370   2     0 gain/0 loss
+    localonly + hoist (F11513, flag cell)            50,218 B 9,835  2     0 gain/0 loss
+    localonly + hoist + 7 `always_inline` (F11513)   49,775 B 9,826  3     0 gain/0 loss
+    blob                                             61,541 B 12,199 3
+
+`S` is a textual no-op: `break` and `goto micro_txblock` compile to the same
+object, so that map is constant.  `F1`/`F2` move single digits.  `R` is the
+nearest only spelling at -105 B and it is still in the same regime -- `micro50`
+and `micro63` are inlined in it too -- while changing the arms' ABI from
+`void` to `short`, which is a larger departure from the object than the frame
+field.  No cell removes the regression or reaches the object, so per F7782
+nothing is adopted beyond the landed `H`.
+
+**WHAT IT MEANS.**  The regression is a real, profile-local cost of the
+retained `-O3` inliner, and it buys nothing at that profile because there was
+no duplicated dispatch to remove.  Under the profile the source is written for
+-- force-inline the closure -- the *same* source shortens `v34handshak` and
+gives the object's three indirect jumps (`localonly` + hoist: 50,095 -> 50,218;
++ the seven stragglers: 69,675 -> 49,775).  So the object's middle inlining
+regime (issue #22) is: **inline the closure bodies so table 2 is written once
+and needs no cross-jumping, while keeping the dispatch at one site** -- exactly
+the `localonly + hoist + seven always_inline` cell, which is 11,766 B short of
+the object and needs a whole-tree `--param` change this tree has declined as a
+source fix.  Until that profile is recovered, the faithful source costs 639
+symbol bytes under the retained flags and the tree keeps its exact set.
+
+**PARTIALCMP, ALL COLUMNS.**  `make -j1 J=1 partial-compare`:
+
+    column                    before(baseline)   after(hoist)
+    positioned bytes          68,381 / 943,398   68,400 / 943,398   (+19)
+    candidate delta           -30,424            -30,968            (-544)
+    exact relocations         1,025 / 18,317     1,019 / 18,317     (-6)
+    candidate relocations     18,216             18,187             (-29)
+    exact symbols             394 / 2,907        394 / 2,907
+    candidate symbols         2,983              2,984              (+1)
+    exact sections            70 / 92            70 / 92
+    ordered sections          63                 63
+    NOBITS                    2,836 / 2,812      2,836 / 2,812
+
+So the whole-tree *positioned* movement is +19 bytes, not +639: the symbol's
+growth is offset by the TU shrinking where the object has no bytes.
+
+**THE ANCHORS MOVED, THEY WERE NOT DROPPED.**  The 21 `v34hst3mid` anchors that
+ended on the rewritten terminal `t3m_txblock(f, E)` calls are re-pointed to
+`f->tx = (E)` with the mutated clause unchanged; `anchorcheck` 0 detached, 0
+non-unique, 0 vacuous, 0 re-pointed.
+
+**GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0 failed**
+and phase boundary OK; `byteident` grade 0 **844/1852**, 0-or-1 **895/1852**,
+exact SET unchanged (0 gains / 0 losses); `compare.py --ratchet` OK (identical
+904, compared 1852); `anchorcheck` 285 suites / 10,038 mutations / 0 detached /
+0 non-unique; `refcheck` 14,179 references, 0 dangling; `git diff --check`
+clean.  (2026-09-30)
