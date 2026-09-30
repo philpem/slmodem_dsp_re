@@ -12,40 +12,6 @@
   "note": "probeselect.  Three sections and they break differently: the power request is arithmetic, the normalisation is two widths of one comparison, and the ladder is fifteen thresholds over eleven bins that each originating arm falls through."
  },
  {
-  "label": "rxstate and txstate offsets transposed",
-  "find": "#define HS_RXSTATE\t0x3594",
-  "replace": "#define HS_RXSTATE\t0x3596"
- },
- {
-  "label": "microstate context fed from rxstate twice",
-  "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
-  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
-  "fn": "hs_setstate"
- },
- {
-  "label": "HS_RXSTATE branch ctx1/ctx2 swapped",
-  "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
-  "fn": "hs_setstate"
- },
- {
-  "label": "HS_TXSTATE branch ctx1/ctx2 swapped",
-  "find": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
-  "fn": "hs_setstate"
- },
- {
-  "label": "[1] and [2] counters swapped",
-  "find": "(long)obj->vect_idx,",
-  "replace": "(long)hs_get(obj, HS_TRACE_2),",
-  "fn": "hs_setstate"
- },
- {
-  "label": "StateName DET_SYNC and DET_CJ transposed",
-  "find": "\"DET_CM_JM\",\t\"DET_SYNC\",\t\"DET_CJ\",\t\"RX_DPSK\",",
-  "replace": "\"DET_CM_JM\",\t\"DET_CJ\",\t\"DET_SYNC\",\t\"RX_DPSK\","
- },
- {
   "label": "timer guard signed rather than unsigned",
   "find": "unsigned d = (unsigned)(*(int *)(m + 0x238) - delta);",
   "replace": "int d = *(int *)(m + 0x238) - delta;",
@@ -186,18 +152,6 @@
   "find": "hs_put(obj, 0x2aa0, 0x10);",
   "replace": "hs_put(obj, 0x2aa0, 0x11);",
   "fn": "v34handshakinit"
- },
- {
-  "label": "fmt[] rxstate and txstate entries permuted, offsets untouched",
-  "find": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
-  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
-  "fn": "hs_setstate"
- },
- {
-  "label": "fmt[] microstate entry moved to the rxstate slot",
-  "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
-  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",",
-  "fn": "hs_setstate"
  },
  {
   "label": "dftfreqinit fills 24 bins",

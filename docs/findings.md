@@ -130080,3 +130080,149 @@ tree.  The two levers are coupled: the budget supplies the inlining the object
 did, the closure and diagnostics supply the statements our source omits.  The
 inline spelling to test is `static inline`, and the closure the object's
 evidence points at is `hs_*`, not the `tx1_*` arms of F11505.  (2026-09-30)
+
+## F11507. The `hs_*` closure gets ONE `static inline` home: the blob's symbol surface and in-range calls are recovered, and the target moves exactly the way F11506 predicted
+
+F11506 named the first lever and declined to land it alone.  This entry lands
+it, with the test link that F11506's single-TU experiment could not see.
+
+**WHAT MOVED, AND WHERE.**  `hs_get`, `hs_put`, `hs_setstate` and the
+`StateName[]`/`HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE`/`HS_TRACE_2` they use
+were defined in `src/pump/v34/V34hshak.c`.  They move VERBATIM -- bodies,
+comments and all -- into `include/dsplib/v34hstx1_arms.h` as `static inline`,
+ahead of the nineteen transmit arms.  `V34hshak.c` includes that header at the
+closure's old position, and `t_v34hstx1.c` already includes it, so both get
+the same internal-linkage copy.  The three extern declarations are deleted
+from `v34hshak.h`.  No other TU calls the closure (verified:
+`grep -rE '(^|[^ *])hs_(get|put|setstate)\('` over `src/` and `test/` returns
+no real call site outside `V34hshak.c` and the arm header), so one home serves
+both.
+
+**WHY THE ARM HEADER, AND NOT A HEADER OF ITS OWN.**  The closure and the
+arms have the same two includers and the same reason to be one textual home
+(F11503): a bare `static` in `V34hshak.c` leaves the arms' `hs_setstate` calls
+in `t_v34hstx1.o` undefined, because every test binary links all of
+`$(OBJ_REPRO)`.  A separate `v34hs_state.h` would also need a NEW mutation
+suite, and a registered suite with no recorded baseline is MISSING to
+`tools/mutsnap.py --check` (a hard defect, F2157/F3002).  `mutate.py` cannot
+record one on this host at all -- its baseline fails for the pre-existing
+`v34hshak` suite too (the modern GCC 14 build in its copy), so the closure's
+anchors join the EXISTING `v34hstx1` suite instead and nothing new is
+registered.  The arm header therefore holds the closure and the arms, and the
+eight closure anchors live in `v34hstx1.json` (F11503's pattern again).
+Moving the arm include from its old site to the closure's old position does
+NOT change `v34handshak`: the measurements below are identical to a build that
+kept them separate.
+
+**MEASURED: THE SYMBOL SURFACE AND THE IN-RANGE PROFILE BECOME THE BLOB'S.**
+
+    v34handshak in-range        before      after       blob
+    hs_setstate calls              26          0           0
+    hs_get / hs_put symbols     3 GLOBALs    0           0 (nm)
+    dsplibs_debug_printf (PC32)    21         30         262
+    txmit (PC32)                    5          5          16
+    bytes                       7,341      6,500      61,541
+    instructions                1,539      1,289      12,199
+    54,200 differing          →  55,041 differing
+
+The 6,500 B is exactly the figure F11506's single-TU `static inline` control
+produced, so the whole-tree link changed nothing about the target.  The
+`-841` bytes are F11506's constant-folding: each inlined copy folds `off` and
+`fmt[(off - HS_MICROSTATE)/2]`, so inlining the closure SHRINKS the function.
+That is why this is a structural fix and not a byte-count win; the 107 missing
+diagnostics remain the gap-closer.
+
+**THE MUTATION ANCHORS MOVE WITH THE BODY, AS F11503 DID.**  Eight
+`v34hshak` anchors named text inside the closure (`#define HS_RXSTATE ...`,
+the three `ctx` branches, the `[2]` counter, the `StateName` transposition and
+the two `fmt[]` entries).  They move into `test/mutations/v34hstx1.json`, whose
+source `include/dsplib/v34hstx1_arms.h` now holds the closure, with the SAME
+test binary `t_v34hshak` (which links `V34hshak.o`, so the mutation's behaviour
+is unchanged).  No suite is added or removed.  Nothing is dropped:
+`anchorcheck` reads **285 suites / 10,038 mutations / 0 non-unique / 0
+re-pointed** (same suite and mutation totals as before the change), and
+`refcheck` 0 dangling.
+
+**GATES.**  `make -j1 J=1 period` period differential **385 passed / 0
+failed**; `byteident` grade 0 **844/1852** and grade 0-or-1 **895/1852** with
+the exact SET unchanged (no exact function gained or lost); `partialcmp`
+positioned **67,363 → 68,109/943,398**, exact relocations **1,016 → 1,015**
+(the one loss is the arm include moving to the closure's old position;
+byteident's exact set, the stronger measure, is unchanged), exact symbols
+394/2,907 unchanged, candidates 2,982 → 2,984.  `anchorcheck`
+and `refcheck` clean, `git diff --check` clean, and `mutsnap --check` exits 0
+with **0 never recorded** (only the ordinary all-stale state a src/ edit
+leaves).  (2026-09-30)
+
+## F11508. `v34handshak`'s "107 missing diagnostics" is an INLINING artefact, not missing statements: object-first per-string counts find nothing absent, and the closure + inliner-budget crossing still does not reproduce
+
+F11506's next test was to reconstruct the diagnostic blocks the arm comments
+name -- "67, 24 and the table-2 arms first -- they are the 107-call deficit".
+Run object-first, that premise does not survive, and F11502's string-set
+result is confirmed at the level of the target's own translation unit.
+
+**METHOD.**  `tools/dis.py` over the blob's `v34handshak` range
+(`0x628f0..0x71955`) and over the whole rebuilt
+`build/tc_out/src_pump_v34_V34hshak.c.o`; every `movl $addend,(%esp) <==
+R_386_32 .rodata.str1.4/.str1.1` is decoded through the section header to the
+literal, and the per-string COUNTS are differenced.  Counts, not the set,
+because a string can exist once and be wanted at several sites.
+
+    distinct strings in the blob's v34handshak range   110
+    ... absent from our V34hshak TU                      3
+    ... and those three are the hs_setstate formats      all three
+
+The three "absent" strings are the `V34HSHAKE: {tx,rx,micro}state` formats,
+and they are not absent: our `hs_setstate` prints through its `fmt[3]` table,
+so the strings are reached by an `R_386_32` against the table and not
+directly from the `movl` at the call.  Every other blob-range string is
+present in our TU, which carries 140 distinct strings against the range's
+110 (ours still names arms the blob did not inline into the range).
+
+**THE PER-STRING DIFFERENCE IS THE WHOLE ANSWER.**  The only strings the blob
+uses MORE often than we do are:
+
+    V34HSHAKE: txstate ...       blob 60   ours 0   (fmt[] table, above)
+    V34HSHAKE: microstate ...    blob 53   ours 0   (fmt[] table, above)
+    V34HSHAKE: rxstate ...       blob 27   ours 0   (fmt[] table, above)
+    V34AGC, setup receiver gain  blob  3   ours 2   (a helper, inlined 3x)
+
+There is no string the blob range uses that our source omits, and no format
+string at all beyond the one F11502 already reconstructed.  So the "107" is
+not 107 missing statements: it is (a) 140 hs_setstate copies the blob inlined
+and constant-folded to direct string references where ours keeps the table
+index, and (b) the inliner budget keeping `v34FreezeEcho`, the `t3m_micro`
+arms and the `V34AGC` helper replaced by calls.  `V34AGC`'s third site is the
+same `rxinit` body inlined once more, not a site we lack.
+
+**THE NAMED "NOT RECONSTRUCTED" BLOCKS ARE ALREADY WRITTEN.**  Each address
+the arm comments list decodes to a string our tree already has, at a
+statement our tree already carries:
+
+    arm 67   0x646b5  "V34MP, Starting txmit MP again(%d), ..."  tx1_mp_reload
+             0x67254  "V34MP, MP detected, starting MP' txmit"   tx1_mp_sequence_end
+             0x6b410  "V34HSHAKE: txstate ..."                   hs_setstate
+    hold tail 0x68704 "End of current MOH msg: ..."              v34tx1_tx_dpsk
+             0x68b12/0x6c771/0x6a87e  txstate, 0x6c7db/0x6b06c  rxstate
+             0x6c760  "MOH: Illegal MH sequence ..."              MOH_ILLEGAL
+    0x68704's second ref      "V34AGC, setup receiver gain ..."  rxinit/V34SetupDemodulator
+
+The "WHAT IS NOT RECONSTRUCTED" comments in `v34hstx1_arms.h` (lines 1658 and
+1807) are therefore STALE -- they predate F11502's reconstruction of those
+strings, and F11502's own list already said so.  Reconstructing them would
+mean writing the same `dsplibs_debug_printf` twice, which is inventing a
+statement; per the rule that nothing wrong-but-plausible lands, it is
+declined.
+
+**THE CROSSING STILL DOES NOT REPRODUCE, SO NO SOURCE CONTROL IS ADOPTED.**
+With the F11507 `static inline` closure in place, F11504's four `--param`s
+give (single TU, GCC 3.4.2-r2):
+
+    v34handshak   blob 61,541 B / 12,199 insns
+                  ours 46,841 B /  9,453 insns, 14,700 bytes differ, 0 hs calls
+
+46,841 B is exactly F11506's predicted figure, and it is 2,746 instructions
+short.  The flag route costs 44 whole-tree exact symbols (F11504), so it is
+declined, and no source-side spelling of the inlining exists that closes the
+rest -- the missing content is not in the source.  The remaining lever is the
+object's own original profile (issue #22), not this pass.  (2026-09-30)

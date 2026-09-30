@@ -2990,5 +2990,54 @@
   "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t}",
   "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
   "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
+ },
+ {
+  "note": "The handshake state closure's own mutations.  F11506 moved hs_get/hs_put/hs_setstate and their StateName/HS_* into include/dsplib/v34hstx1_arms.h as one `static inline` home (the blob inlines the closure into v34handshak and defines no hs symbol).  These anchors came from v34hshak.json's V34hshak.c source; the text and the test binary (t_v34hshak links V34hshak.o) are unchanged."
+ },
+ {
+  "label": "rxstate and txstate offsets transposed",
+  "find": "#define HS_RXSTATE\t0x3594",
+  "replace": "#define HS_RXSTATE\t0x3596"
+ },
+ {
+  "label": "microstate context fed from rxstate twice",
+  "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
+  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "fn": "hs_setstate"
+ },
+ {
+  "label": "HS_RXSTATE branch ctx1/ctx2 swapped",
+  "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
+  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "fn": "hs_setstate"
+ },
+ {
+  "label": "HS_TXSTATE branch ctx1/ctx2 swapped",
+  "find": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
+  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
+  "fn": "hs_setstate"
+ },
+ {
+  "label": "[1] and [2] counters swapped",
+  "find": "(long)obj->vect_idx,",
+  "replace": "(long)hs_get(obj, HS_TRACE_2),",
+  "fn": "hs_setstate"
+ },
+ {
+  "label": "StateName DET_SYNC and DET_CJ transposed",
+  "find": "\"DET_CM_JM\",\t\"DET_SYNC\",\t\"DET_CJ\",\t\"RX_DPSK\",",
+  "replace": "\"DET_CM_JM\",\t\"DET_CJ\",\t\"DET_SYNC\",\t\"RX_DPSK\","
+ },
+ {
+  "label": "fmt[] rxstate and txstate entries permuted, offsets untouched",
+  "find": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
+  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
+  "fn": "hs_setstate"
+ },
+ {
+  "label": "fmt[] microstate entry moved to the rxstate slot",
+  "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
+  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",",
+  "fn": "hs_setstate"
  }
 ]
