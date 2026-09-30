@@ -130226,3 +130226,168 @@ short.  The flag route costs 44 whole-tree exact symbols (F11504), so it is
 declined, and no source-side spelling of the inlining exists that closes the
 rest -- the missing content is not in the source.  The remaining lever is the
 object's own original profile (issue #22), not this pass.  (2026-09-30)
+
+## F11509. `v34handshak`'s residual mapped at the call boundary: the object inlines a THREE-helper closure the recovered profile keeps out-of-line, the "0 hs calls" census was blind to same-TU local calls, and a whole-tree-neutral inline-parameter cell moves the target to 50 KB
+
+F11504/F11506/F11507/F11508 left the target at 46,841 B / 9,453 insns with the
+four `--param`s, called the residual "not in the source", and called the four
+parameters a 44-symbol whole-tree loss.  A census of the blob's and our
+candidate's call boundaries, done with a RESOLVED-target objdump reader rather
+than the relocation reader the earlier passes used, re-classifies the residual
+and corrects one measurement.  No `src/` change is adopted here; the entry is a
+map and a bounded mechanism matrix.
+
+**THE RELOCATION CENSUS WAS VACUOUS FOR A LOCAL CALLEE, AND THAT IS THE
+CORRECTION.**  F11506 ("hs_setstate calls: baseline 26, E2 162, blob 0") and
+F11507 ("hs_setstate calls 26 -> 0") counted `R_386_PC32` relocations.  That
+works while `hs_setstate` is a GLOBAL (`T`), which it was for F11506's E2.  The
+moment F11507 made it `static inline` the symbol went LOCAL, and a call to a
+LOCAL function in the SAME `.text` section is resolved by the assembler and
+carries **no relocation at all** (the AGENTS rule: a relocation's ABSENCE means
+local-and-same-TU).  So "0 hs calls" after F11507 was read as "inlined" when it
+was equally consistent with "called out-of-line, relocation-free".  Resolving
+the call targets against the symbol table instead:
+
+    non-PC32 (resolved) local calls in v34handshak    blob   F11507 tree   p4
+    hs_setstate                                          0        0       157
+    t3c_txblock                                          0       (arms out) 104
+    t3m_txblock                                          0       (arms out)  25
+    getbit                                               3        3          3
+    ApplyBulkDelay                                       2        -          2
+
+`hs_setstate` is **not** inlined by the retained profile; it is called 157
+times from `v34handshak` under the four `--param`s.  The object inlines it
+(and `t3c_txblock` / `t3m_txblock`), and defines no `hs_*`, `t3c_txblock` or
+`t3m_txblock` symbol at all.  The residual is therefore a three-helper
+inlining boundary, not missing statements -- and F11508's "the missing content
+is not in the source" stands: the *statements* exist, the *inlining* does not.
+
+**THE RIG, AND THE CENSUS TOOLS.**  `gcc` 3.4.2 (Gentoo 3.4.2-r2) and GNU as
+2.15.92.0.2 inside
+`ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`; a single-TU compile of
+`src/pump/v34/V34hshak.c` with the period flags only (no `-DDSPLIB_REPRODUCE_BUGS`,
+matching the `build/tc_out` authority) reproduces the committed object
+byte-for-byte (md5 `a7cc9502...`).  `-DDSPLIB_REPRODUCE_BUGS` changes the TU's
+md5 but not `v34handshak`'s size or call census (verified on `base`/`p4`), so
+every cell below is comparable to the authority.  Three new ad-hoc readers in
+`/tmp` (not committed): a resolved-`call` census (`objdump -d`, address-ranged),
+a per-string-count census (relocations against `.rodata.str1.*` decoded through
+the section header), and a `.rodata`-reference census.  `byteident.py --why`
+supplies the padding-stripped instruction counts.
+
+**THE RESIDUAL MAP.**  Every row is a single TU compile; the object's range is
+`0x628f0..0x71955`.
+
+    in-range census                     blob      p4        localonly+literal  scratch2
+    byteident insns (padding stripped)  12,199    9,453     9,891              27,467
+    bytes                               61,541    46,841    50,095             125,194
+    dsplibs_debug_printf (PC32)         262       151       242                260
+    direct `hs` string refs (.text)     140       0         131                140
+    strings (distinct / refs)           110/276   114/165   100/255            108/274
+    total calls                         394       578       372                400
+
+  * **(a) a helper out-of-line that the object inlined -- the dominant block.**
+    `hs_setstate` (callee 0xeb B), `t3c_txblock` (0x3b B) and `t3m_txblock`
+    (0x369 B).  At `p4` these are 157 + 104 + 25 = 286 in-range call sites; the
+    blob has none.  With `p4` the blob inlined, one 0xeb-byte `hs_setstate` body
+    inlined at 157 sites and constant-folded (its `off` argument is a compile
+    constant) is the bulk of the 2,746-instruction gap.
+  * **(d) the `fmt[]` table does not fold -- the same sites, and it is REAL.**
+    `hs_setstate` reaches its three formats through a
+    `static const char *const fmt[3]` indexed `fmt[(off - HS_MICROSTATE)/2]`.
+    GCC 3.4.2 does NOT fold that to the string address: with `p4` our in-range
+    direct `hs` refs are **0**, and the object has **140**.  A `switch (off)`
+    with three literal `dsplibs_debug_printf("...")` calls (the `literal`
+    overlay) DOES fold under the same conditions: with the `localonly` profile
+    it produces 131 direct refs where the table form produces 0.  So the table
+    is an artefact of the reconstruction and the object's source passed the
+    literal.
+  * **(b) a helper we inline that the object kept out.**  None in range at
+    `p4`; the arms and the shallow helpers are inlined on both sides.  The
+    over-inlining direction appears only when the growth limit is raised: the
+    `inline-unit-growth=1000` cell inlines external functions the blob keeps
+    out (`V34SetupDemodulator:` x46, the `V34PREEMPHASIS` forms x58, ...), to
+    65,149 insns and 622 printf.
+  * **(c) genuinely different statements -- small but independently blocking.**
+    The PC32 profile is nearly equal but not equal: `settxlevel` blob 2 / ours
+    p4 0; `bitreverse` 6 / 15; `v34handshakinit` 10 / 12; `dftupdate` 10 / 9.
+    Our non-`hs` string refs are 165 against the blob's 136 at `p4` (the tree
+    references `V34TXSCALE`, the bulk-delay and `V34PROBESELECT` formats more
+    often than the object does).  With the closure inlined (`scratch2`) the
+    totals land at 274/276 refs, so the surplus is in bodies the object
+    factored differently, not in the closure.
+  * **(e) scheduling/regalloc and the rest.**  With `scratch2` (all eight
+    shallow helpers force-inlined) the call count is 400 against 394 and the
+    string refs 274 against 276 -- the call/string profile is recovered -- yet
+    the function is 125,194 B / 27,467 insns, **2.3x the object**.  So once the
+    inlining is forced our straight-line bodies are far larger than the
+    object's; closing (a)+(d) alone cannot reach byte identity.
+
+**MECHANISMS TESTED (one variable at a time, single TU unless noted).**
+
+    mechanism                                measured result
+    -O2                                      1,127 insns (fewer inlines)
+    -O2 + p4                                 7,244 insns
+    -fno-inline-functions                    1,140 insns
+    -fno-inline-functions-called-once        1,140 insns
+    -fno-unit-at-a-time                        639 insns
+    -fno-unit-at-a-time + p4iu               53,428 insns, wrong profile
+    -finline-limit=500 / 2000 / 20000        1,556 / 1,542 / 1,372 insns
+    -march=i486 / pentium / pentiumpro       1,326 / 1,326 / 1,337 (no gain)
+    -mtune=i386 / pentium4                   1,299 / 1,289 (no gain)
+    -fflatten                                REJECTED (3.4.2 has no such option)
+    p4 (large-function-* + max-inline-*)     46,841 B / 9,453
+    p4 + inline-unit-growth=1000             65,149 insns, over-inlines globals
+    inline-unit-growth=100000 + auto=100     localonly: 50,354 B / 10,018, hs
+                                             INLINED, 7 shallow helpers out
+    localonly + literal hs_setstate          50,095 B / 9,891, 131/140 direct
+                                             hs refs, 242/262 printf
+    always_inline forced closure (8 helpers) 125,194 B, profile matches, 2.3x
+    macro hs_setstate (unfolded switch)       183,809 B under p4, declined
+    external `inline` (C89/C99 semantics)    F11505: 1,688 insns, grades unchanged
+    emission order / include position        F11503/F11507: no effect on target
+    TU membership                            v34handshak 0x628f0 sits inside the
+                                             UNANCHORED bracket
+                                             0x5eca1..0x7a9f0 (kind "bracket"),
+                                             so the blob does not uniquely place
+                                             it; V34hshak.c's anchored span is
+                                             only 0x5dd10..0x5ecd1
+                                             (ApplyBulkDelay..getbit)
+
+**WHOLE-TREE, BOTH CANDIDATES (GCC 3.4.2-r2, 300/300 objects, 0 failed, one
+blocked-input set each).**
+
+    profile                    exact/1852  0-or-1/1852  set vs retained
+    retained -O3 (build/tc_out)   844         895        --
+    F11504 p4 parameters          800         851        0 gains / 44 losses
+    localonly parameters          844         895        0 gains /  0 losses
+
+`p4` reproduces F11504's 44-loss figure exactly, independently.  **The
+`localonly` set -- `--param inline-unit-growth=100000 --param
+max-inline-insns-auto=100 --param max-inline-insns-single=1000000 --param
+large-function-insns=10000000 --param large-function-growth=100000` -- is
+whole-tree exact-set NEUTRAL while moving `v34handshak` 6,500 -> 50,354 B and
+inlining the `hs_setstate` closure.**  It is the first aggressive-inline cell
+found that does not cost a single exact function, and it is therefore a clean
+#22 control: the difference between it and `p4` is exactly the `inline-unit-
+growth` / `max-inline-insns-auto` pair, which is what inlines the globals in
+`p4` and over-inlines them in `p4iu`.
+
+**CONCLUSION, AND THE SMALLEST EXACT-CHANGE SET.**  `v34handshak` cannot be
+made exact by any cell tested here.  Reaching it needs, jointly, (1) the
+`hs_setstate` closure AND `t3c_txblock`/`t3m_txblock` inlined at ~286 sites,
+(2) the format literal folded to a direct reference (the `switch` form), and
+(3) helper bodies whose straight-line size matches the object's -- and (3)
+does not hold for our source: fully inlined we are 2.3x too large, so (1)+(2)
+alone overshoot or displace.  The profile that inlines the local closure also
+inlines globals whose cost is a whole-tree exact loss (`p4`), and the profile
+that is whole-tree neutral (`localonly`) stops seven shallow helpers short.
+The evidence that the residual is NOT merely a profile choice is that the
+object's call/string profile (400 calls, 274/276 refs) is reproduced by a cell
+that is 2.3x too large -- the difference is in the reconstructed bodies, not in
+the inliner.  **Next discriminating test:** a per-helper body-size audit of the
+seven helpers `localonly` leaves out (`t72_measure`, `t3m_txblock`,
+`tx1_moh_hold`, `t41_after_guards`, `t46_info0_counting`, `t4_mp_sequence_end`,
+`t41_marks_late`) against the blob's inlined copies, comparing INSTRUCTION
+counts and flag-selected literals, not call presence -- the same object-first
+method F11508 used for the strings.  (2026-09-30)
