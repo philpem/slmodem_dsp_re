@@ -130336,6 +130336,10 @@ supplies the padding-stripped instruction counts.
     -march=i486 / pentium / pentiumpro       1,326 / 1,326 / 1,337 (no gain)
     -mtune=i386 / pentium4                   1,299 / 1,289 (no gain)
     -fflatten                                REJECTED (3.4.2 has no such option)
+    -std=gnu99 (base / localonly)            1,232 / 9,700 insns, no gain
+    -std=c99                                 REJECTED: negative array size at
+                                             V34hshak.c:10383 (a gnu extension
+                                             the source depends on)
     p4 (large-function-* + max-inline-*)     46,841 B / 9,453
     p4 + inline-unit-growth=1000             65,149 insns, over-inlines globals
     inline-unit-growth=100000 + auto=100     localonly: 50,354 B / 10,018, hs
