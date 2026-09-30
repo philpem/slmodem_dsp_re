@@ -1270,7 +1270,8 @@ period: $(REF)
 # read by something that did not come through make.
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
-	partial-compare partial-compare-selftest castscan castscan-selftest
+	partial-compare partial-compare-selftest castscan castscan-selftest \
+	bbalign bbalign-selftest
 tc:
 	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
 
@@ -1327,6 +1328,17 @@ partial-compare-selftest:
 
 tumap-selftest:
 	@$(PYTHON) tools/tumap.py $(BLOB) --self-test
+
+# The anchor aligner's firing proof.  NOT a phase tier: it needs `tc`'s
+# build/tc_out, which `make phase` does not build, and it is apparatus rather
+# than a reconstruction authority.  It REFUSES to pass if the identity control
+# is not clean, if a register-only difference is reported as an unmatched
+# region, or if the cross-object denominator is zero (F134, F2401).
+bbalign:
+	@$(PYTHON) tools/bbalign.py $(SYMBOL) --anchors
+
+bbalign-selftest: tc
+	@$(PYTHON) tools/bbalign.py --anchor-self-test
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF) $(TESTOBJ) $(HARNESS_OBJ)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
