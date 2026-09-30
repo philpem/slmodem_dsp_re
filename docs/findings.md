@@ -131460,3 +131460,45 @@ GCC's cross-jumper that the blob kept structurally distinct, while globally
 disabling the pass separates several paths the blob shared. Artifacts and the
 complete gate denominator are under `build/frontier-v34-audit/crossjump/`.
 (2026-09-30)
+
+## F11522. The transmit-helper interface collapses ten evidenced blob rejoin blocks to one value; selective tail sharing is primarily a lost-CFG hypothesis
+
+The retained reconstruction's per-sample transmit helpers contain **52**
+`return V34TX1_LOOP` sites. Forty already carry object addresses in their
+source comments, and those forty identify **ten distinct** loop-rejoin blocks:
+`0x629c8` (5 sites), `0x629cf` (3), `0x62d70` (3), `0x63941` (5),
+`0x63948` (4), `0x63da2` (6), `0x6409a` (4), `0x640a1` (5),
+`0x6431f` (5), and `0x64326` (2). Twelve returns remain unannotated. The
+shared header nevertheless defines `enum v34tx1_exit` with exactly one value,
+and `v34handshak` ignores every helper return. Its single C `while` bottom is
+therefore the only rejoin GCC sees.
+
+`v34tx1_trnseg4` is a bounded example. Its source comments distinguish four
+blob continuations, **0x629c8, 0x63948, 0x63da2 and 0x640a1**, including the
+two Ja arms whose calls the retained compiler merges. In the blob the V.90
+and K56flex calls remain distinct at 0x64e52 and 0x68003 and flow to different
+rejoins. The one-value helper interface erases that predecessor/successor
+structure before optimization. This is stronger and narrower than claiming
+that the original disabled cross-jumping: F11521 proves the compiler must
+still merge other tails.
+
+The likely reconstruction shape is a monolithic switch with direct
+`continue`/fall-through/goto paths, or an equivalent experimental carrier
+that gives helpers distinct return values and routes them to duplicated loop
+checks. The latter can preserve the testable helper decomposition without
+claiming that the original author wrote an enum. The first finite test should
+restore only `v34tx1_trnseg4`'s four evidenced rejoin classes under the retained
+profile and ask whether the two Ja calls separate without the global call-count
+overshoot of `-fno-crossjumping`. A whole-file ten-class rewrite is premature
+until that local prediction fires and the twelve unannotated returns are
+settled from the object.
+
+This cannot explain every remaining mismatch. `-fno-crossjumping` changes the
+Ja, `txmit`, `v34handshakinit`, and debug-call counts, but leaves `bitreverse`
+at **8** against the blob's **6**. Those two calls require a separate source-
+expression, helper-boundary, or inlining explanation. Missing and duplicated
+debug blocks, source ordering and fall-through, local-variable lifetimes and
+aliasing, and an unrecovered cross-jump threshold remain secondary hypotheses;
+the exact compiler exposes `-fcrossjumping` and `max-crossjump-edges`, but a
+global off control already over-separates the function. No new cell was
+compiled and no source form was adopted. (2026-09-30)
