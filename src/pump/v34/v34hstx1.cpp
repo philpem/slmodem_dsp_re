@@ -303,6 +303,18 @@
 #define TX1_RATEIDX	0xaa98
 
 /*
+ * +0xaa88, a short: the TRANSMIT side's rate index, the other half of the
+ * pair 70's data-mode transition reports.  It is `struct v34_ratecfg`'s
+ * `txbits` member -- V34_RATECFG is +0xaa84 in v34fsk.h, so +4 -- and
+ * `VPcmV34GetCurrentTxBitRate` reads the same field, `movswl 0xaa88; imul
+ * $0x960`, on its way out.  The data-mode diagnostic at 0x63d1a reads it and
+ * TX1_RATEIDX together and multiplies both by 2400; the format string calls
+ * the first `Tx bit rate` and the second `Rx bit Rate`, which is the order
+ * the object passes them and not a transcription slip.
+ */
+#define TX1_TXRATEIDX	0xaa88
+
+/*
  * The transmitted point.  `txpoint` is two shorts and every arm that sends a
  * constellation point writes them with ONE 32-bit store, which is what
  * `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it the same way.
@@ -807,6 +819,24 @@ v34tx1_dataxmit(void *objp)
 	idx = tx1_get(o, TX1_RATEIDX);
 	o->rate_now = idx;
 	o->rate_want = idx;
+
+	/*
+	 * 0x63d11.  The data-mode transition reports both negotiated rates ONCE,
+	 * and only when the machine was not already in data mode: +0x2218 is read
+	 * at 0x63cf4 and a non-zero value jumps over the whole block (0x63d0f).
+	 * The guard is therefore the mode test AHEAD of the debug gate, which is
+	 * why the `test` precedes the `cmpl $0x1` and not the other way round.
+	 *
+	 * Both arguments are the rate INDEX times 2400 (0x960, the V.34 symbol
+	 * rate at the host rate), the transmit index first: 0x63d1a's `imul` is
+	 * on 0xaa88 and its sibling on 0xaa98, and 0xaa88 lands in the first
+	 * vararg slot.  Finding F11444's residual, closed here.
+	 */
+	if (tx1_get_int(o, TX1_HS_MODE) == 0 && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34DATA, getting into data mode from Handshake, "
+			"Tx bit rate - %d, Rx bit Rate - %d\n",
+			tx1_get(o, TX1_TXRATEIDX) * 2400, idx * 2400);
 
 	tx1_put_int(o, TX1_HS_MODE, 1);
 	return V34TX1_LOOP;
