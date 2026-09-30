@@ -130985,3 +130985,160 @@ exact SET unchanged (0 gains / 0 losses); `compare.py --ratchet` OK (identical
 904, compared 1852); `anchorcheck` 285 suites / 10,038 mutations / 0 detached /
 0 non-unique; `refcheck` 14,179 references, 0 dangling; `git diff --check`
 clean.  (2026-09-30)
+
+## F11515. The aggressive inline profile is a whole-tree over-inlining loss, not a hidden gain: 39 of its 44 lost exact symbols are refuted by the blob's own sizes, and no per-file `V34hshak.c` profile reaches the object
+
+F11504 called the four aggressive inline parameters a "44 whole-tree exact
+symbol loss" and treated that as decisive.  The owner asked for both halves of
+that judgement to be re-tested object-first: (1) are those 44 only
+*accidentally* exact under the retained flags, so the aggressive profile might
+be closer to the original *globally*; and (2) was `src/pump/v34/V34hshak.c`
+compiled with its own per-file inline settings?  **The answer is no to both,
+and the retained profile stands.**  The loss is not a symbol-count artefact:
+the blob's own function sizes and call boundaries support retained for 42 of
+the 44, only 2 are a pure register-allocation bystander, and no per-file
+profile reaches `v34handshak` or gains a single exact symbol.
+
+**RIG, IDENTITY, BASELINE.**  GCC 3.4.2-r2 (Gentoo)
+`/usr/i386-pc-linux-gnu/gcc-bin/3.4/gcc`, assembler **GNU as 2.15.92.0.2**,
+image `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest` (the blob's own
+`.comment`).  Whole-tree builds through `tools/toolchain/period.mk` (one rule
+per object, real `-MMD` deps): **300 objects / 300 sources, 0 failed** per
+cell.  The per-object command is period.mk's own (no
+`-DDSPLIB_REPRODUCE_BUGS`, matching the `build/tc_out` authority; F11509
+measured that the define changes the `V34hshak` TU's md5 but not
+`v34handshak`'s size or call census):
+
+    gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+        -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
+        -Iinclude -D__SIZEOF_POINTER__=4 \
+        -include tools/toolchain/period_compat.h <TC_EXTRA> \
+        -o build/tc_out/src_pump_v34_V34hshak.c.o src/pump/v34/V34hshak.c
+
+Baseline `build/tc_out`: `byteident` grade 0 **844/1852**, 0-or-1
+**895/1852**, exact bytes **79,769/720,125**; `compare.py` **904** identical
+mnemonic sequences, total code **88.3%**.  The single-TU control reproduces
+the committed object byte for byte (md5 `4269db6f8b8dd64f2545c46de910b08a`),
+so every cell below is the same rig.
+
+**WHOLE-TREE CELLS (the aggressive profile is net-worse, not hidden-better).**
+
+    profile (300/300, 0 failed)       exact/1852  0-or-1  cmp    exact_bytes     compare-ident  total code
+    retained -O3 (build/tc_out)       844         895     1852   79,769/720,125  904            88.3%
+    p4  (F11504's four --param)       800         851     1844   71,232/715,203  860           134.1%
+    localonly (F11509's five --param) 844         895     1852   79,769/720,125  904            94.4%
+
+  * `p4` is **0 gains / 44 losses** and its denominator falls 1852 -> 1844:
+    **eight symbols the blob defines out-of-line are inlined out of
+    existence** -- `AnalyseDialString`, `ApplyBulkDelay`, `EchoCanceler`,
+    `GetGain`, `GetNextDigitAndReturnNextState`, `V34demodulate`,
+    `_Z14getMPrecvdBitsP12tagV34Object`, `bValidateEnergyValue`.  It also
+    reproduces **8,537 fewer exact bytes**, matches **44 fewer** mnemonic
+    sequences, and emits **134.1% of the blob's code**.  p4 does not "trade"
+    the target for the rest; it over-inlines and grows the tree.  This
+    independently reproduces F11504's 44-loss figure.
+  * `localonly` is whole-tree exact-neutral (0 gains / 0 losses) and
+    byte-neutral, reproducing F11509.  It is a **control**, not a recovery:
+    it gains no exact symbol and does not reach `v34handshak` (below).
+  * **A `DSPLIB_REPRODUCE_BUGS` control on BOTH sides gives the same delta.**
+    The define restores four deliberate bug reproductions and loses none
+    (retained 848/1852, exact bytes 82,072); with it, `p4` is **804/1844,
+    0 gains / 44 losses**, exact bytes 73,535, the same eight-symbol
+    denominator drop.  So the 44-loss result is not an artefact of the
+    no-define authority arm.
+
+**THE 44, CLASSIFIED FROM THEIR OWN OBJECTS.**  Each lost symbol's retained
+and p4 definitions were disassembled and compared directly
+(`byteident.body`/`verdict`/`alpha_why`) rather than by count:
+
+    class                               count  evidence
+    0  SIZE  -- body grew                39    median p4/retained size ratio 5.76;
+                                               17 grew >=10x, 26 >=3x, 9 <1.5x
+    1  BYTES -- same size, pure regalloc  2    alpha_why accepts the pair: only
+                                               register names differ
+    2  BYTES -- same size, real diff      3    mnemonic/operand selection differs
+
+  * **Class 0 is direct over-inlining, and the blob's own size refutes it.**
+    The clearest is `V90Phase3Demodulator::getDecision`: the blob is
+    **52 B** and retained is exact at 52 B -- a two-arm dispatcher that
+    `call`s `getV92Decision`/`getV90Decision` out-of-line (`0x258f0`,
+    `sub $0xc,%esp` then a `call`); p4 inlines a ~16 KB callee into it and
+    emits **16,427 B** (315x; the p4 object begins `sub $0xcc,%esp`).
+    `V90Phase4Modulator::generateSymbol` 45 -> 5,641 B (125x),
+    `TxHdxStartV17` 21 -> 1,486 B (71x), `V90Parameters::init` 63 -> 3,953 B
+    (63x) are the same shape.  Retained == the blob byte for byte; p4 is not
+    a re-shuffle of an accidental match -- it is a different function.
+  * **Class 1 is the only genuine "bystander" reading, and it is 2 of 44.**
+    `V92Phase4Modulator::recivedFirstRrn` and `detector_delete` change by
+    register renaming alone (same 30 and 47 instructions), the F11514
+    equilibrium effect: the allocator's choice moved, the call structure did
+    not.  Retained is still the exact one.
+  * **Class 2** (`V90Equalizer::enterChannelVerification`, `V90Demodulator`'s
+    C2 ctor, `V92ConvolutionEncoder::inverseMap`) is same-size with a
+    different instruction selected (`and` vs `lea` in `inverseMap`) -- again
+    retained == the blob.
+
+  Hypothesis (1) therefore survives for at most **2 of 44** symbols and is
+  refuted for the other 42: 39 are blob-size-refuted over-inlines and 3 are
+  instruction-selection differences.  The object gives no "compensating source
+  error" to name, and a p4 arm that gains nothing, drops eight symbols the
+  blob defines, and reproduces 8.5 KB less blob code is not the original
+  globally.
+
+**PER-FILE `V34hshak.c` FLAGS -- A BOUNDED FAMILY OF TEN, ALL NEGATIVE.**
+Each cell applied its profile to **only** `src/pump/v34/V34hshak.c`; the
+other 299 objects were copied byte-identical from retained, so only that TU's
+symbols can move (`byteident --list-exact` diffs the whole tree anyway).
+
+    cell (per-file, retained elsewhere)          v34handshak ours        exact set
+    ctl (retained)                               1,275 i  55,072 diff    844  (control)
+    p4                                           9,453 i  14,700 diff    844  (cmp 1851)
+    localonly                                    9,891 i  11,446 diff    844
+    -O2                                          1,108 i  56,233 diff    844
+    -O2 + p4                                     7,058 i  26,446 diff    844
+    -finline-limit=20000                         1,331 i  55,102 diff    844  (cmp 1851)
+    --param max-inline-insns-auto=20000          1,331 i  55,102 diff    844  (cmp 1851)
+    -finline-limit=2000                          1,509 i  54,249 diff    844
+    -fno-inline-functions                        1,120 i  56,190 diff    844
+    --param inline-unit-growth=100000            1,275 i  55,072 diff    844  (== ctl)
+
+  * **No per-file profile reaches the object.**  The best byte count is
+    `localonly` at **50,095 B** (`61,541 - 11,446`), still 11,446 bytes and
+    2,308 instructions short; the aggressive cell reaches only 46,841 B.  The
+    known single-TU figures of F11509/F11510 reproduce exactly
+    (p4 = 46,841 B, localonly = 50,095 B), so the rig is the same rig.
+  * **The exact set is unchanged in every cell -- 0 gains / 0 losses.**  The
+    file's own symbols were not exact before and are not after; p4 and
+    `-finline-limit=20000` additionally inline `ApplyBulkDelay` away
+    (denominator 1852 -> 1851), the same missing-symbol defect p4 shows
+    whole-tree.  A per-file flag that neither reproduces the target nor gains
+    an exact symbol is a **fit and is DECLINED** (F7782).
+  * **Is a per-file rule even consistent with the build?**  It is
+    *mechanically* possible and has one precedent: `period.mk:286` (and
+    `period_inner.sh:89`) special-case exactly `src/service/dcr.c` for
+    `TC_DCR_FLAGS` via a `$(filter ...)`.  A `V34hshak.c` rule would be the
+    same one-line filter.  But the object gives no evidence for it, and if the
+    original TU had used a different profile one of the ten cells should have
+    moved toward it; none did.
+
+**WHAT IT WOULD TAKE, AND THE SMALLEST ADOPTABLE CHANGE.**  Nothing here is
+adoptable.  p4 is a whole-tree regression (44 losses, 8 vanished symbols,
+134% code); `localonly` is exact-neutral but recovers nothing and stops 2,308
+instructions short of `v34handshak`; every per-file cell is a fit.  The
+retained `-O3` profile stays, and `v34handshak`'s residual remains issue #22's
+original-profile question, now sharpened from the other side: it needs a
+middle inlining regime that inlines the closure bodies while keeping the
+table-2 dispatch at one site (F11511/F11513), not a global `--param` set and
+not a per-file override.  The branch is findings-only; no `src/` and no test
+changes.
+
+**GATES.**  `make -j1 J=1 phase`: period differential **385 passed / 0
+failed**, phase boundary OK.  `byteident` grade 0 **844/1852**, 0-or-1
+**895/1852**, exact set unchanged.  `compare.py --ratchet` OK (identical 904,
+compared 1852).  `partialcmp` on the unchanged tree: positioned
+**68,381/943,398**, exact relocations **1,025/18,317**, exact symbols
+**394/2,907**, candidate symbols 2,983, exact sections **70/92** -- DIFFERENT,
+the expected census (identical to F11510's post-fix numbers, confirming master
+== the F11510 state).  `anchorcheck` **285 suites / 10,038 mutations / 0
+detached / 0 non-unique / 0 vacuous / 0 re-pointed**.  `refcheck` **14,177
+references, 0 dangling**.  `git diff --check` clean.  (2026-09-30)
