@@ -1,70 +1,35 @@
 /*
- * v34hstx1.cpp -- seventeen arms of `v34handshak`'s per-sample transmit
- * dispatch.
+ * v34hstx1_arms.h -- table 1's nineteen transmit-dispatch arms and the static
+ * helper closure they share, as ONE textual definition compiled into every
+ * translation unit that needs them.
  *
- * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding F217's rule rather
- * than a choice.  78 `JaTXMIT` tail-calls `v90Phase34` and 85 `K56JaTXMIT`
- * tail-calls `k56FlexPhase34`; both live in the V.90/V.92 C++ half, and the
- * five SpanDSP interop binaries link `$(SRC)` -- every `.c` under src/ and no
- * C++ at all.  A `.c` file naming either symbol leaves them undefined and
- * takes those five down with it, which is what v34info1a.cpp, v34k56.cpp and
- * v34pcmmain.cpp are `.cpp` for.  Measured here rather than assumed: as a
- * `.c` this file broke all five, and `make phase` was how it said so.
- * Finding F344.
+ * `v34handshak` is 61,541 bytes because the object INLINES all nineteen arms
+ * (and their helpers) into it.  This tree kept them out of line in
+ * `v34hstx1.cpp`, a separate TU, so `-O3` could not inline them and the
+ * symbol surface carried nineteen spurious GLOBALs the blob does not define
+ * (finding F11443).  `V34hshak.c` now includes this header, which puts the
+ * arm bodies in `v34handshak`'s own translation unit so they inline, and the
+ * mutation driver `t_v34hstx1.c` includes it too, so the suites still call
+ * them directly as `static` copies (finding F11502).
  *
- * The table is `.rodata+0x2da0`, indexed `txstate - 5`, read at 0x62966
- * inside the loop that runs while the transmit queue's count at +0x221c is
- * below the block's sample limit at +0x2aa0.  See include/dsplib/v34hstx1.h
- * for what an arm is and docs/v34handshak.md for the harness.
+ * WHY A HEADER AND NOT TWO COPIES.  The arms' helper closure (`tx1_get`,
+ * `tx1_put`, `tx1_put_point`, `tx1_dpsk4`, `tx1_bitsource`, `tx1_mp_reload`,
+ * `tx1_mp16`, ...) was defined independently in both `v34hstx1.cpp` and
+ * `V34hshak.c`; the two copies cannot share one translation unit.  A header's
+ * `static` copy is legal in each includer, a second definition in a `.c` is
+ * not, so the closure has exactly one home here and the duplicate copies are
+ * removed from `src/` (AGENTS: one definition, one home).
  *
- * ---------------------------------------------------------------------------
- * THE ONE REGISTER CONVENTION THE WHOLE TABLE IS WRITTEN IN, because reading
- * an arm without it gives every field the wrong offset:
- *
- *     0xc0(%esp)  the object
- *     0x4c(%esp)  the object + 0x221c   -- the transmit queue
- *     0x74(%esp)  the object + 0x264    -- the receiver
- *
- * so `0x3a6(%esi)` with `esi` from 0x4c(%esp) is +0x25c2 in the object, not
- * +0x3a6.  The six fields that region carries are `seg_symcount`, `tx_flags`, `prev_quadrant`,
- * `cur_quadrant`, `tx_scr_sr` and `txpoint`, and they are named in `struct v34_object`.
- *
- * ---------------------------------------------------------------------------
- * TWO PAIRS THAT LOOK LIKE ONE ARM AND ARE NOT.
- *
- * 78 `JaTXMIT` and 85 `K56JaTXMIT` are instruction-for-instruction identical
- * -- the same counter and the same `v34FreezeEcho` -- up to the tail call,
- * which is `v90Phase34` for one and
- * `k56FlexPhase34` for the other.  They are two arms and the object gives
- * them two table entries; finding F340 measures them apart.
- *
- * 71 `TXLEVEL` and 86 `TXMD` share the scrambler step and differ in what they
- * transmit: 71 always sends `vect4[0]` and 86 sends `vect4[q]`, the point the
- * scrambler just chose.  71 advances the register and throws the result away
- * except as `cur_quadrant`.
- *
- * ---------------------------------------------------------------------------
- * AND ONE PAIR THAT AGREES COLD AND IS STILL NOT ONE ARM.
- *
- * Finding F323 measured 24 `TX_DPSK` and 60 `TONE_AB` writing the same 69
- * bytes with the same progress code, the table's one collision.  They are two
- * entries at two addresses -- 24's is 0x62b96 and 60's is 0x62d3d, and 60's
- * whole body is thirty-four bytes where 24's is 2,220 -- so the agreement is
- * a property of ONE object fill and of nothing else.  BOTH are written here
- * now, and the agreement is stated where 24 is: cold, the reader hands 24 a
- * zero bit and the Modem-on-Hold flag is clear, so 24 sends the tone 60
- * sends and writes nothing else the object can see.  It is agreement on one
- * path, not identity.
- *
- * WHICH PATH 323 MEASURED, since 60 has two.  The default fill leaves
- * +0x358c at 0xb7eb, which is ODD, so the cold run sent `vect4[2]`; and
- * finding F323's 69 bytes for 60 is what `t_v34hstx1.c`'s odd case still
- * writes, where its even case writes 65.  The collision was measured on one
- * of the two paths and the fill decides which -- seed 1 leaves 0xb06e and
- * would have measured the other.  So the agreement is narrower than the
- * table entry, which is the reason both values are poked here rather than
- * one of them being reached by luck.
+ * The arm and helper BODIES are moved verbatim; only their home and linkage
+ * change.  The two arms that already lived in `V34hshak.c` (`v34tx1_xmitmp`,
+ * `v34tx1_tx_dpsk`) are here too, with `getbit`, so all nineteen are in one
+ * place and the test can still reach them.
  */
+
+#ifndef DSPLIB_V34HSTX1_ARMS_H
+#define DSPLIB_V34HSTX1_ARMS_H
+
+#include "dsplib/v34hstx1.h"	/* enum v34tx1_exit, V34TX1_LOOP */
 
 #include <string.h>
 
@@ -380,7 +345,7 @@ tx1_put_int(void *objp, unsigned off, int v)
  * from this entry.  It is written as the object writes it; deleting it is an
  * equivalent mutation and is recorded as one (finding F342).
  */
-int
+static int
 v34tx1_xmit0(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -436,7 +401,7 @@ tx1_scramble2(struct v34_object *o)
  * register and the quadrant advance while the transmitted point does not --
  * which is what a level-measurement segment wants.
  */
-int
+static int
 v34tx1_txlevel(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -500,7 +465,7 @@ tx1_ja_common(struct v34_object *o, const char *msg)
 	return 1;
 }
 
-int
+static int
 v34tx1_jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -511,7 +476,7 @@ v34tx1_jatxmit(void *objp)
 	return V34TX1_LOOP;
 }
 
-int
+static int
 v34tx1_k56jatxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -559,7 +524,7 @@ v34tx1_k56jatxmit(void *objp)
  * first and 0x63948 does not, and both fall into 0x629e7 -- so the wrap is
  * `V34TX1_LOOP` on either side of the guard and nothing leaves the dispatch.
  */
-int
+static int
 v34tx1_moh_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -633,7 +598,7 @@ v34tx1_moh_silence(void *objp)
  * arm reaching 0x6430c will want the same line; the eventual `v34handshak`
  * may factor it.
  */
-int
+static int
 v34tx1_txmd(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -705,7 +670,7 @@ v34tx1_txmd(void *objp)
  * change the answer; reading it as `movzwl` is an equivalent mutation and is
  * recorded as one.
  */
-int
+static int
 v34tx1_tone_ab(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -744,7 +709,7 @@ v34tx1_tone_ab(void *objp)
  * and it rejoins the loop at 0x6409a like the counting path, so this arm has
  * one exit and no transfer out.
  */
-int
+static int
 v34tx1_sseg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -799,7 +764,7 @@ v34tx1_sseg(void *objp)
  * the diagnostic at 0x63d1a: at `dsplibs_debug_level` 0 the whole block is
  * dead and the store of 1 happens either way.  Finding F341's gap, again.
  */
-int
+static int
 v34tx1_dataxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -884,7 +849,7 @@ v34tx1_dataxmit(void *objp)
  * increments; it moves the microstate to `TX_L2` and zeroes `vect_idx`
  * through 0x62d32, which is shared with other arms of this table.
  */
-int
+static int
 v34tx1_tx_l1(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -973,7 +938,7 @@ v34tx1_tx_l1(void *objp)
  * nothing on this path reads again.  It is stack rather than object state, so
  * no comparison here can see it.
  */
-int
+static int
 v34tx1_sbarseg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -1092,7 +1057,7 @@ v34tx1_sbarseg(void *objp)
  * written here as the object writes it and a mutation deleting it is
  * equivalent, recorded as one.
  */
-int
+static int
 v34tx1_ppseg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -1244,7 +1209,7 @@ v34tx1_ppseg(void *objp)
  * comparing the saved value and re-reading the field are the same thing here;
  * deleting the compare is an equivalent mutation and is recorded as one.
  */
-int
+static int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -1424,7 +1389,7 @@ tx1_dpsk4(struct v34_object *o, short q)
  * is reached only through table 1 at `txstate == 69` and `txmit` does not
  * write +0x3596.
  */
-int
+static int
 v34tx1_exmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -1542,7 +1507,7 @@ v34tx1_exmit(void *objp)
  * blob does print the `J1TXMIT=>TRNSEG4A` line, so the diagnostic is not
  * optional even though the compare is.
  */
-int
+static int
 v34tx1_jtxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -2484,7 +2449,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	return V34TX1_LOOP;				/* 0x62d70 */
 }
 
-int
+static int
 v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -2634,7 +2599,7 @@ v34tx1_trnseg4a(void *objp)
  * arm's own pair of echo reports IS modelled now: it is `v34FreezeEcho`, and
  * finding F572 is the transcript that proves the call.
  */
-int
+static int
 v34tx1_trnseg4(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
@@ -2766,3 +2731,546 @@ v34tx1_trnseg4(void *objp)
 
 	return V34TX1_LOOP;				/* 0x63da2 */
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * `getbit` -- one bit of a V.34 message, with its CRC on the end.
+ *
+ * The reader holds an accumulator (`acc`) and how many of its low bits are
+ * still unread (`avail`); every call hands back the top unread bit and drops
+ * `avail` by one.  When `avail` reaches zero it refills, and the refill is
+ * where the interesting cases are:
+ *
+ *   - a whole word, when `wordbits` or fewer bits of the message are still
+ *     to come: shift `acc` up by `wordbits`, OR the next word in, advance
+ *     `idx`;
+ *   - a PART word, when fewer than `wordbits` are left: shift up by only
+ *     what is left and OR THE WHOLE WORD IN ANYWAY, without advancing `idx`.
+ *     Both of those are the object's, and the second is why the tail of a
+ *     message is not simply its last few bits;
+ *   - nothing left and `crc_on` set: the 16-bit CRC becomes the next word,
+ *     which is how the sequence carries it;
+ *   - nothing left, no CRC, and `repeat` set: reload `acc` and `avail` from
+ *     `acc0`/`avail0`, zero `pos` and `idx`, re-arm the CRC to 0xffff, count
+ *     the repeat in `repeats` -- and CALL ITSELF for the first bit of it.
+ *     That recursion is the object's own; 0x5ec47 calls 0x5eaf0.
+ *   - nothing left, no CRC, no repeat: -1.
+ *
+ * AND ONE ARM THAT IS NOT ANY OF THOSE.  If the message is not merely
+ * exhausted but overrun by EXACTLY sixteen bits -- `nbits - pos` is -16 --
+ * the reader loads 0xf and four bits instead, so the next four calls return
+ * 1, 1, 1, 1.  Nothing else in the function tests a specific negative
+ * remainder.  Recorded as the code's, not explained: no caller reconstructed
+ * so far arranges it.
+ *
+ * The CRC is CRC-16-CCITT, polynomial 0x1021, MSB-first and unreflected --
+ * the same one `v8_crc` computes in src/v8/v8util.c -- folded one bit at a
+ * time over exactly the bits the refill just brought in, high bit first.
+ *
+ * `pos` is kept in a 16-bit slot: every update is `mov %ax,0x1a(%esi)` after
+ * a 32-bit add, so the carry out of bit 15 is dropped.  Hence the
+ * `unsigned short` here.
+ */
+static short
+getbit(struct v34_bitsource *b)
+{
+	unsigned int acc;
+	unsigned short pos = 0;
+	int n = (unsigned short)b->avail;
+	int folded = 0;
+
+	if (n == 0) {
+		int left;
+
+		pos = (unsigned short)b->pos;
+		left = (short)((unsigned short)b->nbits - pos);
+
+		if (left <= 0) {
+			if (left != 0) {
+				if ((short)left == (short)0xfff0) {
+					/* Overrun by exactly one word. */
+					b->acc = 0xf;
+					b->avail = 4;
+					b->pos = (short)(pos + 4);
+					n = 4;
+					acc = 0xf;
+					goto emit;
+				}
+			} else if (b->crc_on != 0) {
+				/* The message is followed by its CRC. */
+				acc = (unsigned short)b->crc;
+				b->avail = 16;
+				b->pos = (short)(pos + 16);
+				b->acc = (int)acc;
+				n = 16;
+				goto emit;
+			}
+
+			if (b->repeat == 0)
+				return -1;
+
+			b->crc = (short)0xffff;
+			b->pos = 0;
+			b->repeats = (short)((unsigned short)b->repeats + 1);
+			b->idx = 0;
+			b->acc = b->acc0;
+			b->avail = (short)(unsigned short)b->avail0;
+
+			return (short)getbit(b);
+		}
+
+		if ((short)b->wordbits <= left) {
+			/* A whole word. */
+			int wb = (unsigned short)b->wordbits;
+			int idx = (unsigned short)b->idx;
+
+			b->avail = (short)wb;
+			acc = (unsigned int)b->acc << ((short)wb & 31);
+			acc |= (unsigned short)b->word[(short)idx];
+			b->idx = (short)(idx + 1);
+			b->pos = (short)(pos + wb);
+			b->acc = (int)acc;
+			folded = (short)wb;
+			n = wb;
+		} else if (left > 0) {
+			/*
+			 * The tail.  `idx` does not advance and the whole word
+			 * is ORed in, not just its top `left` bits.
+			 */
+			int idx = (short)b->idx;
+
+			b->avail = (short)left;
+			acc = (unsigned int)b->acc << (left & 31);
+			acc |= (unsigned short)b->word[idx];
+			b->pos = (short)(pos + left);
+			b->acc = (int)acc;
+			folded = left;
+			n = left;
+		}
+
+		if (b->crc_on != 0 && folded != 0) {
+			acc = (unsigned int)b->acc;
+			do {
+				unsigned int crc = (unsigned short)b->crc;
+				int bit = (int)(crc >> 15);
+
+				folded = (short)(folded - 1);
+				if ((acc >> (folded & 31)) & 1)
+					bit ^= 1;
+				crc += crc;
+				if (bit)
+					crc ^= 0x1021;
+				b->crc = (short)crc;
+			} while (folded != 0);
+			goto emit;
+		}
+	}
+
+	acc = (unsigned int)b->acc;
+
+emit:
+	n--;
+	b->avail = (short)n;
+	return (short)((acc >> (n & 31)) & 1);
+}
+
+static struct v34_bitsource *
+tx1_bitsource(struct v34_object *o)
+{
+	return *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);
+}
+static void
+tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
+	      unsigned short flags)
+{
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->wordbits = 0x10;
+	b->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);
+	b->crc_on = 1;
+	b->avail = 0x12;
+	b->avail0 = 0x12;
+	b->repeat = 0;
+	b->acc = 0x3fffe;
+	b->acc0 = 0x3fffe;
+
+	/* 0x646a1 */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_F3590, 0x22);
+
+	/*
+	 * 0x646b5.  `flags` IS the receiver's word and the object re-reads
+	 * it here rather than using the copy it was handed; nothing between
+	 * the two writes it, so the argument is the parameter.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+			"V34MP, Starting txmit MP again(%d)," " rxflgs=0x%x,txflags=0x%x\n",
+			tx1_get(o, TX1_F359E), flags, o->tx_flags);
+}
+
+static int
+tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
+{
+	unsigned short flags;
+	short seq;
+	int stamp;
+
+	seq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);
+	tx1_put(o, TX1_F359E, seq);
+
+	if ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {
+		flags = rx->flags;			/* 0x645f9 */
+		if ((flags & 0x90u) == 0x90u && seq > 3) {
+			/* 0x648b1 */
+			if (tx1_get(o, TX1_F3598) == 0) {
+				initdigital(o);
+				tx1_put(o, TX1_F3598, 1);
+			}
+			/* 0x648bf */
+			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
+			o->vect_idx = 0;
+			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);
+			return 1;
+		}
+		stamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))
+			== V34_RX_FLAG_TRN_WATCH;		/* 0x64614 */
+	} else {
+		flags = rx->flags;			/* 0x647a9 */
+		stamp = (flags & 0x18u) == 0x10u;	/* 0x647b0 */
+	}
+
+	/*
+	 * 0x647c5 RE-READS +0x359e rather than using the value just stored.
+	 * Nothing between the two writes it, so the two are the same number;
+	 * it is written as the object writes it.
+	 */
+	if (stamp && tx1_get(o, TX1_F359E) > 1) {
+		/* 0x647d3 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		if ((b->word[0] & 1) == 0)
+			tx1_put(o, TX1_F359E, 0);
+		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
+		if (dsplibs_debug_level > 1)		/* 0x67254 */
+			dsplibs_debug_printf(
+				"V34MP, MP detected, starting MP' txmit");
+		flags = rx->flags;			/* 0x64805 */
+	}
+
+	tx1_mp_reload(o, tx1_bitsource(o), flags);
+	return 0;
+}
+static void
+tx1_mp16(struct v34_object *o, short src)
+{
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short k, q;
+	int point;
+
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+	o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,
+				(short)(src >> 2), 2);
+	k = o->cur_quadrant;					/* re-read, 0x63c72 */
+	o->prev_quadrant = k;
+	point = vect16[q + 4 * k];
+	tx1_put_point(o, point);
+}
+static void
+tx1_mp4(struct v34_object *o, short src)
+{
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+
+	(void)tx1_dpsk4(o, q);
+}
+
+static void
+tx1_dpsk_tone(struct v34_object *o, short bit)
+{
+	short sel = (short)((unsigned short)tx1_get(o, TX1_F358C)
+			    ^ (unsigned short)bit);
+
+	tx1_put(o, TX1_F358C, sel);
+	tx1_put_point(o, vect4[2 * (sel & 1)]);
+}
+
+static void
+tx1_moh_cleardown(struct v34_object *o)
+{
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_FABE4, 1);
+}
+
+static void
+tx1_moh_reinit(struct v34_object *o, const char *msg)
+{
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
+	v34handshakinit(o, 1);
+	tx1_put(o, TX1_FABE6, 1);
+}
+
+static int
+tx1_moh_hold(struct v34_object *o)
+{
+	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
+		return V34TX1_LOOP;			/* 0x6431f */
+
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6889f */
+			dsplibs_debug_printf(
+				"MOH: Timeout waiting for MH sequence under"
+				" MHreq, disconnecting...\r\n");
+		/* 0x688b4 */
+		tx1_moh_cleardown(o);
+		o->short_abe2 = 1;
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	if ((unsigned)(o->moh_message - 2) > 1u) {
+		/* 0x6923d */
+		tx1_moh_reinit(o,
+			       "MOH: Timeout waiting for MH sequence under"
+			       " MHreq, initiating retrain\r\n");
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	if (dsplibs_debug_level > 1)			/* 0x65031 */
+		dsplibs_debug_printf(
+			"MOH: Timeout waiting for MH sequence under"
+			" cleardown, terminating connection without" " acknowledge\r\n");
+
+	/* 0x65046 */
+	tx1_moh_cleardown(o);
+	return V34TX1_LOOP;				/* 0x64326 */
+}
+
+static void
+tx1_moh_on_hold(struct v34_object *o)
+{
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_COUNT, 0);
+	o->vect_idx = 0;
+}
+
+static void
+tx1_moh_send(struct v34_object *o)
+{
+	struct v34_bitsource *b;
+
+	if (o->short_abe2 != 3)
+		o->short_abe2 = 1;
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {
+		if (dsplibs_debug_level > 1)	/* 0x7041b */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq," " sending MHfrr\r\n");
+		o->moh_message = 1;		/* 0x70430 */
+	} else {
+		if (dsplibs_debug_level > 1)	/* 0x6a400 */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq," " sending MHcda\r\n");
+		o->moh_message = 3;		/* 0x6a415 */
+	}
+
+	/* 0x6a427 */
+	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
+	*(short **)((char *)o + TX1_PTR_AA6C) =
+		(short *)((char *)o + TX1_BLK_A94C);
+
+	/* 0x6a44e */
+	b = (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->nbits = 8;
+	b->wordbits = 8;
+	b->crc_on = 1;
+	b->acc = 0xf72;
+	b->acc0 = 0xf72;
+	b->avail = 0xc;
+	b->avail0 = 0xc;
+	b->repeat = 0;
+}
+
+static int
+v34tx1_xmitmp(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	int wide = 0;
+	int n = 0;
+
+	o->cur_quadrant = 0;					/* 0x639ab */
+
+	for (;;) {
+		struct v34_bitsource *b;
+		unsigned short flags;
+		short bit, idx;
+
+		wide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;
+		if (n > (wide ? 3 : 1))
+			break;
+
+		/* 0x639db, and 0x6484c where it does not inline */
+		b = tx1_bitsource(o);
+		bit = getbit(b);
+
+		/*
+		 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
+		 * bit reaches it sign-extended -- so the reader's -1 fills
+		 * `cur_quadrant` from bit `n` up rather than setting one bit.
+		 */
+		o->cur_quadrant = (short)((unsigned short)o->cur_quadrant
+				   | (unsigned short)
+				     ((unsigned)(int)bit
+				      << ((unsigned)(unsigned char)n & 31u)));
+
+		/* 0x63ad8 */
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+		idx = o->vect_idx;
+		flags = rx->flags;
+
+		if (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {
+			/* 0x6459b */
+			b = tx1_bitsource(o);
+			if (flags & 0x20u) {
+				b->acc = (int)((unsigned)b->acc << 3);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 3);
+			} else {
+				b->acc = (int)((unsigned)b->acc << 1);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 1);
+			}
+		} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {
+			if (tx1_mp_sequence_end(o, rx)) {
+				/* 0x6490e */
+				wide = (unsigned short)
+				       tx1_get(o, TX1_F382) == 0x89b0u;
+				break;
+			}
+		} else if ((unsigned short)o->vect_idx
+			   == (unsigned short)tx1_get(o, TX1_F3590)) {
+			/* 0x64727 */
+			b = tx1_bitsource(o);
+			b->acc = (int)((unsigned)b->acc << 1);
+			b->avail = (short)((unsigned short)b->avail + 1);
+			tx1_put(o, TX1_F3590,
+				(short)((unsigned short)
+					tx1_get(o, TX1_F3590) + 0x11));
+		}
+
+		n = (short)(n + 1);			/* 0x63b38 */
+	}
+
+	if (wide)
+		tx1_mp16(o, o->cur_quadrant);
+	else
+		tx1_mp4(o, o->cur_quadrant);
+
+	txmit(o);				/* 0x62d5f and 0x64a42 */
+	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
+}
+
+static int
+v34tx1_tx_dpsk(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	short bit;
+
+	/* 0x62b9d */
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+
+	/* 0x62bb5, and 0x684bb where it does not inline */
+	bit = getbit(tx1_bitsource(o));
+	if (bit >= 0) {
+		/* 0x64a13 */
+		tx1_dpsk_tone(o, bit);
+		txmit(o);				/* 0x64a42 */
+		return V34TX1_LOOP;			/* 0x640a1 */
+	}
+
+	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0) {
+		/*
+		 * 0x654dd.  The compare against TONE_AB cannot be false, for
+		 * finding F342's reason at 65: the arm is reached only through
+		 * table 1 at `txstate == 24` and nothing between the dispatch
+		 * and here writes +0x3596 -- `getbit` does not.  It is
+		 * written as the object writes it.
+		 */
+		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		return V34TX1_LOOP;			/* 0x63948 */
+	}
+
+	if (dsplibs_debug_level > 1)			/* 0x68704 */
+		dsplibs_debug_printf(
+			"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
+			*((signed char *)o + TX1_MOH_MSG_PENDING), o->vect_idx,
+			tx1_bitsource(o)->repeats);
+
+	if (*((unsigned char *)o + TX1_MOH_MSG_PENDING) == 0) {
+		/*
+		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
+		 * `getbit`'s own restart arm with the `repeat` test taken out,
+		 * so a reader that declines to repeat is restarted anyway.
+		 * The stores are the object's, in the object's order; the
+		 * compiler sank the rest of them into the successors, which is
+		 * why 0x6a855 and 0x6c9c8 store 0xffff into `crc` again.
+		 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		b->repeats = (short)((unsigned short)b->repeats + 1);
+		b->crc = (short)0xffff;
+		b->pos = 0;
+		b->idx = 0;
+		b->acc = b->acc0;
+		b->avail = b->avail0;
+
+		tx1_dpsk_tone(o, getbit(b));
+		txmit(o);				/* 0x67d3e */
+		return tx1_moh_hold(o);			/* 0x64fec */
+	}
+
+	/*
+	 * 0x64e91.  Both selectors are read as ints and compared UNSIGNED --
+	 * `cmp $0x1 ; je ; jb` picks zero alone and `cmp $0x3 ; ja` sends a
+	 * negative one to the same place a large one goes.
+	 */
+	if (o->moh_message == 1) {
+		tx1_moh_on_hold(o);			/* 0x689f6 */
+	} else if (o->moh_message == 0) {
+		int got = o->moh_recvd;			/* 0x6901d */
+
+		if (got == 4)
+			tx1_moh_on_hold(o);
+		else if ((unsigned)got > 4u) {
+			/* 0x6a3c6 */
+			if (got != 5)
+				tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
+			else
+				tx1_moh_send(o);	/* 0x6a3cf */
+		} else if (got == 0)
+			tx1_moh_on_hold(o);
+		else
+			tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
+	} else if ((unsigned)o->moh_message <= 3u) {
+		tx1_moh_cleardown(o);			/* 0x64eaf */
+	}
+
+	/* 0x64fde */
+	*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;
+	return tx1_moh_hold(o);				/* 0x64fec */
+}
+
+#endif /* DSPLIB_V34HSTX1_ARMS_H */

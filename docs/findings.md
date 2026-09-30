@@ -129769,3 +129769,98 @@ follow-on this pass was told not to start before the diagnostics were resolved;
 the diagnostics are now resolved, and that migration remains.
 
 A partial reconstruction with the remainder named is the deliverable.  (2026-09-30)
+
+## F11503. The F11443/F11502 arm migration: the helper closure has ONE home, 19 GLOBALs go local, and the `v34handshak` gap turns out to be an INLINER BUDGET, not missing code
+
+The F11443/F11502 follow-on, executed.  All nineteen table-1 arms, their
+whole static helper closure and `getbit` now live in
+`include/dsplib/v34hstx1_arms.h`, included as a `static` copy by both
+`V34hshak.c` (so the arms are in `v34handshak`'s own translation unit) and
+the mutation driver `t_v34hstx1.c` (so the suites still call them).  Every
+arm and helper BODY is moved verbatim; only the home and linkage change.
+`src/pump/v34/v34hstx1.cpp` is deleted.
+
+**THE COLLISION IS RESOLVED BY ONE DEFINITION, ONE HOME.**  The four helpers
+defined in both files (`tx1_get`, `tx1_put`, `tx1_put_point`, `tx1_dpsk4`)
+and the twelve that only `V34hshak.c` had (`tx1_bitsource`,
+`tx1_mp_reload`, `tx1_mp_sequence_end`, `tx1_mp16`, `tx1_mp4`,
+`tx1_dpsk_tone`, `tx1_moh_cleardown/reinit/hold/on_hold/send`), plus
+`getbit`, are defined once in the header.  `V34hshak.c`'s duplicate
+definitions are removed; the source of `getbit`+helpers+the two in-TU arms
+(lines 2946..3541) is replaced by the include.  No rename was needed, which
+is why the F11443 anchor problem does not recur: the anchor text is
+byte-identical, it merely moved.
+
+**THE ANCHORS CONSOLIDATE TO ZERO DETACHED.**  `suites.json`'s `v34hstx1`
+(535 mutations) and `v34hstx1_moved` (241) both retarget from
+`v34hstx1.cpp`/`V34hshak.c` to the header.  Because the move is verbatim,
+every `find` still matches exactly once; `anchorcheck` reports **285
+suites / 10,038 mutations / 0 non-unique / 0 vacuous / 0 re-pointed**.
+Rule 1 (the `case V34HS_*` arm map) is now vacuous for these two suites
+because their source is a header with no dispatch; rule 2 (`"fn"`) still
+checks, and uniqueness -- the property F11443 broke -- is fully checked.
+This is the one measured cost of the consolidation, and it is stated rather
+than implied.
+
+**THE SYMBOL SURFACE IS FIXED.**  The blob defines no `v34tx1_*`; this tree
+exported nineteen GLOBALs.  After the move, fourteen of the seventeen
+`v34hstx1.cpp` arms are inlined away and the remaining five are LOCAL
+(`v34tx1_jtxmit`, `v34tx1_trnseg4`, `v34tx1_trnseg4a`, `v34tx1_tx_dpsk`,
+`v34tx1_xmitmp`), exactly the F11443 count.  `partialcmp` candidate symbols
+**2,992 -> 2,982**.
+
+**MEASURED, GCC 3.4.2-r2 `make -j1 J=1 phase` = 385 passed / 0 failed.**
+
+    partialcmp          before        after
+    positioned bytes    66,900        67,363   /943,398   (+463)
+    exact sections      70/92         70/92
+    ordered sections    63            63
+    exact relocations   1,012         1,016    /18,317    (+4)
+    exact symbols       394           394      /2,907
+    candidate symbols   2,992         2,982              (-10)
+    NOBITS              2,836/2,812   2,836/2,812
+    byteident grade 0   844/1,852     844/1,852
+    grade 0-or-1        895/1,852     895/1,852
+
+**THE UNEXPECTED RESULT: `v34handshak` GETS SMALLER, AND IT IS THE INLINER'S
+BUDGET.**  byteident `--why v34handshak`:
+
+    before   blob 12,199 insns; ours 1,757 insns; 52,855 bytes differ
+    after    blob 12,199 insns; ours 1,539 insns; 54,200 bytes differ
+
+The seventeen arms are now in the TU and fourteen inline, but the net
+instruction count FALLS.  The cause is not the arms -- it is that the arms'
+inlining consumes GCC 3.4.2's default inlining budget and DISPLACES the
+`t3m_micro*` table-2 arms that the baseline had inlined into `v34handshak`
+(`t3m_micro49/50/51/55/58/59` and `t3m_micro63` are emitted as local
+functions after the change and were inlined before).  Two controls:
+
+  * include the arms at the TOP, at line 2946, or immediately before
+    `v34handshak` -- the same shrink, from 8,686 to 7,337 bytes; placement
+    does not help;
+  * moving only the seventeen and leaving `getbit` and the in-TU arms in
+    `V34handshak.c` -- the same 7,337 bytes, so the scope does not help
+    either;
+  * append the inline-limit parameters to the recovered flags
+    (`--param large-function-growth=1000 --param large-function-insns=200000
+    --param max-inline-insns-single=20000 --param max-inline-insns-auto=20000`)
+    and ALL nineteen arms and every `t3m_micro` inline: `v34handshak`
+    becomes **48,606 bytes** against the blob's 61,541.
+
+So the obstruction is the inliner budget and NOT missing statements: the
+object's one 61,541-byte function has everything fused, and the recovered
+`-O3` flag set will not fuse this much.  This is issue #22's original-profile
+question, now with a sharp discriminator (`large-function-insns`), and it is
+NOT resolved here: changing the inline parameters is a flag change and the
+task bounds this pass to source and linkage.  The honest statement is that
+the migration buys the symbol surface (+463 positioned bytes, -10 candidates)
+and holds the tree grades, while the function it was aimed at regresses until
+the inline-limit question is settled.  The alternative reconstruction is the
+one F11443 did not consider: the original `v34handshak` may be a SINGLE
+function with the arm bodies written inline in its switch, in which case no
+inlining is needed and the arms header is the wrong shape.  That is the next
+discriminating experiment.
+
+**GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0
+failed**, boundary OK, one-definition 1 known duplicate (unchanged);
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean.  (2026-09-30)
