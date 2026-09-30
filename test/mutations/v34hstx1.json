@@ -3028,16 +3028,16 @@
   "find": "\"DET_CM_JM\",\t\"DET_SYNC\",\t\"DET_CJ\",\t\"RX_DPSK\",",
   "replace": "\"DET_CM_JM\",\t\"DET_CJ\",\t\"DET_SYNC\",\t\"RX_DPSK\","
  },
- {
-  "label": "fmt[] rxstate and txstate entries permuted, offsets untouched",
-  "find": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
-  "replace": "\t\t\"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\",\n\t\t/* HS_TXSTATE */\n\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\"",
+  {
+  "label": "rxstate and txstate format literals permuted",
+  "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
+  "replace": "\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
   "fn": "hs_setstate"
- },
- {
-  "label": "fmt[] microstate entry moved to the rxstate slot",
-  "find": "\t\t\"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\",",
-  "replace": "\t\t\"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\",",
+  },
+  {
+  "label": "microstate format literal moved to the rxstate slot",
+  "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
+  "replace": "\t\t\tsel = \"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\";",
   "fn": "hs_setstate"
- }
+  }
 ]
