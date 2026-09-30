@@ -129681,3 +129681,91 @@ label/arm mismatches; `refcheck.py` 14,132 references, 0 dangling, 0 stale;
 `git diff --check` clean.  The mutation record is refreshed for this suite only
 (`mutsnap --update v90demprog`) -- no whole-tree re-record was run.  (2026-09-29)
 
+
+## F11502. `v34handshak`'s 262 diagnostics are NOT missing: they are out-of-line, and only one format string was ever absent
+
+The brief for this pass was that `v34handshak`'s `dsplibs_debug_level > 1`
+diagnostics "were never reconstructed" (F11444: 262 blob refs against 23 ours),
+and that working them would close the largest single `.text` gap.  Measured
+object-first, that premise is wrong in one direction and right in a much smaller
+one.  This entry records the measurement so the next pass does not re-derive it.
+
+**THE REF-COUNT GAP IS AN INLINING ARTEFACT, NOT 239 MISSING CALL SITES.**  The
+blob's `v34handshak` is `0x628f0`, 61,541 bytes, 12,199 instructions, with 262
+`dsplibs_debug_printf` references and 301 `dsplibs_debug_level` references in its
+own `.text` range.  Ours is 12,441 bytes, 1,757 instructions, 51 direct
+`dsplibs_debug_printf` refs in the function and 122 + 26 across the two objects
+that carry its code (`V34hshak.c.o`, `v34hstx1.cpp.o`).  (F11444's "8,686 B /
+23 refs" is stale; the function has grown since.)  The object emits ONE function
+and inlines into it:
+
+  * the shared `hs_setstate` transition -- 140 of the 262 refs
+    (60 `txstate`, 53 `microstate`, 27 `rxstate`), which this tree emits from
+    one out-of-line function through a three-entry `fmt[]` table;
+  * `v34FreezeEcho` -- 5 copies of its `Freeze EC` + near/far report triple,
+    one in ours;
+  * the 19 `v34tx1_*` arms, out-of-line in `v34hstx1.cpp` (F11443);
+  * `probeselect`, `settxlevel`, `ApplyBulkDelay` call sites;
+
+so the ref count differs by construction and says nothing about which format
+strings exist.
+
+**THE AUTHORITATIVE TEST IS THE STRING SET, AND IT COMES BACK ONE.**  Reading
+every `R_386_32` against `.rodata.str1.1`/`.rodata.str1.4` from the disassembly
+of each object in the rebuilt tree (not a source grep, which string-literal
+concatenation defeats) gives 2,068 distinct format strings across
+`build/repro`.  Of the blob `v34handshak`'s 96 distinct strings, exactly
+**one** is absent from all of them:
+
+    V34DATA, getting into data mode from Handshake, Tx bit rate - %d, Rx bit Rate - %d\n
+
+The three `V34HSHAKE: *state` formats and the two `V34MP` formats that a naive
+comparison reports missing are false positives: the former are emitted by
+`hs_setstate`'s table, the latter differ from the extraction only because the
+string contains a single quote and Python's `repr` chose double-quote
+delimiters.  So 261 of the 262 diagnostics were already emitted by this tree;
+the gap is that they are emitted by *header-included, out-of-line* code rather
+than inlined into `v34handshak`.
+
+**THE ONE GENUINE OMISSION, RECONSTRUCTED.**  The absent format is the
+data-mode transition inside the `DATAXMIT` arm, at `0x63d11`.  The object is
+
+    63cf4  mov 0x2218(%edi),%ebx      ; hs_mode, BEFORE the print
+    63cfa  movswl 0xaa98(%edi),%eax   ; the rate index, sign-extended
+    63d01  test %ebx,%ebx
+    63d03  mov %eax,0x228(%edi+4)     ; rate_now  = idx
+    63d09  mov %eax,0x22c(%edi+4)     ; rate_want = idx
+    63d0f  jne 63d41                  ; already in data mode: no message
+    63d11  cmpl $0x1,dsplibs_debug_level
+    63d18  jbe 63d41
+    63d1a  imul $0x960,%eax,%ecx      ; idx * 2400
+    63d20  mov %ecx,0x8(%esp)         ; arg2
+    63d24  movswl 0xaa88(%edi),%ebx   ; the OTHER rate index
+    63d2b  movl $fmt,(%esp)
+    63d32  imul $0x960,%ebx,%eax      ; 0xaa88 * 2400
+    63d38  mov %eax,0x4(%esp)         ; arg1
+    63d3c  call dsplibs_debug_printf
+    63d41  movl $0x1,0x2218(%edi)     ; hs_mode = 1
+
+`v34hstx1.cpp`'s `v34tx1_dataxmit` had the `rate_now = rate_want = idx` and the
+`hs_mode = 1` store but not the read of `0x2218` nor the diagnostic, and its own
+comment said so ("Finding F341's gap, again").  It is reconstructed now, with
+`TX1_TXRATEIDX` (`0xaa88`, `struct v34_ratecfg.txbits`, the field
+`VPcmV34GetCurrentTxBitRate` also reads) added beside `TX1_RATEIDX`.  The
+regenerated arm computes `args = (0xaa88 * 2400, idx * 2400)`, passes them in
+that order, and references the same bytes -- verified by disassembling
+`build/tc_out/v34hstx1.cpp.o`; only register allocation differs, because ours is
+the out-of-line copy the object inlined.
+
+**WHAT THIS MEANS FOR THE `.text` GAP.**  Reconstructing "the diagnostics" cannot
+close it, because the diagnostics are already emitted.  What is missing is the
+INLINING: our `v34handshak` is 1,757 of the object's 12,199 instructions and
+52,855 bytes differ.  The path is the F11443 migration (move the 19 arms and
+their shared static helper closure into a header included by both `V34hshak.c`
+and `t_v34hstx1.c`, so `-O3` can inline them and `hs_setstate` can go `static`
+with its `off` constant-folded to a direct format string), with the 143 detached
+`v34hstx1.json` anchors consolidated in the same change.  That is the
+follow-on this pass was told not to start before the diagnostics were resolved;
+the diagnostics are now resolved, and that migration remains.
+
+A partial reconstruction with the remainder named is the deliverable.  (2026-09-30)
