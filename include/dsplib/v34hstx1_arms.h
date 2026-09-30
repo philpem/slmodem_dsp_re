@@ -170,25 +170,24 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * order leaves every byte of the object identical, which is why the fixture
  * sweeps the three words to three DIFFERENT values and not to one.
  *
- * NOT `static`, and neither are `hs_get` and `hs_put` above.  `v34handshak`
- * belongs to this translation unit and is being reconstructed one dispatch
- * arm at a time in files beside this one (v34hshak_t3mid.c is the first),
- * and its arms emit the same three transitions from the same three format
- * strings.  A second copy of this function next door is a second place for
- * the argument order above to be got wrong.  Finding F223's six functions
- * lost their `static` for the weaker reason that a test wanted to call them.
+ * THE FORMAT IS A LITERAL PER BRANCH, NOT A `static const char *const fmt[3]`
+ * INDEXED BY `off`.  THE OBJECT HAS NO FORMAT TABLE: all 153 `R_386_32`
+ * references to the three strings are from `.text`, none from `.rodata` or
+ * `.data`, and its `v34handshak` carries 140 of them as the inlined copies of
+ * this function.  GCC 3.4.2 does NOT constant-fold `fmt[(off - HS_MICROSTATE)
+ * / 2]`, so the table form emitted the indices and referenced the strings
+ * through a `.rodata` table instead -- 0 direct references where the object
+ * has 140 (finding F11509).  With the literal selected in the branch, the
+ * inlined and constant-folded copies reference the string directly, as the
+ * object does.  Do not restore a table here.
+ *
+ * `static inline`, as are `hs_get` and `hs_put` above: the object inlines the
+ * whole closure into `v34handshak` and defines no `hs_*` symbol at all
+ * (finding F11506/F11507).
  */
 static inline void
 hs_setstate(struct v34_object *obj, unsigned off, short next)
 {
-	static const char *const fmt[3] = {
-		/* HS_MICROSTATE */
-		"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
-		/* HS_RXSTATE */
-		"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
-		/* HS_TXSTATE */
-		"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n"
-	};
 	short now = hs_get(obj, off);
 
 	if (now == next)
@@ -197,20 +196,23 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
 	if (DSPLIB_DEBUG_ON()) {
 		const char *ctx1;
 		const char *ctx2;
+		const char *sel;
 
 		if (off == HS_MICROSTATE) {
 			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
 			ctx2 = StateName[hs_get(obj, HS_RXSTATE)];
+			sel = "V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n";
 		} else if (off == HS_RXSTATE) {
 			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
 			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+			sel = "V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n";
 		} else {
 			ctx1 = StateName[hs_get(obj, HS_RXSTATE)];
 			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+			sel = "V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n";
 		}
 
-		dsplibs_debug_printf(fmt[(off - HS_MICROSTATE) / 2],
-				     StateName[now], StateName[next],
+		dsplibs_debug_printf(sel, StateName[now], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)hs_get(obj, HS_TRACE_2));

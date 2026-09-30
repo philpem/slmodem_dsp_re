@@ -130395,3 +130395,194 @@ seven helpers `localonly` leaves out (`t72_measure`, `t3m_txblock`,
 `t41_marks_late`) against the blob's inlined copies, comparing INSTRUCTION
 counts and flag-selected literals, not call presence -- the same object-first
 method F11508 used for the strings.  (2026-09-30)
+
+## F11510. The `hs_setstate` format table does not fold: the object references the three strings directly, and selecting the literal per branch removes the table and recovers the references
+
+F11509 named `fmt[(off - HS_MICROSTATE) / 2]` as an artefact and showed a
+`switch`-with-literals overlay folding where the table did not.  This entry
+lands the real source fix and measures the whole tree.  It is NOT a
+tree-wide debug-macro defect: `include/dsplib/debug.h` has no format-selecting
+macro, and of 1393 `dsplibs_debug_printf` sites only `hs_setstate` selected its
+format through a table.  Every other site passes a literal (or a macro that
+expands to one) and already emits a direct reference.
+
+**THE OBJECT HAS NO FORMAT TABLE.**  `tools/relocscan.py --at
+.rodata.str1.4:{0xdd90,0xddcc,0xde08}` (the three `V34HSHAKE:` strings)
+resolves **153** `R_386_32` references, and **all 153 are from `.text`** -- 32
+to the rxstate string, 56 to the microstate, 65 to the txstate.  **140 of them
+are inside `v34handshak`** (0x628f0..0x71955; rx 27, micro 53, tx 60); the
+other 13 are the closure inlined elsewhere in the TU.  No reference is from
+`.rodata` or `.data`, so a 3-pointer table cannot be present.
+
+**THE TABLE FORM DID NOT FOLD.**  Our `hs_setstate` carried `static const char
+*const fmt[3]` indexed `fmt[(off - HS_MICROSTATE) / 2]`; GCC 3.4.2 does not
+constant-fold that index, so every inlined, constant-`off` copy referenced the
+emitted `fmt.0` table (local `.rodata`, `nm -a` shows `r fmt.0`) and the TU
+had **0** direct references to the three strings -- against the object's 153.
+That is why F11509's in-range census read 0.
+
+**THE FIX, AND WHICH SPELLINGS WERE TESTED.**  The format is selected in the
+branch and assigned to a `const char *`; the single call keeps its signature
+(`dsplibs_debug_printf(fmt, StateName[now], StateName[next], ctx1, ctx2,
+vect_idx, trace2)`).  Enumerated spellings, all single-TU, GCC 3.4.2-r2:
+
+    spelling                                  fmt.0   direct refs (TU / v34handshak)
+    baseline table, variable index             present  0 / 0        (committed before)
+    table kept, literal index `fmt[0/1/2]`     present  158 / 14     (table dead but emitted)
+    literal per branch (adopted)               absent   158 / 14
+
+The literal-index cell folds the call sites but GCC still emits the now-dead
+`fmt.0`, leaving a `.rodata` object the object does not have.  The adopted
+form removes it: `nm` shows no `fmt`.  The 158/14 at the retained profile is
+the same in both folding spellings; the object's 153/140 differ in
+distribution, not shape, because the object inlines into `v34handshak` the
+arms and helper bodies that our retained profile keeps as local functions
+(F11509's boundary).
+
+**WHOLE-TREE MEASUREMENTS.**  `make -j1 J=1 phase` period differential **385
+passed / 0 failed**; `byteident` grade 0 **844/1852** and 0-or-1 **895/1852**
+with the exact SET **unchanged** (no symbol gained or lost); `compare.py
+--ratchet` OK, identical 904; `anchorcheck` 285/10,038/0/0; `refcheck` 0
+dangling; `git diff --check` clean.  The count does not move because
+`v34handshak` is not exact either way.  `partialcmp` does move, and this is
+where the fix is visible:
+
+    partialcmp                before        after
+    positioned bytes          68,109        68,381 /943,398  (+272)
+    exact relocations         1,015         1,025 /18,317     (+10)
+    exact sections            70/92         70/92
+    exact symbols             394           394 /2,907
+    candidate symbols         2,984         2,983            (-1)
+
+The relocations gain because the TU now carries `R_386_32` against
+`.rodata.str1.4` at the `hs_setstate` call sites, as the object does, instead
+of a reference to a local table.
+
+**THE ANCHORS MOVED, THEY WERE NOT DROPPED.**  The two `fmt[]`-table anchors
+in `test/mutations/v34hstx1.json` (`fmt[] rxstate and txstate entries
+permuted` and `fmt[] microstate entry moved to the rxstate slot`) mutated the
+table text; they are re-pointed to the branch literals with the same fault
+cases.  `anchorcheck` reports 0 non-unique / 0 vacuous / 0 re-pointed.
+
+**AND THE F11509 OVERLAY IS REPRODUCED EXACTLY FROM SOURCE.**  The
+`localonly` inline parameters (F11509's whole-tree-neutral cell) applied to
+the fixed TU give `v34handshak` **50,095 B** with **131** in-range direct
+references -- byte-for-byte F11509's `localonly + literal` overlay figure
+(50,095 B, 131/140 refs).  The fix therefore closes condition (2) of F11509's
+conclusion independently, not as an overlay.
+
+**A STALE COMMENT CORRECTED.**  The `hs_setstate` block said the closure was
+NOT `static` and that its callers lived in sibling files; F11507 made all
+three `static inline` in one home and verified no other TU calls them.  The
+paragraph is replaced.
+
+**GATES.**  Period 385/0; byteident 844/895 exact set unchanged; partialcmp
++272 positioned / +10 relocations; compare ratchet OK; anchorcheck,
+refcheck, `git diff --check` clean.  (2026-09-30)
+
+## F11511. Per-helper body audit of the seven `localonly` stragglers: every body is statement-complete, and the residual is the object's cross-jumped single-function form, not a source gap
+
+F11509's next discriminating test, run object-first.  The seven helpers
+`localonly` leaves out -- `t72_measure`, `t3m_txblock`, `tx1_moh_hold`,
+`t41_after_guards`, `t46_info0_counting`, `t4_mp_sequence_end`,
+`t41_marks_late` -- were each located in the blob's `v34handshak` range and
+compared against our single-TU out-of-line copy.  **No helper has an extra or
+missing statement.**  The measured deltas are inlining and cross-jumping.
+
+**METHOD.**  Every one of the seven is a `static` definition in
+`V34hshak.c`/`v34hstx1_arms.h`, so it is a LOCAL symbol in
+`build/tc_out/src_pump_v34_V34hshak.c.o` (`nm -S`); the blob defines none of
+them (`nm` on `ref/slmodemd/dsplibs.o` finds no `t3m_txblock`, `t72_measure`,
+...).  The inlined copy in the blob is located by the blob addresses the
+reconstruction's own comments carry at each statement, then disassembled with
+host `objdump -dr` over `0x628f0..0x71955`.  Instruction counts strip nothing;
+ranges end at the last instruction of the helper's own statements, before the
+shared tail it jumps to.
+
+    helper                 ours (local sym, out-of-line)   blob inlined copy       class
+    t72_measure            190 B / 63 insns / 2 calls      0x69cba..0x69d7d:       (ii)
+                                                            195 B / 48 insns / 3 calls
+    t3m_txblock            873 B / 217 insns / 1 jmp*      shared dispatch         (iii)
+                                                            0x62aea..0x62b00 + cases
+    tx1_moh_hold           796 B / 154 insns / 8 calls     two sites 0x6889f..,    (iii)
+                                                            0x65031.. ~20 insns each
+    t41_after_guards       517 B / 105 insns / 5 calls     0x6ab33..0x6ab60:       (ii)+(iii)
+                                                            8 insns, 3 shared exits
+    t46_info0_counting    2422 B / 452 insns / 12 calls    0x6c3f3..0x6c480:       (ii)+(iii)
+                                                            29 insns, 2 shared tails
+    t4_mp_sequence_end     618 B / 134 insns / 3 calls     0x6ff3d..0x6ff94:       (ii)+(iii)
+                                                            21 insns, shared trace
+    t41_marks_late         900 B / 183 insns / 10 calls    0x6dfc2..0x6e04f:       (ii)+(iii)
+                                                            28 insns, shared tails
+
+**THE STATEMENTS ARE PRESENT, AT THE ADDRESSES THE SOURCE NAMES.**  Spot
+checks, each an instruction the blob actually contains at the annotated
+address:
+
+  * `t72_measure` -- `call dftenergy` x2 at 0x69cec/0x69d03, the two zero
+    stores at 0x69d1a/0x69d22, the four-bin loop `0x69d28..0x69d4a`, the
+    signal/noise stores at 0x69d55/0x69d5b, `shr $1`/`div` at
+    0x69d69/0x69d70, and the zero arm at 0x6aa0b.  The blob's rung is 195 B
+    against our 190 B: the **+15 instructions are the out-of-line prologue
+    and epilogue** (`push %ebx`/`sub $0xd8,%esp`/`pop`/`ret`), not statements.
+  * `t41_after_guards` -- `test %cl,%cl` at 0x6ab33, `cmpl $0x1,0xabf0` at
+    0x6ab42, the fall-through `movzwl 0x3596` at 0x6ab56; its three exits are
+    `je`/`jmp` to `0x669fa`, `0x6dca7` and `0x62af1`, the inlined-once
+    `t3c_txblock`/`t41_frr_nack` tails the object shares across sites.  Our
+    517 B is one out-of-line body that has absorbed `t41_frr_nack` and the
+    `t3c_txblock` frame setup.
+  * `t46_info0_counting` -- `cmpw $0xc7,0xaa78` at 0x6c3fa, `and $0xfff` /
+    `cmp $0xf72` at 0x6c410/0x6c415, the debug gate at 0x6c420 and its
+    `movswl 0xaa7a`/`movl $0x2bd0` arms, `cmp $0xc,%ax` at 0x6c44f, the
+    give-up `mov %bx,0xaa7a` at 0x6c462.  Our 2,422 B absorbs
+    `t46_chain_tail` and the shared tails the object jumps to at 0x6add0 and
+    0x70c7f.
+  * `t4_mp_sequence_end` -- `cmpw $0x0,(%ebx)`/`js` at 0x6ff3d/0x6ff41,
+    `and $0xffffff67`/`or $0x10` at 0x6ff52/0x6ff58, `cmp $0x29,%dx` at
+    0x6ff7d; our 618 B absorbs the shared trace body at 0x6ff94.
+  * `t41_marks_late` -- `movswl 0x42(%esp)` at 0x6dfc2, `sar $0x4`/`add
+    $0x1ea` at 0x6dfca/0x6dfcd, `cmpw $0x65,0x359c` at 0x6dfe2, `cmpw
+    $0x1,0xa24a` at 0x6dff3, the debug gate and `v34handshakinit` call at
+    0x6e008/0x6e029.
+  * `tx1_moh_hold` -- both timeout sites carry their own direct string
+    reference: `cmpl $0x1,dsplibs_debug_level` + `movl $0xe8d4,(%esp)` at
+    0x6889f-0x688b4 and `movl $0xe398,(%esp)` at 0x65031-0x65046, each
+    falling into the shared `t3m_txblock` cleardown tail our out-of-line
+    body duplicates.
+  * `t3m_txblock` -- the dispatch is inlined **once and shared by
+    cross-jumping**: `movswl %cx,%eax; sub $0x5,%eax; cmp $0x45,%eax; ja
+    62a40; jmp *0x2ee8(,%eax,4)` at 0x62af1-0x62b00, with the case bodies
+    scattered at 0x62b07, 0x62b15, 0x62b2f, 0x62b45.  `v34handshak` has only
+    **three indirect jumps in its whole 61,541 bytes** (0x62966, 0x62b00,
+    0x64ad2), so the object did not duplicate the switch 25 times; GCC 3.4.2
+    cross-jumped the identical case bodies.  Our out-of-line switch cannot
+    merge with its callers and cannot share a case body between them.
+
+**CLASSIFICATION.**  None is (i) an extra statement or (iv) a missing one.
+`t72_measure` is (ii), scheduling plus an out-of-line frame.  The other six
+are (ii)+(iii): the object inlines the helper, inlines-once and cross-jumps
+the `t3c_txblock`/`t3m_txblock`/`t46_chain_tail`/`t41_frr_nack` tails it calls
+(evidenced by the three indirect jumps and the `je`/`jmp` exits), while our
+helpers are out-of-line local functions that absorb their callees.  Our larger
+out-of-line sizes measure the absorbed callees, not extra statements.
+
+**VERDICT.**  `v34handshak`'s residual is the original inline profile -- the
+object's single-function, cross-jumped form -- and not a source gap.  The
+`fmt[]` defect of F11509/F11510 was the one real source-side artefact in the
+closure, and it is now fixed: `localonly` moves the target to 50,095 B / 131
+direct references exactly (F11510).  The 50,095 -> 61,541 remainder is
+inlining budget and cross-jumping, which is issue #22's original-profile
+question, and the alternative F11503 named -- the original `v34handshak` is a
+single function whose arms were written inline, so no inlining is needed --
+remains the form that would reproduce it.
+
+**NEXT DISCRIMINATING TEST.**  Re-run the `localonly` cell on the whole tree
+with F11510 landed (it was whole-tree exact-neutral: 0 gains / 0 losses) and
+then force-inline the seven stragglers one at a time, scoring the whole-tree
+exact SET both directions.  If some prefix reaches the object's 61,541 B
+without costing an exact symbol, land it.  If it overshoots the 2.3x F11509
+measured, the residual is the single-function source form and belongs to
+issue #22, not a helper-body fix.
+
+**GATES.**  The audit changes no `src/` and no test: `anchorcheck` 285/10,038/0/0,
+`refcheck` 0 dangling.  (2026-09-30)
