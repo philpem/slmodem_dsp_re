@@ -130587,6 +130587,405 @@ issue #22, not a helper-body fix.
 **GATES.**  The audit changes no `src/` and no test: `anchorcheck` 285/10,038/0/0,
 `refcheck` 0 dangling.  (2026-09-30)
 
+
+================================================================================
+## F11512. The macro hypothesis for `v34handshak` is FALSE: force-inlining the seven stragglers (by `#define` or by `always_inline`) overshoots the object and doubles its indirect-jump count, and the force mechanism is not the variable
+
+F11511 closed on the owner's counter to the "cannot be forced inline" argument:
+if the author wrote the repeated handshake boilerplate as a `#define` MACRO, the
+preprocessor expands it inline and GCC 3.4.2 would then tail-merge / cross-jump
+the duplicated bodies, which is EXACTLY the object's shape (`v34handshak` has
+only 3 indirect jumps in 61,541 B, and the stragglers' bodies appear as
+inline-expanded regions).  This entry tests that hypothesis over a bounded,
+enumerated domain on the recovered Gentoo GCC 3.4.2-r2 toolchain.  The
+hypothesis is not supported: the macro form does NOT cross-jump, and the
+resulting function overshoots the object by ~2,200 instructions.
+
+**RIG, VALIDATED BEFORE ANY CELL WAS READ.**  A single-TU compile of
+`src/pump/v34/V34hshak.c` with the tree's exact period flags reproduces the
+committed `build/tc_out` object BYTE FOR BYTE (md5
+`4269db6f8b8dd64f2545c46de910b08a` both).  The flags are
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args -Iinclude
+-D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h`, compiler gcc
+3.4.2-r2, assembler GNU as 2.15.92.0.2 (both inside
+`ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`).  Every cell below is one
+compile of that TU; `byteident.py --why v34handshak` reads it through a
+one-object `TC_OUT`.  Baseline: `byteident` grade 0 **844/1852**, 0-or-1
+**895/1852**; blob `v34handshak` **12,199 insns / 61,541 B / 3 indirect jumps**;
+retained ours **6,469 B / 1,275 insns**; `localonly` ours **50,095 B / 9,891
+insns** (F11510).  The `localonly` parameter set is F11509's:
+`--param inline-unit-growth=100000 --param max-inline-insns-auto=100 --param
+max-inline-insns-single=1000000 --param large-function-insns=10000000 --param
+large-function-growth=100000`.
+
+**THE MACRO TRANSFORMATION, AND THE SPELLING FAMILY.**  Each of the seven
+stragglers -- `t72_measure`, `t3m_txblock`, `tx1_moh_hold`, `t41_after_guards`,
+`t46_info0_counting`, `t4_mp_sequence_end`, `t41_marks_late` -- was converted
+from a `static` function to a function-like macro called at the object's sites:
+`do { ... } while (0)` for a void body with no early return, and a GNU
+statement-expression `({ ... })` for a body that returns (early returns become
+`goto` to a `__label__` local label; value returns assign a result local and the
+statement expression yields it).  Macro arguments are parenthesised for hygiene
+(`f->x` -> `(f)->x`) so the one caller that passes `&f` still compiles; that is
+codegen-neutral.  Two spellings were compiled for the void bodies -- `do/while`
+and statement-expression -- and they are indistinguishable: under `localonly`
+the seven-in-one-cell gives **68,777 B / 14,403 insns** (do/while) against
+**68,771 B / 14,411 insns** (all statement-expression).  The macro spelling is
+therefore not a free variable at this scale.
+
+**CELLS (single TU, GCC 3.4.2-r2).**
+
+    cell                                             v34handshak        blob
+    retained baseline                                 6,469 B 1,275 i    12,199 i
+    retained + 7 as macros                            5,915 B 1,204 i
+    retained + 7 always_inline                        5,915 B 1,204 i    (identical)
+    localonly baseline                               50,095 B 9,891 i
+    localonly + 7 as macros (do/while)               68,777 B 14,403 i
+    localonly + 7 as macros (statement-expr)         68,771 B 14,411 i
+    localonly + 7 always_inline                      69,675 B 14,567 i
+    retained + always_inline on the whole closure   165,000 B 36,624 i
+
+The retained-profile cells barely move: at `-O3` the arms are out-of-line, so
+expanding the seven into them does not grow `v34handshak` -- the target 61,541 B
+is 10x the retained function and the only routes to it are the inlining budget
+(F11504: 44 whole-tree exact losses) or a force mechanism.  Under `localonly`,
+which DOES inline the arms and the `hs_*` closure, the seven are the only
+helpers left out; force-inlining them moves the target from 9,891 (2,308 SHORT)
+to 14,403 (2,204 OVER).  Neither side reaches 12,199.
+
+**THE DECISIVE MEASUREMENT: THE MACRO FORM DOES NOT CROSS-JUMP.**  Counting
+`jmp *` in the `v34handshak` range (host `objdump`, symbol-bounded by `nm -S`):
+
+    retained baseline       2 indirect jumps
+    localonly baseline      2
+    localonly + 7 macros   25        <-- one per t3m_txblock expansion
+    blob                    3
+
+`t3m_txblock` is called at ~25 sites.  Expanded as a macro it emits **25
+separate `movswl/sub/cmp/ja/jmp *table(,%eax,4)` dispatch copies**; the object
+has ONE, shared by cross-jumping (F11511: the three indirect jumps are at
+0x62966, 0x62b00, 0x64ad2).  GCC 3.4.2 does NOT tail-merge the macro-expanded
+switch bodies here.  That is the exact mechanism the owner's hypothesis
+predicted, measured firing the other way: the object's shared-dispatch shape is
+NOT what macro expansion produces under the recovered profile.
+
+**PER-STRAGGLER, `localonly`, ONE AT A TIME (insns; baseline 9,891).**
+
+    t3m_txblock         14,097      t46_info0_counting    9,590
+    t41_after_guards    10,471      t4_mp_sequence_end   10,000
+    t41_marks_late      10,164      t72_measure           9,949
+                                     tx1_moh_hold          9,886
+
+No single straggler reaches 12,199; `t3m_txblock` alone adds 4,206 and dominates
+the cumulative cell, and `t46_info0_counting` actually SHRINKS the target.  So
+no prefix of the seven is a recovery either.
+
+**THE FORCE MECHANISM IS NOT THE VARIABLE.**  On the same seven, `#define` and
+`__attribute__((always_inline))` are byte-identical under retained (`5,915 B /
+1,204 i`) and within 900 B under `localonly` (68,777 vs 69,675).  A macro is
+expanded in the front end and an `always_inline` body in the tree inliner, but
+after both the bodies are the same GIMPLE and the RTL cross-jumper sees the
+same thing; the measured difference is nil at this scale.  This bounds the
+whole-closure macro question with the whole-closure always_inline ceiling:
+forcing all 140 static closure definitions (every static function in
+`V34hshak.c` and `v34hstx1_arms.h`, `getbit` excluded because 3.4.2 rejects
+recursive inlining on it, F11504) gives **165,000 B / 36,624 insns**, 2.7x the
+object.  A whole-closure `#define` transform was also attempted by automated
+text substitution and does NOT cleanly compile (two functions contain
+preprocessor directives and several names collide with struct members); it is
+recorded as an INVALID artifact, not a result, and the always_inline ceiling
+stands in for it.
+
+**WHOLE-TREE EXACT SET: 0 GAINS / 0 LOSSES IN EVERY CELL.**  Only
+`V34hshak.c`/`v34hstx1_arms.h` are edited; the other 299 objects are
+byte-identical, so the whole-tree delta is confined to this TU.  `byteident.py
+--list-exact` over the TU gives exactly four exact blob symbols --
+`dftfreqinit`, `dftnlinitNoiseBins`, `dftnlinitSignalBins`,
+`dftRetrainDetInit` -- and the SET is identical in the retained baseline, the
+retained+7-macro, the `localonly` baseline, the `localonly`+7-macro and the
+`localonly`+7-always_inline cells.  `v34handshak` is not exact before or after.
+No cell helps the target and none is a #22 profile finding, so nothing is
+adopted.
+
+**VERDICT.**  The owner's macro hypothesis is FALSE within the tested domain:
+a `#define` form of the seven does not reproduce `v34handshak`, it overshoots
+the object and emits 25 indirect jumps against the object's 3.  The residual is
+not the inlining mechanism and not a source gap (F11511); it is the object's
+original cross-jumped single-function form, which no tested source spelling or
+force mechanism produces under the recovered profile.  This closes condition
+(3) of F11509's conclusion from the other direction and leaves the question
+where F11509 put it: what makes the object's compile share one dispatch across
+25 sites.
+
+**NEXT DISCRIMINATING TEST.**  Compare the object's three shared-dispatch sites
+against a reconstruction whose arms are ONE `switch` with shared case tails
+(the single-function source form F11503 named), rather than `n` macro/function
+expansions -- i.e. write the dispatch once and have the arms fall through to it,
+so the shared tail is a source fact and no cross-jumping is needed.  Score the
+whole-tree exact SET both directions.
+
+**GATES.**  The experiment edits no `src/` in the landed change and no test.
+`make -j1 J=1 phase`: period differential **385 passed / 0 failed**, phase
+boundary OK.  `compare.py --ratchet` OK (identical 904, compared 1852).
+`anchorcheck` **285 suites / 10,038 mutations / 0 non-unique / 0 vacuous / 0
+mis-armed**.  `refcheck` 14177 references, 0 dangling / 0 stale / 0 held;
+`git diff --check` clean.  The experiment's source edits were reverted, so the
+only change is this finding and the branch is findings-only; `partialcmp` and
+`byteident` are consequently the F11510 baselines (positioned 68,381/943,398;
+grade 0 844/1852, 0-or-1 895/1852) and are not re-run here.  (2026-09-30)
+
+## F11513. The `#define ALWAYS_INLINE __attribute__((always_inline))` shorthand is byte-identical to the direct attribute, and writing the shared table-2 dispatch ONCE reproduces the object's 3 indirect jumps (from 25) but not its size
+
+The owner's clarification of F11512's falsified "macro" hypothesis named two
+tests: the `#define ALWAYS_INLINE __attribute__((always_inline))` shorthand
+(the idiom meant, not a body macro), and F11512's "best remaining lead" --
+write the shared tail ONCE in source so the arms jump to one block and no
+cross-jumping is required.  Both were run as bounded, enumerated experiments.
+**The shorthand is a textual tie for the direct attribute, and the
+shared-dispatch restructure is the mechanism that produces the object's three
+indirect jumps -- but it makes the function shorter, not the object, so
+nothing is adopted.**
+
+**RIG, VALIDATED BEFORE ANY CELL WAS READ.**  `gcc` 3.4.2-r2 (Gentoo) and GNU
+as 2.15.92.0.2 in
+`ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`; one compile of
+`src/pump/v34/V34hshak.c` with the exact period flags reproduces the committed
+`build/tc_out` object BYTE FOR BYTE (md5 `4269db6f8b8dd64f2545c46de910b08a`
+both).  Blob `v34handshak` **12,199 insns / 61,541 B / 3 indirect jumps**;
+retained ours **6,469 B / 1,275 insns / 55,072 bytes differ / 2 indirect
+jumps**.  Exact command per object:
+
+    gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+        -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
+        -Iinclude -D__SIZEOF_POINTER__=4 \
+        -include tools/toolchain/period_compat.h [extra] \
+        -o /out/src_pump_v34_V34hshak.c.o src/pump/v34/V34hshak.c
+
+`--param localonly` is F11509's whole-tree-neutral set: `--param
+inline-unit-growth=100000 --param max-inline-insns-auto=100 --param
+max-inline-insns-single=1000000 --param large-function-insns=10000000 --param
+large-function-growth=100000`.
+
+### Task 1 -- the `#define`-attribute form is the direct attribute
+
+**DOMAIN.**  Target sets: (i) the seven stragglers `t3m_txblock`,
+`tx1_moh_hold`, `t41_after_guards`, `t41_marks_late`, `t46_info0_counting`,
+`t4_mp_sequence_end`, `t72_measure`; (ii) the whole closure -- every two-line
+`static` function definition in `V34hshak.c` and `v34hstx1_arms.h` except the
+recursive `getbit`.  Spellings: direct `__attribute__((always_inline))`;
+`#define ALWAYS_INLINE __attribute__((always_inline))`; direct `static inline`;
+`#define STATIC_INLINE static inline`.  Each spelling was applied at the SAME
+definition sites in both files, so the only difference between a direct and a
+macro cell is the preprocessor tokens.  Profiles: retained `-O3` and
+`localonly`.
+
+    cell                     target    profile    md5 (object)                     v34handshak ours
+    direct attribute         seven     retained   f651c80672ea881e346ff9a21b57ffa5  5,915 B 1,204 i  2 jmp*
+    `#define ALWAYS_INLINE`   seven     retained   f651c80672ea881e346ff9a21b57ffa5  5,915 B 1,204 i  2 jmp*   <- IDENTICAL
+    direct `static inline`   seven     retained   7ae90ed2bfe43ae4d9edd857662132f0  8,004 B 1,698 i  6 jmp*
+    `#define STATIC_INLINE`   seven     retained   7ae90ed2bfe43ae4d9edd857662132f0  8,004 B 1,698 i  6 jmp*   <- IDENTICAL
+    direct attribute         seven     localonly  2b254739e2520b864fcecbe50a134f69 69,675 B 14,567 i 25 jmp*
+    `#define ALWAYS_INLINE`   seven     localonly  2b254739e2520b864fcecbe50a134f69 69,675 B 14,567 i 25 jmp*   <- IDENTICAL
+    direct attribute         closure   retained   7ba87ef0f35f13ea40d9d912aa3a1f20 165,000 B 36,624 i 129 jmp*
+    `#define ALWAYS_INLINE`   closure   retained   7ba87ef0f35f13ea40d9d912aa3a1f20 165,000 B 36,624 i 129 jmp*  <- IDENTICAL
+
+**THE TIE IS EXACT AND TEXTUAL.**  Every direct/macro pair is a byte-identical
+object, so the shorthand is not a free variable.  The `always_inline` and
+`static inline` families are NOT each other (5,915 vs 8,004 B retained), which
+is the mechanism difference and not the spelling.  Both `always_inline` cells
+reproduce F11512's recorded figures (5,915/1,204 retained; 69,675/14,567
+localonly; 165,000/36,624 closure), so the rig is the same rig.
+
+**OWNER'S RULE.**  The `#define`-attribute and the direct attribute are a tie,
+so the `#define ALWAYS_INLINE __attribute__((always_inline))` spelling is the
+cleaner C and is the one that would be used **if any force-inlining were
+landed**.  None is: no cell reproduces the object (the closest is 2,204
+instructions short at localonly, and the closure cell is 2.7x over), so per
+F7782 nothing is adopted.  The tie is recorded, not selected for a score.
+
+### Task 2 -- the object's dispatch is ONE source-shared block, and writing it once gives the 3-jump shape
+
+**THE OBJECT DUPLICATES NOTHING.**  Read out of the blob's range
+`0x628f0..0x71955`: the table-2 dispatch is a single block at 0x62af1 whose
+`jmp *0x2ee8(,%eax,4)` is at 0x62b00, and it is reached by
+**124 jumps to 0x62af1, 1 fall-through into the indirect jump, and 9 jumps to
+the shared tail 0x62a40 -- 134 edges into one block, not 25 copies**.  `nm`
+defines no `t3m_txblock`/`t3c_txblock` symbol anywhere.  So the object's shared
+tails are a SOURCE fact (one block reached by jumps), exactly as F11512's lead
+predicted, and the fitted reconstruction's 25 `t3m_txblock` call sites are the
+thing that duplicates under forced inlining.
+
+**THE BOUNDED RESTRUCTURE.**  `struct t3m_frame` gains a `tx` field; the 25
+terminal `t3m_txblock(f, EXPR);` sites inside the nine `t3m_micro*` arms become
+`f->tx = (EXPR);`; the nine micro switch cases and the twenty-four-state shared
+block `goto micro_txblock` instead of returning; and **one**
+`t3m_txblock(&frame, frame.tx);` sits at that label.  The dispatch is now
+written once in `v34handshak`'s own translation unit.  `make -j1 J=3 period`
+on the restructured tree: **385 passed / 0 failed**, so the deferral is
+behaviourally equivalent.
+
+    cell (single TU, gcc 3.4.2-r2)              v34handshak ours      blob
+    retained baseline                           6,469 B 1,275 i  2 jmp*    12,199 i
+    retained + hoist                            7,108 B 1,378 i  2 jmp*
+    localonly baseline (F11509/F11512)         50,095 B 9,891 i  2 jmp*
+    localonly + hoist                          50,218 B 9,835 i  2 jmp*
+    localonly + hoist + 7 `always_inline`      49,775 B 9,826 i  3 jmp*    3 jmp*   <- SHAPE MATCHES
+    localonly + seven `always_inline` (no hoist) 69,675 B 14,567 i 25 jmp*           <- F11512
+    localonly + hoist + whole closure`always_inline` 147,726 B 33,822 i 106 jmp*
+    blob                                       61,541 B 12,199 i 3 jmp*
+
+**THE MECHANISM IS CONFIRMED; THE SIZE IS NOT.**  Hoisting the single dispatch
+takes the indirect-jump count from **25 to 3 -- the object's own count** (F11512
+had 25, the object 3), which is the decisive measurement the lead predicted and
+which the body-macro form could not produce.  But the object's byte count sits
+BETWEEN the two regimes: hoist gives 49,775 B (11,766 SHORT of 61,541) while
+the 25-duplicate macro/`always_inline` form gives 69,675 B (8,134 OVER).  So the
+residual is no longer dispatch duplication, and F11511/F11512's "not a source
+gap" is corroborated from the other side: the missing ~11.8 KB is inlined body
+content the object has and no tested profile supplies without also duplicating
+something else (the whole-closure force-inline overshoots to 147,726 B).
+
+**WHOLE-TREE EXACT SET: 0 GAINS / 0 LOSSES IN EVERY CELL.**  Only
+`V34hshak.c` (and the arm header for the Task-1 closure cells) is edited, so the
+other 299 objects are byte-identical and the whole-tree delta equals this TU's.
+`byteident --list-exact` over the one-object tree gives the same four names --
+`dftfreqinit`, `dftRetrainDetInit`, `dftnlinitNoiseBins`, `dftnlinitSignalBins`
+-- in every cell; the two flag cells (`localonly`) are whole-tree exact-neutral
+per F11509.  `v34handshak` is not exact before or after.
+
+**VERDICT AND NON-ADOPTION.**  The owner's read of the object's shape is
+CORRECT and is now a measurement: the three indirect jumps are source-shared,
+and writing the dispatch once reproduces them.  It is not adopted because (i)
+under the retained `-O3` profile the hoist alone moves the target the wrong way
+(6,469 -> 7,108 B) -- the shape only appears under the `localonly` parameter
+set, a flag change this tree has declined whole-tree as a source fix; (ii) it
+does not reach byte identity, and per F7782 a nearer structural score with no
+byte preimage is not recovered source; (iii) landing it moves the 25 terminal
+call sites' mutation anchors.  The residual v34handshak gap remains issue #22's
+original-profile/inlining question, sharpened: it needs a middle inlining
+regime that inlines the closure's bodies but keeps the table-2 dispatch at ONE
+site.  The `#define ALWAYS_INLINE` tie is recorded as the cleaner spelling for
+whenever that regime is found.
+
+**NEXT DISCRIMINATING TEST.**  With the hoist (shared dispatch, 3 jumps) held,
+audit the remaining 11,766 B: which inlined bodies does the object have that
+`localonly` leaves out -- per-helper instruction counts at the object's own
+addresses, the F11511 method extended past the seven stragglers.  If no source
+form adds those bodies without a second dispatch copy, the gap is the original
+compiler profile and belongs to #22 and not to a source spelling.
+
+**GATES.**  The experiment edits no `src/` in the landed change and no test; the
+source edits were reverted.  The branch is findings-only.  (2026-09-30)
+
+## F11514. The `v34handshak` byte regression is the retained-`-O3` inline equilibrium, not the shared dispatch: two arms cross the single-caller threshold, the TU `.text` shrinks, and every bounded spelling leaves the object unreached
+
+F11513 said the hoist alone "moves the target the wrong way" under the retained
+profile (6,469 -> 7,108 B) and left the question open.  The owner asked for the
+byte regression to be looked at.  **It is not the shared dispatch, and it is
+not removable by a source spelling.**  Under retained `-O3` the table-2 switch
+was never duplicated -- it is the out-of-line `t3m_txblock` in both forms -- so
+the hoist's only effects are the arms' terminal store and a TU-wide inliner
+regime shift.  Measured, single TU, recovered Gentoo gcc 3.4.2-r2, the
+F11512/F11513 rig (baseline object md5 `4269db6f...` reproduced first).
+
+**THE OBJECT'S REGION, READ FIRST.**  `0x62ae3` `mov 0xc0(%esp),%edi` /
+`0x62aea` `movzwl 0x3596(%edi),%ecx` / `0x62af1` `movswl %cx,%eax; sub $0x5`;
+`cmp $0x45` / `0x62afa` `ja 62a40` / `0x62b00` `jmp *0x2ee8(,%eax,4)` -- one
+indirect jump, case bodies at `0x62b07`, `0x62b15`, `0x62b2f`, `0x62b45`, and
+the `ja` default is the shared tail at `0x62a40`.  F11513 counts 134 edges into
+that one block (124 jumps, 1 fall-through, 9 to the tail) and three indirect
+jumps in the whole 61,541 B function.  Our *retained* `t3m_txblock` is 873 B and
+**byte-identical between baseline and hoist**: the shared dispatch and tail were
+already one out-of-line function, so there is nothing for the hoist to collapse
+at this profile.
+
+**WHERE THE +639 B IS, BY CENSUS.**  `nm -S` local-text deltas between the
+baseline and hoisted objects:
+
+    v34handshak                 6,469 -> 7,108   (+639, +103 insns by --why)
+    t3m_micro50                 1,119 -> absent (inlined into v34handshak)
+    t3m_micro63                 1,175 -> absent (inlined into v34handshak)
+    t3m_micro49/51/58           1,160/1,642/1,672 -> 1,176/1,651/1,688
+    hs_setstate                 absent -> 268      (inlined in baseline)
+    v34tx1_dataxmit             absent -> 169      (inlined in baseline)
+    v34tx1_txmd                 absent -> 616      (inlined in baseline)
+    TU .text                    81,082 -> 80,538   (-544)
+
+A call-target census of `v34handshak` confirms it: 7 out-of-line `t3m_micro*`
+calls at baseline, 5 in the hoist (`t3m_micro50` and `t3m_micro63` gone); the
+mnemonic delta is dominated by `mov` +61, with compares and short branches
+spread over the absorbed arm bodies.  **The regression is therefore a
+TU-level inline-equilibrium shift**: replacing each arm's terminal
+`t3m_txblock(f, E)` with `f->tx = (E)` and adding a frame field moved two
+single-caller arms below GCC 3.4.2's inline threshold while three other bodies
+(`hs_setstate`, `v34tx1_dataxmit`, `v34tx1_txmd`) crossed the other way.  It is
+not a longer branch sequence, not the indirect-jump table, and not per-arm
+prologue/epilogue.  The whole TU's `.text` gets *smaller*; only the symbol grows.
+
+**BOUNDED SPELLING FAMILY (single TU, retained flags).**  Each cell scored
+`v34handshak` and the whole-tree exact set:
+
+    cell                                             v34handshak    jmp*  exact set
+    baseline control (duplicated terminal calls)     6,469 B 1,275   2     (control)
+    H  goto + `frame.tx` (LANDED)                    7,108 B 1,378   2     0 gain/0 loss
+    S  switch `break` + `frame.tx`                   7,108 B 1,378   2     0 gain/0 loss
+    F1 `frame.tx` typed `int`                        7,114 B 1,377   2     0 gain/0 loss
+    F2 `frame.tx` declared first                     7,108 B 1,378   2     0 gain/0 loss
+    R  arms `return short`, local `tx` (no frame)     7,003 B 1,370   2     0 gain/0 loss
+    localonly + hoist (F11513, flag cell)            50,218 B 9,835  2     0 gain/0 loss
+    localonly + hoist + 7 `always_inline` (F11513)   49,775 B 9,826  3     0 gain/0 loss
+    blob                                             61,541 B 12,199 3
+
+`S` is a textual no-op: `break` and `goto micro_txblock` compile to the same
+object, so that map is constant.  `F1`/`F2` move single digits.  `R` is the
+nearest only spelling at -105 B and it is still in the same regime -- `micro50`
+and `micro63` are inlined in it too -- while changing the arms' ABI from
+`void` to `short`, which is a larger departure from the object than the frame
+field.  No cell removes the regression or reaches the object, so per F7782
+nothing is adopted beyond the landed `H`.
+
+**WHAT IT MEANS.**  The regression is a real, profile-local cost of the
+retained `-O3` inliner, and it buys nothing at that profile because there was
+no duplicated dispatch to remove.  Under the profile the source is written for
+-- force-inline the closure -- the *same* source shortens `v34handshak` and
+gives the object's three indirect jumps (`localonly` + hoist: 50,095 -> 50,218;
++ the seven stragglers: 69,675 -> 49,775).  So the object's middle inlining
+regime (issue #22) is: **inline the closure bodies so table 2 is written once
+and needs no cross-jumping, while keeping the dispatch at one site** -- exactly
+the `localonly + hoist + seven always_inline` cell, which is 11,766 B short of
+the object and needs a whole-tree `--param` change this tree has declined as a
+source fix.  Until that profile is recovered, the faithful source costs 639
+symbol bytes under the retained flags and the tree keeps its exact set.
+
+**PARTIALCMP, ALL COLUMNS.**  `make -j1 J=1 partial-compare`:
+
+    column                    before(baseline)   after(hoist)
+    positioned bytes          68,381 / 943,398   68,400 / 943,398   (+19)
+    candidate delta           -30,424            -30,968            (-544)
+    exact relocations         1,025 / 18,317     1,019 / 18,317     (-6)
+    candidate relocations     18,216             18,187             (-29)
+    exact symbols             394 / 2,907        394 / 2,907
+    candidate symbols         2,983              2,984              (+1)
+    exact sections            70 / 92            70 / 92
+    ordered sections          63                 63
+    NOBITS                    2,836 / 2,812      2,836 / 2,812
+
+So the whole-tree *positioned* movement is +19 bytes, not +639: the symbol's
+growth is offset by the TU shrinking where the object has no bytes.
+
+**THE ANCHORS MOVED, THEY WERE NOT DROPPED.**  The 21 `v34hst3mid` anchors that
+ended on the rewritten terminal `t3m_txblock(f, E)` calls are re-pointed to
+`f->tx = (E)` with the mutated clause unchanged; `anchorcheck` 0 detached, 0
+non-unique, 0 vacuous, 0 re-pointed.
+
+**GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0 failed**
+and phase boundary OK; `byteident` grade 0 **844/1852**, 0-or-1 **895/1852**,
+exact SET unchanged (0 gains / 0 losses); `compare.py --ratchet` OK (identical
+904, compared 1852); `anchorcheck` 285 suites / 10,038 mutations / 0 detached /
+0 non-unique; `refcheck` 14,179 references, 0 dangling; `git diff --check`
+clean.  (2026-09-30)
+
 ## F11515. The aggressive inline profile is a whole-tree over-inlining loss, not a hidden gain: 39 of its 44 lost exact symbols are refuted by the blob's own sizes, and no per-file `V34hshak.c` profile reaches the object
 
 F11504 called the four aggressive inline parameters a "44 whole-tree exact
