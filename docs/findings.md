@@ -131502,3 +131502,96 @@ aliasing, and an unrecovered cross-jump threshold remain secondary hypotheses;
 the exact compiler exposes `-fcrossjumping` and `max-crossjump-edges`, but a
 global off control already over-separates the function. No new cell was
 compiled and no source form was adopted. (2026-09-30)
+
+## F11523. The ten "loop-rejoin blocks" are ONE loop test in register colours, not ten lost CFG destinations: the four-return trnseg4 carrier does not separate the Ja calls in the object's fused regime
+
+F11522 proposed a bounded experiment: restore `v34tx1_trnseg4`'s four
+evidenced rejoin values and route each to a separate loop check, predicting
+that normal `-O3 -fcrossjumping` then keeps BOTH `indicateJaTransmission`
+calls while still merging unrelated tails. Run object-first and one variable
+at a time, the prediction is **FALSE in the regime where the arm is inlined**
+-- the object's own fused form -- and the object evidence says why: the
+"destinations" are one loop test duplicated by register allocation, not four
+source control-flow targets. Nothing is adopted. (2026-09-30)
+
+**THE OBJECT, READ FIRST.** All ten annotated rejoins are the same five
+instructions:
+
+    mov 0xc0(%esp),%REG   (only at the outer address)
+    movzwl 0x2aa0(%REG),%edx
+    mov 0x4c(%esp),%eax
+    cmp %dx,(%eax)
+    jmp 0x629e7           (the shared `jl 0x62950`, the loop back-edge)
+
+`REG` is the only variable: `%ecx` at 0x629c8, `%esi` at 0x63941/0x63948,
+`%edi` at 0x6409a/0x640a1, `%eax` at 0x6431f/0x64326, `%ebx` at 0x62d70. The
+7-byte pairs (0x629c8/0x629cf, 0x63941/0x63948, 0x6409a/0x640a1,
+0x6431f/0x64326) are the `mov 0xc0(%esp),%REG` prologue versus the shared
+middle. 0x63da2 is a 7-byte thunk, `mov 0xc0(%esp),%ebx; jmp 0x62d70`. All
+converge at 0x629e7 and jump back to the dispatch head 0x62950. This is the
+source's single `while (obj->txq.count < obj->tx_fill_target)` test; it
+carries no distinct per-destination live value and no distinct statement. So
+ten addresses, one test, five register colours.
+
+**RIG, VALIDATED.** Single-TU compile of `src/pump/v34/V34hshak.c` with the
+period flags and the recovered Gentoo GCC 3.4.2-r2 reproduces the committed
+`build/tc_out` object **byte for byte** (md5 `30b0777628044fa60926f2c345a8fb62`
+both). Census counts are `R_386_PC32` targets within the symbol range, plus
+`byteident`'s padding-stripped instruction count and `jmp *`.
+
+**SOURCE CARRIER.** `enum v34tx1_exit` gains four trnseg4 values; the six
+`return V34TX1_LOOP;` sites in `v34tx1_trnseg4` become 0x640a1, 0x63da2,
+0x629c8 (twice), 0x63948 and 0x63da2; the caller's `while` becomes a
+`for(;;)` that captures `ex` from `v34tx1_trnseg4` and re-tests
+`obj->txq.count < obj->tx_fill_target` at four separate source sites. Two
+domains, one variable at a time: **V1** distinct returns only (caller
+ignores, as committed); **V2** distinct returns plus the four routed loop
+checks.
+
+    cell (single TU, gcc 3.4.2-r2)         profile   B       insns  jmp*  Ja  txmit  init  dbg  brev
+    blob                                   --        61,541  12,199  3    2   16     10    262  6
+    control (committed build/tc_out)       retained   7,108   1,378  2    0    4      1     31  0
+    V1 distinct returns                    retained   7,108   1,378  2    0    4      1     31  0
+    V2 + four loop checks                  retained   6,709   1,318  2    0    4      1     30  0
+    control localonly (post-hoist)         localonly 50,218   9,835  2    1   14      8    242  8
+    V1 distinct returns                    localonly 50,218   9,835  2    1   14      8    242  8
+    V2 + four loop checks                  localonly 49,967   9,808  2    1   14      8    242  8
+    control localonly, -fno-crossjumping   lonly+nx  52,831  10,302  2    2   17      9    252  8
+
+(the four trnseg4 destinations separately, out-of-line: committed
+`v34tx1_trnseg4` is 1,674 B / 360 insns with **1** `indicateJaTransmission`;
+with distinct returns it is 1,831 B / 373 insns with **2**.)
+
+**VERDICT.** The distinct-return mechanism fires only where the arm is
+OUT-OF-LINE: V1/V2's `v34tx1_trnseg4` keeps both Ja calls (2 against the
+committed 1). Under `localonly`, which is the profile that inlines the arm
+into `v34handshak` as the blob does, **both V1 and V2 still merge to 1**: V1
+is byte-identical to the control (dead return values are eliminated); V2's
+four separate loop-check statements compile to identical code and are
+re-merged before the calls, so the calls merge too. The blob's own separation
+is preserved by the register colour of its rejoin copies, which source cannot
+dictate; the four addresses are not four source destinations. The prediction
+therefore fails in the object's regime, and the out-of-line separation is a
+mechanism control that does not match the blob's fused function (and V2 even
+shrinks the retained function 7,108 -> 6,709 B). Per F7782 there is no byte
+preimage and no CFG recovery, so no source is adopted.
+
+**BITREVERSE, THE F11522 SIDE-ITEM, CONFIRMED AND SEPARATE.** Under
+`localonly` the candidate has **8** in-range `bitreverse` calls against the
+blob's **6**, and `-fno-crossjumping` leaves it at **8** -- cross-jumping has
+no effect on it. It is a real source difference: the object open-codes
+`bitreverse(..., 4)` at 0x6346b and 0x677a8 as shift/add chains, and
+`v34hstx1_arms.h:2380` already records that our source writes the call
+instead ("the call is written here", F424's treatment of `getbit`). Not
+bundled here; it is its own item.
+
+**NO TREE CHANGE.** The experiment's `src/` and header edits were reverted;
+the branch is findings-only. **GATES (unchanged tree).** `make -j1 J=1 phase`
+period differential **385 passed / 0 failed**, boundary OK; `byteident`
+grade 0 **844/1852**, grade 0-or-1 **895/1852** (`--why v34handshak`: blob
+12,199 insns / 61,541 B, ours 1,378 / 7,108 B, SIZE); `compare.py --ratchet`
+OK (identical **904**, compared 1852); `partialcmp` positioned
+**68,400/943,398**, exact relocations **1,019/18,317**, exact symbols
+**394/2,907**, candidate symbols 2,984, exact sections **70/92**;
+`anchorcheck` **285 suites / 10,038 mutations / 0 detached / 0 non-unique**;
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean. (2026-09-30)
