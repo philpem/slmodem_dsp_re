@@ -130641,6 +130641,12 @@ so every cell below is the same rig.
   * `localonly` is whole-tree exact-neutral (0 gains / 0 losses) and
     byte-neutral, reproducing F11509.  It is a **control**, not a recovery:
     it gains no exact symbol and does not reach `v34handshak` (below).
+  * **A `DSPLIB_REPRODUCE_BUGS` control on BOTH sides gives the same delta.**
+    The define restores four deliberate bug reproductions and loses none
+    (retained 848/1852, exact bytes 82,072); with it, `p4` is **804/1844,
+    0 gains / 44 losses**, exact bytes 73,535, the same eight-symbol
+    denominator drop.  So the 44-loss result is not an artefact of the
+    no-define authority arm.
 
 **THE 44, CLASSIFIED FROM THEIR OWN OBJECTS.**  Each lost symbol's retained
 and p4 definitions were disassembled and compared directly
