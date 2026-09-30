@@ -129864,3 +129864,83 @@ discriminating experiment.
 **GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0
 failed**, boundary OK, one-definition 1 known duplicate (unchanged);
 `refcheck` 0 dangling / 0 stale; `git diff --check` clean.  (2026-09-30)
+
+## F11504. `v34handshak`'s remaining gap is NOT closable by the inliner budget: every lever reproduces nothing, and the global parameter set costs 44 whole-tree exact symbols
+
+F11503 named the next discriminator for the arm migration's `v34handshak`
+regression: the GCC 3.4.2 inliner budget (`large-function-insns`), or a
+single-function source form.  This entry runs issue #22's crossed, bounded
+experiment over both, and the answer is that **no lever reproduces the
+object** and the one that gets closest is a whole-tree loss.
+
+**BASELINE CONTROL (retained `-O3` profile, `build/tc_out`).**  GCC 3.4.2-r2
+`/usr/i386-pc-linux-gnu/gcc-bin/3.4/gcc`, assembler GNU as 2.15.92.0.2.
+`byteident` grade 0 **844/1852** (45.6%), grade 0-or-1 **895/1852** (48.3%);
+`compare.py` **904** identical mnemonic sequences; `--ratchet` OK.  `byteident
+--why v34handshak` before any change: blob 12,199 insns / 61,541 B, ours 1,539
+insns / 7,341 B, **54,200 bytes differ**.  `partialcmp` is F11503's row
+(positioned 67,363/943,398; relocs 1,016/18,317; symbols 394/2,907; candidates
+2,982).  `anchorcheck` 285/10,038/0; `refcheck` 0 dangling.
+
+**THE RIG IS VALIDATED.**  A single-TU compile of `src/pump/v34/V34hshak.c`
+with the period flags only reproduces the committed object **byte for byte**
+(`md5sum` `c5e929ba…` both).  Every cell below is one compile of that TU;
+`--why v34handshak` reads it through a one-object `TC_OUT`.  The four inline
+parameters were also applied to the WHOLE tree (300/300 objects, 0 failed)
+because a local gain is not a global result.
+
+    cell                                                        v34handshak        tree exact
+    E1 baseline (committed source)                              7,341 B 1,539 i    844/1852
+    E2 --param large-function-growth=1000 large-function-insns=200000
+       max-inline-insns-single/auto=20000                       48,606 B 9,999 i   800/1844
+    E6 always_inline on the 42 arms (getbit excluded), baseline  18,513 B 4,095 i  (one TU)
+    E7 same + E2's params                                        45,885 B 10,019 i (one TU)
+
+**E2 IS A WHOLE-TREE LOSS, SO IT IS DECLINED.**  `TC_OUT=build/tc_out` and
+`TC_OUT=<params tree>` `--list-exact` differ by **44 losses and 0 gains**
+(844 -> 800), and the denominator falls 1852 -> 1844: the budget inlines eight
+symbols out of existence entirely.  The losses span the tree and are not
+`v34handshak`-adjacent -- `RxHdxStartV27`, `RxHdxScramV17`,
+`TxHdxStartV17/27/29`, `detector_delete`, `dtmf_progress`, `VPCMXF_Create`,
+`V90Resampler::reset`, both `V90Modem` ctor forms, the `V92ConvolutionEncoder`
+pair and the `V90ConnectionEvaluator`/`V90Phase4Modulator` members.  This is
+exactly #22's "helps the target but loses elsewhere", so no production flag
+changes.
+
+**EVEN UNLIMITED INLINING DOES NOT REPRODUCE, AND THE RESIDUAL IS STATEMENTS.**
+E2 inlines all nineteen arms and every `t3m_micro` (one local symbol remains)
+and still stops 12,935 B / 2,200 instructions short.  The relocation profile
+says the residual is not diagnostics: against the blob's in-range counts, E2
+emits **MORE** `dsplibs_debug_printf` (318 vs 262) and `dsplibs_debug_level`
+(343 vs 301), while emitting **fewer** instructions (9,999 vs 12,199) and
+calling `txmit` **twice as often** (32 vs 16).  So ~2,200 instructions of
+non-diagnostic code are absent and sixteen `txmit` call sites are duplicated in
+the arms.  The obstruction is the arm bodies' statement content, not only the
+budget; source-side `always_inline` (E6/E7) is bounded by the same ceiling and
+is also insufficient.
+
+**THE OBJECT IS A SINGLE FUSED FUNCTION, BUT THAT ALONE BUYS NOTHING.**
+`v34handshak` (0x628f0, 0xf065 B) has no local symbol inside its range and no
+`R_386_PC32` against `.text`; every PC32 in the range targets a named global.
+The arms are therefore inline-expanded bodies, not out-of-line calls -- the
+giant-function observation is real.  It is also not sufficient, because the
+missing statements do not appear by rewriting the factoring.  The recursive
+`getbit` (local `t` at 0x5eaf0, `0x5ec47` calls `0x5eaf0`) and `txmit`
+(global at 0x5d7b0) stay out-of-line in the blob too, which is why
+`always_inline` on `getbit` is rejected by 3.4.2 as recursive inlining -- its
+recursion is the object's own, so no `always_inline` form is available for it.
+
+**ONE CELL WAS INVALID AND IS EXCLUDED.**  Marking the extern `hs_setstate`
+`__attribute__((always_inline))` (E3) changed the function's size without a
+clean mechanism and is recorded as an invalid diagnostic, not a result; the
+blob inlines `hs_setstate` 140 times, and the extern/cross-declaration form was
+not controlled.
+
+**CONCLUSION.**  In the domain {E2, E6, E7} no source or flag cell reaches byte
+identity, and the closest (E2) is a whole-tree regression, so #22's rule
+declines it.  The migration's deliverable -- the nineteen spurious GLOBALs
+reduced to five LOCALs, `partialcmp` positioned bytes +463 and candidates -10,
+anchors 285/10,038/0 -- stands unchanged.  **Next discriminating test:** a
+per-arm statement audit of the arm bodies, driven by the `txmit` call
+multiplicity (32 vs 16) and the 2,200 missing non-diagnostic instructions, not
+another inliner-profile control.  (2026-09-30)
