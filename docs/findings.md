@@ -131502,3 +131502,69 @@ aliasing, and an unrecovered cross-jump threshold remain secondary hypotheses;
 the exact compiler exposes `-fcrossjumping` and `max-crossjump-edges`, but a
 global off control already over-separates the function. No new cell was
 compiled and no source form was adopted. (2026-09-30)
+
+## F11525. The object's two `bitreverse(...,4)` cap sites are author open-coded Horner evaluations, and the preimage is recovered and adopted
+
+F11522's `bitreverse` census left **8 against 6** and declined, calling it a
+separate source-expression hypothesis. A follow-up on the anchor aligner
+(`tools/bbalign.py --anchors`, the apparatus that maps an inline-heavy symbol
+by content anchors) pushed the lead as the only genuinely source-recoverable
+factoring difference, and this entry completes the domain and adopts.
+
+**THE OBJECT, FROM ITS OWN INSTRUCTIONS -- AUTHOR OPEN-CODED, NOT A CALL.** At
+`0x6346b` and `0x677a8` the blob reads four bits straight out of the record
+word and accumulates them as a branchless Horner: `movzwl` of the 16-bit word,
+`shr`/`and` extraction of bits 6/7/8/9 (or 10..13), then two `lea (... ,
+reg, 2)` doubles yielding `((b6*2 + b7)*2 + b8)*2 + b9`. There is **no `call`
+to a `bitreverse` symbol** at either site -- the only relocation in either block
+is the later `dsplibs_debug_level` reference -- and the whole `v34handshak`
+concerns exactly **6** `bitreverse` calls. Decision from the object, not from
+taste: the author wrote the reversal open-coded. The competing reading -- that
+GCC 3.4.2 turned an explicit `bitreverse` call into this -- is refuted by the
+same compiler's behaviour: our source already *called* `bitreverse` at these
+sites and the retained build kept both calls as relocations, so the compiler
+does not inline a cross-TU global here and the blob's open-coding cannot be a
+compiler unroll.
+
+**THE PREIMAGE, AND THE DOMAIN COMPLETED.** The Horner family was enumerated
+over `(unsigned)(unsigned short)rec[0]`, and the axis the F11522 tail left
+unsettled is closed:
+
+  * `((...>>k)&1)*2` with `+` (the Horner itself) -- **reproduces**: emits
+    `shr`/`and` extraction and `lea` scale-2 doubles exactly as the blob does.
+  * `((...>>k)&1)<<1` with `|` -- **excluded**: retains the bit as a shift and
+    emits `add %reg,%reg`/`or` instead of the `lea` doubles, a different shape
+    the blob does not have.
+  * the closed `b6*8 + b7*4 + b8*2 + b9` form -- collapses to the same
+    `lea`-scale-2 accumulation and is scoped out on the same shape.
+
+So the source family is categorically **not** a `bitreverse` call and **not** a
+shift/OR of the nibble; it is the explicit `lea`-doubled Horner over the two
+direct bit reads -- which is precisely what the object emits. Within that
+closed family the `*2`/`+` Horner is the recovered spelling (the `<<1`/`|`
+variant is a distinct codegen); that is the adopted source form.
+
+**ADOPTED.** The two `v = bitreverse(...~0xf...), 4)` calls in `tx1_ts_rates`
+were replaced by the open-coded Horner, and the comment describing the site
+was updated accordingly. The change is behaviourally inert -- the Horner
+equals `bitreverse(nibble, 4)` over all 65,536 inputs, as F424's treatment of
+`getbit` at 67 argued and as the object's own two role-swapped sites agree --
+so no test disagreement can arise from it, and no whole-tree mutation
+re-record was needed. The `bitreverse` call census in the reconstructed
+`V34hshak` object fell from **27 to 25** (the two removed calls are the two
+now-open-coded sites), and the block's instruction sequence after the change
+reproduced the blob's `0x6346b` sequence mnemonic for mnemonic, register names
+apart.
+
+**WHY NO EXACT SYMBOL IS GAINED.** Under the retained profile the block is
+inlined into the static `v34tx1_trnseg4a`, whose factoring the blob merges into
+its giant `v34handshak`; no comparable symbol exists to certify a grade-0
+byte-identical result. The change is a source-factoring correction, not a
+byte-identity gain -- and the whole-tree grade counts do not move.
+
+**GATES.** `make -j2 J=2 phase`: period differential **385 passed / 0 failed**,
+structural boundary "all OK". `byteident` unchanged at **844/1852 grade 0,
+895/1852 grade 0-or-1**. `anchorcheck` (with mutation `66: the cap's nibble is
+read at bit 6 in the call role` retargeted to the open-coded spelling): **0
+detached / 0 non-unique** across 285 suites, 10038 mutations. `refcheck` 14188
+references, **0 dangling / 0 stale**; `git diff --check` clean. (2026-09-30)
