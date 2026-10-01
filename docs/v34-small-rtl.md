@@ -495,3 +495,87 @@ allocation. A single reload is not proof of a source scope boundary. Require
 matching nearby call boundaries and live values before proposing a source
 lifetime or inlining-context change; the two tested carrier variants do not
 supply it.
+
+### Incoming argument homes and a small allocation-pressure control
+
+The predecessor/prologue trace corrects the earlier shorthand "object-pointer
+spill". The blob pushes four registers and reserves `0xac` bytes, so its
+incoming first argument is at `4 + 16 + 172 = 192`, **`0xc0(%esp)`**. Across
+`v34handshak` there are **845 static read sites, zero write sites, and zero
+address-taking sites** for that slot. It is an incoming argument home, not a
+locally created spill slot. Counts are instruction sites, not execution counts.
+
+The current diagnostic candidate instead reserves `0xec` bytes. Its incoming
+argument is at `4 + 16 + 236 = 256`, **`0x100(%esp)`**, and has one read site:
+loading the pointer into BP. Its `0xc0`/`0xc4` object/byte-pointer frame copies
+are separate locals. Comparing equal-looking offsets across these two stack
+frames would conflate distinct objects.
+
+The aligned predecessor path preserves the same `dftenergy` boundary and
+three-bin clearing loop. The blob uses BP for constants/zeroing, then reloads
+its argument to read retrain state at `0x6930d`, again on the run-count path,
+after the debug call, and after the initializer loop. The candidate retains
+its object pointer in BP across these operations. Before allocation its root
+pseudo 58 has `REG_EQUIV` to the incoming argument; its `fskin` pseudo 60 also
+remains live across the energy call/clear loop and ultimately occupies SI.
+The bins base occupies BX at the target. Thus the candidate has an extra
+resident object base consuming a call-preserved register in this island.
+
+The candidate global allocation dump orders 709 allocation candidates, with
+root pseudo 58 at position 96. Its recorded GPR conflicts include
+AX, DX, CX, BX, SI, DI and SP, leaving BP as the usable GPR. This explains the
+candidate's choice at that stage; later renaming is not the decision that
+placed this long-lived pseudo in BP. The blob has no allocation dump, so its
+original conflicts/priorities cannot be reconstructed uniquely from the
+reloads. Source scopes, volatility, and a particular flag profile do not
+follow from these operands alone.
+
+[Declared small mechanism domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929958161)
+uses five ordinary unsigned-integer examples with 0..4 independent accumulators,
+a loop count, and an object pointer live across `pressure_tick()`. Each is
+compiled with renaming on/off: ten cells on the recovered compiler, retained
+flags, mandatory bug-reproduction define and isolated RTL dumps. There is no
+volatile, explicit register, assembly, manual spill, inline-budget parameter,
+linking, execution or blob-oracle fixture.
+
+| Accumulators | Pointer allocation | Incoming argument reads | Writes |
+| ---: | --- | ---: | ---: |
+| 0 | SI | 1 | 0 |
+| 1 | DI | 1 | 0 |
+| 2 | BP | 1 | 0 |
+| 3 | Incoming stack home | 2 | 0 |
+| 4 | Incoming stack home | 3 | 0 |
+
+These outcomes are identical with renaming on/off. In the three-accumulator
+case, global allocation prioritizes the loop-count pseudo, a2, a1, a0, then
+the pointer. BX carries the count, SI/DI/BP carry the accumulators, and the
+pointer is reloaded from its incoming slot for the output store. In the
+four-accumulator case one accumulator also spills. Its prologue contains two
+adjacent incoming-pointer loads into different registers despite having no
+volatile source. This demonstrates how reload-generated accesses can survive
+into final code after earlier CSE has run.
+
+**Conclusion:** a small ordinary-C example reproduces the mechanism that
+makes repeated incoming-argument loads compatible with normal allocation.
+The blob's reloads are not evidence that the author repeatedly assigned the
+pointer, declared it volatile, or created an explicit stack temporary. The
+current island's residual has a concrete **global allocation/residency**
+component. This does not imply that all remaining non-exact functions are
+allocation-only, and does not recover the original inline profile or identify
+which original live values caused its different choice.
+
+Reproducers: `tools/v34_argument_pressure.py` and
+`tools/v34_argument_homes.py`. The home detector was demonstrated both on the
+known three-accumulator spill and on the resident zero-accumulator control;
+it reports the static-site denominator and argument-slot derivation.
+Artifacts are `build/v34-argument-pressure/results.json`, per-cell RTL and
+assembly, and `handshake-homes.json`. Ten cells compile; zero execute. No
+production source, differential, fuzzing or mutation harness changes/runs.
+
+Further allocator work must compare whole-function conflict/prioritization
+inputs rather than force a spill at this one island. A separate source lead
+visible in the same predecessor is the retrain-state dispatch: the blob
+sign-extends the state then compares as SI, while the candidate's if-chain
+uses a zero-extended halfword and HI comparisons. Test an ordinary state
+`switch` against the if-chain in the smaller standalone detector before
+inferring that difference is allocation; do not add casts just to force width.
