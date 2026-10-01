@@ -2112,3 +2112,17 @@ unchanged. Show shortlist/screen/compile denominators, known detector
 controls and closed-domain dispositions. [The pass](../playbook-small-patterns.md)
 records corrected compiler-path replay, all losses (none in retained source),
 period validation and the still-failing complete-object comparison.
+
+
+The reserve pass (F11542) adds two useful controls. For constant fill loops,
+recover counter direction and output traversal together: a signed-short
+post-decrement countdown plus advancing pointer closes TxNOP/RxClampV22;
+changing either alone misses. Preserve exact write count and memory order,
+then check sentinel boundaries in existing fixed differential fixtures.
+For a float-to-int threshold comparison, naming the converted threshold
+before loading the count can recover the x87 conversion/load schedule without
+changing precision or rounding. These are bounded source carriers, not proof
+of unique original spellings. CID caching and calling-tone early loads did
+not transfer successfully; V32's closest array cell still has a reversed
+store/extension pair and is left out. [The reserve ledger](../playbook-reserve-patterns.md)
+records all seventeen cells and the complete-TU controls.

@@ -34,18 +34,18 @@
  },
  {
   "label": "the silence scale is 8 per unit rather than 10",
-  "find": "\treturn s->count > (int)(10.0f * t);",
-  "replace": "\treturn s->count > (int)(8.0f * t);"
+  "find": "\tint threshold = (int)(10.0f * t);",
+  "replace": "\tint threshold = (int)(8.0f * t);"
  },
  {
   "label": "the silence comparison admits the boundary",
-  "find": "\treturn s->count > (int)(10.0f * t);",
-  "replace": "\treturn s->count >= (int)(10.0f * t);"
+  "find": "\treturn s->count > threshold;",
+  "replace": "\treturn s->count >= threshold;"
  },
  {
   "label": "the silence threshold rounds rather than truncating",
-  "find": "\treturn s->count > (int)(10.0f * t);\n}",
-  "replace": "\treturn s->count > (int)(10.0f * t + 0.5f);\n}"
+  "find": "\tint threshold = (int)(10.0f * t);",
+  "replace": "\tint threshold = (int)(10.0f * t + 0.5f);"
  },
  {
   "label": "silence_create does not keep the callback's context",
