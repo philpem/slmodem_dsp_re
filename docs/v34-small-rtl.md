@@ -844,3 +844,78 @@ inlined pre-comparison store, while the conditional-store source needs no
 motion to retain the blob's sequence. Declare the domain before compiling.
 That would measure source/flag compensation; it would not establish the
 object's global profile or justify a per-file exception by itself.
+
+
+## Byte-exact gain: scalar DMA coefficient stores and alias reloads
+
+[Declared six-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932245374)
+crosses the loop initializer, three explicitly expanded cached pairs, and
+three direct scalar pairs with the retained and diagnostic profiles.
+Both unchanged full-TU controls reproduce saved objects exactly.
+
+The blob txrxdmainit is a 98-byte straight-line initializer. For each pair,
+it loads the real input once, stores it to the swapped destination then the
+conjugate destination, negates/stores the imaginary input, and reloads that
+input for its positive store. Chained real assignments and separate imaginary
+expressions reproduce those ordering and alias constraints naturally.
+
+| Source | Candidate bytes | Canonical verdict | Exact shared functions |
+| --- | ---: | --- | ---: |
+| Loop with cached real/imaginary | 86 | SIZE 12 | 4/29 |
+| Explicit cached pairs | 100 | SIZE 2 | 4/29 |
+| Scalar/chained stores with reloads | 98 | EXACT 0 | 5/29 |
+
+This table holds under BOTH profiles. The direct scalar form is adopted with
+retained compiler flags; no compiler-profile exception is introduced. Merely
+unrolling the cached loop does not produce the blob. Replacing its cached
+imaginary values with reloads is observable when the source and destination
+overlap, so this is also a functional recovery.
+
+Five fixed component fixtures use valid short-array regions within a
+32-short backing array, with source shifts -3, -2, 0, 1, and 4 relative to the
+destination. Three deliberately place a source imaginary element at a prior
+real store or its negated store; the other two are controls. The old loop
+fails 3/5 whole-backing-object comparisons against the blob; scalar source
+passes all five. These are valid inputs to this state-free leaf, not evidence
+about modem lifecycle reachability. The first five non-discriminating overlap
+shifts tried all passed; their log is retained separately rather than treated
+as proof that aliases were already correct. Whole-object comparisons use
+diff_eq_obj, and the original 4,800 non-overlapping coefficient checks remain.
+
+All six full-TU cells keep 55 global definitions/bindings and the same function
+symbol set. No existing exact functions are lost. Explicit cached pairs
+change only txrxdmainit. Scalar source also changes raw handshake call
+displacements because the function grows and alignment moves the handshake
+start by 16 bytes. There are 29 changed retained relative calls and five
+diagnostic calls, all reaching the same absolute helper addresses. Every
+other handshake instruction/operand and relocation record is unchanged;
+handshake size deficits remain 54,549 retained and 3,638 diagnostic.
+This is a helper exactness gain, not an exact handshake claim.
+
+Reproducer: tools/v34_dma_stores.py; commands, source/header/object hashes,
+canonical verdicts, full-TU binding/body/call comparisons, RTL and assembly:
+build/v34-dma-stores/. The layout audit checks equal instruction counts and
+the absolute targets of every changed relative call.
+
+Adopted source validation: make phase J=8 passed, 385 period differential
+tests and zero failures. The new overlap group reports five checks. Structural
+checks are clean: 14,199 references and 10,038 anchors across 285 suites, zero
+detached/non-unique anchors. No source anchors needed retargeting. No fuzzing
+or mutation harness was run.
+
+Two parallel, bounded source investigations produced negative controls:
+the 16-cell polyValue narrowing study found no exact gain; nine detector
+shared-result CFG cells likewise found none. Their unchanged controls
+reproduced, and binding/exact-set denominators stayed unchanged.
+[PolyValue results](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932287648)
+and [detector results](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932271101)
+preserve the findings and scoped artifacts. The next independent source lead
+is setTimingStateParameters: blob has two role-specific state switches,
+while retained source has one switch with role-dependent ternary stores.
+That lead has not yet been compiled.
+
+Whole-tree retained build verification: make tc rebuilt 300 objects with zero
+failures; only V34hshak.c recompiled after adoption. Canonical byteident exact
+set increases **844/1852 -> 845/1852**, gaining only txrxdmainit and losing
+none. Exact bytes increase 79,769 -> 79,867. Before/after JSON snapshots are
+build/v34-dma-stores/tree-before.json and tree-after.json.

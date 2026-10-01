@@ -854,6 +854,28 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* Both pointers refer to valid short arrays within one backing array.
+	 * These fixed component cases exercise the source reloads visible in
+	 * the blob, without imposing a modem-state history on this leaf. */
+	diff_begin("v34 txrxdmainit overlap");
+	{
+		static const int shifts[] = { -3, -2, 0, 1, 4 };
+		short a[32], b[32];
+		int n, k;
+
+		for (n = 0; n < 5; n++) {
+			for (k = 0; k < 32; k++)
+				a[k] = (short)(k * 4093 - 32768);
+			a[10 + shifts[n] + 3] = (short)-32768;
+			memcpy(b, a, sizeof(a));
+			txrxdmainit(a + 10, a + 10 + shifts[n]);
+			ref_txrxdmainit(b + 10, b + 10 + shifts[n]);
+			diff_eq_obj("dma overlapping backing", short[32],
+				    a, b, shifts[n]);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 V34scrambler");
 	{
 		unsigned s0;

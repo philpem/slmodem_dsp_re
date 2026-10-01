@@ -9779,24 +9779,23 @@ datapumpv34(void *objp)
  *
  * So a caller wanting `a * conj(c)` dots against the first half and `a * c`
  * against the second, without either having to negate or swap at run time.
- * The original spells all twelve stores out; the negations reload the source
- * rather than reusing the register they just negated, which is why each
- * source short is read twice.
+ * The original spells all twelve stores out.  Each real input supplies a
+ * chained assignment (swapped destination first); each imaginary input is
+ * read again after its negated store.  Those reloads also preserve the blob's
+ * behavior when the two arrays overlap.  See docs/v34-small-rtl.md.
  */
 void
 txrxdmainit(short *dst, const short *src)
 {
-	int i;
-
-	for (i = 0; i < 3; i++) {
-		int re = (unsigned short)src[2 + i * 2];
-		int im = (unsigned short)src[3 + i * 2];
-
-		dst[i * 2] = (short)re;
-		dst[i * 2 + 1] = (short)-im;
-		dst[6 + i * 2] = (short)im;
-		dst[6 + i * 2 + 1] = (short)re;
-	}
+	dst[0] = dst[7] = src[2];
+	dst[1] = (short)-src[3];
+	dst[6] = src[3];
+	dst[2] = dst[9] = src[4];
+	dst[3] = (short)-src[5];
+	dst[8] = src[5];
+	dst[4] = dst[11] = src[6];
+	dst[5] = (short)-src[7];
+	dst[10] = src[7];
 }
 
 /*
