@@ -1478,3 +1478,65 @@ unchanged from F11532: 853/1852 exact names and 82,921 exact bytes. This closes
 these specific source families, not the original inline profile or V34 byte
 recovery as a whole. A fresh investigation needs a new observable live-graph
 or source-boundary discriminator rather than another closest-size spelling.
+
+
+## Initial-phase arithmetic halves recovered before allocation (F11534)
+
+The next independent discrepancy is in setInitialPhase, not a register-colour
+choice. At 0x605d2 and 0x605f2 the blob halves the input and polynomial sums
+with bare SAR. Retained signed /2 instead expands into a sign-bit correction
+and SAR (truncation toward zero). Restore `(a + b) >> 1` and
+`(p1 + p0) >> 1` in those numerators. Signed negative odd sums distinguish the
+arithmetic operations; this does not claim that existing modem lifecycle
+fixtures expose a changed outcome. The twenty legal polynomial sums are all
+positive (7,632..11,772), so that half's numeric result is unchanged there.
+
+[The four-cell halving domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5937175199)
+uses pinned 27cfae0f source and unchanged hashed headers: original, input-only,
+polynomial-only, both shifts. Original control reproduces the retained full
+object raw-byte-for-byte. Initial RTL's division-by-two expressions count
+2 -> 1/1 -> 0: the two corrections disappear independently during expansion,
+before register allocation. Canonical size gaps are 29, 25, 25 and 14 bytes.
+Each variant changes only setInitialPhase and preserves all 63 defined
+functions, 55 global bindings and 9/29 exact functions. No exact gains/losses.
+The adopted TC object raw-equals both-shift SHA256
+6ea380ec0f7cc2d53e166cead6914ae6621fa49674d6d060e9acbd0897a657e7.
+
+[The separate four-width cells plus raw baseline](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5937225653)
+hold both shifts and cross int/short best error with int/short loop index;
+besti remains int. Gaps are 14, 57, 15 and 67 bytes (int/int, int/short,
+short/int, short/short). All preserve the inventories and 9/29 exact names.
+A short loop recovers the blob's +837 polynomial induction and halfword loop
+test, but also changes setTimingStateParameters from 441 to 433 bytes,
+worsening its blob deficit from 21 to 29; its relocation records are unchanged.
+Short best alone still compares a promoted integer error at full width.
+Neither width is adopted. These are actual live-body changes, not just shifted
+call addresses; the domain stops without spelling permutations.
+
+Remaining initial-phase differences include eager default initialization,
+cached metric loads versus indexed reloads, comparison widths, polynomial
+induction, final intermediate narrowing and branch/register scheduling.
+The two shifts recover a supported source idiom; they do not recover the
+whole function or original profile. Driver: tools/v34_initialphase_halving.py
+--domain <declared URL>, optionally --width-study and --baseline-object.
+Artifacts: build/v34-initialphase-halving/ and build/v34-initialphase-width/;
+results/analysis JSONs preserve complete commands, header hashes, raw controls,
+all changed bodies, canonical verdicts and RTL extracts.
+
+Validation of the adopted shifts: fixed `make period J=8 T=t_v34rx` passes
+1/0; `make phase J=8` with all 385 non-fuzz fixtures explicitly selected passes
+385/0 and the structural boundary. No fixture was changed, and this is not
+coverage of the upstream fuzz fixture. `make tc J=8` reports 300/300 objects,
+zero failed; the whole-tree exact count remains 853/1852, 82,921 exact bytes.
+No fuzzing or mutation execution is performed.
+
+Complete 300-object before/after partial links in the same inferred order
+remain DIFFERENT (strict exit 1). Positioned equality declines
+68,629 -> 68,531 / 943,398 bytes; relocation exact records decline
+1,025 -> 1,021 / 18,317. Exact section contents remain 61, section records 70,
+and symbol records 394/2,907. Candidate contents shrink 16 bytes to 914,190;
+NOBITS remains 2,812 versus reference 2,836. This records the layout losses
+rather than claiming aggregate convergence. Driver and comparison JSONs:
+build/v34-initialphase-partial/. Logs: /tmp/v34-initialphase-period-fixed.log,
+/tmp/v34-initialphase-phase.log, /tmp/v34-initialphase-tc.log,
+/tmp/v34-initialphase-byteident.log and /tmp/v34-initialphase-partial.log.

@@ -132376,3 +132376,39 @@ assembler identity, mandatory bug define, full inventories, changed bodies and
 exact gains/losses. See [the study](v34-small-rtl.md) and
 [playbook](method/refinement.md). No fuzzing or mutation execution is performed.
 (2026-10-01)
+
+
+## F11534. V.34 initial-phase numerator halves recovered as arithmetic shifts; expansion-stage evidence separates this source idiom from allocation, while local-width controls remain non-exact
+
+The blob's setInitialPhase halves its two numerator sums with bare SAR at
+0x605d2 and 0x605f2. Signed /2 in our source instead expands into correction
+plus shift. Four complete-TU controls independently restore each shift and
+both; initial RTL division expressions count 2 -> 1/1 -> 0 before allocation.
+The raw baseline is reproduced, all 63 defined functions and 55 global
+bindings survive, and only setInitialPhase changes. Size gaps 29/25/25/14
+are not exactness; all preserve 9/29 exact names, with no gains/losses.
+
+Adopt both shifts from this instruction evidence. The polynomial half is
+numerically unchanged over all twenty legal indices (positive sums
+7,632..11,772). Negative odd sums distinguish the arithmetic idioms generally,
+but no new modem-reachable failure is claimed. Existing fixed t_v34rx tests
+pass 1/0; the full explicitly non-fuzz period/structural phase passes 385/0.
+No fixture is changed. The adopted comparison object raw-equals the both-shift
+experimental object; 300/300 objects build, zero failed.
+
+A separate best-error/loop int-versus-short cross yields gaps 14/57/15/67,
+no exact gain or loss, all bindings/inventories preserved. Short loop recovers
++837 induction and a halfword test but also changes setTimingStateParameters
+441 -> 433 bytes (blob deficit 21 -> 29) with unchanged relocation records.
+Short best retains a fullwidth promoted-error comparison. Neither width is
+adopted. Further spelling permutations are excluded from this closed domain.
+
+Retained whole-tree exactness stays 853/1852 and 82,921 bytes. Complete
+300-object partial links in the same inferred order remain DIFFERENT (strict
+exit 1): positioned equality 68,629 -> 68,531 / 943,398, relocation exact
+records 1,025 -> 1,021 / 18,317; other exact section/symbol dimensions unchanged.
+This is a source idiom recovery with recorded layout losses, not aggregate or
+function byte-exact convergence. [The study](v34-small-rtl.md) records declared
+domains, complete commands/header hashes, RTL, all changed bodies and canonical
+controls; tools/v34_initialphase_halving.py replays both domains.
+No fuzzing or mutation execution is performed. (2026-10-01)

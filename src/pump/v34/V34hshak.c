@@ -10063,7 +10063,7 @@ setInitialPhase(void *objp)
 			dsplibs_debug_printf("setInitialPhase() : Error - "
 					     "deviding by 0 (samp2+samp1=0)\n");
 	} else {
-		ratio = (((b - a) << 13) + (a + b) / 2) / (a + b);
+		ratio = (((b - a) << 13) + ((a + b) >> 1)) / (a + b);
 	}
 
 	for (i = 0; i <= 0x13; i++) {
@@ -10078,7 +10078,7 @@ setInitialPhase(void *objp)
 					"setInitialPhase() : Error - deviding "
 					"by 0 (polyValue(k2)+polyValue(k)=0)\n");
 		} else {
-			r = ((((p1 - p0) << 13) + (p1 + p0) / 2)
+			r = ((((p1 - p0) << 13) + ((p1 + p0) >> 1))
 			     / (p1 + p0));
 		}
 

@@ -1996,3 +1996,21 @@ size gap is not stronger evidence than those discrepancies. Close the bounded
 domain without adopting a candidate when the predicted source mechanism does
 not reproduce it. [The study](../v34-small-rtl.md) records complete-TU controls,
 exact losses and the stopping conditions; none demonstrates a global ceiling.
+
+
+### Distinguish source arithmetic during expansion from register allocation
+
+A bare arithmetic half and signed division by two differ on negative odd
+inputs. In setInitialPhase the blob uses SAR at both numerator sites, while
+our /2 creates sign corrections in initial RTL. Crossing the two expressions
+independently removes 2 -> 1/1 -> 0 division expressions before allocation;
+this is stronger original-source evidence than a reduced size gap. F11534
+restores the shifts, preserves all exact names and passes the fixed period
+gate, while explicitly recording partial-link layout/relocation losses.
+
+Do not infer every local type from a halfword comparison. A short loop recovers
+an induction step and halfword test, yet changes another helper's body; a short
+best-error local still compares an int-promoted error at full width. Record
+those crossed controls and stop when they fail the predicted whole live graph.
+The remaining comparison widths and reloads are unresolved; the successful
+arithmetic idiom does not establish a byte-exact function.
