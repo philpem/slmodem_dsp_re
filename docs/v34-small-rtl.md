@@ -1620,3 +1620,60 @@ import hit the tools/dis.py/stdlib name collision; its invalid log is preserved
 and excluded. The earlier prototype's missing Path artifact writer is also
 excluded; corrected certificate reruns succeed. No modem harness, fuzzing or
 mutation execution is used; source and production objects remain unchanged.
+
+
+## Initial-phase metric reuse isolated to post-loop CSE (F11538)
+
+The four predeclared production/combined-graph x retained/no-post-loop-CSE
+cells isolate a specific transformation rather than fitting total size.
+The unchanged full-TU control reproduces the retained object byte for byte.
+All cells preserve 63 defined functions, 55 defined globals and 9/29 exact
+compared symbols; no exact gains or losses. setInitialPhase SIZE gaps are
+14/16/2/7 respectively. Each option control changes 31 canonical bodies,
+so it is diagnostic, not a recovered production profile.
+
+The earlier .08.gcse PRE pass creates incoming-path loads for both metric
+operands; they remain memory loads through .17.web. In the combined graph,
+.18.cse2 first changes instructions 378/379 into copies from initial-pair
+pseudos 70/72 (production equivalents 365/366). Disabling
+-fno-rerun-cse-after-loop
+removes that pass and retains fresh initial-exit memory loads. It also
+restores direct movswl initial-product operands. However, earlier PRE still
+loads both operands before the sign test and reuses search-product operands
+on the search exit. The blob's common indexed reload and branch-local
+second load remain unrecovered. No source or option is adopted.
+
+GCC source cross-check: gcc/toplev.c's rest_of_handle_cse2 invokes cse_main
+with after_loop=1, after web, gated by flag_rerun_cse_after_loop.
+gcc/cse.c's cse_end_of_basic_block follows conditional paths according to
+the CSE flags and ignores loop-end notes in this mode. The recovered
+GCC 3.4.2 source archive was inspected together with the relevant sections
+of protector-3.4.1-1: SSP changes CSE protected-argument-copy handling,
+GCSE propagation guards and pre-RTL stack-protection preparation. These
+selected patched files are explanatory evidence, not a claim that every
+Gentoo build patch has been reproduced. Compiler dumps and the executed
+Gentoo binary remain the authority; do not assume SSP is disabled by default.
+All four initial dumps have no set/v markers: the incoming root, derived root
+and metric assignments are plain SETs, as are the later CSE2 copies. The
+SSP SET_VOLATILE_P guards therefore do not apply to these observed assignments.
+
+Domain: https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942030485.
+Replay: tools/v34_metric_cse.py --domain <that URL>.
+Artifacts: build/v34-metric-cse/{results,analysis}.json, four complete TU
+objects, commands, pass dumps and function disassemblies. The seven/eight
+UID issue from V8 is irrelevant here: the positive control is the named
+memory-to-register transition and its disappearance with the named pass.
+Production remains 853/1852 byte-exact, 82,921 bytes; prior fixed 385/0
+period/structural validation applies because no production source changed.
+
+The named-int initial-operand hypothesis was then stopped at source review,
+without another compile matrix. expr.c's NOP_EXPR/CONVERT_EXPR expansion
+passes NULL_RTX to the narrower child; both targetless conversion and an
+explicit SI destination reach convert_move's extension handling. With
+flag_force_mem enabled at retained O3, that handling force_not_mem's the
+HI input before emitting the extension. Merely naming two int locals cannot
+remove the reusable HI carriers by the proposed target mechanism. This
+rejects that mechanism, not every possible lifetime effect of a local.
+Next investigate TimingV34's independently observed signed-word counter
+and arithmetic-halving idioms. Do not infer a source ceiling from these
+bounded negative controls.

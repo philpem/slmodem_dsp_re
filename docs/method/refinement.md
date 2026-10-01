@@ -2057,3 +2057,15 @@ F11535's safety question. Default removal still fails to recover the complete
 object and changes another helper; it is not adopted. Report the mathematical
 boundary, full denominator and known positive/negative controls separately
 from protocol fixtures and source-preimage evidence.
+
+
+A cached input may involve more than one pass. In V34 initial-phase setup,
+GCSE PRE creates incoming-edge loads, and post-loop CSE first replaces them
+with earlier value copies (F11538). Disabling the second transformation
+confirms its cause without undoing the first. Check the earliest changed
+RTL and the final load graph separately, including every changed TU body.
+Consult the recovered compiler source and relevant patch guards, but keep
+executed compiler dumps as authority when only selected source files have
+been patched. A named scalar local is a finite source hypothesis only when
+conversion expansion predicts a distinguishable RTL representation; names
+alone do not compel new loads or register allocation.

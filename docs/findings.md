@@ -132514,3 +132514,23 @@ Invalid initial writer/import attempts are retained separately and excluded.
 Source/production exactness unchanged, 853/1852 and 82,921 bytes; prior fixed
 385/0 period/structural validation remains applicable. No fuzzing, mutation
 or modem-harness execution is performed by this arithmetic study. (2026-10-01)
+
+
+## F11538. V.34 metric caching first appears in post-loop CSE; earlier PRE remains a separate source-graph obstacle
+
+Four source/post-loop-CSE cells reproduce the unchanged raw baseline and
+preserve all 63 functions, 55 globals and 9/29 exact compared symbols.
+setInitialPhase SIZE gaps 14/16/2/7 give no exact gains or losses.
+GCSE creates incoming-path metric loads; the named .18.cse2 pass first
+replaces them with initial-pair register copies. Disabling that pass prevents
+the copies but leaves PRE's earlier two-load placement and search-exit reuse.
+Both option controls change 31 canonical bodies. No adoption or profile
+recovery follows from this causal pass diagnosis.
+
+Selected recovered GCC source plus SSP patch sections support the pass
+order and protected-copy guards; they are not a complete Gentoo-source-build
+claim or evidence that SSP defaults off. [The study](v34-small-rtl.md)
+records the compiler authority, exact transition, domain and next finite
+scalar-expansion discriminator. Replay tools/v34_metric_cse.py; complete
+artifacts build/v34-metric-cse/. No production source changed; retained
+853/1852 exact and prior fixed 385/0 validation remain applicable. (2026-10-01)
