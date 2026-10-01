@@ -9851,50 +9851,36 @@ v34FreezeEcho(void *objp)
  * see finding F110, which is the same offset trap from the other side.
  *
  * The three-way XOR is spelled as a running increment and a parity test,
- * not as `^`, so a tap that fires twice cancels the same way.
+ * not as `^`, so a tap that fires twice cancels the same way.  Keep the mode
+ * test inside this loop: period GCC unswitches it into the two loops in the
+ * blob.  Direct shift-register expressions also let it delay the first load
+ * until a positive bit count, then hold the register and sink its store.
+ * See docs/v34-small-rtl.md for the source/unswitching controls.
  */
 int
 V34scrambler(unsigned *sr, short mode, short bits, short nbits)
 {
-	int mask = (short)((int)((unsigned)1 << ((int)nbits & 31)) - 1);
-	unsigned reg = *sr;
+	int mask = (short)((int)(1u << nbits) - 1);
 	short i;
-
-	/*
-	 * The two variants differ only in the second tap, but the original
-	 * emits the loop twice rather than testing per bit; the branch is
-	 * hoisted out.  Kept as one loop with the tap chosen up front, which
-	 * computes the same thing without duplicating the body.
-	 */
-	unsigned tap = mode ? 0x00002000u : 0x04000000u;
-
 	for (i = 0; i < nbits; i = (short)(i + 1)) {
-		int parity = (bits & 1) ? 1 : 0;
-
-		/* Arithmetic, so a negative `bits` feeds ones for ever. */
+		short parity = 0;
+		if (bits & 1)
+			parity++;
 		bits = (short)(bits >> 1);
-
-		if (reg & tap)
-			parity = (short)(parity + 1);
-		if (reg & 0x00000100u)
-			parity = (short)(parity + 1);
-
+		if (mode != 0) {
+			if (*sr & 0x00002000u)
+				parity++;
+		} else {
+			if (*sr & 0x04000000u)
+				parity++;
+		}
+		if (*sr & 0x00000100u)
+			parity++;
 		if (parity & 1)
-			reg |= 0x80000000u;
-
-		reg >>= 1;
+			*sr |= 0x80000000u;
+		*sr >>= 1;
 	}
-
-	/* Written once, after the loop -- and not at all when nbits <= 0. */
-	if (nbits > 0)
-		*sr = reg;
-
-	/*
-	 * The newest bit sits at 30, so shifting down by 31 - nbits leaves
-	 * the run of them at the bottom, oldest first -- the same order the
-	 * input was consumed in.
-	 */
-	return (short)((reg >> ((0x1f - (int)nbits) & 31)) & (unsigned)mask);
+	return (short)((*sr >> (0x1f - (int)nbits)) & (unsigned)mask);
 }
 
 /*
@@ -9988,12 +9974,17 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
  *     P(k) = -21k^2 + 837k - 354,  truncated to a short.
  *
  * It peaks near k = 20 and is what turns a measured ratio into a phase
- * index; the derivation belongs with task #47.
+ * index; the derivation belongs with task #47.  The coefficient locals and
+ * square-first association reproduce period GCC's late constant propagation
+ * into multiplication instructions; const coefficients lower differently
+ * (see docs/v34-small-rtl.md).
  */
 int
 polyValue(short k)
 {
-	return (short)(-21 * (int)k * k + 837 * k - 354);
+	int a = -21, b = 837, c = -354;
+
+	return (short)(a * ((int)k * k) + b * k + c);
 }
 
 /*

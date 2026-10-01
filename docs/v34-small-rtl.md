@@ -1011,3 +1011,149 @@ support that owner boundary. There is not yet an honest complete owner type
 expressing those members; no fabricated offset view or register forcing was
 adopted. The [audit](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932839607)
 is a bounded future type-recovery lead, not a measured exact gain.
+
+## Byte-exact gain: coefficient locals defer multiplication lowering
+
+The [eight-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5933832353)
+crosses toy and full TU contexts with literal coefficients, const coefficient
+locals, ordinary coefficient locals with square-first association, and ordinary
+locals with left association. All four toy/full function body pairs agree.
+The unchanged full TU reproduces the bug-enabled 1f340221 object byte-for-byte.
+
+| Source | Canonical polyValue verdict |
+| --- | --- |
+| Literal coefficients, left association | SIZE 3 |
+| Const locals, square first | SIZE 3 |
+| Ordinary locals, left association | SIZE 5 |
+| Ordinary locals, square first | EXACT 0, 28 bytes |
+
+Adopt int a = -21, b = 837, c = -354 and the expression
+(short)(a * ((int)k * k) + b * k + c). This is an idiomatic polynomial with
+coefficient locals; const qualification is a measured code-generation choice.
+In the winning .01.rtl, the coefficients are pseudos and multiplication stays
+generic. .06.cse propagates -21 and 837 into existing mulsi instructions.
+With const/literal coefficients, expansion already synthesized shifts, adds
+and negation. Previous association/flag matrices did not test this propagation
+stage, so their negative result did not exclude this source family.
+
+The complete TU rises 6 -> 7 exact of 29 shared functions, gaining only
+polyValue; all 55 global definitions/bindings and the function inventory are
+unchanged. Only polyValue and its caller setInitialPhase change; the caller's
+size gap narrows 41 -> 29 bytes but remains non-exact. No production flags
+change. Reproducer: tools/v34_polynomial_coefficients.py; independent agent
+artifacts are build/v34-agent-polycoeff/, reviewed reproduction artifacts are
+build/v34-polynomial-coefficients/. Both preserve commands, hashes, selected
+compiler/assembler identity, all eight verdicts, RTL and complete TU audits.
+
+## Byte-exact gain: one scrambler loop unswitches to the blob's two
+
+The [seven source controls](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5934181387)
+start from the unchanged 1f340221 full TU, which reproduces raw bytes. Instead
+of choosing a variable tap before the loop, put the mode test inside it and
+increment a short parity counter. Cross cached versus direct shift-register
+access and explicit versus direct shift counts, then compare two explicitly
+written loops. The direct-register, in-loop-mode, direct-shift form recovers
+the guarded first load, both loop graphs, all registers and the 256-byte
+length. Its two loop versions appear in reverse physical order, however.
+Explicit author-written loops have a different instruction graph (92 versus
+98 instructions); the blob's two loops do not prove two loops in the source.
+
+The [three arm-order controls](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5934260776)
+retain the raw baseline, repeat that near control, then reverse the ordinary
+mode condition and swap the two tap arms. This recovers V34scrambler exactly,
+all 256 bytes. The winning .16.loop2 explicitly reports Unswitching loop.
+Thus ordinary source factoring plus GCC's loop unswitching explains the
+reference, without author-written loop duplication or a profile exception.
+
+Adopt the single loop with if (mode != 0), short parity increments and direct
+*sr expressions. Direct shift counts match the period source/instruction
+family; out-of-range counts in existing component fixtures are period
+fidelity probes, not a portable C contract. The required differential gate
+continues to decide those fixtures without tolerance or source workarounds.
+
+The winning full TU rises 6 -> 7/29, gaining only V34scrambler with no losses.
+All 55 globals/bindings and function symbols are unchanged. Changed bodies
+are V34scrambler, txmitdibit, txmitquadbit, v34handshak, v34tx1_dataxmit,
+v34tx1_exmit, v34tx1_jtxmit, v34tx1_sbarseg, v34tx1_trnseg4,
+v34tx1_trnseg4a, v34tx1_tx_dpsk, v34tx1_txmd and v34tx1_xmitmp. The changed
+callers include inlined copies of the recovered source; standalone exactness
+is not a claim that each caller is exact. All seven original controls and
+three arm-order controls retain the baseline's exact functions.
+
+Reproducer: tools/v34_scrambler_factoring.py, with --mode-order for the second
+domain. Artifacts build/v34-scrambler-factoring/ and
+build/v34-scrambler-mode-order/ include commands, identity, hashes, RTL,
+disassembly, all shared verdicts and changed body inventories.
+
+## Owner recovery separates live allocation from dead scratch selection
+
+The [four owner controls](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5933706170)
+model a neutral transmitter prefix containing the existing queue/ring extent,
+segment count and flags. Assertions establish +0x3a4, +0x3a6 and size 0x3a8;
+the root footprint remains +0x221c..+0x25c4. Root expressions through this
+honest nested owner produce an unchanged complete object. An owning pointer
+before the first debug call restores FreezeEcho's SI base, two saved registers
+and all 222 bytes except two dead pop destinations (EAX in blob, ECX in ours).
+Declaring that pointer after the call retains a one-byte size gap.
+
+A [four-cell next discriminator](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5933782577)
+compares the unchanged owner control, Freeze/DMA order from the reference,
+the local SetupDemodulator/Freeze/Scrambler/DMA order from the reference, and
+diagnostic -fno-peephole2. Both reorder controls leave Freeze's two dead pops
+unchanged; disabling peephole2 replaces the scratch pops with stack adjustment,
+confirming the stage. That diagnostic loses four of the six exact functions
+and is not adopted. All cells keep 55 globals and the same function inventory;
+owner-source cells keep 6/29 exact. Reorders alter raw handshake call layout,
+not the Freeze instruction graph. No global type migration or owner adoption
+is made for a grade-1-only result; the independently supported owner remains
+a type-recovery lead rather than a scratch-register tuning workaround.
+
+Reproducer: tools/v34_transmitter_owner.py, with --order-study for the second
+domain. Artifacts build/v34-transmitter-owner/ and
+build/v34-transmitter-order/ preserve both unchanged-object controls, layouts,
+compiler commands, RTL, all function verdicts and symbol/binding audits.
+
+## dpskinit controls: loops recovered, residual still not exact
+
+The independent agent's 15 declared cells cross clear/carrier ordering,
+RMS loop width/addressing, a shared versus separate induction local, carrier
+local/direct argument and independently observed scalar-store orders.
+Direct carrier plus a short root-relative RMS loop restores the prologue,
+both loops and the first 54 instructions, but leaves 35 differing bytes.
+Shared induction and copying the helper's scalar stores emit identical
+complete objects to their corresponding controls. A gain/flag store reorder
+narrows that to 34 bytes and is declined. All controls keep 55 globals,
+29 shared functions and six exact functions; only dpskinit changes.
+The negative result and commands are in build/v34-agent-dpsk/, build/v34-agent-dpsk2/ and build/v34-agent-dpsk3/ and
+[the findings](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5933832353).
+Do not adopt the nearest spelling or resume scalar permutations without a
+new pass-stage explanation.
+
+## Combined adoption and whole-tree verification
+
+The adopted polynomial and scrambler sources compile together under the
+unchanged retained profile. Canonical full-TU exactness is 8/29; all 55 global
+definitions/bindings and the function inventory remain intact. Caller size
+gaps narrow for txmitdibit (71 -> 5 bytes), txmitquadbit (154 -> 21),
+setInitialPhase (41 -> 29) and v34handshak (54,549 -> 54,481). They remain
+non-exact; their gains are not added to the exact-function denominator.
+
+make tc builds 300/300 objects, zero failures. Compared with the pushed
+1f340221 snapshot, canonical whole-tree exactness rises **850/1852 ->
+852/1852**, gaining only polyValue and V34scrambler with no losses. Exact
+bytes rise 82,322 -> 82,606. Before: build/v34-fsk-init/tree-repro-after-fsk.json;
+after: build/v34-polynomial-coefficients/tree-after-gains.json.
+
+Combined make phase J=8: **385 passed, zero failed**, period differential and
+structural boundary all OK. All 14,199 references and 10,038 anchors across
+285 suites are clean; no source anchors needed retargeting. Existing fixtures
+retain all 65,536 short polynomial inputs and 76,800 scrambler output/register
+comparisons, plus round-trip checks. No fuzzing or mutation harness runs.
+Finding F11530 records the branch's four source recoveries (534 exact bytes)
+and keeps comparison-purpose gains separate.
+
+The final combined audit is build/v34-polynomial-coefficients/combined-adoption.json:
+15 changed body/relocation records, unchanged complete function inventory and
+55 bindings, no handshake PC32 target-count changes, and exactly the two new
+exact functions. Post-documentation refcheck reports 14,200 references and
+2,656 finding headings, zero dangling/stale entries.
