@@ -109,3 +109,100 @@ compiler argv, exports, per-function verdicts and dump names. Focused dump
 extracts include `polyValue`, `dftRetrainDetInit` and `detectRetrainReq`.
 The run log records compiler and executed assembler identity. No harness
 results are claimed for this apparatus-only investigation.
+
+## Follow-up: renaming and scheduling separated
+
+The [four-cell control](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5928882513)
+kept the complete TU/source fixed and crossed register renaming with
+post-reload scheduling. `tools/v34_rename_schedule.py` reproduces it with the
+same `--config` and `--blob` arguments as the first experiment. All four cells
+compiled; 29 shared functions were compared and all 55 global bindings were
+preserved. The unchanged cell reproduced the prior baseline object byte for
+byte. Artifacts: `build/v34-rename-schedule/`.
+
+| Renaming | Scheduling | `dftRetrainDetInit` blob verdict |
+| --- | --- | --- |
+| on | on | EXACT |
+| on | off | BYTES(87) |
+| off | on | BYTES(15) |
+| off | off | BYTES(87) |
+
+BYTES numbers are the canonical tool's byte discrepancy, not instruction
+counts. Equal discrepancy counts do not imply the two scheduling-off bodies
+are equal; their registers still differ.
+
+Before scheduling, the five scalar definition/store pairs remain in the same
+instruction-ID order in all four cells, through `.31.bbro`:
+
+```text
+150 151 148 149 146 147 144 145 142 143
+```
+
+`.30.rnreg` substitutes hard registers without reordering those instructions.
+In `.33.sched2` the order becomes:
+
+```text
+renaming on:  150 148 146 151 144 149 142 147 145 143
+renaming off: 150 146 148 151 144 145 142 149 147 143
+```
+
+Disabling scheduling leaves the pre-scheduling order intact. This establishes
+the observed ordering difference at the scheduling pass, downstream of the
+measured register substitutions. Source-store reordering is unnecessary to
+explain this exact standalone control.
+
+### Why those four registers were chosen
+
+The [upstream GCC 3.4.2 source](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/regrename.c)
+provides the decision rule; the actual Gentoo dumps confirm this example's
+behavior. `regrename_optimize` initializes a `tick` array to zero per function,
+processes closed definition/use chains, excludes overlapping live registers
+and incompatible classes/modes, and avoids unsaved call-preserved registers.
+It initializes the best candidate to the existing register and replaces it
+only when another eligible register has a strictly smaller tick. It then
+increments the selected register's tick. Ties preserve the existing choice.
+
+For these contiguous constant/store chains, the remaining useful choices are
+AX, DX and CX; BX holds the object base, SP is fixed, and other call-preserved
+GPRs were not saved. Processing chains in the dump's order yields:
+
+| Last use | Value | Original | Chosen | Tick after choice: AX, DX, CX |
+| --- | ---: | --- | --- | --- |
+| 143 | 9 | AX | AX | 1, 0, 0 |
+| 145 | 3 | AX | DX | 1, 2, 0 |
+| 147 | 0, runs | DX | CX | 1, 2, 3 |
+| 149 | 0, phase | CX | AX | 4, 2, 3 |
+| 151 | 1 | AX | DX | 4, 5, 3 |
+
+The scan considers hard-register numbers in order; AX=0, DX=1, CX=2 in these
+dumps. At the second choice, DX and CX both have tick zero, so DX wins the
+first strict improvement. This reproduces all five recorded outcomes,
+including the unchanged first chain, without adding a source carrier or
+forcing registers. Tick state is per function, not carried across TU function
+emission; earlier emitted functions cannot affect this pass through tick
+history itself. Other passes or changed inline bodies remain separate causes.
+
+### Transfer to the handshake: a bounded source-complete island
+
+The blob's initializer at `0x69392..0x69425` contains the same three-bin loop
+and five scalar stores. The strongest saved post-Horner diagnostic candidate
+contains it at `0xa3c9..0xa436`. The loop operations match in order through
+the comparison/backedge. Both scalar tails store identical widths/values at
+`0xa24a`, `0xa24c`, `0xa250`, `0xa252`, and `0xa254`.
+
+The blob interleaves those stores with reads of `0x3588` and `0x3592` and the
+OR/compare feeding subsequent state transitions. The candidate emits the five
+scalar stores before those later reads. The original object base is reloaded
+into EAX in the blob, whereas the candidate retains it in EBP and also keeps
+a separate receiver pointer in ECX. These are concrete differences in live
+values and scheduling context. The standalone exact initializer consequently
+cannot dictate the inlined register choices or ordering.
+
+Next discriminator: compile the complete saved strongest handshake source
+with isolated RTL dumps and map this initializer plus its following flag/state
+instructions. Locate the first stage introducing the different pointer/live
+range structure, then apply the demonstrated tick and scheduling rules to the
+actual inlined chains. A difference already present before allocation requires
+a source/dataflow or earlier-pass explanation; a difference appearing only in
+renaming/scheduling requires a liveness/choice explanation. Do not force
+registers or permute stores merely to approach the blob.
