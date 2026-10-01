@@ -788,3 +788,59 @@ field store before expanding a global flag hypothesis. Preserve the equality
 test, four-sample step and reset behavior. Record that finite source domain
 before compilation; scheduling can also move stores, so these operands alone
 do not uniquely identify the source.
+
+
+## Window counter: conditional store already recovered when inlined
+
+[Declared four-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5931941086)
+crosses current field increment/store with an ordinary int local counter,
+under retained and diagnostic profiles. The local form computes phase + 4,
+compares against 128, stores the increment only before the non-triggering
+return, and stores zero on the triggering path. No flags or downstream
+detector statements change. Both unchanged controls reproduce saved objects
+exactly. All four cells compile, with four exact functions among 29 shared
+functions and 55 identical global definitions/bindings.
+
+The local form recovers the standalone compare-before-store sequence, but
+the complete handshake body and relocation records are identical to their
+controls in BOTH profiles. The current source already produces this sequence
+when inlined. Handshake size deficits stay 54,549 retained and 3,638 diagnostic;
+the only changed function is detectRetrainReq. Its size deficit increases
+2 -> 3, and it remains non-exact. Its return allocation also changes: current
+source uses DX then transfers to AX, as the blob does, while the local form
+returns directly through AX. A local counter does not settle original source.
+
+The retained baseline's GCSE dump supplies an explicit mechanism:
+- Before store motion, insn 1805 stores phase in BB 95 before the comparison.
+- STORE_MOTION deletes that store, replaces it with an assignment to pseudo
+  1626, and inserts store 7662 at the start of non-triggering BB 96.
+- Later propagation uses the existing incremented pseudo 364 for that store.
+- The standalone detector keeps its pre-comparison store.
+
+The diagnostic baseline also records the counter store-motion event; neither
+local-counter cell needs it. The analysis extractor reports one matching
+counter event in each baseline handshake, zero in both standalone functions
+and in the local-counter handshakes. Those positive and negative controls
+demonstrate it firing. Exact excerpts are preserved in results.json rather
+than inferred only from the final assembly. This occurs before allocation,
+not because of register renaming or a late scheduler moving the store.
+
+**Conclusion:** decline the local-counter source change. The earlier proposed
+store-placement lead is not an unrecovered handshake detail: GCSE store
+motion already recovers it from the retained source. Equivalent source can
+produce different standalone bodies and identical inlined bodies, so the
+standalone counter sequence cannot uniquely identify the author's source.
+This supersedes the source recommendation at the end of the preceding study.
+
+Reproducer: tools/v34_retrain_counter.py. Complete commands, hashes, canonical
+verdicts, full-TU body/binding/call comparisons, RTL, assembly, and extracted
+store-motion traces live in build/v34-retrain-counter/. No source or flag
+change adopted; no differential, fuzzing, or mutation harness was run.
+
+A next causal control is a source/options crossing with -fno-gcse-sm:
+current versus conditional-store source, store motion on/off, under both
+profiles. Predict that disabling the motion keeps the current source's
+inlined pre-comparison store, while the conditional-store source needs no
+motion to retain the blob's sequence. Declare the domain before compiling.
+That would measure source/flag compensation; it would not establish the
+object's global profile or justify a per-file exception by itself.
