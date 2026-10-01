@@ -285,3 +285,58 @@ bounded original-source hypothesis using direct field/object access. Adoption
 still requires the period differential gate. Do not replace all accesses or
 force register choices based on this one block, and do not generalize this
 sample to the other approximately 1,000 non-exact functions.
+
+### Pointer audit and idiomatic field refinement
+
+The follow-up audit closes the identity question **at this action site**.
+`v34handshak` initializes its local frame through `t3m_frame_init`, which sets
+`frame.m = (unsigned char *)obj`. Before the post-retrain flag statement,
+`&frame` is passed only to that initializer. All microstate helpers receiving
+`&frame` and the final transmit helper occur later. Object/receiver callees
+on the earlier path receive object-derived addresses, not this local frame's
+address. They therefore cannot change this carrier on a valid execution.
+This is a local proof, not a blanket alias assertion about arbitrary callers.
+The only direct assignment to `t3m_frame::m` in the TU is its initializer.
+
+The existing `short_3588` field is defined at the measured offset `0x3588`,
+with a live `HS_OFF_ASSERT` here. Updating its low 16 bits with
+`obj->short_3588 |= 2` has the same result as the prior unsigned-read,
+OR, cast-to-short and store, including sign-bit-set values under the deciding
+period compiler. This ordinary field spelling preserves the blob's common
+object base without a synthetic volatile, explicit register, or store order.
+
+[Declared four-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929464711):
+source baseline/field crossed with the retained and historical diagnostic
+profiles. Both unchanged baselines reproduce their prior objects byte for
+byte. All cells retain the same 55 global names/bindings and the same four
+exact functions among 29 shared blob functions. In both profiles **only
+`v34handshak` changes** among the candidate TU's defined function bodies and
+relocation records. Size deficits remain 54,433 bytes under retained flags
+and 4,083 under the historical diagnostic flags. The diagnostic field spelling
+has the identical extracted handshake body/relocation records to the earlier
+explicit-cast common-pointer control. No aggregate exactness improvement is
+claimed, and the historical inline profile is still not adopted.
+
+The branch source now uses the direct field expression at this one site.
+The four existing affected source anchors are retargeted (including the large
+nbits-order anchor); no mutation harness is executed. Reproducer
+`tools/v34_flag_field.py` retrieves the original retained source/header from
+revision `ff2b5e8d`, so adopting the field expression does not silently replace
+its baseline. It was replayed successfully after the source edit. Complete
+commands, hashes, inventories, canonical blob verdicts and RTL dumps live in
+`build/v34-flag-field/results.json` and its four cell directories.
+
+The period differential passed **385 tests, 0 failed** on the edited source.
+The initial combined gate also exposed four detached source anchors; these
+were repaired. The final `make phase J=8` exited zero: **385 passed, 0 failed**,
+14,199 references checked with no live mutant, and 10,038 existing anchors
+across 285 suites with no detached, non-unique or misplaced anchor. This does
+not use a mutation score as reconstruction evidence.
+
+A next discriminator is visible in the same block: the candidate's generic
+`hs_setstate` eagerly sign-extends and caches `now` for both equality and
+logging, whereas the blob first loads the halfword with zero extension for
+its equality comparison, then obtains signed indices only on its debug path.
+This should be investigated as compare/logging source factoring and live
+ranges, with the debug branch included; changing the state field to unsigned
+or globally rewriting the helper would overstate this one-site evidence.

@@ -9372,9 +9372,13 @@ v34handshak(void *vobj)
 		 */
 		dftRetrainDetInit(obj);
 
-		/* 0x693fa/0x69411/0x69425, a 16-bit read-modify-write. */
-		T3M_I16(&frame, T3M_F3588) =
-			(short)(T3M_U16(&frame, T3M_F3588) | 2);
+		/*
+		 * 0x693fa/0x69411/0x69425: the same object base as the
+		 * initializer, with a 16-bit read-modify-write.  Access the
+		 * field directly so the synthetic frame's duplicate pointer
+		 * does not hide the non-overlapping fields from GCC.
+		 */
+		obj->short_3588 |= 2;
 
 		/*
 		 * Three transitions, 0x6941a, 0x694b6 and 0x69544, each the
