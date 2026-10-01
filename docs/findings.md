@@ -131680,3 +131680,87 @@ structural boundary "all OK". `byteident` unchanged at **844/1852 grade 0,
 read at bit 6 in the call role` retargeted to the open-coded spelling): **0
 detached / 0 non-unique** across 285 suites, 10038 mutations. `refcheck` 14188
 references, **0 dangling / 0 stale**; `git diff --check` clean. (2026-09-30)
+## F11526. The anchor aligner applied broadly: the residue is consultant choice and #22 budget, not recoverable source factoring — no second clean bite beyond F11525
+
+The owner asked for F11524/F11525's method applied across the object, not just
+`v34handshak`.  This runs the anchor aligner (`tools/bbalign.py --anchors`) as a
+classifier over a curated battery and reports the recoverable-versus-budget
+map.  **No `src/` change was adopted** — the only clean source-recoverable
+factoring difference the object still carries is the one F11525 already closed,
+and the deeply-examined next lead was declined under F7782 for a measured
+reason.  This entry is the map and the record of that examination.
+
+**HOW THE BATTERY WAS DRAWN, AND THE RANKING.**  `byteident.py --json-out` plus
+a per-symbol `verdict()` pass tallied the live buckets: **844 EXACT, 876 SIZE,
+79 non-grade-1 BYTES, 46 grade 0-or-1, 2 RELOC, 5 UNRESOLVED** over 1852
+symbols.  The sweep targets are the non-exact ones; they were ranked by the
+task's own criteria: (a) `byteident --why` shows a bounded block-level
+difference (the non-grade-1 BYTES, same byte size, ascending differing-byte
+count), (b) the blob body carries content anchors a source difference could
+explain, (c) the largest (SIZE, descending).  The battery was the **58 smallest
+BYTES** plus the **50 largest SIZE** — 108 symbols.
+
+**THE CLASSIFIER.**  A programmatic `anchorscan` reuses `bbalign`'s own
+`stream`/`_align`/`_classify`/`_call_counts` (never a second implementation,
+7773) and, per symbol, reports the region census, the largest one-sided block
+sizes, and the call-anchor deltas.  `bbalign.py --anchor-self-test` already
+proves the aligner fires (F11524); the scan does not change that proof.
+
+**THE RESULT, IN THREE COLUMNS.**  Of the 108:
+
+* **~50 are grade 0-or-1 (register renaming only).**  In anchor mode these show
+  **0 unmatched regions** — the structure and every content anchor match, only
+  the named registers differ.  They are NOT source-factoring and NOT the #22
+  budget; they are lever-3/peephole2 (F7772, F7796, F7812) and reach grade 0 only
+  by emission order or the `-fno-peephole2`/`-mtune` cursor, never by a source
+  spelling.  Examples in the scan: `V90MP::evaluateInfo`, `FPM_SDM_init`,
+  `SDM_init`, `FloatFIR::reset`, `V90SpectralShaper::reset`.
+
+* **The large SIZE symbols are the #22 inlining budget.**  Their anchor map is
+  dominated by one-sided blocks that name the helper the blob inlined and we
+  kept out-of-line (or vice-versa): `v34handshak` 12234/1387 with 100 unmatched
+  regions and blob-only blocks carrying `dftupdate`/`detectorinit`/`hsine*`;
+  `V90Demodulator::progress` 1708/1826 (65 unmatched); `V90Equalizer::process`
+  2110/2078 (54); `V20Phase3Demodulator::getV90Decision`.  These are not
+  reachable by a source spelling — they are the profile/TU-partition question
+  that #22 and lever 14 hold.  This is the wall, not the front.
+
+* **The named open-coded-vs-call leads exist but are masked by the budget wall.**
+  The bitreverse-class signal — a named function whose blob/ours call count
+  differs — does appear across the object, and each sits inside a large
+  inline-heavy function: `bitreverse 16/14` in `probeselect` (here it is the
+  INVERSE of F11525: our count is LOWER, so *we* open-coded what the blob
+  calls), `VPcmV34InitiateRetrain 8/5` in `VPcmV34Progress`, `charFlip 8/7` in
+  `rebuildJMSequence`, `v8_mpyint 3/0`/`v8_cosread 3/1` in `v8handshak`,
+  `memmove 0/1` in `RcFixed_Resample`.  Each names a real factoring difference,
+  but the enclosing symbol is dozens of regions different from the budget, so —
+  exactly as F11525 recorded — a spelling fix moves the source but gains no
+  byte-identical symbol.  They are recorded preimages, not adoptions.
+
+**THE ONE CASE EXAMINED TO THE BYTE, AND WHY IT WAS DECLINED (F7782).**
+`V92Phase4Modulator::generateE2u` (blob 70 vs ours 69 instructions, 8 bytes):
+`bbalign --anchors` and `dis.py` show the ONLY difference is that at both
+stored-symbol reload sites the blob emits `movzwl 0x12(%esp),%eax; cwtl` where
+we emit `movswl 0x12(%esp),%eax`.  Both are byte-identical in EFFECT — a
+sign-extension of the low 16 bits — and the blob's two-instruction form is the
+i686 codegen for avoiding the partial-register-stall of a sign-extension
+(`movswl` writes only 16 bits and serialises against a prior `%eax` use).  This
+is a peephole/scheduling choice, not a source property: the reloaded local is a
+`signed short`, every spelling of `return sym` and every `sym` declaration
+emits one form or the other, and no exhausted enumeration yields a unique
+preimage.  **Recorded and declined** — closer bytes are not a grade.
+
+**WHY NO SECOND EXACT IS REACHABLE FROM THIS SWEEP.**  The same reason F11525
+gives, now measured across the object: the remaining non-exact symbols are
+either grade-1 register allocation (lever-3) or #22 inlining budget, and the
+few genuine source-factoring leads they contain are each a handful of bytes
+inside a function that is otherwise budget-differentiated, so they cannot be
+certified byte-identical by `byteident`.  The broad sweep is therefore a MAP,
+not a closure.
+
+**GATES.**  `make -j4 J=4 phase`: period differential **385 passed / 0 failed**,
+phase boundary "period differential and structural checks all OK".  `byteident`
+unchanged at **844/1852 grade 0, 895/1852 grade 0-or-1** (no `src/` change).
+`bbalign --anchor-self-test`, `anchorcheck` (285 suites, 10038 mutations, 0
+detached / 0 non-unique), `refcheck` (14192 references, 0 dangling) all clean.
+`git diff --check` clean.  (2026-10-01)
