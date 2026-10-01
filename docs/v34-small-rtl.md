@@ -912,10 +912,102 @@ and [detector results](https://github.com/philpem/slmodem_dsp_re/issues/22#issue
 preserve the findings and scoped artifacts. The next independent source lead
 is setTimingStateParameters: blob has two role-specific state switches,
 while retained source has one switch with role-dependent ternary stores.
-That lead has not yet been compiled.
+The follow-up below records the completed five-cell test.
 
 Whole-tree retained build verification: make tc rebuilt 300 objects with zero
 failures; only V34hshak.c recompiled after adoption. Canonical byteident exact
 set increases **844/1852 -> 845/1852**, gaining only txrxdmainit and losing
 none. Exact bytes increase 79,769 -> 79,867. Before/after JSON snapshots are
 build/v34-dma-stores/tree-before.json and tree-after.json.
+
+## Byte-exact gain: FSK initialization width, addressing and store order
+
+The [eight-cell declared domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932794082)
+retains the compiler profile and crosses the original versus observed field
+order with four clear-loop representations: int index with cached short
+pointer, short index with cached pointer, short index with byte-root address,
+and short index with word-root address. The unchanged full-TU control is
+raw-byte-identical to the saved bug-enabled 953bbb45 DMA object.
+
+| Clear source | Original field order | Observed field order |
+| --- | --- | --- |
+| int / cached pointer | SIZE 6 | SIZE 6 |
+| short / cached pointer | SIZE 4 | SIZE 4 |
+| short / byte root | BYTES 85 | EXACT 0 |
+| short / word root | BYTES 85 | EXACT 0 |
+
+The two exact cells have byte-identical complete objects. Adopt the byte-root
+form: its 100 short stores span fsk_interp, fsk_lpf and padding, and must not
+be represented by indexing beyond one declared member array. Initialization
+values and loop bounds are unchanged; the adopted field order follows the
+blob. dpskDetectInfo1Init now matches all 152 bytes. Both independently
+supported address forms remain plausible preimages.
+
+Full-TU exactness rises 5 -> 6 of 29 shared functions, with txrxdmainit's
+98-byte match retained and no exact losses. All 55 global definitions/bindings
+and the function inventory are unchanged. Changed body/relocation records
+are dpskDetectInfo1Init, dpskinit, t72_rx_l1, v34modeminit and v34handshak;
+handshake PC32 target counts do not change. Other size gaps remain, including
+the handshake's 54,549-byte deficit. This recovers a source-level initializer,
+not the handshake's inline profile.
+
+Reproducer: tools/v34_fsk_init.py --original-root /path/to/control-tree.
+Its saved controls, all eight commands, selected compiler/assembler identity,
+source/header/object hashes, RTL, disassembly, exports and canonical verdicts
+are in build/v34-fsk-init/. The independently run agent matrix is in
+build/v34-agent-fsk/; its initial comparison against a bug-disabled make tc
+object was invalid and was preserved, then rerun against the correct control.
+
+## Comparison-build purpose correction
+
+make tc previously omitted DSPLIB_REPRODUCE_BUGS, although make period and
+experiment helpers enabled it. V.34's dsplib_v34_blob_preemp consequently
+moved from initialized data (one) to BSS (zero), also changing relocation
+addends. The [declared correction](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932960266)
+appends the define after configurable TC_FLAGS/TC_EXTRA, including overrides.
+This changes comparison apparatus purpose, not the recovered optimization
+profile. The original raw-object mismatch was not allocator evidence.
+
+On unchanged 953bbb45 source, rebuilding all 300 objects with the corrected
+purpose changes the exact set 845 -> 849 of 1852 with no losses. The four gains
+are FPM_SRE_init, SGD_create and the C1/C2 V92Modulator constructors. Report
+these separately from the source recoveries. The corrected-purpose pre-FSK
+snapshot is build/v34-dma-stores/tree-repro-before-fsk.json.
+
+Whole-tree corrected-purpose verification: make tc builds 300 objects with
+zero failures. Canonical exactness rises **849/1852 -> 850/1852**, gaining
+only dpskDetectInfo1Init, with no losses. Exact bytes rise 82,170 -> 82,322.
+The adopted complete V34hshak object is byte-identical to the winning matrix
+object. The after snapshot is build/v34-fsk-init/tree-repro-after-fsk.json.
+Across this branch there are two recovered-source exact gains, txrxdmainit
+and dpskDetectInfo1Init; the four comparison-purpose gains are separate.
+
+Adopted FSK validation: make phase J=8 passes 385 period differential tests,
+zero failures, and the structural checks (14,199 references; 10,038 anchors
+across 285 suites, no detached/non-unique anchors). No fuzzing or mutation
+harness was run; phase's anchor checks inspect metadata only.
+
+## Timing role-switch domain: closer layout, no adoption
+
+The [five-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932818346)
+compares the unchanged control with two role-switch orders, each using either
+shared or direct debug reporting. tools/v34_timing_role.py preserves commands,
+RTL, canonical verdicts and complete-TU audits in build/v34-timing-role/.
+The unchanged control reproduces the bug-enabled saved object exactly.
+
+Splitting the original role-dependent switch gives two jump tables as in
+the blob. Role-equality-first candidates narrow the size gap from 21 to 10
+bytes; inequality-first candidates narrow it to 7 bytes. Their dispatch and
+post-state-2 test approach the blob, but constant-store tail sharing still
+differs. All four candidates have 93 instructions versus the blob's 94.
+None is exact: the TU stays 5/29, with 55 globals and the same inventory.
+Only TimingV34 and setTimingStateParameters change. Declined for adoption;
+size and a near-identical header do not establish a full source preimage.
+
+A separate FreezeEcho owner audit found that the blob retains a transmitter
+base at root + 0x221c and accesses its flags at +0x3a6, whereas the current
+model names flags directly on the root. Independent DIL/K56flex accesses
+support that owner boundary. There is not yet an honest complete owner type
+expressing those members; no fabricated offset view or register forcing was
+adopted. The [audit](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5932839607)
+is a bounded future type-recovery lead, not a measured exact gain.

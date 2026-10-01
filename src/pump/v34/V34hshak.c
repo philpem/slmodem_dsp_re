@@ -353,11 +353,10 @@ short v21_lobnd[60] = {
 static void
 fsk_clear(struct v34_object *obj)
 {
-	short *p = (short *)((char *)obj + 0xaae6);
-	int i;
+	short i;
 
 	for (i = 0; i <= 0x63; i++)
-		p[i] = 0;
+		*(short *)((char *)obj + 0xaae6 + 2 * i) = 0;
 }
 
 /*
@@ -374,15 +373,15 @@ fsk_state_init(struct v34_object *obj)
 {
 	obj->fsk.delay = 0x30;
 	obj->fsk.offset = 0;
+	obj->fsk.phase = 0;
+	obj->fsk.prev = 0;
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 	obj->fsk.bit_lo = 1;
 	obj->fsk.bit_hi = 0;
+	obj->fsk.next = 6;
 	obj->fsk.bit_len = 0xc;
 	obj->fsk.resync_next = 6;
-	obj->fsk.phase = 0;
-	obj->fsk.next = 6;
-	obj->fsk.nbits = 0;
-	obj->fsk.sr = -1;
-	obj->fsk.prev = 0;
 }
 
 /*
