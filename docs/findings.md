@@ -132295,3 +132295,83 @@ Canonical whole-tree exactness rises 852 -> 853/1852, gaining only preempindex
 and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
 recovered-source exact helper. No fuzzing or mutation harness was run.
 (2026-10-01)
+
+## F11532. `rebuildJMSequence`'s charFlip census is blob 7 / ours 8, not the "8/7" F11526 recorded, and the extra is an optimization clone of the function-acceptance list scan — not a recoverable source statement
+
+Owner lead (F11526 follow-up): the anchor aligner reported `charFlip 8/7` in
+`rebuildJMSequence`.  That was already direction-inverted, and its own
+`ESTABLISHED` section listed the blob's seven R_386_PC32 `charFlip` sites,
+which is the true blob count.  This entry records the verified per-function
+discrepancy, the compiler-stage classification, and the decline under F7782.
+**No `src/` change was adopted.**
+
+**VERIFIED COUNT, OBJECT-FIRST.**  Using `tools/dis.py` with relocations
+folded in, and `tools/toolchain/byteident.py`:
+
+* Blob `rebuildJMSequence` (0x75c50..0x76890): **7** R_386_PC32 `charFlip`
+  calls, at +0xb6, +0x1f0, +0x5e8, +0x6ed, +0x866, +0x9e9, +0xaf4.
+* Ours (`build/tc_out/src_v8_V8.c.o`, `rebuildJMSequence`): **8** R_386_PC32
+  `charFlip` calls, at +0xe8, +0x2fc, +0x3ea, +0x46a, +0x5fd, +0x7a0,
+  +0x7fe, +0x880.
+
+F11526's "8/7" is misleading in both directions: it is blob **7** against ours
+**8**, so WE carry the extra call, not the blob.
+
+**CLASSIFICATION BY CALL SHAPE (per-site, from the surrounding instructions).**
+Each call was classified by whether the `charFlip` result is immediately turned
+into `(charFlip(c)<<1)|1` (an inlined `ext_expected`, shift-or, the
+extension-character translate) or fed to `in_list` as a byte (no shift).  Both
+sides have **5** shift-or (`ext_expected`) and only the direct/in_list class
+differs: blob **2** (`+0x866` and `+0xaf4`, the function-acceptance list and
+the protocol acceptance list), ours **3** (`+0x46a`, `+0x7a0`, `+0x7fe`).
+`in_list` does not call `charFlip`; only the `fn_list`/`ext_list` acceptance
+arguments do.  The extra ours-only call is at **+0x7a0**, which the debug-line
+table and the surrounding `cmpb $0x0,0x20(%ecx)` (cm->fn_list base, +0x20)
+place in the **function-acceptance list** scan.  So ours has **two**
+`fn_list`-acceptance `charFlip` calls where the blob has one.
+
+**STAGE CLASSIFICATION: AN OPTIMIZATION CLONE, NOT A MISSING/ADDED SOURCE
+STATEMENT.**  This is the discriminating step the current playbook documents
+("classify the compiler stage before searching register spellings").  The
+`rebuildJMSequence` source carries exactly **two** `in_list(...charFlip(...))`
+statements (`fn_list`, line 358-359; `ext_list`, line 573-574) — the `grep`
+is unambiguous, and the single "Got Call Function Match" message at line 362
+confirms the function list is exercised once.  The initial RTL
+(`make`-driver, `-fdump-rtl` `V8.c.01.rtl`) for the function already contains
+**seven** `charFlip` calls (five shift-or + two direct) — i.e. at RTL entry the
+call count already matches the blob.  The eighth only appears after the
+optimizer runs (the finished object), so the extra call is introduced by a
+code-motion/duplication pass (CSR/if-conversion) on our control-flow structure,
+and is not a statement the source inventory can add or remove.  The blob's
+equivalent runs the same compiler and produces only seven, so the difference is
+in the CONTROL FLOW around the acceptance list, not in the statements
+themselves.
+
+**WHY IT WAS DECLINED (F7782).**  `byteident --why rebuildJMSequence` reports
+lever 2 ("an absence or an extra"), so this is genuinely not a register/renaming
+artefact.  But the single extra call is a consequence of a broader structural
+divergence, not a recoverable statement: the function is **blob 748 / ours 754
+instructions** with **82 bytes differing**, and `bbalign --anchors` shows the
+dominant divergence is the #22 inlining/budget wall (the blob's `rebuildJM`
+region 0x76341..0x763c4 is 35 instructions against our 0xb24..0xcb6's 103
+instructions for the equivalent acceptance/extension handling).  The
+acceptance-list statements themselves are correct — they are the F166 recovery,
+the blob prints the same "Got Call Function Match" and "NO Call Function
+Match" messages, and both lists are exercised.  No spelling enumeration yields
+a unique preimage for removing the clone (the statements are right; the
+control-flow shape that triggers the duplication is not separable from the
+budget divergence), so no source change is adopted on the "closer is not a
+grade" rule.
+
+**MEASUREMENTS.**  Whole tree at this commit: `byteident` **853/1852 grade 0,
+904 grade 0-or-1** (no `src/` change, unchanged by this entry).  `bbalign
+--anchors rebuildJMSequence`: anchor deltas `charFlip 7/8`,
+`dsplibs_debug_printf 11/12`, 18 unmatched regions, 27/42-blob anchors matched.
+`byteident --why rebuildJMSequence`: SIZE, blob 748 / ours 754, 82 bytes.
+
+**GATES.**  `make -j1 J=1 phase`, `byteident`, `bbalign --anchors
+rebuildJMSequence`, `partialcmp`, `anchorcheck` (0 detached / 0 non-unique),
+`refcheck` (0 dangling), `git diff --check` — see the accompanying commit.  The
+per-function, whole-tree, census and gate verdicts reported above all read from
+a fresh `make tc` (300/300 objects, gcc 3.4.2) and a fresh phase run.
+(2026-10-01)
