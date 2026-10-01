@@ -206,3 +206,82 @@ actual inlined chains. A difference already present before allocation requires
 a source/dataflow or earlier-pass explanation; a difference appearing only in
 renaming/scheduling requires a liveness/choice explanation. Do not force
 registers or permute stores merely to approach the blob.
+
+### Conclusion from the actual inlined island
+
+The four-cell full-TU experiment is complete, followed by two narrowly scoped
+pointer-provenance controls. Both domains were recorded before compilation:
+[original four cells](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929138077)
+and [common-pointer control](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929231084).
+The unchanged cell reproduces the saved post-Horner object **byte for byte**.
+This is the historical diagnostic snapshot, not a proposed production profile.
+All six cells used the recovered Gentoo compiler, its selected assembler, all
+five recorded localonly parameters and the mandatory reproduction define.
+
+The concrete source-level obstacle is **address provenance**, present before
+register allocation. In initial RTL the initializer writes through an inlined
+`obj` copied from `vobj`, while the flag statement loads its base from
+`frame.m`. At combine/local-allocation these are still distinct pseudos:
+`vobj` 58 and the flag base 15860. Global allocation/reload assigns them BP
+and CX respectively. Register renaming does not reunify these live pointers.
+
+In the final scheduled dump, flag-load instruction 13373 depends on all five
+scalar stores (35566, 35564, 35562, 35560, 35558). Its memory-dependence list
+also includes the three bin-increment stores. Turning register renaming off
+retains the memory constraints; turning scheduling off retains source order.
+Thus adjusting renaming alone cannot produce the blob's interleaving here.
+
+The causal control changes exactly one statement in the saved diagnostic
+source: the two `+0x3588 |= 2` accesses immediately after the initializer use
+`obj` directly, with the same widths and arithmetic, instead of `frame.m`.
+This leaves the five initializer assignments unchanged. The scheduled flag
+load (now instruction 13372) loses its memory dependencies on all five scalar
+stores. Hard-register constraints and conservative bin-store dependencies
+remain. The resulting assembly reads the flag after the state store and
+before phase/runs/quiet/tone stores. With scheduling disabled it stays after
+all five stores. This proves the predicted address-provenance mechanism.
+
+The blob also uses one object base for these accesses. The common-pointer
+control does **not** reproduce its exact register choices, complete ordering,
+or its unsigned state load. It establishes a missing optimization opportunity,
+not a unique original-source preimage. Global allocation already chooses BP
+for the candidate's object base; the blob reloads its base from the stack into
+AX. The blob has no RTL dumps from which to prove its earlier history.
+
+| Diagnostic source/options | Shared blob functions | Exact | Handshake size deficit |
+| --- | ---: | ---: | ---: |
+| Saved snapshot, rename on / schedule on | 29 | 4 | 4,083 B |
+| Saved snapshot, rename on / schedule off | 29 | 0 | 4,083 B |
+| Saved snapshot, rename off / schedule on | 29 | 3 | 4,262 B |
+| Saved snapshot, rename off / schedule off | 29 | 0 | 4,262 B |
+| Common pointer, rename on / schedule on | 29 | 4 | 4,083 B |
+| Common pointer, rename on / schedule off | 29 | 0 | 4,083 B |
+
+All six preserve the same 55 global names/bindings. The common-pointer
+scheduled control changes only `v34handshak`'s extracted body/relocation records
+among the candidate TU's defined functions; all others remain identical to the
+saved diagnostic baseline. An `UNRESOLVED` canonical verdict is not itself a
+changed-body verdict: even self-comparison can retain unresolved section
+relocations. The whole handshake remains non-exact, with no aggregate gain.
+
+Reproducer: `tools/v34_inline_rtl.py`; use `--common-pointer` for the second
+domain. Artifacts: `build/v34-inline-rtl/results.json`, `analysis.json`, per-cell
+RTL/disassembly and `build/v34-inline-common-pointer/results.json`. Source and
+header hashes, complete commands and compiler identity are retained. No
+production source, differential, fuzzing or mutation harness was changed/run.
+
+**Conclusion:** the small-example approach was useful. It separates early
+instruction selection, address provenance/alias analysis, global allocation,
+register renaming, and downstream scheduling. A shape match is insufficient
+to classify the residual as register allocation alone. This island provides a
+specific source-structure lead inside the budget-bound handshake; it does not
+establish either an exactness ceiling or a route around the entire inline wall.
+
+The next worthwhile source investigation is an audit of the synthetic
+`t3m_frame` pointer carriers: establish which helpers can change `frame.m`,
+which paths preserve `frame.m == (unsigned char *)obj`, and compare accesses
+through that carrier with the blob's common-base accesses. Only then test a
+bounded original-source hypothesis using direct field/object access. Adoption
+still requires the period differential gate. Do not replace all accesses or
+force register choices based on this one block, and do not generalize this
+sample to the other approximately 1,000 non-exact functions.
