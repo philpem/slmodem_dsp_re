@@ -1255,3 +1255,25 @@ build/v34-polynomial-coefficients/tree-after-gains.json; after:
 build/v34-preemp-dispatch/tree-after-preemp.json. This branch now has five
 recovered-source exact helpers totaling 849 bytes, separate from its four
 comparison-purpose gains. Finding F11531 records this continuation.
+
+### Rebase onto upstream a765afba (2026-10-01)
+
+Upstream added the separate equivalence fixtures and coverage-guided fuzzing
+apparatus. Rebase preserved all reconstruction source and comparison flags
+byte-for-byte; the only conflict was the appended findings register. Upstream
+keeps F11527–F11529; this branch's source-recovery findings are now F11530 and
+F11531, with their references updated.
+
+Post-rebase validation: `make tc J=8` builds 300/300 objects, zero failures.
+Canonical byte identity remains 853/1852 and 82,921 exact bytes; the complete
+exact-symbol set equals the pre-rebase set, with no gains or losses. JSON:
+`build/v34-preemp-dispatch/tree-after-rebase.json`.
+
+`make phase J=8 T="<all 385 unit fixtures except t_fuzz>"` passes 385 period
+differential tests, zero failures, and the structural boundary. The explicit
+fixture selection preserves the owner's no-fuzzing constraint: upstream's
+new `t_fuzz` fixture is not run, and this is not a claim that the unrestricted
+386-test suite was run. Reference checks report 14,218 references, 2,660
+finding headings, zero dangling or stale entries. All 10,038 anchors across
+285 suites remain clean. Logs are `/tmp/v34-rebase-phase.log`,
+`/tmp/v34-rebase-tc.log` and `/tmp/v34-rebase-byteident.log`.
