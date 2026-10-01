@@ -2014,3 +2014,32 @@ best-error local still compares an int-promoted error at full width. Record
 those crossed controls and stop when they fail the predicted whole live graph.
 The remaining comparison widths and reloads are unresolved; the successful
 arithmetic idiom does not establish a byte-exact function.
+
+
+### Find the first duplication pass before declaring an inline-budget cause
+
+V8 rebuildJMSequence retains seven charFlip call instructions through .30.rnreg
+and acquires an eighth first in .31.bbro. A -fno-reorder-blocks control restores
+seven final calls but increases its size gap from 82 to 361 bytes. This is
+block-reordering duplication evidence, not a production flag recovery or proof
+that the original source is already correct (F11536).
+
+Count unique call_insn UIDs within the exact function. Late RTL uses mode-tagged
+forms such as call_insn:HI, and GCSE debug text can print the same UID twice;
+raw symbol-reference counts would invent an earlier doubling. Cross-check the
+final count against canonical R_386_PC32 symbol targets, not dictionary keys.
+The replay tool's known seven/eight/seven controls must fire before trusting it.
+
+Next examine the duplicated block's predecessors, successors, probability
+notes and live operands before/after .bbro. Use a source/options crossing to
+test an independently supported acceptance/extension CFG hypothesis. A finite
+failed family does not prove a source-recovery ceiling, and lack of a unique
+preimage is not proof that all faithful source hypotheses are exhausted.
+Keep SIZE length gaps distinct from counts of differing bytes.
+
+For V34's initial-phase graph, short e plus short best recovers the halfword
+comparison that short best alone missed; the coupled graph also recovers
+induction and product narrowing. Its two-byte near-match still caches inputs
+contrary to the blob (F11535), so it is declined. Do not remove a defined
+winner default to imitate an apparently uninitialized blob slot without
+proving the original first-improvement invariant.

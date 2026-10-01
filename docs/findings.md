@@ -132412,3 +132412,71 @@ function byte-exact convergence. [The study](v34-small-rtl.md) records declared
 domains, complete commands/header hashes, RTL, all changed bodies and canonical
 controls; tools/v34_initialphase_halving.py replays both domains.
 No fuzzing or mutation execution is performed. (2026-10-01)
+
+
+## F11535. V.34 initial-phase path/value graph recovers several narrow operations but not metric reloads; two-byte near-match declined
+
+Four declared complete-TU cells cross path-local assignments/defaults with
+coupled short a/b, error/best and loop carriers plus phase-product narrowing.
+The raw baseline reproduces 4873c184; all preserve 63 function symbols, 55
+global bindings and 9/29 exact functions. SIZE gaps 14/5/68/2 are length gaps,
+not differing-byte counts. No exact gains/losses.
+
+The combined cell recovers halfword error comparison, short-loop test, +837
+induction and final product narrowing, changing only setInitialPhase. The
+separate axes also alter setTimingStateParameters. Every cell still caches
+both initial metrics and reuses them across sign branches, contrary to the
+predicted reload graph; polynomial scheduling also differs. No nearest-size
+candidate is adopted. The blob's absent winner default cannot justify removing
+our defined besti=0 without proving first improvement over the input domain.
+
+[The study](v34-small-rtl.md) records the domain, source/header identity,
+commands, full inventories/changed bodies and stopping condition;
+tools/v34_initialphase_graph.py replays it. Source and production objects stay
+unchanged, exactness 853/1852 and 82,921 bytes. No fixture, fuzzing, mutation or
+profile change. Prior fixed period/structural gate 385/0 remains applicable.
+(2026-10-01)
+
+## F11536. V.8's eighth charFlip first appears in block reordering, confirmed by a single-option control; this does not establish an inline-budget or source-recovery ceiling
+
+Follow-up to [PR #239](https://github.com/philpem/slmodem_dsp_re/pull/239): one
+unchanged full-TU build raw-reproduces the retained V8 object under complete
+Gentoo flags and mandatory bug define. Unique call_insn UIDs show seven
+charFlip calls in rebuildJMSequence through .30.rnreg, then eight first in
+.31.bbro. New UID 2643 feeds the function-list (+0x20) acceptance scan. This
+localizes duplication to block reordering, after allocation/register renaming,
+rather than unspecified code motion or an added source statement.
+
+[The declared one-option control](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5938337201)
+keeps source identical and adds only -fno-reorder-blocks. Final calls return
+to seven; canonical size gap increases 82 -> 361 bytes. Both cells preserve
+all nine function symbols and nine global bindings, 1/9 exact shared functions,
+no exact gains/losses. Six bodies change: evaluateRxJMSequence, initTxSequence,
+rebuildJMSequence, v8_ansamgenerate, v8handshak and v8handshakinit. The flag is
+strictly diagnostic and is not adopted.
+
+This is stronger causal evidence than initial-seven/final-eight alone, but it
+does not establish which original CFG/profile combination avoided the clone.
+The next source hypothesis must inspect predecessor/successor/probability and
+operand differences around the duplicated acceptance block, with a bounded
+source/options cross and complete-TU controls. It is not justified to declare
+all source preimages exhausted or attribute this specifically to inline budget.
+The reported 82 is a SIZE length gap, not 82 differing byte positions.
+
+Counter validation matters: mode-tagged late call_insn:HI forms must be included;
+GCSE diagnostic repetition must be deduplicated by instruction UID (14 text
+refs are seven calls); canonical relocation targets are tuples, not strings.
+An initial relocated-copy build lacked the quoted local v8int.h header path
+and is excluded (build/v8-pass-census/invalid-missing-local-header.log). Initial
+parser/schema counts were invalid and excluded; the reusable tool's positive
+control rejected the canonical-target schema mistake before any interpretation.
+Preserved rejection: build/v8-call-layout/invalid-relocation-target-schema.*.
+The corrected tool fires on known seven/eight/seven stage/object controls.
+
+Driver: tools/v8_call_layout.py --domain <declared URL>; artifacts:
+build/v8-call-layout/results.json, complete commands/input hashes, function
+RTL extracts, full verdicts/inventories and disassembly. Source/flags retained
+unchanged, no behavioral fixture or partial-link change, no fuzzing or mutation
+execution. PR #239's F11532 label collides with the independently pushed V34
+power finding; renumber it during integration rather than conflating the two.
+(2026-10-01)

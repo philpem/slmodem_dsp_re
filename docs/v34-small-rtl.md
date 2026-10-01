@@ -1540,3 +1540,45 @@ rather than claiming aggregate convergence. Driver and comparison JSONs:
 build/v34-initialphase-partial/. Logs: /tmp/v34-initialphase-period-fixed.log,
 /tmp/v34-initialphase-phase.log, /tmp/v34-initialphase-tc.log,
 /tmp/v34-initialphase-byteident.log and /tmp/v34-initialphase-partial.log.
+
+
+## Initial-phase path/value graph crossed, reload prediction rejected (F11535)
+
+[The four-cell graph domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5938272858)
+starts at 4873c184 with its adopted arithmetic halves. It separates path-local
+assignment from the coupled short-carrier graph that isolated best/i changes
+could not test. The path axis assigns a/b from fields inside the sign branches,
+sets ratio/r defaults in their divide-error arms, and initializes best/besti
+after the metric ratio. The carrier axis makes a/b, e/best and i short and
+narrows the phase product before adding phase_frac. besti remains int and its
+defined zero default is preserved. No search-loop rewrite or compiler change.
+
+Raw unchanged control reproduces SHA256
+6ea380ec0f7cc2d53e166cead6914ae6621fa49674d6d060e9acbd0897a657e7.
+Baseline/path/carrier/both gaps are 14/5/68/2 bytes. All four preserve 63
+functions, 55 global bindings and 9/29 exact functions, no gains or losses.
+The combined cell recovers the halfword error comparison, short loop test,
++837 induction and signed product narrowing; only setInitialPhase changes.
+Path-only and carrier-only also change setTimingStateParameters live code.
+
+The load-lifetime prediction fails: every cell still loads both initial
+metrics with movzwl and reuses them across the product/search and sign arms.
+Source path-local spelling is optimized back into a cached graph. Do not
+attribute that specifically to GCSE without identifying the responsible pass.
+The combined cell also differs in polynomial difference/shift scheduling.
+A two-byte size gap therefore does not recover the original live graph.
+
+The blob winner slot has no visible zero-default store; only an improving
+error writes it. Removing our defined besti=0 would introduce an uninitialized
+outcome unless first improvement were proved over the actual ratio domain.
+That default stays in all controls. Neither deleting it nor tuning registers
+is a valid way to erase the residual. No source is adopted; this domain stops.
+Reopening requires a new discriminator for load lifetime or a proof of the
+winner's initialization invariant, not another local-width permutation.
+
+Driver: tools/v34_initialphase_graph.py --domain <declared URL>.
+Artifacts: build/v34-initialphase-graph/{results,analysis}.json, pinned source,
+hashed headers, complete commands, disassemblies and RTL. Production objects
+and exact set remain unchanged: 853/1852 and 82,921 exact bytes. No new fixture,
+fuzzing, mutation execution or compiler-profile adoption. The prior fixed
+385/0 period/structural gate remains the validation of unchanged source.
