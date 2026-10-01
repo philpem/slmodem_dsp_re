@@ -422,3 +422,76 @@ verdicts, inventories and RTL are in `build/v34-state-factor/results.json` and
 The deciding `make phase J=8` exited zero: **385 period tests passed,
 0 failed**, with 14,199 references and 10,038 existing anchors across 285
 suites clean. The helper source is committed only after that validation.
+
+### Duplicate frame carrier: bounded negative result
+
+[Six-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929814439)
+tested the current source against two broader pointer-carrier explanations,
+under retained and historical diagnostic profiles. The macro-only variant
+changes the four `T3M_*` integer-access macros to derive bytes from `f->obj`
+instead of `f->m`, keeping the duplicate member and other uses. The complete
+variant also replaces the remaining byte-pointer reads with casts of `f->obj`
+and removes the `m` member/initializer. These are diagnostic variants only.
+
+The source audit finds exactly one assignment each to `f->obj` and `f->m`,
+both in `t3m_frame_init`. Frame pointers are passed only among the TU's
+private frame helpers; object/receiver callees receive object-derived addresses.
+This explains the intended source equivalence, but no broader source rewrite
+is adopted on that argument alone.
+
+One preliminary run is invalid: a generator substring replacement of `f->m`
+also altered `f->mst`, and GCC rejected the resulting token sequence.
+This is a generator defect, not an original-source/compiler finding. The
+whole partial run is excluded and retained at
+`build/v34-frame-carrier-invalid-generator/INVALID.json`, including the compiler
+log. Identifier-boundary replacement fixes the generator; all six cells were
+rerun, with both unchanged baselines reproducing their prior direct-signed
+objects **byte for byte**.
+
+| Source variant | Retained size deficit | Diagnostic size deficit |
+| --- | ---: | ---: |
+| Current source | 54,546 B | 3,638 B |
+| Common provenance in four macros | 54,615 B | 3,927 B |
+| Remove duplicate byte-pointer carrier | 54,698 B | 4,119 B |
+
+All six retain the same 55 globals/bindings and four exact functions among
+29 shared blob functions. No local function symbols are added or removed.
+The two retained alternatives each change 18 defined function bodies/relocation
+records; the diagnostic alternatives change only `v34handshak` and
+`v34handshak_txblock`. Retained handshake external PC32 target counts stay
+unchanged. Both diagnostic alternatives reduce direct debug-printf references
+from 289 to 288, so even a call-count change is not itself a recovered inline
+profile or a reason to adopt.
+
+The decisive target observation is stronger than these scores: all three
+diagnostic initializer/scalar/flag/state windows have the same instruction
+order, registers and operands after excluding jump destination addresses.
+Their windows start around `0xa409`, `0xa1bc`, and `0xa179` respectively;
+all retain the object in BP. Combine still uses `vobj` pseudo 58 for the
+post-initializer flag access. The blob instead reloads its object base from
+`0xc0(%esp)` into AX at `0x693c6`. Neither broader carrier change recovers
+that reload, its register choices, or the remaining store order.
+
+**Conclusion:** eliminating `frame.m` is insufficient to explain the residual
+at this island. The earlier targeted flag provenance and direct state equality
+recoveries remain supported; that does not justify wholesale removal of the
+synthetic frame. No production source changed in this domain, no differential,
+fuzzing or mutation harness was run, and neither larger rewrite was adopted.
+Close this particular pointer-carrier explanation for the island rather than
+forcing a spill or continuing nearby spelling changes.
+
+Reproducer: `tools/v34_frame_carrier.py`, retained input revision `eb6fa5b4`.
+The diagnostic input is the saved direct-signed cell from the preceding domain.
+Complete compiler/assembler identity, commands, hashes, exports, verdicts,
+changed bodies, local-symbol changes and PC32 target counts are retained in
+`build/v34-frame-carrier/results.json`. Per-cell target windows and
+`retrain-island-analysis.json` record the instruction/operand comparison; that
+comparison explicitly excludes destinations and is not a byte-exact verdict.
+
+A next discriminating investigation should trace **where the blob's object
+argument is spilled and reloaded across the surrounding predecessor paths**,
+and compare it with the candidate's pseudo-58 live range before global
+allocation. A single reload is not proof of a source scope boundary. Require
+matching nearby call boundaries and live values before proposing a source
+lifetime or inlining-context change; the two tested carrier variants do not
+supply it.
