@@ -1582,3 +1582,41 @@ hashed headers, complete commands, disassemblies and RTL. Production objects
 and exact set remain unchanged: 853/1852 and 82,921 exact bytes. No new fixture,
 fuzzing, mutation execution or compiler-profile adoption. The prior fixed
 385/0 period/structural gate remains the validation of unchanged source.
+
+
+## Winner initialization invariant discharged; default removal still non-exact (F11537)
+
+The missing invariant from F11535 has now been checked over the complete
+compiled-arithmetic domain. For the blob's error expression, wrapped 32-bit
+subtract/multiply/add followed by SAR13 and signed16 narrowing means e >= 32000
+exactly when `((R-r_i)^2+4096) mod 2^29` lies in [262144000,268435455].
+That predicate has period 2^28 in R: adding 2^28 changes the square by a
+multiple of 2^29. All 32-bit ratio values are therefore covered by one complete
+2^28-residue interval, including negative signed values via modular reduction.
+
+The first four legal polynomial ratios are 8952,7293,5974,4887. Exhaustive
+finite arithmetic yields prefix survivor counts 3,142,656 -> 37,136 -> 431 -> 0
+across all 268,435,456 residues. An error below the initial 32000 threshold
+must occur by index 3, so the winner slot is assigned before the final read.
+Four known boundary controls produce errors 31997,32001,32764,-32768 and
+verify both passing and failing predicate outcomes. A parent rerun reproduces
+the certificate. This is a static arithmetic invariant, not blob-oracle
+sampling, a modem reachability claim, or reliance on C signed-overflow rules.
+
+[The newly justified three-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5938595692)
+compares raw production baseline, the prior combined graph with winner-zero,
+and that graph with only the redundant zero default removed. The controls
+reproduce both production and prior combined raw objects. SIZE gaps are
+14/2/9; all preserve 63 functions, 55 global bindings and 9/29 exact names,
+no gains/losses. Default removal eliminates the predicted zero/store but still
+caches metrics and changes setTimingStateParameters 441 -> 433 bytes. No
+source is adopted; safe default removal and recovery of the complete original
+live graph are separate conclusions. Stop this family at those three cells.
+
+Driver: tools/v34_initialphase_winner.py --proof (NumPy for arithmetic only),
+or --domain <declared URL> for compiler controls. Artifacts:
+build/v34-initialphase-winner/{proof,results,analysis}.json. An initial NumPy
+import hit the tools/dis.py/stdlib name collision; its invalid log is preserved
+and excluded. The earlier prototype's missing Path artifact writer is also
+excluded; corrected certificate reruns succeed. No modem harness, fuzzing or
+mutation execution is used; source and production objects remain unchanged.

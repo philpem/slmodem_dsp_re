@@ -2031,7 +2031,10 @@ final count against canonical R_386_PC32 symbol targets, not dictionary keys.
 The replay tool's known seven/eight/seven controls must fire before trusting it.
 
 Next examine the duplicated block's predecessors, successors, probability
-notes and live operands before/after .bbro. Use a source/options crossing to
+notes and live operands before/after .bbro. Here the pass explicitly clones
+block 32 (call UID 334) to 166 (UID 2643), redirecting edge 17 -> 32.
+The 17 -> 32 -> 42 trace starts with the incomplete-extension word reload;
+that shared acceptance join is a concrete source-graph boundary to investigate. Use a source/options crossing to
 test an independently supported acceptance/extension CFG hypothesis. A finite
 failed family does not prove a source-recovery ceiling, and lack of a unique
 preimage is not proof that all faithful source hypotheses are exhausted.
@@ -2043,3 +2046,14 @@ induction and product narrowing. Its two-byte near-match still caches inputs
 contrary to the blob (F11535), so it is declined. Do not remove a defined
 winner default to imitate an apparently uninitialized blob slot without
 proving the original first-improvement invariant.
+
+
+A missing initialization can be investigated with a compiled-arithmetic
+invariant rather than deleting the default to improve size. For initial-phase
+winner selection, bits 13..28 of the wrapped square/error make the threshold
+predicate periodic over 2^28 ratios. Exhaustive finite arithmetic proves a
+first improvement by iteration 3 for every 32-bit ratio (F11537), resolving
+F11535's safety question. Default removal still fails to recover the complete
+object and changes another helper; it is not adopted. Report the mathematical
+boundary, full denominator and known positive/negative controls separately
+from protocol fixtures and source-preimage evidence.

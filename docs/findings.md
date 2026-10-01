@@ -132443,7 +132443,11 @@ Follow-up to [PR #239](https://github.com/philpem/slmodem_dsp_re/pull/239): one
 unchanged full-TU build raw-reproduces the retained V8 object under complete
 Gentoo flags and mandatory bug define. Unique call_insn UIDs show seven
 charFlip calls in rebuildJMSequence through .30.rnreg, then eight first in
-.31.bbro. New UID 2643 feeds the function-list (+0x20) acceptance scan. This
+.31.bbro. New UID 2643 feeds the function-list (+0x20) acceptance scan. The pass log
+explicitly copies basic block 32 to 166 and redirects edge 17 -> 32 to the
+copy; original call UID 334 is in block 32. Block 17 reloads rx->word[i] on
+the incomplete-extension path. Its selected trace connects 17 -> 32 -> 42,
+giving a specific acceptance-join graph for the follow-up. This
 localizes duplication to block reordering, after allocation/register renaming,
 rather than unspecified code motion or an added source statement.
 
@@ -132480,3 +132484,33 @@ unchanged, no behavioral fixture or partial-link change, no fuzzing or mutation
 execution. PR #239's F11532 label collides with the independently pushed V34
 power finding; renumber it during integration rather than conflating the two.
 (2026-10-01)
+
+
+## F11537. V.34 winner slot is always initialized under compiled arithmetic; complete modular certificate resolves the invariant, while default-removal controls remain non-exact
+
+For every 32-bit ratio, setInitialPhase obtains an error below its initial
+32000 threshold by iteration 3. The wrapped square/add, SAR13 and signed16
+narrowing threshold predicate depends on bits 13..28 and repeats every 2^28
+ratio values. Checking all 268,435,456 residues against the first four legal
+polynomial ratios [8952,7293,5974,4887] gives unimproved survivor counts
+3,142,656 / 37,136 / 431 / 0. Four fixed boundary controls fire on both
+threshold outcomes; an independent parent rerun reproduces the certificate.
+This is complete finite arithmetic, not sampling, blob-oracle execution,
+modem reachability evidence or an assumption about C signed overflow.
+
+The invariant discharges the winner-before-read question in F11535. Three
+newly declared compiler cells compare raw production, prior combined graph
+with zero default, and that graph without the default. Both old raw controls
+reproduce; gaps 14/2/9, all 63 functions/55 globals/9 of29 exact preserved,
+no gains/losses. Removal eliminates the expected zero/store but retains cached
+metrics and changes setTimingStateParameters 441 -> 433 bytes. No source
+adoption: the initialization invariant does not recover the full live graph.
+
+[The study](v34-small-rtl.md) records the proof reduction, denominator,
+controls, declared compiler domain and stopping condition. Replay:
+tools/v34_initialphase_winner.py --proof, or --domain <declared URL>.
+Certificate/complete-TU artifacts: build/v34-initialphase-winner/.
+Invalid initial writer/import attempts are retained separately and excluded.
+Source/production exactness unchanged, 853/1852 and 82,921 bytes; prior fixed
+385/0 period/structural validation remains applicable. No fuzzing, mutation
+or modem-harness execution is performed by this arithmetic study. (2026-10-01)
