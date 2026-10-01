@@ -131954,3 +131954,109 @@ diff --check` clean.  No `src/` or `include/` change remains (the
 negative-control DiffCoder.h edit was reverted), so `byteident`/`compare`
 were not re-run -- the tree is intentionally unchanged apart from the new
 test file.  No mutation was re-recorded and none was run.  (2026-10-01)
+
+## F11528. Equivalence-fuzz scale-up: differential fuzzing of the Scrambler/Descrambler family, `V90SignBitsExtractor` and `V92Mapper` against the blob, all converging, with the prior fixture extended by eleven groups
+
+This is the owner's scale-up of the F11527 equivalence-fuzzing method: extend
+the single-function harness (`test/unit/t_fuzz.cpp`) to as broad a set of
+non-exact, directly-callable, integer/bit-exact functions as practical.  It
+is **apparatus** (`test/`), not reconstruction: no `src/` edit was made, so no
+mutation re-record and no byteidentity movement.  Cost constraint honoured:
+fuzz is per-function and bounded, never a whole-tree mutation re-record.
+
+**THE HARNESS EXTENSION.**  `test/unit/t_fuzz.cpp` gained three templated
+generic fuzzers and eleven per-function entry points, all on the existing
+fixed-seed LFSR (`FUZZ_SEED 0x5eed1234`), so a run is reproducible bit for bit.
+`fuzz_scal` drives one scalar `process(T)` member, `fuzz_bulk` one bulk
+`process(const T*, I*, n)` member, and `fuzz_reset` one `reset(T)` member --
+OUR instantiation against the blob's `ref_*` alias on every case (never
+ref-vs-ours on one side; the F11527 negative-control discipline).  The
+Scrambler/Descrambler family is placement-built (finding F871) with the running
+history seeded from the LFSR and the restart path crossed frequently; the
+stateful `V90SignBitsExtractor` and `V92Mapper` are constructed and `reset()`
+identically on both sides.  Every group prints its own `PASS <name> N checks`
+denominator through `diff_begin`/`diff_end` (the F134/F2401 bar).
+
+**TWO HARNESS DEFECTS WERE FOUND AND FIXED DURING THE RUN** (this is why the
+denominator discipline and the firing-ritual matter):
+  * `V90SignBitsExtractor::process` initial state was seeded from
+    `next_word() & 3u`, which can be 2 or 3 -- the documented D386 case where
+    the blob's `action` is *undefined* (it falls through both `state` tests)
+    while the reconstruction initialises it to `V90SBE_PASS_ALL`.  The fuzz
+    rightly fired on it (`got 27, reference 0`), but it is D386, a **recorded
+    deviation**, not a defect.  The seed is restricted to states 0/1 -- the
+    comparable domain documented in D386 -- so the fixture measures genuine
+    equivalence over the defined state machine, and the states-2/3 case is
+    still the recorded D386 rather than a new finding.
+  * `V92Mapper::process` was fed full bytes (0..31) as "bits"; the object
+    reads **one bit per byte**.  Full bytes overflow the 16-bit accumulator
+    and index `constelAmplitudeTable[acc + 8*mode]` out of bounds, reading
+    garbage that differs by address between our object and the blob's
+    (`got 0, reference -32768`).  With the bits masked to 0/1 (as the existing
+    `t_v92convmapper` fixture drives them) the function converges.  This was a
+    harness input-model error, not a source defect.
+By contrast, the D386 handling in the first fix is the *correct* classification
+of a deviation the object genuinely has no answer for; restricting the seed is
+not narrowing a defect.
+
+**THE RUN, PERIOD COMPILER (the authority, GCC 3.4.2-r2).**  `make -j1 J=1
+phase`: **period differential 386 passed / 0 failed** (t_fuzz is one test; the
+count is the whole period tier's and does not move for added groups, the
+per-group denominators do).  All fifteen fuzz groups PASS.  The period run of
+`t_fuzz` took ~1 s.
+
+    PASS ParallelDifferentialEncoder<h>::process, fuzz  13629558 checks  (F11527)
+    PASS ParallelDifferentialDecoder<h>::process, fuzz  13626426 checks  (F11527)
+    PASS Scrambler<h,h>::process (bulk), fuzz             7920000 checks  (F11527)
+    PASS Descrambler<h,i>::process (bulk), fuzz           5280000 checks  (F11527)
+    PASS Scrambler<h,h>::process(h), fuzz                 2280000 checks  (control, exact)
+    PASS Scrambler<h,i>::process(h), fuzz                 2280000 checks  (BYTES 7/118)
+    PASS Descrambler<h,i>::process(h), fuzz               2280000 checks  (SIZE 6/118)
+    PASS Descrambler<i,i>::process(i), fuzz               2280000 checks  (BYTES 12/110)
+    PASS Scrambler<i,h>::process(const int*,uchar*,j)     5280000 checks  (control, exact)
+    PASS Scrambler<h,h>::reset(h), fuzz                   1340000 checks  (BYTES 1/44)
+    PASS Scrambler<h,i>::reset(h), fuzz                   1340000 checks  (BYTES 1/44)
+    PASS Descrambler<h,i>::reset(h), fuzz                 1340000 checks  (control, exact)
+    PASS Descrambler<i,i>::reset(i), fuzz                 1340000 checks  (control, exact)
+    PASS V90SignBitsExtractor::process, fuzz              7000000 checks  (SIZE 1/417)
+    PASS V92Mapper::process, fuzz                         4000000 checks  (SIZE 2/107)
+
+**TOTAL.**  **71,215,984 comparisons** across the fifteen groups (the four
+F11527 groups contribute 40,455,984; the eleven added in this pass contribute
+**30,760,000**).  No divergence remains; every reconstruction member driven
+agreed with the blob exactly.  Runtime ~1 s on this host (this is not the
+limiter), so the method can scale to far more functions.
+
+**DIVERGENCE ANALYSIS.**  The two divergences encountered were both resolved as
+apparatus errors, not source defects (see the two bullets above).  No genuine
+`src/` defect was found, so there is nothing to fix in the reconstruction --
+the point of this pass, as with F11527, is breadth of equivalence evidence, not
+a bug hunt.  The `V90SignBitsExtractor` D386 states-2/3 discrepancy remains the
+one recorded deviation, and it is D386, not new.
+
+**COVERAGE GAINED (the honest denominator).**  The reconstruction is complete
+(1,852 .text symbols written; byteident grade 0-or-1 = 895/1852, and the stub
+of this pass).  Of the **1,001 non-exact** functions the byte-identity tier has
+not certified, this pass adds **direct behavioral-equivalence evidence by
+differential fuzz** to **seven** previously-unfuzzed non-exact symbols:
+`Scrambler<unsigned char,int>::process(h)`, `Descrambler<unsigned
+char,int>::process(h)`, `Descrambler<int,int>::process(i)`, `Scrambler<unsigned
+char,unsigned char>::reset(h)`, `Scrambler<unsigned char,int>::reset(h)`,
+`V90SignBitsExtractor::process` and `V92Mapper::process` -- plus four control
+(exact) members and, counting F11527's three (the parallel encoder/decoder
+`process` and the decoder `reset`), **ten** non-exact symbols in total that now
+carry direct fuzz equivalence evidence.  **The gap that remains:** roughly
+**~991 non-exact functions** still rest on the fixed `t_*` fixtures only
+(finite inputs, not seeded breadth), and the non-exact **constructors** of the
+family (`Scrambler<h,h>::C1`, `Scrambler<h,i>::C1`, `Descrambler<i,i>::C1`)
+are not yet fuzzed (their effect on state is covered only indirectly).  These
+are the cheap next targets: the harness pattern already exists and each new
+group is a few lines.
+
+**GATES.**  `make -j1 J=1 phase`: **period differential 386 passed / 0 failed**
+and "phase boundary: period differential and structural checks all OK".
+`anchorcheck` (via phase) **0 detached / 0 non-unique**; `refcheck` 14202
+references, **0 dangling / 0 stale** (after adding F11528); `git diff --check`
+clean.  Only `test/unit/t_fuzz.cpp` changed; no `src/`/`include/` edit and no
+`byteident`/`compare` re-run (the tree is behaviourally unchanged).  No
+mutation re-record and no mutation run.  (2026-10-01)
