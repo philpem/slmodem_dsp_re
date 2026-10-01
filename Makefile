@@ -732,6 +732,56 @@ $(RUNTESTS): run-%: $(BUILD)/test/%
 test: firewall strings offsets refs $(RUNTESTS)
 
 #
+# THE COVERAGE-GUIDED DIFFERENTIAL FUZZ TARGET (libFuzzer).  This is a
+# SEPARATE harness binary, apparatus (`test/fuzz/`), and is deliberately NOT
+# part of `make period`: the period gate is the reconstruction authority and
+# stays untouched, while this fuzzer is the frontier-handoff section 5
+# candidate B brought to a running tool.  See test/fuzz/t_fuzzcov.cpp for
+# what it drives and why.
+#
+# THE TOOLING.  clang + the libFuzzer runtime; pinned clang-19 is the
+# compiler (Debian 13 trixie ships clang-19.1.7; record its version -- a
+# different clang can change coverage counters and CmpTrace behaviour).  The
+# target is 32-bit because it links the blob's i386 `ref_*` object.
+#
+# THE ONE NON-OBVIOUS DEPENDENCY.  The libFuzzer runtime is itself C++ and
+# needs a 32-bit libstdc++.  The host here has none (no g++-multilib), so it
+# is extracted once from the PINNED modern container
+# `slmodem-modern:24.04` (which carries g++-13-multilib) into
+# $(FUZZ_DIR)/libstdc++32.a, then linked by explicit path with -nostdlib++.
+# Documenting the source image is what makes the setup reproducible.
+FUZZ_CC       := clang-19
+FUZZ_DIR      := $(BUILD)/fuzz
+FUZZ_FLAGS    := -m32 -nostdinc++ -ffast-math -fno-finite-math-only \
+                 -fno-exceptions -fno-rtti -DDSPLIB_REPRODUCE_BUGS \
+                 -fno-sized-deallocation -fno-math-errno -Iinclude
+FUZZ_REPRO_SRC:= src/pump/v90/V90SignBitsExtractor.cpp src/pump/v90/V92Mapper.cpp
+FUZZ_REPRO_OBJ:= $(patsubst src/%.cpp,$(FUZZ_DIR)/%.o,$(FUZZ_REPRO_SRC))
+
+$(FUZZ_DIR)/libstdc++32.a: tools/modern/Dockerfile
+	@mkdir -p $(FUZZ_DIR)
+	@docker run --rm -v $(CURDIR)/$(FUZZ_DIR):/out slmodem-modern:24.04 \
+	    bash -c 'cp /usr/lib/gcc/x86_64-linux-gnu/13/32/libstdc++.a /out/libstdc++32.a'
+
+$(FUZZ_DIR)/t_fuzzcov.o: test/fuzz/t_fuzzcov.cpp
+	@mkdir -p $(FUZZ_DIR)
+	$(FUZZ_CC) $(FUZZ_FLAGS) -fsanitize=fuzzer,address -Itest/harness -c $< -o $@
+
+$(FUZZ_DIR)/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
+	$(FUZZ_CC) $(FUZZ_FLAGS) -fsanitize=fuzzer,address -Itest/harness -c $< -o $@
+
+$(FUZZ_DIR)/t_fuzzcov: $(FUZZ_DIR)/t_fuzzcov.o $(FUZZ_REPRO_OBJ) \
+    $(REF) $(BUILD)/test/harness/runtime.o $(FUZZ_DIR)/libstdc++32.a
+	$(FUZZ_CC) -m32 -fsanitize=fuzzer,address -nostdlib++ -o $@ \
+	    $(FUZZ_DIR)/t_fuzzcov.o $(FUZZ_REPRO_OBJ) $(REF) \
+	    $(BUILD)/test/harness/runtime.o $(FUZZ_DIR)/libstdc++32.a -lc -lm -lgcc
+
+fuzz: $(FUZZ_DIR)/t_fuzzcov
+	@echo "built build/fuzz/t_fuzzcov; run it under ASAN_OPTIONS=detect_leaks=0"
+.PHONY: fuzz
+
+#
 # The link-exception census.  tools/linkdiverge.py owns the register; this
 # prints its denominator and catches a STALE entry -- a declared fixture that
 # now LINKS fails here rather than sitting in the register for ever.  The

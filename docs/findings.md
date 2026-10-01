@@ -132060,3 +132060,97 @@ references, **0 dangling / 0 stale** (after adding F11528); `git diff --check`
 clean.  Only `test/unit/t_fuzz.cpp` changed; no `src/`/`include/` edit and no
 `byteident`/`compare` re-run (the tree is behaviourally unchanged).  No
 mutation re-record and no mutation run.  (2026-10-01)
+
+## F11529. Coverage-guided differential fuzzing with the blob as oracle: a clang-19/libFuzzer harness against `ref_*`, driving stateful construction+drain sequences, converging with no divergence and a demonstrated firing negative control
+
+This is the frontier-handoff section 5 candidate B brought to a running tool.
+The fixed-seed fixture (`test/unit/t_fuzz.cpp`, F11527/F11528) is breadth
+without adaptation; a coverage-guided fuzzer learns which state reaches a deep
+branch and mutates toward it.  It is **apparatus** (`test/fuzz/` + a `make
+fuzz` target), not reconstruction: no `src/` edit remains, so no mutation
+re-record and no byteidentity movement.
+
+**THE TOOLING (recorded for reproducibility).**  clang-19.1.7 (Debian 13
+trixie, `/usr/bin/clang-19`) with `-fsanitize=fuzzer,address`.  The target is
+**32-bit** because it links the blob's i386 `ref_*` object.  libFuzzer provides
+the coverage guidance (inline 8-bit counters + PC table) and records a failing
+input automatically.  **The one non-obvious dependency:** the libFuzzer runtime
+is itself C++ and needs a 32-bit `libstdc++`; the host has none (no
+`g++-multilib`), so it is extracted once from the **pinned modern container
+`slmodem-modern:24.04`** (which carries `g++-13-multilib`,
+`/usr/lib/gcc/x86_64-linux-gnu/13/32/libstdc++.a`) and linked by explicit path
+under `-nostdlib++`; `make fuzz` does this extraction itself, so the setup is
+reproducible without touching system packages.
+
+**THE TARGETS AND HOW STATE IS RECONSTRUCTED.**  `test/fuzz/t_fuzzcov.cpp` is a
+single libFuzzer entry (`LLVMFuzzerTestOneInput`) whose first byte selects a
+family and whose remaining bytes are that family's parameter/state/stream.
+Each family drives **OUR reconstruction against the blob's `ref_*` on identical
+inputs** and treats any divergence as a bug (abort -> libFuzzer records the
+input).  Ours is the header-instantiated template and the instrumented
+reconstruction objects; only `test/fuzz/*` and `src/pump/v90/V90SignBitsExtractor.cpp`
+/ `V92Mapper.cpp` are coverage-instrumented, and the denominator below is that
+instrumented set.  State is recovered per input by **construction + drain**:
+the object is constructed (or placement-built per finding F871) and then driven
+through a bounded sequence of `reset`/`process` calls whose parameters and
+stream are the fuzzer's, so the fuzzer genuinely explores deep state machines
+rather than one shallow call.  The families are the same near-exact / non-exact
+**integer** kernels `t_fuzz` built (a divergence there is a real behavioural
+defect, not an x87 artefact): the parallel differential encoder/decoder
+(byteident BYTES, 4/54), `Scrambler<h,h>` bulk (byte-exact positive control),
+and the stateful `V90SignBitsExtractor` (SIZE 1/417) and `V92Mapper` (SIZE
+2/107).
+
+**THREE HARNESS DEFECTS WERE FOUND AND FIXED DURING THE RUN** (this is why the
+firing ritual matters):
+  * **The scrambler object was placement-built INSIDE its data buffer.**  The
+    pointer fields shared memory with the tap history, so with a small `out`
+    the taps read the object's own pointer bytes, which encode the object's
+    stack address -- different for our and ref buffers, so the two sides read
+    different "history" and diverged (`got 246, reference 247`).  Fixed by
+    giving each side a SEPARATE object slot and a SEPARATE data buffer (the
+    t_fuzz `place` layout), so taps read pure data.  This was a harness state
+    error, not a source defect.
+  * **The ref side's pointers were copied with `*pb = *pa`**, pointing into
+    `buf1` instead of the ref side's own `buf2`; fixed by placing `pb`
+    independently.
+  * **The 32-bit comparison counter overflowed** and printed a negative total;
+    widened to `unsigned long long`.
+  The V90SignBitsExtractor state seed was carried as 0/1 only, the documented
+  comparable domain for the D386 recorded deviation (the blob's `action` is
+  undefined for states 2/3), exactly as F11528.
+
+**THE NEGATIVE CONTROL FIRST (why the run is trusted).**  A planted defect
+(`*state ^ *in` -> `*state ^ *in ^ 1u` in
+`ParallelDifferentialEncoder<T>::process`) was caught by the harness within
+seconds: `FUZZCOV DIVERGENCE fam=0 step=0 out: got 11, reference 10` -- the
+encoder group, our side, against the blob.  The planted edit was reverted and
+the harness compared ours to the blob cleanly thereafter.
+
+**THE RUN.**  `ASAN_OPTIONS=detect_leaks=0 ./build/fuzz/t_fuzzcov
+-max_total_time=240` from an empty corpus: **5,381,408 executions in 241 s**
+(~21 k exec/s), **no divergence** (zero crash artifacts), and **coverage of
+118 of 135 instrumented inline-8-bit counters (87.4%)** (the 135 is the
+denominator the fuzzer reports for this binary's instrumented set).  Leak
+detection is disabled for the harness (its own allocations via the runtime' s
+sysdep shim, not a source concern).
+
+**DIVERGENCE ANALYSIS.**  None.  Across 5.38 M fuzz-generated construction +
+drain sequences the reconstruction and the blob agreed exactly on every
+observable (outputs, internal state, reset return), including over the
+near-exact parallel coder (its four differing codegen bytes are not
+behavioural) and the stateful V90SignBitsExtractor / V92Mapper.  This is
+convergence evidence for the targeted functions, the same spirit as the
+fixed-seed pass but with coverage guidance reaching deep states the seed could
+not sample.  No genuine `src/` defect was found; nothing to fix in the
+reconstruction.
+
+**GATES.**  `make -j1 J=1 phase`: **period differential 386 passed / 0 failed**
+(the fuzz target is deliberately NOT wired into `make period`, so the
+denominator is unchanged at 386, not 387 -- `make fuzz` is its own step).
+`anchorcheck` 285 suites / 10038 mutations, **0 detached / 0 non-unique**;
+`refcheck` 14212 references, **0 dangling / 0 stale**; `git diff --check`
+clean.  Changes: `Makefile` (+ the `fuzz` target) and `test/fuzz/t_fuzzcov.cpp`.
+No `src/` or `include/` change remains (the DiffCoder negative-control edit is
+reverted), so `byteident`/`compare` were not re-run.  No mutation re-record and
+no mutation run.  (2026-10-01)
