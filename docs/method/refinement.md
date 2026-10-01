@@ -2069,3 +2069,23 @@ executed compiler dumps as authority when only selected source files have
 been patched. A named scalar local is a finite source hypothesis only when
 conversion expansion predicts a distinguishable RTL representation; names
 alone do not compel new loads or register allocation.
+
+
+A zero SIZE change can hide a useful arithmetic recovery: TimingV34's three
+explicit halves remove six report arithmetic bytes while alignment adds six
+bytes elsewhere (F11539). Use the operand widths and signedness, local opcode
+landmarks and full-TU body inventory as evidence. A signed-word comparison
+and sign-extended divisor can establish a carrier correction independently
+of register scheduling; retain synthetic high-bit examples as arithmetic
+boundaries, not claims of reachable modem states. Gate source adoption on
+fixed period differential fixtures and report unchanged exact denominators.
+
+
+When an earlier pass creates the later pass's input, complete the bounded
+interaction rather than trying nearby source spellings. V34's eight-cell
+source/GCSE/CSE2 cube restores indexed reloads with GCSE off and shows no
+remaining CSE2 effect in that function (F11540), despite changes to 44 other
+bodies. The restored graph costs four exact helpers. This rejects a
+regalloc-only explanation of that local graph without selecting a compiler
+profile; any next profile test must explain those helpers and the remaining
+non-exact body together.

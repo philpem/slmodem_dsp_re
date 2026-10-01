@@ -132534,3 +132534,49 @@ records the compiler authority, exact transition, domain and next finite
 scalar-expansion discriminator. Replay tools/v34_metric_cse.py; complete
 artifacts build/v34-metric-cse/. No production source changed; retained
 853/1852 exact and prior fixed 385/0 validation remain applicable. (2026-10-01)
+
+
+## F11539. V.34 timing report counter is signed word; explicit arithmetic halves restore three object operations independently of unchanged length
+
+Four crossed full-TU controls reproduce the unchanged raw baseline and
+preserve 63 functions, 55 globals, 9/29 exact symbols, no gains or losses.
+Only TimingV34 changes. SIZE gaps 860/844/860/828: the half-only cell removes
+six arithmetic bytes but gains six alignment bytes, leaving length unchanged.
+
+The signed short count reproduces the object's word signed comparison and
+signed divisor; explicit shifts reproduce SAR at all three halving sites.
+The complete report block still differs in scheduling/registers. These are
+local source-semantic corrections, not a whole-symbol grade-1 recovery.
+Object-derived high-bit/negative-odd arithmetic examples are labelled
+synthetic; they establish no modem reachability or protocol defect and were
+not run as new differential fixtures. Existing fixed lifecycle/report inputs
+are positive. [The study](v34-small-rtl.md) records the complete domain,
+positive controls, signed boundaries and GCC conversion/division sources.
+The initial RTL already expands setTimingStateParameters at two sites,
+independently explaining a measured helper-call mismatch, not every residual.
+Replay tools/v34_timing_carriers.py; artifacts build/v34-timing-carriers/.
+Both local corrections are adopted: fixed non-fuzz make phase 385/0,
+structural checks clean; make tc 300/300, zero failures. Final production
+TU equals the measured combined object raw, with only TimingV34 changed.
+There is no claim of whole-symbol byte-exact gain. (2026-10-01)
+
+
+## F11540. V.34 initial-phase indexed reload graph is recoverable by suppressing PRE; full crossed cube rejects a regalloc-only account
+
+Four new no-GCSE cells complete the eight-cell source/GCSE/post-loop-CSE
+cube after validating historical source/header/config/object hashes and
+reproducing the raw unchanged baseline. Suppressing GCSE restores the
+indexed post-search a reload, halfword sign test and branch-local signed
+b loads in the combined graph. With GCSE off, toggling post-loop CSE leaves
+setInitialPhase's canonical body unchanged, but changes 44 other bodies.
+Thus PRE plus subsequent CSE explains this missing load graph, not register
+allocation alone. No claim that all remaining differences have that cause.
+
+All new cells preserve 63 functions/55 globals and change 57 bodies. Each
+loses four exact helpers, retains 5/29 and gains none. Combined-graph gaps
+are 2/7/10/10 across the cube: selected graph landmarks can improve while
+length worsens. No flags or source adopted. [The study](v34-small-rtl.md)
+records the closed domain, exact lost names, commands and complete-body
+checks; replay tools/v34_metric_pre.py, artifacts build/v34-metric-pre/.
+The original compiler profile remains open and these diagnostic results
+must be assessed across the whole TU. (2026-10-01)

@@ -1677,3 +1677,78 @@ rejects that mechanism, not every possible lifetime effect of a local.
 Next investigate TimingV34's independently observed signed-word counter
 and arithmetic-halving idioms. Do not infer a source ceiling from these
 bounded negative controls.
+
+
+## TimingV34 signed report counter and arithmetic halves (F11539)
+
+Declared four full-TU cells before compiling in [#22](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942204632), crossing signed-short local `n`/increment with explicit arithmetic halves at the normalized pair, report count, and signed symbol period. All retained Gentoo flags, mandatory bug define, compiler3.4.2-r2 and executed assembler2.15.92.0.2 were recorded by shared helpers; baseline reproduced `9b7aeacc` object byte for byte. Generator positive controls distinguish four source hashes,3 versus0 division REG_EQUAL notes, one word report comparison in short-counter cells, and three SAR-by-one instructions in shift cells; replay passes.
+
+Canonical verdicts: baseline SIZE860, signed-short counter SIZE844, three arithmetic halves SIZE860, both SIZE828. Every cell preserves63 defined function symbols and55 globals; compared29 symbols,9exact; no gains/losses. Only TimingV34 body changes in each nonbaseline cell. SIZE is a length gap. No production source/header/test edits, adoption, fuzzing, or mutation execution in this measurement.
+
+The object independently supports the source semantics. Blob0x60acf compares the incremented count in a signed word and0x60adb sign-extends it for division. The signed-short candidate recovers that signed word comparison and divisor, though schedules sign extension before rather than after the branch and reverses compare operands. Thus the whole counter/report block is not grade1; the individual width/signedness landmarks reproduce. Blob0x60a15/0x60ae6/0x60afc uses SAR for all three halves. Arithmetic-shift cells reproduce all three SARs under retained flags. Baseline uses SHR for the nonnegative normalized sum and unsigned count, and negative-value correction before SAR for symbol_period. GCC expr.c dispatches division to expand_divmod and shifts to expand_shift; expmed.c signed power-of-two truncating division requires correction, agreeing with these measured emissions. Extracted expr.c/expmed.c are recovered upstream3.4.2 sources, not claimed to be complete Gentoo-patched source; actual Gentoo executable/output decides.
+
+Half-only retains the same function length despite changed arithmetic: normalized and report count SHR become SAR, while symbol-period correction is removed. The report path is6bytes shorter, but baseline5bytes alignment before normalization plus3bytes before its loop become0plus14bytes, absorbing exactly6bytes. This is a direct demonstration that unchanged SIZE does not imply unchanged source/codegen.
+
+The remaining graph mismatch is measured independently from SIZE. Blob calls setTimingStateParameters twice; retained/candidate calls VPcmV34LogTimingOffset twice and never calls setTimingStateParameters. These calls are already present in initial RTL, so that helper’s body is expanded inline before later RTL passes. Both sides call setInitialPhase once and debug_printf once. The arithmetic/carrier domain does not change these call inventories. This establishes inlining at those sites, without claiming inlining uniquely explains every residual instruction.
+
+Behavioral boundaries: the normalized sum lies in0..131070, so its /2 and >>1 are equivalent across its entire operand range. Count32767 plus1 becomes blob signed-32768: at interval40 the blob stores count/acc and returns, while current unsigned widening reports. For signed n=-3 and interval=-4 with ppm_acc1, truncating half produces first quotient-3333 versus blob arithmetic-half-3332. Prior ppm1 with symbol_period-3 produces report-33 for truncating half versus blob-32 for arithmetic-half. These object-derived arithmetic controls are synthetic component inputs, not modem-reachability or protocol-defect claims, and are not newly run differential fixtures. The fixed t_v34rx lifecycle/report fixtures initialize count0, report_interval40, symbol_period0x3e80; they exercise reports/transcripts but do not cover high-bit counts or negative periods. Any production adoption still requires the period differential gate.
+
+Replay: `python3 tools/v34_timing_carriers.py --domain https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942204632`. Results/body dumps/initial RTL in build/v34-timing-carriers; analysis.json includes inventories, signed arithmetic boundaries and compiler-source provenance. Raw plain disassembly records padding. Domain closed: no whole-symbol exact candidate; independently recoverable signed carrier/halving source corrections remain available for period-gated adoption, with no SIZE-based rationale.
+
+
+## PRE/CSE cube restores the reload graph but loses four exact helpers (F11540)
+
+Four new no-GCSE cells plus a raw unchanged control complete the finite
+production/combined graph x GCSE x post-loop-CSE cube, reusing F11538's
+four cells only after their complete source/header/config/object hashes
+match. The new baseline reproduces the old raw object. All 63 functions
+and 55 globals remain; each no-GCSE cell changes 57 canonical bodies.
+All four lose V34scrambler, dftRetrainDetInit, dftfreqinit and
+dpskDetectInfo1Init, giving 5/29 exact, zero gains. No source/option adopted.
+
+| Source | GCSE/CSE2 | GCSE/no CSE2 | No GCSE/CSE2 | Neither |
+| --- | --- | --- | --- | --- |
+| Production | SIZE14 | SIZE16 | SIZE14 | SIZE14 |
+| Combined graph | SIZE2 | SIZE7 | SIZE10 | SIZE10 |
+
+With GCSE disabled, the combined source recovers the blob's indexed
+post-search a reload, halfword sign test and separate signed b loads in
+both sign branches. It retains the previously recovered narrow error test,
++837 short-loop induction and final phase-product narrowing. CSE2 then
+makes no canonical change to setInitialPhase for either source. This is
+not a raw full-TU identity: toggling CSE2 still changes 44 other bodies.
+The missing reload graph is therefore attributable to PRE and its later
+CSE reuse interaction, not irreducible register allocation alone.
+Recovering those landmarks does not recover whole-function bytes or a
+complete original TU profile.
+
+Domain: https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942235103.
+Replay tools/v34_metric_pre.py --domain <that URL>, after recreating the
+historical F11538 artifacts (or retaining their validated originals).
+Artifacts build/v34-metric-pre/{results,analysis}.json include all eight
+cells, commands, raw hashes, full inventories, all changed bodies and
+pass-local memory definitions. The finite cube is closed. Any future
+profile experiment must explain the four lost helper bodies together
+with the remaining initial-phase body; an exact-set improvement or a
+restored local reload graph alone cannot select the original command line.
+
+
+Timing source adoption validation: both axes are adopted on their independent
+object landmarks, not their SIZE828 result. make phase J=8 explicitly selects
+all 385 non-fuzz fixtures: 385 passed, 0 failed, structural boundary OK.
+make tc J=8 builds 300/300 objects, 0 failed. The final production full TU
+is byte-for-byte equal to the tested combined cell and only TimingV34 differs
+from the unchanged baseline. No metadata anchors detached; no fuzzing or
+mutation harness execution. Whole-tree exact-set verification is recorded
+below after completion.
+
+
+Canonical whole-tree result: 853/1852 exact, 82,921 bytes, unchanged exact
+names against build/v34-preemp-dispatch/tree-after-rebase.json (zero gains,
+zero losses). Final report build/v34-timing-carriers/tree-after-adoption.json.
+The optional historical --ratchet command exits 1: its old 810-symbol floor
+requires _ZN13V90ParametersC2EP19_tagModemParameters, already absent from the
+saved 853-symbol branch baseline. This is preserved as a pre-existing floor
+failure, not re-blessed or counted as a passing check. Current source changes
+only TimingV34's object body. Log /tmp/v34-timing-byteident.log; deciding
+period/structural gate remains 385/0.
