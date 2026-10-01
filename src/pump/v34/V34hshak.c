@@ -353,11 +353,10 @@ short v21_lobnd[60] = {
 static void
 fsk_clear(struct v34_object *obj)
 {
-	short *p = (short *)((char *)obj + 0xaae6);
-	int i;
+	short i;
 
 	for (i = 0; i <= 0x63; i++)
-		p[i] = 0;
+		*(short *)((char *)obj + 0xaae6 + 2 * i) = 0;
 }
 
 /*
@@ -374,15 +373,15 @@ fsk_state_init(struct v34_object *obj)
 {
 	obj->fsk.delay = 0x30;
 	obj->fsk.offset = 0;
+	obj->fsk.phase = 0;
+	obj->fsk.prev = 0;
+	obj->fsk.sr = -1;
+	obj->fsk.nbits = 0;
 	obj->fsk.bit_lo = 1;
 	obj->fsk.bit_hi = 0;
+	obj->fsk.next = 6;
 	obj->fsk.bit_len = 0xc;
 	obj->fsk.resync_next = 6;
-	obj->fsk.phase = 0;
-	obj->fsk.next = 6;
-	obj->fsk.nbits = 0;
-	obj->fsk.sr = -1;
-	obj->fsk.prev = 0;
 }
 
 /*
@@ -936,24 +935,29 @@ preempindex(void *p, short baudrate)
 	short i;
 
 	/*
-	 * NO DEFAULT ARM, and the object has none either: an unrecognised
-	 * baud rate drops into the loop with `x` and `ratio` never set.  The
-	 * two live in callee-saved registers the object does not initialise,
-	 * so what the loop actually multiplies is whatever the caller left
-	 * in %edx and %esi.  That is not reproducible in C and is not
-	 * reproduced -- see D37.  The five rates below are every one the
-	 * object handles.
+	 * The descending comparison chain and absence of default initializers
+	 * reproduce the object's period code.  The five rates below are every
+	 * rate it handles.  An unsupported rate leaves x and ratio unset;
+	 * its result depends on incoming machine registers, not a defined C
+	 * contract (D37).  Do not invent a default value for the reconstruction.
+	 * See docs/v34-small-rtl.md for the crossed dispatch/default controls.
 	 */
-	x = 0;
-	ratio = 0;
 
-	switch (baudrate) {
-	case 2400: x = preemp_get(p, PREEMP_M2400); ratio = 0x7da7; break;
-	case 2800: x = preemp_get(p, PREEMP_M2400); ratio = 0x6789; break;
-	case 3000: x = preemp_get(p, PREEMP_M3000); ratio = 0x656f; break;
-	case 3200: x = preemp_get(p, PREEMP_M3200); ratio = 0x639f; break;
-	case 3429: x = preemp_get(p, PREEMP_M3429); ratio = 0x6626; break;
-	default: break;
+	if (baudrate == 3429) {
+		x = preemp_get(p, PREEMP_M3429);
+		ratio = 0x6626;
+	} else if (baudrate == 3200) {
+		x = preemp_get(p, PREEMP_M3200);
+		ratio = 0x639f;
+	} else if (baudrate == 3000) {
+		x = preemp_get(p, PREEMP_M3000);
+		ratio = 0x656f;
+	} else if (baudrate == 2800) {
+		x = preemp_get(p, PREEMP_M2400);
+		ratio = 0x6789;
+	} else if (baudrate == 2400) {
+		x = preemp_get(p, PREEMP_M2400);
+		ratio = 0x7da7;
 	}
 
 	i = 5;
@@ -1159,7 +1163,6 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_dftbin *bins = obj->retrain_bins;
-	short runs;
 	short i;
 
 	dftupdate(bins, nbins, samples, nsamples);
@@ -1189,7 +1192,11 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 		bins[i].acc_im = 0;
 	}
 
-	if (obj->retrain_state == 1) {
+	/* The blob promotes this signed state for its two dispatch comparisons.
+	 * An ordinary switch reproduces that lowering on period GCC; see
+	 * docs/v34-small-rtl.md, retrain-state dispatch. */
+	switch (obj->retrain_state) {
+	case 1:
 		/*
 		 * Waiting for silence on all three bins at once.  Any one of
 		 * them still loud ends the run -- and if the run that just
@@ -1205,18 +1212,18 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 					< (int)bins[1].thresh_lo
 		    && (int)(unsigned short)bins[2].energy
 					< (int)bins[2].thresh_lo) {
-			runs = (short)(obj->retrain_runs + 1);
+			obj->retrain_runs = (short)(obj->retrain_runs + 1);
 		} else {
 			if (obj->retrain_runs >= obj->retrain_quiet_runs)
 				obj->retrain_state = 2;
-			runs = 0;
+			obj->retrain_runs = 0;
 		}
-		obj->retrain_runs = runs;
+		return 0;
+	case 2:
+		break;
+	default:
 		return 0;
 	}
-
-	if (obj->retrain_state != 2)
-		return 0;
 
 	/*
 	 * Waiting for the middle bin -- 1200 Hz -- to come back.
@@ -9372,9 +9379,13 @@ v34handshak(void *vobj)
 		 */
 		dftRetrainDetInit(obj);
 
-		/* 0x693fa/0x69411/0x69425, a 16-bit read-modify-write. */
-		T3M_I16(&frame, T3M_F3588) =
-			(short)(T3M_U16(&frame, T3M_F3588) | 2);
+		/*
+		 * 0x693fa/0x69411/0x69425: the same object base as the
+		 * initializer, with a 16-bit read-modify-write.  Access the
+		 * field directly so the synthetic frame's duplicate pointer
+		 * does not hide the non-overlapping fields from GCC.
+		 */
+		obj->short_3588 |= 2;
 
 		/*
 		 * Three transitions, 0x6941a, 0x694b6 and 0x69544, each the
@@ -9772,24 +9783,23 @@ datapumpv34(void *objp)
  *
  * So a caller wanting `a * conj(c)` dots against the first half and `a * c`
  * against the second, without either having to negate or swap at run time.
- * The original spells all twelve stores out; the negations reload the source
- * rather than reusing the register they just negated, which is why each
- * source short is read twice.
+ * The original spells all twelve stores out.  Each real input supplies a
+ * chained assignment (swapped destination first); each imaginary input is
+ * read again after its negated store.  Those reloads also preserve the blob's
+ * behavior when the two arrays overlap.  See docs/v34-small-rtl.md.
  */
 void
 txrxdmainit(short *dst, const short *src)
 {
-	int i;
-
-	for (i = 0; i < 3; i++) {
-		int re = (unsigned short)src[2 + i * 2];
-		int im = (unsigned short)src[3 + i * 2];
-
-		dst[i * 2] = (short)re;
-		dst[i * 2 + 1] = (short)-im;
-		dst[6 + i * 2] = (short)im;
-		dst[6 + i * 2 + 1] = (short)re;
-	}
+	dst[0] = dst[7] = src[2];
+	dst[1] = (short)-src[3];
+	dst[6] = src[3];
+	dst[2] = dst[9] = src[4];
+	dst[3] = (short)-src[5];
+	dst[8] = src[5];
+	dst[4] = dst[11] = src[6];
+	dst[5] = (short)-src[7];
+	dst[10] = src[7];
 }
 
 /*
@@ -9846,50 +9856,36 @@ v34FreezeEcho(void *objp)
  * see finding F110, which is the same offset trap from the other side.
  *
  * The three-way XOR is spelled as a running increment and a parity test,
- * not as `^`, so a tap that fires twice cancels the same way.
+ * not as `^`, so a tap that fires twice cancels the same way.  Keep the mode
+ * test inside this loop: period GCC unswitches it into the two loops in the
+ * blob.  Direct shift-register expressions also let it delay the first load
+ * until a positive bit count, then hold the register and sink its store.
+ * See docs/v34-small-rtl.md for the source/unswitching controls.
  */
 int
 V34scrambler(unsigned *sr, short mode, short bits, short nbits)
 {
-	int mask = (short)((int)((unsigned)1 << ((int)nbits & 31)) - 1);
-	unsigned reg = *sr;
+	int mask = (short)((int)(1u << nbits) - 1);
 	short i;
-
-	/*
-	 * The two variants differ only in the second tap, but the original
-	 * emits the loop twice rather than testing per bit; the branch is
-	 * hoisted out.  Kept as one loop with the tap chosen up front, which
-	 * computes the same thing without duplicating the body.
-	 */
-	unsigned tap = mode ? 0x00002000u : 0x04000000u;
-
 	for (i = 0; i < nbits; i = (short)(i + 1)) {
-		int parity = (bits & 1) ? 1 : 0;
-
-		/* Arithmetic, so a negative `bits` feeds ones for ever. */
+		short parity = 0;
+		if (bits & 1)
+			parity++;
 		bits = (short)(bits >> 1);
-
-		if (reg & tap)
-			parity = (short)(parity + 1);
-		if (reg & 0x00000100u)
-			parity = (short)(parity + 1);
-
+		if (mode != 0) {
+			if (*sr & 0x00002000u)
+				parity++;
+		} else {
+			if (*sr & 0x04000000u)
+				parity++;
+		}
+		if (*sr & 0x00000100u)
+			parity++;
 		if (parity & 1)
-			reg |= 0x80000000u;
-
-		reg >>= 1;
+			*sr |= 0x80000000u;
+		*sr >>= 1;
 	}
-
-	/* Written once, after the loop -- and not at all when nbits <= 0. */
-	if (nbits > 0)
-		*sr = reg;
-
-	/*
-	 * The newest bit sits at 30, so shifting down by 31 - nbits leaves
-	 * the run of them at the bottom, oldest first -- the same order the
-	 * input was consumed in.
-	 */
-	return (short)((reg >> ((0x1f - (int)nbits) & 31)) & (unsigned)mask);
+	return (short)((*sr >> (0x1f - (int)nbits)) & (unsigned)mask);
 }
 
 /*
@@ -9983,12 +9979,17 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
  *     P(k) = -21k^2 + 837k - 354,  truncated to a short.
  *
  * It peaks near k = 20 and is what turns a measured ratio into a phase
- * index; the derivation belongs with task #47.
+ * index; the derivation belongs with task #47.  The coefficient locals and
+ * square-first association reproduce period GCC's late constant propagation
+ * into multiplication instructions; const coefficients lower differently
+ * (see docs/v34-small-rtl.md).
  */
 int
 polyValue(short k)
 {
-	return (short)(-21 * (int)k * k + 837 * k - 354);
+	int a = -21, b = 837, c = -354;
+
+	return (short)(a * ((int)k * k) + b * k + c);
 }
 
 /*

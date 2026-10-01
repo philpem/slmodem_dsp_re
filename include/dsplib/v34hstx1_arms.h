@@ -181,6 +181,13 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * inlined and constant-folded copies reference the string directly, as the
  * object does.  Do not restore a table here.
  *
+ * The object's equality test uses the halfword before extending it for
+ * signed StateName indexing on the debug path.  Compare the storage directly:
+ * GCC 3.4.2 promotes a signed hs_get return before the equality test, even
+ * when that helper is inlined.  A debug-local read lets GCC retain the first
+ * halfword and extend it only where the index is needed.  The signed field
+ * and the signed debug index remain unchanged (see docs/v34-small-rtl.md).
+ *
  * `static inline`, as are `hs_get` and `hs_put` above: the object inlines the
  * whole closure into `v34handshak` and defines no `hs_*` symbol at all
  * (finding F11506/F11507).
@@ -188,12 +195,11 @@ hs_put(struct v34_object *obj, unsigned off, short v)
 static inline void
 hs_setstate(struct v34_object *obj, unsigned off, short next)
 {
-	short now = hs_get(obj, off);
-
-	if (now == next)
+	if (*(const short *)((const char *)obj + off) == next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
+		short now = hs_get(obj, off);
 		const char *ctx1;
 		const char *ctx2;
 		const char *sel;

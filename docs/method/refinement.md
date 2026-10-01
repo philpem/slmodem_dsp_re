@@ -7,6 +7,62 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## Classify the compiler stage before searching register spellings
+
+The [V.34 small-RTL study](../v34-small-rtl.md) separates several mechanisms
+that can produce similar-looking assembly differences. Use a small control
+and the corresponding GCC dump to identify the stage, then transfer the
+hypothesis to the complete translation unit under the retained flags.
+
+| Observation | Discriminating control | What the control establishes |
+| --- | --- | --- |
+| Incoming argument stays in a register instead of being reloaded from its stack slot | A small unsigned accumulator function with increasing register pressure; inspect global allocation dumps | Normal allocation can spill the argument home. A forced register or fabricated local spill is not recovered source. |
+| Boolean result becomes a branch or setcc | Cross ordinary return/if forms with diagnostic if-conversion options and inspect ce1 | Source control flow and if-conversion are separate causes; a flag that changes many other bodies is a diagnostic. |
+| A conditional store appears absent in a standalone helper | Compare the same helper after inlining and inspect GCSE/store motion | The caller may already recover the observed store. Do not adopt a standalone-only improvement. |
+| Constant multiplication has the wrong instruction graph | Cross literal/const coefficients with ordinary coefficient locals, and inspect expansion then CSE | polyValue became exact at 28 bytes: late coefficient propagation folds an existing multiply, while early constants cause LEA/sub synthesis. Association alone did not recover it. |
+| A comparison dispatch differs and source invents default values | Cross switch versus observed comparison chain with and without the invented initialization | preempindex became exact at 315 bytes only with descending comparisons and original unset locals. Keep supported inputs distinct from undefined caller-register state; byte identity does not define invalid inputs. |
+| Two role loops appear in the blob | Compare one loop with the mode test inside against preselected taps and explicitly duplicated loops; inspect loop2 | V34scrambler became exact at 256 bytes through unswitching. Source arm order determines version layout; two binary loops do not establish two author loops. |
+| A short initializer has a different loop/register shape | Cross index width, address expression, and independently observed store order | dpskDetectInfo1Init became exact at 152 bytes with a short index, root-relative clears and the blob's field order. Two address spellings matched: this is a family, not a unique original spelling. |
+| A tiny coefficient loop differs from straight-line blob stores | Compare expanded cached pairs with scalar assignments preserving reloads | txrxdmainit became exact at 98 bytes only with the observed reloads; expansion alone was insufficient. Five fixed alias fixtures distinguish the old and recovered behavior. |
+
+Keep the component boundary explicit. Those five alias fixtures are valid
+inputs to a state-free leaf; they do not establish modem lifecycle coverage.
+Do not invent an owner or traverse beyond a declared member array to obtain
+a desired register. The FSK clear spans several fields and padding, so it
+uses the complete object's byte storage rather than a fictitious array.
+
+Audit the **purpose** of the comparison build before interpreting results.
+Both make period and make tc must define DSPLIB_REPRODUCE_BUGS after
+configurable flags. Without it, V.34's pre-emphasis selector changes from
+initialized data to zero-initialized BSS. Canonical instruction comparisons
+mask relocation addends and cannot by themselves detect this semantic
+configuration mismatch. Preserve the invalid run, rebuild the unchanged
+control, and report configuration gains separately from source gains.
+
+A recovered owner can settle live register allocation while dead registers
+remain compiler artifacts. V.34 FreezeEcho's real transmitter-prefix pointer
+restores its SI base and frame; the last two bytes are dead pop destinations.
+The peephole2 control identifies scratch selection, and evidence-backed local
+definition orders leave those bytes unchanged. Keep the owner evidence and
+scratch result separate; do not fabricate an aliasing view or migrate a type
+merely to obtain a desired dead register.
+
+Source widths can settle live coalescing without settling dead scratch bytes.
+In txmitdibit, a real transmitter owner, direct state pointer and either a
+short result or quadrant restore every live operand; one dead pop byte stays
+different even after restoring the observed adjacent-wrapper order. The old
+five-byte size gap concealed a copied state and non-tail call. Keep these
+controls as evidence; do not adopt a broad owner migration solely to chase
+that final scratch register.
+
+A smaller size gap is not an adoption criterion. Splitting V.34 timing's
+role-dependent switch into two switches brought the gap from 21 to 7 bytes,
+but produced no exact function and changed another caller. It remains a
+source hypothesis. Review exports, all changed bodies and the complete exact
+set before adopting even a locally exact candidate. The FSK recovery kept
+55 global definitions and raised the TU from 5 to 6 exact functions out of 29;
+the large handshake remains non-exact.
+
 ## Reconstruct the owner before tuning its generated code
 
 `FIELD`, `FIELD_PTR`, and width-specific offset macros are useful during
@@ -316,9 +372,13 @@ searching. Record which side you are on and what the domain was — a finding
 that says "closed by reordering" without saying how many spellings were
 compiled is not reviewable.
 
-### Lever 2. Instruction count at EQUAL byte size means a missing or extra statement
+### Lever 2. Instruction count at EQUAL byte size can expose a missing or extra statement
 
-Cheap, and it finds things no test can:
+An instruction-count difference is a lead, not proof of a source statement.
+Register allocation can add a return-register move; inspect operands and RTL
+before assigning a source cause (see the V.34 boolean-return study above).
+Once the extra instruction is an actual store, this check finds things no
+functional test can:
 
     V90Resampler (Pf) ctor   blob 69 insns, ours 68, both 271 bytes
                              -> a dead `timingHistoryIndex = 0` that reset()

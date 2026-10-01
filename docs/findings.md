@@ -132154,3 +132154,144 @@ clean.  Changes: `Makefile` (+ the `fuzz` target) and `test/fuzz/t_fuzzcov.cpp`.
 No `src/` or `include/` change remains (the DiffCoder negative-control edit is
 reverted), so `byteident`/`compare` were not re-run.  No mutation re-record and
 no mutation run.  (2026-10-01)
+
+## F11530. V.34 small-RTL controls recover four exact helpers; constant propagation and loop unswitching remain source leads beyond the budget map
+
+The F11526 sweep is a measured map of its 108 symbols, not a proof that all
+remaining non-exact functions require the missing inline profile. This branch
+recovers four helper bodies under the retained compiler flags: txrxdmainit
+(98 bytes), dpskDetectInfo1Init (152), polyValue (28) and V34scrambler (256).
+The latter two are new after PR #234's initial 850/1852 result. Full matrices,
+positive and negative controls, commands, hashes, RTL and caller audits are
+in [the small-RTL study](v34-small-rtl.md); the practical decision sequence is
+in [the refinement playbook](method/refinement.md).
+
+**DMA and FSK establish two ordinary source mechanisms.** Expanding the DMA
+loop while retaining cached values fails; chained real assignments and the
+observed imaginary reloads match. Five fixed valid alias fixtures distinguish
+the old source (3/5 failures) from the recovered source (5/5 matches); the
+original 4,800 non-overlap checks remain. For the FSK clear, eight full-TU
+cells separate short index, root addressing and the observed field order.
+Two equally supported address spellings give byte-identical complete objects;
+only their combination with the observed store order matches the 152-byte
+initializer. The clear spans fields and padding, so no fake member array is
+introduced. These are bounded source families, not unique original text.
+
+**polyValue is a compiler-stage distinction, not register renaming.** Eight
+cells cross toy/full context with literal coefficients, const coefficient
+locals and ordinary locals with two associations. Each toy/full body agrees.
+Ordinary int a=-21, b=837, c=-354 with square-first a*((int)k*k)+b*k+c is exact;
+const locals retain the three-byte size gap and ordinary left association
+has a five-byte gap. Initial RTL retains generic multiplies and coefficient
+pseudos in the winning form; RTL CSE then propagates constants into existing
+multiply instructions. Early constants had instead triggered expansion's
+LEA/sub synthesis. Only polyValue and setInitialPhase change; the caller's
+gap narrows 41 -> 29 bytes. Source declarations affect the stage at which
+constant arithmetic is selected even with identical numerical expressions.
+
+**The scrambler's two binary loops do not establish two source loops.** Seven
+controls distinguish preselected taps, mode-in-loop source, cached/direct
+shift-register access, direct/explicitly masked shifts and two author-written
+loops. Direct *sr access with a short parity counter and mode in the loop
+recovers the register graph and 256-byte length but reverses loop versions.
+Three further controls reverse the source condition and swap its tap arms:
+if(mode!=0) selects 0x2000, otherwise 0x4000000. That single source loop is
+exact, with .16.loop2 reporting Unswitching loop. Explicit duplicated loops
+have a different graph. Existing out-of-range-count fixtures remain period
+fidelity probes, not a portable shift contract; none is weakened. Caller gaps
+also narrow: txmitdibit 71 -> 5 bytes and txmitquadbit 154 -> 21.
+
+**Negative controls constrain the next search.** Fifteen dpskinit cells restore
+both loops and the first 54 instructions but leave at least 34 differing bytes;
+scalar permutations are closed without a new mechanism. A real transmitter
+prefix plus owning pointer restores FreezeEcho's base/frame and leaves only
+two dead pop destinations. Four emission-order/peephole controls establish
+scratch selection; observed local definition orders do not close those bytes.
+No nearest-size candidate, fabricated alias view or owner migration is adopted.
+
+**Build-purpose and source gains are separate.** make tc omitted the mandatory
+DSPLIB_REPRODUCE_BUGS define, changing V.34's pre-emphasis selector from data
+one to BSS zero. Appending it after configurable flags aligns comparison
+purpose with make period and experimental helpers. On unchanged source it
+gains four exact functions (FPM_SRE_init, SGD_create and V92Modulator C1/C2),
+845 -> 849/1852. FSK then gave 850; polynomial and scrambler give **852/1852**,
+with no exact losses in these controls. This round adds 284 exact bytes,
+82,322 -> 82,606. Recovered-source gains total 534 bytes across four helpers;
+the four apparatus gains are not attributed to source recovery.
+
+**Gates and limits.** The complete retained build has 300/300 objects and zero
+compile failures. Combined polynomial/scrambler TU gives 8/29 exact, preserving
+all 55 global definitions/bindings and the same function inventory. make phase
+J=8 passes **385 period differential tests, zero failures**; 14,199 references
+and 10,038 anchors over 285 suites are clean. Existing fixtures include all
+65,536 short inputs to polyValue and 76,800 scrambler output/register checks.
+No fuzzing or mutation harness was run. The handshake remains non-exact;
+its size deficit narrows 54,549 -> 54,481, not to zero. These gains do not
+identify the missing inline profile or certify the remaining thousand bodies.
+Post-documentation refcheck reports 14,200 references and 2,656 finding
+headings, zero dangling or stale entries. (2026-10-01)
+
+## F11531. preempindex becomes byte-exact by recovering its comparison chain and removing invented defaults; wrapper size gaps alone were misleading
+
+Four retained-profile complete-TU controls cross switch versus descending
+if/else dispatch with initialized versus unset x/ratio locals. The unchanged
+d884e844 control reproduces the bug-enabled comparison object byte-for-byte.
+The switch forms both retain an 11-byte size gap; the initialized comparison
+chain has the blob's size but differs at 82 bytes. Only the descending chain
+without the invented initializers matches the complete **315-byte** body.
+All 55 global definitions/bindings and the function inventory remain intact;
+only preempindex changes. The TU rises 8 -> 9 exact of 29 shared functions,
+with no exact losses. Commands, hashes, selected compiler/assembler identity,
+RTL, disassembly and all canonical verdicts are preserved by
+[the reproducer](../tools/v34_preemp_dispatch.py) in
+build/v34-preemp-dispatch/.
+
+The existing fixture explicitly exercises the five supported baud rates:
+2400, 2800, 3000, 3200 and 3429, including index boundaries and debug text.
+No gate or tolerance changes. D37 now records the recovered original dataflow
+rather than a deterministic zero default absent from the blob. Unsupported
+rates still leave C locals undefined; period byte identity does not turn
+inherited machine-register state into a portable or defined C input contract.
+The comparison chain in the object was original source structure, not a
+reason to adjust register allocation or global optimization flags.
+
+The preceding wrapper domains were useful negative controls. Dibit source
+copies a local scrambler state and makes a normal call; direct object state
+restores its sibling call but increases the size gap from 5 to 27 bytes.
+An honest transmitter prefix plus owner pointer, direct state and a short
+result or quadrant temporary recovers every live operand and the full
+250-byte instruction graph. Exactly one byte remains: a dead pop destination,
+EAX rather than the blob's EDX. Original adjacent-wrapper emission order does
+not change it; disabling peephole2 identifies the scratch stage and loses five
+of the eight exact functions. Combining the independently supported Freeze
+owner path leaves its two dead pops non-exact too. No type migration or
+scratch-register workaround is adopted.
+
+Sixteen independent quadbit controls likewise recover direct state updates,
+owner base and unsigned-load/signed-index sequences without reproducing the
+remaining live frame/spill graph. All eight exact functions and 55 bindings
+survive those source controls. The best size gap is 11 bytes; it is not an
+exact candidate. Tools v34_dibit_state.py, v34_dibit_owner.py (including width
+and cursor studies) and v34_owner_combination.py preserve the bounded domains;
+[the study](v34-small-rtl.md) and [playbook](method/refinement.md) record why
+these lines stop.
+
+A separate power-input provenance study finds that settxlevel reloads mp[0]
+after writing power reduction, while current source caches it. Six source
+controls recover that load but none is exact. A hypothetical component alias
+mp=&tx_pwr_reduction with initial 0x20 distinguishes total reduction 7 from
+cached-source 4; no new fixture or source adoption is made on that observation
+alone. Four further genuine power-owner controls narrow the size gap to one
+byte but retain 123 instructions versus the blob's 122 and other live operand
+changes; this is not a dead-register-only result. Those source controls are
+also declined.
+
+**Validation:** adopted preempindex make phase J=8 passes 385 period tests,
+zero failures, structural boundary clean. make tc builds 300/300 objects,
+zero failures; the adopted full object equals the winning experimental object
+raw-byte-for-byte. Post-documentation refcheck: 14,202 references and 2,657
+finding headings, clean. All 10,038 anchors over 285 suites remain clean.
+Canonical whole-tree exactness rises 852 -> 853/1852, gaining only preempindex
+and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
+recovered-source exact helper. No fuzzing or mutation harness was run.
+(2026-10-01)

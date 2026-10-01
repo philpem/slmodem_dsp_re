@@ -116,6 +116,12 @@ TC_FLAGS := -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
             -include tools/toolchain/period_compat.h
 TC_FLAGS += $(TC_EXTRA)
 
+# Code-generation comparison reconstructs the blob, just as make period does.
+# In particular V34's blob-preemp selector has different data/bss defaults
+# without this define, changing both behavior and relocation addends.
+# Append after configurable flags, including a command-line TC_FLAGS override.
+override TC_FLAGS += -DDSPLIB_REPRODUCE_BUGS
+
 # Provisional DCR candidate: O2 without the post-loop CSE rerun. The earlier
 # claim that only its frame differed was incorrect: SIZE measures length,
 # and --why reports only the first rejection. See docs/cid-dcr-audit.md and

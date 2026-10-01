@@ -1773,7 +1773,7 @@ hold at each exit, which is the sort of question the three debug strings —
 
 ## D37 ⚠ `preempindex` reads two uninitialised registers for an unknown rate
 
-**Where:** `src/pump/v34/V34hshak.c`, `preempindex`'s symbol-rate switch.
+**Where:** `src/pump/v34/V34hshak.c`, `preempindex`'s symbol-rate dispatch.
 
 **What the original does:** five arms — 2400, 2800, 3000, 3200, 3429 — each
 loading a starting measurement into `%edx` and a Q14 ratio into `%esi`.
@@ -1782,15 +1782,17 @@ through to `mov $0x5,%ebx` and the loop runs on whatever the caller left in
 those two registers: `%esi` is callee-saved and still holds the caller's
 value, `%edx` is caller-saved and holds whatever was last in it.
 
-**What we do:** zero both, which makes the loop run to its ceiling and return
-10.  This is a **deliberate behavioural difference** and the only available
-one: there is no value that reproduces "whatever the caller had", and leaving
-a C variable uninitialised would be undefined behaviour rather than an
-imitation of the original's.
+**What we do now:** preserve the original descending comparison chain and
+absence of initialization. Four crossed source controls establish that both
+changes are needed to recover the complete 315-byte period body (F11531).
+The previous deterministic zero defaults were an invented source policy;
+they have been removed from the reconstruction.
 
-**Where the boundary is:** exactly the five listed rates are identical; any
-other argument differs.  The differential test sweeps the five and does not
-sweep anything else, and says why.
+**Where the boundary is:** the five listed rates define the tested C boundary.
+Unsupported inputs leave C locals uninitialized, so no deterministic C result
+or portable inherited-register behavior is promised. Matching period machine
+instructions does not make that undefined input a defined API. The fixture
+continues to sweep the five supported rates and explains why it omits others.
 
 **Reachability: unmeasured.**  Nothing in the object calls `preempindex` —
 no relocation and no direct call — so there is no call site to check the
