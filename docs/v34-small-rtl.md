@@ -1376,3 +1376,105 @@ zero detached/non-unique anchors. Syntax checks for both new compiler tools
 and `git diff --check` pass. Logs: `/tmp/v34-power-phase-final.log`,
 `/tmp/v34-power-alias-after.log`, `/tmp/v34-power-tc.log`,
 `/tmp/v34-power-byteident.log` and `/tmp/v34-power-partial.log`.
+
+
+## Packing, final-rate and bit-reader controls (F11533)
+
+All controls below start at d67e4042, retain the complete comparison flags and
+DSPLIB_REPRODUCE_BUGS, and use the published Gentoo GCC with its executed
+assembler identity. Unchanged controls reproduce the current complete
+V34hshak object raw-byte-for-byte (SHA256
+84424f7d27fddfe8f66e3022ac5fae1291cd78964d9d48d84ffb7829a059427d).
+Every cell preserves the function inventory and all 55 global bindings.
+Results are full-TU canonical verdicts, not local instruction-count scores.
+No reconstruction source is adopted from these domains.
+
+### Static call counts do not identify authored open coding
+
+F11526's bitreverse 16/14 observation is real, but its interpretation as an
+inverse open-coding preimage in probeselect is unsupported. Current source
+already calls bitreverse for those reversals. Both objects contain four
+three-bit reversals; the four-bit counts are twelve (blob) and ten (ours).
+There are six mp_put_preemp packing sites, not five: five answering rates
+plus the originating 2400 path.
+
+[The declared four-cell crossing](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936784687)
+retains or explicitly expands all six sites, with or without diagnostic
+-fno-crossjumping. Explicit expansion produces a raw-identical whole object
+under either option. Retained tail sharing gives 14 bitreverse calls,
+1 chkForceBaudRate call and 40 debug calls; disabling it gives 19, 1 and 44.
+The blob has 16 reversals. The diagnostic overshoots, changes 41 function
+bodies, and loses dftnlinitSignalBins and preempindex: exactness 9 -> 7/29.
+The size gaps are 517 and 1,134 bytes respectively; neither is exact.
+Call-count differences alone cannot distinguish source calls from branch/tail
+sharing. No helper expansion or flag change is adopted.
+
+The first generator asserted five packing sites and stopped before a source
+variant compiled. It is explicitly invalid and excluded; preserved artifacts
+are /tmp/v34-probeselect-sharing-invalid-count.log and
+build/v34-probeselect-sharing/invalid-site-count-results.json. The corrected
+six-site control is validated independently. Driver:
+tools/v34_probeselect_sharing.py; accepted artifacts:
+build/v34-probeselect-sharing/results.json and each cell's source, RTL and
+disassembly. Exact gains/losses were also calculated from the saved objects;
+the replay tool now emits those lists and asserts the complete inventory.
+
+### Final-rate source graph is more informative than a two-byte size gap
+
+The blob's setfinalrate uses an object root, a 0x18-byte frame, fresh input
+loads across bitreverse, and an ordered code test: signed extension for zero,
+halfword comparisons for 2, 3, 4 and 5. Our baseline caches input words and
+output addresses, uses a 0x4c-byte frame and an integer switch. Despite these
+live differences its size gap is only two bytes.
+
+[Sixteen source cells plus baseline](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936835816)
+cross cached/root output addressing, cached/fresh inputs, int/short decoded
+code and switch/ordered chain. They yield sixteen distinct whole objects,
+none exact. Some cells lose existing exact helpers: dftRetrainDetInit,
+dftnlinitNoiseBins or dftnlinitSignalBins. Root/fresh variants preserve 9/29;
+the integer chain's seven-byte gap still has wrong comparison widths, while
+the short chain's 23-byte gap recovers the comparison shape but caches the
+high-rate flag earlier than the blob.
+
+[Six carrier controls plus baseline](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936926118)
+then cross int/short code with local Boolean, direct byte or direct word
+high-rate tests, holding root/fresh addressing and ordered dispatch. All
+preserve 9/29, none matches. Size gaps: int-local 7, int-byte/int-word 2;
+short-local 23, short-byte/short-word 18. Byte/word tests produce identical
+objects at each width. Stop this domain; a smaller gap does not establish the
+original source. Driver: tools/v34_finalrate_source.py (including
+--carrier-study); artifacts: build/v34-finalrate-source/ and
+build/v34-finalrate-carrier/, including commands, changed bodies and losses.
+
+### Bit-reader counter and CRC spelling controls
+
+[Eight source cells plus baseline](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936993590)
+cross int/short available and remaining counters, explicit shift masks/direct
+shifts, and unsigned-int CRC versus signed-short CRC/top-bit test. All preserve
+9/29 and none is exact. Size gaps in domain order are 14, 15, 25, 24, 22, 30,
+7 and 8 bytes. Signed-short CRC arithmetic introduces narrowing after doubling
+absent from the blob, so the superficially plausible signed local is not a
+recovered preimage.
+
+[The final six-cell discriminator plus baseline](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5937081347)
+keeps wide unsigned CRC arithmetic and uses (short)crc < 0 only for the top bit.
+It crosses int, signed-short and unsigned-short available counters with
+masked/direct shifts. All preserve 9/29, none matches; size gaps are 14, 25,
+22, 7, 36 and 15 bytes. For int and signed-short counters the complete objects
+are raw-identical to corresponding unsigned CRC >> 15 cells. This demonstrates
+an underdetermined source idiom, not a uniquely recoverable CRC spelling.
+
+Driver: tools/v34_getbit_source.py, optionally --crc-top-study. Artifacts:
+build/v34-getbit-source/ and build/v34-getbit-crc-top/. The fixed existing
+bit-reader fixture covers refills, CRC, exhaustion, repeat recursion and
+primed input; no new fixture, fuzzing or mutation execution is needed to
+measure these rejected compiler cells. Direct-shift controls are compiler
+diagnostics, not an expansion of the reader's valid input contract.
+
+These five domains contain 44 compilation cells, including repeated raw
+baselines and equivalent spellings; they are not 44 independent hypotheses.
+No new exact function is recovered. Retained production objects remain
+unchanged from F11532: 853/1852 exact names and 82,921 exact bytes. This closes
+these specific source families, not the original inline profile or V34 byte
+recovery as a whole. A fresh investigation needs a new observable live-graph
+or source-boundary discriminator rather than another closest-size spelling.

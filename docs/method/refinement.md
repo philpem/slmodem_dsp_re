@@ -1975,3 +1975,24 @@ signedness and assignment placement yields nine distinct objects, none exact,
 and the nearest body retains live copy/scheduling differences. Record the
 whole-tree set and partial-link losses as well as the local size. See
 [the power study](../v34-small-rtl.md) for fixed probes and the closed domain.
+
+
+### Count calls only after accounting for tail sharing
+
+A relocation count is a static code-layout measurement, not a count of source
+calls. In probeselect, expanding six bit-reversal packing helpers gives an
+identical full object; -fno-crossjumping raises 14 reversal calls to 19, past
+the blob's 16, and costs two exact helpers. F11533 corrects F11526's proposed
+open-coded-versus-call interpretation. Preserve that historical observation,
+but do not carry its untested source inference into a new reconstruction.
+
+Counter width and signedness must be checked at each use, not selected for
+nearest size. The bit reader's wide CRC with an unsigned top-bit shift and a
+signed-short top-bit test compiles identically under the period compiler;
+a signed-short arithmetic carrier introduces a narrowing absent from the
+blob. Likewise, final-rate candidates can recover a frame/comparison shape
+while retaining different live loads, copies and branch sharing. A two-byte
+size gap is not stronger evidence than those discrepancies. Close the bounded
+domain without adopting a candidate when the predicted source mechanism does
+not reproduce it. [The study](../v34-small-rtl.md) records complete-TU controls,
+exact losses and the stopping conditions; none demonstrates a global ceiling.

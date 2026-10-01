@@ -132338,3 +132338,41 @@ passes 105 checks across 15 cases. Comparison build: 300/300 objects, zero
 failures. Refcheck: 14,218 references and 2,661 finding headings, clean; all
 10,038 anchors across 285 suites are clean. No fuzzing, mutation execution
 or mutation verdict refresh was performed. (2026-10-01)
+
+
+## F11533. V.34 packing call counts reflect tail sharing; final-rate and bit-reader source domains yield no new exact helper
+
+At d67e4042, 44 complete-TU compilation cells across five bounded domains
+reproduce raw baselines, preserve all function symbols and 55 global bindings,
+and yield no new exact function. Repeated baselines/equivalent spellings are
+included in that denominator; this is not 44 independent hypotheses.
+
+F11526's probeselect bitreverse count 16/14 does not establish authored open
+coding. Current source already calls the helper. Expanding all six packing
+sites leaves the whole object identical. Diagnostic -fno-crossjumping raises
+reversal calls 14 -> 19, overshooting the blob's 16, changes 41 bodies and
+loses dftnlinitSignalBins and preempindex (9 -> 7/29 exact). The failed initial
+five-site generator is preserved separately and excluded from accepted results.
+
+Sixteen final-rate source cells cross output addressing, input caching, decoded
+code width and dispatch shape. Six additional carrier cells test the early
+Boolean versus arm-local byte/word tests. None matches. Certain first-domain
+cells lose exact helpers; the second domain preserves 9/29 throughout.
+Recovering comparison width/frame shape or a two-byte size gap does not recover
+the live graph.
+
+Eight bit-reader source cells cross counters, shift masking and CRC carrier.
+Six final controls keep wide CRC arithmetic but cast only its top-bit test.
+All preserve 9/29, none matches. Wide arithmetic with crc >> 15 and with
+(short)crc < 0 gives identical complete objects for the corresponding int and
+signed-short counter cells. Signed-short CRC arithmetic instead introduces an
+extra narrowing after doubling. The original top-bit spelling is therefore
+underdetermined within this source family.
+
+No reconstruction source, option or fixture is adopted. Production exactness
+remains 853/1852 and 82,921 bytes from F11532. This is a bounded negative result,
+not proof of a byte-exactness ceiling. The replay tools record compiler/actual
+assembler identity, mandatory bug define, full inventories, changed bodies and
+exact gains/losses. See [the study](v34-small-rtl.md) and
+[playbook](method/refinement.md). No fuzzing or mutation execution is performed.
+(2026-10-01)
