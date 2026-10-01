@@ -132295,3 +132295,46 @@ Canonical whole-tree exactness rises 852 -> 853/1852, gaining only preempindex
 and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
 recovered-source exact helper. No fuzzing or mutation harness was run.
 (2026-10-01)
+
+## F11532. V.34 power-input reload restored from the object's data flow; fixed component probes distinguish caching, while nine owner/carrier controls remain non-exact
+
+The blob's settxlevel stores the first reduction at 0x62585 and reloads mp[0]
+at 0x62591. Our source cached both input fields. Both observed modem callers
+use +0xa9dc, disjoint from the +0x25dc output; this is not a modem-reachable
+alias defect claim. Direct MP expressions recover the measured source data
+flow without register constraints or compiler-profile changes.
+
+Five fixed words cross received-record, separate-short and actual output-short
+input layouts. The two disjoint controls pass 35 checks each under either
+source. The explicitly exploratory component alias disagrees on three of five
+words under cached source (12/44 checks fail) and passes all 35 checks under
+direct reads. Input 0x20 distinguishes reduction 4 from the blob's 7, 0x04
+3 from 0, and 0xe0 7 from 10; scales follow. Compatible short accesses and
+fully seeded dependencies make this an observable component probe, not proof
+of protocol reachability. It is optional through V34_POWER_ALIAS, leaving the
+normal-message fixtures and their domain unchanged.
+
+Two complete-TU reload controls reproduce the raw baseline and preserve all
+55 globals/bindings and 9/29 exact functions. Only settxlevel changes. The
+adopted whole object raw-equals the direct-read candidate; both power bodies
+remain 448 bytes against the blob's 466. A further eight-cell owner/carrier/
+assignment cross plus baseline emits nine distinct objects, all preserving
+the function inventory/bindings and exact names, with no exact hit. Late
+signed extension changes the live graph but introduces copies absent from the
+blob. Nearest gaps of one byte are not dead-register-only differences. No
+owner migration or carrier rewrite is adopted.
+
+The canonical exact set remains 853/1852 and 82,921 exact bytes. Complete
+300-object partial links in the same inferred input order remain DIFFERENT
+under the strict gate (exit 1); positioned equality declines 68,634 -> 68,629
+of 943,398 bytes while exact section, relocation and symbol records remain
+unchanged. No aggregate-convergence gain is claimed. The study preserves the
+invalid generator and fixture-prediction attempts separately, the corrected
+controls, actual compiler/assembler commands and all changed bodies:
+[power study](v34-small-rtl.md), tools/v34_power_reload.py and
+tools/v34_power_carrier.py. Eight metadata anchors are retargeted. Final make phase with all 385 non-fuzz
+fixtures selected passes 385/0 and the structural boundary; the optional probe
+passes 105 checks across 15 cases. Comparison build: 300/300 objects, zero
+failures. Refcheck: 14,218 references and 2,661 finding headings, clean; all
+10,038 anchors across 285 suites are clean. No fuzzing, mutation execution
+or mutation verdict refresh was performed. (2026-10-01)

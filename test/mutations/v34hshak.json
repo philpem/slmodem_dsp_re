@@ -380,38 +380,38 @@
  },
  {
   "label": "txlevel: the reduction field is bits 4..6",
-  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 4) & 7), 3);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is four bits",
-  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 0xf), 4);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is not reversed",
-  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->tx_pwr_reduction = (short)((w >> 5) & 7);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)(((unsigned short)mp[0] >> 5) & 7);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition field is bits 1..3",
-  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\textra = (short)bitreverse((unsigned short)((w >> 1) & 7), 3);",
+  "find": "\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);",
+  "replace": "\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 1) & 7), 3);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition field is not reversed",
-  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\textra = (short)((w >> 2) & 7);",
+  "find": "\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);",
+  "replace": "\textra = (short)(((unsigned short)mp[0] >> 2) & 7);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the two fields are swapped",
-  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);",
   "fn": "settxlevel"
  },
  {
@@ -422,8 +422,8 @@
  },
  {
   "label": "txlevel: the addition is clamped before the reversal",
-  "find": "\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\tif (extra > 3)\n\t\textra = 3;",
-  "replace": "\t{\n\t\tshort raw = (short)((w >> 2) & 7);\n\n\t\tif (raw > 3)\n\t\t\traw = 3;\n\t\textra = (short)bitreverse((unsigned short)raw, 3);\n\t}",
+  "find": "\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);\n\tif (extra > 3)\n\t\textra = 3;",
+  "replace": "\t{\n\t\tshort raw = (short)(((unsigned short)mp[0] >> 2) & 7);\n\n\t\tif (raw > 3)\n\t\t\traw = 3;\n\t\textra = (short)bitreverse((unsigned short)raw, 3);\n\t}",
   "fn": "settxlevel"
  },
  {
@@ -440,8 +440,8 @@
  },
  {
   "label": "txlevel: the MP short is read from index 1",
-  "find": "\tunsigned w = (unsigned short)mp[0];",
-  "replace": "\tunsigned w = (unsigned short)mp[1];",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[1] >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)(((unsigned short)mp[1] >> 2) & 7), 3);",
   "fn": "settxlevel"
  },
  {

@@ -1277,3 +1277,102 @@ new `t_fuzz` fixture is not run, and this is not a claim that the unrestricted
 finding headings, zero dangling or stale entries. All 10,038 anchors across
 285 suites remain clean. Logs are `/tmp/v34-rebase-phase.log`,
 `/tmp/v34-rebase-tc.log` and `/tmp/v34-rebase-byteident.log`.
+
+## Power-input reload: a source fidelity correction with no exact-count gain
+
+Follow-up to the pre-emphasis/wrapper work starts from landed master b57597e5.
+The blob writes the first decoded reduction at 0x62585 and reloads `mp[0]`
+at 0x62591 before decoding the additional reduction. Current source cached
+both fields from a single read. Both observed modem callers pass the received
+record at +0xa9dc, disjoint from the output field at +0x25dc. No modem alias
+reachability is asserted.
+
+The declared domain is recorded in
+[the issue](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936082208).
+An optional fixed probe in `t_v34hshak` uses five words (0x20, 0x80, 0x04,
+0xe0, 0xfc), three input layouts, and fully seeded PCM/configuration dependencies:
+
+| Input layout | Cached source | Direct-read source |
+| --- | --- | --- |
+| Normal received-message record | 35 checks pass | 35 checks pass |
+| Separate short | 35 checks pass | 35 checks pass |
+| Actual output short used as input, exploratory component alias | 12/44 checks fail; three of five cases disagree | 35 checks pass |
+
+For input 0x20, the cached source gives reduction 4 and the blob gives 7;
+for 0x04, the cached source gives 3 and the blob gives 0; for 0xe0, the cached
+source gives 7 and the blob gives 10. The resulting scale differs too. Two
+other alias words agree, providing negative controls. These are compatible
+short accesses at a seeded component boundary, explicitly not modem lifecycle
+evidence or proof of the intended received-message contract. The source
+correction is justified independently by the object's actual loads and stores;
+the optional probe demonstrates their consequence rather than establishing a
+new protocol input domain. Run after the period build with:
+
+```
+V34_POWER_ALIAS=1 build/period/t_v34hshak
+```
+
+A fixture expectation initially treated reversed additional reduction 4 as 1;
+the blob correctly clamps it to 3. The invalid prediction run is retained as
+`/tmp/v34-power-alias-invalid-prediction.log`, excluded from accepted results.
+The first copied compiler generator also selected preempindex instead of
+settxlevel and stopped at its source-count assertion; its baseline record is
+`build/v34-power-reload/invalid-generator-results.json`. No score from the
+failed source transform is interpreted. These apparatus errors do not justify
+any reconstruction change.
+
+`tools/v34_power_reload.py` replays two complete-TU cells. The unchanged control
+reproduces the original comparison object raw-byte-for-byte. Direct expression
+reads alter only settxlevel; all 55 globals/bindings and all 9/29 exact functions
+survive. Both power bodies remain 448 bytes against the blob's 466. The adopted
+whole object raw-equals the direct-read experimental object, SHA256
+84424f7d27fddfe8f66e3022ac5fae1291cd78964d9d48d84ffb7829a059427d.
+
+### Closing the carrier/owner hypothesis
+
+[The next declared domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5936171161)
+crosses genuine flat/prefix owner layout, signed/unsigned short reduction
+carrier, and assignment before/within the direction branch: eight variants
+plus an unchanged baseline. `tools/v34_power_carrier.py` reproduces the control,
+asserts the real field offsets and root extent, and emits nine distinct full
+objects. Every cell preserves the complete function inventory, all 55 global
+bindings and 9/29 exact names. No cell is byte-exact. Flat gaps are 18, 17, 15
+and 14 bytes; owner gaps are 2, 1, 1 and 2. Owner unsigned-before is 467 bytes,
+not the blob's 466. It postpones signed extension but introduces a zero-extended
+copy before the direction test; live copies and scheduling still differ.
+This closes the proposed carrier explanation in this domain. No owner/type
+migration, branch rewrite or scratch-register tuning is adopted.
+
+Artifacts: `build/v34-power-reload/`, `build/v34-power-carrier/`. The canonical
+whole-tree set remains **853/1852**, 82,921 exact bytes, identical to the
+pre-change set. This is a source data-flow correction, not a byte-exact gain.
+
+Complete before/after partial links use all 300 faithful period objects in
+identical derived order, substituting only the saved baseline V34hshak object
+for the before census. Positioned equal bytes decline **68,634 -> 68,629 of
+943,398**. Other aggregate dimensions are unchanged: 61 sections with exact
+contents, 70 section records, 1,025/18,317 relocation records, 394/2,907 symbol
+records, candidate NOBITS 2,812 against reference 2,836. Both strict comparisons
+remain **DIFFERENT (exit 1)**. The five-byte positional loss is retained in the
+record; this correction does not claim aggregate code/layout convergence.
+The comparator's original-TU attribution still reports its existing one
+name-only disagreement; inferred input order is not uniquely recovered original
+order. Reproduction driver and JSONs: `build/v34-power-partial/`.
+
+Eight existing mutation metadata entries were retargeted to direct reads;
+the index-1 entry still changes both reads. No mutation execution or verdict
+refresh was performed. The first phase run passed all 385 non-fuzz period
+fixtures but stopped at those eight detached anchors, correctly reporting a
+structural failure. The final gate is recorded below after metadata repair.
+
+Final validation after retargeting metadata: `make phase J=8` with all 385
+non-fuzz unit fixtures explicitly selected passes **385/0** and the structural
+boundary. The upstream t_fuzz fixture is excluded; this is not a claim about
+the unrestricted 386-test suite. The optional period alias probe passes all
+**105 checks over 15 fixed cases**. `make tc J=8` builds 300/300 objects, zero
+failures. Refcheck reports 14,218 references and 2,661 finding headings, zero
+dangling/stale entries; anchorcheck reports 10,038 entries across 285 suites,
+zero detached/non-unique anchors. Syntax checks for both new compiler tools
+and `git diff --check` pass. Logs: `/tmp/v34-power-phase-final.log`,
+`/tmp/v34-power-alias-after.log`, `/tmp/v34-power-tc.log`,
+`/tmp/v34-power-byteident.log` and `/tmp/v34-power-partial.log`.

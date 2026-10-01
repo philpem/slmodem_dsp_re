@@ -1955,3 +1955,23 @@ actual pointer path: an equalizer's decoder owner can be external, not the
 adjacent embedded decoder. Likewise, a callback slot is not the callback's code
 address, and a signed comparison cannot be inferred from an unsigned shared
 member declaration. Preserve these distinctions when replacing offset macros.
+
+### Read provenance across stores (V.34 power example)
+
+An input pointer can alias a real output field even when observed lifecycle
+callers pass disjoint buffers. Before caching two reads into one local, check
+whether an intervening store reaches a compatible input lvalue. In settxlevel,
+the blob reloads the MP word after its first power store. Direct reads recover
+that data flow without closing the function's remaining codegen gap.
+
+Separate the evidence: observed modem callers, fixed component probes, and
+exploratory aliases are different boundaries. Report positive controls and
+case/check denominators. Do not promote a synthetic alias to modem reachability,
+and do not change source merely to accommodate an impossible fixture. Here
+the original load/store ordering supplies independent source evidence.
+
+A closest-size owner variant is still insufficient: crossing short carrier
+signedness and assignment placement yields nine distinct objects, none exact,
+and the nearest body retains live copy/scheduling differences. Record the
+whole-tree set and partial-link losses as well as the local size. See
+[the power study](../v34-small-rtl.md) for fixed probes and the closed domain.

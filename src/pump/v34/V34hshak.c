@@ -2699,15 +2699,15 @@ settxlevel(void *objp, const short *mp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
-	unsigned w = (unsigned short)mp[0];
 	int scale = *(short *)(m + 0x25d4);
 	short extra;
 	short want;
 	short n;
 
-	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);
+	/* The second MP read follows this store, as in the object. */
+	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
 
-	extra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);
+	extra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);
 	if (extra > 3)
 		extra = 3;
 
