@@ -2377,9 +2377,13 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
  * THE TWO NIBBLES SWAP BY ROLE, exactly as `initdigital` swaps them
  * (v34shell.c:1568): `role == 0x65` puts the receive rate at bit 6 and the
  * transmit rate at bit 10, and any other value the other way round.  The
- * object open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a chain of
- * shifts and adds; the two forms agree over all 65,536 inputs and the call is
- * written here, which is finding F424's treatment of `getbit` at 67.
+ * object open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a branchless
+ * chain of shifts and `lea` doubles -- the Horner evaluation
+ * `((b6*2 + b7)*2 + b8)*2 + b9` -- and NOT a call to the `bitreverse` symbol,
+ * which is why this site never appears in the object's call census.  The
+ * open-coding is reproduced here, in the two-cap-nibble block below (finding
+ * F11525): the compiler would otherwise keep a `bitreverse` call out-of-line
+ * (that is the only path), so an explicit call is what the object never had.
  *
  * AND THE UPSTREAM CAP IS APPLIED LAST.  If the nibble just written asks for
  * more than `VPcmV34GetMaxUpstreamRateIndex` allows, the four bits are
@@ -2564,15 +2568,17 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	cap = VPcmV34GetMaxUpstreamRateIndex(o);
 	if (o->role == 0x65) {
 		/* 0x677a8 */
-		v = bitreverse((unsigned short)
-			       (((unsigned)(unsigned short)rec[0] >> 10) & 0xf),
-			       4);
+		v = ((((((unsigned)(unsigned short)rec[0] >> 10) & 1) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 11) & 1)) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 12) & 1)) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 13) & 1));
 		mask = ~0x400;
 	} else {
 		/* 0x6346b */
-		v = bitreverse((unsigned short)
-			       (((unsigned)(unsigned short)rec[0] >> 6) & 0xf),
-			       4);
+		v = ((((((unsigned)(unsigned short)rec[0] >> 6) & 1) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 7) & 1)) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 8) & 1)) * 2
+		      + (((unsigned)(unsigned short)rec[0] >> 9) & 1));
 		mask = ~0x40;
 	}
 	if (v * 0x960 > cap) {

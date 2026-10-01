@@ -2669,8 +2669,8 @@
  },
  {
   "label": "66: the cap's nibble is read at bit 6 in the call role",
-  "find": "\t\tv = bitreverse((unsigned short)\n\t\t\t       (((unsigned)(unsigned short)rec[0] >> 10) & 0xf),\n\t\t\t       4);\n\t\tmask = ~0x400;",
-  "replace": "\t\tv = bitreverse((unsigned short)\n\t\t\t       (((unsigned)(unsigned short)rec[0] >> 6) & 0xf),\n\t\t\t       4);\n\t\tmask = ~0x400;",
+  "find": "\t\tv = ((((((unsigned)(unsigned short)rec[0] >> 10) & 1) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 11) & 1)) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 12) & 1)) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 13) & 1));\n\t\tmask = ~0x400;",
+  "replace": "\t\tv = ((((((unsigned)(unsigned short)rec[0] >> 6) & 1) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 7) & 1)) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 8) & 1)) * 2\n\t\t      + (((unsigned)(unsigned short)rec[0] >> 9) & 1));\n\t\tmask = ~0x400;",
   "fn": "tx1_ts_rates"
  },
  {

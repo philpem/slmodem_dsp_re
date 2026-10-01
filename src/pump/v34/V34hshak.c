@@ -3245,6 +3245,7 @@ struct t3m_frame {
 	 * something that is not a pointer or a state word.
 	 */
 	short			nbits;
+	short			tx;
 };
 
 #define T3M_I32(f, off)		(*(int *)((f)->m + (off)))
@@ -3624,7 +3625,7 @@ t3m_micro48(struct t3m_frame *f)
 	if (n == 0x78) {
 		/* 0x6c6e4.  An XOR of bit 0, not a store of a constant. */
 		T3M_U16(f, T3M_TOGGLE) ^= 1;
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -3641,11 +3642,11 @@ t3m_micro48(struct t3m_frame *f)
 		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
 		hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_RX_PHASE2_ANS);
 		T3M_U16(f, T3M_COUNTER) = 0;
-		t3m_txblock(f, V34HS_SILENCE);
+		f->tx = (V34HS_SILENCE);
 		return;
 	}
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -3711,7 +3712,7 @@ t3m_micro47(struct t3m_frame *f)
 	if ((short)n <= 0x5f) {
 		/* 0x6aaf9. */
 		T3M_U16(f, T3M_COUNTER) = n;
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -3723,7 +3724,7 @@ t3m_micro47(struct t3m_frame *f)
 	T3M_U16(f, T3M_COUNTER) = 0;
 	T3M_U16(f, T3M_TOGGLE) ^= 1;
 	hs_setstate(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -3757,7 +3758,7 @@ t3m_micro63(struct t3m_frame *f)
 		if ((short)n <= 0x0f) {
 			/* 0x6d230, and %ecx still holds TONE_AB. */
 			T3M_U16(f, T3M_COUNTER) = n;
-			t3m_txblock(f, tx);
+			f->tx = (tx);
 			return;
 		}
 
@@ -3780,8 +3781,7 @@ t3m_micro63(struct t3m_frame *f)
 			hs_setstate(f->obj, V34HS_MICROSTATE_OFF,
 				    V34HS_DET_SYNC);
 			f->obj->fsk.nbits = 0;
-			t3m_txblock(f,
-				    (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 			return;
 		}
 
@@ -3793,19 +3793,19 @@ t3m_micro63(struct t3m_frame *f)
 		hs_setstate(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);
 		T3M_U16(f, T3M_COUNTER) =
 			f->obj->ptc == 0x30 ? 0x1e : 0x96;
-		t3m_txblock(f, V34HS_SILENCE);
+		f->tx = (V34HS_SILENCE);
 		return;
 	}
 
 	if (tx != V34HS_SILENCE) {			/* 0x6593a */
-		t3m_txblock(f, tx);
+		f->tx = (tx);
 		return;
 	}
 
 	/* 0x65947, a SIGNED byte, and 0x65958, a SIGNED int against 0x240. */
 	if ((signed char)f->m[T3M_FABFF] <= 0
 	    || T3M_I32(f, T3M_F0240) <= 0x240) {
-		t3m_txblock(f, tx);
+		f->tx = (tx);
 		return;
 	}
 
@@ -3820,7 +3820,7 @@ t3m_micro63(struct t3m_frame *f)
 	 * `t_v34hshak.c` already sweeps over every rate and carrier.
 	 */
 	v34setuptxmit(f->obj);
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -3890,7 +3890,7 @@ t3m_micro49(struct t3m_frame *f)
 	 * it does not, but the object reads it again and so does this.
 	 */
 	if ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -3898,7 +3898,7 @@ t3m_micro49(struct t3m_frame *f)
 	f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 
 	if ((f->obj->fsk.sr & 1) == 0) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -3952,7 +3952,7 @@ t3m_micro49(struct t3m_frame *f)
 	/* 0x66b47, and 0x66b55 reads +0x3596 for the exit. */
 	*(short *)((unsigned char *)f->rx + T3M_RX_F264) = f->rx->agc_gain;
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -4020,12 +4020,12 @@ t3m_micro50(struct t3m_frame *f)
 	 */
 	/* 0x66724. */
 	if ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
 	if ((f->obj->fsk.sr & 1) == 0) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -4043,7 +4043,7 @@ t3m_micro50(struct t3m_frame *f)
 	f->rx->flags = (unsigned short)(f->rx->flags
 					& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -4084,7 +4084,7 @@ t3m_micro51(struct t3m_frame *f)
 	T3M_U16(f, T3M_COUNTER) = n;
 
 	if (n != 0x2a) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -4235,7 +4235,7 @@ t3m_micro51(struct t3m_frame *f)
 				     (unsigned)f->rx->flags,
 				     (int)f->rx->agc_gain);
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -4357,7 +4357,7 @@ t3m_micro59(struct t3m_frame *f)
 
 			f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);
 			v34handshakinit(f->obj, 1);
-			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 			return;
 		}
 
@@ -4441,7 +4441,7 @@ t3m_micro59(struct t3m_frame *f)
 					     "info0 is initialized in " "RX_PHASE2_CALL\n");
 	}
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -4567,7 +4567,7 @@ t3m_micro55(struct t3m_frame *f)
 					     "info0 is initialized in " "TX_PHASE1_CALL\n");
 	}
 
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 /*
@@ -4676,7 +4676,7 @@ t3m_micro58(struct t3m_frame *f)
 				f->rx->agc_gain;
 			f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 
-			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+			f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 			return;
 		}
 	}
@@ -4726,7 +4726,7 @@ t3m_micro58(struct t3m_frame *f)
 	/* 0x6608b, 0x6609d and 0x660ab. */
 	if (c <= 0x4b0 || T3M_U16(f, T3M_F3588) != 0
 	    || (unsigned short)f->obj->fsk.sr == 0) {
-		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 		return;
 	}
 
@@ -4736,7 +4736,7 @@ t3m_micro58(struct t3m_frame *f)
 	 */
 	/* 0x660b9. */
 	t3m_errrec_reset(f);
-	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
 static unsigned char
@@ -9445,34 +9445,34 @@ v34handshak(void *vobj)
 	case V34HS_TX_PHASE2_ANS:	/* 47, and 56 is the same address */
 	case V34HS_TX_PHASE2_CALL:	/* 56 */
 		t3m_micro47(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_TX_PHASE3_ANS:	/* 48 */
 		t3m_micro48(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_RX_PHASE1_ANS:	/* 49 */
 		t3m_micro49(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_RX_PHASE2_ANS:	/* 50 */
 		t3m_micro50(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_TX_L1:		/* 51 */
 		t3m_micro51(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_TX_PHASE1_CALL:	/* 55 */
 		t3m_micro55(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_RX_PHASE1_CALL:	/* 58 */
 		t3m_micro58(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_RX_PHASE2_CALL:	/* 59 */
 		t3m_micro59(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_RX_PHASE3_CALL:
 		t3c_micro_rx_phase3_call(obj);
 		return;
 	case V34HS_INFODONE:		/* 63 */
 		t3m_micro63(&frame);
-		return;
+		goto micro_txblock;
 	case V34HS_MOH_TONE:
 		t3c_micro_moh_tone(obj);
 		return;
@@ -9514,9 +9514,13 @@ v34handshak(void *vobj)
 	case V34HS_RX_RETRAIN_ANSWER:	/* 76 */
 	case V34HS_TX_RETRAIN_ANS:	/* 77 */
 	case V34HS_JaTXMIT:		/* 78 */
-		t3c_txblock(obj);
-		return;
+		frame.tx = (short)hs_get(obj, HS_TXSTATE);
+		goto micro_txblock;
 	}
+
+	return;
+micro_txblock:
+	t3m_txblock(&frame, frame.tx);
 }
 
 /*

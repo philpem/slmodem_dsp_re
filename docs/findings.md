@@ -130734,3 +130734,1033 @@ mis-armed**.  `refcheck` 14177 references, 0 dangling / 0 stale / 0 held;
 only change is this finding and the branch is findings-only; `partialcmp` and
 `byteident` are consequently the F11510 baselines (positioned 68,381/943,398;
 grade 0 844/1852, 0-or-1 895/1852) and are not re-run here.  (2026-09-30)
+
+## F11513. The `#define ALWAYS_INLINE __attribute__((always_inline))` shorthand is byte-identical to the direct attribute, and writing the shared table-2 dispatch ONCE reproduces the object's 3 indirect jumps (from 25) but not its size
+
+The owner's clarification of F11512's falsified "macro" hypothesis named two
+tests: the `#define ALWAYS_INLINE __attribute__((always_inline))` shorthand
+(the idiom meant, not a body macro), and F11512's "best remaining lead" --
+write the shared tail ONCE in source so the arms jump to one block and no
+cross-jumping is required.  Both were run as bounded, enumerated experiments.
+**The shorthand is a textual tie for the direct attribute, and the
+shared-dispatch restructure is the mechanism that produces the object's three
+indirect jumps -- but it makes the function shorter, not the object, so
+nothing is adopted.**
+
+**RIG, VALIDATED BEFORE ANY CELL WAS READ.**  `gcc` 3.4.2-r2 (Gentoo) and GNU
+as 2.15.92.0.2 in
+`ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`; one compile of
+`src/pump/v34/V34hshak.c` with the exact period flags reproduces the committed
+`build/tc_out` object BYTE FOR BYTE (md5 `4269db6f8b8dd64f2545c46de910b08a`
+both).  Blob `v34handshak` **12,199 insns / 61,541 B / 3 indirect jumps**;
+retained ours **6,469 B / 1,275 insns / 55,072 bytes differ / 2 indirect
+jumps**.  Exact command per object:
+
+    gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+        -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
+        -Iinclude -D__SIZEOF_POINTER__=4 \
+        -include tools/toolchain/period_compat.h [extra] \
+        -o /out/src_pump_v34_V34hshak.c.o src/pump/v34/V34hshak.c
+
+`--param localonly` is F11509's whole-tree-neutral set: `--param
+inline-unit-growth=100000 --param max-inline-insns-auto=100 --param
+max-inline-insns-single=1000000 --param large-function-insns=10000000 --param
+large-function-growth=100000`.
+
+### Task 1 -- the `#define`-attribute form is the direct attribute
+
+**DOMAIN.**  Target sets: (i) the seven stragglers `t3m_txblock`,
+`tx1_moh_hold`, `t41_after_guards`, `t41_marks_late`, `t46_info0_counting`,
+`t4_mp_sequence_end`, `t72_measure`; (ii) the whole closure -- every two-line
+`static` function definition in `V34hshak.c` and `v34hstx1_arms.h` except the
+recursive `getbit`.  Spellings: direct `__attribute__((always_inline))`;
+`#define ALWAYS_INLINE __attribute__((always_inline))`; direct `static inline`;
+`#define STATIC_INLINE static inline`.  Each spelling was applied at the SAME
+definition sites in both files, so the only difference between a direct and a
+macro cell is the preprocessor tokens.  Profiles: retained `-O3` and
+`localonly`.
+
+    cell                     target    profile    md5 (object)                     v34handshak ours
+    direct attribute         seven     retained   f651c80672ea881e346ff9a21b57ffa5  5,915 B 1,204 i  2 jmp*
+    `#define ALWAYS_INLINE`   seven     retained   f651c80672ea881e346ff9a21b57ffa5  5,915 B 1,204 i  2 jmp*   <- IDENTICAL
+    direct `static inline`   seven     retained   7ae90ed2bfe43ae4d9edd857662132f0  8,004 B 1,698 i  6 jmp*
+    `#define STATIC_INLINE`   seven     retained   7ae90ed2bfe43ae4d9edd857662132f0  8,004 B 1,698 i  6 jmp*   <- IDENTICAL
+    direct attribute         seven     localonly  2b254739e2520b864fcecbe50a134f69 69,675 B 14,567 i 25 jmp*
+    `#define ALWAYS_INLINE`   seven     localonly  2b254739e2520b864fcecbe50a134f69 69,675 B 14,567 i 25 jmp*   <- IDENTICAL
+    direct attribute         closure   retained   7ba87ef0f35f13ea40d9d912aa3a1f20 165,000 B 36,624 i 129 jmp*
+    `#define ALWAYS_INLINE`   closure   retained   7ba87ef0f35f13ea40d9d912aa3a1f20 165,000 B 36,624 i 129 jmp*  <- IDENTICAL
+
+**THE TIE IS EXACT AND TEXTUAL.**  Every direct/macro pair is a byte-identical
+object, so the shorthand is not a free variable.  The `always_inline` and
+`static inline` families are NOT each other (5,915 vs 8,004 B retained), which
+is the mechanism difference and not the spelling.  Both `always_inline` cells
+reproduce F11512's recorded figures (5,915/1,204 retained; 69,675/14,567
+localonly; 165,000/36,624 closure), so the rig is the same rig.
+
+**OWNER'S RULE.**  The `#define`-attribute and the direct attribute are a tie,
+so the `#define ALWAYS_INLINE __attribute__((always_inline))` spelling is the
+cleaner C and is the one that would be used **if any force-inlining were
+landed**.  None is: no cell reproduces the object (the closest is 2,204
+instructions short at localonly, and the closure cell is 2.7x over), so per
+F7782 nothing is adopted.  The tie is recorded, not selected for a score.
+
+### Task 2 -- the object's dispatch is ONE source-shared block, and writing it once gives the 3-jump shape
+
+**THE OBJECT DUPLICATES NOTHING.**  Read out of the blob's range
+`0x628f0..0x71955`: the table-2 dispatch is a single block at 0x62af1 whose
+`jmp *0x2ee8(,%eax,4)` is at 0x62b00, and it is reached by
+**124 jumps to 0x62af1, 1 fall-through into the indirect jump, and 9 jumps to
+the shared tail 0x62a40 -- 134 edges into one block, not 25 copies**.  `nm`
+defines no `t3m_txblock`/`t3c_txblock` symbol anywhere.  So the object's shared
+tails are a SOURCE fact (one block reached by jumps), exactly as F11512's lead
+predicted, and the fitted reconstruction's 25 `t3m_txblock` call sites are the
+thing that duplicates under forced inlining.
+
+**THE BOUNDED RESTRUCTURE.**  `struct t3m_frame` gains a `tx` field; the 25
+terminal `t3m_txblock(f, EXPR);` sites inside the nine `t3m_micro*` arms become
+`f->tx = (EXPR);`; the nine micro switch cases and the twenty-four-state shared
+block `goto micro_txblock` instead of returning; and **one**
+`t3m_txblock(&frame, frame.tx);` sits at that label.  The dispatch is now
+written once in `v34handshak`'s own translation unit.  `make -j1 J=3 period`
+on the restructured tree: **385 passed / 0 failed**, so the deferral is
+behaviourally equivalent.
+
+    cell (single TU, gcc 3.4.2-r2)              v34handshak ours      blob
+    retained baseline                           6,469 B 1,275 i  2 jmp*    12,199 i
+    retained + hoist                            7,108 B 1,378 i  2 jmp*
+    localonly baseline (F11509/F11512)         50,095 B 9,891 i  2 jmp*
+    localonly + hoist                          50,218 B 9,835 i  2 jmp*
+    localonly + hoist + 7 `always_inline`      49,775 B 9,826 i  3 jmp*    3 jmp*   <- SHAPE MATCHES
+    localonly + seven `always_inline` (no hoist) 69,675 B 14,567 i 25 jmp*           <- F11512
+    localonly + hoist + whole closure`always_inline` 147,726 B 33,822 i 106 jmp*
+    blob                                       61,541 B 12,199 i 3 jmp*
+
+**THE MECHANISM IS CONFIRMED; THE SIZE IS NOT.**  Hoisting the single dispatch
+takes the indirect-jump count from **25 to 3 -- the object's own count** (F11512
+had 25, the object 3), which is the decisive measurement the lead predicted and
+which the body-macro form could not produce.  But the object's byte count sits
+BETWEEN the two regimes: hoist gives 49,775 B (11,766 SHORT of 61,541) while
+the 25-duplicate macro/`always_inline` form gives 69,675 B (8,134 OVER).  So the
+residual is no longer dispatch duplication, and F11511/F11512's "not a source
+gap" is corroborated from the other side: the missing ~11.8 KB is inlined body
+content the object has and no tested profile supplies without also duplicating
+something else (the whole-closure force-inline overshoots to 147,726 B).
+
+**WHOLE-TREE EXACT SET: 0 GAINS / 0 LOSSES IN EVERY CELL.**  Only
+`V34hshak.c` (and the arm header for the Task-1 closure cells) is edited, so the
+other 299 objects are byte-identical and the whole-tree delta equals this TU's.
+`byteident --list-exact` over the one-object tree gives the same four names --
+`dftfreqinit`, `dftRetrainDetInit`, `dftnlinitNoiseBins`, `dftnlinitSignalBins`
+-- in every cell; the two flag cells (`localonly`) are whole-tree exact-neutral
+per F11509.  `v34handshak` is not exact before or after.
+
+**VERDICT AND NON-ADOPTION.**  The owner's read of the object's shape is
+CORRECT and is now a measurement: the three indirect jumps are source-shared,
+and writing the dispatch once reproduces them.  It is not adopted because (i)
+under the retained `-O3` profile the hoist alone moves the target the wrong way
+(6,469 -> 7,108 B) -- the shape only appears under the `localonly` parameter
+set, a flag change this tree has declined whole-tree as a source fix; (ii) it
+does not reach byte identity, and per F7782 a nearer structural score with no
+byte preimage is not recovered source; (iii) landing it moves the 25 terminal
+call sites' mutation anchors.  The residual v34handshak gap remains issue #22's
+original-profile/inlining question, sharpened: it needs a middle inlining
+regime that inlines the closure's bodies but keeps the table-2 dispatch at ONE
+site.  The `#define ALWAYS_INLINE` tie is recorded as the cleaner spelling for
+whenever that regime is found.
+
+**NEXT DISCRIMINATING TEST.**  With the hoist (shared dispatch, 3 jumps) held,
+audit the remaining 11,766 B: which inlined bodies does the object have that
+`localonly` leaves out -- per-helper instruction counts at the object's own
+addresses, the F11511 method extended past the seven stragglers.  If no source
+form adds those bodies without a second dispatch copy, the gap is the original
+compiler profile and belongs to #22 and not to a source spelling.
+
+**GATES.**  The experiment edits no `src/` in the landed change and no test; the
+source edits were reverted.  The branch is findings-only.  (2026-09-30)
+
+## F11514. The `v34handshak` byte regression is the retained-`-O3` inline equilibrium, not the shared dispatch: two arms cross the single-caller threshold, the TU `.text` shrinks, and every bounded spelling leaves the object unreached
+
+F11513 said the hoist alone "moves the target the wrong way" under the retained
+profile (6,469 -> 7,108 B) and left the question open.  The owner asked for the
+byte regression to be looked at.  **It is not the shared dispatch, and it is
+not removable by a source spelling.**  Under retained `-O3` the table-2 switch
+was never duplicated -- it is the out-of-line `t3m_txblock` in both forms -- so
+the hoist's only effects are the arms' terminal store and a TU-wide inliner
+regime shift.  Measured, single TU, recovered Gentoo gcc 3.4.2-r2, the
+F11512/F11513 rig (baseline object md5 `4269db6f...` reproduced first).
+
+**THE OBJECT'S REGION, READ FIRST.**  `0x62ae3` `mov 0xc0(%esp),%edi` /
+`0x62aea` `movzwl 0x3596(%edi),%ecx` / `0x62af1` `movswl %cx,%eax; sub $0x5`;
+`cmp $0x45` / `0x62afa` `ja 62a40` / `0x62b00` `jmp *0x2ee8(,%eax,4)` -- one
+indirect jump, case bodies at `0x62b07`, `0x62b15`, `0x62b2f`, `0x62b45`, and
+the `ja` default is the shared tail at `0x62a40`.  F11513 counts 134 edges into
+that one block (124 jumps, 1 fall-through, 9 to the tail) and three indirect
+jumps in the whole 61,541 B function.  Our *retained* `t3m_txblock` is 873 B and
+**byte-identical between baseline and hoist**: the shared dispatch and tail were
+already one out-of-line function, so there is nothing for the hoist to collapse
+at this profile.
+
+**WHERE THE +639 B IS, BY CENSUS.**  `nm -S` local-text deltas between the
+baseline and hoisted objects:
+
+    v34handshak                 6,469 -> 7,108   (+639, +103 insns by --why)
+    t3m_micro50                 1,119 -> absent (inlined into v34handshak)
+    t3m_micro63                 1,175 -> absent (inlined into v34handshak)
+    t3m_micro49/51/58           1,160/1,642/1,672 -> 1,176/1,651/1,688
+    hs_setstate                 absent -> 268      (inlined in baseline)
+    v34tx1_dataxmit             absent -> 169      (inlined in baseline)
+    v34tx1_txmd                 absent -> 616      (inlined in baseline)
+    TU .text                    81,082 -> 80,538   (-544)
+
+A call-target census of `v34handshak` confirms it: 7 out-of-line `t3m_micro*`
+calls at baseline, 5 in the hoist (`t3m_micro50` and `t3m_micro63` gone); the
+mnemonic delta is dominated by `mov` +61, with compares and short branches
+spread over the absorbed arm bodies.  **The regression is therefore a
+TU-level inline-equilibrium shift**: replacing each arm's terminal
+`t3m_txblock(f, E)` with `f->tx = (E)` and adding a frame field moved two
+single-caller arms below GCC 3.4.2's inline threshold while three other bodies
+(`hs_setstate`, `v34tx1_dataxmit`, `v34tx1_txmd`) crossed the other way.  It is
+not a longer branch sequence, not the indirect-jump table, and not per-arm
+prologue/epilogue.  The whole TU's `.text` gets *smaller*; only the symbol grows.
+
+**BOUNDED SPELLING FAMILY (single TU, retained flags).**  Each cell scored
+`v34handshak` and the whole-tree exact set:
+
+    cell                                             v34handshak    jmp*  exact set
+    baseline control (duplicated terminal calls)     6,469 B 1,275   2     (control)
+    H  goto + `frame.tx` (LANDED)                    7,108 B 1,378   2     0 gain/0 loss
+    S  switch `break` + `frame.tx`                   7,108 B 1,378   2     0 gain/0 loss
+    F1 `frame.tx` typed `int`                        7,114 B 1,377   2     0 gain/0 loss
+    F2 `frame.tx` declared first                     7,108 B 1,378   2     0 gain/0 loss
+    R  arms `return short`, local `tx` (no frame)     7,003 B 1,370   2     0 gain/0 loss
+    localonly + hoist (F11513, flag cell)            50,218 B 9,835  2     0 gain/0 loss
+    localonly + hoist + 7 `always_inline` (F11513)   49,775 B 9,826  3     0 gain/0 loss
+    blob                                             61,541 B 12,199 3
+
+`S` is a textual no-op: `break` and `goto micro_txblock` compile to the same
+object, so that map is constant.  `F1`/`F2` move single digits.  `R` is the
+nearest only spelling at -105 B and it is still in the same regime -- `micro50`
+and `micro63` are inlined in it too -- while changing the arms' ABI from
+`void` to `short`, which is a larger departure from the object than the frame
+field.  No cell removes the regression or reaches the object, so per F7782
+nothing is adopted beyond the landed `H`.
+
+**WHAT IT MEANS.**  The regression is a real, profile-local cost of the
+retained `-O3` inliner, and it buys nothing at that profile because there was
+no duplicated dispatch to remove.  Under the profile the source is written for
+-- force-inline the closure -- the *same* source shortens `v34handshak` and
+gives the object's three indirect jumps (`localonly` + hoist: 50,095 -> 50,218;
++ the seven stragglers: 69,675 -> 49,775).  So the object's middle inlining
+regime (issue #22) is: **inline the closure bodies so table 2 is written once
+and needs no cross-jumping, while keeping the dispatch at one site** -- exactly
+the `localonly + hoist + seven always_inline` cell, which is 11,766 B short of
+the object and needs a whole-tree `--param` change this tree has declined as a
+source fix.  Until that profile is recovered, the faithful source costs 639
+symbol bytes under the retained flags and the tree keeps its exact set.
+
+**PARTIALCMP, ALL COLUMNS.**  `make -j1 J=1 partial-compare`:
+
+    column                    before(baseline)   after(hoist)
+    positioned bytes          68,381 / 943,398   68,400 / 943,398   (+19)
+    candidate delta           -30,424            -30,968            (-544)
+    exact relocations         1,025 / 18,317     1,019 / 18,317     (-6)
+    candidate relocations     18,216             18,187             (-29)
+    exact symbols             394 / 2,907        394 / 2,907
+    candidate symbols         2,983              2,984              (+1)
+    exact sections            70 / 92            70 / 92
+    ordered sections          63                 63
+    NOBITS                    2,836 / 2,812      2,836 / 2,812
+
+So the whole-tree *positioned* movement is +19 bytes, not +639: the symbol's
+growth is offset by the TU shrinking where the object has no bytes.
+
+**THE ANCHORS MOVED, THEY WERE NOT DROPPED.**  The 21 `v34hst3mid` anchors that
+ended on the rewritten terminal `t3m_txblock(f, E)` calls are re-pointed to
+`f->tx = (E)` with the mutated clause unchanged; `anchorcheck` 0 detached, 0
+non-unique, 0 vacuous, 0 re-pointed.
+
+**GATES.**  `make -j1 J=1 phase` period differential **385 passed / 0 failed**
+and phase boundary OK; `byteident` grade 0 **844/1852**, 0-or-1 **895/1852**,
+exact SET unchanged (0 gains / 0 losses); `compare.py --ratchet` OK (identical
+904, compared 1852); `anchorcheck` 285 suites / 10,038 mutations / 0 detached /
+0 non-unique; `refcheck` 14,179 references, 0 dangling; `git diff --check`
+clean.  (2026-09-30)
+
+## F11515. The aggressive inline profile is a whole-tree over-inlining loss, not a hidden gain: 39 of its 44 lost exact symbols are refuted by the blob's own sizes, and no per-file `V34hshak.c` profile reaches the object
+
+F11504 called the four aggressive inline parameters a "44 whole-tree exact
+symbol loss" and treated that as decisive.  The owner asked for both halves of
+that judgement to be re-tested object-first: (1) are those 44 only
+*accidentally* exact under the retained flags, so the aggressive profile might
+be closer to the original *globally*; and (2) was `src/pump/v34/V34hshak.c`
+compiled with its own per-file inline settings?  **The answer is no to both,
+and the retained profile stands.**  The loss is not a symbol-count artefact:
+the blob's own function sizes and call boundaries support retained for 42 of
+the 44, only 2 are a pure register-allocation bystander, and no per-file
+profile reaches `v34handshak` or gains a single exact symbol.
+
+**RIG, IDENTITY, BASELINE.**  GCC 3.4.2-r2 (Gentoo)
+`/usr/i386-pc-linux-gnu/gcc-bin/3.4/gcc`, assembler **GNU as 2.15.92.0.2**,
+image `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest` (the blob's own
+`.comment`).  Whole-tree builds through `tools/toolchain/period.mk` (one rule
+per object, real `-MMD` deps): **300 objects / 300 sources, 0 failed** per
+cell.  The per-object command is period.mk's own (no
+`-DDSPLIB_REPRODUCE_BUGS`, matching the `build/tc_out` authority; F11509
+measured that the define changes the `V34hshak` TU's md5 but not
+`v34handshak`'s size or call census):
+
+    gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+        -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
+        -Iinclude -D__SIZEOF_POINTER__=4 \
+        -include tools/toolchain/period_compat.h <TC_EXTRA> \
+        -o build/tc_out/src_pump_v34_V34hshak.c.o src/pump/v34/V34hshak.c
+
+Baseline `build/tc_out`: `byteident` grade 0 **844/1852**, 0-or-1
+**895/1852**, exact bytes **79,769/720,125**; `compare.py` **904** identical
+mnemonic sequences, total code **88.3%**.  The single-TU control reproduces
+the committed object byte for byte (md5 `4269db6f8b8dd64f2545c46de910b08a`),
+so every cell below is the same rig.
+
+**WHOLE-TREE CELLS (the aggressive profile is net-worse, not hidden-better).**
+
+    profile (300/300, 0 failed)       exact/1852  0-or-1  cmp    exact_bytes     compare-ident  total code
+    retained -O3 (build/tc_out)       844         895     1852   79,769/720,125  904            88.3%
+    p4  (F11504's four --param)       800         851     1844   71,232/715,203  860           134.1%
+    localonly (F11509's five --param) 844         895     1852   79,769/720,125  904            94.4%
+
+  * `p4` is **0 gains / 44 losses** and its denominator falls 1852 -> 1844:
+    **eight symbols the blob defines out-of-line are inlined out of
+    existence** -- `AnalyseDialString`, `ApplyBulkDelay`, `EchoCanceler`,
+    `GetGain`, `GetNextDigitAndReturnNextState`, `V34demodulate`,
+    `_Z14getMPrecvdBitsP12tagV34Object`, `bValidateEnergyValue`.  It also
+    reproduces **8,537 fewer exact bytes**, matches **44 fewer** mnemonic
+    sequences, and emits **134.1% of the blob's code**.  p4 does not "trade"
+    the target for the rest; it over-inlines and grows the tree.  This
+    independently reproduces F11504's 44-loss figure.
+  * `localonly` is whole-tree exact-neutral (0 gains / 0 losses) and
+    byte-neutral, reproducing F11509.  It is a **control**, not a recovery:
+    it gains no exact symbol and does not reach `v34handshak` (below).
+  * **A `DSPLIB_REPRODUCE_BUGS` control on BOTH sides gives the same delta.**
+    The define restores four deliberate bug reproductions and loses none
+    (retained 848/1852, exact bytes 82,072); with it, `p4` is **804/1844,
+    0 gains / 44 losses**, exact bytes 73,535, the same eight-symbol
+    denominator drop.  So the 44-loss result is not an artefact of the
+    no-define authority arm.
+
+**THE 44, CLASSIFIED FROM THEIR OWN OBJECTS.**  Each lost symbol's retained
+and p4 definitions were disassembled and compared directly
+(`byteident.body`/`verdict`/`alpha_why`) rather than by count:
+
+    class                               count  evidence
+    0  SIZE  -- body grew                39    median p4/retained size ratio 5.76;
+                                               17 grew >=10x, 26 >=3x, 9 <1.5x
+    1  BYTES -- same size, pure regalloc  2    alpha_why accepts the pair: only
+                                               register names differ
+    2  BYTES -- same size, real diff      3    mnemonic/operand selection differs
+
+  * **Class 0 is direct over-inlining, and the blob's own size refutes it.**
+    The clearest is `V90Phase3Demodulator::getDecision`: the blob is
+    **52 B** and retained is exact at 52 B -- a two-arm dispatcher that
+    `call`s `getV92Decision`/`getV90Decision` out-of-line (`0x258f0`,
+    `sub $0xc,%esp` then a `call`); p4 inlines a ~16 KB callee into it and
+    emits **16,427 B** (315x; the p4 object begins `sub $0xcc,%esp`).
+    `V90Phase4Modulator::generateSymbol` 45 -> 5,641 B (125x),
+    `TxHdxStartV17` 21 -> 1,486 B (71x), `V90Parameters::init` 63 -> 3,953 B
+    (63x) are the same shape.  Retained == the blob byte for byte; p4 is not
+    a re-shuffle of an accidental match -- it is a different function.
+  * **Class 1 is the only genuine "bystander" reading, and it is 2 of 44.**
+    `V92Phase4Modulator::recivedFirstRrn` and `detector_delete` change by
+    register renaming alone (same 30 and 47 instructions), the F11514
+    equilibrium effect: the allocator's choice moved, the call structure did
+    not.  Retained is still the exact one.
+  * **Class 2** (`V90Equalizer::enterChannelVerification`, `V90Demodulator`'s
+    C2 ctor, `V92ConvolutionEncoder::inverseMap`) is same-size with a
+    different instruction selected (`and` vs `lea` in `inverseMap`) -- again
+    retained == the blob.
+
+  Hypothesis (1) therefore survives for at most **2 of 44** symbols and is
+  refuted for the other 42: 39 are blob-size-refuted over-inlines and 3 are
+  instruction-selection differences.  The object gives no "compensating source
+  error" to name, and a p4 arm that gains nothing, drops eight symbols the
+  blob defines, and reproduces 8.5 KB less blob code is not the original
+  globally.
+
+**PER-FILE `V34hshak.c` FLAGS -- A BOUNDED FAMILY OF TEN, ALL NEGATIVE.**
+Each cell applied its profile to **only** `src/pump/v34/V34hshak.c`; the
+other 299 objects were copied byte-identical from retained, so only that TU's
+symbols can move (`byteident --list-exact` diffs the whole tree anyway).
+
+    cell (per-file, retained elsewhere)          v34handshak ours        exact set
+    ctl (retained)                               1,275 i  55,072 diff    844  (control)
+    p4                                           9,453 i  14,700 diff    844  (cmp 1851)
+    localonly                                    9,891 i  11,446 diff    844
+    -O2                                          1,108 i  56,233 diff    844
+    -O2 + p4                                     7,058 i  26,446 diff    844
+    -finline-limit=20000                         1,331 i  55,102 diff    844  (cmp 1851)
+    --param max-inline-insns-auto=20000          1,331 i  55,102 diff    844  (cmp 1851)
+    -finline-limit=2000                          1,509 i  54,249 diff    844
+    -fno-inline-functions                        1,120 i  56,190 diff    844
+    --param inline-unit-growth=100000            1,275 i  55,072 diff    844  (== ctl)
+
+  * **No per-file profile reaches the object.**  The best byte count is
+    `localonly` at **50,095 B** (`61,541 - 11,446`), still 11,446 bytes and
+    2,308 instructions short; the aggressive cell reaches only 46,841 B.  The
+    known single-TU figures of F11509/F11510 reproduce exactly
+    (p4 = 46,841 B, localonly = 50,095 B), so the rig is the same rig.
+  * **The exact set is unchanged in every cell -- 0 gains / 0 losses.**  The
+    file's own symbols were not exact before and are not after; p4 and
+    `-finline-limit=20000` additionally inline `ApplyBulkDelay` away
+    (denominator 1852 -> 1851), the same missing-symbol defect p4 shows
+    whole-tree.  A per-file flag that neither reproduces the target nor gains
+    an exact symbol is a **fit and is DECLINED** (F7782).
+  * **Is a per-file rule even consistent with the build?**  It is
+    *mechanically* possible and has one precedent: `period.mk:286` (and
+    `period_inner.sh:89`) special-case exactly `src/service/dcr.c` for
+    `TC_DCR_FLAGS` via a `$(filter ...)`.  A `V34hshak.c` rule would be the
+    same one-line filter.  But the object gives no evidence for it, and if the
+    original TU had used a different profile one of the ten cells should have
+    moved toward it; none did.
+
+**WHAT IT WOULD TAKE, AND THE SMALLEST ADOPTABLE CHANGE.**  Nothing here is
+adoptable.  p4 is a whole-tree regression (44 losses, 8 vanished symbols,
+134% code); `localonly` is exact-neutral but recovers nothing and stops 2,308
+instructions short of `v34handshak`; every per-file cell is a fit.  The
+retained `-O3` profile stays, and `v34handshak`'s residual remains issue #22's
+original-profile question, now sharpened from the other side: it needs a
+middle inlining regime that inlines the closure bodies while keeping the
+table-2 dispatch at one site (F11511/F11513), not a global `--param` set and
+not a per-file override.  The branch is findings-only; no `src/` and no test
+changes.
+
+**GATES.**  `make -j1 J=1 phase`: period differential **385 passed / 0
+failed**, phase boundary OK.  `byteident` grade 0 **844/1852**, 0-or-1
+**895/1852**, exact set unchanged.  `compare.py --ratchet` OK (identical 904,
+compared 1852).  `partialcmp` on the unchanged tree: positioned
+**68,381/943,398**, exact relocations **1,025/18,317**, exact symbols
+**394/2,907**, candidate symbols 2,983, exact sections **70/92** -- DIFFERENT,
+the expected census (identical to F11510's post-fix numbers, confirming master
+== the F11510 state).  `anchorcheck` **285 suites / 10,038 mutations / 0
+detached / 0 non-unique / 0 vacuous / 0 re-pointed**.  `refcheck` **14,177
+references, 0 dangling**.  `git diff --check` clean.  (2026-09-30)
+
+## F11516. Branch coverage now names its source CFG and missing measurements; the modern instrumented suite is not a passing equivalence gate
+
+At `4a1c18f2`, the handoff baseline was reproduced on the new machine:
+period **385 passed / 0 failed**; positional exact **844/1852**, five
+section-relocation unresolved, 46 register-allocation matches, grade 0-or-1
+**895/1852**, RELOC/BYTES/SIZE **2/79/876**. The modern coverage symbol tree
+reports **1792/1792** translated/drivable symbols referenced by fixtures,
+97.3% of blob text. Its 60 absent names are the previously recorded modern
+emission artifact, not new reconstruction work.
+
+`tools/branchcov.py`, exposed by `tools/debugcov.py --branches` and
+`make branchcov`, reads gcov JSON function/block/branch records. It joins
+only unique exact symbol names to the blob, retains each translation-unit
+instance, and reports unmatched/ambiguous names and missing runtime data.
+It refuses empty domains, missing notes, stale counters, and changed
+source/header/fixture/build-input fingerprints. The standalone report
+retains the associated differential run's separate verdict. It does **not**
+map source branches to blob instruction addresses: that mapping remains open.
+Optimisation and inlining make symbol correspondence insufficient to prove it.
+
+**Detector control.** A compiled two-arm integer function first reports
+**1/2** arms taken and then **2/2**, with the unexecuted block disappearing.
+Missing runtime data stays unknown, not zero executions. Five assertions pass
+in `python3 tools/branchcov.py --self-test`.
+
+**Measured source graph, GCC 13.3.0, gcov 13.3.0, binutils 2.42:** runtime data
+for **248/299** source TUs (assembly excluded); **1693/1852** unique blob
+names measured; **1713/1982** source function instances uniquely matched and
+measured, **269** unmatched and **0** ambiguous. Mapped source blocks executed
+**24075/25652**; branch arms taken **16265/18007**. The largest untaken-arm
+rows include `VPcmV34Progress` **240/325**, `V90Demodulator::progress`
+**201/303**, and `probeselect` **99/164**. These denominators describe the
+instrumented source graph, never the blob's graph or proved equivalence.
+
+**The instrumented differential stays red.** Of **385** expected fixtures,
+**345** pass, **13** return a declared nonzero result, **21** return an
+unexpected nonzero result, **5** are link-excused, and **1** is unbuilt without
+a declaration (`t_v90p4dperiod`, missing three `Descrambler<unsigned char,int>`
+methods). `t_queue` becomes linkable with instrumentation, then fails **52/340**
+checks in its signalling-NaN copy subtest. Coverage is still useful, but these
+are not successful differential measurements. The command exits nonzero and
+writes no successful portability count file. Build and per-fixture logs and
+verdicts live under `build-cov/`; `branches.json` retains the separate verdict.
+
+The scoped instrumented link mode accepts an available fixture without
+invalidating the ordinary modern link declaration. The default stale-entry
+check is unchanged. Three controls establish ordinary stale rejection,
+instrumented availability, and rejection of an unexplained link error.
+No source workaround, new allow-list entry, or tolerance was added.
+(2026-09-30)
+
+## F11517. A persistent period-guided V.90 differential target detects its planted counter change; its short Phase-3 input model plateaus at the seeds
+
+`make fuzz` now builds the 32-bit persistent driver in
+`test/fuzz/v90demprog.cpp`, sharing `t_v90demprog`'s constructed-child Phase-3
+fixture and normalized comparisons. Its 194-byte domain selects one of two
+session flavours, **1..4** calls of **48** samples, and signed fixed-point
+samples in **[-1,127/128]**. Allocation sizes and transition configuration are
+fixed. The receiver retains seeded fixture state and synthetic inactive peers:
+this is **synthetic component fidelity**, not public modem reachability.
+The normal fixture's two sessions and summary checks are preserved.
+
+`tools/fuzz_v90.py` records complete commands against `tc_out/.build-config`,
+uses the mandatory `DSPLIB_REPRODUCE_BUGS` define, and links both targets against
+the blob and period objects. One target is uninstrumented; the other adds GCC
+3.4 arc instrumentation only to `V90Demodulator.cpp`. **Every input executes
+in both.** A mismatch stops exploration, saves the input/results, and repeats
+standalone period replay. Persistent-only replay differences are distinguished
+from instrumentation-only differences. No mismatch is automatically tolerated
+or declared intentional. Build fingerprints and a per-output-directory lock
+prevent stale binaries or concurrent counter writers from giving plausible
+results. The controller preserves a current input before execution and imposes
+a per-case deadline, including when a target emits an incomplete output line.
+
+**Controls, all observed.** A/B/A uninstrumented cases pass with matching
+check/failure counts for repeated A; the three instrumented cases also pass.
+The period counter reset control gives identical complete vectors for repeated
+A, **23/635** counters hit, and a one-call B changes **21/635** counts.
+Three malformed frames exit 2 without a differential verdict. A planted
+partial-line/hanging process is stopped by the deadline. The parser checks
+GCC 3.4 record/header identity and rejects an empty counter domain.
+
+The isolated source copy changes `samplesInPhase += nofIn;` to
+`samplesInPhase = nofIn;` (the existing mutation-suite alternative).
+`two-call-counter.bin` catches it: **1 failure / 3937 checks**, receiver
+bytes **+56..+59** at input tag **0**. This is the **first** checkpoint, since
+the original fixture starts with a seeded counter; it is not evidence that a
+two-call lifecycle was required. The live reconstruction source was never
+mutated. Three regression seeds are stored in `test/fuzz/corpus/v90demprog/`.
+
+**Declared budget and result:** seed 1, three seeds plus 1000 generated cases,
+**1003 inputs / 26193938 checks** across both period targets, **0 divergences**.
+The union is **24/635 TU arc counters**, including **18/326** in `progress()`.
+These are instrumented counters, not every CFG edge. No generated input adds
+coverage beyond the seeds; the corpus remains three distinct inputs. The
+coverage-guided mechanism is running, but this sample-only short Phase-3 domain
+is insufficient for the missing state arms. **The 49 surviving mutations remain
+open.** The next work is a producer-driven lifecycle/input model for further
+arms, with fixture-validity evidence before extending the four-call bound or
+populating inactive peers. No tree-wide mutation retirement or equivalence
+proof is claimed. `docs/fuzzing.md` documents commands and scope.
+
+`make phase` passes: **385 period tests / 0 failures**, plus structural gates.
+No `src/` or `include/` change was made. (2026-09-30)
+
+## F11518. The historical three-jump handshake candidate still contains a fourth dispatch in an omitted helper; the next audit is a shared-exit source question
+
+A **single** historical control was reproduced, not a new flag search:
+F11513's `localonly` parameters, the landed hoist, and `always_inline` on
+`t72_measure`, `t3m_txblock`, `tx1_moh_hold`, `t41_after_guards`,
+`t46_info0_counting`, `t4_mp_sequence_end`, and `t41_marks_late`.
+Each definition was transformed exactly once in an isolated copy. Parameters:
+`inline-unit-growth=100000`, `max-inline-insns-auto=100`,
+`max-inline-insns-single=1000000`, `large-function-insns=10000000`, and
+`large-function-growth=100000`, on the recorded Gentoo GCC 3.4.2-r2 baseline
+with the mandatory reproduction define via `tools/experiment_toolchain.py`.
+
+**Controls before interpretation.** The initial comparison of a default-GNU89
+experiment with `period`'s GNU99 object was invalid and retained as such.
+An unchanged GNU99 control is byte-identical to the period object. The GNU89
+control matches all **63** authority function sizes, non-relocation bytes, and
+normalized relocation tuples; the canonical census is **56 exact / 7
+unresolved**, with those seven still unresolved. The reproduction define moves
+`dsplib_v34_blob_preemp` from BSS value 0 to DATA value 1, shifts `StateName`
+from data offset 0x200 to 0x220, adds 32 data bytes and removes four BSS bytes.
+Those differences are not an optimization finding.
+
+The candidate reproduces **49775 bytes / 9826 non-padding instructions /
+3 indirect jumps**. Raw disassembly has 9872 instructions; applying the
+existing padding predicate yields 9826, exactly the historical convention.
+The blob similarly has 12234 raw / **12199** non-padding instructions and
+**61541 bytes / 3 jumps**. The unmodified GNU89 function is **7108 bytes /
+1378 non-padding instructions**, whereas the GNU99 period one is **6501 /
+1302**. These compiler-dialect contexts must not be interchanged.
+
+**The new observation.** The candidate's remaining local helper calls are
+`t3c_txblock` once and `t46_chain_full` once, alongside the blob's retained
+`getbit` three times and `ApplyBulkDelay` twice. `t3c_txblock` is **1060 bytes /
+251 non-padding instructions** and contains another indirect table-2 jump at
+candidate address **0x48e0**, against `.rodata+0x470`. The parent's table-2
+copy is at **0x9881**, against `.rodata+0x770`; its other two indirect jumps
+are at 0x5513 and 0x6c91. Thus a three-jump **symbol** count does not establish
+one shared dispatch throughout the split handshake implementation: at least
+four relevant dispatches remain across the parent and its omitted helpers.
+`t46_chain_full` is **1899 bytes / 350 instructions**, with no indirect jump,
+and tail-jumps at **0x4d81** to `t3c_txblock`.
+
+Object-first `tools/dis.py` evidence bounds the corresponding blob chain head
+at **0x6adaf..0x6add0**, **6 instructions / 33 bytes**, then a shared dispatch
+tail at **0x6add0..0x6ade3**, **3 instructions / 19 bytes**, reaching **0x62af1**.
+These are bounded spans, not an exclusive allocation of the **11766-byte**
+function-size difference. Shared tails and absorbed callees make helper sizes
+non-additive. Source annotation validity also does not establish ownership:
+**873/873** distinct annotated instruction starts validate, while known
+interior address **0x628f5** is rejected. The lexical local closure has **135**
+of 141 static definitions; **75** carry address anchors and **60** do not.
+
+**Scope review / next discriminator:** examine a source form that joins the
+remaining `t3c` exits into the already-hoisted single dispatch, before assuming
+that forcing the two omitted bodies inline supplies missing code. Hold the
+historical control fixed and count relevant dispatches across helpers as well
+as the parent. This is an evidence-backed shared-exit hypothesis, not a flag
+matrix or a near-byte adoption. No source form was adopted; the F7782 recovery
+criterion was not met and no new exact-source claim is made. Reproducible local
+artifacts and complete compiler/assembler identity are in
+`build/frontier-v34-audit/{run.py,measure.py,manifest.json,measurement.json}`;
+invalid controls remain labelled there. Issue #22 remains open. (2026-09-30)
+
+## F11519. Sharing every terminal `t3c` exit removes the fourth reachable dispatch, but the exhausted four-cell domain has no byte preimage
+
+F11518's next discriminator was recorded in issue #22 before compilation. The
+declared domain crossed exactly two source forms — retained, and one audited
+shared-`t3c`-exit form — with two profiles: retained GNU89 flags, and the
+historical `localonly` parameters plus the original seven forced-inline
+definitions. All four cells used Gentoo GCC 3.4.2-r2, the complete baseline
+flags, and the mandatory `DSPLIB_REPRODUCE_BUGS` define. There was no threshold
+or spelling search.
+
+The source-family audit found **57** `t3c_txblock(obj)` sites. The exported
+`v34handshak_txblock` wrapper's immediate call stays. Fifty-one terminal calls
+inside static receive/microstate helpers are deferred; five direct calls in
+`v34handshak` and nine root-helper returns route to one label, which reads
+`HS_TXSTATE` into the existing frame and joins `micro_txblock`. Every replaced
+call is terminal after comments are removed; the special integer return from
+`t44_det_info_accept` remains propagated. The transform adds no global, field,
+signature, state word, or compiler flag. Its complete audit and generated
+sources are isolated under `build/frontier-v34-audit/shared-exit/`.
+
+| source / profile | `v34handshak` bytes | non-padding insns | reachable closure dispatches |
+| --- | ---: | ---: | ---: |
+| retained / retained | 7,108 | 1,378 | 3 |
+| retained / localonly+seven | 49,775 | 9,826 | 4 |
+| shared exits / retained | 6,839 | 1,352 | 3 |
+| shared exits / localonly+seven | 50,873 | 10,035 | 3 |
+| blob | 61,541 | 12,199 | 3 |
+
+Both unchanged controls reproduce their earlier objects byte for byte. The
+shared aggressive cell removes `t3c_txblock` from the reachable modem closure
+and leaves all three relevant indirect jumps inside `v34handshak`, establishing
+the predicted source-sharing mechanism. The exported standalone dispatch entry
+is preserved: `v34handshak_txblock` grows from a 9-byte wrapper to the 1,060-byte
+dispatch body, but it is not reachable from the modem closure. Counting only
+the parent had hidden this distinction in F11513.
+
+The full defined-global inventory is **55 symbols per cell: 28 T, 22 R, 5 D**.
+Every name and binding is preserved. All four cells retain the same four exact
+blob function names: `dftfreqinit`, `dftRetrainDetInit`,
+`dftnlinitNoiseBins`, and `dftnlinitSignalBins`; there are no gains or losses.
+The candidate remains **10,668 bytes / 2,164 non-padding instructions short**
+of the blob. Thus the fully enumerated family has zero target byte preimages.
+The shared-exit form is a mechanism control, not recovered source, and is not
+adopted under F7782.
+
+The initial smoke run covered only `t_v34hshak` and was explicitly insufficient.
+Both shared-source cells were then linked by replacing only the experimental TU
+in the period object set. A denominator check caught that `print-TESTS` lists
+only the **255 C fixtures**; the missing **130 C++ fixtures** were run separately
+from `print-CXXTESTS`. Results for each shared cell are **255/255 C plus 130/130
+C++ = 385/385 passed, 0 failed**, with per-fixture link and run logs retained.
+This proves behavioural equivalence over the current period suite, not source
+recovery.
+
+The residual call-boundary census supplies the next discriminator. The shared
+aggressive cell leaves two calls to `t46_chain_full`, whose body is 1,867 bytes,
+where the prior candidate left one 1,899-byte copy. It also calls the global
+`setupreceiver` twice while the blob calls it zero times: object-first spans at
+**0x64c04** and **0x6a0c8** inline its work and then call `rxinit` at
+**0x64c0e** and **0x6a0d2**. Correspondingly the candidate has one `rxinit`
+call against the blob's three, and six `detectorinit` calls against eight.
+Any next bounded source family therefore has to cross both the remaining local
+`t46_chain_full` boundary and the global `setupreceiver` inline boundary while
+preserving the exported `setupreceiver` symbol. Summing helper sizes still does
+not allocate the residual 10,668 bytes because inlining changes shared tails
+and callers. No further cells were run. (2026-09-30)
+
+## F11520. The two remaining evidenced inline boundaries explain most of the gap, but their exhausted four-cell family has no byte preimage
+
+F11519's discriminator was recorded in issue #22 before compilation. The
+shared-`t3c`-exit source and historical `localonly` plus seven forced-inline
+helpers were held fixed. The complete declared family crossed force-inlining
+`t46_chain_full` on/off with force-inlining the global `setupreceiver` on/off.
+Each on-cell changed only the definition attribute; the strong out-of-line
+`setupreceiver` export remained. All four cells compiled with Gentoo GCC
+3.4.2-r2, the complete period flags, GNU89 dialect, and the mandatory final
+`DSPLIB_REPRODUCE_BUGS` define.
+
+| `t46_chain_full` / `setupreceiver` | bytes | non-padding insns | closure dispatches |
+| --- | ---: | ---: | ---: |
+| off / off | 50,873 | 10,035 | 3 |
+| off / on | 52,695 | 10,351 | 3 |
+| on / off | 55,651 | 10,909 | 3 |
+| on / on | 57,426 | 11,225 | 3 |
+| blob | 61,541 | 12,199 | 3 |
+
+The off/off control reproduced F11519's object. `t46`-on removes both parent
+calls to that helper. `setupreceiver`-on removes both parent calls to the
+global while restoring the blob's three `rxinit` and eight `detectorinit`
+calls. Thus both object-first boundary predictions fired. Every cell preserves
+the same **55 defined globals: 28 T, 22 R, 5 D**, including `setupreceiver`,
+and the same four exact blob function names. The strongest cell remains
+**4,115 bytes / 974 non-padding instructions short**. The complete family has
+no target byte preimage and no source was adopted under F7782.
+
+Each of the four experimental objects was linked in place of only
+`V34hshak.o` and passed the complete period differential: **255/255 C plus
+130/130 C++ = 385/385, 0 failed per cell**. An initial runner invocation
+selected zero cells because it retained the preceding experiment's name
+filter; its empty denominator was rejected, the selector was corrected, and
+the reported four-cell run is the subsequent complete run. This is a harness
+correction, not an interpreted experimental result.
+
+Against the strongest cell, the remaining external-call count differences are
+now only `bitreverse` **6 versus 8**, `dsplibs_debug_printf` **262 versus 289**,
+`indicateJaTransmission` **2 versus 1**, `txmit` **16 versus 14**, and
+`v34handshakinit` **10 versus 11** (blob versus candidate). All other named
+call counts agree, including the two boundary families just tested. Those five
+differences bound the next object-first investigation; raw size alone does not
+justify another inline choice. Reproducible sources, objects, inventories,
+commands, compiler identity, and the complete gate log are under
+`build/frontier-v34-audit/two-boundary/`. (2026-09-30)
+
+## F11521. Disabling cross-jumping restores the blob's split Ja calls and reaches 60,910 bytes, but overshoots three other call families
+
+F11520 left two terminal source calls to `indicateJaTransmission` which the
+candidate merged into one, while the blob retains two calls at **0x64e52** and
+**0x68003** with distinct continuations. Issue #22 recorded a two-cell profile
+domain before compilation: hold the strongest F11520 source fixed, then cross
+the retained complete profile with that profile plus `-fno-crossjumping`.
+Both cells used Gentoo GCC 3.4.2-r2, GNU89, all established period flags, and
+the mandatory final `DSPLIB_REPRODUCE_BUGS` define. The retained control
+reproduced the saved F11520 object byte for byte.
+
+The prediction fires. The no-crossjumping cell restores **two**
+`indicateJaTransmission` calls and grows `v34handshak` from **57,426 bytes /
+11,225 non-padding instructions** to **60,910 / 11,848**, against the blob's
+**61,541 / 12,199**. All three cells retain three closure dispatches. This is
+the closest size control in the declared sequence, but it is still **631 bytes
+/ 351 instructions short**, not a byte preimage.
+
+The other call families reject a blanket profile conclusion. Against the blob,
+the no-crossjumping cell has `txmit` **17 versus 16**,
+`v34handshakinit` **13 versus 10**, `bitreverse` **8 versus 6**, and
+`dsplibs_debug_printf` **310 versus 262**. Thus suppressing every cross-jump
+restores the observed Ja split while preventing merges that the blob did make.
+It also loses `dftnlinitSignalBins` from the exact-name set, leaving three
+exact functions where the retained cell has four. Both cells preserve all
+**55 defined globals: 28 T, 22 R, 5 D**, with unchanged names and bindings.
+
+The changed cell passed the complete isolated period differential: **255/255 C
++ 130/130 C++ = 385/385, 0 failed**. It is a valid mechanism control, not
+recovered compiler provenance, and neither source nor profile is adopted under
+F7782. The result narrows the remaining problem to selective source-level tail
+sharing: the reconstructed source currently exposes some terminal paths to
+GCC's cross-jumper that the blob kept structurally distinct, while globally
+disabling the pass separates several paths the blob shared. Artifacts and the
+complete gate denominator are under `build/frontier-v34-audit/crossjump/`.
+(2026-09-30)
+
+## F11522. The transmit-helper interface collapses ten evidenced blob rejoin blocks to one value; selective tail sharing is primarily a lost-CFG hypothesis
+
+The retained reconstruction's per-sample transmit helpers contain **52**
+`return V34TX1_LOOP` sites. Forty already carry object addresses in their
+source comments, and those forty identify **ten distinct** loop-rejoin blocks:
+`0x629c8` (5 sites), `0x629cf` (3), `0x62d70` (3), `0x63941` (5),
+`0x63948` (4), `0x63da2` (6), `0x6409a` (4), `0x640a1` (5),
+`0x6431f` (5), and `0x64326` (2). Twelve returns remain unannotated. The
+shared header nevertheless defines `enum v34tx1_exit` with exactly one value,
+and `v34handshak` ignores every helper return. Its single C `while` bottom is
+therefore the only rejoin GCC sees.
+
+`v34tx1_trnseg4` is a bounded example. Its source comments distinguish four
+blob continuations, **0x629c8, 0x63948, 0x63da2 and 0x640a1**, including the
+two Ja arms whose calls the retained compiler merges. In the blob the V.90
+and K56flex calls remain distinct at 0x64e52 and 0x68003 and flow to different
+rejoins. The one-value helper interface erases that predecessor/successor
+structure before optimization. This is stronger and narrower than claiming
+that the original disabled cross-jumping: F11521 proves the compiler must
+still merge other tails.
+
+The likely reconstruction shape is a monolithic switch with direct
+`continue`/fall-through/goto paths, or an equivalent experimental carrier
+that gives helpers distinct return values and routes them to duplicated loop
+checks. The latter can preserve the testable helper decomposition without
+claiming that the original author wrote an enum. The first finite test should
+restore only `v34tx1_trnseg4`'s four evidenced rejoin classes under the retained
+profile and ask whether the two Ja calls separate without the global call-count
+overshoot of `-fno-crossjumping`. A whole-file ten-class rewrite is premature
+until that local prediction fires and the twelve unannotated returns are
+settled from the object.
+
+This cannot explain every remaining mismatch. `-fno-crossjumping` changes the
+Ja, `txmit`, `v34handshakinit`, and debug-call counts, but leaves `bitreverse`
+at **8** against the blob's **6**. Those two calls require a separate source-
+expression, helper-boundary, or inlining explanation. Missing and duplicated
+debug blocks, source ordering and fall-through, local-variable lifetimes and
+aliasing, and an unrecovered cross-jump threshold remain secondary hypotheses;
+the exact compiler exposes `-fcrossjumping` and `max-crossjump-edges`, but a
+global off control already over-separates the function. No new cell was
+compiled and no source form was adopted. (2026-09-30)
+
+## F11524. An anchor aligner maps `v34handshak`'s unmatched regions by content; the object's open-coded 4-bit reversal is a Horner expression, recovered to grade 1 but not adopted
+
+`bbalign.py`'s mnemonic aligner is defeated by the object's dominant shape: one
+side inlines everything the other keeps out-of-line, and `mov` scores against
+`mov` everywhere.  On the committed `v34handshak` it "aligns" 624 rows on
+nothing.  This entry adds **anchor mode** and uses it to name the source family
+behind the F11522 `bitreverse` lead.  **No `src/` or `include/` change is
+adopted**; the tool is apparatus and the lead is recorded.
+
+**THE TOOL.** `tools/bbalign.py --anchors SYMBOL [--ours OBJECT] [--min-insns N]
+[--focus TARGET] [--insns K]`, with `make bbalign-selftest` as its firing gate.
+An ANCHOR is content that survives scheduling and register allocation: the
+named GLOBAL a relocation calls (`R_386_PC32`) or addresses (`R_386_32`), the
+string a `.rodata.str` load reaches (the merge-section addend, as
+`relocscan.py` resolves it), and an indirect jump through a `.rodata` table.
+The two streams are aligned on the longest consistent anchor subsequence with
+`difflib.SequenceMatcher`, and the regions BETWEEN matched anchors are reported
+with their blob/ours address range and disassembly.  A region is `BLOB-ONLY`,
+`OURS-ONLY`, `DIFFERENT` (mnemonics differ), or `SAME-SHAPE` (mnemonics agree,
+operands/registers differ -- corresponding, not reported as unmatched).  The
+anchors still inside an unmatched region are printed, because they are what
+names the source family; a call-anchor census (blob/ours) is printed beside
+them, which reproduces F11520/F11522's call-boundary table from the same
+anchors.
+
+**DENOMINATOR, AND THE FIRING PROOF (`make bbalign-selftest`, exit 0).**
+
+    v34handshak vs itself   matched 1587 of 1587 anchors, 0 unmatched regions
+    FPM_SDM_init (register-only control)  27/27 insns, 1 SAME-SHAPE,
+                                           0 unmatched regions
+    v34handshak vs retained   blob 1587 / ours 183 anchors, matched 126;
+                               12234 vs 1387 instructions; 100 unmatched regions
+    v34handshak vs localonly  blob 1587 / ours 1520, matched 375;
+                               12234 vs 14456; 311 unmatched; bitreverse 6/8
+
+The second line is the NEGATIVE control and it is why the tool is usable:
+`FPM_SDM_init` differs from the tree only by a register renaming
+(`ebx`<->`esi`), and a classifier that called that an unmatched region would
+flood every real run.  It is classified `SAME-SHAPE`, and `--anchor-self-test`
+REFUSES to pass if it ever is not.  The first line is the exact control; the
+last two are the nonzero cross-object denominator, and `--ours` adds the
+`bitreverse 6/8` check as a hard one (F134, F2401).  The denominator is printed
+on every run, including the anchor counts on BOTH sides and the matched rate.
+
+**THE MAP.**  Retained committed candidate (12234 blob / 1387 ours insns):
+127 regions, `identical 19, same-shape 8, blob-only 17, ours-only 4, different
+79`; the large blob-only blocks are the inlined helpers, and their anchors name
+them -- 0x6851b..0x6b039 (2113 insns) carrying `V34SetINFO0aBits`, `dftupdate`
+and the `StateName` prints; 0x6d536..0x6e6c2 (861) carrying `detectorinit` and
+`c1200_`.  Localonly candidate (F11509's whole-tree-neutral aggressive
+profile, 12234 / 9374): 334 regions, `identical 51, same-shape 12, blob-only
+43, ours-only 16, different 212`.  Its call-anchor deltas are F11522's census:
+`dftupdate 10/9, indicateJaTransmission 2/1, bitreverse 6/8, detectorinit 8/6,
+rxinit 3/1, setupreceiver 0/2, txmit 16/14, v34handshakinit 10/8, dftenergy
+7/3, dsplibs_debug_printf 262/237`.  The clean families the map names:
+
+  * **blob-only 0x69b2e..0x6b61e (1325 insns), anchors `hsine1680`,
+    `hsine1920`, `dftupdate`, `StateName` prints** -- a receive/DFT-and-state
+    block the object inlines and the localonly profile does not.
+  * **ours-only 0xa4c1..0xb6f6 (918 insns), anchors `V34SetupModulator`,
+    `V34SetupDemodulator`, `V34SetINFO0aBits`** -- the F11509 setupreceiver
+    boundary, seen from the other side: we keep it out-of-line.
+  * **`tx1_ts_rates`'s region, blob 0x62f82..0x633d1 (233) against ours
+    0x5f20..0x6272 (194)**, which is where the `bitreverse` delta lives.
+
+The alignment is not perfect -- repeated generic anchors (`dsplibs_debug_printf`
+262 times) can pair positionally and split a corresponding block into a small
+`BLOB-ONLY` and a small `OURS-ONLY` -- so read the block size and the anchors,
+not a single region in isolation.  The call census and the large one-sided
+blocks are the trustworthy output.  `modulatevector` (820/736, 8 unmatched)
+and `receiver` (1010/914, 17 unmatched) were run for the denominator; the map
+is cheap and re-runnable.
+
+**THE SOURCE FAMILY, TESTED AND DECLINED UNDER F7782.**  F11522 left
+`bitreverse` at 8 against the blob's 6.  `tools/dis.py` shows the object
+open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a branchless chain:
+it extracts bit 6/7/8/9 (or 10..13) straight from the word, masks 2/1/1/1 and
+accumulates with `add`/`lea` -- the **Horner** evaluation
+`out = ((bit6*2 + bit7)*2 + bit8)*2 + bit9`, not a shift-and-OR of the nibble.
+Five spellings were compiled at 0x6346b/0x677a8 in the localonly profile with
+Gentoo GCC 3.4.2-r2, the complete period flags and the mandatory
+`DSPLIB_REPRODUCE_BUGS`:
+
+    1  for-loop mirroring bitreverse's body   GCC KEEPS A LOOP      rejected
+    2  hand-unrolled t>>=1; r=r*2+(t&1)       shifts a temp t       rejected
+    3  Horner over an `unsigned short t` temp  temp materialised     rejected
+    4  Horner over (rec[0]>>k)&1, signed       movswl/sar            rejected
+    5  Horner over ((unsigned)(unsigned short)rec[0]>>k)&1  => GRADE-1 MATCH
+
+Cell 5 emits the object's 15-instruction sequence mnemonic for mnemonic, same
+shifts (5/8/7/1), masks (2/1/1/1), adds and `lea`s, differing only in register
+names -- a grade-1 match on the block.  The call census moves `bitreverse 8 -> 6`,
+matching the object.  On the localonly `v34handshak` the change is
+**47,339 -> 47,367 bytes**, still 14,174 short of the blob's 61,541.  It is NOT
+adopted: no exact symbol is gained (the block lives in `tx1_ts_rates`, which is
+inlined into the symbol-less `v34tx1_trnseg4a` under the committed retained
+profile, so `byteident` cannot certify it), the candidate space is not
+exhausted (`* 2` vs `<< 1` and `+` vs `|` were not crossed), and adopting would
+rewrite the mutation anchor `66: the cap's nibble is read at bit 6 in the call
+role`.  The fact is recorded: **the object's two bit-reverse sites are an
+explicit Horner 4-bit reversal, and cell 5 is a grade-1 preimage for it** -- a
+next pass that wants the 8 -> 6 call census closed has the spelling and can
+certify it against a profile in which the block has a comparable symbol.
+
+**GATES.**  `make -j1 J=1 phase`: period differential **385 passed / 0 failed**,
+plus the structural boundary "all OK".  `byteident` unchanged at **844/1852
+grade 0, 895/1852 grade 0-or-1** (no `src/` change).  `anchorcheck` 285 suites,
+10038 mutations, **0 detached / 0 non-unique**; `refcheck` 14188 references,
+**0 dangling / 0 stale**; `git diff --check` clean.  F11523 is on
+`improve/v34-rejoin`, not here; this number is pinned to avoid the collision.
+(2026-09-30)
+
+## F11525. The object's two `bitreverse(...,4)` cap sites are author open-coded Horner evaluations, and the preimage is recovered and adopted
+
+F11522's `bitreverse` census left **8 against 6** and declined, calling it a
+separate source-expression hypothesis. A follow-up on the anchor aligner
+(`tools/bbalign.py --anchors`, the apparatus that maps an inline-heavy symbol
+by content anchors) pushed the lead as the only genuinely source-recoverable
+factoring difference, and this entry completes the domain and adopts.
+
+**THE OBJECT, FROM ITS OWN INSTRUCTIONS -- AUTHOR OPEN-CODED, NOT A CALL.** At
+`0x6346b` and `0x677a8` the blob reads four bits straight out of the record
+word and accumulates them as a branchless Horner: `movzwl` of the 16-bit word,
+`shr`/`and` extraction of bits 6/7/8/9 (or 10..13), then two `lea (... ,
+reg, 2)` doubles yielding `((b6*2 + b7)*2 + b8)*2 + b9`. There is **no `call`
+to a `bitreverse` symbol** at either site -- the only relocation in either block
+is the later `dsplibs_debug_level` reference -- and the whole `v34handshak`
+concerns exactly **6** `bitreverse` calls. Decision from the object, not from
+taste: the author wrote the reversal open-coded. The competing reading -- that
+GCC 3.4.2 turned an explicit `bitreverse` call into this -- is refuted by the
+same compiler's behaviour: our source already *called* `bitreverse` at these
+sites and the retained build kept both calls as relocations, so the compiler
+does not inline a cross-TU global here and the blob's open-coding cannot be a
+compiler unroll.
+
+**THE PREIMAGE, AND THE DOMAIN COMPLETED.** The Horner family was enumerated
+over `(unsigned)(unsigned short)rec[0]`, and the axis the F11522 tail left
+unsettled is closed:
+
+  * `((...>>k)&1)*2` with `+` (the Horner itself) -- **reproduces**: emits
+    `shr`/`and` extraction and `lea` scale-2 doubles exactly as the blob does.
+  * `((...>>k)&1)<<1` with `|` -- **excluded**: retains the bit as a shift and
+    emits `add %reg,%reg`/`or` instead of the `lea` doubles, a different shape
+    the blob does not have.
+  * the closed `b6*8 + b7*4 + b8*2 + b9` form -- collapses to the same
+    `lea`-scale-2 accumulation and is scoped out on the same shape.
+
+So the source family is categorically **not** a `bitreverse` call and **not** a
+shift/OR of the nibble; it is the explicit `lea`-doubled Horner over the two
+direct bit reads -- which is precisely what the object emits. Within that
+closed family the `*2`/`+` Horner is the recovered spelling (the `<<1`/`|`
+variant is a distinct codegen); that is the adopted source form.
+
+**ADOPTED.** The two `v = bitreverse(...~0xf...), 4)` calls in `tx1_ts_rates`
+were replaced by the open-coded Horner, and the comment describing the site
+was updated accordingly. The change is behaviourally inert -- the Horner
+equals `bitreverse(nibble, 4)` over all 65,536 inputs, as F424's treatment of
+`getbit` at 67 argued and as the object's own two role-swapped sites agree --
+so no test disagreement can arise from it, and no whole-tree mutation
+re-record was needed. The `bitreverse` call census in the reconstructed
+`V34hshak` object fell from **27 to 25** (the two removed calls are the two
+now-open-coded sites), and the block's instruction sequence after the change
+reproduced the blob's `0x6346b` sequence mnemonic for mnemonic, register names
+apart.
+
+**WHY NO EXACT SYMBOL IS GAINED.** Under the retained profile the block is
+inlined into the static `v34tx1_trnseg4a`, whose factoring the blob merges into
+its giant `v34handshak`; no comparable symbol exists to certify a grade-0
+byte-identical result. The change is a source-factoring correction, not a
+byte-identity gain -- and the whole-tree grade counts do not move.
+
+**GATES.** `make -j2 J=2 phase`: period differential **385 passed / 0 failed**,
+structural boundary "all OK". `byteident` unchanged at **844/1852 grade 0,
+895/1852 grade 0-or-1**. `anchorcheck` (with mutation `66: the cap's nibble is
+read at bit 6 in the call role` retargeted to the open-coded spelling): **0
+detached / 0 non-unique** across 285 suites, 10038 mutations. `refcheck` 14188
+references, **0 dangling / 0 stale**; `git diff --check` clean. (2026-09-30)
+## F11526. The anchor aligner applied broadly: the residue is consultant choice and #22 budget, not recoverable source factoring — no second clean bite beyond F11525
+
+The owner asked for F11524/F11525's method applied across the object, not just
+`v34handshak`.  This runs the anchor aligner (`tools/bbalign.py --anchors`) as a
+classifier over a curated battery and reports the recoverable-versus-budget
+map.  **No `src/` change was adopted** — the only clean source-recoverable
+factoring difference the object still carries is the one F11525 already closed,
+and the deeply-examined next lead was declined under F7782 for a measured
+reason.  This entry is the map and the record of that examination.
+
+**HOW THE BATTERY WAS DRAWN, AND THE RANKING.**  `byteident.py --json-out` plus
+a per-symbol `verdict()` pass tallied the live buckets: **844 EXACT, 876 SIZE,
+79 non-grade-1 BYTES, 46 grade 0-or-1, 2 RELOC, 5 UNRESOLVED** over 1852
+symbols.  The sweep targets are the non-exact ones; they were ranked by the
+task's own criteria: (a) `byteident --why` shows a bounded block-level
+difference (the non-grade-1 BYTES, same byte size, ascending differing-byte
+count), (b) the blob body carries content anchors a source difference could
+explain, (c) the largest (SIZE, descending).  The battery was the **58 smallest
+BYTES** plus the **50 largest SIZE** — 108 symbols.
+
+**THE CLASSIFIER.**  A programmatic `anchorscan` reuses `bbalign`'s own
+`stream`/`_align`/`_classify`/`_call_counts` (never a second implementation,
+7773) and, per symbol, reports the region census, the largest one-sided block
+sizes, and the call-anchor deltas.  `bbalign.py --anchor-self-test` already
+proves the aligner fires (F11524); the scan does not change that proof.
+
+**THE RESULT, IN THREE COLUMNS.**  Of the 108:
+
+* **~50 are grade 0-or-1 (register renaming only).**  In anchor mode these show
+  **0 unmatched regions** — the structure and every content anchor match, only
+  the named registers differ.  They are NOT source-factoring and NOT the #22
+  budget; they are lever-3/peephole2 (F7772, F7796, F7812) and reach grade 0 only
+  by emission order or the `-fno-peephole2`/`-mtune` cursor, never by a source
+  spelling.  Examples in the scan: `V90MP::evaluateInfo`, `FPM_SDM_init`,
+  `SDM_init`, `FloatFIR::reset`, `V90SpectralShaper::reset`.
+
+* **The large SIZE symbols are the #22 inlining budget.**  Their anchor map is
+  dominated by one-sided blocks that name the helper the blob inlined and we
+  kept out-of-line (or vice-versa): `v34handshak` 12234/1387 with 100 unmatched
+  regions and blob-only blocks carrying `dftupdate`/`detectorinit`/`hsine*`;
+  `V90Demodulator::progress` 1708/1826 (65 unmatched); `V90Equalizer::process`
+  2110/2078 (54); `V20Phase3Demodulator::getV90Decision`.  These are not
+  reachable by a source spelling — they are the profile/TU-partition question
+  that #22 and lever 14 hold.  This is the wall, not the front.
+
+* **The named open-coded-vs-call leads exist but are masked by the budget wall.**
+  The bitreverse-class signal — a named function whose blob/ours call count
+  differs — does appear across the object, and each sits inside a large
+  inline-heavy function: `bitreverse 16/14` in `probeselect` (here it is the
+  INVERSE of F11525: our count is LOWER, so *we* open-coded what the blob
+  calls), `VPcmV34InitiateRetrain 8/5` in `VPcmV34Progress`, `charFlip 8/7` in
+  `rebuildJMSequence`, `v8_mpyint 3/0`/`v8_cosread 3/1` in `v8handshak`,
+  `memmove 0/1` in `RcFixed_Resample`.  Each names a real factoring difference,
+  but the enclosing symbol is dozens of regions different from the budget, so —
+  exactly as F11525 recorded — a spelling fix moves the source but gains no
+  byte-identical symbol.  They are recorded preimages, not adoptions.
+
+**THE ONE CASE EXAMINED TO THE BYTE, AND WHY IT WAS DECLINED (F7782).**
+`V92Phase4Modulator::generateE2u` (blob 70 vs ours 69 instructions, 8 bytes):
+`bbalign --anchors` and `dis.py` show the ONLY difference is that at both
+stored-symbol reload sites the blob emits `movzwl 0x12(%esp),%eax; cwtl` where
+we emit `movswl 0x12(%esp),%eax`.  Both are byte-identical in EFFECT — a
+sign-extension of the low 16 bits — and the blob's two-instruction form is the
+i686 codegen for avoiding the partial-register-stall of a sign-extension
+(`movswl` writes only 16 bits and serialises against a prior `%eax` use).  This
+is a peephole/scheduling choice, not a source property: the reloaded local is a
+`signed short`, every spelling of `return sym` and every `sym` declaration
+emits one form or the other, and no exhausted enumeration yields a unique
+preimage.  **Recorded and declined** — closer bytes are not a grade.
+
+**WHY NO SECOND EXACT IS REACHABLE FROM THIS SWEEP.**  The same reason F11525
+gives, now measured across the object: the remaining non-exact symbols are
+either grade-1 register allocation (lever-3) or #22 inlining budget, and the
+few genuine source-factoring leads they contain are each a handful of bytes
+inside a function that is otherwise budget-differentiated, so they cannot be
+certified byte-identical by `byteident`.  The broad sweep is therefore a MAP,
+not a closure.
+
+**GATES.**  `make -j4 J=4 phase`: period differential **385 passed / 0 failed**,
+phase boundary "period differential and structural checks all OK".  `byteident`
+unchanged at **844/1852 grade 0, 895/1852 grade 0-or-1** (no `src/` change).
+`bbalign --anchor-self-test`, `anchorcheck` (285 suites, 10038 mutations, 0
+detached / 0 non-unique), `refcheck` (14192 references, 0 dangling) all clean.
+`git diff --check` clean.  (2026-10-01)
