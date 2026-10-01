@@ -132296,7 +132296,12 @@ and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
 recovered-source exact helper. No fuzzing or mutation harness was run.
 (2026-10-01)
 
-## F11532. `rebuildJMSequence`'s charFlip census is blob 7 / ours 8, not the "8/7" F11526 recorded, and the extra is an optimization clone of the function-acceptance list scan — not a recoverable source statement
+## F11538. `rebuildJMSequence`'s charFlip census is blob 7 / ours 8, not the "8/7" F11526 recorded, and the extra is an optimization clone of the function-acceptance list scan — not a recoverable source statement
+
+*(This finding was originally written as F11532; that label collided with the
+V34 power finding in PR #238, so it was renumbered to F11538 before
+integration.  Its decline has since been superseded by F11539, which recovers
+the extra call through a source restructure.)*
 
 Owner lead (F11526 follow-up): the anchor aligner reported `charFlip 8/7` in
 `rebuildJMSequence`.  That was already direction-inverted, and its own
@@ -132361,7 +132366,11 @@ Match" messages, and both lists are exercised.  No spelling enumeration yields
 a unique preimage for removing the clone (the statements are right; the
 control-flow shape that triggers the duplication is not separable from the
 budget divergence), so no source change is adopted on the "closer is not a
-grade" rule.
+grade" rule.  **That decline is superseded: F11539 shows the duplication IS
+recoverable, by moving the acceptance-list `w` reload so it feeds the shared
+acceptance list from a single flow rather than a distinct predecessor block,
+which returns the call count to seven and narrows the SIZE gap rather than
+widening it.**
 
 **MEASUREMENTS.**  Whole tree at this commit: `byteident` **853/1852 grade 0,
 904 grade 0-or-1** (no `src/` change, unchanged by this entry).  `bbalign
@@ -132375,3 +132384,76 @@ rebuildJMSequence`, `partialcmp`, `anchorcheck` (0 detached / 0 non-unique),
 per-function, whole-tree, census and gate verdicts reported above all read from
 a fresh `make tc` (300/300 objects, gcc 3.4.2) and a fresh phase run.
 (2026-10-01)
+
+## F11539. The `rebuildJMSequence` charFlip clone is recovered by restructuring the acceptance-list `w` reload into a single flow, returning the call census to blob 7 and narrowing the SIZE gap to 69 — adopted
+
+This is the V8 handoff from issue #22 (comment 5938337201,
+`tools/v8_call_layout.py`) after F11538's classification showed the extra call
+is created by the `.bbro` pass, and the flag-alone control traded the SIZE gap
+82 -> 361.  The handoff asked for one independently-supported source CFG
+hypothesis at the acceptance join, crossed across retained/no-reorder flags,
+and to stop that declared family only if the predicted graph was refuted.
+
+**THE INSPECTED ACCEPTANCE JOIN.**  In the unchanged full-TU `-da` build the
+`fn_list` acceptance `charFlip` is one block (block 32, original call UID 334)
+that is a three-way join.  Its predecessors are block 17 (the extension-
+incomplete path, which reloads `rx->word[i]` into `w`), block 28 (the direct-
+indication match `w == 0x109` not taken) and block 29 (the `cm->b2 & 0x02`
+index not set).  `.31.bbro` logs `Connection: 17 32 42`, `Fallthru edge
+17->32 redirected to 166`, `Duplicated bb 32 (created bb 166)`, creating the
+eighth `charFlip` call UID 2643 that feeds the `fn_list` +0x20 scan.  The
+object's equivalent block (**blob 0x764a3..0x764b5**, the `movzwl
+0xc54(%ebp,%ebx,2)` reload into the `charFlip` call at +0x866) is entered by
+five branches (0x75fac, 0x75fb5, 0x76514, 0x767b0, 0x767d8) yet is **not**
+duplicated, and it **reloads `rx->word[i]` inside the block itself**.
+
+**THE HYPOTHESIS, DERIVED FROM THE OBJECT LAYOUT.**  The blob's acceptance
+block always reloads `w` from `rx->word[i]` at its own entry, whatever path
+arrived.  Our source instead carried a separately-loaded `w`: the direct-
+indication path fed the shared `in_list(cm->fn_list, charFlip(w>>1))` with the
+loop-top `w`, while only the extension-incomplete path performed a reload
+(that reload was a distinct block 17, which is what became a `.bbro` trace
+start that produced the duplicate).  **H: the original read `w` for the
+acceptance lists from a single reload at the acceptance entry, so the
+acceptance `charFlip` is not fed by a separately-loaded predecessor block.**
+This is object-first (the object's own acceptance block reloads on entry) and
+not a nearest-size guess.
+
+**THE RESTRUCTURE, WHICH IS SEMANTICS-PRESERVING.**  In `src/v8/V8.c`, the
+`w = (unsigned short)rx->word[i]` statement removed from the extension-only
+position (the end of the `V8_CM_EXT1_PRESENT` arm) and placed once immediately
+before the `/* Or one the menu lists explicitly? */` acceptance-list test.  On
+the direct-indication path the loop index is unchanged, so the reload yields
+the same word; on the extension path the reload still reads the currently
+unmatched word.  Both the `in_list(..., charFlip(w>>1))` argument and the
+later `jm->word[n++] = (short)w` store use the same value as before.
+
+**THE FOUR CELLS** (mandatory `DSPLIB_REPRODUCE_BUGS`, complete-TU raw control,
+bindings, all bodies/differences, canonical exact gains/losses; the retained
+full TU raw-reproduces against the unchanged baseline cell, and all nine
+functions and nine globals are preserved — no gains, no losses, 1/9 exact):
+
+| source | flags | final charFlip calls | SIZE gap (bytes) | exact |
+|---|---|---|---|---|
+| current | retained | 8 | 82 | 1/9 |
+| current | -fno-reorder-blocks | 7 | **361** | 1/9 |
+| **hypothesis H** | **retained** | **7** | **69** | 1/9 |
+| hypothesis H | -fno-reorder-blocks | 7 | 377 | 1/9 |
+
+**DECISION: ADOPTED.**  The hypothesis reproduces the object's join under the
+retained production flags — seven `charFlip` calls and a **narrower** SIZE gap
+(82 -> 69), whereas the `-fno-reorder-blocks` flag alone returns seven calls
+but trades the gap to 361.  The prediction was not refuted, so the stop-on-
+refuted-family condition does not apply.  The flag is not adopted (it stays
+diagnostic-only); the source restructure is the recovery.  `byteident --why
+rebuildJMSequence` now reports SIZE, blob 748 / **ours 755**, 69 bytes
+(unchanged grade-0 tree total 853/1852, 904 grade 0-or-1, no exact gain or
+loss); `bbalign --anchors rebuildJMSequence` no longer reports a `charFlip`
+call-anchor delta (the census is now 7/7) and `dsplibs_debug_printf 11/12`
+remains the unaddressed delta in this function.
+
+**GATES.**  `make -j1 J=1 phase` (period differential **386 passed / 0
+failed**; phase boundary "period differential and structural checks all OK"),
+`make tc` (300/300 objects, gcc 3.4.2), `byteident` (853/1852 grade 0, 904
+grade 0-or-1), `anchorcheck` (0 detached / 0 non-unique), `refcheck` (0
+dangling), `git diff --check` clean.  (2026-10-01)
