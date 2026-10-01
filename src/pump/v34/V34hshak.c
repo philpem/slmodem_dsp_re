@@ -1159,7 +1159,6 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_dftbin *bins = obj->retrain_bins;
-	short runs;
 	short i;
 
 	dftupdate(bins, nbins, samples, nsamples);
@@ -1209,13 +1208,12 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 					< (int)bins[1].thresh_lo
 		    && (int)(unsigned short)bins[2].energy
 					< (int)bins[2].thresh_lo) {
-			runs = (short)(obj->retrain_runs + 1);
+			obj->retrain_runs = (short)(obj->retrain_runs + 1);
 		} else {
 			if (obj->retrain_runs >= obj->retrain_quiet_runs)
 				obj->retrain_state = 2;
-			runs = 0;
+			obj->retrain_runs = 0;
 		}
-		obj->retrain_runs = runs;
 		return 0;
 	case 2:
 		break;

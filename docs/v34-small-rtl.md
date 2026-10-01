@@ -638,3 +638,79 @@ Validation: `make phase J=8` passed: 385 period differential tests, zero
 failures; structural checks clean, including 14,199 resolved references and
 10,038 source anchors over 285 suites, zero detached/non-unique anchors.
 Only anchor metadata was checked; no mutation harness was executed.
+
+
+## Retrain boolean return and quiet-arm field stores
+
+[Return domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5930273094)
+compiled direct equality return versus ordinary explicit if/one/zero under
+retained and diagnostic profiles. Both unchanged controls reproduce the saved
+switch objects exactly. The explicit-if spelling leaves the entire standalone
+detector body and relocation records identical in both profiles, including
+`sete`. Only the inlined handshake changes. Its size deficit moves
+54,548 -> 54,538 under retained flags and 3,638 -> 3,678 under the diagnostic
+profile; neither is evidence of recovery. This return spelling is not adopted.
+The blob's branch-based boolean return remains unexplained by this source pair.
+
+The [next eight-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5930293342)
+crosses that return pair with local `short runs` versus direct field writes
+in the quiet arm, under the same two profiles. All four local-store controls
+reproduce the preceding return experiment objects exactly. The direct-store
+variant increments `obj->retrain_runs` in the quiet branch and clears it in
+the other branch, retaining the same state-update/store order and return.
+The tone arm and its shared comparison, including behavior at a zero tone
+limit after reset, are unchanged.
+
+| Profile | Quiet stores | Return | Handshake size deficit |
+| --- | --- | --- | ---: |
+| Retained | Local | Equality | 54,548 |
+| Retained | Local | Explicit if | 54,538 |
+| Retained | Direct | Equality | 54,549 |
+| Retained | Direct | Explicit if | 54,539 |
+| Diagnostic | Local | Equality | 3,638 |
+| Diagnostic | Local | Explicit if | 3,678 |
+| Diagnostic | Direct | Equality | 3,638 |
+| Diagnostic | Direct | Explicit if | 3,678 |
+
+The local is represented as an SI pseudo in initial RTL, despite its short
+source type. The direct-store form has no such pseudo. In the standalone
+function, direct stores remove exactly one instruction, the quiet increment's
+`cwtl`, under either profile or return spelling. Other standalone instructions
+and operands remain the same apart from shifted branch destinations. The blob's
+quiet increment at `0x5ea18` also stores without `cwtl`. Candidate instruction
+count falls 96 -> 95 versus blob 94; candidate byte-size deficit increases
+1 -> 2. Neither count alone assesses accuracy.
+
+For equality-return controls, inlined handshake mnemonic comparison removes
+one `cwtl` under retained flags; the diagnostic comparison removes that `cwtl`
+and one alignment `nop`. This is a shared source-level explanation for an
+extra conversion in both contexts, not an allocator-only explanation.
+All eight cells retain 55 global definitions/bindings and four exact functions
+among 29 blob-shared functions. Direct-store variants change only the detector
+and handshake bodies/relocations; no function symbols or handshake call targets
+are added/removed. The return-spelling-only variants change just the handshake.
+
+Adopted direct quiet-arm field writes with the original equality return. This
+recovers an observed instruction detail without forced registers, volatility,
+manual spills, flags or a score-based choice. It supports a compatible source
+family; an int temporary could be a separate original-source hypothesis, so
+this does not uniquely identify the author's spelling. No exact-function gain
+is claimed. No existing source-anchor edits were needed for direct stores.
+
+Reproducers: `tools/v34_retrain_return.py` (four compilations) and
+`tools/v34_retrain_stores.py` (eight compilations). Complete commands, hashes,
+canonical verdicts, binding/call/body comparisons, RTL and disassemblies are
+under `build/v34-retrain-return/` and `build/v34-retrain-stores/`. All compilations
+use recovered Gentoo GCC and the final bug-reproduction define; none execute
+a fuzzing or mutation harness.
+
+Stop these spelling tests here. A next discriminating branch-return study
+should cross source with the period compiler's if-conversion mechanism in a
+small function and the full detector, inspect where branches become setcc,
+and review whole-TU effects before drawing profile conclusions. Repeatedly
+rewriting the same boolean expression is not justified by the negative result.
+
+Validation of adopted direct stores: `make phase J=8` passed, 385 period
+differential tests and zero failures. Structural checks clean: 14,199 references
+and 10,038 anchors over 285 suites, zero detached/non-unique anchors.
+No fuzzing or mutation harness was executed.
