@@ -808,15 +808,17 @@ RetrainDetectV32(struct v32_modem *modem)
 int
 RenegotiateDetectV32(struct v32_modem *modem)
 {
+	/* A separate result shares the exit with the request arm (F11541). */
+	int detected = 0;
 	struct v32_dec *dec = DEC(FP(modem));
 	unsigned short req = (unsigned short)dec->retrain;
 
-	if (!(req & V32_DEC_RENEG_REQ))
-		return 0;
-
-	dec->count = 0;
-	dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);
-	return 1;
+	if (req & V32_DEC_RENEG_REQ) {
+		dec->count = 0;
+		dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);
+		detected = 1;
+	}
+	return detected;
 }
 
 unsigned short

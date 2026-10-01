@@ -132580,3 +132580,37 @@ records the closed domain, exact lost names, commands and complete-body
 checks; replay tools/v34_metric_pre.py, artifacts build/v34-metric-pre/.
 The original compiler profile remains open and these diagnostic results
 must be assessed across the whole TU. (2026-10-01)
+
+
+## F11541. A bounded small-function playbook pass finds three exact source candidates: pulse owner, V32 common result and FloatIIR geometry/minimum
+
+A fresh 300-object screen outside active V34/V8/V90/V92 work and fax leaves
+493 shared symbols, 167 small non-exact eligible bodies; twenty are shortlisted
+and five pattern families (eight functions) tested. These are eligibility and
+investigation denominators, not a claim that all shortlisted work is done.
+Known register-only cases and prior closed emission-order experiments are
+kept separate. [The complete pass](playbook-small-patterns.md) records all
+shortlist dispositions, finite domains, predictions and raw controls.
+
+Cached owners before debug calls gain SetPulseMakeTime (88 bytes), initialized
+common-result source gains RenegotiateDetectV32 (44 bytes), and a nested
+geometry arm/unconditional signed minimum/shared successful return gains
+FloatIIR::setCoefficients (58 bytes). No candidate loses an existing exact
+symbol. Retention isolates the exact V32 function from its non-exact neighbor;
+combined retention preserves that hit with RetrainDetectV32 unchanged.
+Fixed non-fuzz make phase passes 385/0 plus structural checks; comparison
+build300/300, zero failures. Whole-tree exact853/1852 ->856/1852, exact
+bytes82,921 ->83,111, exactly these three gains/no losses. Only four bodies
+change (pulse pair plus the two other winners); all definitions/bindings
+preserved. Partial-link positioned equality68,209 ->68,215/943,398,
+other exact record dimensions unchanged; both strict links remain DIFFERENT.
+Beepgen predicate factoring yields no hit; FIFO prefix increment restores a
+wrap branch but return-width overlays leave the public API ambiguous, so
+neither a FIFO signature guess nor any closest-size neighbor is adopted.
+Valid raw full-TU controls, complete flags/bug define, inventories, bindings
+and body/relocation records are retained. Initial missing-local-header,
+wrong-domain metadata and incorrect compiler-PATH runs are preserved as
+invalid/excluded. Corrected filter driver replays all20cells/sixrawcontrols,
+reproducing all20objecthashes and verdicts. One detached static V32 anchor
+is retargeted, with no mutation execution or snapshot refresh.
+No fuzzing/mutation execution. (2026-10-02)
