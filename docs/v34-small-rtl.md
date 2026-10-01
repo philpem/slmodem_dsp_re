@@ -714,3 +714,77 @@ Validation of adopted direct stores: `make phase J=8` passed, 385 period
 differential tests and zero failures. Structural checks clean: 14,199 references
 and 10,038 anchors over 285 suites, zero detached/non-unique anchors.
 No fuzzing or mutation harness was executed.
+
+
+## Boolean return: source crossed with if-conversion controls
+
+[Declared domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5931550698)
+contains eight small examples and sixteen full-TU compilations. Both cross
+equality-return versus explicit-if source with baseline flags,
+-fno-if-conversion, -fno-if-conversion2, and both options. Full TUs also
+cross retained versus diagnostic inline profiles. All 24 compile; none run.
+The four baseline full-TU objects reproduce their saved objects exactly.
+
+The small example has two short fields and no calls, volatility, assembly,
+forced registers, or manual spills. Its RTL detector fires on the known
+equality control and reports zero setcc on the preserved-branch control.
+
+| Return source | Options | Initial RTL setcc | ce1 setcc | Final sete |
+| --- | --- | ---: | ---: | ---: |
+| Equality | Any of the four | 1 | 1 | 1 |
+| Explicit if | Baseline / no-if-conversion2 | 0 | 1 | 1 |
+| Explicit if | No-if-conversion / both | 0 | 0 | 0 |
+
+The same table holds for the standalone detector in both full-TU profiles.
+Equality-return lowering directly creates setcc during expansion; explicit-if
+lowering creates branches which become setcc at ce1. This effect precedes
+allocation. The ce1 dump still exists with -fno-if-conversion; option names
+do not imply that a whole dump/pass disappeared. Absent ce2 dumps are recorded
+as absent, not as a zero count.
+
+Explicit-if plus no-if-conversion produces a 367-byte detector, the blob's
+size, in both profiles. Canonical verdict is **BYTES 103**, not EXACT.
+Grade-1 comparison rejects it too: padding-stripped instruction counts are
+92 (blob) versus 91 (candidate). Return registers and surrounding code differ.
+The blob zeros DX and transfers DX to AX in the common epilogue; this
+candidate zeros AX directly. An instruction-count difference therefore
+does not by itself prove a missing source statement.
+
+All sixteen full-TU cells keep four exact functions among 29 shared with
+the blob, 55 identical global definitions/bindings, the same function-symbol
+set and the same handshake external-call target counts.
+
+| Source | Profile | Baseline | No-if-conversion | No-if-conversion2 | Both |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Equality | Retained | 54,549 | 54,524 | 54,549 | 54,524 |
+| Explicit if | Retained | 54,539 | 54,518 | 54,539 | 54,518 |
+| Equality | Diagnostic | 3,638 | 3,519 | 3,638 | 3,410 |
+| Explicit if | Diagnostic | 3,678 | 3,549 | 3,678 | 3,471 |
+
+Numbers are handshake byte-size deficits, not differing-byte counts.
+Against equality/baseline, no-if-conversion changes 36 function bodies under
+retained flags and 17 under diagnostic flags; both options change 45 and 18.
+No-if-conversion2 alone reproduces equality/baseline bodies exactly, but
+crossing it with no-if-conversion changes 27 bodies relative to the
+first-option object under retained flags and 10 under diagnostic flags.
+These pairwise totals include further changes to already changed bodies.
+The second option's effect depends on the first option's input CFG;
+its isolated negative result does not establish that it is inert.
+
+**Conclusion:** this source/profile pair explains how GCC preserves a branch
+return, and the small example predicts that mechanism in the full detector.
+It neither recovers byte identity nor establishes the object's global profile.
+No source or flag change is adopted. No differential/fuzzing/mutation harness
+runs were necessary for these compile-only findings. Reproducer:
+tools/v34_ifconversion.py; commands/hashes, per-stage counters, canonical
+verdicts, body/binding comparisons and disassemblies: build/v34-ifconversion/.
+
+A separate source clue is the detector's window counter. The blob compares
+the incremented value with 128 before storing the non-triggering value at
+0x5e93b; the triggering arm writes zero at 0x5e95c. Current source increments
+and stores the field before testing, then resets it on the triggering arm.
+Inspect this placement with a local incremented counter and an else-arm
+field store before expanding a global flag hypothesis. Preserve the equality
+test, four-sample step and reset behavior. Record that finite source domain
+before compilation; scheduling can also move stores, so these operands alone
+do not uniquely identify the source.
