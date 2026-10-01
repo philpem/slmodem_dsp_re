@@ -131503,6 +131503,118 @@ the exact compiler exposes `-fcrossjumping` and `max-crossjump-edges`, but a
 global off control already over-separates the function. No new cell was
 compiled and no source form was adopted. (2026-09-30)
 
+## F11524. An anchor aligner maps `v34handshak`'s unmatched regions by content; the object's open-coded 4-bit reversal is a Horner expression, recovered to grade 1 but not adopted
+
+`bbalign.py`'s mnemonic aligner is defeated by the object's dominant shape: one
+side inlines everything the other keeps out-of-line, and `mov` scores against
+`mov` everywhere.  On the committed `v34handshak` it "aligns" 624 rows on
+nothing.  This entry adds **anchor mode** and uses it to name the source family
+behind the F11522 `bitreverse` lead.  **No `src/` or `include/` change is
+adopted**; the tool is apparatus and the lead is recorded.
+
+**THE TOOL.** `tools/bbalign.py --anchors SYMBOL [--ours OBJECT] [--min-insns N]
+[--focus TARGET] [--insns K]`, with `make bbalign-selftest` as its firing gate.
+An ANCHOR is content that survives scheduling and register allocation: the
+named GLOBAL a relocation calls (`R_386_PC32`) or addresses (`R_386_32`), the
+string a `.rodata.str` load reaches (the merge-section addend, as
+`relocscan.py` resolves it), and an indirect jump through a `.rodata` table.
+The two streams are aligned on the longest consistent anchor subsequence with
+`difflib.SequenceMatcher`, and the regions BETWEEN matched anchors are reported
+with their blob/ours address range and disassembly.  A region is `BLOB-ONLY`,
+`OURS-ONLY`, `DIFFERENT` (mnemonics differ), or `SAME-SHAPE` (mnemonics agree,
+operands/registers differ -- corresponding, not reported as unmatched).  The
+anchors still inside an unmatched region are printed, because they are what
+names the source family; a call-anchor census (blob/ours) is printed beside
+them, which reproduces F11520/F11522's call-boundary table from the same
+anchors.
+
+**DENOMINATOR, AND THE FIRING PROOF (`make bbalign-selftest`, exit 0).**
+
+    v34handshak vs itself   matched 1587 of 1587 anchors, 0 unmatched regions
+    FPM_SDM_init (register-only control)  27/27 insns, 1 SAME-SHAPE,
+                                           0 unmatched regions
+    v34handshak vs retained   blob 1587 / ours 183 anchors, matched 126;
+                               12234 vs 1387 instructions; 100 unmatched regions
+    v34handshak vs localonly  blob 1587 / ours 1520, matched 375;
+                               12234 vs 14456; 311 unmatched; bitreverse 6/8
+
+The second line is the NEGATIVE control and it is why the tool is usable:
+`FPM_SDM_init` differs from the tree only by a register renaming
+(`ebx`<->`esi`), and a classifier that called that an unmatched region would
+flood every real run.  It is classified `SAME-SHAPE`, and `--anchor-self-test`
+REFUSES to pass if it ever is not.  The first line is the exact control; the
+last two are the nonzero cross-object denominator, and `--ours` adds the
+`bitreverse 6/8` check as a hard one (F134, F2401).  The denominator is printed
+on every run, including the anchor counts on BOTH sides and the matched rate.
+
+**THE MAP.**  Retained committed candidate (12234 blob / 1387 ours insns):
+127 regions, `identical 19, same-shape 8, blob-only 17, ours-only 4, different
+79`; the large blob-only blocks are the inlined helpers, and their anchors name
+them -- 0x6851b..0x6b039 (2113 insns) carrying `V34SetINFO0aBits`, `dftupdate`
+and the `StateName` prints; 0x6d536..0x6e6c2 (861) carrying `detectorinit` and
+`c1200_`.  Localonly candidate (F11509's whole-tree-neutral aggressive
+profile, 12234 / 9374): 334 regions, `identical 51, same-shape 12, blob-only
+43, ours-only 16, different 212`.  Its call-anchor deltas are F11522's census:
+`dftupdate 10/9, indicateJaTransmission 2/1, bitreverse 6/8, detectorinit 8/6,
+rxinit 3/1, setupreceiver 0/2, txmit 16/14, v34handshakinit 10/8, dftenergy
+7/3, dsplibs_debug_printf 262/237`.  The clean families the map names:
+
+  * **blob-only 0x69b2e..0x6b61e (1325 insns), anchors `hsine1680`,
+    `hsine1920`, `dftupdate`, `StateName` prints** -- a receive/DFT-and-state
+    block the object inlines and the localonly profile does not.
+  * **ours-only 0xa4c1..0xb6f6 (918 insns), anchors `V34SetupModulator`,
+    `V34SetupDemodulator`, `V34SetINFO0aBits`** -- the F11509 setupreceiver
+    boundary, seen from the other side: we keep it out-of-line.
+  * **`tx1_ts_rates`'s region, blob 0x62f82..0x633d1 (233) against ours
+    0x5f20..0x6272 (194)**, which is where the `bitreverse` delta lives.
+
+The alignment is not perfect -- repeated generic anchors (`dsplibs_debug_printf`
+262 times) can pair positionally and split a corresponding block into a small
+`BLOB-ONLY` and a small `OURS-ONLY` -- so read the block size and the anchors,
+not a single region in isolation.  The call census and the large one-sided
+blocks are the trustworthy output.  `modulatevector` (820/736, 8 unmatched)
+and `receiver` (1010/914, 17 unmatched) were run for the denominator; the map
+is cheap and re-runnable.
+
+**THE SOURCE FAMILY, TESTED AND DECLINED UNDER F7782.**  F11522 left
+`bitreverse` at 8 against the blob's 6.  `tools/dis.py` shows the object
+open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a branchless chain:
+it extracts bit 6/7/8/9 (or 10..13) straight from the word, masks 2/1/1/1 and
+accumulates with `add`/`lea` -- the **Horner** evaluation
+`out = ((bit6*2 + bit7)*2 + bit8)*2 + bit9`, not a shift-and-OR of the nibble.
+Five spellings were compiled at 0x6346b/0x677a8 in the localonly profile with
+Gentoo GCC 3.4.2-r2, the complete period flags and the mandatory
+`DSPLIB_REPRODUCE_BUGS`:
+
+    1  for-loop mirroring bitreverse's body   GCC KEEPS A LOOP      rejected
+    2  hand-unrolled t>>=1; r=r*2+(t&1)       shifts a temp t       rejected
+    3  Horner over an `unsigned short t` temp  temp materialised     rejected
+    4  Horner over (rec[0]>>k)&1, signed       movswl/sar            rejected
+    5  Horner over ((unsigned)(unsigned short)rec[0]>>k)&1  => GRADE-1 MATCH
+
+Cell 5 emits the object's 15-instruction sequence mnemonic for mnemonic, same
+shifts (5/8/7/1), masks (2/1/1/1), adds and `lea`s, differing only in register
+names -- a grade-1 match on the block.  The call census moves `bitreverse 8 -> 6`,
+matching the object.  On the localonly `v34handshak` the change is
+**47,339 -> 47,367 bytes**, still 14,174 short of the blob's 61,541.  It is NOT
+adopted: no exact symbol is gained (the block lives in `tx1_ts_rates`, which is
+inlined into the symbol-less `v34tx1_trnseg4a` under the committed retained
+profile, so `byteident` cannot certify it), the candidate space is not
+exhausted (`* 2` vs `<< 1` and `+` vs `|` were not crossed), and adopting would
+rewrite the mutation anchor `66: the cap's nibble is read at bit 6 in the call
+role`.  The fact is recorded: **the object's two bit-reverse sites are an
+explicit Horner 4-bit reversal, and cell 5 is a grade-1 preimage for it** -- a
+next pass that wants the 8 -> 6 call census closed has the spelling and can
+certify it against a profile in which the block has a comparable symbol.
+
+**GATES.**  `make -j1 J=1 phase`: period differential **385 passed / 0 failed**,
+plus the structural boundary "all OK".  `byteident` unchanged at **844/1852
+grade 0, 895/1852 grade 0-or-1** (no `src/` change).  `anchorcheck` 285 suites,
+10038 mutations, **0 detached / 0 non-unique**; `refcheck` 14188 references,
+**0 dangling / 0 stale**; `git diff --check` clean.  F11523 is on
+`improve/v34-rejoin`, not here; this number is pinned to avoid the collision.
+(2026-09-30)
+
 ## F11525. The object's two `bitreverse(...,4)` cap sites are author open-coded Horner evaluations, and the preimage is recovered and adopted
 
 F11522's `bitreverse` census left **8 against 6** and declined, calling it a
