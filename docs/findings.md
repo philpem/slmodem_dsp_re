@@ -131856,3 +131856,101 @@ unchanged at **844/1852 grade 0, 895/1852 grade 0-or-1** (no `src/` change).
 `bbalign --anchor-self-test`, `anchorcheck` (285 suites, 10038 mutations, 0
 detached / 0 non-unique), `refcheck` (14192 references, 0 dangling) all clean.
 `git diff --check` clean.  (2026-10-01)
+
+## F11527. Equivalence fuzzing trial: seeded pseudo-random differential fuzzing of the near-exact integer kernels against the blob-as-oracle, with no divergence and a demonstrated firing negative control
+
+This is the owner's equivalence-fuzzing experiment (frontier-handoff section
+5, candidate B), run narrow and cheap as a trial: the differential harness
+already runs BOTH the blob's `ref_*` behaviour and ours on fixed inputs; the
+addition here is MANY seeded pseudo-random inputs, with the blob as the
+ORACLE and any divergence treated as a bug.  It is **apparatus** (`test/`),
+not reconstruction: no `src/` change was made, so no mutation re-record and
+no byteidentity movement.
+
+**THE HARNESS.** `test/unit/t_fuzz.cpp` is a new differential fixture.  It
+uses a FIXED seed (`FUZZ_SEED 0x5eed1234`) and derives every case from a
+deterministic LFSR, so a run is reproducible bit for bit.  Each target group
+is an `extern "C"` pair of entry points -- the blob's `ref_*` mangled alias
+and this tree's own unmangled symbol -- driven on SEPARATE, identically-seeded
+objects, with every observable (outputs, owned-buffer state, the bytes past
+the object, and for the stateful method the object after each step) compared
+through the harness's `diff_eq_int`.  **Every group prints its own
+`PASS <name> N checks` denominator** through `diff_begin`/`diff_end` (the
+F134/F2401 bar), and the period run captured the four lines verbatim below.
+
+**THE TARGETS, AND WHY.**  The value of the fixture is breadth over
+functions the byte-identity tier has NOT certified, where the only evidence is
+a finite differential fixture.  Parity with the task's instruction -- pick
+near-exact but not exact, clean, resettable, integer -- chose the
+`ParallelDifferentialEncoder<h>`/`Decoder<h>` families, which byteident lists
+in the BYTES bucket (4 of 54 -- same size, four differing bytes) and which are
+integer-only, so a divergence would be a genuine behavioural defect rather
+than an x87/register-allocator artefact.  The `Scrambler<h,h>` and
+`Descrambler<h,i>` members are byte-exact and serve as the positive control:
+seeding them with random history, taps and streams must come out identical or
+the harness is broken.  The `Descrambler<h,i>` width is deliberately included
+because its output is `I`=int while the history is `T`=byte -- the
+intermediate-width path (F870) is only observable at values that do not fit a
+byte.
+
+**PICK JUSTIFICATION RECORDED.**
+`ParallelDifferentialEncoder<h>::process` / `<h>::process` are:
+(a) NEAR-EXACT (4/54, a value-invariant codegen difference that cannot be
+certified by `byteident` and so rests on finite differential evidence);
+(b) integer-only, so period-exact comparison is immediate and there is no
+declared `gccdiverge` entry and no tolerance;
+(c) directly callable through a clean `process(in, out)` signature with a
+resettable `reset(width, init)` and a per-object state buffer, so both sides
+reach the same recoverable initial state;
+(d) a divergence would be meaningful (a scrambled/mapped symbol stream is the
+functional contract).  They are NOT the whole-tree mutation surface -- the
+fuzz is per-function and bounded, deliberately not a mutation re-record.
+
+**RESULT, THE NEGATIVE CONTROL FIRST (this is why the harness is trusted).**
+Two defects were found in the harness itself and fixed before the run was
+accepted:
+  * The first harness compared `ref_*` to `ref_*` (a single coder on both
+    sides), so the parallel groups always agreed.
+  * The second harness ran OUR coder on BOTH sides of every parallel case.
+  A planted defect (`*state ^ *in` -> `*state ^ *in ^ 1u` in
+  DiffCoder.h's `ParallelDifferentialEncoder<T>::process`) was caught by the
+  fixed harness: the subsequent period differential reported the encoder group
+  as `FAIL ... 659442/13629558 checks failed` -- outputs first diverged at
+  `out [input 10600] got 251, reference 250`, and the object state followed at
+  `state [input 10000]`.  The planted bug is gone; the harness now compares
+  OUR reconstruction to the BLOB on every parallel case.
+
+**THE RUN, PERIOD COMPILER (the authority, GCC 3.4.2-r2), 386 passed / 0
+failed.**  Four groups, all PASS, all with an explicit denominator:
+
+    PASS ParallelDifferentialEncoder<h>::process, fuzz  13629558 checks
+    PASS ParallelDifferentialDecoder<h>::process, fuzz  13626426 checks
+    PASS Scrambler<h,h>::process, fuzz                   7920000 checks
+    PASS Descrambler<h,i>::process, fuzz                 5280000 checks
+
+**DIVERGENCE ANALYSIS.**  None.  Across **40,421,984 comparisons** (the sum of
+the four denominators) the reconstruction and the blob agreed exactly,
+including over the near-exact (4/54) encoder/decoder: the four differing
+bytes are therefore codegen (register/emission-order) and not behavioural.  No
+`src/` defect was found, so there is no genuine defect to fix and nothing to
+change -- this is, as intended, the start of the equivalence-evidence effort,
+not a bug hunt.
+
+**CONVERGENCE EVIDENCE.**  The near-exact `ParallelDifferentialEncoder<h>` /
+`Decoder<h>` agree with the blob over 27.2 M deterministic inputs across
+capacity {1,2,4,8,16,32,64}, active widths 0..capacity+3 (the `width >
+capacity` refuse path included), random init bytes, random input streams and
+in-place `in == out` processing.  The byte-exact scrambler/descrambler agree
+over 13.2 M inputs crossing the buffer-restart path many times.  This is
+finite-equivalence evidence (not proof), and it does not subsume the mutation
+worklist -- it is the complementary input-domain-breadth evidence, and it
+needs no rebuild or state file.
+
+**GATES.**  `make -j3 J=3 period`: **386 passed / 0 failed** (`t_fuzz` is the
+one added test; the differential count is the period tier's, so it moved by
+exactly one).  `anchorcheck` 285 suites, 10038 mutations, **0 detached / 0
+non-unique**; `refcheck` 14199 references, **0 dangling / 0 stale**; `git
+diff --check` clean.  No `src/` or `include/` change remains (the
+negative-control DiffCoder.h edit was reverted), so `byteident`/`compare`
+were not re-run -- the tree is intentionally unchanged apart from the new
+test file.  No mutation was re-recorded and none was run.  (2026-10-01)
