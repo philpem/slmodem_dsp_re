@@ -340,3 +340,85 @@ its equality comparison, then obtains signed indices only on its debug path.
 This should be investigated as compare/logging source factoring and live
 ranges, with the debug branch included; changing the state field to unsigned
 or globally rewriting the helper would overstate this one-site evidence.
+
+### State equality and debug indexing: value helper versus direct storage
+
+The comparison/logging investigation produced a second source-factoring lead.
+The blob's microstate check at `0x69401` loads with `movzwl`, compares the
+halfword at `0x6941a`, and only on the debug branch sign-extends that **same
+cached register** at `0x6946c` for `StateName`. It does not reread the subject
+state from memory there. The cached `short now = hs_get(...)` source emits
+`movswl` before equality in the diagnostic candidate.
+
+Two domains were declared before compilation:
+[comparison/read placement, six cells](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929650860)
+and [direct comparison access, four cells](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5929689120).
+Both cross retained and saved diagnostic profiles; all ten preserve recovered
+compiler/assembler identity, complete flags, and bug reproduction. The two
+unchanged baselines reproduce their prior objects byte for byte. The second
+domain reuses those validated baseline objects and verifies their hashes.
+
+The first domain compares the existing cached short with direct `hs_get`
+equality followed by either a second getter in the debug argument or a
+`short now` read local to the debug branch. Neither restores the target
+pattern: all three emit early `movswl`. Initial RTL already promotes the
+signed getter return into SI before the HI comparison. Combine retains the
+sign-extended memory load. Moving the local's scope is insufficient.
+
+The next control bypasses the value-returning getter **only for equality**,
+leaving the existing signed getter and index in the debug block. Signed and
+unsigned direct-memory comparisons were both tested; unsigned comparison also
+casts `next` to unsigned short to preserve all halfword equality cases.
+The signed and unsigned versions produce byte-identical entire objects in
+both profiles. Thus the object's zero extension does **not** establish that
+its state field was unsigned.
+
+Direct signed access produces HI load/compare RTL at combine, rather than
+an SI signed value whose low bits are compared. The diagnostic candidate now
+has `movzwl 0x3592(%ebp),%eax`, `cmp $0x2e,%ax`, and a debug-only
+`movswl %ax,%edi`. GCC reuses the comparison halfword despite the debug-local
+source getter. No additional subject memory load is introduced. This recovers
+the observed value-width and extension placement; register choices, surrounding
+store order, branch layout and the full function remain different.
+
+| Source family | Retained size deficit | Diagnostic size deficit |
+| --- | ---: | ---: |
+| Cached short baseline | 54,433 B | 4,083 B |
+| Getter comparison / getter in debug argument | 54,582 B | 4,191 B |
+| Getter comparison / debug-local short | 54,582 B | 4,079 B |
+| Direct signed comparison / debug-local short | 54,546 B | 3,638 B |
+| Direct unsigned comparison / debug-local short | 54,546 B | 3,638 B |
+
+Every cell retains the same 55 global names/bindings, the same four exact
+functions among 29 shared blob functions, and all baseline local function
+symbols. No byte-exact count increase is claimed. The 445-byte narrowing of
+the diagnostic size gap is not a recovered byte count. The retained function
+shrinks by 113 bytes because this also changes inline decisions; improvement
+must be assessed by bodies and operations, not a monotonic size score.
+
+Under the diagnostic profile the direct-access variants change three defined
+function bodies/relocation records: `v34handshak`, `v34handshakinit`, and
+`v34setuptxmit`. Their external PC32 target counts inside `v34handshak` are
+unchanged. Under retained flags, 35 defined function bodies/relocation records
+change, and the handshake's direct debug-printf references go from 31 to 30;
+this profile contains additional out-of-line helper copies. Full inventories,
+changed bodies and target counts are recorded, rather than attributing every
+change to the target comparison. No global flag change is proposed.
+
+The signed direct predicate and debug-local read are selected on the branch:
+comparison of the stored halfword is separate from its use as a signed index.
+This does not force a hard register or change the state-field type. The
+comparison/storage operation has the same semantics as `hs_get == next`;
+the signed subject value is read again in source only across nonvolatile
+reads, with no intervening call or write. The compiler's reuse of its halfword
+is confirmed in the deciding period output. Selection is based on the actual
+extension-placement recovery, not the near-size results of the earlier cells.
+
+Reproducer: `tools/v34_state_factor.py`, optionally `--direct-load-domain`.
+Retained input revision is `a35ed924`; diagnostic input is the saved snapshot
+with the already-validated direct flag statement. Commands/hashes, complete
+verdicts, inventories and RTL are in `build/v34-state-factor/results.json` and
+`build/v34-state-load/results.json`. No fuzzing or mutation harness runs.
+The deciding `make phase J=8` exited zero: **385 period tests passed,
+0 failed**, with 14,199 references and 10,038 existing anchors across 285
+suites clean. The helper source is committed only after that validation.
