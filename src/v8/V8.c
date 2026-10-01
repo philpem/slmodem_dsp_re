@@ -332,7 +332,6 @@ rebuildJMSequence(struct v8 *v)
 				v->fn_matched = 1;
 				break;
 			}
-			w = (unsigned short)rx->word[i];
 		} else if (w == 0x107 && (cm->b1 & 0x40)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
@@ -352,6 +351,8 @@ rebuildJMSequence(struct v8 *v)
 				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
 			accept = 1;
 		}
+
+		w = (unsigned short)rx->word[i];
 
 		/* Or one the menu lists explicitly? */
 		if (!accept
