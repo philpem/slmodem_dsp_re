@@ -935,24 +935,29 @@ preempindex(void *p, short baudrate)
 	short i;
 
 	/*
-	 * NO DEFAULT ARM, and the object has none either: an unrecognised
-	 * baud rate drops into the loop with `x` and `ratio` never set.  The
-	 * two live in callee-saved registers the object does not initialise,
-	 * so what the loop actually multiplies is whatever the caller left
-	 * in %edx and %esi.  That is not reproducible in C and is not
-	 * reproduced -- see D37.  The five rates below are every one the
-	 * object handles.
+	 * The descending comparison chain and absence of default initializers
+	 * reproduce the object's period code.  The five rates below are every
+	 * rate it handles.  An unsupported rate leaves x and ratio unset;
+	 * its result depends on incoming machine registers, not a defined C
+	 * contract (D37).  Do not invent a default value for the reconstruction.
+	 * See docs/v34-small-rtl.md for the crossed dispatch/default controls.
 	 */
-	x = 0;
-	ratio = 0;
 
-	switch (baudrate) {
-	case 2400: x = preemp_get(p, PREEMP_M2400); ratio = 0x7da7; break;
-	case 2800: x = preemp_get(p, PREEMP_M2400); ratio = 0x6789; break;
-	case 3000: x = preemp_get(p, PREEMP_M3000); ratio = 0x656f; break;
-	case 3200: x = preemp_get(p, PREEMP_M3200); ratio = 0x639f; break;
-	case 3429: x = preemp_get(p, PREEMP_M3429); ratio = 0x6626; break;
-	default: break;
+	if (baudrate == 3429) {
+		x = preemp_get(p, PREEMP_M3429);
+		ratio = 0x6626;
+	} else if (baudrate == 3200) {
+		x = preemp_get(p, PREEMP_M3200);
+		ratio = 0x639f;
+	} else if (baudrate == 3000) {
+		x = preemp_get(p, PREEMP_M3000);
+		ratio = 0x656f;
+	} else if (baudrate == 2800) {
+		x = preemp_get(p, PREEMP_M2400);
+		ratio = 0x6789;
+	} else if (baudrate == 2400) {
+		x = preemp_get(p, PREEMP_M2400);
+		ratio = 0x7da7;
 	}
 
 	i = 5;

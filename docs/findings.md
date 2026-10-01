@@ -132230,3 +132230,68 @@ its size deficit narrows 54,549 -> 54,481, not to zero. These gains do not
 identify the missing inline profile or certify the remaining thousand bodies.
 Post-documentation refcheck reports 14,200 references and 2,656 finding
 headings, zero dangling or stale entries. (2026-10-01)
+
+## F11531. preempindex becomes byte-exact by recovering its comparison chain and removing invented defaults; wrapper size gaps alone were misleading
+
+Four retained-profile complete-TU controls cross switch versus descending
+if/else dispatch with initialized versus unset x/ratio locals. The unchanged
+d884e844 control reproduces the bug-enabled comparison object byte-for-byte.
+The switch forms both retain an 11-byte size gap; the initialized comparison
+chain has the blob's size but differs at 82 bytes. Only the descending chain
+without the invented initializers matches the complete **315-byte** body.
+All 55 global definitions/bindings and the function inventory remain intact;
+only preempindex changes. The TU rises 8 -> 9 exact of 29 shared functions,
+with no exact losses. Commands, hashes, selected compiler/assembler identity,
+RTL, disassembly and all canonical verdicts are preserved by
+[the reproducer](../tools/v34_preemp_dispatch.py) in
+build/v34-preemp-dispatch/.
+
+The existing fixture explicitly exercises the five supported baud rates:
+2400, 2800, 3000, 3200 and 3429, including index boundaries and debug text.
+No gate or tolerance changes. D37 now records the recovered original dataflow
+rather than a deterministic zero default absent from the blob. Unsupported
+rates still leave C locals undefined; period byte identity does not turn
+inherited machine-register state into a portable or defined C input contract.
+The comparison chain in the object was original source structure, not a
+reason to adjust register allocation or global optimization flags.
+
+The preceding wrapper domains were useful negative controls. Dibit source
+copies a local scrambler state and makes a normal call; direct object state
+restores its sibling call but increases the size gap from 5 to 27 bytes.
+An honest transmitter prefix plus owner pointer, direct state and a short
+result or quadrant temporary recovers every live operand and the full
+250-byte instruction graph. Exactly one byte remains: a dead pop destination,
+EAX rather than the blob's EDX. Original adjacent-wrapper emission order does
+not change it; disabling peephole2 identifies the scratch stage and loses five
+of the eight exact functions. Combining the independently supported Freeze
+owner path leaves its two dead pops non-exact too. No type migration or
+scratch-register workaround is adopted.
+
+Sixteen independent quadbit controls likewise recover direct state updates,
+owner base and unsigned-load/signed-index sequences without reproducing the
+remaining live frame/spill graph. All eight exact functions and 55 bindings
+survive those source controls. The best size gap is 11 bytes; it is not an
+exact candidate. Tools v34_dibit_state.py, v34_dibit_owner.py (including width
+and cursor studies) and v34_owner_combination.py preserve the bounded domains;
+[the study](v34-small-rtl.md) and [playbook](method/refinement.md) record why
+these lines stop.
+
+A separate power-input provenance study finds that settxlevel reloads mp[0]
+after writing power reduction, while current source caches it. Six source
+controls recover that load but none is exact. A hypothetical component alias
+mp=&tx_pwr_reduction with initial 0x20 distinguishes total reduction 7 from
+cached-source 4; no new fixture or source adoption is made on that observation
+alone. Four further genuine power-owner controls narrow the size gap to one
+byte but retain 123 instructions versus the blob's 122 and other live operand
+changes; this is not a dead-register-only result. Those source controls are
+also declined.
+
+**Validation:** adopted preempindex make phase J=8 passes 385 period tests,
+zero failures, structural boundary clean. make tc builds 300/300 objects,
+zero failures; the adopted full object equals the winning experimental object
+raw-byte-for-byte. Post-documentation refcheck: 14,202 references and 2,657
+finding headings, clean. All 10,038 anchors over 285 suites remain clean.
+Canonical whole-tree exactness rises 852 -> 853/1852, gaining only preempindex
+and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
+recovered-source exact helper. No fuzzing or mutation harness was run.
+(2026-10-01)

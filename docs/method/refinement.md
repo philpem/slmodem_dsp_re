@@ -20,6 +20,7 @@ hypothesis to the complete translation unit under the retained flags.
 | Boolean result becomes a branch or setcc | Cross ordinary return/if forms with diagnostic if-conversion options and inspect ce1 | Source control flow and if-conversion are separate causes; a flag that changes many other bodies is a diagnostic. |
 | A conditional store appears absent in a standalone helper | Compare the same helper after inlining and inspect GCSE/store motion | The caller may already recover the observed store. Do not adopt a standalone-only improvement. |
 | Constant multiplication has the wrong instruction graph | Cross literal/const coefficients with ordinary coefficient locals, and inspect expansion then CSE | polyValue became exact at 28 bytes: late coefficient propagation folds an existing multiply, while early constants cause LEA/sub synthesis. Association alone did not recover it. |
+| A comparison dispatch differs and source invents default values | Cross switch versus observed comparison chain with and without the invented initialization | preempindex became exact at 315 bytes only with descending comparisons and original unset locals. Keep supported inputs distinct from undefined caller-register state; byte identity does not define invalid inputs. |
 | Two role loops appear in the blob | Compare one loop with the mode test inside against preselected taps and explicitly duplicated loops; inspect loop2 | V34scrambler became exact at 256 bytes through unswitching. Source arm order determines version layout; two binary loops do not establish two author loops. |
 | A short initializer has a different loop/register shape | Cross index width, address expression, and independently observed store order | dpskDetectInfo1Init became exact at 152 bytes with a short index, root-relative clears and the blob's field order. Two address spellings matched: this is a family, not a unique original spelling. |
 | A tiny coefficient loop differs from straight-line blob stores | Compare expanded cached pairs with scalar assignments preserving reloads | txrxdmainit became exact at 98 bytes only with the observed reloads; expansion alone was insufficient. Five fixed alias fixtures distinguish the old and recovered behavior. |
@@ -45,6 +46,14 @@ The peephole2 control identifies scratch selection, and evidence-backed local
 definition orders leave those bytes unchanged. Keep the owner evidence and
 scratch result separate; do not fabricate an aliasing view or migrate a type
 merely to obtain a desired dead register.
+
+Source widths can settle live coalescing without settling dead scratch bytes.
+In txmitdibit, a real transmitter owner, direct state pointer and either a
+short result or quadrant restore every live operand; one dead pop byte stays
+different even after restoring the observed adjacent-wrapper order. The old
+five-byte size gap concealed a copied state and non-tail call. Keep these
+controls as evidence; do not adopt a broad owner migration solely to chase
+that final scratch register.
 
 A smaller size gap is not an adoption criterion. Splitting V.34 timing's
 role-dependent switch into two switches brought the gap from 21 to 7 bytes,

@@ -1157,3 +1157,101 @@ The final combined audit is build/v34-polynomial-coefficients/combined-adoption.
 55 bindings, no handshake PC32 target-count changes, and exactly the two new
 exact functions. Post-documentation refcheck reports 14,200 references and
 2,656 finding headings, zero dangling/stale entries.
+
+## Byte-exact gain: pre-emphasis dispatch and undefined default dataflow
+
+The [four-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5935262209)
+uses unchanged d884e844 source and retained flags. The reference has five
+linear halfword equality tests in descending rate order; source had a switch
+lowered to a wide binary decision tree, plus zero defaults absent from the
+reference. Source structure and default dataflow are independent axes.
+
+| Dispatch / default | Canonical verdict |
+| --- | --- |
+| Switch / zero initialization | SIZE 11 |
+| Switch / unset locals | SIZE 11 |
+| Descending if / zero initialization | BYTES 82 |
+| Descending if / unset locals | EXACT 0, 315 bytes |
+
+Both changes are needed. The unchanged full-TU control reproduces the saved
+bug-enabled object raw-byte-for-byte. All 55 bindings and function symbols
+remain unchanged; only preempindex changes, with full-TU exactness 8 -> 9/29
+and no losses. tools/v34_preemp_dispatch.py preserves the four commands,
+hashes, compiler/assembler identity, all shared verdicts, RTL and disassembly
+in build/v34-preemp-dispatch/. Replay uses its saved historical control or an
+explicit --baseline-object; configurable flags must still reproduce it.
+
+Adopt the original descending chain and no fabricated default assignments.
+Existing component fixtures cover exactly the five supported rates, index
+boundaries and debug output. D37 is updated: unsupported rates have undefined
+C locals and depend on incoming machine state in the period object. Recovering
+identical instructions does not promise a deterministic portable result on
+that input. No fixture, gate or tolerance is changed.
+
+## Quadrant wrappers: the live graph closes before the scratch cursor
+
+Dibit domains have 5 state/store-order cells, 5 real-owner cells, 4 local-width
+cells, 3 emission/peephole controls and 2 owner-combination cells. All raw
+unchanged controls reproduce their saved full objects; all source cells
+preserve eight exact functions and 55 globals. Direct state restores the
+sibling call but widens the size gap 5 -> 27 bytes. A real prefix containing
+queue/ring, segment, flags, quadrants, shift register and point recovers both
+live bases and field-address spill; a short result or quadrant then recovers
+every live operand, exact 250-byte size and instruction graph. The last byte
+is dead pop EAX versus blob EDX. All three short-containing cells match one
+another; this is a source family, not a unique local declaration.
+
+Restoring observed adjacent-wrapper emission order changes the physical order
+but no function body/relocation record. It does not close the dead pop.
+Diagnostic no-peephole2 replaces that operation, confirming scratch selection,
+and loses five of the eight exact functions. Combining the independently
+supported FreezeEcho owner pointer gives no exact gain either (two dead pops
+remain). Full type migration and dead-register tuning are declined.
+
+Tools: v34_dibit_state.py, v34_dibit_owner.py (--width-study and --cursor-study),
+v34_owner_combination.py. Artifacts: build/v34-dibit-state/,
+build/v34-dibit-owner/, build/v34-dibit-width/, build/v34-dibit-cursor/ and
+build/v34-owner-combination/. All preserve declared domain links, actual
+commands, identity, hashes, RTL, complete shared verdicts and binding/body
+inventories. Direct root/owner state-pointer spellings and the two point/store
+orders are experimentally indistinguishable; do not retry them.
+
+The agent's independent [16 quadbit controls](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5935137537)
+recover direct state/sibling call, real owner base and flag/quadrant load
+widths but leave a different frame/spill graph. All 55 bindings and eight
+exact functions survive; no nearest-size candidate is adopted. See
+build/v34-agent-quad/, build/v34-agent-quad-owner/ and
+build/v34-agent-quad-width/ for the finite source cells and dumps.
+
+The next separate source provenance lead is power-input reload: settxlevel
+uses mp[0] again after storing its first decoded power field. Current source
+caches both fields before that write. Six controls recover the input load but
+none is exact; no alias fixture or source change is adopted yet. This is a
+separate boundary/source question, not a justification to tune wrapper
+scratch registers.
+
+The independent [power-owner four-cell extension](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5935329204)
+asserts scale at +0x3b8 and power at +0x3c0 on a neutral prefix of size 0x3c4,
+without moving the root's 0xac4c extent or +0x2a54 scrambler. Local owner forms
+recover base and loads, narrowing the size gap to one byte, but still have
+123 versus 122 instructions and different operands/scheduling. This is not a
+one-byte scratch mismatch. All 55 bindings, function inventory and eight
+exact names survive. The domain is closed without source or fixture adoption;
+build/v34-agent-power/ and build/v34-agent-power-owner/ preserve the results.
+The separate input-reload [finding](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5935276960)
+remains useful provenance evidence.
+
+Adopted preempindex source validation: make phase J=8 passes **385 period
+checks, zero failures**, with structural boundary clean. make tc builds
+300/300 objects, zero failures; the adopted complete object is raw-identical
+to the if/uninitialized matrix winner. Post-documentation refcheck reports
+14,202 references and 2,657 finding headings, zero dangling/stale entries.
+All 10,038 anchors across 285 suites remain clean; no anchor needed retargeting.
+No fuzzing or mutation harness was run.
+
+Canonical whole-tree check: **852/1852 -> 853/1852**, gaining only preempindex,
+with no losses. Exact bytes rise 82,606 -> 82,921. Before snapshot:
+build/v34-polynomial-coefficients/tree-after-gains.json; after:
+build/v34-preemp-dispatch/tree-after-preemp.json. This branch now has five
+recovered-source exact helpers totaling 849 bytes, separate from its four
+comparison-purpose gains. Finding F11531 records this continuation.
