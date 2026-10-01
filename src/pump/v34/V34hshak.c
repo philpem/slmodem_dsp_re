@@ -1189,7 +1189,11 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 		bins[i].acc_im = 0;
 	}
 
-	if (obj->retrain_state == 1) {
+	/* The blob promotes this signed state for its two dispatch comparisons.
+	 * An ordinary switch reproduces that lowering on period GCC; see
+	 * docs/v34-small-rtl.md, retrain-state dispatch. */
+	switch (obj->retrain_state) {
+	case 1:
 		/*
 		 * Waiting for silence on all three bins at once.  Any one of
 		 * them still loud ends the run -- and if the run that just
@@ -1213,10 +1217,11 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 		}
 		obj->retrain_runs = runs;
 		return 0;
-	}
-
-	if (obj->retrain_state != 2)
+	case 2:
+		break;
+	default:
 		return 0;
+	}
 
 	/*
 	 * Waiting for the middle bin -- 1200 Hz -- to come back.

@@ -284,8 +284,8 @@
  },
  {
   "label": "the clear loop resets the double accumulators too",
-  "find": "\t\tbins[i].acc_im = 0;\n\t}\n\n\tif (obj->retrain_state == 1) {",
-  "replace": "\t\tbins[i].acc_im = 0;\n\t\tbins[i].sum_re = 0.0;\n\t\tbins[i].sum_im = 0.0;\n\t}\n\n\tif (obj->retrain_state == 1) {",
+  "find": "\tfor (i = 0; i < nbins; i++) {\n\t\tbins[i].phase = 0;\n\t\tbins[i].acc_re = 0;\n\t\tbins[i].acc_im = 0;\n\t}",
+  "replace": "\tfor (i = 0; i < nbins; i++) {\n\t\tbins[i].phase = 0;\n\t\tbins[i].acc_re = 0;\n\t\tbins[i].acc_im = 0;\n\t\tbins[i].sum_re = 0.0;\n\t\tbins[i].sum_im = 0.0;\n\t}",
   "fn": "detectRetrainReq"
  },
  {
@@ -319,9 +319,9 @@
   "fn": "detectRetrainReq"
  },
  {
-  "label": "the state-2 guard tests 3",
-  "find": "\tif (obj->retrain_state != 2)",
-  "replace": "\tif (obj->retrain_state != 3)",
+  "label": "the tone arm dispatch tests state 3",
+  "find": "\tcase 2:\n\t\tbreak;\n\tdefault:",
+  "replace": "\tcase 3:\n\t\tbreak;\n\tdefault:",
   "fn": "detectRetrainReq"
  },
  {

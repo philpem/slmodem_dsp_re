@@ -579,3 +579,62 @@ sign-extends the state then compares as SI, while the candidate's if-chain
 uses a zero-extended halfword and HI comparisons. Test an ordinary state
 `switch` against the if-chain in the smaller standalone detector before
 inferring that difference is allocation; do not add casts just to force width.
+
+
+## Retrain-state dispatch: ordinary switch versus if-chain
+
+[Declared four-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5930139031)
+compares the unchanged detector with an ordinary switch on its signed-short
+state. Case 1 retains the quiet arm and return; case 2 breaks to the existing
+tone arm and shared equality return; default returns zero. Both spellings are
+compiled as complete translation units under retained flags and the historical
+diagnostic inline profile. The controls reproduce their saved objects exactly.
+
+The blob standalone dispatch at `0x5e99c` and inlined dispatch at `0x69314`
+use `movswl` followed by two full-width comparisons against 1 and 2. The
+if-chain emits `movzwl` and two halfword comparisons. The switch emits the
+blob's signed extension and full-width comparisons in both the exported
+function and the inlined handshake under both profiles. This is an ordinary
+source-structure explanation for the width difference, independent of the
+argument-home allocation difference. Initial RTL already has a HI comparison
+for the if-chain and an explicit sign-extension plus SI comparison for the
+switch, so this difference precedes allocation and register renaming.
+It establishes a compatible source family,
+not a unique original spelling.
+
+| Profile | Source | Handshake size deficit | Exact shared functions |
+| --- | --- | ---: | ---: |
+| Retained | If-chain | 54,546 | 4/29 |
+| Retained | Switch | 54,548 | 4/29 |
+| Diagnostic | If-chain | 3,638 | 4/29 |
+| Diagnostic | Switch | 3,638 | 4/29 |
+
+Every cell has the same 55 global definitions/bindings. Only `detectRetrainReq`
+and `v34handshak` bodies/relocations change; no function symbols are added or
+removed, and handshake external-call target counts are unchanged. The standalone
+detector remains one byte smaller than the blob in all four cells; that is a
+size measurement, not a claim of a one-byte mismatch. Its candidate equality
+return uses `sete`, whereas the blob branches to zero/one return paths. Other
+operand and instruction differences remain. Neither function becomes byte-exact.
+
+Adopted the switch because it recovers observed dispatch semantics/codegen in
+both contexts with ordinary idiomatic source, despite no exact-count gain and
+a two-byte retained size regression. Retargeted two existing source anchors to
+the equivalent switch spelling; no mutation or fuzzing harness was run.
+Reproducer: `tools/v34_retrain_switch.py`; complete commands, hashes, canonical
+verdicts, exports and body comparisons are in
+`build/v34-retrain-switch/results.json`, with per-cell RTL and disassemblies.
+
+The next bounded source question is the detector's boolean return: compare a
+shared direct equality return with an ordinary explicit `if` returning one,
+then zero. It is a distinct CFG hypothesis suggested by the blob's branch
+sequence, not a reason to force registers or spills. For allocator work,
+the ten pressure controls above already give the requested small example and
+show why the incoming argument can remain on the stack. Recovering the whole
+handshake still requires matching its whole-function live ranges and inline
+choices; local dispatch recovery does not resolve that larger question.
+
+Validation: `make phase J=8` passed: 385 period differential tests, zero
+failures; structural checks clean, including 14,199 resolved references and
+10,038 source anchors over 285 suites, zero detached/non-unique anchors.
+Only anchor metadata was checked; no mutation harness was executed.
