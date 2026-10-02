@@ -61,6 +61,9 @@
 #include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
 
+/* F11618: typed member deletion retains each owned pointer across free. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 /*
  * The two sizes the constructor allocates, kept as named literals rather than
  * `sizeof(V90Phase3Modulator)`/`sizeof(V90Phase4Modulator)` even though both
@@ -170,23 +173,17 @@ V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
  * The phase 4 modulator is released BEFORE the converter it was handed, and
  * it does not release that converter itself -- its ownership flag is 1 here,
  * because this class passed a non-null third argument.  The order is
- * therefore not load-bearing and the guards are what matter.
+ * preserved. F11618 uses member delete at all three typed class releases,
+ * retaining one evaluated pointer across each destructor/free pair. All three
+ * axes together recover both199B clones; every partial cross misses. The two
+ * primitive frees and automatic Scrambler destruction remain as observed.
  * ===========================================================================
  */
 V90Modulator::~V90Modulator()
 {
-	if (phase3Modulator) {
-		phase3Modulator->~V90Phase3Modulator();
-		sysdep_free(phase3Modulator);
-	}
-	if (phase4Modulator) {
-		phase4Modulator->~V90Phase4Modulator();
-		sysdep_free(phase4Modulator);
-	}
-	if (bitsToSymbol) {
-		bitsToSymbol->~V90BitsToSymbol();
-		sysdep_free(bitsToSymbol);
-	}
+	delete phase3Modulator;
+	delete phase4Modulator;
+	delete bitsToSymbol;
 	if (symbolBuf)
 		sysdep_free(symbolBuf);
 	if (frameBuf)

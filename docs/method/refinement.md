@@ -2634,3 +2634,13 @@ V90Phase4Modulator's adapter-only cell raw-merges; member delete recovers both
 null guard and automatic member destruction. A recovered first-emitted body
 does not establish that later register/scheduler differences must disappear.
 [Recovery](../v90p4-owned-delete-recovery.md).
+
+
+Cross each independently observed owned-member lifetime. V90Modulator's
+three typed destructor/free pairs all retain one blob pointer across calls.
+Each partial member-delete combination matches199B but still fails the
+complete body; all three recover both clones with all23 bystanders unchanged
+(F11618). Use complete bytes/relocations to distinguish the crossed family
+from an accidental size match. Preserve primitive frees and generated member
+destructors, and isolate the adapter-only control.
+[Recovery](../v90-owned-delete-recovery.md).

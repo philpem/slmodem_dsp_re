@@ -133899,3 +133899,16 @@ this language construct. Exact destructor does not close the three other
 register/scheduler residuals; do not infer that recovery is sufficient.
 Realowned/supplied lifecycle and synthetic guard probes distinguished.
 [Recovery and gates](v90p4-owned-delete-recovery.md). (2026-10-02)
+
+
+## F11618. All three V90 parent member-delete lifetimes recover both clones
+
+Three independently typed owned pointers remain cached through actual blob
+destructor/free pairs; source manually reloaded members. Nine-cell completeTU
+cross isolates adapter-only rawmerge then three memberdelete axes. Every
+nonzero cell199B but only111 EXACT; partialcells BYTES38/38/22/36/22/20.
+Both D1/D2 recover199B from200B,19→21exact/25functions, no losses, all23
+bystanders/nontext/binding/import/export unchanged. Prior F10160 explicit
+destructor recovery did not test this language construct. Real all-live
+constructorchain and synthetic pre-release/null guard subsets distinguished.
+[Recovery and gates](v90-owned-delete-recovery.md). (2026-10-02)
