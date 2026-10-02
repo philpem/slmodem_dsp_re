@@ -72,8 +72,12 @@ def main():
     flags=['-I/src/include' if f=='-Iinclude' else '/src/'+f if f=='tools/toolchain/period_compat.h' else f for f in flags]
     hpaths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).splitlines()
     assert not subprocess.check_output(['git','diff','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).strip()
-    local_paths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--','src/pump/v32'],cwd=ROOT,text=True).splitlines()
-    hpaths += [p for p in local_paths if p.endswith('.h')]
+    local_roots=sorted({'src/pump/v32'} | {str(Path(p).parent) for p in SOURCE_PATHS})
+    local_paths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--']+local_roots,cwd=ROOT,text=True).splitlines()
+    local_headers=sorted({p for p in local_paths if p.endswith('.h')})
+    if local_headers:
+        assert not subprocess.check_output(['git','diff','--name-only',REV,'--']+local_headers,cwd=ROOT,text=True).strip(), 'local header baseline drift'
+    hpaths += local_headers
     headers={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in hpaths}
     result={'revision':REV,'domain':args.domain,'config':config,'headers':headers,'families':{}}
     tc.print_identity(image,tc.GENTOO_COMPILER_PATH,True)

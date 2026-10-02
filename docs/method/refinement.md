@@ -2804,3 +2804,18 @@ Even alpha comparison fails prologue ordering. Keep all26 function/48 data
 controls, distinguish recovered operations from complete identity, and close
 the width family without arithmetic or register permutations.
 [Controls](../v34-hp-counter-controls.md).
+
+Separate loop traversal from recovered arithmetic. V34 echo cursor/count
+controls reach reference sizes yet fail complete/alpha bodies, with meaningful
+bystander changes (F11645/F11646). Preserve original zero-count boundaries,
+report all 26 function/48 data controls, and close the finite families.
+[Controls](../v34-echo-cursor-controls.md).
+
+A conventional advancing structure pointer can recover an indexed loop's
+observed cursor without changing widths or arithmetic: V8 DFT energy becomes
+74B EXACT (F11647). Validate all siblings/data and production raw promotion,
+then report whole-link layout effects separately. Register local headers for
+every experimental source directory; setup failures are invalid, not compiler
+rejections (F11648). Preserve the failed setup and prove the corrected baseline
+raw-reproduces before counting any candidate.
+[Recovery and apparatus control](../v8-dftenergy-recovery.md).

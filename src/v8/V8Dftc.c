@@ -1,7 +1,8 @@
 /*
  * V8Dftc.c -- counter-independent DFT/cosine ownership recovered from
  * LOCAL v8_costbl and its three reference relocations: two in
- * v8_dftupdate and one in v8_cosread. Bodies and data are unchanged.
+ * v8_dftupdate and one in v8_cosread. That ownership move left bodies
+ * and data unchanged; the energy cursor recovery is recorded in F11647.
  */
 #include "dsplib/v8.h"
 
@@ -95,11 +96,11 @@ v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
 {
 	short i;
 
-	for (i = 0; i < n; i++) {
-		int re = (int)((unsigned int)bin[i].re << shift) >> 16;
-		int im = (int)((unsigned int)bin[i].im << shift) >> 16;
+	for (i = 0; i < n; i++, bin++) {
+		int re = (int)((unsigned int)bin->re << shift) >> 16;
+		int im = (int)((unsigned int)bin->im << shift) >> 16;
 
-		bin[i].energy = (short)((re * re + im * im) >> 16);
+		bin->energy = (short)((re * re + im * im) >> 16);
 	}
 }
 

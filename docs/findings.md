@@ -134204,3 +134204,49 @@ objects; all other bodies/relocations and metadata/nontext controls agree.
 Exact11/26 unchanged; no source adoption or new fixture execution.
 Close this counter family without adjacent arithmetic/register/declaration
 variants. [Controls](v34-hp-counter-controls.md). (2026-10-02)
+
+## F11645. Echo filter forward cursors recover size but not complete code
+
+Four complete-TU cells at 20821d7c cross history-shift and dot-product traversal.
+Production 137B/SIZE2; dot-only 139B/BYTES90; shift-only 138B/SIZE1;
+both 139B/BYTES82. Alpha instruction counts fail too. Shift-only also changes
+EchoAdapt; other cursor cells change only EchoFilter. All 26 function/48 data
+metadata and nontext controls agree; exact 11/26 unchanged. Preserve taps!=1
+and unsafe original zero boundary. No adoption or new fixture execution;
+finite traversal domain closed. [Controls](v34-echo-cursor-controls.md).
+(2026-10-02)
+
+## F11646. Echo adaptation three-cursor count loop still misses bytes
+
+Two full-TU cells reproduce 95B production; forward three-cursor candidate
+reaches 79B but remains BYTES23. Reference/candidate alpha counts 34/33;
+EchoHistoryBackwardClean and V34TimingFilter also change with mnemonic
+changes against their baselines. Exact 11/26 unchanged, all 26 function/48
+named data metadata and nontext controls agree. Preserve arithmetic and
+store order; no source adoption or new fixture execution. Close this finite
+cursor/count family without register or declaration variants.
+[Controls](v34-echo-cursor-controls.md). (2026-10-02)
+
+## F11647. Advancing the DFT energy bin recovers 74 byte-exact bytes
+
+Two complete-TU cells retain signed-short counter/arguments and all arithmetic;
+advancing bin instead of indexing bin[i] recovers v8_dftenergy, 98B to 74B
+EXACT. Only this function changes across three functions/one named data
+object; complete symbol/data/nontext controls agree, exact 1 to 2/3. All 300
+production objects inspected, sole changed object raw-matches candidate.
+Whole-tree 919 to 920/1852, 94,850 exact bytes/no losses. Fixed Gentoo phase
+386/0 and structural/static anchors clean; energy fixture 8705 checks over
+272 paired calls. Complete partial positioned matches +59, allocated bytes
+-32, relocation exact records -2; whole links remain DIFFERENT.
+[Recovery, boundaries and complete controls](v8-dftenergy-recovery.md).
+(2026-10-02)
+
+## F11648. Experiment header manifests must include source-local headers
+
+Initial V8 energy setup fails before compilation: src/v8/v8int.h was copied
+but absent from the shared driver's header register. Preserve and exclude the
+invalid setup; no compiler result exists. Discover tracked local headers from
+actual source directories, retain historical V32 register, and check baseline
+header drift. The valid V8 rerun records the missing header and raw-reproduces
+production before measuring the gain. No flags/source behavior change.
+[Invalid artifact and valid controls](v8-dftenergy-recovery.md). (2026-10-02)
