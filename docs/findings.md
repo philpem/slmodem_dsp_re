@@ -133511,3 +133511,29 @@ Fixed Gentoo make phase385 passed/0 failed. MTD fixture passes13 setup,
 checks. Structural14239 references/2716 finding headings and285 suites/
 10038 static anchors clean. No fuzzing, mutation execution or modern
 portability claim. Header now describes unchecked allocation failure accurately.
+
+
+## F11588. Copied-config reads and original fresh carrier recover FPM_MRF_init
+
+Blob193B/current183B. Eight-cell independent cross of member quotient, short
+counter and common length store/original fresh carrier has only one exact193B
+hit. Short-counter+fresh alone193B/BYTES30; size is insufficient. All3 functions/
+4 globals/data/type/binding/visibility preserved, only init changes,1/3 ->2/3
+exact/no losses. Existing fixed fixture covers fresh/reuse and legal successive
+initialization reaching growth with debug transcript controls; synthetic manual
+shrink is identified separately. [Recovery](fpm-mrf-init-recovery.md).
+(2026-10-02)
+
+Retained comparison build300/300, zero failures; only src_dsp_fpm_mrf.c.o
+changes and raw-reproduces the winning complete object. Whole tree880/1852
+->881/1852 exact,87,144 ->87,337 exact bytes, only init gain/no losses.
+Same-order complete300-object partial links remain DIFFERENT (strict exit1):
+positioned68,342 ->68,275 /943,398, allocated914,110 ->914,126;
+exact section70/92, symbol394/2907 unchanged, relocation1020 ->1021 /18317.
+Positional full-object count decreases despite the per-function gain; do not
+claim complete object/profile convergence or adjust padding/layout for score.
+
+Fixed Gentoo make phase385 passed/0 failed. Existing MRF fixture passes513
+checks across config, four ratios and debug-growth controls. Structural14239
+references/2717 finding headings and285 suites/10038 static anchors clean.
+No fuzzing, mutation execution or modern portability claim.

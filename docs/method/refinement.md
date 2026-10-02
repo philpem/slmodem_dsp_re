@@ -2426,3 +2426,12 @@ unsupported allocation-success guard. Only the combined16-cell cross recovers
 184B exactly (F11587). Verify exceptional outcomes with fixed child processes
 and successful controls; an added NULL return can hide a blob fault and alter
 fidelity. [Recovery](../fpm-mtd-create-recovery.md).
+
+
+After aggregate configuration copy, subsequent arithmetic may read the owner
+fields rather than the incoming pointer. FPM_MRF_init also uses the original
+fresh argument as an allocation carrier and a short clear counter (F11588).
+An8-cell independent cross needs all three for full193B exactness; counter+
+carrier alone reaches size but differs30 bytes. Keep growth ownership/debug
+ordering and verify growth through valid successive initialization.
+[Recovery](../fpm-mrf-init-recovery.md).

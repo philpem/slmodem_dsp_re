@@ -24,40 +24,26 @@ void
 FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 {
 	short per_phase;
-	int allocate;
-	int i;
+	short i;
 
 	state->cfg = *cfg;
 	state->need = 1;
 	state->phase = 0;
 	state->widx = 0;
 
-	per_phase = (short)(cfg->taps / cfg->branches);
+	per_phase = (short)(state->cfg.taps / state->cfg.branches);
 
-	if (fresh) {
-		/*
-		 * Caller asserts the state is uninitialised, so the existing
-		 * buffer pointer is not inspected -- and notably not freed.
-		 * Calling init twice with `fresh` set therefore leaks; that is
-		 * the original's behaviour and is reproduced.
-		 */
-		state->history_len = per_phase;
-		allocate = 1;
-	} else if (state->history_len < per_phase) {
-		/* Existing buffer too small: replace it.  No newline in the
-		 * original's message, unlike every other one here. */
+	/* F11588: fresh owns allocation; a growing history promotes it to fresh.
+	 * A nonzero caller fresh value never inspects/frees the previous buffer. */
+	if (!fresh && state->history_len < per_phase) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Reallocate FPM_MRF buffer");
 		sysdep_free(state->history);
-		state->history_len = per_phase;
-		allocate = 1;
-	} else {
-		/* Big enough to reuse; just adopt the new length. */
-		state->history_len = per_phase;
-		allocate = 0;
+		fresh = 1;
 	}
 
-	if (allocate)
+	state->history_len = per_phase;
+	if (fresh)
 		state->history = sysdep_malloc(
 			(unsigned)per_phase * sizeof(short));
 
