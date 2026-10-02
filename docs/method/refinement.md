@@ -2685,3 +2685,20 @@ places VPCMXF_Delete and its class destructor in VpcmFloModem.cpp; ordinary
 class delete then recovers109B from117B by suppressing a sibling free jump,
 with all33 bystanders unchanged (F11623). Preserve the same-TU destructor
 inlining boundary. [Recovery](../vpcmx-delete-recovery.md).
+
+
+Store duplication in the object can motivate a control-placement experiment
+without proving original duplicated source. CID reset branch-local clearing
+recovers118B shape but remains BYTES8 (F11624). Both exits'EAX0 separately
+motivate an ordinary zero-result return hypothesis; its crossed int cells
+still miss (F11625). Close the finite family, preserve baseline controls and
+ABI uncertainty, and do not expand into register or return-type spellings.
+[Controls](../cid-reset-controls.md).
+
+
+An equal-size output-helper candidate is still a negative result when its
+complete body differs. FPM_div's helper/word-index cross reaches150B but
+BYTES105; independent initialization ownership after the zero guard gives
+BYTES108 (F11626). Count all emitted functions separately from blob-common
+symbols, reproduce repeated controls, and close the declared family rather
+than perturbing counter scope, loops or frames. [Controls](../div16-normalization-controls.md).

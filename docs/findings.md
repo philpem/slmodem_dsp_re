@@ -133970,3 +133970,33 @@ reproduced, adapter-only rawmerge, ordinary scalar class delete EXACT109B.
 nontext/binding/import/export agree. F11430 C++ FILE provenance supersedes
 F7818 C-leaf restriction. Preserve declared same-TU destructor and six generated
 member releases. [Recovery and gates](vpcmx-delete-recovery.md). (2026-10-02)
+
+## F11624. CID reset branch-local clears recover118B shape but miss complete bytes
+
+Two completeTU cells isolate samples_fill clearing inside each mode arm.
+Baseline110B/SIZE8; branch-local118B/BYTES8, exact6/10 unchanged, no gains/
+losses. Only cid_reset changes; nine bystanders/nontext/binding/import/export
+unchanged, zero named data. Eight register-coloured rows differ, but existing
+alpha rejects at a backward-entry live-range conflict; do not claim it passed.
+No source adoption or alias bug claim. [Controls](cid-reset-controls.md).
+(2026-10-02)
+
+## F11625. CID reset zero-return/control cross yields no exact gain
+
+Blob both exits leaveEAX0; weaker declaration evidence than caller consumption.
+Four cells void/int×common/branch clear:110/SIZE8,118/BYTES8,112/SIZE6,
+120/SIZE2. Matching isolated prototype overlays, exact6/10 unchanged, only
+cid_reset changes. Repeated void controls raw-reproduce earlier objects.
+No source/header/test adoption or unsigned/bool/return-expression expansion.
+[Full audits and fixture limits](cid-reset-controls.md). (2026-10-02)
+
+## F11626. FPM_div word-output and initialization controls recover no exact body
+
+Four full-TU cells cross output helper and word index:98/SIZE52,
+104/SIZE46,144/SIZE6,150/BYTES105 against150B blob. A separately declared
+three-cell stage repeats baseline/helper-word and moves count initialization
+into the helper after the zero guard:150/BYTES108. Repeated controls raw-match;
+seven compiles/five emissions, no gains/losses,0/1 common exact. Three emitted
+functions/zero named data, both apparatus bystanders/nontext/binding/imports/
+exports unchanged. No source adoption or further counter/scope/frame variants.
+[Controls and stopping rule](div16-normalization-controls.md). (2026-10-02)
