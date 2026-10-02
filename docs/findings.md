@@ -134404,3 +134404,33 @@ V90Parameters C2 BYTES4 entry; baseline and final sets both omit it, and old/
 new tools reproduce the same verdict. No new ratchet loss or floor lowering.
 [Integration and proof scope](anonymous-jumptable-proof.md).
 (2026-10-02)
+
+## F11660. updateAlpha word quotient test recovers before allocation but spills persist
+
+Two complete-V34TX cells at900311af change only int r to short r. Initial
+RTL selects HI subregister comparison and combine selects cmphi; allocation/
+conflict/preference/reload diagnostics stay identical and both quotient and
+numerator spills remain. Full body204→205B versus169B, exact1/7 unchanged.
+Inline adaptecho changes but remains795B versus755B; alpha61/57 and193/183
+rows fail. Five siblings and zero-data/metadata/nontext controls agree; raw
+baseline reproduces, two distinct emissions. No source adoption/candidate
+runtime claim. Existing588 numeric paired calls and42 debug calls/85checks
+are component coverage context, with trap/overflow/shift limits preserved.
+Six-function screen spans two TUs/eleven bodies, not the remainder. Close
+this local family without declaration/shift/register variants.
+[Controls and stage evidence](v34-alpha-width-controls.md). (2026-10-02)
+
+## F11661. Five unresolved complete bodies split dispatch tables from initializer copying
+
+Read-only screen of1082 equal-size production copies finds five UNRESOLVED
+bodies, matching the full1852 census. Four are dispatch consumers refused by
+the current control/stack domain; no entry-identity proof or relaxation here.
+getSegmentPointer is instead a64-byte anonymous initializer copy: CLD/count16/
+REP MOVSL to local stack array, then source-register overwrite. Blob/candidate
+.rodata+2944/0 have equal16-int payloads and non-writable allocated flags2.
+Pool audit finds three start-address copy consumers per object, no named
+overlaps or observed address escape; current TU four functions/eight data.
+This still proves read values, not canonical destination identity; equal data alone
+cannot remove ordinary-section safeguards. No source/tool-grade adoption,
+strict925/1852 unchanged. [Screen and limits](anonymous-jumptable-proof.md).
+(2026-10-02)

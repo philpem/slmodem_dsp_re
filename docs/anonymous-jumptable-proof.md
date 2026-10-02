@@ -126,3 +126,40 @@ ACCEPT on the same production object. It is absent from both the immediate
 924 baseline and final925 set. Do not describe the old floor as fully green
 or lower it silently: this change has zero new losses against either set.
 The three ratchet self-tests validate the detector, not that old tree floor.
+
+
+## Remaining unresolved-body evidence screen
+
+At900311af, a read-only size-filtered screen checks1082 equal-size production
+object copies and finds exactly five UNRESOLVED bodies, consistent with the
+complete1852-function census. Four consume anonymous dispatch tables:
+RxNextStateV17 (730B), V32LocLoopNextState (794B), V90Resampler::setBllState
+(693B) and V90ConstellationPower::getConstellationInfo (227B). The bounded
+proof refuses their control/stack forms. Their table slots have not yet been
+proved here; matching instruction bytes do not license anonymous masking.
+
+The fifth, getSegmentPointer(PcmType,int),115B, consumes a64-byte aggregate
+initializer pool rather than a dispatch table. Actual CLD, count16, source
+pointer and REP MOVSL copy it to the stack before the source register is
+overwritten. The reconstructed local int[2][8] has the same16 boundaries.
+Two actual ELF objects have identical64-byte payloads at .rodata+2944/0,
+both allocated/non-writable flags2. This proves pool values at the observed
+read extent, not yet the destination identity required by the metric.
+
+F11661 records this classification screen. No comparator expansion or new
+exact count is claimed. A future initializer-pool investigation must review
+all references, symbol overlaps and pointer escape, and distinguish immutable
+read equivalence from true canonical destination identity. Absent that proof,
+ordinary .rodata remains UNRESOLVED despite matching bytes or source literals.
+Artifacts: build/jumptable-controls/unresolved-screen.json. This is a screen
+of equal-sized copies, not an exhaustive source-recovery classification.
+
+
+A follow-up pool census finds exactly three start-address R_386_32 copy
+consumers in each object: getSegmentPointer and both calculateDilLength
+overloads. No named starts or sized symbol overlaps occur in the64-byte
+interval; no address escape is observed in these consumers. The complete
+current TU has four functions/eight named data objects. This strengthens
+initializer read equivalence, but still does not establish destination
+identity under the metric. Keep UNRESOLVED; any copy-equivalence detector
+must report a separate measure and have explicit positive/negative controls.

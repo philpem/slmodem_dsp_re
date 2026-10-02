@@ -2905,3 +2905,21 @@ checks need prefix handling outside the owner too. Review the full exact-set
 diff and production hashes: MakeTxData’s 195-byte gain completes a previously
 committed source recovery, while the comparator stage emits no new code.
 [Integration](../anonymous-jumptable-proof.md).
+
+
+Separate local type lowering from allocator state. updateAlpha’s short
+quotient restores the HI predicate in initial RTL and combine but leaves
+its SI arithmetic pseudo, allocation conflicts and two spills unchanged;
+full body becomes205B versus169B (F11660). A recovered TESTW is not a
+recovered source body or a spill improvement. Preserve compiler metadata
+normalization narrowly and delimit diagnostics before allocated instructions.
+[Two-cell control](../v34-alpha-width-controls.md).
+
+
+Classify unresolved relocations by the actual consuming instruction before
+expanding a dispatch proof. The five remaining complete-body candidates are
+four jump-table consumers and one REP aggregate initializer (F11661).
+A typed source literal and equal immutable payload prove read values but do
+not alone prove canonical destination identity. Audit references/overlaps and
+address escape; retain ordinary-section refusal while that distinction is
+open. [Screen](../anonymous-jumptable-proof.md).
