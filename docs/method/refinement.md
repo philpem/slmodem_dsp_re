@@ -1103,16 +1103,17 @@ own. "One type, one home" is about TYPES and undefined behaviour; this is an
 inline function, the duplication is deliberate, and consolidating it needs the
 SET diff re-run.
 
-**Bounded, and the bound is now named to the byte.** `V92deleteConstellations`
-(3 of 173) and `V92deleteFilterCoefficients` (3 of 106) are the purest
-instances of the signature in the object -- byte-identical over 93 of 106
-bytes, residual one 13-byte block -- and `delete[]` does not exist in a `.c`.
-Buying them means asserting `V92ParamsInfo` was a `.cpp` of `extern "C"`
-functions, which this codebase does elsewhere (`v34hstx1.cpp`). **The test is
-a null**: a relocation's PRESENCE proves nothing about a TU (306, 333), there
-are no unrelocated calls out of those five functions and no local text symbols
-in their span to be the target of one. Declined; do not rename the file to buy
-the spelling (7818).
+**A declined language-dependent spelling can reopen after independent TU
+recovery.** F7818's V92 deletion restriction was based on the C reconstruction
+then present. F11404 recovered V92MappingParamsInt.cpp; its current fields are
+typed int*/float* arrays. F11615's bounded deletion cross now closes both
+173B/106B bodies, leaving all three bystanders unchanged. F11616 crosses
+consistent new[] allocations: all deletion-bearing cells raw-merge, so paired
+array expressions are an idiomatic supported family, not unique allocation
+spelling. Keep the TU-local unsized host adapter position and original sizes,
+guards, dangling slots and call order; real allocator lifecycle and whole-TU
+data/export controls decide adoption. No language/layout forcing was needed.
+[Recovery](../v92-array-lifecycle-recovery.md).
 
 ### Lever 8. Width and signedness — and the DESTINATION's declared type
 

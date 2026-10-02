@@ -133864,3 +133864,25 @@ adoption, original int return is not refuted. Invalid empty-domain attempt
 preserved/excluded; replay wrappers now reject it and preflight generators.
 Correct F11613's count126→116 (unchanged108→98), census/gates unaffected.
 [Controls](agc-return-controls.md). (2026-10-02)
+
+
+## F11615. Recovered V92 C++ provenance unlocks both array deletion bodies
+
+F7818's C-language restriction is historical after F11404 recovered the actual
+V92MappingParamsInt.cpp regime. Current arrays are int*/float*, not void*.
+Four complete-TU cells cross constellation/filter delete[] with ordinary
+TU-local unsized host adapter: each independently closes its173B/106B body,
+both two gains/no losses. Other three bodies unchanged; five function symbols/
+no named data objects, nontext/binding/import/export controls agree.
+[Recovery and gates](v92-array-lifecycle-recovery.md). (2026-10-02)
+
+## F11616. Paired V92 new[] allocations raw-merge with retained host calls
+
+Separate five-cell complete-TU allocation cross with supported deletions held
+fixed: constellation/new-int and coefficient/new-float axes over TU-local
+host allocation adapter. All four deletion-bearing cells raw-merge exactly,
+including unchanged121B/73B creators and2679B parameter fill. Adopt idiomatic
+paired lifecycle; original allocation spelling is not uniquely established.
+Real live allocator cases and synthetic unknown-pointer null-pattern probes
+remain distinguished; eleven static anchors retargeted, no execution.
+[Controls](v92-array-lifecycle-recovery.md). (2026-10-02)

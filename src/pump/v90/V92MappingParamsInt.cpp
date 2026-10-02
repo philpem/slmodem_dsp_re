@@ -8,12 +8,14 @@
  * translation unit declaring them `extern "C"`, exactly as the sibling
  * `V90MappingParamsInt.cpp` is (F11393).  This tree reconstructed them in
  * `V92ParamsInfo.c`; compiling that file as C++ recovers the FILE name and
- * the language.  The only source change is the ten `sysdep_malloc` casts C
- * requires and C++ does not: a `void *` does not convert implicitly to the
+ * the language.  That language recovery added the ten `sysdep_malloc` casts C++
+ * requires and C does not: a `void *` does not convert implicitly to the
  * `int *`/`float *` fields.  The two byte-exact functions
  * (`V92createConstellations`, `V92createFilterCoefficients`) survive the
  * front-end change unchanged, and `V92setParamsInfoFromCPUnPck` improves
- * (F11404).
+ * (F11404). F11615/F11616 now recover paired array-new/array-delete;
+ * the supported array allocation spellings raw-merge, while array deletion
+ * reproduces both full bodies. Original spelling is not uniquely established.
  *
  * Five functions, 3,106 bytes.  Four of them are the allocators and the
  * deleters, 411 bytes, with exactly ten `sysdep_malloc` calls and ten
@@ -36,7 +38,7 @@
  * freed, which is D170.  Both facts are the object's and both are reproduced.
  *
  * THE BLOCK PLACEMENT IN THE OBJECT IS GCC'S AND NOT THE SOURCE'S.  Each
- * `if (p) sysdep_free(p)` compiles to a forward `jne` into an out-of-line
+ * array deletion compiles to a forward `jne` into an out-of-line
  * block that calls and jumps back, so the six calls in `V92deleteConstellations`
  * appear in reverse order at the tail of the function.  That is basic-block
  * placement, which CLAUDE.md's rule puts in the "free, so ignore it" column;
@@ -50,6 +52,11 @@
 #include "dsplib/V92CPUnPck.h"
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
+
+/* F11615/F11616: ordinary array expressions over TU-local host adapters.
+ * Keep this position; all tested allocation families emit the same object. */
+inline void *operator new[](size_t size) { return sysdep_malloc(size); }
+inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
  * The scale factors, every one of them read off a `.rodata.cst4` operand
@@ -105,56 +112,44 @@ void
 V92createConstellations(struct V92ParamsInfo *p)
 {
 	/*
-	 * Rolled, this is:
-	 *     for (i = 0; i < 6; i++)
-	 *             p->constellations[i] =
-	 *                     sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	 * Rolled, this allocates six equal int arrays. F11616: new[] and the
+	 * previous explicit host allocator calls emit the same full object.
 	 */
-	p->constellations[0] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[1] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[2] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[3] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[4] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[5] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[0] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
+	p->constellations[1] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
+	p->constellations[2] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
+	p->constellations[3] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
+	p->constellations[4] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
+	p->constellations[5] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];
 }
 
 void
 V92createFilterCoefficients(struct V92ParamsInfo *p)
 {
-	p->z1 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->p1 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->z2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->p2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
+	p->z1 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];
+	p->p1 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];
+	p->z2 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];
+	p->p2 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];
 }
 
 void
 V92deleteConstellations(struct V92ParamsInfo *p)
 {
-	if (p->constellations[0] != 0)
-		sysdep_free(p->constellations[0]);
-	if (p->constellations[1] != 0)
-		sysdep_free(p->constellations[1]);
-	if (p->constellations[2] != 0)
-		sysdep_free(p->constellations[2]);
-	if (p->constellations[3] != 0)
-		sysdep_free(p->constellations[3]);
-	if (p->constellations[4] != 0)
-		sysdep_free(p->constellations[4]);
-	if (p->constellations[5] != 0)
-		sysdep_free(p->constellations[5]);
+	delete[] p->constellations[0];
+	delete[] p->constellations[1];
+	delete[] p->constellations[2];
+	delete[] p->constellations[3];
+	delete[] p->constellations[4];
+	delete[] p->constellations[5];
 }
 
 void
 V92deleteFilterCoefficients(struct V92ParamsInfo *p)
 {
-	if (p->z1 != 0)
-		sysdep_free(p->z1);
-	if (p->p1 != 0)
-		sysdep_free(p->p1);
-	if (p->z2 != 0)
-		sysdep_free(p->z2);
-	if (p->p2 != 0)
-		sysdep_free(p->p2);
+	delete[] p->z1;
+	delete[] p->p1;
+	delete[] p->z2;
+	delete[] p->p2;
 }
 
 /*
