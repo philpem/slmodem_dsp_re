@@ -134559,3 +134559,25 @@ closest515B is not recovered source. XOR-before-SETL and post-AND widening
 remain distinct. No source/runtime adoption or explicit author mask claim.
 Close the bounded domain and reframe; no neighboring type/register/order fits.
 [Full cell ledger](mrf-counter-width-controls.md). (2026-10-02)
+
+
+## F11670. Power-first logical loop recovers an exact 72-byte V90 power-index body
+
+Three posted domains cover8 full-TU compilations/four distinct source forms.
+Index-first &&48B skips the blob's index-zero comparison. Index-first &90B
+carries its predicate across x87 status clobber and saves an extra register.
+Power-first &74B restores predicate lifetime but adds XOR_EAX for integer
+promotion. Conventional power-first &&72B reproduces the complete blob body
+and both relocation targets; no casts, temporary predicates or flags changed.
+All9FUNC/1data controls reviewed, eight sibling bodies/data/metadata/nontext
+unchanged; strict5/9→6/9, one exact gain/no loss. Adopt only predicate order,
+retarget the existing threshold anchor without changing its meaning. Existing
+fixed power-index coverage is118 paired finite/infinite calls; NaN is explicitly
+excluded and no NaN coverage claimed. Targeted deciding period fixture passes.
+Full300-object review isolates this sole raw-matching TU change. Strict
+whole-tree925/1852→926/1852, exactbytes95363→95435, no losses. Fixed full
+phase387/0 and structural checks pass. Partial text grows32B including
+alignment; positioned equal bytes/relocations fall18/5 against blob, whose
+complete partial comparison remains DIFFERENT. This is a function gain, not
+full-object completion.
+[Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)

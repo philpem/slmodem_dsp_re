@@ -2996,3 +2996,12 @@ and conditional-zero destination identity are independent source mechanisms;
 equal lengths can hide different bodies. Close the declared family after
 complete review, retain losing explanatory controls, and reframe before
 more nearby type/order changes. [Ledger](../mrf-counter-width-controls.md).
+
+
+Inspect Boolean predicate lifetime across x87 status clobbers before calling
+a mismatch allocation-only (F11670). Power-first && recovers an exact72-byte
+loop where index-first && skips a comparison, index-first & carries a predicate
+across FNSTSW, and power-first & introduces integer-promotion zeroing. Ordinary
+logical operand order can recover both access and lifetime boundaries without
+casts or forced registers. Cross access/order/operator controls and compare
+complete bodies, not just sizes. [Full-TU recovery](../v90-power-index-predicate-recovery.md).

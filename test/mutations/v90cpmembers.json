@@ -76,8 +76,8 @@
  },
  {
   "label": "the ladder walk uses <= where the object uses <",
-  "find": "\twhile (index != 0 && averagePowerLimits[index] < power)",
-  "replace": "\twhile (index != 0 && averagePowerLimits[index] <= power)"
+  "find": "\twhile (averagePowerLimits[index] < power && index != 0)",
+  "replace": "\twhile (averagePowerLimits[index] <= power && index != 0)"
  },
  {
   "label": "the ladder walk starts one entry down",

@@ -1,0 +1,25 @@
+# Power-index predicate recovery
+
+F11670 follows three declared full-TU domains atfc8641f1: [eager boundary](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5958848280), [predicate lifetime](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5958889903), and [logical result](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5958929582). Eight valid compiles cover four distinct source/emission forms in src/pump/v90/V90ConstellationPower.cpp. All unchanged production and reused candidate raw controls reproduce. Gentoo GCC3.4.2-r2/G++ and executed assembler2.15.92.0.2 use the saved complete C++ profile and mandatory DSPLIB_REPRODUCE_BUGS.
+
+| Loop predicates | Bytes (blob72) | Interpretation |
+| --- | ---: | --- |
+| index !=0 && limit< power |48| Original reconstruction skips comparison at index0 |
+| (index !=0) & (limit< power) |90| Eager comparison; index Boolean survives across x87 status clobber |
+| (limit< power) & (index !=0) |74| Reference lifetime restored; integer Boolean promotion adds XOR_EAX |
+| limit< power && index !=0 |72| Complete canonical byte identity, including both relocation targets |
+
+The blob computes floating SETB first, then TEST index/SETNE and TEST of the low Boolean bytes. It reads the ladder even at index0. This is both a control boundary and a predicate lifetime across FNSTSW AX. The conventional power-first logical form implements the observed order without eager integer promotion. The source's old comment already described that rotated order; the implementation had its operands reversed. Adoption changes only the two logical operands, with explanatory comment. No cast, Boolean temporary, register constraint or profile change. Original spelling is not proved unique, but the ordinary source maps exactly under the period compiler.
+
+All9 function definitions and one named data object are audited, including eight unchanged siblings. Symbol type/binding/import/export inventories, named table, allocated nontext contents/sizes and canonical relocations agree. Strict TU count5/9→6/9, exactly one gain and no losses. Root independently compares the entire target body to the reference using byteident.body:72 bytes and two relocation targets equal. Experimental artifacts are build/playbook-cpower-{eager,order,logical}/{results.json,complete-object-audit.json}.
+
+Existing t_v90cpower exercises118 paired power-index calls:105 ladder-boundary cases,11 edge values and both infinities. Its full owner-unchanged checks are per-side, not only pairwise. The method consumes a scalar/global ladder, not owner state, so constructed public modem history is not claimed. The fixture explicitly excludesNaN under D350; the first domain's initial coverage wording was corrected in its exact issue comment. No new NaN claim or tolerance is introduced. The deciding targeted period fixture passes all4297 checks, including124 power-index checks covering118 paired calls. Production integration measures300 objects: only V90ConstellationPower.cpp changes, raw-identical to the audited exact candidate. The full fixed phase passes387/0 plus structural checks (/tmp/cpower-phase.log);285 suites/10038 static anchors are clean. Strict whole-tree925/1852→926/1852, exact bytes95363→95435. The sole gain is _ZN21V90ConstellationPower21getPowerIndexForPowerEf, with no losses. Artifacts: build/cpower-validation/{production-before.json,production-after.json,tree-before.json,tree-after.json,gain-ledger.json,partial-before-after.json,partial-blob-after.json}.
+
+The same-order partial link grows32 text bytes (24 body bytes plus alignment); later positions shift. Against its prior link,98/99 section records,8728/18218 relocation records and1872/2984 symbols retain exact positions. Against the blob, the census remains DIFFERENT:70/92 exact section records,1018/18317 relocations,394/2907 symbols and68571/943398 positioned reference bytes. Prior blob equal bytes68589 and relocations1023 decrease with layout shifts; a function gain does not establish full partial-link completion. The full300-object review isolates the source change; no partial comparison tolerance or profile adjustment is introduced.
+
+The existing v90cpmembers threshold anchor is retargeted to the reordered expression, preserving its <= comparator replacement. Static anchor checks only; no fuzzing or mutation execution.
+
+User checkpoint: finish this source gain, commit/push, update PR244 and land it after greenCI, then pause before another PR. No fresh domain beyond this checkpoint.
+
+
+Historical experiment reproduction requires a separate fc8641f1 checkout with the three new cpower experiment scripts copied into tools/ and its production objects built. The shared driver reads source from that revision and rejects header/control drift. Run the corresponding script with its linked --domain URL; all controls and source overlays are saved in results.json. The retained source uses the fourth form directly, and make period T=t_v90cpower validates it.
