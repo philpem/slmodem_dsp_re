@@ -43,3 +43,32 @@ Artifacts: build/playbook-adid-nearest-init/results.json and complete-object-aud
 ## Scope review
 
 These independent source predictions both fire without full-body recovery. Together with the prior minimum-level reload control, they justify returning to compiler-stage and independently typed ownership evidence instead of extending local spelling families. The next discriminator for the capability predicate is the Boolean-width lowering stage and its inlined consumer, with return-declaration evidence checked before any type experiment. For the nearest search, only fresh allocation/owner evidence would reopen the residual; the removed initializer alone is not an adoption argument. No finite sample proves a global byte-exactness ceiling.
+
+## F11665: result conversion and operand capture follow-up
+
+At0c5d71b4, three sequential domains test the newly located width/folding mechanism. Domains were posted before each compilation: [four-cell result cross](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5957865775), [Boolean predicate capture](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5957919643), and [integer value capture](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5957948389). There are eight valid full-TU compilations, six distinct source variants and six distinct raw emissions; repeated baselines reproduce production.
+
+Keep the int signature. Blob enterRRN tests EAX at0x386e8 and enterPhase3 at0x1b770; enterPhase3 separately narrows a second result with CWTL. Those consumers support the wide return convention. The callee's OR8/MOVZBL alone does not establish a bool API.
+
+| Cell | Bytes, blob69 | Initial RTL OR | Outcome |
+| --- | ---: | --- | --- |
+| Baseline logical OR | 75 | none | short-circuit branches |
+| Direct eager OR | 69 | SI | OR32/AND1 residual |
+| Boolean result, logical OR | 74 | none | branches remain |
+| Boolean result, eager OR | 72 | QI | OR8 returns, extra widening remains |
+| Captured Boolean predicate, logical OR | 76 | none | unconditional read, branches remain |
+| Captured integer value, logical OR | 69 | SI | eager fold, OR32/AND1 remains |
+
+The initial, combine and allocated RTL checks establish the respective OR modes. Only explicit Boolean result plus eager OR produces IOR:QI, yet its complete body has an extra widening and scheduling differences. All cells remain5/16 exact. The inline getV90Capability body changes in each candidate; all14 other bodies remain unchanged. Symbol metadata, zero named data, allocated nontext payloads/sizes and reviewed relocation destinations agree.
+
+Some bool-result cells move32 .rodata dispatch targets by16 bytes. An initial absolute-section-addend equality assertion correctly failed. The independent audit then checks that each target belongs to exactly one sized named function, lands at a decoded instruction boundary and retains the same function-relative offset. This explains relocation layout movement without masking a destination change. This review-only identity is not inserted into byteident or its grading.
+
+[GCC3.4.2 fold-const.c](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/fold-const.c) explains why the capture distinction matters: fold_truthop first requires two comparison trees; its unconditional-evaluation path then requires simple RHS operands and BRANCH_COST≥2. simple_operand_p accepts constants and suitable local declarations, not the original memory expression. A bare bool predicate local fails the comparison-tree gate. The integer local passes it and changes the initial instruction graph, but does not narrow the result. [i386.c](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/config/i386/i386.c) gives pentiumpro/i686 branch cost2 already, so adding mbranch-cost2 would not be a discriminating experiment. The real period dumps establish the behavior; the stock release source supplies the mechanism, not a claim that every Gentoo patch is absent.
+
+Reproduce with the three playbook_prefilter_{bool,operand,value}.py tools and their posted domain URLs, followed by:
+
+```sh
+python3 tools/playbook_prefilter_capture_audit.py
+```
+
+Per-domain results.json and complete-object-stage-audit.json live under build/playbook-prefilter-{bool,operand,value}. All capture/result domains are closed. No source adoption, candidate runtime, return-type change or exact gain. Do not extend the family with declaration/order/register/cast permutations. The next work moves to independent owner/call-boundary evidence; no global optimum is inferred. Production remains925/1852, all300 object hashes unchanged, prior fixed deciding gate386/0.

@@ -2944,3 +2944,15 @@ without closing the body (F11664). Prove first assignment mathematically,
 keep synthetic fixture labels, and preserve failed diagnostic-dump baselines
 as invalid; a no-dump control must still reproduce raw production.
 [Controls and mandatory scope review](../v90-predicate-initializer-controls.md).
+
+
+Before changing branch cost, inspect the compiler's default and every folding
+gate (F11665). i686 already has cost2; fold_truthop additionally requires two
+comparison trees and simple RHS operands. A captured bool predicate retains
+branches, while a captured int value enables eager SI folding. A bool result
+can restore QI OR yet leave an extra widening. These are distinct pre-allocation
+mechanisms, and none is full-body recovery. Caller EAX tests support the int
+API; narrow operations alone do not establish a narrow return declaration.
+Explain moved table addends using independently checked named-function offsets
+and instruction boundaries; keep that object review separate from grading.
+[Closed domains](../v90-predicate-initializer-controls.md).

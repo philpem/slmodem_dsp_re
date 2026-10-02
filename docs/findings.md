@@ -134473,3 +134473,19 @@ reproduces production with all codegen flags retained. Shared driver exposes
 DUMP_FLAGS with unchanged default. Existing64+64 seeded probes are synthetic,
 not lifecycle. No source adoption/runtime claim; initializer domain closed.
 [Controls and scope review](v90-predicate-initializer-controls.md). (2026-10-02)
+
+## F11665. Boolean result and operand captures separate folding gates from allocation
+
+Eight full16-function TU compiles/six distinct source and object variants at
+0c5d71b4 cross result conversion and two operand boundaries. Bool-result eager
+OR gives IOR:QI but72B versus69; bool-predicate capture retains branches76B;
+int-value capture enables eager folding but IOR:SI/OR32/AND1 remains69B.
+All cells exact5/16 unchanged;14 siblings/zero data/metadata/nontext agree.
+32 dispatch relocation addends move16B in some cells, independently verified
+as unchanged unique sized-owner instruction destinations/relative offsets;
+no classifier relaxation. Compiler comparison-tree/simple-operand gates explain
+capture differences; i686 branchcost2 is already default. EAX-testing callers
+support retaining int API. Raw baselines reproduce; no source/runtime adoption.
+Close all three domains, move to fresh owner/call evidence.925/1852 unchanged.
+[Full matrix and source mechanism](v90-predicate-initializer-controls.md).
+(2026-10-02)
