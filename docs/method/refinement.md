@@ -2153,3 +2153,15 @@ for register/declaration spelling searches. [The six-cell ledger](../v32-detsequ
 reports all negatives, positive graph/spill controls and unchanged retained
 objects. Include new tool/doc files in the tracked-file census before checks,
 so an untracked ledger cannot silently escape cross-reference validation.
+
+
+A global-allocation dump may include reload's final mapping: distinguish the
+boundaries before attributing a spill to priority. F11547 traces installed
+Gentoo cc1 and raw-validates both full-TU outputs; one reg is assigned ECX by
+global allocation, then evicted by reload's CL requirement. A short
+post-decrement temporary instead receives ECX locally and changes the earlier
+allocation decision. F11548 separates decrement from extraction, removes that
+local temporary and recovers the blob's spill arrangement without byte identity.
+[Trace and bounded source control](../v32-detsequence-allocation.md). Machine
+scheduling can put the decrement ahead of SHR even when source decrements
+after extraction; don't infer expression sequencing from that order alone.

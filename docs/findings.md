@@ -132877,3 +132877,40 @@ Fixed make phase passed 385/0; structural checks clean, including 14,223
 references, 2,675 finding headings and 285 suites / 10,038 static anchors.
 Upstream drift was not checked (checkout absent; manifest-only check).
 (2026-10-02)
+
+
+## F11547. DetSequence's two spill choices occur at different boundaries.
+
+Gentoo cc1 debugger traces on two unchanged full-TU controls distinguish
+allocation from reload. The computed-shift source synthesizes int counter 95
+in .09.loop; global allocation puts reg 66 in ECX, nbits 64 in EBP and counter 95
+in EBX. Reload's CREG requirement for the shift evicts reg 66. The explicit
+short post-decrement creates old-value temporary 81 in initial RTL; local
+allocation gives it ECX, so global allocation spills nbits and keeps reg in
+EBX. Reload preserves that decision. Both trace objects raw-reproduce their
+saved full TUs, 2/2 controls and 6/6 snapshots. Memory-cost/priority alone is
+not the causal explanation. [Ledger and commands](v32-detsequence-allocation.md).
+Compiler/as are Gentoo image executables; read-only host debugger mounts are
+apparatus, not a compiler-profile change or claimed original source.
+(2026-10-02)
+
+## F11548. Separating short decrement recovers the spill arrangement, not exactness.
+
+The F11547 trace justifies two separately predeclared cells: previous found-once
+control, and shift extraction followed by a separate short decrement before
+match testing. The alternative removes the old-value shift temporary and
+recovers short counter=EBX, bound=EBP, reg spilled, as in the blob. A second
+trace confirms reg first goes to ECX and reload evicts it; 2/2 raw full-TU
+controls and 6/6 snapshots. Source pair results 290B/SIZE15 and 275B/BYTES112;
+8 functions/globals,6/8 exact, only target changed, zero gains/losses.
+Remaining spill-slot/scratch/scheduling differences are not adopted by score.
+The multiline generator assertion failed before compilation, was recorded,
+and was corrected without expanding the domain. [Complete record](v32-detsequence-allocation.md).
+No production/header/fixture/anchor changes, no fuzzing/mutation execution;
+retained 860/1852 unchanged. Candidate differential/partial-link adoption
+checks NOT RUN because no candidate is retained. The domain closes here.
+Final fixed gate 385/0; structural checks clean. All 300 retained objects raw
+unchanged. Final trace runner waits for the driver/assembler exit sentinel;
+failed intermediate runner attempts are preserved/excluded and both pairs
+rerun (4/4 raw controls, 12/12 snapshots).
+(2026-10-02)
