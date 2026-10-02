@@ -1044,14 +1044,14 @@ That closed ten more symbols over five files. **Anywhere this tree open-codes
 a single compile, and the 31-byte gap that had been read as "register pressure"
 was the expansion missing entirely.
 
-**AND IT WILL BREAK THE MODERN BUILD'S LINK UNTIL YOU ADD THE SIZED FORM.**
-C++14 sized deallocation makes GCC 13 call `operator delete(void *, size_t)`
-for `delete p` on a class with a destructor, which is an undefined `_ZdlPvj`
-in a tree that links no libstdc++ -- every test binary, while the period
-differential is 251 passed / 0 failed. `Resampler.h` documents it and solves it
-with a MEMBER operator; a global sized form guarded on
-`__cplusplus >= 201402L` is inert under 3.4.2 (199711L) and does the same job.
-Either way, prove the guard is inert by re-reading `byteident` across it.
+**THE MODERN BUILD NEEDS ITS SIZED-DEALLOCATION DEMAND WITHDRAWN.**
+C++14 sized deallocation makes modern GCC call `operator delete(void *, size_t)`
+for class deletion, while the period compiler uses the unsized form. The old
+wave added guarded sized adapters in reconstruction source (7816); F7900
+removed those apparatus blocks and recovered all200 period objects unchanged
+with the modern-only `-fno-sized-deallocation` flag. Use that existing flag,
+not new `__cplusplus` source shims. Preserve unsized inline adapter placement:
+period-visible definitions can carry code-generation effects (7815).
 
 **BUT A DELETE-EXPRESSION RUNS A DESTRUCTOR AND AN EXPLICIT FREE DOES NOT**, so
 take it only where the OBJECT ITSELF makes the destructor call.
@@ -2671,3 +2671,17 @@ helpers remain unguarded and automatic embedded destruction stays generated.
 Audit the full ownership boundary and keep genuine child lifecycles separate
 from temporarily masked or pre-released guard fixtures.
 [Controls](../modem-owned-delete-recovery.md).
+
+
+A bounded owner screen can recover source lifetime without recovering bytes.
+V90Demodulator all-eight removes128B and leaves only a dead-pop mismatch,
+but loses constructor identity and changes a progress jump-table layout
+(F11622). Preserve that informative loss without adopting it as a gain or
+calling19 cells exhaustive. [Controls](../v90dem-owned-delete-controls.md).
+
+
+Revisit a C-language exclusion only with independent TU provenance. F11430
+places VPCMXF_Delete and its class destructor in VpcmFloModem.cpp; ordinary
+class delete then recovers109B from117B by suppressing a sibling free jump,
+with all33 bystanders unchanged (F11623). Preserve the same-TU destructor
+inlining boundary. [Recovery](../vpcmx-delete-recovery.md).

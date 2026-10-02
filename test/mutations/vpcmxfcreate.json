@@ -24,7 +24,6 @@
    "allocation length."
   ]
  },
-
  {
   "label": "the side handed to the modem is not inverted",
   "find": "\tside = (V90ModemSide)(digitalSide == 0);",
@@ -77,7 +76,6 @@
   "find": "\tnew (self) VPcmFloModem(v34Object, side, dpRuntime,\n\t\t\t\t (unsigned int)maxDataBuffer, v90Mode, v92Mode);",
   "replace": "\tnew (self) VPcmFloModem(v34Object, side, dpRuntime, durationMs,\n\t\t\t\t v90Mode, v92Mode);"
  },
-
  {
   "label": "mode 1 sets the V.92 mode and not the V.90 one",
   "find": "\tcase 1:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)0;",
@@ -98,7 +96,6 @@
   "find": "\tdefault:\n\t\tv90Mode = (V90ComputationalMode)0;\n\t\tv92Mode = (V92ComputationalMode)0;",
   "replace": "\tdefault:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)1;"
  },
-
  {
   "label": "the object is allocated 64 bytes short",
   "find": "\tself = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem));",
@@ -114,7 +111,6 @@
   "find": "\t\t    digitalSide != 0 ? \"Digital\" : \"Analog\", maxDataBuffer);",
   "replace": "\t\t    digitalSide != 0 ? \"Digital\" : \"Analog\", (int)durationMs);"
  },
-
  {
   "label": "nofBitsPerSymbol is left at the constructor's 0",
   "find": "\tself->nofBitsPerSymbol = 2;",
@@ -181,15 +177,14 @@
   "find": "\tself->cpNofBits = 0;",
   "replace": "\t(void)0;"
  },
-
  {
   "label": "VPCMXF_Delete drops its null guard",
-  "find": "\tif (self != 0) {\n\t\tself->~VPcmFloModem();\n\t\tsysdep_free(self);\n\t}",
+  "find": "\tdelete self;",
   "replace": "\tself->~VPcmFloModem();\n\tsysdep_free(self);"
  },
  {
   "label": "VPCMXF_Delete frees without destroying",
-  "find": "\t\tself->~VPcmFloModem();\n\t\tsysdep_free(self);",
-  "replace": "\t\tsysdep_free(self);"
+  "find": "\tdelete self;",
+  "replace": "\tif (self != 0)\n\t\tsysdep_free(self);"
  }
 ]

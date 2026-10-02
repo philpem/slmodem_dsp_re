@@ -133949,3 +133949,24 @@ other bodies/data/nontext/binding/import/export unchanged. Preserve primitive
 and mapping frees, generated members, unsigned guards and V92 pointer clear.
 Real constructed lifecycles and synthetic guard/cleanup probes distinguished.
 [Recovery and gates](modem-owned-delete-recovery.md). (2026-10-02)
+
+## F11622. V90 demodulator member-delete screen recovers shape but no exact gain
+
+Bounded19 completeTU cells: baseline/adapter/all-eight/eight singleton/eight
+complement controls. Adapter-only raw-merges. All-eight797→669B D1/D2 but
+BYTES1 dead pop EAX versus blobEDX/ECX; alpha agrees. Every owner-bearing cell
+loses exact C2 and gains nothing,21→20/31functions. C2/progress canonical
+streams also change, not pure alpha renaming; all27 others unchanged.
+Zero named data, binding/import/export agree; relocated jump-table addends
+change in raw rodata. No source adopted or mixed-subset exhaustion claim.
+[Controls and fixture limits](v90dem-owned-delete-controls.md). (2026-10-02)
+
+## F11623. Typed VPCMXF deletion recovers the109B wrapper
+
+The retained117B wrapper inlines six member destructors then sibcalls free;
+blob calls free and uses one epilogue. Three-cell completeTU control: baseline
+reproduced, adapter-only rawmerge, ordinary scalar class delete EXACT109B.
+22→23/34functions, no losses, all33 other bodies unchanged; three named data/
+nontext/binding/import/export agree. F11430 C++ FILE provenance supersedes
+F7818 C-leaf restriction. Preserve declared same-TU destructor and six generated
+member releases. [Recovery and gates](vpcmx-delete-recovery.md). (2026-10-02)
