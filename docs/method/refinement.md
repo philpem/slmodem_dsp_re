@@ -2727,3 +2727,14 @@ child guards and validate actual constructed lifecycles; do not invent invalid
 null fixtures or widen the blob contract. Aligned whole-object allocation can
 stay constant despite a shorter exact function.
 [Recovery](../dpw-delete-guard-recovery.md).
+
+
+An unsupported defensive guard is a source-contract lead, not a guarantee
+of a complete byte recovery. FixedRC reset needs external memory-call
+boundaries too; their cross restores270B shape but remains BYTES41 (F11630).
+Explicitly review replacement imports and shared helper callers. Tone creation
+loses its added allocation guard yet remains SIZE90 (F11631). Close these
+finite domains and review distinct allocation/dispatch boundaries instead of
+perturbing registers or accepting only a nearer size.
+[Reset controls](../fixedrc-reset-controls.md),
+[tone controls](../tone-allocation-guard-controls.md).

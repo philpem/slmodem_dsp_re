@@ -134035,3 +134035,23 @@ reviewed, one changes and raw-matches candidate; whole-tree915→916/1852,
 Same-order complete partial remains DIFFERENT; positioned+1, allocated/
 section/symbol/relocation exact counts unchanged.
 [Recovery and contract](dpw-delete-guard-recovery.md). (2026-10-02)
+
+## F11630. FixedRC reset guard and external-clear cross restores boundaries but no exact gain
+
+Four fullTU cells cross added-null-return removal and four sysdep_memset calls:
+Reset219/213/269/270B versus270, combinedBYTES41; Create699/705/749/759B.
+Only these two bodies change,1/5 common exact unchanged,8 emitted functions/
+22 data, all six bystanders/raw nontext/data/binding/exports unchanged.
+Wrapper cells intentionally replace memset import by sysdep_memset. Combined
+matches first41 rows but alpha rejects XOR/MOV thereafter; equal size not
+recovery. No source adoption/nearby scope/register expansion.
+[Controls and next source boundary](fixedrc-reset-controls.md). (2026-10-02)
+
+## F11631. FPM tone unsupported allocation-return removal alone remains nonexact
+
+Blob malloc rejoins configuration without null test; source adds early return.
+Two fullTU cells669/SIZE84→663/SIZE90 versus753B;7/11 exact unchanged,
+only FPM_TONE_create changes. Two named data/all ten bystanders/nontext/
+binding/import/export controls agree; baseline raw-reproduces. No source
+adoption or invalid allocation-failure fixture, fuzzing or mutation execution.
+[Finite guard control](tone-allocation-guard-controls.md). (2026-10-02)
