@@ -2956,3 +2956,15 @@ API; narrow operations alone do not establish a narrow return declaration.
 Explain moved table addends using independently checked named-function offsets
 and instruction boundaries; keep that object review separate from grading.
 [Closed domains](../v90-predicate-initializer-controls.md).
+
+
+Cross owner lifetime with independently observed scalar boundaries before
+attributing a wrapper gap to allocation (F11666). B103 reload recovery and
+unsigned result extension are distinct effects; removing the explicit short
+count cast emits identical code under the current prototype. Close that
+conversion family rather than inventing a caller signature. Signed16 input
+loads and zero-extended results bound implementation semantics, not uniquely
+formal declarations; validate wider-result behavior with real initialized
+components and adequate buffers. A short reference alias can hide the high
+result bit even while differential tests pass.
+[Full-TU controls](../b103-transmit-boundary-controls.md).

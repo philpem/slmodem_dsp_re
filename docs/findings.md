@@ -134489,3 +134489,18 @@ support retaining int API. Raw baselines reproduce; no source/runtime adoption.
 Close all three domains, move to fresh owner/call evidence.925/1852 unchanged.
 [Full matrix and source mechanism](v90-predicate-initializer-controls.md).
 (2026-10-02)
+
+## F11666. B103 transmit reloads and result extension recover independently without exactness
+
+Two lifetime cells plus eight crossed cells at6cde9a9d: remove dsp cache,
+unsigned wrapper results, implicit count conversion. Root+0x54 reloads return;
+unsigned result removes one CWTL; implicit/explicit count siblings emit same
+objects. Wrappers92/117→97/122B versus99/124B; strict4/17 unchanged. Five
+wrapper/inline bodies change;17functions/3data metadata/nontext/relocs reviewed.
+Ten valid compiles; eight-cell cross has four distinct emissions. Baselines raw
+reproduce. Existing780 created-component paired transmit calls bound1..6bits,
+not pointer-corruption/public history. No source/API/runtime adoption; domains
+closed. Separate MRF exit-width lead needs high-output-count fixture, fullhelper/
+caller review; incoming signed16load alone does not prove formal prototype.
+[Controls and next discriminator](b103-transmit-boundary-controls.md).
+(2026-10-02)
