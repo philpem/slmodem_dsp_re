@@ -130,3 +130,9 @@ DetSequence's proposed loop transfer and a separately observed found lifetime
 are tested and closed by F11546: [six valid cells](v32-detsequence-loops.md),
 no adoption. The remaining measured discrepancy begins at allocation/reload;
 these local graph recoveries do not justify another spelling matrix.
+
+
+F11549's word-home pair recovers DetSequence's slots but is non-exact and closed;
+F11550 certifies peephole exposure without adopting flags. The independent
+predecessor GenSequence lead (F11551–F11552) crosses countdown with narrow-before-
+mask index update; combined source is exact 118B. [Ledger](v32-gensequence-recovery.md).

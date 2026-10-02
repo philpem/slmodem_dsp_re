@@ -34,18 +34,18 @@
  },
  {
   "label": "the generator counts the index UPWARDS, so the fields come out least significant first",
-  "find": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t hdx->gen_index_mask);",
-  "replace": "\t\tindex = (unsigned short)((index + 1) &\n\t\t\t\t\t hdx->gen_index_mask);"
+  "find": "(index-- * width)",
+  "replace": "(index++ * width)"
  },
  {
   "label": "the generator advances the index before emitting rather than after",
-  "find": "\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */\n\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t hdx->gen_index_mask);",
-  "replace": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t hdx->gen_index_mask);\n\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */"
+  "find": "\t\t*out++ = (short)((pattern >> (index-- * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */\n\t\tindex &= hdx->gen_index_mask;",
+  "replace": "\t\tindex = (unsigned short)((index - 1) & hdx->gen_index_mask);\n\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */"
  },
  {
   "label": "the shift is the index alone rather than the index times the field width",
-  "find": "\t\t*out++ = (short)((pattern >> (index * width)) &",
-  "replace": "\t\t*out++ = (short)((pattern >> index) &"
+  "find": "(pattern >> (index-- * width))",
+  "replace": "(pattern >> index--)"
  },
  {
   "label": "the generator's index is not written back, so a second call restarts at the top field",
@@ -54,8 +54,8 @@
  },
  {
   "label": "the wrap mask is applied before the decrement rather than after",
-  "find": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t hdx->gen_index_mask);",
-  "replace": "\t\tindex = (unsigned short)((index &\n\t\t\t\t\t hdx->gen_index_mask) - 1);"
+  "find": "\t\t*out++ = (short)((pattern >> (index-- * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */\n\t\tindex &= hdx->gen_index_mask;",
+  "replace": "\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t hdx->gen_mask);\t/* D402 */\n\t\tindex = (unsigned short)((index & hdx->gen_index_mask) - 1);"
  },
  {
   "label": "the detector's target and mask are stored to each other's offsets",

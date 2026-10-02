@@ -132914,3 +132914,53 @@ unchanged. Final trace runner waits for the driver/assembler exit sentinel;
 failed intermediate runner attempts are preserved/excluded and both pairs
 rerun (4/4 raw controls, 12/12 snapshots).
 (2026-10-02)
+
+
+## F11549. DetSequence spill homes expose a partial allocation order.
+
+Two unchanged Gentoo full-TU traces confirm ascending-pseudo initial spill
+allocation and late ECX-eviction home for reg 66: 16/16 allocations,6/6 boundary
+snapshots, 2/2 raw controls. Blob offsets put word before mask/target/found/nread;
+a separately declared scope pair moves word before mask and recovers all eight
+slots, but stays non-exact (275B/BYTES112 ->275B/BYTES107). No adoption or
+permutation sweep. Reserved debugger attribute /optimized parameter attempts
+are preserved/excluded; accepted trace reads i386 ABI arguments at true entry.
+[Ledger/replay](v32-detsequence-allocation.md). This is a home-order constraint,
+not unique original declaration evidence. (2026-10-02)
+
+## F11550. DetSequence is exposed to peephole2; disabling it loses exact neighbors.
+
+Four crossed full-TU source/option controls recover both raw source baselines.
+Found's immediate-zero store persists through flow2 and first receives scratch
+ESI in peephole2. Disabling the pass removes that scratch, changes DetSequence
+from 275B to 288B/SIZE13, and changes GenSequence/InitGenSequence/LoadReg too.
+Exact6/8 falls to 4/8, losing InitGenSequence and LoadReg. No flag adopted.
+The established TU cursor mechanism is relevant, but these controls do not
+recover its original state or prove preceding source was the cause.
+[Ledger](v32-detsequence-allocation.md). (2026-10-02)
+
+## F11551. GenSequence has an independent countdown and index-narrowing lead.
+
+It is DetSequence's only non-exact emitted predecessor; TU order agrees with
+blob. Blob preserves old index for the shift, narrows the decremented index
+before masking, and uses a short countdown. Retained source uses ascending
+index loop and narrows after masking. Four predeclared cells isolate those
+properties: 111B/SIZE7,128B/SIZE10,120B/SIZE2,118B/EXACT. Every cell preserves 8
+functions/globals; only GenSequence changes. [Domain/ledger](v32-gensequence-recovery.md).
+No other spellings or source-order sweep. (2026-10-02)
+
+## F11552. GenSequence's combined source candidate is byte-exact.
+
+Countdown plus index-- inside the extraction followed by index &= wrap_mask
+matches all 118 blob bytes and canonical relocations, 7/8 exact with zero losses.
+It preserves mask-load/output-store order and 16-bit wrap semantics. The gain
+leaves retained DetSequence 275B/BYTES214 unchanged; it does not establish its
+cursor state. Retained full-TU object raw-reproduces the winner; complete build 300/300.
+Whole-tree 860/1852 -> 861/1852; 83,604 -> 83,722 exact bytes, only GenSequence
+gained, zero losses. All eight relative TU function starts match the blob.
+Fixed make phase 385/0; structural checks clean. Four static anchors retargeted
+without mutation execution or snapshot refresh; no fuzzing. Same-order complete
+partial links gain 102 positioned bytes but lose 3 positional relocation records;
+both remain DIFFERENT(exit1). No source/header/fixture changes outside GenSequence
+and its corrected alias-order comment. No modern portability claim.
+[Adoption ledger](v32-gensequence-recovery.md). (2026-10-02)

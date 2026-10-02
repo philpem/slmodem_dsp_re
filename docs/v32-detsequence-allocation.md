@@ -167,3 +167,50 @@ All 300 retained compiler objects were independently raw-rechecked against the
 saved 860-exact baseline and remain identical. No modern portability claim;
 upstream drift remains untested because the upstream checkout is absent
 (the seven manifest files were checked against their manifest only).
+
+## Spill ordering and predecessor follow-up (F11549–F11552)
+
+The next [two-control spill trace](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5944608125)
+observes alter_reg at its true i386 cdecl entry and frame offset at return.
+Both full-TU objects raw-reproduce. The post-decrement control allocates
+pseudos 64,67,68,69,70,72,97,102; the separate-decrement control allocates
+67,68,69,70,72,96,101,66. Each allocation grows the frame by 4 bytes: 16/16
+allocation events and 6/6 boundary snapshots. In the latter, reg 66 gets its
+home last when ECX is evicted. Initial spill homes follow increasing pseudo
+numbers. The blob's eight slot identities imply word before mask/target/
+found/nread, then derived-base/count/reg.
+
+An initial debugger subclass used a reserved number attribute and failed;
+a subsequent optimized-DWARF parameter trace reported wrong pseudo numbers.
+Both are preserved/excluded under build/detsequence-spill-trace-invalid-*.
+The accepted trace uses machine ABI arguments at the function entry, avoiding
+optimized parameter locations. Replay:
+
+```
+python3 tools/detsequence_spill_trace.py --domain https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5944608125 --analysis-only
+```
+
+[A new two-cell scope/home-order domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5944634385)
+compares the previous separate-decrement source with unsigned int word moved
+to function scope immediately before mask; its per-word assignment stays put.
+All eight spill offsets recover the blob. Exactness does not: 275B/BYTES112
+and 275B/BYTES107, 8 functions/globals, 6/8 exact, only target changed. No adoption
+or declaration-order sweep. This domain is closed; source evidence establishes
+only a partial ordering of home allocation, not unique original declaration text.
+Reproduce with tools/playbook_detsequence_word_home.py --domain <that URL>.
+
+[A four-cell source/peephole diagnostic](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5944669470)
+crosses those two sources with retained flags /-fno-peephole2. Both full-TU
+source controls raw-reproduce. Found's immediate-zero store survives flow2;
+peephole2 first creates scratch ESI=0 and its store. Disabling that pass
+removes the scratch form, changes DetSequence from 275B to 288B/SIZE13, and
+changes four bodies: DetSequence,GenSequence,InitGenSequence,LoadReg. The exact
+count falls 6/8 to 4/8, losing InitGenSequence and LoadReg. This certifies pass
+exposure, not the exact original cursor state or a profile to adopt.
+Reproduce with tools/detsequence_peephole.py --domain <that URL>.
+
+All preceding emitted functions are already exact except GenSequence; emission
+order agrees with the blob. Its independent countdown/narrowing source lead
+is tested next in [the gain ledger](v32-gensequence-recovery.md). GenSequence
+becomes exact without changing the retained DetSequence body or score, so
+its recovery does not establish a cursor explanation for the detector miss.

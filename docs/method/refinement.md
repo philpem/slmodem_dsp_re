@@ -2165,3 +2165,14 @@ local temporary and recovers the blob's spill arrangement without byte identity.
 [Trace and bounded source control](../v32-detsequence-allocation.md). Machine
 scheduling can put the decrement ahead of SHR even when source decrements
 after extraction; don't infer expression sequencing from that order alone.
+
+
+Trace spill-home allocation before inferring source declaration order. F11549
+observes ascending pseudo allocation and late reload eviction; a minimal
+word-scope change recovers all blob slots but remains non-exact. Optimized
+compiler debug parameter locations can misreport arguments: trace the true
+ABI entry and validate full-TU raw output. F11550's crossed peephole control
+certifies scratch exposure but loses exact neighbors. Returning to the
+non-exact predecessor reveals an independent GenSequence source property:
+short post-decrement narrows before the wrapping AND, and combines with a
+countdown to recover 118 bytes exactly (F11551–F11552). [Measured record](../v32-gensequence-recovery.md).

@@ -73,12 +73,10 @@ InitGenSequence(struct v32_modem *modem, unsigned short pattern, unsigned short 
 /*
  * Emit `count` fields of the pattern.
  *
- * `width` and `pattern` are read once, before the loop; `mask` and
- * `index_mask` are read INSIDE it, every iteration.  That is not a choice
- * made here -- the first two are read before the first store to `*out` and
- * the last two after it, and a store through a `short *` may alias them, so
- * the compiler cannot hoist what follows it.  Written in the object's order
- * so the same thing happens.
+ * `width` and `pattern` are read once, before the loop. `gen_mask` is
+ * read each iteration before the output store; `gen_index_mask` follows
+ * that store. A `short *` output may alias these fields, so preserve those
+ * per-iteration reads and their order (F11552).
  */
 void
 GenSequence(struct v32_modem *modem, short *out, unsigned short count)
@@ -88,13 +86,13 @@ GenSequence(struct v32_modem *modem, short *out, unsigned short count)
 	int width = hdx->gen_width;
 	int pattern = hdx->gen_pattern;
 	unsigned short index = hdx->gen_index;
-	unsigned short i;
 
-	for (i = 0; i < count; i++) {
-		*out++ = (short)((pattern >> (index * width)) &
+	/* Narrow the decremented index before wrapping it, as in the blob
+	 * (F11552). The shift still uses the previous index. */
+	while (count-- != 0) {
+		*out++ = (short)((pattern >> (index-- * width)) &
 				 hdx->gen_mask);	/* D402 */
-		index = (unsigned short)((index - 1) &
-					 hdx->gen_index_mask);
+		index &= hdx->gen_index_mask;
 	}
 
 	hdx->gen_index = index;
