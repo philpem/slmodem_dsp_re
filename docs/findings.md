@@ -133051,3 +133051,21 @@ Whole-tree863/1852 ->865/1852, exact bytes83,848 ->84,058; only the two encoders
 gain and zero losses. Fixed Gentoo phase385/0, structural checks clean.
 Same-order partial links lose32 positioned matching bytes as later code shifts;
 exact section/symbol/relocation record counts unchanged, both remain DIFFERENT.
+
+## F11559. Float2Linear's machine countdown comes from a source pointer walk.
+
+Four complete-TU countdown/cursor cells give102B/SIZE1,111B/SIZE10,
+101B/EXACT and93B/SIZE8. Only cursors with the retained ascending loop are
+exact, including the constant relocation; all23 functions/22 globals preserved,
+only Float2Linear changes, TU7/23 ->8/23, no losses. Gentoo .09.loop explicitly
+reports loop reversal and converts its induction variable from+1 to-1.
+Retain both pointer advances without an explicit source countdown. Reverse
+conversion and CrossDataLinks unchanged. Arithmetic, gain guard and no-op
+nonpositive counts preserved. [Ledger/replay](float2linear-cursors.md).
+(2026-10-02)
+
+Retained complete object raw-reproduces winner; one of300 TUs changes.
+Whole-tree865/1852 ->866/1852, exact bytes84,058 ->84,159, only Float2Linear
+gains, zero losses. Fixed Gentoo phase385/0, structural checks clean. Two static
+anchors retargeted with original fault meanings; no mutation execution or
+snapshot refresh. Same-order partial-link metrics unchanged; strict DIFFERENT.

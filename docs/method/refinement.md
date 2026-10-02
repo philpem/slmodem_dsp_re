@@ -2219,3 +2219,12 @@ uniquely recovering a helper signature (F11557). A separate input/magnitude
 carrier domain closes linear2alaw too (F11558). Inspect initial RTL before
 blaming scheduling for a comparison that was already normalized there.
 [Seven-cell staged record](../pcm-segment-search-recovery.md).
+
+## A machine countdown can be an optimizer's reversed ascending loop
+
+Float2Linear's four-cell source domain recovers101-byte exactness with
+advancing input/output pointers and the existing ascending loop. An explicit
+countdown misses, alone and with cursors. Gentoo's loop dump says it reversed
+the cursor loop; source index i is dead except as the bound. Check that pass
+before inferring a countdown from machine decrement/test (F11559).
+[Complete-TU controls](../float2linear-cursors.md).

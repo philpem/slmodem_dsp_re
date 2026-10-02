@@ -163,3 +163,9 @@ cursor alone recovers the table walk, a late-inlined size argument recovers
 linear2ulaw, and reusing the input magnitude recovers linear2alaw. Seven valid
 full-TU cells preserve six functions/eight globals and recover6/6 exact.
 [Helper-bound discriminator and validation](pcm-segment-search-recovery.md).
+
+Float2Linear adds a counterexample to blindly adopting countdown-plus-cursor:
+only cursors with its original ascending loop recover101-byte exactness
+(F11559). The four-cell TU domain and .09.loop reversal record show why the
+machine decrement is not a source spelling. Reverse conversion is an exact,
+unchanged control. [Recovery and validation](float2linear-cursors.md).

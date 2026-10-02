@@ -36,14 +36,14 @@
  },
  {
   "label": "Float2Linear's zero-gain test becomes a sign test",
-  "find": "\tif (gain == 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\tdst[i] = (short)(src[i] * gain);",
-  "replace": "\tif (gain <= 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\tdst[i] = (short)(src[i] * gain);",
+  "find": "\tif (gain == 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\t*dst++ = (short)(*src++ * gain);",
+  "replace": "\tif (gain <= 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\t*dst++ = (short)(*src++ * gain);",
   "note": "the gain list carries -1.0f and -2.0f, which must convert, and 0.0f, which must not."
  },
  {
   "label": "Float2Linear rounds instead of truncating",
-  "find": "\t\tdst[i] = (short)(src[i] * gain);",
-  "replace": "\t\tdst[i] = (short)(src[i] * gain + 0.5f);"
+  "find": "\t\t*dst++ = (short)(*src++ * gain);",
+  "replace": "\t\t*dst++ = (short)(*src++ * gain + 0.5f);"
  },
  {
   "label": "Linear2Float loses its gain",

@@ -463,6 +463,7 @@ create_dtmf(struct dtmf *d)
  * float -> 16-bit linear at a gain; the (short) cast truncates toward zero
  * (the object programs the x87 round-to-zero bits around its store).  A
  * gain of exactly 0.0f is "off" and leaves dst untouched.
+ * Advancing buffers let the period compiler reverse the loop (F11559).
  */
 void
 zFLTUTL_Float2Linear(float *src, short *dst, int n, float gain)
@@ -472,7 +473,7 @@ zFLTUTL_Float2Linear(float *src, short *dst, int n, float gain)
 	if (gain == 0.0f)
 		return;
 	for (i = 0; i < n; i++)
-		dst[i] = (short)(src[i] * gain);
+		*dst++ = (short)(*src++ * gain);
 }
 
 /* 16-bit linear -> float at a gain, same 0.0f-is-off convention. */
