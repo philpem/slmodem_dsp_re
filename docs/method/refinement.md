@@ -2796,3 +2796,11 @@ a second entry test, growing287B to303B with no exact gain (F11643). Preserve
 the complete control and its denominator; do not remove observed guards or
 expand counter synonyms to fit the partial result.
 [Controls](../floatfir-countdown-controls.md).
+
+Repeated word counter narrowing is source evidence but not a guarantee of
+complete recovery. V34TimingHPFilter's int→short control restores increment
+narrowing and word comparison, reaching76B yet remainingBYTES29 (F11644).
+Even alpha comparison fails prologue ordering. Keep all26 function/48 data
+controls, distinguish recovered operations from complete identity, and close
+the width family without arithmetic or register permutations.
+[Controls](../v34-hp-counter-controls.md).

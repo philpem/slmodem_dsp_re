@@ -134193,3 +134193,14 @@ loads. Only block process changes across eight functions/zero named data
 objects; all metadata and allocated nontext controls agree. No source adoption
 or new differential run; the finite counter family is closed.
 [Controls and coverage limits](floatfir-countdown-controls.md). (2026-10-02)
+
+## F11644. V34 high-pass word counter reaches size but not complete identity
+
+Two complete-TU cells at065e39c0 reproduce70B/SIZE6 production; short counter
+recovers repeated word narrowing/comparison and76B shape, but remainsBYTES29.
+Alpha comparison fails prologue instruction order too, so this is not a clean
+register-only match. Only high-pass changes across26 functions/48 named data
+objects; all other bodies/relocations and metadata/nontext controls agree.
+Exact11/26 unchanged; no source adoption or new fixture execution.
+Close this counter family without adjacent arithmetic/register/declaration
+variants. [Controls](v34-hp-counter-controls.md). (2026-10-02)
