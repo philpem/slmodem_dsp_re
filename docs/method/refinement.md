@@ -2228,3 +2228,10 @@ countdown misses, alone and with cursors. Gentoo's loop dump says it reversed
 the cursor loop; source index i is dead except as the bound. Check that pass
 before inferring a countdown from machine decrement/test (F11559).
 [Complete-TU controls](../float2linear-cursors.md).
+
+An apparently register/layout-bound constructor can still omit a real failure
+edge. toneiir_create's blob checks the allocation result; reconstruction did
+not. Restore observed behavior even when its finite source domain gives no
+byte-exact gain. A same-length candidate with114 differing bytes is not a
+recovery. Fixed allocator-failure and one-shot recovery checks distinguish this
+from a score-only rewrite (F11560). [Record](../toneiir-allocation-recovery.md).

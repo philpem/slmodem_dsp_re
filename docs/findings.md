@@ -133069,3 +133069,21 @@ Whole-tree865/1852 ->866/1852, exact bytes84,058 ->84,159, only Float2Linear
 gains, zero losses. Fixed Gentoo phase385/0, structural checks clean. Two static
 anchors retargeted with original fault meanings; no mutation execution or
 snapshot refresh. Same-order partial-link metrics unchanged; strict DIFFERENT.
+
+## F11560. toneiir_create lacks the blob's allocation-failure return.
+
+The reference tests sysdep_malloc's result at0x7c44f and returns null without
+initialization on failure. Source omitted this edge. Four predeclared complete-TU
+cells raw-reproduce their baseline, preserve8 bodies/globals and change only
+create: SIZE2, SIZE12, SIZE12 and BYTES114; no exact gains/losses. Retain the
+nested literal-zero failure return for directly observed behavioral fidelity,
+not for code-size fit. A fixed one-shot allocator rejection fixture detects
+the missing edge with period exit139 and checks20 failure/recovery outcomes.
+[Ledger and replay](toneiir-allocation-recovery.md). (2026-10-02)
+
+Retained object raw-reproduces the nested literal guard; one of300 TUs changes,
+read-only data unchanged. Exact set866/1852 and84,159 bytes unchanged. Fixed
+Gentoo phase385/0; the added failure case passes20 checks. Partial links remain
+DIFFERENT: positioned equality+18 bytes, exact relocation records-4; section
+and symbol records unchanged. The nearby _iir_filter_create has no blob-side
+allocation check and remains unchanged; guards are recovered per symbol.
