@@ -64,7 +64,7 @@ advance(int idx, int len)
 	return (next < len) ? next : 0;
 }
 
-short
+unsigned short
 FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
 {
 	const int branches = state->cfg.branches;
@@ -132,7 +132,8 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
 	state->phase = (short)phase;
 	state->widx = (short)widx;
 	state->need = (short)need;
-	return (short)produced;
+	/* Both original exits zero-extend the result word (F11667). */
+	return (unsigned short)produced;
 }
 
 /*

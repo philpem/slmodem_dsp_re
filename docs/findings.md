@@ -134504,3 +134504,27 @@ closed. Separate MRF exit-width lead needs high-output-count fixture, fullhelper
 caller review; incoming signed16load alone does not prove formal prototype.
 [Controls and next discriminator](b103-transmit-boundary-controls.md).
 (2026-10-02)
+
+
+## F11667. MRF result zero extension is observable at a valid initialized boundary
+
+Both blob FPM_MRF_filter exits zero-extend the produced low word. A fresh
+10:9 filter using its actual 270-coefficient B103 transmit bank produces
+32767/32768 outputs from 29490/29491 inputs. Two fixed patterns independently
+expose the old signed result: -32768 versus blob32768. Output, untouched tails,
+27 history samples and normalized owner state agree. No public modem history
+is claimed. Larger output counts wrap the signed output index and are excluded;
+an initial invalid fixture/run is preserved and excluded from conclusions.
+
+Three shared-declaration cells cover30 valid full-TU compiles/80 functions.
+Every baseline raw-reproduces. Unsigned-short and int-with-unsigned-word returns
+emit identical objects; only two MOVSWL→MOVZWL bytes change in the helper,
+all77 caller bodies/data/nontext/relocations/bindings agree. Original formal
+return type is not unique. Adopt the unsigned-short result with shared header;
+keep signed input counts and caller narrowing unchanged. The new fixed
+component fixture passes the deciding period compiler: fixed suite387/0.
+Only one of300 production objects changes; strict925/1852 and95363 exact bytes
+remain unchanged. A same-order300-object partial link differs only at two
+text bytes:18218 relocations/2984 symbols unchanged. Blob partial comparison
+remains DIFFERENT; no byte-exact gain or completion is claimed.
+[Controls](mrf-result-width-controls.md). (2026-10-02)

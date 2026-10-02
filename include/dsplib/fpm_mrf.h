@@ -88,9 +88,11 @@ extern struct fpm_mrf_cfg FPM_MRF_CFG;
  * @param out    Output buffer; receives the produced samples.
  * @param count  Number of input samples to consume.
  * @return Number of output samples produced, roughly `count * branches /
- *         decimate`.
+ *         decimate`, zero-extended from its low 16 bits. The original
+ *         uses a signed 16-bit output index: at most 32768 outputs may be
+ *         produced before a subsequent store would use a wrapped index.
  */
-short FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out,
+unsigned short FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out,
 		     short count);
 
 #endif /* DSPLIB_FPM_MRF_H */

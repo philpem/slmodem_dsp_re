@@ -2968,3 +2968,14 @@ formal declarations; validate wider-result behavior with real initialized
 components and adequate buffers. A short reference alias can hide the high
 result bit even while differential tests pass.
 [Full-TU controls](../b103-transmit-boundary-controls.md).
+
+
+Observe full scalar results at a valid initialized boundary before treating
+return-extension differences as allocation noise (F11667). A signed-short
+reference alias hides results with bit15 set. Bound buffer indices separately
+from input formal ranges: MRF accepts positive signed16 inputs, but its signed
+output index limits this fixed 10:9 boundary to32768 outputs. Preserve and
+exclude invalid over-limit probes. Audit the shared header and every caller;
+unsigned-short versus narrowed-int result families can emit identical objects
+without proving the original declaration. Caller-local narrowing remains
+independent. [Measured controls](../mrf-result-width-controls.md).
