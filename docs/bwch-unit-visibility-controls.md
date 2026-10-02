@@ -52,3 +52,12 @@ or moving more declarations. No candidate differential, whole-tree census or
 partial-link gate was run, and no runtime or lifecycle conclusion is inferred.
 Production source remains the previously validated ratio-only correction;
 last census 882/1852 exact, 87,605 exact bytes and fixed phase 385/0.
+
+Follow-up object inspection: block_size_table is a 48-byte STB_LOCAL object
+in .rodata, attached to bwchdem.c's local symbol group; its neighboring objects
+have the same baseline ordering and relative offsets (Space +48, Mark +58,
+IIR +68, AGC +100). This does not support a separately exported table as the
+explanation. Do not infer function ownership from the last preceding STT_FILE
+in the linked global-symbol tail. The remaining constructor store mismatch
+is specifically the ordering of two zero stores at +2 and +4, rather than a
+wrong final field value. No additional source-order permutation was compiled.
