@@ -2502,3 +2502,19 @@ Use fixed alias controls to expose rereads, labelled component-only when no
 modem history is proved. A bystander free's dead POP may change too; record
 that gain without inventing a source change in free.
 [Recovery](../ecc-init-cache-recovery.md).
+
+
+Do not treat early index initialization plus separated postincrement as an
+exact source recovery merely because size approaches the object. V22 MRF's
+four-cell cross closes without a hit (F11597): combined227Bvs228 still changes
+saved-register count and sequencing. Distinguish RHS sampling before a
+postincrement assignment from incrementing after its store; these have
+different local lifetimes. [Controls](../v22-mrf-index-controls.md).
+
+
+Sampling the RHS before work[k++] is a distinct discriminator, but V22 MRF's
+four-cell follow-up also fails (F11598), growing244→245B. After two negative
+batches, park nearby index/temporary synonyms and return to independent
+operand or field evidence. A bounded failed family does not establish that
+source recovery is globally exhausted.
+[Scope review](../v22-mrf-index-controls.md).

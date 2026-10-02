@@ -133673,3 +133673,24 @@ Fixed Gentoo make phase385 passed/0 failed; all9438 ECC checks pass including
 24 alias checks (8/24 failed on corrected baseline fixture). Structural14240
 references/2725 finding headings and285 suites/10038 static anchors clean.
 No fuzzing/mutation execution or modern portability claim.
+
+
+## F11597. V22 MRF early index and separate increment do not recover init
+
+Four-cell lifetime×sequencing family, four emissions:244/211/244/227B vs228B,
+no exact gains/losses,1/3 exact unchanged. Combined58vs60 instructions after
+padding, different saved register/frame and load/store/increment order.
+All3 functions/2 globals/data/type/binding/visibility preserved; no adoption
+or candidate differential/census/partial gate. [Controls](v22-mrf-index-controls.md).
+(2026-10-02)
+
+
+## F11598. V22 MRF sampled RHS does not recover the postincrement lifetime
+
+Four-cell early-index×sampled-RHS follow-up preserves original work[k++];
+244/245/244/245B vs228B, four emissions, no exact gains/losses,1/3 unchanged.
+All3 functions/2 globals/data/type/binding/visibility preserved; no source
+adoption or candidate gates. After two unsuccessful batches, park nearby
+index/sequencing variants pending a fresh discriminator; no global source
+ceiling inferred. [Controls and scope review](v22-mrf-index-controls.md).
+(2026-10-02)
