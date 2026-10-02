@@ -2518,3 +2518,28 @@ batches, park nearby index/temporary synonyms and return to independent
 operand or field evidence. A bounded failed family does not establish that
 source recovery is globally exhausted.
 [Scope review](../v22-mrf-index-controls.md).
+
+
+Opposite temporary-array rail placement and early work-index lifetime motivate
+an independent stack/source cross, but do not force an exact preimage.
+V22 PPS's four cells restore selected boundaries yet fail the complete290B
+body (F11599). Close the family, preserve arrays/data/symbol controls and
+select another operand/use lead. [Controls](../v22-pps-init-controls.md).
+
+
+Distinguish a sentinel countdown from a postdecrement test using initial RTL
+and final flags. MTD sentinel retains CMPWffff; postdecrement reproduces the
+blob's DEC/narrow/INCWoldflags but still misses the complete297B function
+(F11600/F11601). Short energy locals do not by themselves reproduce its clamp.
+Terminal ternary lowering is another early-stage discriminator; sharedverdict
+also fails (F11602). Close these staged families, preserve data/body controls,
+and do not promote a one-byte size difference into a byte preimage.
+[Controls](../mtd-detect-controls.md).
+
+
+Review an inlined helper's complete TU, including bystanders. Shared IIR's
+counter/cursor/feed-forward narrowing eight-cell cross has no full hit
+(F11603), and count changes untouched II despite unchanged size. Do not add
+an uninitialized output merely to match the blob's undefined zero-section
+return; preserve the fixture's exclusion and demand an independent discriminator
+before more local permutations. [Controls](../iir-boundary-controls.md).

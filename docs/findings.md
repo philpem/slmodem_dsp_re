@@ -133694,3 +133694,52 @@ adoption or candidate gates. After two unsuccessful batches, park nearby
 index/sequencing variants pending a fresh discriminator; no global source
 ceiling inferred. [Controls and scope review](v22-mrf-index-controls.md).
 (2026-10-02)
+
+
+## F11599. V22 pulse-shaper early work index and rail layout remain non-exact
+
+Four-cell independent index×array-order cross gives305/305/289/289B vs290B,
+four emissions, no exact gain/loss,1/3 unchanged; combined76vs78 instructions.
+All3 functions/2 globals/data/type/binding/visibility preserved. No source
+adoption/candidate gates; close local family. [Controls](v22-pps-init-controls.md).
+(2026-10-02)
+
+
+## F11600. MTD sentinel loop and word energy carriers remain non-exact
+
+Four-cell full-TU cross gives288/287/306/305B vs297B, four emissions, no exact
+gains/losses,2/3 unchanged. Sentinel initialRTL/finalCMPWffff differs from blob
+old-value flags. Wordlocals restore some comparisons, not clamp SAR15.
+Generator assertion rejected broad match before candidatecompilation; corrected
+full rerun valid. All3 functions/3 data objects/type/binding/nontext preserved;
+no adoption/candidate gates. [Controls](mtd-detect-controls.md).
+(2026-10-02)
+
+## F11601. MTD postdecrement explains loop flags without complete recovery
+
+Two staged postdecrement cells plus unchanged baseline recover DEC/narrow/
+INCWoldflags;288/299/298B vs297B, three emissions, no exact gain/loss,2/3
+unchanged. Complete data/symbol/otherbody controls agree. No source adoption
+or candidate gates; close source spelling stage. [Controls](mtd-detect-controls.md).
+(2026-10-02)
+
+## F11602. MTD shared verdict does not close the terminal decision
+
+Three-cell production/postdecrement-word/shared-verdict stage gives288/298/316B
+vs297B, three emissions, no exact gain/loss,2/3 unchanged. InitialRTL already
+lowers retained ternary to boolean; commonconstantresult refocus is negative.
+Data/symbol controls agree; no adoption/candidate gates. Park nearby detector
+variants; negative-count behavior discrepancy is static prediction, not a
+runtime or modem reachability result. [Scope review](mtd-detect-controls.md).
+(2026-10-02)
+
+
+## F11603. Shared IIR counter/cursor/FF narrowing family closes without a hit
+
+Eight-cell full-TU cross, eight raw emissions,0/3 exact unchanged/no gains or
+losses. Combined scalar190Bvs191 has58vs59 instructions; block269Bvs287 has
+79vs86. Count also changes untouchedII canonical body at unchanged213B.
+All3 functions/types/binding/visibility/allocated nontext preserved; no data
+objects. No source/flag adoption/candidate gates/undefined-return fabrication.
+[Controls](iir-boundary-controls.md).
+(2026-10-02)
