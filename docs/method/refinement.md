@@ -2337,3 +2337,14 @@ cross: generate2's four cells yield only the combined148-byte exact hit
 The callee must define both outputs before use; a matching sibling is evidence
 for transfer, not permission to apply it blindly to phase-reversal generators.
 [Quadrature transfer](../fpm-tone-pair-recovery.md).
+
+
+A register-heavy oscillator residual can still conceal a real signed-word
+boundary. Fixed negative traversal and naturally reached counter32760 expose
+FPM_TONE_generate discrepancies that ordinary answer-tone tests miss (F11577).
+Use adequate buffers and valid history before changing source. Narrowing locals
+can recover cmpw while eager Boolean lowering appears already in initial RTL;
+that is not allocator evidence. Direct field predicates recover branches, then
+owner-counter update plus predicate order and private-phase capture boundary
+recover the full213 bytes. Early source field writes can be coalesced into
+conditional final stores. [Bounded recovery](../fpm-tone-sine-recovery.md).

@@ -20,7 +20,7 @@
 extern void *ref_FPM_TONE_create(void *state, void *cfg);
 extern void ref_FPM_TONE_set_freq(void *state, short hz);
 extern void ref_FPM_TONE_set_scale(void *state, short scale);
-extern void ref_FPM_TONE_generate(void *state, short *out, short count);
+extern short ref_FPM_TONE_generate(void *state, short *out, short count);
 extern short ref_FPM_TONE_CFG[];
 extern short ref_FPM_TONE_generate_demod(void *state, short *out,
 					 short count);
@@ -458,6 +458,81 @@ filter_stream(const char *what, int total, int len, int taps_override)
 	return diff_end();
 }
 
+/* Fixed component inputs. Both states clone a fully constructed object from the supplied
+ * configuration; positive calls establish the high counter without planting
+ * internal history. Negative count has the complete word-sized output range.
+ * These are component boundaries, not modem lifecycle claims. */
+static int
+check_generate_boundaries(void)
+{
+	struct fpm_tone_cfg cfg = FPM_TONE_CFG;
+	struct fpm_tone a, b;
+	void *owner;
+	static short oa[65600], ob[65600];
+	int i, k, rc = 0;
+	short ra, rb;
+
+	cfg.rev_period = 0;
+	owner = ref_FPM_TONE_create(NULL, &cfg);
+	if (owner == NULL) {
+		diff_begin("generator boundary allocation");
+		diff_eq_int("owner allocated %ld", 0, 1, 0);
+		return rc | diff_end();
+	}
+	memcpy(&a, owner, sizeof(a));
+	memcpy(&b, owner, sizeof(b));
+	diff_begin("FPM_TONE_generate negative count");
+	for (i = 0; i < 65600; i++) oa[i] = ob[i] = 0x5a5a;
+	ra = ref_FPM_TONE_generate(&a, oa, -1);
+	rb = FPM_TONE_generate(&b, ob, -1);
+	diff_eq_int("returned count (%ld)", rb, ra, -1);
+	for (i = 0; i < 65535; i++)
+		diff_eq_int("negative sample %ld", ob[i], oa[i], i);
+	for (i = 65535; i < 65600; i++) {
+		diff_eq_int("reference guard %ld", oa[i], 0x5a5a, i);
+		diff_eq_int("reconstruction guard %ld", ob[i], 0x5a5a, i);
+	}
+	diff_eq_obj("negative generator state", struct fpm_tone, &b, &a, -1);
+	rc |= diff_end();
+
+	ref_FPM_TONE_delete(owner);
+	cfg.rev_period = 32767;
+	owner = ref_FPM_TONE_create(NULL, &cfg);
+	if (owner == NULL) {
+		diff_begin("generator boundary allocation");
+		diff_eq_int("owner allocated %ld", 0, 1, 0);
+		return rc | diff_end();
+	}
+	memcpy(&a, owner, sizeof(a));
+	memcpy(&b, owner, sizeof(b));
+	diff_begin("FPM_TONE_generate reachable counter wrap");
+	for (k = 0; k < 8; k++) {
+		ra = ref_FPM_TONE_generate(&a, oa, 32760);
+		rb = FPM_TONE_generate(&b, ob, 32760);
+		diff_eq_int("history returned %ld", rb, ra, k);
+		for (i = 0; i < 32760; i++)
+			diff_eq_int("history sample %ld", ob[i], oa[i], i);
+		diff_eq_obj("history state", struct fpm_tone, &b, &a, k);
+	}
+	diff_eq_int("reference reached count %ld", a.rev_count, 32760, 8);
+	diff_eq_int("reconstruction reached count %ld", b.rev_count, 32760, 8);
+	ra = ref_FPM_TONE_generate(&a, oa, 128);
+	rb = FPM_TONE_generate(&b, ob, 128);
+	diff_eq_int("boundary returned %ld", rb, ra, 128);
+	for (i = 0; i < 128; i++)
+		diff_eq_int("boundary sample %ld", ob[i], oa[i], i);
+	diff_eq_obj("counter wrap state", struct fpm_tone, &b, &a, 128);
+	/* The next ordinary call also observes any premature phase reversal. */
+	ref_FPM_TONE_generate(&a, oa, 8);
+	FPM_TONE_generate(&b, ob, 8);
+	for (i = 0; i < 8; i++)
+		diff_eq_int("post-boundary sample %ld", ob[i], oa[i], i);
+	diff_eq_obj("post-boundary state", struct fpm_tone, &b, &a, 8);
+	rc |= diff_end();
+	ref_FPM_TONE_delete(owner);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -466,6 +541,8 @@ main(void)
 	void *built;
 	int rc = 0;
 	int k;
+
+	rc |= check_generate_boundaries();
 
 	/* One reference object, cloned for both sides. */
 	built = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);

@@ -133299,3 +133299,25 @@ partial links remain DIFFERENT, positioned68,320 ->68,343/943,398,
 matching relocation records1,018 ->1,019/18,317.
 [Complete transfer and retained validation](fpm-tone-pair-recovery.md).
 (2026-10-02)
+
+
+## F11577. Sine generator becomes byte-exact and restores negative traversal and reachable signed-word reversal behavior
+
+Correct fixed component controls expose skipped negative output and premature
+reversal after eight ordinary32760-sample calls reach counter32760. Unrepaired
+source fails65,536/65,667 negative and10/262,237 counter checks. Initial
+constructor fixture crash is invalid/excluded, corrected before interpretation.
+Forty matrix cells plus one staged seed cover34 sources/32 emissions across
+bounded generation, reversal, promotion, guard and phase-lifetime families.
+Final twelve-cell cross has one213-byte exact hit: owner word counter update,
+reference predicate order, phase capture after counter clear, with recovered
+short countdown/direct scale/callee-defined outputs. No register-specific
+source, flag or public-type change; all eleven functions/twelve globals/data
+preserved, only generator changes. Compiler coalesces the early counter write.
+Retained build300/300, whole-tree871/1852 ->872/1852 and84,914 ->85,127
+exact bytes, sole gain/no losses. Fixed Gentoo phase385/0; negative65,667 and
+reachable counter262,237 checks pass. Static tick anchors retargeted, not
+executed. Complete partial links remain DIFFERENT; positioned68,343
+->68,419/943,398, matching relocation records1,019 ->1,018/18,317.
+[Complete recovery and retained validation](fpm-tone-sine-recovery.md).
+(2026-10-02)

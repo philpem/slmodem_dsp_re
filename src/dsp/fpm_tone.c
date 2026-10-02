@@ -260,32 +260,30 @@ short
 FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 {
 	struct fpm_phasor p;
-	int scale = state->cfg.scale;
-	int period = state->cfg.rev_period;
-	int elapsed;
-	int i;
+	short i;
 
 	p.phase = state->phase;
 	p.inc = state->inc;
-	p.cos = p.sin = 0;
 
-	for (i = 0; i < count; i++) {
+	for (i = count; i-- != 0;) {
 		FPM_phasor(&p);
-		out[i] = ((scale * p.sin) >> 14);
+		*out++ = ((state->cfg.scale * p.sin) >> 14);
 	}
 
 	/*
 	 * Phase-reversal bookkeeping.  The counter advances in units of eight
 	 * samples, so at 8 kHz it ticks in milliseconds and the default period
-	 * of 450 is the ITU-T V.25 figure directly.
+	 * of 450 is the ITU-T V.25 figure directly. The comparison is signed
+	 * word-sized even though the stored counter is unsigned (F11577).
 	 */
-	elapsed = state->rev_count
-		  + (count >> 3);
+	state->rev_count = (short)(state->rev_count + (count >> 3));
 
-	if (period > 0 && period <= elapsed) {
-		int phase = (short)p.phase;
+	if (state->cfg.rev_period <= (short)state->rev_count &&
+	    state->cfg.rev_period > 0) {
+		int phase;
 
 		state->rev_count = 0;
+		phase = (short)p.phase;
 
 		/*
 		 * Half of a 0x8000 cycle is 180 degrees.  The original adds
@@ -300,8 +298,6 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 
 		/* Explicit int -> unsigned short; the sign conversion is the point. */
 		p.phase = (unsigned short)phase;
-	} else {
-		state->rev_count = (short)elapsed;
 	}
 
 	state->phase = (short)p.phase;
