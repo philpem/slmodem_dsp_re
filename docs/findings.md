@@ -134318,3 +134318,28 @@ static anchors clean. Init30241 checks/8pairedcalls plus17 ANSam component
 lifecycle checks per side. Full partial positioned -146, allocated -16,
 exact section/symbol/relocation records unchanged; whole links DIFFERENT.
 [Complete controls and boundaries](v8-ansam-owner-recovery.md). (2026-10-02)
+
+## F11654. Tonequeue output cursor enables reversal but still misses the body
+
+Two full-V8.c cells at e70c56b9 retain increasing int counter/call types and
+replace out[i] with *out++. Directstore/ADD2 and period loop reversal recover;
+79B production becomes94B/SIZE4 versus90B, alpha26/25 also fails. Exact2/9
+unchanged. Inlinehandshake also changes344 canonical bytes, with same3288B/
+743rows and relocationtargetmultiset but differing offsets/branch operands;
+not pure register renaming. Seven other bodies and nameddata/metadata agree.
+Raw41jumptableaddends shift+16, canonical function-interior targets agree.
+No adoption/new fixture execution; finite family closed. Unused uppercosine
+argument bits do not establish formal width. [Controls](v8-tonequeue-cursor-controls.md).
+(2026-10-02)
+
+## F11655. Echo history-energy cursor/countdown misses the entry lowering
+
+Two complete-TU cells at e70c56b9 reproduce54B production; guarded captured
+history/countdown gives38B/SIZE15 against53B. Directload/ADD2 and DEC/JNE
+recover, but TEST/JMP entry merges with backedge instead of CMP0/JBE plus
+copiedcount. Alpha17/18 also fails. Only energy changes across26 functions/
+48 data; full sibling/metadata/nontext controls agree, exact11/26 unchanged.
+Existing2000 paired initialized-component energycalls are coverage context;
+no candidate differential/new fixture/sourceadoption. The eight-function
+screen spans90 TU functions, not an exhaustive tree classification. Close
+this finite control. [Evidence](v34-echo-energy-controls.md). (2026-10-02)

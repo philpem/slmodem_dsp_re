@@ -2855,3 +2855,18 @@ bodies and anonymous tables too: raw jump-table addends move with function
 alignment, but each function-interior target must still agree. Report that
 controlled raw-data change explicitly, not as unchanged nontext.
 [Recovery](../v8-ansam-owner-recovery.md).
+
+Dead-index removal can enable automatic reversal without closing call-boundary
+normalization. Tonequeue's output pointer recovers ADD2/countdown but stays
+SIZE4, with meaningful inlinehandshake/relocation-layout changes (F11654).
+An exact byte-consuming callee does not require upper argument-slot bits to
+be normalized; do not infer a unique wider prototype from their absence.
+Close traversal independently of any future ABI investigation.
+[Controls](../v8-tonequeue-cursor-controls.md).
+
+Read-only reduction cursors need their own control even when neighboring FIR
+cursor domains failed. Echo history-energy restores load/ADD2/countdown but
+merges entry with backedge, missing the blob's distinct skip/count copy
+(F11655). Use initial loop diagnostics to distinguish compiler strength
+reduction from source traversal, then preserve complete negative evidence
+and input boundaries. [Control](../v34-echo-energy-controls.md).
