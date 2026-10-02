@@ -512,7 +512,10 @@ def renumber(old, new, nth=None):
         rpat = re.compile(r"\bD%s\b" % re.escape(o))
         rrep = "D" + n
     else:
-        hpat = re.compile(r"(?m)^(#{2,4} )%s\." % re.escape(o))
+        # The heading carries an optional `F` prefix (FINDING_HEAD accepts
+        # one, and every heading in the register is written with it), so the
+        # capture must keep it or the rewrite drops it / never matches.
+        hpat = re.compile(r"(?m)^(#{2,4} )(F?)%s\." % re.escape(o))
         #
         # BOTH SIDES OF A MERGE FOUND THIS BUG INDEPENDENTLY, and this is
         # the one that survived.  `cid-dtmf` bounded the repeat to {0,10}?
@@ -548,6 +551,20 @@ def renumber(old, new, nth=None):
         return (rpat.sub(rrep, text) if kind == "D"
                 else rpat.sub(lambda m: m.group(1) + n, text))
 
+    def move_heading(text):
+        # Rename the heading, keeping the `F` prefix the register writes.
+        # A zero-match rewrite was observed as a SILENT NO-OP (exit 0, file
+        # unchanged) when the pattern and the register's spelling disagreed;
+        # refuse rather than report success on a file that did not move.
+        if kind == "D":
+            return hpat.sub(lambda m: m.group(1) + rrep, text, count=1)
+        out, nsub = hpat.subn(lambda m: m.group(1) + m.group(2) + n + ".",
+                              text, count=1)
+        if nsub != 1:
+            sys.exit("no `## F%s.` heading where the entry was expected -- "
+                     "refusing to report a renumber that changed nothing" % o)
+        return out
+
     #
     # THE DISAMBIGUATED PATH.  One heading, chosen by position, and only the
     # citations inside its own section -- everything else that names the
@@ -567,9 +584,7 @@ def renumber(old, new, nth=None):
         start = spans[at]
         end = spans[at + 1] if at + 1 < len(spans) else len(doc)
 
-        body = doc[start:end]
-        body = hpat.sub(lambda m: m.group(1) + (rrep if kind == "D"
-                                                else n + "."), body, count=1)
+        body = move_heading(doc[start:end])
         body = move_refs(body)
         open(path, "w", encoding="utf-8").write(doc[:start] + body + doc[end:])
 
@@ -592,8 +607,7 @@ def renumber(old, new, nth=None):
     for f in tracked():
         text = orig = read(f)
         if f == path:
-            text = hpat.sub(lambda m: m.group(1) + (rrep if kind == "D"
-                                                    else n + "."), text, count=1)
+            text = move_heading(text)
         text = move_refs(text)
         if text != orig:
             open(f, "w", encoding="utf-8").write(text)
