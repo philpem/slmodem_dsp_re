@@ -69,3 +69,60 @@ census before claiming any recovered exact function. Whole-object metadata
 and unused nontext remain separate controls. Source and all 300 production
 objects are unchanged in this detector stage; the previous fixed period gate
 is 386/0 and the authoritative strict count is 924/1852, 95168 exact bytes.
+
+
+## Integration into canonical relocation comparison
+
+F11659 connects the shared proof to byteident.body. An opcode check only
+avoids unnecessary work; it never supplies identity. Only the proved dispatch
+relocation, with exactly matching offset, R_386_32 kind, section and table
+base, receives the ordered table identity. A refused proof preserves the
+existing section tag and its UNRESOLVED safeguard. Named data and ordinary
+anonymous pointers retain their existing resolution rules. No named-function
+exception, table-byte fingerprint or addend masking is introduced.
+
+    python3 tools/toolchain/jumptable_integration_controls.py
+    python3 tools/toolchain/byteident.py --self-test
+    python3 tools/toolchain/byteident.py --ratchet-self-test
+
+Integration executes 48 synthetic ELF objects: three equal pairs grade EXACT,
+three different destination pairs grade RELOC, 40 refused table proofs never
+grade EXACT against the supported baseline, and an ordinary anonymous-table
+pointer remains UNRESOLVED even against itself. Two real objects recover
+MakeTxData EXACT. All 59 existing relocation controls and three exact-set
+ratchet controls pass. Review added unsupported incoming word-relocation and
+external prefixed/address-size jump controls, plus relocation-field bounds.
+The shared section-edge scanner now strips known prefixes before inspecting
+direct branches; owner prefix forms remain refused.
+
+The initial rebased integration fixture exposed objdump including anonymous
+padding before the first named function. The fixture now places padding in
+a sized preceding function, so it measures rebasing without that apparatus
+ambiguity. The failed fixture run is not counted as successful integration.
+The independent four-cell source audit now reads the original dispatch target
+from ELF rather than assuming byteident will retain a section tag: baseline
+and either axis alone still fail, combined alone is EXACT.
+
+The complete census changes 924→925 of 1852, exact bytes 95168→95363,
+with MakeTxData the only gained function and zero losses. This completes
+classification of the previously committed source recovery; no new source
+change or new emitted code is attributed to the comparator edit. All 300
+production objects retain their recorded hashes. The fixed period/structural
+gate passes 386/0, with no fuzzing or mutation execution. Full-TU and partial
+link evidence remains F11657’s: only the source-recovered generator changed,
+its table slots agree individually, and whole partial links remain DIFFERENT.
+
+Byteident now requires pyelftools for this proof path, as does the standalone
+analysis tool. Its ordinary section-resolution refusal and full-object
+binding/export checks remain separate. Scope remains the narrow documented
+ABI-entry domain; broader dispatch forms require independent proof and
+negative controls rather than relaxation to reduce UNRESOLVED counts.
+
+
+The older stored 810-symbol ratchet has one pre-existing unmet entry,
+`_ZN13V90ParametersC2EP19_tagModemParameters`, already discussed in the
+Playbook. Both pre-integration and integrated tools report BYTES4 / grade-1
+ACCEPT on the same production object. It is absent from both the immediate
+924 baseline and final925 set. Do not describe the old floor as fully green
+or lower it silently: this change has zero new losses against either set.
+The three ratchet self-tests validate the detector, not that old tree floor.

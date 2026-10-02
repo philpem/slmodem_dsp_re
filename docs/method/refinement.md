@@ -2896,3 +2896,12 @@ canonical grading. Review control transfers beyond Jcc: LOOP, far/prefixed
 jumps and entries into guard instruction interiors can bypass an incomplete
 parser. Preserve unsupported cases as unproved, and state the ABI-entry
 boundary. [Controls](../anonymous-jumptable-proof.md).
+
+
+Integrate proved table identity through the actual shared body/verdict path
+and retest every refusal there (F11659). Ordinary anonymous data must stay
+unresolved; changed ordered destinations must be RELOC. Known incoming-edge
+checks need prefix handling outside the owner too. Review the full exact-set
+diff and production hashes: MakeTxData’s 195-byte gain completes a previously
+committed source recovery, while the comparator stage emits no new code.
+[Integration](../anonymous-jumptable-proof.md).

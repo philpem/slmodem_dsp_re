@@ -134385,3 +134385,22 @@ but comparator/census remain unchanged: UNRESOLVED, strict 924/1852. No source
 or production-object changes, fuzzing or mutation execution. Narrow ABI-entry
 domain and unsupported forms are explicit. [Proof and controls](anonymous-jumptable-proof.md).
 (2026-10-02)
+
+## F11659. Proved anonymous dispatch identity completes MakeTxData byte exactness
+
+Shared bounded proof replaces only the matching dispatch relocation identity
+in byteident.body. 48 real assembled synthetic ELF objects: three equal-pair
+EXACT checks, three changed-pair RELOC checks, 40 refused proofs never EXACT
+against supported baseline, ordinary consumer UNRESOLVED. Two actual objects
+recover MakeTxData EXACT. All 59 prior relocation and three ratchet controls
+pass. Review closes external prefixed/direct bypass and incoming word-address
+gaps with controls and validates relocation fields. Initial rebasing fixture
+padding ambiguity corrected, not counted as a valid run. Complete 1852 census
+924→925, exact bytes 95168→95363; sole gain MakeTxData/no losses. All 300
+production hashes unchanged: this completes the prior committed source
+recovery’s classification, not a new emitted-code change. Fixed period and
+structural gate 386/0. Older 810-symbol floor has one unchanged pre-existing
+V90Parameters C2 BYTES4 entry; baseline and final sets both omit it, and old/
+new tools reproduce the same verdict. No new ratchet loss or floor lowering.
+[Integration and proof scope](anonymous-jumptable-proof.md).
+(2026-10-02)

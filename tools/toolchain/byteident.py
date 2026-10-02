@@ -253,6 +253,22 @@ def body(path, sym):
     relocs = {off: (kind, relocation_target(kind, target, raw[off:off + 4],
                                            symbols))
               for off, (kind, target) in relocs.items()}
+    # An anonymous table becomes a destination only after the shared bounded
+    # ELF proof establishes guard extent and every ordered instruction target.
+    # The opcode prefilter saves work; it never supplies proof or a grade.
+    if b"\xff\x24" in raw and any(kind == "R_386_32" and target[0] == "section"
+                                  for kind, target in relocs.values()):
+        import jumptable
+        try:
+            proof = jumptable.prove(path, sym)
+        except jumptable.Refused:
+            pass
+        else:
+            off = proof['relocation_offset']
+            expected = ("R_386_32", ("section", proof['table_section'],
+                                      proof['table_offset']))
+            if relocs.get(off) == expected:
+                relocs[off] = ("R_386_32", proof['identity'])
     return raw, relocs
 
 

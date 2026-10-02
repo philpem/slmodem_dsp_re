@@ -39,8 +39,11 @@ def fixture(label, **options):
     extra = 'jmp *%eax\n' if options.get('indirect') else ''
     middle = 'inc %ecx\n' if options.get('clobber') else ''
     flags = 'aw' if options.get('writable') else 'a'
+    padding = options.get('code_padding', 0)
+    leading = (f'.type leading,@function\nleading:\n.space {padding},0x90\n'
+               '.size leading,.-leading\n') if padding else ''
     source = f'''.text
-.space {options.get('code_padding', 0)},0x90
+{leading}
 .globl sample
 .type sample,@function
 sample:
@@ -140,6 +143,9 @@ def main():
         'address-size-indirect': {'prefix': '.byte 0x67\njmp *%eax\n'},
         'return-address-store': {'prefix': 'mov %eax,(%esp)\nret\n'},
         'stack-pointer-write': {'prefix': 'mov %eax,%esp\nret\n'},
+        'incoming-word-address': {'other_body': '.short dispatch\nret'},
+        'external-prefixed-direct': {'other_body': '.byte 0xf2\njmp dispatch'},
+        'external-address-size-direct': {'other_body': '.byte 0x67\njmp dispatch'},
     }
     for label, options in negatives.items():
         try:

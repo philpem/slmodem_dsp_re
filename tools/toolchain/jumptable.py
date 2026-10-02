@@ -15,6 +15,10 @@ from pathlib import Path
 from elftools.elf.elffile import ELFFile
 from elftools.elf.relocation import RelocationSection
 
+PREFIXES = frozenset(('rep', 'repz', 'repnz', 'bnd', 'notrack', 'addr16',
+                      'data16', 'cs', 'ds', 'es', 'fs', 'gs', 'ss', 'lock',
+                      'xacquire', 'xrelease'))
+
 
 class Refused(ValueError):
     pass
@@ -52,10 +56,14 @@ def section_direct_edges(path, section):
     output = subprocess.check_output(['objdump', '-dw', '--section=' + section, path], text=True)
     edges = []
     for line in output.splitlines():
-        match = re.match(r'^\s*([0-9a-f]+):\t(?:[0-9a-f]{2} )+\s*\t'
-                         r'(?:j\w+|loop\w*|call)\s+([0-9a-f]+)\s', line)
+        match = re.match(r'^\s*([0-9a-f]+):\t(?:[0-9a-f]{2} )+\s*\t(.*)$', line)
         if match:
-            edges.append((int(match[1], 16), int(match[2], 16)))
+            tokens = match[2].split()
+            while tokens and tokens[0] in PREFIXES:
+                tokens.pop(0)
+            if len(tokens) >= 2 and tokens[0].startswith(('j', 'loop', 'call')):
+                if re.fullmatch('[0-9a-f]+', tokens[1]):
+                    edges.append((int(match[1], 16), int(tokens[1], 16)))
     return edges
 
 
@@ -93,9 +101,7 @@ def prove(path, name):
     rows = instructions(str(path), section.name, start, end)
     require(not any(r[2] in ('ljmp', 'lcall', 'iret', 'iretd', 'retf', 'syscall',
                             'sysenter', 'int', 'int3', 'into', 'enter', 'leave',
-                            'push', 'pop', 'pusha', 'popa', 'rep', 'repz', 'repnz',
-                            'bnd', 'notrack', 'addr16', 'data16', 'cs', 'ds',
-                            'es', 'fs', 'gs', 'ss', 'lock', 'xacquire', 'xrelease')
+                            'push', 'pop', 'pusha', 'popa') or r[2] in PREFIXES
                     for r in rows),
             'unsupported control/stack instruction')
     require(not any(r[2] == 'ret' and r[3] for r in rows), 'unsupported return form')
@@ -136,10 +142,22 @@ def prove(path, name):
     for relsec in sections:
         if isinstance(relsec, RelocationSection):
             require(not relsec.is_RELA(), 'RELA unsupported')
+            require(0 <= relsec['sh_info'] < len(sections) and
+                    0 <= relsec['sh_link'] < len(sections), 'relocation section indices')
             linked = sections[relsec['sh_link']]
+            require(linked['sh_type'] == 'SHT_SYMTAB', 'relocation symbol table')
             for relocation in relsec.iter_relocations():
-                relocations.append((relsec['sh_info'], relocation,
-                                    linked.get_symbol(relocation['r_info_sym'])))
+                require(relocation['r_info_sym'] < linked.num_symbols(), 'relocation symbol index')
+                symbol = linked.get_symbol(relocation['r_info_sym'])
+                if symbol['st_shndx'] == section_id:
+                    require(relocation['r_info_type'] in (1, 2),
+                            'unsupported incoming relocation kind')
+                if relocation['r_info_type'] in (1, 2):
+                    require(relocation['r_offset'] + 4 <=
+                            sections[relsec['sh_info']]['sh_size'] and
+                            sections[relsec['sh_info']]['sh_type'] == 'SHT_PROGBITS',
+                            'relocation field extent')
+                relocations.append((relsec['sh_info'], relocation, symbol))
     code_relocs = [(r, s) for sec, r, s in relocations
                   if sec == section_id and jump[0] <= r['r_offset'] < jump[0] + len(jump[1])]
     require(len(code_relocs) == 1, 'dispatch relocation count')

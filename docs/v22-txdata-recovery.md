@@ -62,3 +62,10 @@ build/playbook-v22-txdata-adoption. F11657 records the recovery. A later
 general table resolver must establish guard/index extent, instruction-boundary
 targets, unique ownership and entry identity, with negative controls. A named
 exception or anonymous-addend masking would not justify an exact count.
+
+
+F11659 subsequently supplies the general destination proof and integration
+controls. The combined source is now strictly EXACT; the final census is
+925/1852, 95363 exact bytes, with MakeTxData the sole gain and no losses.
+This resolves the comparator limitation recorded above without changing the
+recovered source. [Integration and rejection controls](anonymous-jumptable-proof.md).
