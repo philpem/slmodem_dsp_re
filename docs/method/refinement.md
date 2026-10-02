@@ -2834,3 +2834,16 @@ against164B and fails instruction count too (F11650). Keep sample loads inside
 the bin loop to preserve alias lifetime, review the whole TU, and close that
 traversal domain without promoting a partial match.
 [Control](../v8-dftupdate-cursor-controls.md).
+
+Preserve ascending overlap behavior when recovering pointer-copy source.
+V8 coefficient copy keeps its signed-short loop and changes only indexed
+assignment to *dst++=*src++, recovering45B EXACT with all twelve siblings
+unchanged (F11651). Report alignment-absorbed growth and positioned-layout
+loss independently. [Recovery](../v8-copycoeff-cursor-recovery.md).
+
+An independent word-counter/coefficient-cursor cross can recover both predicted
+operations without closing a FIR body (F11652). Retain valid indexed history;
+do not add an unused final before-array pointer decrement to fit disassembly.
+Separate the recovered operations from merged-history and accumulator residuals,
+and close finite source domains without forcing spills or registers.
+[Controls](../v8-fsktx-source-controls.md).

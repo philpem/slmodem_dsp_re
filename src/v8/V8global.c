@@ -518,15 +518,15 @@ emit:
 	return (s->shifter >> (short)s->nleft) & 1;
 }
 
-/* Copy `n` coefficients.  The counter is a short, so `n` above 32767 never
- * terminates -- no caller comes close. */
+/* Copy `n` coefficients in ascending order.  Count and counter are signed
+ * shorts; a nonpositive count copies nothing.  Cursor recovery: F11651. */
 void
 v8_copycoeff(short *dst, const short *src, short n)
 {
 	short i;
 
 	for (i = 0; i < n; i++)
-		dst[i] = src[i];
+		*dst++ = *src++;
 }
 
 /*

@@ -134279,3 +134279,26 @@ also fail. Exact2/3 unchanged; only update changes across3 functions/1 named
 data object, all metadata/nontext/bystander controls agree. No source
 adoption or new fixture execution; finite traversal domain closed.
 [Controls and input boundary](v8-dftupdate-cursor-controls.md). (2026-10-02)
+
+## F11651. Advancing coefficient-copy pointers recover 45 exact bytes
+
+Two full-V8global cells atafedb41d keep short count/index and replace indexed
+copy with *dst++=*src++. Candidate45B EXACT from41B, sole changed body across
+13 functions/four named data objects; full sibling/metadata/nontext controls
+agree. Ascending overlap/no-op count semantics remain. All300 production
+objects inspected; sole changed object raw-matches candidate. Whole-tree
+922→923/1852,95083 exact bytes/no losses. Fixed Gentoo phase386/0, copy4162
+checks over66 paired calls, structural/static anchors clean. Complete same-order
+partial positioned -2, allocated bytes and exact metadata records unchanged;
+whole link DIFFERENT. [Recovery](v8-copycoeff-cursor-recovery.md). (2026-10-02)
+
+## F11652. Shaping-filter short counter and tap cursor recover operations only
+
+Four complete-V8Dpsk controls atafedb41d cross observed short counter and
+coefficient cursor. Production70B, short76B, cursor81B, both90B versus116B.
+Word narrowing/comparison and direct tap loads/ADD2 recover, but complete
+and alpha bodies miss. Only filter changes across4 functions/zero data;
+full metadata/nontext/bystander controls agree, exact2/4 unchanged. No source
+adoption/new fixture execution; synthetic component coverage is not public
+lifecycle evidence. Close this finite family without spill/register/history
+pointer forcing. [Controls](v8-fsktx-source-controls.md). (2026-10-02)
