@@ -225,9 +225,10 @@ unsigned short
 FSE_decision_CD(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v32_dec *m = (struct v32_dec *)state->cfg.owner;
-	short n = (short)(m->count + 1);
+	int n = m->count + 1;
+	short decision;
 
-	if (n > 0x0e) {
+	if ((short)n > 0x0e) {
 		m->count = 0;
 		state->mu_sel = 0;
 		state->cfg.decision = FSE_decision_trn;
@@ -238,8 +239,11 @@ FSE_decision_CD(struct fpm_fse *state, short *angle, short *mag)
 		state->lms_on = 0;
 	}
 
+	/* Read before the output write, including a count/mag alias (F11571). */
+	decision = (short)m->count;
 	*mag = 0x3299;
-	return (unsigned short)((m->count & 1) ? 3 : 0);
+	decision = (decision & 1) ? 3 : 0;
+	return (unsigned short)decision;
 }
 
 /*

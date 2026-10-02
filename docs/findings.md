@@ -133206,3 +133206,35 @@ and all four prior width controls reproduce. Twelve sources/emissions distinct.
 No source adoption or candidate runtime/partial gates, no fuzzing/mutation
 execution. Finite transfer closed pending independent lifetime/owner/profile
 evidence. [Ledger](fpm-tone-if-conversion.md). (2026-10-02)
+
+## F11571. V32 CD decision input must precede aliased magnitude output.
+
+Blob count reads precede magnitude stores on both arms; reconstruction reads
+afterward. A fixed component fixture obtains counts0,1,13,14 through ordinary
+CD calls, then aliases the signed-short output with the unsigned-short count
+member. Baseline fails3/268 checks; corresponding signed/unsigned aliases are
+permitted C, without a claim that modem callers use one. Retained read-before-
+output and counter-use narrowing recover the observed boundaries. Eighteen
+valid complete-TU lifetime/conversion/sched2 cells preserve9 functions/9 globals
+and data,0/9 exact unchanged. Closest122B/BYTES2 has four raw byte differences
+and a moved relocation due to swapped successor/lms stores. Flow2 order is
+reversed in sched2; disabling that pass gives BYTES27 and changes all9 bodies,
+so no flag exception. [Controls and validation](fse-cd-load-recovery.md).
+(2026-10-02)
+
+Retained complete TU raw-reproduces the closest supported candidate; only one
+of300 objects changes. Exact set868/1852 and84,590 bytes unchanged. Fixed Gentoo
+phase385/0; repaired alias group268/268, whole slicer fixture35,312 checks pass.
+Complete same-order partial links remain DIFFERENT, positioned equality68,316/
+943,398, allocated914,142 and exact section/symbol/relocation counts unchanged.
+No static-anchor retarget needed;285 suites/10,038 anchors remain unique.
+
+## F11572. Reversing two independent CD stores does not reverse final scheduling.
+
+F11571's measured flow2 ->sched2 store reversal motivates a two-cell staged
+control reversing only adjacent successor/lms assignments to distinct fields.
+Both source orders emit the identical full object,122B/BYTES2. All9 functions/
+9 globals/data unchanged, no gain/loss. Four domains total20 valid compilations,
+11 sources/10 emissions, no flag exception or broader store permutations.
+This source-order family is closed pending independent source/profile evidence.
+[Ledger](fse-cd-load-recovery.md). (2026-10-02)

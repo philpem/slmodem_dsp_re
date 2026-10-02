@@ -2291,3 +2291,17 @@ cross. No function becomes exact (F11570). A verified shared compiler mechanism
 can explain an instruction family while leaving scheduling and lifetime
 questions open; do not equate successful transfer with recovered original
 source. [Twelve-cell transfer](../fpm-tone-if-conversion.md).
+
+A close non-exact slicer can still read its decision input after an output that
+the blob reads first. FSE_decision_CD's fixed permitted count/magnitude alias
+fails3/268 baseline checks; recover the read boundary before interpreting its
+remaining scheduler difference (F11571). BYTES2 masks the union of relocation
+fields: here four raw bytes and the successor relocation move when two stores
+swap. Inspect relocation positions and RTL stages, not the byte score alone.
+[Source/option cross and fixed fixture](../fse-cd-load-recovery.md).
+
+Do not infer that reversing two independent source writes will undo a measured
+scheduler reversal. The CD successor/lms two-cell control emits the same
+complete object in both orders (F11572); the compiler can erase lexical-order
+information before final scheduling. Close that bounded family rather than
+expanding into arbitrary store permutations.
