@@ -2870,3 +2870,20 @@ merges entry with backedge, missing the blob's distinct skip/count copy
 (F11655). Use initial loop diagnostics to distinguish compiler strength
 reduction from source traversal, then preserve complete negative evidence
 and input boundaries. [Control](../v34-echo-energy-controls.md).
+
+Treat observed byte-sample lifetimes as independent boundaries, including a
+load between two output stores. V22 control's three capture axes still fail
+full bodies despite the closest148B versus145B (F11656). A whole control-byte
+value domain on disjoint objects does not cover alias timing; require valid
+object/representation evidence before claiming a behavioral difference or
+original API contract. Do not choose captures or retype flags by nearest size.
+[Controls](../v22-control-capture-controls.md).
+
+
+Cross count-capture timing with old-value postdecrement when dispatch and
+loop flags independently support them. MakeTxData’s combined spelling
+recovers the complete body and five function-relative table targets; neither
+axis alone does (F11657). Anonymous section offsets remain UNRESOLVED in the
+strict comparator. Preserve that distinction until a general resolver proves
+table extent and targets with negative controls; never replace target identity
+with masked addends or a named exception. [Evidence](../v22-txdata-recovery.md).

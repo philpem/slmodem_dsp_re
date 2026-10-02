@@ -134343,3 +134343,32 @@ Existing2000 paired initialized-component energycalls are coverage context;
 no candidate differential/new fixture/sourceadoption. The eight-function
 screen spans90 TU functions, not an exhaustive tree classification. Close
 this finite control. [Evidence](v34-echo-energy-controls.md). (2026-10-02)
+
+## F11656. V22 control-byte capture lifetimes do not recover the full body
+
+Eight full-v22stc cells at d672e822 cross first/later flags0c captures and
+intervening first flags0d sample. Sizes151/161/148/152/153/179/150/177B versus
+145B; exact0/2 unchanged, eight distinct raw emissions. Only control changes;
+full sibling/one-data/metadata/nontext controls agree. Closest148B alpha45/46
+still fails; allcaptures177B alpha52/46. Existing262144 paired constructed
+calls use disjointcontrols and do not establish alias behavior. No new
+fixture/sourceadoption/behavioral failure claim. Original exported alias/type
+contract remains unproven; no bitfield/restrict inference or forced layout.
+[Bounded domain and limits](v22-control-capture-controls.md). (2026-10-02)
+
+## F11657. MakeTxData recovers its full body and bounded anonymous dispatch table
+
+Four complete-TU cells cross count capture before dispatch and old-value
+postdecrement in four single-symbol loops. Sizes 175/175/211/195 versus 195;
+only combined matches every nonrelocated byte and all five table targets
+(65,103,131,163,28 relative to MakeTxData). Strict comparator remains
+UNRESOLVED1; no automatic exact gain is claimed. Bounded audit reports one
+match and three known misses. Only MakeTxData changes across ten functions;
+other bodies, metadata and nonrelocated nontext agree. Anonymous table layout
+changes are reviewed entry by entry. All 300 production objects inspected;
+sole v22prc object raw-matches candidate. Strict tree 924/1852, 95168 exact
+bytes, no losses. Fixed period/structural gate 386/0,
+existing MakeTxData fixture 130 paired checks. Full same-order links remain
+DIFFERENT; positioned equal bytes +141, allocated +32, exact section/symbol/
+relocation records unchanged. [Recovery and proof limits](v22-txdata-recovery.md).
+(2026-10-02)

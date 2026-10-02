@@ -58,7 +58,7 @@ iabs(int v)
 void
 MakeTxData(short *out, const short *count, short pattern)
 {
-	short i;
+	short i = *count;
 
 	switch (pattern) {
 	case V22_TXDATA_S1:
@@ -66,26 +66,26 @@ MakeTxData(short *out, const short *count, short pattern)
 		 * Two symbols per step, so the counter moves by two and the
 		 * loop is entered only when it is already non-zero.
 		 */
-		for (i = *count; i != 0; i = (short)(i - 2)) {
+		for (; i != 0; i = (short)(i - 2)) {
 			out[0] = V22_TXDATA_S1_EVEN;
 			out[1] = V22_TXDATA_S1_ODD;
 			out += 2;
 		}
 		break;
 	case V22_TXDATA_ONES_1200:
-		for (i = *count; i != 0; i = (short)(i - 1))
+		while (i-- != 0)
 			*out++ = V22_TRAINED_1200_SYMBOL;
 		break;
 	case V22_TXDATA_ONES_2400:
-		for (i = *count; i != 0; i = (short)(i - 1))
+		while (i-- != 0)
 			*out++ = V22_TRAINED_2400_SYMBOL;
 		break;
 	case V22_TXDATA_SYMBOL_2:
-		for (i = *count; i != 0; i = (short)(i - 1))
+		while (i-- != 0)
 			*out++ = 2;
 		break;
 	case V22_TXDATA_SYMBOL_10:
-		for (i = *count; i != 0; i = (short)(i - 1))
+		while (i-- != 0)
 			*out++ = 10;
 		break;
 	default:
