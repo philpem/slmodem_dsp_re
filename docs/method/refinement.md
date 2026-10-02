@@ -2348,3 +2348,14 @@ that is not allocator evidence. Direct field predicates recover branches, then
 owner-counter update plus predicate order and private-phase capture boundary
 recover the full213 bytes. Early source field writes can be coalesced into
 conditional final stores. [Bounded recovery](../fpm-tone-sine-recovery.md).
+
+
+Primitive array-new can preserve an element-count boundary that manual byte
+allocation folds into a different instruction. Psd's five-cell scaffold/control
+cross recovers both82-byte constructors when the second float array uses new[];
+first-only and unused allocator scaffold raw-reproduce baseline (F11578).
+Two exact cells emit the same complete object: choose the consistent two-array
+form without claiming unique first-allocation spelling. Verify cookies, emitted
+allocator symbols, exact sizes, uninitialized buffer content and every TU body.
+C++ replay must include configured CXX flags, not only the C profile.
+[Allocation transfer](../psd-array-new-recovery.md).

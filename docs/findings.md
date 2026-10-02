@@ -133321,3 +133321,24 @@ executed. Complete partial links remain DIFFERENT; positioned68,343
 ->68,419/943,398, matching relocation records1,019 ->1,018/18,317.
 [Complete recovery and retained validation](fpm-tone-sine-recovery.md).
 (2026-10-02)
+
+
+## F11578. Primitive-array new recovers both82-byte Psd constructor clones
+
+Five complete-C++-TU cells isolate unchanged source, allocator scaffold and
+new[] for either/both float buffers. Baseline/scaffold/first-only85B/SIZE3;
+second-only/both82B/EXACT for C1 and C2. Five sources/two complete objects.
+Scaffold and first-only raw-reproduce production; both hits raw-agree. Retain
+consistent array-new for both buffers, preserving delete[] definition position,
+member reloads and overlap store. Thirteen functions/global bindings/data
+preserved, only clones change, six/thirteen ->eight/thirteen exact, no losses.
+No cookie, initialization, null check or allocation-operator symbol appears;
+sysdep_malloc remains allocator. Full configured CXX flags used by the shared
+replay engine, with complete raw baseline proof. No placement/permutation sweep.
+[Full controls and retained validation](psd-array-new-recovery.md).
+(2026-10-02)
+
+Retained300/300 build; whole-tree872/1852 ->874/1852 exact and85,127
+->85,291 exact bytes, no losses. Gentoo phase385/0; allocation accounting
+covered by existing t_psd. Complete partial links remain DIFFERENT; positioned
+68,419 ->68,418/943,398 bytes, other exact-record counts unchanged.

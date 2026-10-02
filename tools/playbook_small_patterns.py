@@ -75,6 +75,14 @@ def main():
     headers={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in hpaths}
     result={'revision':REV,'domain':args.domain,'config':config,'headers':headers,'families':{}}
     tc.print_identity(image,tc.GENTOO_COMPILER_PATH,True)
+    if any(Path(path).suffix == '.cpp' for path in SOURCE_PATHS):
+        identity_shell = ('set -e; export PATH=' + shlex.quote(tc.GENTOO_COMPILER_PATH) +
+                          ':$PATH; command -v g++; g++ --version; g++ -dumpmachine; '
+                          'replay_as_path=$(g++ -print-prog-name=as); "$replay_as_path" --version')
+        identity_command = tc.docker_prefix(image, ROOT, out, True) + ['/bin/sh', '-c', identity_shell]
+        (out/'cxx-identity-command.json').write_text(json.dumps(identity_command, indent=2) + '\n')
+        with (out/'cxx-identity.log').open('w') as log:
+            subprocess.run(identity_command, stdout=log, stderr=subprocess.STDOUT, check=True)
     for path in SOURCE_PATHS:
         source=subprocess.check_output(['git','show',REV+':'+path],cwd=ROOT,text=True)
         family=Path(path).stem;fo=out/family;fo.mkdir(exist_ok=True)
@@ -90,7 +98,14 @@ def main():
                 assert hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()==headers[rel]
                 (cd/local.name).write_bytes(contents)
             dst='/work/'+family+'/'+label
-            command=tc.docker_prefix(image,ROOT,out,True)+['/bin/sh','-c','cd '+shlex.quote(dst)+' && '+tc.compile_shell(tc.GENTOO_COMPILER_PATH,flags+['-da'],dst+'/candidate.o',dst+'/'+file.name)]
+            cell_flags = flags + ['-da']
+            if file.suffix == '.cpp':
+                cell_flags += shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('cxx   ')))
+            shell = tc.compile_shell(tc.GENTOO_COMPILER_PATH, cell_flags, dst+'/candidate.o', dst+'/'+file.name)
+            if file.suffix == '.cpp':
+                assert shell.count('exec gcc -c ') == 1
+                shell = shell.replace('exec gcc -c ', 'exec g++ -c ', 1)
+            command=tc.docker_prefix(image,ROOT,out,True)+['/bin/sh','-c','cd '+shlex.quote(dst)+' && '+shell]
             entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command};fr['cells'][label]=entry
             assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==d for p,d in headers.items())
             with (cd/'compile.log').open('w') as log:entry['compile_exit']=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT).returncode
