@@ -132978,3 +132978,21 @@ but leaves244B/SIZE7, changes seven bodies and loses two exact neighbors
 (TxHdxFinishFrame,V32TxHdxModem). Both domains closed; no flag adoption.
 The known-transition analyzer reports all control denominators.
 [Ledger/replay](v32-txhdxtrn-pass-boundary.md). (2026-10-02)
+
+## F11554. FPM_rms requires both short countdown and advancing input for exactness.
+
+The blob's countdown width and sample-pointer advance independently differ
+from retained ascending unsigned indexing. Four predeclared complete-TU cells
+give63B/SIZE1,67B/SIZE5,68B/SIZE6 and62B/EXACT. The unchanged raw object
+reproduces, all cells preserve one strong function/global definition, and
+only the combined source is exact including the FPM_sqrt_dp relocation.
+Retain the unsigned-short countdown and sequential cursor, preserving zero
+count, scaling/multiply order and accumulation wrap. No flags or arithmetic
+changes; no fuzzing or mutation execution. [Ledger/replay](fpm-rms-countdown.md).
+Retained complete object raw-reproduces the winner; only its TU changes among
+300 objects. Whole-tree861/1852 ->862/1852, exact bytes83,722 ->83,784,
+only FPM_rms gained and zero losses. Fixed Gentoo phase385/0, structural checks
+clean. Same-order partial links gain4 positioned bytes, no exact section/
+symbol/relocation-record change; both strict comparisons remain DIFFERENT.
+Initial stale census rejected/excluded, corrected source/build controls rerun.
+(2026-10-02)

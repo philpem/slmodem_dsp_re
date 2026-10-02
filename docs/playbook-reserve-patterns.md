@@ -144,3 +144,9 @@ F11549's word-home pair recovers DetSequence's slots but is non-exact and closed
 F11550 certifies peephole exposure without adopting flags. The independent
 predecessor GenSequence lead (F11551–F11552) crosses countdown with narrow-before-
 mask index update; combined source is exact 118B. [Ledger](v32-gensequence-recovery.md).
+
+The fresh non-exact screen at74cda31e has159 eligible bodies from493 shared
+symbols after the declared path exclusions (300 objects). FPM_rms is a new
+object-backed loop lead, not a nearest-size assumption: its four crossed
+countdown/cursor cells recover62-byte exactness only together (F11554).
+[Domain and validation](fpm-rms-countdown.md).

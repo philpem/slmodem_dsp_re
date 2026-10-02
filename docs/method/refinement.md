@@ -2188,3 +2188,9 @@ RMW but loses two exact neighbors. The unsigned fold itself recovers one
 instruction without exact identity. Treat these as separate measured effects,
 and close both bounded domains without inventing volatile declarations or
 adopting local score improvements. [F11553 and replay](../v32-txhdxtrn-pass-boundary.md).
+
+FPM_rms supplies another independently measured countdown/cursor case:
+neither property alone recovers the function, and both recover all62 bytes
+including its call relocation (F11554). Preserve arithmetic order and overflow
+semantics; loop recovery is not permission to replace scaled products with
+an algebraically similar expression. [Four-cell record](../fpm-rms-countdown.md).
