@@ -41,7 +41,9 @@ _status(unsigned char *out, unsigned short *len, char code)
 int
 silence_is_more_then(struct silence *s, float t)
 {
-	return s->count > (int)(10.0f * t);
+	int threshold = (int)(10.0f * t);
+
+	return s->count > threshold;
 }
 
 /*

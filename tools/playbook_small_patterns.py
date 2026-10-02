@@ -13,6 +13,8 @@ import experiment_toolchain as tc
 sys.path.insert(0, str(ROOT/'tools/toolchain'))
 import byteident as b
 REV='555036b4'
+SOURCE_PATHS=('src/call/call.c','src/pump/v32/V32int.c','src/service/Beepgen.c')
+OUT_NAME='playbook-parent-patterns'
 
 def function(source,name):
     start=source.index('\n'+name+'(')+1
@@ -62,7 +64,7 @@ def variants(path,source):
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--domain',required=True);args=ap.parse_args()
-    out=ROOT/'build/playbook-parent-patterns';out.mkdir(exist_ok=True)
+    out=ROOT/'build'/OUT_NAME;out.mkdir(exist_ok=True)
     config=(ROOT/'build/tc_out/.build-config').read_text();image=config.splitlines()[0].split(' ',1)[1]
     flags=shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('flags ')))
     flags=['-I/src/include' if f=='-Iinclude' else '/src/'+f if f=='tools/toolchain/period_compat.h' else f for f in flags]
@@ -73,7 +75,7 @@ def main():
     headers={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in hpaths}
     result={'revision':REV,'domain':args.domain,'config':config,'headers':headers,'families':{}}
     tc.print_identity(image,tc.GENTOO_COMPILER_PATH,True)
-    for path in ('src/call/call.c','src/pump/v32/V32int.c','src/service/Beepgen.c'):
+    for path in SOURCE_PATHS:
         source=subprocess.check_output(['git','show',REV+':'+path],cwd=ROOT,text=True)
         family=Path(path).stem;fo=out/family;fo.mkdir(exist_ok=True)
         retained=ROOT/'build/tc_out'/ (path.replace('/','_')+'.o')

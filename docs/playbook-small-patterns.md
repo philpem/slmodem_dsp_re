@@ -203,3 +203,7 @@ pass. No modern portability claim is made by this period reconstruction pass.
 The historical byte-ident ratchet's pre-existing V90 constructor loss from
 PR238 is not re-blessed; the direct comparison to the saved branch baseline
 preserves every baseline exact name and adds exactly three.
+
+The twelve reserves were revisited in [a separate bounded second pass](playbook-reserve-patterns.md)
+on baseline5632087b. Its dispositions supersede the initial uncompiled-reserve
+labels above; the first pass's five closed families remain closed.

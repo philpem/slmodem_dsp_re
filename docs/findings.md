@@ -132619,6 +132619,41 @@ reproducing all20objecthashes and verdicts. One detached static V32 anchor
 is retargeted, with no mutation execution or snapshot refresh.
 No fuzzing/mutation execution. (2026-10-02)
 
+
+## F11542. A second bounded playbook pass gains two V22 fill loops and the silence threshold comparison
+
+Revisiting the twelve small-function reserves opens five finite source
+families: six targets, seventeen compile cells including five raw full-TU
+controls. Signed-short countdown plus advancing output pointer reproduces
+TxNOP and RxClampV22 (44 bytes each); either change alone misses. A named
+int threshold before silence_is_more_then's comparison reproduces its
+66-byte body without changing x87 precision, truncation or comparison.
+The [reserve ledger](playbook-reserve-patterns.md) records domains, complete
+commands, inventories, rejected cells and next discriminating hypotheses.
+
+All unchanged controls reproduce raw objects under Gentoo3.4.2-r2 with the
+mandatory bug define. Production adoption reproduces both winning full-TU
+objects; fifteen function/global definitions preserved, only three intended
+bodies change. Complete build300/300, zero failures. Whole-tree exactset
+856/1852 ->859/1852; exactbytes83,111 ->83,265, three gains/no losses.
+Complete partial-link positioned equality68,215 ->68,222/943,398, other
+exact record dimensions unchanged; both strict links remain DIFFERENT.
+Initial fixed non-fuzz period run passes385/0 but structural anchors expose
+three detached silence metadata rows; they are retargeted to the same scale,
+comparison and rounding changes on the named threshold. Final fixed
+period/structural gate passes385/0 after metadata repair; all10038 anchors
+across285 suites are clean. No mutation execution or snapshot refresh.
+
+CID cache/destination and calling-tone amplitude locals do not close.
+RxHdxSequenceE direct-array access leaves only six differing bytes, an
+adjacent count-store/zero-extension ordering mismatch; chaining the store
+restores order but changes live ranges elsewhere. No nearest-cell adoption.
+That four-cell domain closes with fourteen functions/globals and ten exact
+bodies preserved. Direct count storage and rereading *count is a possible
+future carrier test, explicitly not executed in this pass. These finite
+results do not establish unique original spelling, a byte-exact ceiling or
+register allocation as every remaining function's cause. (2026-10-02)
+
 ## F11538. `rebuildJMSequence`'s charFlip census is blob 7 / ours 8, not the "8/7" F11526 recorded, and the extra is an optimization clone of the function-acceptance list scan — not a recoverable source statement
 
 *(This finding was originally written as F11532; that label collided with the

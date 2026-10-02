@@ -373,8 +373,10 @@ TxNOP(void *modem, void *arg1, short *out, short *count)
 	(void)modem;
 	(void)arg1;
 
-	for (i = 0; i <= V22_TX_BLOCK - 1; i++)
-		out[i] = 0;
+	i = V22_TX_BLOCK - 1;
+	do {
+		*out++ = 0;
+	} while (i-- != 0);
 
 	*count = V22_TX_BLOCK;
 }
@@ -386,8 +388,10 @@ RxClampV22(void *modem, void *arg1, short *out, short *count)
 	(void)modem;
 	(void)arg1;
 
-	for (i = 0; i <= V22_CLAMP_BLOCK - 1; i++)
-		out[i] = V22_CLAMP_VALUE;
+	i = V22_CLAMP_BLOCK - 1;
+	do {
+		*out++ = V22_CLAMP_VALUE;
+	} while (i-- != 0);
 
 	*count = V22_CLAMP_BLOCK;
 }
