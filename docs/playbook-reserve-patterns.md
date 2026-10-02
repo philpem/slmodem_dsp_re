@@ -24,7 +24,7 @@ Predeclared domains on issue #22:
 
 RxHdxStartB103 is deferred because its call/inlining mismatch overlaps prior
 profile controls. v23FP_tx_create's apparent width lead is already refuted by
-F8139. TxHdxTRN's memory subtraction versus cached update does not yet give
+F8122. TxHdxTRN's memory subtraction versus cached update does not yet give
 an independent source family. ModDataV22, DetSequence and V22FP_modem remain
 screened, uncompiled reserves. A shortlist is not a proof of recoverability.
 
