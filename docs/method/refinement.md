@@ -2492,3 +2492,13 @@ has a fixed store-displacement mismatch, while Progress and data layout change.
 Compare named data owners and relocations separately from section padding/order;
 never adopt the option merely because one instruction reappears.
 [Controls](../bwch-unit-visibility-controls.md).
+
+
+Early loads can identify original local lifetimes even when field widths are
+already right. ECC init caches near-delay and line fill before allocation and
+clears; both locals recover the607-byte body (F11596). Short and promoted-int
+spellings raw-merge, so claim the retained lifetime rather than a unique width.
+Use fixed alias controls to expose rereads, labelled component-only when no
+modem history is proved. A bystander free's dead POP may change too; record
+that gain without inventing a source change in free.
+[Recovery](../ecc-init-cache-recovery.md).

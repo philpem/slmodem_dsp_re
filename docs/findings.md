@@ -133649,3 +133649,27 @@ canonical relocation targets/types/binding/visibility; layout changes and
 combined .rodata grows124→144B. No source/flag adoption or new runtime/census/
 partial gate. [Controls](bwch-unit-visibility-controls.md).
 (2026-10-02)
+
+
+## F11596. ECC initialization retains delay and fill across allocation and clears
+
+Nine-cell full-TU cache×width cross has four emissions. Short/int cache widths
+raw-merge; both caches recover607B init exactly, each alone603B/SIZE4.
+Unchanged98B free also becomes exact via dead POP EAX→ECX; cancel unchanged.
+All3 functions/ECC_CFG/type/binding/visibility/allocated nontext preserved,
+exact0/3→2/3 with no losses. Fixed synthetic borrowed-buffer alias distinguishes
+saved fill from reread member; not modem reachability. [Recovery](ecc-init-cache-recovery.md).
+(2026-10-02)
+
+Retained comparison build300/300, zero failures; only src_dsp_fpm_ecc.c.o
+changes and raw-reproduces combined short-cache winner. Whole tree882/1852
+→884/1852 exact,87,605→88,310 exact bytes: init607B and free98B gains, no losses.
+Same-order complete300-object partial links remain DIFFERENT (strict exit1):
+positioned68,258→68,254 /943,398, allocated914,142 unchanged; exact section70/92,
+symbol394/2907, relocation1020/18317 unchanged. No layout score fitting or
+complete-object identity claim.
+
+Fixed Gentoo make phase385 passed/0 failed; all9438 ECC checks pass including
+24 alias checks (8/24 failed on corrected baseline fixture). Structural14240
+references/2725 finding headings and285 suites/10038 static anchors clean.
+No fuzzing/mutation execution or modern portability claim.

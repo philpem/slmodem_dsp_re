@@ -222,11 +222,17 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 	short taps;
 	short i, j;
 	int back;
+	short near_delay;
+	short fill;
 
 	if (cfg != 0)
 		state->cfg = *cfg;
 	else
 		state->cfg = ECC_CFG;
+
+	/* F11596: retain the entry values across allocation and buffer clears. */
+	near_delay = state->near_delay;
+	fill = state->cfg.fill;
 
 	/*
 	 * The delay line has to hold the far tap's whole reach.  `taps` is the
@@ -235,7 +241,7 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 	 */
 	taps = (short)(state->cfg.near_taps + state->cfg.far_taps);
 	line_len = (short)(state->cfg.far_lag + state->far_delay +
-			   state->near_delay);
+			   near_delay);
 
 	if (fresh) {
 		/*
@@ -272,7 +278,7 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 	 * the top of the line; the far tap is `far_lag` symbols older, and is
 	 * NOT reduced modulo the length -- only the near one is.
 	 */
-	back = line_len - state->near_delay;
+	back = line_len - near_delay;
 	state->near_rd = (short)(back % line_len);
 	state->far_rd = (short)(back - state->cfg.far_lag);
 	state->line_len = line_len;
@@ -296,7 +302,7 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 		for (i = 0; i < 2 * taps; i++)
 			state->coef[j][i] = 0;
 	for (i = 0; i < line_len; i++)
-		state->line[i] = state->cfg.fill;
+		state->line[i] = fill;
 }
 
 void
