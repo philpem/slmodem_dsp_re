@@ -133846,8 +133846,21 @@ bug claim. [Recovery and gates](v27-delete-argument-recovery.md). (2026-10-02)
 All19 blob calls supply a fourth scalar:17 literal1, two original signed input
 counts. Twelve-TU/two-cell complete cross preserves void and field reloads;
 ignored formal leaves callee raw-identical. RxHdxNoSignal223B becomes EXACT,
-no losses across126 functions. Eighteen canonical bodies change, including
+no losses across116 functions. Eighteen canonical bodies change, including
 noncalling QualityDetectV27's equivalent state33 store factoring; nontext/data/
 binding/import/export controls agree. Return semantics remain an independent
 hypothesis, not proved by this reconstruction's header or unread frame slots.
 [Recovery and gates](agc-fourth-argument-recovery.md). (2026-10-02)
+
+
+## F11614. Independent AGC return-consumption controls do not recover bytes
+
+Six blob callers consume EAX; four full-width and two signed AX conversions.
+Ordinary int-return hypothesis crossed separately with field/direct consumption:
+minimal6compilations/7functions and expanded36compilations/116functions/24data
+objects yield zero exact gains/losses. Eight canonical bodies change, including
+ignored-return RxDetMarkB103; data/nontext/binding controls agree. No production
+adoption, original int return is not refuted. Invalid empty-domain attempt
+preserved/excluded; replay wrappers now reject it and preflight generators.
+Correct F11613's count126→116 (unchanged108→98), census/gates unaffected.
+[Controls](agc-return-controls.md). (2026-10-02)

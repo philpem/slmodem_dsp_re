@@ -2613,3 +2613,13 @@ callee raw-identical while preserving void and field reloads. An object's EAX
 consumption is evidence for a return hypothesis; a reconstruction header does
 not prove the original lacked a result. Review genuine control-factoring
 bystanders, not just edited callers. [Recovery](../agc-fourth-argument-recovery.md).
+
+
+Stage return semantics separately from call-argument restoration. Six observed
+AGC EAX consumers motivate an int return, with two signed-short conversions;
+minimal and complete twelve-TU controls recover no exact bodies (F11614).
+Ignored results can still affect a caller body, so audit all API consumers.
+Close the finite family without asserting that zero gains disprove the original
+return type. Reject an empty domain and preflight all generators before the
+first compile; preserve invalid attempts outside valid result artifacts.
+[Controls](../agc-return-controls.md).

@@ -15,9 +15,9 @@ all caller signal-field reloads. EAX consumption supports an independent return
 hypothesis: neither frame reads nor this reconstruction's header establish the
 original return type. Do not combine that axis with these argument controls.
 
-Twenty-four valid complete compilations across twelve TUs, 126 functions and 24 named data objects.
+Twenty-four valid complete compilations across twelve TUs, 116 functions and 24 named data objects.
 RxHdxNoSignal207→223B is the sole complete EXACT gain, no losses. The callee's
-complete object raw-merges; eighteen canonical bodies change, 108 unchanged.
+complete object raw-merges; eighteen canonical bodies change, 98 unchanged.
 All seventeen calling bodies change. Only noncalling bystander QualityDetectV27
 changes: at unchanged246B, the transition to state33 moves from a jump through
 a common store to a local word store and a jump past the common store. Same
