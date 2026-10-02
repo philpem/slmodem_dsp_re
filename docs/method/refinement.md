@@ -2258,3 +2258,18 @@ where the blob has setl/neg/and, with no exact gain. Do not adopt carrier
 narrowing solely because individual instructions agree, or infer a unique
 local type from a word comparison (F11564).
 [Closed width domain](../fpm-tone-width-controls.md).
+
+A shared narrow temporary can extend a value before a store that only needs its
+low half. V22 IIR recovers history-store-before-extension by narrowing at uses,
+then recovers its full body only when accumulator initialization/reset match
+the preheader/latch boundary. Cross both source questions: either alone misses
+(F11565). Keep mixer narrowing explicit; rereading the stored history introduces
+an alias-sensitive operation the reference does not perform.
+[Six-cell record](../v22-iir-conversion-recovery.md).
+
+SMCv32_encoder_abs's countdown/cursor cross restores sequential input and the
+word sentinel but leaves distinct ring-return/tag conversion boundaries. A
+correct recovered loop is not authority to widen ring locals or force masks;
+inspect the helper signature and field reads across callers first, including
+closed F8249 controls (F11566).
+[Traversal domain](../v32-smc-abs-traversal-controls.md).

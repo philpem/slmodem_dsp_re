@@ -133133,3 +133133,30 @@ all11 functions/12 globals survive,4/11 exact unchanged, only filter changes.
 Word instructions recover but wrap still branches, unlike blob setl/neg/and.
 No source adoption, width family closed; candidate runtime/partial gates
 NOT RUN. [Record/reopening criterion](fpm-tone-width-controls.md). (2026-10-02)
+
+## F11565. V22 IIR requires use-site narrowing and boundary accumulator reset.
+
+A two-cell full-TU control restores BX history store before mixer extension,
+but both230B/SIZE2 remain non-exact. A four-cell conversion/reset cross yields
+230B/SIZE2,230B/SIZE2,232B/BYTES14,232B/EXACT. Both changes together recover
+all232 bytes; neither alone does. All2 functions/4 globals preserved, only
+demod changes; TU1/2 ->2/2, no losses. Six valid cells,2 raw controls, four
+distinct sources/emissions. [Replay/validation ledger](v22-iir-conversion-recovery.md).
+(2026-10-02)
+
+## F11566. V32 absolute encoder traversal controls leave ring/tag type differences.
+
+Four full-TU countdown/cursor cells give152B/SIZE4,154B/SIZE2,149B/SIZE7,
+154B/SIZE2. Both recovers advancing pointer and unsigned-short sentinel, but
+retains ring branch/conversions and signed-word mode load versus blob mask/
+signed-byte load. All3 functions/5 globals survive,0/3 exact unchanged, only
+abs changes, raw full baseline reproduces. Traversal family closed, no source
+adoption or candidate runtime/partial-link gates. Separate helper/type audit
+is requested, not a result. [Ledger](v32-smc-abs-traversal-controls.md). (2026-10-02)
+
+Retained complete object raw-reproduces the combined winner, one of300 TUs
+changes and coefficient data remains unchanged. Whole-tree867/1852 ->868/1852,
+exact bytes84,358 ->84,590, zero losses. Fixed Gentoo phase385/0; existing
+V22 IIR fixture6,410 checks, no fixture/anchor changes. Complete same-order
+partial links remain DIFFERENT: positioned equality-1 byte; allocated bytes
+and exact section/symbol/relocation records unchanged.
