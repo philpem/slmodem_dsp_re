@@ -2979,3 +2979,12 @@ exclude invalid over-limit probes. Audit the shared header and every caller;
 unsigned-short versus narrowed-int result families can emit identical objects
 without proving the original declaration. Caller-local narrowing remains
 independent. [Measured controls](../mrf-result-width-controls.md).
+
+
+For scalar loop widths, separate narrowing at the update from narrowing only
+at function return. The MRF counter-only control restores signed truncation
+after increment but does not recover the full helper. Ring-next narrowing
+must precede the wrap comparison to reproduce the observed boundary. Keep
+convolution indices at their separately measured width; cross independently
+evidenced families instead of enumerating arbitrary local-type permutations.
+[Ongoing bounded MRF controls](../mrf-counter-width-controls.md).

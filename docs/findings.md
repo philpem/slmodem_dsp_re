@@ -134528,3 +134528,18 @@ remain unchanged. A same-order300-object partial link differs only at two
 text bytes:18218 relocations/2984 symbols unchanged. Blob partial comparison
 remains DIFFERENT; no byte-exact gain or completion is claimed.
 [Controls](mrf-result-width-controls.md). (2026-10-02)
+
+
+## F11668. MRF loop widths recover scalar boundaries without complete-body identity
+
+At cbd16911, counter-only2cells and scalar/counter4cells compile complete
+fpm_mrf.c with raw production baselines. Six valid compiles/four distinct
+emissions; helper446→447/492/494B versus blob533. Signed short produced restores
+postincrement truncation. Short phase/remaining/need/ring-next before comparison
+restore independently observed HI boundaries. Convolution k stays int.
+Only filter changes;3FUNC/1data full metadata/nontext/canonical relocation audit
+passes. Init193/free16 remain exact, strict2/3 unchanged,0gains/0losses. Shared
+signed input/unsigned result remain unchanged. No source/runtime adoption.
+Close width spelling family; independent input countdown predicates and
+branchless ring wrap are next controls, not register/type permutations.
+[Measured controls](mrf-counter-width-controls.md). (2026-10-02)
