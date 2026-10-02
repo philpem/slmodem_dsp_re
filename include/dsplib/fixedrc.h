@@ -16,7 +16,7 @@
 /*
  * Number of entries in the factor tables, excluding the {0,0} terminator.
  * RcFixed_Check_Combination() returns RCFIXED_NMODES for an unsupported
- * combination, and RcFixed_Create() maps that to an identity converter.
+ * combination. Callers must reject that sentinel before construction.
  */
 #define RCFIXED_NMODES 20
 
@@ -27,9 +27,9 @@
  * tables for a matching down:up pair. The search deliberately starts at
  * index 2: entries 0 and 1 are the plain x4 and /4 cases, reachable only
  * by asking for them explicitly. Equal rates reduce to 1:1, which is
- * *not* in the tables, so 8000 -> 8000 returns #RCFIXED_NMODES and yields
- * an identity converter -- the mechanism by which moving the host to
- * 8 kHz turns this whole module into a pass-through.
+ * *not* in the tables, so 8000 -> 8000 returns #RCFIXED_NMODES,
+ * the unsupported sentinel. The wrapper skips conversion for equal rates;
+ * passing the sentinel to the original constructor is invalid.
  *
  * @param in_rate   Input sample rate.
  * @param out_rate  Output sample rate.
@@ -112,10 +112,11 @@ struct rc;
 /**
  * @brief Create a converter for a mode from RcFixed_Check_Combination().
  * @param mode  A mode index.
- * @return A new converter; NULL for modes at or above #RCFIXED_NMODES, i.e.
- *         unsupported ratios.  Modes 0 and 1 are built with their own 40-byte
- *         state, but their kind-1 conversion is not reconstructed (it is
- *         unreachable through the public API); see RcFixed_Resample().
+ * @return A new converter for modes 0..19; NULL for negative modes or
+ *         modes above 999. Modes 20..999 reach an invalid-state reset in
+ *         the original: reject unsupported lookup results before calling.
+ *         Allocation failure is not checked by the original. Modes 0 and 1
+ *         have their own state; kind-1 resampling remains unimplemented.
  */
 struct rc *RcFixed_Create(int mode);
 
@@ -125,7 +126,7 @@ struct rc *RcFixed_Create(int mode);
  */
 void RcFixed_Delete(struct rc *h);
 
-/** @brief Reset a converter's history and phase to their initial state. */
+/** @brief Reset a live converter and state to their initial history/phase. */
 void RcFixed_Reset(struct rc *h);
 
 /**

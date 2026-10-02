@@ -21,6 +21,24 @@
 #include <string.h>
 
 #include "dsplib/fixedrc.h"
+#include "dsplib/sysdep.h"
+
+static const short rc80to96filter[216];
+static const short rc96to80filter[160];
+static const short rc480to80filter[68];
+static const short rc480to96filter[68];
+static const short rc96to384filter[184];
+static const short rc384to96filter[68];
+static const short rc80to384filter[960];
+static const short rc384to80filter[340];
+static const short rc96to120filter[140];
+static const short rc120to96filter[232];
+static const short rc80to120filter[126];
+static const short rc120to80filter[96];
+static const short rc96to320filter[380];
+static const short rc320to96filter[204];
+static const short rc72to80filter[380];
+static const short rc80to72filter[288];
 
 /*
  * Supported conversion ratios, as (down, up) pairs indexed by mode.
@@ -202,7 +220,7 @@ RcFixed_State(struct rc *h)
 static void
 rc_reset_state(struct rc_state *s)
 {
-	memset(s->history, 0, sizeof(s->history));
+	sysdep_memset(s->history, 0, sizeof(s->history));
 	s->pos = s->taps;
 	s->input_needed = (s->up <= s->down) ? 1 : 0;
 
@@ -227,20 +245,19 @@ RcFixed_Delete(struct rc *h)
 {
 	if (h == NULL)
 		return;
-	if (h->state != NULL && h->kind == 1) {
-		struct rc_kind1 *k1 = (struct rc_kind1 *)h->state;
-		free(k1->w6);
-		free(k1->w174);
-		free(k1->w30);
+	if (h->state != NULL) {
+		if (h->kind == 1) {
+			sysdep_free(((struct rc_kind1 *)h->state)->w6);
+			sysdep_free(((struct rc_kind1 *)h->state)->w174);
+			sysdep_free(((struct rc_kind1 *)h->state)->w30);
+		}
+		sysdep_free(h->state);
 	}
-	free(h->state);
-	free(h);
+	sysdep_free(h);
 }
 void
 RcFixed_Reset(struct rc *h)
 {
-	if (h == NULL || h->state == NULL)
-		return;
 	if (h->kind == 0) {
 		rc_reset_state(h->state);
 	} else if (h->kind == 1) {
@@ -251,9 +268,9 @@ RcFixed_Reset(struct rc *h)
 		 * +0x24.
 		 */
 		struct rc_kind1 *k1 = (struct rc_kind1 *)h->state;
-		memset(k1->w6, 0, 4);
-		memset(k1->w174, 0, 4);
-		memset(k1->w30, 0, 4);
+		sysdep_memset(k1->w6, 0, 4);
+		sysdep_memset(k1->w174, 0, 4);
+		sysdep_memset(k1->w30, 0, 4);
 		k1->pos6 = 0;
 		k1->pos174 = 0;
 		k1->pos30 = 0;
@@ -263,71 +280,113 @@ struct rc *
 RcFixed_Create(int mode)
 {
 	struct rc *h;
-	struct rc_state *s;
+	struct rc_state *s = NULL;
+	struct rc_kind1 *k1 = NULL;
 
-	/* The original rejects absurd mode numbers before touching the tables. */
-	if (mode < 0 || mode > 999)
+	if ((unsigned)mode > 999u)
 		return NULL;
 
-	/*
-	 * Modes 0 and 1: the plain x4 and /4 converters, with their own 40-byte
-	 * state and three coefficient tables.  This is the arm the object's jump
-	 * table sends both modes to; reconstructing it is what makes CI_b1,
-	 * CI_b2 and CI_bDroop emittable (they are otherwise unused file-scope
-	 * statics and GCC drops those).  The buffers are allocated here and
-	 * cleared by RcFixed_Reset below, exactly as the object does.
-	 */
+	h = sysdep_malloc(sizeof(*h));
+	h->state = NULL;
 	if (mode <= 1) {
-		struct rc_kind1 *k1;
-
-		h = calloc(1, sizeof(*h));
-		if (h == NULL)
-			return NULL;
-
-		k1 = calloc(1, sizeof(*k1));
-		if (k1 == NULL) {
-			free(h);
-			return NULL;
-		}
-
 		h->kind = 1;
+		k1 = sysdep_malloc(sizeof(*k1));
 		h->state = (struct rc_state *)k1;
+		k1->w6 = sysdep_malloc(6);
+		k1->w174 = sysdep_malloc(174);
+		k1->w30 = sysdep_malloc(30);
+	} else {
+		h->kind = 0;
+		if (mode < RCFIXED_NMODES) {
+			s = sysdep_malloc(sizeof(*s));
+			h->state = s;
+			s->up = (short)fixedRc_UpFact[mode];
+			s->down = (short)fixedRc_DownFact[mode];
+		}
+	}
 
-		k1->w6 = calloc(1, 6);
-		k1->w174 = calloc(1, 174);
-		k1->w30 = calloc(1, 30);
+	switch (mode) {
+	case 0:
+	case 1:
 		k1->mode = (short)mode;
 		k1->droop = CI_bDroop;
 		k1->b1 = CI_b1;
 		k1->b2 = CI_b2;
-
-		RcFixed_Reset(h);
-		return h;
+		break;
+	case 2:
+		s->coeff = rc80to96filter;
+		s->taps = 36;
+		break;
+	case 3:
+		s->coeff = rc96to80filter;
+		s->taps = 32;
+		break;
+	case 4:
+		s->coeff = rc80to96filter;
+		s->taps = 36;
+		break;
+	case 5:
+		s->coeff = rc480to80filter;
+		s->taps = 68;
+		break;
+	case 6:
+		s->coeff = rc96to80filter;
+		s->taps = 32;
+		break;
+	case 7:
+		s->coeff = rc480to96filter;
+		s->taps = 68;
+		break;
+	case 8:
+		s->coeff = rc96to384filter;
+		s->taps = 46;
+		break;
+	case 9:
+		s->coeff = rc384to96filter;
+		s->taps = 68;
+		break;
+	case 10:
+		s->coeff = rc80to384filter;
+		s->taps = 40;
+		break;
+	case 11:
+		s->coeff = rc384to80filter;
+		s->taps = 68;
+		break;
+	case 12:
+		s->coeff = rc96to120filter;
+		s->taps = 28;
+		break;
+	case 13:
+		s->coeff = rc120to96filter;
+		s->taps = 58;
+		break;
+	case 14:
+		s->coeff = rc80to120filter;
+		s->taps = 42;
+		break;
+	case 15:
+		s->coeff = rc120to80filter;
+		s->taps = 48;
+		break;
+	case 16:
+		s->coeff = rc96to320filter;
+		s->taps = 38;
+		break;
+	case 17:
+		s->coeff = rc320to96filter;
+		s->taps = 68;
+		break;
+	case 18:
+		s->coeff = rc72to80filter;
+		s->taps = 38;
+		break;
+	case 19:
+		s->coeff = rc80to72filter;
+		s->taps = 32;
+		break;
 	}
-
-	/* Modes 2 and up, and anything past the table, have no mode 0/1 bank. */
-	if (mode >= RCFIXED_NMODES || rc_banks[mode].coeff == NULL)
-		return NULL;
-
-	h = calloc(1, sizeof(*h));
-	if (h == NULL)
-		return NULL;
-
-	s = calloc(1, sizeof(*s));
-	if (s == NULL) {
-		free(h);
-		return NULL;
-	}
-
-	h->kind = 0;
-	h->state = s;
-
-	s->coeff = rc_banks[mode].coeff;
-	s->taps = (short)rc_banks[mode].taps;
-	s->up = (short)fixedRc_UpFact[mode];
-	s->down = (short)fixedRc_DownFact[mode];
-
-	rc_reset_state(s);
+	RcFixed_Reset(h);
 	return h;
 }
 int
@@ -344,7 +403,7 @@ RcFixed_Check_Combination(int in_rate, int out_rate)
 	 * Start at 2, skipping the explicit-only x4 and /4 entries, and stop
 	 * at the {0,0} terminator.  Returning the terminator's index on no
 	 * match is deliberate: RcFixed_Create() treats any mode above the
-	 * table as "no conversion required".
+	 * table must be rejected by the caller before construction.
 	 */
 	for (mode = 2; fixedRc_UpFact[mode] != 0; mode++) {
 		if (fixedRc_UpFact[mode] == up && fixedRc_DownFact[mode] == down)
@@ -357,16 +416,8 @@ RcFixed_Check_Combination(int in_rate, int out_rate)
 
 
 
-/*
- * Put a converter back to the state Create left it in.
- *
- * The null check is ours and the original has none -- `RcFixed_Delete`
- * checks, this one dereferences its argument on the first instruction.  Kept
- * because a caller error should not be a fault here, and because it cannot
- * be differentially tested either way: the only input that would tell the two
- * apart crashes the reference.  Noted so it is not mistaken for something the
- * object does.
- */
+/* Reset intentionally requires a live converter/state, as the blob does.
+ * F11634 restores host allocation/free ownership and external clear calls. */
 
 
 

@@ -96731,6 +96731,11 @@ exactly, 42 for 42. That is not a tolerance being widened — the test asserts
 equality and gets it — but the 9600 arm is worth re-adding the moment this is
 settled, because it is four more blocks of coverage for free.
 
+**Follow-up (2026-10-02, F11634):** paired host ownership and partial clears
+are now restored. The six9600Hz bridge trees are reinstated and all48 added
+ledger checks pass, alongside the original native-rate coverage. The historical
+paragraph above records the old boundary, not a current reason to omit them.
+
 ### F8531. `connect_1200` and `connect_2400` are a shared subroutine of three protocol states, not states of the machine — and one of their format strings names four V.22 fields at once
 
 `connect_2400` is at **0x088cd0**, not at 0x08a7a0 as a task brief had it;
@@ -134055,3 +134060,36 @@ only FPM_TONE_create changes. Two named data/all ten bystanders/nontext/
 binding/import/export controls agree; baseline raw-reproduces. No source
 adoption or invalid allocation-failure fixture, fuzzing or mutation execution.
 [Finite guard control](tone-allocation-guard-controls.md). (2026-10-02)
+
+## F11632. Complete FixedRC factory ownership candidate restores boundaries but misses bytes
+
+Two fullTU cells at53c3bd00:699B production Create versus783B full factory
+candidate against769B blob. Common handle malloc/state-null, exact scratch
+malloc sizes, twenty case choices and common reset restored with paired
+sysdep_free; Reset270/BYTES41, Delete109/SIZE4,1/5 common exact unchanged.
+Eight emitted functions/22 named data, intentional80B switch table added;
+all existing data values/targets/exports/binding unchanged. Three host hook
+imports replace calloc/free/memset. No score-only adoption from this stage.
+[Factory and ownership recovery ledger](fixedrc-factory-recovery.md). (2026-10-02)
+
+## F11633. FixedRC unsigned-mode discriminator removes signed tests but remains nonexact
+
+Three fullTU cells repeat production/factory-signed and test unsigned formal
+with matching isolated prototype. Repeated objects raw reproduce; Create
+783/SIZE14→786/SIZE17 versus769B, no exact gains/losses. Original signed plus
+unsigned casts remains an alternative; API type not uniquely recovered.
+No further type/cast/declaration variants. [Controls](fixedrc-factory-recovery.md).
+(2026-10-02)
+
+## F11634. State-free guard extent and repeated owner operands recover FixedRC Delete
+
+Five fullTU cells include production/repeated factory-signed and state-free
+scope, child-owner reevaluation, both. Only both recovers complete113B Delete
+from109B,1→2/5 common exact/no losses. Against full factory parent, only Delete
+changes; authentic h/state/kind guards and primitive frees preserved. Paired
+factory malloc/free and exact partial resets are required by F8530. New fixed
+owner witness and restored V22 bridge ledger validate the retained candidate;
+phase386/0 passes (new fixed owner binary); whole-tree916→917/1852,94638
+exact bytes. Complete same-order partial remains DIFFERENT, positioned+141/
+allocated+240; [ledger](fixedrc-factory-recovery.md) records all controls.
+(2026-10-02)

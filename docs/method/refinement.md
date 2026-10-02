@@ -2738,3 +2738,15 @@ finite domains and review distinct allocation/dispatch boundaries instead of
 perturbing registers or accepting only a nearer size.
 [Reset controls](../fixedrc-reset-controls.md),
 [tone controls](../tone-allocation-guard-controls.md).
+
+
+Preserve guard extent, not only the existence of a null check. FixedRC's state
+check guards the state free itself, and child free operands reload the owner
+between unknown external calls (F11634). Both properties recover113B Delete;
+either partial cell does. Pair host allocation and deallocation, restore only
+observed partial clears, and validate asymmetric created-owner lifecycles.
+Full factory ownership can be source-supported without closing factory bytes;
+keep those residuals and intentional import/jump-table changes visible. A new
+ledger must first fire on the known baseline mismatch:162/652 failures became
+652/652 passes here, with six real V22 bridge witnesses restored.
+[Recovery and bounded domains](../fixedrc-factory-recovery.md).
