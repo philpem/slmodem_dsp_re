@@ -133588,3 +133588,52 @@ Fixed Gentoo make phase385 passed/0 failed, including229798 trace allocation/
 clearing checks and existing Bell103 signal/reinit/coverage fixtures. Structural
 14240 references/2720 finding headings and285 suites/10038 static anchors
 clean. No fuzzing, mutation execution or modern portability claim.
+
+
+## F11592. FSM cache/countdown/total source family closes without an exact gain
+
+Sixteen valid complete-TU cells/emissions preserve3 functions/4 globals/data/
+type/binding/visibility; only modulate changes,2/3 exact unchanged. Combined
+230B vsblob229B still differs in return load and earlier instructions. Original
+public short return retained; callers consume low16 bits, no unique API type
+inferred from upper EAX. Initial16-cell metadata-invalid run preserved/excluded,
+full rerun against actual predeclared URL. No adoption/candidate runtime/census/
+partial gates. [Closed controls](fsm-modulate-controls.md).
+(2026-10-02)
+
+## F11593. FSE_getdiag loop-only guard does not recover the complete body
+
+Corrected two-cell full-TU control213B ->217B vsblob229B; all4 functions/
+5 globals/data/type/binding/visibility preserved, only getdiag changes,
+1/4 exact unchanged. Actual0xa7d86 returns EBX, including negative selected
+counts; t_v32fpsub already verifies this. Two prior compiles under false
+zero-return clarification preserved INVALID/excluded, no source adoption.
+Corrected loop-only domain rerun separately. No candidate runtime/census/
+partial gates. [Controls and correction](fse-getdiag-guard-controls.md).
+(2026-10-02)
+
+
+## F11594. Owned backward-channel tone threshold fixes a constructor coverage gap
+
+Blob constructor immediate29000/0x7148 vs retained28996/0x7144. Four-cell
+ratio×const-table visibility cross has two complete emissions: moving definition
+raw-reproduces baseline, corrected+move agrees ratio-only. All3 functions/
+3 globals/data/type/binding/visibility preserved, only constructor changes;
+348B/SIZE16 and1/3 exact unchanged. Adopt literal29000 only; no exact gain.
+Fixed child-config comparison catches all five constructors,5/284930 baseline
+checks fail; existing coverage6 passes. Generic tone fixture could not validate
+this owner's child ratio. [Recovery and controls](bwch-constructor-controls.md).
+(2026-10-02)
+
+Retained comparison build300/300, zero failures; only src_pump_v23_bwchdem.c.o
+changes and raw-reproduces ratio-only candidate. Constructor canonical bytes
+have exactly one changed byte at+194 (0x44→0x48); relocation records unchanged.
+Whole-tree882/1852 and87,605 exact bytes unchanged, no exact gains/losses.
+Same-order complete300-object partial links remain DIFFERENT (strict exit1):
+positioned68,258/943,398, allocated914,142, exact section70/92, symbol394/2907,
+relocation1020/18317 unchanged. No complete-object/profile identity claim.
+
+Fixed Gentoo make phase385 passed/0 failed. V23 fixture passes39009+131595+
+114326+6=284936 checks, including all five previously failing owned-child
+ratio comparisons. Structural14240 references/2723 finding headings and285
+suites/10038 static anchors clean. No fuzzing/mutation execution/modern claim.

@@ -2460,3 +2460,25 @@ body; short counter alone misses one byte (F11591). Test requested allocation
 sizes and untouched allocated contents at negative component boundaries.
 Do not retype the field or narrow a promoted loop bound merely to avoid the
 blob's own counter wrap. [Recovery](../fpm-fsd-init-recovery.md).
+
+
+Word countdowns/cached members/narrowed total can recover FSM loop structure
+without its complete229-byte body (F11592). Keep the tested four-axis family
+closed; upper return-register bits do not uniquely type the public API.
+[Controls](../fsm-modulate-controls.md).
+
+A duplicated positive-count pretest motivates a guard experiment, not an
+exact source claim. FSE_getdiag loop-only guard reaches217B vs229B without
+exactness (F11593). Inspect the branch destination instruction before inferring
+an exceptional return: it moves the selected count, not zero. Preserve invalid
+preimage attempts and existing negative-count fixture evidence separately.
+[Controls](../fse-getdiag-guard-controls.md).
+
+
+Generic helper coverage does not validate a parent's child configuration.
+BwChDem_Create's ratio28996 differs from object's29000 even while existing
+waveform tests pass (F11594); fixed owned-child comparison catches all five
+constructors. Recover literal fidelity independently from exactness. Deferred
+const-table definition raw-reproduces baseline, so initializer visibility does
+not unlock this first-entry load. Keep const/data controls; no source-order
+or mutable/volatile score fitting. [Controls](../bwch-constructor-controls.md).

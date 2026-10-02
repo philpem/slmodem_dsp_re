@@ -104,7 +104,7 @@ static const struct fpm_agc_cfg AGCv23_CFG = {
 #define BWCH_MARK_HZ		390
 
 /* Overrides applied to the shared FPM_TONE configuration. */
-#define BWCH_TONE_RATIO		28996	/* 0.885 in Q15 */
+#define BWCH_TONE_RATIO		29000	/* F11594: object threshold at 0x875c8 */
 #define BWCH_TONE_MIN_LEVEL	3
 
 /* Carrier is up once the tone has been present for this many blocks. */
