@@ -97,9 +97,9 @@ int dsplib_encode_plain;
  * result wraps in a char rather than in an int.  It cannot matter for the
  * values `offsetarr` holds; it is kept because it is what the object does.
  *
- * The object has this twice rather than calling it once, which is why the
- * two copies advance the same counter in the same way: they are one step
- * written out in two places, not two policies.
+ * The object contains two copies of this operation. The formatted-nibble
+ * path uses this helper; cEncodeChar spells out its byte update and counter
+ * branches (F11575). Both advance the same shared key position.
  */
 static char
 encode_step(int v)
@@ -122,7 +122,13 @@ encode_step(int v)
 char
 cEncodeChar(unsigned char c)
 {
-	return encode_step((int)c);
+	c += offsetarr[iEncodeOffset] + '0';
+
+	if (iEncodeOffset == ENCODE_KEY_LEN - 1)
+		iEncodeOffset = 0;
+	else
+		iEncodeOffset++;
+	return (char)c;
 }
 
 /*

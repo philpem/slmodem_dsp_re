@@ -2319,3 +2319,13 @@ loop carrier: only their removal plus short post-decrement recovers the complete
 125-byte function in an eight-cell cross (F11574). The same-length cached-scale
 control still differs in88 bytes. Register allocation can follow recovered
 lifetimes without register-specific source. [Controls](../fpm-tone-demod-recovery.md).
+
+
+A ternary counter update can merge stores/returns and change a byte input's
+lifetime even when all arithmetic is already correct. cEncodeChar's complete
+six-cell cross gives three exact ordinary-branch forms and zero ternary hits;
+byte-helper narrowing is unnecessary in that family (F11575). Select an
+independently supported form and review all callers: the direct byte form
+preserves edprintf, while shared helper changes affect it. Multiple hits bound
+a common source property, not a unique original spelling.
+[Carrier/control cross](../encode-carrier-recovery.md).

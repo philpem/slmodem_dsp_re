@@ -133266,3 +133266,19 @@ buffered negative-count component test and static anchors clean. Complete
 same-order partial links remain DIFFERENT; positioned equality68,316
 ->68,315/943,398. This is a function recovery, not whole-object completion.
 (2026-10-02)
+
+
+## F11575. cEncodeChar becomes byte-exact with ordinary counter branches; byte-helper narrowing is not required
+
+A six-cell complete-TU carrier/control cross yields three51-byte exact hits:
+all ordinary if/else forms, versus no ternary hits. Retained int helper,
+byte helper and direct byte form share the control result; the direct ternary
+raw-reproduces baseline. Six sources/five objects, two functions/three globals
+and data preserved. Direct byte plus ordinary counter branches changes only
+cEncodeChar; edprintf's canonical body/relocations remain intact. No unique
+original helper/type claim or compiler flag change.
+Retained whole-tree869/1852 ->870/1852,84,715 ->84,766 exact bytes, no losses;
+fixed Gentoo phase385/0, static anchors clean. Complete same-order partial
+links remain DIFFERENT, positioned68,315 ->68,320/943,398.
+[Full experiment and retained validation](encode-carrier-recovery.md).
+(2026-10-02)
