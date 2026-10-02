@@ -2207,3 +2207,15 @@ in retained source. Recovering the addition tree still leaves load/exchange
 differences and no exact gain (F11556). Algebraic equivalence does not imply
 finite-precision grouping, and load order alone does not justify invented
 coefficient locals. [Closed source domain](../notch-addition-tree.md).
+
+## A constant loop bound can reveal when a helper was inlined
+
+PCM's indexed segment search differs from the blob's pointer walk. Recovering
+the cursor leaves a strict-comparison difference: fixed source emits <=7,
+the blob emits <8. A helper size argument initialized to8 at the call preserves
+the strict comparison under period inlining; both size-only and table/size
+forms yield the same complete object. This constrains late binding without
+uniquely recovering a helper signature (F11557). A separate input/magnitude
+carrier domain closes linear2alaw too (F11558). Inspect initial RTL before
+blaming scheduling for a comparison that was already normalized there.
+[Seven-cell staged record](../pcm-segment-search-recovery.md).

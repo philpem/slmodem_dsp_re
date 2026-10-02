@@ -43,15 +43,17 @@ static short seg_end[8] = {
  * exceeds the largest segment -- callers treat that as saturation.
  */
 static int
-search_segment(int mag)
+search_segment(int mag, int size)
 {
 	int seg;
+	const short *end = seg_end;
 
-	for (seg = 0; seg < 8; seg++) {
-		if (seg_end[seg] >= mag)
+	/* The inlined blob walks the table and compares against size (F11557). */
+	for (seg = 0; seg < size; seg++) {
+		if (*end++ >= mag)
 			return seg;
 	}
-	return 8;
+	return size;
 }
 
 /*
@@ -63,18 +65,17 @@ search_segment(int mag)
 unsigned char
 linear2alaw(int pcm_val)
 {
-	int mask, seg, mag;
+	int mask, seg;
 	unsigned char aval;
 
 	if (pcm_val >= 0) {
-		mag = pcm_val;
 		mask = 0xd5;		/* sign bit set, even bits inverted */
 	} else {
-		mag = -pcm_val - 8;
+		pcm_val = -pcm_val - 8;
 		mask = 0x55;
 	}
 
-	seg = search_segment(mag);
+	seg = search_segment(pcm_val, 8);
 	if (seg >= 8)			/* out of range - saturate */
 		return (unsigned char)(0x7f ^ mask);
 
@@ -84,9 +85,9 @@ linear2alaw(int pcm_val)
 	 * 4-bit shift; from segment 2 upward the step doubles per segment.
 	 */
 	if (seg < 2)
-		aval |= (mag >> 4) & 0x0f;
+		aval |= (pcm_val >> 4) & 0x0f;
 	else
-		aval |= (mag >> (seg + 3)) & 0x0f;
+		aval |= (pcm_val >> (seg + 3)) & 0x0f;
 
 	return (unsigned char)(aval ^ mask);
 }
@@ -140,7 +141,7 @@ linear2ulaw(int pcm_val)
 		mask = 0xff;
 	}
 
-	seg = search_segment(mag);
+	seg = search_segment(mag, 8);
 	if (seg >= 8)			/* out of range - saturate */
 		return (unsigned char)(0x7f ^ mask);
 

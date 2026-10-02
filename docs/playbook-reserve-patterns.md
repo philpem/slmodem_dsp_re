@@ -157,3 +157,9 @@ in a two-cell full-TU domain. Notch's independently observed addition grouping
 is tested separately (F11556); it recovers the operation tree but staysSIZE2,
 so the closed domain contributes evidence and no adopted source.
 [Constructor](dualtone-create-common-return.md), [notch](notch-addition-tree.md).
+
+PCM's fresh cursor lead (F11557–F11558) is staged, not a spelling sweep:
+cursor alone recovers the table walk, a late-inlined size argument recovers
+linear2ulaw, and reusing the input magnitude recovers linear2alaw. Seven valid
+full-TU cells preserve six functions/eight globals and recover6/6 exact.
+[Helper-bound discriminator and validation](pcm-segment-search-recovery.md).

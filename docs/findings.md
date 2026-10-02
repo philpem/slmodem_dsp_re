@@ -133023,3 +133023,31 @@ function/global preserved; raw baseline reproduces, no exact gain/loss.
 Coefficient-load/exchange order remains different. No candidate adopted or
 additional spelling sweep; investigate a pass boundary before hypothesizing
 coefficient declarations. [Ledger/replay](notch-addition-tree.md). (2026-10-02)
+
+## F11557. PCM's pointer search requires a late-inlined bound for exactness.
+
+Two full-TU cursor controls recover both encoders' table walk but leave
+linear2ulaw BYTES2: cmp7/jle versus blob cmp8/jl. Three staged controls test
+fixed bound, size argument and table+size arguments. Both parameterized forms
+yield100B/EXACT for linear2ulaw and identical complete objects; linear2alaw
+remains SIZE2. Initial RTL distinguishes fixed comparison7 from size pseudo
+initialized8. Six functions/eight strong globals and four prior exact bodies
+preserved. Retain minimal size argument; no unique original-signature claim.
+[Ledger/replay](pcm-segment-search-recovery.md). (2026-10-02)
+
+## F11558. Reusing the PCM A-law input as magnitude closes the other encoder.
+
+With cursor/size helper held fixed, two complete-TU controls isolate input
+versus separate magnitude local. Reusing pcm_val recovers110B/EXACT from
+SIZE2, only linear2alaw changes, TU5/6 ->6/6 with no losses. Both calls pass8;
+public signatures, table data, masks, arithmetic and saturation unchanged.
+Three staged raw controls reproduce; all7 valid cells preserve6 functions/
+8 globals. Incorrect-domain-URL magnitude run preserved/excluded, both cells
+rerun correctly. Fixed exhaustive t_pcm is the differential fixture.
+[Validation ledger](pcm-segment-search-recovery.md). (2026-10-02)
+
+Retained full object raw-reproduces the corrected winner; one of300 TUs changes.
+Whole-tree863/1852 ->865/1852, exact bytes83,848 ->84,058; only the two encoders
+gain and zero losses. Fixed Gentoo phase385/0, structural checks clean.
+Same-order partial links lose32 positioned matching bytes as later code shifts;
+exact section/symbol/relocation record counts unchanged, both remain DIFFERENT.
