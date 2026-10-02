@@ -2392,3 +2392,19 @@ recover both612-byte clones (F11582). Denominator-only gets the same length
 but differs171 bytes; numerator-only stays596B. Cross guards, retain full
 bodies and inspect final cursor state, rather than treating size as fidelity.
 [Guard recovery](../floatarma-padding-recovery.md).
+
+
+An inline narrowing cast can still be folded into a table relocation, while
+assignment into a short index preserves the same compiler's conversion
+boundary. TONE_read needs short masked phase, bounded quadrants and stored
+short reflections; the width-only cross leaves11 differing bytes, both
+storage forms raw-agree on the full121-byte object (F11584). Use fixed
+exhaustive input coverage and full-TU/relocation controls, not explicit
+registers or assumed original spelling.
+[Width/storage cross](../tone-read-width-recovery.md).
+
+Unconditional min assignment is not universally an exactness unlock.
+FloatFIR setCoefficients' four min-store/nested-update cells recover selected
+boundaries but none the complete body (F11583); close the family rather than
+expand arbitrary variable/store permutations.
+[Closed control cross](../floatfir-coefficient-control.md).

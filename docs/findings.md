@@ -133419,3 +133419,46 @@ Negative positional movement is recorded, not optimized away with padding.
 Fixed Gentoo phase385 passed/0 failed, with full retained profile.
 Structural14,238 references/2,711 findings headings and285 suites/10,038
 static anchors clean. No modern portability, fuzzing or mutation-runtime claim.
+
+
+## F11583. FloatFIR coefficient-update min/control cross remains non-exact
+
+Reference always stores selected min index; baseline conditionally stores
+and early-returns on equal taps. Four complete-TU cells: baseline56B/SIZE2,
+min-store58B/BYTES26, nested-update54B/SIZE4, both56B/SIZE2. Four sources/
+four objects,2/8 exact unchanged, only target body changes. All functions/
+global types/bindings/visibility/nontext preserved. No source adoption;
+candidate runtime/whole-tree/partial gates NOT RUN.
+[Closed controls](floatfir-coefficient-control.md).
+(2026-10-02)
+
+
+## F11584. Short reflected-index storage recovers complete TONE_read
+
+Word quadrant tests and narrowed/sign-extended reflected indices distinguish
+blob121B from baseline113B. Eight width/index/bound cells leave121B/BYTES11
+when all three properties restored: compiler folds inline second-quadrant
+short cast into table relocation. Four storage controls prove both short
+phase assignment and short block-local index forms raw-agree121B/EXACT.
+Production and staged full-object controls raw-reproduce saved objects.
+Twelve compiles/ten sources/nine complete emissions;6 defined functions
+(4 blob-shared)/6 global
+bindings/types/visibility/data preserved, only TONE_read changes,1/4 ->2/4
+exact/no losses. Retain short phase/reflections and bounded quadrants, no
+register-specific source. Existing fixed fixture exhausts65536 short inputs.
+[Full recovery and validation](tone-read-width-recovery.md).
+(2026-10-02)
+
+Retained300/300 comparison build, only src_dsp_FP_math.c.o changes and
+raw-reproduces winner. Whole-tree878/1852 ->879/1852 exact,86,839 ->86,960
+exact bytes, only TONE_read gain/no losses. Complete same-order300-object
+partial links remain DIFFERENT (strict exit1): positioned68,284 ->68,283
+/943,398; allocated914,158 unchanged; exact section70/92, symbol394/2907,
+relocation1,020/18,317 unchanged. Per-function exactness does not establish
+complete object/profile identity. The two current exported coefficient
+helpers absent from the blob retain their complete bodies and bindings.
+
+Fixed Gentoo phase385 passed/0 failed, including exhaustive65536-phase
+fixture and negative/nonzero/cardinal/wrap controls. Structural14,238
+references/2,713 finding headings and285 suites/10,038 static anchors clean.
+No modern portability claim, fuzzing or mutation execution.
