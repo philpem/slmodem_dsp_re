@@ -10310,7 +10310,7 @@ TimingV34(void *objp)
 	rx->timing_frac = acc - (whole << 15);
 	rx->phase_inc = (short)(whole + (unsigned short)rx->symbol_period);
 
-	/* Signed word count and arithmetic halves match the object (F11539). */
+	/* Signed word count and arithmetic halves match the object (F11544). */
 	n = (short)(rx->ppm_count + 1);
 	acc = whole + (unsigned short)rx->ppm_acc;
 

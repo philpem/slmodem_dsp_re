@@ -1622,7 +1622,7 @@ excluded; corrected certificate reruns succeed. No modem harness, fuzzing or
 mutation execution is used; source and production objects remain unchanged.
 
 
-## Initial-phase metric reuse isolated to post-loop CSE (F11538)
+## Initial-phase metric reuse isolated to post-loop CSE (F11543)
 
 The four predeclared production/combined-graph x retained/no-post-loop-CSE
 cells isolate a specific transformation rather than fitting total size.
@@ -1679,7 +1679,7 @@ and arithmetic-halving idioms. Do not infer a source ceiling from these
 bounded negative controls.
 
 
-## TimingV34 signed report counter and arithmetic halves (F11539)
+## TimingV34 signed report counter and arithmetic halves (F11544)
 
 Declared four full-TU cells before compiling in [#22](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942204632), crossing signed-short local `n`/increment with explicit arithmetic halves at the normalized pair, report count, and signed symbol period. All retained Gentoo flags, mandatory bug define, compiler3.4.2-r2 and executed assembler2.15.92.0.2 were recorded by shared helpers; baseline reproduced `9b7aeacc` object byte for byte. Generator positive controls distinguish four source hashes,3 versus0 division REG_EQUAL notes, one word report comparison in short-counter cells, and three SAR-by-one instructions in shift cells; replay passes.
 
@@ -1699,7 +1699,7 @@ Replay: `python3 tools/v34_timing_carriers.py --domain https://github.com/philpe
 ## PRE/CSE cube restores the reload graph but loses four exact helpers (F11540)
 
 Four new no-GCSE cells plus a raw unchanged control complete the finite
-production/combined graph x GCSE x post-loop-CSE cube, reusing F11538's
+production/combined graph x GCSE x post-loop-CSE cube, reusing F11543's
 four cells only after their complete source/header/config/object hashes
 match. The new baseline reproduces the old raw object. All 63 functions
 and 55 globals remain; each no-GCSE cell changes 57 canonical bodies.
@@ -1724,7 +1724,7 @@ complete original TU profile.
 
 Domain: https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5942235103.
 Replay tools/v34_metric_pre.py --domain <that URL>, after recreating the
-historical F11538 artifacts (or retaining their validated originals).
+historical F11543 artifacts (or retaining their validated originals).
 Artifacts build/v34-metric-pre/{results,analysis}.json include all eight
 cells, commands, raw hashes, full inventories, all changed bodies and
 pass-local memory definitions. The finite cube is closed. Any future
