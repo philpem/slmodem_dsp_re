@@ -133561,3 +133561,30 @@ oscillator bodies change, extra entry helpers unchanged. Production and prior
 staged full-object controls raw-replay. No adoption or candidate runtime/
 census/partial gates. [Closed domain](phasor-consumption-controls.md).
 (2026-10-02)
+
+
+## F11591. Short clear counter and unsigned trace allocation recover FPM_FSD_init
+
+Four-cell complete-TU cross has only combined268B/EXACT: baseline253B,
+unsigned trace253B, short counter268B/BYTES1. All3 functions/4 globals/data/
+type/binding/visibility preserved, only init changes,1/3 ->2/3 exact/no losses.
+Word-count use-site conversion does not retype signed trace clear length.
+Fixed constructor allocation probes fail unchanged source4/33192 checks;
+negative lengths are component conversion boundaries, not demodulation or
+modem reachability. Preserve short counter overflow and promoted2*iir_len
+bound as static observed behavior, without claiming unrun overflow coverage.
+[Recovery](fpm-fsd-init-recovery.md).
+(2026-10-02)
+
+Retained comparison build300/300, zero failures; only src_dsp_fpm_fsd.c.o
+changes and raw-reproduces the winning complete object. Whole tree881/1852
+->882/1852 exact,87,337 ->87,605 exact bytes, only init gain/no losses.
+Same-order complete300-object partial links remain DIFFERENT (strict exit1):
+positioned68,275 ->68,258 /943,398, allocated914,126 ->914,142;
+exact section70/92, symbol394/2907 unchanged, relocation1021 ->1020 /18317.
+Positional reduction retained honestly; no layout/padding score fitting.
+
+Fixed Gentoo make phase385 passed/0 failed, including229798 trace allocation/
+clearing checks and existing Bell103 signal/reinit/coverage fixtures. Structural
+14240 references/2720 finding headings and285 suites/10038 static anchors
+clean. No fuzzing, mutation execution or modern portability claim.

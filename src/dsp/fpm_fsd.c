@@ -15,7 +15,7 @@
 void
 FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg, int fresh)
 {
-	int i;
+	short i; /* F11591: all three clearing loops narrow each increment. */
 
 	state->cfg = *cfg;
 	state->hist_idx = 0;
@@ -34,8 +34,9 @@ FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg, int fresh)
 			(unsigned)state->cfg.fir_taps * sizeof(short));
 		state->iir_hist = sysdep_malloc(
 			(unsigned)state->cfg.iir_len * 2 * sizeof(short));
+		/* Allocation uses the word as unsigned; clearing below stays signed. */
 		state->trace = sysdep_malloc(
-			(unsigned)state->cfg.trace_len * sizeof(short));
+			(unsigned short)state->cfg.trace_len * sizeof(short));
 	}
 
 	for (i = 0; i < state->cfg.fir_taps; i++)

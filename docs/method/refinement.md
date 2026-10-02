@@ -2451,3 +2451,12 @@ raw-merges unsigned+short with short-only, with no exact gains (F11590).
 A separate observed register/load role is a hypothesis to test, not a source
 preimage once the bounded cross refutes it.
 [Controls](../phasor-consumption-controls.md).
+
+
+Use-site signedness can differ between allocation and clearing: FPM_FSD_init
+allocates an unsigned-word trace length but clears with signed comparisons.
+Shared short counter plus that allocation conversion closes its full268-byte
+body; short counter alone misses one byte (F11591). Test requested allocation
+sizes and untouched allocated contents at negative component boundaries.
+Do not retype the field or narrow a promoted loop bound merely to avoid the
+blob's own counter wrap. [Recovery](../fpm-fsd-init-recovery.md).
