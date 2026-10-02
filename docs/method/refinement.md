@@ -2847,3 +2847,11 @@ do not add an unused final before-array pointer decrement to fit disassembly.
 Separate the recovered operations from merged-history and accumulator residuals,
 and close finite source domains without forcing spills or registers.
 [Controls](../v8-fsktx-source-controls.md).
+
+A typed embedded-subobject owner can recover compact offsets and lifetime
+across a call without changing store order. ANSam's six tone-pointer accesses
+plus owner-relative envelope_phase recover85B EXACT (F11653). Review sibling
+bodies and anonymous tables too: raw jump-table addends move with function
+alignment, but each function-interior target must still agree. Report that
+controlled raw-data change explicitly, not as unchanged nontext.
+[Recovery](../v8-ansam-owner-recovery.md).

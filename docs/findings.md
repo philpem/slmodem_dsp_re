@@ -134302,3 +134302,19 @@ full metadata/nontext/bystander controls agree, exact2/4 unchanged. No source
 adoption/new fixture execution; synthetic component coverage is not public
 lifecycle evidence. Close this finite family without spill/register/history
 pointer forcing. [Controls](v8-fsktx-source-controls.md). (2026-10-02)
+
+## F11653. Typed tone owner recovers the ANSam initializer
+
+Two complete-V8.c cells at5000b4aa retain source store order and use cached
+struct v8_tone pointer for the six blob compact-offset accesses, preserving
+owner-relative envelope_phase. Candidate85B EXACT from106B; only initializer
+changes across9 functions/1 data, exact1→2/9/no losses. All siblings/canonical
+relocations and metadata agree. Raw rodata jump-table41 addends shift -16
+with following function; every instruction-relative target/nonrelocated byte
+remains unchanged. Do not claim raw nontext equality. All300 production
+objects inspected; sole changed object raw-matches candidate. Whole-tree
+924/1852,95168 exact bytes/no losses, fixed Gentoo phase386/0 and structural/
+static anchors clean. Init30241 checks/8pairedcalls plus17 ANSam component
+lifecycle checks per side. Full partial positioned -146, allocated -16,
+exact section/symbol/relocation records unchanged; whole links DIFFERENT.
+[Complete controls and boundaries](v8-ansam-owner-recovery.md). (2026-10-02)

@@ -767,13 +767,15 @@ v8_TONEq_init(struct v8 *v)
 void
 v8_ansaminit(struct v8 *v)
 {
-	v->tone.carrier_phase = 0;
-	v->tone.envelope_step = 0x1a;
-	v->tone.carrier_step = 0xe00;
-	v->tone.reversal_count = 0;
+	struct v8_tone *t = &v->tone;
+
+	t->carrier_phase = 0;
+	t->envelope_step = 0x1a;
+	t->carrier_step = 0xe00;
+	t->reversal_count = 0;
 	v->tone.envelope_phase = 0;
-	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
-	v->tone.reversal_enable = 1;
+	t->amplitude = v8_mpyint(0x3e80, v->tx_gain);
+	t->reversal_enable = 1;
 }
 
 void
