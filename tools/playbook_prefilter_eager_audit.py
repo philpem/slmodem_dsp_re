@@ -31,5 +31,16 @@ changed=[name for name in functions if b.body(str(folder/'baseline/candidate.o')
 assert changed==['_ZN12V90PreFilter16getV90CapabilityEv','_ZNK12V90PreFilter13isV90WithEia6Ev'],changed
 assert len(functions)==16
 reports['scope']={'functions':len(functions),'named_data':len(reports['baseline']['objects']),'changed':changed}
+reports['stages']={}
+for stage in ('01.rtl','20.combine','25.greg'):
+ cells={}
+ for cell in ('baseline','eager-or'):
+  text=(folder/cell/('V90PreFilter.cpp.'+stage)).read_text().split(';; Function int V90PreFilter::isV90WithEia6() const',1)[1].split(';; Function ',1)[0]
+  if stage=='25.greg':text=text[text.index('\n(insn'):]
+  cells[cell]={'or_si':text.count('(ior:SI '),'or_qi':text.count('(ior:QI '),'and_si':text.count('(and:SI ')}
+ assert cells['baseline']['or_si']==0 and cells['baseline']['or_qi']==0
+ assert cells['eager-or']['or_si']==1 and cells['eager-or']['or_qi']==0
+ if stage!='01.rtl':assert cells['eager-or']['and_si']==1
+ reports['stages'][stage]=cells
 (root/'complete-object-audit.json').write_text(json.dumps(reports,indent=2,default=lambda value:value.hex() if isinstance(value,bytes) else str(value))+'\n')
 print('Two cells:',len(functions),'functions,',len(reports['baseline']['objects']),'named data; metadata/nontext/14 sibling bodies agree')

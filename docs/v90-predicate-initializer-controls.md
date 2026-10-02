@@ -8,6 +8,8 @@ F11663 and F11664 record two independent bounded source domains at 0a9b564f. Bot
 
 The candidate recovers the unconditional read and the 69-byte extent (baseline75), but uses a 32-bit OR followed by AND1 rather than the blob's byte OR followed by MOVZBL. Strict verdict is BYTES7, not EXACT; this is more than a register rename. Inlined getV90Capability also changes, remaining125B versus122B. Exactness remains5/16. All14 sibling bodies, zero named data objects, symbol metadata, allocated nontext contents and canonical relocations agree. Raw baseline reproduces; both valid cells emit distinct objects.
 
+The compiler-stage audit locates the width difference before allocation: initial RTL already contains IOR:SI, while combine retains it and adds AND:SI1 when merging the zero extensions of the SETE results. Allocated RTL preserves that pair. The baseline has no IOR at these stages. GCC3.4.2 expr.c routes BIT_IOR_EXPR/TRUTH_OR_EXPR to ior_optab; the period dumps, rather than an assumed allocator heuristic, establish the stage here. A narrower return declaration is still unproved by the symbol name, which does not encode it.
+
 The existing run_iseia6 component fixture traverses16 codecs, each selected loop plus two negative selectors, and five registry values. It supplies valid parameter storage and deliberately marks a table capability to exercise both answers; those table modifications are explicit component probes. It does not establish modem lifecycle or equivalence for missing parameter storage. No candidate runtime claim is made. Close the operator-only family; recovering eager evaluation does not establish the Boolean representation or original return declaration.
 
 Reproduce:
