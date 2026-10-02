@@ -2235,3 +2235,11 @@ not. Restore observed behavior even when its finite source domain gives no
 byte-exact gain. A same-length candidate with114 differing bytes is not a
 recovery. Fixed allocator-failure and one-shot recovery checks distinguish this
 from a score-only rewrite (F11560). [Record](../toneiir-allocation-recovery.md).
+
+Recovering an x87 opcode is not recovering its lifetime or evaluation boundary.
+Floating RMS literal/local controls recover fld1 but either add final narrowing
+or move the reciprocal before the loop; both miss the reference's two separated
+count conversions (F11561). Inspect the full stack tree and conversion sites,
+not just the attractive opcode. Likewise the constructor common-pointer-return
+family succeeds for Dual_TONE_create and fails for silence_create (F11562).
+[Closed domains](../playbook-rms-silence-controls.md).

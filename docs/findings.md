@@ -133087,3 +133087,22 @@ Gentoo phase385/0; the added failure case passes20 checks. Partial links remain
 DIFFERENT: positioned equality+18 bytes, exact relocation records-4; section
 and symbol records unchanged. The nearby _iir_filter_create has no blob-side
 allocation check and remains unchanged; guards are recovered per symbol.
+
+## F11561. Floating RMS's fld1 does not establish its reciprocal source form.
+
+Two complete-TU literal cells yield86B/SIZE4 and92B/SIZE10; unsuffixed1.0
+recovers fld1 but adds final narrowing. Three typed-float-scale cells yield
+86B/SIZE4 and two identical68B/SIZE14 bodies: fld1 retained but both divisions
+move before the variance loop, unlike the blob. All23 functions/22 globals
+survive,8/23 exact unchanged. Three collateral canonical bodies differ only
+in pool addends; values/instructions verified. Both domains closed, no source
+adoption, candidate runtime/partial gates NOT RUN.
+[Ledger and reopening criteria](playbook-rms-silence-controls.md). (2026-10-02)
+
+## F11562. Silence constructor's common-return family does not recover its body.
+
+Two raw-controlled complete-TU cells preserve5 functions/globals and3/5 exact;
+only silence_create changes,80B/SIZE2 ->76B/SIZE6, zero gains/losses. The
+Dual_TONE_create success cannot be generalized to every constructor. Family
+closed with no source change and no candidate runtime/partial-link gates.
+[Ledger/replay](playbook-rms-silence-controls.md). (2026-10-02)
