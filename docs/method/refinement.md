@@ -2126,3 +2126,17 @@ of unique original spellings. CID caching and calling-tone early loads did
 not transfer successfully; V32's closest array cell still has a reversed
 store/extension pair and is left out. [The reserve ledger](../playbook-reserve-patterns.md)
 records all seventeen cells and the complete-TU controls.
+
+
+A narrow output parameter can carry a returned value differently from a
+local of the same declared type. RxHdxSequenceE's unsigned-short local
+expands into a widened SI pseudo and its count store uses the lowpart;
+storing directly through count and passing *count to the next call keeps
+the returned HI store before widening. Together with direct array-root
+access this closes the complete339-byte function (F11545); either change
+alone misses. Inspect initial RTL and cross the independent carriers before
+classifying an adjacent store/extension swap as register allocation alone.
+Preserve the same truncation, memory order and call boundaries; do not
+mechanically eliminate locals elsewhere. [The bounded record](../v32-sequence-count.md)
+includes exact neighboring-body controls and the two still-deferred V22
+reserves whose previous spelling domains are already closed.

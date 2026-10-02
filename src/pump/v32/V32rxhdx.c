@@ -569,14 +569,12 @@ RxHdxSequenceE(struct v32_modem *modem, short *in, unsigned short *out,
 	       unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
-	unsigned short n;
 
 	hdx->timer +=
 		(unsigned int)hdx->symbol_len;
 
-	n = DemodDataV32(modem, in, out, *count);
-	*count = n;
-	DescrambleDataV32(modem, (short *)out, n);
+	*count = DemodDataV32(modem, in, out, *count);
+	DescrambleDataV32(modem, (short *)out, *count);
 
 	hdx = HDX(modem);
 	if (hdx->short_48 != 0) {
@@ -589,8 +587,7 @@ RxHdxSequenceE(struct v32_modem *modem, short *in, unsigned short *out,
 		short *regs;
 
 		hdx = HDX(modem);
-		regs = hdx->regs;
-		regs[V32HDX_REG_RATE_SEQ] = (short)GetSequence(modem);
+		hdx->regs[V32HDX_REG_RATE_SEQ] = (short)GetSequence(modem);
 
 		hdx = HDX(modem);
 		regs = hdx->regs;
