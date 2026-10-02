@@ -133537,3 +133537,14 @@ Fixed Gentoo make phase385 passed/0 failed. Existing MRF fixture passes513
 checks across config, four ratios and debug-growth controls. Structural14239
 references/2717 finding headings and285 suites/10038 static anchors clean.
 No fuzzing, mutation execution or modern portability claim.
+
+
+## F11589. Local phasor interpolation width alone does not recover the blob
+
+Two complete-TU cells int vs short frac preserve all tables/advance/helper
+factoring. Short local adds one byte to each oscillator (200/143/234B vs
+blob211/161/246B);0/3 exact unchanged. Raw baseline reproduced, all5 defined
+functions/9 globals and data/type/binding/visibility preserved; only three
+oscillator bodies change, extra entry helpers unchanged. No source adoption
+or candidate runtime/whole-tree/partial gates. [Closed domain](phasor-fraction-controls.md).
+(2026-10-02)

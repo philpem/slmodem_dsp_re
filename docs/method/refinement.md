@@ -2435,3 +2435,11 @@ An8-cell independent cross needs all three for full193B exactness; counter+
 carrier alone reaches size but differs30 bytes. Keep growth ownership/debug
 ordering and verify growth through valid successive initialization.
 [Recovery](../fpm-mrf-init-recovery.md).
+
+
+A short local inside a shared inlined helper is not a universal conversion
+carrier. Phasor interpolation fraction-width transfer alone adds one byte
+per oscillator without recovering their bodies (F11589). Preserve the
+complete TU/table controls and close that local-width family; existing
+exhaustive fixtures are not evidence for an unrun candidate.
+[Controls](../phasor-fraction-controls.md).
