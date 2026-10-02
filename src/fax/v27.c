@@ -104,8 +104,8 @@
  *
  * V27RX_delete supplies constant 1 before FPM_FSE_free, FPM_SRE_free
  * and FPM_MRF_free. None reads it. F11609 restores MRF's call argument;
- * FSE/SRE omissions remain separate (F8870), and an unread argument does
- * not prove an absent source formal.
+ * F11610 restores FSE/SRE too. An unread argument does not establish
+ * an absent original source formal.
  */
 
 #include <string.h>

@@ -131,7 +131,7 @@ run(const struct fpm_ecc_cfg *cfg, short near_delay, short far_delay,
 	diff_eq_int("re-init kept the buffer", b.line == keep, 1, input);
 
 	ref_FPM_ECC_free(&a);
-	FPM_ECC_free(&b);
+	FPM_ECC_free(&b, 1);
 }
 
 /* Synthetic component alias control (F11596), not modem reachability.
@@ -295,7 +295,7 @@ cancel_case(const char *tag, const struct fpm_ecc_cfg *cfg, short near_delay,
 		     (adapt_near == 1 || adapt_far == 1)) ? 1 : 0, 0);
 
 	ref_FPM_ECC_free(&a);
-	FPM_ECC_free(&b);
+	FPM_ECC_free(&b, 1);
 	return diff_end();
 }
 

@@ -133,7 +133,9 @@ void FPM_PPS_init(struct fpm_pps *state, const struct fpm_pps_cfg *cfg,
  *
  * @param state The shaper state to tear down.
  */
-void FPM_PPS_free(struct fpm_pps *state);
+/* F11610: callers supply a scalar that the blob does not read.
+ * Its original width/name/meaning are unproved; int is conventional. */
+void FPM_PPS_free(struct fpm_pps *state, int unused);
 
 /**
  * @brief Shape up to @p count symbols from @p src into passband samples.

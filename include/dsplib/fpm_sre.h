@@ -270,7 +270,9 @@ void FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg,
  * @brief Free a symbol-timing recovery state's four buffers.
  * @param sre The state to tear down. Its pointers are not cleared.
  */
-void FPM_SRE_free(struct fpm_sre *sre);
+/* F11610: callers supply a scalar that the blob does not read.
+ * Its original width/name/meaning are unproved; int is conventional. */
+void FPM_SRE_free(struct fpm_sre *sre, int unused);
 
 /**
  * @brief Interpolate and time-recover @p count input samples.

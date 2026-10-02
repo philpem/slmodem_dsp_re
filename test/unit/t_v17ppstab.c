@@ -215,7 +215,7 @@ test_pps_use(void)
 		    0);
 
 	ref_FPM_PPS_free(theirs);
-	FPM_PPS_free(&ours);
+	FPM_PPS_free(&ours, 1);
 
 	return diff_end();
 }

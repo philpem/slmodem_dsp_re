@@ -388,10 +388,10 @@ V27RX_delete(void *modem)
 	struct v27_rx_shared *sh;
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_FSE_free((&rx->fse));
+	FPM_FSE_free((&rx->fse), 1);
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_SRE_free((&rx->sre));
+	FPM_SRE_free((&rx->sre), 1);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	FPM_MRF_free((&rx->mrf), 1);

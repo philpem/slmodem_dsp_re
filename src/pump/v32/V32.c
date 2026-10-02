@@ -995,11 +995,11 @@ V32FP_delete(struct v32_modem *modem)
 	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone0);
 
 	sysdep_free(FP(modem)->decoder.vtb.paths);
-	FPM_FSE_free(FSE(FP(modem)));
-	FPM_SRE_free(&FP(modem)->sre);
-	FPM_ECC_free(ECC(FP(modem)));
+	FPM_FSE_free(FSE(FP(modem)), 1);
+	FPM_SRE_free(&FP(modem)->sre, 1);
+	FPM_ECC_free(ECC(FP(modem)), 1);
 	FPM_MRF_free(&FP(modem)->mrf, 1);
-	FPM_PPS_free(PPS(FP(modem)));
+	FPM_PPS_free(PPS(FP(modem)), 1);
 	sysdep_free(FP(modem)->rx_buf);
 	sysdep_free(FP(modem)->clean_buf);
 

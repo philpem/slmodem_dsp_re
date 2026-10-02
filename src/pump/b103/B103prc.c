@@ -861,32 +861,32 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
  * both FPM_MRF_free calls. The callees ignore it; its original type/name
  * and meaning are unproved. Dropping it preserves behavior, not bytes.
  *
+ * F11611 keeps direct child-owner accesses: the blob reloads fp->dsp and
+ * fp->hdx after calls rather than caching either child across releases.
+ *
  * The final free is D8: it releases the object unconditionally, even when the
  * caller supplied it.  Reproduced -- see docs/deviations.md.
  */
 void
 B103FP_delete(struct b103fp *fp)
 {
-	struct b103_dsp *dsp = fp->dsp;
-	struct b103_hdx *hdx;
 
-	FPM_FSM_delete(&dsp->fsm);
-	FPM_MTD_delete(dsp->mtd);
-	FPM_FSD_free(&dsp->fsd, 1);
-	FPM_MRF_free(&dsp->rx_mrf, 1);
-	FPM_MRF_free(&dsp->tx_mrf, 1);
+	FPM_FSM_delete(&fp->dsp->fsm);
+	FPM_MTD_delete(fp->dsp->mtd);
+	FPM_FSD_free(&fp->dsp->fsd, 1);
+	FPM_MRF_free(&fp->dsp->rx_mrf, 1);
+	FPM_MRF_free(&fp->dsp->tx_mrf, 1);
 
-	sysdep_free(dsp->scratch);
-	sysdep_free(dsp->rx_scratch);
-	sysdep_free(dsp->bpf_hist);
-	sysdep_free(dsp);
+	sysdep_free(fp->dsp->scratch);
+	sysdep_free(fp->dsp->rx_scratch);
+	sysdep_free(fp->dsp->bpf_hist);
+	sysdep_free(fp->dsp);
 
-	hdx = fp->hdx;
-	if (hdx->tone_detect != NULL)
-		FPM_TONE_delete(hdx->tone_detect);
-	if (hdx->tone_lo != NULL)
-		FPM_TONE_delete(hdx->tone_lo);
-	sysdep_free(hdx);
+	if (fp->hdx->tone_detect != NULL)
+		FPM_TONE_delete(fp->hdx->tone_detect);
+	if (fp->hdx->tone_lo != NULL)
+		FPM_TONE_delete(fp->hdx->tone_lo);
+	sysdep_free(fp->hdx);
 
 	sysdep_free(fp);	/* D8 */
 }

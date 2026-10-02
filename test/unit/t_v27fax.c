@@ -1581,9 +1581,9 @@ run_delete(void)
 		switch (v) {
 		case 1:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
 					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
@@ -1599,9 +1599,9 @@ run_delete(void)
 			break;
 		case 2:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
 					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(b.rx);
@@ -1615,9 +1615,9 @@ run_delete(void)
 			break;
 		case 3:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
 					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
@@ -1631,9 +1631,9 @@ run_delete(void)
 			break;
 		case 4:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
 					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
@@ -1647,9 +1647,9 @@ run_delete(void)
 			break;
 		default:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
 					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
@@ -3584,7 +3584,7 @@ run_txdelete(void)
 
 		if (v != 6)
 			FPM_PPS_free((struct fpm_pps *)(void *)
-					FX(b.tx, V27TX_PPS));
+					FX(b.tx, V27TX_PPS), 1);
 		if (v != 1)
 			sysdep_free(((struct fpm_smc_ring *)(void *)
 					FX(b.tx, V27TX_RING))->sym);

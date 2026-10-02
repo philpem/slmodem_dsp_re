@@ -2579,3 +2579,20 @@ adapt test consumers. Recover observed literals, not invented ownership meaning
 or a unique formal width. Check unchanged helper bodies and non-exact bystanders;
 API fidelity is source evidence even when only some callers become exact.
 [Recovery](../free-argument-recovery.md).
+
+
+Extend an ignored-argument recovery only after auditing every caller. The
+FSE/SRE×ECC×PPS cross restores13 explicit literal1 slots and yields five exact
+callers (F11610); two V27 bodies still miss initial setup, so preserve their
+unmatched status. Ignored formal type/name/meaning remain unproved. Full
+partial links may lose positioned relocation matches despite complete function
+gains; report both, with all-TU data/export and differential controls.
+[Recovery](../free-argument-recovery-rest.md).
+
+
+Repeated owner loads after calls can distinguish a cached child local from
+original direct owner expressions. B103 needs both dsp andhdx lifetimes to
+recover its full deletion body (F11611); either alone misses. Retain guards,
+call order and real lifecycle allocator checks. Do not infer a prior behavior
+bug from a register/source lifetime recovery, or transfer it to already-matching
+loads without new evidence. [Controls](../free-argument-recovery-rest.md).

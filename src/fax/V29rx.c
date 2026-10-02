@@ -403,16 +403,16 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
  *
  * The object supplies literal second argument 1 to FPM_FSE_free,
  * FPM_SRE_free and FPM_MRF_free. None reads it. F11609 restores the MRF
- * argument; FSE/SRE remain separately recorded omissions (F8876), not
- * proof that the original source had no second formal.
+ * argument; F11610 restores FSE/SRE too. An unread argument never proved
+ * that the original source had no second formal.
  *
  * The final free is a sibling `jmp` and is unconditional.
  */
 void
 V29RX_delete(void *modem)
 {
-	FPM_FSE_free(&((struct v29_rx *)modem)->rx->fse);
-	FPM_SRE_free(&((struct v29_rx *)modem)->rx->sre);
+	FPM_FSE_free(&((struct v29_rx *)modem)->rx->fse, 1);
+	FPM_SRE_free(&((struct v29_rx *)modem)->rx->sre, 1);
 	FPM_MRF_free(&((struct v29_rx *)modem)->rx->mrf, 1);
 
 	sysdep_free(((struct v29_rx *)modem)->rx->buf_sre);

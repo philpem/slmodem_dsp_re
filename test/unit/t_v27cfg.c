@@ -1192,7 +1192,7 @@ test_use_sre(void)
 		diff_eq_int("sre.cfg.proto[coeffs] (%ld)", a.cfg.proto[coeffs],
 			    b.cfg.proto[coeffs], rate);
 
-		FPM_SRE_free(&a);
+		FPM_SRE_free(&a, 1);
 		ref_FPM_SRE_free(&b);
 	}
 
@@ -1262,7 +1262,7 @@ test_use_fse(void)
 		cmp_shorts("fse.tilt_coeff[%ld]", a.tilt_coeff, b.tilt_coeff,
 			   4);
 
-		FPM_FSE_free(&a);
+		FPM_FSE_free(&a, 1);
 		ref_FPM_FSE_free(&b);
 	}
 

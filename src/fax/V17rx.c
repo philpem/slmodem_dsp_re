@@ -606,7 +606,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 
 /*
  * V17RX_delete -- .text 0x097b40, 251 bytes.  See v17fax.h for the order and
- * for why the object's literal 1 in the second argument slot is not here.
+ * of releases. F11610 restores each ignored literal second argument 1.
  */
 void
 V17RX_delete(void *modem)
@@ -614,8 +614,8 @@ V17RX_delete(void *modem)
 	SGD_delete(RXSTATE(modem)->dec.sgd);
 	sysdep_free(RXSTATE(modem)->dec.vtb.paths);
 
-	FPM_FSE_free(&RXS(modem)->fse);
-	FPM_SRE_free(&RXS(modem)->sre);
+	FPM_FSE_free(&RXS(modem)->fse, 1);
+	FPM_SRE_free(&RXS(modem)->sre, 1);
 	FPM_MRF_free(&RXS(modem)->mrf, 1);
 
 	sysdep_free(RXSTATE(modem)->buf_sre);

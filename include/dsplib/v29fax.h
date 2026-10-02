@@ -1569,8 +1569,8 @@ void V29RX_delete(void *modem);
  * `V29TX_create`, this function derives +0x08, +0x0c, +0x10 and +0x64
  * again from what releases each, and the two readings agree (finding
  * F9255). The literal 1 the object passes in the second argument slot
- * before `FPM_PPS_free` is not reproduced (finding F8876, as for
- * `V29RX_delete`). No NULL guard anywhere, and the handle goes
+ * before FPM_PPS_free is restored by F11610, as are the receive frees.
+ * No NULL guard anywhere, and the handle goes
  * unconditionally, so a caller that supplied the storage does not get it
  * back (reproduced; D1150).
  *

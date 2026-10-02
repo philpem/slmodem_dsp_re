@@ -146,8 +146,9 @@ FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
  * afterwards.  The pointers are not cleared.
  */
 void
-FPM_PPS_free(struct fpm_pps *state)
+FPM_PPS_free(struct fpm_pps *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->hist_q);
 	sysdep_free(state->hist_i);
 }

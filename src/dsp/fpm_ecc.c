@@ -306,8 +306,9 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 }
 
 void
-FPM_ECC_free(struct fpm_ecc *state)
+FPM_ECC_free(struct fpm_ecc *state, int unused)
 {
+	(void)unused;
 	short j;
 
 	for (j = 2; j >= 0; j--)

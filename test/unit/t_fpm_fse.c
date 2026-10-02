@@ -153,7 +153,7 @@ run(const char *label, struct fpm_fse_cfg *cfg)
 	ref_FPM_FSE_free(&theirs);
 	ref_frees = harness_alloc.frees - before.frees;
 	before = harness_alloc;
-	FPM_FSE_free(&ours);
+	FPM_FSE_free(&ours, 1);
 	diff_eq_int("free: frees (%ld)", harness_alloc.frees - before.frees,
 		    ref_frees, 3);
 	diff_eq_int("free released five (%ld)", ref_frees, 5, 3);
@@ -383,7 +383,7 @@ main(void)
 				lines += dsplib_debug_capture_lines(1);
 
 			ref_FPM_FSE_free(&theirs);
-			FPM_FSE_free(&ours);
+			FPM_FSE_free(&ours, 1);
 		}
 		diff_eq_int("it said something (%ld)", lines > 0, 1,
 			    (long)lines);

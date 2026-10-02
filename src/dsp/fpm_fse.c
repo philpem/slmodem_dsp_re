@@ -590,8 +590,9 @@ FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 }
 
 void
-FPM_FSE_free(struct fpm_fse *state)
+FPM_FSE_free(struct fpm_fse *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->out_q);
 	sysdep_free(state->out_i);
 	sysdep_free(state->hist);

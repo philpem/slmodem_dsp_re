@@ -102249,9 +102249,9 @@ empty and silent blocks. Deviation D1036.
 
 ### F8876. Three `_free` calls in `V29RX_delete` are given a second argument that no callee loads, exactly as `B103FP_delete`'s are
 
-**Superseded for MRF source/byte fidelity by F11609.** An unread argument
-does not establish a one-argument original declaration. The measured caller
-stack setup is restored; FSE/SRE remain separately open.
+**Superseded for source/byte fidelity by F11609/F11610.** An unread argument
+does not establish a one-argument original declaration. Measured MRF/FSE/SRE
+caller stack setup is restored; original formal width/name/meaning remain unknown.
 
 `V29RX_delete` (0x09b590) writes a literal 1 to `0x4(%esp)` before each of
 `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`. All three take one argument
@@ -133807,4 +133807,25 @@ Initial four-TU MRF×FSD cross and all11-TU consumer expansion recover complete
 cid_delete86B,v23FP_rx_delete89B,V21RX_delete123B,V21TX_delete104B. Ignored int
 formal is a conventional family, not unique original type/name/meaning.
 Full validation and audit are recorded in [recovery](free-argument-recovery.md).
+(2026-10-02)
+
+
+## F11610. Remaining ignored free arguments recover five complete callers
+
+13explicitliteral1 caller slots across FSE/SRE/ECC/PPS, callees ignore value.
+Groupedreceiver×ECC×PPS eight-cell complete11-TU cross (88compilations,37functions,
+11dataobjects) recovers V32FP_delete293,V17RX_delete251,V29RX_delete220,
+V17TX_delete107,V29TX_delete135; no exact losses/bystanders. Allfourcallees rawmerge,
+data/binding/nontext agree. V27RX191vs193/V27TX107BYTES9 remain unmatched;
+int ignoredformal is conventional, originalwidth/name/meaning unknown.
+[Recovery and gates](free-argument-recovery-rest.md). (2026-10-02)
+
+## F11611. B103 deletion direct child-owner lifetimes recover the full body
+
+Four-cell directdsp×directhdx cross254/257/270/272B versus272, combinedexact;
+17functions/3dataobjects, onlydelete changes, no losses. Blob reloadsowners
+aftercalls; retain directexpressions without forcing registers. Generator
+assertion rejected separatelyassignedhdx beforecompilation; invalidrun retained,
+correctedfourcell valid. Fixedt_b103create real lifecycle authority, no ordinary
+behavioralbug claim. [Evidence and gates](free-argument-recovery-rest.md).
 (2026-10-02)

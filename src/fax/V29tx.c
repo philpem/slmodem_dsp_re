@@ -260,10 +260,9 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
  * 0x09bea1 and 0x09bed9, then three of `0x20(%ebx)` -- so `((struct v29_tx_root *)modem)->tx`
  * expands at each use here as `RX()` and `DET()` do above.
  *
- * The object places a literal 1 in the second argument slot before
- * `FPM_PPS_free` (0x09be91), which takes a single argument and reads no frame
- * slot past the first.  Not reproduced; finding F8876, exactly as for
- * `V29RX_delete`.
+ * F11610 restores the ignored literal second argument 1 before
+ * FPM_PPS_free (0x09be91). Its original type/name/meaning are unproved;
+ * the measured caller stack setup is part of byte fidelity.
  *
  * The final free is a sibling `jmp` and is unconditional, and nothing on the
  * way is guarded; D1150.
@@ -271,7 +270,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 void
 V29TX_delete(void *modem)
 {
-	FPM_PPS_free(&((struct v29_tx_root *)modem)->tx->pps);
+	FPM_PPS_free(&((struct v29_tx_root *)modem)->tx->pps, 1);
 
 	sysdep_free(((struct v29_tx_root *)modem)->tx->ring.sym);
 	sysdep_free(((struct v29_tx_root *)modem)->tx->ring.q);
