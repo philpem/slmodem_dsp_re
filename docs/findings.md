@@ -134122,31 +134122,33 @@ initializer audit establishes150 (5frames×6modes×5values), corrected here.
 
 ## F11637. Wider FIFO8 read results remove sign extension but miss complete bodies
 
-Three whole-TU cells atfcf0427a testshort/unsignedshort/int with isolatedmatching
-headers. Baseline160B/SIZE13 vs173B; widercells rawmerge159B/SIZE14. All4
-functions/oneFIFO_CFGobject/symbol/nontext controls preserved; onlyreadchanges.
-Productionrawreproduces,2/4exactunchanged. Callertruncation andexistingfixture
-shortdeclaration do not uniquelyrecover originalABI. NoAPIadoption orfixture
-execution; returnwidthfamilyclosed. [Controls](fifo-read-return-controls.md).
-(2026-10-02)
+Three whole-TU cells at fcf0427a test short, unsigned short and int results
+with matching isolated headers. Baseline is 160B/SIZE13 against 173B;
+both wider cells raw-merge at 159B/SIZE14. All four functions, one FIFO_CFG
+object and symbol/nontext controls are preserved; only read changes.
+Production raw bytes reproduce, with 2/4 exact unchanged. Caller truncation
+and the existing fixture's short declaration do not uniquely recover the
+original ABI. No API adoption or fixture execution; the return-width family
+is closed. [Controls](fifo-read-return-controls.md). (2026-10-02)
 
 ## F11638. V34 transmit queue recovers sample-before-clear and direct wrap
 
-Four load/storeorder×helper/directwrap cells recover68B EXACT onlywithboth.
-Directwrapalone68B/BYTES10; loadorderalone70B/SIZE2. SevenTUfunctions/zero
-nameddataobjects, onlyqueuechanges; allsymbol/nontext controlsagree. Synthetic
-componentoverlapdetector fires6/2040onbaseline, thenpasses2040/2040; separate
-source-storagecoverage retained. All300productionobjects reviewed, onechanges
-andrawmatchespromotedcandidate. Whole-tree918→919/1852,94776exactbytes/
-no losses; fixedphase386/0/staticanchorsclean. CompletepartialremainDIFFERENT,
-positioned-1/allocatedunchanged. [Recovery](v34-txqueue-recovery.md).
-(2026-10-02)
+Four load/store-order × helper/direct-wrap cells recover 68B EXACT only with
+both changes. Direct wrap alone is 68B/BYTES10; load order alone is 70B/SIZE2.
+Seven TU functions, zero named data objects: only the queue changes, and all
+symbol/nontext controls agree. The synthetic component overlap detector fires
+6/2040 on baseline, then passes 2040/2040; separate source-storage coverage
+is retained. All 300 production objects are reviewed: one changes and
+raw-matches the promoted candidate. Whole-tree 918→919/1852, 94,776 exact
+bytes, no losses; fixed phase 386/0, static anchors clean. Complete partial
+links remain DIFFERENT, positioned bytes -1, allocated size unchanged.
+[Recovery](v34-txqueue-recovery.md). (2026-10-02)
 
 ## F11639. Bitreverse statement predicate matches size but fails the predicted lowering
 
-Two completeTUcells atfcf0427a reproduce the explicitoldbaseline:56B/SIZE8
-ternary,64B/BYTES40 statementpredicate. CandidateemitsTEST/JE/MOV ratherthan
-blobTEST/SETNE. Exact0/7unchanged; onlybitreversechanges, symbol/nontext
-controlsagree. Equal size is not recovery. No source adoption ornewfixture;
-statementpredicatefamilyclosed. [Controls](v34-bitreverse-init-controls.md).
-(2026-10-02)
+Two complete-TU cells at fcf0427a reproduce the explicit old baseline:
+56B/SIZE8 ternary, 64B/BYTES40 statement predicate. The candidate emits
+TEST/JE/MOV rather than the blob's TEST/SETNE. Exact count 0/7 is unchanged;
+only bitreverse changes, with symbol/nontext controls agreeing. Equal size
+is not recovery. No source adoption or new fixture; the statement-predicate
+family is closed. [Controls](v34-bitreverse-init-controls.md). (2026-10-02)
