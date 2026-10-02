@@ -2273,3 +2273,14 @@ correct recovered loop is not authority to widen ring locals or force masks;
 inspect the helper signature and field reads across callers first, including
 closed F8249 controls (F11566).
 [Traversal domain](../v32-smc-abs-traversal-controls.md).
+
+For a rejected conditional-zero mask, read the converter's complete predicate.
+GCC3.4's noce_try_store_flag_mask needs zero versus the destination itself:
+a ternary assigning a separate result temporary can fail even when both arms
+are already SImode. Ordinary in-place conditional clearing recovers V32's mask
+in all three encoder callers (F11568). Shifted tags, wrapped-result carriers
+and comparison-use narrowing are separate axes; together they recover an exact
+68-byte abs loop but leave51 bytes different in the whole function (F11567,
+F11569). Do not turn an exact internal region into an adoption or declare the
+remaining prologue a pure regalloc issue without examining its load ordering.
+[Closed24-cell record](../v32-smc-if-conversion.md).

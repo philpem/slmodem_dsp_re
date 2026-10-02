@@ -133160,3 +133160,37 @@ exact bytes84,358 ->84,590, zero losses. Fixed Gentoo phase385/0; existing
 V22 IIR fixture6,410 checks, no fixture/anchor changes. Complete same-order
 partial links remain DIFFERENT: positioned equality-1 byte; allocated bytes
 and exact section/symbol/relocation records unchanged.
+
+## F11567. V32 shifted-tag narrowing recovers loads but not complete encoders.
+
+Six full-TU traversal/tag cells preserve3 functions/5 globals,0/3 exact and
+unchanged data. Short shifted tags recover abs/tcm signed-byte mode loads and
+dif's post-shift conversion without changing the shared mode field. Dif grows
+369 ->385B for all-short tags; abs152/154B and tcm360B remain non-exact.
+Raw production and preceding traversal controls reproduce. No source adoption
+or candidate runtime/partial gates. [Ledger](v32-smc-if-conversion.md).
+(2026-10-02)
+
+## F11568. GCC's mask conversion requires destination identity, not merely SImode.
+
+Recovered GCC3.4.2 ifcvt.c requires zero versus the destination itself. V32's
+ternary ce1 assigns reg91 from reg92[next] or zero, already in SImode, so that
+necessary predicate fails. Ordinary conditional clearing of next converts one
+block in each encoder and recovers setl/neg/and. Twelve full-TU cells raw-replay
+six tag controls; all3 functions/5 globals/data survive,0/3 exact unchanged.
+All three callers inspected; no adoption for individual matching instructions.
+[Compiler source and crossed controls](v32-smc-if-conversion.md). (2026-10-02)
+
+## F11569. V32 ring carriers and comparison narrowing recover an exact loop only.
+
+Four staged helper/caller int-carrier cells preserve pre-comparison short
+narrowing: abs159/158/159/155B, no exact hits; caller-only emission is inert.
+Both removes the redundant post-mask extension but changes cmpw/setl to
+dword cmp/setg. Two staged comparison-use cells restore cmpw/setl, yielding
+abs156B/BYTES51. Its68-byte loop and canonical relocation now reproduce;
+prologue/final-store ordering and registers still differ. Dif343B/SIZE14 and
+tcm364B/SIZE10 miss too. All three callers reviewed, all inventories/data
+unchanged. Four domains total24 valid compilations,16 sources/15 emissions,
+raw controls reproduce, no gains/losses and no source adoption. Local families
+closed pending a new independent discriminator; no mutation/fuzzing execution.
+[Ledger](v32-smc-if-conversion.md). (2026-10-02)
