@@ -2699,15 +2699,15 @@ settxlevel(void *objp, const short *mp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
-	unsigned w = (unsigned short)mp[0];
 	int scale = *(short *)(m + 0x25d4);
 	short extra;
 	short want;
 	short n;
 
-	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);
+	/* The second MP read follows this store, as in the object. */
+	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
 
-	extra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);
+	extra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);
 	if (extra > 3)
 		extra = 3;
 
@@ -10063,7 +10063,7 @@ setInitialPhase(void *objp)
 			dsplibs_debug_printf("setInitialPhase() : Error - "
 					     "deviding by 0 (samp2+samp1=0)\n");
 	} else {
-		ratio = (((b - a) << 13) + (a + b) / 2) / (a + b);
+		ratio = (((b - a) << 13) + ((a + b) >> 1)) / (a + b);
 	}
 
 	for (i = 0; i <= 0x13; i++) {
@@ -10078,7 +10078,7 @@ setInitialPhase(void *objp)
 					"setInitialPhase() : Error - deviding "
 					"by 0 (polyValue(k2)+polyValue(k)=0)\n");
 		} else {
-			r = ((((p1 - p0) << 13) + (p1 + p0) / 2)
+			r = ((((p1 - p0) << 13) + ((p1 + p0) >> 1))
 			     / (p1 + p0));
 		}
 
@@ -10217,7 +10217,7 @@ TimingV34(void *objp)
 	int err = 0;
 	int acc;
 	int whole;
-	int n;
+	short n;
 
 	state = (unsigned short)rx->pllcnt;
 
@@ -10297,7 +10297,7 @@ TimingV34(void *objp)
 		b = (unsigned short)((b >> ((16 - sh) & 31)));
 
 		if ((a | b) != 0)
-			err = (((b - a) << 15) + (a + b) / 2) / (a + b);
+			err = (((b - a) << 15) + ((a + b) >> 1)) / (a + b);
 
 		acc = rx->timing_integrator + (((int)rx->timing_i_gain * err + 0x4000) >> 15);
 		rx->timing_integrator = acc;
@@ -10310,7 +10310,8 @@ TimingV34(void *objp)
 	rx->timing_frac = acc - (whole << 15);
 	rx->phase_inc = (short)(whole + (unsigned short)rx->symbol_period);
 
-	n = (unsigned short)(rx->ppm_count + 1);
+	/* Signed word count and arithmetic halves match the object (F11544). */
+	n = (short)(rx->ppm_count + 1);
 	acc = whole + (unsigned short)rx->ppm_acc;
 
 	if (n < (int)(short)rx->report_interval) {
@@ -10321,9 +10322,9 @@ TimingV34(void *objp)
 
 	/* Every report_interval symbols: convert the accumulated slip to ppm. */
 	{
-		int ppm = ((short)acc * 10000 + n / 2) / n;
+		int ppm = ((short)acc * 10000 + (n >> 1)) / n;
 
-		ppm = (ppm * 25 * 4 + (short)rx->symbol_period / 2)
+		ppm = (ppm * 25 * 4 + ((short)rx->symbol_period >> 1))
 		      / (short)rx->symbol_period;
 		rx->timing_offset = (short)ppm;
 

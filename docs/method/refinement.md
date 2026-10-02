@@ -1955,3 +1955,137 @@ actual pointer path: an equalizer's decoder owner can be external, not the
 adjacent embedded decoder. Likewise, a callback slot is not the callback's code
 address, and a signed comparison cannot be inferred from an unsigned shared
 member declaration. Preserve these distinctions when replacing offset macros.
+
+### Read provenance across stores (V.34 power example)
+
+An input pointer can alias a real output field even when observed lifecycle
+callers pass disjoint buffers. Before caching two reads into one local, check
+whether an intervening store reaches a compatible input lvalue. In settxlevel,
+the blob reloads the MP word after its first power store. Direct reads recover
+that data flow without closing the function's remaining codegen gap.
+
+Separate the evidence: observed modem callers, fixed component probes, and
+exploratory aliases are different boundaries. Report positive controls and
+case/check denominators. Do not promote a synthetic alias to modem reachability,
+and do not change source merely to accommodate an impossible fixture. Here
+the original load/store ordering supplies independent source evidence.
+
+A closest-size owner variant is still insufficient: crossing short carrier
+signedness and assignment placement yields nine distinct objects, none exact,
+and the nearest body retains live copy/scheduling differences. Record the
+whole-tree set and partial-link losses as well as the local size. See
+[the power study](../v34-small-rtl.md) for fixed probes and the closed domain.
+
+
+### Count calls only after accounting for tail sharing
+
+A relocation count is a static code-layout measurement, not a count of source
+calls. In probeselect, expanding six bit-reversal packing helpers gives an
+identical full object; -fno-crossjumping raises 14 reversal calls to 19, past
+the blob's 16, and costs two exact helpers. F11533 corrects F11526's proposed
+open-coded-versus-call interpretation. Preserve that historical observation,
+but do not carry its untested source inference into a new reconstruction.
+
+Counter width and signedness must be checked at each use, not selected for
+nearest size. The bit reader's wide CRC with an unsigned top-bit shift and a
+signed-short top-bit test compiles identically under the period compiler;
+a signed-short arithmetic carrier introduces a narrowing absent from the
+blob. Likewise, final-rate candidates can recover a frame/comparison shape
+while retaining different live loads, copies and branch sharing. A two-byte
+size gap is not stronger evidence than those discrepancies. Close the bounded
+domain without adopting a candidate when the predicted source mechanism does
+not reproduce it. [The study](../v34-small-rtl.md) records complete-TU controls,
+exact losses and the stopping conditions; none demonstrates a global ceiling.
+
+
+### Distinguish source arithmetic during expansion from register allocation
+
+A bare arithmetic half and signed division by two differ on negative odd
+inputs. In setInitialPhase the blob uses SAR at both numerator sites, while
+our /2 creates sign corrections in initial RTL. Crossing the two expressions
+independently removes 2 -> 1/1 -> 0 division expressions before allocation;
+this is stronger original-source evidence than a reduced size gap. F11534
+restores the shifts, preserves all exact names and passes the fixed period
+gate, while explicitly recording partial-link layout/relocation losses.
+
+Do not infer every local type from a halfword comparison. A short loop recovers
+an induction step and halfword test, yet changes another helper's body; a short
+best-error local still compares an int-promoted error at full width. Record
+those crossed controls and stop when they fail the predicted whole live graph.
+The remaining comparison widths and reloads are unresolved; the successful
+arithmetic idiom does not establish a byte-exact function.
+
+
+### Find the first duplication pass before declaring an inline-budget cause
+
+V8 rebuildJMSequence retains seven charFlip call instructions through .30.rnreg
+and acquires an eighth first in .31.bbro. A -fno-reorder-blocks control restores
+seven final calls but increases its size gap from 82 to 361 bytes. This is
+block-reordering duplication evidence, not a production flag recovery or proof
+that the original source is already correct (F11536).
+
+Count unique call_insn UIDs within the exact function. Late RTL uses mode-tagged
+forms such as call_insn:HI, and GCSE debug text can print the same UID twice;
+raw symbol-reference counts would invent an earlier doubling. Cross-check the
+final count against canonical R_386_PC32 symbol targets, not dictionary keys.
+The replay tool's known seven/eight/seven controls must fire before trusting it.
+
+Next examine the duplicated block's predecessors, successors, probability
+notes and live operands before/after .bbro. Here the pass explicitly clones
+block 32 (call UID 334) to 166 (UID 2643), redirecting edge 17 -> 32.
+The 17 -> 32 -> 42 trace starts with the incomplete-extension word reload;
+that shared acceptance join is a concrete source-graph boundary to investigate. Use a source/options crossing to
+test an independently supported acceptance/extension CFG hypothesis. A finite
+failed family does not prove a source-recovery ceiling, and lack of a unique
+preimage is not proof that all faithful source hypotheses are exhausted.
+Keep SIZE length gaps distinct from counts of differing bytes.
+
+For V34's initial-phase graph, short e plus short best recovers the halfword
+comparison that short best alone missed; the coupled graph also recovers
+induction and product narrowing. Its two-byte near-match still caches inputs
+contrary to the blob (F11535), so it is declined. Do not remove a defined
+winner default to imitate an apparently uninitialized blob slot without
+proving the original first-improvement invariant.
+
+
+A missing initialization can be investigated with a compiled-arithmetic
+invariant rather than deleting the default to improve size. For initial-phase
+winner selection, bits 13..28 of the wrapped square/error make the threshold
+predicate periodic over 2^28 ratios. Exhaustive finite arithmetic proves a
+first improvement by iteration 3 for every 32-bit ratio (F11537), resolving
+F11535's safety question. Default removal still fails to recover the complete
+object and changes another helper; it is not adopted. Report the mathematical
+boundary, full denominator and known positive/negative controls separately
+from protocol fixtures and source-preimage evidence.
+
+
+A cached input may involve more than one pass. In V34 initial-phase setup,
+GCSE PRE creates incoming-edge loads, and post-loop CSE first replaces them
+with earlier value copies (F11543). Disabling the second transformation
+confirms its cause without undoing the first. Check the earliest changed
+RTL and the final load graph separately, including every changed TU body.
+Consult the recovered compiler source and relevant patch guards, but keep
+executed compiler dumps as authority when only selected source files have
+been patched. A named scalar local is a finite source hypothesis only when
+conversion expansion predicts a distinguishable RTL representation; names
+alone do not compel new loads or register allocation.
+
+
+A zero SIZE change can hide a useful arithmetic recovery: TimingV34's three
+explicit halves remove six report arithmetic bytes while alignment adds six
+bytes elsewhere (F11544). Use the operand widths and signedness, local opcode
+landmarks and full-TU body inventory as evidence. A signed-word comparison
+and sign-extended divisor can establish a carrier correction independently
+of register scheduling; retain synthetic high-bit examples as arithmetic
+boundaries, not claims of reachable modem states. Gate source adoption on
+fixed period differential fixtures and report unchanged exact denominators.
+
+
+When an earlier pass creates the later pass's input, complete the bounded
+interaction rather than trying nearby source spellings. V34's eight-cell
+source/GCSE/CSE2 cube restores indexed reloads with GCSE off and shows no
+remaining CSE2 effect in that function (F11540), despite changes to 44 other
+bodies. The restored graph costs four exact helpers. This rejects a
+regalloc-only explanation of that local graph without selecting a compiler
+profile; any next profile test must explain those helpers and the remaining
+non-exact body together.

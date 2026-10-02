@@ -848,6 +848,60 @@ run_settxlevel(unsigned short mp, short scale, short want, int sens, int gate,
 	compare_pwr_blocks("settxlevel blocks", tag);
 }
 
+
+/* Fixed component input-provenance probes, NOT modem lifecycle evidence.
+ * Both observed modem callers pass +0xa9dc. The output-alias case is an
+ * optional exploratory call through compatible short lvalues, with every
+ * dependency seeded just as in run_settxlevel. It is not a protocol input.
+ */
+static int
+probe_power_input_alias(void)
+{
+	static const unsigned short inputs[] = { 0x20, 0x80, 0x04, 0xe0, 0xfc };
+	static const short expected_normal[] = { 4, 1, 3, 7, 10 };
+	static const short expected_alias[] = { 7, 1, 0, 10, 10 };
+	unsigned mode, k;
+	int rc = 0;
+
+	for (mode = 0; mode < 3; mode++) {
+		diff_begin(mode == 0 ? "power input: received-record control" :
+			   mode == 1 ? "power input: separate-short control" :
+			   "power input: exploratory output alias (not lifecycle)");
+		for (k = 0; k < sizeof(inputs) / sizeof(inputs[0]); k++) {
+			short a = (short)inputs[k], b = a, got;
+			const short *pa = &a, *pb = &b;
+			long tag = (long)mode * 100 + k;
+
+			setup();
+			seed_pwr(0, 0, 0, 4);
+			poke_short(0x25d4, 0x16a1);
+			poke_int(0x24c, 0);
+			poke_int(0x250, 0);
+			if (mode == 0) {
+				poke_short(0xa9dc, a);
+				pa = (const short *)((const char *)&oa + 0xa9dc);
+				pb = (const short *)(ob + 0xa9dc);
+			} else if (mode == 2) {
+				poke_short(0x25dc, a);
+				pa = &oa.tx_pwr_reduction;
+				pb = (const short *)(ob + 0x25dc);
+			}
+			settxlevel(&oa, pa);
+			ref_settxlevel(ob, pb);
+			compare("power input object", tag);
+			compare_pwr_blocks("power input dependencies", tag);
+			memcpy(&got, ob + 0x25dc, sizeof(got));
+			diff_eq_int("blob reduction prediction", got,
+				    mode == 2 ? expected_alias[k] : expected_normal[k],
+				    tag);
+			diff_eq_int("separate input unchanged, ours", a, inputs[k], tag);
+			diff_eq_int("separate input unchanged, blob", b, inputs[k], tag);
+		}
+		rc |= diff_end();
+	}
+	return rc;
+}
+
 /*
  * One `v34setuptxmit` case.
  *
@@ -1410,6 +1464,9 @@ main(void)
 {
 	unsigned i, k;
 	int rc = 0;
+
+	if (getenv("V34_POWER_ALIAS"))
+		return probe_power_input_alias();
 
 	diff_begin("v34 handshake: the fifteen rate tables");
 	{

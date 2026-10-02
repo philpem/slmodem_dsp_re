@@ -132296,6 +132296,295 @@ and losing none; exact bytes 82,606 -> 82,921. This is the branch's fifth
 recovered-source exact helper. No fuzzing or mutation harness was run.
 (2026-10-01)
 
+## F11532. V.34 power-input reload restored from the object's data flow; fixed component probes distinguish caching, while nine owner/carrier controls remain non-exact
+
+The blob's settxlevel stores the first reduction at 0x62585 and reloads mp[0]
+at 0x62591. Our source cached both input fields. Both observed modem callers
+use +0xa9dc, disjoint from the +0x25dc output; this is not a modem-reachable
+alias defect claim. Direct MP expressions recover the measured source data
+flow without register constraints or compiler-profile changes.
+
+Five fixed words cross received-record, separate-short and actual output-short
+input layouts. The two disjoint controls pass 35 checks each under either
+source. The explicitly exploratory component alias disagrees on three of five
+words under cached source (12/44 checks fail) and passes all 35 checks under
+direct reads. Input 0x20 distinguishes reduction 4 from the blob's 7, 0x04
+3 from 0, and 0xe0 7 from 10; scales follow. Compatible short accesses and
+fully seeded dependencies make this an observable component probe, not proof
+of protocol reachability. It is optional through V34_POWER_ALIAS, leaving the
+normal-message fixtures and their domain unchanged.
+
+Two complete-TU reload controls reproduce the raw baseline and preserve all
+55 globals/bindings and 9/29 exact functions. Only settxlevel changes. The
+adopted whole object raw-equals the direct-read candidate; both power bodies
+remain 448 bytes against the blob's 466. A further eight-cell owner/carrier/
+assignment cross plus baseline emits nine distinct objects, all preserving
+the function inventory/bindings and exact names, with no exact hit. Late
+signed extension changes the live graph but introduces copies absent from the
+blob. Nearest gaps of one byte are not dead-register-only differences. No
+owner migration or carrier rewrite is adopted.
+
+The canonical exact set remains 853/1852 and 82,921 exact bytes. Complete
+300-object partial links in the same inferred input order remain DIFFERENT
+under the strict gate (exit 1); positioned equality declines 68,634 -> 68,629
+of 943,398 bytes while exact section, relocation and symbol records remain
+unchanged. No aggregate-convergence gain is claimed. The study preserves the
+invalid generator and fixture-prediction attempts separately, the corrected
+controls, actual compiler/assembler commands and all changed bodies:
+[power study](v34-small-rtl.md), tools/v34_power_reload.py and
+tools/v34_power_carrier.py. Eight metadata anchors are retargeted. Final make phase with all 385 non-fuzz
+fixtures selected passes 385/0 and the structural boundary; the optional probe
+passes 105 checks across 15 cases. Comparison build: 300/300 objects, zero
+failures. Refcheck: 14,218 references and 2,661 finding headings, clean; all
+10,038 anchors across 285 suites are clean. No fuzzing, mutation execution
+or mutation verdict refresh was performed. (2026-10-01)
+
+
+## F11533. V.34 packing call counts reflect tail sharing; final-rate and bit-reader source domains yield no new exact helper
+
+At d67e4042, 44 complete-TU compilation cells across five bounded domains
+reproduce raw baselines, preserve all function symbols and 55 global bindings,
+and yield no new exact function. Repeated baselines/equivalent spellings are
+included in that denominator; this is not 44 independent hypotheses.
+
+F11526's probeselect bitreverse count 16/14 does not establish authored open
+coding. Current source already calls the helper. Expanding all six packing
+sites leaves the whole object identical. Diagnostic -fno-crossjumping raises
+reversal calls 14 -> 19, overshooting the blob's 16, changes 41 bodies and
+loses dftnlinitSignalBins and preempindex (9 -> 7/29 exact). The failed initial
+five-site generator is preserved separately and excluded from accepted results.
+
+Sixteen final-rate source cells cross output addressing, input caching, decoded
+code width and dispatch shape. Six additional carrier cells test the early
+Boolean versus arm-local byte/word tests. None matches. Certain first-domain
+cells lose exact helpers; the second domain preserves 9/29 throughout.
+Recovering comparison width/frame shape or a two-byte size gap does not recover
+the live graph.
+
+Eight bit-reader source cells cross counters, shift masking and CRC carrier.
+Six final controls keep wide CRC arithmetic but cast only its top-bit test.
+All preserve 9/29, none matches. Wide arithmetic with crc >> 15 and with
+(short)crc < 0 gives identical complete objects for the corresponding int and
+signed-short counter cells. Signed-short CRC arithmetic instead introduces an
+extra narrowing after doubling. The original top-bit spelling is therefore
+underdetermined within this source family.
+
+No reconstruction source, option or fixture is adopted. Production exactness
+remains 853/1852 and 82,921 bytes from F11532. This is a bounded negative result,
+not proof of a byte-exactness ceiling. The replay tools record compiler/actual
+assembler identity, mandatory bug define, full inventories, changed bodies and
+exact gains/losses. See [the study](v34-small-rtl.md) and
+[playbook](method/refinement.md). No fuzzing or mutation execution is performed.
+(2026-10-01)
+
+
+## F11534. V.34 initial-phase numerator halves recovered as arithmetic shifts; expansion-stage evidence separates this source idiom from allocation, while local-width controls remain non-exact
+
+The blob's setInitialPhase halves its two numerator sums with bare SAR at
+0x605d2 and 0x605f2. Signed /2 in our source instead expands into correction
+plus shift. Four complete-TU controls independently restore each shift and
+both; initial RTL division expressions count 2 -> 1/1 -> 0 before allocation.
+The raw baseline is reproduced, all 63 defined functions and 55 global
+bindings survive, and only setInitialPhase changes. Size gaps 29/25/25/14
+are not exactness; all preserve 9/29 exact names, with no gains/losses.
+
+Adopt both shifts from this instruction evidence. The polynomial half is
+numerically unchanged over all twenty legal indices (positive sums
+7,632..11,772). Negative odd sums distinguish the arithmetic idioms generally,
+but no new modem-reachable failure is claimed. Existing fixed t_v34rx tests
+pass 1/0; the full explicitly non-fuzz period/structural phase passes 385/0.
+No fixture is changed. The adopted comparison object raw-equals the both-shift
+experimental object; 300/300 objects build, zero failed.
+
+A separate best-error/loop int-versus-short cross yields gaps 14/57/15/67,
+no exact gain or loss, all bindings/inventories preserved. Short loop recovers
++837 induction and a halfword test but also changes setTimingStateParameters
+441 -> 433 bytes (blob deficit 21 -> 29) with unchanged relocation records.
+Short best retains a fullwidth promoted-error comparison. Neither width is
+adopted. Further spelling permutations are excluded from this closed domain.
+
+Retained whole-tree exactness stays 853/1852 and 82,921 bytes. Complete
+300-object partial links in the same inferred order remain DIFFERENT (strict
+exit 1): positioned equality 68,629 -> 68,531 / 943,398, relocation exact
+records 1,025 -> 1,021 / 18,317; other exact section/symbol dimensions unchanged.
+This is a source idiom recovery with recorded layout losses, not aggregate or
+function byte-exact convergence. [The study](v34-small-rtl.md) records declared
+domains, complete commands/header hashes, RTL, all changed bodies and canonical
+controls; tools/v34_initialphase_halving.py replays both domains.
+No fuzzing or mutation execution is performed. (2026-10-01)
+
+
+## F11535. V.34 initial-phase path/value graph recovers several narrow operations but not metric reloads; two-byte near-match declined
+
+Four declared complete-TU cells cross path-local assignments/defaults with
+coupled short a/b, error/best and loop carriers plus phase-product narrowing.
+The raw baseline reproduces 4873c184; all preserve 63 function symbols, 55
+global bindings and 9/29 exact functions. SIZE gaps 14/5/68/2 are length gaps,
+not differing-byte counts. No exact gains/losses.
+
+The combined cell recovers halfword error comparison, short-loop test, +837
+induction and final product narrowing, changing only setInitialPhase. The
+separate axes also alter setTimingStateParameters. Every cell still caches
+both initial metrics and reuses them across sign branches, contrary to the
+predicted reload graph; polynomial scheduling also differs. No nearest-size
+candidate is adopted. The blob's absent winner default cannot justify removing
+our defined besti=0 without proving first improvement over the input domain.
+
+[The study](v34-small-rtl.md) records the domain, source/header identity,
+commands, full inventories/changed bodies and stopping condition;
+tools/v34_initialphase_graph.py replays it. Source and production objects stay
+unchanged, exactness 853/1852 and 82,921 bytes. No fixture, fuzzing, mutation or
+profile change. Prior fixed period/structural gate 385/0 remains applicable.
+(2026-10-01)
+
+## F11536. V.8's eighth charFlip first appears in block reordering, confirmed by a single-option control; this does not establish an inline-budget or source-recovery ceiling
+
+Follow-up to [PR #239](https://github.com/philpem/slmodem_dsp_re/pull/239): one
+unchanged full-TU build raw-reproduces the retained V8 object under complete
+Gentoo flags and mandatory bug define. Unique call_insn UIDs show seven
+charFlip calls in rebuildJMSequence through .30.rnreg, then eight first in
+.31.bbro. New UID 2643 feeds the function-list (+0x20) acceptance scan. The pass log
+explicitly copies basic block 32 to 166 and redirects edge 17 -> 32 to the
+copy; original call UID 334 is in block 32. Block 17 reloads rx->word[i] on
+the incomplete-extension path. Its selected trace connects 17 -> 32 -> 42,
+giving a specific acceptance-join graph for the follow-up. This
+localizes duplication to block reordering, after allocation/register renaming,
+rather than unspecified code motion or an added source statement.
+
+[The declared one-option control](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5938337201)
+keeps source identical and adds only -fno-reorder-blocks. Final calls return
+to seven; canonical size gap increases 82 -> 361 bytes. Both cells preserve
+all nine function symbols and nine global bindings, 1/9 exact shared functions,
+no exact gains/losses. Six bodies change: evaluateRxJMSequence, initTxSequence,
+rebuildJMSequence, v8_ansamgenerate, v8handshak and v8handshakinit. The flag is
+strictly diagnostic and is not adopted.
+
+This is stronger causal evidence than initial-seven/final-eight alone, but it
+does not establish which original CFG/profile combination avoided the clone.
+The next source hypothesis must inspect predecessor/successor/probability and
+operand differences around the duplicated acceptance block, with a bounded
+source/options cross and complete-TU controls. It is not justified to declare
+all source preimages exhausted or attribute this specifically to inline budget.
+The reported 82 is a SIZE length gap, not 82 differing byte positions.
+
+Counter validation matters: mode-tagged late call_insn:HI forms must be included;
+GCSE diagnostic repetition must be deduplicated by instruction UID (14 text
+refs are seven calls); canonical relocation targets are tuples, not strings.
+An initial relocated-copy build lacked the quoted local v8int.h header path
+and is excluded (build/v8-pass-census/invalid-missing-local-header.log). Initial
+parser/schema counts were invalid and excluded; the reusable tool's positive
+control rejected the canonical-target schema mistake before any interpretation.
+Preserved rejection: build/v8-call-layout/invalid-relocation-target-schema.*.
+The corrected tool fires on known seven/eight/seven stage/object controls.
+
+Driver: tools/v8_call_layout.py --domain <declared URL>; artifacts:
+build/v8-call-layout/results.json, complete commands/input hashes, function
+RTL extracts, full verdicts/inventories and disassembly. Source/flags retained
+unchanged, no behavioral fixture or partial-link change, no fuzzing or mutation
+execution. PR #239's F11532 label collides with the independently pushed V34
+power finding; renumber it during integration rather than conflating the two.
+(2026-10-01)
+
+
+## F11537. V.34 winner slot is always initialized under compiled arithmetic; complete modular certificate resolves the invariant, while default-removal controls remain non-exact
+
+For every 32-bit ratio, setInitialPhase obtains an error below its initial
+32000 threshold by iteration 3. The wrapped square/add, SAR13 and signed16
+narrowing threshold predicate depends on bits 13..28 and repeats every 2^28
+ratio values. Checking all 268,435,456 residues against the first four legal
+polynomial ratios [8952,7293,5974,4887] gives unimproved survivor counts
+3,142,656 / 37,136 / 431 / 0. Four fixed boundary controls fire on both
+threshold outcomes; an independent parent rerun reproduces the certificate.
+This is complete finite arithmetic, not sampling, blob-oracle execution,
+modem reachability evidence or an assumption about C signed overflow.
+
+The invariant discharges the winner-before-read question in F11535. Three
+newly declared compiler cells compare raw production, prior combined graph
+with zero default, and that graph without the default. Both old raw controls
+reproduce; gaps 14/2/9, all 63 functions/55 globals/9 of29 exact preserved,
+no gains/losses. Removal eliminates the expected zero/store but retains cached
+metrics and changes setTimingStateParameters 441 -> 433 bytes. No source
+adoption: the initialization invariant does not recover the full live graph.
+
+[The study](v34-small-rtl.md) records the proof reduction, denominator,
+controls, declared compiler domain and stopping condition. Replay:
+tools/v34_initialphase_winner.py --proof, or --domain <declared URL>.
+Certificate/complete-TU artifacts: build/v34-initialphase-winner/.
+Invalid initial writer/import attempts are retained separately and excluded.
+Source/production exactness unchanged, 853/1852 and 82,921 bytes; prior fixed
+385/0 period/structural validation remains applicable. No fuzzing, mutation
+or modem-harness execution is performed by this arithmetic study. (2026-10-01)
+
+
+## F11543. V.34 metric caching first appears in post-loop CSE; earlier PRE remains a separate source-graph obstacle
+
+Originally F11538 on PR #238; renumbered during integration because the
+landed V8 finding now owns F11538. The V34 timing finding likewise moves
+from F11539 to F11544; its source and measurements are unchanged.
+
+Four source/post-loop-CSE cells reproduce the unchanged raw baseline and
+preserve all 63 functions, 55 globals and 9/29 exact compared symbols.
+setInitialPhase SIZE gaps 14/16/2/7 give no exact gains or losses.
+GCSE creates incoming-path metric loads; the named .18.cse2 pass first
+replaces them with initial-pair register copies. Disabling that pass prevents
+the copies but leaves PRE's earlier two-load placement and search-exit reuse.
+Both option controls change 31 canonical bodies. No adoption or profile
+recovery follows from this causal pass diagnosis.
+
+Selected recovered GCC source plus SSP patch sections support the pass
+order and protected-copy guards; they are not a complete Gentoo-source-build
+claim or evidence that SSP defaults off. [The study](v34-small-rtl.md)
+records the compiler authority, exact transition, domain and next finite
+scalar-expansion discriminator. Replay tools/v34_metric_cse.py; complete
+artifacts build/v34-metric-cse/. No production source changed; retained
+853/1852 exact and prior fixed 385/0 validation remain applicable. (2026-10-01)
+
+
+## F11544. V.34 timing report counter is signed word; explicit arithmetic halves restore three object operations independently of unchanged length
+
+Four crossed full-TU controls reproduce the unchanged raw baseline and
+preserve 63 functions, 55 globals, 9/29 exact symbols, no gains or losses.
+Only TimingV34 changes. SIZE gaps 860/844/860/828: the half-only cell removes
+six arithmetic bytes but gains six alignment bytes, leaving length unchanged.
+
+The signed short count reproduces the object's word signed comparison and
+signed divisor; explicit shifts reproduce SAR at all three halving sites.
+The complete report block still differs in scheduling/registers. These are
+local source-semantic corrections, not a whole-symbol grade-1 recovery.
+Object-derived high-bit/negative-odd arithmetic examples are labelled
+synthetic; they establish no modem reachability or protocol defect and were
+not run as new differential fixtures. Existing fixed lifecycle/report inputs
+are positive. [The study](v34-small-rtl.md) records the complete domain,
+positive controls, signed boundaries and GCC conversion/division sources.
+The initial RTL already expands setTimingStateParameters at two sites,
+independently explaining a measured helper-call mismatch, not every residual.
+Replay tools/v34_timing_carriers.py; artifacts build/v34-timing-carriers/.
+Both local corrections are adopted: fixed non-fuzz make phase 385/0,
+structural checks clean; make tc 300/300, zero failures. Final production
+TU equals the measured combined object raw, with only TimingV34 changed.
+There is no claim of whole-symbol byte-exact gain. (2026-10-01)
+
+
+## F11540. V.34 initial-phase indexed reload graph is recoverable by suppressing PRE; full crossed cube rejects a regalloc-only account
+
+Four new no-GCSE cells complete the eight-cell source/GCSE/post-loop-CSE
+cube after validating historical source/header/config/object hashes and
+reproducing the raw unchanged baseline. Suppressing GCSE restores the
+indexed post-search a reload, halfword sign test and branch-local signed
+b loads in the combined graph. With GCSE off, toggling post-loop CSE leaves
+setInitialPhase's canonical body unchanged, but changes 44 other bodies.
+Thus PRE plus subsequent CSE explains this missing load graph, not register
+allocation alone. No claim that all remaining differences have that cause.
+
+All new cells preserve 63 functions/55 globals and change 57 bodies. Each
+loses four exact helpers, retains 5/29 and gains none. Combined-graph gaps
+are 2/7/10/10 across the cube: selected graph landmarks can improve while
+length worsens. No flags or source adopted. [The study](v34-small-rtl.md)
+records the closed domain, exact lost names, commands and complete-body
+checks; replay tools/v34_metric_pre.py, artifacts build/v34-metric-pre/.
+The original compiler profile remains open and these diagnostic results
+must be assessed across the whole TU. (2026-10-01)
+
 ## F11538. `rebuildJMSequence`'s charFlip census is blob 7 / ours 8, not the "8/7" F11526 recorded, and the extra is an optimization clone of the function-acceptance list scan — not a recoverable source statement
 
 *(This finding was originally written as F11532; that label collided with the
