@@ -27,7 +27,7 @@ def variants(path, source):
 
 
 if __name__ == '__main__':
-    driver.REV = '74cda31e'
+    driver.REV = '62e9866f'
     driver.OUT_NAME = 'playbook-fpm-rms'
     driver.SOURCE_PATHS = ('src/dsp/fpm_rms.c',)
     driver.variants = variants

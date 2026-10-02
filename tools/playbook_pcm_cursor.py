@@ -12,7 +12,7 @@ def variants(path, source):
 
 
 if __name__ == '__main__':
-    driver.REV = '7ddff66c'
+    driver.REV = '1b81dd2b'
     driver.OUT_NAME = 'playbook-pcm-cursor'
     driver.SOURCE_PATHS = ('src/service/pcm.c',)
     driver.variants = variants

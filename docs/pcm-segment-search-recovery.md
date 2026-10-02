@@ -20,6 +20,9 @@ as eight, then table and size arguments together. Both parameterized cells
 make linear2ulaw EXACT100B, leaving linear2alaw SIZE2; their complete objects
 are byte-identical to each other. Initial RTL holds the inlined size pseudo
 initialized to eight; late substitution preserves the strict comparison.
+By first CSE the loop comparison uses literal eight, while initial RTL had
+the size pseudo as its operand. The fixed-bound form already held seven in
+initial RTL. This is a measured pass boundary, not a guessed original flag.
 
 | Helper cell | linear2alaw | linear2ulaw | Exact TU |
 | --- | --- | --- | --- |
@@ -95,3 +98,29 @@ Fixed Gentoo make phase passes385/0, structural checks clean. Reference check
 14,224 refs/2,687 finding headings; static anchors285 suites/10,038, all unique.
 Three new replay tools compile and whitespace checks pass. No anchor retargeting,
 snapshot refresh, fixture changes or modern portability claim.
+
+## Rebase onto the finding-renumber fix
+
+Rebased onto master41a7a017, which fixes refcheck's silent no-op when renumbering
+F-prefixed headings. No finding collision required renumbering here. All7
+historical commit pairs retain identical source/header/fixture/toolchain trees;
+all300 retained Gentoo objects raw-reproduce after rebuilding on the new base.
+Replay scripts now reference the corresponding reachable rebased baselines:
+
+| Historical baseline | Rebased baseline |
+| --- | --- |
+| 3cbe7d52 | f206063c |
+| 74cda31e | 62e9866f |
+| 2be7a9e8 | a22e7229 |
+| 7ddff66c | 1b81dd2b |
+
+Original PCM experiment artifacts are preserved in their `-pre-rebase`
+directories; fresh replays use the updated baseline IDs. Earlier historical
+hashes in this ledger identify the actual original measurements, not new
+source differences introduced by the rebase.
+
+Fresh replay identity:7/7 source/object/inventory/binding/verdict records
+match their pre-rebase controls, including3/3 raw staged baselines. The new
+whole-tree census keeps exactly the same865 exact names and84,058 exact bytes.
+Post-rebase fixed Gentoo make phase passes385/0, structural checks clean
+(14,224 refs/2,687 finding headings;285 suites/10,038 static anchors).

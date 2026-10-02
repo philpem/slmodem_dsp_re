@@ -11,7 +11,7 @@ def variants(path, source):
 
 
 if __name__ == '__main__':
-    driver.REV = '2be7a9e8'
+    driver.REV = 'a22e7229'
     driver.OUT_NAME = 'playbook-notch-grouping'
     driver.SOURCE_PATHS = ('src/dsp/Notch.c',)
     driver.variants = variants

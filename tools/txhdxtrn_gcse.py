@@ -13,7 +13,7 @@ def variants(path, source):
 
 if __name__ == '__main__':
     driver = fold.driver
-    driver.REV = '3cbe7d52'
+    driver.REV = 'f206063c'
     driver.OUT_NAME = 'txhdxtrn-gcse'
     driver.SOURCE_PATHS = ('src/pump/v32/V32TXHDX.c',)
     driver.variants = variants
