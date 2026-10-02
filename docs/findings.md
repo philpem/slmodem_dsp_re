@@ -132964,3 +132964,17 @@ partial links gain 102 positioned bytes but lose 3 positional relocation records
 both remain DIFFERENT(exit1). No source/header/fixture changes outside GenSequence
 and its corrected alias-order comment. No modern portability claim.
 [Adoption ledger](v32-gensequence-recovery.md). (2026-10-02)
+
+## F11553. TxHdxTRN's input fold and cached subtraction have separate origins.
+
+Three predeclared full-TU input controls preserve 9 functions/globals and4/9
+exact: signed fold237B/BYTES45, explicit unsigned-word fold237B/BYTES44,
+unsigned-mask fold237B/BYTES45. Only the cast recovers the blob's zero extension;
+no exact gain or source adoption. The cached state_left subtraction first
+appears in GCSE PRE, which replaces load48's operand with reaching register102.
+Six crossed source/pass controls reproduce both raw source objects. Disabling
+load motion changes neither object; disabling all GCSE restores memory RMW
+but leaves244B/SIZE7, changes seven bodies and loses two exact neighbors
+(TxHdxFinishFrame,V32TxHdxModem). Both domains closed; no flag adoption.
+The known-transition analyzer reports all control denominators.
+[Ledger/replay](v32-txhdxtrn-pass-boundary.md). (2026-10-02)

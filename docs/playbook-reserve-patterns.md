@@ -28,6 +28,14 @@ F8122. TxHdxTRN's memory subtraction versus cached update does not yet give
 an independent source family. ModDataV22, DetSequence and V22FP_modem remain
 screened, uncompiled reserves. A shortlist is not a proof of recoverability.
 
+Later TxHdxTRN controls (F11553) distinguish a fresh unsigned-input fold lead
+from that subtraction hypothesis: explicit unsigned-short conversion recovers
+one extension instruction, without exact identity; unsigned mask changes
+nothing. GCSE PRE first introduces the cached subtraction. Disabling load
+motion changes nothing; disabling all GCSE restores memory RMW but loses
+two exact neighbors. Both finite domains are now closed, no adoption.
+[Pass-boundary record](v32-txhdxtrn-pass-boundary.md).
+
 ## Exact source recoveries
 
 The blob's TxNOP and RxClampV22 initialize signed-short counters to 159 and

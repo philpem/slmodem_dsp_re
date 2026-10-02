@@ -2176,3 +2176,15 @@ certifies scratch exposure but loses exact neighbors. Returning to the
 non-exact predecessor reveals an independent GenSequence source property:
 short post-decrement narrows before the wrapping AND, and combines with a
 countdown to recover 118 bytes exactly (F11551–F11552). [Measured record](../v32-gensequence-recovery.md).
+
+## Locate redundant-load elimination before blaming allocation
+
+TxHdxTRN's cached subtraction initially resembles a register-lifetime issue.
+Its first CSE dump still reloads the member; GCSE PRE explicitly replaces
+that load with the comparison's reaching register. Cross the independently
+observed unsigned input fold with diagnostic pass controls: disabling load
+motion changes neither raw object, while disabling all GCSE restores memory
+RMW but loses two exact neighbors. The unsigned fold itself recovers one
+instruction without exact identity. Treat these as separate measured effects,
+and close both bounded domains without inventing volatile declarations or
+adopting local score improvements. [F11553 and replay](../v32-txhdxtrn-pass-boundary.md).
