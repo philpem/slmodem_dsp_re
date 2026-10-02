@@ -133194,3 +133194,15 @@ unchanged. Four domains total24 valid compilations,16 sources/15 emissions,
 raw controls reproduce, no gains/losses and no source adoption. Local families
 closed pending a new independent discriminator; no mutation/fuzzing execution.
 [Ledger](v32-smc-if-conversion.md). (2026-10-02)
+
+## F11570. Destination-identity mask recovery transfers to the tone filter.
+
+F11568's compiler predicate reopens F11564's specific ring conditional with
+new evidence. Twelve full-TU width/conditional cells: all six ordinary updates
+convert1/1 blocks, all six ternaries0/1. Word comparison/mask and20-byte frame
+recover, but nearest234B remains non-exact against235B. All11 functions/12
+globals/data preserved,4/11 exact unchanged, only filter changes; raw baseline
+and all four prior width controls reproduce. Twelve sources/emissions distinct.
+No source adoption or candidate runtime/partial gates, no fuzzing/mutation
+execution. Finite transfer closed pending independent lifetime/owner/profile
+evidence. [Ledger](fpm-tone-if-conversion.md). (2026-10-02)

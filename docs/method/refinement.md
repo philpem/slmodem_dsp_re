@@ -2284,3 +2284,10 @@ and comparison-use narrowing are separate axes; together they recover an exact
 F11569). Do not turn an exact internal region into an adoption or declare the
 remaining prologue a pure regalloc issue without examining its load ordering.
 [Closed24-cell record](../v32-smc-if-conversion.md).
+
+The destination-identity diagnostic transfers to FPM_TONE_filter: six ordinary
+conditional updates convert and six ternaries do not, across a bounded carrier
+cross. No function becomes exact (F11570). A verified shared compiler mechanism
+can explain an instruction family while leaving scheduling and lifetime
+questions open; do not equate successful transfer with recovered original
+source. [Twelve-cell transfer](../fpm-tone-if-conversion.md).
