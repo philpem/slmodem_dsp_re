@@ -133637,3 +133637,15 @@ Fixed Gentoo make phase385 passed/0 failed. V23 fixture passes39009+131595+
 114326+6=284936 checks, including all five previously failing owned-child
 ratio comparisons. Structural14240 references/2723 finding headings and285
 suites/10038 static anchors clean. No fuzzing/mutation execution/modern claim.
+
+
+## F11595. Deferred readonly initializer needs sequential expansion but does not recover Create
+
+Four-cell initializer-position × unit-at-a-time cross confirms initial-RTL
+folding mechanism: only combined cell retains block table load. Create reaches
+364B/BYTES8, fails register-normalized store-displacement comparison; Progress
+also changes, exact1/3 unchanged. Seven named data owners preserve values,
+canonical relocation targets/types/binding/visibility; layout changes and
+combined .rodata grows124→144B. No source/flag adoption or new runtime/census/
+partial gate. [Controls](bwch-unit-visibility-controls.md).
+(2026-10-02)

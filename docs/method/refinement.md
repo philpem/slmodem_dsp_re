@@ -2482,3 +2482,13 @@ constructors. Recover literal fidelity independently from exactness. Deferred
 const-table definition raw-reproduces baseline, so initializer visibility does
 not unlock this first-entry load. Keep const/data controls; no source-order
 or mutable/volatile score fitting. [Controls](../bwch-constructor-controls.md).
+
+
+A later readonly initializer may still be visible when unit-at-a-time parsing
+precedes expansion. Cross initializer placement with that pass before attributing
+constant folding to source order (F11595). Initial RTL can confirm the mechanism
+without recovering the body: Bw Create regains its table load and size but still
+has a fixed store-displacement mismatch, while Progress and data layout change.
+Compare named data owners and relocations separately from section padding/order;
+never adopt the option merely because one instruction reappears.
+[Controls](../bwch-unit-visibility-controls.md).
