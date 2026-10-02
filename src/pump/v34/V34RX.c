@@ -41,14 +41,17 @@ rxreadqueue(struct v34_queue *q)
 	/* The output sits immediately after the ring. */
 	short *out = (short *)((char *)q + V34_RXQ_END);
 	int *p = q->rd;
-	int i;
+	short i;
 
+	/* F11635: short count, low-word reads and direct cursor wrap match
+	 * the standalone and inlined queue operation in the period object. */
 	q->count = (short)(q->count - V34_QUEUE_BURST);
 
 	for (i = 0; i < V34_QUEUE_BURST; i++) {
-		out[i] = (short)*p;
+		*out++ = *(const short *)p;
 		p++;
-		p = q_next(q, p, V34_RXQ_END);
+		if ((char *)p >= (char *)q + V34_RXQ_END)
+			p = q->ring;
 	}
 
 	q->rd = p;

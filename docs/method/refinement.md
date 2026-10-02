@@ -2750,3 +2750,17 @@ keep those residuals and intentional import/jump-table changes visible. A new
 ledger must first fire on the known baseline mismatch:162/652 failures became
 652/652 passes here, with six real V22 bridge witnesses restored.
 [Recovery and bounded domains](../fixedrc-factory-recovery.md).
+
+Recover a loop's widths and traversal independently before testing helper
+factoring. V34 receive queue's eight counter/output/readwidth controls miss;
+direct conditional wrap then eliminates the helper's cursor temporary and
+recovers70B EXACT (F11635). Audit the inlined caller too: V34agc changes only
+in its queue prefix, with complete later body unchanged. An exact function
+gain can still reduce whole-link positioned matches; report both.
+[Recovery](../v34-rxqueue-recovery.md).
+
+A captured child load is a valid source lifetime hypothesis, not a promised
+byte match. CID string capture restores the pre-loop owner access but stays
+SIZE1 (F11636). Keep capture after the external clear, audit actual allocation
+and output/owner boundaries, and close the finite family rather than expanding
+register or pointer synonyms. [Control](../cid-string-capture-controls.md).

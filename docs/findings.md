@@ -134093,3 +134093,29 @@ phase386/0 passes (new fixed owner binary); whole-tree916→917/1852,94638
 exact bytes. Complete same-order partial remains DIFFERENT, positioned+141/
 allocated+240; [ledger](fixedrc-factory-recovery.md) records all controls.
 (2026-10-02)
+
+## F11635. V34 receive queue recovers short counter, output walk and direct wrap
+
+Eight counter/output/readwidth cells all miss62..75B versus70B. Independent
+helper-boundary discrimination then tests production, repeated combined,
+and direct conditional wrap: only direct recovers70B EXACT. Eleven valid
+compilations/nine raw emissions preserve12 TU functions/five named data
+objects, all nontext/import/export/binding controls. Only queue and its
+inlined V34agc prefix change; AGC suffix from+0x60/relocation map stay identical.
+All300 production objects reviewed, one changes/raw-matches promoted candidate.
+Whole-tree917→918/1852,94708exact bytes/no losses; deciding fixed phase386/0,
+static anchors clean. Full partial links remain DIFFERENT, positioned-293/
+allocated+16; do not claim layout/profile recovery.
+[Complete controls and validation](v34-rxqueue-recovery.md). (2026-10-02)
+
+## F11636. CID child capture restores owner lifetime but misses complete bytes
+
+Two complete-TU controls preserve10 functions/zero named data objects, symbols
+and allocated nontext. Branch-local typed child capture restores the blob's
+pre-loop owner load, but remains146B/SIZE1 versus145B;6/10exact unchanged.
+Production raw baseline reproduces. No source adoption or new fixture run.
+Close this capture domain without pointer/declaration/register synonyms.
+[Controls and caller/fixture boundaries](cid-string-capture-controls.md).
+The issue domain initially misstated the existing fixture as180cases; direct
+initializer audit establishes150 (5frames×6modes×5values), corrected here.
+(2026-10-02)
