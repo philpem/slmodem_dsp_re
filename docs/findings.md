@@ -133106,3 +133106,30 @@ only silence_create changes,80B/SIZE2 ->76B/SIZE6, zero gains/losses. The
 Dual_TONE_create success cannot be generalized to every constructor. Family
 closed with no source change and no candidate runtime/partial-link gates.
 [Ledger/replay](playbook-rms-silence-controls.md). (2026-10-02)
+
+## F11563. GenerateAnsTone recovers from a pointer walk and direct elapsed-field updates.
+
+Four full-TU countdown/cursor cells yield196B/SIZE3,174B/SIZE25,199B/BYTES4
+and174B/SIZE25. Only pointer walking retains the reference loop; Gentoo reports
+loop reversal. Two staged elapsed-carrier cells test the cursor temporary and
+direct field updates. Direct `ans->elapsed += count` recovers all199 bytes and
+its call relocation, including both signed comparison directions. One strong
+function preserved;6 valid cells,2 raw controls,0/1 ->1/1 exact, no losses.
+[Replay/validation ledger](v32-anstone-recovery.md). (2026-10-02)
+
+Retained complete object raw-reproduces the winner, only one of300 TUs changes.
+Whole-tree866/1852 ->867/1852, exact bytes84,159 ->84,358, zero losses. Fixed
+Gentoo phase385/0; the24-anchor suite retains its fault meanings and
+all285 suites/10,038 anchors stay unique. Complete same-order partial links
+remain DIFFERENT: positioned equality-9 bytes, allocated size and exact
+section/symbol/relocation-record counts unchanged. No mutation execution.
+
+## F11564. Tone-filter word instructions do not recover its ring conditional.
+
+A read-only audit and independent parent inspection find blob cmpw and outer
+incw against retained dword instructions. Four full-TU signed-short carrier
+cells give238B/SIZE3,239B/SIZE4,239B/SIZE4,240B/SIZE5; raw baseline reproduces,
+all11 functions/12 globals survive,4/11 exact unchanged, only filter changes.
+Word instructions recover but wrap still branches, unlike blob setl/neg/and.
+No source adoption, width family closed; candidate runtime/partial gates
+NOT RUN. [Record/reopening criterion](fpm-tone-width-controls.md). (2026-10-02)

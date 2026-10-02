@@ -2243,3 +2243,18 @@ count conversions (F11561). Inspect the full stack tree and conversion sites,
 not just the attractive opcode. Likewise the constructor common-pointer-return
 family succeeds for Dual_TONE_create and fails for silence_create (F11562).
 [Closed domains](../playbook-rms-silence-controls.md).
+
+GenerateAnsTone supplies another ascending-loop reversal control: an output
+cursor recovers its clear loop; a source countdown does not. Its four remaining
+comparison bytes disappear when elapsed updates use the field rather than a
+common temporary. Early source field writes are coalesced into the reference's
+conditional final stores by Gentoo, so infer source factoring from complete
+controlled bodies rather than store placement alone (F11563).
+[Six-cell record](../v32-anstone-recovery.md).
+
+Operand-width recovery can leave a distinct condition-lowering mismatch.
+FPM_TONE_filter's short carrier cross restores cmpw/incw but leaves a branch
+where the blob has setl/neg/and, with no exact gain. Do not adopt carrier
+narrowing solely because individual instructions agree, or infer a unique
+local type from a word comparison (F11564).
+[Closed width domain](../fpm-tone-width-controls.md).
