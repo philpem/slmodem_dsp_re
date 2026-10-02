@@ -2819,3 +2819,18 @@ every experimental source directory; setup failures are invalid, not compiler
 rejections (F11648). Preserve the failed setup and prove the corrected baseline
 raw-reproduces before counting any candidate.
 [Recovery and apparatus control](../v8-dftenergy-recovery.md).
+
+Counter width can determine whether GCC reverses a loop. V8 queue int counters
+reverse to countdowns; short counters retain the blob's forward narrowing
+and recover two complete94B helpers (F11649). Cross independent helpers to
+separate each gain, and audit inline consumers too: V8agc's changed prefix
+includes scheduling/alignment, while its complete later suffix and relocations
+stay identical. Do not infer global original flags from two source recoveries.
+[Recovery](../v8-queue-width-recovery.md).
+
+An advancing sample cursor can reproduce addressing and outer-counter spills
+without recovering the complete loop. DFT update's cursor grows150→172B
+against164B and fails instruction count too (F11650). Keep sample loads inside
+the bin loop to preserve alias lifetime, review the whole TU, and close that
+traversal domain without promoting a partial match.
+[Control](../v8-dftupdate-cursor-controls.md).

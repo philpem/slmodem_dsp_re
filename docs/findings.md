@@ -134250,3 +134250,32 @@ actual source directories, retain historical V32 register, and check baseline
 header drift. The valid V8 rerun records the missing header and raw-reproduces
 production before measuring the gain. No flags/source behavior change.
 [Invalid artifact and valid controls](v8-dftenergy-recovery.md). (2026-10-02)
+
+## F11649. Signed-word counters recover both V8 queue helpers
+
+Four full-TU cells at379d400b cross RX/TX int/short counters. Each short
+counter independently recovers its complete94B body from85B production;
+combined exact3→5/13 with no losses. Period loop RTL reverses both int
+loops and neither short loop: source width recovers forward word narrowing
+without flag/register forcing. RX also changes V8agc's inlined queue prefix;
+its705B suffix from+0x100 and all canonical relocations remain identical.
+Full13-function/four-data metadata/nontext controls agree. Existing fixed
+fixture covers155 paired calls per helper over40 initialized component
+objects. [Complete recovery and validation](v8-queue-width-recovery.md).
+(2026-10-02)
+
+F11649 production gate: all300 objects inspected, sole changed object
+raw-matches combined cell. Whole-tree922/1852,95038 exact bytes/no losses;
+fixed Gentoo phase386/0 and structural/static anchors clean. Same-order full
+partial positioned -8, allocated bytes and section/symbol/relocation exact
+records unchanged; whole-object identity remains unachieved. (2026-10-02)
+
+## F11650. DFT sample cursor restores traversal but misses the complete body
+
+Two complete-TU cells at379d400b reproduce150B baseline; sample cursor
+restores direct inner sample load, outerADD2 and spilled signed-short index,
+but candidate172B remainsSIZE8 against164B reference. Alpha counts53/51
+also fail. Exact2/3 unchanged; only update changes across3 functions/1 named
+data object, all metadata/nontext/bystander controls agree. No source
+adoption or new fixture execution; finite traversal domain closed.
+[Controls and input boundary](v8-dftupdate-cursor-controls.md). (2026-10-02)

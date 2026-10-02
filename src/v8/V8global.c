@@ -154,7 +154,7 @@ v8_rxreadqueue(struct v8 *v)
 {
 	short *src = v->tx_sym_a;
 	short *dst = v->rx_stage;
-	int i;
+	short i;
 
 	v->sym_avail = (short)(v->sym_avail - V8_QUEUE_BLOCK);
 
@@ -413,7 +413,7 @@ v8_txwritequeue(struct v8 *v)
 {
 	const short *src = v->tx_stage;
 	short *dst = v->tx_ring_half;
-	int i;
+	short i;
 
 	v->tx_avail = (short)(v->tx_avail + V8_QUEUE_BLOCK);
 
