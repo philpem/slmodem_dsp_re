@@ -2933,3 +2933,14 @@ count allocated instructions separately from diagnostic listings. Do not turn
 an unexplained root+4 carrier into an invented header or volatility variant;
 separate-storage fixtures do not establish reachable aliasing.
 [Two-cell control](../v34-minlevel-reload-controls.md).
+
+
+Separate eager evaluation from Boolean-width recovery (F11663): replacing
+logical OR with bitwise OR restores the unconditional parameter read, yet
+integer promotions produce OR32/AND1 rather than OR8/MOVZBL. Inspect the
+callee and inline consumer before drawing a return-type conclusion. Removing
+an unsupported index initializer can likewise change scheduling/alignment
+without closing the body (F11664). Prove first assignment mathematically,
+keep synthetic fixture labels, and preserve failed diagnostic-dump baselines
+as invalid; a no-dump control must still reproduce raw production.
+[Controls and mandatory scope review](../v90-predicate-initializer-controls.md).

@@ -134448,3 +134448,28 @@ remains unexplained: no invented header/volatile/register variants. Existing
 reachable aliasing. No source adoption or candidate runtime claim. Close
 the two-cell family; production925/1852 and prior fixed gate386/0 unchanged.
 [Controls](v34-minlevel-reload-controls.md). (2026-10-02)
+
+## F11663. Eager capability OR restores the read boundary but misses Boolean width
+
+Two complete V90PreFilter cells at0a9b564f replace only logical OR with
+bitwise OR. Unconditional parameter read returns and extent75→69B matches,
+but OR32/AND1 differs from blob OR8/MOVZBL: BYTES7, exact5/16 unchanged.
+Inlined getV90Capability changes,125B versus122B. All14 siblings, zero data,
+metadata/nontext/relocations agree; baseline raw reproduces. Existing16-codec
+component sweep supplies params and explicit capability controls, not public
+lifecycle. No source adoption/runtime claim. Operator family closed; Boolean
+width/return declaration remains a separate stage question.
+[Controls](v90-predicate-initializer-controls.md). (2026-10-02)
+
+## F11664. Nearest-entry first-win initialization disappears without exact recovery
+
+Six-function read-only screen nominates two complete34-function ADID cells:
+remove only at=5, absent in blob. Every valid-row short distance≤65536 is
+below sentinel1000000, so first iteration assigns at. Store disappears but
+complete body remains133B versus132B; inline consumer1073B versus1124B.
+Exact12/34 unchanged;32 siblings/zero data/metadata/nontext/relocs agree.
+Initial diagnostic-da baseline ICE excluded/preserved; no-dump rerun raw
+reproduces production with all codegen flags retained. Shared driver exposes
+DUMP_FLAGS with unchanged default. Existing64+64 seeded probes are synthetic,
+not lifecycle. No source adoption/runtime claim; initializer domain closed.
+[Controls and scope review](v90-predicate-initializer-controls.md). (2026-10-02)
