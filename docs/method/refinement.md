@@ -2604,3 +2604,12 @@ arguments against the explicit child-local statement at the first calls. V27
 RX/TX recover complete bodies this way (F11612); preserve later matching owner
 reloads. Review register-renamed bystanders and avoid claiming unique spelling
 from setup order. [Recovery](../v27-delete-argument-recovery.md).
+
+
+Keep ignored arguments and return recovery as independent axes. Audit every
+caller slot, including original input counts that survive a resampler overwrite.
+AGC's nineteen explicit fourth slots recover RxHdxNoSignal (F11613) with the
+callee raw-identical while preserving void and field reloads. An object's EAX
+consumption is evidence for a return hypothesis; a reconstruction header does
+not prove the original lacked a result. Review genuine control-factoring
+bystanders, not just edited callers. [Recovery](../agc-fourth-argument-recovery.md).

@@ -57,7 +57,7 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 	unsigned short n;
 	struct v29_rx_block *rx;
 
-	FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count);
+	FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count, 1);
 	/* Not the object's `%eax`; the same value.  D1036. */
 	signal = ((struct v29_rx *)modem)->rx->agc.signal;
 
@@ -212,7 +212,7 @@ DataCarrierDetectV29(void *modem, short *in, unsigned short count)
 			FPM_AGC_agc((struct fpm_agc *)(void *)
 					&det->v21_agc,
 				    (short *)det->v21_buf,
-				    count);
+				    count, 1);
 
 			det = ((struct v29_rx *)modem)->det;
 			if (FPM_MTD_detect((struct fpm_mtd *)

@@ -1153,13 +1153,9 @@ int V21TX_control(void *modem, const struct v21tx_ctl *arg);
  * about the same block, resamples what is left into the DSP block's own
  * `mag` buffer and demodulates that into `bits`.
  *
- * The object passes `FPM_AGC_agc` a fourth argument, the constant 1, and
- * uses the value left in `%eax` -- neither of which that function has. This
- * is the third site in the tree with the same shape (`src/pump/v23/
- * bwchdem.c` and `src/pump/v22/v22data.c` are the others) and it is
- * answered the same way: the extra argument has no observable effect and
- * is dropped, and the returned value is `agc.signal`, which is read out of
- * the state instead.
+ * F11613 retains the observed fourth argument, literal 1, ignored by the
+ * callee. The object also uses EAX, equal to agc.signal; this source still
+ * reads the field. Original return semantics remain a separate hypothesis.
  *
  * `bits` is spelled `short *` because that is what the half-duplex handler
  * signature carries; `FPM_FSD_demodulate` wants `unsigned short *` and the

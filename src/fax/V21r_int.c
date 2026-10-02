@@ -25,13 +25,10 @@
  * handle throughout.  A local pointer would have lived in a callee-saved
  * register across the calls instead.
  *
- * `FPM_AGC_agc` IS GIVEN A FOURTH ARGUMENT BY THE OBJECT and its return value
- * is used, and it has neither.  The extra argument is dead stack setup and is
- * not reproduced -- an argument the callee never loads has no observable
- * effect, which is `V21RX_delete`'s note above and `v22data.c`'s at its own
- * call site.  The value in %eax on return is `agc.signal`, the same quantity
- * the function's last store put in the state, so the field is read here
- * instead; `src/pump/v23/bwchdem.c` records that reading and is tested on it.
+ * F11613 retains the observed fourth argument, literal 1, which the callee
+ * never reads. The object also consumes EAX, equal to agc.signal. This
+ * source still reads the field; original return semantics are a separate
+ * hypothesis, not established by unread frame slots.
  *
  * The squelch loop indexes with an `unsigned short` and compares `jb`
  * (0x0a57be..0x0a57c4), so a count with the top bit set walks forward rather
@@ -43,7 +40,7 @@ DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 	struct v21_rx *rx = (struct v21_rx *)modem;
 	short nsamples;
 
-	FPM_AGC_agc(&rx->dsp->agc, in, count);
+	FPM_AGC_agc(&rx->dsp->agc, in, count, 1);
 
 	rx->dsp->int_0004 = rx->dsp->agc.signal;
 	rx->dsp->int_0008 = 1;

@@ -126,13 +126,13 @@
  },
  {
   "label": "the gain control runs on the cleaned copy",
-  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);",
-  "replace": "\tFPM_AGC_agc(AGC_OF(fp), CLEAN_OF(fp), n);"
+  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n, 1);",
+  "replace": "\tFPM_AGC_agc(AGC_OF(fp), CLEAN_OF(fp), n, 1);"
  },
  {
   "label": "the gain control is handed the equaliser instead of its own block",
-  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);",
-  "replace": "\tFPM_AGC_agc((struct fpm_agc *)(void *)&fp->fse, RXBUF_OF(fp), n);"
+  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n, 1);",
+  "replace": "\tFPM_AGC_agc((struct fpm_agc *)(void *)&fp->fse, RXBUF_OF(fp), n, 1);"
  },
  {
   "label": "the silence bit is set when the gain control DID see a signal",

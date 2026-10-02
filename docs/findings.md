@@ -133839,3 +133839,15 @@ All7 functions/type/binding/nontext controlled, no data objects. RX decision
 bystander stays298B, changes under consistent register renaming only; other
 four bodies unchanged. Original spelling is not unique, no ordinary behavior
 bug claim. [Recovery and gates](v27-delete-argument-recovery.md). (2026-10-02)
+
+
+## F11613. Explicit AGC fourth slots recover RxHdxNoSignal
+
+All19 blob calls supply a fourth scalar:17 literal1, two original signed input
+counts. Twelve-TU/two-cell complete cross preserves void and field reloads;
+ignored formal leaves callee raw-identical. RxHdxNoSignal223B becomes EXACT,
+no losses across126 functions. Eighteen canonical bodies change, including
+noncalling QualityDetectV27's equivalent state33 store factoring; nontext/data/
+binding/import/export controls agree. Return semantics remain an independent
+hypothesis, not proved by this reconstruction's header or unread frame slots.
+[Recovery and gates](agc-fourth-argument-recovery.md). (2026-10-02)

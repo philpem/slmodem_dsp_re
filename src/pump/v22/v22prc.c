@@ -327,13 +327,11 @@ Detect_v22(void *modem, short *data)
 	short i, j;
 
 	/*
-	 * The whole block through the second AGC.  The object passes a FOURTH
-	 * argument, the constant 1, which FPM_AGC_agc does not have -- the
-	 * same extra argument `bwchdem.c` records at its own call site, and
-	 * ignored in the same way.  Unlike bwchdem this caller discards the
-	 * return as well, so there is nothing to read back out of the state.
+	 * The whole block through the second AGC. F11613 retains its observed
+	 * fourth argument, literal 1, which the callee never reads. This caller
+	 * discards the result and does not read back the signal field.
 	 */
-	FPM_AGC_agc(&v22->dsp->agc2, data, V22_DETECT_BLOCK);
+	FPM_AGC_agc(&v22->dsp->agc2, data, V22_DETECT_BLOCK, 1);
 
 	for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
 		short *chunk = data + (int)i * V22_DETECT_SUBBLOCK;

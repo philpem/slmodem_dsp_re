@@ -276,12 +276,10 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	}
 
 	/*
-	 * The object passes a FOURTH argument here, the constant 1, which
-	 * FPM_AGC_agc does not have -- the same extra argument v22data.c's
-	 * Detect_v22 and bwchdem.c record at their own call sites, and
-	 * ignored in the same way.
+	 * F11613 retains the observed fourth argument, literal 1, which the
+	 * callee never reads.
 	 */
-	FPM_AGC_agc(&fp->dsp->agc, fp->dsp->rx_scratch, n_rate);
+	FPM_AGC_agc(&fp->dsp->agc, fp->dsp->rx_scratch, n_rate, 1);
 
 	/*
 	 * `agc.f18` is read ONCE and used twice across the clock-recovery

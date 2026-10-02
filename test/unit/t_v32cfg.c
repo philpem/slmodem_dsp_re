@@ -203,7 +203,7 @@ main(void)
 				excite(gain_a, 720, pass + 1);
 				memcpy(gain_b, gain_a, sizeof(short) * 720);
 				ref_FPM_AGC_agc(&a, gain_a, 720);
-				FPM_AGC_agc(&b, gain_b, 720);
+				FPM_AGC_agc(&b, gain_b, 720, 1);
 				for (i = 0; i < 720; i++)
 					diff_eq_int("gained sample %ld",
 						    gain_b[i], gain_a[i], i);

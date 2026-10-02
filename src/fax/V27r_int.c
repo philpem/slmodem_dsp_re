@@ -59,7 +59,7 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	struct v27_rx_block *rx;
 	struct v27_rx_shared *sh;
 
-	FPM_AGC_agc(&((struct v27_rx *)modem)->rx->agc, in, count);
+	FPM_AGC_agc(&((struct v27_rx *)modem)->rx->agc, in, count, 1);
 	/* Not the object's `%eax`; the same value.  D1094. */
 	signal = ((struct v27_rx *)modem)->rx->agc.signal;
 
@@ -163,7 +163,7 @@ DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 			for (i = 0; i < (int)count; i = (short)(i + 1))
 				buf[i] = samples[i];
 
-			FPM_AGC_agc(&sh->agc, buf, count);
+			FPM_AGC_agc(&sh->agc, buf, count, 1);
 
 			if (FPM_MTD_detect((struct fpm_mtd *)
 						sh->mtd_v21,

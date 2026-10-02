@@ -78,7 +78,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	unsigned short n;
 	struct v17rx_state *rxs;
 
-	FPM_AGC_agc(&RXS(modem)->agc.value, in, count);
+	FPM_AGC_agc(&RXS(modem)->agc.value, in, count, 1);
 	/* Not the object's `%eax`; the same value.  D1091. */
 	signal = RXS(modem)->agc.value.signal;
 
@@ -228,7 +228,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 			FPM_AGC_agc((struct fpm_agc *)(void *)
 					&ctl->agc,
 				    (short *)ctl->buf2,
-				    count);
+				    count, 1);
 
 			if (FPM_MTD_detect((struct fpm_mtd *)
 						ctl->mtd2,

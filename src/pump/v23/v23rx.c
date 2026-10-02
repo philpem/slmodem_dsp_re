@@ -340,7 +340,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		for (i = 0; i < count; i++)
 			rx->det_buf[i] = samples[i];
 
-		FPM_AGC_agc(&rx->det_agc, rx->det_buf, (unsigned short)count);
+		FPM_AGC_agc(&rx->det_agc, rx->det_buf, (unsigned short)count, 1);
 
 		if (FPM_TONE_detect(rx->tone, rx->det_buf, (short)count)
 		    == FPM_TONE_PRESENT) {
@@ -360,12 +360,11 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 	nout = FPM_MRF_filter(&rx->mrf, samples, samples, (short)count);
 
 	/*
-	 * The original uses the value FPM_AGC_agc leaves in %eax, which is the
-	 * `signal` flag the same instruction stored into the object.  Read the
-	 * field: it is the same number and does not rest on a return value the
-	 * function never promised.  Same as bwchdem.c and b103fp.c.
+	 * The object uses EAX, equal to the stored signal flag. This source
+	 * still reads the field; original return semantics remain a separate
+	 * axis. F11613 restores the fourth slot: original signed count, not nout.
 	 */
-	FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout);
+	FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout, (short)count);
 	signal = rx->agc.signal;
 
 	/*

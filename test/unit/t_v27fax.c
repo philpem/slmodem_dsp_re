@@ -1846,7 +1846,7 @@ dcd_model(int variant, struct v27_fixture *f, short *samples,
 					buf[i] = samples[i];
 
 			FPM_AGC_agc((struct fpm_agc *)(void *)
-					FX(sh, V27SH_AGC), buf, count);
+					FX(sh, V27SH_AGC), buf, count, 1);
 
 			f->mtd_b.acc = f->acc_b;
 			i = FPM_MTD_detect(&f->mtd_b, buf, (short)count);

@@ -99,8 +99,9 @@ FPM_AGC_Release(struct fpm_agc *agc)
 }
 
 void
-FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count)
+FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused)
 {
+	(void)unused;
 	const unsigned block_len = agc->cfg.block_len;
 	const int acquire_level = agc->cfg.acquire_level;
 	const int squelch_level = agc->cfg.squelch_level;

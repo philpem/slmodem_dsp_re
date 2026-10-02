@@ -198,7 +198,7 @@ stream(const char *what, struct fpm_agc *a, struct fpm_agc *b,
 		}
 
 		before = *b;
-		FPM_AGC_agc(a, ours, (unsigned short)len);
+		FPM_AGC_agc(a, ours, (unsigned short)len, 1);
 		ref_FPM_AGC_agc(b, ref, (unsigned short)len);
 
 		compare_state(what, a, b, f);
@@ -258,7 +258,7 @@ main(void)
 			ref[i] = (short)v;
 		}
 
-		FPM_AGC_agc(&a, ours, (unsigned short)n);
+		FPM_AGC_agc(&a, ours, (unsigned short)n, 1);
 		ref_FPM_AGC_agc(&b, ref, (unsigned short)n);
 
 		compare_state("len", &a, &b, n);
@@ -293,7 +293,7 @@ main(void)
 
 		FPM_AGC_init(&a, &cfg, 1);
 		ref_FPM_AGC_init(&b, &cfg, 1);
-		FPM_AGC_agc(&a, ours, 53);
+		FPM_AGC_agc(&a, ours, 53, 1);
 		ref_FPM_AGC_agc(&b, ref, 53);
 		compare_state("loud", &a, &b, 0);
 		compare_samples("loud", ours, ref, 53);

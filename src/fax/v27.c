@@ -61,14 +61,12 @@
  * (finding F7796).  It is not a claim that the author had them in one file.
  *
  * ---------------------------------------------------------------------------
- * THE AGC'S RETURN VALUE, WHICH IS NOT ONE
+ * THE AGC'S OBSERVED EAX VALUE
  *
- * `DemodDataV27` calls `FPM_AGC_agc`, passes it a FOURTH argument (the literal
- * 1) that it does not have, and then USES `%eax`.  `FPM_AGC_agc` is `void` --
- * `include/dsplib/fpm_agc.h` says so and the object's own frame reads confirm
- * it -- so the calling translation unit declared it as returning `int` while
- * the defining one returned nothing, and `%eax` holds whatever the definition
- * left there.
+ * F11613 restores the observed fourth argument, literal 1. The object
+ * consumes EAX, equal to agc.signal. The current reconstruction uses void
+ * and reads the field; that is not proof of the original return type or
+ * conflicting declarations. Return recovery is an independent hypothesis.
  *
  * WHAT IT LEAVES THERE IS `agc->signal`: the two instructions before its only
  * `ret` are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)`, the store to `signal`
