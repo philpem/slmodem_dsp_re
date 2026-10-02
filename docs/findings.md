@@ -133924,3 +133924,16 @@ free-and-clear paths and conditional ARMA clear. Old claim that scalar delete
 cannot emit two calls is refuted by this actual period compiler control.
 Real constructed lifecycle and synthetic member-shape probes distinguished.
 [Recovery and gates](v92ec-owned-delete-recovery.md). (2026-10-02)
+
+## F11620. Five V92 parent member-delete lifetimes recover three exact bodies
+
+Five independent captured destructor/free operands motivate33 complete-TU
+cells: baseline, adapter-only,31 owner crosses. Adapter-only raw-merges;
+all nonzero cells503B but only11111 recovers both complete D1/D2, partials
+BYTES22..86. Unchanged126B enterPhase3 also becomes exact by ECX/EDX renaming,
+20→23exact/30 functions, no losses; all27 others unchanged. One data object/
+nontext/binding/import/export controls agree. Preserve virtual resampler,
+primitive frees, dangling members and generated Scrambler destruction.
+Actual all-live lifecycle and synthetic temporarily masked-owner subsets
+are distinguished. [Recovery and gates](v92-owned-delete-recovery.md).
+(2026-10-02)

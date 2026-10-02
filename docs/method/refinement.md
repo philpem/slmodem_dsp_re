@@ -2653,3 +2653,12 @@ recovering both195B clones while all13 other bodies remain unchanged (F11619).
 Keep conditional pointer clears inside their observed guards; test the adapter
 independently. Large layout growth can still reduce positioned partial-link
 matches despite complete function recovery. [Controls](../v92ec-owned-delete-recovery.md).
+
+
+A five-owner cross can reveal a bystander register effect separately from
+source recovery. All31 nonzero V92Modulator crosses recover enterPhase3 by
+ECX/EDX renaming, but only all-five recovers both complete503B destructors
+(F11620). Every partial also503B yet fails bytes. Audit the bystander, preserve
+virtual and primitive releases, and label temporarily masked-owner fixture
+subsets synthetic rather than pre-release histories.
+[Recovery](../v92-owned-delete-recovery.md).

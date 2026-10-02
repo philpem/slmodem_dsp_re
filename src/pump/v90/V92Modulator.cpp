@@ -77,14 +77,12 @@
  * site needs.  Genuine placement `new` is used below instead; see finding
  * F10157 for the site that proved this mechanism end-to-end.
  *
- * AND WHY ONE OF THE SIX IS `delete` AFTER ALL.  `ResamplerTimingOffset` has
- * a virtual destructor and inherits `Resampler`'s member `operator delete`,
- * so the blob releases it with `mov (%edx),%eax; call *0x4(%eax)` -- vtable
- * slot one, the deleting destructor, and no `sysdep_free` of its own.  The
- * only C++ that emits that is `delete p`, and it costs no libstdc++ because
- * the `operator delete` it reaches is the member one.  The other five have no
- * `operator delete` of their own, so `delete` on them would reference the
- * global form and break every test binary's link.
+ * F11620: all six class owners use ordinary scalar delete. The resampler
+ * dispatches through its virtual deleting destructor; the other five retain
+ * one evaluated pointer across their nonvirtual destructor and host free.
+ * A TU-local inline unsized adapter avoids any library delete dependency.
+ * All five observed lifetimes together recover both503B clones; each partial
+ * cross still misses. Primitive buffer frees remain as observed.
  *
  * Plain cdecl, `this` first on the stack -- `mov 0x50(%esp),%esi` after four
  * pushes and a 0x3c-byte frame -- finding F215.
@@ -112,6 +110,9 @@ extern "C" {
 #include "dsplib/Queue.h"
 #include "dsplib/FloatFIR.h"
 #include "dsplib/sysdep.h"
+
+/* F11620: ordinary typed deletion keeps each evaluated child pointer. */
+inline void operator delete(void *p) { sysdep_free(p); }
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -268,28 +269,13 @@ static float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {
  */
 V92Modulator::~V92Modulator()
 {
-	if (phase3Modulator != 0) {
-		phase3Modulator->~V92Phase3Modulator();
-		sysdep_free(phase3Modulator);
-	}
-	if (phase4Modulator != 0) {
-		phase4Modulator->~V92Phase4Modulator();
-		sysdep_free(phase4Modulator);
-	}
-	if (bitsToSymbol != 0) {
-		bitsToSymbol->~V92BitsToSymbol();
-		sysdep_free(bitsToSymbol);
-	}
+	delete phase3Modulator;
+	delete phase4Modulator;
+	delete bitsToSymbol;
 	if (resampler != 0)
 		delete resampler;
-	if (queue != 0) {
-		queue->~Queue();
-		sysdep_free(queue);
-	}
-	if (txFilter != 0) {
-		txFilter->~FloatFIR();
-		sysdep_free(txFilter);
-	}
+	delete queue;
+	delete txFilter;
 	if (buf_7c != 0)
 		sysdep_free(buf_7c);
 	if (resampleIn != 0)
