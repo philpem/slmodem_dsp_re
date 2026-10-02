@@ -2718,3 +2718,12 @@ accesses, yet all relevant class methods are empty (F11628). Keep receiver
 use, record extent, sizeof and ownership separate; do not select scalar or
 array delete solely to suppress a sibling free jump.
 [Audit](../k56-owner-boundary-audit.md).
+
+
+Audit added defensive guards against the actual first memory access. Removing
+dp_wrapper_delete's unsupported null early return recovers85B EXACT (F11629),
+while both other TU functions stay unchanged. Preserve independently observed
+child guards and validate actual constructed lifecycles; do not invent invalid
+null fixtures or widen the blob contract. Aligned whole-object allocation can
+stay constant despite a shorter exact function.
+[Recovery](../dpw-delete-guard-recovery.md).

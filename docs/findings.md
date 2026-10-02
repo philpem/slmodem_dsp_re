@@ -134022,3 +134022,16 @@ class methods/constructor supply no positive scalar lifetime boundary. Old
 C-language exclusion stale; delete-casting merely to suppress sibling free
 still unsupported. No source or compiler experiment adopted.
 [Pointer chain and denominator](k56-owner-boundary-audit.md). (2026-10-02)
+
+## F11629. Removing invented wrapper-null acceptance recovers85B destructor
+
+Blob dp_wrapper_delete immediately dereferences argument0x5a28; ours added
+null early return. Two fullTU cells isolate removal:90→85B EXACT,0→1/3,
+no losses, both bystanders/one data/nontext/binding/import/export unchanged.
+Real paired wrapper/resampler lifecycle fixture covers14 component scenarios;
+no null crash probe or fuzz/mutation execution. All300 production objects
+reviewed, one changes and raw-matches candidate; whole-tree915→916/1852,
+94525 exact bytes. Fixed Gentoo phase385/0 and structural gates pass.
+Same-order complete partial remains DIFFERENT; positioned+1, allocated/
+section/symbol/relocation exact counts unchanged.
+[Recovery and contract](dpw-delete-guard-recovery.md). (2026-10-02)
