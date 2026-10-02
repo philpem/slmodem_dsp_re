@@ -74,6 +74,9 @@
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V92Jd.h"
 
+/* F11621: typed owned deletion retains one pointer across both calls. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 /*
  * .rodata.str1.4+0x416c.  Fifty-seven asterisks and a CRLF; counted from the
  * hex dump rather than typed until it looked right.
@@ -82,7 +85,8 @@
 	"*********************************************************\r\n"
 
 /*
- * The destructor.
+ * The destructor. F11621: all five typed owners use ordinary scalar delete;
+ * phase2Info stays a bare host free, and CP/MP destruction is generated.
  *
  * SIX POINTERS IN FORWARD ORDER, then the two embedded members in reverse.
  * The forward order is the giveaway that the six are statements in the body
@@ -110,28 +114,13 @@ V90Modem::~V90Modem()
 			    "V90Modem Destructor: Illegal modemSide\r\n");
 	}
 
-	if (modulator != 0) {
-		modulator->~V90Modulator();
-		sysdep_free(modulator);
-	}
-	if (demodulator != 0) {
-		demodulator->~V90Demodulator();
-		sysdep_free(demodulator);
-	}
+	delete modulator;
+	delete demodulator;
 	if (phase2Info != 0)
 		sysdep_free(phase2Info);
-	if (jd != 0) {
-		jd->~V90Jd();
-		sysdep_free(jd);
-	}
-	if (jd92 != 0) {
-		jd92->~V92Jd();
-		sysdep_free(jd92);
-	}
-	if (params != 0) {
-		params->~V90Parameters();
-		sysdep_free(params);
-	}
+	delete jd;
+	delete jd92;
+	delete params;
 }
 
 void

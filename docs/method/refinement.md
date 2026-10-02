@@ -2662,3 +2662,12 @@ ECX/EDX renaming, but only all-five recovers both complete503B destructors
 virtual and primitive releases, and label temporarily masked-owner fixture
 subsets synthetic rather than pre-release histories.
 [Recovery](../v92-owned-delete-recovery.md).
+
+
+Typed-owner recovery does not authorize rewriting adjacent primitive releases.
+V90/V92 modem crosses recover four destructor clones plus two unchanged
+register-renamed bystanders (F11621); phase2Info remains bare free, V92 mapping
+helpers remain unguarded and automatic embedded destruction stays generated.
+Audit the full ownership boundary and keep genuine child lifecycles separate
+from temporarily masked or pre-released guard fixtures.
+[Controls](../modem-owned-delete-recovery.md).

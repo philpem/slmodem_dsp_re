@@ -138,8 +138,8 @@
   },
   {
     "label": "dtor: the jitter detector's guard releases the V.92 one",
-    "find": "\tif (jd != 0) {\n\t\tjd->~V90Jd();\n\t\tsysdep_free(jd);",
-    "replace": "\tif (jd != 0) {\n\t\tjd->~V90Jd();\n\t\tsysdep_free(jd92);"
+    "find": "\tdelete jd;",
+    "replace": "\tif (jd != 0) {\n\t\tjd->~V90Jd();\n\t\tsysdep_free(jd92);\n\t}"
   },
   {
     "label": "dtor: the phase 2 record is freed without its guard",
@@ -148,13 +148,13 @@
   },
   {
     "label": "dtor: the modulator is freed without being destroyed",
-    "find": "\t\tmodulator->~V90Modulator();\n\t\tsysdep_free(modulator);",
-    "replace": "\t\tsysdep_free(modulator);"
+    "find": "\tdelete modulator;",
+    "replace": "\tif (modulator != 0)\n\t\tsysdep_free(modulator);"
   },
   {
     "label": "dtor: the demodulator is freed without being destroyed",
-    "find": "\t\tdemodulator->~V90Demodulator();\n\t\tsysdep_free(demodulator);",
-    "replace": "\t\tsysdep_free(demodulator);"
+    "find": "\tdelete demodulator;",
+    "replace": "\tif (demodulator != 0)\n\t\tsysdep_free(demodulator);"
   },
   {
     "equivalent": true,
@@ -176,8 +176,8 @@
       "nothing."
     ],
     "label": "dtor: the parameter block is released without being destroyed",
-    "find": "\t\tparams->~V90Parameters();\n\t\tsysdep_free(params);",
-    "replace": "\t\tsysdep_free(params);"
+    "find": "\tdelete params;",
+    "replace": "\tif (params != 0)\n\t\tsysdep_free(params);"
   },
   {
     "equivalent": true,

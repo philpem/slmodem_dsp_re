@@ -133937,3 +133937,15 @@ primitive frees, dangling members and generated Scrambler destruction.
 Actual all-live lifecycle and synthetic temporarily masked-owner subsets
 are distinguished. [Recovery and gates](v92-owned-delete-recovery.md).
 (2026-10-02)
+
+## F11621. V90/V92 modem owned-member crosses recover six exact bodies
+
+Independent captured typed destructor/free pointers support42 fullTU cells:
+V90 five-owner33, V92 three-owner9. Adapter-only controls raw-merge; only
+all-owner cells recover both clones, V90337→321B and V92261→229B. Each
+nonzero cross also recovers unchanged printTitle210B/progress121B by audited
+register renaming. Exact2→5/8 V90,1→4/7 V92, six gains/no losses, all9
+other bodies/data/nontext/binding/import/export unchanged. Preserve primitive
+and mapping frees, generated members, unsigned guards and V92 pointer clear.
+Real constructed lifecycles and synthetic guard/cleanup probes distinguished.
+[Recovery and gates](modem-owned-delete-recovery.md). (2026-10-02)
