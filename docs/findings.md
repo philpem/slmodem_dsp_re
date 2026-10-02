@@ -133282,3 +133282,20 @@ fixed Gentoo phase385/0, static anchors clean. Complete same-order partial
 links remain DIFFERENT, positioned68,315 ->68,320/943,398.
 [Full experiment and retained validation](encode-carrier-recovery.md).
 (2026-10-02)
+
+
+## F11576. Quadrature generator transfers the output-lifetime and short post-decrement recovery
+
+Four complete-TU controls cross artificial phasor output clears with loop
+carrier. Baseline165B/SIZE17; lifetime149B/SIZE1; loop164B/SIZE16;
+both148B/EXACT. Only FPM_TONE_generate2 changes, eleven functions/twelve
+global bindings preserved, five/eleven ->six/eleven exact, no losses.
+FPM_phasor unconditionally defines cos/sin before use; scale reloads around
+each output store remain intact. No register-specific source or flag change.
+Retained full TU raw-replays; build300/300; whole-tree870/1852 ->871/1852,
+84,766 ->84,914 exact bytes, one gain/no losses. Fixed Gentoo phase385/0,
+existing negative-count group131,335 checks, static anchors clean. Complete
+partial links remain DIFFERENT, positioned68,320 ->68,343/943,398,
+matching relocation records1,018 ->1,019/18,317.
+[Complete transfer and retained validation](fpm-tone-pair-recovery.md).
+(2026-10-02)

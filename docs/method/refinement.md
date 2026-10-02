@@ -2329,3 +2329,11 @@ independently supported form and review all callers: the direct byte form
 preserves edprintf, while shared helper changes affect it. Multiple hits bound
 a common source property, not a unique original spelling.
 [Carrier/control cross](../encode-carrier-recovery.md).
+
+
+Check siblings for a proved output-lifetime/countdown pattern, but rerun the
+cross: generate2's four cells yield only the combined148-byte exact hit
+(F11576), preserving its two separate scale reads and demod's existing gain.
+The callee must define both outputs before use; a matching sibling is evidence
+for transfer, not permission to apply it blindly to phase-reversal generators.
+[Quadrature transfer](../fpm-tone-pair-recovery.md).

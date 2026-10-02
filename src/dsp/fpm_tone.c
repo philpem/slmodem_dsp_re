@@ -328,27 +328,26 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
  * same way, so a caller whose output buffer overlaps the object sees the same
  * thing we do.
  *
- * The counter is 16-bit and the loop tests for -1 rather than for zero, so a
- * count of 0 writes nothing and a NEGATIVE count runs about 65536 times --
+ * The short post-decrement tests the old count, so zero writes nothing
+ * and a NEGATIVE count follows the wrapped 16-bit traversal --
  * the same shape, and the same hazard, as FPM_TONE_detect and
  * FPM_TONE_generate_demod.
  *
- * The original leaves the phasor's cos and sin uninitialised on the stack;
- * they are cleared here so the reconstruction has no indeterminate reads.
- * FPM_phasor writes both before either is read, so this cannot differ.
+ * The callee defines cos and sin before either is read. The original has
+ * no initial output clears; retaining that lifetime and the short countdown
+ * recovers the complete function (F11576).
  */
 short
 FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
 		   short count)
 {
 	struct fpm_phasor p;
-	int i;
+	short i;
 
 	p.phase = state->phase;
 	p.inc = state->inc;
-	p.cos = p.sin = 0;
 
-	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+	for (i = count; i-- != 0;) {
 		FPM_phasor(&p);
 		*cos_out++ = ((state->cfg.scale * p.cos) >> 14);
 		*sin_out++ = ((state->cfg.scale * p.sin) >> 14);
