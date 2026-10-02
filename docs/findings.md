@@ -134000,3 +134000,25 @@ seven compiles/five emissions, no gains/losses,0/1 common exact. Three emitted
 functions/zero named data, both apparatus bystanders/nontext/binding/imports/
 exports unchanged. No source adoption or further counter/scope/frame variants.
 [Controls and stopping rule](div16-normalization-controls.md). (2026-10-02)
+
+## F11627. Notch scheduler cross isolates x87 ordering without an exact gain
+
+Four fullTU cells cross F11556's two addition trees with retained/sched2-off
+profiles:54/SIZE2 twice,48/SIZE8 twice,0/1 exact throughout. All four raw
+emissions distinct; baseline reproduces. One function/zero data, complete
+nontext/binding/import/export controls agree. RTL shows sched2 hoists loads
+49,51,50 before calculations; later stack conversion inserts four exchanges
+versus one without scheduling. Disabled pass does not reproduce the blob's
+load order. Diagnostic only, no source/profile adoption or cached-local sweep.
+[Stage evidence](notch-addition-tree.md). (2026-10-02)
+
+## F11628. Remaining C++ deletion screen leaves an unproven K56 owner boundary
+
+72 C++ objects/976 emitted functions leave three blob-common nonexact destructor/
+Delete occurrences: closed V90Demodulator pair and K56FLEX_Delete17vs23B.
+One additional GenericIIR D2 emission is absent from blob. Two callers trace
+factory allocation into class API use and real+0xc record accesses, but empty
+class methods/constructor supply no positive scalar lifetime boundary. Old
+C-language exclusion stale; delete-casting merely to suppress sibling free
+still unsupported. No source or compiler experiment adopted.
+[Pointer chain and denominator](k56-owner-boundary-audit.md). (2026-10-02)

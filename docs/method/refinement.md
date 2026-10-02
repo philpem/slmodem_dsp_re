@@ -2702,3 +2702,19 @@ BYTES105; independent initialization ownership after the zero guard gives
 BYTES108 (F11626). Count all emitted functions separately from blob-common
 symbols, reproduce repeated controls, and close the declared family rather
 than perturbing counter scope, loops or frames. [Controls](../div16-normalization-controls.md).
+
+
+Separate postreload scheduling from x87 stack conversion before classifying
+exchange differences as allocation. Notch's sched2 control changes54B to48B,
+but neither addition tree becomes exact (F11627). Scheduled load hoisting
+precedes inserted exchanges; a disabled-pass near miss supports neither a
+production option change nor invented coefficient locals.
+[Stage controls](../notch-addition-tree.md).
+
+
+C++ TU provenance enables delete hypotheses but does not establish pointee
+lifetime. K56's actual factory pointer reaches class API calls and+0xc record
+accesses, yet all relevant class methods are empty (F11628). Keep receiver
+use, record extent, sizeof and ownership separate; do not select scalar or
+array delete solely to suppress a sibling free jump.
+[Audit](../k56-owner-boundary-audit.md).
