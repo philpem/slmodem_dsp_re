@@ -2305,3 +2305,17 @@ scheduler reversal. The CD successor/lms two-cell control emits the same
 complete object in both orders (F11572); the compiler can erase lexical-order
 information before final scheduling. Close that bounded family rather than
 expanding into arbitrary store permutations.
+
+
+An early zero-extension can reflect a conversion boundary without being the
+whole source mismatch. Caller ID pack_next_bit's seven carrier/position controls
+recover selected operations but leave the complete function non-exact; review
+its inlined caller too (F11573). [Closed domain](../cid-pack-conversion-controls.md).
+
+Do not clear automatic output fields merely because the reference leaves them
+uninitialized. Prove which fields the callee defines and which anyone reads.
+The cosine generator's artificial clears and cached scale interact with the
+loop carrier: only their removal plus short post-decrement recovers the complete
+125-byte function in an eight-cell cross (F11574). The same-length cached-scale
+control still differs in88 bytes. Register allocation can follow recovered
+lifetimes without register-specific source. [Controls](../fpm-tone-demod-recovery.md).

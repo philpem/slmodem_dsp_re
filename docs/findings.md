@@ -133238,3 +133238,31 @@ Both source orders emit the identical full object,122B/BYTES2. All9 functions/
 11 sources/10 emissions, no flag exception or broader store permutations.
 This source-order family is closed pending independent source/profile evidence.
 [Ledger](fse-cd-load-recovery.md). (2026-10-02)
+
+
+## F11573. Caller ID packer conversion controls recover operand boundaries without byte-exactness
+
+Seven complete-TU compilations (six distinct sources/emissions) cross word
+versus int accumulator and updated-position carriers, then position narrowing
+at uses. All pack_next_bit bodies remain303B/SIZE2 against301B reference.
+Four functions/global bindings/data preserved, zero exact gains/losses; only
+packer and its inlined cid_modem caller change. No reconstruction adoption.
+[Complete controls](cid-pack-conversion-controls.md). (2026-10-02)
+
+
+## F11574. Cosine tone generator becomes byte-exact through output lifetime, scale reload and short post-decrement
+
+The complete eight-cell source cross has one125-byte exact body: direct
+per-sample scale reads, no artificial phasor output initialization, and a
+short post-decrement loop. All eleven functions/twelve global bindings and
+data preserved; only FPM_TONE_generate_demod changes, four/eleven ->five/eleven
+exact with no losses. Seventeen staged compilations cover nine distinct
+sources/emissions; winner raw-replays independently. Callee always defines
+cos before use and neither side reads sin. No register-specific spelling or
+flag change. [Complete recovery](fpm-tone-demod-recovery.md).
+Retained build300/300; whole-tree868/1852 ->869/1852 exact,84,590 ->84,715
+exact bytes, one gain/no losses. Fixed Gentoo phase385/0, new adequately
+buffered negative-count component test and static anchors clean. Complete
+same-order partial links remain DIFFERENT; positioned equality68,316
+->68,315/943,398. This is a function recovery, not whole-object completion.
+(2026-10-02)

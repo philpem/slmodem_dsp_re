@@ -646,6 +646,34 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* Component boundary: -1 wraps through 65,535 samples. Buffers cover
+	 * the complete write range; this makes no modem lifecycle claim. */
+	diff_begin("FPM_TONE_generate_demod negative count");
+	{
+		static short na[65600], nb[65600];
+		short ra, rb;
+		int i;
+
+		memcpy(a, built, sizeof(a));
+		memcpy(b, built, sizeof(b));
+		ref_FPM_TONE_set_freq((struct fpm_tone *)a, 1800);
+		FPM_TONE_set_freq((struct fpm_tone *)b, 1800);
+		ref_FPM_TONE_set_scale((struct fpm_tone *)a, 32767);
+		FPM_TONE_set_scale((struct fpm_tone *)b, 32767);
+		for (i = 0; i < 65600; i++) na[i] = nb[i] = 0x5a5a;
+		ra = ref_FPM_TONE_generate_demod((struct fpm_tone *)a, na, -1);
+		rb = FPM_TONE_generate_demod((struct fpm_tone *)b, nb, -1);
+		diff_eq_int("returned (%ld)", rb, ra, -1);
+		for (i = 0; i < 65535; i++)
+			diff_eq_int("wrapped sample %ld", nb[i], na[i], i);
+		for (i = 65535; i < 65600; i++) {
+			diff_eq_int("reference guard %ld", na[i], 0x5a5a, i);
+			diff_eq_int("reconstruction guard %ld", nb[i], 0x5a5a, i);
+		}
+		compare_state(b, a, "generate_demod negative");
+	}
+	rc |= diff_end();
+
 	/*
 	 * And that it really is the cosine of the same oscillator: after the
 	 * same number of samples from the same start, generate_demod's phase

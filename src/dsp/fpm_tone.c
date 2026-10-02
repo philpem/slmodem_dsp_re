@@ -372,24 +372,21 @@ FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
  * It also returns `count`, which FPM_TONE_generate does not.
  *
  * The original leaves the phasor's cos and sin fields uninitialised on the
- * stack.  Harmless -- FPM_phasor_demod writes cos before anything reads it,
- * and sin is never touched -- but they are cleared here so the reconstruction
- * has no indeterminate reads.
+ * stack.  FPM_phasor_demod always writes cos before the caller reads it; neither
+ * caller nor callee reads sin. No initial output values are needed (F11574).
  */
 short
 FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
 {
 	struct fpm_phasor p;
-	int scale = state->cfg.scale;
-	int i;
+	short i;
 
 	p.phase = state->phase;
 	p.inc = state->inc;
-	p.cos = p.sin = 0;
 
-	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+	for (i = count; i-- != 0;) {
 		FPM_phasor_demod(&p);
-		*out++ = ((scale * p.cos) >> 14);
+		*out++ = ((state->cfg.scale * p.cos) >> 14);
 	}
 
 	state->phase = (short)p.phase;
