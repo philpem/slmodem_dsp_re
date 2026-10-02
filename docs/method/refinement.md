@@ -2140,3 +2140,16 @@ Preserve the same truncation, memory order and call boundaries; do not
 mechanically eliminate locals elsewhere. [The bounded record](../v32-sequence-count.md)
 includes exact neighboring-body controls and the two still-deferred V22
 reserves whose previous spelling domains are already closed.
+
+
+Transfer a recovered loop pattern by a declared product, then distinguish
+source-graph recovery from exactness. DetSequence's countdown and separate
+short shift reproduce their local graph but increase size; a newly observed
+once-per-call found initializer fixes a third lifetime without closing the
+spill choice (F11546). Local allocation still has the bound pseudo; global
+allocation/reload spills it and retains the shift-register pseudo, opposite
+the blob. That is a pass boundary for the next explanation, not permission
+for register/declaration spelling searches. [The six-cell ledger](../v32-detsequence-loops.md)
+reports all negatives, positive graph/spill controls and unchanged retained
+objects. Include new tool/doc files in the tracked-file census before checks,
+so an untracked ledger cannot silently escape cross-reference validation.

@@ -132844,3 +132844,36 @@ records unchanged. Both strict links remain DIFFERENT. Final fixed period/
 structural gate385/0, clean10038 anchors/285 suites and14223 refs/2674
 headings. No anchor retargeting, fuzzing or mutation execution.
 (2026-10-02)
+
+
+## F11546. DetSequence's countdown, narrow shift and found lifetime controls recover local graphs but do not close its allocation/spill mismatch
+
+On baselinese98ea74b, a four-cell full-TU domain crosses the blob's remaining
+word countdown with its separate short shift counter. Baseline275B/BYTES214,
+countdown280B/SIZE5, shift285B/SIZE10, both290B/SIZE15; no exact candidate.
+A new object-backed observation finds found initialized once before the
+word loop, while our source resets it per word. A separately declared
+control/hoist pair removes that reset but remains 290B/SIZE15. Hoisting is
+equivalent because a match returns at word end; no continuing iteration
+can have found!=0. Neither family is adopted for a closest score.
+
+All six valid cells preserve eight functions/globals and six/eight exact;
+only DetSequence changes, zero gains/losses. Both unchanged full-TU controls
+raw-reproduce their respective retained/previous-combined objects. The
+[complete ledger](v32-detsequence-loops.md) records the invalid/excluded
+initial URL metadata run and corrected four-cell replay, source/command/
+header hashes, full bodies/relocations and known graph controls 4/4+2/2.
+
+Remaining bound spill first appears in .25.greg, after .24.lreg keeps
+pseudo 64; .25 stores nbits at ESP+0x1c and retains reg in EBX. The blob has
+nbits in EBP and reg on the stack. Found hoisting fixes its lifetime but
+leaves the spill choice and cost/priority unchanged. No further independent
+source-boundary domain is supported by the pass audit; declaration/register/
+volatile guesses are deferred. This is one measured allocation example,
+not a global non-recoverability claim. All 300 retained objects remain raw
+identical to the 860/1852 baseline, 83,604 exact bytes; no production/header/
+fixture change, no anchor retargeting, fuzzing or mutation execution.
+Fixed make phase passed 385/0; structural checks clean, including 14,223
+references, 2,675 finding headings and 285 suites / 10,038 static anchors.
+Upstream drift was not checked (checkout absent; manifest-only check).
+(2026-10-02)

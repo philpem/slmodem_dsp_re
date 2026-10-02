@@ -125,3 +125,8 @@ F11545 executes the previously unrun direct-count carrier hypothesis in
 access it recovers RxHdxSequenceE exactly; the previous four-cell family
 remains closed. ModDataV22/V22FP_modem's older exhausted source domains are
 confirmed by a separate read-only audit, with no new compilation there.
+
+DetSequence's proposed loop transfer and a separately observed found lifetime
+are tested and closed by F11546: [six valid cells](v32-detsequence-loops.md),
+no adoption. The remaining measured discrepancy begins at allocation/reload;
+these local graph recoveries do not justify another spelling matrix.
