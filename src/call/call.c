@@ -485,28 +485,36 @@ void
 SetPulseBreakTime(void *modem, int ms)
 {
 	struct call *c = call_of(modem);
+	struct call_dp *st;
 
 	if (c == 0)
 		return;
+
+	/* The blob keeps this owner across the debug call (F11541). */
+	st = c->self;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("call: SetPulseBreakTime %lu\n",
 				     (unsigned long)ms);
 
-	c->self->pulse_break = ms;
+	st->pulse_break = ms;
 }
 
 void
 SetPulseMakeTime(void *modem, int ms)
 {
 	struct call *c = call_of(modem);
+	struct call_dp *st;
 
 	if (c == 0)
 		return;
+
+	/* The blob keeps this owner across the debug call (F11541). */
+	st = c->self;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("call: SetPulseMakeTime %lu\n",
 				     (unsigned long)ms);
 
-	c->self->pulse_make = ms;
+	st->pulse_make = ms;
 }

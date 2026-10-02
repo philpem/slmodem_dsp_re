@@ -388,18 +388,17 @@ FloatIIR::setCoefficients(float *coeff, unsigned ncoeff)
 		return -1;
 
 	m_coeff = coeff;
-	if (m_ncoeff == n)
-		return 0;		/* pointer swapped, geometry unchanged */
+	/* One successful return and a stored minimum match the blob (F11541). */
+	if (m_ncoeff != n) {
+		m_ncoeff = n;
 
-	m_ncoeff = n;
-
-	/*
-	 * The write position is clamped, not rewound: growing the tap count
-	 * shrinks the room above it, and a position already inside that room
-	 * is pulled down to the new limit.  A position below it is left alone,
-	 * so the history in flight survives the change.
-	 */
-	if (m_pos > (int)(m_len - n))
-		m_pos = (int)(m_len - n);
+		/*
+		 * The write position is clamped, not rewound: growing the tap count
+		 * shrinks the room above it, and a position already inside that room
+		 * is pulled down to the new limit.  A position below it is left alone,
+		 * so the history in flight survives the change.
+		 */
+		m_pos = m_pos > (int)(m_len - n) ? (int)(m_len - n) : m_pos;
+	}
 	return 0;
 }

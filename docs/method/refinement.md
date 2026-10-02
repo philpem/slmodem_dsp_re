@@ -2089,3 +2089,26 @@ bodies. The restored graph costs four exact helpers. This rejects a
 regalloc-only explanation of that local graph without selecting a compiler
 profile; any next profile test must explain those helpers and the remaining
 non-exact body together.
+
+
+## Transfer recovered patterns through a bounded small-function pass
+
+A curated 20-function shortlist produced three exact gains after testing five
+families (F11541), without a new compiler profile. Prefer observable source
+boundaries over residual size: cache a derived owner before a debug call
+when the blob keeps it across that call; share a successful return when an
+early return gives the result an extra lifetime; use an unconditional signed
+minimum store where the blob stores in both outcomes. FloatIIR needed both
+the nested geometry arm and minimum, while FloatFIR did not close with the
+same pattern. V32's result initialization position mattered, and retaining
+only its exact renegotiation function preserved the hit independently of the
+non-exact retrain neighbor.
+
+Measure full TUs and preserve nearby non-exact bodies. An idiom that closed
+one family is a hypothesis elsewhere, not permission for a mechanical tree
+rewrite. The FIFO experiment produced identical objects for unsigned-short
+and int returns, with no caller discriminating the API: leave that signature
+unchanged. Show shortlist/screen/compile denominators, known detector
+controls and closed-domain dispositions. [The pass](../playbook-small-patterns.md)
+records corrected compiler-path replay, all losses (none in retained source),
+period validation and the still-failing complete-object comparison.

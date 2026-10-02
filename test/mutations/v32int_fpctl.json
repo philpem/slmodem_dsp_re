@@ -244,8 +244,8 @@
  },
  {
   "label": "the renegotiation poller also steps the retrain counter",
-  "find": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\treturn 1;",
-  "replace": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\tdec->short_74 =\n\t\t(unsigned short)(dec->short_74 + 1);\n\treturn 1;"
+  "find": "\t\tdec->count = 0;\n\t\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\t\tdetected = 1;",
+  "replace": "\t\tdec->count = 0;\n\t\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\t\tdec->short_74 =\n\t\t\t(unsigned short)(dec->short_74 + 1);\n\t\tdetected = 1;"
  },
  {
   "label": "the epoch poller returns the phase counter rather than the rate-change report",
