@@ -2923,3 +2923,13 @@ A typed source literal and equal immutable payload prove read values but do
 not alone prove canonical destination identity. Audit references/overlaps and
 address escape; retain ordinary-section refusal while that distinction is
 open. [Screen](../anonymous-jumptable-proof.md).
+
+
+A post-store reload is a testable source boundary, but recovering it alone
+does not recover the whole function (F11662). Minimum-level diagnostics gain
+the blob's second cfg+0x60 read through initial, combine and allocated RTL,
+yet remain101B versus104B. Review every sibling and nontext relocation, and
+count allocated instructions separately from diagnostic listings. Do not turn
+an unexplained root+4 carrier into an invented header or volatility variant;
+separate-storage fixtures do not establish reachable aliasing.
+[Two-cell control](../v34-minlevel-reload-controls.md).

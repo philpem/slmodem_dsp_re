@@ -134434,3 +134434,17 @@ This still proves read values, not canonical destination identity; equal data al
 cannot remove ordinary-section safeguards. No source/tool-grade adoption,
 strict925/1852 unchanged. [Screen and limits](anonymous-jumptable-proof.md).
 (2026-10-02)
+
+## F11662. Minimum-level diagnostic reload survives lowering without complete-body recovery
+
+Two complete VPcmV34Main cells at b75131e2 replace only the cached debug
+argument with a fresh int read through captured cfg+0x60. Initial/combine/
+allocated instruction RTL restore the second read, after the threshold store
+in emitted code. Full body98→101B versus104B; exact23/57 unchanged. All56
+siblings, one named data object, metadata/nontext and relocations agree;
+raw baseline reproduces, two valid distinct emissions. Root+4 owner carrier
+remains unexplained: no invented header/volatile/register variants. Existing
+25 paired component calls use separate config storage and do not establish
+reachable aliasing. No source adoption or candidate runtime claim. Close
+the two-cell family; production925/1852 and prior fixed gate386/0 unchanged.
+[Controls](v34-minlevel-reload-controls.md). (2026-10-02)
