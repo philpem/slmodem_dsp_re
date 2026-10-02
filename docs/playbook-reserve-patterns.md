@@ -119,3 +119,9 @@ identity does not establish complete-object identity.
 All five domains close here. No mutation verdict is refreshed and no modern
 portability claim is made. These finite results neither prove a whole-tree
 ceiling nor classify every remaining non-exact function as register allocation.
+
+F11545 executes the previously unrun direct-count carrier hypothesis in
+[a new four-cell follow-up](v32-sequence-count.md). Combined with direct-array
+access it recovers RxHdxSequenceE exactly; the previous four-cell family
+remains closed. ModDataV22/V22FP_modem's older exhausted source domains are
+confirmed by a separate read-only audit, with no new compilation there.

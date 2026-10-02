@@ -132815,3 +132815,32 @@ failed**; phase boundary "period differential and structural checks all OK"),
 `make tc` (300/300 objects, gcc 3.4.2), `byteident` (853/1852 grade 0, 904
 grade 0-or-1), `anchorcheck` (0 detached / 0 non-unique), `refcheck` (0
 dangling), `git diff --check` clean.  (2026-10-01)
+
+
+## F11545. RxHdxSequenceE becomes byte-exact by retaining the count output parameter as the carrier and the hdx root for its rate store
+
+F11542's direct-array control left six differing bytes: the adjacent Demod
+count-store/zero-extension order. Chained assignment restored order but
+changed live ranges elsewhere. A new four-cell carrier domain removes the
+local n, stores Demod directly through count, and passes *count to
+Descramble, crossed with cached-regs/direct-hdx first rate store. Verdicts
+BYTES49/6/43/EXACT; the combination reproduces the complete339-byte target.
+All fourteen functions/globals preserved, only the target changes;
+10/14 ->11/14 exact, zero losses. Unchanged raw baseline reproduces, and
+production full TU equals the winning experimental object byte for byte.
+The [complete record](v32-sequence-count.md) carries predictions, controls,
+commands/hashes, inventories, RTL and dispositions.
+
+Initial RTL distinguishes lowpart-of-widened-SI local from direct returned-HI
+store. Four known final graph controls fire4/4; the combined object stores
+AX before widening for the argument and keeps hdx+0x44 instead of rebasing
+regs+0x3c. No compiler-profile change or nearest-byte adoption. This is a
+matching source carrier, not a uniquely recovered original spelling or a
+whole-tree claim. Independent complete build300/300, zero failed; whole-tree859/1852 ->
+860/1852, exactbytes83,265 ->83,604, one gain/no losses. Complete same-order
+partial links positioned equality68,369 ->68,371/943,398, allocated914,174
+unchanged; exact section70/92, relocation1,022/18,317 and symbol394/2,907
+records unchanged. Both strict links remain DIFFERENT. Final fixed period/
+structural gate385/0, clean10038 anchors/285 suites and14223 refs/2674
+headings. No anchor retargeting, fuzzing or mutation execution.
+(2026-10-02)
