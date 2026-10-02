@@ -313,8 +313,9 @@ V90ConstellationPower::getPower(V90MappingParams *mappingParams,
  *
  * The object enters the loop on `averagePowerLimits[34] < power` alone and
  * leaves it on `limits[i] < power && i != 0`, which is the rotated form of the
- * loop below with `34 != 0` folded away.  Both conditions are computed with
- * `setb`/`setne` and ANDed rather than short circuited, which is free.
+ * loop below with `34 != 0` folded away (F11670). The power predicate
+ * comes first, so index zero still receives its comparison. Both conditions
+ * are computed with `setb`/`setne` and ANDed rather than short circuited.
  *
  * The comparison is `unsigned int` against `float`, and the object converts
  * with `fildll` off a zero-extended pair -- so the ladder is unsigned, and the
@@ -327,7 +328,7 @@ V90ConstellationPower::getPowerIndexForPower(float power)
 	unsigned int index;
 
 	index = V90CP_POWER_INDICES - 1;
-	while (index != 0 && averagePowerLimits[index] < power)
+	while (averagePowerLimits[index] < power && index != 0)
 		index--;
 
 	return index;

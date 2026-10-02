@@ -1,0 +1,2 @@
+# Match the version used to validate the ELF jump-table resolver.
+pyelftools==0.30

@@ -103,3 +103,11 @@ Reference checking resolved 14,223 references and 2,675 finding headings;
 static anchor checking covered 285 suites / 10,038 anchors, all clean.
 Upstream drift was not checked because the upstream source checkout is absent;
 the seven manifest files were checked against the manifest only.
+
+## Allocation follow-up
+
+[The evidence checkpoint](v32-detsequence-allocation.md) compares all six saved
+controls: reg ranks before nbits in every cell, but their final spill choices
+reverse when the short shift is introduced. Priority alone is insufficient;
+the baseline compiler already creates an int running shift counter. The next
+trace concerns counter lifetime, ECX constraints and allocation versus reload.

@@ -287,7 +287,7 @@ static void
 free_pair(void)
 {
 	ref_FPM_FSE_free(&theirs);
-	FPM_FSE_free(&ours);
+	FPM_FSE_free(&ours, 1);
 }
 
 /*

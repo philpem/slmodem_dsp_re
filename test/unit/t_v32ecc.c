@@ -127,8 +127,8 @@ main(void)
 		cmp_maps("state cfg.imap[k][j] (%ld)", a.cfg.imap, b.cfg.imap);
 		cmp_maps("state cfg.qmap[k][j] (%ld)", a.cfg.qmap, b.cfg.qmap);
 
-		FPM_ECC_free(&a);
-		FPM_ECC_free(&b);
+		FPM_ECC_free(&a, 1);
+		FPM_ECC_free(&b, 1);
 		rc |= diff_end();
 	}
 

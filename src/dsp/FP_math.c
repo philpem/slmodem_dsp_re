@@ -235,19 +235,27 @@ static const short ThresholdsTable[16] = {
  * Reconstructs a full 2048-point cosine from the quarter stored above, by
  * folding the phase into one of four quadrants.  Two of the four negate the
  * table value; that is not an error, it is what makes the second and third
- * quadrants of a cosine.
+ * quadrants of a cosine. The masked phase and reflected index remain
+ * short values; storing each reflection before indexing preserves the
+ * object's conversion boundary (F11584).
  */
 short
 TONE_read(short phase)
 {
-	int p = phase & 0x7ff;
+	short p = phase & 0x7ff;
 
-	if (p >= 0x201 && p <= 0x400)
-		return (short)-FPTONE[0x400 - p];
-	if (p >= 0x401 && p <= 0x600)
-		return (short)-FPTONE[p - 0x400];
-	if (p >= 0x601)
-		return FPTONE[0x800 - p];
+	if (p >= 0x201 && p <= 0x400) {
+		p = 0x400 - p;
+		return (short)-FPTONE[p];
+	}
+	if (p >= 0x401 && p <= 0x600) {
+		p = p - 0x400;
+		return (short)-FPTONE[p];
+	}
+	if (p >= 0x601 && p <= 0x7ff) {
+		p = 0x800 - p;
+		return FPTONE[p];
+	}
 	return FPTONE[p];
 }
 

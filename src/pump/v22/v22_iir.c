@@ -70,11 +70,10 @@ V22_iir_filt_demod(short *samples, const short *b, const short *a,
 		   short *xhist, short *yhist, const short *mix)
 {
 	short i;
+	int acc = 0;
 
 	for (i = 0; i <= V22_IIR_BLOCK - 1; i++) {
-		int acc = 0;
 		short j;
-		short y;
 
 		xhist[0] = samples[i];
 
@@ -97,10 +96,10 @@ V22_iir_filt_demod(short *samples, const short *b, const short *a,
 			yhist[j] = yhist[j - 1];
 
 		/* One truncation, and the mixer sees the truncated value. */
-		y = (short)acc;
-		yhist[0] = y;
+		yhist[0] = acc;
 
-		samples[i] = (short)((y * mix[i]) >> 12);
+		samples[i] = (short)(((short)acc * mix[i]) >> 12);
+		acc = 0;
 	}
 }
 

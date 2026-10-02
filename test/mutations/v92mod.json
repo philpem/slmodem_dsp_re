@@ -163,13 +163,13 @@
  },
  {
   "label": "the phase 3 modulator's null test is dropped",
-  "find": "\tif (phase3Modulator != 0) {",
-  "replace": "\tif (phase3Modulator != (V92Phase3Modulator *)1) {"
+  "find": "\tdelete phase3Modulator;",
+  "replace": "\tphase3Modulator->~V92Phase3Modulator();\n\tsysdep_free(phase3Modulator);"
  },
  {
   "label": "the bit-to-symbol stage's null test is dropped",
-  "find": "\tif (bitsToSymbol != 0) {",
-  "replace": "\tif (bitsToSymbol != (V92BitsToSymbol *)1) {"
+  "find": "\tdelete bitsToSymbol;",
+  "replace": "\tbitsToSymbol->~V92BitsToSymbol();\n\tsysdep_free(bitsToSymbol);"
  },
  {
   "label": "the resampler's null test is dropped",
@@ -195,18 +195,18 @@
  },
  {
   "label": "the phase 3 modulator is freed without being destroyed",
-  "find": "\t\tphase3Modulator->~V92Phase3Modulator();\n\t\tsysdep_free(phase3Modulator);",
-  "replace": "\t\tsysdep_free(phase3Modulator);"
+  "find": "\tdelete phase3Modulator;",
+  "replace": "\tif (phase3Modulator != 0)\n\t\tsysdep_free(phase3Modulator);"
  },
  {
   "label": "the queue is freed without being destroyed",
-  "find": "\t\tqueue->~Queue();\n\t\tsysdep_free(queue);",
-  "replace": "\t\tsysdep_free(queue);"
+  "find": "\tdelete queue;",
+  "replace": "\tif (queue != 0)\n\t\tsysdep_free(queue);"
  },
  {
   "label": "the destructor nulls the transmit filter after freeing it",
-  "find": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t}",
-  "replace": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t\ttxFilter = 0;\n\t}"
+  "find": "\tdelete txFilter;",
+  "replace": "\tdelete txFilter;\n\ttxFilter = 0;"
  },
  {
   "label": "break v92TxPreFilter's mirror on one side only",

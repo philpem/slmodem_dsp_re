@@ -516,7 +516,7 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
 	}
 
 	/* The object passes a fourth argument here; see the header. */
-	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);
+	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n, 1);
 
 	fp = owner->fp;
 	owner->flags =

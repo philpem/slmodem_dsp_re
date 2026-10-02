@@ -1044,14 +1044,14 @@ That closed ten more symbols over five files. **Anywhere this tree open-codes
 a single compile, and the 31-byte gap that had been read as "register pressure"
 was the expansion missing entirely.
 
-**AND IT WILL BREAK THE MODERN BUILD'S LINK UNTIL YOU ADD THE SIZED FORM.**
-C++14 sized deallocation makes GCC 13 call `operator delete(void *, size_t)`
-for `delete p` on a class with a destructor, which is an undefined `_ZdlPvj`
-in a tree that links no libstdc++ -- every test binary, while the period
-differential is 251 passed / 0 failed. `Resampler.h` documents it and solves it
-with a MEMBER operator; a global sized form guarded on
-`__cplusplus >= 201402L` is inert under 3.4.2 (199711L) and does the same job.
-Either way, prove the guard is inert by re-reading `byteident` across it.
+**THE MODERN BUILD NEEDS ITS SIZED-DEALLOCATION DEMAND WITHDRAWN.**
+C++14 sized deallocation makes modern GCC call `operator delete(void *, size_t)`
+for class deletion, while the period compiler uses the unsized form. The old
+wave added guarded sized adapters in reconstruction source (7816); F7900
+removed those apparatus blocks and recovered all200 period objects unchanged
+with the modern-only `-fno-sized-deallocation` flag. Use that existing flag,
+not new `__cplusplus` source shims. Preserve unsized inline adapter placement:
+period-visible definitions can carry code-generation effects (7815).
 
 **BUT A DELETE-EXPRESSION RUNS A DESTRUCTOR AND AN EXPLICIT FREE DOES NOT**, so
 take it only where the OBJECT ITSELF makes the destructor call.
@@ -1103,16 +1103,17 @@ own. "One type, one home" is about TYPES and undefined behaviour; this is an
 inline function, the duplication is deliberate, and consolidating it needs the
 SET diff re-run.
 
-**Bounded, and the bound is now named to the byte.** `V92deleteConstellations`
-(3 of 173) and `V92deleteFilterCoefficients` (3 of 106) are the purest
-instances of the signature in the object -- byte-identical over 93 of 106
-bytes, residual one 13-byte block -- and `delete[]` does not exist in a `.c`.
-Buying them means asserting `V92ParamsInfo` was a `.cpp` of `extern "C"`
-functions, which this codebase does elsewhere (`v34hstx1.cpp`). **The test is
-a null**: a relocation's PRESENCE proves nothing about a TU (306, 333), there
-are no unrelocated calls out of those five functions and no local text symbols
-in their span to be the target of one. Declined; do not rename the file to buy
-the spelling (7818).
+**A declined language-dependent spelling can reopen after independent TU
+recovery.** F7818's V92 deletion restriction was based on the C reconstruction
+then present. F11404 recovered V92MappingParamsInt.cpp; its current fields are
+typed int*/float* arrays. F11615's bounded deletion cross now closes both
+173B/106B bodies, leaving all three bystanders unchanged. F11616 crosses
+consistent new[] allocations: all deletion-bearing cells raw-merge, so paired
+array expressions are an idiomatic supported family, not unique allocation
+spelling. Keep the TU-local unsized host adapter position and original sizes,
+guards, dangling slots and call order; real allocator lifecycle and whole-TU
+data/export controls decide adoption. No language/layout forcing was needed.
+[Recovery](../v92-array-lifecycle-recovery.md).
 
 ### Lever 8. Width and signedness — and the DESTINATION's declared type
 
@@ -2153,3 +2154,854 @@ for register/declaration spelling searches. [The six-cell ledger](../v32-detsequ
 reports all negatives, positive graph/spill controls and unchanged retained
 objects. Include new tool/doc files in the tracked-file census before checks,
 so an untracked ledger cannot silently escape cross-reference validation.
+
+
+A global-allocation dump may include reload's final mapping: distinguish the
+boundaries before attributing a spill to priority. F11547 traces installed
+Gentoo cc1 and raw-validates both full-TU outputs; one reg is assigned ECX by
+global allocation, then evicted by reload's CL requirement. A short
+post-decrement temporary instead receives ECX locally and changes the earlier
+allocation decision. F11548 separates decrement from extraction, removes that
+local temporary and recovers the blob's spill arrangement without byte identity.
+[Trace and bounded source control](../v32-detsequence-allocation.md). Machine
+scheduling can put the decrement ahead of SHR even when source decrements
+after extraction; don't infer expression sequencing from that order alone.
+
+
+Trace spill-home allocation before inferring source declaration order. F11549
+observes ascending pseudo allocation and late reload eviction; a minimal
+word-scope change recovers all blob slots but remains non-exact. Optimized
+compiler debug parameter locations can misreport arguments: trace the true
+ABI entry and validate full-TU raw output. F11550's crossed peephole control
+certifies scratch exposure but loses exact neighbors. Returning to the
+non-exact predecessor reveals an independent GenSequence source property:
+short post-decrement narrows before the wrapping AND, and combines with a
+countdown to recover 118 bytes exactly (F11551–F11552). [Measured record](../v32-gensequence-recovery.md).
+
+## Locate redundant-load elimination before blaming allocation
+
+TxHdxTRN's cached subtraction initially resembles a register-lifetime issue.
+Its first CSE dump still reloads the member; GCSE PRE explicitly replaces
+that load with the comparison's reaching register. Cross the independently
+observed unsigned input fold with diagnostic pass controls: disabling load
+motion changes neither raw object, while disabling all GCSE restores memory
+RMW but loses two exact neighbors. The unsigned fold itself recovers one
+instruction without exact identity. Treat these as separate measured effects,
+and close both bounded domains without inventing volatile declarations or
+adopting local score improvements. [F11553 and replay](../v32-txhdxtrn-pass-boundary.md).
+
+FPM_rms supplies another independently measured countdown/cursor case:
+neither property alone recovers the function, and both recover all62 bytes
+including its call relocation (F11554). Preserve arithmetic order and overflow
+semantics; loop recovery is not permission to replace scaled products with
+an algebraically similar expression. [Four-cell record](../fpm-rms-countdown.md).
+
+An allocation failure's literal-zero early return can obscure the blob's
+common pointer return. Dual_TONE_create recovers64-byte exactness by guarding
+initialization and returning the allocated pointer for both outcomes; the
+two-cell full-TU domain changes only that function (F11555).
+[Measured record](../dualtone-create-common-return.md).
+
+Trace x87 stack operands before calling a difference scheduling. Notch's
+saved-state addition occurs before its product-sum in the blob and after it
+in retained source. Recovering the addition tree still leaves load/exchange
+differences and no exact gain (F11556). Algebraic equivalence does not imply
+finite-precision grouping, and load order alone does not justify invented
+coefficient locals. [Closed source domain](../notch-addition-tree.md).
+
+## A constant loop bound can reveal when a helper was inlined
+
+PCM's indexed segment search differs from the blob's pointer walk. Recovering
+the cursor leaves a strict-comparison difference: fixed source emits <=7,
+the blob emits <8. A helper size argument initialized to8 at the call preserves
+the strict comparison under period inlining; both size-only and table/size
+forms yield the same complete object. This constrains late binding without
+uniquely recovering a helper signature (F11557). A separate input/magnitude
+carrier domain closes linear2alaw too (F11558). Inspect initial RTL before
+blaming scheduling for a comparison that was already normalized there.
+[Seven-cell staged record](../pcm-segment-search-recovery.md).
+
+## A machine countdown can be an optimizer's reversed ascending loop
+
+Float2Linear's four-cell source domain recovers101-byte exactness with
+advancing input/output pointers and the existing ascending loop. An explicit
+countdown misses, alone and with cursors. Gentoo's loop dump says it reversed
+the cursor loop; source index i is dead except as the bound. Check that pass
+before inferring a countdown from machine decrement/test (F11559).
+[Complete-TU controls](../float2linear-cursors.md).
+
+An apparently register/layout-bound constructor can still omit a real failure
+edge. toneiir_create's blob checks the allocation result; reconstruction did
+not. Restore observed behavior even when its finite source domain gives no
+byte-exact gain. A same-length candidate with114 differing bytes is not a
+recovery. Fixed allocator-failure and one-shot recovery checks distinguish this
+from a score-only rewrite (F11560). [Record](../toneiir-allocation-recovery.md).
+
+Recovering an x87 opcode is not recovering its lifetime or evaluation boundary.
+Floating RMS literal/local controls recover fld1 but either add final narrowing
+or move the reciprocal before the loop; both miss the reference's two separated
+count conversions (F11561). Inspect the full stack tree and conversion sites,
+not just the attractive opcode. Likewise the constructor common-pointer-return
+family succeeds for Dual_TONE_create and fails for silence_create (F11562).
+[Closed domains](../playbook-rms-silence-controls.md).
+
+GenerateAnsTone supplies another ascending-loop reversal control: an output
+cursor recovers its clear loop; a source countdown does not. Its four remaining
+comparison bytes disappear when elapsed updates use the field rather than a
+common temporary. Early source field writes are coalesced into the reference's
+conditional final stores by Gentoo, so infer source factoring from complete
+controlled bodies rather than store placement alone (F11563).
+[Six-cell record](../v32-anstone-recovery.md).
+
+Operand-width recovery can leave a distinct condition-lowering mismatch.
+FPM_TONE_filter's short carrier cross restores cmpw/incw but leaves a branch
+where the blob has setl/neg/and, with no exact gain. Do not adopt carrier
+narrowing solely because individual instructions agree, or infer a unique
+local type from a word comparison (F11564).
+[Closed width domain](../fpm-tone-width-controls.md).
+
+A shared narrow temporary can extend a value before a store that only needs its
+low half. V22 IIR recovers history-store-before-extension by narrowing at uses,
+then recovers its full body only when accumulator initialization/reset match
+the preheader/latch boundary. Cross both source questions: either alone misses
+(F11565). Keep mixer narrowing explicit; rereading the stored history introduces
+an alias-sensitive operation the reference does not perform.
+[Six-cell record](../v22-iir-conversion-recovery.md).
+
+SMCv32_encoder_abs's countdown/cursor cross restores sequential input and the
+word sentinel but leaves distinct ring-return/tag conversion boundaries. A
+correct recovered loop is not authority to widen ring locals or force masks;
+inspect the helper signature and field reads across callers first, including
+closed F8249 controls (F11566).
+[Traversal domain](../v32-smc-abs-traversal-controls.md).
+
+For a rejected conditional-zero mask, read the converter's complete predicate.
+GCC3.4's noce_try_store_flag_mask needs zero versus the destination itself:
+a ternary assigning a separate result temporary can fail even when both arms
+are already SImode. Ordinary in-place conditional clearing recovers V32's mask
+in all three encoder callers (F11568). Shifted tags, wrapped-result carriers
+and comparison-use narrowing are separate axes; together they recover an exact
+68-byte abs loop but leave51 bytes different in the whole function (F11567,
+F11569). Do not turn an exact internal region into an adoption or declare the
+remaining prologue a pure regalloc issue without examining its load ordering.
+[Closed24-cell record](../v32-smc-if-conversion.md).
+
+The destination-identity diagnostic transfers to FPM_TONE_filter: six ordinary
+conditional updates convert and six ternaries do not, across a bounded carrier
+cross. No function becomes exact (F11570). A verified shared compiler mechanism
+can explain an instruction family while leaving scheduling and lifetime
+questions open; do not equate successful transfer with recovered original
+source. [Twelve-cell transfer](../fpm-tone-if-conversion.md).
+
+A close non-exact slicer can still read its decision input after an output that
+the blob reads first. FSE_decision_CD's fixed permitted count/magnitude alias
+fails3/268 baseline checks; recover the read boundary before interpreting its
+remaining scheduler difference (F11571). BYTES2 masks the union of relocation
+fields: here four raw bytes and the successor relocation move when two stores
+swap. Inspect relocation positions and RTL stages, not the byte score alone.
+[Source/option cross and fixed fixture](../fse-cd-load-recovery.md).
+
+Do not infer that reversing two independent source writes will undo a measured
+scheduler reversal. The CD successor/lms two-cell control emits the same
+complete object in both orders (F11572); the compiler can erase lexical-order
+information before final scheduling. Close that bounded family rather than
+expanding into arbitrary store permutations.
+
+
+An early zero-extension can reflect a conversion boundary without being the
+whole source mismatch. Caller ID pack_next_bit's seven carrier/position controls
+recover selected operations but leave the complete function non-exact; review
+its inlined caller too (F11573). [Closed domain](../cid-pack-conversion-controls.md).
+
+Do not clear automatic output fields merely because the reference leaves them
+uninitialized. Prove which fields the callee defines and which anyone reads.
+The cosine generator's artificial clears and cached scale interact with the
+loop carrier: only their removal plus short post-decrement recovers the complete
+125-byte function in an eight-cell cross (F11574). The same-length cached-scale
+control still differs in88 bytes. Register allocation can follow recovered
+lifetimes without register-specific source. [Controls](../fpm-tone-demod-recovery.md).
+
+
+A ternary counter update can merge stores/returns and change a byte input's
+lifetime even when all arithmetic is already correct. cEncodeChar's complete
+six-cell cross gives three exact ordinary-branch forms and zero ternary hits;
+byte-helper narrowing is unnecessary in that family (F11575). Select an
+independently supported form and review all callers: the direct byte form
+preserves edprintf, while shared helper changes affect it. Multiple hits bound
+a common source property, not a unique original spelling.
+[Carrier/control cross](../encode-carrier-recovery.md).
+
+
+Check siblings for a proved output-lifetime/countdown pattern, but rerun the
+cross: generate2's four cells yield only the combined148-byte exact hit
+(F11576), preserving its two separate scale reads and demod's existing gain.
+The callee must define both outputs before use; a matching sibling is evidence
+for transfer, not permission to apply it blindly to phase-reversal generators.
+[Quadrature transfer](../fpm-tone-pair-recovery.md).
+
+
+A register-heavy oscillator residual can still conceal a real signed-word
+boundary. Fixed negative traversal and naturally reached counter32760 expose
+FPM_TONE_generate discrepancies that ordinary answer-tone tests miss (F11577).
+Use adequate buffers and valid history before changing source. Narrowing locals
+can recover cmpw while eager Boolean lowering appears already in initial RTL;
+that is not allocator evidence. Direct field predicates recover branches, then
+owner-counter update plus predicate order and private-phase capture boundary
+recover the full213 bytes. Early source field writes can be coalesced into
+conditional final stores. [Bounded recovery](../fpm-tone-sine-recovery.md).
+
+
+Primitive array-new can preserve an element-count boundary that manual byte
+allocation folds into a different instruction. Psd's five-cell scaffold/control
+cross recovers both82-byte constructors when the second float array uses new[];
+first-only and unused allocator scaffold raw-reproduce baseline (F11578).
+Two exact cells emit the same complete object: choose the consistent two-array
+form without claiming unique first-allocation spelling. Verify cookies, emitted
+allocator symbols, exact sizes, uninitialized buffer content and every TU body.
+C++ replay must include configured CXX flags, not only the C profile.
+[Allocation transfer](../psd-array-new-recovery.md).
+
+
+Owned-object publication can distinguish otherwise similar constructor code.
+V90SpectralVerifier publishes Psd at+4 after nested construction in the blob;
+manual allocation assigned to the member before construction obscured that
+lifetime. Raw-local/late assignment and direct placement-expression assignment
+emit the same162-byte exact clones (F11579). Compare the call/store boundary
+and preserve parameter-member reloads; do not infer allocator changes from
+register colours alone. [Full-TU controls](../v90sv-publication-recovery.md).
+
+
+Publication transfer has limits: Resampler history-local and conditional-owner
+forms recover the blob allocation/pointer-store boundary and174-byte length
+but still differ in44 bytes (F11580); complete TU exact set unchanged. Do not
+adopt a size-only hit or expand arbitrary initialization-store permutations.
+[Closed family](../resampler-history-publication-controls.md).
+
+
+A sibling count-local transfer can recover only an arithmetic prefix.
+Descrambler<int,int> becomes107B/BYTES19 across27 header consumers with
+no exact gains; Scrambler's prior success is not a full-preimage proof
+(F11581). Require every defining copy and full body, preserve negative
+controls and close the tested arithmetic family.
+[Shared-header transfer](../descrambler-count-controls.md).
+
+
+Opposite-order duplicate pretests before a member cursor is initialized can
+expose an outer source guard around a for loop. FloatARMA's independent
+denominator/numerator cross has only one full hit: both padding guards
+recover both612-byte clones (F11582). Denominator-only gets the same length
+but differs171 bytes; numerator-only stays596B. Cross guards, retain full
+bodies and inspect final cursor state, rather than treating size as fidelity.
+[Guard recovery](../floatarma-padding-recovery.md).
+
+
+An inline narrowing cast can still be folded into a table relocation, while
+assignment into a short index preserves the same compiler's conversion
+boundary. TONE_read needs short masked phase, bounded quadrants and stored
+short reflections; the width-only cross leaves11 differing bytes, both
+storage forms raw-agree on the full121-byte object (F11584). Use fixed
+exhaustive input coverage and full-TU/relocation controls, not explicit
+registers or assumed original spelling.
+[Width/storage cross](../tone-read-width-recovery.md).
+
+Unconditional min assignment is not universally an exactness unlock.
+FloatFIR setCoefficients' four min-store/nested-update cells recover selected
+boundaries but none the complete body (F11583); close the family rather than
+expand arbitrary variable/store permutations.
+[Closed control cross](../floatfir-coefficient-control.md).
+
+
+A word load does not establish unsigned source type. RxClampV32's member
+is already signed short; countdown/conversion controls close without a gain
+(F11585). [Closed domain](../rxclamp-count-controls.md).
+
+Matching loop/return shape and even total size does not establish a divider
+preimage. GetFP_Value's bounded arithmetic/lifetime families leave byte
+mismatches; preserve the static zero-divisor fidelity observation separately
+from unrun runtime/reachability claims (F11586).
+[Controls](../getfp-divider-controls.md).
+
+Aggregate copies and short element counts are independent boundaries:
+FPM_MTD_create needs both, plus short loop counter and removal of an
+unsupported allocation-success guard. Only the combined16-cell cross recovers
+184B exactly (F11587). Verify exceptional outcomes with fixed child processes
+and successful controls; an added NULL return can hide a blob fault and alter
+fidelity. [Recovery](../fpm-mtd-create-recovery.md).
+
+
+After aggregate configuration copy, subsequent arithmetic may read the owner
+fields rather than the incoming pointer. FPM_MRF_init also uses the original
+fresh argument as an allocation carrier and a short clear counter (F11588).
+An8-cell independent cross needs all three for full193B exactness; counter+
+carrier alone reaches size but differs30 bytes. Keep growth ownership/debug
+ordering and verify growth through valid successive initialization.
+[Recovery](../fpm-mrf-init-recovery.md).
+
+
+A short local inside a shared inlined helper is not a universal conversion
+carrier. Phasor interpolation fraction-width transfer alone adds one byte
+per oscillator without recovering their bodies (F11589). Preserve the
+complete TU/table controls and close that local-width family; existing
+exhaustive fixtures are not evidence for an unrun candidate.
+[Controls](../phasor-fraction-controls.md).
+
+
+An unsigned-word operand can lose its additional bits when its arithmetic
+result is assigned short. Phasor's original-word × fraction-width cross
+raw-merges unsigned+short with short-only, with no exact gains (F11590).
+A separate observed register/load role is a hypothesis to test, not a source
+preimage once the bounded cross refutes it.
+[Controls](../phasor-consumption-controls.md).
+
+
+Use-site signedness can differ between allocation and clearing: FPM_FSD_init
+allocates an unsigned-word trace length but clears with signed comparisons.
+Shared short counter plus that allocation conversion closes its full268-byte
+body; short counter alone misses one byte (F11591). Test requested allocation
+sizes and untouched allocated contents at negative component boundaries.
+Do not retype the field or narrow a promoted loop bound merely to avoid the
+blob's own counter wrap. [Recovery](../fpm-fsd-init-recovery.md).
+
+
+Word countdowns/cached members/narrowed total can recover FSM loop structure
+without its complete229-byte body (F11592). Keep the tested four-axis family
+closed; upper return-register bits do not uniquely type the public API.
+[Controls](../fsm-modulate-controls.md).
+
+A duplicated positive-count pretest motivates a guard experiment, not an
+exact source claim. FSE_getdiag loop-only guard reaches217B vs229B without
+exactness (F11593). Inspect the branch destination instruction before inferring
+an exceptional return: it moves the selected count, not zero. Preserve invalid
+preimage attempts and existing negative-count fixture evidence separately.
+[Controls](../fse-getdiag-guard-controls.md).
+
+
+Generic helper coverage does not validate a parent's child configuration.
+BwChDem_Create's ratio28996 differs from object's29000 even while existing
+waveform tests pass (F11594); fixed owned-child comparison catches all five
+constructors. Recover literal fidelity independently from exactness. Deferred
+const-table definition raw-reproduces baseline, so initializer visibility does
+not unlock this first-entry load. Keep const/data controls; no source-order
+or mutable/volatile score fitting. [Controls](../bwch-constructor-controls.md).
+
+
+A later readonly initializer may still be visible when unit-at-a-time parsing
+precedes expansion. Cross initializer placement with that pass before attributing
+constant folding to source order (F11595). Initial RTL can confirm the mechanism
+without recovering the body: Bw Create regains its table load and size but still
+has a fixed store-displacement mismatch, while Progress and data layout change.
+Compare named data owners and relocations separately from section padding/order;
+never adopt the option merely because one instruction reappears.
+[Controls](../bwch-unit-visibility-controls.md).
+
+
+Early loads can identify original local lifetimes even when field widths are
+already right. ECC init caches near-delay and line fill before allocation and
+clears; both locals recover the607-byte body (F11596). Short and promoted-int
+spellings raw-merge, so claim the retained lifetime rather than a unique width.
+Use fixed alias controls to expose rereads, labelled component-only when no
+modem history is proved. A bystander free's dead POP may change too; record
+that gain without inventing a source change in free.
+[Recovery](../ecc-init-cache-recovery.md).
+
+
+Do not treat early index initialization plus separated postincrement as an
+exact source recovery merely because size approaches the object. V22 MRF's
+four-cell cross closes without a hit (F11597): combined227Bvs228 still changes
+saved-register count and sequencing. Distinguish RHS sampling before a
+postincrement assignment from incrementing after its store; these have
+different local lifetimes. [Controls](../v22-mrf-index-controls.md).
+
+
+Sampling the RHS before work[k++] is a distinct discriminator, but V22 MRF's
+four-cell follow-up also fails (F11598), growing244→245B. After two negative
+batches, park nearby index/temporary synonyms and return to independent
+operand or field evidence. A bounded failed family does not establish that
+source recovery is globally exhausted.
+[Scope review](../v22-mrf-index-controls.md).
+
+
+Opposite temporary-array rail placement and early work-index lifetime motivate
+an independent stack/source cross, but do not force an exact preimage.
+V22 PPS's four cells restore selected boundaries yet fail the complete290B
+body (F11599). Close the family, preserve arrays/data/symbol controls and
+select another operand/use lead. [Controls](../v22-pps-init-controls.md).
+
+
+Distinguish a sentinel countdown from a postdecrement test using initial RTL
+and final flags. MTD sentinel retains CMPWffff; postdecrement reproduces the
+blob's DEC/narrow/INCWoldflags but still misses the complete297B function
+(F11600/F11601). Short energy locals do not by themselves reproduce its clamp.
+Terminal ternary lowering is another early-stage discriminator; sharedverdict
+also fails (F11602). Close these staged families, preserve data/body controls,
+and do not promote a one-byte size difference into a byte preimage.
+[Controls](../mtd-detect-controls.md).
+
+
+Review an inlined helper's complete TU, including bystanders. Shared IIR's
+counter/cursor/feed-forward narrowing eight-cell cross has no full hit
+(F11603), and count changes untouched II despite unchanged size. Do not add
+an uninitialized output merely to match the blob's undefined zero-section
+return; preserve the fixture's exclusion and demand an independent discriminator
+before more local permutations. [Controls](../iir-boundary-controls.md).
+
+
+A use-site word conversion does not prove a word-width running carrier.
+Block-update's promoted-position control reflects the blob's full-width
+subtraction and later narrowing but fails its complete244B body (F11604).
+Keep arithmetic bounds separate from service reachability, close the bounded
+family and do not fit accumulator widths or stack allocation by size.
+[Controls](../block-position-controls.md).
+
+
+Local stack-word addresses and store/reload pairs support testing an ordinary
+inlined helper, without forcing address escapes. Div32 helper×word-index
+cross reproduces these boundaries, and guarded do/while restores conditional
+count-store placement, but neither closes the full body (F11605/F11606).
+Review error epilogues and narrowing widths, not just size. Audit fixture
+cross-product claims: two marginal sweeps need not cover every pair. Keep
+concrete missing fixed vectors and close declaration/frame permutations.
+[Controls](../div32-normalization-controls.md).
+
+
+Signed-word increment and comparison evidence can recover a loop even when
+its complete initializer still misses. V34 detector short counters reproduce
+its prologue and clearing loops, but two observed post-loop store-order axes
+fail the full body (F11607/F11608). Close the finite family, keep the partial
+recovery and select independent evidence rather than permute fields/registers.
+[Controls](../v34-detector-initialization-controls.md).
+
+
+An unread callee slot does not establish an absent source argument. Audit all
+caller stack writes before dropping a nominally dead scalar: restoring MRF/FSD
+free arguments recovers four complete callers (F11609). Cross each API change,
+use isolated consistent header overlays, then rebuild every caller/callee and
+adapt test consumers. Recover observed literals, not invented ownership meaning
+or a unique formal width. Check unchanged helper bodies and non-exact bystanders;
+API fidelity is source evidence even when only some callers become exact.
+[Recovery](../free-argument-recovery.md).
+
+
+Extend an ignored-argument recovery only after auditing every caller. The
+FSE/SRE×ECC×PPS cross restores13 explicit literal1 slots and yields five exact
+callers (F11610); two V27 bodies still miss initial setup, so preserve their
+unmatched status. Ignored formal type/name/meaning remain unproved. Full
+partial links may lose positioned relocation matches despite complete function
+gains; report both, with all-TU data/export and differential controls.
+[Recovery](../free-argument-recovery-rest.md).
+
+
+Repeated owner loads after calls can distinguish a cached child local from
+original direct owner expressions. B103 needs both dsp andhdx lifetimes to
+recover its full deletion body (F11611); either alone misses. Retain guards,
+call order and real lifecycle allocator checks. Do not infer a prior behavior
+bug from a register/source lifetime recovery, or transfer it to already-matching
+loads without new evidence. [Controls](../free-argument-recovery-rest.md).
+
+
+Call argument evaluation and a preceding pointer assignment need not schedule
+identically. When a deletion suffix already matches, compare direct owner-member
+arguments against the explicit child-local statement at the first calls. V27
+RX/TX recover complete bodies this way (F11612); preserve later matching owner
+reloads. Review register-renamed bystanders and avoid claiming unique spelling
+from setup order. [Recovery](../v27-delete-argument-recovery.md).
+
+
+Keep ignored arguments and return recovery as independent axes. Audit every
+caller slot, including original input counts that survive a resampler overwrite.
+AGC's nineteen explicit fourth slots recover RxHdxNoSignal (F11613) with the
+callee raw-identical while preserving void and field reloads. An object's EAX
+consumption is evidence for a return hypothesis; a reconstruction header does
+not prove the original lacked a result. Review genuine control-factoring
+bystanders, not just edited callers. [Recovery](../agc-fourth-argument-recovery.md).
+
+
+Stage return semantics separately from call-argument restoration. Six observed
+AGC EAX consumers motivate an int return, with two signed-short conversions;
+minimal and complete twelve-TU controls recover no exact bodies (F11614).
+Ignored results can still affect a caller body, so audit all API consumers.
+Close the finite family without asserting that zero gains disprove the original
+return type. Reject an empty domain and preflight all generators before the
+first compile; preserve invalid attempts outside valid result artifacts.
+[Controls](../agc-return-controls.md).
+
+
+Cached-pointer controls do not exhaust an ordinary delete expression. A
+typed owned class pointer plus one blob pointer retained across destructor/
+free supports testing scalar delete separately from its TU-local adapter.
+V90Phase4Modulator's adapter-only cell raw-merges; member delete recovers both
+94B clones and leaves all51 bystanders unchanged (F11617). Preserve ownership,
+null guard and automatic member destruction. A recovered first-emitted body
+does not establish that later register/scheduler differences must disappear.
+[Recovery](../v90p4-owned-delete-recovery.md).
+
+
+Cross each independently observed owned-member lifetime. V90Modulator's
+three typed destructor/free pairs all retain one blob pointer across calls.
+Each partial member-delete combination matches199B but still fails the
+complete body; all three recover both clones with all23 bystanders unchanged
+(F11618). Use complete bytes/relocations to distinguish the crossed family
+from an accidental size match. Preserve primitive frees and generated member
+destructors, and isolate the adapter-only control.
+[Recovery](../v90-owned-delete-recovery.md).
+
+
+A nonvirtual owned class deletion can emit both destructor and host free.
+Do not infer explicit destructor syntax from two calls alone. V92EchoCanceller
+retains the same pointer across both calls with ordinary guarded member delete,
+recovering both195B clones while all13 other bodies remain unchanged (F11619).
+Keep conditional pointer clears inside their observed guards; test the adapter
+independently. Large layout growth can still reduce positioned partial-link
+matches despite complete function recovery. [Controls](../v92ec-owned-delete-recovery.md).
+
+
+A five-owner cross can reveal a bystander register effect separately from
+source recovery. All31 nonzero V92Modulator crosses recover enterPhase3 by
+ECX/EDX renaming, but only all-five recovers both complete503B destructors
+(F11620). Every partial also503B yet fails bytes. Audit the bystander, preserve
+virtual and primitive releases, and label temporarily masked-owner fixture
+subsets synthetic rather than pre-release histories.
+[Recovery](../v92-owned-delete-recovery.md).
+
+
+Typed-owner recovery does not authorize rewriting adjacent primitive releases.
+V90/V92 modem crosses recover four destructor clones plus two unchanged
+register-renamed bystanders (F11621); phase2Info remains bare free, V92 mapping
+helpers remain unguarded and automatic embedded destruction stays generated.
+Audit the full ownership boundary and keep genuine child lifecycles separate
+from temporarily masked or pre-released guard fixtures.
+[Controls](../modem-owned-delete-recovery.md).
+
+
+A bounded owner screen can recover source lifetime without recovering bytes.
+V90Demodulator all-eight removes128B and leaves only a dead-pop mismatch,
+but loses constructor identity and changes a progress jump-table layout
+(F11622). Preserve that informative loss without adopting it as a gain or
+calling19 cells exhaustive. [Controls](../v90dem-owned-delete-controls.md).
+
+
+Revisit a C-language exclusion only with independent TU provenance. F11430
+places VPCMXF_Delete and its class destructor in VpcmFloModem.cpp; ordinary
+class delete then recovers109B from117B by suppressing a sibling free jump,
+with all33 bystanders unchanged (F11623). Preserve the same-TU destructor
+inlining boundary. [Recovery](../vpcmx-delete-recovery.md).
+
+
+Store duplication in the object can motivate a control-placement experiment
+without proving original duplicated source. CID reset branch-local clearing
+recovers118B shape but remains BYTES8 (F11624). Both exits'EAX0 separately
+motivate an ordinary zero-result return hypothesis; its crossed int cells
+still miss (F11625). Close the finite family, preserve baseline controls and
+ABI uncertainty, and do not expand into register or return-type spellings.
+[Controls](../cid-reset-controls.md).
+
+
+An equal-size output-helper candidate is still a negative result when its
+complete body differs. FPM_div's helper/word-index cross reaches150B but
+BYTES105; independent initialization ownership after the zero guard gives
+BYTES108 (F11626). Count all emitted functions separately from blob-common
+symbols, reproduce repeated controls, and close the declared family rather
+than perturbing counter scope, loops or frames. [Controls](../div16-normalization-controls.md).
+
+
+Separate postreload scheduling from x87 stack conversion before classifying
+exchange differences as allocation. Notch's sched2 control changes54B to48B,
+but neither addition tree becomes exact (F11627). Scheduled load hoisting
+precedes inserted exchanges; a disabled-pass near miss supports neither a
+production option change nor invented coefficient locals.
+[Stage controls](../notch-addition-tree.md).
+
+
+C++ TU provenance enables delete hypotheses but does not establish pointee
+lifetime. K56's actual factory pointer reaches class API calls and+0xc record
+accesses, yet all relevant class methods are empty (F11628). Keep receiver
+use, record extent, sizeof and ownership separate; do not select scalar or
+array delete solely to suppress a sibling free jump.
+[Audit](../k56-owner-boundary-audit.md).
+
+
+Audit added defensive guards against the actual first memory access. Removing
+dp_wrapper_delete's unsupported null early return recovers85B EXACT (F11629),
+while both other TU functions stay unchanged. Preserve independently observed
+child guards and validate actual constructed lifecycles; do not invent invalid
+null fixtures or widen the blob contract. Aligned whole-object allocation can
+stay constant despite a shorter exact function.
+[Recovery](../dpw-delete-guard-recovery.md).
+
+
+An unsupported defensive guard is a source-contract lead, not a guarantee
+of a complete byte recovery. FixedRC reset needs external memory-call
+boundaries too; their cross restores270B shape but remains BYTES41 (F11630).
+Explicitly review replacement imports and shared helper callers. Tone creation
+loses its added allocation guard yet remains SIZE90 (F11631). Close these
+finite domains and review distinct allocation/dispatch boundaries instead of
+perturbing registers or accepting only a nearer size.
+[Reset controls](../fixedrc-reset-controls.md),
+[tone controls](../tone-allocation-guard-controls.md).
+
+
+Preserve guard extent, not only the existence of a null check. FixedRC's state
+check guards the state free itself, and child free operands reload the owner
+between unknown external calls (F11634). Both properties recover113B Delete;
+either partial cell does. Pair host allocation and deallocation, restore only
+observed partial clears, and validate asymmetric created-owner lifecycles.
+Full factory ownership can be source-supported without closing factory bytes;
+keep those residuals and intentional import/jump-table changes visible. A new
+ledger must first fire on the known baseline mismatch:162/652 failures became
+652/652 passes here, with six real V22 bridge witnesses restored.
+[Recovery and bounded domains](../fixedrc-factory-recovery.md).
+
+Recover a loop's widths and traversal independently before testing helper
+factoring. V34 receive queue's eight counter/output/readwidth controls miss;
+direct conditional wrap then eliminates the helper's cursor temporary and
+recovers70B EXACT (F11635). Audit the inlined caller too: V34agc changes only
+in its queue prefix, with complete later body unchanged. An exact function
+gain can still reduce whole-link positioned matches; report both.
+[Recovery](../v34-rxqueue-recovery.md).
+
+A captured child load is a valid source lifetime hypothesis, not a promised
+byte match. CID string capture restores the pre-loop owner access but stays
+SIZE1 (F11636). Keep capture after the external clear, audit actual allocation
+and output/owner boundaries, and close the finite family rather than expanding
+register or pointer synonyms. [Control](../cid-string-capture-controls.md).
+
+Separate sample-read order from cursor-helper factoring. V34 transmit queue
+needs both to recover68B EXACT (F11638). A fixed overlap witness detects the
+baseline's lost highhalf sample, while ordinary separate-buffer tests cannot.
+Label that allocated component probe synthetic rather than asserting modem
+reachability. Preserve other helper users and report alignment-absorbed size
+changes. [Recovery](../v34-txqueue-recovery.md).
+
+Return-width and predicate hypotheses need complete bodies, not selected
+instructions or equal size. FIFO8 read's wider results remove sign extension
+but remainSIZE14 (F11637); bitreverse's statement predicate reaches64B but
+emitsTEST/JE/MOV instead ofSETNE (F11639). Keep both negative controls,
+preserve ABI uncertainty, and close each family without adjacent synonyms.
+[Return controls](../fifo-read-return-controls.md),
+[predicate controls](../v34-bitreverse-init-controls.md).
+
+Inspect both comparison operands in initial RTL before inferring source
+width from the final CMP. Decision's short best_dist alone still compares
+SI values; both short distance locals produce HI comparison and CMPW
+(F11640–F11642). A normalized unused return register can motivate a bounded
+API control without uniquely recovering its declaration. Even after cursor,
+comparison, guarded reads and result normalization reproduce, differing
+spills and entry layout do not authorize register/declaration variants.
+Preserve repeated raw controls and close the finite family.
+[Controls](../v34-decision-controls.md).
+
+A recovered countdown backedge does not prove the entry boundary is recovered.
+FloatFIR's postdecrement control keeps the authentic zero guard but introduces
+a second entry test, growing287B to303B with no exact gain (F11643). Preserve
+the complete control and its denominator; do not remove observed guards or
+expand counter synonyms to fit the partial result.
+[Controls](../floatfir-countdown-controls.md).
+
+Repeated word counter narrowing is source evidence but not a guarantee of
+complete recovery. V34TimingHPFilter's int→short control restores increment
+narrowing and word comparison, reaching76B yet remainingBYTES29 (F11644).
+Even alpha comparison fails prologue ordering. Keep all26 function/48 data
+controls, distinguish recovered operations from complete identity, and close
+the width family without arithmetic or register permutations.
+[Controls](../v34-hp-counter-controls.md).
+
+Separate loop traversal from recovered arithmetic. V34 echo cursor/count
+controls reach reference sizes yet fail complete/alpha bodies, with meaningful
+bystander changes (F11645/F11646). Preserve original zero-count boundaries,
+report all 26 function/48 data controls, and close the finite families.
+[Controls](../v34-echo-cursor-controls.md).
+
+A conventional advancing structure pointer can recover an indexed loop's
+observed cursor without changing widths or arithmetic: V8 DFT energy becomes
+74B EXACT (F11647). Validate all siblings/data and production raw promotion,
+then report whole-link layout effects separately. Register local headers for
+every experimental source directory; setup failures are invalid, not compiler
+rejections (F11648). Preserve the failed setup and prove the corrected baseline
+raw-reproduces before counting any candidate.
+[Recovery and apparatus control](../v8-dftenergy-recovery.md).
+
+Counter width can determine whether GCC reverses a loop. V8 queue int counters
+reverse to countdowns; short counters retain the blob's forward narrowing
+and recover two complete94B helpers (F11649). Cross independent helpers to
+separate each gain, and audit inline consumers too: V8agc's changed prefix
+includes scheduling/alignment, while its complete later suffix and relocations
+stay identical. Do not infer global original flags from two source recoveries.
+[Recovery](../v8-queue-width-recovery.md).
+
+An advancing sample cursor can reproduce addressing and outer-counter spills
+without recovering the complete loop. DFT update's cursor grows150→172B
+against164B and fails instruction count too (F11650). Keep sample loads inside
+the bin loop to preserve alias lifetime, review the whole TU, and close that
+traversal domain without promoting a partial match.
+[Control](../v8-dftupdate-cursor-controls.md).
+
+Preserve ascending overlap behavior when recovering pointer-copy source.
+V8 coefficient copy keeps its signed-short loop and changes only indexed
+assignment to *dst++=*src++, recovering45B EXACT with all twelve siblings
+unchanged (F11651). Report alignment-absorbed growth and positioned-layout
+loss independently. [Recovery](../v8-copycoeff-cursor-recovery.md).
+
+An independent word-counter/coefficient-cursor cross can recover both predicted
+operations without closing a FIR body (F11652). Retain valid indexed history;
+do not add an unused final before-array pointer decrement to fit disassembly.
+Separate the recovered operations from merged-history and accumulator residuals,
+and close finite source domains without forcing spills or registers.
+[Controls](../v8-fsktx-source-controls.md).
+
+A typed embedded-subobject owner can recover compact offsets and lifetime
+across a call without changing store order. ANSam's six tone-pointer accesses
+plus owner-relative envelope_phase recover85B EXACT (F11653). Review sibling
+bodies and anonymous tables too: raw jump-table addends move with function
+alignment, but each function-interior target must still agree. Report that
+controlled raw-data change explicitly, not as unchanged nontext.
+[Recovery](../v8-ansam-owner-recovery.md).
+
+Dead-index removal can enable automatic reversal without closing call-boundary
+normalization. Tonequeue's output pointer recovers ADD2/countdown but stays
+SIZE4, with meaningful inlinehandshake/relocation-layout changes (F11654).
+An exact byte-consuming callee does not require upper argument-slot bits to
+be normalized; do not infer a unique wider prototype from their absence.
+Close traversal independently of any future ABI investigation.
+[Controls](../v8-tonequeue-cursor-controls.md).
+
+Read-only reduction cursors need their own control even when neighboring FIR
+cursor domains failed. Echo history-energy restores load/ADD2/countdown but
+merges entry with backedge, missing the blob's distinct skip/count copy
+(F11655). Use initial loop diagnostics to distinguish compiler strength
+reduction from source traversal, then preserve complete negative evidence
+and input boundaries. [Control](../v34-echo-energy-controls.md).
+
+Treat observed byte-sample lifetimes as independent boundaries, including a
+load between two output stores. V22 control's three capture axes still fail
+full bodies despite the closest148B versus145B (F11656). A whole control-byte
+value domain on disjoint objects does not cover alias timing; require valid
+object/representation evidence before claiming a behavioral difference or
+original API contract. Do not choose captures or retype flags by nearest size.
+[Controls](../v22-control-capture-controls.md).
+
+
+Cross count-capture timing with old-value postdecrement when dispatch and
+loop flags independently support them. MakeTxData’s combined spelling
+recovers the complete body and five function-relative table targets; neither
+axis alone does (F11657). Anonymous section offsets remain UNRESOLVED in the
+strict comparator. Preserve that distinction until a general resolver proves
+table extent and targets with negative controls; never replace target identity
+with masked addends or a named exception. [Evidence](../v22-txdata-recovery.md).
+
+
+Anonymous jump-table identity needs guard-derived extent and ordered relocated
+instruction destinations, not table-byte masking (F11658). Prove a separate
+bounded detector on real ELF positives and explicit refusals before modifying
+canonical grading. Review control transfers beyond Jcc: LOOP, far/prefixed
+jumps and entries into guard instruction interiors can bypass an incomplete
+parser. Preserve unsupported cases as unproved, and state the ABI-entry
+boundary. [Controls](../anonymous-jumptable-proof.md).
+
+
+Integrate proved table identity through the actual shared body/verdict path
+and retest every refusal there (F11659). Ordinary anonymous data must stay
+unresolved; changed ordered destinations must be RELOC. Known incoming-edge
+checks need prefix handling outside the owner too. Review the full exact-set
+diff and production hashes: MakeTxData’s 195-byte gain completes a previously
+committed source recovery, while the comparator stage emits no new code.
+[Integration](../anonymous-jumptable-proof.md).
+
+
+Separate local type lowering from allocator state. updateAlpha’s short
+quotient restores the HI predicate in initial RTL and combine but leaves
+its SI arithmetic pseudo, allocation conflicts and two spills unchanged;
+full body becomes205B versus169B (F11660). A recovered TESTW is not a
+recovered source body or a spill improvement. Preserve compiler metadata
+normalization narrowly and delimit diagnostics before allocated instructions.
+[Two-cell control](../v34-alpha-width-controls.md).
+
+
+Classify unresolved relocations by the actual consuming instruction before
+expanding a dispatch proof. The five remaining complete-body candidates are
+four jump-table consumers and one REP aggregate initializer (F11661).
+A typed source literal and equal immutable payload prove read values but do
+not alone prove canonical destination identity. Audit references/overlaps and
+address escape; retain ordinary-section refusal while that distinction is
+open. [Screen](../anonymous-jumptable-proof.md).
+
+
+A post-store reload is a testable source boundary, but recovering it alone
+does not recover the whole function (F11662). Minimum-level diagnostics gain
+the blob's second cfg+0x60 read through initial, combine and allocated RTL,
+yet remain101B versus104B. Review every sibling and nontext relocation, and
+count allocated instructions separately from diagnostic listings. Do not turn
+an unexplained root+4 carrier into an invented header or volatility variant;
+separate-storage fixtures do not establish reachable aliasing.
+[Two-cell control](../v34-minlevel-reload-controls.md).
+
+
+Separate eager evaluation from Boolean-width recovery (F11663): replacing
+logical OR with bitwise OR restores the unconditional parameter read, yet
+integer promotions produce OR32/AND1 rather than OR8/MOVZBL. Inspect the
+callee and inline consumer before drawing a return-type conclusion. Removing
+an unsupported index initializer can likewise change scheduling/alignment
+without closing the body (F11664). Prove first assignment mathematically,
+keep synthetic fixture labels, and preserve failed diagnostic-dump baselines
+as invalid; a no-dump control must still reproduce raw production.
+[Controls and mandatory scope review](../v90-predicate-initializer-controls.md).
+
+
+Before changing branch cost, inspect the compiler's default and every folding
+gate (F11665). i686 already has cost2; fold_truthop additionally requires two
+comparison trees and simple RHS operands. A captured bool predicate retains
+branches, while a captured int value enables eager SI folding. A bool result
+can restore QI OR yet leave an extra widening. These are distinct pre-allocation
+mechanisms, and none is full-body recovery. Caller EAX tests support the int
+API; narrow operations alone do not establish a narrow return declaration.
+Explain moved table addends using independently checked named-function offsets
+and instruction boundaries; keep that object review separate from grading.
+[Closed domains](../v90-predicate-initializer-controls.md).
+
+
+Cross owner lifetime with independently observed scalar boundaries before
+attributing a wrapper gap to allocation (F11666). B103 reload recovery and
+unsigned result extension are distinct effects; removing the explicit short
+count cast emits identical code under the current prototype. Close that
+conversion family rather than inventing a caller signature. Signed16 input
+loads and zero-extended results bound implementation semantics, not uniquely
+formal declarations; validate wider-result behavior with real initialized
+components and adequate buffers. A short reference alias can hide the high
+result bit even while differential tests pass.
+[Full-TU controls](../b103-transmit-boundary-controls.md).
+
+
+Observe full scalar results at a valid initialized boundary before treating
+return-extension differences as allocation noise (F11667). A signed-short
+reference alias hides results with bit15 set. Bound buffer indices separately
+from input formal ranges: MRF accepts positive signed16 inputs, but its signed
+output index limits this fixed 10:9 boundary to32768 outputs. Preserve and
+exclude invalid over-limit probes. Audit the shared header and every caller;
+unsigned-short versus narrowed-int result families can emit identical objects
+without proving the original declaration. Caller-local narrowing remains
+independent. [Measured controls](../mrf-result-width-controls.md).
+
+
+For scalar loop widths, separate narrowing at the update from narrowing only
+at function return. The MRF counter-only control restores signed truncation
+after increment but does not recover the full helper. Ring-next narrowing
+must precede the wrap comparison to reproduce the observed boundary. Keep
+convolution indices at their separately measured width; cross independently
+evidenced families instead of enumerating arbitrary local-type permutations.
+[Ongoing bounded MRF controls](../mrf-counter-width-controls.md).
+
+
+MRF's nine-cell countdown/conditional cross (F11669) restores all predicted
+local boundaries without full identity. Input-loop old-value nonzero tests
+and conditional-zero destination identity are independent source mechanisms;
+equal lengths can hide different bodies. Close the declared family after
+complete review, retain losing explanatory controls, and reframe before
+more nearby type/order changes. [Ledger](../mrf-counter-width-controls.md).
+
+
+Inspect Boolean predicate lifetime across x87 status clobbers before calling
+a mismatch allocation-only (F11670). Power-first && recovers an exact72-byte
+loop where index-first && skips a comparison, index-first & carries a predicate
+across FNSTSW, and power-first & introduces integer-promotion zeroing. Ordinary
+logical operand order can recover both access and lifetime boundaries without
+casts or forced registers. Cross access/order/operator controls and compare
+complete bodies, not just sizes. [Full-TU recovery](../v90-power-index-predicate-recovery.md).

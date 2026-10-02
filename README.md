@@ -92,6 +92,10 @@ third_party/spandsp/   test peer, LGPL, never linked into src/
 
 ## Tools
 
+Host Python analysis dependencies (including the strict byte comparator’s ELF
+reader) are installed with `python3 -m pip install -r tools/ci/requirements.txt`.
+The Gentoo compiler image remains separate from these host tools.
+
 | tool | purpose |
 |---|---|
 | `tools/tumap.py` | recover the 281-TU map from `STT_FILE` symbols |

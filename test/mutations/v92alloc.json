@@ -1,57 +1,57 @@
 [
  {
   "label": "shrink one constellation allocation to half",
-  "find": "\tp->constellations[2] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);",
-  "replace": "\tp->constellations[2] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ / 2);"
+  "find": "\tp->constellations[2] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];",
+  "replace": "\tp->constellations[2] = new int[(V92_PARAMSINFO_CONSTELLATION_SZ / 2) / sizeof(int)];"
  },
  {
   "label": "drop the sixth constellation allocation",
-  "find": "\tp->constellations[5] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n}",
+  "find": "\tp->constellations[5] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];\n}",
   "replace": "}"
  },
  {
   "label": "store the first constellation at the fourth slot",
-  "find": "\tp->constellations[0] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n\tp->constellations[1]",
-  "replace": "\tp->constellations[3] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);\n\tp->constellations[1]"
+  "find": "\tp->constellations[0] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];\n\tp->constellations[1]",
+  "replace": "\tp->constellations[3] = new int[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(int)];\n\tp->constellations[1]"
  },
  {
   "label": "allocate the coefficient banks at the constellation size",
-  "find": "\tp->p1 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);",
-  "replace": "\tp->p1 = (float *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);"
+  "find": "\tp->p1 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];",
+  "replace": "\tp->p1 = new float[V92_PARAMSINFO_CONSTELLATION_SZ / sizeof(float)];"
  },
  {
   "label": "drop the fourth coefficient bank",
-  "find": "\tp->p2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
+  "find": "\tp->p2 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];\n}",
   "replace": "}"
  },
  {
   "label": "add a fifth coefficient bank the object does not allocate",
-  "find": "\tp->p2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
-  "replace": "\tp->p2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n\tp->constellations[0] = (int *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}"
+  "find": "\tp->p2 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];\n}",
+  "replace": "\tp->p2 = new float[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(float)];\n\tp->constellations[0] = new int[V92_PARAMSINFO_FILTERCOEF_SZ / sizeof(int)];\n}"
  },
  {
   "label": "null the constellation slot after freeing it",
-  "find": "\tif (p->constellations[0] != 0)\n\t\tsysdep_free(p->constellations[0]);",
-  "replace": "\tif (p->constellations[0] != 0) {\n\t\tsysdep_free(p->constellations[0]);\n\t\tp->constellations[0] = 0;\n\t}"
+  "find": "\tdelete[] p->constellations[0];",
+  "replace": "\tdelete[] p->constellations[0];\n\tp->constellations[0] = 0;"
  },
  {
   "label": "null every coefficient slot after freeing it",
-  "find": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);",
-  "replace": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);\n\tp->z2 = 0;"
+  "find": "\tdelete[] p->z2;",
+  "replace": "\tdelete[] p->z2;\n\tp->z2 = 0;"
  },
  {
   "label": "delegate the null test to the allocator",
-  "find": "\tif (p->constellations[4] != 0)\n\t\tsysdep_free(p->constellations[4]);",
+  "find": "\tdelete[] p->constellations[4];",
   "replace": "\tsysdep_free(p->constellations[4]);"
  },
  {
   "label": "invert the null test on a constellation slot",
-  "find": "\tif (p->constellations[3] != 0)\n\t\tsysdep_free(p->constellations[3]);",
+  "find": "\tdelete[] p->constellations[3];",
   "replace": "\tif (p->constellations[3] == 0)\n\t\tsysdep_free(p->constellations[3]);"
  },
  {
   "label": "free the third coefficient bank twice and the fourth never",
-  "find": "\tif (p->p2 != 0)\n\t\tsysdep_free(p->p2);",
-  "replace": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);"
+  "find": "\tdelete[] p->p2;",
+  "replace": "\tdelete[] p->z2;"
  }
 ]

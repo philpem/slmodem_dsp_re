@@ -156,6 +156,49 @@ demod_frag(const char *what, struct fpm_fsd *fa, struct fpm_fsd *fb,
 	compare_demod(what, fb, fa, tag);
 }
 
+/* Constructor-only conversion controls. Negative trace counts skip the
+ * signed clearing loop, yet the blob allocates the unsigned-word length.
+ * These are component boundaries, not demodulator lifecycle inputs. */
+static int
+run_trace_allocation_boundaries(void)
+{
+	static const short lengths[] = {-32768, -1, 0, 1, 12, 160, 32767};
+	unsigned k;
+	diff_begin("FSD init trace allocation/clearing boundaries");
+	for (k = 0; k < sizeof(lengths) / sizeof(lengths[0]); k++) {
+		struct fpm_fsd a, b;
+		struct fpm_fsd_cfg cfg;
+		unsigned words = (unsigned short)lengths[k];
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.fir = ref_B103_CHAN_INTRP;
+		cfg.fir_taps = 15;
+		cfg.iir = ref_B103_IIR_LPF;
+		cfg.iir_len = 3;
+		cfg.bit_samples = 8;
+		cfg.trace_len = lengths[k];
+		memset(&a, 0, sizeof(a));
+		memset(&b, 0, sizeof(b));
+		ref_FPM_FSD_init(&a, &cfg, 1);
+		FPM_FSD_init(&b, &cfg, 1);
+		diff_eq_int("reference trace allocated (%ld)", a.trace != 0, 1, lengths[k]);
+		diff_eq_int("source trace allocated (%ld)", b.trace != 0, a.trace != 0, lengths[k]);
+		diff_eq_int("reference trace request (%ld)", harness_alloc_reqsize(a.trace), words * sizeof(short), lengths[k]);
+		diff_eq_int("source trace request (%ld)", harness_alloc_reqsize(b.trace), words * sizeof(short), lengths[k]);
+		compare(&b, &a);
+		if (lengths[k] < 0 && a.trace && b.trace) {
+			unsigned i;
+			/* The entire allocated array must retain the allocator's fill. */
+			for (i = 0; i < words; i++) {
+				diff_eq_int("negative trace source/reference word (%ld)", b.trace[i], a.trace[i], i);
+				diff_eq_int("negative trace reference untouched (%ld)", a.trace[i], (short)(HARNESS_MALLOC_FILL * 0x101), i);
+			}
+		}
+		ref_FPM_FSD_free(&a);
+		FPM_FSD_free(&b, 1);
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -199,7 +242,7 @@ main(void)
 	rc |= diff_end();
 
 	ref_FPM_FSD_free(&a);
-	FPM_FSD_free(&b);
+	FPM_FSD_free(&b, 1);
 
 	/* --- FPM_FSD_demodulate, on a real signal --------------------- */
 	{
@@ -328,6 +371,8 @@ main(void)
 	printf("t_fpm_fsd: %d bits (%d zero, %d one), %d resync, %d free-run, "
 	       "%d capped\n", bits_emitted, saw_bit[0], saw_bit[1],
 	       saw_resync, saw_freerun, saw_cap_hit);
+
+	rc |= run_trace_allocation_boundaries();
 
 	return rc;
 }

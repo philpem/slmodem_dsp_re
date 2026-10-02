@@ -67,7 +67,9 @@ void FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg,
  * @brief Free the buffers allocated by FPM_FSD_init() with `fresh != 0`.
  * @param state  The demodulator to tear down.
  */
-void FPM_FSD_free(struct fpm_fsd *state);
+/* F11609: callers pass a second scalar; the blob ignores its value.
+ * int is a conventional spelling, not a uniquely recovered width/name. */
+void FPM_FSD_free(struct fpm_fsd *state, int unused);
 
 /*
  * The library default: no filters, but Bell 103's scalars throughout.

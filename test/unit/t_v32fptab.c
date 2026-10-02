@@ -437,7 +437,7 @@ test_pps_use(void)
 	diff_eq_int("the shaper produced a non-zero sample (%ld)", moved, 1, 0);
 
 	ref_FPM_PPS_free(theirs);
-	FPM_PPS_free(&ours);
+	FPM_PPS_free(&ours, 1);
 
 	return diff_end();
 }

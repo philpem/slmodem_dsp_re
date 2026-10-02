@@ -183,9 +183,8 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
  * the block's layout has two independent statements behind it.  See the
  * header and finding F9252.
  *
- * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED (0x099603,
- * before `FPM_MRF_free`).  Finding F8876; `V21RX_delete` above carries the
- * same note for the same reason.
+ * F11609 restores literal second argument 1 before FPM_MRF_free
+ * (0x099603). The callee ignores it, but it is part of the caller's bytes.
  *
  * No NULL guard anywhere, and the handle goes unconditionally; D1150.
  */
@@ -195,7 +194,7 @@ V21TX_delete(void *modem)
 	struct v21_tx *tx = (struct v21_tx *)modem;
 
 	FPM_FSM_delete(&tx->dsp->fsm);
-	FPM_MRF_free(&tx->dsp->mrf);
+	FPM_MRF_free(&tx->dsp->mrf, 1);
 	sysdep_free(tx->dsp->scratch);
 	sysdep_free(tx->dsp);
 

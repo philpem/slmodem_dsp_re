@@ -116,7 +116,9 @@ void FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg,
  * @brief Free the buffers allocated by FPM_ECC_init() with `fresh != 0`.
  * @param state  The canceller to tear down.
  */
-void FPM_ECC_free(struct fpm_ecc *state);
+/* F11610: callers supply a scalar that the blob does not read.
+ * Its original width/name/meaning are unproved; int is conventional. */
+void FPM_ECC_free(struct fpm_ecc *state, int unused);
 
 /**
  * @brief Subtract the echo estimate from samples in place and adapt the

@@ -3,8 +3,8 @@
   "why": "Five of Psd's six members.  `Psd::process` is not reconstructed (finding F876), so nothing here touches the overlap arithmetic, the accumulation or the four OutputOption arms -- `m_overlap` is carried and never used, and this set can only check that it is carried.  The window assertions all have the same trap behind them: WINDOW_BOXCAR is all ones, so a call that ignored its argument would agree with a boxcar reference for ever.  `windows_differ` in the test is what makes those assertions non-vacuous, and the two `setWindowType` entries below are what show it firing.  As in floatarma.json, no entry is allowed to write past a buffer: where the natural mutation would overrun, the entry moves the value the other way and the same assertion catches it."},
 
  {"label": "the spectrum buffer is two words longer than the map says",
-  "find": "\tm_fft = (float *)sysdep_malloc((m_length + 1) * sizeof(float));",
-  "replace": "\tm_fft = (float *)sysdep_malloc((m_length + 2) * sizeof(float));"},
+  "find": "\tm_fft = new float[m_length + 1];",
+  "replace": "\tm_fft = new float[m_length + 2];"},
 
  {"label": "the window is designed into the spectrum buffer",
   "find": "\tdesignWindow(window, m_window, m_length);\n\tm_overlap = overlap;",

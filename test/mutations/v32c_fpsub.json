@@ -24,8 +24,8 @@
  },
  {
   "label": "the equaliser is freed from the resampler's offset",
-  "find": "\tFPM_FSE_free(FSE(FP(modem)));",
-  "replace": "\tFPM_FSE_free((struct fpm_fse *)(void *)FIELD(FP(modem), V32FP_SRE));"
+  "find": "\tFPM_FSE_free(FSE(FP(modem)), 1);",
+  "replace": "\tFPM_FSE_free((struct fpm_fse *)(void *)FIELD(FP(modem), V32FP_SRE), 1);"
  },
  {
   "label": "the half-duplex context's buffer is released but the context is not",

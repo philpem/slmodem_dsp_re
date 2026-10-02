@@ -27,16 +27,9 @@
  * trees: the 2400 arm and the answer arm allocate different sub-objects.  A
  * destructor tested on one arm has been tested on one tree.
  *
- * WHY THE HOST RATE IS THE DATAPUMP'S OWN 8000 AND NOT SOMETHING THE WRAPPER
- * HAS TO CONVERT.  At 9600 `dp_wrapper_create` builds two rate converters and
- * the ledger goes four blocks short -- not because `v22_delete` misses them,
- * but because `src/core/FixedRC.c` releases them through libc `free` where
- * the object calls `sysdep_free`, so the harness's counters never see the
- * calls.  That is finding F8530, it is a real divergence in a file outside
- * this one's scope, and it is not this test's to paper over.  At 8000 the
- * wrapper builds no converters, every block goes through the hook, and the
- * two ledgers are equal rather than merely close.  Re-add a 9600 arm when
- * F8530 is settled: it is four more blocks of coverage for nothing.
+ * F8530 exposed four unrecorded converter frees at a 9600 Hz host rate.
+ * F11634 restores paired host ownership; this fixture now includes the
+ * six native 8000 Hz trees and six 9600 Hz bridge trees, without tolerance.
  */
 
 #include <stdio.h>
@@ -85,7 +78,7 @@ struct ledger {
  * the constructor is always the blob's.
  */
 static struct ledger
-cycle(int id, int caller, int ours, int *allocs_after_create)
+cycle_rate(int id, int caller, int ours, int *allocs_after_create, int srate)
 {
 	static struct dp_operations op;
 	struct ledger l;
@@ -95,7 +88,7 @@ cycle(int id, int caller, int ours, int *allocs_after_create)
 	op.name = "v22";
 
 	harness_alloc_reset();
-	dp = ref_v22_create(0, id, caller, V22_DP_SRATE, V22_DP_FRAG, &op);
+	dp = ref_v22_create(0, id, caller, srate, V22_DP_FRAG, &op);
 	if (allocs_after_create != 0)
 		*allocs_after_create = harness_alloc.allocs;
 
@@ -108,6 +101,12 @@ cycle(int id, int caller, int ours, int *allocs_after_create)
 	l.null = harness_alloc.free_null;
 	l.overflow = harness_alloc.overflow;
 	return l;
+}
+
+static struct ledger
+cycle(int id, int caller, int ours, int *allocs_after_create)
+{
+	return cycle_rate(id, caller, ours, allocs_after_create, V22_DP_SRATE);
 }
 
 int
@@ -181,6 +180,25 @@ main(void)
 		diff_eq_int("return (arm %ld)", o.ret, r.ret, (long)k);
 	}
 	rc |= diff_end();
+
+	diff_begin("v22_delete: six real 9600 Hz bridge trees");
+	for (k = 0; k < sizeof(arms) / sizeof(arms[0]); k++) {
+		int made_ref = 0, made_ours = 0;
+		struct ledger r = cycle_rate(arms[k].id, arms[k].caller, 0,
+					     &made_ref, 9600);
+		struct ledger o = cycle_rate(arms[k].id, arms[k].caller, 1,
+					     &made_ours, 9600);
+		diff_eq_obj("bridge owner ledger", struct ledger, &o, &r, k);
+		diff_eq_int("bridge %ld actually built", made_ref > 4, 1, k);
+		diff_eq_int("bridge %ld same allocations", made_ours, made_ref, k);
+		diff_eq_int("bridge %ld no leak", o.live, 0, k);
+		diff_eq_int("bridge %ld frees all", o.frees, o.allocs, k);
+		diff_eq_int("bridge %ld no bad free", o.bad, 0, k);
+		diff_eq_int("bridge %ld no null free", o.null, 0, k);
+		diff_eq_int("bridge %ld no overflow", o.overflow, 0, k);
+	}
+	rc |= diff_end();
+	printf("v22 ownership denominator: six native and six bridge trees\n");
 
 	return rc;
 }

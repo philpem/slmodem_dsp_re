@@ -270,12 +270,12 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 /*
  * ---------------------------------------------------------------------------
  * V17TX_delete -- .text 0x098e00, 107 bytes.  See v17fax.h; the object's
- * literal 1 before `FPM_PPS_free` is F8876 again and is not reproduced.
+ * literal 1 before FPM_PPS_free is restored by F11610.
  */
 void
 V17TX_delete(void *modem)
 {
-	FPM_PPS_free(&TXBLOCK(modem)->pps);
+	FPM_PPS_free(&TXBLOCK(modem)->pps, 1);
 	sysdep_free(TXBLOCK(modem)->ring.sym);
 	sysdep_free(TXBLOCK(modem));
 

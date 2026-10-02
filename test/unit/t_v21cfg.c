@@ -608,7 +608,7 @@ test_use_mrf(void)
 	cmp_shorts("mrf.cfg.coeff[%ld]", a.cfg.coeff, b.cfg.coeff, 360);
 	cmp_shorts("mrf.history[%ld]", a.history, b.history, 40);
 
-	FPM_MRF_free(&a);
+	FPM_MRF_free(&a, 1);
 	ref_FPM_MRF_free(&b);
 
 	return diff_end();
@@ -689,7 +689,7 @@ test_use_fsd(void)
 			   2 * 3);
 		cmp_shorts("fsd.trace[%ld]", a.trace, b.trace, 160);
 
-		FPM_FSD_free(&a);
+		FPM_FSD_free(&a, 1);
 		ref_FPM_FSD_free(&b);
 	}
 

@@ -69,6 +69,7 @@ static void *alloc_slots[HARNESS_ALLOC_SLOTS];
  */
 static unsigned long alloc_ord[HARNESS_ALLOC_SLOTS];
 static unsigned long alloc_next_ord;
+static int alloc_fail_next;
 
 /*
  * The size each live allocation was ASKED for.
@@ -197,13 +198,27 @@ harness_alloc_reset(void)
 	memset(alloc_ord, 0, sizeof(alloc_ord));
 	memset(alloc_size, 0, sizeof(alloc_size));
 	alloc_next_ord = 0;
+	alloc_fail_next = 0;
 	memset(&harness_alloc, 0, sizeof(harness_alloc));
+}
+
+void
+harness_alloc_fail_next(void)
+{
+	alloc_fail_next = 1;
 }
 
 void *
 sysdep_malloc(unsigned int size)
 {
-	void *p = malloc(size);
+	void *p;
+
+	if (alloc_fail_next) {
+		alloc_fail_next = 0;
+		harness_alloc.fail_injected++;
+		return 0;
+	}
+	p = malloc(size);
 
 	if (p != 0) {
 		/*

@@ -74,10 +74,9 @@
  * hdx + 0x00 .. +0x2b with nothing over.  Evidence class 2, a callee that
  * types it.
  *
- * The object passes a FOURTH argument to `FPM_AGC_agc` (the constant 1, at
- * 0xc(%esp)) which the callee never reads; `src/pump/v32/v32demod.c`,
- * `src/pump/v23/bwchdem.c` and `src/pump/v22/v22data.c` all record this at
- * their own call sites and pass three.  So does this file.
+ * F11613 restores the observed fourth argument, literal 1, although the
+ * callee never reads it. Omitting an unread slot preserves behavior but
+ * changes caller code generation.
  *
  * ---------------------------------------------------------------------------
  * THE TWO FORMAT STRINGS, WHICH ARE THE AUTHOR'S OWN WORDS
@@ -324,7 +323,7 @@ RxHdxTone(struct v32_modem *modem, short *in, unsigned short *out, unsigned shor
 	    || (modem->params.options & V32_OPT_0400) != 0
 	    || hdx->state_left > 180) {
 		/* The object passes a fourth argument here; see the header. */
-		FPM_AGC_agc((&hdx->agc), in, *count);
+		FPM_AGC_agc((&hdx->agc), in, *count, 1);
 
 		if (FPM_TONE_detect(HDX(modem)->tone0, in,
 				    (short)*count) == 0)
@@ -356,7 +355,7 @@ RxHdxNoSignal(struct v32_modem *modem, short *in, unsigned short *out,
 		 + hdx->symbol_len);
 
 	/* The object passes a fourth argument here; see the header. */
-	FPM_AGC_agc((&hdx->agc), in, *count);
+	FPM_AGC_agc((&hdx->agc), in, *count, 1);
 
 	if (FPM_TONE_detect(HDX(modem)->tone0, in,
 			    (short)*count) != 0) {
@@ -412,7 +411,7 @@ RxHdxPhsReversal(struct v32_modem *modem, short *in, unsigned short *out,
 	short miss;
 
 	/* The object passes a fourth argument here; see the header. */
-	FPM_AGC_agc(&HDX(modem)->agc, in, *count);
+	FPM_AGC_agc(&HDX(modem)->agc, in, *count, 1);
 	FPM_TONE_kill(HDX(modem)->tone1, in, (short)*count);
 	FPM_TONE_kill(HDX(modem)->tone2, in, (short)*count);
 

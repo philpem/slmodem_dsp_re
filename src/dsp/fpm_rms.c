@@ -28,10 +28,10 @@ short
 FPM_rms(const short *samples, unsigned short count)
 {
 	int sum = 0;
-	unsigned i;
 
-	for (i = 0; i < count; i++) {
-		int x = samples[i];
+	/* The blob uses a 16-bit countdown and advances the input (F11554). */
+	while (count-- != 0) {
+		int x = *samples++;
 
 		/*
 		 * Scale first, then square: (x/36) * x rather than (x*x)/36.

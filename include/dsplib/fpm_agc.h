@@ -108,6 +108,7 @@ void FPM_AGC_Release(struct fpm_agc *agc);
  *                 left completely untouched; see the partitioning note in
  *                 src/dsp/fpm_agc.c.
  */
-void FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count);
+/* F11613: callers supply a fourth scalar; the callee never reads it. */
+void FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused);
 
 #endif /* DSPLIB_FPM_AGC_H */

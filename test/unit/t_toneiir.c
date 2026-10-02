@@ -561,6 +561,44 @@ run_toneiir_create(void)
 	return diff_end();
 }
 
+/* A valid create boundary: allocation is allowed to return NULL. Test both
+ * config forms, reject one request per side, and verify one-shot recovery. */
+static int
+run_toneiir_allocation_failure(void)
+{
+	struct toneiir_cfg ca, cb;
+	struct toneiir *a, *b;
+	int i;
+
+	diff_begin("toneiir_create: allocation failure");
+	make_cfg(&ca, 1, 300, 2200);
+	make_cfg(&cb, 0, 300, 2200);
+	for (i = 0; i < 2; i++) {
+		harness_alloc_reset();
+		harness_alloc_fail_next();
+		a = ref_toneiir_create(0, i ? &ca : 0);
+		harness_alloc_fail_next();
+		b = toneiir_create(0, i ? &cb : 0);
+		diff_eq_int("blob returns NULL (%ld)", a == 0, 1, i);
+		diff_eq_int("ours returns NULL (%ld)", b == 0, a == 0, i);
+		diff_eq_int("rejected requests (%ld)", harness_alloc.fail_injected, 2, i);
+		diff_eq_int("no successful allocations (%ld)", harness_alloc.allocs, 0, i);
+		diff_eq_int("no live allocations (%ld)", harness_alloc.live, 0, i);
+		diff_eq_int("no live bytes (%ld)", harness_alloc.bytes, 0, i);
+		/* The failure control is consumed, not a permanent allocator change. */
+		a = ref_toneiir_create(0, &ca);
+		b = toneiir_create(0, &cb);
+		diff_eq_int("blob resumes allocation (%ld)", a != 0, 1, i);
+		diff_eq_int("ours resumes allocation (%ld)", b != 0, a != 0, i);
+		ref_toneiir_delete(a);
+		toneiir_delete(b);
+		diff_eq_int("balanced recovery (%ld)", harness_alloc.live, 0, i);
+		diff_eq_int("recovery allocations (%ld)", harness_alloc.allocs, 2, i);
+	}
+	harness_alloc_reset();
+	return diff_end();
+}
+
 static int
 run_toneiir_reset(void)
 {
@@ -838,6 +876,7 @@ main(void)
 
 	rc |= run_toneiir_config();
 	rc |= run_toneiir_create();
+	rc |= run_toneiir_allocation_failure();
 	rc |= run_toneiir_reset();
 	rc |= run_toneiir_progress("toneiir_progress: 550 Hz in band",
 				  550.0, 9000, 40000, 300, TONEIIR_PRESENT);

@@ -28,6 +28,14 @@ F8122. TxHdxTRN's memory subtraction versus cached update does not yet give
 an independent source family. ModDataV22, DetSequence and V22FP_modem remain
 screened, uncompiled reserves. A shortlist is not a proof of recoverability.
 
+Later TxHdxTRN controls (F11553) distinguish a fresh unsigned-input fold lead
+from that subtraction hypothesis: explicit unsigned-short conversion recovers
+one extension instruction, without exact identity; unsigned mask changes
+nothing. GCSE PRE first introduces the cached subtraction. Disabling load
+motion changes nothing; disabling all GCSE restores memory RMW but loses
+two exact neighbors. Both finite domains are now closed, no adoption.
+[Pass-boundary record](v32-txhdxtrn-pass-boundary.md).
+
 ## Exact source recoveries
 
 The blob's TxNOP and RxClampV22 initialize signed-short counters to 159 and
@@ -130,3 +138,34 @@ DetSequence's proposed loop transfer and a separately observed found lifetime
 are tested and closed by F11546: [six valid cells](v32-detsequence-loops.md),
 no adoption. The remaining measured discrepancy begins at allocation/reload;
 these local graph recoveries do not justify another spelling matrix.
+
+
+F11549's word-home pair recovers DetSequence's slots but is non-exact and closed;
+F11550 certifies peephole exposure without adopting flags. The independent
+predecessor GenSequence lead (F11551–F11552) crosses countdown with narrow-before-
+mask index update; combined source is exact 118B. [Ledger](v32-gensequence-recovery.md).
+
+The fresh non-exact screen at74cda31e has159 eligible bodies from493 shared
+symbols after the declared path exclusions (300 objects). FPM_rms is a new
+object-backed loop lead, not a nearest-size assumption: its four crossed
+countdown/cursor cells recover62-byte exactness only together (F11554).
+[Domain and validation](fpm-rms-countdown.md).
+
+Dual_TONE_create supplies a fresh common-result case (F11555): guarded
+successful initialization followed by return st recovers64-byte exactness
+in a two-cell full-TU domain. Notch's independently observed addition grouping
+is tested separately (F11556); it recovers the operation tree but staysSIZE2,
+so the closed domain contributes evidence and no adopted source.
+[Constructor](dualtone-create-common-return.md), [notch](notch-addition-tree.md).
+
+PCM's fresh cursor lead (F11557–F11558) is staged, not a spelling sweep:
+cursor alone recovers the table walk, a late-inlined size argument recovers
+linear2ulaw, and reusing the input magnitude recovers linear2alaw. Seven valid
+full-TU cells preserve six functions/eight globals and recover6/6 exact.
+[Helper-bound discriminator and validation](pcm-segment-search-recovery.md).
+
+Float2Linear adds a counterexample to blindly adopting countdown-plus-cursor:
+only cursors with its original ascending loop recover101-byte exactness
+(F11559). The four-cell TU domain and .09.loop reversal record show why the
+machine decrement is not a source spelling. Reverse conversion is an exact,
+unchanged control. [Recovery and validation](float2linear-cursors.md).

@@ -131,7 +131,54 @@ run(const struct fpm_ecc_cfg *cfg, short near_delay, short far_delay,
 	diff_eq_int("re-init kept the buffer", b.line == keep, 1, input);
 
 	ref_FPM_ECC_free(&a);
-	FPM_ECC_free(&b);
+	FPM_ECC_free(&b, 1);
+}
+
+/* Synthetic component alias control (F11596), not modem reachability.
+ * Borrowed arrays with fresh=0; the near clear overwrites cfg.fill before
+ * line initialization. The object retains the fill value sampled at entry.
+ * Do not pass these borrowed buffers to ECC_free.
+ */
+static int
+init_fill_alias(void)
+{
+	static const short fills[] = { -32768, -1, 16, 0x0103 };
+	unsigned n;
+
+	diff_begin("ECC init: synthetic borrowed-buffer fill alias");
+	for (n = 0; n < sizeof(fills) / sizeof(fills[0]); n++) {
+		struct fpm_ecc a, b;
+		struct fpm_ecc_cfg cfg;
+		short qa[1], qb[1], la[2], lb[2];
+		short ca[3][2], cb[3][2];
+		int j;
+
+		memset(&a, 0, sizeof(a));
+		memset(&b, 0, sizeof(b));
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.far_lag = 2;
+		cfg.near_taps = 1;
+		cfg.fill = fills[n];
+		a.near_i = &a.cfg.fill;
+		b.near_i = &b.cfg.fill;
+		a.near_q = qa;
+		b.near_q = qb;
+		a.line = la;
+		b.line = lb;
+		for (j = 0; j < 3; j++) {
+			a.coef[j] = ca[j];
+			b.coef[j] = cb[j];
+		}
+		ref_FPM_ECC_init(&a, &cfg, 0);
+		FPM_ECC_init(&b, &cfg, 0);
+		diff_eq_int("reference fill overwritten (%ld)", a.cfg.fill, 0, n);
+		diff_eq_int("source fill overwritten (%ld)", b.cfg.fill, 0, n);
+		for (j = 0; j < 2; j++) {
+			diff_eq_int("reference retained fill (%ld)", la[j], fills[n], 2*n+j);
+			diff_eq_int("source line matches (%ld)", lb[j], la[j], 2*n+j);
+		}
+	}
+	return diff_end();
 }
 
 /*
@@ -248,7 +295,7 @@ cancel_case(const char *tag, const struct fpm_ecc_cfg *cfg, short near_delay,
 		     (adapt_near == 1 || adapt_far == 1)) ? 1 : 0, 0);
 
 	ref_FPM_ECC_free(&a);
-	FPM_ECC_free(&b);
+	FPM_ECC_free(&b, 1);
 	return diff_end();
 }
 
@@ -328,7 +375,7 @@ main(void)
 {
 	struct fpm_ecc_cfg cfg;
 	int i, j;
-	int rc;
+	int rc = 0;
 
 	for (i = 0; i < 6; i++)
 		for (j = 0; j < 256; j++) {
@@ -341,6 +388,8 @@ main(void)
 		    &ref_ECC_CFG, 0);
 	if (diff_end() != 0)
 		return 1;
+
+	rc |= init_fill_alias();
 
 	diff_begin("FPM_ECC_init");
 
@@ -377,7 +426,7 @@ main(void)
 	/* No configuration at all: the library default is taken. */
 	run(0, 12, 6, 10);
 	run(0, 0, 0, 11);
-	rc = diff_end();
+	rc |= diff_end();
 
 	/* The V.32 shape again, and every combination of the three switches. */
 	memset(&cfg, 0, sizeof(cfg));

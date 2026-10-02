@@ -1,41 +1,41 @@
 [
  {
-  "label": "NOTE: a three-phase cadence with two DIFFERENT end comparisons, and the fixture is built to separate them. Cases land exactly ON each boundary as well as either side of it; whole cadences are driven block by block with lengths that are and are not multiples of the block; and the tone OBJECT is compared byte for byte after every call, which is the only observable that can see the generator running (or not running) during a phase whose output is all zeros. Six degenerate shapes -- zero count, negative count, zero and negative lengths -- are in the first section."
+  "label": "NOTE: a three-phase cadence with two DIFFERENT end comparisons, and the fixture is built to separate them. Cases land exactly ON each boundary as well as either side of it; whole cadences are driven block by block with lengths that are and are not multiples of the block; and the tone OBJECT is compared byte for byte after every call, which is the only observable that can see the generator running (or not running) during a phase whose output is all zeros. Six degenerate shapes -- zero count, negative count, zero and negative lengths -- are in the first section. F11563 retargets anchors after pointer-loop and elapsed-field recovery; fault meanings retained, no mutation execution or snapshot refresh."
  },
  {
   "label": "the tone phase ends one sample early, which agrees except when elapsed + count lands exactly on TONE_LEN",
-  "find": "\t\tif (elapsed >= ans->tone_len) {",
-  "replace": "\t\tif (elapsed > ans->tone_len) {"
+  "find": "\t\tif (ans->elapsed >= ans->tone_len) {",
+  "replace": "\t\tif (ans->elapsed > ans->tone_len) {"
  },
  {
   "label": "the silence phase ends one sample early, which is the tone phase's comparison and not its own",
-  "find": "\t\tif (elapsed > ans->silence_len) {   /* D405 */",
-  "replace": "\t\tif (elapsed >= ans->silence_len) {   /* D405 */"
+  "find": "\t\tif (ans->elapsed > ans->silence_len) {   /* D405 */",
+  "replace": "\t\tif (ans->elapsed >= ans->silence_len) {   /* D405 */"
  },
  {
   "label": "the tone phase measures itself against the silence length",
-  "find": "\t\tif (elapsed >= ans->tone_len) {",
-  "replace": "\t\tif (elapsed >= ans->silence_len) {"
+  "find": "\t\tif (ans->elapsed >= ans->tone_len) {",
+  "replace": "\t\tif (ans->elapsed >= ans->silence_len) {"
  },
  {
   "label": "the silence phase measures itself against the tone length",
-  "find": "\t\tif (elapsed > ans->silence_len) {   /* D405 */",
-  "replace": "\t\tif (elapsed > ans->tone_len) {   /* D405 */"
+  "find": "\t\tif (ans->elapsed > ans->silence_len) {   /* D405 */",
+  "replace": "\t\tif (ans->elapsed > ans->tone_len) {   /* D405 */"
  },
  {
   "label": "the counter is tested before the block is added to it",
-  "find": "\t\telapsed = ans->elapsed + count;\n\t\tif (elapsed >= ans->tone_len) {",
-  "replace": "\t\telapsed = ans->elapsed;\n\t\tif (elapsed >= ans->tone_len) {\n\t\t\telapsed += count;"
+  "find": "\t\tans->elapsed += count;\n\t\tif (ans->elapsed >= ans->tone_len) {",
+  "replace": "\t\tif (ans->elapsed >= ans->tone_len) {\n\t\t\tans->elapsed += count;"
  },
  {
   "label": "the tone phase carries its overrun into the silence instead of zeroing it",
   "find": "\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;",
-  "replace": "\t\t\tans->elapsed = elapsed - ans->tone_len;\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;"
+  "replace": "\t\t\tans->elapsed = ans->elapsed - ans->tone_len;\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;"
  },
  {
   "label": "the silence phase carries its overrun rather than zeroing it",
   "find": "\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_DONE;",
-  "replace": "\t\t\tans->elapsed = elapsed;\n\t\t\tans->phase = V32ANS_PHASE_DONE;"
+  "replace": "\t\t\tans->elapsed = ans->elapsed;\n\t\t\tans->phase = V32ANS_PHASE_DONE;"
  },
  {
   "label": "the tone phase advances straight to the done phase",
@@ -71,8 +71,8 @@
  },
  {
   "label": "the counter is read from the word above it",
-  "find": "\t\telapsed = ans->elapsed + count;\n\t\tif (elapsed >= ans->tone_len) {",
-  "replace": "\t\telapsed = *(int *)(void *)((unsigned char *)ans + V32ANS_ELAPSED + 4) + count;\n\t\tif (elapsed >= ans->tone_len) {"
+  "find": "\t\tans->elapsed += count;\n\t\tif (ans->elapsed >= ans->tone_len) {",
+  "replace": "\t\tans->elapsed = *(int *)(void *)((unsigned char *)ans + V32ANS_ELAPSED + 4) + count;\n\t\tif (ans->elapsed >= ans->tone_len) {"
  },
  {
   "label": "the generator is taken from the word below it",
@@ -91,37 +91,37 @@
  },
  {
   "label": "the silence phase runs the generator first and then zeroes over it, which no output comparison can see",
-  "find": "\t\tint i;\n\n\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;",
-  "replace": "\t\tint i;\n\n\t\tFPM_TONE_generate(ans->tone, out, (short)count);\n\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;"
+  "find": "\t\tint i;\n\n\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;",
+  "replace": "\t\tint i;\n\n\t\tFPM_TONE_generate(ans->tone, out, (short)count);\n\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;"
  },
  {
   "label": "the silence loop writes one sample too many",
-  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;",
-  "replace": "\t\tfor (i = 0; i <= count; i++)\n\t\t\tout[i] = 0;"
+  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;",
+  "replace": "\t\tfor (i = 0; i <= count; i++)\n\t\t\t*out++ = 0;"
  },
  {
   "label": "the silence loop's bound is unsigned, so a negative count writes 4 billion words",
-  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;",
-  "replace": "\t\tfor (i = 0; (unsigned int)i < (unsigned int)count; i++)\n\t\t\tout[i] = 0;"
+  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;",
+  "replace": "\t\tfor (i = 0; (unsigned int)i < (unsigned int)count; i++)\n\t\t\t*out++ = 0;"
  },
  {
   "label": "the silence is a constant that is not zero",
-  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;",
-  "replace": "\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 1;"
+  "find": "\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;",
+  "replace": "\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 1;"
  },
  {
-  "label": "the tone phase's ending arm falls through to the counter store, so the zero it just wrote is overwritten by the accumulated count",
-  "find": "\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n\t\t\treturn 1;\n",
-  "replace": "\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n"
+  "label": "the tone ending arm overwrites its reset with the accumulated counter",
+  "find": "\t\tif (ans->elapsed >= ans->tone_len) {\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n\t\t\treturn 1;\n",
+  "replace": "\t\tif (ans->elapsed >= ans->tone_len) {\n\t\t\tint accumulated = ans->elapsed;\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n\t\t\tans->elapsed = accumulated;\n\t\t\treturn 1;\n"
  },
  {
   "label": "the counter is not stored at all, so the cadence never advances",
-  "find": "\tans->elapsed = elapsed;\n\n\treturn 1;",
-  "replace": "\treturn 1;"
+  "find": "GenerateAnsTone(void *ctx, short *out, int count)\n{\n\tstruct v32_ans_tone *ans = (struct v32_ans_tone *)ctx;\n\tint phase = ans->phase;\n\n\tif (phase == V32ANS_PHASE_TONE) {\n\t\tFPM_TONE_generate(ans->tone, out, (short)count);\n\n\t\tans->elapsed += count;\n\t\tif (ans->elapsed >= ans->tone_len) {\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n\t\t\treturn 1;\n\t\t}\n\t} else if (phase == V32ANS_PHASE_SILENCE) {\n\t\tint i;\n\n\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;\n\n\t\tans->elapsed += count;\n\t\tif (ans->elapsed > ans->silence_len) {   /* D405 */\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_DONE;\n\t\t\treturn 1;\n\t\t}\n\t} else {\n\t\treturn 1;\n\t}\n\n\treturn 1;\n}",
+  "replace": "GenerateAnsTone(void *ctx, short *out, int count)\n{\n\tstruct v32_ans_tone *ans = (struct v32_ans_tone *)ctx;\n\tint phase = ans->phase;\n\tint elapsed;\n\n\tif (phase == V32ANS_PHASE_TONE) {\n\t\tFPM_TONE_generate(ans->tone, out, (short)count);\n\n\t\telapsed = ans->elapsed + count;\n\t\tif (elapsed >= ans->tone_len) {\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_SILENCE;\n\t\t\treturn 1;\n\t\t}\n\t} else if (phase == V32ANS_PHASE_SILENCE) {\n\t\tint i;\n\n\t\tfor (i = 0; i < count; i++)\n\t\t\t*out++ = 0;\n\n\t\telapsed = ans->elapsed + count;\n\t\tif (elapsed > ans->silence_len) {   /* D405 */\n\t\t\tans->elapsed = 0;\t/* D406 */\n\t\t\tans->phase = V32ANS_PHASE_DONE;\n\t\t\treturn 1;\n\t\t}\n\t} else {\n\t\treturn 1;\n\t}\n\n\treturn 1;\n}"
  },
  {
-  "label": "the done phase falls through to the counter store instead of returning",
+  "label": "the done phase writes zero to the counter instead of returning without touching it",
   "find": "\t} else {\n\t\treturn 1;\n\t}",
-  "replace": "\t} else {\n\t\telapsed = 0;\n\t}"
+  "replace": "\t} else {\n\t\tans->elapsed = 0;\n\t}"
  }
 ]

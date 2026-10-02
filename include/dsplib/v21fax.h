@@ -1085,10 +1085,9 @@ void *V21TX_create(void *modem, const struct v21tx_cfg *params);
  * `sysdep_free` of the pointer at +0x2c. Two readings of one block, neither
  * derived from the other, and they agree. Finding F9252.
  *
- * The literal 1 in the second argument slot is not reproduced. The object
- * plants one at 0x099603 before `FPM_MRF_free`, which takes a single
- * argument and reads no frame slot past the first. Finding F8876, and
- * `V17TX_delete` and `V21RX_delete` both carry the note.
+ * F11609 restores the literal second argument 1 at 0x099603 before
+ * FPM_MRF_free. The callee ignores it; its width/name/meaning remain
+ * unknown, but caller stack setup is part of byte fidelity.
  *
  * There is no NULL guard on anything and the handle is released
  * unconditionally by a sibling `jmp`, so a caller that supplied the storage
@@ -1154,13 +1153,9 @@ int V21TX_control(void *modem, const struct v21tx_ctl *arg);
  * about the same block, resamples what is left into the DSP block's own
  * `mag` buffer and demodulates that into `bits`.
  *
- * The object passes `FPM_AGC_agc` a fourth argument, the constant 1, and
- * uses the value left in `%eax` -- neither of which that function has. This
- * is the third site in the tree with the same shape (`src/pump/v23/
- * bwchdem.c` and `src/pump/v22/v22data.c` are the others) and it is
- * answered the same way: the extra argument has no observable effect and
- * is dropped, and the returned value is `agc.signal`, which is read out of
- * the state instead.
+ * F11613 retains the observed fourth argument, literal 1, ignored by the
+ * callee. The object also uses EAX, equal to agc.signal; this source still
+ * reads the field. Original return semantics remain a separate hypothesis.
  *
  * `bits` is spelled `short *` because that is what the half-duplex handler
  * signature carries; `FPM_FSD_demodulate` wants `unsigned short *` and the

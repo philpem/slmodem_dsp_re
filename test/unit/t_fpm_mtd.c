@@ -11,6 +11,10 @@
  */
 
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
 
 #include "harness.h"
 #include "dsplib/fpm_mtd.h"
@@ -37,6 +41,108 @@ compare(const struct fpm_mtd *ours, const struct fpm_mtd *ref)
 	diff_eq_int("wideband (%ld)", ours->wideband, ref->wideband, 0);
 	for (i = 0; i < ours->cfg.tones * 2; i++)
 		diff_eq_int("acc[%ld]", ours->acc[i], ref->acc[i], i);
+}
+
+/* Fixed constructor boundary probes, not detector lifecycle claims. Negative
+ * tone counts exercise the blob's short allocation conversion without entering
+ * its clearing loop. Positive counts stop before the allocation-wrap boundary. */
+static int
+run_create_boundaries(void)
+{
+	static const short counts[] = {-32768, -16385, 0, 1, 2, 7, 16383};
+	unsigned k;
+	int rc;
+
+	diff_begin("MTD create allocation-count boundaries");
+	for (k = 0; k < sizeof(counts) / sizeof(counts[0]); k++) {
+		struct fpm_mtd_cfg cfg;
+		struct fpm_mtd *a, *b;
+		unsigned bytes = (unsigned)((short)(counts[k] * 2)) * sizeof(short);
+
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.coeff = ref_MTDb103_COEF; /* create does not read coefficients */
+		cfg.tones = counts[k];
+		cfg.f0a = 0x1234;
+		a = ref_FPM_MTD_create(0, &cfg);
+		b = FPM_MTD_create(0, &cfg);
+		diff_eq_int("reference state exists (%ld)", a != 0, 1, counts[k]);
+		diff_eq_int("source state exists (%ld)", b != 0, a != 0, counts[k]);
+		if (a && b) {
+			diff_eq_int("acc allocation succeeds (%ld)", b->acc != 0, a->acc != 0, counts[k]);
+			diff_eq_int("reference acc allocated (%ld)", a->acc != 0, 1, counts[k]);
+			diff_eq_int("reference request bytes (%ld)", harness_alloc_reqsize(a->acc), bytes, counts[k]);
+			diff_eq_int("source request bytes (%ld)", harness_alloc_reqsize(b->acc), bytes, counts[k]);
+			diff_eq_int("f0a copied (%ld)", b->cfg.f0a, a->cfg.f0a, counts[k]);
+			compare(b, a);
+		}
+		if (a) ref_FPM_MTD_delete(a);
+		if (b) FPM_MTD_delete(b);
+	}
+	/* Default config and an aliasing aggregate copy are distinct paths. */
+	{
+		struct fpm_mtd *a = ref_FPM_MTD_create(0, 0);
+		struct fpm_mtd *b = FPM_MTD_create(0, 0);
+		diff_eq_int("default states exist (%ld)", a != 0 && b != 0, 1, 0);
+		if (a && b) {
+			/* Default coefficient pointers belong to their respective objects. */
+			a->cfg.coeff = b->cfg.coeff;
+			compare(b, a);
+			ref_FPM_MTD_create(a, &a->cfg);
+			FPM_MTD_create(b, &b->cfg);
+			compare(b, a);
+		}
+		if (a) ref_FPM_MTD_delete(a);
+		if (b) FPM_MTD_delete(b);
+	}
+	rc = diff_end();
+	return rc;
+}
+
+/* The blob dereferences the failed state allocation. Observe the outcome in
+ * separate children; successful controls prove the fixture itself can return. */
+static int
+create_child_status(int reference, int fail, int defaults)
+{
+	pid_t child = fork();
+	int status;
+	if (child < 0) return -1;
+	if (child == 0) {
+		struct rlimit core_limit = {0, 0};
+		struct fpm_mtd_cfg cfg;
+		struct fpm_mtd *state;
+		setrlimit(RLIMIT_CORE, &core_limit);
+		alarm(5);
+		memset(&cfg, 0, sizeof(cfg));
+		cfg.coeff = ref_MTDb103_COEF;
+		cfg.tones = 2;
+		if (fail) harness_alloc_fail_next();
+		state = reference ? ref_FPM_MTD_create(0, defaults ? 0 : &cfg)
+			: FPM_MTD_create(0, defaults ? 0 : &cfg);
+		if (!state) _exit(2);
+		if (reference) ref_FPM_MTD_delete(state);
+		else FPM_MTD_delete(state);
+		_exit(0);
+	}
+	if (waitpid(child, &status, 0) != child) return -1;
+	if (WIFSIGNALED(status)) return -WTERMSIG(status);
+	if (WIFEXITED(status)) return WEXITSTATUS(status);
+	return -1;
+}
+
+static int
+run_create_allocation_failure(void)
+{
+	int defaults;
+	diff_begin("MTD create first-allocation failure and successful controls");
+	for (defaults = 0; defaults < 2; defaults++) {
+		int a = create_child_status(1, 1, defaults);
+		int b = create_child_status(0, 1, defaults);
+		diff_eq_int("blob fails with SIGSEGV (%ld)", a, -SIGSEGV, defaults);
+		diff_eq_int("source failure matches (%ld)", b, a, defaults);
+		diff_eq_int("blob successful control (%ld)", create_child_status(1, 0, defaults), 0, defaults);
+		diff_eq_int("source successful control (%ld)", create_child_status(0, 0, defaults), 0, defaults);
+	}
+	return diff_end();
 }
 
 int
@@ -171,6 +277,9 @@ main(void)
 			    verdicts[0] != FPM_MTD_NOSIGNAL, 1, 0);
 	}
 	rc |= diff_end();
+
+	rc |= run_create_boundaries();
+	rc |= run_create_allocation_failure();
 
 	return rc;
 }

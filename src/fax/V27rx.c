@@ -377,9 +377,9 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 /*
  * Release everything the receiver owns, in the object's order.
  *
- * The instance pointer is re-read before every call rather than kept in a
- * local; that is what the object encodes and it is not observable, because
- * nothing on this path writes the instance.
+ * Child block pointers are read from the handle at each call. F11612
+ * retains direct owner-member arguments for the three embedded frees;
+ * assigning the child pointer earlier changes argument setup under GCC 3.4.2.
  */
 void
 V27RX_delete(void *modem)
@@ -387,14 +387,11 @@ V27RX_delete(void *modem)
 	struct v27_rx_block *rx;
 	struct v27_rx_shared *sh;
 
-	rx = ((struct v27_rx *)modem)->rx;
-	FPM_FSE_free((&rx->fse));
+	FPM_FSE_free(&((struct v27_rx *)modem)->rx->fse, 1);
 
-	rx = ((struct v27_rx *)modem)->rx;
-	FPM_SRE_free((&rx->sre));
+	FPM_SRE_free(&((struct v27_rx *)modem)->rx->sre, 1);
 
-	rx = ((struct v27_rx *)modem)->rx;
-	FPM_MRF_free((&rx->mrf));
+	FPM_MRF_free(&((struct v27_rx *)modem)->rx->mrf, 1);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	sysdep_free(rx->buf_b);

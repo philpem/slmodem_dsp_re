@@ -134,8 +134,11 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 	short scale;
 	int i;
 
-	if (st == 0)
+	if (st == 0) {
 		st = sysdep_malloc(sizeof(*st));
+		if (st == 0)
+			return 0;
+	}
 	if (cfg == 0)
 		cfg = &toneiir_configuration_default;
 

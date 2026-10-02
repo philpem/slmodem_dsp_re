@@ -37,13 +37,12 @@ GenerateAnsTone(void *ctx, short *out, int count)
 {
 	struct v32_ans_tone *ans = (struct v32_ans_tone *)ctx;
 	int phase = ans->phase;
-	int elapsed;
 
 	if (phase == V32ANS_PHASE_TONE) {
 		FPM_TONE_generate(ans->tone, out, (short)count);
 
-		elapsed = ans->elapsed + count;
-		if (elapsed >= ans->tone_len) {
+		ans->elapsed += count;
+		if (ans->elapsed >= ans->tone_len) {
 			ans->elapsed = 0;	/* D406 */
 			ans->phase = V32ANS_PHASE_SILENCE;
 			return 1;
@@ -52,10 +51,10 @@ GenerateAnsTone(void *ctx, short *out, int count)
 		int i;
 
 		for (i = 0; i < count; i++)
-			out[i] = 0;
+			*out++ = 0;
 
-		elapsed = ans->elapsed + count;
-		if (elapsed > ans->silence_len) {   /* D405 */
+		ans->elapsed += count;
+		if (ans->elapsed > ans->silence_len) {   /* D405 */
 			ans->elapsed = 0;	/* D406 */
 			ans->phase = V32ANS_PHASE_DONE;
 			return 1;
@@ -63,8 +62,6 @@ GenerateAnsTone(void *ctx, short *out, int count)
 	} else {
 		return 1;
 	}
-
-	ans->elapsed = elapsed;
 
 	return 1;
 }

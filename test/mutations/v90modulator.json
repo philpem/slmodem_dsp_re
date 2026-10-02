@@ -106,23 +106,23 @@
  },
  {
   "label": "dtor: the phase 3 modulator's guard is dropped",
-  "find": "\tif (phase3Modulator) {",
-  "replace": "\tif (1) {"
+  "find": "\tdelete phase3Modulator;",
+  "replace": "\tphase3Modulator->~V90Phase3Modulator();\n\tsysdep_free(phase3Modulator);"
  },
  {
   "label": "dtor: the phase 4 modulator is freed without being destroyed",
-  "find": "\t\tphase4Modulator->~V90Phase4Modulator();\n\t\tsysdep_free(phase4Modulator);",
-  "replace": "\t\tsysdep_free(phase4Modulator);"
+  "find": "\tdelete phase4Modulator;",
+  "replace": "\tif (phase4Modulator)\n\t\tsysdep_free(phase4Modulator);"
  },
  {
   "label": "dtor: the phase 3 modulator is destroyed and not freed",
-  "find": "\t\tphase3Modulator->~V90Phase3Modulator();\n\t\tsysdep_free(phase3Modulator);",
-  "replace": "\t\tphase3Modulator->~V90Phase3Modulator();"
+  "find": "\tdelete phase3Modulator;",
+  "replace": "\tif (phase3Modulator)\n\t\tphase3Modulator->~V90Phase3Modulator();"
  },
  {
   "label": "dtor: the converter is not released",
-  "find": "\tif (bitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();",
-  "replace": "\tif (!bitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();"
+  "find": "\tdelete bitsToSymbol;",
+  "replace": "\tif (!bitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t}"
  },
  {
   "label": "dtor: the symbol buffer's free is not guarded",

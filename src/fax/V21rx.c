@@ -243,13 +243,9 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
  * than cached in a local, because the object re-reads it: five separate
  * `mov 0x50(%ebx),%eax` between 0x099278 and 0x0992c8.
  *
- * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED.  The object
- * puts one there before `FPM_FSD_free` and `FPM_MRF_free`, both of which take
- * a single argument and never load a second -- so it is dead stack setup,
- * presumably from a version where they took a `fresh` flag like their init
- * counterparts.  `B103FP_delete` has exactly the same three call sites and
- * the same note; there is nothing to reproduce, because an argument the
- * callee never loads has no observable effect.
+ * F11609 restores literal second argument 1 for both FPM_FSD_free and
+ * FPM_MRF_free. Neither callee reads it; caller bytes still depend on it.
+ * Its original type/name and meaning remain unproved.
  *
  * There is no NULL guard on anything, and the last free releases the handle
  * unconditionally even when the caller supplied it.  Both reproduced; see
@@ -261,8 +257,8 @@ V21RX_delete(void *modem)
 	struct v21_rx *rx = (struct v21_rx *)modem;
 
 	FPM_MTD_delete(rx->dsp->mtd);
-	FPM_FSD_free(&rx->dsp->fsd);
-	FPM_MRF_free(&rx->dsp->mrf);
+	FPM_FSD_free(&rx->dsp->fsd, 1);
+	FPM_MRF_free(&rx->dsp->mrf, 1);
 
 	sysdep_free(rx->dsp->mag);
 	sysdep_free(rx->dsp);

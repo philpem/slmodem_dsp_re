@@ -79,34 +79,34 @@
       "replace" : "\tif (!bts) {\n\t\tbitsToSymbol = bts;"
    },
    {
-      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the ownership flag is not consulted",
-      "replace" : "\tif (bitsToSymbol) {"
+      "replace" : "\tdelete bitsToSymbol;"
    },
    {
-      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the ownership flag is read the wrong way round",
-      "replace" : "\tif (externalBitsToSymbol && bitsToSymbol) {"
+      "replace" : "\tif (externalBitsToSymbol)\n\t\tdelete bitsToSymbol;"
    },
    {
-      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the null guard is dropped",
-      "replace" : "\tif (!externalBitsToSymbol) {"
+      "replace" : "\tif (!externalBitsToSymbol) {\n\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t}"
    },
    {
-      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the converter is freed without being destroyed",
-      "replace" : "\t\tsysdep_free(bitsToSymbol);"
+      "replace" : "\tif (!externalBitsToSymbol && bitsToSymbol)\n\t\tsysdep_free(bitsToSymbol);"
    },
    {
-      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the converter is destroyed and not freed",
-      "replace" : "\t\tbitsToSymbol->~V90BitsToSymbol();"
+      "replace" : "\tif (!externalBitsToSymbol && bitsToSymbol)\n\t\tbitsToSymbol->~V90BitsToSymbol();"
    },
    {
-      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "find" : "\tif (!externalBitsToSymbol)\n\t\tdelete bitsToSymbol;",
       "label" : "dtor: the pointer is nulled afterwards, which the blob does not do",
-      "replace" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t\tbitsToSymbol = 0;"
+      "replace" : "\tif (!externalBitsToSymbol) {\n\t\tdelete bitsToSymbol;\n\t\tbitsToSymbol = 0;\n\t}"
    },
    {
       "_" : [

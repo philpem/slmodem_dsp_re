@@ -379,6 +379,9 @@ VPcmFloModem::resetBitPointer()
 #include "dsplib/sysdep.h"
 #include "dsplib/vpcm_tables.h"
 
+/* F11623: scalar class deletion retains the observed call-plus-return. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 /*
  * `v34initialbauds`, .rodata+0x3e0 in the object -- six bytes, all 1.  It is
  * the array this constructor copies into `v34BaudAllow` (+0x217); the note
@@ -2486,19 +2489,16 @@ typedef char vpcmxfterm_off_dem[
 extern "C" void VPCMXF_SessionTermination(VPcmFloModem *self);
 
 /*
- * `VPCMXF_Delete` is `if (p) { p->~VPcmFloModem(); sysdep_free(p); }`, and
- * `_ZN12VPcmFloModemD1Ev` at 0xd0a0 is the SAME six calls in the same order,
- * 0x61 bytes of it -- the destructor defined above, inlined here and emitted
- * out of line, one source statement producing both.  A hand-written sequence
- * here would give us a function with no `~VPcmFloModem` behind it.
+ * F11623: ordinary scalar delete inlines the same six member destructors
+ * as the out-of-line VPcmFloModem destructor, then calls the host free.
+ * The explicit destructor/free wrapper emitted a sibling jump instead.
+ * Adapter-only raw-merges; this expression recovers the complete109B body,
+ * with all33 other functions and three named data objects unchanged.
  */
 extern "C" void
 VPCMXF_Delete(VPcmFloModem *self)
 {
-	if (self != 0) {
-		self->~VPcmFloModem();
-		sysdep_free(self);
-	}
+	delete self;
 }
 
 extern "C" void

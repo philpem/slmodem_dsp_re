@@ -217,6 +217,7 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 	      unsigned short count)
 {
 	struct b103_dsp *dsp = fp->dsp;
+	short original_count = (short)count;
 	/*
 	 * The local oscillator's samples.  The original's frame leaves room
 	 * for 160 shorts here and bounds `count` against it nowhere; 160 is
@@ -234,7 +235,7 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 		for (i = 0; i < (short)count; i++)
 			dsp->rx_scratch[i] = in[i];
 
-		FPM_AGC_agc(&dsp->det_agc, dsp->rx_scratch, count);
+		FPM_AGC_agc(&dsp->det_agc, dsp->rx_scratch, count, 1);
 
 		dsp->rx_tone = 0;
 		if (FPM_TONE_detect(fp->hdx->tone_detect, dsp->rx_scratch,
@@ -255,7 +256,7 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 					       (short)count);
 
 	dsp->agc.f18 = dsp->r00;
-	FPM_AGC_agc(&dsp->agc, dsp->scratch, count);
+	FPM_AGC_agc(&dsp->agc, dsp->scratch, count, original_count);
 	dsp->rx_energy = dsp->agc.signal;
 
 	if (dsp->rx_state == 15)
@@ -397,7 +398,7 @@ RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count)
 
 	hdx->rx_count = (short)(hdx->rx_count + 1);
 
-	FPM_AGC_agc(&dsp->det_agc, in, (unsigned short)*count);
+	FPM_AGC_agc(&dsp->det_agc, in, (unsigned short)*count, 1);
 
 	if (FPM_TONE_detect(hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
 		dsp->rx_state = (short)(dsp->rx_state + 5);
@@ -857,12 +858,12 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
  * objects are guarded because loopback never creates the detector; nothing
  * else is.
  *
- * Note the original places a literal 1 in the second argument slot before
- * FPM_FSD_free and both FPM_MRF_free calls.  Neither function reads it --
- * both take a single argument -- so it is dead stack setup, presumably from
- * a version where they took a `fresh` flag like their init counterparts.
- * Not reproduced, because there is nothing to reproduce: an argument the
- * callee never loads has no observable effect.
+ * F11609 restores the observed second argument 1 for FPM_FSD_free and
+ * both FPM_MRF_free calls. The callees ignore it; its original type/name
+ * and meaning are unproved. Dropping it preserves behavior, not bytes.
+ *
+ * F11611 keeps direct child-owner accesses: the blob reloads fp->dsp and
+ * fp->hdx after calls rather than caching either child across releases.
  *
  * The final free is D8: it releases the object unconditionally, even when the
  * caller supplied it.  Reproduced -- see docs/deviations.md.
@@ -870,26 +871,23 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 void
 B103FP_delete(struct b103fp *fp)
 {
-	struct b103_dsp *dsp = fp->dsp;
-	struct b103_hdx *hdx;
 
-	FPM_FSM_delete(&dsp->fsm);
-	FPM_MTD_delete(dsp->mtd);
-	FPM_FSD_free(&dsp->fsd);
-	FPM_MRF_free(&dsp->rx_mrf);
-	FPM_MRF_free(&dsp->tx_mrf);
+	FPM_FSM_delete(&fp->dsp->fsm);
+	FPM_MTD_delete(fp->dsp->mtd);
+	FPM_FSD_free(&fp->dsp->fsd, 1);
+	FPM_MRF_free(&fp->dsp->rx_mrf, 1);
+	FPM_MRF_free(&fp->dsp->tx_mrf, 1);
 
-	sysdep_free(dsp->scratch);
-	sysdep_free(dsp->rx_scratch);
-	sysdep_free(dsp->bpf_hist);
-	sysdep_free(dsp);
+	sysdep_free(fp->dsp->scratch);
+	sysdep_free(fp->dsp->rx_scratch);
+	sysdep_free(fp->dsp->bpf_hist);
+	sysdep_free(fp->dsp);
 
-	hdx = fp->hdx;
-	if (hdx->tone_detect != NULL)
-		FPM_TONE_delete(hdx->tone_detect);
-	if (hdx->tone_lo != NULL)
-		FPM_TONE_delete(hdx->tone_lo);
-	sysdep_free(hdx);
+	if (fp->hdx->tone_detect != NULL)
+		FPM_TONE_delete(fp->hdx->tone_detect);
+	if (fp->hdx->tone_lo != NULL)
+		FPM_TONE_delete(fp->hdx->tone_lo);
+	sysdep_free(fp->hdx);
 
 	sysdep_free(fp);	/* D8 */
 }

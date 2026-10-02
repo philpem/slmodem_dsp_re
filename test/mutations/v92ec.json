@@ -121,17 +121,17 @@
  },
  {
   "label": "the ARMA pointer is freed but not nulled",
-  "find": "\t\tsysdep_free(arma);\n\t\tarma = NULL;",
-  "replace": "\t\tsysdep_free(arma);"
+  "find": "\t\tdelete arma;\n\t\tarma = NULL;",
+  "replace": "\t\tdelete arma;"
  },
  {
   "label": "the ARMA is freed without being destroyed",
-  "find": "\t\tarma->~FloatARMA();\n\t\tsysdep_free(arma);",
+  "find": "\t\tdelete arma;",
   "replace": "\t\tsysdep_free(arma);"
  },
  {
   "label": "the ARMA pointer is nulled before it is freed",
-  "find": "\t\tarma->~FloatARMA();\n\t\tsysdep_free(arma);\n\t\tarma = NULL;",
+  "find": "\t\tdelete arma;\n\t\tarma = NULL;",
   "replace": "\t\tarma->~FloatARMA();\n\t\tarma = NULL;\n\t\tsysdep_free(arma);"
  },
  {

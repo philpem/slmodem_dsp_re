@@ -1581,11 +1581,11 @@ run_delete(void)
 		switch (v) {
 		case 1:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1599,11 +1599,11 @@ run_delete(void)
 			break;
 		case 2:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(b.rx);
 			FPM_MTD_delete((struct fpm_mtd *)
 					FXP(b.sh, V27SH_MTD));
@@ -1615,11 +1615,11 @@ run_delete(void)
 			break;
 		case 3:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1631,11 +1631,11 @@ run_delete(void)
 			break;
 		case 4:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1647,11 +1647,11 @@ run_delete(void)
 			break;
 		default:
 			FPM_FSE_free((struct fpm_fse *)(void *)
-					FX(b.rx, V27RX_FSE));
+					FX(b.rx, V27RX_FSE), 1);
 			FPM_SRE_free((struct fpm_sre *)(void *)
-					FX(b.rx, V27RX_SRE));
+					FX(b.rx, V27RX_SRE), 1);
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1846,7 +1846,7 @@ dcd_model(int variant, struct v27_fixture *f, short *samples,
 					buf[i] = samples[i];
 
 			FPM_AGC_agc((struct fpm_agc *)(void *)
-					FX(sh, V27SH_AGC), buf, count);
+					FX(sh, V27SH_AGC), buf, count, 1);
 
 			f->mtd_b.acc = f->acc_b;
 			i = FPM_MTD_detect(&f->mtd_b, buf, (short)count);
@@ -3584,7 +3584,7 @@ run_txdelete(void)
 
 		if (v != 6)
 			FPM_PPS_free((struct fpm_pps *)(void *)
-					FX(b.tx, V27TX_PPS));
+					FX(b.tx, V27TX_PPS), 1);
 		if (v != 1)
 			sysdep_free(((struct fpm_smc_ring *)(void *)
 					FX(b.tx, V27TX_RING))->sym);

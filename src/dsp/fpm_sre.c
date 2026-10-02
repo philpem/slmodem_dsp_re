@@ -521,8 +521,9 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, short count)
  * leaves both to the caller.
  */
 void
-FPM_SRE_free(struct fpm_sre *sre)
+FPM_SRE_free(struct fpm_sre *sre, int unused)
 {
+	(void)unused;
 	sysdep_free(sre->clk);
 	sysdep_free(sre->hist);
 	sysdep_free(sre->coeff);

@@ -393,6 +393,43 @@ run_cd(void)
 }
 
 static int
+run_cd_count_alias(void)
+{
+	static const int prior_calls[] = { 0, 1, 13, 14 };
+	unsigned int trial;
+	int k;
+
+	diff_begin("FSE_decision_CD: count output alias after ordinary progression");
+	for (trial = 0; trial < sizeof(prior_calls) / sizeof(prior_calls[0]); trial++) {
+		short angle_a = 123, angle_b = 123;
+		unsigned short ra, rb;
+		int before;
+
+		setup(FSE_decision_CD, (fpm_fse_decision)ref_FSE_decision_CD);
+		for (k = 0; k < prior_calls[trial]; k++)
+			step(FSE_decision_CD, ref_FSE_decision_CD, 0,
+			     0, 0, 0, 0, trial * 16 + k);
+		before = dec_b.count;
+		diff_eq_int("ordinary CD calls establish count (%ld)",
+			    before, prior_calls[trial], trial);
+
+		/* Corresponding signed/unsigned short aliases are permitted.
+		 * The call boundary permits this output; it does not assert
+		 * that the modem's carrier loop uses an aliased destination. */
+		rb = ref_FSE_decision_CD(&st_b, &angle_b, (short *)&dec_b.count);
+		ra = FSE_decision_CD(&st_a, &angle_a, (short *)&dec_a.count);
+		diff_eq_int("aliased decision (%ld)", ra, rb, trial);
+		diff_eq_int("blob decides before magnitude overwrites count (%ld)",
+			    rb, before == 14 ? 0 : ((before + 1) & 1) ? 3 : 0, trial);
+		diff_eq_int("aliased magnitude (%ld)", dec_a.count, dec_b.count, trial);
+		diff_eq_int("blob magnitude is retained (%ld)", dec_b.count, 0x3299, trial);
+		diff_eq_int("CD leaves angle untouched (%ld)", angle_a, angle_b, trial);
+		compare(trial);
+	}
+	return diff_end();
+}
+
+static int
 run_trn(void)
 {
 	int k;
@@ -846,6 +883,7 @@ main(void)
 
 	seed = 20250812u;
 	rc |= run_cd();
+	rc |= run_cd_count_alias();
 	rc |= run_trn();
 	rc |= run_4pt();
 	rc |= run_ab();

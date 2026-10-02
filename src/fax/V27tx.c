@@ -244,8 +244,9 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
  * pointers are loaded afresh before each use, exactly as `V27RX_delete` does.
  * Neither is observable, because nothing on this path writes the instance.
  *
- * `FPM_PPS_free` is given a second argument the object does not declare; see
- * `v27fax.h` and F8870.  Not reproduced.
+ * F11612 retains the direct owner-member argument for the first PPS free.
+ * F11610 restores the ignored second argument 1 to FPM_PPS_free.
+ * An unread slot does not prove an absent original formal.
  */
 void
 V27TX_delete(void *modem)
@@ -253,8 +254,7 @@ V27TX_delete(void *modem)
 	struct v27_tx_block *tx;
 	struct v27_tx_source *src;
 
-	tx = ((struct v27_tx *)modem)->tx;
-	FPM_PPS_free(&tx->pps);
+	FPM_PPS_free(&((struct v27_tx *)modem)->tx->pps, 1);
 
 	/*
 	 * The SYMBOL RING's buffer, not a scratch allocation of the

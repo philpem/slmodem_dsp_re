@@ -175,18 +175,18 @@
  },
  {
   "label": "the modulator is destroyed and not freed",
-  "find": "\t\tsysdep_free(modulator);",
-  "replace": "\t\t(void)0;"
+  "find": "\tdelete modulator;",
+  "replace": "\tif (modulator != 0)\n\t\tmodulator->~V92Modulator();"
  },
  {
   "label": "the CP is destroyed and not freed",
-  "find": "\t\tsysdep_free(cp);",
-  "replace": "\t\t(void)0;"
+  "find": "\tdelete cp;",
+  "replace": "\tif (cp != 0)\n\t\tcp->~V92CP();"
  },
  {
   "label": "the V92Parameters is destroyed and not freed",
-  "find": "\t\tsysdep_free(parameters);",
-  "replace": "\t\t(void)0;"
+  "find": "\tdelete parameters;",
+  "replace": "\tif (parameters != 0)\n\t\tparameters->~V92Parameters();"
  },
  {
   "label": "the phase 2 info's null guard is dropped",
@@ -200,8 +200,8 @@
  },
  {
   "label": "the other four pointers are nulled as well",
-  "find": "\t\tsysdep_free(modulator);\n\t}",
-  "replace": "\t\tsysdep_free(modulator);\n\t\tmodulator = 0;\n\t}"
+  "find": "\tdelete modulator;",
+  "replace": "\tdelete modulator;\n\tmodulator = 0;"
  },
  {
   "label": "the phase 2 info is nulled before it is freed rather than after",

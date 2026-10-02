@@ -171,7 +171,7 @@ extern short ref_FPM_MTD_detect(struct fpm_mtd *state, const short *samples,
  * THE AGC'S `%eax` IS `agc->signal`, AND THIS DECLARATION IS HOW THAT IS
  * MEASURED RATHER THAN BELIEVED.
  *
- * `FPM_AGC_agc` is `void` and takes three arguments; `DemodDataV29` in the
+ * The reconstruction keeps `FPM_AGC_agc` void and now has four arguments; `DemodDataV29` in the
  * object nonetheless uses the register the definition happens to leave the
  * store to `signal` in.  `src/fax/v29.c` reads the field instead, which is
  * only correct while the identity holds, so the identity is asserted here on

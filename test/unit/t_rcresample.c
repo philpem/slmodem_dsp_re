@@ -281,8 +281,8 @@ main(void)
 			/*
 			 * NULL is deliberately NOT driven here: the original
 			 * dereferences its argument on the first instruction
-			 * and the reconstruction checks, so the one input
-			 * that would tell them apart crashes the reference.
+			 * and the reconstruction preserves that contract.
+			 * Invalid null inputs are not lifecycle fixtures.
 			 * See the note on RcFixed_Reset.
 			 */
 			ref_RcFixed_Delete(ha);

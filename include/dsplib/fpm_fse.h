@@ -207,7 +207,9 @@ void FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg,
  * @brief Free the buffers allocated by FPM_FSE_init().
  * @param state  The equaliser to tear down.
  */
-void FPM_FSE_free(struct fpm_fse *state);
+/* F11610: callers supply a scalar that the blob does not read.
+ * Its original width/name/meaning are unproved; int is conventional. */
+void FPM_FSE_free(struct fpm_fse *state, int unused);
 
 /*
  * The library's built-in configuration, `D` at .data 0x8160 and therefore not

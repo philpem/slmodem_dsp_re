@@ -51,6 +51,9 @@ extern "C" {
 #include "dsplib/V92Parameters.h"
 #include "dsplib/vpcm_tables.h"
 
+/* F11619: retain one evaluated ARMA pointer across destruction and free. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V92EC_OFF(field, off, tag) \
@@ -347,22 +350,11 @@ V92EchoCanceller::reset()
  * message is plain text rather than encoded.  Every other diagnostic here is
  * an ungated `edprintf`, which self-gates one level down.
  *
- * THE ARMA IS DESTROYED AND THEN FREED SEPARATELY, which is what an explicit
- * destructor call followed by `sysdep_free` compiles to and is NOT what
- * `delete` compiles to.  Two calls, the same pointer in `%ebx` for both.
- *
- * THE REASON USED TO BE "`delete` WOULD CALL `operator delete` AND THE OBJECT
- * CALLS `sysdep_free`", AND THAT INFERENCE IS WITHDRAWN -- finding F7786.  This
- * codebase REPLACES global `operator delete`, and the replacement inlines to
- * `sysdep_free`, so a `delete` here would also have reached `sysdep_free` and
- * the callee's name settles nothing.  The blob's own compiler-generated `D0Ev`
- * destructors prove it: they tail-call `sysdep_free` where a library
- * `operator delete` would have made them call `_ZdlPv`, and the object defines
- * and references no `_Znwj`, `_Znaj`, `_ZdlPv` or `_ZdaPv` anywhere.
- *
- * WHAT STILL CARRIES THE READING IS THE SHAPE, not the name: `delete p` emits
- * ONE call after a front-end null test, and the object emits TWO -- the
- * destructor and then the free -- which no spelling of `delete` produces.
+ * F11619: the nonvirtual ARMA destructor and host free receive the same
+ * evaluated pointer. Ordinary scalar delete with the inline host adapter
+ * reproduces both195B clones; explicit member calls reloaded the pointer.
+ * Adapter-only raw-merges and all13 other bodies stay unchanged. Preserve
+ * the null guard and its conditional pointer clear, and both primitive frees.
  */
 V92EchoCanceller::~V92EchoCanceller()
 {
@@ -378,8 +370,7 @@ V92EchoCanceller::~V92EchoCanceller()
 		echoHistory = NULL;
 	}
 	if (arma != NULL) {
-		arma->~FloatARMA();
-		sysdep_free(arma);
+		delete arma;
 		arma = NULL;
 	}
 }

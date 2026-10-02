@@ -106,30 +106,26 @@ struct fpm_mtd *
 FPM_MTD_create(struct fpm_mtd *state, const struct fpm_mtd_cfg *cfg)
 {
 	int owned = 0;
-	int i;
+	short i;
 
 	if (state == NULL) {
 		state = sysdep_malloc(sizeof(*state));
-		if (state == NULL)
-			return NULL;
 		owned = 1;
 	}
 
-	/* Only 12 bytes are copied -- the config's first three words. */
+	/* F11587: aggregate copy, short counter and element-count boundary. */
 	if (cfg != NULL) {
-		state->cfg.coeff = cfg->coeff;
-		state->cfg.tones = cfg->tones;
-		state->cfg.ratio = cfg->ratio;
-		state->cfg.min_level = cfg->min_level;
-		state->cfg.f0a = cfg->f0a;
+		state->cfg = *cfg;
 	} else {
 		state->cfg = FPM_MTD_CFG;
 	}
 
 	/* As elsewhere in fpm_*, buffers follow the object's ownership. */
-	if (owned)
-		state->acc = sysdep_malloc(
-			(unsigned)state->cfg.tones * 2 * sizeof(short));
+	if (owned) {
+		short elements = state->cfg.tones * 2;
+
+		state->acc = sysdep_malloc(elements * sizeof(short));
+	}
 
 	/* Two accumulators per tone. */
 	for (i = 0; i < state->cfg.tones; i++) {

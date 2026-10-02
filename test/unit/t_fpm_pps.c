@@ -522,7 +522,7 @@ main(void)
 			lb = harness_alloc.live;
 			fb = harness_alloc.frees;
 			nb = harness_alloc.free_null;
-			FPM_PPS_free(&gs);
+			FPM_PPS_free(&gs, 1);
 			fb = harness_alloc.frees - fb;
 			lb = lb - harness_alloc.live;
 			nb = harness_alloc.free_null - nb;

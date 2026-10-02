@@ -127,9 +127,6 @@ dp_wrapper_create(void *dp_data, dp_process_fn process, int dp_frag,
 void
 dp_wrapper_delete(struct dp_wrapper *w)
 {
-	if (w == NULL)
-		return;
-
 	w->dp_data = NULL;
 	if (w->rc_to_dp)
 		RcFixed_Delete(w->rc_to_dp);

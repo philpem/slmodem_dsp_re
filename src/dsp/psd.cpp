@@ -13,6 +13,7 @@
  */
 
 #include <math.h>
+#include <stddef.h>
 #include "dsplib/Psd.h"
 #include "dsplib/fft.h"		/* process() calls realfft (finding F1325) */
 
@@ -22,6 +23,7 @@ void sysdep_free(void *ptr);
 }
 
 inline void operator delete[](void *p) { sysdep_free(p); }
+void *operator new[](size_t);
 
 /*
  * Hold the compiler to the map in the header (finding F230); tools/offcheck.py
@@ -53,15 +55,21 @@ typedef char psd_opt_linear[(Psd::OUTPUT_LINEAR == 2) ? 1 : -1];
  * and the object really does re-read it.  Neither buffer is cleared: only
  * `m_window` is written, by `designWindow`, so `m_fft` carries allocator
  * garbage out of the constructor.  `m_overlap` is stored last, after the
- * window is designed.
+ * window is designed. Primitive array-new reproduces both82-byte ABI clones
+ * with an inlined allocator and no cookies (F11578).
  */
 Psd::Psd(unsigned int length, WindowType window, unsigned int overlap)
 {
 	m_length = length;
-	m_window = (float *)sysdep_malloc(length * sizeof(float));
-	m_fft = (float *)sysdep_malloc((m_length + 1) * sizeof(float));
+	m_window = new float[length];
+	m_fft = new float[m_length + 1];
 	designWindow(window, m_window, m_length);
 	m_overlap = overlap;
+}
+
+inline void *operator new[](size_t n)
+{
+	return sysdep_malloc(n);
 }
 
 /* Window first, spectrum second; neither pointer is nulled. */

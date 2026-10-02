@@ -61,14 +61,12 @@
  * (finding F7796).  It is not a claim that the author had them in one file.
  *
  * ---------------------------------------------------------------------------
- * THE AGC'S RETURN VALUE, WHICH IS NOT ONE
+ * THE AGC'S OBSERVED EAX VALUE
  *
- * `DemodDataV27` calls `FPM_AGC_agc`, passes it a FOURTH argument (the literal
- * 1) that it does not have, and then USES `%eax`.  `FPM_AGC_agc` is `void` --
- * `include/dsplib/fpm_agc.h` says so and the object's own frame reads confirm
- * it -- so the calling translation unit declared it as returning `int` while
- * the defining one returned nothing, and `%eax` holds whatever the definition
- * left there.
+ * F11613 restores the observed fourth argument, literal 1. The object
+ * consumes EAX, equal to agc.signal. The current reconstruction uses void
+ * and reads the field; that is not proof of the original return type or
+ * conflicting declarations. Return recovery is an independent hypothesis.
  *
  * WHAT IT LEAVES THERE IS `agc->signal`: the two instructions before its only
  * `ret` are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)`, the store to `signal`
@@ -100,13 +98,12 @@
  * gap -- see the arithmetic in `v27fax.h`.
  *
  * ---------------------------------------------------------------------------
- * THE THREE `FPM_*_free` CALLS TAKE A SECOND ARGUMENT THEY DO NOT HAVE
+ * THE THREE FPM FREE CALLS IGNORE THEIR SECOND ARGUMENTS
  *
- * `V27RX_delete` stores the constant 1 at 0x4(%esp) before each of
- * `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`, and none of the three
- * reads it -- the same extra argument `v22data.c` and `bwchdem.c` record at
- * their `FPM_AGC_agc` sites.  cdecl makes it harmless and it is not
- * reproduced.  Finding F8870.
+ * V27RX_delete supplies constant 1 before FPM_FSE_free, FPM_SRE_free
+ * and FPM_MRF_free. None reads it. F11609 restores MRF's call argument;
+ * F11610 restores FSE/SRE too. An unread argument does not establish
+ * an absent original source formal.
  */
 
 #include <string.h>

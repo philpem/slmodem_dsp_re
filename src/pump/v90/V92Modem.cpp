@@ -92,6 +92,9 @@
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase2Info.h"
 
+/* F11621: typed owned deletion retains one pointer across both calls. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
 #define V92MODEM_OFF(field, off, tag) \
@@ -137,6 +140,10 @@ typedef char v92modem_szmod[(sizeof(V92Modulator) == 0x90) ? 1 : -1];
  * ===========================================================================
  * V92Modem::~V92Modem (.text+0x13a80 D1, +0x13990 D2, 229 bytes each)
  *
+ * F11621: three typed owners use ordinary scalar delete, retaining one
+ * evaluated pointer across destructor/free. Mapping and phase2 bare frees
+ * remain as observed.
+ *
  * FIVE RELEASES AND ONE NULLING.  The four owned objects come back in the
  * order mapping parameters, modulator, CP, parameters, phase 2 info -- which
  * is neither the construction order nor its reverse -- and only the LAST of
@@ -178,18 +185,9 @@ V92Modem::~V92Modem()
 	if (mappingParams != 0)
 		sysdep_free(mappingParams);
 
-	if (modulator != 0) {
-		modulator->~V92Modulator();
-		sysdep_free(modulator);
-	}
-	if (cp != 0) {
-		cp->~V92CP();
-		sysdep_free(cp);
-	}
-	if (parameters != 0) {
-		parameters->~V92Parameters();
-		sysdep_free(parameters);
-	}
+	delete modulator;
+	delete cp;
+	delete parameters;
 	if (phase2Info != 0) {
 		sysdep_free(phase2Info);
 		phase2Info = 0;

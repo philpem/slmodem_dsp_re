@@ -25,6 +25,7 @@
 
 #include "harness.h"
 #include "dsplib/v23fp.h"
+#include "dsplib/fpm_tone.h"
 
 extern void *ref_BwChDem_Create(void *bw, const void *cfg);
 extern void ref_BwChDem_Delete(void *bw);
@@ -45,8 +46,9 @@ static int saw_given_up;	/* returned 2                        */
 
 /*
  * The four fields that hold addresses.  Their contents are compared
- * separately where they point at something; `tone` and `agc.cfg.alpha/beta`
- * are covered by t_fpm_tone and t_fpm_agc.
+ * separately where they point at something. The constructor's owned tone
+ * ratio is checked after create; generic tone and AGC behavior has its own
+ * fixtures.
  */
 static int
 is_pointer_field(unsigned off)
@@ -128,6 +130,10 @@ run(const char *what, const short *signal, int n, int block, int silence_limit)
 	ours = BwChDem_Create(NULL, &cfg);
 	ref = ref_BwChDem_Create(NULL, &cfg);
 	compare_obj("after create", ours, ref);
+	diff_eq_int("owned tone constructor ratio", ours->tone->cfg.ratio,
+		    ((const struct bwchdem *)ref)->tone->cfg.ratio, 0);
+	diff_eq_int("reference owned tone ratio",
+		    ((const struct bwchdem *)ref)->tone->cfg.ratio, 29000, 0);
 
 	for (at = 0; at + block <= n; at += block) {
 		short rc_a, rc_b;

@@ -177,6 +177,7 @@ void harness_ttyin_reset(const unsigned char *script, int len);
  * free(), so the run survives to report them.
  */
 struct alloc_log {
+	int fail_injected; /* deliberately rejected requests        */
 	int allocs;	/* successful sysdep_malloc calls          */
 	int frees;	/* sysdep_free calls that released memory  */
 	int live;	/* outstanding allocations                 */
@@ -251,6 +252,9 @@ int harness_modem_route_add(void *m, const unsigned char *pattern, int len);
 
 extern struct alloc_log harness_alloc;
 void harness_alloc_reset(void);
+/* Reject exactly the next sysdep_malloc request. Reset cancels this control.
+ * The failed request increments fail_injected and creates no live allocation. */
+void harness_alloc_fail_next(void);
 
 /*
  * WHICH sysdep_malloc HANDED A POINTER OUT -- 1 for the run's first, 2 for

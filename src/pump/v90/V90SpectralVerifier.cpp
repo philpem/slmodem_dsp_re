@@ -115,7 +115,8 @@ V90SV_POFF(SPECTRAL_VERIFIER_PSD_OVERLAP_LEN,  0x2bc, overlap);
  * THREE ALLOCATIONS, NONE CHECKED, AND ONE OF THEM CONSTRUCTED.  The two
  * float buffers are left exactly as the allocator returned them -- nothing
  * here clears either -- and the third holds a `Psd` built from three
- * parameter slots.
+ * parameter slots. The owned Psd is published only after construction
+ * (F11579), as in both162-byte blob constructor clones.
  *
  * THE PARAMETER BLOCK IS RE-READ THROUGH THE OBJECT.  `SPECTRAL_VERIFIER_-
  * FFT_WINDOW` and `..._PSD_OVERLAP_LEN` are loaded via `(%ebx)`, the pointer
@@ -137,8 +138,7 @@ V90SpectralVerifier::V90SpectralVerifier(V90Parameters *p)
 	buf_18 = (float *)sysdep_malloc(psdLength * sizeof(float));
 	spectrum = (float *)sysdep_malloc((fftLength / 2) * sizeof(float));
 
-	psd = (Psd *)sysdep_malloc(sizeof(Psd));
-	new (psd) Psd(fftLength,
+	psd = new (sysdep_malloc(sizeof(Psd))) Psd(fftLength,
 		      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,
 		      params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);
 

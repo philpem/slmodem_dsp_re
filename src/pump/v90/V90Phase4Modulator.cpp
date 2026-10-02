@@ -71,6 +71,9 @@ extern "C" {
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Phase4Modulator.h"
 
+/* F11617: ordinary owned class deletion over the TU-local host adapter. */
+inline void operator delete(void *p) { sysdep_free(p); }
+
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V90P4_OFF(field, off, tag) \
@@ -213,35 +216,18 @@ V90Phase4Modulator::V90Phase4Modulator(V90Parameters *p, unsigned int flag,
  * supplied converter is never touched however non-null it is.  Neither the
  * pointer nor the flag is cleared afterwards.
  *
- * NOT GRADE 0: blob 28 instructions against our 26 (byteident's lever-2
- * "absence" reading).  Disassembly shows this is a register-allocation
- * choice, not a missing statement: the blob holds `this` in %esi AND
- * `bitsToSymbol` in %ebx as two separate callee-saved registers across the
- * `V90BitsToSymbol` destructor call, so it never re-reads the field; we hold
- * only `this` and reload the field from memory after the call clobbers the
- * scratch that held it.  The reload/no-reload difference costs +1 in the
- * shared tail and the missing second callee-saved restore costs +1 in the
- * early-exit path -- accounts for the whole delta 2.
- *
- * Two alternate spellings were compiled and declined (F7782's hill-climbing
- * rule -- neither is closer to a match, both moved further away):
- *   `V90BitsToSymbol *bts = bitsToSymbol; if (!ext && bts) {...}`
- *       -> blob 28 / ours 30: the combined `&&` condition made GCC merge the
- *          two tests with sete/setne instead of the blob's two sequential
- *          branches.
- *   the same local hoisted into a nested `if (!ext) { if (bts) {...} }`
- *       -> blob 28 / ours 21: over-shrank the body instead.
- * Left as the direct field-access spelling above (2-cell enumeration, no
- * cell reached zero); a wider search was not run since this pair is outside
- * this pass's assignment (v90p4mod refinement task, F10192-adjacent).
+ * F11617: ordinary member delete preserves the one evaluated converter
+ * pointer across its destructor and free, reproducing both complete94B
+ * clones. The former manual member destructor/free re-read the field and
+ * produced83B. Prior cached-pointer guard controls did not test this language
+ * construct. Adapter-only object raw-merges; all51 other bodies unchanged.
+ * This is a supported source family, not a claimed ordinary lifecycle bug.
  * ===========================================================================
  */
 V90Phase4Modulator::~V90Phase4Modulator()
 {
-	if (!externalBitsToSymbol && bitsToSymbol) {
-		bitsToSymbol->~V90BitsToSymbol();
-		sysdep_free(bitsToSymbol);
-	}
+	if (!externalBitsToSymbol)
+		delete bitsToSymbol;
 }
 
 /*
@@ -1048,17 +1034,11 @@ V90Phase4Modulator::setMappingParams(V90MappingParams *mapping)
  *                   register holds the byte changes the encoding length.
  *                   Same mechanism as `setRdRtSymbols`, one register over.
  *
- * BOTH TRACE TO THE SAME ROOT, which the derivation above the destructor
- * (`~V90Phase4Modulator`, this class's first-emitted member) now documents:
- * the destructor itself is not grade 0 for a register-allocation reason, sits
- * at TU emission index 0 where lever 3's reorder mechanism categorically
- * cannot reach it (finding F7808's corollary -- nothing precedes the first
- * symbol to move), and a 2-cell enumeration there did not close it.
- * `recivedCPtag` (this file, above `recivedE2u`) is the same family again --
- * a pure register swap, nothing else differing.  All three read as one
- * finding, not three: the scratch-register cursor's state reaching this file
- * is set upstream of every one of them, and closing it means closing the
- * destructor first.  DECLINED here on that basis; not hill-climbed.
+ * F11617 closes both first-emitted destructor clones through ordinary scalar
+ * delete, but all51 other complete bodies remain unchanged. That is a
+ * measured counterexample to treating destructor recovery as sufficient to
+ * close these residuals. The cursor/codegen explanations above remain
+ * separate hypotheses; no source reorder or register forcing is adopted.
  * ===========================================================================
  */
 void

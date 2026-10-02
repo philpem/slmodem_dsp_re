@@ -104,7 +104,7 @@ static const struct fpm_agc_cfg AGCv23_CFG = {
 #define BWCH_MARK_HZ		390
 
 /* Overrides applied to the shared FPM_TONE configuration. */
-#define BWCH_TONE_RATIO		28996	/* 0.885 in Q15 */
+#define BWCH_TONE_RATIO		29000	/* F11594: object threshold at 0x875c8 */
 #define BWCH_TONE_MIN_LEVEL	3
 
 /* Carrier is up once the tone has been present for this many blocks. */
@@ -233,13 +233,11 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 			bw->iir_sections, count);
 
 	/*
-	 * The original passes FPM_AGC_agc a fourth argument and the function
-	 * has three; it is simply ignored.  It also uses the value left in
-	 * %eax on return, which is the `signal` flag the same instruction
-	 * stored in the object -- so read the field, which is the same number
-	 * and does not depend on a return value the function never promised.
+	 * F11613 retains the observed fourth argument, literal 1. The object
+	 * also uses EAX, equal to the stored signal flag. This reconstruction
+	 * still reads that field; original return semantics are a separate axis.
 	 */
-	FPM_AGC_agc(&bw->agc, samples, (unsigned short)count);
+	FPM_AGC_agc(&bw->agc, samples, (unsigned short)count, 1);
 	signal = bw->agc.signal;
 
 	if (bw->carrier_blocks <= BWCH_CARRIER_BLOCKS) {
