@@ -134372,3 +134372,16 @@ existing MakeTxData fixture 130 paired checks. Full same-order links remain
 DIFFERENT; positioned equal bytes +141, allocated +32, exact section/symbol/
 relocation records unchanged. [Recovery and proof limits](v22-txdata-recovery.md).
 (2026-10-02)
+
+## F11658. General anonymous-table proof passes positive and adversarial ELF controls
+
+Separate name-independent ELF32 absolute CMP/JA/JMP proof retains ordered
+same-function instruction-boundary targets and exact guard-derived extent.
+44 synthetic ELF objects: seven accepted establish three equal pairs/two
+distinct identities; 37 refused with explicit reasons. Review found LOOP,
+far-transfer, prefix-token and CMP-interior gaps; corrected with assembled
+negative controls. Two real MakeTxData objects prove one equal table identity,
+but comparator/census remain unchanged: UNRESOLVED, strict 924/1852. No source
+or production-object changes, fuzzing or mutation execution. Narrow ABI-entry
+domain and unsupported forms are explicit. [Proof and controls](anonymous-jumptable-proof.md).
+(2026-10-02)

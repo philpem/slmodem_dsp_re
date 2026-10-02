@@ -2887,3 +2887,12 @@ axis alone does (F11657). Anonymous section offsets remain UNRESOLVED in the
 strict comparator. Preserve that distinction until a general resolver proves
 table extent and targets with negative controls; never replace target identity
 with masked addends or a named exception. [Evidence](../v22-txdata-recovery.md).
+
+
+Anonymous jump-table identity needs guard-derived extent and ordered relocated
+instruction destinations, not table-byte masking (F11658). Prove a separate
+bounded detector on real ELF positives and explicit refusals before modifying
+canonical grading. Review control transfers beyond Jcc: LOOP, far/prefixed
+jumps and entries into guard instruction interiors can bypass an incomplete
+parser. Preserve unsupported cases as unproved, and state the ABI-entry
+boundary. [Controls](../anonymous-jumptable-proof.md).
