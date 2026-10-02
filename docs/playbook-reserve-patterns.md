@@ -150,3 +150,10 @@ symbols after the declared path exclusions (300 objects). FPM_rms is a new
 object-backed loop lead, not a nearest-size assumption: its four crossed
 countdown/cursor cells recover62-byte exactness only together (F11554).
 [Domain and validation](fpm-rms-countdown.md).
+
+Dual_TONE_create supplies a fresh common-result case (F11555): guarded
+successful initialization followed by return st recovers64-byte exactness
+in a two-cell full-TU domain. Notch's independently observed addition grouping
+is tested separately (F11556); it recovers the operation tree but staysSIZE2,
+so the closed domain contributes evidence and no adopted source.
+[Constructor](dualtone-create-common-return.md), [notch](notch-addition-tree.md).

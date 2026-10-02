@@ -2194,3 +2194,16 @@ neither property alone recovers the function, and both recover all62 bytes
 including its call relocation (F11554). Preserve arithmetic order and overflow
 semantics; loop recovery is not permission to replace scaled products with
 an algebraically similar expression. [Four-cell record](../fpm-rms-countdown.md).
+
+An allocation failure's literal-zero early return can obscure the blob's
+common pointer return. Dual_TONE_create recovers64-byte exactness by guarding
+initialization and returning the allocated pointer for both outcomes; the
+two-cell full-TU domain changes only that function (F11555).
+[Measured record](../dualtone-create-common-return.md).
+
+Trace x87 stack operands before calling a difference scheduling. Notch's
+saved-state addition occurs before its product-sum in the blob and after it
+in retained source. Recovering the addition tree still leaves load/exchange
+differences and no exact gain (F11556). Algebraic equivalence does not imply
+finite-precision grouping, and load order alone does not justify invented
+coefficient locals. [Closed source domain](../notch-addition-tree.md).

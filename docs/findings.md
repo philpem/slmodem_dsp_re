@@ -132996,3 +132996,30 @@ clean. Same-order partial links gain4 positioned bytes, no exact section/
 symbol/relocation-record change; both strict comparisons remain DIFFERENT.
 Initial stale census rejected/excluded, corrected source/build controls rerun.
 (2026-10-02)
+
+## F11555. Dual_TONE_create's common pointer return recovers64-byte exactness.
+
+The blob shares EBX-to-EAX return for success/failure; retained early failure
+return materializes a separate zero. Two complete-TU controls preserve3 strong
+functions/globals. Guarded initialization plus unconditional return st yields
+64B/EXACT from66B/SIZE2, including both call relocations; only create changes,
+TU exact1/3 ->2/3 with no losses. Allocation/clear/stores unchanged. Raw baseline
+reproduces. Existing fixture checks full initialized object and allocation
+accounting; failure is structurally equivalent, not forced by that fixture.
+[Domain and validation](dualtone-create-common-return.md). (2026-10-02)
+
+Retained full object raw-reproduces the winner; one of300 objects changes.
+Whole-tree862/1852 ->863/1852, exact bytes83,784 ->83,848, only create gains,
+zero losses. Fixed Gentoo phase385/0, structural checks clean. Same-order
+partial links lose137 positioned matching bytes as later code shifts, gain3
+exact relocation records, and remain DIFFERENT; no whole-object identity claim.
+
+## F11556. Notch's addition tree differs independently of its x87 load order.
+
+Blob fadds state[1] to the feedback product then faddp adds feed-forward;
+retained source sums products first. The two-cell grouped-source control
+recovers that operation tree but remains54B/SIZE2 versus blob56. One strong
+function/global preserved; raw baseline reproduces, no exact gain/loss.
+Coefficient-load/exchange order remains different. No candidate adopted or
+additional spelling sweep; investigate a pass boundary before hypothesizing
+coefficient declarations. [Ledger/replay](notch-addition-tree.md). (2026-10-02)

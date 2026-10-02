@@ -91,12 +91,12 @@ Dual_TONE_create(void)
 	 * the literal would under-allocate.
 	 */
 	st = sysdep_malloc(sizeof(*st));
-	if (st == 0)
-		return 0;
-
-	sysdep_memset(st, 0, sizeof(*st));
-	st->ratio = 226;
-	st->min_energy = 1;
+	/* Both allocation outcomes share the pointer return (F11555). */
+	if (st != 0) {
+		sysdep_memset(st, 0, sizeof(*st));
+		st->ratio = 226;
+		st->min_energy = 1;
+	}
 
 	return st;
 }
