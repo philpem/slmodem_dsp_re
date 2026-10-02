@@ -2543,3 +2543,21 @@ counter/cursor/feed-forward narrowing eight-cell cross has no full hit
 an uninitialized output merely to match the blob's undefined zero-section
 return; preserve the fixture's exclusion and demand an independent discriminator
 before more local permutations. [Controls](../iir-boundary-controls.md).
+
+
+A use-site word conversion does not prove a word-width running carrier.
+Block-update's promoted-position control reflects the blob's full-width
+subtraction and later narrowing but fails its complete244B body (F11604).
+Keep arithmetic bounds separate from service reachability, close the bounded
+family and do not fit accumulator widths or stack allocation by size.
+[Controls](../block-position-controls.md).
+
+
+Local stack-word addresses and store/reload pairs support testing an ordinary
+inlined helper, without forcing address escapes. Div32 helper×word-index
+cross reproduces these boundaries, and guarded do/while restores conditional
+count-store placement, but neither closes the full body (F11605/F11606).
+Review error epilogues and narrowing widths, not just size. Audit fixture
+cross-product claims: two marginal sweeps need not cover every pair. Keep
+concrete missing fixed vectors and close declaration/frame permutations.
+[Controls](../div32-normalization-controls.md).

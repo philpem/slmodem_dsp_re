@@ -133743,3 +133743,35 @@ All3 functions/types/binding/visibility/allocated nontext preserved; no data
 objects. No source/flag adoption/candidate gates/undefined-return fabrication.
 [Controls](iir-boundary-controls.md).
 (2026-10-02)
+
+
+## F11604. Promoted block-update position does not recover the complete loop
+
+Two-cell complete-TU control:217/207B versus blob244B, two raw emissions,
+no exact gains/losses,0/3 unchanged. Blob narrowing at index use does not
+establish F8163's inferred running word carrier. Only block_update changes;
+all3 functions/types/binding/visibility/nontext preserved, no data objects.
+No source adoption/candidate gates; close family, preserve component fixture
+qualification. [Controls](block-position-controls.md). (2026-10-02)
+
+
+## F11605. Reciprocal local-output helper and word index explain boundaries without a hit
+
+Four-cell complete-TU cross117/123/131/137B versus blob147B, four raw emissions,
+no exact gain/loss,0/2 unchanged. Ordinary inline helper reproduces local word
+output addresses; word index reproduces narrowing. All2 functions/types/
+binding/visibility/nontext preserved, no data objects; circ_dotp2 unchanged.
+Malformed generator helper insertion rejected; invalid run preserved/excluded,
+corrected full rerun valid. [Controls](div32-normalization-controls.md).
+(2026-10-02)
+
+## F11606. Reciprocal guarded count-store placement remains a non-exact factoring lead
+
+Three-cell staged production/helper-word/guarded-helper-word controls:
+117/137/148B versus147B, three emissions,0/2 unchanged/no gains/losses.
+Guarded do/while restores skipped final count store;42vs45 instructions and
+loop/load/frame differences remain. Complete-TU controls agree; no adoption/
+candidate gates. Existing fixture's every-mantissa/shift claim is overstated:
+0x40008000 yields missing8001/shift1. Preserve fixed-vector follow-up, close
+nearby permutations without claiming a global ceiling.
+[Scope and evidence](div32-normalization-controls.md). (2026-10-02)
