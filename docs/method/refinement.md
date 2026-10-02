@@ -2443,3 +2443,11 @@ per oscillator without recovering their bodies (F11589). Preserve the
 complete TU/table controls and close that local-width family; existing
 exhaustive fixtures are not evidence for an unrun candidate.
 [Controls](../phasor-fraction-controls.md).
+
+
+An unsigned-word operand can lose its additional bits when its arithmetic
+result is assigned short. Phasor's original-word × fraction-width cross
+raw-merges unsigned+short with short-only, with no exact gains (F11590).
+A separate observed register/load role is a hypothesis to test, not a source
+preimage once the bounded cross refutes it.
+[Controls](../phasor-consumption-controls.md).

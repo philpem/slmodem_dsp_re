@@ -133548,3 +133548,16 @@ functions/9 globals and data/type/binding/visibility preserved; only three
 oscillator bodies change, extra entry helpers unchanged. No source adoption
 or candidate runtime/whole-tree/partial gates. [Closed domain](phasor-fraction-controls.md).
 (2026-10-02)
+
+
+## F11590. Original-word consumption does not unlock phasor fraction narrowing
+
+Four complete-TU cells cross original signed/unsigned-word operand and int/
+short frac. Unsigned+short raw-agrees prior short-only candidate; four sources/
+three emissions,0/3 exact unchanged. Oscillator sizes199/142/233 baseline,
+200/143/234 short,204/147/238 unsigned,200/143/234 combined vs211/161/246 blob.
+All5 functions/9 globals/data/type/binding/visibility preserved; only three
+oscillator bodies change, extra entry helpers unchanged. Production and prior
+staged full-object controls raw-replay. No adoption or candidate runtime/
+census/partial gates. [Closed domain](phasor-consumption-controls.md).
+(2026-10-02)

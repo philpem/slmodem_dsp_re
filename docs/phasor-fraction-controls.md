@@ -28,5 +28,6 @@ Next discriminating observation: reference first loads the original word
 zero-extended at0xa94f6, makes a signed copy at0xa94f9 for the shifted index,
 and subtracts from the original zero-extended word. Current source uses one
 signed int phase for both roles. That separately observable consumption
-boundary is untested; local frac width results do not settle it. Preserve the
-sign-table extension/data and predeclare any such subsequent cross separately.
+boundary was subsequently tested in F11590: the four-cell operand/width
+cross closes without a full preimage. Preserve sign-table extension/data.
+[Subsequent controls](phasor-consumption-controls.md).
