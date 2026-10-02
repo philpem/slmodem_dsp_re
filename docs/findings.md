@@ -133342,3 +133342,25 @@ Retained300/300 build; whole-tree872/1852 ->874/1852 exact and85,127
 ->85,291 exact bytes, no losses. Gentoo phase385/0; allocation accounting
 covered by existing t_psd. Complete partial links remain DIFFERENT; positioned
 68,419 ->68,418/943,398 bytes, other exact-record counts unchanged.
+
+
+## F11579. Late owned-Psd publication recovers both V90SpectralVerifier constructors
+
+Blob calls nested constructor before storing owner+4; baseline does opposite.
+Three complete-TU controls: early publication158B/SIZE4, raw-local then
+publication162B/EXACT, placement-expression assignment162B/EXACT. Both late
+forms raw-agree, baseline raw-reproduces production. Fourteen functions/global
+bindings/data preserved; only constructor clones change. Nine/fourteen
+->eleven/fourteen exact, no losses. Retain direct expression, member reloads,
+existing placement allocator and both raw float allocations. No wrapper/order
+or register sweep; static anchors retargeted, not executed.
+[Controls and retained validation](v90sv-publication-recovery.md).
+(2026-10-02)
+
+Retained300/300 build; whole-tree874/1852 ->876/1852 and85,291 ->85,615
+exact bytes, only two clones gain/no losses. Full partial links DIFFERENT;
+positioned68,418 ->68,568/943,398; relocation1,018 ->1,025/18,317.
+
+Fixed Gentoo phase385 passed/0 failed, including constructor/nested allocation
+accounting/reset/destructor fixtures. Structural14,235 references/2,708
+findings headings clean;285 suites/10,038 static anchors clean.

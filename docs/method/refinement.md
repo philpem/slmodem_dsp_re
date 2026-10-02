@@ -2359,3 +2359,12 @@ form without claiming unique first-allocation spelling. Verify cookies, emitted
 allocator symbols, exact sizes, uninitialized buffer content and every TU body.
 C++ replay must include configured CXX flags, not only the C profile.
 [Allocation transfer](../psd-array-new-recovery.md).
+
+
+Owned-object publication can distinguish otherwise similar constructor code.
+V90SpectralVerifier publishes Psd at+4 after nested construction in the blob;
+manual allocation assigned to the member before construction obscured that
+lifetime. Raw-local/late assignment and direct placement-expression assignment
+emit the same162-byte exact clones (F11579). Compare the call/store boundary
+and preserve parameter-member reloads; do not infer allocator changes from
+register colours alone. [Full-TU controls](../v90sv-publication-recovery.md).

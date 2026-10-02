@@ -23,12 +23,12 @@
   "replace": "\tspectrum = (float *)sysdep_malloc(fftLength * sizeof(float));"},
 
  {"label": "the spectrum is cleared, which the object leaves as allocated",
-  "find": "\tpsd = (Psd *)sysdep_malloc(sizeof(Psd));",
-  "replace": "\tspectrum[0] = 0.0f;\n\tpsd = (Psd *)sysdep_malloc(sizeof(Psd));"},
+  "find": "\tpsd = new (sysdep_malloc(sizeof(Psd))) Psd(fftLength,",
+  "replace": "\tspectrum[0] = 0.0f;\n\tpsd = new (sysdep_malloc(sizeof(Psd))) Psd(fftLength,"},
 
  {"label": "the Psd is built with the PSD length rather than the transform length",
-  "find": "\tnew (psd) Psd(fftLength,",
-  "replace": "\tnew (psd) Psd(psdLength,"},
+  "find": "\tpsd = new (sysdep_malloc(sizeof(Psd))) Psd(fftLength,",
+  "replace": "\tpsd = new (sysdep_malloc(sizeof(Psd))) Psd(psdLength,"},
 
  {"label": "the Psd's window and overlap slots are swapped",
   "find": "\t\t      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,\n\t\t      params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);",
