@@ -2779,3 +2779,20 @@ emitsTEST/JE/MOV instead ofSETNE (F11639). Keep both negative controls,
 preserve ABI uncertainty, and close each family without adjacent synonyms.
 [Return controls](../fifo-read-return-controls.md),
 [predicate controls](../v34-bitreverse-init-controls.md).
+
+Inspect both comparison operands in initial RTL before inferring source
+width from the final CMP. Decision's short best_dist alone still compares
+SI values; both short distance locals produce HI comparison and CMPW
+(F11640–F11642). A normalized unused return register can motivate a bounded
+API control without uniquely recovering its declaration. Even after cursor,
+comparison, guarded reads and result normalization reproduce, differing
+spills and entry layout do not authorize register/declaration variants.
+Preserve repeated raw controls and close the finite family.
+[Controls](../v34-decision-controls.md).
+
+A recovered countdown backedge does not prove the entry boundary is recovered.
+FloatFIR's postdecrement control keeps the authentic zero guard but introduces
+a second entry test, growing287B to303B with no exact gain (F11643). Preserve
+the complete control and its denominator; do not remove observed guards or
+expand counter synonyms to fit the partial result.
+[Controls](../floatfir-countdown-controls.md).

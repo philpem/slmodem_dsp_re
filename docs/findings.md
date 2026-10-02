@@ -134152,3 +134152,44 @@ TEST/JE/MOV rather than the blob's TEST/SETNE. Exact count 0/7 is unchanged;
 only bitreverse changes, with symbol/nontext controls agreeing. Equal size
 is not recovery. No source adoption or new fixture; the statement-predicate
 family is closed. [Controls](v34-bitreverse-init-controls.md). (2026-10-02)
+
+## F11640. Decision cursor and best-distance width recover operations but not bytes
+
+Four full-TU cells at361ef919 cross indexed/advancing points and int/short
+best_dist. Sizes167/164/168/165B against170B; no exact gain. Only decision
+changes across12 functions/five named data objects; complete symbol/nontext
+controls agree and raw production reproduces. Best-distance-only narrowing
+still gives a32-bit comparison. [Controls](v34-decision-controls.md).
+(2026-10-02)
+
+## F11641. Decision normalized result cross preserves an unresolved return ABI
+
+Twelve full-TU cells retain all four void controls and cross short/int results,
+with identical signed-short normalization and isolated matching headers.
+All repeated controls raw-reproduce; each short/int pair raw-merges. Returning
+sizes172/169/173/170B; even170B remains BYTES129. Zero blob/source consumers
+leave original short versusint declaration unresolved. No API/source adoption,
+1/12 exact unchanged. [Controls](v34-decision-controls.md). (2026-10-02)
+
+## F11642. Both decision distances must narrow for the word compare
+
+Nine final cells cross both local widths and conditional target-read ownership,
+retaining advancing points and the normalized result. Both short locals give
+HI comparison in initial RTL and final CMPW/JGE; guarded reads survive too.
+Combined171B still differs in spills, owner loads and entry layout, with no
+further independent source discriminator. Across three domains25 valid
+compiles/12 raw emissions, only decision changes and all metadata/nontext
+controls agree. No production change; finite domains closed without register/
+declaration forcing. [Stage evidence and full results](v34-decision-controls.md).
+(2026-10-02)
+
+## F11643. FloatFIR postdecrement recovers the backedge but adds an entry test
+
+Two complete-TU controls preserve the authentic count-zero guard and cross
+retained do/predecrement with while/postdecrement. Raw production287B/BYTES244
+reproduces; candidate303B/SIZE16, no exact gain or loss (2/8 unchanged).
+The sentinel backedge recovers, but a second entry test survives after member
+loads. Only block process changes across eight functions/zero named data
+objects; all metadata and allocated nontext controls agree. No source adoption
+or new differential run; the finite counter family is closed.
+[Controls and coverage limits](floatfir-countdown-controls.md). (2026-10-02)
