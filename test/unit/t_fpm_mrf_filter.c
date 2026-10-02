@@ -93,7 +93,7 @@ run(const char *label, short branches, short decimate, short *coeff,
 
 	rc = diff_end();
 	ref_FPM_MRF_free(&a);
-	FPM_MRF_free(&b);
+	FPM_MRF_free(&b, 1);
 	return rc;
 }
 

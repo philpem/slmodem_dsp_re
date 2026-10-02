@@ -1085,10 +1085,9 @@ void *V21TX_create(void *modem, const struct v21tx_cfg *params);
  * `sysdep_free` of the pointer at +0x2c. Two readings of one block, neither
  * derived from the other, and they agree. Finding F9252.
  *
- * The literal 1 in the second argument slot is not reproduced. The object
- * plants one at 0x099603 before `FPM_MRF_free`, which takes a single
- * argument and reads no frame slot past the first. Finding F8876, and
- * `V17TX_delete` and `V21RX_delete` both carry the note.
+ * F11609 restores the literal second argument 1 at 0x099603 before
+ * FPM_MRF_free. The callee ignores it; its width/name/meaning remain
+ * unknown, but caller stack setup is part of byte fidelity.
  *
  * There is no NULL guard on anything and the handle is released
  * unconditionally by a sibling `jmp`, so a caller that supplied the storage

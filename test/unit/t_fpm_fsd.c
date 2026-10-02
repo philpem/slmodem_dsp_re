@@ -194,7 +194,7 @@ run_trace_allocation_boundaries(void)
 			}
 		}
 		ref_FPM_FSD_free(&a);
-		FPM_FSD_free(&b);
+		FPM_FSD_free(&b, 1);
 	}
 	return diff_end();
 }
@@ -242,7 +242,7 @@ main(void)
 	rc |= diff_end();
 
 	ref_FPM_FSD_free(&a);
-	FPM_FSD_free(&b);
+	FPM_FSD_free(&b, 1);
 
 	/* --- FPM_FSD_demodulate, on a real signal --------------------- */
 	{

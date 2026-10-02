@@ -290,11 +290,11 @@ v23FP_rx_delete(struct v23rx *rx)
 		return;
 	FPM_TONE_delete(rx->tone);
 	/*
-	 * Both frees are called with a second argument they do not have; see
-	 * the same note in b103fp.c.  Neither reads it.
+	 * F11609: both frees receive the blob's second argument 0.
+	 * Neither callee reads it; preserving the call boundary recovers bytes.
 	 */
-	FPM_MRF_free(&rx->mrf);
-	FPM_FSD_free(&rx->fsd);
+	FPM_MRF_free(&rx->mrf, 0);
+	FPM_FSD_free(&rx->fsd, 0);
 	sysdep_free(rx->iir_state);
 	sysdep_free(rx);
 }

@@ -177,7 +177,7 @@ main(void)
 			diff_eq_int("history[%ld]", b.history[i], a.history[i],
 				    i);
 		ref_FPM_MRF_free(&a);
-		FPM_MRF_free(&b);
+		FPM_MRF_free(&b, 1);
 	}
 	if (diff_end())
 		return 1;

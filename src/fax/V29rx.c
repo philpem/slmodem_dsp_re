@@ -401,13 +401,10 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
  * ---------------------------------------------------------------------------
  * V29RX_delete -- .text 0x09b590, 220 bytes.
  *
- * The object places a literal 1 in the second argument slot before
- * `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`.  All three take a single
- * argument -- none of them reads a frame slot past the first -- so it is dead
- * stack setup, presumably left from a version where they took a `fresh` flag
- * like their `_init` counterparts.  Not reproduced, because there is nothing
- * to reproduce; `B103FP_delete` records the identical pattern for the same
- * three-way reason.  Finding F8876.
+ * The object supplies literal second argument 1 to FPM_FSE_free,
+ * FPM_SRE_free and FPM_MRF_free. None reads it. F11609 restores the MRF
+ * argument; FSE/SRE remain separately recorded omissions (F8876), not
+ * proof that the original source had no second formal.
  *
  * The final free is a sibling `jmp` and is unconditional.
  */
@@ -416,7 +413,7 @@ V29RX_delete(void *modem)
 {
 	FPM_FSE_free(&((struct v29_rx *)modem)->rx->fse);
 	FPM_SRE_free(&((struct v29_rx *)modem)->rx->sre);
-	FPM_MRF_free(&((struct v29_rx *)modem)->rx->mrf);
+	FPM_MRF_free(&((struct v29_rx *)modem)->rx->mrf, 1);
 
 	sysdep_free(((struct v29_rx *)modem)->rx->buf_sre);
 	sysdep_free(((struct v29_rx *)modem)->rx->buf_mrf);

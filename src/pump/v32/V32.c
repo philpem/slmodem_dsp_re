@@ -998,7 +998,7 @@ V32FP_delete(struct v32_modem *modem)
 	FPM_FSE_free(FSE(FP(modem)));
 	FPM_SRE_free(&FP(modem)->sre);
 	FPM_ECC_free(ECC(FP(modem)));
-	FPM_MRF_free(&FP(modem)->mrf);
+	FPM_MRF_free(&FP(modem)->mrf, 1);
 	FPM_PPS_free(PPS(FP(modem)));
 	sysdep_free(FP(modem)->rx_buf);
 	sysdep_free(FP(modem)->clean_buf);

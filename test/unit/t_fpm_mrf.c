@@ -97,7 +97,7 @@ run(const char *label, short branches, short decimate, short *coeff,
 
 	rc = diff_end();
 	ref_FPM_MRF_free(&a);
-	FPM_MRF_free(&b);
+	FPM_MRF_free(&b, 1);
 	return rc;
 }
 
@@ -174,7 +174,7 @@ main(void)
 			else
 				lines += dsplib_debug_capture_lines(1);
 			ref_FPM_MRF_free(&a);
-			FPM_MRF_free(&b);
+			FPM_MRF_free(&b, 1);
 		}
 		diff_eq_int("it said something (%ld)", lines > 0, 1,
 			    (long)lines);

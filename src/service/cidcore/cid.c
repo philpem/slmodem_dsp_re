@@ -227,11 +227,10 @@ cid_create(struct cid_modem *ctx, int cid_val, int mode)
  * the object's own reading of it.  The mode is re-read from memory between
  * the two tests, which is why this is two `if`s and not an if/else chain.
  *
- * The object places a literal 1 in the second argument slot before
- * `FPM_MRF_free`, which takes ONE argument and never loads it (0xa8df0 reads
- * `0x4(%esp)` and tail-calls `sysdep_free`).  Not reproduced, on exactly the
- * ground `B103FP_delete` states for the same dead slot: an argument the callee
- * never loads has no observable effect.
+ * F11609 restores the observed second argument 1 to FPM_MRF_free.
+ * The callee ignores it; an unread formal does not justify dropping the
+ * caller's stack setup when reconstructing bytes. Its original meaning
+ * and declared width remain unknown.
  */
 void
 cid_delete(struct cid_modem *ctx)
@@ -239,7 +238,7 @@ cid_delete(struct cid_modem *ctx)
 	if (ctx->mode != 0)
 		sysdep_free(ctx->dtmf);
 	if (ctx->mode != 1)
-		FPM_MRF_free(&ctx->fsk->mrf);
+		FPM_MRF_free(&ctx->fsk->mrf, 1);
 	sysdep_free(ctx->fsk);
 	sysdep_free(ctx);
 }

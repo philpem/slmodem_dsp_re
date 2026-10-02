@@ -616,7 +616,7 @@ V17RX_delete(void *modem)
 
 	FPM_FSE_free(&RXS(modem)->fse);
 	FPM_SRE_free(&RXS(modem)->sre);
-	FPM_MRF_free(&RXS(modem)->mrf);
+	FPM_MRF_free(&RXS(modem)->mrf, 1);
 
 	sysdep_free(RXSTATE(modem)->buf_sre);
 	sysdep_free(RXSTATE(modem)->buf_mrf);

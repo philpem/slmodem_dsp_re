@@ -2561,3 +2561,21 @@ Review error epilogues and narrowing widths, not just size. Audit fixture
 cross-product claims: two marginal sweeps need not cover every pair. Keep
 concrete missing fixed vectors and close declaration/frame permutations.
 [Controls](../div32-normalization-controls.md).
+
+
+Signed-word increment and comparison evidence can recover a loop even when
+its complete initializer still misses. V34 detector short counters reproduce
+its prologue and clearing loops, but two observed post-loop store-order axes
+fail the full body (F11607/F11608). Close the finite family, keep the partial
+recovery and select independent evidence rather than permute fields/registers.
+[Controls](../v34-detector-initialization-controls.md).
+
+
+An unread callee slot does not establish an absent source argument. Audit all
+caller stack writes before dropping a nominally dead scalar: restoring MRF/FSD
+free arguments recovers four complete callers (F11609). Cross each API change,
+use isolated consistent header overlays, then rebuild every caller/callee and
+adapt test consumers. Recover observed literals, not invented ownership meaning
+or a unique formal width. Check unchanged helper bodies and non-exact bystanders;
+API fidelity is source evidence even when only some callers become exact.
+[Recovery](../free-argument-recovery.md).

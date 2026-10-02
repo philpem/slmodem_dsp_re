@@ -394,7 +394,7 @@ V27RX_delete(void *modem)
 	FPM_SRE_free((&rx->sre));
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_MRF_free((&rx->mrf));
+	FPM_MRF_free((&rx->mrf), 1);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	sysdep_free(rx->buf_b);

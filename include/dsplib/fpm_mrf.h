@@ -68,7 +68,9 @@ void FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg,
  * @brief Free an MRF resampler's history buffer.
  * @param state The resampler state to tear down.
  */
-void FPM_MRF_free(struct fpm_mrf *state);
+/* F11609: callers pass a second scalar; the blob ignores its value.
+ * int is a conventional spelling, not a uniquely recovered width/name. */
+void FPM_MRF_free(struct fpm_mrf *state, int unused);
 
 /** @brief Library default configuration: 9:10, no coefficients. A template
  *  for callers to copy and patch `coeff`, not a usable filter on its own. */

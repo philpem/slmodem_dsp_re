@@ -100,13 +100,12 @@
  * gap -- see the arithmetic in `v27fax.h`.
  *
  * ---------------------------------------------------------------------------
- * THE THREE `FPM_*_free` CALLS TAKE A SECOND ARGUMENT THEY DO NOT HAVE
+ * THE THREE FPM FREE CALLS IGNORE THEIR SECOND ARGUMENTS
  *
- * `V27RX_delete` stores the constant 1 at 0x4(%esp) before each of
- * `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`, and none of the three
- * reads it -- the same extra argument `v22data.c` and `bwchdem.c` record at
- * their `FPM_AGC_agc` sites.  cdecl makes it harmless and it is not
- * reproduced.  Finding F8870.
+ * V27RX_delete supplies constant 1 before FPM_FSE_free, FPM_SRE_free
+ * and FPM_MRF_free. None reads it. F11609 restores MRF's call argument;
+ * FSE/SRE omissions remain separate (F8870), and an unread argument does
+ * not prove an absent source formal.
  */
 
 #include <string.h>

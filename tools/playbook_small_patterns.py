@@ -15,6 +15,8 @@ import byteident as b
 REV='555036b4'
 SOURCE_PATHS=('src/call/call.c','src/pump/v32/V32int.c','src/service/Beepgen.c')
 OUT_NAME='playbook-parent-patterns'
+# Optional candidate-only public headers; production hashes stay authoritative.
+HEADER_OVERLAYS = lambda path, label: {}
 
 def function(source,name):
     start=source.index('\n'+name+'(')+1
@@ -101,12 +103,21 @@ def main():
             cell_flags = flags + ['-da']
             if file.suffix == '.cpp':
                 cell_flags += shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('cxx   ')))
+            overlays = HEADER_OVERLAYS(path, label)
+            overlay_hashes = {}
+            for rel, contents in overlays.items():
+                overlay = cd/'include'/rel
+                overlay.parent.mkdir(parents=True, exist_ok=True)
+                overlay.write_text(contents)
+                overlay_hashes[rel] = hashlib.sha256(contents.encode()).hexdigest()
+            if overlays:
+                cell_flags = ['-I'+dst+'/include'] + cell_flags
             shell = tc.compile_shell(tc.GENTOO_COMPILER_PATH, cell_flags, dst+'/candidate.o', dst+'/'+file.name)
             if file.suffix == '.cpp':
                 assert shell.count('exec gcc -c ') == 1
                 shell = shell.replace('exec gcc -c ', 'exec g++ -c ', 1)
             command=tc.docker_prefix(image,ROOT,out,True)+['/bin/sh','-c','cd '+shlex.quote(dst)+' && '+shell]
-            entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command};fr['cells'][label]=entry
+            entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command,'overlay_header_hashes':overlay_hashes};fr['cells'][label]=entry
             assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==d for p,d in headers.items())
             with (cd/'compile.log').open('w') as log:entry['compile_exit']=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT).returncode
             (out/'results.json').write_text(json.dumps(result,indent=2)+'\n');assert entry['compile_exit']==0,label

@@ -16,8 +16,9 @@
 #include "dsplib/sysdep.h"
 
 void
-FPM_MRF_free(struct fpm_mrf *state)
+FPM_MRF_free(struct fpm_mrf *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->history);
 }
 void

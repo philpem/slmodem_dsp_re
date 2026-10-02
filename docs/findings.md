@@ -102249,6 +102249,10 @@ empty and silent blocks. Deviation D1036.
 
 ### F8876. Three `_free` calls in `V29RX_delete` are given a second argument that no callee loads, exactly as `B103FP_delete`'s are
 
+**Superseded for MRF source/byte fidelity by F11609.** An unread argument
+does not establish a one-argument original declaration. The measured caller
+stack setup is restored; FSE/SRE remain separately open.
+
 `V29RX_delete` (0x09b590) writes a literal 1 to `0x4(%esp)` before each of
 `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`. All three take one argument
 and none reads a second frame slot, so it is dead stack setup -- presumably left
@@ -133775,3 +133779,32 @@ candidate gates. Existing fixture's every-mantissa/shift claim is overstated:
 0x40008000 yields missing8001/shift1. Preserve fixed-vector follow-up, close
 nearby permutations without claiming a global ceiling.
 [Scope and evidence](div32-normalization-controls.md). (2026-10-02)
+
+
+## F11607. V34 detector word counters recover loops but not complete initialization
+
+Four-cell section/tap width cross172/164/169/186B versus186B; four emissions,
+0/2 exact/no gains/losses. Both shorts raw-recover prologue/nested loops,
+leaving BYTES18 after-loop stores. Untouched tone_detect512B unchanged;
+all2 functions/types/binding/nontext preserved, no data objects. No adoption/
+candidate gates. [Controls](v34-detector-initialization-controls.md).
+(2026-10-02)
+
+## F11608. V34 detector armed/state and threshold store-order stage closes without a hit
+
+Production plus four short-counter store cells:186B with BYTES18/11/26/19,
+five emissions,0/2 exact/no gains/losses. Complete-TU controls agree; no
+runtime/source adoption/gates. Close bounded ordering family; do not infer
+unique source order from scheduling or fit unrelated fields/registers.
+[Controls](v34-detector-initialization-controls.md). (2026-10-02)
+
+## F11609. Restore ignored MRF/FSD free arguments for byte fidelity
+
+Blob's10 MRF and3 FSD calls explicitly supply a second scalar: all1 except
+V23's two0s. Unread callee argument does not prove an absent source formal;
+F8876's behavioral rationale cannot justify omission for byte reconstruction.
+Initial four-TU MRF×FSD cross and all11-TU consumer expansion recover complete
+cid_delete86B,v23FP_rx_delete89B,V21RX_delete123B,V21TX_delete104B. Ignored int
+formal is a conventional family, not unique original type/name/meaning.
+Full validation and audit are recorded in [recovery](free-argument-recovery.md).
+(2026-10-02)

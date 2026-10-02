@@ -222,8 +222,9 @@ FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
  * embeds it in a larger block rather than allocating it separately.
  */
 void
-FPM_FSD_free(struct fpm_fsd *state)
+FPM_FSD_free(struct fpm_fsd *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->trace);
 	sysdep_free(state->iir_hist);
 	sysdep_free(state->fir_hist);

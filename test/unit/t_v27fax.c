@@ -1585,7 +1585,7 @@ run_delete(void)
 			FPM_SRE_free((struct fpm_sre *)(void *)
 					FX(b.rx, V27RX_SRE));
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1603,7 +1603,7 @@ run_delete(void)
 			FPM_SRE_free((struct fpm_sre *)(void *)
 					FX(b.rx, V27RX_SRE));
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(b.rx);
 			FPM_MTD_delete((struct fpm_mtd *)
 					FXP(b.sh, V27SH_MTD));
@@ -1619,7 +1619,7 @@ run_delete(void)
 			FPM_SRE_free((struct fpm_sre *)(void *)
 					FX(b.rx, V27RX_SRE));
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1635,7 +1635,7 @@ run_delete(void)
 			FPM_SRE_free((struct fpm_sre *)(void *)
 					FX(b.rx, V27RX_SRE));
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);
@@ -1651,7 +1651,7 @@ run_delete(void)
 			FPM_SRE_free((struct fpm_sre *)(void *)
 					FX(b.rx, V27RX_SRE));
 			FPM_MRF_free((struct fpm_mrf *)(void *)
-					FX(b.rx, V27RX_MRF));
+					FX(b.rx, V27RX_MRF), 1);
 			sysdep_free(FXP(b.rx, V27RX_BUF_B));
 			sysdep_free(FXP(b.rx, V27RX_BUF_A));
 			sysdep_free(b.rx);

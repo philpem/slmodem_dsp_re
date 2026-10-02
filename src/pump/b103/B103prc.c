@@ -857,12 +857,9 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
  * objects are guarded because loopback never creates the detector; nothing
  * else is.
  *
- * Note the original places a literal 1 in the second argument slot before
- * FPM_FSD_free and both FPM_MRF_free calls.  Neither function reads it --
- * both take a single argument -- so it is dead stack setup, presumably from
- * a version where they took a `fresh` flag like their init counterparts.
- * Not reproduced, because there is nothing to reproduce: an argument the
- * callee never loads has no observable effect.
+ * F11609 restores the observed second argument 1 for FPM_FSD_free and
+ * both FPM_MRF_free calls. The callees ignore it; its original type/name
+ * and meaning are unproved. Dropping it preserves behavior, not bytes.
  *
  * The final free is D8: it releases the object unconditionally, even when the
  * caller supplied it.  Reproduced -- see docs/deviations.md.
@@ -875,9 +872,9 @@ B103FP_delete(struct b103fp *fp)
 
 	FPM_FSM_delete(&dsp->fsm);
 	FPM_MTD_delete(dsp->mtd);
-	FPM_FSD_free(&dsp->fsd);
-	FPM_MRF_free(&dsp->rx_mrf);
-	FPM_MRF_free(&dsp->tx_mrf);
+	FPM_FSD_free(&dsp->fsd, 1);
+	FPM_MRF_free(&dsp->rx_mrf, 1);
+	FPM_MRF_free(&dsp->tx_mrf, 1);
 
 	sysdep_free(dsp->scratch);
 	sysdep_free(dsp->rx_scratch);
