@@ -12,4 +12,18 @@ Safe runtime boundaries remain the actual initialized fixtures, at most32768 out
 F11668 records six valid compiles across the two domains, four distinct source/emission combinations, with no byte-exact gain. Close this local-width spelling family. The next independent source boundaries are the needed-input private short countdown (original word increment/test/nonzero versus current positive guard/32-bit decrement), shortfall nonzero versus positive predicate, and branchless ring wrap (blob SETL/NEG/AND versus candidate conditional branch). Preserve original need for subtraction and the convolution int counter. These observations justify new posted domains; no further compile is authorized by the closed width domain. Invalid negative-history or wrapped-output fixtures are not introduced.
 
 
-The [next nine-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5958780568) has an unchanged production control plus eight narrowed candidates crossing private needed-input countdown, shortfall nonzero test and in-place conditional-zero ring wrap. GCC3 noce_try_store_flag_mask supplies the latter discriminator through destination identity (Playbook F11568); the mask instructions do not uniquely establish explicit author-written masks. Raw narrow baseline must reproduce the494-byte object before interpretation. The matrix is running; results are not claimed here.
+The [next nine-cell domain](https://github.com/philpem/slmodem_dsp_re/issues/22#issuecomment-5958780568) has an unchanged production control plus eight narrowed candidates crossing private needed-input countdown, shortfall nonzero test and in-place conditional-zero ring wrap. GCC3 noce_try_store_flag_mask supplies the latter discriminator through destination identity (Playbook F11568); the mask instructions do not uniquely establish explicit author-written masks. Raw narrow baseline must reproduce the494-byte object before interpretation. All nine compiles are valid and yield nine distinct emissions. The raw production control446B and narrow control494B reproduce their prior objects. Needed countdown and shortfall nonzero independently restore MOVSWL/word INC/JNE; in-place clearing independently restores both SETL/NEG/AND wraps. No complete function becomes exact: strict2/3 for every cell, no gains/losses. Only filter changes; all3function/1data full-object audits agree. Source/runtime adoption is declined. F11669 records this domain.
+
+
+| Narrowed candidate axes | Filter bytes (blob533) |
+| --- | ---: |
+| Control |494|
+| In-place wrap |515|
+| Shortfall nonzero |482|
+| Shortfall + in-place |503|
+| Needed countdown |494|
+| Needed + in-place |501|
+| Needed + shortfall |482|
+| All three |489|
+
+Equal lengths do not mean equal bodies: all nine emissions differ. In-place conversion uses XOR-zero before SETL rather than blob MOVZBL, with further widening after AND. Do not turn the closest length into source recovery or expand adjacent types/order based on scores. Artifacts: build/playbook-mrf-loop-boundaries/{results.json,complete-object-audit.json}. Close this family and reframe toward an independent function/source boundary; no author-written mask conclusion, source adoption, runtime claim or extra exact count.

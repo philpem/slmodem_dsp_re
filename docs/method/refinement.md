@@ -2988,3 +2988,11 @@ must precede the wrap comparison to reproduce the observed boundary. Keep
 convolution indices at their separately measured width; cross independently
 evidenced families instead of enumerating arbitrary local-type permutations.
 [Ongoing bounded MRF controls](../mrf-counter-width-controls.md).
+
+
+MRF's nine-cell countdown/conditional cross (F11669) restores all predicted
+local boundaries without full identity. Input-loop old-value nonzero tests
+and conditional-zero destination identity are independent source mechanisms;
+equal lengths can hide different bodies. Close the declared family after
+complete review, retain losing explanatory controls, and reframe before
+more nearby type/order changes. [Ledger](../mrf-counter-width-controls.md).

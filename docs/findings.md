@@ -134543,3 +134543,19 @@ signed input/unsigned result remain unchanged. No source/runtime adoption.
 Close width spelling family; independent input countdown predicates and
 branchless ring wrap are next controls, not register/type permutations.
 [Measured controls](mrf-counter-width-controls.md). (2026-10-02)
+
+
+## F11669. MRF countdown and destination identity recover independently without exact gain
+
+The posted9cell full-TU domain crosses needed-input private short countdown,
+shortfall nonzero and in-place conditional-zero ring wrap on F11668's narrowed
+control, plus unchanged production baseline. All9 valid compiles yield9distinct
+emissions; both production446B and narrowed494B raw controls reproduce.
+Countdowns restore MOVSWL/word INC/JNE; in-place update restores2SETL/NEG/AND
+wraps, supported by GCC3 noce_try_store_flag_mask and Playbook F11568.
+All3FUNC/1data metadata/nontext/canonicalrelocs/binding controls agree, only
+filterchanges; exact2/3 unchanged,0gains/0losses. Combined489B vsblob533;
+closest515B is not recovered source. XOR-before-SETL and post-AND widening
+remain distinct. No source/runtime adoption or explicit author mask claim.
+Close the bounded domain and reframe; no neighboring type/register/order fits.
+[Full cell ledger](mrf-counter-width-controls.md). (2026-10-02)
