@@ -133364,3 +133364,58 @@ positioned68,418 ->68,568/943,398; relocation1,018 ->1,025/18,317.
 Fixed Gentoo phase385 passed/0 failed, including constructor/nested allocation
 accounting/reset/destructor fixtures. Structural14,235 references/2,708
 findings headings clean;285 suites/10,038 static anchors clean.
+
+
+## F11580. Resampler history publication fixes size but does not recover the body
+
+Three complete-TU controls test blob private-null/optional-allocation/owner
+publication against baseline early owner store. Baseline172B/SIZE2; both late
+forms raw-agree174B/BYTES44. Three sources/two emissions,16/25 exact/no
+gains or losses; only adopting C1/C2 bodies change,26 global bindings preserved.
+No source adoption, runtime/whole-tree/partial-link gates NOT RUN. Correct
+length and a recovered pointer boundary are insufficient for byte recovery.
+[Closed controls](resampler-history-publication-controls.md).
+(2026-10-02)
+
+
+## F11581. Descrambler count-local transfer recovers allocation prefix, not full body
+
+Three header cells over27 fresh consumers (299 C/C++ dependency inputs from
+300-object manifest),81 complete compiles. Unchanged/reassociated raw-agree
+with production27/27. Count-local107B/BYTES19 versus110B/SIZE3 baseline.
+541 body-copy comparisons/314 exact per cell unchanged;57 scrambler/
+descrambler defining copies reviewed, only int/int constructor changes.
+Data/symbol types/bindings/visibility/sections preserved. Prefix through
+allocator and relocation offsets match; pointer/epilogue register colours
+still differ. No header adoption, runtime/whole-tree/partial gates NOT RUN.
+[Finite shared scope](descrambler-count-controls.md).
+(2026-10-02)
+
+
+## F11582. Both outer padding guards recover FloatARMA constructor clones
+
+Duplicated reference pretests before member-index assignment support guards
+around denominator/numerator padding loops. Four complete-TU cells: baseline
+596B/SIZE16, denominator612B/BYTES171, numerator596B/SIZE16, both612B/EXACT
+for C1/C2. Four sources/four objects, baseline raw-reproduces production.
+Seven functions/global bindings/nontext preserved; only constructor clones
+change, three/seven ->five/seven exact, no losses. Retain both guards, same
+allocation/copy/normalization/reset; no size-only adoption or register/order
+permutations. Existing fixed fixtures cover both clones, padded coefficients,
+allocation byte accounting and final member-index/reset state. One static
+padding anchor retargeted, not executed.
+[Complete recovery](floatarma-padding-recovery.md).
+(2026-10-02)
+
+Retained300/300 build changes only src_dsp_FloatARMA.cpp.o, raw-matching
+winning full-TU cell. Whole-tree876/1852 ->878/1852 exact,85,615 ->86,839
+exact bytes; only constructor clones gain/no losses. Complete same-order
+300-object partial links remain DIFFERENT (strict exit1): positioned68,568
+->68,284/943,398 bytes; allocated914,126 ->914,158; exact section70/92
+and symbol394/2907 unchanged, relocation1,025 ->1,020/18,317. Local body
+recovery moves later layout and does not establish original global profile.
+Negative positional movement is recorded, not optimized away with padding.
+
+Fixed Gentoo phase385 passed/0 failed, with full retained profile.
+Structural14,238 references/2,711 findings headings and285 suites/10,038
+static anchors clean. No modern portability, fuzzing or mutation-runtime claim.

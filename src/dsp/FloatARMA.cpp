@@ -226,7 +226,9 @@ FloatARMA::process(const float *in, float *out, unsigned int count)
  * before it.
  *
  * The scaling loops are bounded by the CALLER's counts, not the rounded ones,
- * so the zero-filled slots above `nNum`/`nDen` stay zero; and `den[0]` is
+ * so the zero-filled slots above `nNum`/`nDen` stay zero. Each padding loop
+ * has a separate outer guard before initializing the member index, as in
+ * both612-byte constructor clones (F11582). `den[0]` is
  * re-read on every iteration, which the object also does -- the store to
  * `m_b[i]` may alias it, both being `float *`.
  */
@@ -250,13 +252,17 @@ FloatARMA::FloatARMA(unsigned int nDen, unsigned int nNum, float *den,
 
 	for (m_idx = 0; m_idx < nDen; m_idx++)
 		m_a[m_idx] = den[m_idx];
-	for (m_idx = nDen; m_idx < m_nA; m_idx++)
-		m_a[m_idx] = 0.0f;
+	if (m_nA > nDen) {
+		for (m_idx = nDen; m_idx < m_nA; m_idx++)
+			m_a[m_idx] = 0.0f;
+	}
 
 	for (m_idx = 0; m_idx < nNum; m_idx++)
 		m_b[m_idx] = num[m_idx];
-	for (m_idx = nNum; m_idx < m_nB; m_idx++)
-		m_b[m_idx] = 0.0f;
+	if (m_nB > nNum) {
+		for (m_idx = nNum; m_idx < m_nB; m_idx++)
+			m_b[m_idx] = 0.0f;
+	}
 
 	if (den[0] != 1.0f) {
 		for (m_idx = 0; m_idx < nNum; m_idx++)

@@ -2368,3 +2368,27 @@ lifetime. Raw-local/late assignment and direct placement-expression assignment
 emit the same162-byte exact clones (F11579). Compare the call/store boundary
 and preserve parameter-member reloads; do not infer allocator changes from
 register colours alone. [Full-TU controls](../v90sv-publication-recovery.md).
+
+
+Publication transfer has limits: Resampler history-local and conditional-owner
+forms recover the blob allocation/pointer-store boundary and174-byte length
+but still differ in44 bytes (F11580); complete TU exact set unchanged. Do not
+adopt a size-only hit or expand arbitrary initialization-store permutations.
+[Closed family](../resampler-history-publication-controls.md).
+
+
+A sibling count-local transfer can recover only an arithmetic prefix.
+Descrambler<int,int> becomes107B/BYTES19 across27 header consumers with
+no exact gains; Scrambler's prior success is not a full-preimage proof
+(F11581). Require every defining copy and full body, preserve negative
+controls and close the tested arithmetic family.
+[Shared-header transfer](../descrambler-count-controls.md).
+
+
+Opposite-order duplicate pretests before a member cursor is initialized can
+expose an outer source guard around a for loop. FloatARMA's independent
+denominator/numerator cross has only one full hit: both padding guards
+recover both612-byte clones (F11582). Denominator-only gets the same length
+but differs171 bytes; numerator-only stays596B. Cross guards, retain full
+bodies and inspect final cursor state, rather than treating size as fidelity.
+[Guard recovery](../floatarma-padding-recovery.md).

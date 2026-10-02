@@ -19,7 +19,7 @@
   "replace": "\tm_b = (float *)sysdep_malloc((m_nB + 1) * sizeof(float));"},
 
  {"label": "the padding above the caller's denominator count is left as allocated",
-  "find": "\tfor (m_idx = nDen; m_idx < m_nA; m_idx++)\n\t\tm_a[m_idx] = 0.0f;",
+  "find": "\tif (m_nA > nDen) {\n\t\tfor (m_idx = nDen; m_idx < m_nA; m_idx++)\n\t\t\tm_a[m_idx] = 0.0f;\n\t}",
   "replace": ""},
 
  {"label": "the normalisation divisor is compared against zero, not one",
