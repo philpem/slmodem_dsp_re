@@ -2624,3 +2624,13 @@ Close the finite family without asserting that zero gains disprove the original
 return type. Reject an empty domain and preflight all generators before the
 first compile; preserve invalid attempts outside valid result artifacts.
 [Controls](../agc-return-controls.md).
+
+
+Cached-pointer controls do not exhaust an ordinary delete expression. A
+typed owned class pointer plus one blob pointer retained across destructor/
+free supports testing scalar delete separately from its TU-local adapter.
+V90Phase4Modulator's adapter-only cell raw-merges; member delete recovers both
+94B clones and leaves all51 bystanders unchanged (F11617). Preserve ownership,
+null guard and automatic member destruction. A recovered first-emitted body
+does not establish that later register/scheduler differences must disappear.
+[Recovery](../v90p4-owned-delete-recovery.md).

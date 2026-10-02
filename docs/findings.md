@@ -133886,3 +133886,16 @@ paired lifecycle; original allocation spelling is not uniquely established.
 Real live allocator cases and synthetic unknown-pointer null-pattern probes
 remain distinguished; eleven static anchors retargeted, no execution.
 [Controls](v92-array-lifecycle-recovery.md). (2026-10-02)
+
+
+## F11617. Ordinary V90 phase-four member delete recovers both destructors
+
+Blob caches one owned converter pointer across destructor/free; manual member
+calls reloaded it. Three-cell completeTU control: adapter-only raw-merges,
+ordinary typed member delete recovers both94B D1/D2 from83B,37→39exact/53
+functions, no losses. All51otherbodies unchanged, no named data objects,
+nontext/binding/import/export agree. Previous cache controls did not test
+this language construct. Exact destructor does not close the three other
+register/scheduler residuals; do not infer that recovery is sufficient.
+Realowned/supplied lifecycle and synthetic guard probes distinguished.
+[Recovery and gates](v90p4-owned-delete-recovery.md). (2026-10-02)
