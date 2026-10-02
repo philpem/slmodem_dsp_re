@@ -134119,3 +134119,34 @@ Close this capture domain without pointer/declaration/register synonyms.
 The issue domain initially misstated the existing fixture as180cases; direct
 initializer audit establishes150 (5frames×6modes×5values), corrected here.
 (2026-10-02)
+
+## F11637. Wider FIFO8 read results remove sign extension but miss complete bodies
+
+Three whole-TU cells atfcf0427a testshort/unsignedshort/int with isolatedmatching
+headers. Baseline160B/SIZE13 vs173B; widercells rawmerge159B/SIZE14. All4
+functions/oneFIFO_CFGobject/symbol/nontext controls preserved; onlyreadchanges.
+Productionrawreproduces,2/4exactunchanged. Callertruncation andexistingfixture
+shortdeclaration do not uniquelyrecover originalABI. NoAPIadoption orfixture
+execution; returnwidthfamilyclosed. [Controls](fifo-read-return-controls.md).
+(2026-10-02)
+
+## F11638. V34 transmit queue recovers sample-before-clear and direct wrap
+
+Four load/storeorder×helper/directwrap cells recover68B EXACT onlywithboth.
+Directwrapalone68B/BYTES10; loadorderalone70B/SIZE2. SevenTUfunctions/zero
+nameddataobjects, onlyqueuechanges; allsymbol/nontext controlsagree. Synthetic
+componentoverlapdetector fires6/2040onbaseline, thenpasses2040/2040; separate
+source-storagecoverage retained. All300productionobjects reviewed, onechanges
+andrawmatchespromotedcandidate. Whole-tree918→919/1852,94776exactbytes/
+no losses; fixedphase386/0/staticanchorsclean. CompletepartialremainDIFFERENT,
+positioned-1/allocatedunchanged. [Recovery](v34-txqueue-recovery.md).
+(2026-10-02)
+
+## F11639. Bitreverse statement predicate matches size but fails the predicted lowering
+
+Two completeTUcells atfcf0427a reproduce the explicitoldbaseline:56B/SIZE8
+ternary,64B/BYTES40 statementpredicate. CandidateemitsTEST/JE/MOV ratherthan
+blobTEST/SETNE. Exact0/7unchanged; onlybitreversechanges, symbol/nontext
+controlsagree. Equal size is not recovery. No source adoption ornewfixture;
+statementpredicatefamilyclosed. [Controls](v34-bitreverse-init-controls.md).
+(2026-10-02)

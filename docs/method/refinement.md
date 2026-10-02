@@ -2764,3 +2764,18 @@ byte match. CID string capture restores the pre-loop owner access but stays
 SIZE1 (F11636). Keep capture after the external clear, audit actual allocation
 and output/owner boundaries, and close the finite family rather than expanding
 register or pointer synonyms. [Control](../cid-string-capture-controls.md).
+
+Separate sample-read order from cursor-helper factoring. V34 transmit queue
+needs both to recover68B EXACT (F11638). A fixed overlap witness detects the
+baseline's lost highhalf sample, while ordinary separate-buffer tests cannot.
+Label that allocated component probe synthetic rather than asserting modem
+reachability. Preserve other helper users and report alignment-absorbed size
+changes. [Recovery](../v34-txqueue-recovery.md).
+
+Return-width and predicate hypotheses need complete bodies, not selected
+instructions or equal size. FIFO8 read's wider results remove sign extension
+but remainSIZE14 (F11637); bitreverse's statement predicate reaches64B but
+emitsTEST/JE/MOV instead ofSETNE (F11639). Keep both negative controls,
+preserve ABI uncertainty, and close each family without adjacent synonyms.
+[Return controls](../fifo-read-return-controls.md),
+[predicate controls](../v34-bitreverse-init-controls.md).

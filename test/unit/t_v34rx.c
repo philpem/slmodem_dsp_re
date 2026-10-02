@@ -146,6 +146,38 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * Synthetic component alias probe, not a modem lifecycle history:
+	 * source starts at the current ring slot's high half.  The blob reads
+	 * that sample before clearing the high half of its destination.
+	 * Keep the source within the ring and exercise two distinct old halves.
+	 */
+	diff_begin("v34 txqueue overlap");
+	for (start = 0; start < 2; start++) {
+		unsigned k;
+		short high = start == 0 ? (short)0x1234 : (short)0xfedc;
+
+		memset(&qa, HARNESS_MALLOC_FILL, sizeof(qa));
+		memset(&qb, HARNESS_MALLOC_FILL, sizeof(qb));
+		for (k = 0; k < 158; k++)
+			qa.q.ring[k] = qb.q.ring[k] =
+				(int)(((unsigned)(unsigned short)high << 16)
+				      | (unsigned short)(k * 719 + 13));
+		qa.q.count = qb.q.count = 0;
+		qa.q.rd = qa.q.ring;
+		qb.q.rd = qb.q.ring;
+		qa.q.wr = qa.q.ring + 5;
+		qb.q.wr = qb.q.ring + 5;
+		txwritequeue(&qa.q, (const short *)qa.q.wr + 1);
+		ref_txwritequeue(&qb.q, (const short *)qb.q.wr + 1);
+		diff_eq_int("captured high half %ld",
+			    ((short *)qa.q.ring)[10], high, start);
+		diff_eq_int("reference captured high half %ld",
+			    ((short *)qb.q.ring)[10], high, start);
+		compare("overlap after txwritequeue", start);
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 nlencoder");
 	{
 		int re, im;

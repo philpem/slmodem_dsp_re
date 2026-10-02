@@ -351,11 +351,13 @@ txwritequeue(struct v34_queue *q, const short *src)
 	q->count = (short)(q->count + V34_QUEUE_BURST);
 
 	for (i = 0; i < V34_QUEUE_BURST; i++) {
-		/* Low half the sample, high half explicitly zeroed. */
-		((short *)p)[1] = 0;
+		/* F11638: read the sample before clearing its destination high
+		 * half; overlapping component buffers preserve that order. */
 		((short *)p)[0] = src[i];
+		((short *)p)[1] = 0;
 		p++;
-		p = q_next(q, p, V34_TXQ_END);
+		if ((char *)p >= (char *)q + V34_TXQ_END)
+			p = q->ring;
 	}
 
 	q->wr = p;
