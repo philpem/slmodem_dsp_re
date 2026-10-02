@@ -2596,3 +2596,11 @@ recover its full deletion body (F11611); either alone misses. Retain guards,
 call order and real lifecycle allocator checks. Do not infer a prior behavior
 bug from a register/source lifetime recovery, or transfer it to already-matching
 loads without new evidence. [Controls](../free-argument-recovery-rest.md).
+
+
+Call argument evaluation and a preceding pointer assignment need not schedule
+identically. When a deletion suffix already matches, compare direct owner-member
+arguments against the explicit child-local statement at the first calls. V27
+RX/TX recover complete bodies this way (F11612); preserve later matching owner
+reloads. Review register-renamed bystanders and avoid claiming unique spelling
+from setup order. [Recovery](../v27-delete-argument-recovery.md).

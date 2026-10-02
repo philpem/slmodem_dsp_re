@@ -133829,3 +133829,13 @@ assertion rejected separatelyassignedhdx beforecompilation; invalidrun retained,
 correctedfourcell valid. Fixedt_b103create real lifecycle authority, no ordinary
 behavioralbug claim. [Evidence and gates](free-argument-recovery-rest.md).
 (2026-10-02)
+
+
+## F11612. V27 direct owner-member arguments recover both deletion bodies
+
+Two cells in each complete RX/TX TU:193B/107B become EXACT after removing
+preceding child-pointer assignments at embedded frees; two gains/no losses.
+All7 functions/type/binding/nontext controlled, no data objects. RX decision
+bystander stays298B, changes under consistent register renaming only; other
+four bodies unchanged. Original spelling is not unique, no ordinary behavior
+bug claim. [Recovery and gates](v27-delete-argument-recovery.md). (2026-10-02)
