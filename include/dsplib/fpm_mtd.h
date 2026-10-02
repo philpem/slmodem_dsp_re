@@ -40,7 +40,8 @@ struct fpm_mtd {
  * @param state  Existing state to initialise in place, or NULL to allocate
  *               a new 24-byte state (and its accumulator array) on the heap.
  * @param cfg    Configuration to copy in, or NULL for the built-in default.
- * @return @p state, or the newly allocated state; NULL if allocation failed.
+ * @return @p state, or the newly allocated state. As in the object,
+ *         allocation failure is unchecked and may fault.
  */
 struct fpm_mtd *FPM_MTD_create(struct fpm_mtd *state,
 			       const struct fpm_mtd_cfg *cfg);

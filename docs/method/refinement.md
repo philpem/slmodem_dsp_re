@@ -2408,3 +2408,21 @@ FloatFIR setCoefficients' four min-store/nested-update cells recover selected
 boundaries but none the complete body (F11583); close the family rather than
 expand arbitrary variable/store permutations.
 [Closed control cross](../floatfir-coefficient-control.md).
+
+
+A word load does not establish unsigned source type. RxClampV32's member
+is already signed short; countdown/conversion controls close without a gain
+(F11585). [Closed domain](../rxclamp-count-controls.md).
+
+Matching loop/return shape and even total size does not establish a divider
+preimage. GetFP_Value's bounded arithmetic/lifetime families leave byte
+mismatches; preserve the static zero-divisor fidelity observation separately
+from unrun runtime/reachability claims (F11586).
+[Controls](../getfp-divider-controls.md).
+
+Aggregate copies and short element counts are independent boundaries:
+FPM_MTD_create needs both, plus short loop counter and removal of an
+unsupported allocation-success guard. Only the combined16-cell cross recovers
+184B exactly (F11587). Verify exceptional outcomes with fixed child processes
+and successful controls; an added NULL return can hide a blob fault and alter
+fidelity. [Recovery](../fpm-mtd-create-recovery.md).

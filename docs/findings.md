@@ -133462,3 +133462,52 @@ Fixed Gentoo phase385 passed/0 failed, including exhaustive65536-phase
 fixture and negative/nonzero/cardinal/wrap controls. Structural14,238
 references/2,713 finding headings and285 suites/10,038 static anchors clean.
 No modern portability claim, fuzzing or mutation execution.
+
+
+## F11585. RxClampV32 countdown/conversion controls do not recover the body
+
+Four compiles/three sources/two emissions:60B baseline,63B countdown,
+conversion-only raw-identical60B, blob49B. Full-TU25 functions/31 globals,
+nontext and binding/type/visibility preserved,14/25 exact unchanged.
+Member already signed short; no retyping or source adoption. Candidate
+runtime/census/partial gates NOT RUN. [Closed controls](rxclamp-count-controls.md).
+(2026-10-02)
+
+## F11586. GetFP_Value arithmetic/lifetime families close without an exact gain
+
+Eighteen valid compiles/twelve sources/nine complete emissions across four
+bounded domains: baseline156B vs blob82B, closest complete cells82B/BYTES19
+and82B/BYTES28. Production/staged controls raw-replay their own objects;
+all6 functions/6 globals/data/binding/type/visibility retained,2/4 exact unchanged.
+Four initial negative-step compiles had incorrect domain metadata, preserved
+INVALID and excluded; corrected four-cell rerun used actual predeclared URL.
+No source adoption, candidate runtime/census/partial gates NOT RUN. Reference
+zero-divisor loop vs source guard is static fidelity evidence, not runtime
+or modem reachability evidence. [Controls](getfp-divider-controls.md).
+(2026-10-02)
+
+## F11587. Four source boundaries recover complete FPM_MTD_create
+
+Aggregate config copy, short clearing counter, short element count before byte
+conversion and unchecked state allocation independently supported by blob.
+16-cell full-TU cross has only one exact184B winner; all partial combinations
+nonexact. All3 functions/5 globals and data/type/binding/visibility preserved,
+1/3 ->2/3 exact/no losses. New fixed allocation-count/failure probes demonstrably
+fail unchanged source (3/32916 and2/8 checks), with successful controls; negative
+counts are component conversion evidence, not detector/modem reachability.
+[Recovery and validation](fpm-mtd-create-recovery.md).
+(2026-10-02)
+
+Retained comparison build300/300, zero failures; only src_dsp_fpm_mtd.c.o
+changes, raw-identical to the winning complete experimental object. Census
+879/1852 ->880/1852 exact,86,960 ->87,144 exact bytes, only create gain/no losses.
+Same-order complete300-object partial links remain DIFFERENT (strict exit1):
+positioned68,283 ->68,342 /943,398, allocated914,158 ->914,110;
+exact section70/92, symbol394/2907, relocation1020/18317 unchanged. This
+recovery does not prove complete object/compiler-profile identity.
+
+Fixed Gentoo make phase385 passed/0 failed. MTD fixture passes13 setup,
+17 supplied-state,272 detector,32916 allocation-boundary and8 failure/control
+checks. Structural14239 references/2716 finding headings and285 suites/
+10038 static anchors clean. No fuzzing, mutation execution or modern
+portability claim. Header now describes unchecked allocation failure accurately.
