@@ -2061,7 +2061,7 @@ from protocol fixtures and source-preimage evidence.
 
 A cached input may involve more than one pass. In V34 initial-phase setup,
 GCSE PRE creates incoming-edge loads, and post-loop CSE first replaces them
-with earlier value copies (F11538). Disabling the second transformation
+with earlier value copies (F11543). Disabling the second transformation
 confirms its cause without undoing the first. Check the earliest changed
 RTL and the final load graph separately, including every changed TU body.
 Consult the recovered compiler source and relevant patch guards, but keep
@@ -2073,7 +2073,7 @@ alone do not compel new loads or register allocation.
 
 A zero SIZE change can hide a useful arithmetic recovery: TimingV34's three
 explicit halves remove six report arithmetic bytes while alignment adds six
-bytes elsewhere (F11539). Use the operand widths and signedness, local opcode
+bytes elsewhere (F11544). Use the operand widths and signedness, local opcode
 landmarks and full-TU body inventory as evidence. A signed-word comparison
 and sign-extended divisor can establish a carrier correction independently
 of register scheduling; retain synthetic high-bit examples as arithmetic

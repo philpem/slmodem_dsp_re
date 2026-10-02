@@ -132516,7 +132516,11 @@ Source/production exactness unchanged, 853/1852 and 82,921 bytes; prior fixed
 or modem-harness execution is performed by this arithmetic study. (2026-10-01)
 
 
-## F11538. V.34 metric caching first appears in post-loop CSE; earlier PRE remains a separate source-graph obstacle
+## F11543. V.34 metric caching first appears in post-loop CSE; earlier PRE remains a separate source-graph obstacle
+
+Originally F11538 on PR #238; renumbered during integration because the
+landed V8 finding now owns F11538. The V34 timing finding likewise moves
+from F11539 to F11544; its source and measurements are unchanged.
 
 Four source/post-loop-CSE cells reproduce the unchanged raw baseline and
 preserve all 63 functions, 55 globals and 9/29 exact compared symbols.
@@ -132536,7 +132540,7 @@ artifacts build/v34-metric-cse/. No production source changed; retained
 853/1852 exact and prior fixed 385/0 validation remain applicable. (2026-10-01)
 
 
-## F11539. V.34 timing report counter is signed word; explicit arithmetic halves restore three object operations independently of unchanged length
+## F11544. V.34 timing report counter is signed word; explicit arithmetic halves restore three object operations independently of unchanged length
 
 Four crossed full-TU controls reproduce the unchanged raw baseline and
 preserve 63 functions, 55 globals, 9/29 exact symbols, no gains or losses.
