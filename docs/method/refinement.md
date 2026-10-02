@@ -2644,3 +2644,12 @@ complete body; all three recover both clones with all23 bystanders unchanged
 from an accidental size match. Preserve primitive frees and generated member
 destructors, and isolate the adapter-only control.
 [Recovery](../v90-owned-delete-recovery.md).
+
+
+A nonvirtual owned class deletion can emit both destructor and host free.
+Do not infer explicit destructor syntax from two calls alone. V92EchoCanceller
+retains the same pointer across both calls with ordinary guarded member delete,
+recovering both195B clones while all13 other bodies remain unchanged (F11619).
+Keep conditional pointer clears inside their observed guards; test the adapter
+independently. Large layout growth can still reduce positioned partial-link
+matches despite complete function recovery. [Controls](../v92ec-owned-delete-recovery.md).

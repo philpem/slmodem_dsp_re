@@ -133912,3 +133912,15 @@ bystanders/nontext/binding/import/export unchanged. Prior F10160 explicit
 destructor recovery did not test this language construct. Real all-live
 constructorchain and synthetic pre-release/null guard subsets distinguished.
 [Recovery and gates](v90-owned-delete-recovery.md). (2026-10-02)
+
+## F11619. Ordinary ARMA member delete recovers both V92 echo destructors
+
+Blob retains one typed FloatARMA pointer through destructor/free; manual
+member calls reloaded it. Three-cell completeTU control isolates adapter-only
+rawmerge; guarded member delete recovers both195B D1/D2 from128B,
+3→5exact/15 functions, no losses. All13 bystanders unchanged, two named data
+objects/nontext/binding/import/export controls agree. Preserve both primitive
+free-and-clear paths and conditional ARMA clear. Old claim that scalar delete
+cannot emit two calls is refuted by this actual period compiler control.
+Real constructed lifecycle and synthetic member-shape probes distinguished.
+[Recovery and gates](v92ec-owned-delete-recovery.md). (2026-10-02)
