@@ -134601,3 +134601,30 @@ and spill-selection tracing with unchanged-object controls. No source
 adoption, runtime claim or exact-count gain. Number reserved separately
 from the concurrent PR245 findings; reconcile numbering at integration.
 [Reproduction tool, controls and limits](gcc3-reload-tracing.md). (2026-10-03)
+
+## F11691. Read-only allocator tracing unlocks an exact 169-byte V34 updateAlpha source cross
+
+Installed Gentoo cc1 retains DWARF: unchanged-executable GDB observations
+raw-reproduce all three full/extracted/debug-disabled controls. Local
+allocation coalesces73/77; divisor74's shorter lifetime has higher priority
+and takes EAX, forcing the combined quantity to EDX. Hardware watchpoints
+resolve F11690's combined .greg boundary: global.c find_reg evicts both
+pseudos for the divide remainder78 (local frequency/lifetime85.5 versus171),
+before reload assigns their stack slots. Divisor74's later reassignment is
+a separate reload step. This corrects attributing the two spills to reload
+alone. No debug-call or enclosing-TU dependency is required.
+
+The blob's ADD0x8000/SAR on the normalized energy register supports updating
+the by-value parameter in place, rather than creating a local divisor.
+Cross with the independently observed HI quotient boundary: four full-TU
+cells give204/205/170/169B; only in-place energy plus short quotient is EXACT.
+Metadata/nontext/canonical relocation audits cover7FUNC/0data, unchanged.
+adaptecho inline copy shrinks795→779B (blob755); txinit changes register
+colours only, four siblings unchanged. Strict1/7→2/7, no losses. All300
+production objects reviewed, sole changedTU raw-reproduces candidate.
+Whole-tree926/1852→927/1852; exact bytes95435→95604, sole gain updateAlpha.
+Fixed period gate388/0, structural/anchor checks clean; existing component
+alpha588 and debug85 checks pass. No fuzzing/mutation runs, profile change,
+new reachability claim or unique-spelling claim.
+[Four-cell cross and reusable GDB observation tools](gcc3-reload-tracing.md).
+(2026-10-03)

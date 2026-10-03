@@ -2,17 +2,21 @@
 
 This compiler-only investigation belongs to [issue #246](https://github.com/philpem/slmodem_dsp_re/issues/246),
 separate from the source/profile experiments in PR #245. Baseline is merged
-master `47174bf3`. No reconstruction source, compiler profile, fuzzing or
-mutation harness was changed or run. There is no new byte-exact gain.
+master `47174bf3`. The initial tool checkpoint changed no reconstruction
+source and had no byte-exact gain; the follow-up below recovers the 169-byte
+updateAlpha body. No compiler profile, fuzzing or mutation harness was changed
+or run.
 
 ## Reproduce the measurement
 
-Use an unchanged production `tc_out` directory containing `.build-config`
-and `src_pump_v34_V34TX.c.o`, built from the same source/header revision:
+Use an archived production `tc_out` directory containing `.build-config`
+and `src_pump_v34_V34TX.c.o`, built from pre-recovery revision `47174bf3`.
+The driver reads that historical source with `git show`; current recovered
+source is deliberately not the original spill control:
 
 ```sh
 python3 tools/gcc3_reload_trace.py --self-test
-python3 tools/gcc3_reload_reproduce.py --baseline-dir build/tc_out
+python3 tools/gcc3_reload_reproduce.py --baseline-dir build/gcc3-alpha-production-before
 python3 tools/gcc3_reload_trace.py \
   build/gcc3-reload-reproduction/full-rtl/V34TX.c.24.lreg \
   build/gcc3-reload-reproduction/full-rtl/V34TX.c.25.greg \
@@ -82,9 +86,9 @@ Inserted instructions load the numerator and store the quotient temporary.
 UID 56 sign-extends the temporary's HI stack read into named `r` in EAX.
 The dump also explicitly reports divisor 74 reassigned to hard register 2.
 
-These observations establish the allocation-to-reload transition. They do
-**not** establish the exact ranking decision that initially assigned EDX,
-nor prove what source/profile gave the blob its different allocation.
+These observations establish the transition across the combined global/reload
+dump boundary. The initial tool checkpoint could not distinguish which pass
+evicted the values. The GDB follow-up below resolves that distinction.
 Calling this a spill of named `r` would conflate two different pseudos.
 
 ## GCC implementation context and next discriminator
@@ -106,7 +110,7 @@ actual interval. `finish_spills` clears assignments for spilled pseudos and
 retries global allocation while excluding previously used or forbidden homes.
 The `.greg` boundary includes reload: it is not solely a global-allocation dump.
 
-The next discriminating experiment is to instrument a provenance-validated
+The initial next discriminating experiment was to instrument a provenance-validated
 Gentoo compiler at `block_alloc`/`find_free_reg` and reload spill selection:
 record quantity membership, suggestions, birth/death, priority, attempted
 classes/hard registers and rejection masks for 73/74/77. Require the
@@ -114,7 +118,100 @@ instrumented full and extracted objects to remain raw-identical to these
 controls. That can distinguish suggested-register allocation, ordering and
 conflict rejection without another source permutation matrix. Until then,
 the divide constraint explains why reloads are needed, but the initial
-allocation choice remains open.
+allocation choice remained open at that checkpoint.
+
+## Unchanged-compiler GDB observation closes the ranking question
+
+The installed cc1 has full DWARF. `tools/gcc3_alloc_observe.py` copies that
+unchanged executable, hashes it, prepares the same three historical inputs
+through the period driver, and invokes host GDB with read-only callbacks in
+`tools/gcc3_alloc_observe_gdb.py`. No compiler variables or instructions are
+modified. The host libc differs from the image's; this is explicitly a
+diagnostic execution environment, subject to unchanged-output controls.
+
+```sh
+python3 tools/gcc3_alloc_observe.py > build/gcc3-allocation-observation.log 2>&1
+```
+
+All three preparations raw-match their prior objects. Each container/plain
+host/GDB assembly triple is raw-identical; assembling observed output with
+the period driver's selected assembler reproduces each reference object raw.
+Known coalescing and global-eviction controls pass in all three cells.
+Observed event counts are 13, 13 and 12 for full/extracted/quiet respectively.
+Commands, executable/source/object hashes, GDB version, host dependencies,
+compiler logs and JSON events are retained under
+`build/gcc3-allocation-observation`. Missing/optimized-out variables are
+reported as unavailable. The tool is bounded to this compiler's DWARF types,
+source locations, hard-register numbering and the historical pseudos.
+
+Local allocation combines **73 and 77 into one quantity**, with seven
+references, frequency1197 and birth/death6..16. Divisor74 has five references,
+frequency855 and birth/death10..14. Neither has hard-register suggestions.
+The priority formula favors the divisor: ignoring the common multiplier,
+`floor_log2(5)*855/4 = 427.5`, versus `floor_log2(7)*1197/10 = 239.4`.
+Divisor74 takes EAX first; the combined quantity fails AREG, then GENERAL
+allocation chooses EDX. This is quantity ordering, not two independent
+EDX assignment decisions.
+
+Hardware watchpoints show **global.c find_reg** changing both73/77 homes to
+-1 before reload. It allocates pseudo78, the divide remainder, in EDX.
+Its eviction comparison uses local frequency1197/live-length14 against
+remainder frequency171/live-length1:85.5 <171. Reload subsequently gives
+those unallocated values stack homes. Divisor74's later reassignment to ECX
+does occur in reload's finish_spills/retry_global_alloc path. Thus attributing
+all three changes to reload would be wrong. The precise local/global
+mechanism reproduces without the debug path or enclosing TU.
+
+## Source cross recovers the complete function
+
+The blob ADDs0x8000 into the normalized energy register, then shifts that
+same value; our original expression produced a separate local divisor.
+This supports testing an in-place update of the by-value energy parameter.
+Unlike a register-fitting rewrite, it changes a source boundary directly
+visible in the blob. Cross it with the independently measured HI quotient
+boundary from F11660:
+
+| Full-TU cell | updateAlpha | adaptecho | Exact functions |
+| --- | ---: | ---: | ---: |
+| Baseline | 204B | 795B | 1/7 |
+| Short quotient only | 205B | 795B | 1/7 |
+| In-place energy only | 170B | 779B | 1/7 |
+| In-place energy + short quotient | **169B EXACT** | 779B | **2/7** |
+
+Replay with `tools/gcc3_alpha_energy_reproduce.py
+--baseline-dir build/gcc3-alpha-production-before --domain
+https://github.com/philpem/slmodem_dsp_re/issues/246#issuecomment-5973663607`.
+Use the pre-recovery baseline archive when replaying. Four valid full-TU cells produce four
+distinct objects; raw baseline reproduces. Energy-update cells have zero
+observed stack substitutions, with numerator/result locally assigned EAX.
+The denominator remains the cross-block energy pseudo rather than a new
+local allocation candidate. The combined cell matches every byte and all
+three canonical relocation targets in the reference updateAlpha.
+Run `python3 tools/gcc3_alpha_energy_audit.py` for the full-TU nontext,
+metadata, exact-body and register-only bystander checks.
+
+All seven functions and zero named data objects were reviewed across the
+four cells: symbol metadata, allocated nontext extents, raw nontext and
+canonical nontext relocations agree. Production changes updateAlpha and its
+inlined adaptecho copy; txinit changes register colours only (alpha-equivalent
+to baseline); four other bodies remain unchanged. There is one exact gain
+and no loss in this TU. This is an evidence-supported source family, not
+proof of unique original spelling or complete recovery of adaptecho.
+
+Production validation reviews all **300** objects: only V34TX changes, and
+that object raw-reproduces the combined candidate. Whole-tree exact census
+is **926/1852 →927/1852**, exact bytes **95,435→95,604**, sole gain updateAlpha,
+zero losses. Fixed period gate reports **388 passed, 0 failed**, with
+structural checks green. Existing updateAlpha coverage passes588 numeric
+checks and85 debug-transcript checks; txinit's44,041 checks pass too. These
+are component fixtures, with the original excluded divide-trap/nonterminating
+inputs unchanged; no new end-to-end or mutation coverage claim. No anchor
+changes were needed;285 suite declarations/10,038 anchors remain attached.
+The same-tree period partial link shrinks text by48B including alignment;
+positioned reference bytes increase68,571→68,904, equal relocations
+1018→1028/18,317, exact sections remain61. Both whole-object comparisons
+remain DIFFERENT. Function identity is the completed gain, not full-object
+or profile completion.
 
 ## Tool limits
 

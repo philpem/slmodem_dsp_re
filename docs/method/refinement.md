@@ -2915,14 +2915,18 @@ recovered source body or a spill improvement. Preserve compiler metadata
 normalization narrowly and delimit diagnostics before allocated instructions.
 [Two-cell control](../v34-alpha-width-controls.md).
 
-Trace allocation boundaries before calling stack traffic register pressure.
-The isolated updateAlpha reproducer retains the full-TU spill graph even with
-its debug path disabled: local EDX pseudos 73/77 become stack homes, while
-named quotient 67 remains EAX. Compare persistent instruction patterns,
-exclude metadata, and retain unclassified restructures. Standard dumps show
-the transition but do not expose every local quantity-ranking decision.
-Require raw plain/diagnostic object controls and record rejected dump options
-separately. [Issue #246 tracing tool and controls](../gcc3-reload-tracing.md).
+Trace allocation boundaries before calling stack traffic register pressure
+(F11690-F11691). The isolated updateAlpha reproducer retains the full-TU spill
+graph without its debug path; read-only GDB shows global allocation evicting
+the locally coalesced numerator/result to give EDX to the divide remainder.
+Reload then allocates their stack slots. An in-place energy update, supported
+by the blob's ADD/SAR on the same register, keeps the denominator cross-block
+and restores register-held arithmetic. Crossed with the independently
+observed HI quotient boundary, it recovers the complete169-byte body. Neither
+axis alone is exact. Require raw objects from container/plain/GDB controls;
+record missing debug variables and rejected dump options separately. Review
+inline consumers and register-renamed siblings before adoption.
+[Issue #246 tools and controls](../gcc3-reload-tracing.md).
 
 
 Classify unresolved relocations by the actual consuming instruction before

@@ -17,6 +17,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline-dir', required=True, type=Path,
                         help='validated production tc_out containing saved .build-config')
+    parser.add_argument('--revision', default='47174bf3',
+                        help='historical source control revision (default: pre-recovery baseline)')
     args = parser.parse_args()
     out = ROOT/'build/gcc3-reload-reproduction'
     out.mkdir(parents=True, exist_ok=True)
@@ -24,7 +26,7 @@ def main():
     image = config.splitlines()[0].split(' ', 1)[1]
     flags = shlex.split(next(line[6:] for line in config.splitlines() if line.startswith('flags ')))
     flags = ['-I/src/include' if f == '-Iinclude' else '/src/'+f if f == 'tools/toolchain/period_compat.h' else f for f in flags]
-    source = (ROOT/'src/pump/v34/V34TX.c').read_text()
+    source = subprocess.check_output(['git', 'show', args.revision+':src/pump/v34/V34TX.c'], cwd=ROOT, text=True)
     start = source.index('\nvoid\nupdateAlpha(')+1
     end = source.index('\n}\n', start)+2
     small = '#include "dsplib/debug.h"\n'+source[start:end]+'\n'
@@ -35,7 +37,8 @@ def main():
              ('tree-capability', source, ['-fdump-tree-all']),
              ('extracted-plain', small, []), ('extracted-rtl', small, ['-da']),
              ('quiet-plain', quiet, []), ('quiet-rtl', quiet, ['-da'])]
-    results = {'config': config, 'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'cells': {}}
+    results = {'config': config, 'revision': args.revision,
+               'checkout_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'cells': {}}
     for label, text, diagnostics in cases:
         folder = out/label
         if folder.exists():
