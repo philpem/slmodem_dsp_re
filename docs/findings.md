@@ -134739,3 +134739,31 @@ not position alone. Whether the same cross lifts V90Jd C1 (BYTES 34) and
 DescramblerIii C1 (BYTES 19) is the next bounded check.
 [Artifacts](build/playbook-v92cp-cross/results.json),
 [agent run](build/playbook-ctor-tu-position/results.json). (2026-10-03)
+
+## F11679. QueueIf::write(T) is reachable but its cell costs V92Modulator::C2 - declined
+
+Agent-run two-family screen. The isfull spelling (the full-test
+intermediate materialized as a named temp; spacelocal folds to the same
+object) makes _ZN5QueueIfE5writeEf EXACT at 85/85 but shifts
+V92Modulator::C2 (734 bytes) EXACT -> BYTES 7 (split-store constant row);
+progress also moves, net 23/30 with one gain and one real loss: 71 bytes
+gained against 734 lost. Declined; the joint-cursor question (fix C2 on
+the adopted object) is recorded, not attempted. getSegmentPointer closes
+as grade-0 UNRESOLVED(1): zero differing bytes outside the anonymous
+.rodata pool addend (blob +2944 = ld -r cumulative offset, no covering
+symbol) - the jump-table artifact class; shape probes that would rename it
+delete the rep movsl and were preserved invalid. Body done; fix is
+tool-side normalization, not source. [Artifacts](build/playbook-queue-segptr/results.json).
+
+## F11680. V90Jd C1's mirror is neither position nor declaration order
+
+The blob's V90Jd.cpp TU order already matches ours (the premise that the
+ctor is first was stale), and moving the definition anywhere changes no
+byte of any function. New decoded constraint: the blob's C1 is
+byte-identical to its C2 (119B, 41 insns, alignment nop included) while
+our C2 is exact and our C1 carries the mirror - our two clones diverge
+where the blob's did not. All five local-declaration permutations emit
+byte-identical objects. Position and declaration order both excluded;
+the remaining hypothesis is the clone-emission cursor itself. 
+[Artifacts](build/playbook-v90jd-pos/results.json),
+build/playbook-v90jd-locals/results.json. (2026-10-03)
