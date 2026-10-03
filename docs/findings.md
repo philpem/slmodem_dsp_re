@@ -134638,3 +134638,23 @@ four bodies with zero gains - the register carrier is not the definition
 order at this granularity. Both declines recorded; no census change
 (927/1852), no adoption.
 [Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+## F11673. JdNotDetector's reset arm spelled first recovers an exact 75-byte detector
+
+The standalone detector's arms were transcribed offset-order; swapping to
+`if (symbol != 0) jdNotRunLength = 0; else jdNotRunLength++;` emits the
+blob's block layout (fall-through reset, far increment block) exactly.
+Independent corroboration before compiling: getV90Decision's inline copy of
+the same test already reads the swapped order and the v90p3ddec mutation
+anchors quote it; the v90p3ddec JdNotDetector anchor was retargeted to the
+adopted spelling with its fault case preserved (anchorcheck 285 suites /
+10038 mutations, 0 problems). Census 927/1852 -> 928/1852, exact bytes
+95489 -> 95564, sole gain, zero losses; fixed phase 387/0.
+
+The sibling amplitude (+0x40) family closed: `(unsigned short)amplitude`
+folds to a byte-identical object (the load extension follows the field's
+declared type through nop casts, so a cast cannot move it), and the raw
+0x40-displacement probe was contaminated by non-this bases; the field
+stays short per its documented inference. The V92CP definition-order and
+v8_crc msb negatives are F11672's.
+[Domain](v90-jd-arm-order.md). (2026-10-03)

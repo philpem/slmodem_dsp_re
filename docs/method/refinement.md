@@ -3023,3 +3023,15 @@ form. A stale ratchet floor can report a loss the census refutes; check the
 symbol against the current exact set before treating it as a regression
 (F11671, third documentation of the same pre-existing 810-floor
 V90Parameters C2 entry).
+
+
+An if/else pair whose arms are one increment and one reset can emit with
+either arm as the fall-through; the blob's choice is readable from which
+block the conditional branch targets, and the mirror spelling of the arms
+is the source lever (F11673). Check the tree for an INLINE copy of the same
+test before compiling: getV90Decision's state-9 copy already carried the
+author's arm order, and the mutation anchors quote it -- corroboration that
+cost one compile instead of a domain. A cast on the READ of a struct field
+folds to a nop conversion and cannot change the load's extension; the
+extension follows the field's declared type, and a raw displacement probe
+over a TU is contaminated by any other object at that offset (F11673).
