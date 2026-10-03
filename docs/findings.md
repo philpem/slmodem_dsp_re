@@ -134672,3 +134672,12 @@ compute tap2, interleave reset's zeroed arg, store tap1, store tap2) is
 recorded for a future carrier. Scrambler.h's Descrambler ctor repeats the
 block and was left untouched - its C1 is a SIZE case, a different disease.
 [Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+Whole-tree partial-link state after both adoptions (2185e6b5+0056f610):
+exact section records 70/92, equal positioned reference bytes 68577/943398,
+relocations 1018/18317, symbols 394/2907, verdict DIFFERENT; the encoder's
+linkonce section is content-equal at 54/54. partialcmp's per-linkonce
+"equal" tally reports ScramblerIhh C1 as 102/102 while the census finds 10
+differing bytes (grade-1 REJECT, USE CONFLICT row); the census is the
+authority for function identity and the discrepancy is recorded, not
+resolved. Both CI jobs green on the four-commit head.
