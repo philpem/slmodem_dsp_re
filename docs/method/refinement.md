@@ -3035,3 +3035,15 @@ cost one compile instead of a domain. A cast on the READ of a struct field
 folds to a nop conversion and cannot change the load's extension; the
 extension follows the field's declared type, and a raw displacement probe
 over a TU is contaminated by any other object at that offset (F11673).
+
+
+A store whose emission position matters can be unpinned from its source
+position only when the scheduler is indifferent; when the blob places it
+after an unrelated load, the source position is the lever and the load's
+own position is the answer sheet (F11675). For two loads feeding two
+stores through a pointer the compiler cannot prove disjoint from the
+destination, adjacent reads are the only spelling that yields
+load,load,store,store -- interleaved statements serialize on the first
+store. And check row-indexed rejection reports for desync before reading
+a WIDTH/operand row as a type difference: one shifted store re-numbers
+every row after it.

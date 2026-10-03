@@ -134681,3 +134681,20 @@ linkonce section is content-equal at 54/54. partialcmp's per-linkonce
 differing bytes (grade-1 REJECT, USE CONFLICT row); the census is the
 authority for function identity and the discrepancy is recorded, not
 resolved. Both CI jobs green on the four-commit head.
+
+## F11675. V90Jd ctor's unpackWord position and adjacent constellation reads recover an exact 119-byte body
+
+The blob stores unpackWord (0x8c) after the movzbl look-load, not with the
+unpack[] bytes, and schedules the two constellation parameters as
+load,load,store,store - reachable only by reading both before storing,
+because the scheduler cannot prove params and this do not alias and an
+interleaved spelling makes the second load wait on the first store. The
+transcribed source had unpackWord third and interleaved reads.
+temp-reads-after-look emits _ZN5V90JdC2EP13V90Parameters exactly; its C1
+clone improves BYTES 50 -> 34 with the same register mirror the V92CP ctor
+shows, no losses. Whole-word load casts were already right; an explicit
+(unsigned short) amplitude-style cast attempt on the reads folds
+byte-identical (F11673's rule). Five v90jd/v90jdstd anchors retargeted to
+the adopted spellings with fault cases preserved; anchorcheck clean. Census
+928/1852 -> 929/1852, exact bytes 95564 -> 95683, sole gain, zero losses.
+[Domain](v90jd-unpackword-recovery.md). (2026-10-03)
