@@ -134713,3 +134713,29 @@ when the register carrier is found. The blob's tail also differs in
 callee-save spill order, consistent with the carrier being upstream of the
 function.
 [Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+## F11677. Two value-identical ctor spellings recover all four FloatFIR/FloatIIR ctors (delegated run)
+
+Agent-run domain on the 112/105 four-ctor family (equal instruction counts,
+7-byte gap): the gap is one alignment pad before the duplicated tail, and
+the argument-register swap is the parameter-store order. Two spellings,
+both value-identical, jointly make FloatFIR C1/C2 and FloatIIR C1/C2
+exact: the malloc result through a local (`float *hist = sysdep_malloc(...); history = hist;`), and bufferLength/m_len assigned before
+coefficients/m_coeff. Zero losses anywhere; census 929/1852 -> 933/1852 on
+adoption. [Agent artifacts](build/playbook-floatfir-ctor/results.json),
+domain and results in #22.
+
+## F11678. The V92CP register split is the decoded statement order crossed with the definition position
+
+The agent TU-partition check found the blob's V92CP.cpp FILE bracket
+[0x4e5b0,0x50015) holds exactly our 15 symbols - no split finding. Five
+definition positions give two co-location states for the 0x12/-1 pair and
+never the blob's split; crossing F11672's decoded body order with the
+after-reset position reaches it: V92CP C1 AND C2 exact, 8 -> 10 in the TU,
+zero losses. Census 933/1852 -> 935/1852 on adoption, 12 v92cp/v92cpcrc
+anchors retargeted with fault cases preserved. The carrier question from
+F11672-F11676 is answered for V92CP: statement order x emission position,
+not position alone. Whether the same cross lifts V90Jd C1 (BYTES 34) and
+DescramblerIii C1 (BYTES 19) is the next bounded check.
+[Artifacts](build/playbook-v92cp-cross/results.json),
+[agent run](build/playbook-ctor-tu-position/results.json). (2026-10-03)
