@@ -2915,6 +2915,15 @@ recovered source body or a spill improvement. Preserve compiler metadata
 normalization narrowly and delimit diagnostics before allocated instructions.
 [Two-cell control](../v34-alpha-width-controls.md).
 
+Trace allocation boundaries before calling stack traffic register pressure.
+The isolated updateAlpha reproducer retains the full-TU spill graph even with
+its debug path disabled: local EDX pseudos 73/77 become stack homes, while
+named quotient 67 remains EAX. Compare persistent instruction patterns,
+exclude metadata, and retain unclassified restructures. Standard dumps show
+the transition but do not expose every local quantity-ranking decision.
+Require raw plain/diagnostic object controls and record rejected dump options
+separately. [Issue #246 tracing tool and controls](../gcc3-reload-tracing.md).
+
 
 Classify unresolved relocations by the actual consuming instruction before
 expanding a dispatch proof. The five remaining complete-body candidates are

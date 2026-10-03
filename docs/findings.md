@@ -134581,3 +134581,23 @@ alignment; positioned equal bytes/relocations fall18/5 against blob, whose
 complete partial comparison remains DIFFERENT. This is a function gain, not
 full-object completion.
 [Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)
+
+## F11690. An isolated GCC3 reproducer separates local spill temporaries from the named quotient
+
+Issue #246's full V34TX, exact updateAlpha extraction and debug-disabled
+extraction reproduce the same allocation-to-reload transition: numerator73
+and raw quotient temporary77 start in EDX and become stack homes; named
+quotient67 remains in EAX. Neither spilled pseudo is in the global allocation
+order. Divide UID55 requests EAX input/output reloads, and divisor74 moves
+from EAX to ECX. Removing the enclosing TU/debug path does not remove the
+two spills. Six valid compiles, three raw plain/-da object controls, three
+known spill graphs and three resident negatives pass; full baseline object
+raw-reproduces. The seventh attempt, -fdump-tree-all, is a cc1 capability
+refusal. RTL reader self-test passes8/8 controls including five refusals.
+Upstream GCC3 allocator/reload source explains constraints and quantity
+ranking machinery, but standard dumps do not expose the complete initial
+ranking decision. Next discriminator is instrumented quantity/preferences
+and spill-selection tracing with unchanged-object controls. No source
+adoption, runtime claim or exact-count gain. Number reserved separately
+from the concurrent PR245 findings; reconcile numbering at integration.
+[Reproduction tool, controls and limits](gcc3-reload-tracing.md). (2026-10-03)
