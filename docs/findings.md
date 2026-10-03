@@ -134581,3 +134581,50 @@ alignment; positioned equal bytes/relocations fall18/5 against blob, whose
 complete partial comparison remains DIFFERENT. This is a function gain, not
 full-object completion.
 [Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)
+
+## F11690. An isolated GCC3 reproducer separates local spill temporaries from the named quotient
+
+Issue #246's full V34TX, exact updateAlpha extraction and debug-disabled
+extraction reproduce the same allocation-to-reload transition: numerator73
+and raw quotient temporary77 start in EDX and become stack homes; named
+quotient67 remains in EAX. Neither spilled pseudo is in the global allocation
+order. Divide UID55 requests EAX input/output reloads, and divisor74 moves
+from EAX to ECX. Removing the enclosing TU/debug path does not remove the
+two spills. Six valid compiles, three raw plain/-da object controls, three
+known spill graphs and three resident negatives pass; full baseline object
+raw-reproduces. The seventh attempt, -fdump-tree-all, is a cc1 capability
+refusal. RTL reader self-test passes8/8 controls including five refusals.
+Upstream GCC3 allocator/reload source explains constraints and quantity
+ranking machinery, but standard dumps do not expose the complete initial
+ranking decision. Next discriminator is instrumented quantity/preferences
+and spill-selection tracing with unchanged-object controls. No source
+adoption, runtime claim or exact-count gain. Number reserved separately
+from the concurrent PR245 findings; reconcile numbering at integration.
+[Reproduction tool, controls and limits](gcc3-reload-tracing.md). (2026-10-03)
+
+## F11691. Read-only allocator tracing unlocks an exact 169-byte V34 updateAlpha source cross
+
+Installed Gentoo cc1 retains DWARF: unchanged-executable GDB observations
+raw-reproduce all three full/extracted/debug-disabled controls. Local
+allocation coalesces73/77; divisor74's shorter lifetime has higher priority
+and takes EAX, forcing the combined quantity to EDX. Hardware watchpoints
+resolve F11690's combined .greg boundary: global.c find_reg evicts both
+pseudos for the divide remainder78 (local frequency/lifetime85.5 versus171),
+before reload assigns their stack slots. Divisor74's later reassignment is
+a separate reload step. This corrects attributing the two spills to reload
+alone. No debug-call or enclosing-TU dependency is required.
+
+The blob's ADD0x8000/SAR on the normalized energy register supports updating
+the by-value parameter in place, rather than creating a local divisor.
+Cross with the independently observed HI quotient boundary: four full-TU
+cells give204/205/170/169B; only in-place energy plus short quotient is EXACT.
+Metadata/nontext/canonical relocation audits cover7FUNC/0data, unchanged.
+adaptecho inline copy shrinks795→779B (blob755); txinit changes register
+colours only, four siblings unchanged. Strict1/7→2/7, no losses. All300
+production objects reviewed, sole changedTU raw-reproduces candidate.
+Whole-tree926/1852→927/1852; exact bytes95435→95604, sole gain updateAlpha.
+Fixed period gate388/0, structural/anchor checks clean; existing component
+alpha588 and debug85 checks pass. No fuzzing/mutation runs, profile change,
+new reachability claim or unique-spelling claim.
+[Four-cell cross and reusable GDB observation tools](gcc3-reload-tracing.md).
+(2026-10-03)
