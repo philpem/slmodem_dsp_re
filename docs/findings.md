@@ -134619,3 +134619,22 @@ partial before/after: exact sections 61 -> 62, positioned reference bytes
 68571 -> 68575, relocations 1018/18317 and symbols 394/2907 unchanged,
 verdict DIFFERENT. Function gain, not completion.
 [Domain and decoder negative](diffcoder-operand-order.md). (2026-10-03)
+
+## F11672. v8_crc sign-bit spelling family closes; V92CP ctor order decoded but declined
+
+Eight value-identical sign-bit extractions over v8_crc (V8global.c) at
+2185e6b5, all full-TU: none emits the blob's unsigned-load-primary +
+movswl-register-re-narrow + shr31 shape; the two signed-read spellings make
+the SIGNED load primary (roles reversed), the rest keep the cast-free
+bit-15 shift. Family closed, no source adoption; residual one byte is the
+movswl encoding. V92CP's ctor (61/61): six insertion points of byte_04 in
+resetDetector's statement order give position 5 (after zerosRun) the blob's
+instruction-for-instruction body under register renaming - BYTES(8)
+grade-1 ACCEPT from 34 differing bytes - decoding the author's body order;
+the remaining 8 bytes are one register-pair assignment. Reordering all
+thirteen V92CP.cpp definitions to the blob's own address order keeps all
+seven exact functions exact but moves the ctor to BYTES(29) and changes
+four bodies with zero gains - the register carrier is not the definition
+order at this granularity. Both declines recorded; no census change
+(927/1852), no adoption.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
