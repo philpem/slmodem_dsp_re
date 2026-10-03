@@ -49,3 +49,14 @@ the reorders are behavior-preserving. No fuzzing or mutation execution;
 static anchor checks before any commit. Canonical verdicts via
 byteident.py only; changed-bodies lists per cell in the results.json
 artifacts.
+
+## Addendum: Scrambler ctor tap-pointer family (F11674)
+
+Posted as the "Scrambler ctor tap-pointer family" comment in #22; three
+labels over both defining TUs (V90Phase4Modulator.cpp, V90Phase3Modulator.cpp)
+with a Scrambler.h-only overlay scoped to the Scrambler ctor occurrence.
+tap-direct (direct from pLimit) is byte-identical to baseline - the
+association is CSE-normalized, so the pInitOut intermediate is not a
+carrier. tap-swap changes the C1 body but inverts the compute order as
+well and moves away. No gains, no losses; nothing adopted.
+Artifacts: build/playbook-scrambler-taps/results.json.

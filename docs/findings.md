@@ -134658,3 +134658,17 @@ declared type through nop casts, so a cast cannot move it), and the raw
 stays short per its documented inference. The V92CP definition-order and
 v8_crc msb negatives are F11672's.
 [Domain](v90-jd-arm-order.md). (2026-10-03)
+
+## F11674. Scrambler ctor tap-pointer association folds; the swap inverts compute order
+
+Both Scrambler C1 instantiations (Ihh, Ihi, 102/102) share the tap-store
+order difference. The direct-from-pLimit spelling
+(`pInitTap1 = pLimit + c + a; pInitTap2 = pLimit + c + b;`) emits a
+byte-identical object: the association CSE-normalizes and the scheduler is
+free. Swapping the two statements changes the body but inverts the compute
+order too and moves away; no cell gains, zero losses. The family closes
+without adoption; the blob's schedule (compute tap1, store pInitOut,
+compute tap2, interleave reset's zeroed arg, store tap1, store tap2) is
+recorded for a future carrier. Scrambler.h's Descrambler ctor repeats the
+block and was left untouched - its C1 is a SIZE case, a different disease.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
