@@ -3018,3 +3018,26 @@ across FNSTSW, and power-first & introduces integer-promotion zeroing. Ordinary
 logical operand order can recover both access and lifetime boundaries without
 casts or forced registers. Cross access/order/operator controls and compare
 complete bodies, not just sizes. [Full-TU recovery](../v90-power-index-predicate-recovery.md).
+
+
+## Cross source arithmetic boundaries with observed induction widths
+
+F11692 transfers updateAlpha's in-place arithmetic diagnostic to
+V34TimingHPFilter, without transferring its spill explanation. Short index
+alone matches length but leaves BYTES29; in-place carry multiplication alone
+also fails. Together they recover all 76 bytes. Inspect combine before local
+and global allocation: a named carry update can change the two-address operand
+and lifetime even when neither object spills. Feature screening is triage;
+stack references are not spill evidence.
+
+F11693 recovers V34TimingFiltersInit's six fixed-offset stores and short
+induction, then its member-relative history clear. A byte-size expression used
+as an element count reproduces the known D29 overwrite and unsigned loop bound.
+A flattened pointer clearing the same bytes need not produce that address form.
+Keep reproduction defects guarded and preserve the shipping initialization.
+Do not claim six explicit stores uniquely recover the original array declaration.
+
+Audit allocated nontext with canonical relocation targets: a preceding function
+shrinking moves a jump table's raw addends while preserving its destination
+function and relative offset. Verify that identity before masking bytes.
+[Screen and 27-cell reproduction](../gcc3-candidate-screen.md).
