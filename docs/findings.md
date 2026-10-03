@@ -134698,3 +134698,18 @@ byte-identical (F11673's rule). Five v90jd/v90jdstd anchors retargeted to
 the adopted spellings with fault cases preserved; anchorcheck clean. Census
 928/1852 -> 929/1852, exact bytes 95564 -> 95683, sole gain, zero losses.
 [Domain](v90jd-unpackword-recovery.md). (2026-10-03)
+
+## F11676. The Descrambler count temp recovers the scale shape but not the registers
+
+DescramblerIii C1 (110 vs 107) reassociated the malloc size to
+(b+c)*4+4; the blob keeps (1+b+c)<<2. The Scrambler's documented count-temp
+pattern, applied to the Descrambler ctor, emits the blob's lea+shl exactly
+(both associations normalize through the temp; DescramblerIhi C1 and every
+sizeof=1 instantiation unchanged), but the remaining 19 differing bytes are
+the surrounding register assignment - the same scratch-register mirror
+class as the V92CP and V90Jd C1 clones. No exact function, no losses;
+declined per the F11672 precedent, the recovered spelling recorded for
+when the register carrier is found. The blob's tail also differs in
+callee-save spill order, consistent with the carrier being upstream of the
+function.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)

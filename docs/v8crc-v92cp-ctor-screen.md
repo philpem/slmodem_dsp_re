@@ -60,3 +60,13 @@ association is CSE-normalized, so the pInitOut intermediate is not a
 carrier. tap-swap changes the C1 body but inverts the compute order as
 well and moves away. No gains, no losses; nothing adopted.
 Artifacts: build/playbook-scrambler-taps/results.json.
+
+## Addendum: Descrambler count temp (F11676)
+
+Posted as the "Descrambler ctor count-temp family" comment in #22; three
+labels over both Descrambler-defining TUs with a Scrambler.h overlay scoped
+to the Descrambler ctor. Both count-temp spellings emit the blob's
+lea 0x1(%esi,%ebx,1) + shl $0x2 malloc-size shape for DescramblerIii C1
+(down from the reassociated (b+c)*4+4), leave every sizeof=1 instantiation
+byte-identical, and stop at BYTES 19 on the register assignment. Declined.
+Artifacts: build/playbook-descrambler-count/results.json.
