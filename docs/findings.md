@@ -134628,3 +134628,32 @@ alpha588 and debug85 checks pass. No fuzzing/mutation runs, profile change,
 new reachability claim or unique-spelling claim.
 [Four-cell cross and reusable GDB observation tools](gcc3-reload-tracing.md).
 (2026-10-03)
+
+
+## F11692 — V34 HP: index width crossed with in-place arithmetic
+
+Object-first candidate screen: 300 objects, 131 scoped TUs, 583 shared symbols,
+340 nonexact, 180 feature candidates, 0 missing-disassembly refusals; 3/3 known
+controls. Features nominate inspection, not source recovery. Four HP cells:
+70/76/70/76 bytes; short index plus in-place carry multiply alone is EXACT.
+Combine changes the product's source boundary before allocation; no stack
+substitutions in either control. Full-TU 26 functions/48 data reviewed; combined
+adoption changes only HP/init. Screen, finite reproducer and canonical data
+relocation audit are reusable. [Evidence](gcc3-candidate-screen.md), issue248.
+(2026-10-03)
+
+## F11693 — V34 timing initialization: byte-size element bound
+
+Nested loop/type/clear domain (8 cells) and explicit six-store domain (4) fail
+exactness. Predeclared sizeof-member domain (3 including production control)
+recovers all 102 bytes with short index, six explicit state clears, HP pointer
+store preceding prefilter, and hist clearing to sizeof(hist). The latter is
+80 short elements, reproducing established D29. Shipping initialization stays
+bounded. Three initial attempts carry invalid domain metadata and are excluded.
+Combined cell raw-reproduces final production TU; all 27 valid cells pass full
+metadata/nontext/canonical-relocation audit. Probe's six jump-table addends
+move but retain function-relative targets. Whole-tree 927→929/1852, exact bytes
+95604→95782, sole gains HP/init, zero losses, 299/300 objects unchanged.
+Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation,
+new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
+(2026-10-03)
