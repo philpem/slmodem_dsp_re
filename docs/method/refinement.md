@@ -3005,3 +3005,21 @@ across FNSTSW, and power-first & introduces integer-promotion zeroing. Ordinary
 logical operand order can recover both access and lifetime boundaries without
 casts or forced registers. Cross access/order/operator controls and compare
 complete bodies, not just sizes. [Full-TU recovery](../v90-power-index-predicate-recovery.md).
+
+
+For a commutative op with two memory operands, source operand order survives
+to RTL and assigns which load feeds the accumulator and which stays the
+memory operand; for a REG+MEM pair the same order is canonicalized away
+(REG first) and no spelling reaches the other two-address form (F11671).
+Test the flip on BOTH shapes before concluding anything about "operand
+order" in general: the encoder's flip recovered the exact 54-byte body -
+accumulator `movzbl (%edx),%eax` then memory `xor (%ebx),%al`, with the
+input-pointer increment scheduled after the xor as a consequence - while the
+decoder's flip emitted a byte-identical object, closing its residual as a
+reload form choice rather than a spelling. Exclude re-read spellings with a
+behavior argument first: reading `*in` again after the `*out` store changes
+`out == in` results, and recorded aliasing parity pins the one-read temp
+form. A stale ratchet floor can report a loss the census refutes; check the
+symbol against the current exact set before treating it as a regression
+(F11671, third documentation of the same pre-existing 810-floor
+V90Parameters C2 entry).

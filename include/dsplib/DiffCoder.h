@@ -231,10 +231,14 @@ void ParallelDifferentialEncoder<T>::process(T *in, T *out)
 
 	/* The object caches state_ before the loop, advances all three
 	 * pointers, and stores the computed byte to output before state.
-	 * Keep size_ as a member read at the loop bound.  See
+	 * Keep size_ as a member read at the loop bound.  The operand
+	 * order is *in ^ *state: the blob loads *state into the accumulator
+	 * and applies *in as the memory operand, and only this spelling
+	 * produces that under the period compiler (the reverse order emits
+	 * the roles swapped; see docs/diffcoder-operand-order.md).  See
 	 * docs/spectral-encoder-experiment.md for the crossed controls. */
 	for (i = 0; i < size_; i++) {
-		T x = *state ^ *in;
+		T x = *in ^ *state;
 		*out = x;
 		*state = x;
 		state++;

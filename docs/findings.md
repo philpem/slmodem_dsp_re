@@ -134581,3 +134581,41 @@ alignment; positioned equal bytes/relocations fall18/5 against blob, whose
 complete partial comparison remains DIFFERENT. This is a function gain, not
 full-object completion.
 [Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)
+
+## F11671. Commutative operand order reaches the encoder XOR but is canonicalized away in the decoder
+
+Four posted labels (baseline/decoder-flip/encoder-flip/both-flip) over the two
+defining TUs at 47174bf3, header overlay include/dsplib/DiffCoder.h only,
+driver playbook_diffcoder_flip.py over playbook_small_patterns.py. Gentoo
+GCC 3.4.2-r2, executed as 2.15.92.0.2, saved C++ profile, DSPLIB_REPRODUCE_BUGS
+last. Baselines raw-reproduce both retained objects; no invalid runs.
+
+Encoder flip `T x = *in ^ *state` emits the blob's 54-byte body exactly
+(acc <- *state via movzbl (%edx),%eax, mem-xor *in via xor (%ebx),%al, and
+`inc %ebx` scheduled after the xor as the memory-operand role requires);
+decoder flip `*out = *state ^ x` emits a byte-identical object to baseline.
+Zero losses in either TU cell; changed-bodies list is exactly the encoder.
+For two-MEM commutative operands source order survives to RTL and assigns the
+accumulator/memory roles; for a REG+MEM pair the order is canonicalized away
+(REG first), so no spelling of `x ^ *state` reaches the blob's acc<-REG-copy
++ mem-xor form. The no-temp decoder re-read form was excluded pre-compile:
+`*out = *in ^ *state; *state = *in;` re-reads *in after the *out store and
+changes behavior when out == in, while t_diffcoder's 13.6M-check parity pins
+the blob to the one-read temp form. The decoder residual is therefore the
+reload two-address form choice for a REG+MEM commutative op - allocation
+stage, not source order; the spelling family is closed there.
+
+Adopted: encoder operand order only, comment records the observed roles.
+Behavior-identical (commutative XOR); no fixture or fuzz change; static
+anchor check clean (285 suites, 10038 mutations). Whole-tree census
+926/1852 -> 927/1852, exact bytes 95435 -> 95489, sole gain
+_ZN27ParallelDifferentialEncoderIhE7processEPhS1_, zero losses, no bystander
+bodies in the 300-object review. Fixed phase 387/0 with structural checks.
+The historical --ratchet exit is the pre-documented stale 810-symbol floor
+requiring _ZN13V90ParametersC2EP19_tagModemParameters, already absent from
+master's 926 set before this change (same pre-existing floor failure recorded
+at F11560's integration and docs/v34-small-rtl.md; not re-blessed). Same-tree
+partial before/after: exact sections 61 -> 62, positioned reference bytes
+68571 -> 68575, relocations 1018/18317 and symbols 394/2907 unchanged,
+verdict DIFFERENT. Function gain, not completion.
+[Domain and decoder negative](diffcoder-operand-order.md). (2026-10-03)
