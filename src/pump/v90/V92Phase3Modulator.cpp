@@ -217,17 +217,18 @@ static short
 jaSymbol(V92Phase3Modulator *m)
 {
 	unsigned char bit = 1;
-	short sample;
+	unsigned int sample;
 
 	if (m->symbolCount > 24u)
 		bit = m->jaBits[(m->symbolCount - 25u) % m->jaBitCount];
 
 	m->polarity ^= m->scrambler.process(bit);
 
-	sample = m->codeLevel;
+	/* The original keeps an unsigned magnitude until its return (F11807). */
+	sample = (unsigned short)m->codeLevel;
 	if (m->polarity != 0u)
-		sample = (short)-sample;
-	return sample;
+		sample = -sample;
+	return (short)sample;
 }
 
 /*

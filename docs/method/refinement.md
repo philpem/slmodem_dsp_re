@@ -3496,3 +3496,32 @@ audit losing single-factor cells and all bystanders. The unchanged TRN gain
 is a measured peep2 cursor effect with matching eligibility, not additional
 source recovery. All272 scratch choices replay; no cursor forcing or dead
 carriers. [Screen, controls, audits and replay](../gcc3-alignment-results.md).
+
+### Pair counts with their derived lengths before fitting stack sizes
+
+GenericIIR C1's extra saved register follows source ownership, not a new
+alignment flag: the original count/derived-length pairs precede coefficient
+pointers. The three-cell pairing×pointer-age boundary closes107B only when
+both properties agree. Installed24.lreg puts blockSize inECX with12-instruction
+span rather thanESI with16; C1/C2 copies alone change (F11806). Observe the
+parameter's pseudo and local allocation before interpreting its frame.
+Do not generalize an exact neighbor's statement order or enumerate permutations.
+
+### Distinguish a wide unsigned magnitude from an unsigned short carrier
+
+MOVZWL, full-width NEG and a terminal MOVSWL can describe an unsigned32-bit
+magnitude with one signed-short conversion. A signed/unsigned *short* matrix
+has not tested that family. Independent original witnesses recover V92 Ja77B
+and E1u54B (F11807–F11808); fields/return ABI stay unchanged. Explicit post-call
+capture is raw-inert for Ja. Inspect inline copies: E1u's five-byte removal
+recovers the original88B arm even while the enclosing pump's SIZE gap grows.
+Keep original load, arithmetic and conversion boundaries rather than fitting
+aggregate length. CPt's wide near-hit stays declined.
+
+Opcode screening is only a candidate generator (F11809). Require operand/path
+tracing: NEG may build a quality mask or modify a different stored amplitude.
+Six masked-count controls and four larger-pump ownership cells do not transfer
+the gain. The pump's post-call lowering is already unchanged, and its remaining
+remote tails need compiler-stage CFG evidence (F11810). Do not reopen cast,
+ternary, declaration-order or flag matrices without a new discriminator.
+Complete domains, audits and replay: [sample transfer results](../gcc3-sample-transfer-results.md).

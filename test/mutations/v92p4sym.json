@@ -53,23 +53,23 @@
  },
  {
   "label": "generateE1u scrambles a one rather than a zero",
-  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0)",
-  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(1)"
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0)",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(1)"
  },
  {
   "label": "generateE1u does not fold prevBit in",
-  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;",
-  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ 0u;"
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ 0u;"
  },
  {
   "label": "generateE1u does not carry the bit forward",
-  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n",
-  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\n"
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\n"
  },
  {
   "label": "generateE1u negates on a zero bit",
-  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
-  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = (unsigned short)amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = (unsigned short)amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
  },
  {
   "label": "generateCPu takes the bits-to-symbol arm when flag_3c is clear",

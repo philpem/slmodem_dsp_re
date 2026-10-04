@@ -73,18 +73,19 @@ GenericIIR<Sample, Coeff>::GenericIIR(unsigned nden, unsigned nnum,
 				      Coeff *den, Coeff *num,
 				      unsigned blockSize)
 {
-	m_den = den;
-	m_num = num;
-	m_nden = nden;
-	m_nnum = nnum;
-
 	/*
 	 * Over-allocate by blockSize so a whole block fits between
 	 * compactions.  The history is `n` deep; the slack is what lets the
 	 * write position walk downward without a wrap test per sample.
+	 * Keep each count with its derived length before the coefficient
+	 * pointers: the original uses this ownership order (F11806).
 	 */
-	m_inLen = nnum + blockSize;
+	m_nden = nden;
 	m_outLen = nden + blockSize;
+	m_nnum = nnum;
+	m_inLen = nnum + blockSize;
+	m_den = den;
+	m_num = num;
 
 	m_inHist = 0;
 	m_outHist = 0;
