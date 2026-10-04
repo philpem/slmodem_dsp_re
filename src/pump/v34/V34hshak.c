@@ -416,13 +416,13 @@ void
 dpskinit(void *objp, short mode, short high)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	short carrier = (mode == 0) ? 1200 : 2400;
 	int i;
 
 	fsk_clear(obj);
 
-	V34SetupModulator((struct v34_modulator *)((char *)obj + 0x1450),
+	V34SetupModulator(v34_object_modulator(obj),
 			  600, carrier, 0, 0, 1);
 
 	rx->fir_coeff = high ? bpv22high : bpv22low;
@@ -503,10 +503,10 @@ void
 v34modeminit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_modulator *mod =
-		(struct v34_modulator *)((char *)obj + 0x1450);
+		v34_object_modulator(obj);
 	int originate;
 	int i;
 
@@ -602,7 +602,7 @@ v34modeminit(void *objp)
 	preinitdigital(obj);
 	txinit(obj);
 
-	detectorinit((struct v34_detector *)((char *)obj + 0x3564),
+	detectorinit(v34_object_detector(obj),
 		     originate ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
@@ -645,7 +645,7 @@ setfinalrate(void *objp)
 	unsigned short a9de = *(unsigned short *)(m + 0xa9de);
 	unsigned short a9e0 = *(unsigned short *)(m + 0xa9e0);
 	unsigned short a9e2 = *(unsigned short *)(m + 0xa9e2);
-	short *tx_baud    = (short *)(m + 0xaa84);
+	short *tx_baud    = (short *)v34_object_ratecfg(obj);
 	short *tx_preemp  = (short *)(m + 0xaa8a);
 	const short **tx_scale = (const short **)(m + 0xaa90);
 	short *tx_carrier = (short *)(m + 0xaa94);
@@ -805,7 +805,7 @@ void
 setupreceiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	unsigned char *m = (unsigned char *)obj;
 	short baud = *(short *)(m + 0xaa96);
 	short carrier = *(short *)(m + 0xaaa8);
@@ -880,7 +880,7 @@ setupreceiver(void *objp)
 							 | V34_RX_FLAG_DATA
 							 | V34_RX_FLAG_FIR));
 
-	detectorinit((struct v34_detector *)((char *)obj + 0x3564),
+	detectorinit(v34_object_detector(obj),
 		     cdesc, 0, 8, 10, 0x600, 0);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
@@ -1293,7 +1293,7 @@ void
 v34handshakinit(void *objp, int mode)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	unsigned char *m = (unsigned char *)obj;
 	int delta;
 	int base;
@@ -1503,7 +1503,7 @@ v34handshakinit(void *objp, int mode)
 		 * for, the other way round from `v34modeminit`'s -- which is
 		 * consistent, since the two ends listen for each other.
 		 */
-		detectorinit((struct v34_detector *)(m + 0x3564),
+		detectorinit(v34_object_detector(obj),
 			     (obj->role == 0x65) ? c2400_ : c1200_,
 			     0, 0x64, 0x32, 0x800, 0);
 		hs_put(obj, 0x356a, 1);
@@ -2148,7 +2148,7 @@ probeselect(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_dftbin *bins = obj->probe_bins;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	short *msg = (short *)(m + 0xa9ac);
 	const unsigned char *pcfg = (const unsigned char *)obj->pac3c;
 
@@ -2157,7 +2157,7 @@ probeselect(void *objp)
 	 * fields, plus the five per-rate pre-emphasis slots -- which are the
 	 * only thing here that function does not also write.
 	 */
-	short *tx_baud		= (short *)(m + 0xaa84);
+	short *tx_baud		= (short *)v34_object_ratecfg(obj);
 	short *tx_preemp	= (short *)(m + 0xaa8a);
 	const short **tx_scale	= (const short **)(m + 0xaa90);
 	short *tx_carrier	= (short *)(m + 0xaa94);
@@ -2774,15 +2774,15 @@ v34setuptxmit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	int pcm;
 
 	settxlevel(obj, (const short *)(m + 0xa9dc));
 
 	pcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);
 
-	V34SetupModulator((struct v34_modulator *)(m + 0x1450),
-			  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),
+	V34SetupModulator(v34_object_modulator(obj),
+			  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),
 			  *(short *)(m + 0xaa8a), pcm, 1);
 
 	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);
@@ -2993,7 +2993,7 @@ ApplyBulkDelay(void *objp, short delay)
  * it is really fixed.
  */
 #define T3C_RX(obj)	((struct v34_receiver *)&(obj)->rxq)
-#define T3C_DET(obj)	((struct v34_detector *)((char *)(obj) + T3C_DETECTOR))
+#define T3C_DET(obj)	v34_object_detector(obj)
 
 /*
  * ===========================================================================
@@ -4112,7 +4112,7 @@ t3m_micro51(struct t3m_frame *f)
 		 * constants either way; only the coefficient table depends on
 		 * which end this is.
 		 */
-		detectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),
+		detectorinit(v34_object_detector(f->obj),
 			     f->obj->role == 0x65 ? c2400_ : c1200_,
 			     0, 0x64, 0x32, 0x800, 0);
 
@@ -4354,7 +4354,7 @@ t3m_micro59(struct t3m_frame *f)
 		/* 0x662fc and 0x6bb57. */
 		if (f->rx->retrain_gate != 0
 		    && tone_detect(f->rx,
-				   (struct v34_detector *)(f->m + T3M_DETECTOR),
+				   v34_object_detector(f->obj),
 				   (const short *)((unsigned char *)f->rx
 						   + T3M_RX_FSKIN),
 				   f->rx->rx_samples)) {
@@ -5102,8 +5102,8 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 #define T41_FABF8	0xabf8	/* byte: "the drop has been reported"       */
 #define T41_RX_SAMPS	0x010c	/* receiver: where the detector reads from  */
 
-#define T41_RX(obj)	((struct v34_receiver *)((char *)(obj) + 0x0264))
-#define T41_DET(obj)	((struct v34_detector *)((char *)(obj) + T41_DETECTOR))
+#define T41_RX(obj)	v34_object_receiver(obj)
+#define T41_DET(obj)	v34_object_detector(obj)
 
 static void *
 t41_getp(const struct v34_object *obj, unsigned off)
@@ -7404,7 +7404,7 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_RXCARRDESC	0xaab0	/* the detector coefficients for the rate  */
 #define T4_RTSCALE	0xaacc	/* int, SIGNED: scaled per baud at 0x6d111 */
 
-#define T4_RX(obj)	((struct v34_receiver *)((char *)(obj) + 0x0264))
+#define T4_RX(obj)	v34_object_receiver(obj)
 #define T4_M(p)		((unsigned char *)(p))
 #define T4_I16(p, off)	(*(short *)(T4_M(p) + (off)))
 #define T4_U16(p, off)	(*(unsigned short *)(T4_M(p) + (off)))
@@ -9920,7 +9920,7 @@ void
 V34SetupDemodulator(void *objp, short baud, short carrier)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -10019,7 +10019,7 @@ void
 setInitialPhase(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	short k = 1;
 	int a, b;
 	int ratio = 0;
@@ -10121,7 +10121,7 @@ void
 setTimingStateParameters(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	int variant = (obj->role == 0x65);
 	int state = (short)rx->pllcnt;
 	int report = 0;
@@ -10210,7 +10210,7 @@ void
 TimingV34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	int state;
 	int i0, i1;
 	int a, b;

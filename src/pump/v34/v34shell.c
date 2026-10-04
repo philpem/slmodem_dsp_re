@@ -1633,8 +1633,7 @@ void
 initdigital(void *obj)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	struct v34_ratecfg *cfg =
-	    (struct v34_ratecfg *)((char *)obj + V34_RATECFG);
+	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
 	unsigned info = (unsigned short)o->info_rates;
 	int tx, rx, lim_tx, lim_rx;
 	int level;

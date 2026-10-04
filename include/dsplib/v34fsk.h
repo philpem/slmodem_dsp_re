@@ -24,6 +24,7 @@
 
 #include "dsplib/v34det.h"	/* struct v34_dftbin: the retrain detector's   */
 #include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one  */
+#include "dsplib/v34recv.h"	/* struct v34_receiver: the +0x264 sub-object  */
 #include "dsplib/v34rx.h"	/* struct v34_queue: the object owns both      */
 
 #ifdef __cplusplus
@@ -1317,6 +1318,57 @@ typedef char v34ratecfg_size[
 #endif
 
 #define V34_RATECFG	0xaa84
+
+/*
+ * The object's sub-object regions, each reached today by a raw cast at
+ * every use (issue #260).  These are the one derivation each now has.
+ *
+ * They are MACROS and not embedded members on purpose, for two reasons.
+ * First, F630 ruled for the detector that a region our declaration tiles
+ * is adjacency, not a bound -- the object states a displacement and a
+ * next-field boundary, never a size -- and the same holds for every
+ * region here.  The receiver (+0x264) and the rate config (+0xaa84) are
+ * worse than unbounded: both are DUAL VIEWS of storage the object
+ * already names member by member (`rxq`, `baud_rate`, `fsk` ...), so an
+ * embedded member would have to overlap existing ones.  A derivation
+ * point converts every site, changes no layout, and asserts nothing the
+ * blob has not said.  Second, a macro is a compile-time substitution:
+ * it cannot move code generation, where a static inline function measured
+ * two grade-1 register shifts in later functions of V34hshak.c -- the
+ * allocator-state bystander channel of findings 7796/7800 -- and the
+ * byte-identity ratchet is the wave's own gate.
+ *
+ * Each takes the object and nothing else, so a reader can find every
+ * sub-object access by grepping the accessor's name.
+ */
+
+/* The receive datapump, `struct v34_receiver` in v34recv.h, at +0x264. */
+#define v34_object_receiver(obj) \
+	((struct v34_receiver *)((char *)(obj) + 0x264))
+
+/* The timing filters, `struct v34_timing` in v34filt.h, at +0x50c. */
+#define v34_object_timing(obj) \
+	((struct v34_timing *)((char *)(obj) + 0x50c))
+
+/* The equaliser, `struct v34_equalizer` in v34filt.h, at +0x630. */
+#define v34_object_equalizer(obj) \
+	((struct v34_equalizer *)((char *)(obj) + 0x630))
+
+/* The transmitter, `struct v34_modulator` in v34filt.h, at +0x1450. */
+#define v34_object_modulator(obj) \
+	((struct v34_modulator *)((char *)(obj) + 0x1450))
+
+/*
+ * The retrain detector, `struct v34_detector` in v34det.h, at +0x3564.
+ * F630 measured it tiling to +0x3588 and ruled the tiling a measurement,
+ * not a bound; see the finding before changing either constant.
+ */
+#define v34_object_detector(obj) \
+	((struct v34_detector *)((char *)(obj) + 0x3564))
+
+/* The negotiated rate configuration, `struct v34_ratecfg`, at +0xaa84. */
+#define v34_object_ratecfg(obj) \
+	((struct v34_ratecfg *)((char *)(obj) + V34_RATECFG))
 
 /**
  * @brief Interpolate, discriminate and filter one FSK block.

@@ -2635,7 +2635,7 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	int want;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
@@ -2702,7 +2702,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	unsigned char *sess = (unsigned char *)obj->p3548;
 	unsigned char *cfg;
 	unsigned char dp = requestedDp;
@@ -2976,7 +2976,7 @@ VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -3014,7 +3014,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	unsigned char *sess = (unsigned char *)obj->p3548;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 
 	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
 
@@ -3144,8 +3144,7 @@ extern "C" int
 VPcmV34GetCurrentRxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
 
 	if (obj->role == PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
@@ -3165,8 +3164,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
 	const unsigned char *tx;
 	unsigned int n;
 
@@ -3221,8 +3219,7 @@ VPcmV34GetCurrentRxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->rx_baud;
+	return v34_object_ratecfg(obj)->rx_baud;
 }
 
 int
@@ -3237,8 +3234,7 @@ VPcmV34GetCurrentTxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->baud;
+	return v34_object_ratecfg(obj)->baud;
 }
 
 int
@@ -3253,8 +3249,7 @@ VPcmV34GetCurrentRxCarrier(void *objp)
 		return 0;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->rx_carrier;
+	return v34_object_ratecfg(obj)->rx_carrier;
 }
 
 int
@@ -3269,16 +3264,14 @@ VPcmV34GetCurrentTxCarrier(void *objp)
 		return 0;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->carrier;
+	return v34_object_ratecfg(obj)->carrier;
 }
 
 int
 VPcmV34GetSNR(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)
-	    ((unsigned char *)obj + 0x264);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	int db = 0;
 	int last = 0;
 
@@ -4033,7 +4026,7 @@ v90Phase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	unsigned short fl = rx->flags;
 	short n;
@@ -4461,9 +4454,8 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)(m + V34_RATECFG);
+	struct v34_receiver *rx = v34_object_receiver(obj);
+	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
@@ -4539,7 +4531,7 @@ k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
 
 	if (!(rx->flags & V34_RX_FLAG_DATA)) {
@@ -4679,7 +4671,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	unsigned char *cfg = (unsigned char *)runtime;
 	unsigned char *sess = (unsigned char *)obj->p3548;
 	unsigned char *k56 = (unsigned char *)obj->pac18;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	unsigned char *v92;
 	/*
 	 * All three are read BEFORE the memset, out of `runtime` rather than

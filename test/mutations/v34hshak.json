@@ -558,13 +558,13 @@
  },
  {
   "label": "setuptxmit: the modulator gets the receive baud rate",
-  "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),",
+  "find": "\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),",
   "replace": "\t\t\t  *(short *)(m + 0xaa96), *(short *)(m + 0xaa94),",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: carrier and pre-emphasis are transposed",
-  "find": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
+  "find": "\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
   "replace": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa8a),\n\t\t\t  *(short *)(m + 0xaa94), pcm, 1);",
   "fn": "v34setuptxmit"
  },
@@ -638,8 +638,8 @@
  },
  {
   "label": "setuptxmit: the two transitions are printed before the modulator's line",
-  "find": "\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator((struct v34_modulator *)(m + 0x1450),\n\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);",
+  "find": "\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);",
   "fn": "v34setuptxmit"
  },
  {
@@ -1244,8 +1244,8 @@
  },
  {
   "label": "the demodulator trace has baud and carrier swapped",
-  "find": "\tstruct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
-  "replace": "\tstruct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
+  "find": "\tstruct v34_receiver *rx = v34_object_receiver(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
+  "replace": "\tstruct v34_receiver *rx = v34_object_receiver(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
  },
  {
   "label": "the demodulator produces three outputs per call, not four",

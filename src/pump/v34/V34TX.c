@@ -163,7 +163,7 @@ txmit(void *objp)
 	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
 		    | (unsigned short)obj->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
-		(struct v34_modulator *)((char *)obj + 0x1450), sym, local);
+		v34_object_modulator(obj), sym, local);
 
 	if (n > 0) {
 		int *wr = txq->wr;

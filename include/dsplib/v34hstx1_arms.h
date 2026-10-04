@@ -234,9 +234,6 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  */
 #define PROG_TXBIT_DATA		0x10
 
-/* The receiver sub-object; `0x74(%esp)` above. */
-#define TX1_RECEIVER	0x264
-
 /* The transmit state machine's own word (finding F213). */
 #define TX1_TXSTATE	0x3596
 
@@ -254,9 +251,6 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * reconfigured.  Nothing else in the tree reads it; it is `unmapped_35a6`.
  */
 #define TX1_SEGLEN	0x35a6
-
-/* The modulator, where V34SetupModulator writes it -- V34hshak.c:302. */
-#define TX1_MODULATOR	0x1450
 
 /*
  * +0x358c.  60 masks it with one to choose between two of `vect4`'s four
@@ -523,8 +517,7 @@ static int
 v34tx1_xmit0(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 
 	o->txpoint.c[0] = 0;
 	o->txpoint.c[1] = 0;
@@ -799,16 +792,14 @@ v34tx1_txmd(void *objp)
 
 	if ((unsigned short)o->vect_idx
 	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {
-		struct v34_ratecfg *cfg =
-			(struct v34_ratecfg *)((char *)o + V34_RATECFG);
+		struct v34_ratecfg *cfg = v34_object_ratecfg(o);
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
 
 		if (dsplibs_debug_level > 1)		/* 0x6800d */
 			dsplibs_debug_printf(
 				"TX: Done with MD, moving to S/Sbar" " again...\r\n");
 
-		V34SetupModulator((struct v34_modulator *)
-				  ((char *)o + TX1_MODULATOR),
+		V34SetupModulator(v34_object_modulator(o),
 				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
@@ -942,8 +933,7 @@ static int
 v34tx1_dataxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	int idx;
 
 	modulatevector(o);
@@ -1150,8 +1140,7 @@ v34tx1_sbarseg(void *objp)
 		hs_setstate(o, TX1_TXSTATE, V34HS_TXMD);
 
 		/* 0x67885 */
-		V34SetupModulator((struct v34_modulator *)
-				  ((char *)o + TX1_MODULATOR),
+		V34SetupModulator(v34_object_modulator(o),
 				  4800, 2400, 0, 0, 0);
 
 		/*
@@ -1253,8 +1242,7 @@ v34tx1_ppseg(void *objp)
 			o->vect_idx = 0;
 		} else {
 			/* 0x680ac */
-			struct v34_ratecfg *cfg = (struct v34_ratecfg *)
-						  ((char *)o + V34_RATECFG);
+			struct v34_ratecfg *cfg = v34_object_ratecfg(o);
 			short v = (short)((unsigned short)o->rtd + 0x90);
 			short baud = cfg->baud;
 			int span, q, acc;
@@ -1387,8 +1375,7 @@ static int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1685,8 +1672,7 @@ static int
 v34tx1_jtxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	unsigned shift;
 	unsigned short idx;
 	short bits, mode, q;
@@ -2638,10 +2624,8 @@ static int
 v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
-	struct v34_ratecfg *cfg =
-		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
 	int n, lim, baud, period;
 	short *rec;
 
@@ -2788,8 +2772,7 @@ static int
 v34tx1_trnseg4(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_ratecfg *cfg =
-		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
 	short q;
 	int n, span, baud;
 
@@ -3289,8 +3272,7 @@ static int
 v34tx1_xmitmp(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = v34_object_receiver(o);
 	int wide = 0;
 	int n = 0;
 

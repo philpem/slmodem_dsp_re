@@ -158,8 +158,7 @@ void
 VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg = (const struct v34_ratecfg *)
-	    ((const unsigned char *)obj + V34_RATECFG);
+	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 
 	if (DSPLIB_DEBUG_ON())
@@ -385,8 +384,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    unsigned long maxCount)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)
-	    ((unsigned char *)obj + V34_RECEIVER_OFFSET);
+	struct v34_receiver *rx = v34_object_receiver(obj);
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
 	unsigned long n = 0;
