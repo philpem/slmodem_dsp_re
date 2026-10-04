@@ -133,8 +133,8 @@ v8_absfn(short x)
 void
 v8_crc(struct v8_handshake *hs, int bit)
 {
+	int msb = hs->crc < 0 ? 1 : 0;
 	unsigned int crc = (unsigned short)hs->crc;
-	int msb = ((int)(short)crc) < 0 ? 1 : 0;
 
 	crc += crc;
 	if ((short)bit != 0)
