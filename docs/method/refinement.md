@@ -3163,3 +3163,141 @@ product-carrier change before allocation. Preserve the tone's measured original
 period/phase bugs throughout. [13 full-TU controls](../batch5-calling-tone.md),
 F11708. V34nlencoder's analogous magnitude-update family canonicalizes and
 misses; do not generalize an exact gain into a universal source recipe (F11709).
+
+
+An original diagnostic is executable source even when the normal debug level
+hides it. Recover its exact format, unsigned gate and call boundary, and compare
+complete bodies: call_delete becomes158B exact (F11730). Count debug relocation
+anchors only to triage; inlining, CFG duplication and shared tail jumps can
+change counts without removing a message. The new gcc3_debug_anchor_census.py
+reports its object/symbol denominators and a known0→1 restoration control.
+The call/Psd finite negative families are closed in their local records.
+
+
+A cursor/countdown transfer may need a different value-read boundary in its
+sibling. FPM_lmsupd closes150B with hist[k--] and an advancing coefficient
+destination captured before arithmetic. FPM_lmsupd2 needs its first narrowed
+product computed before capturing that destination; both int and short product
+carriers then emit the exact182B body. Initial RTL identifies the t/dest source
+order before register allocation, and the failed earlier capture produces an
+extra frame slot and coefficient load. Keep the measured common property,
+not a gratuitous local retype. The two gains combine without moving the third
+TU body; the isolated first gain still changes its non-exact sibling through
+allocation state. [72-cell record](../batch20-dsp-boundaries.md).
+
+
+Separate configuration spelling from literal correctness. V23's receive
+constructor retains an authentic original version print and its observed
+initialization boundaries, then an independent literal control recovers29000
+from the object's0x7148 (F11732). Neither a near instruction match nor old green
+fixtures justify keeping28998. Audit constant/table emission order explicitly.
+Original B103 case/default diagnostics close two state functions (F11733),
+but later shared-prototype changes can undo that match; measure the combined
+TU rather than summing isolated winners.
+
+The switch/branch factoring lever now has a two-axis control in float2Bits
+(F11734): a case0/case1 switch recovers its common no-match return, while
+placing the subtraction arm under a negated whole table predicate recovers loop
+fall-through and branch direction. Neither source component is exact alone;
+the combined fullTU reproduces283B and leaves the enclosing CPPacker unchanged.
+Preserve unordered routing with whole-predicate negation, not an ordered
+opposite comparison. Inspect initial RTL dispatch and table edges before
+attributing layout to postallocation scheduling. Failed DIL zero-trip/code-load,
+ModulusDecoder split-product/add, and Parameters fabs/store crosses are closed
+bounded families, not reasons to retest source synonyms.
+
+Before classifying small residuals as compiler-only, compare original debug-call
+anchors even for completed source. B103's four missing prints explained most
+of its SIZE residual and exposed authentic CFG, field-owner and widening-loop
+boundaries (FINDING_B103). The object's sole emission order plus recovered prints
+and config zero predicate make create exact406B and untouched exit exact49B.
+The shrinking non-exact process exposed a true count..0 versus count-1..0 error;
+record it as behavioral reconstruction and run the final batch's period gate,
+not as an inert expression choice. Keep failed direct-param, unsigned-local,
+split-status and count-address controls: none closes process's remainingSIZE11.
+
+A float expression assigned to a double temporary is still a source boundary.
+realfft's four h1/h2 locals retain DF destinations after previous operand-cast
+cleanup; changing only those destinations to float recovers its exact505B
+body. Initial RTL verifies DF→SF while x87 retains excess precision without
+intermediate memory stores. Do not infer source type from the absence of a
+spill. Full TU remains two exact symbols with identical nontext metadata/data.
+[Width control](../batch20-realfft-width-controls.md).
+
+Direct helper output pointers and delayed feedback history acquisition can
+recover member-store lifetimes without recovering a function. FloatARMA's
+cross reaches scalar392B but stillBYTES152; block remains80B short. Close the
+bounded family and reject size-only candidates.
+[Output/load controls](../batch20-arma-output-controls.md).
+
+A FABS mismatch can originate at two different GCC3 stages. For getTimingHistoryStd
+(F11737), positive/complement ternaries fold before initial RTL, while the
+negative ternary becomes ABS at21.ce2. Explicit positive/complement sign assignments
+preserve the blob's compare, +/-1 load and multiply; negative-first statements
+preserve the operations but reverse their layout. Cross predicate and statement
+form, retaining whole-predicate semantics, before declaring arithmetic spelling
+or register allocation exhausted. Exact body plus full-TU nontext/literal auditing
+is required; record both initial and late folding boundaries.
+
+Call boundaries can bound index lifetimes without permutations: V90 history
+resample's original increment follows its read-only timing getter, while the
+baseline carries next across the call. Late local alone misses; direct member
+increment/wrap closes170B. Cross new source gain with earlier same-TU gains:
+this six-cell cross retains both resample170B/Std66B and audits the14bystanders.
+
+A signed-word callee load proves consumption width, not necessarily formal width
+(F11738). Cross consistent declarations/definitions with narrowing at use and
+caller return/owner lifetimes. Require the callee raw control and all consumers;
+B103/V21's four transmit gains leave MRF raw unchanged. Compose same-TU winners:
+the B103 Answer diagnostic-only gain is forgone at peephole2 in the combined
+candidate, and is excluded from the batch count rather than fitted with padding.
+
+Historical replay after a deliberate header change must use an explicit revision
+snapshot, not suppress the default drift guard (F11739). The shared driver's
+--historical-headers mode hashes Git inputs and records include paths; the raw
+baseline remains mandatory. Default current-header mode still rejects drift.
+
+A saved result register across a diagnostic can identify source result ownership
+(F11740). ConnectionEvaluator retrain twins close only with an entry-owned
+verdict and shared cleanup; equivalent early returns materialize constants late
+and omit the saved register. Cross result definition boundary and shared/duplicated
+cleanup before concluding extra saves are regalloc noise. Compile both twins and
+all TU bystanders; a post-counter negative cell changes a later nonexact carrier,
+while the chosen entry-verdict cell preserves it.
+
+For a weighted update with unchanged member before arithmetic, distinguish cached
+local and direct member product inputs. ConnectionEvaluator average's member
+product and hot-first CFG are each insufficient; their cross reproduces113B.
+Initial RTL shows the additional source member read. Preserve unsigned integer
+conversion, full extended precision and the single final rounding; do not create
+float temporaries or reassociate an expression to match a size. Cross independent
+same-TU winners before adoption: all three gains here survive together.
+
+Census opcode and call-count gaps require provenance before source hypotheses
+(F11741). SpectralVerifier process inherits its extra FABS from inlined
+printSpectrum; getTimingHistoryStd had a local conditional-sign boundary.
+Similarly, two distinct addresses or debug relocations may reflect shared tails.
+Trace the instruction back to the source owner before reopening a closed family.
+
+Whole configuration capture is a separate source boundary from pointer-store
+permutations. V22 FSE's bounded copy-before-assignment control recovers instruction
+structure but leaves five register bytes; retain that grade-1 preimage for compiler
+allocation tracing and decline production adoption until strict proof.
+
+A short source loop counter can still have an SI pseudo in GCC3 RTL. Tone IIR's
+short tap counters expose low-word sign extension and cmpw boundaries while
+pseudo mode stays promoted (F11743). Literal four-section factoring plus short
+counters recovers most of both progress bodies but not strict identity; a separate
+shift-array capture recovers another seventeen bytes yet remains three short.
+Retain the measured preimages; do not invent padding or force stack slots.
+
+Cold diagnostic blocks: address order is not callback execution order.
+Trace branch targets and rejoins before adopting source order. CALLPROG_Dial
+parameter-29 debug read at higher address executes before the mainline read;
+its CFG rejoins before that call. Branch-specific parameter rereads may be
+observable even with constant getter values. Preserve host-read/printed
+sequence and counts across valid lifecycle/debug states; require explicit
+getter denominators and an old-source failing control. Equal function size
+(1094B here) is insufficient: final residual remains BYTES422. F11742 and
+docs/batch20-callprog-callback-order-controls.md carry complete-TU and runtime
+controls, including the rejected intermediate seed rather than hiding it.

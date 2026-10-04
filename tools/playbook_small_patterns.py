@@ -69,21 +69,32 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--domain',required=True)
     ap.add_argument('--baseline-dir', type=Path, default=ROOT/'build/tc_out',
                     help='archived production objects/config for historical replay')
+    ap.add_argument('--historical-headers', action='store_true',
+                    help='explicitly compile with a Git snapshot of REV headers, not current headers')
     args=ap.parse_args()
     out=ROOT/'build'/OUT_NAME;out.mkdir(exist_ok=True)
     config=(args.baseline_dir/'.build-config').read_text();image=config.splitlines()[0].split(' ',1)[1]
     flags=shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('flags ')))
     flags=['-I/src/include' if f=='-Iinclude' else '/src/'+f if f=='tools/toolchain/period_compat.h' else f for f in flags]
     hpaths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).splitlines()
-    assert not subprocess.check_output(['git','diff','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).strip()
+    if not args.historical_headers:
+        assert not subprocess.check_output(['git','diff','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).strip()
     local_roots=sorted({'src/pump/v32'} | {str(Path(p).parent) for p in SOURCE_PATHS})
     local_paths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--']+local_roots,cwd=ROOT,text=True).splitlines()
     local_headers=sorted({p for p in local_paths if p.endswith('.h')})
-    if local_headers:
+    if local_headers and not args.historical_headers:
         assert not subprocess.check_output(['git','diff','--name-only',REV,'--']+local_headers,cwd=ROOT,text=True).strip(), 'local header baseline drift'
     hpaths += local_headers
-    headers={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in hpaths}
-    result={'revision':REV,'domain':args.domain,'config':config,'headers':headers,'families':{}}
+    header_inputs={p:subprocess.check_output(['git','show',REV+':'+p],cwd=ROOT) if args.historical_headers else (ROOT/p).read_bytes() for p in hpaths}
+    headers={p:hashlib.sha256(data).hexdigest() for p,data in header_inputs.items()}
+    snapshot=None
+    if args.historical_headers:
+        full_revision=subprocess.check_output(['git','rev-parse',REV],cwd=ROOT,text=True).strip()
+        snapshot=out/('historical-headers-'+full_revision)
+        for path,data in header_inputs.items():
+            target=snapshot/path;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
+        flags=['-I/work/'+snapshot.name+'/include' if f=='-I/src/include' else '/work/'+snapshot.name+'/tools/toolchain/period_compat.h' if f=='/src/tools/toolchain/period_compat.h' else f for f in flags]
+    result={'revision':REV,'domain':args.domain,'config':config,'headers':headers,'header_input_mode':'explicit-git-snapshot' if args.historical_headers else 'current-must-match-revision','families':{}}
     tc.print_identity(image,tc.GENTOO_COMPILER_PATH,True)
     if any(Path(path).suffix == '.cpp' for path in SOURCE_PATHS):
         identity_shell = ('set -e; export PATH=' + shlex.quote(tc.GENTOO_COMPILER_PATH) +
@@ -105,7 +116,8 @@ def main():
             for local in (ROOT/Path(path).parent).glob('*.h'):
                 rel=str(local.relative_to(ROOT))
                 contents=subprocess.check_output(['git','show',REV+':'+rel],cwd=ROOT)
-                assert hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()==headers[rel]
+                assert hashlib.sha256(header_inputs[rel]).hexdigest()==headers[rel]
+                if not args.historical_headers:assert hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()==headers[rel]
                 (cd/local.name).write_bytes(contents)
             dst='/work/'+family+'/'+label
             cell_flags = flags + list(DUMP_FLAGS)
@@ -126,7 +138,8 @@ def main():
                 shell = shell.replace('exec gcc -c ', 'exec g++ -c ', 1)
             command=tc.docker_prefix(image,ROOT,out,True)+['/bin/sh','-c','cd '+shlex.quote(dst)+' && '+shell]
             entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command,'overlay_header_hashes':overlay_hashes};fr['cells'][label]=entry
-            assert all(hashlib.sha256((ROOT/p).read_bytes()).hexdigest()==d for p,d in headers.items())
+            actual_headers=snapshot if args.historical_headers else ROOT
+            assert all(hashlib.sha256((actual_headers/p).read_bytes()).hexdigest()==d for p,d in headers.items())
             with (cd/'compile.log').open('w') as log:entry['compile_exit']=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT).returncode
             (out/'results.json').write_text(json.dumps(result,indent=2)+'\n');assert entry['compile_exit']==0,label
             obj=str(cd/'candidate.o');entry['object_hash']=hashlib.sha256(Path(obj).read_bytes()).hexdigest()

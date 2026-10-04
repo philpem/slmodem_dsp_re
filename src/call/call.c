@@ -161,6 +161,9 @@ call_delete(struct dp *dp)
 {
 	struct call_dp *st = ((struct call_dp *)dp)->self;
 
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: delete...\n");
+
 	CALLPROG_Delete(&st->callprog);
 	if (st->rc_in != 0)
 		RcFixed_Delete(st->rc_in);

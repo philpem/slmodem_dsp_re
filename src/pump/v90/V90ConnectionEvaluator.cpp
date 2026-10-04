@@ -264,15 +264,15 @@ V90ConnectionEvaluator::updateAvePdsnr(float pdsnr, unsigned int nofSymbols)
 {
 	unsigned int nofOldSymbols = avePdsnrNofSymbols;
 
-	if (nofOldSymbols == 0) {
+	if (nofOldSymbols != 0) {
+		avePdsnr = (avePdsnrNofSymbols * avePdsnr + pdsnr * nofSymbols)
+			  / (nofOldSymbols + nofSymbols);
+		avePdsnrNofSymbols = nofOldSymbols + nofSymbols;
+	} else {
 		avePdsnr = pdsnr;
 		avePdsnrNofSymbols = nofSymbols;
 		return;
 	}
-
-	avePdsnr = (nofOldSymbols * avePdsnr + pdsnr * nofSymbols)
-		  / (nofOldSymbols + nofSymbols);
-	avePdsnrNofSymbols = nofOldSymbols + nofSymbols;
 }
 
 /*
@@ -354,21 +354,20 @@ V90ConnectionEvaluator::indicateRemoteRateReneg()
 int
 V90ConnectionEvaluator::indicateLocalRetrain()
 {
+	int verdict = V90CE_VERDICT_RETRAIN;
 	silenceRrnRequest = 0;
 	nofV90Retrains++;
 
 	if (nofV90Retrains > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
+		verdict = V90CE_VERDICT_FALLBACK_V34;
 		edprintf("V90ConnectionEvaluator: initiating fall back to V34 "
 			 "due to %d V90 retrains\r\n", nofV90Retrains);
 		nofV90Retrains = 0;
-		dataDurationCounter = 0;
-		retrainCounter = 0;
-		return V90CE_VERDICT_FALLBACK_V34;
 	}
 
 	dataDurationCounter = 0;
 	retrainCounter = 0;
-	return V90CE_VERDICT_RETRAIN;
+	return verdict;
 }
 
 /*
@@ -383,21 +382,20 @@ V90ConnectionEvaluator::indicateLocalRetrain()
 int
 V90ConnectionEvaluator::indicateRemoteRetrain()
 {
+	int verdict = V90CE_VERDICT_RETRAIN;
 	silenceRrnRequest = 0;
 	nofRemoteRetrains++;
 
 	if (nofRemoteRetrains > (unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {
+		verdict = V90CE_VERDICT_FALLBACK_V34;
 		edprintf("V90ConnectionEvaluator: initiating fall back to V34 "
 			 "due to %d remote retrains\r\n", nofRemoteRetrains);
 		nofRemoteRetrains = 0;
-		dataDurationCounter = 0;
-		retrainCounter = 0;
-		return V90CE_VERDICT_FALLBACK_V34;
 	}
 
 	dataDurationCounter = 0;
 	retrainCounter = 0;
-	return V90CE_VERDICT_RETRAIN;
+	return verdict;
 }
 
 /*

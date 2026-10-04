@@ -304,14 +304,12 @@ V90Resampler::resample(const float *in, unsigned int n, float *out,
 		periodSamples += n;
 		if (periodSamples
 		    >= (unsigned int)params->TIMING_HISTORY_EVALUATION_PERIOD) {
-			unsigned int next = timingHistoryIndex + 1;
-
 			periodSamples = 0;
 			timingHistory[timingHistoryIndex] =
 			    getTimingOffsetPPM();
-			if (next == timingHistoryLen)
-				next = 0;
-			timingHistoryIndex = next;
+			timingHistoryIndex++;
+			if (timingHistoryIndex == timingHistoryLen)
+				timingHistoryIndex = 0;
 		}
 	}
 }
@@ -332,6 +330,13 @@ float
 V90Resampler::getTimingHistoryStd()
 {
 	float var = Var(timingHistory, timingHistoryLen);
+	float sign;
 
-	return sqrt(var * (var < 0.0f ? -1.0f : 1.0f));
+	/* Explicit sign selection preserves the object's multiply and branch.
+	 * GCC 3's ternary/ce2 forms otherwise collapse this to fabs. */
+	if (!(var < 0.0f))
+		sign = 1.0f;
+	else
+		sign = -1.0f;
+	return sqrt(var * sign);
 }

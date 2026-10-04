@@ -66,6 +66,7 @@
 
 #include "dsplib/fpm_iir.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/debug.h"
 #include "dsplib/v23fp.h"
 
 /*
@@ -127,7 +128,7 @@ static const struct fpm_agc_cfg AGCv23_CFG = {
  * 2100 Hz -- from being mistaken for an idle mark.
  */
 #define V23RX_TONE_HZ		1300
-#define V23RX_TONE_RATIO	28998	/* 0.885 in Q15, up from 0.75 */
+#define V23RX_TONE_RATIO	29000	/* 0.885 in Q15, up from 0.75 */
 
 /*
  * The transmit-side fields are inherited unchanged and unused: this object
@@ -218,9 +219,9 @@ static const struct fpm_mrf_cfg MRFv23_CFG = {
 struct v23rx *
 v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg)
 {
+	struct fpm_tone_cfg tone;
 	struct fpm_mrf_cfg mrf;
 	struct fpm_fsd_cfg fsd;
-	struct fpm_tone_cfg tone;
 	short i;
 
 	if (rx == NULL)
@@ -239,9 +240,9 @@ v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg)
 	FPM_FSD_init(&rx->fsd, &fsd, 1);
 
 	tone = TONEv23_CFG;
-	tone.freq = V23RX_TONE_HZ;
-	tone.ratio = V23RX_TONE_RATIO;
 	tone.src = FPM_TONE_CFG.src;	/* the shared 53-tap prototype */
+	tone.ratio = V23RX_TONE_RATIO;
+	tone.freq = V23RX_TONE_HZ;
 	rx->tone = FPM_TONE_create(NULL, &tone);
 
 	rx->rx_state = 0;
@@ -276,10 +277,8 @@ v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg)
 	rx->acquire_limit = V23RX_ACQUIRE_LIMIT_MS;
 	rx->status = V23RX_WAITING;
 
-	/*
-	 * The original prints "V23FP Rx Created, version 10-December-02." at
-	 * debug level 2.  Dropped, as everywhere else in this tree.
-	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V23FP Rx Created, version 10-December-02.\r\n");
 	return rx;
 }
 
