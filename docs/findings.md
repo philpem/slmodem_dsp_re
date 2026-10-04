@@ -136110,3 +136110,58 @@ and partial instruction recoveries were left unadopted.
 `docs/next20-byteexact-results.md`; machine ledgers
 `build/next20-production-audit.json`, `build/next20-census-delta.json`,
 `build/next20-all-experiment-denominators.json`, `build/next20-phase.log`.
+
+
+## F11815. Writable output-count promotion closes FPM_div at 150 bytes
+
+Base b470429e (merged #268). Earlier terminal-publication helpers were not the
+same family as updating `(*count)++` each normalization iteration. Installed
+Gentoo GCC3 09.loop explicitly announces r/w HI count-memory promotion and
+retains one terminal store outside the loop. LEA1/copy replaces the private
+counter INC. Count initialization inside the helper, after the zero-denominator
+guard, closes the complete 150-byte FPM_div; caller initialization leaves
+BYTES46 at the same size. Only this complete winner is adopted, preserving
+zero handling, output order, index/table sentinel, reproduce-bugs behavior
+and ABI. Normalizing nonzero ushort inputs takes at most 15 shifts; no count
+wrap. This is a matching source family, not a unique-author-spelling claim.
+`tools/gcc3_normalization_{owner,loop,reciprocal,guard}_reproduce.py`;
+`tools/gcc3_normalization_audit.py`; `docs/gcc3-loop-memory-results.md`.
+
+## F11816. Loop-memory transfer is positive without additional exact bodies
+
+33 valid full-TU cells, 104 blob-common verdicts, 172 emitted-body comparisons;
+all baseline objects reproduce raw, every non-target body and metadata/data/
+BSS/nontext relocation remains unchanged, zero losses. Pointed log/sqrt/div32
+and V8 controls restore specific loop topology but retain arithmetic, output
+storage or whole-body differences. No slot/declaration/parameter permutations
+or partial source adoptions. V8 unsigned-run controls independently restore
+SHR/JBE/JA but a 17-byte residual remains; zero-only postdecrement emits
+DEC/CMP(-1)/JNE rather than original DEC/JNE. Remainder publication and operand
+ownership are recorded as next independent discriminators, not profile proof.
+
+New loop-memory trace tool: five controls (writable positive, no-promotion
+negative, three refusals) and real count-promotion/final-store-depth controls.
+Original operand screen: 300 objects, 1886 common defining copies, eleven
+eligible non-exact candidates, real positive and missing-copy negative. Four
+V34 candidates reserved for #263. V8 bit pushing already updates pointed
+memory: the screen is only a candidate generator. FPM_sqrt's retained bound
+check is not removed for a byte hit. No fuzzing/mutation execution; #22 and
+other-session source/header work untouched. Full finite domains and replay:
+`docs/gcc3-loop-memory-results.md`; `tools/gcc3_loop_memory_trace.py`,
+`tools/gcc3_normalization_screen.py`, V8 replay/audit tools.
+
+
+## F11817. Integrated normalization gain passes period and structural gates
+
+Production: 1055 to 1056 exact names out of 1852, 114545 to 114695 exact
+original bytes. FPM_div's integrated object reproduces the independent winner
+raw; 299 of 300 other objects and the full build configuration are raw-equal.
+Only FPM_div's body changes; all metadata/data/BSS/nontext relocations pass.
+Final `make phase J=4` exits zero: 388 period differential passes, zero
+failures, all structural gates green. Static anchor check: 285 suites, 10038
+unique anchors, zero detached/non-unique; no retargeting, fuzzing or mutation
+execution. New tracing/replay tools and bounded misses are retained, not
+partial source changes. Upstream b470429e; #22 and other-session #263 untouched.
+`tools/gcc3_normalization_production_audit.py`;
+`build/normalization-production-audit.json`, `build/normalization-phase.log`;
+`docs/gcc3-loop-memory-results.md`.
