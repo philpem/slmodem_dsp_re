@@ -3093,3 +3093,15 @@ order: use controls and retain argument-load boundaries, rather than assign
 register names or broaden a synonym search. One exact candidate out of twelve
 permutations is evidence within that domain, not global source uniqueness.
 [Full-TU controls and replay](../v34-detector-boundaries.md), F11702.
+
+### Finish one arithmetic channel before the next product
+
+V34 dftupdate's reference PUSH/FILD of the real product precedes imaginary
+IMUL, while the reconstruction computed both products and integer updates
+before either floating update. Recover the complete real channel before the
+imaginary product and inspect combine: the real conversion moves before the
+imaginary multiply, changing lifetime overlap before allocation. Combined with
+the independently measured advancing input cursor and per-bin input load,
+this recovers all200 bytes. Each axis alone misses. Keep wrapping integer adds
+and x87 operations/rounding points intact; cross the source boundaries rather
+than fit the ensuing registers. [Twelve full-TU cells and pass controls](../v34-dft-loop-boundaries.md), F11703.
