@@ -339,7 +339,7 @@ TxHdxTRN(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 	ScrambleDataV32(modem, data, count);
 
 	for (i = 0; i < count; i++)
-		data[i] = trn[data[i] & 3];
+		data[i] = trn[(unsigned short)data[i] & 3];
 
 	n = (short)ModDataV32(modem, data, out, count);
 

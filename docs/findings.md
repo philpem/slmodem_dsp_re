@@ -134582,6 +134582,191 @@ complete partial comparison remains DIFFERENT. This is a function gain, not
 full-object completion.
 [Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)
 
+## F11671. Commutative operand order reaches the encoder XOR but is canonicalized away in the decoder
+
+Four posted labels (baseline/decoder-flip/encoder-flip/both-flip) over the two
+defining TUs at 47174bf3, header overlay include/dsplib/DiffCoder.h only,
+driver playbook_diffcoder_flip.py over playbook_small_patterns.py. Gentoo
+GCC 3.4.2-r2, executed as 2.15.92.0.2, saved C++ profile, DSPLIB_REPRODUCE_BUGS
+last. Baselines raw-reproduce both retained objects; no invalid runs.
+
+Encoder flip `T x = *in ^ *state` emits the blob's 54-byte body exactly
+(acc <- *state via movzbl (%edx),%eax, mem-xor *in via xor (%ebx),%al, and
+`inc %ebx` scheduled after the xor as the memory-operand role requires);
+decoder flip `*out = *state ^ x` emits a byte-identical object to baseline.
+Zero losses in either TU cell; changed-bodies list is exactly the encoder.
+For two-MEM commutative operands source order survives to RTL and assigns the
+accumulator/memory roles; for a REG+MEM pair the order is canonicalized away
+(REG first), so no spelling of `x ^ *state` reaches the blob's acc<-REG-copy
++ mem-xor form. The no-temp decoder re-read form was excluded pre-compile:
+`*out = *in ^ *state; *state = *in;` re-reads *in after the *out store and
+changes behavior when out == in, while t_diffcoder's 13.6M-check parity pins
+the blob to the one-read temp form. The decoder residual is therefore the
+reload two-address form choice for a REG+MEM commutative op - allocation
+stage, not source order; the spelling family is closed there.
+
+Adopted: encoder operand order only, comment records the observed roles.
+Behavior-identical (commutative XOR); no fixture or fuzz change; static
+anchor check clean (285 suites, 10038 mutations). Whole-tree census
+926/1852 -> 927/1852, exact bytes 95435 -> 95489, sole gain
+_ZN27ParallelDifferentialEncoderIhE7processEPhS1_, zero losses, no bystander
+bodies in the 300-object review. Fixed phase 387/0 with structural checks.
+The historical --ratchet exit is the pre-documented stale 810-symbol floor
+requiring _ZN13V90ParametersC2EP19_tagModemParameters, already absent from
+master's 926 set before this change (same pre-existing floor failure recorded
+at F11560's integration and docs/v34-small-rtl.md; not re-blessed). Same-tree
+partial before/after: exact sections 61 -> 62, positioned reference bytes
+68571 -> 68575, relocations 1018/18317 and symbols 394/2907 unchanged,
+verdict DIFFERENT. Function gain, not completion.
+[Domain and decoder negative](diffcoder-operand-order.md). (2026-10-03)
+
+## F11672. v8_crc sign-bit spelling family closes; V92CP ctor order decoded but declined
+
+Eight value-identical sign-bit extractions over v8_crc (V8global.c) at
+2185e6b5, all full-TU: none emits the blob's unsigned-load-primary +
+movswl-register-re-narrow + shr31 shape; the two signed-read spellings make
+the SIGNED load primary (roles reversed), the rest keep the cast-free
+bit-15 shift. Family closed, no source adoption; residual one byte is the
+movswl encoding. V92CP's ctor (61/61): six insertion points of byte_04 in
+resetDetector's statement order give position 5 (after zerosRun) the blob's
+instruction-for-instruction body under register renaming - BYTES(8)
+grade-1 ACCEPT from 34 differing bytes - decoding the author's body order;
+the remaining 8 bytes are one register-pair assignment. Reordering all
+thirteen V92CP.cpp definitions to the blob's own address order keeps all
+seven exact functions exact but moves the ctor to BYTES(29) and changes
+four bodies with zero gains - the register carrier is not the definition
+order at this granularity. Both declines recorded; no census change
+(927/1852), no adoption.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+## F11673. JdNotDetector's reset arm spelled first recovers an exact 75-byte detector
+
+The standalone detector's arms were transcribed offset-order; swapping to
+`if (symbol != 0) jdNotRunLength = 0; else jdNotRunLength++;` emits the
+blob's block layout (fall-through reset, far increment block) exactly.
+Independent corroboration before compiling: getV90Decision's inline copy of
+the same test already reads the swapped order and the v90p3ddec mutation
+anchors quote it; the v90p3ddec JdNotDetector anchor was retargeted to the
+adopted spelling with its fault case preserved (anchorcheck 285 suites /
+10038 mutations, 0 problems). Census 927/1852 -> 928/1852, exact bytes
+95489 -> 95564, sole gain, zero losses; fixed phase 387/0.
+
+The sibling amplitude (+0x40) family closed: `(unsigned short)amplitude`
+folds to a byte-identical object (the load extension follows the field's
+declared type through nop casts, so a cast cannot move it), and the raw
+0x40-displacement probe was contaminated by non-this bases; the field
+stays short per its documented inference. The V92CP definition-order and
+v8_crc msb negatives are F11672's.
+[Domain](v90-jd-arm-order.md). (2026-10-03)
+
+## F11674. Scrambler ctor tap-pointer association folds; the swap inverts compute order
+
+Both Scrambler C1 instantiations (Ihh, Ihi, 102/102) share the tap-store
+order difference. The direct-from-pLimit spelling
+(`pInitTap1 = pLimit + c + a; pInitTap2 = pLimit + c + b;`) emits a
+byte-identical object: the association CSE-normalizes and the scheduler is
+free. Swapping the two statements changes the body but inverts the compute
+order too and moves away; no cell gains, zero losses. The family closes
+without adoption; the blob's schedule (compute tap1, store pInitOut,
+compute tap2, interleave reset's zeroed arg, store tap1, store tap2) is
+recorded for a future carrier. Scrambler.h's Descrambler ctor repeats the
+block and was left untouched - its C1 is a SIZE case, a different disease.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+Whole-tree partial-link state after both adoptions (2185e6b5+0056f610):
+exact section records 70/92, equal positioned reference bytes 68577/943398,
+relocations 1018/18317, symbols 394/2907, verdict DIFFERENT; the encoder's
+linkonce section is content-equal at 54/54. partialcmp's per-linkonce
+"equal" tally reports ScramblerIhh C1 as 102/102 while the census finds 10
+differing bytes (grade-1 REJECT, USE CONFLICT row); the census is the
+authority for function identity and the discrepancy is recorded, not
+resolved. Both CI jobs green on the four-commit head.
+
+## F11675. V90Jd ctor's unpackWord position and adjacent constellation reads recover an exact 119-byte body
+
+The blob stores unpackWord (0x8c) after the movzbl look-load, not with the
+unpack[] bytes, and schedules the two constellation parameters as
+load,load,store,store - reachable only by reading both before storing,
+because the scheduler cannot prove params and this do not alias and an
+interleaved spelling makes the second load wait on the first store. The
+transcribed source had unpackWord third and interleaved reads.
+temp-reads-after-look emits _ZN5V90JdC2EP13V90Parameters exactly; its C1
+clone improves BYTES 50 -> 34 with the same register mirror the V92CP ctor
+shows, no losses. Whole-word load casts were already right; an explicit
+(unsigned short) amplitude-style cast attempt on the reads folds
+byte-identical (F11673's rule). Five v90jd/v90jdstd anchors retargeted to
+the adopted spellings with fault cases preserved; anchorcheck clean. Census
+928/1852 -> 929/1852, exact bytes 95564 -> 95683, sole gain, zero losses.
+[Domain](v90jd-unpackword-recovery.md). (2026-10-03)
+
+## F11676. The Descrambler count temp recovers the scale shape but not the registers
+
+DescramblerIii C1 (110 vs 107) reassociated the malloc size to
+(b+c)*4+4; the blob keeps (1+b+c)<<2. The Scrambler's documented count-temp
+pattern, applied to the Descrambler ctor, emits the blob's lea+shl exactly
+(both associations normalize through the temp; DescramblerIhi C1 and every
+sizeof=1 instantiation unchanged), but the remaining 19 differing bytes are
+the surrounding register assignment - the same scratch-register mirror
+class as the V92CP and V90Jd C1 clones. No exact function, no losses;
+declined per the F11672 precedent, the recovered spelling recorded for
+when the register carrier is found. The blob's tail also differs in
+callee-save spill order, consistent with the carrier being upstream of the
+function.
+[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+
+## F11677. Two value-identical ctor spellings recover all four FloatFIR/FloatIIR ctors (delegated run)
+
+Agent-run domain on the 112/105 four-ctor family (equal instruction counts,
+7-byte gap): the gap is one alignment pad before the duplicated tail, and
+the argument-register swap is the parameter-store order. Two spellings,
+both value-identical, jointly make FloatFIR C1/C2 and FloatIIR C1/C2
+exact: the malloc result through a local (`float *hist = sysdep_malloc(...); history = hist;`), and bufferLength/m_len assigned before
+coefficients/m_coeff. Zero losses anywhere; census 929/1852 -> 933/1852 on
+adoption. [Agent artifacts](build/playbook-floatfir-ctor/results.json),
+domain and results in #22.
+
+## F11678. The V92CP register split is the decoded statement order crossed with the definition position
+
+The agent TU-partition check found the blob's V92CP.cpp FILE bracket
+[0x4e5b0,0x50015) holds exactly our 15 symbols - no split finding. Five
+definition positions give two co-location states for the 0x12/-1 pair and
+never the blob's split; crossing F11672's decoded body order with the
+after-reset position reaches it: V92CP C1 AND C2 exact, 8 -> 10 in the TU,
+zero losses. Census 933/1852 -> 935/1852 on adoption, 12 v92cp/v92cpcrc
+anchors retargeted with fault cases preserved. The carrier question from
+F11672-F11676 is answered for V92CP: statement order x emission position,
+not position alone. Whether the same cross lifts V90Jd C1 (BYTES 34) and
+DescramblerIii C1 (BYTES 19) is the next bounded check.
+[Artifacts](build/playbook-v92cp-cross/results.json),
+[agent run](build/playbook-ctor-tu-position/results.json). (2026-10-03)
+
+## F11679. QueueIf::write(T) is reachable but its cell costs V92Modulator::C2 - declined
+
+Agent-run two-family screen. The isfull spelling (the full-test
+intermediate materialized as a named temp; spacelocal folds to the same
+object) makes _ZN5QueueIfE5writeEf EXACT at 85/85 but shifts
+V92Modulator::C2 (734 bytes) EXACT -> BYTES 7 (split-store constant row);
+progress also moves, net 23/30 with one gain and one real loss: 71 bytes
+gained against 734 lost. Declined; the joint-cursor question (fix C2 on
+the adopted object) is recorded, not attempted. getSegmentPointer closes
+as grade-0 UNRESOLVED(1): zero differing bytes outside the anonymous
+.rodata pool addend (blob +2944 = ld -r cumulative offset, no covering
+symbol) - the jump-table artifact class; shape probes that would rename it
+delete the rep movsl and were preserved invalid. Body done; fix is
+tool-side normalization, not source. [Artifacts](build/playbook-queue-segptr/results.json).
+
+## F11680. V90Jd C1's mirror is neither position nor declaration order
+
+The blob's V90Jd.cpp TU order already matches ours (the premise that the
+ctor is first was stale), and moving the definition anywhere changes no
+byte of any function. New decoded constraint: the blob's C1 is
+byte-identical to its C2 (119B, 41 insns, alignment nop included) while
+our C2 is exact and our C1 carries the mirror - our two clones diverge
+where the blob's did not. All five local-declaration permutations emit
+byte-identical objects. Position and declaration order both excluded;
+the remaining hypothesis is the clone-emission cursor itself. 
+[Artifacts](build/playbook-v90jd-pos/results.json),
+build/playbook-v90jd-locals/results.json. (2026-10-03)
 ## F11690. An isolated GCC3 reproducer separates local spill temporaries from the named quotient
 
 Issue #246's full V34TX, exact updateAlpha extraction and debug-disabled
@@ -134658,6 +134843,85 @@ Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation
 new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
 (2026-10-03)
 
+## F11710. dp_runtime_create's tail store order recovers the 298-byte body
+
+Agent-run six-permutation domain over {clockDeviation, modeFlags,
+connectionType} (dp_param.c): exactly one preimage,
+[connectionType, clockDeviation, modeFlags], emits the blob's 298/298 body
+including the load-hoist of info->connection_type and the ecx/edx pair;
+the head 0x10/0x2 order and the $0x6 hoist are coupled consequences of the
+same single-block order. Decoded bystander: the head-swap cell folds the
+two ands into one, so the original's final &= ~0x80 follows the ternary -
+the current order is right there. dp_param.c 2/3 -> 3/3, zero losses,
+anchors clean. Census 938/1852 -> 939/1852 (+298 bytes) on adoption.
+[Artifacts](build/playbook-fdsp-dprt-r2/results.json). (2026-10-03)
+
+(Numbered F11694 in this branch's PR #245 comments before the merge; renumbered 11694->11710 at integration against master's F11694.)
+
+## F11711. FDSP_DP_Delete's tail needs a callee-saved zero live across the call
+
+Blob: mov %ebx,(%esp); xor %ebx,%ebx; call sysdep_free; store %ebx to the
+global. Ours: call; xor %eax; store %eax (moffs). Every statement-level
+spelling folds - GCC deletes the dead param store and CSEs to a literal-0
+post-call store; read-back and store-before-free are excluded by
+inspection (the global is never loaded). The blob's tail requires a
+callee-saved zero live across the call, i.e. cursor state: the blob's
+Beepgen.c extent is GetGain alone with FDSP_DP_Run immediately before
+Delete in the [Detector|Dtmf|Fdsp] bracket, so the blob's Fdsp.c plausibly
+opens with FDSP_DP_Run and the peephole2 immediate-split cursor differs -
+the #6/#20 TU-repartition class, not a source spelling. Statement-level
+family closed. [Agent artifacts](build/playbook-fdsp-dprt/results.json).
+(2026-10-03)
+
+## F11712. V90Phase4Demodulator's decoded store order recovers both clones exactly
+
+The blob's C1 and C2 are byte-identical AND ours are - a body defect, not
+the V90Jd clone cursor. The 17 differing rows are the eleven body
+assignments' schedule; the blob's order is mappingParams1, params,
+sessionFlag, demapper, mappingParams2, cp, mp, descrambler,
+connectionEvaluator, phase3Demodulator, autoDigitalImpDetector. Two
+preimages (blob-order and mp1-third) make C1 AND C2 exact at 225 bytes;
+the par/flag adjacency carries 14 of the bytes, the dem/mp2 and p3d/ce
+moves the rest. Per lever 0 this decodes the three relative orders, not a
+unique spelling - mappingParams1's position is not encoded. 13/20 -> 15/20
+in the TU, zero losses; five v90p4dctor anchors retargeted with fault
+cases preserved. [Agent artifacts](build/playbook-demod-tdx/results.json).
+
+## F11713. Three validated components land without exactness: rx_shift, the mask clamp, TxHdxTRN's fold
+
+V22FP_modem's byte 103 (bf->b7) follows from `unsigned short rx_shift` -
+the blob's loads of the field are all movzwl and the retype rule holds;
+6 -> 5 differing bytes, v22mod 0/10 held. The constellation-mask getters'
+clamp as `if (which >= 6) which = 0;` on the parameter reproduces the
+blob's setl/neg/and clamp and clean scaled load (58->37 and 62->39
+differing bytes; the GCC 3.4.2 if-form clamp expansion is corroborated by
+the blob's own inline copies); the residual is allocator state, an
+emission-order question, with getConstellationsIndex itself SIZE -4.
+TxHdxTRN's `trn[(unsigned short)data[i] & 3]` takes the predicted 1 byte
+(55->54); the remaining 54 are the rename plus F11553's closed RMW, and
+POSITION IS EXCLUDED for the rename (trn-after-data demonstrated null
+while moving a sibling). All three adopted together: census 939/1852 ->
+941/1852, exact bytes +450, zero losses, DemodCtor's two clones the only
+gains. [Artifacts](build/playbook-masks-v22fp-w2/results.json),
+build/playbook-demod-tdx/results.json. (2026-10-03)
+
+## F11714. V34GiveProbeResults's direct double load, short index and objp+4 guard recover the 71-byte body
+
+Three value-identical changes together - and only together - emit the
+blob's 71/71 body: the byte-copy union replaced by a direct
+*(const double *)p load, `int i, k` narrowed to `short i; int k`, and the
+receiver-pair guard read through the objp+4 base (the documented F179/F180
+addressing artifact; two spellings, int+1 and char+4, are exact
+preimages, decoding the base fact not a unique spelling). The owner type
+was confirmed reconstructed before any header invention. Recorded
+bystanders: three sibling bodies move (V34GiveINFO1aBits 729->699 with
+delta 14->16, VPcmV34InterpretMohMessageBits 721->707 delta 1->15,
+V34GiveINFO0dBits same size) - no EXACT losses, TU 0/7 exact throughout.
+Census 941/1852 -> 942/1852 (+71 bytes), anchors clean. The screen's
+other residual, VPcmV34GetSNR, is exhausted at the spelling level
+(declaration order falsified; residue is allocator/propagation state for
+the F11690/F11691 trace method).
+[Agent artifacts](build/playbook-v34-residual/results.json). (2026-10-03)
 
 ## F11694. V8 CRC: death-bearing extension recovers the unsigned primary load
 
@@ -134935,6 +135199,37 @@ Final repaired batch gate: make phase J=4 passes388 period differential tests,
 14,286 references, no unresolved/stale/live-mutant reports. Mutation metadata
 was only statically retargeted; no fuzzing or mutation harness was executed.
 
+## F11715. RcFixed_Reset and V92Phase4Modulator::reset close to the trace-method class
+
+RcFixed_Reset's diff is confined to the kind-1 memset block: the blob
+materializes 0 (edx) before 4 (eax), stores arg2-then-arg3 and hoists
+call-3's $4 into callee-saved esi; ours is 4-first/arg3-first with
+per-call re-materialization. Advance test CLEARED (0/5 symbols move under
+-fno-peephole2 - position axis dead); all four spelling cells
+((size_t)4, sizeof member, shared const n, static-helper refactor) fold
+byte-identical - the map is constant, even refactoring normalizes.
+V92Phase4Modulator::reset's 18-row arg-marshal region: blob emits
+suvLimit->amplitude->byte_42 (source order); the three never-varied
+positions all worsen (197/47/56) and i-in-for is inert - source positions
+pinned, no preimage. Both handed to the F11690/F11691 arg-pseudo trace
+queue. Zero exact losses in all ten cells (32/44 and 2/5 held).
+[Agent artifacts](build/playbook-rcfixed-p4m/results.json). (2026-10-04)
+
+## F11716. FPM_FSE_init's zero stores sit below a copy that our scheduler always sinks stores above
+
+A predictive model - every 32-bit store sourced after the cfg copy is
+emitted above it, in source order; the copy sinks below that set - was
+confirmed 4/4 before reading scores: freq-last swaps the pair, both-after
+is byte-identical INERT, the other two positions worsen (+5). The blob
+has both zero stores below its copy, so no ordering of the member writes
+produces it: the residual is the copy's dependence form at the scheduler,
+not a store-order fact. Also decoded: the Ihh C1 has two defining
+objects - V92Phase4Modulator's copy is EXACT with the shared header text,
+proving the residual in the other three Scrambler TUs is per-TU allocator
+state (V90P3M/V92P3M Ihi both BYTES 22 with byte-identical wrong bodies);
+a shared-header change cannot meet the zero-losses constraint and no
+cells were compiled. FPM_FSE_free exact in every cell. 
+[Agent artifacts](build/playbook-fse-zeros-v92scr/results.json). (2026-10-04)
 
 ## F11730. Original deletion diagnostic recovers call_delete158B
 

@@ -182,16 +182,21 @@ V90Phase4Demodulator::V90Phase4Demodulator(V90MappingParams *mp1,
 	: phase4Modulator(par, flag, 0, 0, mp2, mp1, 0, V90P4D_MODULATOR_ARG8),
 	  rDetector1(par), rDetector2(par)
 {
-	sessionFlag = flag;
-	params = par;
+	/* Store order is the blob's decoded sequence (mappingParams1,
+	 * params, sessionFlag, demapper, mappingParams2, cp, mp,
+	 * descrambler, connectionEvaluator, phase3Demodulator,
+	 * autoDigitalImpDetector): both clones go exact with it and the
+	 * par/flag pair carries 14 of the bytes (finding F11696). */
 	mappingParams1 = mp1;
+	params = par;
+	sessionFlag = flag;
+	demapper = dem;
 	mappingParams2 = mp2;
 	cp = cpArg;
 	mp = mpArg;
-	phase3Demodulator = p3d;
-	demapper = dem;
 	descrambler = dsc;
 	connectionEvaluator = ce;
+	phase3Demodulator = p3d;
 	autoDigitalImpDetector = adid;
 }
 

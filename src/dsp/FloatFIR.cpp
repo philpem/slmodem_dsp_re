@@ -181,11 +181,16 @@ FloatFIR::FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize)
 {
 	unsigned int i;
 
+	/* bufferLength is assigned before coefficients: the blob's argument
+	 * registers for the ctor's two parameter stores follow this order,
+	 * and the malloc result through a local removes the alignment pad
+	 * before the duplicated tail (finding F11677). */
 	taps = nTaps & ~3u;
-	coefficients = coef;
 	bufferLength = taps + blockSize;
+	coefficients = coef;
 
-	history = (float *)sysdep_malloc(bufferLength * sizeof(float));
+	float *hist = (float *)sysdep_malloc(bufferLength * sizeof(float));
+	history = hist;
 	if (history != 0)
 		for (i = 0; i < bufferLength; i++)
 			history[i] = 0.0f;
