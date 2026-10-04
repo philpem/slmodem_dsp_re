@@ -557,17 +557,23 @@ V90Phase3Modulator::generateTRN1d()
 	return scrambler.process(1) ? codeLevel : (short)-codeLevel;
 }
 
-/* 0x2b9f0 and 0x2ba40, 80 bytes each: the two V.92 vectors, same body. */
+/* F11804: the 80-byte vectors retain distinct post-call level ownership. */
 int
 V90Phase3Modulator::generateJdPhase()
 {
-	return scrambledSymbol(this, vectorBit(jdV92PhaseBits, symbolCount));
+	polarity ^= scrambler.process(jdV92PhaseBits[(symbolCount - 1u) % 72u]);
+	return polarity ? codeLevel : (short)-codeLevel;
 }
 
 int
 V90Phase3Modulator::generateV92Jd()
 {
-	return scrambledSymbol(this, vectorBit(jdV92Bits, symbolCount));
+	int scrambled = scrambler.process(jdV92Bits[(symbolCount - 1u) % 72u]);
+	unsigned int level = (unsigned short)codeLevel;
+	polarity ^= scrambled;
+	if (!polarity)
+		level = -level;
+	return (short)level;
 }
 
 /*
