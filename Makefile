@@ -1321,6 +1321,7 @@ period: $(REF)
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
 	partial-compare partial-compare-selftest castscan castscan-selftest \
+	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
 tc:
 	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
@@ -1350,6 +1351,16 @@ castscan:
 
 castscan-selftest:
 	@$(PYTHON) tools/castscan.py --self-test
+
+# Raw-offset access census for issue #260: every site where an object's
+# layout is expressed as an address rather than a typed member, re-keyed
+# by (owner shape, resolved offset, access width) so a cleanup wave has a
+# denominator that moves.  A triage ledger, not a gate.
+offsetcensus:
+	@$(PYTHON) tools/offsetcensus.py
+
+offsetcensus-selftest:
+	@$(PYTHON) tools/offsetcensus.py --self-test
 
 # Link with binutils 2.15 in the period image.  DIFFERENT is the expected
 # report until convergence, so partial-compare is a census rather than a phase
