@@ -2432,10 +2432,17 @@ V90Phase3Demodulator::getMaxUcode()
 int
 V90Phase3Demodulator::JdNotDetector(int symbol)
 {
-	if (symbol == 0)
-		jdNotRunLength++;
-	else
+	/* The reset arm is spelled first: the blob branches on symbol != 0 to
+	 * the increment block and falls through to the reset, the mirror of
+	 * the transcribed order.  getV90Decision's inline copy of this test
+	 * already reads `if (bit != 0) jdNotRunLength = 0; else
+	 * jdNotRunLength++;`, and the v90p3ddec mutation anchors quote that
+	 * spelling; the standalone detector now matches it and the object
+	 * exactly. */
+	if (symbol != 0)
 		jdNotRunLength = 0;
+	else
+		jdNotRunLength++;
 
 	if (jdNotRunLength > 11 && samplesInState % 72 == 12)
 		return 1;

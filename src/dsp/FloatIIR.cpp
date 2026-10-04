@@ -341,10 +341,15 @@ FloatIIR::process(const float *in, float *out, unsigned count)
 
 FloatIIR::FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize)
 {
+	/* m_len before m_coeff and the malloc result through a local, as in
+	 * FloatFIR's ctor (finding F11677): the blob's parameter-store
+	 * registers and the missing alignment pad before the duplicated
+	 * tail both follow from these two spellings. */
 	m_ncoeff = ncoeff & ~3u;
-	m_coeff = coeff;
 	m_len = m_ncoeff + blockSize;
-	m_hist = (float *)sysdep_malloc(m_len * sizeof(float));
+	m_coeff = coeff;
+	float *hist = (float *)sysdep_malloc(m_len * sizeof(float));
+	m_hist = hist;
 
 	/*
 	 * A failed allocation leaves m_hist null and is NOT reported: the

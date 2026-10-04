@@ -3020,6 +3020,46 @@ casts or forced registers. Cross access/order/operator controls and compare
 complete bodies, not just sizes. [Full-TU recovery](../v90-power-index-predicate-recovery.md).
 
 
+For a commutative op with two memory operands, source operand order survives
+to RTL and assigns which load feeds the accumulator and which stays the
+memory operand; for a REG+MEM pair the same order is canonicalized away
+(REG first) and no spelling reaches the other two-address form (F11671).
+Test the flip on BOTH shapes before concluding anything about "operand
+order" in general: the encoder's flip recovered the exact 54-byte body -
+accumulator `movzbl (%edx),%eax` then memory `xor (%ebx),%al`, with the
+input-pointer increment scheduled after the xor as a consequence - while the
+decoder's flip emitted a byte-identical object, closing its residual as a
+reload form choice rather than a spelling. Exclude re-read spellings with a
+behavior argument first: reading `*in` again after the `*out` store changes
+`out == in` results, and recorded aliasing parity pins the one-read temp
+form. A stale ratchet floor can report a loss the census refutes; check the
+symbol against the current exact set before treating it as a regression
+(F11671, third documentation of the same pre-existing 810-floor
+V90Parameters C2 entry).
+
+
+An if/else pair whose arms are one increment and one reset can emit with
+either arm as the fall-through; the blob's choice is readable from which
+block the conditional branch targets, and the mirror spelling of the arms
+is the source lever (F11673). Check the tree for an INLINE copy of the same
+test before compiling: getV90Decision's state-9 copy already carried the
+author's arm order, and the mutation anchors quote it -- corroboration that
+cost one compile instead of a domain. A cast on the READ of a struct field
+folds to a nop conversion and cannot change the load's extension; the
+extension follows the field's declared type, and a raw displacement probe
+over a TU is contaminated by any other object at that offset (F11673).
+
+
+A store whose emission position matters can be unpinned from its source
+position only when the scheduler is indifferent; when the blob places it
+after an unrelated load, the source position is the lever and the load's
+own position is the answer sheet (F11675). For two loads feeding two
+stores through a pointer the compiler cannot prove disjoint from the
+destination, adjacent reads are the only spelling that yields
+load,load,store,store -- interleaved statements serialize on the first
+store. And check row-indexed rejection reports for desync before reading
+a WIDTH/operand row as a type difference: one shifted store re-numbers
+every row after it.
 ## Cross source arithmetic boundaries with observed induction widths
 
 F11692 transfers updateAlpha's in-place arithmetic diagnostic to

@@ -140,14 +140,16 @@ V90Jd::V90Jd(V90Parameters *params)
 
 	unpack[0] = 0;
 	unpack[1] = 0;
-	unpackWord = 0;
 
 	/*
 	 * The maximum lookahead, two bits.  `movzbl` then `and $1` and
 	 * `shr $1; and $1` -- the low two bits of the parameter's low byte,
-	 * and nothing above them can reach the message.
+	 * and nothing above them can reach the message.  `unpackWord = 0`
+	 * follows this read in the source: the blob stores 0x8c after the
+	 * `movzbl`, not with the unpack[] bytes (finding F11675).
 	 */
 	look = (unsigned char)params->MAX_SPECTRAL_SHAPER_LOOKAHEAD;
+	unpackWord = 0;
 
 	bits[49] = (unsigned char)(look & 1);
 	bits[50] = (unsigned char)((look >> 1) & 1);
@@ -155,9 +157,15 @@ V90Jd::V90Jd(V90Parameters *params)
 	/*
 	 * The constellation size, two bits, one parameter each -- a whole-word
 	 * load and a byte store, so only the low byte of either is carried.
+	 * Both parameters are read before either is stored: the scheduler
+	 * cannot prove params and this do not alias, so interleaved
+	 * statements wait on the first store and the blob's
+	 * load,load,store,store shape is lost.
 	 */
-	bits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;
-	bits[48] = (unsigned char)params->V34_RRN_CONSTELLATION;
+	int c47 = params->V34_PHASE4_CONSTELLATION;
+	int c48 = params->V34_RRN_CONSTELLATION;
+	bits[47] = (unsigned char)c47;
+	bits[48] = (unsigned char)c48;
 
 	/*
 	 * Keep the branch spelling used by setRatesMask above.  GCC 3.4.2

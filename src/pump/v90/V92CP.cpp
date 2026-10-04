@@ -24,62 +24,6 @@
 #include "dsplib/debug.h"
 #include "dsplib/V92CP.h"
 
-/* Hold the compiler to the map in the header; see V90CP.cpp for why.  This
- * class has no pointer members, so the layout is the same at both widths --
- * the guard is kept for consistency with the sibling classes. */
-#if __SIZEOF_POINTER__ == 4
-#define V92CP_OFF(field, off, tag) \
-	typedef char v92cp_off_##tag[ \
-	    ((int)__builtin_offsetof(V92CP, field) == (off)) ? 1 : -1]
-
-V92CP_OFF(byte_00,	0x000, byte00);
-V92CP_OFF(char_01,	0x001, char01);
-V92CP_OFF(dataBitRate,	0x002, char02);
-V92CP_OFF(byte_03,	0x003, byte03);
-V92CP_OFF(byte_04,	0x004, byte04);
-V92CP_OFF(shaperSR,	0x008, word08);
-V92CP_OFF(shaperId,	0x00c, word0c);
-V92CP_OFF(flt_10,	0x010, flt10);
-V92CP_OFF(shaperA1,	0x014, flt14);
-V92CP_OFF(shaperA2,	0x018, flt18);
-V92CP_OFF(shaperB1,	0x01c, flt1c);
-V92CP_OFF(shaperB2,	0x020, flt20);
-V92CP_OFF(byte_24,	0x024, byte24);
-V92CP_OFF(distinctIndex,	0x028, word28);
-V92CP_OFF(constellationMask,	0x042, short42);
-V92CP_OFF(codecConstellationMask,	0x0a2, shorta2);
-V92CP_OFF(word_104,	0x104, word104);
-V92CP_OFF(suv,		0x108, suv);
-V92CP_OFF(word_10c,	0x10c, word10c);
-V92CP_OFF(word_110,	0x110, word110);
-V92CP_OFF(rxState,	0x114, word114);
-V92CP_OFF(byte_118,	0x118, byte118);
-V92CP_OFF(onesRun,	0x119, byte119);
-V92CP_OFF(zerosRun,	0x11a, byte11a);
-V92CP_OFF(bitIndex,	0x11c, word11c);
-V92CP_OFF(stateBitCount,	0x120, word120);
-V92CP_OFF(word_124,	0x124, word124);
-V92CP_OFF(bitsPerSymbol,	0x128, byte128);
-V92CP_OFF(bits,		0x129, bits);
-V92CP_OFF(crc,		0x8f9, crc);
-V92CP_OFF(vectorLen,	0x90c, vectorlen);
-V92CP_OFF(msgLen,	0x910, msglen);
-V92CP_OFF(word_914,	0x914, word914);
-typedef char v92cp_size[(sizeof(V92CP) == 0x918) ? 1 : -1];
-#endif
-
-V92CP::V92CP()
-{
-	byte_04 = 0;
-
-	rxState = 0;
-	onesRun = 0;
-	zerosRun = 0;
-	bitIndex = 18;
-	stateBitCount = 0;
-
-	word_914 = -1;
-}
 
 /*
  * One byte in the object: `ret`.  The class allocates nothing -- unlike
@@ -183,6 +127,69 @@ void
 V92CP::reset()
 {
 	resetDetector();
+
+	word_914 = -1;
+}
+
+/* Hold the compiler to the map in the header; see V90CP.cpp for why.  This
+ * class has no pointer members, so the layout is the same at both widths --
+ * the guard is kept for consistency with the sibling classes. */
+#if __SIZEOF_POINTER__ == 4
+#define V92CP_OFF(field, off, tag) \
+	typedef char v92cp_off_##tag[ \
+	    ((int)__builtin_offsetof(V92CP, field) == (off)) ? 1 : -1]
+
+V92CP_OFF(byte_00,	0x000, byte00);
+V92CP_OFF(char_01,	0x001, char01);
+V92CP_OFF(dataBitRate,	0x002, char02);
+V92CP_OFF(byte_03,	0x003, byte03);
+V92CP_OFF(byte_04,	0x004, byte04);
+V92CP_OFF(shaperSR,	0x008, word08);
+V92CP_OFF(shaperId,	0x00c, word0c);
+V92CP_OFF(flt_10,	0x010, flt10);
+V92CP_OFF(shaperA1,	0x014, flt14);
+V92CP_OFF(shaperA2,	0x018, flt18);
+V92CP_OFF(shaperB1,	0x01c, flt1c);
+V92CP_OFF(shaperB2,	0x020, flt20);
+V92CP_OFF(byte_24,	0x024, byte24);
+V92CP_OFF(distinctIndex,	0x028, word28);
+V92CP_OFF(constellationMask,	0x042, short42);
+V92CP_OFF(codecConstellationMask,	0x0a2, shorta2);
+V92CP_OFF(word_104,	0x104, word104);
+V92CP_OFF(suv,		0x108, suv);
+V92CP_OFF(word_10c,	0x10c, word10c);
+V92CP_OFF(word_110,	0x110, word110);
+V92CP_OFF(rxState,	0x114, word114);
+V92CP_OFF(byte_118,	0x118, byte118);
+V92CP_OFF(onesRun,	0x119, byte119);
+V92CP_OFF(zerosRun,	0x11a, byte11a);
+V92CP_OFF(bitIndex,	0x11c, word11c);
+V92CP_OFF(stateBitCount,	0x120, word120);
+V92CP_OFF(word_124,	0x124, word124);
+V92CP_OFF(bitsPerSymbol,	0x128, byte128);
+V92CP_OFF(bits,		0x129, bits);
+V92CP_OFF(crc,		0x8f9, crc);
+V92CP_OFF(vectorLen,	0x90c, vectorlen);
+V92CP_OFF(msgLen,	0x910, msglen);
+V92CP_OFF(word_914,	0x914, word914);
+typedef char v92cp_size[(sizeof(V92CP) == 0x918) ? 1 : -1];
+#endif
+
+V92CP::V92CP()
+{
+	/* The statement order is resetDetector's, with byte_04 after
+	 * zerosRun and word_914 last: the blob's register split for the
+	 * 0x12 constant and the -1 follows from 0x12's live range ending
+	 * before -1 is materialized (finding F11672's decode, F11678's
+	 * cross).  The definition sits after V92CP::reset for the same
+	 * reason -- the blob emits it at 0x4e8a0, between reset
+	 * (0x4e860) and setSUV (0x4e920). */
+	bitIndex = 18;
+	stateBitCount = 0;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
+	byte_04 = 0;
 
 	word_914 = -1;
 }
