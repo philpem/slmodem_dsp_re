@@ -134735,3 +134735,30 @@ original spelling or recovered global compiler profile.
 
 [Declarations, mechanism, complete controls and replay](v34-detector-boundaries.md).
 No fuzzing or mutation execution. (2026-10-04)
+
+## F11703. V34 dftupdate is exact after recovering input scope and channel consumption order
+
+`dftupdate` is now EXACT200/200 under retained Gentoo GCC3.4.2-r2. The reference
+advances the sample pointer once per outer iteration and loads it inside the
+bin loop after phase update. Restoring those two boundaries matches entry and
+outer-loop tail; interleaving integer products/updates leaves BYTES38. The
+first remaining opcode divergence is real PUSH/FILD versus imaginary IMUL:
+source currently completes both integer channels before either floating channel.
+Complete the real channel, including its floating accumulator, before computing
+the imaginary channel and all200 bytes match. Product values, wrapping adds,
+double operations and rounding points are unchanged. Names/flags are not fitted.
+
+Combine proves the lifetime boundary before allocation: negative control's
+imaginary multiply UID68 precedes real conversion UID75; exact control's real
+conversion UID63 precedes imaginary multiply UID73. Twelve full-TU cells,
+ten distinct sources/objects, twenty-four parsed stages and twelve positive/
+negative input/channel controls pass. All three functions/one cosine table,
+metadata/data/nontext/canonical relocations and both bystanders are reviewed.
+Source correction alone to channel order misses, as does the input correction
+without full channel consumption. No unique original source spelling claimed.
+
+Production299/300 objects unchanged; sole DFTC.c.o raw-matches the candidate.
+Exact set933→934/1852, +200 exact bytes, zero losses. Whole-object positional
+comparison remains separately reported and DIFFERENT. [Declared domains,
+controls, source/pass evidence and replay](v34-dft-loop-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)

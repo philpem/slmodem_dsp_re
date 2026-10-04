@@ -110,19 +110,19 @@ dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 	short i;
 
 	/*
-	 * Sample outer, bin inner.  The sample is loaded once per bin in the
-	 * original rather than hoisted, which changes nothing; the loop order
-	 * itself does matter, because it is what makes one call advance every
-	 * bin by the same number of samples.
+	 * Sample outer, bin inner, advancing the input cursor once per sample.
+	 * The original loads the sample inside the bin loop after updating
+	 * phase. Keep that boundary, including when the input aliases a short
+	 * field of the bin bank. Every bin advances by the same sample count.
 	 */
-	for (i = 0; i < nsamples; i++) {
+	for (i = 0; i < nsamples; i++, samples++) {
 		struct v34_dftbin *b = bins;
-		int x = samples[i];
 		short j;
 
 		for (j = 0; j < nbins; j++, b++) {
 			unsigned idx;
 			int re, im;
+			int x;
 
 			/*
 			 * The accumulator is 14 bits wide and the table has
@@ -139,6 +139,7 @@ dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 					    + (unsigned short)b->inc)
 					   & V34_DFT_PHASE_MASK);
 			idx = (unsigned)b->phase >> V34_DFT_PHASE_SHIFT;
+			x = *samples;
 
 			/*
 			 * Quadrature by table offset: a quarter turn is 64
@@ -148,7 +149,6 @@ dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 			 * surfaces.
 			 */
 			re = costbl[idx] * x;
-			im = costbl[(idx + V34_DFT_QUARTER) & 0xff] * x;
 
 			/*
 			 * Wrapping adds.  A long integration overflows these
@@ -159,11 +159,13 @@ dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 			 */
 			b->acc_re = (int)((unsigned)b->acc_re
 					  + (unsigned)(re >> 6));
+			/* Consume the same real product unshifted, at 80 bits. */
+			b->sum_re += (double)re;
+			im = costbl[(idx + V34_DFT_QUARTER) & 0xff] * x;
 			b->acc_im = (int)((unsigned)b->acc_im
 					  + (unsigned)(im >> 6));
 
-			/* The same products again, unshifted, at 80 bits. */
-			b->sum_re += (double)re;
+			/* The imaginary product has the same unshifted x87 path. */
 			b->sum_im += (double)im;
 		}
 	}
