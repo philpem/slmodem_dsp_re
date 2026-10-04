@@ -77,12 +77,32 @@ FPM_div_table_generate(int i)
 	return (unsigned short)(0x40000000 / ((unsigned)(i + 0x80) * 0x100));
 }
 
+/*
+ * A pointed count word reproduces the original normalizer's loop.  GCC3's
+ * loop pass promotes that word and publishes it once after the backedge,
+ * retaining the separate next-value pseudo (F11815).  A private int counter
+ * with one terminal output assignment does not emit the same code.
+ * Both output words belong to the caller; the zero guard precedes this helper.
+ */
+static inline void
+normalize16(unsigned short denom, unsigned short *mantissa, unsigned short *count)
+{
+	*count = 0;
+	if ((short)denom >= 0) {
+		do {
+			denom += denom;
+			(*count)++;
+		} while ((short)denom >= 0);
+	}
+	*mantissa = denom;
+}
+
 int
 FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift)
 {
-	unsigned mantissa = denom;
-	unsigned count = 0;
-	int index;
+	unsigned short mantissa;
+	unsigned short count;
+	unsigned short index;
 
 	if (denom == 0) {
 		if (DSPLIB_DEBUG_ON())
@@ -91,11 +111,7 @@ FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift)
 		return 1;
 	}
 
-	/* Left-normalise until the top bit is set, counting the shifts. */
-	while ((short)mantissa >= 0) {
-		mantissa = (mantissa + mantissa) & 0xffff;
-		count++;
-	}
+	normalize16(denom, &mantissa, &count);
 
 	index = (int)((mantissa + 0x80) >> 8) - 0x80;
 

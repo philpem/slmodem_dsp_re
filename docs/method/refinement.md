@@ -3549,3 +3549,23 @@ No declaration, register, slot or equivalent-expression permutations follow
 from these partial successes. Reopen a closed family only with an independent
 original operand or compiler-stage witness. See
 [next20-byteexact-results.md](../next20-byteexact-results.md).
+
+
+### Trace writable loop memory before calling a LEA/copy difference regalloc
+
+A count updated through an output pointer can be promoted by GCC3's loop pass,
+leaving one final word store and a separate next-value pseudo. A private int
+counter followed by one terminal publication is a different source family.
+Original LEA1/copy/backedge/word-store operands justify crossing these two;
+`09.loop`'s explicit `Hoisted regno ... r/w from (mem:HI ... count)` diagnostic
+establishes the promotion in the reconstruction. FPM_div additionally needs
+helper-owned count initialization after the zero guard and becomes EXACT150
+(F11815). Keep initialization placement as an independent witness.
+
+The mechanism transfers to log/sqrt/V8 normalization without closing their
+complete bodies. A split increment alone does not establish a missing helper:
+V8's bit helper already updates pointed structure memory. Do not force output
+slots, permute declarations/parameters, remove checks, or tune late registers
+from near hits. Trace output storage lifetimes or the remaining source operand
+boundary before reopening a closed family. Full domains, detector controls,
+audits and replay: [loop-memory results](../gcc3-loop-memory-results.md).
