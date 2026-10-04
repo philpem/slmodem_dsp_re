@@ -482,14 +482,14 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x14 is 0",
-  "find": "\t */\n\t*(short *)(r + 0x14) = -1;",
-  "replace": "\t */\n\t*(short *)(r + 0x14) = 0;",
+  "find": "\t */\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
+  "replace": "\t */\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x16 is 0",
-  "find": "\t*(short *)(r + 0x14) = -1;\n\t*(short *)(r + 0x16) = 1;",
-  "replace": "\t*(short *)(r + 0x14) = -1;\n\t*(short *)(r + 0x16) = 0;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;",
   "fn": "t3m_errrec_core"
  },
  {
@@ -518,74 +518,74 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1a is 1",
-  "find": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + 0x1a) = 0;",
-  "replace": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + 0x1a) = 1;",
+  "find": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;",
+  "replace": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1c is 9",
-  "find": "\t*(short *)(r + 0x1a) = 0;\n\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t*(short *)(r + 0x1a) = 0;\n\t*(short *)(r + 0x1c) = 9;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 9;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1e is 1",
-  "find": "\t*(short *)(r + 0x1c) = 8;\n\t*(short *)(r + 0x1e) = 0;",
-  "replace": "\t*(short *)(r + 0x1c) = 8;\n\t*(short *)(r + 0x1e) = 1;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x20 is 0",
-  "find": "\t*(short *)(r + 0x1e) = 0;\n\t*(short *)(r + 0x20) = 1;",
-  "replace": "\t*(short *)(r + 0x1e) = 0;\n\t*(short *)(r + 0x20) = 0;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x22 is 1",
-  "find": "\t*(short *)(r + 0x20) = 1;\n\t*(short *)(r + 0x22) = 0;",
-  "replace": "\t*(short *)(r + 0x20) = 1;\n\t*(short *)(r + 0x22) = 1;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x24 is 0xf73",
-  "find": "\t*(short *)(r + 0x22) = 0;\n\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x22) = 0;\n\t*(int *)(r + 0x24) = 0xf73;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf73;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x24 is a halfword",
-  "find": "\t*(short *)(r + 0x22) = 0;\n\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x22) = 0;\n\t*(short *)(r + 0x24) = 0xf72;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x28 is 0xd",
-  "find": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;",
-  "replace": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(short *)(r + 0x28) = 0xd;",
+  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;",
+  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xd;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2a is 0xd",
-  "find": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;\n\t*(short *)(r + 0x2a) = 0xc;",
-  "replace": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;\n\t*(short *)(r + 0x2a) = 0xd;",
+  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;",
+  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xd;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2c is 0xf73",
-  "find": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(int *)(r + 0x2c) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(int *)(r + 0x2c) = 0xf73;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf73;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2c is a halfword",
-  "find": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(int *)(r + 0x2c) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(short *)(r + 0x2c) = 0xf72;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) is at +0xa97c",
-  "find": "#define T3M_MSGREC0\t\t0xa94c",
-  "replace": "#define T3M_MSGREC0\t\t0xa97c"
+  "find": "#define T3M_MSGREC0\t\t(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)",
+  "replace": "#define T3M_MSGREC0\t\t(V34_MSGREC_BASE + 1 * V34_MSGREC_STRIDE)"
  },
  {
   "label": "the shared reset (47, 49, 50) does not announce itself",
@@ -1600,62 +1600,62 @@
  },
  {
   "label": "51's record +0x18 is 0x25",
-  "find": "\t\t*(short *)(r + 0x18) = 0x26;",
-  "replace": "\t\t*(short *)(r + 0x18) = 0x25;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x25;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x18 is the shared reset's 0x11",
-  "find": "\t\t*(short *)(r + 0x18) = 0x26;",
-  "replace": "\t\t*(short *)(r + 0x18) = 0x11;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x11;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x20 is 1 rather than 0",
-  "find": "\t\t*(short *)(r + 0x20) = 0;\n\t\t*(short *)(r + 0x22) = 0;",
-  "replace": "\t\t*(short *)(r + 0x20) = 1;\n\t\t*(short *)(r + 0x22) = 0;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x24 is 0xf72",
-  "find": "\t\t*(int *)(r + 0x24) = 0xff72;",
-  "replace": "\t\t*(int *)(r + 0x24) = 0xf72;",
+  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xff72;",
+  "replace": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x24 is a halfword",
-  "find": "\t\t*(int *)(r + 0x24) = 0xff72;",
-  "replace": "\t\t*(short *)(r + 0x24) = (short)0xff72;",
+  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xff72;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = (short)0xff72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x2c is 0xf72",
-  "find": "\t\t*(int *)(r + 0x2c) = 0xff72;",
-  "replace": "\t\t*(int *)(r + 0x2c) = 0xf72;",
+  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xff72;",
+  "replace": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x28 is 0xc",
-  "find": "\t\t*(short *)(r + 0x28) = 0x10;",
-  "replace": "\t\t*(short *)(r + 0x28) = 0xc;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0x10;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x2a is 0xc",
-  "find": "\t\t*(short *)(r + 0x2a) = 0x10;",
-  "replace": "\t\t*(short *)(r + 0x2a) = 0xc;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0x10;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1c is 0",
-  "find": "\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1c) = 0;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x14 is 0",
-  "find": "\n\t\t*(short *)(r + 0x14) = -1;",
-  "replace": "\n\t\t*(short *)(r + 0x14) = 0;",
+  "find": "\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
+  "replace": "\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = 0;",
   "fn": "t3m_micro51"
  },
  {
@@ -2426,34 +2426,34 @@
  },
  {
   "label": "58's head needs only +0x20",
-  "find": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)",
-  "replace": "\t\tif (*(short *)(r + 0x20) != 0)",
+  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
+  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0)",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head needs only +0x22",
-  "find": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)",
-  "replace": "\t\tif (*(short *)(r + 0x22) != 0)",
+  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
+  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
   "equivalent": true,
   "why": "the two readings differ only when +0x22 is non-zero and +0x20 is ZERO, and the action is a clear of +0x20 -- so on exactly the rows where they disagree the mutant writes the value the field already holds.  Held fixed: that the action is a clear and that the field it clears is the field it tests.  The mirror image, `needs only +0x20`, IS caught, because there the mutant clears a field the object leaves alone -- and that pair is what says the guard has two halves at all.",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head takes either of the two",
-  "find": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)",
-  "replace": "\t\tif (*(short *)(r + 0x20) != 0 || *(short *)(r + 0x22) != 0)",
+  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
+  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 ||\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head clears +0x22 rather than +0x20",
-  "find": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)\n\t\t\t*(short *)(r + 0x20) = 0;",
-  "replace": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)\n\t\t\t*(short *)(r + 0x22) = 0;",
+  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
+  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head stores 1 rather than clearing",
-  "find": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)\n\t\t\t*(short *)(r + 0x20) = 0;",
-  "replace": "\t\tif (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)\n\t\t\t*(short *)(r + 0x20) = 1;",
+  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
+  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;",
   "fn": "t3m_micro58"
  },
  {
@@ -2700,32 +2700,32 @@
  },
  {
   "label": "51's record +0x16 is 0",
-  "find": "\t\t*(short *)(r + 0x14) = -1;\n\t\t*(short *)(r + 0x16) = 1;",
-  "replace": "\t\t*(short *)(r + 0x14) = -1;\n\t\t*(short *)(r + 0x16) = 0;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1a is 1",
-  "find": "\t\t*(short *)(r + 0x18) = 0x26;\n\t\t*(short *)(r + 0x1a) = 0;",
-  "replace": "\t\t*(short *)(r + 0x18) = 0x26;\n\t\t*(short *)(r + 0x1a) = 1;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 1;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1c is 9",
-  "find": "\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1c) = 9;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 9;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1e is 1",
-  "find": "\t\t*(short *)(r + 0x1c) = 8;\n\t\t*(short *)(r + 0x1e) = 0;",
-  "replace": "\t\t*(short *)(r + 0x1c) = 8;\n\t\t*(short *)(r + 0x1e) = 1;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 1;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x22 is 1",
-  "find": "\t\t*(short *)(r + 0x20) = 0;\n\t\t*(short *)(r + 0x22) = 0;",
-  "replace": "\t\t*(short *)(r + 0x20) = 0;\n\t\t*(short *)(r + 0x22) = 1;",
+  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
+  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 1;",
   "fn": "t3m_micro51"
  }
 ]

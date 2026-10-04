@@ -177,55 +177,55 @@
  },
  {
   "label": "record +0x1c takes 0 rather than 8",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x1c, 8);\t    /* 0x6b219 */",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, wordbits),\n\t\t       8);\t    /* 0x6b219 */",
   "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x1c, 0);\t    /* 0x6b219 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x16 takes 0 rather than 1",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x16, 1);\t    /* 0x6b21f */",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, crc_on),\n\t\t       1);\t    /* 0x6b21f */",
   "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x16, 0);\t    /* 0x6b21f */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x28 takes 0x11",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);\t    /* 0x6b225 */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);\t    /* 0x6b225 */",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail),\n\t\t       0x10);\t    /* 0x6b225 */",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x11);\t    /* 0x6b225 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2a takes 0x11",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\t    /* 0x6b22b */",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0),\n\t\t       0x10);\t    /* 0x6b22b */",
   "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x11);\t    /* 0x6b22b */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x20 is not cleared",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\t    /* 0x6b231 */\n",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat),\n\t\t       0);\t    /* 0x6b231 */\n",
   "replace": "",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x24 is written sixteen bits wide",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc),\n\t\t\t 0xff72); /* 0x6b23e */",
   "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x24, (short)0xff72); /* 0x6b23e */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2c is written sixteen bits wide",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc0),\n\t\t\t 0xff72); /* 0x6b245 */",
   "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2c, (short)0xff72); /* 0x6b245 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x24 takes 0xff71",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc),\n\t\t\t 0xff72); /* 0x6b23e */",
   "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff71); /* 0x6b23e */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2c takes the sign-extended value",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */",
+  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc0),\n\t\t\t 0xff72); /* 0x6b245 */",
   "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, (int)(short)0xff72); /* 0x6b245 */",
   "fn": "t53_rx_det_ab"
  },
@@ -261,13 +261,13 @@
  },
  {
   "label": "the second record's length is INFO1c's",
-  "find": "\t\ths_put(obj, 0xa9dc + 0x18, 0x26);",
-  "replace": "\t\ths_put(obj, 0xa9dc + 0x18, 0x4d);",
+  "find": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x26);",
+  "replace": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x4d);",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the second record's length lands at its +0x14",
-  "find": "\t\ths_put(obj, 0xa9dc + 0x18, 0x26);",
+  "find": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x26);",
   "replace": "\t\ths_put(obj, 0xa9dc + 0x14, 0x26);",
   "fn": "t53_rx_det_ab"
  },

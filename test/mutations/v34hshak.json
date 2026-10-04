@@ -94,20 +94,20 @@
  },
  {
   "label": "mode 0 points 0xaa70 at the 0xa94c record",
-  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);",
-  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c + 0x18, 0x11);",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\ths_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 0 record index 12 gets 8 rather than 0x11",
-  "find": "hs_put(obj, 0xa97c + 0x18, 0x11);",
-  "replace": "hs_put(obj, 0xa97c + 0x18, 8);",
+  "find": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
+  "replace": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       8);",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 record index 12 gets 0x11 rather than 8",
-  "find": "hs_put(obj, 0xa97c + 0x18, 8);",
-  "replace": "hs_put(obj, 0xa97c + 0x18, 0x11);",
+  "find": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       8);",
+  "replace": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
   "fn": "v34handshakinit"
  },
  {
@@ -118,8 +118,8 @@
  },
  {
   "label": "mode 4 record 0xa94c: +0x24 constant off by one",
-  "find": "\n\t\t\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\n\t\t\t*(int *)(r + 0x24) = 0xf73;",
+  "find": "\n\t\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "replace": "\n\t\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf73;",
   "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "v34handshakinit"
  },

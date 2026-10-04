@@ -385,62 +385,62 @@
  },
  {
   "label": "the record's +0x14 is cleared rather than set to -1",
-  "find": "\t\t    ? 0x1e : 0x11;\n\n\t*(short *)(r + 0x14) = -1;",
-  "replace": "\t\t    ? 0x1e : 0x11;\n\n\t*(short *)(r + 0x14) = 0;",
+  "find": "\t\t    ? 0x1e : 0x11;\n\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
+  "replace": "\t\t    ? 0x1e : 0x11;\n\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = 0;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x16 is cleared",
-  "find": "\t*(short *)(r + 0x1c) = 8;\n\t*(short *)(r + 0x16) = 1;",
-  "replace": "\t*(short *)(r + 0x1c) = 8;\n\t*(short *)(r + 0x16) = 0;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x1c takes 9",
-  "find": "\t*(short *)(r + 0x18) = arm;\n\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t*(short *)(r + 0x18) = arm;\n\t*(short *)(r + 0x1c) = 9;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = arm;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = arm;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 9;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x20 is cleared",
-  "find": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(short *)(r + 0x20) = 1;",
-  "replace": "\t*(short *)(r + 0x2a) = 0xc;\n\t*(short *)(r + 0x20) = 0;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x22 is not cleared",
-  "find": "\n\t*(short *)(r + 0x22) = 0;\n\t*(short *)(r + 0x18) = arm;",
-  "replace": "\n\t*(short *)(r + 0x18) = arm;",
+  "find": "\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = arm;",
+  "replace": "\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = arm;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x24 is a short rather than an int",
-  "find": "\t*(short *)(r + 0x16) = 1;\n\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x16) = 1;\n\t*(short *)(r + 0x24) = 0xf72;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x2c is a short rather than an int",
-  "find": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(int *)(r + 0x2c) = 0xf72;",
-  "replace": "\t*(int *)(r + 0x24) = 0xf72;\n\t*(short *)(r + 0x2c) = 0xf72;",
+  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
+  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x24 takes 0xf73",
-  "find": "\t*(short *)(r + 0x16) = 1;\n\t*(int *)(r + 0x24) = 0xf72;",
-  "replace": "\t*(short *)(r + 0x16) = 1;\n\t*(int *)(r + 0x24) = 0xf73;",
+  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf73;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x2a takes 13",
-  "find": "\t*(int *)(r + 0x2c) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;\n\t*(short *)(r + 0x2a) = 0xc;",
-  "replace": "\t*(int *)(r + 0x2c) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;\n\t*(short *)(r + 0x2a) = 0xd;",
+  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;",
+  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xd;",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x28 takes 13",
-  "find": "\t*(int *)(r + 0x2c) = 0xf72;\n\t*(short *)(r + 0x28) = 0xc;",
-  "replace": "\t*(int *)(r + 0x2c) = 0xf72;\n\t*(short *)(r + 0x28) = 0xd;",
+  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;",
+  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xd;",
   "fn": "t46_init_record"
  },
  {

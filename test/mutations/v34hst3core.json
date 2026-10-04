@@ -95,8 +95,8 @@
  },
  {
   "label": "79 writes -1 two bytes further along",
-  "find": "\ths_put(obj, T3C_BLK_A97C + 0x14, -1);",
-  "replace": "\ths_put(obj, T3C_BLK_A97C + 0x16, -1);",
+  "find": "\ths_put(obj, T3C_BLK_A97C +\n\t\t    __builtin_offsetof(struct v34_bitsource, crc), -1);",
+  "replace": "\ths_put(obj, T3C_BLK_A97C +\n\t\t    __builtin_offsetof(struct v34_bitsource, crc_on), -1);",
   "fn": "t3c_micro_moh_tone"
  },
  {

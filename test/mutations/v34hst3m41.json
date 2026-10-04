@@ -113,8 +113,8 @@
  },
  {
   "label": "the 0x72 door does not clear the block counter",
-  "find": "\t*(short *)((char *)rec + 0x14) = -1;\n\tobj->fsk.nbits = 0;",
-  "replace": "\t*(short *)((char *)rec + 0x14) = -1;",
+  "find": "\t*(short *)((char *)rec +\n\t\t    __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\tobj->fsk.nbits = 0;",
+  "replace": "\t*(short *)((char *)rec +\n\t\t    __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
   "fn": "t41_to_det_info"
  },
  {
@@ -137,7 +137,7 @@
  },
  {
   "label": "the 0x72 door invalidates the record's +0x16 rather than its +0x14",
-  "find": "\t*(short *)((char *)rec + 0x14) = -1;",
+  "find": "\t*(short *)((char *)rec +\n\t\t    __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
   "replace": "\t*(short *)((char *)rec + 0x16) = -1;",
   "fn": "t41_to_det_info"
  },
@@ -248,19 +248,19 @@
  },
  {
   "label": "the tone search's record holds 0xf73",
-  "find": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf72);",
+  "find": "\tt3c_puti(obj, T41_BLK_A94C +\n\t\t __builtin_offsetof(struct v34_bitsource, acc), 0xf72);",
   "replace": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf73);",
   "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record holds 0xd at +0x28",
-  "find": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xc);",
+  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0xc);",
   "replace": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xd);",
   "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record ends with a zero at +0x20",
-  "find": "\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
+  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
   "replace": "\ths_put(obj, T41_BLK_A94C + 0x20, 0);",
   "fn": "t41_tone_search"
  },
@@ -466,19 +466,19 @@
  },
  {
   "label": "Info1c's record holds 0x11 at +0x28",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x28, 0x11);\n\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x10);\n\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x11);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c aims +0xaa6c at the other record",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x20, 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
+  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
+  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0xff73",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72);",
+  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc), 0xff72);",
   "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);",
   "fn": "t41_info_marks"
  },
@@ -515,8 +515,8 @@
  },
  {
   "label": "the tone search's last store happens only with the diagnostics on",
-  "find": "\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C + 0x20, 1);",
+  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
   "fn": "t41_tone_search"
  },
  {

@@ -1371,7 +1371,9 @@ v34handshakinit(void *objp, int mode)
 
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
 		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
-		hs_put(obj, 0xa97c + 0x18, 0x11);
+		hs_put(obj, 0xa97c +
+			    __builtin_offsetof(struct v34_bitsource, nbits),
+		       0x11);
 		hs_put(obj, 0x25dc, 0);
 
 		/*
@@ -1441,18 +1443,18 @@ v34handshakinit(void *objp, int mode)
 		{
 			unsigned char *r = m + 0xaa0c;
 
-			*(short *)(r + 0x14) = -1;
-			*(short *)(r + 0x16) = 0;
-			*(short *)(r + 0x18) = 0;
-			*(short *)(r + 0x1a) = 0;
-			*(short *)(r + 0x1c) = 0;
-			*(short *)(r + 0x1e) = 0;
-			*(short *)(r + 0x20) = 0;
-			*(short *)(r + 0x22) = 0;
-			*(int *)(r + 0x24) = 0;
-			*(short *)(r + 0x28) = 0;
-			*(short *)(r + 0x2a) = 0;
-			*(int *)(r + 0x2c) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;
+			*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0;
+			*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0;
 		}
 
 		obj->seg_symcount = 0;
@@ -1491,7 +1493,9 @@ v34handshakinit(void *objp, int mode)
 		hs_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);
 
 		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
-		hs_put(obj, 0xa97c + 0x18, 8);
+		hs_put(obj, 0xa97c +
+			    __builtin_offsetof(struct v34_bitsource, nbits),
+		       8);
 		*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);
 
 		VPcmV34SetMohMessageBits(obj, (short *)(m + 0xa94c));
@@ -1507,18 +1511,18 @@ v34handshakinit(void *objp, int mode)
 			unsigned char *r = (unsigned char *)
 					   *(short **)(m + 0xaa6c);
 
-			*(short *)(r + 0x14) = -1;
-			*(short *)(r + 0x16) = 1;
-			*(short *)(r + 0x18) = 8;
-			*(short *)(r + 0x1a) = 0;
-			*(short *)(r + 0x1c) = 8;
-			*(short *)(r + 0x1e) = 0;
-			*(short *)(r + 0x20) = 0;
-			*(short *)(r + 0x22) = 0;
-			*(int *)(r + 0x24) = 0xf72;
-			*(short *)(r + 0x28) = 0xc;
-			*(short *)(r + 0x2a) = 0xc;
-			*(int *)(r + 0x2c) = 0xf72;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 8;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;
+			*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;
+			*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;
 		}
 
 		hs_put(obj, T3C_F358C, 0);
@@ -2954,8 +2958,12 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3C_MODE	0x2218	/* int:   selects what the tail reports     */
 #define T3C_DETECTOR	0x3564	/* struct v34_detector, inside the object   */
 #define T3C_FSKGATE	0xa8a0	/* int:   non-zero diverts at 0x64a87       */
-#define T3C_BLK_A94C	0xa94c	/* what +0xaa6c is aimed at                 */
-#define T3C_BLK_A97C	0xa97c	/* what +0xaa70 is aimed at                 */
+#define V34_MSGREC_BASE	0xa94c	/* five struct v34_bitsource records */
+#define V34_MSGREC_STRIDE	((int)sizeof(struct v34_bitsource))
+#define T3C_BLK_A94C	/* what +0xaa6c is aimed at                 */ \
+	(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)
+#define T3C_BLK_A97C	/* what +0xaa70 is aimed at                 */ \
+	(V34_MSGREC_BASE + 1 * V34_MSGREC_STRIDE)
 #define T3C_COUNT	0xaa78	/* short: the counter, and HS_TRACE_2       */
 #define T3C_COUNT_SRC	0xaa7c	/* short: RX_PHASE3_CALL copies it in       */
 /* now the member's own offset (issue #260). */
@@ -3080,11 +3088,12 @@ ApplyBulkDelay(void *objp, short delay)
 					   constant                          */
 #define T3M_F35A0		0x35a0	/* short, arm 51 clears on both paths  */
 #define T3M_F35A2		0x35a2	/* short, arm 51's is_short path only  */
-#define T3M_INFOREC		0xa9ac	/* the THIRD of the five message
+#define T3M_INFOREC		/* the THIRD of the five message
 					   records at +0xa94c, 0x30 apart;
 					   arm 51 hands it to
 					   `V34SetINFO1aBits` and prints ten
-					   of its halfwords                  */
+					   of its halfwords                  */ \
+	(V34_MSGREC_BASE + 2 * V34_MSGREC_STRIDE)
 /* now the member's own offset (issue #260). */
 #define T3M_SELFPTR		/* arm 51 aims this at +0xa9ac and
 					   then reads the record back through
@@ -3108,7 +3117,7 @@ ApplyBulkDelay(void *objp, short delay)
  * +0xaa3c -- twelve fields on a 0x30 stride, and `v34handshakinit`'s mode-2
  * body blanks the +0xaa0c one field for field.  Arm 47 fills this one.
  */
-#define T3M_MSGREC0		0xa94c
+#define T3M_MSGREC0		(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)
 
 /* Within the receiver. */
 #define T3M_RX_FSKIN		0x010c	/* `fskdemodulate`'s second argument   */
@@ -3583,20 +3592,20 @@ t3m_errrec_core(struct t3m_frame *f)
 	 * originate test alone is not enough -- with no V.90 receiver the
 	 * object jumps back into the 0x11 block.
 	 */
-	*(short *)(r + 0x14) = -1;
-	*(short *)(r + 0x16) = 1;
-	*(short *)(r + 0x18) =
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) =
 		(f->obj->role == 0x65 && f->obj->v90_receiver != 0)
 		? 0x1e : 0x11;
-	*(short *)(r + 0x1a) = 0;
-	*(short *)(r + 0x1c) = 8;
-	*(short *)(r + 0x1e) = 0;
-	*(short *)(r + 0x20) = 1;
-	*(short *)(r + 0x22) = 0;
-	*(int *)(r + 0x24) = 0xf72;
-	*(short *)(r + 0x28) = 0xc;
-	*(short *)(r + 0x2a) = 0xc;
-	*(int *)(r + 0x2c) = 0xf72;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;
+	*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;
+	*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;
 }
 
 /*
@@ -4204,18 +4213,18 @@ t3m_micro51(struct t3m_frame *f)
 		 */
 		r = *(unsigned char **)(f->m + T3M_SELFPTR);
 
-		*(short *)(r + 0x14) = -1;
-		*(short *)(r + 0x16) = 1;
-		*(short *)(r + 0x18) = 0x26;
-		*(short *)(r + 0x1a) = 0;
-		*(short *)(r + 0x1c) = 8;
-		*(short *)(r + 0x1e) = 0;
-		*(short *)(r + 0x20) = 0;
-		*(short *)(r + 0x22) = 0;
-		*(int *)(r + 0x24) = 0xff72;
-		*(short *)(r + 0x28) = 0x10;
-		*(short *)(r + 0x2a) = 0x10;
-		*(int *)(r + 0x2c) = 0xff72;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;
+		*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xff72;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0x10;
+		*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0x10;
+		*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xff72;
 
 		/* 0x6bac3.  Four copies, and the rate they copy is the one the
 		   switch above may have replaced. */
@@ -4662,8 +4671,9 @@ t3m_micro58(struct t3m_frame *f)
 	if ((short)T3M_U16(f, V34HS_TXSTATE_OFF) == V34HS_TX_DPSK) {
 		unsigned char *r = *(unsigned char **)(f->m + T3M_SELFPTR);
 
-		if (*(short *)(r + 0x20) != 0 && *(short *)(r + 0x22) != 0)
-			*(short *)(r + 0x20) = 0;
+		if (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&
+		    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)
+			*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;
 	}
 
 	/* 0x66018, and the store is before either threshold. */
@@ -4978,8 +4988,10 @@ t3c_micro_moh_tone(struct v34_object *obj)
 
 	obj->fsk.phase = 0;
 	obj->fsk.nbits = 0;
-	hs_put(obj, T3C_BLK_A97C + 0x14, -1);
-	hs_put(obj, T3C_BLK_A97C + 0x18, 8);
+	hs_put(obj, T3C_BLK_A97C +
+		    __builtin_offsetof(struct v34_bitsource, crc), -1);
+	hs_put(obj, T3C_BLK_A97C +
+		    __builtin_offsetof(struct v34_bitsource, nbits), 8);
 	hs_put(obj, T3C_COUNT, 0);
 	t3c_putp(obj, T3C_PTR_AA70, (char *)obj + T3C_BLK_A97C);
 	t3c_putp(obj, T3C_PTR_AA6C, (char *)obj + T3C_BLK_A94C);
@@ -5105,8 +5117,10 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 #define T41_F358A	0x358a	/* short: the arm's own sub-state, 0/1/2    */
 #define T41_F358C	0x358c	/* short: cleared on three ways out         */
 #define T41_F35A0	0x35a0	/* short: a counter this arm steps and caps */
-#define T41_BLK_A94C	0xa94c	/* the 0x30-byte record 0x70bdd fills       */
-#define T41_BLK_A9AC	0xa9ac	/* the one 0x6d387 fills, and aims +0xaa6c  */
+#define T41_BLK_A94C	/* the 0x30-byte record 0x70bdd fills       */ \
+	(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)
+#define T41_BLK_A9AC	/* the one 0x6d387 fills, and aims +0xaa6c  */ \
+	(V34_MSGREC_BASE + 2 * V34_MSGREC_STRIDE)
 /* now the member's own offset (issue #260). */
 #define T41_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
 /* now the member's own offset (issue #260). */
@@ -5155,11 +5169,11 @@ t41_detect(struct v34_object *obj)
 static void
 t41_record_head(struct v34_object *obj, unsigned base, short f18)
 {
-	hs_put(obj, base + 0x14, -1);
-	hs_put(obj, base + 0x1a, 0);
-	hs_put(obj, base + 0x1e, 0);
-	hs_put(obj, base + 0x22, 0);
-	hs_put(obj, base + 0x18, f18);
+	hs_put(obj, base + __builtin_offsetof(struct v34_bitsource, crc), -1);
+	hs_put(obj, base + __builtin_offsetof(struct v34_bitsource, pos), 0);
+	hs_put(obj, base + __builtin_offsetof(struct v34_bitsource, idx), 0);
+	hs_put(obj, base + __builtin_offsetof(struct v34_bitsource, repeats), 0);
+	hs_put(obj, base + __builtin_offsetof(struct v34_bitsource, nbits), f18);
 }
 
 /*
@@ -5254,7 +5268,8 @@ t41_to_det_info(struct v34_object *obj)
 
 	hs_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);
 
-	*(short *)((char *)rec + 0x14) = -1;
+	*(short *)((char *)rec +
+		    __builtin_offsetof(struct v34_bitsource, crc)) = -1;
 	obj->fsk.nbits = 0;
 
 	if (hs_get(obj, T41_F358A) == 0)
@@ -5340,13 +5355,20 @@ t41_tone_search(struct v34_object *obj)
 	 * `jmp` target at 0x70d6c, so everything from here down is emitted
 	 * once.
 	 */
-	hs_put(obj, T41_BLK_A94C + 0x1c, 8);			/* 0x70c07 */
-	hs_put(obj, T41_BLK_A94C + 0x16, 1);
-	t3c_puti(obj, T41_BLK_A94C + 0x24, 0xf72);
-	t3c_puti(obj, T41_BLK_A94C + 0x2c, 0xf72);
-	hs_put(obj, T41_BLK_A94C + 0x28, 0xc);
-	hs_put(obj, T41_BLK_A94C + 0x2a, 0xc);
-	hs_put(obj, T41_BLK_A94C + 0x20, 1);
+	hs_put(obj, T41_BLK_A94C +
+		    __builtin_offsetof(struct v34_bitsource, wordbits), 8);	/* 0x70c07 */
+	hs_put(obj, T41_BLK_A94C +
+		    __builtin_offsetof(struct v34_bitsource, crc_on), 1);
+	t3c_puti(obj, T41_BLK_A94C +
+		 __builtin_offsetof(struct v34_bitsource, acc), 0xf72);
+	t3c_puti(obj, T41_BLK_A94C +
+		 __builtin_offsetof(struct v34_bitsource, acc0), 0xf72);
+	hs_put(obj, T41_BLK_A94C +
+		    __builtin_offsetof(struct v34_bitsource, avail), 0xc);
+	hs_put(obj, T41_BLK_A94C +
+		    __builtin_offsetof(struct v34_bitsource, avail0), 0xc);
+	hs_put(obj, T41_BLK_A94C +
+		    __builtin_offsetof(struct v34_bitsource, repeat), 1);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -5585,14 +5607,21 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 		hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 
 		t41_record_head(obj, T41_BLK_A9AC, 0x4d);
-		hs_put(obj, T41_BLK_A9AC + 0x1c, 8);
-		hs_put(obj, T41_BLK_A9AC + 0x16, 1);
-		hs_put(obj, T41_BLK_A9AC + 0x28, 0x10);
-		hs_put(obj, T41_BLK_A9AC + 0x2a, 0x10);
-		hs_put(obj, T41_BLK_A9AC + 0x20, 0);
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, wordbits), 8);
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, crc_on), 1);
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, avail), 0x10);
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, avail0), 0x10);
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, repeat), 0);
 		t3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);
-		t3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72);
-		t3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72);
+		t3c_puti(obj, T41_BLK_A9AC +
+			 __builtin_offsetof(struct v34_bitsource, acc), 0xff72);
+		t3c_puti(obj, T41_BLK_A9AC +
+			 __builtin_offsetof(struct v34_bitsource, acc0), 0xff72);
 		hs_put(obj, T41_F358C, 0);
 
 		hs_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);
@@ -5777,18 +5806,18 @@ t46_init_record(struct v34_object *obj)
 	short arm = (obj->role == 0x65 && obj->v90_receiver != 0)
 		    ? 0x1e : 0x11;
 
-	*(short *)(r + 0x14) = -1;
-	*(short *)(r + 0x1a) = 0;
-	*(short *)(r + 0x1e) = 0;
-	*(short *)(r + 0x22) = 0;
-	*(short *)(r + 0x18) = arm;
-	*(short *)(r + 0x1c) = 8;
-	*(short *)(r + 0x16) = 1;
-	*(int *)(r + 0x24) = 0xf72;
-	*(int *)(r + 0x2c) = 0xf72;
-	*(short *)(r + 0x28) = 0xc;
-	*(short *)(r + 0x2a) = 0xc;
-	*(short *)(r + 0x20) = 1;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = arm;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;
+	*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;
+	*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;
+	*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;
 }
 
 /*
@@ -6189,8 +6218,11 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
  * struct already names -- `fsk`, `role`, `v90_receiver`, `local_short`,
  * `is_short` -- are used by name instead.
  */
-#define T44_BLK_A94C	0xa94c	/* the record the restart installs         */
-#define T44_REC_A97C	0xa97c	/* where the bring-up aims +0xaa70         */
+#define T44_BLK_A94C	/* the record the restart installs         */ \
+	(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)
+#define T44_REC_A97C	/* where the bring-up aims +0xaa70         */ \
+	(V34_MSGREC_BASE + 1 * V34_MSGREC_STRIDE)
+/* now record 1 of the five (issue #260). */
 #define T44_COUNT_SRC	0xaa7c	/* short: reloaded into the counter        */
 #define T44_PTR_AA6C	0xaa6c	/* where it installs it                    */
 #define T44_PTR_AA70	0xaa70	/* the record this arm's bit clock feeds   */
@@ -6211,8 +6243,11 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 #define T44_F358C	0x358c	/* short: the 0x4d arm clears it          */
 #define T44_F35A2	0x35a2	/* short: the message-descriptor length    */
 #define T44_PROBE	0xa320	/* the probe bins V34GiveProbeResults takes*/
-#define T44_REC_A9AC	0xa9ac	/* the INFO1a record the 0x4d arm installs */
-#define T44_REC_A9DC	0xa9dc	/* the INFO1a/1c record that arrived       */
+#define T44_REC_A9AC	/* the INFO1a record the 0x4d arm installs */ \
+	(V34_MSGREC_BASE + 2 * V34_MSGREC_STRIDE)
+/* now record 2 of the five (issue #260). */
+#define T44_REC_A9DC	/* the INFO1a/1c record that arrived       */ \
+	(V34_MSGREC_BASE + 3 * V34_MSGREC_STRIDE)
 #define T44_TXBAUD	0xaa84	/* short: what probeselect chose to send   */
 #define T44_CARRIER	0xaaa8	/* short: the receive carrier, in Hz       */
 #define T44_RXCARRDESC	0xaab0	/* the detector coefficients for it        */
@@ -6224,19 +6259,37 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
  * +0xaa6c.  Both are inside the object, so the harness compares the two
  * pointers by offset from their own base rather than as addresses.
  */
-#define T44_R_BYTES	0x00	/* ten shorts, one per byte received       */
-#define T44_R_CRC	0x14	/* short: the CRC-16 register, poly 0x1021 */
-#define T44_R_F16	0x16
-#define T44_R_NBITS	0x18	/* short: message length in bits           */
-#define T44_R_F1A	0x1a
-#define T44_R_F1C	0x1c
-#define T44_R_F1E	0x1e
-#define T44_R_F20	0x20
-#define T44_R_F22	0x22
-#define T44_R_F24	0x24	/* int */
-#define T44_R_F28	0x28
-#define T44_R_F2A	0x2a
-#define T44_R_F2C	0x2c	/* int */
+/* now the record field's own offset (issue #260). */
+#define T44_R_BYTES	/* ten shorts, one per byte received       */ \
+	((int)__builtin_offsetof(struct v34_bitsource, word))
+/* now the record field's own offset (issue #260). */
+#define T44_R_CRC	/* short: the CRC-16 register, poly 0x1021 */ \
+	((int)__builtin_offsetof(struct v34_bitsource, crc))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F16	((int)__builtin_offsetof(struct v34_bitsource, crc_on))
+/* now the record field's own offset (issue #260). */
+#define T44_R_NBITS	/* short: message length in bits           */ \
+	((int)__builtin_offsetof(struct v34_bitsource, nbits))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F1A	((int)__builtin_offsetof(struct v34_bitsource, pos))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F1C	((int)__builtin_offsetof(struct v34_bitsource, wordbits))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F1E	((int)__builtin_offsetof(struct v34_bitsource, idx))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F20	((int)__builtin_offsetof(struct v34_bitsource, repeat))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F22	((int)__builtin_offsetof(struct v34_bitsource, repeats))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F24	/* int */ \
+	((int)__builtin_offsetof(struct v34_bitsource, acc))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F28	((int)__builtin_offsetof(struct v34_bitsource, avail))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F2A	((int)__builtin_offsetof(struct v34_bitsource, avail0))
+/* now the record field's own offset (issue #260). */
+#define T44_R_F2C	/* int */ \
+	((int)__builtin_offsetof(struct v34_bitsource, acc0))
 
 static short *
 t44_record(const struct v34_object *obj, unsigned off)
@@ -6425,7 +6478,9 @@ t44_mdlength(struct v34_object *obj)
 	int rev;
 
 	raw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)
-		      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf8) >> 3));
+		      | ((hs_get(obj, T44_REC_A9DC +
+				 __builtin_offsetof(struct v34_bitsource,
+						    word[1])) & 0xf8) >> 3));
 	hs_put(obj, T44_F35A2, raw);
 
 	rev = bitreverse((unsigned short)raw, 7);
@@ -6868,10 +6923,16 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 		short *blk = t44_record(obj, T44_PTR_AA6C);
 
 		/* 0x6e571, and it is the OTHER record's +0x04. */
-		if ((t44_recget(blk, 0x04) & 0x80) == 0) {
-			t44_recput(blk, 0x22, 0);
-			t44_recput(blk, 0x04,
-				   (short)(t44_recget(blk, 0x04) | 0x80));
+		if ((t44_recget(blk, __builtin_offsetof(
+			     struct v34_bitsource, word[2])) & 0x80) == 0) {
+			t44_recput(blk, __builtin_offsetof(
+					struct v34_bitsource, repeats), 0);
+			t44_recput(blk, __builtin_offsetof(
+					   struct v34_bitsource, word[2]),
+				   (short)(t44_recget(blk,
+					   __builtin_offsetof(
+					   struct v34_bitsource, word[2])) |
+					   0x80));
 		}
 
 		/*
@@ -6890,7 +6951,8 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 			hs_put(obj, T44_FABAE + 2u * (unsigned)i,
 			       t44_recget(rec, 2u * (unsigned)i));
 
-		if ((t44_recget(rec, 0x04) & 0x80) == 0) {
+		if ((t44_recget(rec, __builtin_offsetof(
+			     struct v34_bitsource, word[2])) & 0x80) == 0) {
 			/*
 			 * 0x6e5fb.  This exit does NOT rejoin the bit clock:
 			 * 0x6e740 jumps straight to the transmit dispatch.
@@ -7268,18 +7330,32 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * at +0x18 (finding F443).
 		 */
 		t41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */
-		hs_put(obj, T41_BLK_A9AC + 0x1c, 8);	    /* 0x6b219 */
-		hs_put(obj, T41_BLK_A9AC + 0x16, 1);	    /* 0x6b21f */
-		hs_put(obj, T41_BLK_A9AC + 0x28, 0x10);	    /* 0x6b225 */
-		hs_put(obj, T41_BLK_A9AC + 0x2a, 0x10);	    /* 0x6b22b */
-		hs_put(obj, T41_BLK_A9AC + 0x20, 0);	    /* 0x6b231 */
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, wordbits),
+		       8);	    /* 0x6b219 */
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, crc_on),
+		       1);	    /* 0x6b21f */
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, avail),
+		       0x10);	    /* 0x6b225 */
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, avail0),
+		       0x10);	    /* 0x6b22b */
+		hs_put(obj, T41_BLK_A9AC +
+			    __builtin_offsetof(struct v34_bitsource, repeat),
+		       0);	    /* 0x6b231 */
 		/*
 		 * THIRTY-TWO BITS, both of them: `movl $0xff72` and not
 		 * `movw`, so the immediate is +65394 and the halfword above
 		 * each is zeroed too.
 		 */
-		t3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff72); /* 0x6b23e */
-		t3c_puti(obj, T41_BLK_A9AC + 0x2c, 0xff72); /* 0x6b245 */
+		t3c_puti(obj, T41_BLK_A9AC +
+			 __builtin_offsetof(struct v34_bitsource, acc),
+			 0xff72); /* 0x6b23e */
+		t3c_puti(obj, T41_BLK_A9AC +
+			 __builtin_offsetof(struct v34_bitsource, acc0),
+			 0xff72); /* 0x6b245 */
 
 		/*
 		 * 0x6b24c and the 0x26 arm's 0x6f6ba are the same seven
@@ -7295,7 +7371,9 @@ t53_rx_det_ab(struct v34_object *obj)
 
 		/* 0x6b379: the SECOND record, and INFO1a's length. */
 		t3c_putp(obj, T41_PTR_AA70, (char *)obj + 0xa9dc);
-		hs_put(obj, 0xa9dc + 0x18, 0x26);
+		hs_put(obj, 0xa9dc +
+			    __builtin_offsetof(struct v34_bitsource, nbits),
+		       0x26);
 
 		/*
 		 * 0x6b3a2, and it reads the record through `%ebx` -- obj +
@@ -8452,7 +8530,8 @@ t4_rx_receive(struct v34_object *obj)
 #define T72_F358C	0x358c	/* short: toggled while waiting for tone A  */
 #define T72_F359C	0x359c	/* short: 0x65 is the originating end       */
 #define T72_FSKGATE	0xa8a0	/* int:   armed on the answering end's exit */
-#define T72_BLK_A9DC	0xa9dc	/* the record whose length this arm sets    */
+#define T72_BLK_A9DC	/* the record whose length this arm sets    */ \
+	(V34_MSGREC_BASE + 3 * V34_MSGREC_STRIDE)
 #define T72_PTR_AA70	0xaa70	/* pointer, aimed at that record            */
 #define T72_NL_NOISE	0xaab4	/* int:   the 0x180 rung's noise total      */
 #define T72_NL_SIGNAL	0xaab8	/* int:   and its signal total              */
@@ -8904,7 +8983,9 @@ t72_rx_l1(struct v34_object *obj)
 		 * 0x6b379 before aiming the same pointer at it -- which
 		 * sequence the end expects is the whole difference.
 		 */
-		hs_put(obj, T72_BLK_A9DC + 0x18, 0x4d);		 /* 0x67f54 */
+		hs_put(obj, T72_BLK_A9DC +
+			    __builtin_offsetof(struct v34_bitsource, nbits),
+		       0x4d);		 /* 0x67f54 */
 		obj->vect_idx = 0;				 /* 0x67f5a */
 		/*
 		 * 0x67f68.  `mov %ebx,0xa8a0(%esi)`, thirty-two bits.  This
@@ -10409,6 +10490,15 @@ const short vectpp[96] = {
 V34HS_OFF(fsk,     struct v34_object,   fsk,        0xaad0);
 V34HS_OFF(interp,  struct v34_object,   fsk_interp, 0xaae6);
 V34HS_OFF(lpf,     struct v34_object,   fsk_lpf,    0xab00);
+
+/*
+ * The five struct v34_bitsource records from V34_MSGREC_BASE end exactly
+ * where the object's next member begins -- F634's dual reading of the
+ * region, compile-checked (issue #260).
+ */
+typedef char v34msgrec_extent[
+	(__builtin_offsetof(struct v34_object, info_caps)
+	 == V34_MSGREC_BASE + 5 * (int)sizeof(struct v34_bitsource)) ? 1 : -1];
 
 V34HS_OFF(out_count,    struct v34_receiver, out_count,       0x128);
 V34HS_OFF(flags,   struct v34_receiver, flags,      0x122);

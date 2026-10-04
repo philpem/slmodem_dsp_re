@@ -527,32 +527,32 @@
  },
  {
   "label": "the other record's flag is bit 6",
-  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
+  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
   "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x40) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the other record's flag test is inverted",
-  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
+  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
   "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x80) != 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the other record's +0x22 is not cleared with the flag",
-  "find": "\t\t\tt44_recput(blk, 0x22, 0);",
+  "find": "\t\t\tt44_recput(blk, __builtin_offsetof(\n\t\t\t\t\tstruct v34_bitsource, repeats), 0);",
   "replace": "\t\t\t(void)0;",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the flag is assigned rather than ored in",
-  "find": "\t\t\tt44_recput(blk, 0x04,\n\t\t\t\t   (short)(t44_recget(blk, 0x04) | 0x80));",
+  "find": "\t\t\tt44_recput(blk, __builtin_offsetof(\n\t\t\t\t\t   struct v34_bitsource, word[2]),\n\t\t\t\t   (short)(t44_recget(blk,\n\t\t\t\t\t   __builtin_offsetof(\n\t\t\t\t\t   struct v34_bitsource, word[2])) |\n\t\t\t\t\t   0x80));",
   "replace": "\t\t\tt44_recput(blk, 0x04, (short)0x80);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the flag is set on the record being clocked, not the other one",
-  "find": "\t\tif ((t44_recget(blk, 0x04) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {",
+  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
+  "replace": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
@@ -605,13 +605,13 @@
  },
  {
   "label": "the record's own flag is bit 6",
-  "find": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {",
+  "find": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
   "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x40) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the record's own flag test is inverted",
-  "find": "\t\tif ((t44_recget(rec, 0x04) & 0x80) == 0) {",
+  "find": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
   "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x80) != 0) {",
   "fn": "t44_det_info_accept"
  },
@@ -779,7 +779,7 @@
  },
  {
   "label": "the length's second field is a nibble",
-  "find": "\t\t      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf8) >> 3));",
+  "find": "\t\t      | ((hs_get(obj, T44_REC_A9DC +\n\t\t\t\t __builtin_offsetof(struct v34_bitsource,\n\t\t\t\t\t\t    word[1])) & 0xf8) >> 3));",
   "replace": "\t\t      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf0) >> 4));",
   "fn": "t44_mdlength"
  },

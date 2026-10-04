@@ -702,6 +702,10 @@ struct v34_bitsource {
 	int	acc0;				/* +0x2c */
 };
 
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34bitsource_size[(sizeof(struct v34_bitsource) == 0x30) ? 1 : -1];
+#endif
+
 /**
  * @brief Set the far-end echo canceller's bulk delay, and decide whether it
  * can run at that delay.
