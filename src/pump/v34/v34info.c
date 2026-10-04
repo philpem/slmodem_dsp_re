@@ -240,22 +240,22 @@ V34GiveProbeResults(void *objp, const void *src)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	const unsigned char *p;
-	int i, k;
+	short i;
+	int k;
+
+	/* The blob reads the receiver pair through an objp+4 base - the
+	 * documented F179/F180 addressing artifact, not a sub-object.  Two
+	 * spellings of it (int-typed +1, char-typed +4) both reproduce the
+	 * 71-byte body exactly; this is the int form (finding F11698). */
+	const int *recv = (const int *)objp + 1;
 
 	/* Neither PCM receiver running: nothing to record. */
-	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0)
+	if (recv[0x92] == 0 && recv[0x93] == 0)
 		return 0;
 
 	p = (const unsigned char *)src + V34_PROBE_OFFSET;
 	for (i = 0; i < V34_PROBE_RESULTS; i++) {
-		union {
-			double d;
-			unsigned char b[sizeof(double)];
-		} u;
-
-		for (k = 0; k < (int)sizeof(double); k++)
-			u.b[k] = p[k];
-		obj->probe_results[i] = u.d;
+		obj->probe_results[i] = *(const double *)p;
 		p += V34_PROBE_STRIDE;
 	}
 

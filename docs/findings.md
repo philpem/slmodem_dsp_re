@@ -134902,3 +134902,21 @@ while moving a sibling). All three adopted together: census 939/1852 ->
 941/1852, exact bytes +450, zero losses, DemodCtor's two clones the only
 gains. [Artifacts](build/playbook-masks-v22fp-w2/results.json),
 build/playbook-demod-tdx/results.json. (2026-10-03)
+
+## F11698. V34GiveProbeResults's direct double load, short index and objp+4 guard recover the 71-byte body
+
+Three value-identical changes together - and only together - emit the
+blob's 71/71 body: the byte-copy union replaced by a direct
+*(const double *)p load, `int i, k` narrowed to `short i; int k`, and the
+receiver-pair guard read through the objp+4 base (the documented F179/F180
+addressing artifact; two spellings, int+1 and char+4, are exact
+preimages, decoding the base fact not a unique spelling). The owner type
+was confirmed reconstructed before any header invention. Recorded
+bystanders: three sibling bodies move (V34GiveINFO1aBits 729->699 with
+delta 14->16, VPcmV34InterpretMohMessageBits 721->707 delta 1->15,
+V34GiveINFO0dBits same size) - no EXACT losses, TU 0/7 exact throughout.
+Census 941/1852 -> 942/1852 (+71 bytes), anchors clean. The screen's
+other residual, VPcmV34GetSNR, is exhausted at the spelling level
+(declaration order falsified; residue is allocator/propagation state for
+the F11690/F11691 trace method).
+[Agent artifacts](build/playbook-v34-residual/results.json). (2026-10-03)
