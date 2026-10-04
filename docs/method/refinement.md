@@ -3058,3 +3058,24 @@ This happens before allocation: do not label the operand-role mismatch regalloc.
 runs under expensive optimizations in the forward pass. Preserve its measured
 losses instead of treating an accepted flag as proof a pass did not execute.
 [Thirteen bounded controls and replay](../v8-crc-extension-promotion.md).
+
+
+## Mask tests may be compiler-expanded grouped cases
+
+F11700 recovers VPcmV34GetQuickConnectIndication's59-byte body with a grouped
+switch and one initialized result. An early-return switch has identical length
+but misses55 bytes. GCC3 stmt.c emit_case_bit_tests introduces the masks at
+initial RTL; ordering counts merged case nodes, not represented values.
+Inspect the source control's branch/result lifetime as well as the mask values.
+[Three-cell switch control](../v34-accessor-boundaries.md).
+
+## Keep a multiply input live until its later consumer
+
+F11701's SNR loop computes product before copying old v to last; the negative
+copies first and permits destructive multiplication. Combine retains the
+product72/v64/last63 use boundary before allocation, recovering all99 bytes
+when crossed with the independent second-loop handoff. Flat-first alone
+raw-merges production; the handoff alone merely matches length. A named
+intermediate is evidence-supported when the blob consumes its input later;
+it is not permission to introduce temporaries for register scores.
+[Bounded loop/product controls](../v34-accessor-boundaries.md).
