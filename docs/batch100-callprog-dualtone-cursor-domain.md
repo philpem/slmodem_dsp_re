@@ -1,0 +1,7 @@
+# Dual-tone original history and sample cursors
+
+Pinned856c1ecb complete DualTone_Detector.c raw period baseline. Original holds all four history bases at entry before timer publication/count guard (st+0x10/18/20/28). Its BP inner loop advances coefficient pointer by10 bytes and history pointer by8; short counter begins2, narrows each decrement and tests sign (0x7e3c0/0x7e441..44d). Its sample pointer advances by2 before notch computation (0x7e44f); current indexes samples[i], uses int section index, and recreates BP addresses. Existing dualtone-create common-return domain touches only create, not these loops. Predeclare four crossed controls: original BP cursor loop with short countdown2..0 and scale index3-s; and entry history-base ownership plus forward samples cursor advanced after BP/before notches. Retain current arithmetic order, short truncation/doubling/scales, outer short index/count predicate, history store order and every energy/decision operation. Arrays live within owning struct, pointer capture is same location for its lifetime; sample aliases are not restricted. No headers, width broadening, flags or arbitrary arithmetic permutations. CompleteTU audit all three symbols/tables/nontext/relocs; parent batch gate only.
+
+## Measured closure
+
+Four rawfullTU cells: baselineSIZE17; entryowner/samplecursor onlySIZE12; shortBPcountdown onlySIZE23; bothSIZE24. No exactgain/loss,onlydetectchanges. All metadata/nameddata/nontextcanonicalrelocs preserved. No sourceadoption or unconstrained cursor/register expansion.

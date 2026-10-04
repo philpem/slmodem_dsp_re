@@ -1,0 +1,5 @@
+# VPcm probe final shared result
+
+The consumed-vector control gets the original first scaled vector store, but final readback becomes an integer copy after a scratch float narrow. Original0xf07b FSTS then0xf081 FSTPS consumes the SAME x87 expression value in two float destinations, not a narrowed array read. This independently supports a shared final arithmetic result written to the work vector and selected L2 destination. Predeclare baseline, prior vector control, shared long-double expression result with both implicit float destinations, and shared float expression result with float literals and both destinations. Real25-element scaled vector consumption stays; final writes both use a result with identical expression order. No synthetic spills/padding, flags or declaration-order fit. Existing explicit scaled/decade narrows fixed. Require strict exact target and completeTU audit; no arithmetic nonexact adoption.
+
+Measured: Four valid cells, shared long-double and float produce respectively SIZE20/21, equal to readback controls. No gains/losses; no adoption.

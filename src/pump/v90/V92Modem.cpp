@@ -414,12 +414,11 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 
 	case V92_MODEM_SIDE_ANALOG:
 		/*
-		 * Seven arguments, and six of the seven are read back out of
-		 * the object rather than out of a register: +0x008, `lea
+		 * Of the seven arguments, five use the owner: +0x008, `lea
 		 * 0xc(%esi)`, +0xaa4, +0xaa0 and +0x004 at .text+0x13e78
-		 * onwards.  Only `dil` reaches the call in the register the
-		 * parameter arrived in, which is the compiler's choice
-		 * between two spellings of the same value.
+		 * onwards.  The descriptor input is retained through the
+		 * construction calls; this argument does not reload the mutable
+		 * `dil` member published earlier.
 		 *
 		 * `ja` is modelled here as bytes (see the header), so the
 		 * cast to `V92Ja *` is this call site's alone -- the asm()
@@ -427,7 +426,7 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 		 * none.
 		 */
 		p = sysdep_malloc(sizeof(V92Modulator));
-		new (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dil,
+		new (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dilDescriptor,
 				     cp, mappingParams, parameters);
 		modulator = (V92Modulator *)p;
 		break;
@@ -441,6 +440,6 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modem Constructor: Illegal modemSide\r\n");
-		break;
+		return;
 	}
 }

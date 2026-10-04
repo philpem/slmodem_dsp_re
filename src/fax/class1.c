@@ -210,12 +210,11 @@ _send_silence_state_init(struct fax_class1 *ctx, int samples)
 int
 _recieve_silence_state_init(struct fax_class1 *ctx, int samples)
 {
-	int half;
+	int half = samples / 2;
 
 	ctx->state = CLASS1_RECIEVE_SILENCE_STATE;
 	ctx->silence_blocks = 0;
 	ctx->energy = 0;
-	half = samples / 2;
 	if (half == 0)
 		half = 1;
 	ctx->countdown = half;
@@ -341,9 +340,9 @@ _idle_state_init(struct fax_class1 *ctx)
 }
 
 /*
- * The object emits two loops here, the second with 160 as an immediate, which
- * is what jump threading makes of one loop over a variable the compiler has
- * just pinned to 160 on that path.  Written as the one loop.
+ * The object has separate variable-count and fixed-block clearing arms.
+ * Keep the fixed bound named to retain its signed CMP160/JL pair under
+ * the period compiler, like _send_silence_state below.
  */
 static int
 _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
@@ -360,11 +359,16 @@ _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	(void)word7;
 	(void)word8;
 
-	if (n <= 0)
-		n = CLASS1_BLOCK_SAMPLES;
+	if (n > 0) {
+		for (i = 0; i < n; i++)
+			tx[i] = 0;
+		*tx_count = n;
+		return 0;
+	}
+	n = CLASS1_BLOCK_SAMPLES;
 	for (i = 0; i < n; i++)
 		tx[i] = 0;
-	*tx_count = n;
+	*tx_count = CLASS1_BLOCK_SAMPLES;
 	return 0;
 }
 
@@ -393,11 +397,11 @@ _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	ctx->countdown++;
 	*tx_count = CLASS1_BLOCK_SAMPLES;
 
-	if (ctx->countdown > ctx->answer_tone_blocks) {
-		cHDLCtx_preamble_state_init(ctx);
+	if (ctx->countdown <= ctx->answer_tone_blocks) {
+		FPM_TONE_generate(ctx->tone, tx, CLASS1_BLOCK_SAMPLES);
 		return 0;
 	}
-	FPM_TONE_generate(ctx->tone, tx, CLASS1_BLOCK_SAMPLES);
+	cHDLCtx_preamble_state_init(ctx);
 	return 0;
 }
 

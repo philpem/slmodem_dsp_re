@@ -51,7 +51,7 @@ SetScramblerV27(void *modem)
 {
 	struct sdmv27_cfg cfg;
 	struct v27_tx_source *prm;
-	struct sdmv27 *sdm;
+	struct v27_tx_block *tx;
 	short rate;
 	unsigned short reg;
 
@@ -61,13 +61,13 @@ SetScramblerV27(void *modem)
 	rate = prm->rate;
 	cfg.nbits = (unsigned short)V27TX_SDM_NUM_BITS[rate];
 
-	sdm = &((struct v27_tx *)modem)->tx->sdm;
-	reg = sdm->reg;
+	tx = ((struct v27_tx *)modem)->tx;
+	reg = tx->sdm.reg;
 
-	SDMv27_init(sdm, &cfg);
+	SDMv27_init(&tx->sdm, &cfg);
 
-	sdm = &((struct v27_tx *)modem)->tx->sdm;
-	sdm->reg = reg;
+	tx = ((struct v27_tx *)modem)->tx;
+	tx->sdm.reg = reg;
 }
 
 /*

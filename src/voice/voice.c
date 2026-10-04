@@ -230,22 +230,24 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 int
 voice_dle_command(struct voice_ctx *v, signed char cmd)
 {
+	int status = 0;
 	switch (cmd) {
 	case VOICE_DLE_ETX:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("voice dle command: ETX\n");
 		v->dle_etx = 1;
-		return 0;
+		break;
 	case VOICE_DLE_CAN:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("voice <CAN> command\n");
 		v->dle_can = 1;
-		return VOICE_DLE_CAN_STATUS;
+		status = VOICE_DLE_CAN_STATUS;
+		break;
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Unknown command - %2x\n", cmd);
 	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Unknown command - %2x\n", cmd);
-	return 0;
+	return status;
 }
 
 

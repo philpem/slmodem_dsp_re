@@ -1,0 +1,3 @@
+# V27 scrambler configuration owner boundary
+
+856c1ecb retained complete TU/profile. SetScramblerV27 blob92B reads reg from tx-block+0x22 before constructing tx-block+0x1c argument; after call it reloads tx-block and writes reg at+0x22. Retained95B caches nested sdm pointer before and after call, using+6 and explicit repeated base addition. Four cells cross whole-block ownership before and after call. Existing source types only; no header/flags/declaration/order/scratch changes. Restore continues rereading current owner after callback. Both field accesses denote the same declared field for the whole argument domain. Raw baseline, complete TU metadata/data/relocations/nontext and all bystanders audited. No further pointer/locals permutations after a miss.

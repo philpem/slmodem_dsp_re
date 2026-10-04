@@ -190,6 +190,135 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
             'reachable_instructions': len(seen), 'returns': returns}
 
 
+def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
+    """Prove a bounded cdecl push-save frame with disjoint outgoing arguments.
+
+    Direct relocated callees obey i386 callee-save/stack-return ABI. No frame
+    address may escape, and only the entry saves and balanced exit pops touch
+    save slots. Argument stores stay in the separately allocated outgoing area.
+    """
+    callee = frozenset(('ebx', 'esi', 'edi', 'ebp'))
+    pushed = []; prefix = 0
+    while prefix < len(rows) and rows[prefix][2] == 'push':
+        operand = rows[prefix][3]
+        require(operand.startswith('%') and operand[1:] in callee,
+                'unsupported ABI entry push')
+        register = operand[1:]
+        require(register not in pushed, 'duplicate ABI register save')
+        pushed.append(register); prefix += 1
+    require(pushed and prefix < len(rows), 'missing ABI saves/frame')
+    allocation = rows[prefix]
+    match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', allocation[3])
+    require(allocation[2] == 'sub' and match is not None,
+            'missing ABI outgoing frame')
+    frame = int(match[1], 16); total = frame + 4 * len(pushed)
+    require(0 < frame <= 256 and frame % 4 == 0 and allocation[0] < dispatch,
+            'ABI outgoing frame extent')
+    basic = frozenset(('mov','movswl','movzwl','movsbl','movzbl','lea','inc',
+                       'dec','add','sub','neg','not','and','or','xor','shl',
+                       'shr','sar','mul','imul','cmp','test','sbb','adc',
+                       'ret','nop','push','pop','call'))
+    aliases = {'ebx':'ebx','bx':'ebx','bl':'ebx','bh':'ebx',
+               'esi':'esi','si':'esi','edi':'edi','di':'edi',
+               'ebp':'ebp','bp':'ebp'}
+    def base(mnemonic):
+        return mnemonic[:-1] if mnemonic[-1:] in ('b','w','l') and mnemonic[:-1] in basic else mnemonic
+    def writes(mnemonic, operands):
+        if mnemonic == 'lea' and re.fullmatch(r'0x0\(%(esi|edi|ebp)(?:,%eiz,1)?\),%\1', operands):
+            return None  # GNU as alignment no-op, no register value changes.
+        if base(mnemonic) in ('cmp','test','ret','nop','call','push') or mnemonic.startswith('j'):
+            return None
+        target = re.search(r'(?:^|,)%(\w+)$', operands)
+        return aliases.get(target[1]) if target else None
+    operations = {}
+    for i,(address,raw,mnemonic,operands) in enumerate(rows):
+        op = base(mnemonic)
+        require(op in basic or mnemonic.startswith('j'), 'unsupported ABI-frame instruction')
+        require(re.search(r'%sp\b',operands) is None, 'partial ABI stack pointer')
+        if op == 'push':
+            require(i < prefix, 'nonentry ABI push')
+            operations[address] = ('push',pushed[i]); continue
+        if op == 'pop':
+            require(re.fullmatch(r'%(ebx|esi|edi|ebp)',operands) is not None,
+                    'unsupported ABI pop')
+            operations[address] = ('pop',operands[1:]); continue
+        if op == 'call':
+            require(address in calls, 'unproved ABI call')
+            operations[address] = ('call',); continue
+        written = writes(mnemonic, operands)
+        require(written is None or written in pushed, 'unsaved ABI callee-register write')
+        if '%esp' not in operands: continue
+        adjust = re.fullmatch(r'\$0x([0-9a-f]+),%esp',operands)
+        if adjust:
+            require(op in ('sub','add') and int(adjust[1],16)==frame,
+                    'unsupported ABI frame adjustment')
+            require(op != 'sub' or i == prefix, 'reallocated ABI frame')
+            operations[address] = ('allocate' if op=='sub' else 'release',); continue
+        load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))',operands)
+        if load:
+            offset = int(load[1] or '0',16)
+            require(op in ('mov','movswl','movzwl','movsbl','movzbl') and
+                    offset >= total+4 and offset%4==0, 'ABI saved-slot/return-address read')
+            operations[address] = ('argument',load[2]); continue
+        store = re.fullmatch(r'(?:\$0x[0-9a-f]+|%(?:eax|ebx|ecx|edx|esi|edi|ebp)),(?:(0x[0-9a-f]+))?\(%esp\)',operands)
+        require(store is not None and op=='mov', 'ABI frame address escape/unsupported access')
+        offset = int(store[1] or '0',16)
+        require(offset%4==0 and offset+4<=frame, 'ABI argument store overlaps save/return slot')
+        operations[address] = ('outgoing',)
+    by_address = {r[0]:i for i,r in enumerate(rows)}
+    pending = [(rows[0][0],(0,(),False,frozenset()))]; seen = {}; returns = 0
+    while pending:
+        address,state = pending.pop()
+        if address in seen:
+            require(seen[address]==state, 'inconsistent ABI-frame join'); continue
+        seen[address]=state; depth,saves,allocated,restored=state
+        restored=set(restored); saves=list(saves); i=by_address[address]
+        _,raw,mnemonic,operands=rows[i]; operation=operations.get(address)
+        if operation:
+            kind=operation[0]
+            if kind=='push':
+                require(not allocated and len(saves)==i, 'ABI push state')
+                saves.append(operation[1]); depth+=4
+            elif kind=='allocate':
+                require(not allocated and saves==pushed and depth==total-frame,
+                        'ABI allocation state')
+                allocated=True; depth+=frame
+            elif kind=='release':
+                require(allocated and depth==total and saves==pushed,
+                        'ABI release state')
+                allocated=False; depth-=frame
+            elif kind=='pop':
+                require(not allocated and saves and saves[-1]==operation[1] and depth==4*len(saves),
+                        'wrong/unbalanced ABI restore')
+                saves.pop(); depth-=4; restored.add(operation[1])
+            else:
+                require(allocated and depth==total and saves==pushed,
+                        'ABI call/argument access outside frame')
+                if kind=='argument':restored.discard(operation[1])
+        else:
+            register=writes(mnemonic,operands)
+            if register:restored.discard(register)
+        if mnemonic=='ret':
+            require(depth==0 and not allocated and not saves and restored==set(pushed),
+                    'unbalanced ABI-frame return')
+            returns+=1; continue
+        if mnemonic=='jmp' and operands.startswith('*'):successors=destinations
+        elif mnemonic.startswith('j'):
+            target=re.match(r'^([0-9a-f]+)\s',operands)
+            require(target is not None,'ABI branch target');successors=[int(target[1],16)]
+            if mnemonic!='jmp':
+                require(i+1<len(rows),'ABI branch fallthrough');successors.append(rows[i+1][0])
+        else:
+            require(i+1<len(rows),'ABI fallthrough extent');successors=[rows[i+1][0]]
+        next_state=(depth,tuple(saves),allocated,frozenset(restored))
+        for successor in successors:
+            require(successor in by_address,'ABI successor extent');pending.append((successor,next_state))
+    require(returns>0,'ABI frame without return')
+    return {'bytes':frame,'pushed_registers':pushed,'reachable_instructions':len(seen),
+            'returns':returns,'direct_abi_calls':len(calls)}
+
+
+
 def prove(path, name):
     """Return one fully proved table's ordered destinations and provenance.
 
@@ -222,9 +351,10 @@ def prove(path, name):
                     for s in symbols), 'zero-sized function alias')
     require(sum(s.name == section.name for s in sections) == 1, 'ambiguous code section')
     rows = instructions(str(path), section.name, start, end)
+    pushed_abi = rows[0][2] == 'push'
     require(not any(r[2] in ('ljmp', 'lcall', 'iret', 'iretd', 'retf', 'syscall',
                             'sysenter', 'int', 'int3', 'into', 'enter', 'leave',
-                            'push', 'pop', 'pusha', 'popa') or r[2] in PREFIXES
+                            'pusha', 'popa') or (r[2] in ('push','pop') and not pushed_abi) or r[2] in PREFIXES
                     for r in rows),
             'unsupported control/stack instruction')
     require(not any(r[2] == 'ret' and r[3] for r in rows), 'unsupported return form')
@@ -247,13 +377,6 @@ def prove(path, name):
     match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + register + r',4\)', jump[3])
     require(jump[2] == 'jmp' and match is not None, 'absolute index/scale dispatch')
     protected = set(range(cmp_row[0] + 1, jump[0] + len(jump[1])))
-    for address, _, mnemonic, operands in rows:
-        if mnemonic.startswith(('j', 'loop', 'call')) and not operands.startswith('*'):
-            target = re.match(r'^([0-9a-f]+)\s', operands)
-            require(target is not None, 'undecoded direct branch')
-            destination = int(target[1], 16)
-            require(destination in boundaries, 'external/interior direct branch')
-            require(destination not in protected, 'direct guard bypass')
     require(not any(s['st_shndx'] == section_id and s['st_value'] in protected
                     and s['st_info']['type'] != 'STT_SECTION' for s in symbols),
             'named guard bypass entry')
@@ -283,8 +406,54 @@ def prove(path, name):
     code_relocs = [(r, s) for sec, r, s in relocations
                   if sec == section_id and jump[0] <= r['r_offset'] < jump[0] + len(jump[1])]
     require(len(code_relocs) == 1, 'dispatch relocation count')
-    require(sum(sec == section_id and start <= r['r_offset'] < end
-                for sec, r, _ in relocations) == 1, 'additional owner relocations')
+    owner_relocs = [(r,s) for sec,r,s in relocations
+                    if sec==section_id and start<=r['r_offset']<end]
+    calls = set()
+    if pushed_abi:
+        occupied = set()
+        for r,symbol in owner_relocs:
+            field = r['r_offset']
+            matching = [row for row in rows if row[0] <= field and field+4 <= row[0]+len(row[1])]
+            require(len(matching)==1 and not occupied.intersection(range(field,field+4)),
+                    'overlapping/undecoded ABI relocation')
+            occupied.update(range(field,field+4));row=matching[0]
+            if row[2]=='call':
+                require(row[1][:1]==b'\xe8' and len(row[1])==5 and field==row[0]+1 and
+                        r['r_info_type']==2 and row[1][1:]==b'\xfc\xff\xff\xff' and
+                        symbol.name and symbol['st_info']['type'] in ('STT_FUNC','STT_NOTYPE') and
+                        symbol['st_shndx']!='SHN_ABS', 'unsupported ABI call relocation')
+                calls.add(row[0])
+            elif row[2].startswith('j'):
+                require(row[0]==jump[0] and r['r_info_type']==1,
+                        'additional relocated ABI control transfer')
+            else:
+                # Only decoded data fields may relocate. Frame/stack offsets,
+                # guard bounds and opcode bytes were proved at their literal
+                # values and must never be changed by the linker.
+                raw=row[1]; offset=field-row[0]
+                immediate_store=(row[2] in ('mov','movl') and
+                                 len(raw)>=6 and raw[0]==0xc7 and
+                                 raw[1]&0x38==0 and offset==len(raw)-4 and
+                                 row[3].startswith('$') and
+                                 not row[3].endswith(',%esp'))
+                absolute_compare=(row[2] in ('cmp','cmpl') and
+                                  len(raw)==7 and raw[:2]==b'\x83\x3d' and
+                                  offset==2 and row[0]!=cmp_row[0])
+                require(r['r_info_type']==1 and
+                        (immediate_store or absolute_compare),
+                        'unsupported ABI data relocation field')
+        require(all(row[0] in calls for row in rows if row[2]=='call'),
+                'unrelocated ABI call')
+    else:
+        require(len(owner_relocs)==1, 'additional owner relocations')
+    for address, _, mnemonic, operands in rows:
+        if address in calls: continue
+        if mnemonic.startswith(('j', 'loop', 'call')) and not operands.startswith('*'):
+            target = re.match(r'^([0-9a-f]+)\s', operands)
+            require(target is not None, 'undecoded direct branch')
+            destination = int(target[1], 16)
+            require(destination in boundaries, 'external/interior direct branch')
+            require(destination not in protected, 'direct guard bypass')
     relocation, table_symbol = code_relocs[0]
     require(relocation['r_info_type'] == 1 and
             relocation['r_offset'] == jump[0] + len(jump[1]) - 4 and
@@ -318,8 +487,11 @@ def prove(path, name):
         require(target in boundaries and start <= target < end, 'entry instruction boundary/owner')
         require(target not in protected, 'table guard bypass')
         destinations.append(target - start)
-    stack_proof = prove_fixed_stack_frame(rows, jump[0],
-                                          [start + d for d in destinations]) if stack_writes else None
+    if pushed_abi:
+        stack_proof = prove_pushed_abi_frame(rows, jump[0], [start+d for d in destinations], calls)
+    else:
+        stack_proof = prove_fixed_stack_frame(rows, jump[0],
+                                              [start+d for d in destinations]) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]

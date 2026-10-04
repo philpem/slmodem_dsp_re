@@ -385,8 +385,8 @@
  },
  {
   "label": "initiateRRN's two states are exchanged",
-  "find": "\t\tstate = V92P4M_STATE_RU;\n\t} else {",
-  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RU;\n\t} else {"
+  "find": "\t\tstate = V92P4M_STATE_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");",
+  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");"
  },
  {
   "label": "initiateRRN hands the phase 4 modulator byte_0c, not byte_0d",
@@ -405,18 +405,18 @@
  },
  {
   "label": "initiateRRN arms the modulus encoder, which is FPE's store",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 1;\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");"
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tstate = V92P4M_STATE_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 1;\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tstate = V92P4M_STATE_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");"
  },
  {
   "label": "initiateRRN asks for a whole block rather than one symbol",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation"
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tstate = V92P4M_STATE_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tstate = V92P4M_STATE_RU;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation"
  },
  {
   "label": "initiateFPE's two states are exchanged",
-  "find": "\t\tstate = V92P4M_STATE_RM;\n\t} else {",
-  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RM;\n\t} else {"
+  "find": "\t\tstate = V92P4M_STATE_RM;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RmModulation\\r\\n\");",
+  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RM;\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RmModulation\\r\\n\");"
  },
  {
   "label": "initiateFPE does not arm the modulus encoder",

@@ -57,13 +57,14 @@ faxvmi_byte_reverse(unsigned short *buf, short count)
 {
 	short i;
 
-	for (i = count; i != 0; i--) {
+	for (i = count; i-- != 0;) {
 		unsigned short in = *buf;
 		unsigned short out = 0;
-		short bit;
+		unsigned short bit;
 
-		for (bit = 7; bit >= 0; bit--) {
-			out = (unsigned short)((out << 1) | (in & 1));
+		for (bit = 8; bit-- != 0;) {
+			out = (unsigned short)(out << 1);
+			out |= in & 1;
 			in >>= 1;
 		}
 		*buf++ = out;

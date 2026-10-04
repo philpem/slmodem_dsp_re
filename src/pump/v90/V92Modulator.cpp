@@ -536,13 +536,13 @@ V92Modulator::initiateRRN()
 	bitsToSymbol->setSymbolsBlockSize(1);
 
 	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		state = V92P4M_STATE_RU;
 		edprintf("V92Modulator: Phase4Modulator state initialized to "
 			 "RuModulation\r\n");
-		state = V92P4M_STATE_RU;
 	} else {
+		state = V92P4M_STATE_DATA_TO_RU;
 		edprintf("V92Modulator: Phase4Modulator state initialized to "
 			 "DataToRuModulation\r\n");
-		state = V92P4M_STATE_DATA_TO_RU;
 	}
 
 	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,
@@ -587,13 +587,13 @@ V92Modulator::initiateFPE()
 	bitsToSymbol->transmitter->modulusEncoder->field_50 = 1;
 
 	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		state = V92P4M_STATE_RM;
 		edprintf("V92Modulator: Phase4Modulator state initialized to "
 			 "RmModulation\r\n");
-		state = V92P4M_STATE_RM;
 	} else {
+		state = V92P4M_STATE_DATA_TO_RM;
 		edprintf("V92Modulator: Phase4Modulator state initialized to "
 			 "DataToRmModulation\r\n");
-		state = V92P4M_STATE_DATA_TO_RM;
 	}
 
 	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,

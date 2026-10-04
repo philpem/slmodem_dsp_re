@@ -24,23 +24,23 @@
  },
  {
   "label": "the ETX flag is set to 2",
-  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;",
-  "replace": "\t\tv->dle_etx = 2;\n\t\treturn 0;"
+  "find": "\t\tv->dle_etx = 1;\n\t\tbreak;",
+  "replace": "\t\tv->dle_etx = 2;\n\t\tbreak;"
  },
  {
   "label": "ETX returns 1",
-  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;",
-  "replace": "\t\tv->dle_etx = 1;\n\t\treturn 1;"
+  "find": "\t\tv->dle_etx = 1;\n\t\tbreak;",
+  "replace": "\t\tv->dle_etx = 1;\n\t\tstatus = 1;\n\t\tbreak;"
  },
  {
   "label": "CAN returns 8",
-  "find": "\t\treturn VOICE_DLE_CAN_STATUS;",
-  "replace": "\t\treturn VOICE_DLE_CAN_STATUS - 1;"
+  "find": "\t\tstatus = VOICE_DLE_CAN_STATUS;",
+  "replace": "\t\tstatus = VOICE_DLE_CAN_STATUS - 1;"
  },
  {
   "label": "an unknown command returns 9",
-  "find": "\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\treturn 0;",
-  "replace": "\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\treturn VOICE_DLE_CAN_STATUS;"
+  "find": "\t\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\t}\n\treturn status;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\t\tstatus = VOICE_DLE_CAN_STATUS;\n\t}\n\treturn status;"
  },
  {
   "label": "the command byte is printed without its sign extension",
@@ -59,8 +59,8 @@
  },
  {
   "label": "the unknown-command gate fires at level 1",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);",
-  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);"
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);",
+  "replace": "\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);"
  },
  {
   "label": "the CAN gate fires at level 1",
@@ -69,7 +69,7 @@
  },
  {
   "label": "the ETX arm falls through to CAN",
-  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;\n\tcase VOICE_DLE_CAN:",
+  "find": "\t\tv->dle_etx = 1;\n\t\tbreak;\n\tcase VOICE_DLE_CAN:",
   "replace": "\t\tv->dle_etx = 1;\n\t\t/* fallthrough */\n\tcase VOICE_DLE_CAN:"
  }
 ]

@@ -17,20 +17,34 @@
 #include "dsplib/t30frame.h"
 
 /*
- * The inner walk is faxvmi_byte_reverse's, which the object inlines here
- * while still emitting the standalone copy -- F605's inlining boundary, so a
- * per-function byte comparison will read this function long and that one
- * short.  Written as the call it is.
+ * The original FILE split excludes an out-of-TU compiler inline here. Its
+ * literal byte loop has the same postdecrement/narrow-before-OR boundaries
+ * as faxvmi_byte_reverse; the frame stride retains the unsigned header word.
  */
 void
 faxvmi_frame_reverse(unsigned short *buf, short count)
 {
 	short i;
 
-	for (i = count; i != 0; i--) {
-		short len = (short)*buf++;
+	for (i = count; i-- != 0;) {
+		unsigned short len = *buf++;
 
-		faxvmi_byte_reverse(buf, len);
+		{
+			unsigned short *p = buf;
+			short n;
+
+			for (n = (short)len; n-- != 0;) {
+				unsigned short in = *p, out = 0;
+				unsigned short bit;
+
+				for (bit = 8; bit-- != 0;) {
+					out = (unsigned short)(out << 1);
+					out |= in & 1;
+					in >>= 1;
+				}
+				*p++ = out;
+			}
+		}
 		buf += len;
 	}
 }

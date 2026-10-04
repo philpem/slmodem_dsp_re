@@ -254,8 +254,8 @@
  },
  {
   "label": "the two initialisation messages are swapped",
-  "find": "\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RD;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_14;\n",
-  "replace": "\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RD;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_14;\n"
+  "find": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RD;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t} else {\n\t\tp4state = P4M_STATE_UNNAMED_14;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t}\n",
+  "replace": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RD;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t} else {\n\t\tp4state = P4M_STATE_UNNAMED_14;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t}\n"
  },
  {
   "label": "both arms choose RdModulation",
@@ -264,13 +264,13 @@
  },
  {
   "label": "the phase 4 reset is given a zero companding code",
-  "find": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n",
-  "replace": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, 0,\n"
+  "find": "\t\t\t \"DataToRdModulation\\r\\n\");\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n",
+  "replace": "\t\t\t \"DataToRdModulation\\r\\n\");\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, 0,\n"
  },
  {
   "label": "the phase 4 reset is given a warm-up loop",
-  "find": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 0, phase2Info->rtd);\n",
-  "replace": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 1, phase2Info->rtd);\n"
+  "find": "\t\t\t \"DataToRdModulation\\r\\n\");\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 0, phase2Info->rtd);\n",
+  "replace": "\t\t\t \"DataToRdModulation\\r\\n\");\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 1, phase2Info->rtd);\n"
  },
  {
   "label": "initiateRRN does not clear the event code",
@@ -596,18 +596,18 @@
  },
  {
   "label": "the FPE enters the data phase rather than phase 4",
-  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
-  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
  },
  {
   "label": "the FPE block is the whole symbol count",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(nofSymbols);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(nofSymbols);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
  },
  {
   "label": "the FPE's two phase 4 states are chosen the other way round",
-  "find": "\t\tp4state = P4M_STATE_RF;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_1C;",
-  "replace": "\t\tp4state = P4M_STATE_UNNAMED_1C;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RF;"
+  "find": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");\n\t} else {\n\t\tp4state = P4M_STATE_UNNAMED_1C;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t}\n",
+  "replace": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_UNNAMED_1C;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");\n\t} else {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t}\n"
  },
  {
   "label": "the FPE reuses the RRN states",
@@ -616,8 +616,8 @@
  },
  {
   "label": "the FPE bit count is tested the other way",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n\t\tp4state = P4M_STATE_RF;\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
  },
  {
   "label": "the FPE sets the Rd/Rt symbols",

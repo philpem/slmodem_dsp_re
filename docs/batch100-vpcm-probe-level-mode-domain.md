@@ -1,0 +1,5 @@
+# VPcm final level expression mode
+
+Original final level transform FMUL/FADD keeps x87 value through FSTS to vector and FSTPS to L2, whereas retained long-double operands followed by float assignment emit a forced FSTPS/MOV integer transfer even with the redundant explicit cast removed. This is the exact new expression-mode boundary. Predeclare baseline, long-double vector control, float-literal final expression and double-literal final expression. Preserve original scaled and log float conversion boundaries, vector semantics, all callers/other arithmetic/diagnostics and constant numerical values. No flag/ABI/padding/volatile controls. Existing actual vector domain is positive structural control. Strict target exactness and completeTU metadata/nontext/bystander audit decide adoption; nonexact arithmetic changes remain findings only.
+
+Measured: Four valid cells: long double20, double20, float21 size residual; no exact gains/losses. Changing literal expression mode alone does not recover shared x87 result; no adoption.

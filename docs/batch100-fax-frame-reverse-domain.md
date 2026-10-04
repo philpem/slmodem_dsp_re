@@ -1,0 +1,7 @@
+# Frame reverse original body and stride domain
+
+Revision 856c1ecb, complete faxvmififo.c. Eight crossed cells, all other tokens fixed. Baseline retained full raw TU; Gentoo saved profile and bug define, executed assembler identity, -da, complete body/data/binding/relocation audit. No runtime or mutation runs.
+
+Original frame_reverse 151B contains byte_reverse's three witnessed inner loop boundaries, with no call relocation. F11399 proves distinct original FILE faxvmi_utls.c and faxvmififo.c, excluding an out-of-TU compiler inline under this regime. Literal nested loop is one admissible original factoring family; shared header inline/macro remains indistinguishable. Preserve standalone globally emitted byte_reverse in its original TU. Test call vs literal body with signed-short outer and unsigned-short inner postdecrements, narrowed shift before OR, a separate walker leaving frame base intact.
+
+Cross signed-short length versus unsigned-short length, retaining signed-short loop/call count conversion. Blob zero-extends length from header, preserves its full unsigned value across loop, and advances frame base with that unsigned length. Baseline sign-extends length for pointer advance. This is an actual high-bit stride discrepancy; no reachable-input claim excuses it. Cross outer signed-short postdecrement against existing decrement-after-body. Eight cells only; no local or declaration permutation after a miss.

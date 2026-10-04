@@ -1,0 +1,7 @@
+# Demapper alternate-level byte ownership
+
+Pinned 856c1ecb. In resetNoSpectral original 0x30d94 reads mapp's Ucode byte to compare alternate levels, then the first constellation store 0x30dc4 precedes a second byte read 0x30dd8 for the second level. Baseline snapshots that byte in `c` and reuses it through both output stores. reset contains the same source pattern and will be independently checked against its original body before adoption. A character source can alias a short destination, so this is a read-after-store ownership distinction, not a register-color prescription.
+
+Predeclare four full-TU cells: baseline; remove only the Ucode local in resetNoSpectral and use its original member expression at every lookup; same in reset; both. Preserve comparison, alternate ordering, k narrows/increments, loop bounds, all member copies, diagnostics and decoder resets. No header/type/register/flag edits. Raw baseline, all nonexact bystanders, metadata/exports/named data and canonical nontext mandatory. Require each targeted body to become exact; do not adopt bystander-only movement or an equivalent size. Alias reachability beyond this object witness is not claimed if a candidate remains nonexact.
+
+Measured: Four valid cells: no exact gains/losses. reset source receiving-byte removal reaches723-byte equal size but544 byte differences; resetNoSpectral worsens SIZE57→96. Independently confirmed reset original first output0x30924 then byte reload0x30938 (alternate arm0x3098f/0x309a3). No source adopted.
