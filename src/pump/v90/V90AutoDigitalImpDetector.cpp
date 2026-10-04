@@ -983,7 +983,7 @@ V90AutoDigitalImpDetector::updateLinMappMeanAndVar(short phase, short code)
 	mean = magnitudeSum[phase][code] * inv;
 
 	linearMappingVar[phase][code] = magnitudeSqSum[phase][code] * inv - mean * mean;
-	linMapp[phase][code] = (short)(mean + 0.5f);
+	linMapp[phase][code] = (short)(mean + 0.5);
 }
 
 /*
@@ -1066,7 +1066,7 @@ V90AutoDigitalImpDetector::updateLinMappMeanAndVarAlt(short phase, short code)
 		return;
 
 	linMappAlt[phase][code] =
-	    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5f);
+	    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5);
 }
 
 /*
