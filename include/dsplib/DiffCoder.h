@@ -296,12 +296,15 @@ void ParallelDifferentialDecoder<T>::process(T *in, T *out)
 
 	/* Cache state_ and advance all three pointers, as in the object.
 	 * Preserve the input byte before writing output, including in-place
-	 * decoding.  The loop bound remains a member read.  See
-	 * docs/parallel-decoder-retained-result.md for controls and residual. */
+	 * decoding.  Keep a separate narrow decoded result for the two-address
+	 * XOR; the loop bound remains a member read.  See
+	 * docs/gcc3-value-carriers-results.md for the exact reproduction. */
 	for (i = 0; i < size_; i++) {
 		T x = *in;
 
-		*out = x ^ *state;
+		T decoded = x;
+		decoded ^= *state;
+		*out = decoded;
 		*state = x;
 		state++;
 		in++;

@@ -3439,3 +3439,24 @@ inert in ADID; inspect complete bodies and independent witnesses before a
 cross. Signedness can recover an original loop branch without recovering the
 function: F11792's four constellation controls gain zero and close that finite
 domain. Keep negative controls as evidence; do not adopt partial score gains.
+
+
+### Distinguish a two-address destination from an expression of the same width
+
+A byte XOR can differ before allocation even when both source forms already
+expand in QImode. ParallelDifferentialDecoder's preserved input feeds a later
+state store; a separate narrow decoded result updated with XOR supplies the
+original destination identity (F11795). Combine keeps input first and folds
+state memory second, letting reload emit the original byte copy/memory XOR.
+This closes57B where cached-pointer and commutative spellings did not. Trace
+initial/combine/reload operands, retain alias-visible store ordering and audit
+all compiler-discovered header consumers. Do not add temps just to tune colour.
+
+Expression mode transfers across independent original half-load/pop witnesses:
+ADID's two mean methods need double addition although their stored0.5 constant
+is still float-sized (F11794). Cross sister methods and inspect inline consumers;
+constant bytes do not determine expression type. The same discriminator narrows
+F7846's Uref to an extra four-byte frame allocation (F11796), not an exact
+function. A complete instruction-sequence match with wrong stack offsets remains
+nonexact. Require a slot-allocation/lifetime witness before more source forms;
+never normalize away the frame to obtain a gain. [Controls and results](../gcc3-value-carriers-results.md).

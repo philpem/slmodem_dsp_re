@@ -255,7 +255,7 @@
  },
  {
   "label": "drop the rounding term on the mean",
-  "find": "- mean * mean;\n\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "find": "- mean * mean;\n\tlinMapp[phase][code] = (short)(mean + 0.5);",
   "replace": "- mean * mean;\n\tlinMapp[phase][code] = (short)mean;"
  },
  {
@@ -275,8 +275,8 @@
  },
  {
   "label": "multiply by a reciprocal where the object divides",
-  "find": "\t    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5f);",
-  "replace": "\t    (short)(altMagnitudeSum[phase] * (1.0f / altMagnitudeCount[phase]) + 0.5f);"
+  "find": "\t    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5);",
+  "replace": "\t    (short)(altMagnitudeSum[phase] * (1.0f / altMagnitudeCount[phase]) + 0.5);"
  },
  {
   "label": "write the alternate mean into the plain table",
