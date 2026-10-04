@@ -134870,3 +134870,35 @@ opens with FDSP_DP_Run and the peephole2 immediate-split cursor differs -
 the #6/#20 TU-repartition class, not a source spelling. Statement-level
 family closed. [Agent artifacts](build/playbook-fdsp-dprt/results.json).
 (2026-10-03)
+
+## F11696. V90Phase4Demodulator's decoded store order recovers both clones exactly
+
+The blob's C1 and C2 are byte-identical AND ours are - a body defect, not
+the V90Jd clone cursor. The 17 differing rows are the eleven body
+assignments' schedule; the blob's order is mappingParams1, params,
+sessionFlag, demapper, mappingParams2, cp, mp, descrambler,
+connectionEvaluator, phase3Demodulator, autoDigitalImpDetector. Two
+preimages (blob-order and mp1-third) make C1 AND C2 exact at 225 bytes;
+the par/flag adjacency carries 14 of the bytes, the dem/mp2 and p3d/ce
+moves the rest. Per lever 0 this decodes the three relative orders, not a
+unique spelling - mappingParams1's position is not encoded. 13/20 -> 15/20
+in the TU, zero losses; five v90p4dctor anchors retargeted with fault
+cases preserved. [Agent artifacts](build/playbook-demod-tdx/results.json).
+
+## F11697. Three validated components land without exactness: rx_shift, the mask clamp, TxHdxTRN's fold
+
+V22FP_modem's byte 103 (bf->b7) follows from `unsigned short rx_shift` -
+the blob's loads of the field are all movzwl and the retype rule holds;
+6 -> 5 differing bytes, v22mod 0/10 held. The constellation-mask getters'
+clamp as `if (which >= 6) which = 0;` on the parameter reproduces the
+blob's setl/neg/and clamp and clean scaled load (58->37 and 62->39
+differing bytes; the GCC 3.4.2 if-form clamp expansion is corroborated by
+the blob's own inline copies); the residual is allocator state, an
+emission-order question, with getConstellationsIndex itself SIZE -4.
+TxHdxTRN's `trn[(unsigned short)data[i] & 3]` takes the predicted 1 byte
+(55->54); the remaining 54 are the rename plus F11553's closed RMW, and
+POSITION IS EXCLUDED for the rename (trn-after-data demonstrated null
+while moving a sibling). All three adopted together: census 939/1852 ->
+941/1852, exact bytes +450, zero losses, DemodCtor's two clones the only
+gains. [Artifacts](build/playbook-masks-v22fp-w2/results.json),
+build/playbook-demod-tdx/results.json. (2026-10-03)

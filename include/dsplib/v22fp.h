@@ -295,7 +295,7 @@ struct v22fp_hdx {
 	 * input sample as `(short)((int)in[i] >> rx_shift)`, with the count
 	 * loaded `movzwl` (finding F8600).
 	 */
-	short rx_shift;		/* +0x34 init 0                             */
+	unsigned short rx_shift; /* +0x34 init 0; the blob loads it movzwl   */
 	/*
 	 * NOT written by create.  Six bytes rather than a shape, because
 	 * nothing reconstructed reads any of it.

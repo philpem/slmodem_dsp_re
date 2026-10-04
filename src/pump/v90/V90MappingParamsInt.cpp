@@ -176,7 +176,9 @@ getConstellationMask(V90MappingParams *params, int which, short *mask)
 	unsigned int n;
 	int k, i;
 
-	k = params->distinctIndex[which < 6 ? which : 0];
+	if (which >= 6)
+		which = 0;
+	k = params->distinctIndex[which];
 	length = params->constellationSize[k];
 	table = params->constellation[k];
 
@@ -198,7 +200,9 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
 	unsigned int n;
 	int k, i;
 
-	k = params->distinctIndex[which < 6 ? which : 0];
+	if (which >= 6)
+		which = 0;
+	k = params->distinctIndex[which];
 	length = params->constellationSize[k];
 	table = params->codecConstellation[k];
 
