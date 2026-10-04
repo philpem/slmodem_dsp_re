@@ -11560,6 +11560,14 @@ function's signature and the period compiler was not available to check it.
 Whoever runs `make period` next should A/B the two spellings and, if the callee
 stays byte-identical, take the change and retract this entry.
 
+
+**2026-10-04 update (F11812): retired at the Data call site.** A consistent
+unsigned-short public count and explicit signed-short callee consumption
+reproduce both the original call extension and the callee object. All other
+header consumers remain raw-identical except the already non-exact protocol
+caller, which is included in the full-TU audit. Combined with the separately
+captured quality mask, `RxHdxDataV27` is exact at 226 bytes.
+
 ## D1141 ✅ the four half-duplex handlers cast `out` where the author's family had one pointer type
 
 `RxHdxDataV17`, `RxHdxErrorV17`, `RxHdxDataV27` and `RxHdxErrorV27` are state

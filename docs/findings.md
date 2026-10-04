@@ -136049,3 +136049,64 @@ Thirty existing baseline RTL dumps locate distinct mechanisms without new compil
 ## F11811. Sample/constructor transfer batch composes three exact gains under unchanged profile
 
 Baseline14769433 afterPR266; final1049→1052/1852,113629→113867 exact reference bytes, three gains238B, zero exact losses. All3 changed production objects reproduce independently audited winners raw;297/300 others and complete build config unchanged.23 valid full-TU source cells produce516 strict common verdicts/534 emitted-body comparisons, eight unchanged baseline controls raw reproduced. Invalid pre-compilation P4 locator and premature production inspection are retained/excluded and repeated correctly. First final gate establishes388period passes/0failures but flags6 detached semantic anchors; their find/replace strings are retargeted without changing labels/counts or executing mutants. Final make phase J=4 exits0 with388period passes/0failures and all structural checks green;285suites/10038 anchors unique, no mutation/fuzz execution. Other-session structure inventory and issue22 remain untouched. No whole-object/profile/exhaustion claim. docs/gcc3-sample-transfer-results.md.
+
+
+## F11812. A used quality verdict crosses two previously negative width boundaries
+
+Baseline `8af3af53`, after PR #267. Fifteen direct mask/multiply cells and fifteen
+captured-verdict cells distinguish initial RTL folding: direct expressions
+retain branches, while a used boolean and wide mask recover SETNE/NEG/AND and
+exact `RxHdxDataV17` (226 bytes). Both before/after flag-clear mask controls
+match; multiplication controls miss. V27 remains three bytes long, V29 eight.
+Crossing independently observed V27 unsigned-short public count with signed-short
+consumption (F9237), or V29 existing union byte flag writes, recovers
+`RxHdxDataV27` and `RxHdxDataV29` (226 bytes each). Neither axis alone works.
+The 72 crossed cells include all eighteen primary/direct-consumer TUs; the
+callee and other consumers remain raw-identical. The non-exact protocol caller
+changes and is explicitly audited. All 102 complete-TU cells and 704 common/
+emitted-body comparisons pass baseline, metadata/data/BSS/nontext-relocation
+controls with three distinct gains (678 bytes) and zero exact losses. No
+structure/layout changes, profile fit or unique-source-preimage claim.
+`tools/next20_count_{mask,predicate,cross,audit}.py`;
+`docs/next20-quality-mask-domain.md`. Integrated production and period gate
+pass; see F11814.
+
+## F11813. Transfer mechanisms recover without twenty complete-function gains
+
+218 valid complete-TU cells cover 1,438 blob-common verdicts and 1,486 emitted
+bodies across the root and three agents. Beyond the 102 quality-return cells,
+there are 24 fax no-carrier, 30 DSP normalization/FIR/tone, eleven fax SMC,
+22 V90/V92 and 29 V32/V23/V22 cells; none adds an exact gain or loss.
+Captured ring predicates restore SETL/NEG/AND, and the SMC previous-transition
+short restores CMPW, yet complete bodies miss. A delayed tone cast is hoisted
+before IIR, refuting that prediction. Demapper integer-index ownership reaches
+408 bytes from 392 (blob 408) but leaves BYTES1 SIB commutation. The first
+observed incoming association difference is 02.sibling after normalized-equal
+01.rtl. Coefficient/sample/CFG controls miss; precoder block copying emits
+REP MOVSL absent from the original, and historical loop unrolling leaves
+profile as a competing explanation. Normalization helpers restore word outputs
+but keep different loop/slot/allocation choices. No partial wins adopted;
+F1604/F6605's empty-source-loop inference stays declined. All baselines,
+bystanders, metadata, data and relocations are accounted for. These finite
+misses close the tested domains, not source recovery generally.
+`docs/next20-byteexact-results.md`, `tools/next20_{data,dsp,v90}_*.py`.
+No fuzzing or mutation execution; other-session PR #263 and issue #22 untouched.
+
+## F11814. Quality-mask batch integrates three exact gains with no losses
+
+Baseline `8af3af53`: 1,052 to 1,055 exact names out of 1,852; 113,867 to
+114,545 exact original bytes. The three production objects reproduce the
+independently audited winners raw; 297 of 300 others and the complete build
+configuration remain raw-identical. The unchanged V27 callee includes its
+explicit signed-short consumption under the unsigned public count. Complete
+production metadata/data/BSS/nontext-relocation audits pass. Final
+`make phase J=4` exits zero with 388 period differential passes, zero failures
+and all structural checks green. Static anchor checking reports 285 suites /
+10,038 unique anchors, zero detached/non-unique, no retargeting needed. No
+fuzzing or mutation execution. Upstream remains `8af3af53`; other-session
+PR #263 structure work and issue #22 are untouched. Target twenty was not
+reached: the 218 bounded controls yielded these three complete functions,
+and partial instruction recoveries were left unadopted.
+`docs/next20-byteexact-results.md`; machine ledgers
+`build/next20-production-audit.json`, `build/next20-census-delta.json`,
+`build/next20-all-experiment-denominators.json`, `build/next20-phase.log`.

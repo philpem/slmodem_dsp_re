@@ -107,10 +107,10 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
  * work either does is sign-extending `count`.
  */
 void
-DescrambleDataV27(void *modem, unsigned short *data, short count)
+DescrambleDataV27(void *modem, unsigned short *data, unsigned short count)
 {
 	SDMv27_descrambler(&((struct v27_rx *)modem)->rx->sdm,
-			   data, count);
+			   data, (short)count);
 }
 
 int

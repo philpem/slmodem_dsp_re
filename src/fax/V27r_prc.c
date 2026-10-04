@@ -77,27 +77,20 @@ V27RX_modem(void *modem, short *in, short *out, unsigned short *count)
  * `short *` and both callees declare theirs `unsigned short *`, and the
  * pointer is passed through untouched either way.  Deviation D1141.
  *
- * THE RESULT IS A `?:` AND THE OBJECT SPELLS IT BRANCHLESSLY -- `cmp $0x2,%ax`
- * / `setne` / `movzbl` / `neg` / `and`, which is `n & -(q != 2)`.  The `?:` is
- * what is written, for the reason `src/fax/v17.c` gives at the identical site.
+ * Keep the quality verdict as a used boolean value, then mask the count
+ * before the terminal short return (F11812).  The period compiler folds a
+ * direct ternary or mask expression to branches instead.
  *
- * ONE CODEGEN DIFFERENCE IS EXPECTED HERE AND IT IS DECLARED RATHER THAN
- * FITTED.  The object widens `n` for the `DescrambleDataV27` call with
- * `movzwl %ax,%edi`; `DescrambleDataV27`'s third parameter is `short` in this
- * tree (from its own `movswl` of that parameter, F9118), so the implicit
- * conversion below must widen with `movswl` instead.  Declaring that parameter
- * `unsigned short` and letting the SINGLE narrowing happen inside the callee
- * would reproduce both sites -- but it is a change to a written, tested
- * function's signature that cannot be checked without the period compiler, so
- * it is left for whoever has one.  The two spellings are behaviourally
- * identical for every `n`, because the conversion to `short` happens either
- * way before `SDMv27_descrambler` sees it.  Finding F9237, deviation D1140.
+ * The public descrambler count is unsigned short, matching the original
+ * caller's zero extension; its signed-short consumption remains explicit in
+ * the callee.  Both complete period objects were checked (F9237, F11812).
  */
 short
 RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short r;
+	unsigned int r;
+	int reliable;
 
 	((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
 	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_DATA;
@@ -114,14 +107,15 @@ RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count)
 	DescrambleDataV27(modem, (unsigned short *)(void *)out, (short)n);
 	*count = 0;
 
-	r = (short)(QualityDetectV27(modem) != V27_QUALITY_UNRELIABLE ? n : 0);
+	reliable = QualityDetectV27(modem) != V27_QUALITY_UNRELIABLE;
 
 	((struct v27_rx *)modem)->result.byte.flags &=
 		(unsigned char)~(unsigned char)V27_STATUS_FLAG_LOW_SNR;
+	r = n & (unsigned int)-reliable;
 	if (GetSNRV27(modem) <= V27RX_SNR_THRESHOLD)
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_LOW_SNR;
 
-	return r;
+	return (short)r;
 }
 
 /*
@@ -358,10 +352,9 @@ RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count)
  * hands over immediately rather than counting 65535 blocks.  Both readings are
  * reproduced; see v27fax.h at `V27SH_COUNTDOWN`.
  *
- * THE `DescrambleDataV27` WIDENING IS THE SAME DECLARED DIFFERENCE
- * `RxHdxDataV27` CARRIES: the object widens `n` with `movzwl` and this tree's
- * `DescrambleDataV27` takes a `short`, so the implicit conversion widens with
- * `movswl` instead.  Behaviourally identical for every `n`.  F9237, D1140.
+ * The descrambler accepts an unsigned-short count and consumes its signed
+ * short interpretation.  The explicit narrow at this protocol call remains;
+ * its complete body is still non-exact (F11812).
  */
 short
 RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
