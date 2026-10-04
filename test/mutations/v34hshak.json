@@ -143,8 +143,8 @@
  },
  {
   "label": "tail: 0xaa3c and 0x2aa0 values swapped",
-  "find": "\ths_put(obj, 0xaa3c, 0);\n\ths_put(obj, 0x2aa0, 0x10);",
-  "replace": "\ths_put(obj, 0xaa3c, 0x10);\n\ths_put(obj, 0x2aa0, 0);",
+  "find": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0);\n\ths_put(obj, 0x2aa0, 0x10);",
+  "replace": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0x10);\n\ths_put(obj, 0x2aa0, 0);",
   "fn": "v34handshakinit"
  },
  {

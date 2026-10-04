@@ -127,14 +127,14 @@
  },
  {
   "label": "the J gate wants 0x10 rather than 0x08",
-  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
-  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_TRN_WATCH\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_TRN_WATCH\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
   "fn": "t4_receive_body"
  },
  {
   "label": "the J gate's marker is 0x66, not 0x65",
-  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x65) {",
-  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, 0x359c) == 0x66) {",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x66) {",
   "fn": "t4_receive_body"
  },
  {

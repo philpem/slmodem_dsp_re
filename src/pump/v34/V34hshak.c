@@ -1289,6 +1289,35 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
  * constants through the same `obj + 4` base, which is the corroboration that
  * they are one group and that the reset arm is a reset.
  */
+/*
+ * The offsets `v34handshakinit` writes, hoisted above it: a #define is
+ * visible only from its own line down, the T3C_ and T3M_ family blocks sit
+ * further down beside the arms that own the rest of each family, and the
+ * init sites spell these by name (issue #260).  Where a macro is defined has
+ * no codegen presence -- the tokens at every use site are identical either
+ * way -- so this is preprocessor data moved, not a statement reordered.
+ */
+#define T3C_F358C	0x358c	/* short: cleared by MOH_TONE's body        */
+/*
+ * +0x356a IS THE DETECTOR'S OWN `armed`, AND THE OBJECT SAYS SO RATHER THAN
+ * THE STRUCTURE DOING.  +0x3564 is the base `detectorinit` is handed one
+ * statement earlier, `struct v34_detector`'s third field sits at +6, and
+ * 0x3564 + 6 is 0x356a -- so both writers of this offset (0x6d5db here and
+ * 0x6ec4a in microstate 44, which the tree already carries as `T44_F356A`)
+ * are arming the detector they have just built.
+ *
+ * IT IS STILL AN OFFSET AND NOT A FIELD ACCESS.  v34fsk.h declines to embed
+ * the detector at +0x3564 on purpose -- two things meeting is adjacency, not
+ * a bound (findings F215 and F630) -- and reaching through a cast here would
+ * override that decision from the far side.  The name records what it is;
+ * the access stays as the tree writes every other offset.  Finding F751.
+ */
+#define T3C_F356A	0x356a	/* short: the detector at +0x3564's `armed` */
+#define T3C_FABE4	0xabe4	/* short: set to 1 on the disconnect path  */
+#define T3C_FABE6	0xabe6	/* short: set to 1 on the retrain path     */
+#define T3M_F3588		0x3588	/* short, arm 47's second entry guard;
+					   `v34handshakinit` also writes it  */
+#define T3M_F358A		0x358a	/* short, set to 1 beside it           */
 void
 v34handshakinit(void *objp, int mode)
 {
@@ -1317,10 +1346,10 @@ v34handshakinit(void *objp, int mode)
 	*(int *)(m + 0x244) = base;
 	*(int *)(m + 0x23c) = base + 0x69780;
 
-	hs_put(obj, 0xabe6, 0);
+	hs_put(obj, T3C_FABE6, 0);
 	m[0xabe8] = 0;
 	m[0xabf8] = 0;
-	hs_put(obj, 0xabe4, 0);
+	hs_put(obj, T3C_FABE4, 0);
 	m[0xabfe] = 0;
 	m[0xabff] = 0;
 
@@ -1384,8 +1413,8 @@ v34handshakinit(void *objp, int mode)
 
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
 		rx->agc_gain = rx->agc_start_gain;
-		hs_put(obj, 0x358a, 2);
-		hs_put(obj, 0x3588, 2);
+		hs_put(obj, T3M_F358A, 2);
+		hs_put(obj, T3M_F3588, 2);
 		break;
 
 	case 2:
@@ -1492,7 +1521,7 @@ v34handshakinit(void *objp, int mode)
 			*(int *)(r + 0x2c) = 0xf72;
 		}
 
-		hs_put(obj, 0x358c, 0);
+		hs_put(obj, T3C_F358C, 0);
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -1506,8 +1535,8 @@ v34handshakinit(void *objp, int mode)
 		detectorinit(v34_object_detector(obj),
 			     (obj->role == 0x65) ? c2400_ : c1200_,
 			     0, 0x64, 0x32, 0x800, 0);
-		hs_put(obj, 0x356a, 1);
-		hs_put(obj, 0x358a, 0);
+		hs_put(obj, T3C_F356A, 1);
+		hs_put(obj, T3M_F358A, 0);
 		break;
 
 	default:
@@ -1515,7 +1544,7 @@ v34handshakinit(void *objp, int mode)
 		break;
 	}
 
-	hs_put(obj, 0xaa3c, 0);
+	hs_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0);
 	hs_put(obj, 0x2aa0, 0x10);
 }
 
@@ -2924,14 +2953,15 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3C_LVL_COUNT	0x0234	/* int:   blocks below it, capped at 0x257f */
 #define T3C_MODE	0x2218	/* int:   selects what the tail reports     */
 #define T3C_DETECTOR	0x3564	/* struct v34_detector, inside the object   */
-#define T3C_F358C	0x358c	/* short: cleared by MOH_TONE's body        */
 #define T3C_FSKGATE	0xa8a0	/* int:   non-zero diverts at 0x64a87       */
 #define T3C_BLK_A94C	0xa94c	/* what +0xaa6c is aimed at                 */
 #define T3C_BLK_A97C	0xa97c	/* what +0xaa70 is aimed at                 */
 #define T3C_COUNT	0xaa78	/* short: the counter, and HS_TRACE_2       */
 #define T3C_COUNT_SRC	0xaa7c	/* short: RX_PHASE3_CALL copies it in       */
-#define T3C_PTR_AA6C	0xaa6c
-#define T3C_PTR_AA70	0xaa70
+/* now the member's own offset (issue #260). */
+#define T3C_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
+/* now the member's own offset (issue #260). */
+#define T3C_PTR_AA70	((int)__builtin_offsetof(struct v34_object, paa70))
 /*
  * THE ONE OFFSET HERE THAT IS NOT A MISSING FIELD.  +0xaae2 IS `fsk.sr` and
  * every other reader in this file now spells it that way -- but 0x65c8a reads
@@ -2942,26 +2972,13 @@ ApplyBulkDelay(void *objp, short delay)
  * it would be a codegen regression that nothing in this tree could catch.
  * The offset stays for that one read.  Finding F553.
  */
-/*
- * +0x356a IS THE DETECTOR'S OWN `armed`, AND THE OBJECT SAYS SO RATHER THAN
- * THE STRUCTURE DOING.  +0x3564 is the base `detectorinit` is handed one
- * statement earlier, `struct v34_detector`'s third field sits at +6, and
- * 0x3564 + 6 is 0x356a -- so both writers of this offset (0x6d5db here and
- * 0x6ec4a in microstate 44, which the tree already carries as `T44_F356A`)
- * are arming the detector they have just built.
- *
- * IT IS STILL AN OFFSET AND NOT A FIELD ACCESS.  v34fsk.h declines to embed
- * the detector at +0x3564 on purpose -- two things meeting is adjacency, not
- * a bound (findings F215 and F630) -- and reaching through a cast here would
- * override that decision from the far side.  The name records what it is;
- * the access stays as the tree writes every other offset.  Finding F751.
- */
-#define T3C_F356A	0x356a	/* short: the detector at +0x3564's `armed` */
 #define T3C_FAAE2	0xaae2	/* THE LOW BYTE of `fsk.sr`; see above     */
-#define T3C_FABE4	0xabe4	/* short: set to 1 on the disconnect path  */
-#define T3C_FABE6	0xabe6	/* short: set to 1 on the retrain path     */
-#define T3C_FABF8	0xabf8	/* byte:  "the drop has been reported"     */
-#define T3C_FABF9	0xabf9	/* byte:  non-zero diverts at 0x6c8f8      */
+/* now the member's own offset (issue #260). */
+#define T3C_FABF8	/* byte:  "the drop has been reported"     */ \
+	((int)__builtin_offsetof(struct v34_object, moh_msg_pending))
+/* now the member's own offset (issue #260). */
+#define T3C_FABF9	/* byte:  non-zero diverts at 0x6c8f8      */ \
+	((int)__builtin_offsetof(struct v34_object, moh_path_sel))
 #define T3C_FABFC	0xabfc	/* short: what the counter must reach      */
 #define T3C_RX_SAMPS	0x010c	/* receiver: where a detector reads from   */
 
@@ -3047,9 +3064,6 @@ ApplyBulkDelay(void *objp, short delay)
  * than an offset (docs/findings.md's rule about decompiler-shaped names).
  * What IS measured is in the comment beside each use.
  */
-#define T3M_F3588		0x3588	/* short, arm 47's second entry guard;
-					   `v34handshakinit` also writes it  */
-#define T3M_F358A		0x358a	/* short, set to 1 beside it           */
 #define T3M_FABAE		0xabae	/* ten shorts arm 47 clears            */
 #define T3M_FABC2		0xabc2	/* the eleventh, cleared separately    */
 #define T3M_FABFF		0xabff	/* SIGNED byte, arm 63's third guard   */
@@ -3071,10 +3085,12 @@ ApplyBulkDelay(void *objp, short delay)
 					   arm 51 hands it to
 					   `V34SetINFO1aBits` and prints ten
 					   of its halfwords                  */
-#define T3M_SELFPTR		0xaa6c	/* arm 51 aims this at +0xa9ac and
+/* now the member's own offset (issue #260). */
+#define T3M_SELFPTR		/* arm 51 aims this at +0xa9ac and
 					   then reads the record back through
 					   it -- the harness knows it as one
-					   of the two self-pointers          */
+					   of the two self-pointers          */ \
+	((int)__builtin_offsetof(struct v34_object, paa6c))
 #define T3M_TXBAUD		0xaa84	/* short, the transmit baud rate       */
 #define T3M_TXSCALE		0xaa90	/* const short *, the transmit power
 					   scale                             */
@@ -5091,15 +5107,19 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 #define T41_F35A0	0x35a0	/* short: a counter this arm steps and caps */
 #define T41_BLK_A94C	0xa94c	/* the 0x30-byte record 0x70bdd fills       */
 #define T41_BLK_A9AC	0xa9ac	/* the one 0x6d387 fills, and aims +0xaa6c  */
-#define T41_PTR_AA6C	0xaa6c
-#define T41_PTR_AA70	0xaa70
+/* now the member's own offset (issue #260). */
+#define T41_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
+/* now the member's own offset (issue #260). */
+#define T41_PTR_AA70	((int)__builtin_offsetof(struct v34_object, paa70))
 #define T41_COUNT	0xaa78	/* short: the counter, and the trace's [2]  */
 #define T41_FAA7A	0xaa7a	/* short: cleared unconditionally on entry  */
 #define T41_RTD		0xaa7e	/* short: the round-trip delay, >> 4 here   */
 #define T41_ABAE	0xabae	/* short[10]: the info record staged here   */
 #define T41_FABC2	0xabc2	/* short: the last index of it to copy out  */
 #define T41_FABE8	0xabe8	/* byte: non-zero takes the second door     */
-#define T41_FABF8	0xabf8	/* byte: "the drop has been reported"       */
+/* now the member's own offset (issue #260). */
+#define T41_FABF8	/* byte: "the drop has been reported"       */ \
+	((int)__builtin_offsetof(struct v34_object, moh_msg_pending))
 #define T41_RX_SAMPS	0x010c	/* receiver: where the detector reads from  */
 
 #define T41_RX(obj)	v34_object_receiver(obj)
@@ -8106,7 +8126,8 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	 * this arm that moves a state word the caller did not seed.
 	 */
 	if ((flags & 0x98) == V34_RX_FLAG_LATE_TRN
-	    && T4_I16(obj, 0x359c) == 0x65) {
+	    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,
+			    role))) == 0x65) {
 		/*
 		 * 0x68e50 is the body, not a call: `settxlevel` against the
 		 * +0xa9dc record, `V34SetupModulator` on the three shorts at

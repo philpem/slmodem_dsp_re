@@ -414,7 +414,8 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
  * and checks it by offset instead (finding F324).
  */
-#define TX1_PTR_AA6C	0xaa6c
+/* now the member's own offset (issue #260). */
+#define TX1_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
 #define TX1_BLK_A94C	0xa94c
 
 /*
@@ -2003,8 +2004,12 @@ v34tx1_jtxmit(void *objp)
  * chooses twice -- which message is built at 0x6a3f3, and which of the tail's
  * three ways out is taken at 0x65012.  Neither has another reader here.
  */
-#define TX1_MOH_MSG_PENDING	0xabf8
-#define TX1_MOH_PATH_SEL	0xabf9
+/* now the member's own offset (issue #260). */
+#define TX1_MOH_MSG_PENDING \
+	((int)__builtin_offsetof(struct v34_object, moh_msg_pending))
+/* now the member's own offset (issue #260). */
+#define TX1_MOH_PATH_SEL \
+	((int)__builtin_offsetof(struct v34_object, moh_path_sel))
 
 /*
  * 0x64a13 and 0x67d07, the same nine instructions twice.  The message bit is

@@ -1546,19 +1546,6 @@ typedef char v34pcmcreate_objlen[
 #include "dsplib/vpcm.h"
 
 /*
- * The modulation numbers, which are the same five `VPcmV34InitiateRetrain`
- * takes and `v34pcmmain.cpp` spells out at its own head -- both files are
- * halves of `VPcmV34Main.cpp` and each carries the constants it uses, since
- * splitting one translation unit by language leaves no shared private header
- * to put them in.  56 is not one of `v8dp.h`'s ids and there is no V.8 code
- * for it; finding F1090 has why.
- */
-#define DP_V34			34
-#define DP_K56FLEX		56
-#define DP_V90			90
-#define DP_V92			92
-
-/*
  * The answerer's value of `role`, the same 0x65/0x66 pair `v34modeminit`,
  * `preinitdigital` and `v34handshakinit` all test it against and the same
  * constant v34pcmmain.cpp spells `PCM_ROLE`.  Named here too because the four
@@ -1573,21 +1560,6 @@ typedef char v34pcmcreate_objlen[
  * return 8000 rather than zero.
  */
 #define PCMIF_PCM_BAUD		8000
-
-/*
- * The configuration byte `VPcmV34RequestDPNotification` clears a bit of, and
- * the bit.  `requestOutputSampleClear` in v34pcmmain.cpp SETS the same bit
- * beside the same three words, and that file spells the pair the same way --
- * both halves of `VPcmV34Main.cpp` carry the constants they use, since
- * splitting one translation unit by language leaves no shared private header.
- *
- * Named rather than written `&= 0xfe` because a mask states a bit position
- * and hides a meaning: this one is "a sample clear is outstanding", which is
- * what the setter and this clearer agree on.  A macro is a compile-time
- * substitution and cannot move code generation, so the name is free.
- */
-#define CFG_FLAGS51		0x51
-#define CFG_FLAG51_CLEAR	0x01
 
 /*
  * The three-link chain `VPcmV34InitiateRateRenegotiation` and
@@ -1617,7 +1589,6 @@ typedef char v34pcmcreate_objlen[
  * arithmetic through these three NAMED offsets rather than becoming either a
  * guessed struct or a function call.
  */
-#define SESS_DEMOD		0x175c	/* V90Modem::demodulator, a V90Demodulator*  */
 #define DEMOD_CONNEVAL		0x020c	/* V90Demodulator::connectionEvaluator       */
 #define CONNEVAL_EXTERNAL_DEMAND 0x8c	/* V90ConnectionEvaluator::externalDemandCode */
 
