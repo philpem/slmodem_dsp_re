@@ -70,7 +70,7 @@ wrapping operation, cosine index, double addition nor rounding point changes.
 The copy is a source preimage in the declared domain, not a unique spelling.
 
 At combine, the negative control computes imaginary product at UID68 and
-converts real product at UID74. The exact source converts real at UID63 and
+converts real product at UID75. The exact source converts real at UID63 and
 computes imaginary at UID73. This reverses their lifetime overlap before
 allocation and explains PUSH/FILD before imaginary IMUL, rather than fitting
 ECX/EDX names. The final scheduled instructions and every register then match.

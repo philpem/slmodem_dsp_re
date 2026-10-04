@@ -134749,7 +134749,7 @@ the imaginary channel and all200 bytes match. Product values, wrapping adds,
 double operations and rounding points are unchanged. Names/flags are not fitted.
 
 Combine proves the lifetime boundary before allocation: negative control's
-imaginary multiply UID68 precedes real conversion UID74; exact control's real
+imaginary multiply UID68 precedes real conversion UID75; exact control's real
 conversion UID63 precedes imaginary multiply UID73. Twelve full-TU cells,
 ten distinct sources/objects, twenty-four parsed stages and twelve positive/
 negative input/channel controls pass. All three functions/one cosine table,
