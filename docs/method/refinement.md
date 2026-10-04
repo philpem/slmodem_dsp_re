@@ -3460,3 +3460,19 @@ F7846's Uref to an extra four-byte frame allocation (F11796), not an exact
 function. A complete instruction-sequence match with wrong stack offsets remains
 nonexact. Require a slot-allocation/lifetime witness before more source forms;
 never normalize away the frame to obtain a gain. [Controls and results](../gcc3-value-carriers-results.md).
+
+
+### Separate local slots from known-callee alignment
+
+A four-byte frame mismatch need not be another local or a global flag. Trace
+assign_stack_local_1 and ix86_compute_frame_layout in the installed period
+compiler, preserving emitted objects raw. Uref's four allocations agree;
+the difference is padding2 propagated from its already-emitted callee through
+cgraph_rtl_info. Recovering the original constant quiet NaN instead of a
+library nanf call lowers that callee's known incoming boundary128→32bits;
+crossing it with independently evidenced double-half addition closes240B
+(F11798–F11799). Keep flags/function order fixed, inspect the callee's object,
+audit inline consumers and pool/table relocations, and require valid target
+observations plus refusal controls. Do not infer dead locals from stack size.
+The other three NaN sites supply bounded no-gain controls, not a general
+license for spelling changes. [Results and replay](../gcc3-uref-stack-results.md).

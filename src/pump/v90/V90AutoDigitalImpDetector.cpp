@@ -855,7 +855,8 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 	 * allocation, and no spelling of this declaration reaches it.
 	 * Finding F7848.
 	 */
-	float bestVar = nanf("");
+	/* F11799: compile-time quiet NaN also preserves the caller alignment. */
+	float bestVar = NAN;
 	float bestValue;
 
 	do {
@@ -1041,7 +1042,7 @@ V90AutoDigitalImpDetector::updateUref()
 
 			linearMappingVar[phase][ucode] =
 			    magnitudeSqSum[phase][ucode] * inv - mean * mean;
-			linMapp[phase][ucode] = (short)(mean + 0.5f);
+			linMapp[phase][ucode] = (short)(mean + 0.5);
 		}
 	}
 

@@ -568,7 +568,7 @@
  },
  {
   "label": "drop the rounding term on updateUref's mean",
-  "find": "\t\t\tlinMapp[phase][ucode] = (short)(mean + 0.5f);",
+  "find": "\t\t\tlinMapp[phase][ucode] = (short)(mean + 0.5);",
   "replace": "\t\t\tlinMapp[phase][ucode] = (short)mean;"
  },
  {
