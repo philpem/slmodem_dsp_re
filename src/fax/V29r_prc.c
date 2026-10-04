@@ -114,14 +114,15 @@ short
 RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short units;
+	unsigned int units;
+	int reliable;
 
-	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_CARRIER >> 8);
 	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_DATA;
 
 	if ((short)DataCarrierDetectV29(modem, in, *count) == 0
 	    || ((struct v29_rx *)modem)->det->int_0008 != 0) {
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_CARRIER >> 8);
 		*count = 0;
 		return 0;
 	}
@@ -130,14 +131,14 @@ RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 	DescrambleDataV29(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	units = (short)((short)QualityDetectV29(modem) != V29Q_NO_CARRIER
-			? (short)n : 0);
+	reliable = (short)QualityDetectV29(modem) != V29Q_NO_CARRIER;
 
-	((struct v29_rx *)modem)->result.word &= ~V29_STATUS_LOW_SNR;
+	((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_LOW_SNR >> 8);
+	units = n & (unsigned int)-reliable;
 	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_LOW_SNR;
+		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_LOW_SNR >> 8);
 
-	return units;
+	return (short)units;
 }
 
 /*

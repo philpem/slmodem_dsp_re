@@ -1916,7 +1916,7 @@ void ScrambleDataV27(void *modem, unsigned short *data, short count);
  * @param data   Data words, descrambled in place.
  * @param count  Number of words.
  */
-void DescrambleDataV27(void *modem, unsigned short *data, short count);
+void DescrambleDataV27(void *modem, unsigned short *data, unsigned short count);
 
 /* ------------------------------------------------------------------ */
 /* The transmit half-duplex machine and its constructor                */

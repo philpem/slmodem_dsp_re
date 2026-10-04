@@ -89,27 +89,18 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
  * passed through untouched, so nothing in the object distinguishes the two
  * spellings and the casts cost no instruction.  Deviation D1141.
  *
- * THE RESULT IS A `?:` AND THE OBJECT SPELLS IT BRANCHLESSLY.  It emits
- * `cmp $0x2,%ax` / `setne %al` / `movzbl %al,%esi` / `neg %esi` /
- * `and %edi,%esi`, which is `n & -(q != 2)` -- the standard shape GCC folds a
- * two-armed conditional into when one arm is a constant zero and the guard is
- * already a flag.  The `?:` is what is written here, because it is the source
- * that expression is the compilation of and because writing the mask by hand
- * would be fitting the object rather than reading it.  `n` is `unsigned short`
- * and the object zero-extends it (`movzwl %ax,%edi`), which is the local's
- * declared type showing through (finding F7803); the final `movswl %si` is the
- * function's own `short` return.
- *
- * THE `andb $0x7f` SITS BETWEEN THE `setne` AND THE `and` in the object.  That
- * is the scheduler moving a store with no dependence on either, not a
- * statement order to reproduce: the clear of `V17RX_FLAG_LOW_SNR` belongs with
- * the `GetSNRV17` test it precedes.
+ * The original quality verdict is a used boolean value, then NEG/AND masks
+ * the demodulated count.  Keep the verdict separate and the selected result
+ * wide until the short return.  Direct ternary/mask spellings fold to branches
+ * before register allocation on the period compiler; see F11812.
+ * The low-SNR flag clear lies between SETNE and the count mask in the object.
  */
 short
 RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short r;
+	unsigned int r;
+	int reliable;
 
 	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
 	RXROOT(modem)->result.byte.status = V17RX_STATUS_DATA;
@@ -126,14 +117,15 @@ RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
 	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	r = (short)(QualityDetectV17(modem) != V17_QUALITY_UNRELIABLE ? n : 0);
+	reliable = QualityDetectV17(modem) != V17_QUALITY_UNRELIABLE;
 
 	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_LOW_SNR;
+	r = n & (unsigned int)-reliable;
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
 		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
 
-	return r;
+	return (short)r;
 }
 
 /*

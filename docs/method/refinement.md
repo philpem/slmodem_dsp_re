@@ -3525,3 +3525,27 @@ the gain. The pump's post-call lowering is already unchanged, and its remaining
 remote tails need compiler-stage CFG evidence (F11810). Do not reopen cast,
 ternary, declaration-order or flag matrices without a new discriminator.
 Complete domains, audits and replay: [sample transfer results](../gcc3-sample-transfer-results.md).
+
+
+### Preserve a used boolean value before a zero-selection mask (F11812)
+
+An original SETcc/NEG/AND sequence can distinguish a separately used boolean
+from a direct conditional expression. In the period compiler, direct
+`n & -(quality != bad)` and multiplication controls fold to branches already
+in initial RTL. Capturing `int reliable = quality != bad`, then using its
+negated value to mask a wide count before the terminal short return, reproduces
+`RxHdxDataV17`. V27 and V29 additionally require independently witnessed public
+argument/consumption widths and existing union byte flag writes. Cross these
+axes: the width controls alone had previously failed. Review complete caller
+and callee TUs, including non-exact bodies and every header consumer.
+
+This is a bounded source-value ownership lever, not a reason to rewrite all
+ternaries. Ring-wrap transfers recover SETL/NEG/AND but still miss complete
+functions; an opcode screen must be traced to the same value/path. A widened
+source carrier can be raw-inert once optimization keeps the narrow result wide,
+so full-register index use alone does not establish an `int` local. Demapper's
+BYTES1 SIB commutation and a same-size normalization helper remain misses.
+No declaration, register, slot or equivalent-expression permutations follow
+from these partial successes. Reopen a closed family only with an independent
+original operand or compiler-stage witness. See
+[next20-byteexact-results.md](../next20-byteexact-results.md).
