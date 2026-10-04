@@ -3105,3 +3105,18 @@ the independently measured advancing input cursor and per-bin input load,
 this recovers all200 bytes. Each axis alone misses. Keep wrapping integer adds
 and x87 operations/rounding points intact; cross the source boundaries rather
 than fit the ensuing registers. [Twelve full-TU cells and pass controls](../v34-dft-loop-boundaries.md), F11703.
+
+### Trace a neighboring gain before interpreting it as source recovery
+
+An independently observed array-base local in V34TimingPrefilter makes the
+following, unchanged V34EqualizerCleanUp exact. Compare its actual RTL across
+stages while excluding only compiler addresses and MEM alias annotations:
+instructions agree through postreload, and the first change is peephole2's
+constant scratch. This is a translation-unit scratch carrier, not evidence of
+different cleanup source. Recover the address boundary on its own object
+merit, report the neighboring gain separately, and keep the nonexact precursor
+open. Here a late-coefficient control is closer to the precursor's product
+schedule but loses the cleanup gain; that prevents claiming a unique original
+source or freezing the early-coefficient choice. Bounded initialization controls
+also miss. [37 full-TU controls and firing detector](../v34-prefilter-boundaries.md),
+F11705. The related rollback domain is closed without adoption (F11704).

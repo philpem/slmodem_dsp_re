@@ -1447,6 +1447,7 @@ V34TimingPrefilter(struct v34_timing *t)
 	int acc_re = 0x2000;		/* Q14 round-to-nearest, both parts */
 	int acc_im = 0x2000;
 	int k;
+	int *state = t->pre_state;
 
 	/*
 	 * Two taps per iteration, because two complex inputs arrive per call
@@ -1455,13 +1456,13 @@ V34TimingPrefilter(struct v34_timing *t)
 	 * applied to a complex signal, not a complex filter.
 	 */
 	for (k = 0; k < V34_TIMING_PRE_TAPS; k += 2) {
-		int old0 = t->pre_state[k];
-		int old1 = t->pre_state[k + 1];
+		int old0 = state[k];
+		int old1 = state[k + 1];
 		int c0 = V34TimingPrefilterCoeff[k];
 		int c1 = V34TimingPrefilterCoeff[k + 1];
 
-		t->pre_state[k] = carry0;
-		t->pre_state[k + 1] = carry1;
+		state[k] = carry0;
+		state[k + 1] = carry1;
 
 		acc_re = (int)((unsigned)acc_re
 			       + (unsigned)((short)carry0 * c0));

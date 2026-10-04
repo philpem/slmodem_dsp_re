@@ -134762,3 +134762,47 @@ Exact set933→934/1852, +200 exact bytes, zero losses. Whole-object positional
 comparison remains separately reported and DIFFERENT. [Declared domains,
 controls, source/pass evidence and replay](v34-dft-loop-boundaries.md).
 No fuzzing or mutation execution. (2026-10-04)
+
+## F11704. Echo-history rollback count lifetime explains layout but does not recover an exact body
+
+A bounded sixteen-cell cross on V34EchoHistoryBackwardClean separates the
+reference's signed half-span comparison, shared remaining count, prefilter
+cursor load scope and backward-loop countdown. The shared count reduces the
+404-byte body's differing-byte verdict from 254 to 119; signed comparison plus
+early cursor reaches 111. Countdown changes wrap/exit CFG and misses length.
+All cells retain 13/26 exact functions; only the investigated body changes.
+Complete-TU metadata, all 48 named data and canonical nontext relocations agree.
+No source is adopted and the source family is closed. A lower difference score
+is not permission for register/declaration synonyms or an API type guess.
+[Declared domain and reproduction](v34-rewind-boundaries.md). (2026-10-04)
+
+## F11705. Timing-prefilter state-base recovery makes the following cleanup exact through peephole2
+
+The blob gives V34TimingPrefilter's state array its own base (t+0x74). Recovering
+that local pointer changes the prefilter address graph and makes the unchanged
+V34EqualizerCleanUp EXACT 48/48. This is independently supported source factoring
+with a whole-TU scratch effect, not recovery of cleanup statements. Cleanup's
+actual instructions agree through postreload; the first difference is
+peephole2's HI unity-constant scratch AX versus CX. Register renaming later
+changes the zero/length call-argument scratches too.
+
+Twenty-one complete prefilter cells cross base factoring, exchange sequence,
+product lifetime, coefficient load scope and two bounded initialization
+controls. Four yield the cleanup gain; none makes the prefilter exact. The
+late-coefficient/local-base control reduces its length difference to two bytes
+and reproduces the persistent imaginary accumulator/product schedule; its
+initialization/spill placement remains different. Only the supported local base
+is adopted. This does not establish a unique source preimage, settle coefficient
+order or freeze source/profile choices around a compensating exact-set gain.
+
+Together with the rollback negatives: 37 complete TUs, 26 functions/48 data
+objects each, full metadata/data/canonical relocation checks; 60 parsed stage
+records, four unchanged-stage and two firing scratch controls. Production
+299/300 objects stay raw-identical; the changed object raw-matches its declared
+candidate. Exact set 934→935/1852, +48 exact bytes, zero losses. Same-order
+partial links remain DIFFERENT, with positioned matches decreasing by one byte.
+[Controls, limits and replay](v34-prefilter-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+Validation: make phase J=4, 388 passed / 0 failed; 37 valid cells represent
+33 sources / 21 raw objects. Existing echo/timing and equalizer fixtures pass.
