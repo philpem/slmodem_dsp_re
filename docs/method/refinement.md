@@ -3041,3 +3041,20 @@ Audit allocated nontext with canonical relocation targets: a preceding function
 shrinking moves a jump table's raw addends while preserving its destination
 function and relative offset. Verify that identity before masking bytes.
 [Screen and 27-cell reproduction](../gcc3-candidate-screen.md).
+
+
+## The last narrow consumer can select the extended load
+
+F11694 reopens v8_crc's rejected extraction-spelling family with a different
+question. Baseline expansion resembles the blob, but combine removes its
+signed extension; the signed-field negative retains a shared HI load and both
+extensions, then regmove folds the last extension into the load. GCC3
+optimize_reg_copy_3 requires the narrow pseudo to die at that consumer and
+rewrites earlier users through subregs. Signed predicate first, unsigned read
+second makes that extension unsigned and recovers the entire41-byte function.
+This happens before allocation: do not label the operand-role mismatch regalloc.
+
+`-fno-regmove` is an insufficient disabling control: the extension folding
+runs under expensive optimizations in the forward pass. Preserve its measured
+losses instead of treating an accepted flag as proof a pass did not execute.
+[Thirteen bounded controls and replay](../v8-crc-extension-promotion.md).

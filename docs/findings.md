@@ -134630,7 +134630,7 @@ new reachability claim or unique-spelling claim.
 (2026-10-03)
 
 
-## F11692 — V34 HP: index width crossed with in-place arithmetic
+## F11692. V34 HP: index width crossed with in-place arithmetic
 
 Object-first candidate screen: 300 objects, 131 scoped TUs, 583 shared symbols,
 340 nonexact, 180 feature candidates, 0 missing-disassembly refusals; 3/3 known
@@ -134642,7 +134642,7 @@ adoption changes only HP/init. Screen, finite reproducer and canonical data
 relocation audit are reusable. [Evidence](gcc3-candidate-screen.md), issue248.
 (2026-10-03)
 
-## F11693 — V34 timing initialization: byte-size element bound
+## F11693. V34 timing initialization: byte-size element bound
 
 Nested loop/type/clear domain (8 cells) and explicit six-store domain (4) fail
 exactness. Predeclared sizeof-member domain (3 including production control)
@@ -134657,3 +134657,29 @@ move but retain function-relative targets. Whole-tree 927→929/1852, exact byte
 Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation,
 new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
 (2026-10-03)
+
+
+## F11694. V8 CRC: death-bearing extension recovers the unsigned primary load
+
+Reopens F11672 with a new pass-derived ordering hypothesis. Six diagnostic
+controls: full baseline, signed-field negative, extracted baseline, plain/-da;
+3/3 raw pairs, production/extraction controls pass. Baseline sign extension
+and shift31 survive CSE2 but vanish in combine, before allocation. Signed-field
+negative preserves both, then regmove promotes the shared HI load signed.
+GCC3 optimize_reg_copy_3 folds the extension where HI dies into its memory
+load; -fno-regmove does not suppress this expensive-optimization subpass.
+Four flag/source controls retain CRC bodies and lose v8_absfn: no adoption.
+
+Three source-order cells test the predicted reversal: signed field predicate
+before unsigned CRC read makes unsigned extension the last consumer, produces
+unsigned memory load plus signed register re-extension and shift31, EXACT41.
+Only v8_crc changes. All13 compile cells valid;11 full-TU cells reviewed
+(13FUNC/4data), metadata/nontext unchanged;290 parsed stage records,10 iterative
+GCSE UID-duplication refusals;5 causal controls fire. Production300 objects:
+299 unchanged, sole V8global raw-reproduces candidate. Census929→930/1852,
+exactbytes95782→95823, sole gain, zero losses. F11692/F11693 heading punctuation
+corrected after inherited refs failure; final phase388/0 and structural boundary
+pass, CRC22824 fixed checks,285 suites/10038 static anchors clean. Same-order
+partial positioned bytes/relocations/symbol census unchanged, DIFFERENT both.
+[Trace/replay](v8-crc-extension-promotion.md).
+No profile/fuzz/mutation or unique-spelling claim. (2026-10-04)
