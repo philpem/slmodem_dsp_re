@@ -134683,3 +134683,31 @@ pass, CRC22824 fixed checks,285 suites/10038 static anchors clean. Same-order
 partial positioned bytes/relocations/symbol census unchanged, DIFFERENT both.
 [Trace/replay](v8-crc-extension-promotion.md).
 No profile/fuzz/mutation or unique-spelling claim. (2026-10-04)
+
+
+## F11700. V34 quick-connect: grouped switch with shared result recovers EXACT59
+
+Three source cells: mask/early-return production73, grouped switch/return59
+BYTES55, grouped switch/result59 EXACT. GCC3 stmt.c expands bit tests at initial
+RTL; case ordering is by case-node count after adjacent-range merging. Each
+of three groups has two nodes, producing E7/408/310. Masks do not establish
+hand-written shifts. Shared result recovers epilogue; no field/type/flag edits.
+Combined quick/SNR changes only these two bodies. All10 full-TU cells audited,
+57FUNC/1data, metadata/nontext/canonical targets unchanged;48 stage records,
+3 causal controls. [Controls](v34-accessor-boundaries.md). (2026-10-04)
+
+## F11701. V34 SNR: product before last-value copy preserves the multiply input
+
+Flat first loop raw-merges retained90; explicit last→v second-loop handoff
+restores99 bytes but misses33. Blob multiplies before saving old v. New
+product-before-last cell has named product72 from v64 at combine UID62,
+then old-v copy to last63 atUID66; input remains live through multiply.
+Retained negative instead multiplies last63 after copying. EXACT99 without
+flags/register permutations. All10 cells valid,7 sources/6 objects; combined
+23→25/57, zero losses. Production300 objects:sole VPcmV34Main TU changes and
+raw-reproduces combined;930→932/1852, exactbytes95823→95981, sole two gains,
+zero losses. Fixed phase388/0;285 suites/10038 anchors clean. Partial positioned
+bytes68908→68923/943398, relocations1028/18317/symbols394/2907 unchanged,
+DIFFERENT both. Original wrapped products/guards/count timing preserved;
+no fuzzing/mutation or unique-spelling claim. [Replay](v34-accessor-boundaries.md).
+(2026-10-04)

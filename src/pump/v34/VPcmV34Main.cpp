@@ -3125,21 +3125,19 @@ int
 VPcmV34GetQuickConnectIndication(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	int mask;
+	int result = 0;
 
-	if ((unsigned int)obj->status > 10u)
-		return 0;
-
-	mask = 1 << obj->status;
-
-	if ((mask & 0xe7) != 0)
-		return obj->is_short;
-	if ((mask & 0x408) != 0)
-		return 0;
-	if ((mask & 0x310) != 0)
-		return 1;
-
-	return 0;
+	switch (obj->status) {
+	case 0: case 1: case 2: case 5: case 6: case 7:
+		result = obj->is_short; break;
+	case 3: case 10:
+		result = 0; break;
+	case 4: case 8: case 9:
+		result = 1; break;
+	default:
+		break;
+	}
+	return result;
 }
 
 extern "C" int
@@ -3284,27 +3282,24 @@ VPcmV34GetSNR(void *objp)
 	int db = 0;
 	int last = 0;
 
-	if (rx->equerr > 0) {
-		int v = rx->sig_energy / rx->equerr;
+	int v = 0;
 
-		if (v > 0) {
-			for (;;) {
-				last = v;
-				v = (int)((unsigned int)v * 0x1013u) >> 14;
-				if (v <= 0)
-					break;
-				db += 6;
-			}
-		}
+	if (rx->equerr > 0)
+		v = rx->sig_energy / rx->equerr;
+
+	while (v > 0) {
+		int product = (int)((unsigned int)v * 0x1013u);
+		last = v;
+		v = product >> 14;
+		if (v > 0)
+			db += 6;
 	}
 
-	if (last > 0) {
-		for (;;) {
-			last = (int)((unsigned int)last * 0x32d6u) >> 14;
-			if (last <= 0)
-				break;
+	v = last;
+	while (v > 0) {
+		v = (int)((unsigned int)v * 0x32d6u) >> 14;
+		if (v > 0)
 			db += 1;
-		}
 	}
 
 	return db;
