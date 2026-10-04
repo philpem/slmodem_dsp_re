@@ -430,32 +430,31 @@ create_dtmf(struct dtmf *d)
 {
 	short i;
 
-	if (d == NULL) {
+	if (d == NULL)
 		d = sysdep_malloc(sizeof(struct dtmf));
-		if (d == NULL) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-				    "could not allocate DTMF channel\n");
-			return NULL;
+	if (d == NULL) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "could not allocate DTMF channel\n");
+	} else {
+
+		for (i = 0; i <= 7; i++) {
+			d->notch_state[i][0] = 0.0f;
+			d->notch_state[i][1] = 0.0f;
+			d->energy[i] = 0.0f;
 		}
-	}
+		for (i = 0; i <= 1; i++)
+			d->bias_state[i] = 0.0f;
+		for (i = 0; i <= 7; i++)
+			d->hist[i] = -1;
 
-	for (i = 0; i <= 7; i++) {
-		d->notch_state[i][0] = 0.0f;
-		d->notch_state[i][1] = 0.0f;
-		d->energy[i] = 0.0f;
+		d->total = 0.0f;
+		d->phase = 0;
+		d->count = 0;
+		d->held = 0;
+		d->digit = -1;
+		d->easy = 0;
 	}
-	for (i = 0; i <= 1; i++)
-		d->bias_state[i] = 0.0f;
-	for (i = 0; i <= 7; i++)
-		d->hist[i] = -1;
-
-	d->total = 0.0f;
-	d->phase = 0;
-	d->count = 0;
-	d->held = 0;
-	d->digit = -1;
-	d->easy = 0;
 	return d;
 }
 

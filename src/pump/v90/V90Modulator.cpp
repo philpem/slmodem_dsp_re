@@ -675,13 +675,13 @@ V90Modulator::initiateRRN()
 	bitsToSymbol->setSymbolsBlockSize(1);
 
 	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		p4state = P4M_STATE_RD;
 		edprintf("V90Modulator: Phase4Modulator state initialized to "
 			 "RdModulation\r\n");
-		p4state = P4M_STATE_RD;
 	} else {
+		p4state = P4M_STATE_UNNAMED_14;
 		edprintf("V90Modulator: Phase4Modulator state initialized to "
 			 "DataToRdModulation\r\n");
-		p4state = P4M_STATE_UNNAMED_14;
 	}
 
 	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
@@ -760,13 +760,13 @@ V90Modulator::initiateFPE()
 	bitsToSymbol->setSymbolsBlockSize(1);
 
 	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		p4state = P4M_STATE_RF;
 		edprintf("V90Modulator: Phase4Modulator state initialized to "
 			 "RfModulation\r\n");
-		p4state = P4M_STATE_RF;
 	} else {
+		p4state = P4M_STATE_UNNAMED_1C;
 		edprintf("V90Modulator: Phase4Modulator state initialized to "
 			 "DataToRfModulation\r\n");
-		p4state = P4M_STATE_UNNAMED_1C;
 	}
 
 	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,

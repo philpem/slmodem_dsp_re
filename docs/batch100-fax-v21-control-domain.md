@@ -1,0 +1,3 @@
+# V21 receive control flags and boolean source boundary
+
+856c1ecb full V21r_stc.c fourcells. Original byte flags loaded ONCE before hdx scalarstore, retained rereads afterwards; flags saved then reused for reinit preserves originalalias/control behavior. Original TEST/SETNE vs sourceSHR/AND boolean1bit assignment licenses existing explicit1/0 source-arm lever. Cross two authentic axes only; int0008store remains before flags snapshot, no childpointer/artificialcursor fitting. No sharedheader/control ABI changes; whole8bit flags preserved. Fullrawbaseline/metadata/data/nontext/binding/reloc/bybody/bystanders proof, close after miss. No runtime/mutation execution.

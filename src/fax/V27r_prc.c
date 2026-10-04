@@ -329,7 +329,7 @@ RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count)
 	if (CarrierDetectV27(modem))
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
 
-	if ((((struct v27_rx *)modem)->result.byte.flags & V27_STATUS_FLAG_CARRIER)
+	if ((((struct v27_rx *)modem)->result.word & (V27_STATUS_FLAG_CARRIER << 8))
 	    && ((struct v27_rx *)modem)->rx->fse.mse <= V27RX_MSE_IDLE_OK) {
 		RxNextStateV27(modem);
 		if (DSPLIB_DEBUG_ON())
@@ -428,12 +428,21 @@ short
 RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
 {
 	struct v27_rx_shared *sh;
-	unsigned short left;
 
 	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
 
-	if (CarrierDetectV27(modem) == 0) {
+	if (CarrierDetectV27(modem) != 0) {
+		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
+		sh = ((struct v27_rx *)modem)->shared;
+		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
+
+		sh->countdown = (unsigned short)(sh->countdown - 1);
+		if ((short)sh->countdown > 0 && (short)EpochDetectV27(modem) == 0)
+			return 0;
+
+		RxNextStateV27(modem);
+	} else {
 		unsigned char flags;
 
 		sh = ((struct v27_rx *)modem)->shared;
@@ -444,20 +453,7 @@ RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
 		((struct v27_rx *)modem)->result.byte.flags = (unsigned char)
 			((flags | V27_STATUS_FLAG_ERROR)
 			 & (unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER);
-		return 0;
 	}
-
-	((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
-	sh = ((struct v27_rx *)modem)->shared;
-	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
-
-	left = (unsigned short)(sh->countdown - 1);
-	sh->countdown = left;
-	if ((short)left > 0 && (short)EpochDetectV27(modem) == 0)
-		return 0;
-
-	RxNextStateV27(modem);
-
 	return 0;
 }
 

@@ -362,7 +362,7 @@ RxHdxIdleV17(void *modem, short *in, short *out, unsigned short *count)
 	if (CarrierDetectV17(modem) != 0)
 		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
 
-	if ((RXROOT(modem)->result.byte.flags & V17RX_FLAG_CARRIER) != 0
+	if ((RXROOT(modem)->result.word & (V17RX_FLAG_CARRIER << 8)) != 0
 	    && RXSTATE(modem)->fse.mse <= V17RXS_DEC_ERROR_SMALL) {
 		RxNextStateV17(modem);
 		if (DSPLIB_DEBUG_ON())
@@ -529,29 +529,24 @@ RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxEpochDetV17(void *modem, short *in, short *out, unsigned short *count)
 {
-	short left;
-
 	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
 
-	if (CarrierDetectV17(modem) == 0) {
+	if (CarrierDetectV17(modem) != 0) {
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
+
+		RXCTL(modem)->countdown = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+		if (RXCTL(modem)->countdown <= 0 || (short)EpochDetectV17(modem) != 0)
+			RxNextStateV17(modem);
+	} else {
 		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
 			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
-		return 0;
 	}
-
-	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
-	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
-
-	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
-	RXCTL(modem)->countdown = left;
-	if (left <= 0 || EpochDetectV17(modem) != 0)
-		RxNextStateV17(modem);
-
 	return 0;
 }
 

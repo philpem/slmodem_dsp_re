@@ -217,14 +217,13 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 void
 voice_set_rx(struct voice_ctx *v)
 {
-	unsigned int (*query)(void *obj, int what) =
-	    (unsigned int (*)(void *, int))v->cfg.get_sreg;
 
 	v->rx_armed = 1;
 	v->mode = 0;
 	v->handler = voice_rx;
 	detector_set_enable(v->detector, (short)v->detector_enable_rx);
-	silence_create(v->silence, v->cfg.modem, query);
+	silence_create(v->silence, v->cfg.modem,
+	    (unsigned int (*)(void *, int))v->cfg.get_sreg);
 	v->marker_countdown = (unsigned short)(v->marker_period
 					       * VOICE_RX_MARKER_UNIT);
 
@@ -245,11 +244,11 @@ voice_set_rx(struct voice_ctx *v)
 	 * the product; making the cast explicit here does not move that
 	 * store or add a second rounding.
 	 */
-	v->gain_fmt1 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
+	v->gain_fmt1 = (float)(unsigned int)v->cfg.get_sreg(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
 		       * VOICE_RX_PARAM_SCALE;
-	v->gain_fmt3 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
+	v->gain_fmt3 = (float)(unsigned int)v->cfg.get_sreg(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
 		       * VOICE_RX_PARAM_SCALE;
-	v->gain_other = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
+	v->gain_other = (float)(unsigned int)v->cfg.get_sreg(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
 			* VOICE_RX_PARAM_SCALE;
 }
 

@@ -3373,3 +3373,42 @@ The batch50 pulse digit separates original input from corrected count and acquir
 ### Compare expression mode and copy width, not just constant bytes
 
 A0.5f→0.5 expression-mode change recovers V90 enterDataPhase190B while its entire constant pool stays byte-identical (F11765); don't infer source literal width from pool bytes alone. FIFO_create167B needs whole-config copy crossed with capacity zero-extension and signed cursor use; neither local signedness fix nor copy alone succeeds (F11766). Audit high-bit behavior from operands, not the signedness of one branch opcode.
+
+### An early initialized common result can be the original debug-call lifetime
+
+Voice DLE196B needs switch arms assigning a shared status initialized before callbacks (F11769). Literal returns remove its carrier; an equivalent if assignment graph still misses. The accompanying merged-string pool changes order but not values. Review allocated data order alongside code; exact functions are not full-object identity. Do not normalize an unrelocated local-call distance simply to bank an otherwise matching dialer: the unresolved callee/TU layout remains a separate witness.
+
+### Snapshot callbacks only where the original acquires them
+
+Rx voice_set_rx305B closes when callback-owner reads follow the original calls: the silence callback is acquired after detector setup and each gain callback is read from its owner at use (F11770). Capturing a function pointer at entry extends its lifetime across callbacks and can change both allocation and visible owner reloads. Cross acquisition timing with per-use owner access; preserve the callback prototype and returned-word interpretation. Neither timing nor direct gain reads alone reproduces this example.
+
+### Reconstruct the state that lives through diagnostics
+
+V90/V92 initiateFPE/RRN assignments before diagnostic calls reproduce four leaves; equivalent assignments after calls prevent original late tail merging (F11772). A residual attributed to crossjump freedom can still have a recoverable source carrier. Use pass dumps to locate the first actual merge: here26.postreload retains both sites and27.flow2 merges only the recovered graph.
+
+Fax reversal requires crossings of loop-counter width, postdecrement grammar and shift-before-OR narrowing (F11771). Matching one loop opcode alone does not establish the source. Literal frame open-coding additionally needs the original unsigned header stride; inspect high-bit address extension separately from loop branches.
+
+### Read declared union views at the original width
+
+A byte flag write followed by a word-mask test can differ from two byte-member operations even when their values agree: GCC caches the byte value across a conditional join and adds a CFG edge before register allocation (F11773). Initial RTL distinguishes QI byte from SI word guards, and the post-GCSE loop dump first distinguishes their jump counts. The original word read plus an exact sister function establishes the union view; use existing declarations and corresponding shifted masks. This recovers RxHdxIdleV17/V27 without volatile or alias tricks. Pair arm orientation with memory countdown ownership and narrow callee-result use for related epoch states; none of the partial source controls suffices.
+
+Whole enclosing-object ownership must sometimes cross both pre-call reads and post-call stores (SetScramblerV27, F11775). Holding the nested helper pointer on either side alone does not reproduce original92B. Preserve the observed post-call owner reread rather than caching a child across initialization; inspect the enclosing address formation, not just the final equivalent field offset.
+
+Separate variable and fixed clearing arms may be source structure, not compiler threading (_idle_state, F11776). Check original loop bounds and adjacent exact witnesses: named existing bound160 retains CMP160/JL whereas a literal loop canonicalizes to CMP159/JLE. Cross this boundary with the observed arm graph; do not infer source from length alone.
+
+Anonymous tables in ordinary push-save functions may be comparable even with direct calls (F11777). Prove the frame, ABI call contract, protected guard and every ordered case destination before canonicalization; do not mask anonymous relocations. Validate rejection controls through the actual comparator and audit old/new immutable baseline classifications separately. V29 transition byte writes then recover467B with zero unrelated body changes.
+
+Return the observed owner, even on a null diagnostic path, when its lifetime is visible (create_dtmf, F11778). A literal returnNULL removes that live-through-call object and may duplicate the epilogue; a failure diagnostic or positively guarded initialization followed by common return recovers228B. Adjacent constructors can still miss under the same family: keep the complete-TU negative control rather than generalize from one win.
+
+Arithmetic preparation can begin across a store group while completion remains afterward (_recieve_silence_state_init, F11779). Compare the whole dependency chain: signed half-count SHR+ADD before state stores and SAR after them witnesses an earlier initialization of the existing local. Transfer that observed lifetime rather than permute stores until scheduling matches.
+
+Existing helper factoring can settle nearly an entire wrapper while leaving a dead scratch register (FDSP_DP_Run, F11781). Calls to its two conversion helpers reproduce137/138 bytes and all relocation destinations; remaining POP differs first atpeephole2, not register allocation or CFG. Cross independently proven predecessors before attributing TU history. Do not alter a return ABI or add dead locals to bank the last byte. Final scheduled RTL may place epilogue instructions before the epilogue note; use the complete function to confirm surviving instructions.
+
+
+### Inspect terminal source edges before attributing a constructor frame to allocation
+
+An explicit return in a switch's final diagnostic arm can select a sibling jump where break retains CALL and cleanup (V92Modem, F11782). Here it restores the original frame and exposes a separate retained parameter versus mutable-member reload across construction calls. Cross the two observed boundaries: neither alone reproduces either constructor, both recover both clones. Initial RTL and02.sibling distinguish source age and terminal control before register allocation. Do not generalize return synonyms without the original tail-call witness.
+
+Inspect period libc headers and preprocessed source before assigning an FPRem to unsafe optimizer algebra (PHASOR, F11783). Glibc's __FAST_MATH__ inline wrapper may explain it even when macro-only and optimizer-flag controls are raw-identical. Keep diagnostic profile changes and exact losses visible; a wrapper preimage is not a recovered whole profile.
+
+Duplicated cyclic scratch arrays can support affine state-index arithmetic without modulo (VTB, F11783). Prove the index range over the actual state domain rather than replacing every read with XOR. A new private emitted helper is an inventory change to review, not permission to force inline; literal source expansion is a separate bounded control. Close raw-equivalent loop spellings instead of expanding the syntax domain without new witnesses.

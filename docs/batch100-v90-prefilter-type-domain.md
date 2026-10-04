@@ -1,0 +1,3 @@
+# Forced coefficient type across diagnostic
+
+Pinned856c1ecb V90PreFilter fullTU. After proving the initiate-state live-through-call lever, original selectFilter independently assigns forced type1/type2 to ESI before its diagnostic (0x4596f/0x45988), sharing the call0x45974. Type3 is explicitly assigned after its different call0x457f7, and is not moved. Predeclare baseline and moving only local type=1/type=2 before their diagnostic in forced registry arms. Do not move wide, source guards, member reads/writes, automatic/codec arms, or the distinct type3 boundary. Raw baseline, full metadata/data/canonical relocation/bystander audits. No flags/header changes, no mutation/fuzz/harness execution; parent batch gate.

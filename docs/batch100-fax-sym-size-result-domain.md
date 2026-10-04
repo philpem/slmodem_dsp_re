@@ -1,0 +1,3 @@
+# Class1 rate switch shared result
+
+856c1ecb retained fullTU/profile. _sym_size original103B has several constants assigned before branch tests and shared return node; retained100B has separate final return nodes. Test ordinary switch assignments/breaks plus one shared int result and final return versus retained direct returns, with all seven rate/default choices unchanged. Nonbaseline includes independently verified idle/answer original state gains. No case-order/type/profile/padding/cursor/declaration permutations, no table substitution. Stop after baseline/control, fullTU bystanders and metadata/nontext/data/reloc audit including unknown nonexact changes.

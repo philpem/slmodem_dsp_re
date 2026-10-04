@@ -1,0 +1,3 @@
+# FIFO read independent count gates
+
+856c1ecb full fifo.c four cells. Existing FIFO_write min-owner/postdecrement family is closed; this is independent FIFO_read original data and padding counters, not a retry. Blob96c93 DEC then MOVZWL/INC AX tests old unsigned-short data count; padding96cdc DEC/MOVZWL/INC AX too. Current both decrement after body. Cross these two unsigned-short postdecrement conditions only. Existing exact FIFO_create167 whole-config/unsigned-size/signed-index stays fixed, all other types/stores/binding unchanged. Full raw retained baseline, actual flags/bug define, full-TU bystanders/named data/relocations/nontext. No further carriers/ordering after miss.

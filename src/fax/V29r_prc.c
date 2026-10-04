@@ -156,7 +156,8 @@ RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
 {
-	((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_ERROR >> 8);
+	((struct v29_rx *)modem)->result.byte.flags |=
+			(unsigned char)(V29_STATUS_ERROR >> 8);
 
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
@@ -211,8 +212,8 @@ RxNextStateV29(void *modem)
 		((struct v29_rx *)modem)->det->handler = RxHdxEpochDetV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_EPOCH_DET;
 
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.byte.flags2 &= (unsigned char)~(V29_STATUS_IDLE >> 16);
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_DATA >> 8);
 		break;
 
 	case V29RX_STATE_EPOCH_DET:
@@ -224,8 +225,8 @@ RxNextStateV29(void *modem)
 		((struct v29_rx *)modem)->det->handler = RxHdxPrtcolV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_PROTOCOL;
 
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.byte.flags2 &= (unsigned char)~(V29_STATUS_IDLE >> 16);
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_DATA >> 8);
 
 		/*
 		 * THE ONLY DSP THIS FUNCTION DOES, and it is a POINTER STEP
@@ -252,8 +253,8 @@ RxNextStateV29(void *modem)
 		((struct v29_rx *)modem)->det->handler = RxHdxDataV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.byte.flags2 &= (unsigned char)~(V29_STATUS_IDLE >> 16);
+		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_DATA >> 8);
 		break;
 
 	case V29RX_STATE_DATA:
@@ -265,8 +266,8 @@ RxNextStateV29(void *modem)
 		((struct v29_rx *)modem)->det->state_count = 0;
 		((struct v29_rx *)modem)->det->int_0008 = 0;
 
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_IDLE;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.byte.flags2 |= (unsigned char)(V29_STATUS_IDLE >> 16);
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_DATA >> 8);
 		break;
 
 	case V29RX_STATE_IDLE:
@@ -276,8 +277,8 @@ RxNextStateV29(void *modem)
 		((struct v29_rx *)modem)->det->handler = RxHdxDataV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.byte.flags2 &= (unsigned char)~(V29_STATUS_IDLE >> 16);
+		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_DATA >> 8);
 
 		/*
 		 * The IDLE arm alone does NOT seed the block budget, so the
@@ -297,11 +298,11 @@ RxNextStateV29(void *modem)
 			dsplibs_debug_printf("V29RX_DEFAULT, %d\n",
 					     ((struct v29_rx *)modem)->det->state);
 
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.byte.flags2 &= (unsigned char)~(V29_STATUS_IDLE >> 16);
 		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_DEFAULT;
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_ERROR >> 8);
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_DATA >> 8);
+		((struct v29_rx *)modem)->result.byte.flags &= (unsigned char)~(V29_STATUS_CARRIER >> 8);
 		break;
 	}
 }
@@ -341,7 +342,8 @@ RxHdxIdleV29(void *modem, short *in, short *out, unsigned short *count)
 	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_IDLE;
 
 	if (CarrierDetectV29(modem))
-		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_CARRIER >> 8);
+		((struct v29_rx *)modem)->result.byte.flags |=
+			(unsigned char)(V29_STATUS_CARRIER >> 8);
 
 	if ((((struct v29_rx *)modem)->result.word & V29_STATUS_CARRIER) != 0
 	    && ((struct v29_rx *)modem)->rx->fse.mse <= V29RX_MSE_RECOVERED) {
@@ -450,26 +452,27 @@ RxHdxEpochDetV29(void *modem, short *in, short *out, unsigned short *count)
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
 
-	if (!CarrierDetectV29(modem)) {
+	if (CarrierDetectV29(modem) != 0) {
+		((struct v29_rx *)modem)->result.byte.flags |=
+			(unsigned char)(V29_STATUS_CARRIER >> 8);
+		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
+
+		((struct v29_rx *)modem)->det->state_count =
+			(short)(((struct v29_rx *)modem)->det->state_count - 1);
+		if (((struct v29_rx *)modem)->det->state_count > 0
+		    && (short)EpochDetectV29(modem) == 0)
+			return 0;
+
+		RxNextStateV29(modem);
+	} else {
 		((struct v29_rx *)modem)->det->handler = RxHdxErrorV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+		((struct v29_rx *)modem)->result.byte.flags |=
+			(unsigned char)(V29_STATUS_ERROR >> 8);
 		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
-		return 0;
+		((struct v29_rx *)modem)->result.byte.flags &=
+			(unsigned char)~(unsigned char)(V29_STATUS_CARRIER >> 8);
 	}
-
-	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
-	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
-
-	((struct v29_rx *)modem)->det->state_count =
-		(short)(((struct v29_rx *)modem)->det->state_count - 1);
-	if (((struct v29_rx *)modem)->det->state_count > 0
-	    && (short)EpochDetectV29(modem) == 0)
-		return 0;
-
-	RxNextStateV29(modem);
-
 	return 0;
 }
 
@@ -498,7 +501,8 @@ RxHdxStartV29(void *modem, short *in, short *out, unsigned short *count)
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 
 	if (CarrierDetectV29(modem)) {
-		((struct v29_rx *)modem)->result.byte.flags |= (unsigned char)(V29_STATUS_CARRIER >> 8);
+		((struct v29_rx *)modem)->result.byte.flags |=
+			(unsigned char)(V29_STATUS_CARRIER >> 8);
 		RxNextStateV29(modem);
 	}
 

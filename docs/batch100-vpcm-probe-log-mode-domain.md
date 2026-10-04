@@ -1,0 +1,5 @@
+# VPcm probe log source modes
+
+Original scaled and logarithm results both have FSTPS/FLDS float conversions, and log is FYL2X intrinsic. This does not uniquely distinguish ordinary double log10 from log10l; baseline reconstruction currently uses long-double calls/coefficient arithmetic. The vector controls recovered original real work-array but retain an integer-copy final conversion. Predeclare crossed ordinary double scaled-product expression and ordinary double log10 call, on the consumed vector with ordinary double final expression. Keep both explicit float conversion boundaries and the exact2^-14 coefficient/value. Intrinsic emits noexternalcall in either source family; no rounding-equivalence claim before targetexactness. Baseline/currentlongdoublevector positive control, double scaled alone, double logarithm alone, both. Do not extend to arbitrary arithmetic reassociation. FullTU raw/metadata/data/reloc/body audit mandatory.
+
+Measured: Five valid cells, all vector controls retain SIZE20. Standard double product/log source modes do not alter the target. No gains/losses; source family closed, no adoption.

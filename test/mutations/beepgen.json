@@ -304,13 +304,13 @@
  },
  {
   "label": "create_dtmf: the history loop stops one entry short",
-  "find": "\tfor (i = 0; i <= 7; i++)\n\t\td->hist[i] = -1;",
-  "replace": "\tfor (i = 0; i <= 6; i++)\n\t\td->hist[i] = -1;"
+  "find": "\t\tfor (i = 0; i <= 7; i++)\n\t\t\td->hist[i] = -1;",
+  "replace": "\t\tfor (i = 0; i <= 6; i++)\n\t\t\td->hist[i] = -1;"
  },
  {
   "label": "create_dtmf: only half the bias notch is cleared",
-  "find": "\tfor (i = 0; i <= 1; i++)\n\t\td->bias_state[i] = 0.0f;",
-  "replace": "\tfor (i = 0; i <= 0; i++)\n\t\td->bias_state[i] = 0.0f;"
+  "find": "\t\tfor (i = 0; i <= 1; i++)\n\t\t\td->bias_state[i] = 0.0f;",
+  "replace": "\t\tfor (i = 0; i <= 0; i++)\n\t\t\td->bias_state[i] = 0.0f;"
  },
  {
   "label": "create_dtmf: the receiver is one byte larger",

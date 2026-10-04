@@ -1,0 +1,7 @@
+# FloatARMA block count old-value lifetime
+
+Pinned856c1ecb fullTU. Original block process begins DEC count/store/INC/zero guard at0x46e97..46ea4, closes DECL(saved count),CMP -1/JNE at0x47015..1c. Current guarded do-loop uses predecrement count. This is a distinct original postdecrement count old-value boundary; F11643 FloatFIR analogue rejected entry mismatch, not this ARMA function. Previous batch20 result-pointer/latefeedback family remains closed; cross only result-pointer as explicitly measured negative seed because original block holds member output addresses and loads them for FSTPS, and source baseline has temporary narrow/copy. Four cells baseline, block while(count-- !=0) retaining owning cache guard, explicit helper result-pointer seed, both. Preserve every arithmetic operation/grouping/member access/order/history carry, scalar body except shared helper consequence. No count width change, cache permutations or spills. FullTU raw baseline, five already-exact bodies, metadata/data/relocs/nonexact scalar bystander review required. No phase/mutation/fuzz; parent batch gate.
+
+## Measured closure
+
+Four fullTU controls valid: postdecrement482B vsblob562B; outputpointercontrol482B; both482B. No gain. Bothpostdecrementcells lose previouslyexactreset throughTUallocation interaction. All metadata/data/nontextcanonicalrelocs preserved; no productionadoption or furthercountspellings.
