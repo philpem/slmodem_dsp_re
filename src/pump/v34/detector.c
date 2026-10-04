@@ -70,7 +70,7 @@ void
 detectorinit(struct v34_detector *d, const short *coeff, short polarity,
 	     short limit, short warmup, short thresh_lo, short thresh_hi)
 {
-	int section, tap;
+	short section, tap;
 
 	/* The original's nested pair, which is where the 2-D history came from. */
 	for (section = 0; section < 2; section++)
@@ -81,12 +81,12 @@ detectorinit(struct v34_detector *d, const short *coeff, short polarity,
 
 	d->coeff = coeff;
 	d->polarity = polarity;
-	d->armed = 0;
 	d->count = (short)-warmup;
-	d->limit = limit;
 	d->state = V34_DET_STATE_WARMUP;
-	d->thresh_hi = thresh_hi;
+	d->armed = 0;
+	d->limit = limit;
 	d->thresh_lo = thresh_lo;
+	d->thresh_hi = thresh_hi;
 	d->level = 0;
 }
 

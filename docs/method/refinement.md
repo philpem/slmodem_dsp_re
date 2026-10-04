@@ -3079,3 +3079,17 @@ raw-merges production; the handoff alone merely matches length. A named
 intermediate is evidence-supported when the blob consumes its input later;
 it is not permission to introduce temporaries for register scores.
 [Bounded loop/product controls](../v34-accessor-boundaries.md).
+
+### Cross counter width with store order while preserving argument lifetimes
+
+V34 detectorinit's signed-short nested counters recover its entire loop region,
+but the tail still differs. Keep that independently measured width correction
+while crossing the bounded source orders of the remaining independent stores.
+A literal copy of machine store order changes the coeff argument's load role
+and misses; coeff-first source plus count/state/armed/limit/lo/hi matches186 bytes.
+Initial/combine RTL separates the counter extensions from allocation and
+scheduled field-store order. A machine order does not uniquely identify source
+order: use controls and retain argument-load boundaries, rather than assign
+register names or broaden a synonym search. One exact candidate out of twelve
+permutations is evidence within that domain, not global source uniqueness.
+[Full-TU controls and replay](../v34-detector-boundaries.md), F11702.
