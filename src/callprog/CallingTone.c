@@ -43,14 +43,14 @@ GenerateCallingTone(struct calling_tone *ct, short *buf, int count)
 		 * original's, and it is why the period accounting below
 		 * over-counts after a transition inside a block.  See D12.
 		 */
-		end = remaining < count ? remaining : count;
+		end = remaining;
+		if (end > count)
+			end = count;
 
-		if (ct->on == 0) {
-			while (i < end)
-				buf[i++] = 0;
-		} else {
+		if (ct->on != 0) {
 			while (i < end) {
 				short v;
+				int amplitude = ct->amplitude;
 
 				/*
 				 * The phase accumulator holds one cycle in
@@ -71,7 +71,9 @@ GenerateCallingTone(struct calling_tone *ct, short *buf, int count)
 				 * peak table entry give 32768, which wraps
 				 * to -32768 in the store.
 				 */
-				buf[i] = (short)((ct->amplitude * v) >> 13);
+				amplitude *= v;
+				amplitude >>= 13;
+				buf[i] = (short)amplitude;
 				i++;
 
 				ct->phase = (short)((ct->phase
@@ -79,20 +81,22 @@ GenerateCallingTone(struct calling_tone *ct, short *buf, int count)
 						    & CALLING_TONE_PHASE_MASK);
 			}
 			remaining = ct->remaining;
+		} else {
+			while (i < end)
+				buf[i++] = 0;
 		}
 
 		remaining -= end;
-		if (remaining != 0) {
-			ct->remaining = remaining;
-			continue;
-		}
-
-		if (ct->on != 0) {
-			ct->on = 0;
-			ct->remaining = CALLING_TONE_OFF;
+		if (remaining == 0) {
+			if (ct->on != 0) {
+				ct->on = 0;
+				ct->remaining = CALLING_TONE_OFF;
+			} else {
+				ct->on = 1;
+				ct->remaining = CALLING_TONE_ON;
+			}
 		} else {
-			ct->on = 1;
-			ct->remaining = CALLING_TONE_ON;
+			ct->remaining = remaining;
 		}
 	}
 }

@@ -134843,7 +134843,7 @@ Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation
 new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
 (2026-10-03)
 
-## F11694. dp_runtime_create's tail store order recovers the 298-byte body
+## F11710. dp_runtime_create's tail store order recovers the 298-byte body
 
 Agent-run six-permutation domain over {clockDeviation, modeFlags,
 connectionType} (dp_param.c): exactly one preimage,
@@ -134856,7 +134856,9 @@ the current order is right there. dp_param.c 2/3 -> 3/3, zero losses,
 anchors clean. Census 938/1852 -> 939/1852 (+298 bytes) on adoption.
 [Artifacts](build/playbook-fdsp-dprt-r2/results.json). (2026-10-03)
 
-## F11695. FDSP_DP_Delete's tail needs a callee-saved zero live across the call
+(Numbered F11694 in this branch's PR #245 comments before the merge; renumbered 11694->11710 at integration against master's F11694.)
+
+## F11711. FDSP_DP_Delete's tail needs a callee-saved zero live across the call
 
 Blob: mov %ebx,(%esp); xor %ebx,%ebx; call sysdep_free; store %ebx to the
 global. Ours: call; xor %eax; store %eax (moffs). Every statement-level
@@ -134871,7 +134873,7 @@ the #6/#20 TU-repartition class, not a source spelling. Statement-level
 family closed. [Agent artifacts](build/playbook-fdsp-dprt/results.json).
 (2026-10-03)
 
-## F11696. V90Phase4Demodulator's decoded store order recovers both clones exactly
+## F11712. V90Phase4Demodulator's decoded store order recovers both clones exactly
 
 The blob's C1 and C2 are byte-identical AND ours are - a body defect, not
 the V90Jd clone cursor. The 17 differing rows are the eleven body
@@ -134885,7 +134887,7 @@ unique spelling - mappingParams1's position is not encoded. 13/20 -> 15/20
 in the TU, zero losses; five v90p4dctor anchors retargeted with fault
 cases preserved. [Agent artifacts](build/playbook-demod-tdx/results.json).
 
-## F11697. Three validated components land without exactness: rx_shift, the mask clamp, TxHdxTRN's fold
+## F11713. Three validated components land without exactness: rx_shift, the mask clamp, TxHdxTRN's fold
 
 V22FP_modem's byte 103 (bf->b7) follows from `unsigned short rx_shift` -
 the blob's loads of the field are all movzwl and the retype rule holds;
@@ -134903,7 +134905,7 @@ while moving a sibling). All three adopted together: census 939/1852 ->
 gains. [Artifacts](build/playbook-masks-v22fp-w2/results.json),
 build/playbook-demod-tdx/results.json. (2026-10-03)
 
-## F11698. V34GiveProbeResults's direct double load, short index and objp+4 guard recover the 71-byte body
+## F11714. V34GiveProbeResults's direct double load, short index and objp+4 guard recover the 71-byte body
 
 Three value-identical changes together - and only together - emit the
 blob's 71/71 body: the byte-copy union replaced by a direct
@@ -134920,3 +134922,279 @@ other residual, VPcmV34GetSNR, is exhausted at the spelling level
 (declaration order falsified; residue is allocator/propagation state for
 the F11690/F11691 trace method).
 [Agent artifacts](build/playbook-v34-residual/results.json). (2026-10-03)
+
+## F11694. V8 CRC: death-bearing extension recovers the unsigned primary load
+
+Reopens F11672 with a new pass-derived ordering hypothesis. Six diagnostic
+controls: full baseline, signed-field negative, extracted baseline, plain/-da;
+3/3 raw pairs, production/extraction controls pass. Baseline sign extension
+and shift31 survive CSE2 but vanish in combine, before allocation. Signed-field
+negative preserves both, then regmove promotes the shared HI load signed.
+GCC3 optimize_reg_copy_3 folds the extension where HI dies into its memory
+load; -fno-regmove does not suppress this expensive-optimization subpass.
+Four flag/source controls retain CRC bodies and lose v8_absfn: no adoption.
+
+Three source-order cells test the predicted reversal: signed field predicate
+before unsigned CRC read makes unsigned extension the last consumer, produces
+unsigned memory load plus signed register re-extension and shift31, EXACT41.
+Only v8_crc changes. All13 compile cells valid;11 full-TU cells reviewed
+(13FUNC/4data), metadata/nontext unchanged;290 parsed stage records,10 iterative
+GCSE UID-duplication refusals;5 causal controls fire. Production300 objects:
+299 unchanged, sole V8global raw-reproduces candidate. Census929→930/1852,
+exactbytes95782→95823, sole gain, zero losses. F11692/F11693 heading punctuation
+corrected after inherited refs failure; final phase388/0 and structural boundary
+pass, CRC22824 fixed checks,285 suites/10038 static anchors clean. Same-order
+partial positioned bytes/relocations/symbol census unchanged, DIFFERENT both.
+[Trace/replay](v8-crc-extension-promotion.md).
+No profile/fuzz/mutation or unique-spelling claim. (2026-10-04)
+
+
+## F11700. V34 quick-connect: grouped switch with shared result recovers EXACT59
+
+Three source cells: mask/early-return production73, grouped switch/return59
+BYTES55, grouped switch/result59 EXACT. GCC3 stmt.c expands bit tests at initial
+RTL; case ordering is by case-node count after adjacent-range merging. Each
+of three groups has two nodes, producing E7/408/310. Masks do not establish
+hand-written shifts. Shared result recovers epilogue; no field/type/flag edits.
+Combined quick/SNR changes only these two bodies. All10 full-TU cells audited,
+57FUNC/1data, metadata/nontext/canonical targets unchanged;48 stage records,
+3 causal controls. [Controls](v34-accessor-boundaries.md). (2026-10-04)
+
+## F11701. V34 SNR: product before last-value copy preserves the multiply input
+
+Flat first loop raw-merges retained90; explicit last→v second-loop handoff
+restores99 bytes but misses33. Blob multiplies before saving old v. New
+product-before-last cell has named product72 from v64 at combine UID62,
+then old-v copy to last63 atUID66; input remains live through multiply.
+Retained negative instead multiplies last63 after copying. EXACT99 without
+flags/register permutations. All10 cells valid,7 sources/6 objects; combined
+23→25/57, zero losses. Production300 objects:sole VPcmV34Main TU changes and
+raw-reproduces combined;930→932/1852, exactbytes95823→95981, sole two gains,
+zero losses. Fixed phase388/0;285 suites/10038 anchors clean. Partial positioned
+bytes68908→68923/943398, relocations1028/18317/symbols394/2907 unchanged,
+DIFFERENT both. Original wrapped products/guards/count timing preserved;
+no fuzzing/mutation or unique-spelling claim. [Replay](v34-accessor-boundaries.md).
+(2026-10-04)
+
+## F11702. V34 detector initialization crosses short counters with source store order
+
+`detectorinit` is now byte-exact186/186 on Gentoo GCC3.4.2-r2. Baseline172
+used int nested counters where the blob has signed-short increment extensions
+and word comparisons. Narrowing both restores the complete entry/clearing-loop
+region; crossing the tail source order closes the remaining18 differing bytes.
+The supported order retains coeff first, then polarity,count,state,armed,limit,
+thresh_lo,thresh_hi,level. Copying final instruction order into source misses:
+it moves the coeff argument's load to EBP instead of preserving ECX. Initial
+and combine RTL explain the counter width before allocation and preserve the
+source stores before final scheduling rearranges them.
+
+Four initial controls plus14 crossed controls:18 valid cells,16 source hashes,
+15 objects; one exact cell among twelve middle/threshold permutations. Four
+metadata-invalid attempts are preserved and excluded. All18 complete two-function
+TUs preserve metadata, empty nontext/relocations and tone_detect's body;18 stage
+records and five causal controls pass. Production299/300 objects unchanged,
+sole changed object raw-matches the candidate. Exact set932→933/1852, +186
+exact bytes, zero losses. This is a bounded source preimage, not proof of unique
+original spelling or recovered global compiler profile.
+
+[Declarations, mechanism, complete controls and replay](v34-detector-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+## F11703. V34 dftupdate is exact after recovering input scope and channel consumption order
+
+`dftupdate` is now EXACT200/200 under retained Gentoo GCC3.4.2-r2. The reference
+advances the sample pointer once per outer iteration and loads it inside the
+bin loop after phase update. Restoring those two boundaries matches entry and
+outer-loop tail; interleaving integer products/updates leaves BYTES38. The
+first remaining opcode divergence is real PUSH/FILD versus imaginary IMUL:
+source currently completes both integer channels before either floating channel.
+Complete the real channel, including its floating accumulator, before computing
+the imaginary channel and all200 bytes match. Product values, wrapping adds,
+double operations and rounding points are unchanged. Names/flags are not fitted.
+
+Combine proves the lifetime boundary before allocation: negative control's
+imaginary multiply UID68 precedes real conversion UID75; exact control's real
+conversion UID63 precedes imaginary multiply UID73. Twelve full-TU cells,
+ten distinct sources/objects, twenty-four parsed stages and twelve positive/
+negative input/channel controls pass. All three functions/one cosine table,
+metadata/data/nontext/canonical relocations and both bystanders are reviewed.
+Source correction alone to channel order misses, as does the input correction
+without full channel consumption. No unique original source spelling claimed.
+
+Production299/300 objects unchanged; sole DFTC.c.o raw-matches the candidate.
+Exact set933→934/1852, +200 exact bytes, zero losses. Whole-object positional
+comparison remains separately reported and DIFFERENT. [Declared domains,
+controls, source/pass evidence and replay](v34-dft-loop-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+## F11704. Echo-history rollback count lifetime explains layout but does not recover an exact body
+
+A bounded sixteen-cell cross on V34EchoHistoryBackwardClean separates the
+reference's signed half-span comparison, shared remaining count, prefilter
+cursor load scope and backward-loop countdown. The shared count reduces the
+404-byte body's differing-byte verdict from 254 to 119; signed comparison plus
+early cursor reaches 111. Countdown changes wrap/exit CFG and misses length.
+All cells retain 13/26 exact functions; only the investigated body changes.
+Complete-TU metadata, all 48 named data and canonical nontext relocations agree.
+No source is adopted and the source family is closed. A lower difference score
+is not permission for register/declaration synonyms or an API type guess.
+[Declared domain and reproduction](v34-rewind-boundaries.md). (2026-10-04)
+
+## F11705. Timing-prefilter state-base recovery makes the following cleanup exact through peephole2
+
+The blob gives V34TimingPrefilter's state array its own base (t+0x74). Recovering
+that local pointer changes the prefilter address graph and makes the unchanged
+V34EqualizerCleanUp EXACT 48/48. This is independently supported source factoring
+with a whole-TU scratch effect, not recovery of cleanup statements. Cleanup's
+actual instructions agree through postreload; the first difference is
+peephole2's HI unity-constant scratch AX versus CX. Register renaming later
+changes the zero/length call-argument scratches too.
+
+Twenty-one complete prefilter cells cross base factoring, exchange sequence,
+product lifetime, coefficient load scope and two bounded initialization
+controls. Four yield the cleanup gain; none makes the prefilter exact. The
+late-coefficient/local-base control reduces its length difference to two bytes
+and reproduces the persistent imaginary accumulator/product schedule; its
+initialization/spill placement remains different. Only the supported local base
+is adopted. This does not establish a unique source preimage, settle coefficient
+order or freeze source/profile choices around a compensating exact-set gain.
+
+Together with the rollback negatives: 37 complete TUs, 26 functions/48 data
+objects each, full metadata/data/canonical relocation checks; 60 parsed stage
+records, four unchanged-stage and two firing scratch controls. Production
+299/300 objects stay raw-identical; the changed object raw-matches its declared
+candidate. Exact set 934→935/1852, +48 exact bytes, zero losses. Same-order
+partial links remain DIFFERENT, with positioned matches decreasing by one byte.
+[Controls, limits and replay](v34-prefilter-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+Validation: make phase J=4, 388 passed / 0 failed; 37 valid cells represent
+33 sources / 21 raw objects. Existing echo/timing and equalizer fixtures pass.
+
+
+## F11706. V8 detector clears: field-derived bounds and retained short nested loops close two functions.
+
+At 80c5dea3 `V8Detector.c` had zero exact bodies out of six. The object's
+phase-reversal initializer compares its index with a register-held64, while
+ours compared an immediate63. The reconstructed initializer already sets
+`half=32`; restoring the loop bound `i < pr->half * 2` gives the exact77-byte
+body. A cached `full=pr->half * 2` does not: combine compares index with
+immediate64. The field-bound invariant is register-held even after GCC folds
+its value, and its compare direction survives to the object's JG loop.
+
+`v8_detectorinit` was missing actual source structure. The blob contains two
+nested short section/tap counters indexing the four-entry histories, followed
+by a three-iteration short empty loop inside each three-deep history clear.
+Our earlier comment acknowledged that empty loop but deliberately omitted it.
+Restoring nested short loops and that empty loop gives the exact267-byte
+body. It changes no memory effect: flat four-entry clears become2x2 clears,
+and all existing three-entry stores are retained. Integer empty-loop controls
+vanish; without the short empty loop the body misses28bytes. Table/armed
+store-order swap misses8bytes despite the recovered loop shapes.
+
+The declared15-cell main domain plus combined winner has16 distinct source
+hashes and12 object hashes; combined TU0/6→2/6 exact, +344 exact bytes,
+zero losses. All six function symbols/bindings, two coefficient objects,
+allocated nontext bytes, relocation targets and bystanders are preserved
+through20/20 audited complete TUs. Seven counter/compare controls plus a
+four-cell raw-identity control pass (8/8 causal checks). Actual Gentoo
+GCC3.4.2-r2 and selected binutils assembler executed; full retained profile,
+unchanged headers, mandatory bug define and-da. Baseline raw object reproduced.
+
+Biquad history-load/store interleaving misses; a separate four-source
+call-result accumulation domain (commuted addition, named short, named int
+with preserved short cast, baseline) collapses to one raw object. Both
+families close without adoption. The remaining ADD-versus-LEA differences
+need a pass discriminator, not more declaration synonyms. No byte-count
+hill-climbing, mutation execution or fuzzing was performed. The batch owner
+runs the deciding phase gate on the integrated batch before committing.
+
+See `docs/batch5-v8-detector-boundaries.md` and tools
+`gcc3_batch5_v8_detector_reproduce.py`, `gcc3_batch5_v8_biquad_reproduce.py`,
+`gcc3_batch5_v8_detector_audit.py`.
+
+## F11707. GenericToneDetector's quotient ownership and reset store boundary recover both constructors
+
+*Object-first bounded source recovery, Gentoo GCC 3.4.2-r2, baseline 80c5dea3.*
+
+Both constructor clones are now relocation-normalized byte-exact at 267 bytes
+(C1 and C2), from 302 bytes each; the full TU rises from 3 to 5 of 7 exact,
+without an exact loss. The source stores each division quotient directly in
+`blocks1`/`blocks2`, tests its multiply-back against the duration and increments
+the same field. `reset()` places the four separate accumulator-zero statements
+before the count-zero statement. The out-of-line reset's bytes remain exact
+and unchanged despite this source order change.
+
+This is not inferred from layout alone. The baseline's local quotient increment
+branches survive combine and disappear in GCC's ce2 pass, which emits ADC;
+member quotient branches survive ce2 and reproduce the blob's branch/store CFG.
+The reset source boundary changes initial RTL store order; only the combined
+source reproduces the constructor tail. A shared float-zero assignment is a
+negative control: it loses reset exactness. No register names are dictated.
+
+Sixteen full-TU cells (two crossed domains) cover member versus local quotient,
+compare-before-smoother-store/accumulation-order hypotheses, and the count/float
+zero boundaries. F1991's already-closed predicate operand swaps were not retried.
+The process controls give no gain and are unadopted. All cells preserve seven
+functions, symbol type/binding/visibility, named data, allocated nontext bytes,
+and absence of nontext relocations. Text-body comparisons normalize relocation
+targets. Thirty-six selected constructor stage records and ten causal controls
+verify the ce2/initial-store distinctions. See
+`docs/gcc3-tone-detector-boundaries.md` and
+`tools/gcc3_tone_detector_{reproduce,audit}.py` for replay and retained failures.
+
+The parent batch records the fresh production objects, whole-tree exact set and
+final period/structural gate. No fuzzing or mutation harness was run.
+
+## F11708. Calling tone becomes exact after recovering clamp, call-load and period-transition boundaries
+
+GenerateCallingTone is relocation-normalized EXACT215/215 on the retained
+Gentoo compiler. The first eight-cell cross separates clamp spelling, on-first
+source arms and amplitude load-before-TONE_read. Their combination recovers
+entry/address/call shape but leaves64 differing bytes. A five-cell discriminator
+then crosses in-place amplitude scaling against explicit remaining-zero
+transition/else-save source CFG. Only the combined source is exact. Tone phase,
+rounding shifts, narrowed output, period-accounting defects and transition stores
+are preserved; no register names are prescribed.
+
+The product-carrier distinction is visible at combine, before allocation:
+baseline's output store consumes an unnamed result; in-place source consumes
+the updated amplitude pseudo. Four firing positive/negative controls across
+sixteen selected stage records verify the change. The explicit if/else recovers
+the blob's inline transition versus out-of-line nonzero save. This is a bounded
+source preimage, not proof of a unique original spelling.
+
+Thirteen CallingTone full-TU cells preserve both function bindings, data,
+allocated nontext bytes, canonical relocation targets and ResetCallingTone's
+exact body. [Declared controls and replay](batch5-calling-tone.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+## F11709. Nonlinear encoder magnitude update is canonicalized, square ordering alone misses
+
+Four complete V34TX.c cells cross square operand order and keeping the final
+nonlinear sum in mag before converting to g. Updating mag is raw-object inert;
+reversing the square operands changes only V34nlencoder, and neither combination
+recovers its119-byte reference (ours117). Nine selected initial/combine/global
+allocation records show the explicit update changes initial RTL but is folded
+away by combine. All seven bodies are reviewed; metadata/data/allocated nontext
+and canonical relocation controls pass. No source adopted, family closed.
+[Declaration and replay](batch5-v34-nlencoder.md). (2026-10-04)
+
+
+Batch verification for F11706–F11709: five function gains, exact set935→940/1852,
+exact bytes96,415→97,508 (+1,093), zero exact losses. Fresh300-object baseline;
+297 unchanged and three changed production objects raw-identical to declared
+winners. All53 complete-TU controls retained:48 distinct sources/33 raw objects.
+Five stale GenericToneDetector metadata anchors retargeted without changing
+labels/intent or executing mutants. The first structural gate failed on those
+anchors while the period tier passed388/0; the repaired gate is reported below.
+Same-order partial links remain DIFFERENT: positioned matches fall15 bytes,
+canonical exact relocation records increase3, symbol records unchanged. These
+are separate measurements from the function-normalized exact-set gain.
+
+
+Final repaired batch gate: make phase J=4 passes388 period differential tests,
+0 failed, and all structural/provenance checks. Static anchor check:285 suites,
+10,038 anchors, no detached/non-unique/wrong-owner anchors. Reference check:
+14,286 references, no unresolved/stale/live-mutant reports. Mutation metadata
+was only statically retargeted; no fuzzing or mutation harness was executed.

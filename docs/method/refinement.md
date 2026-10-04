@@ -3081,3 +3081,125 @@ Audit allocated nontext with canonical relocation targets: a preceding function
 shrinking moves a jump table's raw addends while preserving its destination
 function and relative offset. Verify that identity before masking bytes.
 [Screen and 27-cell reproduction](../gcc3-candidate-screen.md).
+
+
+## The last narrow consumer can select the extended load
+
+F11694 reopens v8_crc's rejected extraction-spelling family with a different
+question. Baseline expansion resembles the blob, but combine removes its
+signed extension; the signed-field negative retains a shared HI load and both
+extensions, then regmove folds the last extension into the load. GCC3
+optimize_reg_copy_3 requires the narrow pseudo to die at that consumer and
+rewrites earlier users through subregs. Signed predicate first, unsigned read
+second makes that extension unsigned and recovers the entire41-byte function.
+This happens before allocation: do not label the operand-role mismatch regalloc.
+
+`-fno-regmove` is an insufficient disabling control: the extension folding
+runs under expensive optimizations in the forward pass. Preserve its measured
+losses instead of treating an accepted flag as proof a pass did not execute.
+[Thirteen bounded controls and replay](../v8-crc-extension-promotion.md).
+
+
+## Mask tests may be compiler-expanded grouped cases
+
+F11700 recovers VPcmV34GetQuickConnectIndication's59-byte body with a grouped
+switch and one initialized result. An early-return switch has identical length
+but misses55 bytes. GCC3 stmt.c emit_case_bit_tests introduces the masks at
+initial RTL; ordering counts merged case nodes, not represented values.
+Inspect the source control's branch/result lifetime as well as the mask values.
+[Three-cell switch control](../v34-accessor-boundaries.md).
+
+## Keep a multiply input live until its later consumer
+
+F11701's SNR loop computes product before copying old v to last; the negative
+copies first and permits destructive multiplication. Combine retains the
+product72/v64/last63 use boundary before allocation, recovering all99 bytes
+when crossed with the independent second-loop handoff. Flat-first alone
+raw-merges production; the handoff alone merely matches length. A named
+intermediate is evidence-supported when the blob consumes its input later;
+it is not permission to introduce temporaries for register scores.
+[Bounded loop/product controls](../v34-accessor-boundaries.md).
+
+### Cross counter width with store order while preserving argument lifetimes
+
+V34 detectorinit's signed-short nested counters recover its entire loop region,
+but the tail still differs. Keep that independently measured width correction
+while crossing the bounded source orders of the remaining independent stores.
+A literal copy of machine store order changes the coeff argument's load role
+and misses; coeff-first source plus count/state/armed/limit/lo/hi matches186 bytes.
+Initial/combine RTL separates the counter extensions from allocation and
+scheduled field-store order. A machine order does not uniquely identify source
+order: use controls and retain argument-load boundaries, rather than assign
+register names or broaden a synonym search. One exact candidate out of twelve
+permutations is evidence within that domain, not global source uniqueness.
+[Full-TU controls and replay](../v34-detector-boundaries.md), F11702.
+
+### Finish one arithmetic channel before the next product
+
+V34 dftupdate's reference PUSH/FILD of the real product precedes imaginary
+IMUL, while the reconstruction computed both products and integer updates
+before either floating update. Recover the complete real channel before the
+imaginary product and inspect combine: the real conversion moves before the
+imaginary multiply, changing lifetime overlap before allocation. Combined with
+the independently measured advancing input cursor and per-bin input load,
+this recovers all200 bytes. Each axis alone misses. Keep wrapping integer adds
+and x87 operations/rounding points intact; cross the source boundaries rather
+than fit the ensuing registers. [Twelve full-TU cells and pass controls](../v34-dft-loop-boundaries.md), F11703.
+
+### Trace a neighboring gain before interpreting it as source recovery
+
+An independently observed array-base local in V34TimingPrefilter makes the
+following, unchanged V34EqualizerCleanUp exact. Compare its actual RTL across
+stages while excluding only compiler addresses and MEM alias annotations:
+instructions agree through postreload, and the first change is peephole2's
+constant scratch. This is a translation-unit scratch carrier, not evidence of
+different cleanup source. Recover the address boundary on its own object
+merit, report the neighboring gain separately, and keep the nonexact precursor
+open. Here a late-coefficient control is closer to the precursor's product
+schedule but loses the cleanup gain; that prevents claiming a unique original
+source or freezing the early-coefficient choice. Bounded initialization controls
+also miss. [37 full-TU controls and firing detector](../v34-prefilter-boundaries.md),
+F11705. The related rollback domain is closed without adoption (F11704).
+
+
+A constant-sized initializer can still reveal a field-derived loop bound.
+In `v8_phase_rev_init`, setting `half=32` then comparing the loop index with
+`half*2` produces an invariant register64 and the object's compare direction.
+A literal64 and a cached local `full=half*2` compare immediates differently;
+combine distinguishes all three before allocation. The field-bound form
+closes the77-byte function. Do not assume that a binary constant establishes
+a source literal, and cross cached versus direct member bounds explicitly.
+
+Retained empty loops can be real source structure. V8's detector initializer
+contains a three-iteration short empty loop nested inside its history clear,
+as well as a2x2 short section/tap clear. Restoring both gives267 exact bytes;
+integer empty loops disappear and removing the short empty loop misses28bytes.
+Identify the counter narrowing and the CFG from the object and RTL before
+retaining an empty loop; inventing no-effect code solely to move layout is
+not this mechanism. These two recoveries combine for344 exact bytes without
+bystander changes (F11706; [declared controls](../batch5-v8-detector-boundaries.md)).
+
+GenericToneDetector extends the statement-boundary lever with a measured
+ownership discriminator (F11707). A local quotient increment can be
+if-converted to ADC even when the blob branches; storing/testing/incrementing
+the member preserves its memory updates through ce2. Cross that independent
+boundary with the observed reset count/accumulator order. Here both constructor
+clones become exact267B while the out-of-line reset stays exact. A shared-zero
+assignment loses reset, so do not treat all zero stores as freely reorderable.
+Use complete-TU positive/negative controls, inspect combine→ce2, and test callers
+that inline the changed method. The two process compare/accumulation boundary
+hypotheses gave no gain; their residual is still open, not an invitation to
+repeat F1991's closed operand swaps.
+
+### Cross call-load lifetime with transition CFG instead of rewriting register names
+
+Calling tone's saved amplitude is read before TONE_read in the blob and scaled
+in place afterward. Current source read it after the call and consumed an
+anonymous product. Recover both boundaries, then separate remaining-zero
+transition/else-save from the nonzero-save/continue CFG. Source clamp and arm
+order controls alone recover length, not bytes; only the combined lifetime/CFG
+control is exact215B. Inspect combine's output-store source to demonstrate the
+product-carrier change before allocation. Preserve the tone's measured original
+period/phase bugs throughout. [13 full-TU controls](../batch5-calling-tone.md),
+F11708. V34nlencoder's analogous magnitude-update family canonicalizes and
+misses; do not generalize an exact gain into a universal source recipe (F11709).

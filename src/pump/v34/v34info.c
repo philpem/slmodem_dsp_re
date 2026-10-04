@@ -246,7 +246,7 @@ V34GiveProbeResults(void *objp, const void *src)
 	/* The blob reads the receiver pair through an objp+4 base - the
 	 * documented F179/F180 addressing artifact, not a sub-object.  Two
 	 * spellings of it (int-typed +1, char-typed +4) both reproduce the
-	 * 71-byte body exactly; this is the int form (finding F11698). */
+	 * 71-byte body exactly; this is the int form (finding F11714). */
 	const int *recv = (const int *)objp + 1;
 
 	/* Neither PCM receiver running: nothing to record. */

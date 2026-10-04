@@ -30,10 +30,9 @@
  * its body is: call `GenericIIR<float,double>::reset` on +0x00, then zero
  * +0x2c, +0x0c, +0x10, +0x14, +0x18, +0x30, +0x24, +0x38.  The constructor
  * ends with a call to the SAME `GenericIIR` member and stores to exactly those
- * eight fields and no others -- in a different order, which is scheduling and
- * free (CLAUDE.md).  Set intersection over eight fields and one call is not a
- * coincidence, so the original's constructor said `reset();` and GCC inlined
- * it.
+ * eight fields and no others.  F11707 measures how reset's statement order
+ * changes this inlined tail while its standalone body remains byte-identical.
+ * The shared fields and call support retaining `reset();` in the constructor.
  *
  * It was written out here while `reset()` was a later batch.  That batch has
  * landed, the tail is the call, and the generated code is the same code.
@@ -107,7 +106,6 @@ GenericToneDetector::GenericToneDetector(unsigned int nden, unsigned int nnum,
 					 float ratio_, unsigned int blockLen_,
 					 unsigned int blockSize)
 {
-	unsigned int n;
 
 	filter = new GenericIIR<float, double>(nden, nnum, den, num, blockSize);
 
@@ -115,15 +113,13 @@ GenericToneDetector::GenericToneDetector(unsigned int nden, unsigned int nnum,
 	threshold = threshold_;
 	ratio = ratio_;
 
-	n = samples1 / blockLen_;
-	if (n * blockLen_ < samples1)
-		n++;
-	blocks1 = n;
+	blocks1 = samples1 / blockLen_;
+	if (blocks1 * blockLen_ < samples1)
+		blocks1++;
 
-	n = samples2 / blockLen_;
-	if (n * blockLen_ < samples2)
-		n++;
-	blocks2 = n;
+	blocks2 = samples2 / blockLen_;
+	if (blocks2 * blockLen_ < samples2)
+		blocks2++;
 
 	flag = flag_;
 
@@ -146,11 +142,11 @@ void GenericToneDetector::reset()
 {
 	filter->reset();
 
-	count_2c = 0;
 	acc_0c = 0;
 	acc_10 = 0;
 	acc_14 = 0;
 	acc_18 = 0;
+	count_2c = 0;
 	count_30 = 0;
 	sampleCount = 0;
 	detected = 0;
