@@ -134711,3 +134711,27 @@ bytes68908→68923/943398, relocations1028/18317/symbols394/2907 unchanged,
 DIFFERENT both. Original wrapped products/guards/count timing preserved;
 no fuzzing/mutation or unique-spelling claim. [Replay](v34-accessor-boundaries.md).
 (2026-10-04)
+
+## F11702. V34 detector initialization crosses short counters with source store order
+
+`detectorinit` is now byte-exact186/186 on Gentoo GCC3.4.2-r2. Baseline172
+used int nested counters where the blob has signed-short increment extensions
+and word comparisons. Narrowing both restores the complete entry/clearing-loop
+region; crossing the tail source order closes the remaining18 differing bytes.
+The supported order retains coeff first, then polarity,count,state,armed,limit,
+thresh_lo,thresh_hi,level. Copying final instruction order into source misses:
+it moves the coeff argument's load to EBP instead of preserving ECX. Initial
+and combine RTL explain the counter width before allocation and preserve the
+source stores before final scheduling rearranges them.
+
+Four initial controls plus14 crossed controls:18 valid cells,16 source hashes,
+15 objects; one exact cell among twelve middle/threshold permutations. Four
+metadata-invalid attempts are preserved and excluded. All18 complete two-function
+TUs preserve metadata, empty nontext/relocations and tone_detect's body;18 stage
+records and five causal controls pass. Production299/300 objects unchanged,
+sole changed object raw-matches the candidate. Exact set932→933/1852, +186
+exact bytes, zero losses. This is a bounded source preimage, not proof of unique
+original spelling or recovered global compiler profile.
+
+[Declarations, mechanism, complete controls and replay](v34-detector-boundaries.md).
+No fuzzing or mutation execution. (2026-10-04)
