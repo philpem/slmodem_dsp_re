@@ -134842,3 +134842,31 @@ move but retain function-relative targets. Whole-tree 927→929/1852, exact byte
 Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation,
 new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
 (2026-10-03)
+
+## F11694. dp_runtime_create's tail store order recovers the 298-byte body
+
+Agent-run six-permutation domain over {clockDeviation, modeFlags,
+connectionType} (dp_param.c): exactly one preimage,
+[connectionType, clockDeviation, modeFlags], emits the blob's 298/298 body
+including the load-hoist of info->connection_type and the ecx/edx pair;
+the head 0x10/0x2 order and the $0x6 hoist are coupled consequences of the
+same single-block order. Decoded bystander: the head-swap cell folds the
+two ands into one, so the original's final &= ~0x80 follows the ternary -
+the current order is right there. dp_param.c 2/3 -> 3/3, zero losses,
+anchors clean. Census 938/1852 -> 939/1852 (+298 bytes) on adoption.
+[Artifacts](build/playbook-fdsp-dprt-r2/results.json). (2026-10-03)
+
+## F11695. FDSP_DP_Delete's tail needs a callee-saved zero live across the call
+
+Blob: mov %ebx,(%esp); xor %ebx,%ebx; call sysdep_free; store %ebx to the
+global. Ours: call; xor %eax; store %eax (moffs). Every statement-level
+spelling folds - GCC deletes the dead param store and CSEs to a literal-0
+post-call store; read-back and store-before-free are excluded by
+inspection (the global is never loaded). The blob's tail requires a
+callee-saved zero live across the call, i.e. cursor state: the blob's
+Beepgen.c extent is GetGain alone with FDSP_DP_Run immediately before
+Delete in the [Detector|Dtmf|Fdsp] bracket, so the blob's Fdsp.c plausibly
+opens with FDSP_DP_Run and the peephole2 immediate-split cursor differs -
+the #6/#20 TU-repartition class, not a source spelling. Statement-level
+family closed. [Agent artifacts](build/playbook-fdsp-dprt/results.json).
+(2026-10-03)

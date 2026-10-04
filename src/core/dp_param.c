@@ -81,9 +81,12 @@ dp_runtime_create(void *modem)
 	rt->unnamed_0014 = 700;
 	rt->powerReductionTenths = 0;
 	rt->unnamed_0044 = 6;
+	/* The blob's store order is connectionType, clockDeviation,
+	 * modeFlags: the load-hoist of info->connection_type and the
+	 * ecx/edx pair follow from this order alone (finding F11694). */
+	rt->connectionType = (int)info->connection_type;
 	rt->clockDeviation = info->clock_deviation;
 	rt->modeFlags = 1;
-	rt->connectionType = (int)info->connection_type;
 	rt->codecType = (int)modem_get_param(modem, MDMPRM_CODECTYPE);
 	rt->unnamed_0058 = 0;
 	rt->unnamed_005c = 0;
