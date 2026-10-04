@@ -381,7 +381,7 @@ TxHdxIdleV27(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	struct fax_fifo *fifo;
-	short taken;
+	unsigned short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_IDLE;

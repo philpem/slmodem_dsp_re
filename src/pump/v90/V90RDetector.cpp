@@ -117,44 +117,48 @@ V90RDetector::reset(unsigned int rSamples, unsigned int rNotSamples)
  * comparison is against the 16-bit field reloaded from the object, so a
  * seventeenth sample cannot leave a stale high bit behind.
  */
+/* Direct ushort updates followed by a positive complete-group guard preserve
+ * the original member store/reload boundary. Both changes are needed: either
+ * member update restores the reload; the guard retains the entry verdict.
+ * Their crossing reproduces all four detectors.
+ * The finite controls and full-TU audit are in batch50-v90-rdetector-domain.md.
+ */
 int
 V90RDetector::detectR(short sample)
 {
 	int found = 0;
-	unsigned int bits = (unsigned int)signBits * 2u;
 	int taken;
 
+	signBits <<= 1;
 	if (sample > 0)
-		bits |= 1u;
-	signBits = (unsigned short)bits;
+		signBits |= 1;
 
 	taken = sampleCount + 1;
-	if (taken != 6) {
-		sampleCount = taken;
-		return 0;
-	}
+	if (taken == 6) {
+		if (signBits == 0x38) {
+			negativeRunLength = 0;
+			positiveRunLength += 6;
+			if (positiveRunLength == rLimit) {
+				polarity = 1;
+				found = 1;
+			}
+		} else if (signBits == 0x07) {
+			positiveRunLength = 0;
+			negativeRunLength += 6;
+			if (negativeRunLength == rLimit) {
+				polarity = -1;
+				found = 1;
+			}
+		} else {
+			positiveRunLength = 0;
+			negativeRunLength = 0;
+		}
 
-	if (signBits == 0x38) {
-		negativeRunLength = 0;
-		positiveRunLength += 6;
-		if (positiveRunLength == rLimit) {
-			polarity = 1;
-			found = 1;
-		}
-	} else if (signBits == 0x07) {
-		positiveRunLength = 0;
-		negativeRunLength += 6;
-		if (negativeRunLength == rLimit) {
-			polarity = -1;
-			found = 1;
-		}
+		sampleCount = 0;
+		signBits = 0;
 	} else {
-		positiveRunLength = 0;
-		negativeRunLength = 0;
+		sampleCount = taken;
 	}
-
-	sampleCount = 0;
-	signBits = 0;
 	return found;
 }
 
@@ -173,29 +177,27 @@ int
 V90RDetector::detectRNot(short sample)
 {
 	int verdict = 0;
-	unsigned int reg = (unsigned int)signBits * 2u;
 	int used;
 
+	signBits <<= 1;
 	if (sample > 0)
-		reg |= 1u;
-	signBits = (unsigned short)reg;
+		signBits |= 1;
 
 	used = sampleCount + 1;
-	if (used != 6) {
-		sampleCount = used;
-		return 0;
-	}
+	if (used == 6) {
+		if ((unsigned int)signBits == (polarity > 0 ? 0x07u : 0x38u)) {
+			notRunLength += 6;
+			if (notRunLength == rNotLimit)
+				verdict = -1;
+		} else {
+			notRunLength = 0;
+		}
 
-	if ((unsigned int)signBits == (polarity > 0 ? 0x07u : 0x38u)) {
-		notRunLength += 6;
-		if (notRunLength == rNotLimit)
-			verdict = -1;
+		sampleCount = 0;
+		signBits = 0;
 	} else {
-		notRunLength = 0;
+		sampleCount = used;
 	}
-
-	sampleCount = 0;
-	signBits = 0;
 	return verdict;
 }
 
@@ -208,40 +210,38 @@ int
 V90RDetector::detectRf(short sample)
 {
 	int hit = 0;
-	unsigned int sr = (unsigned int)signBits * 2u;
 	int seen;
 
+	signBits <<= 1;
 	if (sample > 0)
-		sr |= 1u;
-	signBits = (unsigned short)sr;
+		signBits |= 1;
 
 	seen = sampleCount + 1;
-	if (seen != 12) {
-		sampleCount = seen;
-		return 0;
-	}
+	if (seen == 12) {
+		if (signBits == 0xccc) {
+			negativeRunLength = 0;
+			positiveRunLength += 12;
+			if (positiveRunLength == rfLimit) {
+				polarity = 1;
+				hit = 1;
+			}
+		} else if (signBits == 0x333) {
+			positiveRunLength = 0;
+			negativeRunLength += 12;
+			if (negativeRunLength == rfLimit) {
+				polarity = -1;
+				hit = 1;
+			}
+		} else {
+			positiveRunLength = 0;
+			negativeRunLength = 0;
+		}
 
-	if (signBits == 0xccc) {
-		negativeRunLength = 0;
-		positiveRunLength += 12;
-		if (positiveRunLength == rfLimit) {
-			polarity = 1;
-			hit = 1;
-		}
-	} else if (signBits == 0x333) {
-		positiveRunLength = 0;
-		negativeRunLength += 12;
-		if (negativeRunLength == rfLimit) {
-			polarity = -1;
-			hit = 1;
-		}
+		sampleCount = 0;
+		signBits = 0;
 	} else {
-		positiveRunLength = 0;
-		negativeRunLength = 0;
+		sampleCount = seen;
 	}
-
-	sampleCount = 0;
-	signBits = 0;
 	return hit;
 }
 
@@ -253,28 +253,26 @@ int
 V90RDetector::detectRfNot(short sample)
 {
 	int answer = 0;
-	unsigned int shifted = (unsigned int)signBits * 2u;
 	int count;
 
+	signBits <<= 1;
 	if (sample > 0)
-		shifted |= 1u;
-	signBits = (unsigned short)shifted;
+		signBits |= 1;
 
 	count = sampleCount + 1;
-	if (count != 12) {
-		sampleCount = count;
-		return 0;
-	}
+	if (count == 12) {
+		if ((unsigned int)signBits == (polarity > 0 ? 0x333u : 0xcccu)) {
+			notRunLength += 12;
+			if (notRunLength == rfNotLimit)
+				answer = -1;
+		} else {
+			notRunLength = 0;
+		}
 
-	if ((unsigned int)signBits == (polarity > 0 ? 0x333u : 0xcccu)) {
-		notRunLength += 12;
-		if (notRunLength == rfNotLimit)
-			answer = -1;
+		sampleCount = 0;
+		signBits = 0;
 	} else {
-		notRunLength = 0;
+		sampleCount = count;
 	}
-
-	sampleCount = 0;
-	signBits = 0;
 	return answer;
 }

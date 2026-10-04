@@ -40,11 +40,12 @@ data_raw(const char *buf, char *out)
 		n = 0xf5;
 
 	for (i = 0; i < n; i++) {
-		unsigned char hi = (unsigned char)buf[i] >> 4;
-		unsigned char lo = (unsigned char)buf[i] & 0x0f;
+		char hi = (unsigned char)buf[i] >> 4;
 
-		out[2 * i] = (char)(hi > 9 ? hi + 0x57 : hi + 0x30);
-		out[2 * i + 1] = (char)(lo > 9 ? lo + 0x57 : lo + 0x30);
+		out[2 * i] = (char)(hi <= 9 ? hi + 0x30 : hi + 0x57);
+		char lo = (unsigned char)buf[i] & 0x0f;
+
+		out[2 * i + 1] = (char)(lo <= 9 ? lo + 0x30 : lo + 0x57);
 	}
 	out[2 * i] = '\0';
 }

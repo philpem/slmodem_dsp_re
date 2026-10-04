@@ -135727,3 +135727,139 @@ exact reference bytes 68,664→68,345/943,398, exact relocations
 are not function exactness; retain the decline and do not claim whole-object
 identity. Work is isolated from PR245's source/header ownership. Unpublished
 findings were renumbered to F11730 onwards when that draft allocated F11710–16.
+
+## F11750. Incoming default lifetime recovers the 44B voice status mapper
+
+On902f47fa/Gentoo3.4.2-r2, four complete voice.c controls cross if/switch and
+return/assignment forms. Raw baseline reproduced. Blob keeps incoming status
+at entry and branches to three constant returns; retained early-return source
+materializes constants early and samples default only at the final edge.
+If/else assignments into the incoming status reproduce exactly44B; both switch
+forms miss. TU3→4/9 exact, zero losses; inline voice_modem changes as an explicit
+bystander, all seven other bodies unchanged. Metadata/named data/allocated
+nontext/canonical relocations identical. Adopt only the proved if-assignment
+source; no register carrier or signature change. Domain/replay:
+ docs/batch50-voice-status-boundaries.md and gcc3_batch50_voice_status_reproduce.py.
+The root complete-TU audit checks this positive together with CID and negative
+FIFO controls (25/25 cells); endbatch runtime gate remains pending.
+
+## F11751. CID renderer's late read and signed decimal-first predicate recover two117B bodies
+
+The object reloads each input byte for the low digit AFTER writing its high
+digit. Retained Data.c precomputed both nibbles before the first output write,
+which differs when buffers overlap. The original low-valued decimal arm also
+falls through; letters occupy the cold arm. Eight complete-TU late-read/type/
+statement-form controls first show that late reading recovers both117B bodies
+except six branch/arm bytes; signedness and explicit-versus-ternary alone are
+raw-equivalent within that direction. This finite domain is closed, not expanded
+by a nearest-byte score.
+
+A distinct four-cell late-read/decimal-first cross exposes the two remaining
+JA-versus-JG opcodes. This is a new predicate-dependent signedness discriminator:
+the earlier unsigned/signed controls canonicalized under >9-first, but not under
+<=9-first. The final five-cell signed-byte/decimal-first cross on the late seed
+recovers data_raw and data_unformatted_output EXACT117B each. Nibbles remain
+0..15, so signed byte temporaries preserve all extracted values; no new NaN,
+undefined shift, buffer contract or source cast workaround. This is the object's
+read boundary and byte predicate, not a chosen register rename.
+
+Full Data.c0→2/3 exact, no losses. Formatted renderer changes through its inlined
+hex helper and remains non-exact (SIZE117); it is not counted as a gain. All17
+complete-TU controls preserve metadata, named data, allocated nontext bytes and
+canonical relocations. Source winner adopted, endbatch deciding gate pending.
+Docs/replays: docs/batch50-cid-hex-boundaries.md and three gcc3_batch50_cid_hex*
+reproducers; gcc3_batch50_root_audit.py fires the two positive exact controls.
+
+## F11752. FIFO8 count-return/index-postincrement cross closes without a gain
+
+Blob's count arrives zero-extended in EAX; signed-short source emits MOVSWL.
+This does not uniquely identify a formal return type: unsigned-short and int
+can agree for an already-zero-extended count. Consistent candidate header and
+unsigned-return definitions crossed with element-index postincrement in four
+complete TUs. Raw baseline reproduced; two targets may change but no exact
+hit/loss, all named data/nontext/canonical relocations and two bystanders
+unchanged. Existing Tx caller narrows AX, insufficient to recover the wider
+contract uniquely. No header/source adoption and no arbitrary counter/carrier
+expansion. Domain: docs/batch50-fifo-count-boundaries.md; replay/audit:
+ gcc3_batch50_fifo_reproduce.py / gcc3_batch50_root_audit.py. Only this declared
+family is excluded; the remaining FIFO bodies are not declared unrecoverable.
+
+## F11753. Completed fax source boundaries recover sixteen functions
+
+Sixteen functions (1,212 blob bytes) become exact at baseline902f47fa: eight message reporters, V17/V27 receive controls, three transmit idle states and three V29 receive states. Crossed masks/branch orientation, request and child read boundaries, saved-budget unsignedness and existing union byte flag updates establish the source changes. All83 valid full-TU cells preserve metadata/data, audit complete bystanders and lose no exact names. See `docs/batch50-fax-findings.md` and the finite domain/replay tools it names. Final integrated period gate pending; no fuzzing or mutation execution.
+
+## F11754. V34 cursor and reporting boundaries, V8 promoted input and history loop
+
+Four functions (470 blob bytes) become exact: V34EchoEstimateDelayLineEnergy53B, V34EchoReportCoeff223B, charFlip33B and notch_filter161B. The energy source uses an ascending loop with an advancing history pointer; GCC .09.loop reverses it, so DEC/JNE does not establish a source countdown. Reporting preserves coefficient ownership across callbacks, guards each print separately, and branches directly from discovery into a signed guarded do loop. charFlip promotes its byte input before shifts without changing ABI; notch_filter restores the original paired two-step history loop. All53 complete-TU controls pass metadata/data/bystander audits, no exact losses. Domain documents and gcc3_batch50_integer_audit.py preserve positive and negative controls. Integrated period gate pending.
+
+## F11755. CID output ownership and wrapper dispatch controls remain nonexact
+
+Four CID controls cross captured DTMF child with owner-relative output stores. Owner-relative stores close145B, leaving BYTES9; child capture adds no difference at that spelling. No adoption. Initial erroneous generator child type archived invalid and excluded.
+
+Twelve wrapper controls expose independently witnessed literal rate dispatch, sequential creation/failure handling, immediate-mode calls, shared cleanup and original delete-before-create emission order. Literal pointer-returning creation plus shared cleanup reaches SIZE2 but remains nonexact; no source retained. A newly established behavioral discrepancy deserves follow-up: blob rejects unsupported unequal rates at the first NULL converter check, whereas retained source skips checks for mode -1. This claim follows the complete object control flow; it has no new runtime reachability evidence here. Removing the extra72B rate table alone is still insufficient.
+
+Full root audit now covers41/41 valid TUs with three retained exact positive controls, zero exact losses and complete metadata/nontext/bystander checks; intentional removal of the extra rate table is restricted to declined cells. Documents `batch50-cid-owner-boundaries.md` and `batch50-wrapper-dispatch-domain.md` preserve closed domains. No local/scope/register synonyms authorized absent a new independent discriminator.
+
+## F11756. Voice S-register default result initializes after its callback
+
+vce_get_sreg reproduces the blob188B after restoring common unsigned zero result, explicit guarded one assignment for nonzero low sensitivity, and result initialization after modem_get_param. Initializing before the callback forces a live-through-call zero into ESI with extra save/restore and leaves SIZE24; boolean selection after callback also misses. Only guarded/common/post-call cell is exact in the six valid complete-TU controls. All seven bystanders, metadata, named data, allocated nontext and canonical relocations remain unchanged;4/8→5/8 exact, no losses. Full root audit51/51 controls with four exact positive controls; final period gate pending. Tools gcc3_batch50_voice_register.py and gcc3_batch50_voice_register_lifetime.py and domain batch50-voice-register-result.md preserve the lifecycle discriminator.
+
+TONE_kill coefficient capture inside/outside loop crossed with postfix/final output increment gives four raw-equivalent127B bodies against blob133B; no source adopted. Count/source aliases remain measured negatives, not a recovered spill or register arrangement.
+
+## F11757. Fax callback owner reloads and default frame result add two exact functions
+
+FAXVMI_delete114B needs both owner reloads across unknown callbacks/free calls; GetT30FrameIDFromBuffer84B needs original default/result owner. These add198B and no exact losses to the sixteen-function package. All92 valid extra fullTU cells audit metadata/data/nontext/canonical relocations and complete bystanders;15 additional shared-header consumers and descrambler callee controls reproduce raw. Headers remain unchanged. Domain/tool manifest is build/batch50-fax-extra-manifest.json; durable outcomes and closed controls in docs/batch50-fax-extra-findings.md.
+
+Ten V17/V29 transmitter budget handlers have a real operand discrepancy: blob compares signed remaining count with zero-extended fullwidth budget, whereas retained short cast narrows high-bit budgets. Sixteen consistent comparison/count-carrier/member-reread controls give no exact gains; source unadopted. V27 formal/consumption narrowing controls likewise change original caller extensions but remain nonexact. Neither statement family is exhausted C generally; these domains are closed until a new independent boundary. Final integrated period gate pending.
+
+## F11758. Detector setup and GenericToneDetector loop/tail domains close negative
+
+Detector creator's staged DTMF result across config copy ×setup zero order gives four SIZE6 cells, no adoption. GenericToneDetector block overload fast-arm output/input stores ×explicit countdown, guarded do afterzero capture, and shared strong/weak HIT update order give fifteen fullTU cells: increasing loops remain SIZE3, explicit countdown cellsSIZE29. None are exact; no comparison/precision tolerances or new flag. The HIT-order controls test original tail eligibility and remain independently negative, rather than re-opening F1991 operand inversion. Both families are closed until a new original CFG/read or compiler mechanism discriminator.
+
+Rootaudit now74/74 completeTUs with five exact positive controls; every retained data/metadata/relocation/bystander invariant passes and zero exact losses. No source from these negative controls is retained.
+
+## F11759. CID return buffer lifetime crosses owner-relative output stores
+
+cid_get_strings becomes EXACT145B only when output local is initialized after sysdep_memset and digit stores use ctx->strings[i]. Blob zero memset operand first uses ESI then retains return buffer there, while local-first source changes that call-setup live range. Earlier owner/capture controls reached BYTES9 and did not establish this callback boundary. Crossed late/direct fourcell domain: retained SIZE1; directonlyBYTES9; lateonlySIZE1; bothEXACT. Public interfaces, threecalls, modepredicates and16digit extent unchanged. FullTU6/10→7/10 exact; allnine neighbours canonical-invariant and allmetadata/nontext/data/relocations preserved. Integrated periodgate pending. Tool gcc3_batch50_cid_output_lifetime.py with domain batch50-cid-owner-boundaries.md.
+
+## F11760. Consistent V8 cosine formal and output cursor recover one caller
+
+Full-register cosine arguments, byte narrowing at table use, and advancing TONEq output cursor reproduce v8_TONEq_generate90B. Callee remains EXACT14B across signed/unsigned full-formal alternatives; original signedness is not uniquely established. Retain idiomatic int with explicit lowbyte lookup, removing only redundant caller byte casts; ANSam cursor/short/phase alternatives not adopted. Consistent twelve-TU production proof and44-cell cosine/fullcaller audit have five560B integer-package gains and zero exact losses. Additional negative integer controls72/72 audited, including SDM rematerialization/cursor controls. Full300-TU shared-header rebuild underway; final period gate pending.
+
+## F11761. Twelve V90/V92 leaves recover1168 bytes under retained compiler profile
+
+Two128B MappingParamsInt setters need explicit signed clamp; getNofRefLoops33B initializes count before loading loop bank. Six V90/V92 unsigned-cycle leaves use a common int result with fully covered cases and explicit narrow negation; initialized defensive default and width-only controls miss. V90 generateJd80B recovers member vector/polarity ownership, generateSymbol45B narrowing each child result at its return use, and ADID isThereAnyAltRbsPhase57B its original verdict predicate. Complete87-cell audit reviews full TUs,111 selected bodies, data/metadata/relocations and bystanders, no exact losses. Changed nonexact generator/COMDAT bodies are recorded in docs/batch50-v90-findings.md rather than hidden by score. Final integrated census/gate pending.
+
+Fixed-frame anonymous jump tables require bounded aligned entry allocation, distinct untouched callee-save slots, balanced CFG restoration/deallocation, and existing guard/index/table validation.28 assembled ELF controls accept3/refuse25; changed destination grades RELOC, rebased destination grades EXACT. Historical48-object controls and20alpha/59relocation tests remain green. Old/new prover on immutable300-object baseline each gives973/1852 with identical exact-name sets: zero apparatus-only gains. Two Sd gains prove the ordered six-case destinations; table addends are not masked. See docs/batch50-v90-fixed-frame-proof.md.
+
+## F11762. Pulse digit requires both child acquisition and a separate corrected count
+
+Four full-TU controls cross the blob's post-debug child-owner acquisition before the zero test with a separate corrected-count local. Only the cross recovers PulseDialDigit146B; either axis alone misses. Original input remains available, zero becomes ten in a separate local, and stores/callback receive that corrected value. Full metadata/data/bystander audit covers all11 bodies, six baseline exact neighbours unchanged. First invalid owner-type run preserved/excluded; corrected baseline reproduces raw. Root audit now78 valid cells, six positive controls. Final integrated period gate pending. Reproducer tools/gcc3_batch50_pulse_digit.py; domain docs/batch50-pulse-digit-domain.md.
+
+## F11763. Four V90 R detectors need member ownership crossed with the complete-group guard
+
+Member compound shift/bit updates restore the original store/reload boundary, but alone leave a two-byte literal-zero early-return difference. A positive complete-group guard keeps the common initialized verdict across the incomplete-group arm. Crossing both recovers detectR164B, detectRf164B, detectRNot113B, detectRfNot117B: all nine TU bodies exact, no losses. F8085's return synonyms were inert on the temporary-based source; this ownership interaction is the new explanatory observation. V90 package now121 valid full-TU controls and16 gains. Domain/reproducer docs/batch50-v90-rdetector-domain.md, tools/gcc3_batch50_v90_rdetector.py; retained pass snapshots identify when each boundary changes. Final integrated gate pending.
+
+## F11764. Thirty further fax/FixedRC controls remain findings, with no source adoption
+
+Original constructor templates/order, medium callback ownership, HDLC guards, signed readiness and class1 allocation failure were bounded in30 complete-TU controls. No exact gain or loss. The class1 blob's allocation-error path is an authentic behavior lead; candidates do not recreate its bytes, and no reachable-input equivalence claim is made. FixedRC table-to-switch was already landed in F11632-F11634: the old lead was stale. Split kind=0 stores miss; removing the unused bank table preserves all eight raw instruction streams with relocation fields masked, removes160B/18 pointer relocations and shifts the anonymous selector addend. It is data-only evidence, not a function gain; source/header/generator stay unchanged. docs/batch50-fax-medium-findings.md and docs/batch50-fixedrc-constructor-domain.md retain denominators and full audits.
+
+## F11765. V90 data-phase entry: a double half expression recovers190 bytes
+
+Four crossed entry/progress literal-width cells isolate enterDataPhase: only changing its0.5f literal to0.5 reproduces the original half-load before unsigned rate conversion and FADDP. All constant-pool values/data/relocations unchanged; full25-body audit changes only the entry. Progress controls decline, no source adoption there. V90 aggregate144 valid TUs,17 gains, zero losses. Reproducer/domain tools/gcc3_batch50_v90_rate_half.py and docs/batch50-v90-rate-half-domain.md. Integrated period gate pending.
+
+## F11766. FIFO constructor needs original config copy and operand signedness
+
+Eight independent/crossed controls recover FIFO_create167B only with whole config copy, unsigned-at-use capacity and direct signed index. Original capacity MOVZWL and cursor MOVSWL establish these boundaries; the previous signed-branch comment conflated capacity with index and is corrected. Header/API unchanged; all metadata/data/nontext/bystanders unchanged and both exact FIFO neighbours preserved. Ten full-TU controls include the declined GetSNRV21 abs-before-narrow77B/BYTES4 lead. No adoption of register-only neighbours. Domain docs/batch50-fax-abs-fifo-domain.md, full findings docs/batch50-fax-fifo-findings.md. Final gate pending.
+
+## F11767. Broader kernel/tone and pulse readiness controls close without source adoption
+
+Integer package now151 audited full-TU controls, five gains unchanged: authentic TONE_generate count return, CID/tone ownership, kernel float-clear helper boundaries and output cursors all remain nonexact. No prototype guesses or closest-size cells adopted. Root pulse readiness13 further valid controls restore postcallback elapsed/count reloads, shared increment and common count verdict; best373B/BYTES4 remains two compare/branch orientation differences. Explicit shared break-value control also misses. Those declined cells incidentally make SetPulseBreakTime exact through TU allocator history; no negative readiness body is adopted to bank that bystander. Root total91 valid full-TU controls, six retained exact gains. Full domains, original read evidence and invalid-run exclusions are retained.
+
+## F11768. Batch50 integrates47 source gains with zero loss and a green period gate
+
+Master/base902f47fa, strict worst-copy census973→1020/1852 and103539→108349 exact bytes:47 gains/4810B, zero losses, five unresolved unchanged. All300 final raw objects equal an independently audited full-TU winner or archived baseline under identical complete configuration;31 selected TUs,30 raw changes. Old/new anonymous-table proof over immutable baseline retains exactly973 names, so no apparatus-only gain is claimed. Bounded fixed-frame controls28 assembled ELF objects (3 accepted/25 refused), historical integration48 synthetic objects,20 alpha and59 relocation cases, three membership-ratchet controls pass. Mnemonic ratchet passes; historical810-name floor's pre-existing V90Parameters C2 omission remains visible, unchanged in master and final, not reblessed.
+
+Final make phase J=4 passes388 period tests/0 failures and all structural gates. First run's period388/0 passed but41 detached mutation anchors refused structural provenance; retargeted semantic anchors preserve all labels/counts, then full phase rerun passes. Static anchors285 suites/10038 mutations,0 detached/nonunique/mispointed; references14323 checked,0 dangling/stale; unique finding numbers. No mutation/fuzz execution. Python syntax131 new diagnostic tools and whitespace check pass. Findings-only negatives are not promoted.
+
+Same-order300-input partial links both remain DIFFERENT: positioned equality68861→69172/943398, exact relocation records1037→1031/18317, exact defined-symbol records394/2907. Those record-position changes are retained, not treated as contrary function-proof evidence. No whole-object completion claim. Root6 gains757B; integer5/560B; V90/V9217/1916B; completed fax/data19/1577B. Full finite controls, callback/high-bit caveats, valid-run denominators and replay instructions: [batch50 results](batch50-results.md). Source gains are independent of profile/flag fitting and the other session's main checkout is untouched.

@@ -1,0 +1,3 @@
+# Original logarithm order and history-count ownership
+
+Base902f47fa. calcK blob computes/truncates log10(k) before log10(2), current source computes log10(2) first then log10(k) in return. Test explicit float log(k) local computed first, with entry versus first-use declaration; keep both explicit float conversion boundaries and reciprocal multiply. V92 resetEchoHistory blob retains length in ECX and clears EDX loopcount; test loopcount initialization before parameter-owner fetch and immediately before length rebuild. No field-store permutations/flags/headers; retain whole TU raw controls and every consumer.

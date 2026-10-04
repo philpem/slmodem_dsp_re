@@ -60,8 +60,8 @@
  },
  {
   "label": "getNofRefLoops always walks codec zero's table",
-  "find": "\tV90RefLoop *loops = dataBase[codecType].loops;\n\tint n = 0;",
-  "replace": "\tV90RefLoop *loops = dataBase[0].loops;\n\tint n = 0;"
+  "find": "\tint n = 0;\n\tV90RefLoop *loops = dataBase[codecType].loops;",
+  "replace": "\tint n = 0;\n\tV90RefLoop *loops = dataBase[0].loops;"
  },
  {
   "label": "the terminator is the second byte of the name",

@@ -64,8 +64,9 @@ V17RX_control(void *modem, const struct v17rx_ctl *arg)
 
 	cfg->int_0008 = arg->int_0004;
 
-	RXCTL(modem)->r08 =
-		(arg->flags_0d & V17RXCTL_SET_CTL_INT_0008) != 0;
+	RXCTL(modem)->r08 = 0;
+	if (arg->flags_0d & V17RXCTL_SET_CTL_INT_0008)
+		RXCTL(modem)->r08 = 1;
 
 	if (arg->flags_0d & V17RXCTL_REINIT) {
 		cfg->short_train = arg->short_train;

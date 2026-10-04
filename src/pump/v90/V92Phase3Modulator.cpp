@@ -108,37 +108,43 @@ typedef char v92p3m_size[(sizeof(V92Phase3Modulator) == 0x50) ? 1 : -1];
  * The negation is taken as a SHORT before it is widened: `movzwl 0x4(%esi);
  * neg; movswl %di,%ebx`, so -32768 stays -32768 rather than becoming 32768.
  */
-static short
+static int
 ruSymbol(const V92Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 1:
 	case 2:
-		return m->codeLevel;
+		sample = m->codeLevel;
+		break;
 	case 3:
 	case 4:
 	case 5:
-		return (short)-m->codeLevel;
+		sample = (short)-m->codeLevel;
+		break;
 	}
-	return 0;
+	return sample;
 }
 
 /* Its inversion; `generateRuNot` (+0x16400) with the two arms exchanged. */
-static short
+static int
 ruNotSymbol(const V92Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 1:
 	case 2:
-		return (short)-m->codeLevel;
+		sample = (short)-m->codeLevel;
+		break;
 	case 3:
 	case 4:
 	case 5:
-		return m->codeLevel;
+		sample = m->codeLevel;
+		break;
 	}
-	return 0;
+	return sample;
 }
 
 /*
@@ -149,39 +155,47 @@ ruNotSymbol(const V92Phase3Modulator *m)
  * at .text+0x16705 -- and the three masks are exactly {0,2}, {1,4} and {3,5}.
  * `genereteSu` (+0x16460, the misspelling is the original's) is the same.
  */
-static short
+static int
 suSymbol(const V92Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
-		return m->suLevel;
+		sample = m->suLevel;
+		break;
 	case 1:
 	case 4:
-		return 0;
+		sample = 0;
+		break;
 	case 3:
 	case 5:
-		return (short)-m->suLevel;
+		sample = (short)-m->suLevel;
+		break;
 	}
-	return 0;
+	return sample;
 }
 
 /* Its inversion; `genereteSuNot` (+0x164e0).  The zeros stay put. */
-static short
+static int
 suNotSymbol(const V92Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
-		return (short)-m->suLevel;
+		sample = (short)-m->suLevel;
+		break;
 	case 1:
 	case 4:
-		return 0;
+		sample = 0;
+		break;
 	case 3:
 	case 5:
-		return m->suLevel;
+		sample = m->suLevel;
+		break;
 	}
-	return 0;
+	return sample;
 }
 
 /*

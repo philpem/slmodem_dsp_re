@@ -67,6 +67,129 @@ def section_direct_edges(path, section):
     return edges
 
 
+def prove_fixed_stack_frame(rows, dispatch, destinations):
+    """Track one entry-allocated frame and untouched callee-save slots in CFG.
+
+    This accepts ordinary register saves, not arbitrary stack writes. All
+    paths start at the sized ABI entry, keep the same frame depth at joins,
+    restore each saved register from its own unchanged slot, and deallocate
+    the frame before RET. Argument loads cannot alias a saved slot.
+    """
+    first = rows[0]
+    frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
+    require(first[2] == 'sub' and frame_match is not None,
+            'fixed frame must be allocated at entry')
+    frame = int(frame_match[1], 16)
+    require(0 < frame <= 256 and frame % 4 == 0, 'fixed frame extent')
+    callee = frozenset(('ebx', 'esi', 'edi', 'ebp'))
+    supported = frozenset(('mov', 'movswl', 'movzwl', 'movsbl', 'movzbl',
+                           'lea', 'inc', 'dec', 'add', 'sub', 'neg', 'not',
+                           'and', 'or', 'xor', 'shl', 'shr', 'sar', 'mul',
+                           'imul', 'cmp', 'test', 'ret', 'nop'))
+    aliases = {'ebx':'ebx', 'bx':'ebx', 'bl':'ebx', 'bh':'ebx',
+               'esi':'esi', 'si':'esi', 'edi':'edi', 'di':'edi',
+               'ebp':'ebp', 'bp':'ebp'}
+    def written_callee(mnemonic, operands):
+        if mnemonic in ('cmp', 'test', 'ret', 'nop') or mnemonic.startswith('j'):
+            return None
+        target = re.search(r'(?:^|,)%(\w+)$', operands)
+        return aliases.get(target[1]) if target else None
+    stack_ops = {}; slots = {}; saved = set(); written = set()
+    for address, raw, mnemonic, operands in rows:
+        require(mnemonic in supported or mnemonic.startswith('j'),
+                'unsupported fixed-frame instruction')
+        require(re.search(r'%sp\b', operands) is None, 'partial stack-pointer access')
+        if '%esp' not in operands:
+            register = written_callee(mnemonic, operands)
+            if register: written.add(register)
+            continue
+        adjust = re.fullmatch(r'\$0x([0-9a-f]+),%esp', operands)
+        if adjust:
+            require(mnemonic in ('add', 'sub') and int(adjust[1], 16) == frame,
+                    'unsupported fixed-frame adjustment')
+            require(mnemonic != 'sub' or address == first[0],
+                    'reallocated fixed frame')
+            stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
+            continue
+        store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
+        if store:
+            offset = int(store[2] or '0', 16); register = store[1]
+            require(mnemonic == 'mov' and offset % 4 == 0 and offset + 4 <= frame,
+                    'saved slot extent/form')
+            require(address < dispatch and offset not in slots and register not in saved,
+                    'saved slot duplicate/clobber')
+            require(register not in written, 'saved register modified before save')
+            slots[offset] = register; saved.add(register)
+            stack_ops[address] = ('save', offset, register)
+            continue
+        load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
+        require(load is not None and mnemonic == 'mov', 'unsupported fixed-frame stack access')
+        offset = int(load[1] or '0', 16); register = load[2]
+        if offset < frame:
+            require(slots.get(offset) == register, 'saved slot wrong-owner read')
+            stack_ops[address] = ('restore', offset, register)
+        else:
+            require(offset >= frame + 4 and offset % 4 == 0,
+                    'return address/unaligned argument read')
+            stack_ops[address] = ('argument', register)
+            if register in callee: written.add(register)
+    require(saved, 'fixed frame without supported saved registers')
+    by_address = {row[0]: i for i, row in enumerate(rows)}
+    pending = [(first[0], (False, frozenset(), frozenset()))]; seen = {}
+    returns = 0
+    while pending:
+        address, state = pending.pop()
+        if address in seen:
+            require(seen[address] == state, 'inconsistent fixed-frame join')
+            continue
+        seen[address] = state
+        allocated, available, restored = state
+        i = by_address[address]; _, raw, mnemonic, operands = rows[i]
+        available = set(available); restored = set(restored)
+        operation = stack_ops.get(address)
+        if operation:
+            kind = operation[0]
+            if kind == 'allocate':
+                require(not allocated and not available, 'fixed-frame allocation state')
+                allocated = True
+            elif kind == 'release':
+                require(allocated and restored == saved, 'frame release before register restoration')
+                allocated = False
+            else:
+                require(allocated, 'stack access outside allocated frame')
+                if kind == 'save': available.add(operation[1])
+                elif kind == 'restore':
+                    require(operation[1] in available, 'restore without saved slot')
+                    restored.add(operation[2])
+                elif kind == 'argument': restored.discard(operation[1])
+        else:
+            register = written_callee(mnemonic, operands)
+            if register: restored.discard(register)
+        if mnemonic == 'ret':
+            require(not allocated and restored == saved, 'unbalanced fixed-frame return')
+            returns += 1
+            continue
+        if mnemonic == 'jmp' and operands.startswith('*'):
+            successors = destinations
+        elif mnemonic.startswith('j'):
+            target = re.match(r'^([0-9a-f]+)\s', operands)
+            require(target is not None, 'fixed-frame branch target')
+            successors = [int(target[1], 16)]
+            if mnemonic != 'jmp':
+                require(i + 1 < len(rows), 'fixed-frame branch fallthrough extent')
+                successors.append(rows[i + 1][0])
+        else:
+            require(i + 1 < len(rows), 'fixed-frame fallthrough extent')
+            successors = [rows[i + 1][0]]
+        next_state = (allocated, frozenset(available), frozenset(restored))
+        for successor in successors:
+            require(successor in by_address, 'fixed-frame successor extent')
+            pending.append((successor, next_state))
+    require(returns > 0, 'fixed frame without reachable return')
+    return {'bytes': frame, 'saved_slots': sorted(slots.items()),
+            'reachable_instructions': len(seen), 'returns': returns}
+
+
 def prove(path, name):
     """Return one fully proved table's ordered destinations and provenance.
 
@@ -105,10 +228,9 @@ def prove(path, name):
                     for r in rows),
             'unsupported control/stack instruction')
     require(not any(r[2] == 'ret' and r[3] for r in rows), 'unsupported return form')
-    require(not any(r[2] not in ('cmp', 'test') and
-                    (re.search(r'(?:^|,)%e?sp$', r[3]) or
-                     r[3].endswith(')') and '%esp' in r[3]) for r in rows),
-            'unsupported stack write')
+    stack_writes = any(r[2] not in ('cmp', 'test') and
+                       (re.search(r'(?:^|,)%e?sp$', r[3]) or
+                        r[3].endswith(')') and '%esp' in r[3]) for r in rows)
     boundaries = {r[0] for r in rows}
     indirect = [i for i, r in enumerate(rows) if r[2].startswith(('j', 'call'))
                 and r[3].startswith('*')]
@@ -196,6 +318,8 @@ def prove(path, name):
         require(target in boundaries and start <= target < end, 'entry instruction boundary/owner')
         require(target not in protected, 'table guard bypass')
         destinations.append(target - start)
+    stack_proof = prove_fixed_stack_frame(rows, jump[0],
+                                          [start + d for d in destinations]) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]
@@ -205,6 +329,7 @@ def prove(path, name):
             targets = {target} if relocation['r_info_type'] == 1 else {target, target + 4}
             require(not targets & protected, 'relocated guard bypass')
     return {'function': name, 'count': count, 'targets': destinations,
+            'fixed_stack_frame': stack_proof,
             'table_section': table_section.name, 'table_offset': table_start,
             'relocation_offset': relocation_offset(code_relocs, start),
             'guard_offset': cmp_row[0] - start, 'index': register,

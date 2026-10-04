@@ -230,8 +230,8 @@
  },
  {
   "label": "answer on a nonzero total rather than a positive one",
-  "find": "\treturn sum > 0 ? 1 : 0;",
-  "replace": "\treturn sum != 0 ? 1 : 0;"
+  "find": "\tif (sum > 0)\n\t\tresult = 1;\n\treturn result;",
+  "replace": "\tif (sum != 0)\n\t\tresult = 1;\n\treturn result;"
  },
  {
   "label": "count flagged phases rather than summing the flags",

@@ -411,12 +411,16 @@ short
 TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	struct fax_fifo *fifo =
-		(struct fax_fifo *)prm->fifo;
+	struct fax_fifo *fifo;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_IDLE;
+	fifo = (struct fax_fifo *)prm->fifo;
 
-	if (fifo->count == 0) {
+	if (fifo->count != 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+	{
 		unsigned short b = (unsigned short)*budget;
 		short nsamples = (short)TxNoCarrierV17(modem, in, out, b);
 
@@ -424,8 +428,6 @@ TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	TxNextStateV17(modem);
-	return 0;
 }
 
 /*

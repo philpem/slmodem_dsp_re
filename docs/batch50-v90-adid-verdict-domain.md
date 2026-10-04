@@ -1,0 +1,3 @@
+# ADID entry-owned verdict boundary
+
+Base902f47fa. Both isThereAnyAltRbsPhase and isAltRbs originals clear a separate verdict before their loop/arithmetic, assign1 only on acceptance, and share return cleanup. Current terminal comparisons return synthesized SETcc; isAltRbs also uses early literal reject. Test each independently and combined with a common int result initialized at entry; preserve short sum/phase wrap, full-int absolute arithmetic and original signed predicates. Four completeTU raw-controlled cells. Use -dr initialRTL rather than -da: prior ADID full-RTL dump ICE is already recorded and is not a source/compiler profile change. No declaration/template/header edits.

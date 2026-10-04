@@ -3,7 +3,6 @@
   "label": "NOTE: this set covers setParamsInfoFromCPUnPck and the two static helpers it inlines, and NOTHING ELSE in src/pump/v90/V90MappingParamsInt.cpp.  The file's other six members are the v90mapint suite's, against t_v90cmask; the two suites share a source and have different binaries, which is the shape v90modprog and v90modulator already have over V90Modulator.cpp.",
   "note": "The two helpers are near-identical bodies and every anchor below therefore quotes the line that separates them -- `params->constellation[c]` against `params->codecConstellation[c]` -- rather than the loop text, which appears twice.  tools/anchorcheck.py is what proves that; finding F7521 is why it is not taken on trust."
  },
-
  {
   "label": "the codec loop's else arm reads the codec bitmaps rather than the ordinary ones",
   "find": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {\n\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
@@ -64,7 +63,6 @@
   "find": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)cp->dataBitRate);",
   "replace": "\tsetDataBitRateInline(params, (int)cp->codecConstellationPresent,\n\t\t\t     (int)cp->dataBitRate);"
  },
-
  {
   "label": "the ordinary helper writes the codec table",
   "find": "\tunsigned char *table = params->constellation[c];",
@@ -122,20 +120,20 @@
  },
  {
   "label": "the ordinary helper's clamp is at 3 rather than 6",
-  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
-  "replace": "\tunsigned int c = (unsigned int)(which < 3 ? which : 0);\n\tunsigned char *table = params->constellation[c];"
+  "find": "\tunsigned int c = (unsigned int)which;\n\tif (which >= 6) c = 0;\n\tunsigned char *table = params->constellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)which;\n\tif (which >= 3) c = 0;\n\tunsigned char *table = params->constellation[c];"
  },
  {
   "label": "the ordinary helper's clamp admits 6 as well",
-  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
-  "replace": "\tunsigned int c = (unsigned int)(which <= 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
+  "find": "\tunsigned int c = (unsigned int)which;\n\tif (which >= 6) c = 0;\n\tunsigned char *table = params->constellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)which;\n\tif (which > 6) c = 0;\n\tunsigned char *table = params->constellation[c];",
   "equivalent": true,
   "why": "THE CLAMP IS DEAD IN THE ONLY CALLER THIS TREE HAS.  setParamsInfoFromCPUnPck passes (int)i from three loops that run 0..5, so `which < 6` and `which <= 6` select the same arm for every argument the helper can receive, and so does every other predicate true over 0..5.  The clamp is reachable only through the object's own setConstellationMask (.text+0x33570) and setCodecConstellationMask (+0x335f0), which are the two GLOBALS this batch deliberately did not claim -- see the .cpp.  The row that moves the boundary DOWN, to 3, is NOT equivalent and is the one above: it changes the answer for i = 3, 4 and 5.  The object's own evidence for the clamp is the SIGNED `cmp $0x6 ; setl` against the caller's UNSIGNED `jbe`, which is a codegen fact and not one this tier can see (finding F5821)."
  },
  {
   "label": "the codec helper's clamp admits 6 as well",
-  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->codecConstellation[c];",
-  "replace": "\tunsigned int c = (unsigned int)(which <= 6 ? which : 0);\n\tunsigned char *table = params->codecConstellation[c];",
+  "find": "\tunsigned int c = (unsigned int)which;\n\tif (which >= 6) c = 0;\n\tunsigned char *table = params->codecConstellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)which;\n\tif (which > 6) c = 0;\n\tunsigned char *table = params->codecConstellation[c];",
   "equivalent": true,
   "why": "The same argument as the row above, over the other helper.  Its caller's loop also runs 0..5."
  }

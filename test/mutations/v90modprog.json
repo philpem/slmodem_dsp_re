@@ -521,8 +521,8 @@
  },
  {
   "label": "the data phase entry is not idempotent",
-  "find": "V90Modulator::enterDataPhase()\n{\n\tif (state == 3)\n\t\treturn;\n",
-  "replace": "V90Modulator::enterDataPhase()\n{\n"
+  "find": "V90Modulator::enterDataPhase()\n{\n\t/* The rate diagnostic uses double expression precision for its half\n\t * offset; this retains the original early FLDS and FADDP boundary. */\n\tif (state == 3)\n\t\treturn;\n",
+  "replace": "V90Modulator::enterDataPhase()\n{\n\t/* The rate diagnostic uses double expression precision for its half\n\t * offset; this retains the original early FLDS and FADDP boundary. */\n"
  },
  {
   "label": "the data phase entry raises the wrong event",

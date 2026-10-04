@@ -1,0 +1,3 @@
+# SD detector loop/result ownership finite domain
+
+Baseline902f47fa untouched fullTU must reproduce retained object under the complete period profile. Original process shifts history through distinct descending source/destination pointers and clears an independent return verdict at entry; ours uses indexed history and terminal SETBE. These are independent source use boundaries, not register permutations. Four cells cross indexed versus descending-pointer copy with early int result versus terminal predicate. Preserve correlation/energy declaration order and all NaN predicates. No width changes, no flags, no padding. Audit all TU metadata/data/relocs and bystanders; stop this finite family on a miss.

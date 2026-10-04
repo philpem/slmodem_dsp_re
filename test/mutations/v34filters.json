@@ -37,18 +37,18 @@
  },
  {
   "label": "the scan rounds up rather than down",
-  "find": "unsigned n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;",
-  "replace": "unsigned n = ((e->taps + V34_ECHO_REPORT_COLS - 1)\n\t\t      / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;"
+  "find": "int n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;",
+  "replace": "int n = ((e->taps + V34_ECHO_REPORT_COLS - 1)\n\t\t / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;"
  },
  {
   "label": "the all-zero test becomes a not-equal",
-  "find": "\tif (k == n) {",
-  "replace": "\tif (k != n) {"
+  "find": "\tk = 0;\n\tif (n > 0) {\n\t\tdo {\n\t\t\tif (coeff[k] != 0)\n\t\t\t\tgoto coefficients;\n\t\t} while (++k < n);\n\t}\n\n\t/*\n\t * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a\n\t * literal 0x3f on all three, and all three are referenced from this\n\t * function and nowhere else:\n\t *\n\t *      .rodata.str1.4+0xf878  \"?======= Nothing to report =========\"\n\t *      .rodata.str1.1+0x2c84  \"?%d %d %d %d %d %d\"\n\t *      .rodata.str1.4+0xf8a0  \"?======= Coefficients[1..%ld]=========\"\n\t *\n\t * Invented paraphrases stood here until the whole tree's format strings\n\t * were checked against .rodata; see finding F180.  The header takes an\n\t * argument, which the paraphrase did not: `%edx` at 0x72298 is still\n\t * `n`, the tap count rounded down to a multiple of six.\n\t */\n\t{\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"?======= Nothing to report =========\\n\");\n\t\treturn;\n\t}\n",
+  "replace": "\tk = 0;\n\tif (n > 0) {\n\t\tdo {\n\t\t\tif (coeff[k] != 0)\n\t\t\t\tbreak;\n\t\t} while (++k < n);\n\t}\n\n\t/*\n\t * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a\n\t * literal 0x3f on all three, and all three are referenced from this\n\t * function and nowhere else:\n\t *\n\t *      .rodata.str1.4+0xf878  \"?======= Nothing to report =========\"\n\t *      .rodata.str1.1+0x2c84  \"?%d %d %d %d %d %d\"\n\t *      .rodata.str1.4+0xf8a0  \"?======= Coefficients[1..%ld]=========\"\n\t *\n\t * Invented paraphrases stood here until the whole tree's format strings\n\t * were checked against .rodata; see finding F180.  The header takes an\n\t * argument, which the paraphrase did not: `%edx` at 0x72298 is still\n\t * `n`, the tap count rounded down to a multiple of six.\n\t */\n\tif (k != n) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"?======= Nothing to report =========\\n\");\n\t\treturn;\n\t}\n"
  },
  {
   "label": "the row loop runs to the rounded count rather than a fixed 144",
-  "find": "\tfor (i = 0; i <= V34_ECHO_REPORT_TAPS - V34_ECHO_REPORT_COLS;",
-  "replace": "\tfor (i = 0; i <= (int)n - V34_ECHO_REPORT_COLS;"
+  "find": "\tfor (i = 0; i < V34_ECHO_REPORT_TAPS;",
+  "replace": "\tfor (i = 0; i < n;"
  },
  {
   "label": "the row loop steps by one rather than by six",
@@ -57,8 +57,8 @@
  },
  {
   "label": "the row's last two columns swapped",
-  "find": "e->coeff[i + 4], e->coeff[i + 5]);",
-  "replace": "e->coeff[i + 5], e->coeff[i + 4]);"
+  "find": "coeff[i + 4], coeff[i + 5]);",
+  "replace": "coeff[i + 5], coeff[i + 4]);"
  },
  {
   "label": "the empty report is printed ungated",
@@ -67,8 +67,8 @@
  },
  {
   "label": "the report's early return is dropped, so the header always prints",
-  "find": "\tif (!DSPLIB_DEBUG_ON())\n\t\treturn;\n\n\tdsplibs_debug_printf(",
-  "replace": "\tdsplibs_debug_printf("
+  "find": "coefficients:\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"?======= Coefficients[1..%ld]=========\\n\",",
+  "replace": "coefficients:\n\tdsplibs_debug_printf(\"?======= Coefficients[1..%ld]=========\\n\","
  },
  {
   "label": "the CleanUp announcement's gate is >= 1 rather than > 1",

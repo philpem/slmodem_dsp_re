@@ -128,22 +128,27 @@ V90Phase3Modulator::setSessionFlag(unsigned int flag)
  * what names the state.  The modulus is unsigned -- the object divides by six
  * with the 0xaaaaaaab reciprocal and an unsigned shift.
  */
-static short
+static int
 sdSymbol(const V90Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
-		return m->codeLevelAlt;
+		sample = m->codeLevelAlt;
+		break;
 	case 1:
-		return m->idleLevel;
+		sample = m->idleLevel;
+		break;
 	case 3:
 	case 5:
-		return (short)-m->codeLevelAlt;
+		sample = (short)-m->codeLevelAlt;
+		break;
 	case 4:
-		return (short)-m->idleLevel;
+		sample = (short)-m->idleLevel;
+		break;
 	}
-	return 0;		/* unreachable: a remainder mod 6 is < 6 */
+	return sample;
 }
 
 int
@@ -261,22 +266,27 @@ V90Phase3Modulator::resetDILGenerator(const tagV90DILdescriptor *d)
  */
 
 /* Its inversion, .rodata:0xa0c, matching `generateSdNot`'s table at 0x99c. */
-static short
+static int
 sdNotSymbol(const V90Phase3Modulator *m)
 {
+	int sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
-		return (short)-m->codeLevelAlt;
+		sample = (short)-m->codeLevelAlt;
+		break;
 	case 1:
-		return (short)-m->idleLevel;
+		sample = (short)-m->idleLevel;
+		break;
 	case 3:
 	case 5:
-		return m->codeLevelAlt;
+		sample = m->codeLevelAlt;
+		break;
 	case 4:
-		return m->idleLevel;
+		sample = m->idleLevel;
+		break;
 	}
-	return 0;		/* unreachable, as above */
+	return sample;
 }
 
 /*
@@ -347,9 +357,9 @@ updateCodeSegment(V90Phase3Modulator *m)
  * The header used to spell them `void` with the usual not-measured caveat;
  * the standalone bodies are the measurement.
  *
- * Their unreachable default arms differ from the helpers': past the `%6u`
- * the standalone bodies return whatever is in a callee-saved register, the
- * helpers return 0, and no input reaches either.
+ * Every possible unsigned remainder assigns the promoted result.  No
+ * default initialization is needed; adding one changes the standalone
+ * result lifetime even though that default edge is unreachable.
  * ===========================================================================
  */
 int
@@ -529,7 +539,8 @@ V90Phase3Modulator::generateJdNot()
 int
 V90Phase3Modulator::generateJd()
 {
-	return scrambledSymbol(this, vectorBit(jdBits, symbolCount));
+	polarity ^= scrambler.process(jdBits[(symbolCount - 1u) % 72u]);
+	return polarity ? codeLevel : (short)-codeLevel;
 }
 
 /*
@@ -1020,23 +1031,23 @@ V90Phase3Modulator::~V90Phase3Modulator()
 }
 
 /*
- * THE DISPATCHER: one test of `sessionFlag` and a tail call to whichever of
+ * THE DISPATCHER: one test of `sessionFlag` and a call to whichever of
  * the two symbol generators the session is running.  It is the entry point
  * the modulator's caller uses, and it is why `sessionFlag` is at +0x00 --
  * the field a dispatcher tests first is the one that costs no displacement
  * byte to reach.
  *
- * The object sign-extends the callee's value again before returning it; the
- * header says why that instruction is not in our build and why it cannot
- * change the number.
+ * The object narrows the callee's int result to short and widens it again
+ * before returning.  Both child generators produce short-valued samples,
+ * and these explicit casts retain that dispatcher conversion boundary.
  */
 int
 V90Phase3Modulator::generateSymbol()
 {
 	if (sessionFlag != 0)
-		return generateV92Symbol();
+		return (short)generateV92Symbol();
 
-	return generateV90Symbol();
+	return (short)generateV90Symbol();
 }
 
 /*
