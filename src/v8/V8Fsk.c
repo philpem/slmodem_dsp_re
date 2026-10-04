@@ -186,7 +186,7 @@ v8_fskmodulate(struct v8 *v, short which)
 			 + (which == 0 ? p->carrier_a : p->carrier_b)) & 0x1fff;
 		p->carrier_phase = (short)phase;
 
-		c = v8_cosread((unsigned char)(phase >> 5));
+		c = v8_cosread((phase >> 5));
 		*out++ = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
 	}
 

@@ -1,0 +1,3 @@
+# Jd phase extraction predicate grammar
+
+Explicit branches around a left-shift-mask predicate raw-reproduce the baseline (four cells); they do not activate setRatesMask's measured TEST/SETNE carrier. That sibling tests a right-shifted value masked with1, while phase assignments currently test value & shifted1. Bound four new independent setter/constructor right-shift predicate branch controls, retaining conversion/unsigned counter and long-long intermediate. No widening or declaration changes. These are the two original bit-extraction source idioms, not arbitrary algebraic/register permutations; stop after this grammar crossing.

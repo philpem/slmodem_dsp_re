@@ -1,0 +1,3 @@
+# V92 Jd phase bit publication
+
+Original setJdPhase computes an explicit shifted one-bit mask, TESTs the converted Q16 value and SETNE stores each byte. Current boolean assignment is lowered to SAR/AND/MOV instead. The same source pattern occurs in its constructor clones; setRatesMask already documents explicit branch stores as the measured TEST/SETNE carrier. Predeclare four crossed cells replacing boolean assignment with if(maskbit) byte1 else byte0 independently in phase setter and constructor phase loop. Preserve unsigned loop counters, long-long conversion, all member stores and data. FullTU metadata/relocs/bystanders audit; no flags, declaration permutations or shared headers.

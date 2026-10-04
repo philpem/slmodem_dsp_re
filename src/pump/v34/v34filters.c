@@ -1046,15 +1046,18 @@ V34EchoEstimateDelayLineEnergy(struct v34_echo *e)
 {
 	int acc = 0;
 	unsigned k;
+	const short *hist = e->hist;
 
 	/*
 	 * Named for the delay line and computed over the tap HISTORY, which
 	 * is a different array.  The name is the original's; the arithmetic is
 	 * `e->hist`, unambiguously, at +0x10.
 	 */
-	for (k = 0; k < e->taps; k++)
+	for (k = 0; k < e->taps; k++) {
+		int sample = *hist++;
 		acc = (int)((unsigned)acc
-			    + (unsigned)((e->hist[k] * e->hist[k]) >> 5));
+			    + (unsigned)((sample * sample) >> 5));
+	}
 
 	return acc;
 }
@@ -1151,14 +1154,19 @@ V34PremptxCopy(void *modulator, const short *coeff)
 void
 V34EchoReportCoeff(struct v34_echo *e)
 {
-	unsigned n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;
-	unsigned k;
+	int n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;
+	int k;
 	int i;
+	const short *coeff = e->coeff;
 
 	/* Nothing to say if every tap the scan covers is still zero. */
-	for (k = 0; k < n; k++)
-		if (e->coeff[k] != 0)
-			break;
+	k = 0;
+	if (n > 0) {
+		do {
+			if (coeff[k] != 0)
+				goto coefficients;
+		} while (++k < n);
+	}
 
 	/*
 	 * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a
@@ -1174,17 +1182,16 @@ V34EchoReportCoeff(struct v34_echo *e)
 	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
 	 * `n`, the tap count rounded down to a multiple of six.
 	 */
-	if (k == n) {
+	{
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"?======= Nothing to report =========\n");
 		return;
 	}
 
-	if (!DSPLIB_DEBUG_ON())
-		return;
-
-	dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
+coefficients:
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
 			     (long)n);
 
 	/*
@@ -1198,14 +1205,13 @@ V34EchoReportCoeff(struct v34_echo *e)
 	 * the reconstruction's own allocation rather than of anything the
 	 * caller owns.  D28.
 	 */
-	for (i = 0; i <= V34_ECHO_REPORT_TAPS - V34_ECHO_REPORT_COLS;
+	for (i = 0; i < V34_ECHO_REPORT_TAPS;
 	     i += V34_ECHO_REPORT_COLS) {
-		if (!DSPLIB_DEBUG_ON())
-			return;
-		dsplibs_debug_printf("?%d %d %d %d %d %d\n",
-				     e->coeff[i], e->coeff[i + 1],
-				     e->coeff[i + 2], e->coeff[i + 3],
-				     e->coeff[i + 4], e->coeff[i + 5]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("?%d %d %d %d %d %d\n",
+				     coeff[i], coeff[i + 1],
+				     coeff[i + 2], coeff[i + 3],
+				     coeff[i + 4], coeff[i + 5]);
 	}
 }
 

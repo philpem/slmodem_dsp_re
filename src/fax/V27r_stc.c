@@ -35,9 +35,6 @@ V27RX_control(void *rx, void *req)
 {
 	struct v27rx_ctl *ctl = (struct v27rx_ctl *)req;
 	struct v27_rx_shared *sh;
-	struct v27_rx_block *rxb;
-	unsigned char flags;
-	unsigned char mask;
 
 	if (req == 0)
 		return 0;
@@ -46,18 +43,15 @@ V27RX_control(void *rx, void *req)
 	sh = ((struct v27_rx *)rx)->shared;
 	sh->int_0004 = 0;
 
-	flags = ctl->flags;
-	if (flags & V27RXCTL_FLAGS_FORCE_NOCARRIER)
+	if (ctl->flags & V27RXCTL_FLAGS_FORCE_NOCARRIER)
 		sh->int_0004 = 1;
-	if (flags & V27RXCTL_FLAGS_REINIT)
+	if (ctl->flags & V27RXCTL_FLAGS_REINIT)
 		V27RX_create(rx, &((struct v27_rx *)rx)->cfg);
 
-	mask = ctl->mask;
-	rxb = ((struct v27_rx *)rx)->rx;
-	if (mask & V27RXCTL_MASK_DISABLE_00)
-		rxb->int_0000 = 0;
-	if (mask & V27RXCTL_MASK_DISABLE_FSE_LMS)
-		rxb->en_fse_lms = 0;
+	if (ctl->mask & V27RXCTL_MASK_DISABLE_00)
+		((struct v27_rx *)rx)->rx->int_0000 = 0;
+	if (ctl->mask & V27RXCTL_MASK_DISABLE_FSE_LMS)
+		((struct v27_rx *)rx)->rx->en_fse_lms = 0;
 
 	return 1;
 }

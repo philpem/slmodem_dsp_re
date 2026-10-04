@@ -123,8 +123,8 @@ V90PreFilter::isV90WithEia6() const
 int
 V90PreFilter::getNofRefLoops() const
 {
-	V90RefLoop *loops = dataBase[codecType].loops;
 	int n = 0;
+	V90RefLoop *loops = dataBase[codecType].loops;
 
 	while (loops[n].name[0] != '\0')
 		n++;

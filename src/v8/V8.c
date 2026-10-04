@@ -933,13 +933,13 @@ v8_TONEq_generate(struct v8 *v, short *out)
 {
 	int i;
 
-	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+	for (i = 0; i < V8_QUEUE_BLOCK; i++, out++) {
 		unsigned phase = (unsigned)(unsigned short)v->toneq_pending
 				 + (unsigned short)v->toneq_period;
 
 		phase &= 0x3fff;
 		v->toneq_pending = (short)phase;
-		out[i] = v8_cosread((unsigned char)((phase + 0x20) >> 6));
+		*out = v8_cosread(((phase + 0x20) >> 6));
 	}
 }
 
@@ -973,12 +973,12 @@ v8_ansamgenerate(struct v8 *v, short *out)
 		t->carrier_phase = (short)carrier;
 
 		depth = v8_mpyint(V8_ANSAM_DEPTH,
-				  v8_cosread((unsigned char)((envelope + 0x20)
+				  v8_cosread(((envelope + 0x20)
 							     >> 6)));
 		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
 
 		out[i] = v8_fsktxfilter(v,
-			v8_mpyint(v8_cosread((unsigned char)((t->carrier_phase + 0x20)
+			v8_mpyint(v8_cosread(((t->carrier_phase + 0x20)
 							     >> 6)), level));
 	}
 

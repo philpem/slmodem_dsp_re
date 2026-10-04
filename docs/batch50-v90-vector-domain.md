@@ -1,0 +1,3 @@
+# Phase3 vector ownership boundary
+
+Base902f47fa. Original generateJd/Phase/V92 computes unsigned modulo72 before fetching the member bit vector, uses one saved register, and loads polarity after the opaque scrambler call. Current vectorBit(pointer,count) helper evaluates both arguments first, retains the pointer across the division, then allocates a second saved register. Test direct member-index expression in the three standalone leaves, and in every existing vectorBit call. Cross each with confirmed cycle result winner. No definition ordering, artificial locals or header/flag changes; unsigned arithmetic and narrow symbol return unchanged. Audit every changed generator.

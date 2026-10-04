@@ -38,10 +38,10 @@ char *V29TX_MESG[8] = {
 	name(void *handle, int code, char **out)			\
 	{								\
 		(void)handle;						\
-		if ((unsigned)code > (guard))				\
-			*out = NULL;					\
-		else							\
-			*out = (table)[(unsigned char)code];		\
+		if ((unsigned)code <= (guard)) \
+			*out = (table)[((unsigned)code & 255)]; \
+		else \
+			*out = NULL; \
 	}
 
 MESSAGE_FN(v29tx_message, V29TX_MESG, 8)

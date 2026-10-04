@@ -1,3 +1,4 @@
+#include <string.h>
 /*
  * fifo.c -- Class 1 fax: the FIFO of 16-bit elements.
  *
@@ -42,46 +43,40 @@ const struct fifo_cfg FIFO_CFG = { 0, 100, 0 };
  * is why this is spelled as two parallel reads below rather than a pointer
  * reassignment.
  *
- * The count-down fill loop is a SIGNED comparison against `size` sign
- * extended from the object's own `movswl %ax,%edx` / `cmp %eax,%edx; jl`
- * (0x096c06..0x096c12) -- so it is written as a plain `for` over `short i`
- * against `f->size` rather than the unsigned idiom `FIFO_read`/`FIFO_write`
- * use for their cursors.  Both are the object's; they are different loops.
+ * The fill loop compares a sign-extended short cursor against a ZERO-
+ * extended capacity, both at int width: MOVSWL cursor and MOVZWL size,
+ * then CMP/JL at 0x096c06..0x096c12. The signed branch does not establish
+ * a signed capacity. Its subscript uses the signed cursor directly too.
+ * The config is snapshotted as six bytes (one dword and one word) before
+ * unknown allocation calls, preserving the original read/store widths.
+ * batch50-fax-abs-fifo-domain.md records the independent source controls.
  */
 struct fax_fifo *
 FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg)
 {
-	short word0, size;
-	unsigned short fill;
+	struct fifo_cfg config;
 
-	if (cfg != NULL) {
-		word0 = cfg->word0;
-		size = cfg->size;
-		fill = (unsigned short)cfg->fill;
-	} else {
-		word0 = FIFO_CFG.word0;
-		size = FIFO_CFG.size;
-		fill = (unsigned short)FIFO_CFG.fill;
-	}
+	if (cfg != NULL)
+		config = *cfg;
+	else
+		config = FIFO_CFG;
 
 	if (f == NULL) {
 		f = sysdep_malloc(sizeof(struct fax_fifo));
 		f->buf = (unsigned short *)
-			sysdep_malloc((unsigned)(unsigned short)size * 2);
+			sysdep_malloc((unsigned)(unsigned short)config.size * 2);
 	}
 
-	f->short_000 = word0;
-	f->size = size;
+	memcpy(f, &config, sizeof config);
 	f->count = 0;
 	f->rd = 0;
-	f->fill = fill;
 	f->wr = 0;
 
 	{
 		short i;
 
-		for (i = 0; i < f->size; i++)
-			f->buf[(unsigned short)i] = 0;
+		for (i = 0; i < (unsigned short)f->size; i++)
+			f->buf[i] = 0;
 	}
 
 	return f;

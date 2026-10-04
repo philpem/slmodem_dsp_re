@@ -106,9 +106,10 @@ GetT30FrameIDFromBuffer(unsigned char address, unsigned char control,
 {
 	unsigned int id;
 	int marker = 0;
+	int result = 0xff;
 
 	if (address != 0xff)
-		return 0xff;
+		return result;
 
 	if (control == 0x03 || control == 0x13) {
 		id = aReversedCharsArray[fcf];
@@ -118,5 +119,6 @@ GetT30FrameIDFromBuffer(unsigned char address, unsigned char control,
 	}
 	if (id > 0x84)
 		id &= 0x7f;
-	return (int)id | marker;
+	result = (int)id | marker;
+	return result;
 }

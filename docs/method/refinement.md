@@ -3341,3 +3341,35 @@ getter denominators and an old-source failing control. Equal function size
 (1094B here) is insufficient: final residual remains BYTES422. F11742 and
 docs/batch20-callprog-callback-order-controls.md carry complete-TU and runtime
 controls, including the rejected intermediate seed rather than hiding it.
+
+The incoming argument may be the original default result. _handle_status's
+if-assignment form (F11750) keeps it live at entry and recovers44B; sparse
+switch/return and switch/assignment alternatives do not. Transfer result-lifetime
+hypotheses through actual dispatch forms, not a fabricated register carrier.
+
+Compare read ownership across output stores before treating a renderer as a
+register mismatch (F11751). CID's high output store separates two input reads;
+eagerly cached nibbles hide that alias boundary. Predicate direction can expose
+signedness even when earlier signed/unsigned source variants were raw-equivalent:
+late read plus decimal-first signed-byte ternaries recover two complete bodies.
+The changed assumption is the new observed branch direction, not a lower score.
+
+Source cursor loops can expose GCC3 reversal that indexed loops block: V34 history energy compiles an ascending counter plus `*hist++` into the blob DEC/JNE. Trace `.09.loop` before inferring source count direction (F11754). For short paired history copies, flattened stores can remove genuine loop topology; restoring the two-step V8 loop recovers161B. Full-register shifts with a byte ABI may require an unsigned working copy before lookup, as charFlip proves.
+
+Full-width masked message indices and branch orientation can interact: neither mask nor arm order alone recovers the eight modem reporters. Status stores can precede child/request sampling, and boolean clear-then-conditionally-set can preserve reads that direct boolean assignment hoists. Use actual alias/read boundaries and cross independent witnesses; do not treat store/read rearrangement as behaviorally inert (F11753). Existing union bytes can express observed byte flags without inventing a new shared type.
+
+A common default result needs its original initialization boundary as well as its switch shape. vce_get_sreg clears its result after the external getter: moving zero before the call creates a callee-save live range and changes the prologue. Explicit guarded assignment1 instead of a boolean expression is also needed. Cross these independent instruction witnesses; the result alone is not a new general store-order lever (F11756).
+
+CID extends callback-boundary reconstruction: an output buffer initialized after memset, combined with owner-relative stores, preserves the original call-setup scratch lifetime and reaches145B. Neither axis alone reproduces it. Capturing a child by itself did not explain the residual; trace the full owner and return-buffer lifetimes rather than fit register names (F11759).
+
+A fullwidth cosine formal can eliminate caller byte extensions while the callee consumes exactly the lowbyte. Cross consistent callee/caller declarations with real output cursors and verify all header consumers; signed/unsigned full formal may remain indistinguishable. V8 TONEq90B needs both width and cursor, while ANSam remains nonexact (F11760).
+
+For fully covered unsigned modulo switches, defensive result initialization can destroy the original live range. A common fullwidth result with explicit narrow negation reproduces six V90/V92 leaves when allcases are proven covered; never leave an actually reachable result uninitialized. Anonymous jump-table operands need proven ordered destinations and CFG/stack ownership, including meaningful negative controls. Measure comparator support changes on the immutable baseline before attributing source gains (F11761).
+
+### Cross ownership with value lifetime before closing a return-spelling domain
+
+The batch50 pulse digit separates original input from corrected count and acquires the child before the zero branch: neither alone matches, both recover146B (F11762). V90RDetector's compound member update first restores store/reload, then a positive complete-group guard retains the initialized verdict and closes four functions (F11763). Return synonyms being inert on one ownership graph does not exclude their interaction with an independently witnessed graph. Require the full finite cross and inspect unchanged exact neighbours; avoid arbitrary reordering or register padding.
+
+### Compare expression mode and copy width, not just constant bytes
+
+A0.5f→0.5 expression-mode change recovers V90 enterDataPhase190B while its entire constant pool stays byte-identical (F11765); don't infer source literal width from pool bytes alone. FIFO_create167B needs whole-config copy crossed with capacity zero-extension and signed cursor use; neither local signedness fix nor copy alone succeeds (F11766). Audit high-bit behavior from operands, not the signedness of one branch opcode.

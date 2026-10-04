@@ -1,0 +1,3 @@
+# Original shared count verdict
+
+Eight readiness controls restore postcallback member reloads and original shared increment but remain nonexact; they also incidentally move SetPulseBreakTime into exactness. No source adoption on that basis. A fresh discriminator: blob's initial zero-count edge reaches the common SETE verdict (0x3350), whereas all eight cells retained literal return1. One additional graph candidate guards work with remaining !=0 and shares the member-count verdict, retaining the original unsigned elapsed and callback reloads. Two complete TUs including raw baseline, fixed flags. Close if nonexact; do not adopt a negative body for its bystander gain.

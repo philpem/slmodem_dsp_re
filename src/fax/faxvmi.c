@@ -397,16 +397,14 @@ const struct faxvmi_ctl FAXVMI_CTL = { 0 };
 void
 FAXVMI_delete(struct faxvmi *vmi)
 {
-	struct faxvmi_link *lk = vmi->link;
-	struct faxvmi_framer *fr = vmi->framer;
 
-	vxx_delete[(unsigned short)vmi->slot](lk);
-	sysdep_free(lk->ptr_0000);
-	sysdep_free(lk->buf);
-	sysdep_free(fr->frame);
-	sysdep_free(fr->fifo);
-	sysdep_free(lk);
-	sysdep_free(fr);
+	vxx_delete[(unsigned short)vmi->slot](vmi->link);
+	sysdep_free(vmi->link->ptr_0000);
+	sysdep_free(vmi->link->buf);
+	sysdep_free(vmi->framer->frame);
+	sysdep_free(vmi->framer->fifo);
+	sysdep_free(vmi->link);
+	sysdep_free(vmi->framer);
 	sysdep_free(vmi);
 }
 

@@ -433,14 +433,15 @@ cid_progress(struct cid_modem *ctx, short *in, int what, short *count)
 char *
 cid_get_strings(struct cid_modem *ctx)
 {
-	char *out = ctx->strings;
+	char *out;
 	int i;
 
-	sysdep_memset(out, 0, sizeof(ctx->strings));
+	sysdep_memset(ctx->strings, 0, sizeof(ctx->strings));
+	out = ctx->strings;
 
 	if (ctx->mode != CID_MODE_FSK && ctx->mode != CID_MODE_FSK_DONE) {
 		for (i = 0; i <= 15; i++)
-			out[i] = ctx->dtmf->digits[i];
+			ctx->strings[i] = ctx->dtmf->digits[i];
 		return out;
 	}
 

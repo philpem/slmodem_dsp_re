@@ -274,7 +274,8 @@ static void
 setConstellationMaskInline(V90MappingParams *params, int which,
 			   const short *mask)
 {
-	unsigned int c = (unsigned int)(which < 6 ? which : 0);
+	unsigned int c = (unsigned int)which;
+	if (which >= 6) c = 0;
 	unsigned char *table = params->constellation[c];
 	unsigned int *size = &params->constellationSize[c];
 	int j, k;
@@ -310,7 +311,8 @@ static void
 setCodecConstellationMaskInline(V90MappingParams *params, int which,
 				const short *mask)
 {
-	unsigned int c = (unsigned int)(which < 6 ? which : 0);
+	unsigned int c = (unsigned int)which;
+	if (which >= 6) c = 0;
 	unsigned char *table = params->codecConstellation[c];
 	unsigned int *size = &params->constellationSize[c];
 	int j, k;

@@ -599,13 +599,16 @@ V90AutoDigitalImpDetector::resetLinearMapping()
 int
 V90AutoDigitalImpDetector::isThereAnyAltRbsPhase()
 {
+	int result = 0;
 	short sum = 0;
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++)
 		sum = (short)(sum + altRbsFlag[phase]);
 
-	return sum > 0 ? 1 : 0;
+	if (sum > 0)
+		result = 1;
+	return result;
 }
 
 /*

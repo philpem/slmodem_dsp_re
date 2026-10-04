@@ -1,38 +1,38 @@
 [
  {
   "label": "Ru emits its two halves the wrong way round",
-  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn m->codeLevel;",
-  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn (short)-m->codeLevel;"
+  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsample = m->codeLevel;\n\t\tbreak;",
+  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsample = (short)-m->codeLevel;\n\t\tbreak;"
  },
  {
   "label": "Ru cycles over three symbols, not six",
-  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {",
-  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 3u) {"
+  "find": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {",
+  "replace": "ruSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 3u) {"
  },
  {
   "label": "RuNot is not the inversion of Ru",
-  "find": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn (short)-m->codeLevel;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\treturn m->codeLevel;",
-  "replace": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\treturn m->codeLevel;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\treturn (short)-m->codeLevel;"
+  "find": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsample = (short)-m->codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsample = m->codeLevel;\n\t\tbreak;",
+  "replace": "ruNotSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsample = m->codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsample = (short)-m->codeLevel;\n\t\tbreak;"
  },
  {
   "label": "Su has no zero symbols",
-  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn 0;",
-  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn m->suLevel;"
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;\n\tcase 1:\n\tcase 4:\n\t\tsample = 0;\n\t\tbreak;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;\n\tcase 1:\n\tcase 4:\n\t\tsample = m->suLevel;\n\t\tbreak;"
  },
  {
   "label": "Su takes the Ru amplitude",
-  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;",
-  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->codeLevel;"
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->codeLevel;\n\t\tbreak;"
  },
  {
   "label": "Su's zeros sit at 3 and 5 rather than 1 and 4",
-  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn 0;\n\tcase 3:\n\tcase 5:\n\t\treturn (short)-m->suLevel;",
-  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;\n\tcase 1:\n\tcase 4:\n\t\treturn (short)-m->suLevel;\n\tcase 3:\n\tcase 5:\n\t\treturn 0;"
+  "find": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;\n\tcase 1:\n\tcase 4:\n\t\tsample = 0;\n\t\tbreak;\n\tcase 3:\n\tcase 5:\n\t\tsample = (short)-m->suLevel;\n\t\tbreak;",
+  "replace": "suSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;\n\tcase 1:\n\tcase 4:\n\t\tsample = (short)-m->suLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 5:\n\t\tsample = 0;\n\t\tbreak;"
  },
  {
   "label": "SuNot is not the inversion of Su",
-  "find": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn (short)-m->suLevel;",
-  "replace": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\treturn m->suLevel;"
+  "find": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = (short)-m->suLevel;\n\t\tbreak;",
+  "replace": "suNotSymbol(const V92Phase3Modulator *m)\n{\n\tint sample;\n\tswitch ((m->symbolCount - 1u) % 6u) {\n\tcase 0:\n\tcase 2:\n\t\tsample = m->suLevel;\n\t\tbreak;"
  },
  {
   "label": "Ja leaves its constant-bit run one symbol early",

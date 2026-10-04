@@ -88,8 +88,9 @@ static const unsigned char wordFlip[16] = {
 unsigned char
 charFlip(unsigned char b)
 {
-	return (unsigned char)((wordFlip[b & 0x0f] << 4)
-			       | wordFlip[b >> 4]);
+	unsigned bits = b;
+	return (unsigned char)((wordFlip[bits & 0x0f] << 4)
+			       | wordFlip[bits >> 4]);
 }
 
 /* Where the gain table runs out. */

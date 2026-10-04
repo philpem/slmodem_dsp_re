@@ -363,7 +363,9 @@ call_of(void *modem)
 void
 PulseDialDigit(void *modem, int digit)
 {
+	int remaining;
 	struct call *c = call_of(modem);
+	struct call *st;
 
 	if (c == 0)
 		return;
@@ -373,14 +375,17 @@ PulseDialDigit(void *modem, int digit)
 		dsplibs_debug_printf("call: PulseDialDigit %lu...\n",
 				     (unsigned long)digit);
 
+	st = c->self;
+
 	/* Zero dials ten, which is how loop disconnect has always spelled it. */
+	remaining = digit;
 	if (digit == 0)
-		digit = 10;
+		remaining = 10;
 
-	c->self->pulse_remaining = digit;
-	c->self->pulse_elapsed = 0;
+	st->pulse_remaining = remaining;
+	st->pulse_elapsed = 0;
 
-	modem_set_param(modem, MDMPRM_PULSE_DIAL, digit);
+	modem_set_param(modem, MDMPRM_PULSE_DIAL, remaining);
 }
 
 int

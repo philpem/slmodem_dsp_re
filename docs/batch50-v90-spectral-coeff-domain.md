@@ -1,0 +1,3 @@
+# Immutable coefficient storage boundary
+
+Original shaping progress spills four captured coefficients with FSTPS/FMULS in16 bytes; current long-double coefficient locals spill with FSTPT/FLDT in60-byte frame. They are read only from float member storage, never modified, so float captures preserve their exact finite values while retaining long-double recurrence/state. Predeclare four crossed progress cells: coefficient captures float versus long double, and unsigned guard left<=0 versus left==0. getMetric independent float captures adds a fifth cell, and both methods float with inclusive guard adds a sixth. No state/intermediate precision changes, no reassociation, no declaration permutations. Baseline raw fullTU and full metadata/data/reloc/bystander audit required.

@@ -77,10 +77,10 @@ notch_filter(const short *in, struct v8_detector *d)
 	for (i = 0; i < 2; i++)
 		acc -= (short)v8_mpyint(d->acc_d[i], a[i + 1]);
 
-	d->acc_c[2] = d->acc_c[1];
-	d->acc_d[2] = d->acc_d[1];
-	d->acc_c[1] = d->acc_c[0];
-	d->acc_d[1] = d->acc_d[0];
+	for (i = 0; i < 2; i++) {
+		d->acc_c[2 - i] = d->acc_c[1 - i];
+		d->acc_d[2 - i] = d->acc_d[1 - i];
+	}
 	d->acc_d[0] = (short)acc;
 	return (short)acc;
 }

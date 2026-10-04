@@ -518,6 +518,8 @@ V90Modulator::acknowledgeEReception()
 void
 V90Modulator::enterDataPhase()
 {
+	/* The rate diagnostic uses double expression precision for its half
+	 * offset; this retains the original early FLDS and FADDP boundary. */
 	if (state == 3)
 		return;
 
@@ -534,7 +536,7 @@ V90Modulator::enterDataPhase()
 		dsplibs_debug_printf("V90Modulator: enter Data Phase, "
 				     "Rate = %d [bps]\r\n",
 				     state == 3
-					 ? (unsigned int)(0.5f +
+					 ? (unsigned int)(0.5 +
 					       (8000 *
 						bitsToSymbol->mapper->
 						    bitsPerFrame) *

@@ -661,11 +661,11 @@ int
 _handle_status(int status, int code)
 {
 	if (code == 1)
-		return 10;
-	if (code == 2)
-		return 11;
-	if (code == 4)
-		return 12;
+		status = 10;
+	else if (code == 2)
+		status = 11;
+	else if (code == 4)
+		status = 12;
 	return status;
 }
 

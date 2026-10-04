@@ -338,12 +338,16 @@ short
 TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	struct fax_fifo *fifo =
-		(struct fax_fifo *)prm->fifo;
+	struct fax_fifo *fifo;
 
 	((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_IDLE;
+	fifo = (struct fax_fifo *)prm->fifo;
 
-	if (fifo->count == 0) {
+	if (fifo->count != 0) {
+		TxNextStateV29(modem);
+		return 0;
+	}
+	{
 		unsigned short b = (unsigned short)*budget;
 		short nsamples = (short)TxNoCarrierV29(modem, in, out, b);
 
@@ -351,8 +355,6 @@ TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	TxNextStateV29(modem);
-	return 0;
 }
 
 /*

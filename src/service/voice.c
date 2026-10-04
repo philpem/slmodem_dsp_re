@@ -173,32 +173,38 @@ static int
 vce_get_sreg(void *modem, unsigned int num)
 {
 	struct voice_info *vi;
-	unsigned int level;
+	unsigned int result;
 
 	vi = (struct voice_info *)modem_get_param(modem, MDMPRM_VOICEINFO);
+	result = 0;
 
 	switch (num) {
 	case SREG_FLASH_TIMER:
-		return VCE_FLASH_TIMER;
+		result = VCE_FLASH_TIMER;
+		break;
 	case SREG_HANDSET_GANE:
-		return VCE_HANDSET_GAIN;
+		result = VCE_HANDSET_GAIN;
+		break;
 	case SREG_VOICE_DIALTONE_DETECT_DELAY:
-		return VCE_DIALTONE_DETECT_DELAY;
+		result = VCE_DIALTONE_DETECT_DELAY;
+		break;
 	case SREG_SILENCE_DETECT_SENSITIVITY:
-		level = vi->silence_detect_sensitivity
-			>> VCE_SILENCE_LEVEL_SHIFT;
-		if (level == 0)
-			return vi->silence_detect_sensitivity != 0;
-		if (level > VCE_SILENCE_LEVEL_MAX)
-			return VCE_SILENCE_LEVEL_MAX;
-		return (int)level;
+		result = vi->silence_detect_sensitivity >> VCE_SILENCE_LEVEL_SHIFT;
+		if (result == 0) {
+			if (vi->silence_detect_sensitivity != 0)
+				result = 1;
+		} else if (result > VCE_SILENCE_LEVEL_MAX)
+			result = VCE_SILENCE_LEVEL_MAX;
+		break;
 	case SREG_SILENCE_DETECT_DURATION:
-		return (int)vi->silence_detect_period;
+		result = vi->silence_detect_period;
+		break;
 	case SREG_MIC_GAIN:
 	case SREG_LINE_RECORD_GAIN:
-		return (int)vi->rx_gain;
+		result = vi->rx_gain;
+		break;
 	}
-	return 0;
+	return result;
 }
 
 /*

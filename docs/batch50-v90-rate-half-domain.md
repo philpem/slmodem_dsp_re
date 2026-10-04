@@ -1,0 +1,3 @@
+# Rate diagnostic literal expression precision
+
+V90 enterDataPhase original loads half into x87 before converting the unsigned integer bit rate, then FADDP; current retains the same half payload in an FADDS memory operand after conversion. Its progress inline copy has the same rate expression. Predeclare four cells independently using the idiomatic double literal0.5 versus float literal0.5f in each rate expression. Reciprocal remains explicitly float, so no constant value changes. This is expression mode/literal-width evidence, not reordered padding or register choices. Untouched raw fullTU, constant-pool payload and all bystander/canonical relocation audits mandatory; reject a nonexact change or value-level gate failure.

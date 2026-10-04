@@ -713,8 +713,12 @@ unsigned char charFlip(unsigned char b);
 short v8_mpyint(short a, short b);
 /** @brief Absolute value. */
 short v8_absfn(short x);
-/** @brief Read the cosine table at a given phase. */
-short v8_cosread(unsigned char phase);
+/** @brief Read the cosine table at the low byte of a full-width phase.
+ * The table owner narrows at lookup; byte-formal caller casts obscured this
+ * boundary. Signed and unsigned full-width formals reproduce the same object,
+ * so the original signedness is not uniquely established by this recovery.
+ */
+short v8_cosread(int phase);
 /** @brief Fold one bit into a handshake sequence's running CRC. */
 void v8_crc(struct v8_handshake *hs, int bit);
 /** @brief Copy `n` filter coefficients from `src` to `dst`. */

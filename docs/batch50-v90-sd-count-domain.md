@@ -1,0 +1,3 @@
+# SD counted copy source-use boundary
+
+The eight-cell follow-up matches180-byte body with24 differing bytes, preserving FP skeleton and common verdict. It still keeps decremented history length live alongside original length during pointer initialization; original reuses the loaded length, initializes both pointers, then decrements once. Bound four further cells crossing count decrement after pointer initialization and positive acceptance expressed as explicit if(run<limit) result0 else result1 (original JB to common verdict). These are load-use/branch source boundaries; no register permutations. Cross the supported endpoint/late accumulator/common-result candidate. Baseline raw original control included. Stop on remaining register-only residue.

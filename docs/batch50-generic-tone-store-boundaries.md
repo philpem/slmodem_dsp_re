@@ -1,0 +1,11 @@
+# Generic tone block accumulator stores and count ownership
+
+Full GenericToneDetector.cpp raw902f47fa. Prior F1991 excludes mere comparison-operand inversion; this family changes neither comparison nor floating expression. Blob early non-block arm swaps x87 top then stores out accumulator before input; retained source stores input thenout and has no FXCH. Blob count decrement/latch follows both stores (shared endofiteration); retained ascending for counter is reversed byGCC and its decrement interleaves stores.
+
+Declare fourcells: baseline, output-before-input stores only on early continue arm, explicit private unsigned n countdown instead of increasingk, both. Preserve input/output arithmetic order, all mean/NaN branches, weak-arm behavior, cleanup, public ABI and count-zero behavior. No artificial scopes/barriers. Audit completeTUmetadata/nameddata/nontext/canonicalrelocs and all bystanders; close if not exact.
+
+Four initial controls miss:425B increasing-counter forms and393B explicit n decrement forms. The latter loadcount directly intoESI beforezero test and no longer contain the blob EAX zero-test then ESI copy. Blob loop count capture is on the nonzero arm, with one common decrement latch reached by continue and cleanup. Declare three further controls: raw baseline and guarded do/private counter captured afterzero check, crossed with existing fast-arm store orientation. This tests original count lifetime/loop-entry boundary, not arithmetic or register locals. Close after these.
+
+Independent source-factoring witness found in complete body: blob strong and weak HIT arms share INC count_2c followed by zero count_30, then one blocks1 check. Retained weak HIT writes count_30 first then increments count_2c, preventing that shared tail and permitting a fused counter load/increment/compare. Declare8cells: original baseline plus fast-store orientation×weak-hit update order×increasing/private-countdown counter. This crosses earlier store/count controls with genuine shared-tail eligibility. No new comparison or arithmetic spellings; original weak-arm misses still bypass blocks1.
+
+All15validcells audited, noexact gains/losses. Ascendingloopcells remainSIZE3; explicitcountdownSIZE29; guardeddo cells nonexact. Shared-hitorderdoesnotcloseregime. Noadoption;closefamilyabsentnewindependentwitness.

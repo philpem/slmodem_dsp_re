@@ -78,8 +78,8 @@ v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
 			b->phase = (short)phase;
 
 			idx = phase >> 6;
-			b->re += (v8_cosread((unsigned char)idx) * x) >> 6;
-			b->im += (v8_cosread((unsigned char)(idx + 0x40)) * x)
+			b->re += (v8_cosread(idx) * x) >> 6;
+			b->im += (v8_cosread((idx + 0x40)) * x)
 				 >> 6;
 		}
 	}
@@ -106,8 +106,8 @@ v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
 
 /* One entry of the cosine table.  The index is a byte, so it wraps freely. */
 short
-v8_cosread(unsigned char phase)
+v8_cosread(int phase)
 {
-	return v8_costbl[phase];
+	return v8_costbl[(unsigned char)phase];
 }
 

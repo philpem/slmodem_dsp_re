@@ -1,0 +1,3 @@
+# One break value for both comparisons
+
+Shared verdict restores the complete373-byte shape but leaves two CMP/Jcc orientation differences (four bytes). Blob loads break into EDX once at32e9, keeps it over the branch, and adds make to that same value at336f. Retained candidate addresses the member in both expressions. Test exactly one explicit unsigned break local acquired after elapsed, shared across both comparisons, crossed against raw baseline and previous shared verdict (threeTUs). No order permutations, operand synonym sweep, flags, padding or arbitrary predecessor changes. Failure closes this witness; incidental SetPulseBreakTime gain alone is not sufficient to adopt a nonexact readiness body.

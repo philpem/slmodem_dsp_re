@@ -1,0 +1,15 @@
+# R detector: narrow member publication and a shared verdict edge
+
+Pinned902f47fa, complete Gentoo GCC3.4.2-r2 period profile and bug define. Replay the four declared source cells with gcc3_batch50_v90_rdetector.py, then run gcc3_batch50_v90_rdetector_trace.py. Eight initial/first-CSE function snapshots retain complete RTL and hashes in build/batch50-v90-rdetector-cse-witness.json. This is pass localization, not an assertion that every later optimization is understood.
+
+In baseline detectRNot initial RTL, the member at this+32 has two loads and two stores: initial history read, narrowed shifted-history publication, complete-group read, and final clear. First CSE removes the complete-group load; the remaining access counts are one load/two stores. Its value is now supplied from the temporary. The resulting final code sinks publication to the incomplete-group arm and uses MOVZWL register,register in the complete arm.
+
+Direct ushort member compound shift/OR gives separate publication on the optional OR path. After first CSE, that source retains two loads/three stores, including the complete-group read. Final instruction combination coalesces the update into the original ADD/OR/store while retaining the original reload. This cell alone reaches BYTES2: its incomplete-group literal return still emits XOR EAX,EAX.
+
+The independent positive complete-group guard sends the incomplete count update to the function's common verdict return. Combined with direct publication, that edge returns the entry-cleared verdict carrier, reproducing MOV EBX,EAX. All four detector twins become exact; both individual axes remain negative controls. F8085's return-variable/cast synonyms were inert because GCC proved zero on their old early-exit edge; this source/CFG crossing changes the boundary on which that proof and forwarding happen.
+
+GCC3 source confirms first CSE is a distinct pass: gcc/toplev.c invokes cse_main before GCSE, and gcc/cse.c cse_main initializes alias analysis and selects basic-block branch paths for cse_basic_block. The dump localizes the load distinction at that first CSE stage. No causal claim about a specific cse_insn rule is made without a compiler instrumentation trace.
+
+Transfer rule: when the original reloads a narrow member across a guard but the reconstruction forwards a wide temporary and sinks its store, test a real narrow-member publication boundary. Independently cross a positive group guard/common verdict edge when original early exits retain an initialized verdict. Preserve negative single-axis cells; do not retry literal-return synonyms or vary register carriers. Whole-TU metadata, data, canonical relocations and all bystanders still decide adoption.
+
+The compound ushort shift is defined for all values: integral promotion gives at most131070, which fits int, and assignment reduces modulo65536. OR1 after reduction equals the original unsigned shift/OR then reduction. Both complete/incomplete paths preserve counter, polarity, sign-history and return values. No headers or caller contracts change.

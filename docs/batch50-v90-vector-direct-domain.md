@@ -1,0 +1,3 @@
+# Phase3 standalone primitive ownership cross
+
+The direct-vector expression reproduces Jd exactly but loses previously exact JdNot and leaves V92 twins register-different. Do not adopt that net-zero axis. Object standalone Jd-family bodies own the full polarity update and narrow return; original recovered file-static primitive factoring remains a hypothesis. Test that direct primitive body at the three vector standalone methods, then at constant-zero JdNot as well. Keep all state-machine consumers and shared primitive unchanged. Cross with confirmed covered-cycle pair. Finite baseline + three leaf/two-cycle axes; no emission-order or pseudo-number fitting. Preserve losses as negative.
