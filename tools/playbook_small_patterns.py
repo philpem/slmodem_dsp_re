@@ -66,9 +66,12 @@ def variants(path,source):
     return cells
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--domain',required=True);args=ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--domain',required=True)
+    ap.add_argument('--baseline-dir', type=Path, default=ROOT/'build/tc_out',
+                    help='archived production objects/config for historical replay')
+    args=ap.parse_args()
     out=ROOT/'build'/OUT_NAME;out.mkdir(exist_ok=True)
-    config=(ROOT/'build/tc_out/.build-config').read_text();image=config.splitlines()[0].split(' ',1)[1]
+    config=(args.baseline_dir/'.build-config').read_text();image=config.splitlines()[0].split(' ',1)[1]
     flags=shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('flags ')))
     flags=['-I/src/include' if f=='-Iinclude' else '/src/'+f if f=='tools/toolchain/period_compat.h' else f for f in flags]
     hpaths=subprocess.check_output(['git','ls-tree','-r','--name-only',REV,'--','include','tools/toolchain/period_compat.h'],cwd=ROOT,text=True).splitlines()
@@ -93,7 +96,7 @@ def main():
     for path in SOURCE_PATHS:
         source=subprocess.check_output(['git','show',REV+':'+path],cwd=ROOT,text=True)
         family=Path(path).stem;fo=out/family;fo.mkdir(exist_ok=True)
-        retained=ROOT/'build/tc_out'/ (path.replace('/','_')+'.o')
+        retained=args.baseline_dir/ (path.replace('/','_')+'.o')
         saved=fo/'retained.o'
         if not saved.exists():saved.write_bytes(retained.read_bytes())
         cells=variants(path,source);fr={'source_path':path,'retained_hash':hashlib.sha256(saved.read_bytes()).hexdigest(),'cells':{}};result['families'][family]=fr

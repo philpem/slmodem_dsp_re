@@ -67,3 +67,11 @@ but the local type does not explain the register-held quotient or complete
 body. Do not expand shift widths, declaration order or numerator synonyms
 from this score. Any later original-source claim needs independent evidence;
 TEST AX alone does not prove a unique declaration. F11660 records the result.
+
+The independent parameter-update boundary later changes this result:
+F11691's unchanged-compiler GDB trace locates the local/global eviction,
+and the blob's in-place ADD/SAR supports updating normalized energy before
+the reciprocal. Crossed with this measured short quotient, the complete
+169-byte function becomes exact. The quotient-width-only negative remains
+valid; no neighboring width/declaration-order family was reopened.
+[Tracing and four-cell cross](gcc3-reload-tracing.md).

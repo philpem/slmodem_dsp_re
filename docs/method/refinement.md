@@ -2915,6 +2915,19 @@ recovered source body or a spill improvement. Preserve compiler metadata
 normalization narrowly and delimit diagnostics before allocated instructions.
 [Two-cell control](../v34-alpha-width-controls.md).
 
+Trace allocation boundaries before calling stack traffic register pressure
+(F11690-F11691). The isolated updateAlpha reproducer retains the full-TU spill
+graph without its debug path; read-only GDB shows global allocation evicting
+the locally coalesced numerator/result to give EDX to the divide remainder.
+Reload then allocates their stack slots. An in-place energy update, supported
+by the blob's ADD/SAR on the same register, keeps the denominator cross-block
+and restores register-held arithmetic. Crossed with the independently
+observed HI quotient boundary, it recovers the complete169-byte body. Neither
+axis alone is exact. Require raw objects from container/plain/GDB controls;
+record missing debug variables and rejected dump options separately. Review
+inline consumers and register-renamed siblings before adoption.
+[Issue #246 tools and controls](../gcc3-reload-tracing.md).
+
 
 Classify unresolved relocations by the actual consuming instruction before
 expanding a dispatch proof. The five remaining complete-body candidates are
@@ -3047,3 +3060,24 @@ load,load,store,store -- interleaved statements serialize on the first
 store. And check row-indexed rejection reports for desync before reading
 a WIDTH/operand row as a type difference: one shifted store re-numbers
 every row after it.
+## Cross source arithmetic boundaries with observed induction widths
+
+F11692 transfers updateAlpha's in-place arithmetic diagnostic to
+V34TimingHPFilter, without transferring its spill explanation. Short index
+alone matches length but leaves BYTES29; in-place carry multiplication alone
+also fails. Together they recover all 76 bytes. Inspect combine before local
+and global allocation: a named carry update can change the two-address operand
+and lifetime even when neither object spills. Feature screening is triage;
+stack references are not spill evidence.
+
+F11693 recovers V34TimingFiltersInit's six fixed-offset stores and short
+induction, then its member-relative history clear. A byte-size expression used
+as an element count reproduces the known D29 overwrite and unsigned loop bound.
+A flattened pointer clearing the same bytes need not produce that address form.
+Keep reproduction defects guarded and preserve the shipping initialization.
+Do not claim six explicit stores uniquely recover the original array declaration.
+
+Audit allocated nontext with canonical relocation targets: a preceding function
+shrinking moves a jump table's raw addends while preserving its destination
+function and relative offset. Verify that identity before masking bytes.
+[Screen and 27-cell reproduction](../gcc3-candidate-screen.md).

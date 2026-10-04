@@ -59,7 +59,7 @@ updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
 
 	if (energy != 0) {
 		int shift = 0;
-		int r;
+		short r;
 
 		/*
 		 * Normalise `energy` up until bit 30 is set, counting the
@@ -74,9 +74,10 @@ updateAlpha(short *alpha, int energy, int apply_decay, int gain, int decay,
 			energy += energy;
 		}
 
-		/* A reciprocal: (1 << (shift + 21)) / (normalised >> 16). */
-		r = (short)((1 << (shift + 0x15))
-			    / ((energy + 0x8000) >> 16));
+		/* Round the normalised energy before taking its reciprocal. */
+		energy += 0x8000;
+		energy >>= 16;
+		r = (short)((1 << (shift + 0x15)) / energy);
 
 		/*
 		 * A negative quotient means the divide overflowed; the

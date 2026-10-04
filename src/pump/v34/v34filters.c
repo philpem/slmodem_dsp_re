@@ -1244,7 +1244,7 @@ V34TimingHPFilter(struct v34_timing *t, short sample)
 	short *hist = t->hist;
 	int carry = sample;
 	int acc = 0x8000;		/* Q16 round-to-nearest */
-	int k;
+	short k;
 
 	/*
 	 * Same read-then-overwrite shift as the Hilbert filter, with one
@@ -1256,8 +1256,8 @@ V34TimingHPFilter(struct v34_timing *t, short sample)
 		int old = hist[k];
 
 		hist[k] = (short)carry;
-		acc = (int)((unsigned)acc
-			    + (unsigned)(carry * V34TimingHPFilterCoeff[k]));
+		carry *= V34TimingHPFilterCoeff[k];
+		acc = (int)((unsigned)acc + (unsigned)carry);
 		carry = old;
 	}
 
@@ -1395,16 +1395,21 @@ V34TimingFilter(struct v34_timing *t, int sample)
 void
 V34TimingFiltersInit(struct v34_timing *t)
 {
-	int i, j;
+	short i;
 
 	/*
 	 * The original walks this as three outer steps of one short each,
-	 * writing six entries six shorts apart -- the transposed form of a
-	 * `short[6][3]`, which is why the type is two-dimensional here.
+	 * writing six entries three shorts apart.  Six individual state arrays
+	 * could also produce this layout; the model groups them as short[6][3].
 	 */
-	for (i = 0; i < 6; i++)
-		for (j = 0; j < 3; j++)
-			t->iir[i][j] = 0;
+	for (i = 0; i < 3; i++) {
+		t->iir[0][i] = 0;
+		t->iir[1][i] = 0;
+		t->iir[2][i] = 0;
+		t->iir[3][i] = 0;
+		t->iir[4][i] = 0;
+		t->iir[5][i] = 0;
+	}
 
 	/*
 	 * The object writes eighty SHORTS from +0x024.  That covers `hist`
@@ -1419,18 +1424,19 @@ V34TimingFiltersInit(struct v34_timing *t)
 	 * comparison, while the shipping build must not consume heap contents
 	 * as filter history.  See docs/deviations.md, D29.
 	 */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	/* Byte size used as a short element count: preserve the D29 extent. */
+	for (i = 0; i < sizeof(t->hist); i++)
+		t->hist[i] = 0;
+#else
 	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
 		t->hist[i] = 0;
-#ifdef DSPLIB_REPRODUCE_BUGS
-	for (i = 0; i < (V34_TIMING_INIT_SHORTS - V34_TIMING_HP_TAPS) / 2; i++)
-		t->pre_state[i] = 0;
-#else
 	for (i = 0; i < V34_TIMING_PRE_TAPS; i++)
 		t->pre_state[i] = 0;
 #endif
 
-	t->prefilter_coeff = V34TimingPrefilterCoeff;
 	t->hp_coeff = V34TimingHPFilterCoeff;
+	t->prefilter_coeff = V34TimingPrefilterCoeff;
 }
 
 int
