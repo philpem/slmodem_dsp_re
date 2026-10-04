@@ -135230,3 +135230,500 @@ state (V90P3M/V92P3M Ihi both BYTES 22 with byte-identical wrong bodies);
 a shared-header change cannot meet the zero-losses constraint and no
 cells were compiled. FPM_FSE_free exact in every cell. 
 [Agent artifacts](build/playbook-fse-zeros-v92scr/results.json). (2026-10-04)
+
+## F11730. Original deletion diagnostic recovers call_delete158B
+
+At93d7eee1 the call deletion body is110B against158B reference. The blob's
+unsigned debug-level>1 entry arm prints its own .rodata.str1.1+0x369 string
+`call: delete...\n` before deleting the supervisor and converters. Restoring
+that omitted behavior reproduces all158bytes and canonical relocations.
+The complete11-function TU rises5→6 exact with no losses. Four later pulse
+bodies differ only in raw string-relocation addends; canonical bodies remain
+identical. The operations table retains every named function target and value;
+only the authenticated string is added to allocated nontext data.
+
+Thirty-four root-owned complete-TU controls also investigate call creation,
+message lifetime, dp-owner reload, queue signedness/byte addressing, named frame
+objects and dial-string factoring, plus Psd frequency-loop ownership. None
+adds another exact function. All raw baselines reproduce; complete metadata,
+named objects, string additions and jump-table destination changes are audited.
+Do not infer missing statements from a debug relocation count alone: the new
+census explicitly distinguishes direct calls and tail jumps and fires on this
+known0→1 restoration. Batch period gate is deferred to integration; this finding
+claims object evidence, not a new executed runtime verdict. (2026-10-04)
+[Deletion control](batch20-call-delete-boundary.md),
+[other boundaries](batch20-call-processing-boundaries.md),
+[frequency controls](batch20-psd-frequency-boundaries.md).
+
+## F11731. Two circular LMS helpers close through destination and product use boundaries
+
+
+FPM_lmsupd150B and FPM_lmsupd2 182B are exact together: coefficient destination
+capture `short *dest=c++` and history `hist[k--]` recover the circular update's
+short-index narrowing and pointer advance before arithmetic. Neither alone
+closes FPM_lmsupd. FPM_lmsupd2 needs an independent boundary: compute its first
+narrowed product t BEFORE capturing dest, then perform the second product and
+coefficient update. Capturing dest before t causes a third frame slot and early
+coefficient-value load, while late capture reproduces the blob's eight-byte
+frame and load order. Int/short t both hit raw-identical objects; keep existing
+int t, since no unique declaration-width preimage is established.
+
+Late t/dest order exists in initial RTL: first loop t UID40 before dest44,
+second83 before87; failed early source has dest33 before t43 and75 before85.
+Combine differs before allocation. This is a recovered use boundary; no
+invented register, forced spill or variable-order sweep. Two winners combine
+in the complete three-function TU, +332 exact bytes, zero losses, unchanged
+FPM_block_update raw body. An isolated first-function winner still changes
+non-exact second-function allocation; measure those bystanders explicitly.
+
+72/72 complete TU controls across IIR, LMS, FSM, MTD, circular dot-product;
+185 stage records,6/6 causal controls. Symbol metadata, data/nontext bytes and
+relocation targets preserved in all valid cells. Gentoo compiler and selected
+assembler executed; mandatory bug define/full retained profile, unchanged
+headers, baseline raw object reproduced. Two generator-invalid runs preserved
+and excluded. FSM bounded return-header overlays closed without adoption;
+header remains unchanged. IIR/MTD/dotp families miss and close, not adopted.
+See docs/batch20-dsp-boundaries.md and tools/gcc3_batch20_* replay/audit tools.
+Batch owner gates integrated source once before commit, no fuzzing/mutation.
+
+
+## F11732. V23 initialization restores original diagnostics and a29000 ratio
+
+Three original constructors become exact: v23FP_tx_create255B,
+v23FP_rx_create581B and CreateV23Modem524B. The transmit constructor needs
+both observed member-store order and cfg.src-before-cfg.scale. Receive setup
+needs its config-owner/order boundaries and the original guarded version print.
+An independent literal cross then identifies a real value error: the blob has
+0x7148=29000, while source used28998. Correcting it closes the last byte.
+The modem constructor requires both original diagnostics together with the
+allocation arm and tone-selection predicate orientation. Neither partial
+source component alone closes its complete body. Static period tables change
+emission order to the reference; their values remain intact, and this is
+recorded rather than described as unchanged raw data.
+
+The bounded receiver/wrapper/progress controls retain negative results and
+invalid mapped-status or wrong-case diagnostic spellings explicitly. No AGC
+return-schema or unprototyped-call fit is adopted. Final full-tree denominator
+and period verdict belong to batch integration. (2026-10-04)
+[Domains and complete-TU audits](batch20-data-state-domain.md).
+
+## F11733. Original B103 state diagnostics recover two complete bodies
+
+Restoring the blob's per-case and default diagnostics gives
+B103OriginateNextState295B and B103AnswerNextState237B exact together.
+The four-cell cross isolates both restorations: originate-only is exact,
+answer-only misses by7B, and both close. No source-register permutation is
+needed. The complete17-function TU rises4→6 exact with no losses; authenticated
+strings, exports and complete allocated nontext contents are audited.
+
+A later shared MRF width hypothesis changes these same bodies; do not assume
+independent gains compose. Its combined AnswerNextState residual must be
+resolved or reported before adopting that schema. Standalone measurements
+are not a whole-tree improvement claim. (2026-10-04)
+[Control and interaction record](batch20-data-state-domain.md).
+
+## F11734. Two explicit CFG boundaries recover float2Bits's original switch and loop arms
+
+*Gentoo GCC3.4.2-r2, baseline93d7eee1, complete V90CPpck.cpp.*
+
+The analogue CP packer's `float2Bits(float,short*,int)` is now byte-exact283B,
+from SIZE6 at277B. The enclosing CPPacker body remains entirely unchanged
+(SIZE133); TU exact set rises0→1of2 with zero losses.
+
+The recovered source uses `switch(mode)` with cases0/1 and no default body;
+invalid modes still write nothing. Each greedy table loop places the subtraction
+arm first under `!(table[i]>x)`, with the zero-store arm in else. The whole
+predicate is negated; substituting `x>=table[i]` would change unordered routing.
+The four-cell cross separates the effects: switch alone gives BYTES30,
+subtraction-first alone remains SIZE6, combined gives EXACT0. Initial RTL
+already distinguishes dispatch `ne` versus switch `eq`, and the two table
+`gt` branches versus their complement. This is source CFG recovery, not a
+register coloring or function-position trick.
+
+Full-TU audits retain all functions/exports, table owners/bytes, allocated
+nontext bytes and absence of nontext relocations. Only float2Bits's canonical
+body changes; all14text relocations are included in exact identity. Twenty-four
+stage records and eight initial dispatch/table-edge controls verify the boundary.
+
+The same bounded pass rejected eight DIL zero-trip/load-order controls and four
+ModulusDecoder product/add factorings; both unchanged baseline TUs raw reproduce.
+Four additional V90Parameters floating-display/store controls also give no exact
+function and are unadopted. A missing fabsf declaration attempt is preserved as
+invalid and excluded; corrected controls include math.h. Twenty valid complete
+TU controls pass metadata/data/nontext/bystander audits. Replay lives in
+`docs/batch20-v90-small-boundaries.md` and
+`tools/gcc3_batch20_v90_small_{reproduce,audit}.py`. Batch gate and whole-tree
+counts belong to the parent integration; no fuzz/mutation was run.
+
+## F11735. B103's missing original diagnostics conceal two exact gains and a real widening-loop discrepancy
+
+*Baseline93d7eee1, Gentoo period compiler; complete owned b103.c TU.*
+
+`b103_create` is now byte-exact406B and `dp_b103_exit` exact49B. The TU rises
+2→4of5 exact with no losses. The object-first call census found two missing
+prints in create and two in process: create entry/config, full DSP state/low
+message transition, and BELL_103_LINKED. Every format string and argument came
+from blob relocations; they are gated by the original unsigned debug-level>1.
+
+Create also distinguishes Bell103 explicitly before testing V21, and the source
+uses the object's create/delete/process/init/exit emission order. Only then does
+it reach BYTES1/406B. Complementing the config-name ternary's zero predicate
+closes that final byte; all other instructions and all15relocations
+already agree. Unsigned count/status local type controls add no gain and are
+unadopted. Exit was not edited internally; it becomes exact through the TU
+predecessor changes, an independently checked carrier effect.
+
+Process also contains a real source error: the blob decrements its byte-buffer
+index BEFORE the first widening store and visits count-1..0; the original source
+visited count..0 and wrote one extra int. Correcting this is behavioral recovery,
+not a source spelling control. The line-rate notifications use self->dp.modem
+in the object, while the input dp owns bit transfer and status return. Those
+pointers coincide on the valid wrapper lifecycle but the original field owner
+remains observable. The diagnostic low byte is explicitly narrowed to unsigned
+char, matching MOVZBL. Status translation is the object's switch CFG. This
+complete process recovery remains non-exact SIZE11, and cannot be counted as an
+exact gain; parent period/structural gate must validate before commit.
+
+Seventy-one valid complete-TU cells over eight bounded domains reproduce the raw
+baseline and preserve the canonical24-byte ops table, function bindings/types,
+and bystanders. Only the two original debug imports and seven original strings
+(including ops name) appear. Ninety selected RTL records and ten initial
+missing-call controls pass. Parameter/count-address, eager-edge, split-status,
+local id-owner and unsigned-local families are closed negative controls, not
+register fitting invitations. Scoped byte-buffer/status/CONNECT-definition
+controls add seventeen no-hit cells; rx pointer and byte conversion are body
+no-ops, tx pointer and CONNECT-before-print worsen size. Do not infer source
+pointer locals from an allocated base register alone. A coordinated candidate-only
+B103FP unsigned-return header leaves the full stable wrapper object raw identical
+(3284 bytes); three header-cross controls prove it is an unaffected consumer.
+All allocated nontext sections and all nontext relocations are covered: canonical
+24-byte ops table, zero BSS, original strings only. One early-default generated cell was semantically
+invalid; that initial run is preserved/excluded and corrected controls rerun.
+
+Replay/artifacts: docs/batch20-v90-small-boundaries.md,
+tools/gcc3_batch20_v90_small_reproduce.py --family b103 with the declared switches,
+tools/gcc3_batch20_b103_buffers_reproduce.py,
+tools/gcc3_batch20_b103_header_reproduce.py, and tools/gcc3_batch20_b103_audit.py. No fuzzing/mutation was run; header overlay is unchanged in this consumer; coordinated MRF prototype recovery is recorded separately. Parent batch owns full-tree counts and final gate.
+
+## F11736. FFT separation temporary width recovers realfft; ARMA output controls close
+
+93d7eee1 baseline, full retained Gentoo GCC3.4.2-r2 C++ profile with mandatory
+bug define and executed compiler-selected assembler, complete TUs and -da.
+ANSam constructor/destructor clones are already4/4 canonical exact; untouched.
+
+realfft's four separation temporaries were double, despite F1354 and the file's
+notes describing the plain float arithmetic boundary. The two-cell width
+control gives baseline525B/SIZE20 vs float505B/EXACT. four1 remains exact365B.
+Initial RTL named temporaries all change DF→SF, no flag/operand-order change.
+No intermediate float memory narrowing occurs in the blob: GCC3 keeps float
+assignments in excess-precision registers, yet their internal modes alter
+expression/lifetime analysis. Thus absence of a spill cannot justify double
+source destinations. Adopt only the four local float declarations.
+
+Independent FloatARMA four-cell output-pointer × late-feedback acquisition
+control preserves5/7 exact with no gains. Scalar408→392 but BYTES residuals
+275/316/152; block466→482 vsblob562. Boundaries affect codegen, but do not
+recover the complete preimage; no adoption and no expansion into arbitrary
+permutations. A generator failure before compile preserved/excluded; valid
+controls all rerun.
+
+6/6 complete TU audits preserve symbols/type/binding/visibility, named data,
+allocated nontext sizes, every nontext byte and relocation. Only realfft
+changes in adopted FFT candidate. No exact loss. Tools:
+`gcc3_batch20_fft_width_reproduce.py`, `gcc3_batch20_arma_output_reproduce.py`,
+`gcc3_batch20_cpp_boundaries_audit.py`; docs/batch20-realfft-width-controls.md,
+docs/batch20-arma-output-controls.md. Period differential deferred to final
+batch gate; no runtime success claimed before owner runs it.
+
+## F11737. V90Resampler standard deviation: statement sign selection avoids two GCC3 fabs folds and closes 66 bytes
+
+Baseline93d7eee1/Gentoo GCC3.4.2-r2, retained full command/bug define and actual
+assembler identity. Six declared complete-TU controls reproduce the raw baseline.
+Blob getTimingHistoryStd66B compares variance against zero, selects +1/-1,
+multiplies and FSQRTs; baseline39B emits FABS/FSQRT instead. The apparent arithmetic
+synonyms are separable compiler input forms, not a register-renaming residual.
+
+Cross negative/nonnegative/whole-complement predicate with ternary versus explicit
+float sign assignments. Both nonnegative and whole-complement statement controls
+are EXACT66B, while negative-first statements reach66B/BYTES9; all ternaries emit
+39B/SIZE27. Adopt whole-complement statements to retain the original complete
+predicate and avoid inventing an ordered opposite for unordered source values.
+The actual period comparison and +/-1 paths are identical to the blob.
+
+Thirty-six RTL records show two simplification boundaries: positive/complement
+ternaries already contain ABS in initial RTL; original negative ternary first
+becomes ABS in21.ce2; explicit statements preserve branch and multiply. GCC3
+ifcvt.c:noce_try_abs recognizes NEG/source arms against zero and expands ABS,
+consistent with the measured ce2 boundary; do not claim tree folding explains
+both cases. Negative-first statement retains the two paths but reversed layout.
+
+Full TU13→14/16 exact, no losses; fifteen other bodies unchanged, metadata and
+all named data/vtable/switch-table relocation targets preserved. Only original
+zero and -1 constants are added to the otherwise absent cst4 pool. Audit6/6 TUs,
+16functions each, 36stage records. Parent owns the final period/structural gate;
+no fuzzing or mutation run.
+
+Replay tools/gcc3_batch20_resampler_reproduce.py and
+ tools/gcc3_batch20_resampler_audit.py; source domain in
+ docs/batch20-v90-small-boundaries.md; build/gcc3-batch20-v90-resampler retains
+all positive and negative controls and full-TU/stage audits.
+
+INDEPENDENT SECOND GAIN. V90Resampler::resample baseline177B defines a next-index
+local before getTimingOffsetPPM, while blob170B computes the increment after the
+call and history assignment. Three finite cells: baseline, late index local,
+late direct member increment/wrap. Only direct member form is exact170B. A six-
+cell cross with all sign-statement controls retains both gains, TU13→15/16 exact;
+fourteen bystanders unchanged, data/vtable/switch-table relocs preserved and only
+original zero/-1 literals added.72RTL stage records and6full-TU audits pass.
+Both source changes adopted; getter is read-only and normal lifecycle indices
+are unchanged. No inferred function-order or register-name control required.
+Replay tools/gcc3_batch20_v90_history_{reproduce,audit}.py.
+
+NEGATIVE FOLLOW-UPS.35complete-TU controls cover timing return/counter domains,
+Resampler allocation-owner/guard and initializer-list crossings, and Precoders
+scalar transfer organizations and four normal/coset CFG crosses. Equal sizes were reached but no exact gains;
+none adopted. tools/gcc3_batch20_resampler_negative_audit.py passes35/35.
+Initial timing generator nextPhases typo rejected, preserved/excluded, whole-
+identifier correction rerun with raw baseline. Constructor-init guard also
+rejected a global replacement before compilation; corrected to local body.
+
+## F11738. MRF formal width and narrowing at use recover four transmit bodies
+
+Baseline 93d7eee1, complete retained Gentoo GCC 3.4.2-r2 commands, mandatory bug
+reproduction define and executed assembler identity. The MRF callee's signed-word
+load bounds its consumption, but does not uniquely establish a short formal.
+The B103/V21 caller objects preserve an unsigned count across calls and zero-extend
+AX on return. A consistent int formal plus explicit short narrowing inside the
+callee reproduces every one of the 24 MRF control objects raw. Unsigned-short
+formal is also a preimage for that callee, but changes unrelated caller code;
+no uniquely recovered formal width is claimed.
+
+The 24-cell formal/return/owner/count cross and complete consumer controls recover
+ModDataB103 (99B), TxNoCarrierB103 (124B), ModDataV21 (87B) and TxNoCarrierV21
+(103B). Adopt the consistent declaration/definition and local use boundaries.
+All eight other MRF consumer TUs in the shared-header control remain raw identical.
+The full audit covers 82 complete TUs, bindings, visibility, symbol types, named
+data values and canonical relocations, allocated nontext bytes and bounded body
+changes. The production 300-object rebuild is a separate integration control.
+
+Combined B103 diagnostics and MRF changes retain Originate's gain but forgo the
+237B diagnostic-only Answer candidate (SIZE13); this is not a loss against master,
+where Answer was already non-exact. The first changed normalized RTL dump is
+28.peephole2, with 27.flow2 equal; both copies start at 0x940. This fits the known
+F7812 global scratch-selection cursor, not an address-alignment explanation.
+Do not repair it with padding, a fabricated source local or counter fitting.
+
+Six further MRF caller crosses produce no gains and are closed: V32, B103 and
+V17/V21/V27/V29 receive-side counts. One V32 candidate loses an exact bystander;
+none is adopted. Documentation: docs/batch20-data-state-domain.md and
+ docs/batch20-mrf-count-transfer-domain.md. Replay/audit tools:
+ batch20_mrf_formal_reproduce.py, batch20_mrf_consumers_reproduce.py,
+ batch20_v21_mrf_reproduce.py, batch20_mrf_audit.py and
+ batch20_b103_mrf_stages.py. Runtime validation is deferred to the final batch gate.
+
+## F11739. Explicit historical header snapshots replay old controls without weakening the drift gate
+
+After this batch's coordinated MRF header changes, the shared experiment driver's
+default preflight correctly rejects historical controls with current headers.
+The opt-in --historical-headers mode reads revision-addressed include, compatibility
+and local headers from Git, hashes them, rewrites compiler include paths to that
+snapshot, and records the selected input mode and complete commands. It does not
+change the default requirement that current headers match the chosen revision.
+
+A two-cell call-delete replay against archived production-before objects fires
+both controls: the unmodified 93d7eee1 TU reproduces its raw object; the original
+entry diagnostic again recovers exactly 158B, 5→6/11 exact with no losses. The
+normal invocation fails before Docker on header drift; its rejected log is kept.
+Artifacts: build/gcc3-batch20-historical-header-control and
+ /tmp/batch20-default-header-guard.log. No source or optimization profile is
+changed by the replay mode; historical experiments must select it explicitly.
+
+## F11740. ConnectionEvaluator verdict ownership and member-count use close three exact functions
+
+Baseline93d7eee1/Gentoo GCC3.4.2-r2. Nine complete-TU source cells reproduce the
+retained raw baseline under the full profile, mandatory bug define and actual
+assembler identity. Three independent gains adopted together:
+updateAvePdsnr113B, indicateLocalRetrain136B, indicateRemoteRetrain136B.
+TU8→11/16 exact, no losses; parent owns final whole-tree count and period gate.
+
+RETRAIN TWINS. Blob saves ESI and defines default verdict4 before threshold and
+fallback5 before the diagnostic call. Baseline early returns instead materialize
+EAX constants late,111B for each function. Four bounded candidates cross shared
+versus duplicated cleanup and default verdict defined at entry versus after
+counter increment; fallback verdict is before the original diagnostic in all.
+Both duplicate-cleanup candidates are body no-ops. Shared cleanup/post-counter
+matches local136B only; shared cleanup/entry verdict matches both136B twins.
+The winner defines a result whose lifetime spans the conditional/debug call and
+returns it after shared cleanup. It preserves every original field update,
+threshold, format string and call; no new diagnostic or declaration changes.
+
+WEIGHTED AVERAGE. Blob113B executes weighted hot path as fallthrough and reloads
+avePdsnrNofSymbols for its first product. Baseline106B has a zero-count early
+return and reuses cached nofOldSymbols in arithmetic. Four crossed controls:
+hot-first if/else versus early return, and first-product member read versus local.
+Only both components together match113B. All unsigned count conversions, sum,
+weighted arithmetic and single final float rounding remain unchanged; no local
+float intermediate or regrouping was introduced. Nine initial RTL annotation
+controls show the member-product cells contain a fourth member reference
+(including stores) versus baseline three. Both reads see the same unchanged
+member before any update, so this is a source/use boundary, not a behavior fix.
+
+COMBINED AUDIT. Baseline/twin/average/both cells complete the independent factor
+cross. Combined winner retains all three matches and thirteen unchanged
+bystanders. Metadata, imports, named data and every allocated nontext constant,
+section and relocation target are unchanged in all nine controls.162RTL stage
+records cover initial, combine, ce2, allocation, block reorder and scheduling.
+One unadopted post-counter/shared-cleanup cell alters later nonexact
+ evaluateMeanErrorStdPhase3 through scratch-register choice and independent zero-
+store scheduling (69instructions and SIZE17 unchanged); entry-verdict winner
+leaves it unchanged. The audit names this negative carrier explicitly rather
+than treating all negative bystanders as unchanged.
+
+Replay tools/gcc3_batch20_connection_reproduce.py and
+ tools/gcc3_batch20_connection_audit.py; declared domain
+ docs/batch20-v90-small-boundaries.md; retained artifacts
+ build/gcc3-batch20-v90-connection. No headers/templates, flags, harness,
+fuzzing or mutation execution changed. Parent period/structural gate pending.
+
+## F11741. Independent follow-up domains close without byte-exact gains; V22 FSE leaves a grade-1 preimage
+
+Baseline 93d7eee1, complete Gentoo profile and raw unchanged controls. Declined
+source candidates remain outside production; complete TU audits record metadata,
+named data, allocated nontext bytes, canonical relocations and explicit bystanders.
+Only the bounded families below close; no claim that every source lead is exhausted.
+
+Four original-definition-order controls move v34diag and V90SdDetector to the
+blob's order. Emission detectors fire, but no gains: diagnostic bodies remain
+SIZE40/SIZE36; all six SdDetector bodies are canonical unchanged. SDM's six
+order permutations were already closed in F7827 and are not rerun.
+
+Eight V90/V92 controls cross SSF coefficient width and progress guard, V92
+fraction expression width, and native SpectralVerifier spectrum accessors. No
+gains. The verifier accessor control reaches SIZE5, and its three fdivs match
+both spellings under the saved -ffast-math profile, refuting the old comment's
+unsafe-math exclusion premise. A census FABS gap in verifier process is inherited
+from inlined printSpectrum, already F5802/lever10; it is not a new sign boundary.
+
+V8Interface's 24 controls retain 2/7 exact without gains. RingDetector's two-cell
+call versus literal reset-body factoring control retains 2/5 exact; original
+inline/order families were already closed. Two further MRF caller handoffs
+(CID and V23) cover six complete TUs; no gains, V23's new constructor remains
+exact. No blanket removal of count casts is adopted.
+
+Thirteen final complete-TU controls cross the authentic B103 constructor banner
+with the integrated winner, V22's MRF formal/use widths, and V22 FSE's whole-config
+capture. No strict gains/losses. All V22 MRF callee objects raw reproduce the
+retained helper; unsigned caller handoff reaches 510B/BYTES231. The FSE control
+copies its small configuration value before assigning either state pointer,
+matching the blob's paired load boundary. It reaches 372B/BYTES5 with instruction
+structure equal modulo register names (alpha_why returns None). This is a bounded
+source preimage worth passing to allocation tracing, not an exact candidate to
+adopt by size. V22 headers/source remain unchanged.
+
+Audit/replay tools and explicit domains live in docs/batch20-original-order-controls.md,
+docs/batch20-verifier-native-probe-controls.md, docs/batch20-v8-interface-domain.md,
+docs/batch20-ring-factoring-domain.md, and the final V22/B103 domains. Archive
+invalid preflight runs separately and exclude them from these denominators.
+No fuzzing or mutation execution, no source padding or register-name fitting.
+
+## F11743. Dialer and Tone IIR boundaries measured; no exact adoption
+
+93d7eee1 unchanged retained Gentoo Cprofile/bugdefine/actual selectedassembler,
+full TUs and initialRTL. All12controls raw-reproduce baseline and preserve
+metadata/data/nontext bytes/relocations and exact sets. No source adoption.
+
+DialerAbort2cells: blobcmp10/ja unsigned vsours signedjle; explicitunsigned
+cast recovers jbe, but both147vs145/SIZE2. Error diagnostic stillours tailjmp
+vsblobcall+ret. Negative-state behavior is a real semantic sourcelead, with
+valid lifecycle reachability notestablished. No synthetic fixture or adaptation.
+DialerCreate4cells: membermodem reads across GetConfig/pulse callbacks ×unsigned
+grade rejection. All261vsblob269/SIZE8, onlyCreatechanges,0/6exact retained.
+
+ToneIIR4cells: sourceforsections vsoriginalfour literalblocks ×int/shortk.
+Bothaxes recover major source shape. toneprogress692→1029/753/1126vs1141;
+iirprogress306→673/315/782vs802.3/8exact retained, sixbystanders unchanged.
+InitialRTL shortk pseudo staysSI because GCC promotes it, but its low-word
+sign-extension writes/cmpw boundary fires2persection. Do not infer source
+width solely from pseudo mode. Bothexpandedshort candidates stillmiss fullbody.
+
+New independent shiftarray capture2cells approved after missingoriginal
+pointer/frameslot observation. Onexpandedshortseed, capture f->shift once
+before sampleloop; iirprogress782→799vs802, still3short. toneprogress1126vs1141
+unchanged. Cursor detector fires, no broad followup/padding/permutations.
+
+Replay tools gcc3_batch20_dialer_abort_reproduce.py,
+gcc3_batch20_dialer_create_reproduce.py,gcc3_batch20_toneiir_sections_reproduce.py,
+gcc3_batch20_toneiir_shift_reproduce.py. Audit gcc3_batch20_call_dialer_audit.py
+prints12/12. Matching fourdocs registered domains beforecompiles. Source files
+Dialer.c/toneiir.c untouched, no runtime/mutation/fuzzing execution.
+
+## F11742. Callprog callback boundaries recovered; strict lifecycle negative control fires.
+
+The seven blob CALLPROG_Dial diagnostic sites versus six reconstructed sites
+were not an omitted message: all seven original strings exist, and refusal/
+exit share one reconstructed tail call. Relocations instead revealed an
+independent GetNoAnswerTimeOut (parameter 30) diagnostic read before five
+mainline timeout writes, and an independent GetBlindDialPause (29) diagnostic
+read. Both were previously cached in reconstruction.
+
+The initial two-read seed reduced SIZE139 to SIZE73, but the strict valid
+Create → Dial fixture rejected it (10/62 checks). Dynamic traces corrected a
+static-layout interpretation: blind debug getter/print at cold 0x7a975 executes
+before the mainline timeout read, via 0x7a7c0 → 0x7a975 → 0x7a7c6. A second
+GetDialToneValidationTime (34) read occurs only when the first `(value+9)/10`
+is greater than two, at 0x7a9aa. GetDialToneWaitTime (45) is unchanged. These
+externally observable callback boundaries are source fidelity corrections,
+not behaviorally inert rewrites.
+
+Five-cell complete-TU crossed follow-up: original 955B/SIZE139; seed
+1021B/SIZE73; validation reread only 1094B/BYTES423; blind order only
+1030B/SIZE64; both final 1094B/BYTES422. Blob is 1094B. No exact gain/loss:
+3/6 exact unchanged, only Dial changes. Five metadata/data/nontext/relocation
+and bystander audits pass (17 named objects), RTL getter counts
+9/11/12/11/12 fire. Raw baseline reproduces; final production period object
+is raw-identical to the final controlled candidate. Full commands/profile,
+DSPLIB_REPRODUCE_BUGS, header digests and executed assembler are archived.
+
+Strengthened existing lifecycle fixture preserves all original transcripts
+and compares whole Dial host-read/print sequences plus callback counts over
+8 valid Create → Dial cases (levels0/1/2/3 × blind/wait). Parameter-specific
+reference denominators fire; 70 strict checks. Command:
+make period T=t_callprog_create J=4. With original 93d7eee1 source: 12/70
+failed checks, test denominator0 passed/1 failed. With restored final source:
+70/70 checks, test denominator1 passed/0 failed. Logs
+/tmp/batch20-callprog-old-source-control.log and
+/tmp/batch20-callprog-final-restored.log preserve the negative and positive
+controls; /tmp/batch20-callprog-trace-detail.log preserves seed discrimination.
+Final source restored before parent integration. Parent full batch phase is
+the final gate; no fuzz/mutation run, no tolerance or diagnostic weakening.
+
+Evidence: docs/batch20-callprog-read-boundaries.md;
+docs/batch20-callprog-callback-order-controls.md; tools/gcc3_batch20_callprog_reads.py,
+tools/gcc3_batch20_callprog_audit.py, tools/gcc3_batch20_callprog_callback_reproduce.py,
+tools/gcc3_batch20_callprog_callback_audit.py.
+
+## F11744. Twenty-function integrated batch: 960/1852 exact and final period gate green
+
+On master baseline 93d7eee1, final Gentoo GCC 3.4.2-r2 production comparison
+recovers 20 exact functions with zero exact-set losses: 940→960/1852, exact
+bytes 97,508→101,930 (+4,422). docs/batch20-integration.md enumerates the gains.
+All 300 production objects are checked: 287 raw unchanged; the 13 changed
+objects raw match retained replay candidates. Configuration and MRF callee remain
+raw unchanged. The production audit fires on these known gains and reports all
+denominators. Same-TU winners are crossed; diagnostics-only B103 Answer remains
+non-exact and is excluded from the count.
+
+Final make phase J=4 exits zero: period differential 388 passed / 0 failed,
+structural gates all OK. Static anchors cover 285 suites / 10,038 entries with
+zero detached, nonunique or mislabelled anchors. Only apparatus anchors are
+retargeted; no mutation or fuzzing harness is executed. The initial 387/1 failed
+gate is preserved: expanded reachable Callprog lifecycle coverage exposed real
+callback boundaries, corrected under unchanged checks (F11742). Original source
+fails 12/70; final source passes 70/70.
+
+Partial links use the same 300-input order and both remain DIFFERENT: positioned
+exact reference bytes 68,664→68,345/943,398, exact relocations
+1,029→1,031/18,317, exact symbols 394/2,907 on both. These positional metrics
+are not function exactness; retain the decline and do not claim whole-object
+identity. Work is isolated from PR245's source/header ownership. Unpublished
+findings were renumbered to F11730 onwards when that draft allocated F11710–16.

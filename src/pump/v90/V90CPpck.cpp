@@ -196,7 +196,8 @@ float2Bits(float f, short *bits, int mode)
 	float x;
 	int i;
 
-	if (mode == 0) {
+	switch (mode) {
+	case 0:
 		if (f > 8.0f || f < 0.0f) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
@@ -206,14 +207,15 @@ float2Bits(float f, short *bits, int mode)
 		x = fabsf(f);
 
 		for (i = 0; i <= 15; i++) {
-			if (fltTable2[i] > x) {
-				bits[15 - i] = 0;
-			} else {
+			if (!(fltTable2[i] > x)) {
 				bits[15 - i] = 1;
 				x -= fltTable2[i];
+			} else {
+				bits[15 - i] = 0;
 			}
 		}
-	} else if (mode == 1) {
+		break;
+	case 1:
 		if (f > 1.0f || f < -1.0f) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
@@ -224,13 +226,14 @@ float2Bits(float f, short *bits, int mode)
 		x = fabsf(f);
 
 		for (i = 0; i <= 6; i++) {
-			if (fltTable1[i] > x) {
-				bits[6 - i] = 0;
-			} else {
+			if (!(fltTable1[i] > x)) {
 				bits[6 - i] = 1;
 				x -= fltTable1[i];
+			} else {
+				bits[6 - i] = 0;
 			}
 		}
+		break;
 	}
 }
 

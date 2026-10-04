@@ -65,7 +65,7 @@ advance(int idx, int len)
 }
 
 unsigned short
-FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
+FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 {
 	const int branches = state->cfg.branches;
 	const int decimate = state->cfg.decimate;
@@ -76,7 +76,8 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
 	int widx = state->widx;
 	int need = state->need;
 	int produced = 0;
-	int remaining = count;
+	/* The blob narrows the incoming slot here, not in every caller. */
+	int remaining = (short)count;
 
 	while (remaining != 0) {
 		const short *c;

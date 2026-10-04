@@ -360,7 +360,7 @@ run_dial_no_accessor(void)
 	{
 		unsigned lvl;
 
-		for (lvl = 1; lvl <= 3; lvl++) {
+		for (lvl = 0; lvl <= 3; lvl++) {
 			char pa[4096], pb[4096];
 			struct callprog c, d;
 			struct callprog_cfg cc, cd;
@@ -427,7 +427,7 @@ run_dial_no_accessor(void)
 		};
 		unsigned lvl, k;
 
-		for (lvl = 1; lvl <= 3; lvl++) {
+		for (lvl = 0; lvl <= 3; lvl++) {
 			for (k = 0; k < sizeof(dcase) / sizeof(dcase[0]); k++) {
 				char pa[4096], pb[4096];
 				struct callprog c, d;
@@ -521,6 +521,20 @@ printed_only(int side, char *buf, size_t n)
 	return buf;
 }
 
+/* Count callback markers in the isolated Dial capture, not the print count. */
+static int
+trace_occurrences(const char *text, const char *needle)
+{
+	int count = 0;
+	size_t width = strlen(needle);
+
+	while ((text = strstr(text, needle)) != NULL) {
+		count++;
+		text += width;
+	}
+	return count;
+}
+
 /*
  * The same three functions again, with the diagnostics turned on and the two
  * transcripts compared.
@@ -543,12 +557,18 @@ run_trace(void)
 	struct callprog a, b;
 	struct callprog_cfg ca, cb;
 	static char pa[65536], pb[65536];
+	static char dial_ours[16384], dial_ref[16384];
 	unsigned lines = 0;
+	int dial_cases = 0;
 	int lvl, blind, rc;
 
 	diff_begin("CALLPROG create/dial/delete: the transcripts agree");
-	for (lvl = 1; lvl <= 3; lvl++) {
+	for (lvl = 0; lvl <= 3; lvl++) {
 		for (blind = 0; blind <= 1; blind++) {
+			size_t start_ours, start_ref, len_ours, len_ref;
+			int reads_ours, reads_ref;
+			long sample = lvl * 2 + blind;
+
 			harness_param_reset();
 			harness_alloc_reset();
 			harness_param_set(MustNoiseFilterBeApplied, blind);
@@ -586,7 +606,7 @@ run_trace(void)
 
 			memset(&a, 0xA5, sizeof(a));
 			memset(&b, 0xA5, sizeof(b));
-			ca.w0 = 1;
+			ca.w0 = blind;
 			ca.get_sreg = sreg_stub;
 			ca.modem = (void *)0xC0DEu;
 			ca.w3 = 0;
@@ -605,8 +625,46 @@ run_trace(void)
 
 			ref_CALLPROG_Create(&a, &ca);
 			CALLPROG_Create(&b, &cb);
+			start_ours = strlen(dsplib_debug_capture_text(0));
+			start_ref = strlen(dsplib_debug_capture_text(1));
+			reads_ours = harness_param_ours.calls;
+			reads_ref = harness_param_ref.calls;
 			ref_CALLPROG_Dial(&a, "T5551234");
 			CALLPROG_Dial(&b, "T5551234");
+
+			/* Valid Create -> Dial lifecycle, before any seeded states.
+			 * Preserve getter markers as well as diagnostics: cached
+			 * values formerly hid two missing host callbacks. */
+			len_ours = strlen(dsplib_debug_capture_text(0)) - start_ours;
+			len_ref = strlen(dsplib_debug_capture_text(1)) - start_ref;
+			diff_eq_int("Dial capture fits (%ld)",
+				len_ours < sizeof(dial_ours) && len_ref < sizeof(dial_ref),
+				1, sample);
+			if (len_ours < sizeof(dial_ours) && len_ref < sizeof(dial_ref)) {
+				memcpy(dial_ours, dsplib_debug_capture_text(0) + start_ours,
+				       len_ours);
+				memcpy(dial_ref, dsplib_debug_capture_text(1) + start_ref,
+				       len_ref);
+				dial_ours[len_ours] = dial_ref[len_ref] = '\0';
+			if (strcmp(dial_ours, dial_ref) != 0 && getenv("DBGDIFF") != NULL)
+				fprintf(stderr, "--- Dial ours level %d blind %d ---\n%s"
+					"--- Dial blob ---\n%s", lvl, blind, dial_ours, dial_ref);
+				diff_eq_int("Dial host-read/print order (%ld)",
+					strcmp(dial_ours, dial_ref) == 0, 1, sample);
+				diff_eq_int("reference no-answer reads (%ld)",
+					trace_occurrences(dial_ref, "<< get_param 30 >>\n"),
+					5 + (lvl > 1), sample);
+				diff_eq_int("reference blind-pause reads (%ld)",
+					trace_occurrences(dial_ref, "<< get_param 29 >>\n"),
+					blind * (1 + (lvl > 1)), sample);
+				diff_eq_int("reference validation reads (%ld)",
+					trace_occurrences(dial_ref, "<< get_param 34 >>\n"),
+					blind ? 0 : 2, sample);
+				dial_cases++;
+			}
+			diff_eq_int("Dial callback count (%ld)",
+				harness_param_ours.calls - reads_ours,
+				harness_param_ref.calls - reads_ref, sample);
 			ref_CALLPROG_Delete(&a);
 			CALLPROG_Delete(&b);
 
@@ -626,9 +684,9 @@ run_trace(void)
 				    (long)dsplib_debug_capture_lines(1),
 				    (long)dsplib_debug_capture_lines(0),
 				    (long)(lvl * 2 + blind));
-			if (lvl == 1) {
+			if (lvl <= 1) {
 				/* The gates are `> 1`, so nothing may fire. */
-				diff_eq_int("level 1 is silent (%ld)",
+				diff_eq_int("level 0/1 is silent (%ld)",
 					    (long)dsplib_debug_capture_lines(0),
 					    0, (long)blind);
 			}
@@ -641,6 +699,7 @@ run_trace(void)
 	 */
 	diff_eq_int("the trace said something (%ld)", lines > 20, 1,
 		    (long)lines);
+	diff_eq_int("Dial lifecycle read cases (%ld)", dial_cases, 8, dial_cases);
 	return diff_end();
 }
 

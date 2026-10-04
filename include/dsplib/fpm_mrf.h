@@ -86,13 +86,14 @@ extern struct fpm_mrf_cfg FPM_MRF_CFG;
  * @param state  Resampler state (holds the circular history and position).
  * @param in     Input samples, @p count of them.
  * @param out    Output buffer; receives the produced samples.
- * @param count  Number of input samples to consume.
+ * @param count  Number of input samples to consume; narrowed to signed 16 bits
+ *               at use. The exact original formal width is not uniquely known.
  * @return Number of output samples produced, roughly `count * branches /
  *         decimate`, zero-extended from its low 16 bits. The original
  *         uses a signed 16-bit output index: at most 32768 outputs may be
  *         produced before a subsequent store would use a wrapped index.
  */
 unsigned short FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out,
-		     short count);
+		     int count);
 
 #endif /* DSPLIB_FPM_MRF_H */

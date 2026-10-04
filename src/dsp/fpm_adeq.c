@@ -54,14 +54,14 @@ FPM_lmsupd(short *coeff, const short *hist, short widx, short taps, short err)
 	short *c = coeff;
 	short k;
 
-	for (k = widx; k >= 0; k--) {
-		*c = (short)(*c + ((hist[k] * err + 0x20000) >> 18));
-		c++;
+	for (k = widx; k >= 0;) {
+		short *dest = c++;
+		*dest = (short)(*dest + ((hist[k--] * err + 0x20000) >> 18));
 	}
 
-	for (k = (short)(taps - 1); k > widx; k--) {
-		*c = (short)(*c + ((hist[k] * err + 0x20000) >> 18));
-		c++;
+	for (k = (short)(taps - 1); k > widx;) {
+		short *dest = c++;
+		*dest = (short)(*dest + ((hist[k--] * err + 0x20000) >> 18));
 	}
 }
 
@@ -116,16 +116,18 @@ FPM_lmsupd2(short *coeff, const short *hist, short widx, short taps, short err,
 	short k;
 	int t;
 
-	for (k = widx; k >= 0; k--) {
-		t = (short)((hist[k] * mu + 0x10) >> 5);
-		*c = (short)(((t * err + 0x10000) >> 17) + *c);
-		c++;
+	for (k = widx; k >= 0;) {
+		short *dest;
+		t = (short)((hist[k--] * mu + 0x10) >> 5);
+		dest = c++;
+		*dest = (short)(((t * err + 0x10000) >> 17) + *dest);
 	}
 
-	for (k = (short)(taps - 1); k > widx; k--) {
-		t = (short)((hist[k] * mu + 0x10) >> 5);
-		*c = (short)(((t * err + 0x10000) >> 17) + *c);
-		c++;
+	for (k = (short)(taps - 1); k > widx;) {
+		short *dest;
+		t = (short)((hist[k--] * mu + 0x10) >> 5);
+		dest = c++;
+		*dest = (short)(((t * err + 0x10000) >> 17) + *dest);
 	}
 }
 

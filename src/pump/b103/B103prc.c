@@ -29,19 +29,18 @@
  * here checks that `nbits` fits; B103FP_modem is what keeps the request small
  * enough, and the original has no guard either.
  */
-short
+unsigned short
 ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
 	    unsigned short nbits)
 {
-	struct b103_dsp *dsp = fp->dsp;
 	unsigned short nsamples;
 
-	nsamples = (unsigned short)FPM_FSM_modulate(&dsp->fsm, bits,
-						    dsp->scratch, nbits);
+	nsamples = (unsigned short)FPM_FSM_modulate(&fp->dsp->fsm, bits,
+						    fp->dsp->scratch, nbits);
 
-	return (short)(unsigned short)FPM_MRF_filter(&dsp->tx_mrf,
-						     dsp->scratch, out,
-						     (short)nsamples);
+	return FPM_MRF_filter(&fp->dsp->tx_mrf,
+						     fp->dsp->scratch, out,
+						     nsamples);
 }
 
 /*
@@ -57,22 +56,21 @@ ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
  * Note the scale is saved and restored around the FSM call only -- the
  * resampler runs with whatever it was given, which by then is silence anyway.
  */
-short
+unsigned short
 TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits, short *out,
 		unsigned short nbits)
 {
-	struct b103_dsp *dsp = fp->dsp;
-	short saved_scale = dsp->fsm.cfg.scale;
+	short saved_scale = fp->dsp->fsm.cfg.scale;
 	unsigned short nsamples;
 
-	dsp->fsm.cfg.scale = 0;
-	nsamples = (unsigned short)FPM_FSM_modulate(&dsp->fsm, bits,
-						    dsp->scratch, nbits);
-	dsp->fsm.cfg.scale = saved_scale;
+	fp->dsp->fsm.cfg.scale = 0;
+	nsamples = (unsigned short)FPM_FSM_modulate(&fp->dsp->fsm, bits,
+						    fp->dsp->scratch, nbits);
+	fp->dsp->fsm.cfg.scale = saved_scale;
 
-	return (short)(unsigned short)FPM_MRF_filter(&dsp->tx_mrf,
-						     dsp->scratch, out,
-						     (short)nsamples);
+	return FPM_MRF_filter(&fp->dsp->tx_mrf,
+						     fp->dsp->scratch, out,
+						     nsamples);
 }
 
 /*
@@ -575,6 +573,8 @@ B103OriginateNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_CARRDET;
 		fp->flags |= 0x10;
 		fp->status = 2;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_START\n");
 		break;
 
 	case B103_STATE_CARRDET:
@@ -583,6 +583,8 @@ B103OriginateNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_WAIT1;
 		fp->flags &= (unsigned char)~0x40;
 		fp->status = 3;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_CARRDET\n");
 		break;
 
 	case B103_STATE_WAIT1:
@@ -592,6 +594,8 @@ B103OriginateNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_WAIT2;
 		fp->flags |= 0x24;
 		fp->status = 4;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_WAIT1\n");
 		break;
 
 	case B103_STATE_WAIT2:
@@ -600,9 +604,13 @@ B103OriginateNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_DATA;
 		fp->flags |= 0x09;
 		fp->status = 7;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_WAIT2\n");
 		break;
 
 	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("default\n");
 		break;
 	}
 }
@@ -626,6 +634,8 @@ B103AnswerNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_CARRDET;
 		fp->flags |= 0x10;
 		fp->status = 2;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_START\n");
 		break;
 
 	case B103_STATE_CARRDET:
@@ -634,6 +644,8 @@ B103AnswerNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_WAIT1;
 		fp->flags &= (unsigned char)~0x40;
 		fp->status = 3;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_CARRDET\n");
 		break;
 
 	case B103_STATE_WAIT1:
@@ -642,9 +654,13 @@ B103AnswerNextState(struct b103fp *fp)
 		hdx->substate = B103_STATE_DATA;
 		fp->flags |= 0x2d;
 		fp->status = 7;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("B103_STATE_WAIT1\n");
 		break;
 
 	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("default\n");
 		break;
 	}
 }

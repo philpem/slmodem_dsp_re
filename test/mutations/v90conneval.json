@@ -38,8 +38,8 @@
 
  {"label": "the average PDSNR is the reciprocal of the object's",
   "why": "THE ONE THAT MATTERS MOST in this set.  objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding F245), so a reconstruction that believed the mnemonic would divide the other way round -- and a side-against-side comparison would not care, because both sides would be wrong together.  It is catchable only because t_v90conneval.cpp asserts what the FIRST call leaves behind and drives two hundred accumulating calls after it.",
-  "find": "\tavePdsnr = (nofOldSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
-  "replace": "\tavePdsnr = (nofOldSymbols + nofSymbols)\n\t\t  / (nofOldSymbols * avePdsnr + pdsnr * nofSymbols);"},
+  "find": "\t\tavePdsnr = (avePdsnrNofSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t\t  / (nofOldSymbols + nofSymbols);",
+  "replace": "\t\tavePdsnr = (nofOldSymbols + nofSymbols)\n\t\t\t  / (avePdsnrNofSymbols * avePdsnr + pdsnr * nofSymbols);"},
 
  {"label": "the weight is a signed count",
   "why": "`push $0; push %eax; fildll` is the zero-extending conversion GCC uses for `unsigned int`; a signed count would have been a bare `fildl`.  The two agree on every total below 2^31, which is why the fixture starts three of its runs near the boundary and asserts it crossed.",
@@ -47,22 +47,22 @@
   "replace": "\tint nofOldSymbols = (int)avePdsnrNofSymbols;"},
 
  {"label": "the new sample carries a weight of one",
-  "find": "pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
-  "replace": "pdsnr)\n\t\t  / (nofOldSymbols + 1);"},
+  "find": "pdsnr * nofSymbols)\n\t\t\t  / (nofOldSymbols + nofSymbols);",
+  "replace": "pdsnr)\n\t\t\t  / (nofOldSymbols + 1);"},
 
  {"label": "the first-call test is on the average, not on the count",
-  "find": "\tif (nofOldSymbols == 0) {",
-  "replace": "\tif (avePdsnr == 0.0f) {"},
+  "find": "\tif (nofOldSymbols != 0) {",
+  "replace": "\tif (avePdsnr != 0.0f) {"},
 
  {"label": "the first call averages rather than assigns",
-  "find": "\tif (nofOldSymbols == 0) {\n\t\tavePdsnr = pdsnr;",
-  "replace": "\tif (nofOldSymbols == 0) {\n\t\tavePdsnr = (avePdsnr + pdsnr) / 2;"},
+  "find": "\t} else {\n\t\tavePdsnr = pdsnr;\n\t\tavePdsnrNofSymbols = nofSymbols;",
+  "replace": "\t} else {\n\t\tavePdsnr = (avePdsnr + pdsnr) / 2;\n\t\tavePdsnrNofSymbols = nofSymbols;"},
 
  {"label": "the running average rounds at every step",
   "equivalent": true,
   "why": "PROVEN, not assumed.  The two forms were compiled with this tree's own CXXFLAGS and `objdump -d` diffed over `_ZN22V90ConnectionEvaluator14updateAvePdsnrEfj`: the instruction text is IDENTICAL, operands included.  The reason is the one CLAUDE.md gives for not using -ffloat-store -- a `float` LOCAL is not a rounding point, because GCC keeps it in an x87 register at 80-bit extended and rounds only where a value reaches memory.  Both forms round exactly once, at the `fstps` into +0x70.  So this is a mutation that cannot fail, and the interesting part is that the obvious reading of it -- 'three roundings instead of one' -- is wrong: naming a temporary does not create a rounding point on this target.  Assign it to a MEMBER instead of a local and it becomes a real defect.",
-  "find": "\tavePdsnr = (nofOldSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);\n",
-  "replace": "\t{\n\t\tfloat a = nofOldSymbols * avePdsnr;\n\t\tfloat b = pdsnr * nofSymbols;\n\n\t\tavePdsnr = (a + b) / (nofOldSymbols + nofSymbols);\n\t}\n"},
+  "find": "\t\tavePdsnr = (avePdsnrNofSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t\t  / (nofOldSymbols + nofSymbols);\n",
+  "replace": "\t\t{\n\t\t\tfloat a = avePdsnrNofSymbols * avePdsnr;\n\t\t\tfloat b = pdsnr * nofSymbols;\n\n\t\t\tavePdsnr = (a + b) / (nofOldSymbols + nofSymbols);\n\t\t}\n"},
 
  {"label": "the two thresholds are stored in each other's slots",
   "find": "\tthreshUp = up;\n\tthreshDown = down;",
@@ -105,24 +105,24 @@
 
  {"label": "indicateLocalRetrain reads the REMOTE limit",
   "why": "The anchor carries the diagnostic that follows it because `evaluatePhase3` and `evaluatePhase4` compare against the SAME parameter four more times; without the trailing line this find matches six places and the whole run goes silent while reporting `0 NOT caught`.  The claim is unchanged.",
-  "find": "(unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\tedprintf(\"V90ConnectionEvaluator: initiating fall back to V34 \"\n\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);",
-  "replace": "(unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {\n\t\tedprintf(\"V90ConnectionEvaluator: initiating fall back to V34 \"\n\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);"},
+  "find": "(unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\tedprintf(\"V90ConnectionEvaluator: initiating fall back to V34 \"\n\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);",
+  "replace": "(unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {\n\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\tedprintf(\"V90ConnectionEvaluator: initiating fall back to V34 \"\n\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);"},
 
  {"label": "indicateLocalRetrain does not restart its counter",
-  "find": "\t\tnofV90Retrains = 0;\n\t\tdataDurationCounter = 0;",
-  "replace": "\t\tdataDurationCounter = 0;"},
+  "find": "\t\tnofV90Retrains = 0;\n\t}\n\n\tdataDurationCounter = 0;",
+  "replace": "\t}\n\n\tdataDurationCounter = 0;"},
 
  {"label": "indicateLocalRetrain restarts its counter every time",
-  "find": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
-  "replace": "\tnofV90Retrains = 0;\n\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain"},
+  "find": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn verdict;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\tnofV90Retrains = 0;\n\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn verdict;\n}\n\n/*\n * indicateRemoteRetrain"},
 
  {"label": "indicateLocalRetrain gives up on both paths",
-  "find": "\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
-  "replace": "\treturn V90CE_VERDICT_FALLBACK_V34;\n}\n\n/*\n * indicateRemoteRetrain"},
+  "find": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn verdict;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn V90CE_VERDICT_FALLBACK_V34;\n}\n\n/*\n * indicateRemoteRetrain"},
 
  {"label": "indicateLocalRetrain leaves +0x18 alone on the ordinary path",
-  "find": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain",
-  "replace": "\tdataDurationCounter = 0;\n\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * indicateRemoteRetrain"},
+  "find": "\tdataDurationCounter = 0;\n\tretrainCounter = 0;\n\treturn verdict;\n}\n\n/*\n * indicateRemoteRetrain",
+  "replace": "\tdataDurationCounter = 0;\n\treturn verdict;\n}\n\n/*\n * indicateRemoteRetrain"},
 
  {"label": "the local fall-back diagnostic prints the limit, not the count",
   "find": "\t\t\t \"due to %d V90 retrains\\r\\n\", nofV90Retrains);",
@@ -141,7 +141,7 @@
   "replace": "\tnofV90Retrains++;"},
 
  {"label": "indicateRemoteRetrain gives up on both paths",
-  "find": "\treturn V90CE_VERDICT_RETRAIN;\n}\n\n/*\n * evaluateMeanErrorStdPhase4",
+  "find": "\treturn verdict;\n}\n\n/*\n * evaluateMeanErrorStdPhase4",
   "replace": "\treturn V90CE_VERDICT_FALLBACK_V34;\n}\n\n/*\n * evaluateMeanErrorStdPhase4"},
 
  {"label": "the remote fall-back diagnostic uses the local wording",

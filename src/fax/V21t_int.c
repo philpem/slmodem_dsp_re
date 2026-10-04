@@ -34,7 +34,7 @@ ModDataV21(void *modem, const unsigned short *bits, short *out,
 
 	return (unsigned short)FPM_MRF_filter(&tx->dsp->mrf,
 					      tx->dsp->scratch, out,
-					      (short)nsamples);
+					      nsamples);
 }
 
 /*
@@ -60,5 +60,5 @@ TxNoCarrierV21(void *modem, const unsigned short *bits, short *out,
 
 	return (unsigned short)FPM_MRF_filter(&tx->dsp->mrf,
 					      tx->dsp->scratch, out,
-					      (short)nsamples);
+					      nsamples);
 }

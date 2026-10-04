@@ -103,14 +103,14 @@ v23FP_tx_create(struct v23tx *tx, short mark, short space, short period_len,
 	if (tx == NULL)
 		tx = sysdep_malloc(sizeof(*tx));
 
-	tx->period_index = 0;
 	tx->period_len = period_len;
-	tx->period = period;
-	tx->remaining = (unsigned short)period[0];
-	tx->resume = 0;
-	tx->mute = mute;
 	tx->space = space;
+	tx->period = period;
 	tx->mark = mark;
+	tx->period_index = 0;
+	tx->resume = 0;
+	tx->remaining = (unsigned short)period[0];
+	tx->mute = mute;
 
 	/*
 	 * `held` is deliberately not set, because the original does not set
@@ -121,8 +121,8 @@ v23FP_tx_create(struct v23tx *tx, short mark, short space, short period_len,
 	 */
 
 	cfg = TONEv23_CFG;
-	cfg.scale = V23TX_SCALE;
 	cfg.src = FPM_TONE_CFG.src;	/* the shared 53-tap prototype */
+	cfg.scale = V23TX_SCALE;
 	tx->tone = FPM_TONE_create(NULL, &cfg);
 
 	return tx;

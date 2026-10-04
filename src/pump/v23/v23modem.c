@@ -58,6 +58,7 @@
  */
 
 #include "dsplib/sysdep.h"
+#include "dsplib/debug.h"
 #include "dsplib/v23fp.h"
 
 /*
@@ -126,29 +127,27 @@ CreateV23Modem(struct v23modem *m, int mode, const struct v23_cfg *cfg)
 		m = sysdep_malloc(sizeof(*m));
 		m->mode = (short)mode;
 
-		if (m->mode != 0) {
-			/* The host end: 1200 bps out, 75 bps in. */
-			m->rx = BwChDem_Create(NULL, cfg);
-			m->tx = v23FP_tx_create(NULL, V23_FW_MARK,
-						V23_FW_SPACE, V23_PERIOD_LEN,
-						fw_ch_samp_per_bit_table,
-						cfg->answer_tone);
-		} else {
+		if (m->mode == 0) {
 			/* The terminal end: 75 bps out, 1200 bps in. */
 			m->rx = v23FP_rx_create(NULL, cfg);
 			m->tx = v23FP_tx_create(NULL, V23_BW_MARK,
 						V23_BW_SPACE, V23_PERIOD_LEN,
 						bw_ch_samp_per_bit_table,
 						cfg->answer_tone);
+		} else {
+			/* The host end: 1200 bps out, 75 bps in. */
+			m->rx = BwChDem_Create(NULL, cfg);
+			m->tx = v23FP_tx_create(NULL, V23_FW_MARK,
+						V23_FW_SPACE, V23_PERIOD_LEN,
+						fw_ch_samp_per_bit_table,
+						cfg->answer_tone);
 		}
 	}
 
-	/*
-	 * The original prints "V23FP version %s %s" with __TIME__ and __DATE__
-	 * -- 15:48:09 on Sep 22 2005 -- at debug level 2.  Dropped, as
-	 * everywhere else in this tree, but recorded because it is the only
-	 * date this module carries.
-	 */
+	/* Original build identity, recovered from the diagnostic literals. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V23FP version %s %s\n",
+				     "Sep 22 2005", "15:48:09");
 
 	m->elapsed = 0;
 	m->sample_rate = cfg->sample_rate;
@@ -156,10 +155,12 @@ CreateV23Modem(struct v23modem *m, int mode, const struct v23_cfg *cfg)
 	m->silence_samples = cfg->sample_rate / V23_SILENCE_DIVISOR;
 
 	if (cfg->answer_tone) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Generating answer tone.\n");
 		tone = FPM_TONE_CFG;
 		tone.freq = V23_ANSWER_TONE_HZ;		/* already 2100 */
 		tone.rev_period = 0;			/* no V.25 reversals */
-		tone.scale = (short)(m->mode != 0 ? V23_ANSWER_TONE_SCALE : 0);
+		tone.scale = (short)(m->mode == 0 ? 0 : V23_ANSWER_TONE_SCALE);
 		m->answer_tone = FPM_TONE_create(NULL, &tone);
 		m->state = V23_STATE_TONE;
 	} else {

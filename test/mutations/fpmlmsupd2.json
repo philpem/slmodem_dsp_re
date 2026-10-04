@@ -7,8 +7,8 @@
  },
  {
   "label": "lmsupd2's intermediate is not narrowed to 16 bits between the two multiplies",
-  "find": "\tfor (k = widx; k >= 0; k--) {\n\t\tt = (short)((hist[k] * mu + 0x10) >> 5);",
-  "replace": "\tfor (k = widx; k >= 0; k--) {\n\t\tt = (hist[k] * mu + 0x10) >> 5;"
+  "find": "\tfor (k = widx; k >= 0;) {\n\t\tshort *dest;\n\t\tt = (short)((hist[k--] * mu + 0x10) >> 5);",
+  "replace": "\tfor (k = widx; k >= 0;) {\n\t\tshort *dest;\n\t\tt = (hist[k--] * mu + 0x10) >> 5;"
  },
  {
   "label": "lmsupd2's two multipliers are transposed",
@@ -17,13 +17,13 @@
  },
  {
   "label": "lmsupd2's first stage truncates instead of rounding",
-  "find": "\t\tt = (short)((hist[k] * mu + 0x10) >> 5);\n\t\t*c = (short)(((t * err + 0x10000) >> 17) + *c);\n\t\tc++;\n\t}\n}",
-  "replace": "\t\tt = (short)((hist[k] * mu) >> 5);\n\t\t*c = (short)(((t * err + 0x10000) >> 17) + *c);\n\t\tc++;\n\t}\n}"
+  "find": "\t\tt = (short)((hist[k--] * mu + 0x10) >> 5);\n\t\tdest = c++;\n\t\t*dest = (short)(((t * err + 0x10000) >> 17) + *dest);\n\t}\n}",
+  "replace": "\t\tt = (short)((hist[k--] * mu) >> 5);\n\t\tdest = c++;\n\t\t*dest = (short)(((t * err000) >> 17) + *dest);\n\t}\n}"
  },
  {
   "label": "lmsupd2's second stage shifts by 18, as the single-stage form does",
-  "find": "\t\t*c = (short)(((t * err + 0x10000) >> 17) + *c);\n\t\tc++;\n\t}\n}",
-  "replace": "\t\t*c = (short)(((t * err + 0x10000) >> 18) + *c);\n\t\tc++;\n\t}\n}"
+  "find": "\t\t*dest = (short)(((t * err + 0x10000) >> 17) + *dest);\n\t}\n}",
+  "replace": "\t\t*dest = (short)(((t * err + 0x10000) >> 18) + *dest);\n\t}\n}"
  },
  {
   "label": "block_update's circular wrap is a modulo rather than one conditional add",

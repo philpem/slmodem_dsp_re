@@ -971,6 +971,11 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 
 	cp->fatal = DialerCreate(&cp->dialer, s, cp->modem);
 
+	/* The diagnostic makes its own host read, before the five writes. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("GetNoAnswerTimeOut. %d\n",
+				     modem_get_param(cp->modem, GetNoAnswerTimeOut));
+
 	/*
 	 * Five timeouts, all from the same parameter.  Whatever they were
 	 * meant to be individually, the host is asked the same question five
@@ -982,10 +987,6 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	cp->timeout[4] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
 	cp->timeout[5] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
 
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("GetNoAnswerTimeOut. %d\n",
-				     cp->timeout[5]);
-
 	build_timeouts(cp);
 
 	if (cp->blind_dial != 0) {
@@ -995,13 +996,14 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 		 * both detectors are switched off for the two states that
 		 * would otherwise be listening.
 		 */
-		timeout_table[1] = modem_get_param(cp->modem,
-						   GetBlindDialPause);
-
+		/* Cold diagnostic block rejoins before the timeout host read. */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"BlindCall: GetBlindDialPause = %d .\n",
-				timeout_table[1]);
+				modem_get_param(cp->modem, GetBlindDialPause));
+
+		timeout_table[1] = modem_get_param(cp->modem,
+						   GetBlindDialPause);
 
 		next_state_due_timeout[1] = 2;
 		message_due_timeout[1] = CALLPROG_DIALING;
@@ -1022,6 +1024,10 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 		 */
 		if (extra <= 2)
 			extra = 2;
+		else
+			/* The larger-validation branch makes its own host read. */
+			extra = (modem_get_param(cp->modem,
+						 GetDialToneValidationTime) + 9) / 10;
 		timeout_table[1] = wait + extra;
 
 		if (DSPLIB_DEBUG_ON())
