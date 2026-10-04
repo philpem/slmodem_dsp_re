@@ -46,13 +46,13 @@
  },
  {
   "label": "Ja's constant bit is 0",
-  "find": "\tunsigned char bit = 1;\n\tshort sample;",
-  "replace": "\tunsigned char bit = 0;\n\tshort sample;"
+  "find": "\tunsigned char bit = 1;\n\tunsigned int sample;",
+  "replace": "\tunsigned char bit = 0;\n\tunsigned int sample;"
  },
  {
   "label": "Ja's polarity chooses the wrong sign",
-  "find": "\tsample = m->codeLevel;\n\tif (m->polarity != 0u)\n\t\tsample = (short)-sample;",
-  "replace": "\tsample = m->codeLevel;\n\tif (m->polarity == 0u)\n\t\tsample = (short)-sample;"
+  "find": "\tsample = (unsigned short)m->codeLevel;\n\tif (m->polarity != 0u)\n\t\tsample = -sample;",
+  "replace": "\tsample = (unsigned short)m->codeLevel;\n\tif (m->polarity == 0u)\n\t\tsample = -sample;"
  },
  {
   "label": "Ja replaces the polarity instead of accumulating into it",

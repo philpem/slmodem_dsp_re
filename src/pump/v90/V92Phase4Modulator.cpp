@@ -280,7 +280,8 @@ V92Phase4Modulator::~V92Phase4Modulator()
  * Every one of them returns a symbol, and every one of them ends with a
  * 16-bit value sign-extended into %eax -- `cwtl` where the value is already in
  * %ax, `movswl` where it is in memory.  That is why the return type is `int`
- * and the local holding the symbol is `short`.
+ * and the returned symbol is narrowed to `short`.  A generator can keep a
+ * wider magnitude until that conversion, as generateE1u does (F11808).
  *
  * Six share one shape: fill `bits` with `bitsPerSymbol` scrambled bits,
  * exclusive-OR `prevBit` into the LAST of them, store the result back both
@@ -324,15 +325,15 @@ int V92Phase4Modulator::generateCPt()
 int V92Phase4Modulator::generateE1u()
 {
 	unsigned int bit;
-	short sym;
+	unsigned int sym;
 
 	bit = (unsigned char)scrambler.process(0) ^ prevBit;
 	prevBit = bit;
 
-	sym = amplitude;
+	sym = (unsigned short)amplitude;
 	if (bit != 0)
 		sym = -sym;
-	return sym;
+	return (short)sym;
 }
 
 /*
