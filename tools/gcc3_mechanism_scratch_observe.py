@@ -27,19 +27,19 @@ def self_test():
   else:raise AssertionError('invalid trace accepted')
  print('scratch trace controls: 1 accepted, 5 refused')
 def main():
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--reproduction-dir',type=Path,default=ROOT/'build/gcc3-mechanism-fdsp');ap.add_argument('--target',default='FDSP_DP_Run');ap.add_argument('--self-test',action='store_true');args=ap.parse_args()
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--reproduction-dir',type=Path,default=ROOT/'build/gcc3-mechanism-fdsp');ap.add_argument('--target',default='FDSP_DP_Run');ap.add_argument('--self-test',action='store_true');ap.add_argument('--compiler-kind',choices=('cc1','cc1plus'),default='cc1');ap.add_argument('--out',type=Path,default=ROOT/'build/gcc3-mechanism-scratch');args=ap.parse_args()
  if args.self_test:self_test();return
  source=args.reproduction_dir.resolve();prior=json.loads((source/'results.json').read_text());config=prior['config'];image=config.splitlines()[0].split(' ',1)[1]
- out=ROOT/'build/gcc3-mechanism-scratch';out.mkdir(exist_ok=True);cc1=out/'cc1'
- with cc1.open('wb') as f:subprocess.run(['docker','run','--rm','--platform','linux/386',image,'cat','/usr/libexec/gcc/i386-pc-linux-gnu/3.4.2/cc1'],stdout=f,check=True)
+ out=args.out.resolve();out.mkdir(exist_ok=True);cc1=out/args.compiler_kind
+ with cc1.open('wb') as f:subprocess.run(['docker','run','--rm','--platform','linux/386',image,'cat','/usr/libexec/gcc/i386-pc-linux-gnu/3.4.2/'+args.compiler_kind],stdout=f,check=True)
  cc1.chmod(0o755);nm=subprocess.check_output(['nm',str(cc1)],text=True);addresses={line.split()[-1]:int(line.split()[0],16) for line in nm.splitlines() if len(line.split())==3}
  assert 'search_ofs.0' in addresses,'unsupported compiler cursor symbol'
  results={'revision':prior['revision'],'config':config,'compiler_sha256':hashlib.sha256(cc1.read_bytes()).hexdigest(),'cells':{}}
  for family,fr in prior['families'].items():
   for label,cell in fr['cells'].items():
    inputs=source/family/label;folder=out/(family+'-'+label);folder.mkdir(exist_ok=True);lines=(inputs/'compile.log').read_text().splitlines()
-   for preprocessed in inputs.glob('*.i'):shutil.copy2(preprocessed,folder/preprocessed.name)
-   command=shlex.split(next(line for line in lines if '/cc1 -fpreprocessed' in line));assembler=shlex.split(next(line for line in lines if '/bin/as ' in line));command[0]=str(cc1)
+   for preprocessed in inputs.glob('*.ii' if args.compiler_kind=='cc1plus' else '*.i'):shutil.copy2(preprocessed,folder/preprocessed.name)
+   command=shlex.split(next(line for line in lines if '/'+args.compiler_kind+' -fpreprocessed' in line));assembler=shlex.split(next(line for line in lines if '/bin/as ' in line));command[0]=str(cc1)
    plain=list(command);plain[plain.index('-o')+1]='plain.s';run(plain,folder,'cc1-plain')
    observed=list(command);observed[observed.index('-o')+1]='observed.s'
    (folder/'observer-settings.json').write_text(json.dumps({'target':args.target,'cursor_address':addresses['search_ofs.0']}))

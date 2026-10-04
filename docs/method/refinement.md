@@ -3476,3 +3476,23 @@ audit inline consumers and pool/table relocations, and require valid target
 observations plus refusal controls. Do not infer dead locals from stack size.
 The other three NaN sites supply bounded no-gain controls, not a general
 license for spelling changes. [Results and replay](../gcc3-uref-stack-results.md).
+
+
+### Check publication, binding and saved-register padding separately
+
+An emitted callee does not necessarily publish an incoming alignment value.
+Installed GCC3.4.2 guards publication with binds_local; weak/template controls
+return known info with boundary0, so callers keep the default16bytes (F11802).
+Aligned double slots still publish4bytes in the strong-leaf controls: local
+alignment is not a call requirement. Source-order pairs are raw-inert under
+the retained unit-at-a-time pipeline; no production visibility/order fit.
+
+Near-frame vector callers instead retain16-byte incoming-call alignment while
+direct member indexing removes an extra saved register. The resulting12bytes
+of padding disappear (F11804). Trace post-call value ownership and narrowing:
+one vector uses a late conditional return, its sister uses an unsigned wide
+level and one terminal short conversion. Cross the sisters independently,
+audit losing single-factor cells and all bystanders. The unchanged TRN gain
+is a measured peep2 cursor effect with matching eligibility, not additional
+source recovery. All272 scratch choices replay; no cursor forcing or dead
+carriers. [Screen, controls, audits and replay](../gcc3-alignment-results.md).
