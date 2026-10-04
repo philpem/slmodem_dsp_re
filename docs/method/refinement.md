@@ -3120,3 +3120,46 @@ schedule but loses the cleanup gain; that prevents claiming a unique original
 source or freezing the early-coefficient choice. Bounded initialization controls
 also miss. [37 full-TU controls and firing detector](../v34-prefilter-boundaries.md),
 F11705. The related rollback domain is closed without adoption (F11704).
+
+
+A constant-sized initializer can still reveal a field-derived loop bound.
+In `v8_phase_rev_init`, setting `half=32` then comparing the loop index with
+`half*2` produces an invariant register64 and the object's compare direction.
+A literal64 and a cached local `full=half*2` compare immediates differently;
+combine distinguishes all three before allocation. The field-bound form
+closes the77-byte function. Do not assume that a binary constant establishes
+a source literal, and cross cached versus direct member bounds explicitly.
+
+Retained empty loops can be real source structure. V8's detector initializer
+contains a three-iteration short empty loop nested inside its history clear,
+as well as a2x2 short section/tap clear. Restoring both gives267 exact bytes;
+integer empty loops disappear and removing the short empty loop misses28bytes.
+Identify the counter narrowing and the CFG from the object and RTL before
+retaining an empty loop; inventing no-effect code solely to move layout is
+not this mechanism. These two recoveries combine for344 exact bytes without
+bystander changes (F11706; [declared controls](../batch5-v8-detector-boundaries.md)).
+
+GenericToneDetector extends the statement-boundary lever with a measured
+ownership discriminator (F11707). A local quotient increment can be
+if-converted to ADC even when the blob branches; storing/testing/incrementing
+the member preserves its memory updates through ce2. Cross that independent
+boundary with the observed reset count/accumulator order. Here both constructor
+clones become exact267B while the out-of-line reset stays exact. A shared-zero
+assignment loses reset, so do not treat all zero stores as freely reorderable.
+Use complete-TU positive/negative controls, inspect combine→ce2, and test callers
+that inline the changed method. The two process compare/accumulation boundary
+hypotheses gave no gain; their residual is still open, not an invitation to
+repeat F1991's closed operand swaps.
+
+### Cross call-load lifetime with transition CFG instead of rewriting register names
+
+Calling tone's saved amplitude is read before TONE_read in the blob and scaled
+in place afterward. Current source read it after the call and consumed an
+anonymous product. Recover both boundaries, then separate remaining-zero
+transition/else-save from the nonzero-save/continue CFG. Source clamp and arm
+order controls alone recover length, not bytes; only the combined lifetime/CFG
+control is exact215B. Inspect combine's output-store source to demonstrate the
+product-carrier change before allocation. Preserve the tone's measured original
+period/phase bugs throughout. [13 full-TU controls](../batch5-calling-tone.md),
+F11708. V34nlencoder's analogous magnitude-update family canonicalizes and
+misses; do not generalize an exact gain into a universal source recipe (F11709).
