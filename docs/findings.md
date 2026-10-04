@@ -134806,3 +134806,131 @@ No fuzzing or mutation execution. (2026-10-04)
 
 Validation: make phase J=4, 388 passed / 0 failed; 37 valid cells represent
 33 sources / 21 raw objects. Existing echo/timing and equalizer fixtures pass.
+
+
+## F11706. V8 detector clears: field-derived bounds and retained short nested loops close two functions.
+
+At 80c5dea3 `V8Detector.c` had zero exact bodies out of six. The object's
+phase-reversal initializer compares its index with a register-held64, while
+ours compared an immediate63. The reconstructed initializer already sets
+`half=32`; restoring the loop bound `i < pr->half * 2` gives the exact77-byte
+body. A cached `full=pr->half * 2` does not: combine compares index with
+immediate64. The field-bound invariant is register-held even after GCC folds
+its value, and its compare direction survives to the object's JG loop.
+
+`v8_detectorinit` was missing actual source structure. The blob contains two
+nested short section/tap counters indexing the four-entry histories, followed
+by a three-iteration short empty loop inside each three-deep history clear.
+Our earlier comment acknowledged that empty loop but deliberately omitted it.
+Restoring nested short loops and that empty loop gives the exact267-byte
+body. It changes no memory effect: flat four-entry clears become2x2 clears,
+and all existing three-entry stores are retained. Integer empty-loop controls
+vanish; without the short empty loop the body misses28bytes. Table/armed
+store-order swap misses8bytes despite the recovered loop shapes.
+
+The declared15-cell main domain plus combined winner has16 distinct source
+hashes and12 object hashes; combined TU0/6→2/6 exact, +344 exact bytes,
+zero losses. All six function symbols/bindings, two coefficient objects,
+allocated nontext bytes, relocation targets and bystanders are preserved
+through20/20 audited complete TUs. Seven counter/compare controls plus a
+four-cell raw-identity control pass (8/8 causal checks). Actual Gentoo
+GCC3.4.2-r2 and selected binutils assembler executed; full retained profile,
+unchanged headers, mandatory bug define and-da. Baseline raw object reproduced.
+
+Biquad history-load/store interleaving misses; a separate four-source
+call-result accumulation domain (commuted addition, named short, named int
+with preserved short cast, baseline) collapses to one raw object. Both
+families close without adoption. The remaining ADD-versus-LEA differences
+need a pass discriminator, not more declaration synonyms. No byte-count
+hill-climbing, mutation execution or fuzzing was performed. The batch owner
+runs the deciding phase gate on the integrated batch before committing.
+
+See `docs/batch5-v8-detector-boundaries.md` and tools
+`gcc3_batch5_v8_detector_reproduce.py`, `gcc3_batch5_v8_biquad_reproduce.py`,
+`gcc3_batch5_v8_detector_audit.py`.
+
+## F11707. GenericToneDetector's quotient ownership and reset store boundary recover both constructors
+
+*Object-first bounded source recovery, Gentoo GCC 3.4.2-r2, baseline 80c5dea3.*
+
+Both constructor clones are now relocation-normalized byte-exact at 267 bytes
+(C1 and C2), from 302 bytes each; the full TU rises from 3 to 5 of 7 exact,
+without an exact loss. The source stores each division quotient directly in
+`blocks1`/`blocks2`, tests its multiply-back against the duration and increments
+the same field. `reset()` places the four separate accumulator-zero statements
+before the count-zero statement. The out-of-line reset's bytes remain exact
+and unchanged despite this source order change.
+
+This is not inferred from layout alone. The baseline's local quotient increment
+branches survive combine and disappear in GCC's ce2 pass, which emits ADC;
+member quotient branches survive ce2 and reproduce the blob's branch/store CFG.
+The reset source boundary changes initial RTL store order; only the combined
+source reproduces the constructor tail. A shared float-zero assignment is a
+negative control: it loses reset exactness. No register names are dictated.
+
+Sixteen full-TU cells (two crossed domains) cover member versus local quotient,
+compare-before-smoother-store/accumulation-order hypotheses, and the count/float
+zero boundaries. F1991's already-closed predicate operand swaps were not retried.
+The process controls give no gain and are unadopted. All cells preserve seven
+functions, symbol type/binding/visibility, named data, allocated nontext bytes,
+and absence of nontext relocations. Text-body comparisons normalize relocation
+targets. Thirty-six selected constructor stage records and ten causal controls
+verify the ce2/initial-store distinctions. See
+`docs/gcc3-tone-detector-boundaries.md` and
+`tools/gcc3_tone_detector_{reproduce,audit}.py` for replay and retained failures.
+
+The parent batch records the fresh production objects, whole-tree exact set and
+final period/structural gate. No fuzzing or mutation harness was run.
+
+## F11708. Calling tone becomes exact after recovering clamp, call-load and period-transition boundaries
+
+GenerateCallingTone is relocation-normalized EXACT215/215 on the retained
+Gentoo compiler. The first eight-cell cross separates clamp spelling, on-first
+source arms and amplitude load-before-TONE_read. Their combination recovers
+entry/address/call shape but leaves64 differing bytes. A five-cell discriminator
+then crosses in-place amplitude scaling against explicit remaining-zero
+transition/else-save source CFG. Only the combined source is exact. Tone phase,
+rounding shifts, narrowed output, period-accounting defects and transition stores
+are preserved; no register names are prescribed.
+
+The product-carrier distinction is visible at combine, before allocation:
+baseline's output store consumes an unnamed result; in-place source consumes
+the updated amplitude pseudo. Four firing positive/negative controls across
+sixteen selected stage records verify the change. The explicit if/else recovers
+the blob's inline transition versus out-of-line nonzero save. This is a bounded
+source preimage, not proof of a unique original spelling.
+
+Thirteen CallingTone full-TU cells preserve both function bindings, data,
+allocated nontext bytes, canonical relocation targets and ResetCallingTone's
+exact body. [Declared controls and replay](batch5-calling-tone.md).
+No fuzzing or mutation execution. (2026-10-04)
+
+## F11709. Nonlinear encoder magnitude update is canonicalized, square ordering alone misses
+
+Four complete V34TX.c cells cross square operand order and keeping the final
+nonlinear sum in mag before converting to g. Updating mag is raw-object inert;
+reversing the square operands changes only V34nlencoder, and neither combination
+recovers its119-byte reference (ours117). Nine selected initial/combine/global
+allocation records show the explicit update changes initial RTL but is folded
+away by combine. All seven bodies are reviewed; metadata/data/allocated nontext
+and canonical relocation controls pass. No source adopted, family closed.
+[Declaration and replay](batch5-v34-nlencoder.md). (2026-10-04)
+
+
+Batch verification for F11706–F11709: five function gains, exact set935→940/1852,
+exact bytes96,415→97,508 (+1,093), zero exact losses. Fresh300-object baseline;
+297 unchanged and three changed production objects raw-identical to declared
+winners. All53 complete-TU controls retained:48 distinct sources/33 raw objects.
+Five stale GenericToneDetector metadata anchors retargeted without changing
+labels/intent or executing mutants. The first structural gate failed on those
+anchors while the period tier passed388/0; the repaired gate is reported below.
+Same-order partial links remain DIFFERENT: positioned matches fall15 bytes,
+canonical exact relocation records increase3, symbol records unchanged. These
+are separate measurements from the function-normalized exact-set gain.
+
+
+Final repaired batch gate: make phase J=4 passes388 period differential tests,
+0 failed, and all structural/provenance checks. Static anchor check:285 suites,
+10,038 anchors, no detached/non-unique/wrong-owner anchors. Reference check:
+14,286 references, no unresolved/stale/live-mutant reports. Mutation metadata
+was only statically retargeted; no fuzzing or mutation harness was executed.

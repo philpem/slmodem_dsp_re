@@ -146,21 +146,26 @@ biquad_filter(short in, struct v8_detector *d, const short *coeff)
 /*
  * Arm the tone detector.
  *
- * The original has an empty inner loop here -- three iterations that do
- * nothing -- left over from whatever the accumulators used to be.  It has no
- * effect and is not reproduced; everything that touches memory is.
+ * The original retains two short section/tap counters and a three-iteration
+ * empty inner loop beside the three-deep histories. GCC 3.4.2 preserves that
+ * loop with short counters; retaining it reproduces the observed body. It
+ * changes no memory or return value (F11706).
  */
 void
 v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
 		short a3, short a4, short a5, short a6, short a7)
 {
-	int i;
+	short i, j;
 
-	for (i = 0; i < 4; i++) {
-		d->acc_a[i] = 0;
-		d->acc_b[i] = 0;
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 2; j++) {
+			d->acc_a[2 * i + j] = 0;
+			d->acc_b[2 * i + j] = 0;
+		}
 	}
 	for (i = 0; i < 3; i++) {
+		for (j = 0; j < 3; j++)
+			;
 		d->acc_c[i] = 0;
 		d->acc_d[i] = 0;
 	}
@@ -266,7 +271,8 @@ v8_phase_rev_init(struct v8_phase_rev *pr)
 	pr->reversals = 0;
 	pr->half = 0x20;
 	pr->widx = 0;
-	for (i = 0; i < 64; i++)
+	/* The full window follows the initialized half-window (F11706). */
+	for (i = 0; i < pr->half * 2; i++)
 		pr->window[i] = 0;
 }
 

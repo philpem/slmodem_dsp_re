@@ -1,23 +1,23 @@
 [
  {
   "label": "the two durations are swapped",
-  "find": "\tn = samples1 / blockLen_;\n\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;\n\n\tn = samples2 / blockLen_;\n\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks2 = n;",
-  "replace": "\tn = samples2 / blockLen_;\n\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks1 = n;\n\n\tn = samples1 / blockLen_;\n\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks2 = n;"
+  "find": "\tblocks1 = samples1 / blockLen_;\n\tif (blocks1 * blockLen_ < samples1)\n\t\tblocks1++;\n\n\tblocks2 = samples2 / blockLen_;\n\tif (blocks2 * blockLen_ < samples2)\n\t\tblocks2++;",
+  "replace": "\tblocks1 = samples2 / blockLen_;\n\tif (blocks1 * blockLen_ < samples2)\n\t\tblocks1++;\n\n\tblocks2 = samples1 / blockLen_;\n\tif (blocks2 * blockLen_ < samples1)\n\t\tblocks2++;"
  },
  {
   "label": "the first duration rounds DOWN",
-  "find": "\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;",
-  "replace": "\tif (n * blockLen_ > samples1)\n\t\tn++;\n\tblocks1 = n;"
+  "find": "\tif (blocks1 * blockLen_ < samples1)\n\t\tblocks1++;",
+  "replace": "\tif (blocks1 * blockLen_ > samples1)\n\t\tblocks1++;"
  },
  {
   "label": "the first duration rounds up even when it divides exactly",
-  "find": "\tif (n * blockLen_ < samples1)\n\t\tn++;\n\tblocks1 = n;",
-  "replace": "\tif (n * blockLen_ <= samples1)\n\t\tn++;\n\tblocks1 = n;"
+  "find": "\tif (blocks1 * blockLen_ < samples1)\n\t\tblocks1++;",
+  "replace": "\tif (blocks1 * blockLen_ <= samples1)\n\t\tblocks1++;"
  },
  {
   "label": "the second duration rounds DOWN",
-  "find": "\tif (n * blockLen_ < samples2)\n\t\tn++;\n\tblocks2 = n;",
-  "replace": "\tif (n * blockLen_ > samples2)\n\t\tn++;\n\tblocks2 = n;"
+  "find": "\tif (blocks2 * blockLen_ < samples2)\n\t\tblocks2++;",
+  "replace": "\tif (blocks2 * blockLen_ > samples2)\n\t\tblocks2++;"
  },
  {
   "label": "the two floats are swapped",
@@ -46,8 +46,8 @@
  },
  {
   "label": "the filter is never reset",
-  "find": "\tfilter->reset();\n\n\tcount_2c = 0;",
-  "replace": "\tcount_2c = 0;",
+  "find": "\tfilter->reset();\n\n\tacc_0c = 0;",
+  "replace": "\tacc_0c = 0;",
   "why": "IT WAS REGISTERED EQUIVALENT AND IT IS NOT ONE ANY MORE, which is the notification the old entry said it existed to produce. The equivalence was conditional on this line being reachable only from the constructor: `GenericIIR`'s own constructor ends with `reset()`, so a second call over freshly constructed state rewrites every field with the value already in it and no comparison can see the difference. `reset()` is now a member in its own right, `t_gtonedet`'s run_reset dirties both history buffers and both write positions before calling it, and dropping the call leaves ours holding the dirt while the blob's clears it. Killed, not survived."
  },
  {
