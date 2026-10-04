@@ -135198,3 +135198,35 @@ Final repaired batch gate: make phase J=4 passes388 period differential tests,
 10,038 anchors, no detached/non-unique/wrong-owner anchors. Reference check:
 14,286 references, no unresolved/stale/live-mutant reports. Mutation metadata
 was only statically retargeted; no fuzzing or mutation harness was executed.
+
+## F11715. RcFixed_Reset and V92Phase4Modulator::reset close to the trace-method class
+
+RcFixed_Reset's diff is confined to the kind-1 memset block: the blob
+materializes 0 (edx) before 4 (eax), stores arg2-then-arg3 and hoists
+call-3's $4 into callee-saved esi; ours is 4-first/arg3-first with
+per-call re-materialization. Advance test CLEARED (0/5 symbols move under
+-fno-peephole2 - position axis dead); all four spelling cells
+((size_t)4, sizeof member, shared const n, static-helper refactor) fold
+byte-identical - the map is constant, even refactoring normalizes.
+V92Phase4Modulator::reset's 18-row arg-marshal region: blob emits
+suvLimit->amplitude->byte_42 (source order); the three never-varied
+positions all worsen (197/47/56) and i-in-for is inert - source positions
+pinned, no preimage. Both handed to the F11690/F11691 arg-pseudo trace
+queue. Zero exact losses in all ten cells (32/44 and 2/5 held).
+[Agent artifacts](build/playbook-rcfixed-p4m/results.json). (2026-10-04)
+
+## F11716. FPM_FSE_init's zero stores sit below a copy that our scheduler always sinks stores above
+
+A predictive model - every 32-bit store sourced after the cfg copy is
+emitted above it, in source order; the copy sinks below that set - was
+confirmed 4/4 before reading scores: freq-last swaps the pair, both-after
+is byte-identical INERT, the other two positions worsen (+5). The blob
+has both zero stores below its copy, so no ordering of the member writes
+produces it: the residual is the copy's dependence form at the scheduler,
+not a store-order fact. Also decoded: the Ihh C1 has two defining
+objects - V92Phase4Modulator's copy is EXACT with the shared header text,
+proving the residual in the other three Scrambler TUs is per-TU allocator
+state (V90P3M/V92P3M Ihi both BYTES 22 with byte-identical wrong bodies);
+a shared-header change cannot meet the zero-losses constraint and no
+cells were compiled. FPM_FSE_free exact in every cell. 
+[Agent artifacts](build/playbook-fse-zeros-v92scr/results.json). (2026-10-04)
