@@ -322,7 +322,7 @@ V92Modem::reset()
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modem Reset: Illegal modemSide\r\n");
-		break;
+		return;
 	}
 }
 

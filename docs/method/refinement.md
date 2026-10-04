@@ -3412,3 +3412,30 @@ An explicit return in a switch's final diagnostic arm can select a sibling jump 
 Inspect period libc headers and preprocessed source before assigning an FPRem to unsafe optimizer algebra (PHASOR, F11783). Glibc's __FAST_MATH__ inline wrapper may explain it even when macro-only and optimizer-flag controls are raw-identical. Keep diagnostic profile changes and exact losses visible; a wrapper preimage is not a recovered whole profile.
 
 Duplicated cyclic scratch arrays can support affine state-index arithmetic without modulo (VTB, F11783). Prove the index range over the actual state domain rather than replacing every read with XOR. A new private emitted helper is an inventory change to review, not permission to force inline; literal source expansion is a separate bounded control. Close raw-equivalent loop spellings instead of expanding the syntax domain without new witnesses.
+
+### Classify complete mismatches before assigning an allocator cause
+
+F11789's immutable300-object inventory accounts for811 nonexact symbols;
+only40 pass the complete existing alpha proof with proven relocation identity.
+Instruction differences, size/call gaps and unresolved destination proofs are
+observations, not an inlining-budget diagnosis. Use typed call destinations,
+not printed relocated call-site offsets. Score every defining copy, not a
+favourable COMDAT. [Inventory and witnesses](../gcc3-mechanism-classification.md).
+
+For a dead epilogue scratch, observe the installed compiler's TU-wide search
+history before changing source. F11790's read-only GDB observer preserves all
+five emitted objects raw, while a captured eligibility model reproduces154
+supported choices out of163 recorded searches. Removing the evidenced final
+predecessor predicts and produces a different scratch, but removes an export
+and cannot be adopted. The cursor required for ECX is a conditional constraint
+under that captured state, not recovered original flags or TU ordering. Never
+insert dummy allocations or permute definitions just to obtain the cursor.
+[Reproduction tools and results](../gcc3-mechanism-results.md).
+
+Extend the terminal-edge lever with an instruction-boundary relocation census:
+F11791 finds three candidate bodies, of which explicit default return closes
+V92Modem::reset138B at02.sibling. The same spelling misses V90 reset and is
+inert in ADID; inspect complete bodies and independent witnesses before a
+cross. Signedness can recover an original loop branch without recovering the
+function: F11792's four constellation controls gain zero and close that finite
+domain. Keep negative controls as evidence; do not adopt partial score gains.
