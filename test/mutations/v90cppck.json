@@ -3,7 +3,6 @@
   "label": "NOTE: this set covers src/pump/v90/V90CPpck.cpp, caught by t_v90cmask. getDataBitRate lives in V90MappingParamsInt.cpp and is not reachable from here; its two constants are covered by the v90cmask suite's own rows.",
   "note": "THE ONE THAT MATTERS MOST is 'fltTable2 gets its missing 2^-8 back'. The object's table has no 2^-8 and holds 2^-9 twice, so a generated table differs only for a magnitude that reaches entry ten -- which is why 0.00390625f is in `fbEdge` by name rather than by luck. SECOND is the pair of truncation rows: bits[19] and bits[30] carry a whole dword narrowed to a short, and with the 0/1 values a flag fixture would use, `(short)x` and `x != 0` are the same function (7458). WHAT NO ROW HERE REACHES: a NaN or an infinity in any of the five floats, whose ordered `fcom` comparisons read unordered as `below` under -mno-ieee-fp and would need a gccdiverge entry; a `word_10c` above six, which is the other caller's problem (D570/D790); and a bit buffer shorter than the message, which is out of bounds on both sides."
  },
-
  {
   "label": "fltTable2 gets its missing 2^-8 back, as a generator would produce",
   "find": "\t0.015625f,\t0.0078125f,\t0.001953125f,\t0.001953125f,",
@@ -19,21 +18,20 @@
   "find": "float fltTable1[7] = {\n\t1.0f,\t\t0.5f,\t\t0.25f,\t\t0.125f,\n\t0.0625f,\t0.03125f,\t0.015625f\n};",
   "replace": "float fltTable1[7] = {\n\t0.015625f,\t0.03125f,\t0.0625f,\t0.125f,\n\t0.25f,\t\t0.5f,\t\t1.0f\n};"
  },
-
  {
   "label": "Q3.13 writes the heaviest weight at bits[0]",
-  "find": "\t\t\tif (fltTable2[i] > x) {\n\t\t\t\tbits[15 - i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[15 - i] = 1;",
-  "replace": "\t\t\tif (fltTable2[i] > x) {\n\t\t\t\tbits[i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[i] = 1;"
+  "find": "\t\t\tif (!(fltTable2[i] > x)) {\n\t\t\t\tbits[15 - i] = 1;\n\t\t\t\tx -= fltTable2[i];\n\t\t\t} else {\n\t\t\t\tbits[15 - i] = 0;",
+  "replace": "\t\t\tif (!(fltTable2[i] > x)) {\n\t\t\t\tbits[i] = 1;\n\t\t\t\tx -= fltTable2[i];\n\t\t\t} else {\n\t\t\t\tbits[i] = 0;"
  },
  {
   "label": "Q1.6 writes the heaviest weight at bits[0]",
-  "find": "\t\t\tif (fltTable1[i] > x) {\n\t\t\t\tbits[6 - i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[6 - i] = 1;",
-  "replace": "\t\t\tif (fltTable1[i] > x) {\n\t\t\t\tbits[i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[i] = 1;"
+  "find": "\t\t\tif (!(fltTable1[i] > x)) {\n\t\t\t\tbits[6 - i] = 1;\n\t\t\t\tx -= fltTable1[i];\n\t\t\t} else {\n\t\t\t\tbits[6 - i] = 0;",
+  "replace": "\t\t\tif (!(fltTable1[i] > x)) {\n\t\t\t\tbits[i] = 1;\n\t\t\t\tx -= fltTable1[i];\n\t\t\t} else {\n\t\t\t\tbits[i] = 0;"
  },
  {
   "label": "Q3.13's greedy test admits equality",
-  "find": "\t\t\tif (fltTable2[i] > x) {",
-  "replace": "\t\t\tif (fltTable2[i] >= x) {"
+  "find": "\t\t\tif (!(fltTable2[i] > x)) {",
+  "replace": "\t\t\tif (!(fltTable2[i] >= x)) {"
  },
  {
   "label": "Q3.13 keeps the sign instead of taking fabs",
@@ -42,13 +40,13 @@
  },
  {
   "label": "Q3.13 stops one entry short",
-  "find": "\t\tfor (i = 0; i <= 15; i++) {\n\t\t\tif (fltTable2[i] > x) {",
-  "replace": "\t\tfor (i = 0; i <= 14; i++) {\n\t\t\tif (fltTable2[i] > x) {"
+  "find": "\t\tfor (i = 0; i <= 15; i++) {\n\t\t\tif (!(fltTable2[i] > x)) {",
+  "replace": "\t\tfor (i = 0; i <= 14; i++) {\n\t\t\tif (!(fltTable2[i] > x)) {"
  },
  {
   "label": "Q1.6 stops one entry short",
-  "find": "\t\tfor (i = 0; i <= 6; i++) {\n\t\t\tif (fltTable1[i] > x) {",
-  "replace": "\t\tfor (i = 0; i <= 5; i++) {\n\t\t\tif (fltTable1[i] > x) {"
+  "find": "\t\tfor (i = 0; i <= 6; i++) {\n\t\t\tif (!(fltTable1[i] > x)) {",
+  "replace": "\t\tfor (i = 0; i <= 5; i++) {\n\t\t\tif (!(fltTable1[i] > x)) {"
  },
  {
   "label": "the sign entry lands before the magnitude rather than after it",
@@ -82,10 +80,9 @@
  },
  {
   "label": "any mode but 1 runs the Q3.13 arm",
-  "find": "\tif (mode == 0) {\n\t\tif (f > 8.0f || f < 0.0f) {",
-  "replace": "\tif (mode != 1) {\n\t\tif (f > 8.0f || f < 0.0f) {"
+  "find": "\tswitch (mode) {\n\tcase 0:\n\t\tif (f > 8.0f || f < 0.0f) {",
+  "replace": "\tswitch (mode) {\n\tdefault:\n\t\tif (f > 8.0f || f < 0.0f) {"
  },
-
  {
   "label": "the opening run of ones is sixteen rather than seventeen",
   "find": "\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
@@ -293,7 +290,6 @@
   "find": "\treturn pos + 0x14;",
   "replace": "\treturn pos + 0x13;"
  },
-
  {
   "label": "the CPt flag is not inverted",
   "find": "\t\t info->word_04 != 0 ? \"\" : \"t\",",
@@ -319,7 +315,6 @@
   "find": "\t\t\t r[15], r[16]);",
   "replace": "\t\t\t r[15], r[15]);"
  },
-
  {
   "equivalent": true,
   "why": "The mask word is loaded with `movzwl` in the object and shifted with `sar`, which is what the cast spells; but only bits 0..15 are ever extracted, so the sign extension cannot reach an output. The reading is a codegen-tier one (CLAUDE.md's 613 rule) and no differential trial can separate the two. It is here so that a later reader can see it was measured and found unobservable rather than never asked.",

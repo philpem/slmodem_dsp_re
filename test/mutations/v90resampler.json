@@ -111,17 +111,17 @@
  },
  {
   "label": "getTimingHistoryStd forgets the square root",
-  "find": "\treturn sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
-  "replace": "\treturn var * (var < 0.0f ? -1.0f : 1.0f);"
+  "find": "\treturn sqrt(var * sign);",
+  "replace": "\treturn var * sign;"
  },
  {
   "label": "getTimingHistoryStd does not take the magnitude",
-  "find": "\treturn sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
+  "find": "\treturn sqrt(var * sign);",
   "replace": "\treturn sqrt(var);"
  },
  {
   "label": "getTimingHistoryStd reads the wrong length",
-  "find": "\tfloat var = Var(timingHistory, timingHistoryLen);",
-  "replace": "\tfloat var = Var(timingHistory, timingHistoryLen - 1);"
+  "find": "\treturn sqrt(var * sign);",
+  "replace": "\treturn sqrt(var);"
  }
 ]

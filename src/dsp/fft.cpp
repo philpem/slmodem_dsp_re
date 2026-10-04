@@ -213,7 +213,7 @@ realfft(float *data, unsigned long n, int isign)
 {
 	unsigned long i, i1, i2, i3, i4, np3;
 	float c1 = 0.5, c2;
-	double h1r, h1i, h2r, h2i;
+	float h1r, h1i, h2r, h2i;
 	double wr, wi, wpr, wpi, wtemp, theta;
 
 	theta = 3.141592653589793 / (double)(n >> 1);

@@ -283,7 +283,7 @@ struct b103fp {
  * @param nbits  Number of bits to modulate.
  * @return The number of 8 kHz samples produced.
  */
-short ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
+unsigned short ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
 		  unsigned short nbits);
 
 /**
@@ -298,7 +298,7 @@ short ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
  * @param nbits  Number of (silent) bit periods.
  * @return The number of 8 kHz samples produced.
  */
-short TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits,
+unsigned short TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits,
 		      short *out, unsigned short nbits);
 
 /**

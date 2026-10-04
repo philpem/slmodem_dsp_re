@@ -5,9 +5,9 @@
  *   dp_b103_init   .text 0x005840
  *   dp_b103_exit   .text 0x005880
  *   b103_ops       .data  0x0090
- *   b103_create    .text 0x005400   (pending -- see below)
- *   b103_delete    .text 0x0055a0   (pending)
- *   b103_process   .text 0x0055f0   (pending)
+ *   b103_create    .text 0x005400
+ *   b103_delete    .text 0x0055a0
+ *   b103_process   .text 0x0055f0
  *
  * This is the thin layer between the modem core and the Bell 103 modulation.
  * It owns nothing of the DSP; it registers the datapump, allocates the state,
@@ -21,14 +21,13 @@
  * dp_wrapper_create() as a function pointer and is never reachable from the
  * ops table at all.
  *
- * STATUS: registration is complete and verified.  b103_create, b103_delete
- * and b103_process are not yet reconstructed -- they depend on B103FP_create
- * (0x867 bytes), B103FP_delete and B103FP_modem, which are the modulation
- * proper.  Until those land, the ops table carries NULL for create and
- * delete, so the module registers correctly but cannot yet build a datapump.
+ * All five glue entry points and the modulation methods are reconstructed.
+ * The original diagnostics are retained: creation reports its configuration,
+ * and processing reports DSP status changes and the link indication.
  */
 
 #include <stddef.h>
+#include "dsplib/debug.h"
 
 #include "dsplib/b103.h"
 #include "dsplib/dp_wrapper.h"
@@ -87,14 +86,6 @@ static struct dp_operations b103_ops = {
 	/* use_count and hangup are zero */
 };
 
-int
-dp_b103_init(void)
-{
-	modem_dp_register(DP_B103, &b103_ops);
-	modem_dp_register(DP_V21, &b103_ops);
-	return 0;
-}
-
 static struct dp *
 b103_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
@@ -103,6 +94,9 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
 	struct b103_dp *dp;
 
 	(void)max_frag;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("b103: create...\n");
 
 	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
@@ -124,12 +118,20 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
 	dp->wrapper->dp = &dp->dp;
 
 	cfg.call_type = (caller == 0) ? B103_CALL_ANSWER : B103_CALL_ORIGINATE;
-	cfg.v21 = (id == DP_V21);
+	if (id == DP_B103)
+		cfg.v21 = 0;
+	else
+		cfg.v21 = (id == DP_V21);
 	cfg.loop_high_channel = 0;
 	cfg.tone_timeout_ticks = 60000;		/* 3000 blocks */
 	cfg.f10 = 1;
 	cfg.f14 = 700;
 	cfg.tx_scale = 6200;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("b103: %s config %d,%d,%d,%d,%d %d",
+		    cfg.v21 == 0 ? "Bell103" : "V.21", cfg.call_type, cfg.v21,
+		    cfg.tone_timeout_ticks, cfg.f10, cfg.f14, cfg.tx_scale);
 
 	dp->last_status = 1;
 	dp->fp = B103FP_create(NULL, &cfg);
@@ -141,12 +143,123 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	return &dp->dp;
 }
+
+static int
+b103_delete(struct dp *dp)
+{
+	struct b103_dp *self = (struct b103_dp *)
+		((struct dp_wrapper *)dp->dp_data)->dp;
+
+	B103FP_delete(self->fp);
+	dp_wrapper_delete(self->wrapper);
+	dp->dp_data = NULL;
+	sysdep_free(self);
+	return 0;
+}
+
+static int
+b103_process(void *dp_arg, void *in, void *out, int count)
+{
+	struct dp *dp = (struct dp *)dp_arg;
+	struct b103_dp *self = (struct b103_dp *)
+		((struct dp_wrapper *)dp->dp_data)->dp;
+	short n_tx;
+	short n_rx;
+	int status;
+	int result;
+	int i;
+
+	(void)count;
+
+	if (self->tx_bits_wanted != 0) {
+		/*
+		 * Fetch as bytes into the same buffer B103FP_modem will read
+		 * as ints, then widen backwards.
+		 */
+		n_tx = (short)self->tx_bits_wanted;
+		n_tx = (short)modem_get_bits(dp->modem, 1,
+					     (unsigned char *)self->tx_bits,
+					     (unsigned short)n_tx);
+		for (i = (unsigned short)n_tx; --i >= 0; )
+			self->tx_bits[i] =
+				((unsigned char *)self->tx_bits)[i];
+	} else {
+		n_tx = B103_BITS_PER_BLOCK;
+	}
+
+	n_rx = B103_DP_FRAG;
+	result = B103FP_modem(self->fp, self->tx_bits, (short *)out,
+			      (short *)in, self->rx_bits, &n_tx, &n_rx);
+
+	/* Hand recovered bits back, narrowing ints to bytes in place. */
+	if (self->tx_bits_wanted != 0 && n_rx != 0) {
+		for (i = 0; i < (unsigned short)n_rx; i++)
+			((unsigned char *)self->rx_bits)[i] =
+				(unsigned char)(self->rx_bits[i] & 1);
+		modem_put_bits(dp->modem, 1, (unsigned char *)self->rx_bits,
+			       (unsigned short)n_rx);
+	}
+
+	if (result != self->last_status) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("b103: B103 state -> %x (msg: %x)\n",
+			    result, (unsigned char)result);
+		self->last_status = result;
+	}
+
+	status = result & 0xff;
+	result = DPSTAT_OK;
+	switch (status) {
+	case 0:
+		self->tx_bits_wanted = B103_BITS_PER_BLOCK;
+		break;
+	case 5:
+	case 6:
+		self->tx_bits_wanted = 0;
+		result = DPSTAT_ERROR;
+		break;
+	case 7:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("b103: ReturnStatus = BELL_103_LINKED\n");
+		result = DPSTAT_CONNECT;
+		break;
+	default:
+		self->tx_bits_wanted = 0;
+		break;
+	}
+
+	/*
+	 * Only on the edge into connect: tell the core the line rate and
+	 * open the data path.
+	 */
+	if ((unsigned)result != dp->status && result == DPSTAT_CONNECT) {
+		self->tx_bits_wanted = B103_BITS_PER_BLOCK;
+		modem_set_param(self->dp.modem, MDMPRM_TX_RATE, B103_LINE_RATE);
+		modem_set_param(self->dp.modem, MDMPRM_RX_RATE, B103_LINE_RATE);
+	}
+
+	dp->status = (unsigned)result;
+	return result;
+}
+
+int
+dp_b103_init(void)
+{
+	modem_dp_register(DP_B103, &b103_ops);
+	modem_dp_register(DP_V21, &b103_ops);
+	return 0;
+}
+
 void
 dp_b103_exit(void)
 {
 	modem_dp_deregister(DP_B103, &b103_ops);
 	modem_dp_deregister(DP_V21, &b103_ops);
 }
+
+
+
+
 
 
 /*
@@ -185,18 +298,7 @@ dp_b103_exit(void)
  * Reproduced as written: it is how the original documents the relationship,
  * and it is what would still work if the two were ever separated.
  */
-static int
-b103_delete(struct dp *dp)
-{
-	struct b103_dp *self = (struct b103_dp *)
-		((struct dp_wrapper *)dp->dp_data)->dp;
 
-	B103FP_delete(self->fp);
-	dp_wrapper_delete(self->wrapper);
-	dp->dp_data = NULL;
-	sysdep_free(self);
-	return 0;
-}
 
 /*
  * ---------------------------------------------------------------------------
@@ -211,7 +313,7 @@ b103_delete(struct dp *dp)
  *
  * `modem_get_bits` and `modem_put_bits` deal in one BYTE per bit; B103FP_modem
  * deals in one INT per bit.  Rather than keep two buffers, the same one is
- * widened in place -- and walked BACKWARDS, which is what makes that safe:
+ * widened in place -- count-1 down through zero, which makes that safe:
  * writing element i as an int cannot clobber element i+1 as a byte if you
  * start from the end.
  *
@@ -232,76 +334,3 @@ b103_delete(struct dp *dp)
  * on the transition is what makes `dp->status` the edge trigger the core
  * expects.
  */
-static int
-b103_process(void *dp_arg, void *in, void *out, int count)
-{
-	struct dp *dp = (struct dp *)dp_arg;
-	struct b103_dp *self = (struct b103_dp *)
-		((struct dp_wrapper *)dp->dp_data)->dp;
-	short n_tx;
-	short n_rx;
-	int status;
-	int result;
-	int i;
-
-	(void)count;
-
-	if (self->tx_bits_wanted != 0) {
-		/*
-		 * Fetch as bytes into the same buffer B103FP_modem will read
-		 * as ints, then widen backwards.
-		 */
-		n_tx = (short)self->tx_bits_wanted;
-		n_tx = (short)modem_get_bits(dp->modem, 1,
-					     (unsigned char *)self->tx_bits,
-					     (unsigned short)n_tx);
-		for (i = (unsigned short)n_tx; i >= 0; i--)
-			self->tx_bits[i] =
-				((unsigned char *)self->tx_bits)[i];
-	} else {
-		n_tx = B103_BITS_PER_BLOCK;
-	}
-
-	n_rx = B103_DP_FRAG;
-	result = B103FP_modem(self->fp, self->tx_bits, (short *)out,
-			      (short *)in, self->rx_bits, &n_tx, &n_rx);
-
-	/* Hand recovered bits back, narrowing ints to bytes in place. */
-	if (self->tx_bits_wanted != 0 && n_rx != 0) {
-		for (i = 0; i < (unsigned short)n_rx; i++)
-			((unsigned char *)self->rx_bits)[i] =
-				(unsigned char)(self->rx_bits[i] & 1);
-		modem_put_bits(dp->modem, 1, (unsigned char *)self->rx_bits,
-			       (unsigned short)n_rx);
-	}
-
-	if (result != self->last_status)
-		self->last_status = result;
-
-	status = result & 0xff;
-	if (status == 0) {
-		self->tx_bits_wanted = B103_BITS_PER_BLOCK;
-		result = DPSTAT_OK;
-	} else if (status == 5 || status == 6) {
-		self->tx_bits_wanted = 0;
-		result = DPSTAT_ERROR;
-	} else if (status == 7) {
-		result = DPSTAT_CONNECT;
-	} else {
-		self->tx_bits_wanted = 0;
-		result = DPSTAT_OK;
-	}
-
-	/*
-	 * Only on the edge into connect: tell the core the line rate and
-	 * open the data path.
-	 */
-	if ((unsigned)result != dp->status && result == DPSTAT_CONNECT) {
-		self->tx_bits_wanted = B103_BITS_PER_BLOCK;
-		modem_set_param(dp->modem, MDMPRM_TX_RATE, B103_LINE_RATE);
-		modem_set_param(dp->modem, MDMPRM_RX_RATE, B103_LINE_RATE);
-	}
-
-	dp->status = (unsigned)result;
-	return result;
-}
