@@ -695,7 +695,7 @@
   },
   {
     "label": "a repeat does not step the counter at +0xaa78",
-    "find": "\t\tT4_U16(obj, T3C_COUNT)++;\t\t/* 0x6ff1e */",
+    "find": "\t\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\t/* 0x6ff1e */",
     "replace": "\t\t;\t\t\t\t\t/* 0x6ff1e */",
     "fn": "t4_mp_word"
   },

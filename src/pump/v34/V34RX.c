@@ -338,9 +338,9 @@ void
 rxtiminginit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 
-	V34TimingFiltersInit(&obj->timing);
+	V34TimingFiltersInit(&obj->rxv.named.timing);
 
 	/* Where rxreadqueue leaves its four samples. */
 	rx->rx_samples = (short *)((char *)obj + 0x370);
@@ -374,13 +374,13 @@ void
 rxinit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 
 	rx->agc_gain = 0x200;
 	rx->agc_step = 0x3333;
 	rx->mix_carrier_step = 1;
 
-	V34EqualizerCleanUp(&obj->equalizer);
+	V34EqualizerCleanUp(&obj->rxv.named.equalizer);
 
 	/*
 	 * The fill is %ecx, which held 1 before V34EqualizerCleanUp and is
@@ -678,8 +678,8 @@ void
 rxtiming(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
-	struct v34_timing *t = &obj->timing;
+	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_timing *t = &obj->rxv.named.timing;
 	short i;
 
 	/* Set before the count is even tested, so it lands on an empty call. */
@@ -772,7 +772,7 @@ int
 modem_serrint(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	struct v34_queue *rxq = (struct v34_queue *)rx;
 	short lag = serr_dequeue(obj);
 	short acc;
@@ -1028,7 +1028,7 @@ void
 decoderv34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 
 	if ((rx->flags & 0x98) == 0x98) {
 		short n = rx->subframe_idx;
@@ -1288,8 +1288,8 @@ void
 receiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
-	struct v34_timing *t = &obj->timing;
+	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_timing *t = &obj->rxv.named.timing;
 	struct v34_equalizer *eq =
 		(struct v34_equalizer *)((char *)rx + V34_RX_EQ_OFFSET);
 	unsigned flags;

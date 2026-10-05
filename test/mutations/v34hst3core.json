@@ -64,8 +64,8 @@
  },
  {
   "label": "the MOH counter is not stepped",
-  "find": "\tstruct v34_receiver *rx = T3C_RX(obj);\n\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
-  "replace": "\tstruct v34_receiver *rx = T3C_RX(obj);\n\n\tobj->short_aa78 = (short)(obj->short_aa78);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
+  "find": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
+  "replace": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
   "fn": "t3c_moh_step_detector"
  },
  {

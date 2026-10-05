@@ -1130,7 +1130,7 @@ V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
 /* And the receiver trio, reached as `obj + 0x264 + 0x258`. */
 #define V34PCMMAIN_RXASSERT(name, field, off) \
 	typedef char v34pcmmain_rxoff_##name[ \
-		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		((int)(__builtin_offsetof(struct v34_object, rxv) \
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
@@ -2284,7 +2284,7 @@ typedef char v34pcmcreate_objlen[
 V34PCMIF_ASSERT(txscale, tx_scale,           0x25d4);
 V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
-V34PCMIF_ASSERT(short_382,    short_382,             0x0382);
+V34PCMIF_ASSERT(short_382,    rxv.named.short_382,    0x0382);
 V34PCMIF_ASSERT(seg_symcount,   seg_symcount,            0x25c0);
 V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
 V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
@@ -2308,7 +2308,7 @@ V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
  */
 #define V34PCMIF_RXASSERT(name, field, off) \
 	typedef char v34pcmif_rxoff_##name[ \
-		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		((int)(__builtin_offsetof(struct v34_object, rxv) \
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
@@ -2606,7 +2606,7 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	int want;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
@@ -2673,7 +2673,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	unsigned char *sess = (unsigned char *)obj->p3548;
 	unsigned char *cfg;
 	unsigned char dp = requestedDp;
@@ -2947,7 +2947,7 @@ VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -2985,7 +2985,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	unsigned char *sess = (unsigned char *)obj->p3548;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 
 	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
 
@@ -3242,7 +3242,7 @@ int
 VPcmV34GetSNR(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	int db = 0;
 	int last = 0;
 
@@ -3274,7 +3274,7 @@ getTimingOffset(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	return obj->timing_offset;
+	return obj->rxv.named.timing_offset;
 }
 
 int
@@ -3282,7 +3282,7 @@ getTimingPhase(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	return obj->timing_phase;
+	return obj->rxv.named.timing_phase;
 }
 
 void *
@@ -3816,7 +3816,7 @@ v90RateRenegSilence(void *objp)
 	}
 
 	if (r == 17) {
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -3834,7 +3834,7 @@ v90RateRenegSilence(void *objp)
 		 */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -3857,7 +3857,7 @@ v90RateRenegSilence(void *objp)
 		 */
 		int q;
 
-		if (o->short_382 == OB_CONSTEL_16) {
+		if (o->rxv.named.short_382 == OB_CONSTEL_16) {
 			int d;
 
 			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
@@ -3894,7 +3894,7 @@ v90RateRenegSilence(void *objp)
 		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
 		done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -3962,7 +3962,7 @@ v90RateReneg(void *objp)
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -3974,7 +3974,7 @@ v90RateReneg(void *objp)
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -3997,7 +3997,7 @@ v90Phase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	unsigned short fl = rx->flags;
 	short n;
@@ -4139,7 +4139,7 @@ v90Phase34(void *objp)
 
 	case 5: {
 		/* The idle symbol.  See the note at the top of this block. */
-		short c = o->short_382;
+		short c = o->rxv.named.short_382;
 		int q;
 
 		if (c == OB_CONSTEL_16) {
@@ -4176,7 +4176,7 @@ v90Phase34(void *objp)
 		 * scrambled with `tx_flags`'s polynomial and IS differentially
 		 * encoded, unlike case 5.
 		 */
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -4193,7 +4193,7 @@ v90Phase34(void *objp)
 		 */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4206,7 +4206,7 @@ v90Phase34(void *objp)
 	case 10: {
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4265,7 +4265,7 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	obj->progress = 6;
 	*(int *)(m + 0x2218) = 5;
 
-	obj->short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+	obj->rxv.named.short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
 
 	/*
 	 * The timer, reset: the same three fields and the same two constants
@@ -4291,11 +4291,11 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 	obj->v90_receiver = 3;
 
 	if (silence_scr != 0)
-		obj->short_382 = 0;
+		obj->rxv.named.short_382 = 0;
 	else if (constel != 0)
-		obj->short_382 = (short)0x89b0;
+		obj->rxv.named.short_382 = (short)0x89b0;
 	else
-		obj->short_382 = (short)0x8990;
+		obj->rxv.named.short_382 = (short)0x8990;
 }
 
 void
@@ -4312,9 +4312,9 @@ V34XF_IndicateDilReceived(void *objp, unsigned char constel)
 	obj->seg_symcount = 0;
 
 	if (constel != 0)
-		obj->short_382 = (short)0x89b0;
+		obj->rxv.named.short_382 = (short)0x89b0;
 	else
-		obj->short_382 = (short)0x8990;
+		obj->rxv.named.short_382 = (short)0x8990;
 }
 
 void
@@ -4425,12 +4425,12 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
-	obj->short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
+	obj->rxv.named.short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -4502,7 +4502,7 @@ k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
 
 	if (!(rx->flags & V34_RX_FLAG_DATA)) {
@@ -4573,7 +4573,7 @@ k56FlexPhase34(void *objp)
 		/* The idle symbol.  See the note at the top of this file. */
 		int q;
 
-		if (o->short_382 == OB_CONSTEL_16) {
+		if (o->rxv.named.short_382 == OB_CONSTEL_16) {
 			int d;
 
 			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
@@ -4605,7 +4605,7 @@ k56FlexPhase34(void *objp)
 		 */
 		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->rxv.named.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4642,7 +4642,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	unsigned char *cfg = (unsigned char *)runtime;
 	unsigned char *sess = (unsigned char *)obj->p3548;
 	unsigned char *k56 = (unsigned char *)obj->pac18;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	unsigned char *v92;
 	/*
 	 * All three are read BEFORE the memset, out of `runtime` rather than
@@ -5097,7 +5097,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				modem_serrint(obj);
 				*out++ = (float)obj->tx_sample;
 				if (obj->txq.count < obj->tx_fill_target
-				    || obj->rxq.count > 5) {
+				    || obj->rxv.named.rxq.count > 5) {
 					if (obj->tx_flags & PROG_TXBIT_DATA)
 						datapumpv34(obj);
 					else

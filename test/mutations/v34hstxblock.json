@@ -296,8 +296,8 @@
   },
   {
     "label": "the receiver is located four bytes late",
-    "find": "\tf->rx = T3C_RX(obj);",
-    "replace": "\tf->rx = (struct v34_receiver *)((char *)T3C_RX(obj) + 4);",
+    "find": "\tf->rx = &obj->rxv.receiver;",
+    "replace": "\tf->rx = (struct v34_receiver *)((char *)&obj->rxv.receiver + 4);",
     "fn": "t3m_frame_init"
   },
   {

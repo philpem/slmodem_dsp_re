@@ -65,8 +65,8 @@
  },
  {
   "label": "case 5 picks the emitter the other way round",
-  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);",
-  "replace": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitquadbit(o, o->cur_quadrant);",
+  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);",
+  "replace": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitquadbit(o, o->cur_quadrant);",
   "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -77,8 +77,8 @@
  },
  {
   "label": "case 4's constellation test is inverted",
-  "find": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->short_382 == OB_CONSTEL_16) {\n\t\t\tint d;",
-  "replace": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->short_382 != OB_CONSTEL_16) {\n\t\t\tint d;",
+  "find": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16) {\n\t\t\tint d;",
+  "replace": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->rxv.named.short_382 != OB_CONSTEL_16) {\n\t\t\tint d;",
   "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {

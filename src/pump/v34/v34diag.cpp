@@ -384,7 +384,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    unsigned long maxCount)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(obj);
+	struct v34_receiver *rx = &obj->rxv.receiver;
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
 	unsigned long n = 0;

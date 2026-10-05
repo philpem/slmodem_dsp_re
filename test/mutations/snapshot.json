@@ -1974,7 +1974,7 @@
    }
   },
   "v34datapump": {
-   "key": "77b440611aaf32bc332ee6adfd727271ede5d21bc6443a7dad0ab1be71fb2c42",
+   "key": "06a246466a1a0a45d7e02651cdb6c430e227a1c2f2b404d1d675e00880e20eb8",
    "summary": "78 mutations: 75 caught (75 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x124 is bumped after `receiver` rather than before it": "caught",
@@ -2456,7 +2456,7 @@
    }
   },
   "v34hsmst44": {
-   "key": "da68aace9aa6a0e07901653c9faec50f643a87d45a9e0e9f8f958dcd98354c76",
+   "key": "cd5d79a3f7f695db1e001db3a503c790418553ff27213c0034d696992de6188e",
    "summary": "214 mutations: 207 caught (207 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
@@ -2676,7 +2676,7 @@
    }
   },
   "v34hsrx4": {
-   "key": "ee7e4066b2793f18ab11961f779f2b91f14a2b719307f639bc45c7d7a8d5925b",
+   "key": "a1ef25f6d5e31649615e98af001d09cb128df9a91907c6609c0447fef0f3ff1e",
    "summary": "176 mutations: 170 caught (170 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa80 raises 0x100 rather than 0x200": "caught",
@@ -3071,7 +3071,7 @@
    }
   },
   "v34hst346": {
-   "key": "1c2a093e62d865632fc4b17a11a429c7de39bcfe5bae4f949b2e3faea318a228",
+   "key": "bd0442ede5ad4b9c4c1817ed69aeebcddf72e0da6d61e8cf07e29344715139f5",
    "summary": "75 mutations: 72 caught (72 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa7a is not stepped": "caught",
@@ -3152,7 +3152,7 @@
    }
   },
   "v34hst3core": {
-   "key": "5e0c209fcad2576dd47464ca69471a1c77e631a061bfc1f354eb37b4b415477a",
+   "key": "f0f90a0fdd09ca58e057bc1220df40285715fe7b25e2deb6851b4bc3c0ddf1e4",
    "summary": "70 mutations: 70 caught (70 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -4580,7 +4580,7 @@
    }
   },
   "v34hstxblock": {
-   "key": "89885296a6d0f09530bdc098886b0534a8305585a2d602380b4ad5a73b89623f",
+   "key": "c884913da17a9c2e01fd44dc74f242bd1785bc8f433643d797df9c7796d0278e",
    "summary": "52 mutations: 50 caught (50 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x238 against +0x23c compared signed": "caught",
@@ -4826,7 +4826,7 @@
    }
   },
   "v34k56": {
-   "key": "842fbe3599a4b3b3c47c4202fc2eade470166e36d152a83593b29d5a98c1615e",
+   "key": "ddaf956b64299027fca85e77c9f57ff5a479685917720830588d9e9c579d0989",
    "summary": "28 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 13 equivalent, 0 MIScounted",
    "verdicts": {
     "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store": "equivalent",
@@ -4860,7 +4860,7 @@
    }
   },
   "v34pcmif": {
-   "key": "bcb67215f8e06d479c9b5e8aa4f08e75d71bd0d41f3fa50adc233936ef330ea8",
+   "key": "fedde1130826439cad2dbe7027c69f79bf35e85c2f2d5fd31d2c07f74eecba9c",
    "summary": "126 mutations: 120 caught (120 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "force: 2800 spoils only one of its two bins": "caught",
@@ -7877,7 +7877,7 @@
    }
   },
   "v90p34": {
-   "key": "0bfc6d685d7288c369bde0e3e51b6bbb949b727944338a64ec897d62d1e96c53",
+   "key": "5b9937ac78b1f5a3bdcd3ead01bfe3375aea27ca71d0cf092dc44ffdb3b7cd7d",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "case 10 does not consult the bit source": "caught",

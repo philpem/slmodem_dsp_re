@@ -101,7 +101,7 @@ setup(const struct v34_fsk *cfg)
 	 */
 	obj_a.echo0.coeff_frac = (short *)&dly_a;
 	obj_b.echo0.coeff_frac = (short *)&dly_b;
-	obj_a.fsk_inhibit = obj_b.fsk_inhibit = 0;
+	obj_a.rxv.named.fsk_inhibit = obj_b.rxv.named.fsk_inhibit = 0;
 	obj_a.fsk = *cfg;
 	obj_b.fsk = *cfg;
 }
@@ -157,7 +157,7 @@ run_demod(const char *what, const struct v34_fsk *cfg, int inhibit,
 	int i;
 
 	setup(cfg);
-	obj_a.fsk_inhibit = obj_b.fsk_inhibit = (short)inhibit;
+	obj_a.rxv.named.fsk_inhibit = obj_b.rxv.named.fsk_inhibit = (short)inhibit;
 
 	for (i = 0; i + V34_FSK_BLOCK <= NSAMP; i += V34_FSK_BLOCK) {
 		short before_phase = obj_a.fsk.phase;

@@ -370,7 +370,7 @@ main(void)
 		for (b = 0; b < sizeof(oa); b++) {
 			/* Every pointer: each side holds its own addresses. */
 			unsigned skip[][2] = {
-			  { __builtin_offsetof(struct v34_object, rxq)
+			  { __builtin_offsetof(struct v34_object, rxv.named.rxq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
 			  { __builtin_offsetof(struct v34_object, txq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
@@ -403,10 +403,10 @@ main(void)
 			    ob.txq.rd - ob.txq.ring, 0);
 		diff_eq_int("txq wr", oa.txq.wr - oa.txq.ring,
 			    ob.txq.wr - ob.txq.ring, 0);
-		diff_eq_int("rxq rd", oa.rxq.rd - oa.rxq.ring,
-			    ob.rxq.rd - ob.rxq.ring, 0);
-		diff_eq_int("rxq wr", oa.rxq.wr - oa.rxq.ring,
-			    ob.rxq.wr - ob.rxq.ring, 0);
+		diff_eq_int("rxq rd", oa.rxv.named.rxq.rd - oa.rxv.named.rxq.ring,
+			    ob.rxv.named.rxq.rd - ob.rxv.named.rxq.ring, 0);
+		diff_eq_int("rxq wr", oa.rxv.named.rxq.wr - oa.rxv.named.rxq.ring,
+			    ob.rxv.named.rxq.wr - ob.rxv.named.rxq.ring, 0);
 		diff_eq_int("txq primed with 32", oa.txq.count, 0x20, 0);
 	}
 	rc |= diff_end();
@@ -1346,9 +1346,9 @@ main(void)
 				oa.txq.ring[b] = ob.txq.ring[b] =
 				    (int)(short)(b * 2777 - 12000);
 			oa.txq.count = ob.txq.count = 0x30;
-			oa.rxq.count = ob.rxq.count = 0;
+			oa.rxv.named.rxq.count = ob.rxv.named.rxq.count = 0;
 			for (b = 0; b < V34_RXQ_RING; b++)
-				oa.rxq.ring[b] = ob.rxq.ring[b] = 0;
+				oa.rxv.named.rxq.ring[b] = ob.rxv.named.rxq.ring[b] = 0;
 
 			dsplibs_debug_level = lvl;
 			ref_dsplibs_debug_level = lvl;
@@ -1416,8 +1416,8 @@ main(void)
 						    * 100000 + b);
 			}
 			diff_eq_int("serrint rxq wr",
-				    (long)(oa.rxq.wr - oa.rxq.ring),
-				    (long)(ob.rxq.wr - ob.rxq.ring),
+				    (long)(oa.rxv.named.rxq.wr - oa.rxv.named.rxq.ring),
+				    (long)(ob.rxv.named.rxq.wr - ob.rxv.named.rxq.ring),
 				    (long)mode * 100 + feed * 10 + far);
 			diff_eq_int("serrint txq rd",
 				    (long)(oa.txq.rd - oa.txq.ring),

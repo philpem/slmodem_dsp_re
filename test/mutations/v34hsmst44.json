@@ -467,7 +467,7 @@
   },
   {
     "label": "the record is not re-read after the restart",
-    "find": "\trec = t44_record(obj, T44_PTR_AA70);\n\trec->word[idx]",
+    "find": "\trec = (struct v34_bitsource *)obj->paa70;\n\trec->word[idx]",
     "replace": "\trec->word[idx]",
     "equivalent": true,
     "why": "0x6698e reloads +0xaa70 after the restart may have run, and the restart writes +0xaa6c and never +0xaa70 -- so the reloaded pointer is the cached one on every path that exists.  This becomes testable, and stops being equivalent, the moment an arm that moves +0xaa70 lands; the accept path at 0x6e534 is where to look.",
@@ -617,13 +617,13 @@
   },
   {
     "label": "the early exit moves the microstate to DET_CJ",
-    "find": "\t\t\ths_set_microstate(obj, V34HS_DET_SYNC);\n\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
-    "replace": "\t\t\ths_set_microstate(obj, V34HS_DET_CJ);\n\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+    "find": "\t\t\ths_set_microstate(obj, V34HS_DET_SYNC);\n\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
+    "replace": "\t\t\ths_set_microstate(obj, V34HS_DET_CJ);\n\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "fn": "t44_det_info_accept"
   },
   {
     "label": "the early exit leaves the register alone",
-    "find": "\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+    "find": "\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "replace": "\t\t\t(void)0;",
     "fn": "t44_det_info_accept"
   },
@@ -648,7 +648,7 @@
   {
     "label": "the decoder is handed the +0xaa70 record instead of the fixed address",
     "find": "\tV34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);",
-    "replace": "\tV34GiveINFO0dBits(obj, t44_record(obj, T44_PTR_AA70));",
+    "replace": "\tV34GiveINFO0dBits(obj, (struct v34_bitsource *)obj->paa70);",
     "fn": "t44_det_info_accept"
   },
   {
@@ -836,7 +836,7 @@
   {
     "label": "the MOH decoder is given the installed record instead",
     "find": "\tVPcmV34InterpretMohMessageBits(obj, rec);",
-    "replace": "\tVPcmV34InterpretMohMessageBits(obj, t44_record(obj, T44_PTR_AA6C));",
+    "replace": "\tVPcmV34InterpretMohMessageBits(obj, (struct v34_bitsource *)obj->paa6c);",
     "fn": "t44_accept_len08"
   },
   {
@@ -865,19 +865,19 @@
   },
   {
     "label": "the MOH resynchronise goes to DET_INFO",
-    "find": "\t\ths_set_microstate(obj, V34HS_DET_SYNC);\n\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
-    "replace": "\t\ths_set_microstate(obj, V34HS_DET_INFO);\n\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+    "find": "\t\ths_set_microstate(obj, V34HS_DET_SYNC);\n\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
+    "replace": "\t\ths_set_microstate(obj, V34HS_DET_INFO);\n\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "fn": "t44_accept_len08"
   },
   {
     "label": "the MOH resynchronise leaves sr alone",
-    "find": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
-    "replace": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+    "find": "\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
+    "replace": "\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "fn": "t44_accept_len08"
   },
   {
     "label": "the MOH resynchronise leaves the register alone",
-    "find": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
+    "find": "\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
     "replace": "\t\tobj->fsk.sr = -1;",
     "fn": "t44_accept_len08"
   },
@@ -926,8 +926,8 @@
   },
   {
     "label": "the INFO1a decoder's answer is inverted",
-    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
-    "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) == 0) {",
+    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)obj->paa70) != 0) {",
+    "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)obj->paa70) == 0) {",
     "fn": "t44_accept_len26"
   },
   {
@@ -938,8 +938,8 @@
   },
   {
     "label": "the INFO1a decoder is given the installed record",
-    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
-    "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA6C)) != 0) {",
+    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)obj->paa70) != 0) {",
+    "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)(struct v34_bitsource *)obj->paa6c) != 0) {",
     "fn": "t44_accept_len26"
   },
   {
@@ -1035,13 +1035,13 @@
   },
   {
     "label": "neither detector set-up raises DET_PENDING",
-    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
-    "replace": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+    "replace": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
     "fn": "t44_accept_len26"
   },
   {
     "label": "the FIRST detector set-up is dropped",
-    "find": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
+    "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
     "replace": "\t(void)0;",
     "equivalent": true,
     "why": "EQUIVALENT, and the strongest one in this batch.  `detectorinit` writes nine fields of the detector at +0x3564 and reads nothing (src/pump/v34/detector.c); the two calls at 0x6f0d1 and 0x6f125 differ only in the warm-up, so the second writes every field the first did.  The only statement between them is the receiver flag word's DET_PENDING, which is not in the detector.  HELD FIXED: that `detectorinit` has no effect outside the struct it is given.  The mutations of the SECOND call below are what check that from the other side.",
@@ -1067,8 +1067,8 @@
   },
   {
     "label": "the detectors read the record being clocked",
-    "find": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
-    "replace": "\tdetectorinit(&obj->detector, t44_record(obj, T44_PTR_AA70),\n\t\t     0, 8, 0x78, 0x600, 0);",
+    "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+    "replace": "\tdetectorinit(&obj->detector, (struct v34_bitsource *)obj->paa70,\n\t\t     0, 8, 0x78, 0x600, 0);",
     "fn": "t44_accept_len26"
   },
   {
@@ -1197,20 +1197,20 @@
   },
   {
     "label": "the answer is installed at the restart's record",
-    "find": "\tobj->paa6c = &obj->msgrec[2];\n\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
-    "replace": "\tobj->paa6c = obj->msgrec;\n\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
+    "find": "\tobj->paa6c = &obj->msgrec[2];\n\tif (V34GiveINFO1dBits(obj, (const short *)obj->paa70) != 0)",
+    "replace": "\tobj->paa6c = obj->msgrec;\n\tif (V34GiveINFO1dBits(obj, (const short *)obj->paa70) != 0)",
     "fn": "t44_accept_len4d"
   },
   {
     "label": "the INFO1d answer is inverted",
-    "find": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
-    "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) == 0)",
+    "find": "\tif (V34GiveINFO1dBits(obj, (const short *)obj->paa70) != 0)",
+    "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)obj->paa70) == 0)",
     "fn": "t44_accept_len4d"
   },
   {
     "label": "the INFO1d decoder is given the answer's record",
-    "find": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
-    "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA6C)) != 0)",
+    "find": "\tif (V34GiveINFO1dBits(obj, (const short *)obj->paa70) != 0)",
+    "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)(struct v34_bitsource *)obj->paa6c) != 0)",
     "fn": "t44_accept_len4d"
   },
   {
@@ -1221,14 +1221,14 @@
   },
   {
     "label": "the INFO1a answer is not built",
-    "find": "\tV34SetINFO1aBits(obj, (short *)t44_record(obj, T44_PTR_AA6C));",
+    "find": "\tV34SetINFO1aBits(obj, (short *)obj->paa6c);",
     "replace": "\t(void)0;",
     "fn": "t44_accept_len4d"
   },
   {
     "label": "the INFO1a answer is built in the clocked record",
-    "find": "\tV34SetINFO1aBits(obj, (short *)t44_record(obj, T44_PTR_AA6C));",
-    "replace": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA70));",
+    "find": "\tV34SetINFO1aBits(obj, (short *)obj->paa6c);",
+    "replace": "\tV34SetINFO1aBits(obj, (struct v34_bitsource *)obj->paa70);",
     "fn": "t44_accept_len4d"
   },
   {
@@ -1313,7 +1313,7 @@
     "label": "the INFO1a decoder is given the cached record pointer",
     "equivalent": true,
     "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding F406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding F401's third equivalence says of the restart.",
-    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
+    "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)obj->paa70) != 0) {",
     "replace": "\tif ((short)V34GiveINFO1aBits(obj, (const short *)rec) != 0) {",
     "fn": "t44_accept_len26"
   }

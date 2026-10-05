@@ -533,7 +533,7 @@ static int
 v34tx1_xmit0(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 
 	o->txpoint.c[0] = 0;
 	o->txpoint.c[1] = 0;
@@ -949,7 +949,7 @@ static int
 v34tx1_dataxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	int idx;
 
 	modulatevector(o);
@@ -1397,7 +1397,7 @@ static int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1693,7 +1693,7 @@ static int
 v34tx1_jtxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	unsigned shift;
 	unsigned short idx;
 	short bits, mode, q;
@@ -2649,7 +2649,7 @@ static int
 v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
 	int n, lim, baud, period;
 	short *rec;
@@ -3296,7 +3296,7 @@ static int
 v34tx1_xmitmp(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = v34_object_receiver(o);
+	struct v34_receiver *rx = &o->rxv.receiver;
 	int wide = 0;
 	int n = 0;
 

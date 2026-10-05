@@ -1244,8 +1244,8 @@
  },
  {
   "label": "the demodulator trace has baud and carrier swapped",
-  "find": "\tstruct v34_receiver *rx = v34_object_receiver(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
-  "replace": "\tstruct v34_receiver *rx = v34_object_receiver(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
+  "find": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
+  "replace": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
  },
  {
   "label": "the demodulator produces three outputs per call, not four",

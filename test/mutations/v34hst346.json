@@ -46,8 +46,8 @@
   },
   {
     "label": "the TX_DPSK guard reaches through +0xaa70 rather than +0xaa6c",
-    "find": "\t\tshort *r = *(short **)((char *)obj + T3C_PTR_AA6C);",
-    "replace": "\t\tshort *r = *(short **)((char *)obj + T3C_PTR_AA70);",
+    "find": "\t\tshort *r = (short *)obj->paa6c;",
+    "replace": "\t\tshort *r = (short *)obj->paa70;",
     "fn": "t46_micro_tx_phase1_ans"
   },
   {
@@ -272,8 +272,8 @@
   },
   {
     "label": "0x6f90c hands the INFO0a record to the INFO0d builder",
-    "find": "\t\tV34SetINFO0dBits(obj,\n\t\t\t\t *(short **)((char *)obj + T3C_PTR_AA70));",
-    "replace": "\t\tV34SetINFO0dBits(obj,\n\t\t\t\t *(short **)((char *)obj + T3C_PTR_AA6C));",
+    "find": "\t\tV34SetINFO0dBits(obj, (short *)obj->paa70);",
+    "replace": "\t\tV34SetINFO0dBits(obj, (short *)obj->paa6c);",
     "fn": "t46_body_retrain"
   },
   {

@@ -203,7 +203,7 @@ setup(int dataflag, int state, short constel, short vidx, short txbits,
 	oa.tx_flags = ob.tx_flags = tx_flags;
 
 	oa.k56flex_receiver = ob.k56flex_receiver = state;
-	oa.short_382 = ob.short_382 = constel;
+	oa.rxv.named.short_382 = ob.rxv.named.short_382 = constel;
 	oa.vect_idx = ob.vect_idx = vidx;
 	*(short *)((char *)&oa + OB_TXBITS) = txbits;
 	*(short *)((char *)&ob + OB_TXBITS) = txbits;

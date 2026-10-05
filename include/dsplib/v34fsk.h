@@ -418,54 +418,89 @@ struct v34_object {
 	 * Two bytes, written as a short by both arms.
 	 */
 	short samples_valid;				/* +0x262 */
-	struct v34_queue rxq;				/* +0x264 */
-	int rxq_ring_tail[V34_RXQ_RING - 1];		/* to +0x370 */
-	unsigned char unmapped_0370[0x382 - 0x370];
 	/*
-	 * +0x0382. Written six times and read nowhere in this object -- the
-	 * only stores are VPcmV34Main.cpp's, four of them in the two Indicate
-	 * entry points reconstructed here. So whatever consumes it lives in
-	 * the C++ half that is still to come, and the values are all this
-	 * says about it: 0 when a Jd arrives with the silence-scrambler flag
-	 * set, otherwise 0x89b0 or 0x8990 according to a constellation-size
-	 * flag. The two differ by 32, which is the only structure visible.
+	 * +0x264 to +0xa00, the receiver's storage in BOTH of its readings
+	 * (issue #260 wave 7).  The `named` arm is the object's own readings
+	 * of the same 0x79c bytes, every member at its existing offset: the
+	 * receive datapump queue (whose ring continues as `rxq_ring_tail`,
+	 * the object's continuation of `struct v34_queue`'s one declared
+	 * entry), the two words and the FSK inhibit that sit above it, the
+	 * exported accessors' timing pair, and the two filter sub-objects.
+	 * The `receiver` arm is `struct v34_receiver` (v34recv.h), whose
+	 * differential-tested 0x79c extent covers the same range and models
+	 * parts of it the object's own readings had left as pads -- and
+	 * whose `pad_000[0x120]` and `pad_2a8` are exactly those members'
+	 * and the filters' bytes seen from the receiver instead.
 	 *
-	 * As a `struct v34_receiver` offset this is +0x11e, immediately below
-	 * that struct's `vectpp_idx`/`flags` pair; named here rather than
-	 * there because every caller has the whole object in hand.
+	 * Both arms are 0x79c bytes, so the union is, and `unmapped_0a00`
+	 * and everything after it keep their offsets either way.  The
+	 * wave-4-era derives `v34_object_timing` and `v34_object_equalizer`
+	 * were the previous spelling of `named.timing`/`named.equalizer`.
 	 */
-	short short_382;					/* +0x0382 */
-	unsigned char unmapped_0384[0x402 - 0x384];
-	/*
-	 * Non-zero makes fskdemodulate return without doing anything -- not
-	 * even running the detector -- so it reads as "the FSK receiver is
-	 * switched off".  Nothing here sets it.
-	 */
-	short fsk_inhibit;				/* +0x402 */
-	unsigned char unmapped_0404[0x49c - 0x404];
-	/*
-	 * +0x049c and +0x04a0, named from the object's own exported
-	 * accessors `getTimingOffset` and `getTimingPhase` -- the same class
-	 * of evidence as a format string. What the fields mean beyond that
-	 * is not claimed: the two accessors are the only readers anywhere in
-	 * the object (exported API with no internal caller) and no writer
-	 * has been traced to them.
-	 */
-	int timing_offset;				/* +0x049c */
-	int timing_phase;				/* +0x04a0 */
-	unsigned char unmapped_04a4[0x50c - 0x4a4];
-	/*
-	 * The timing-recovery filters, `struct v34_timing` in v34filt.h, at
-	 * +0x50c: the derivation `v34_object_timing` carried until issue
-	 * #260 embedded it.
-	 */
-	struct v34_timing timing;				/* +0x50c */
-	/*
-	 * The equaliser, `struct v34_equalizer` in v34filt.h, at +0x630;
-	 * its 0x3cc extent is asserted in v34filters.c.
-	 */
-	struct v34_equalizer equalizer;				/* +0x630 */
-	unsigned char unmapped_09fc[0xe74 - 0x9fc];
+	union {
+		struct {
+			struct v34_queue rxq;			/* +0x264 */
+			int rxq_ring_tail[V34_RXQ_RING - 1];	/* to +0x370 */
+			unsigned char unmapped_0370[0x382 - 0x370];
+			/*
+			 * +0x0382. Written six times and read nowhere in this
+			 * object -- the only stores are VPcmV34Main.cpp's,
+			 * four of them in the two Indicate entry points
+			 * reconstructed here. So whatever consumes it lives
+			 * in the C++ half that is still to come, and the
+			 * values are all this says about it: 0 when a Jd
+			 * arrives with the silence-scrambler flag set,
+			 * otherwise 0x89b0 or 0x8990 according to a
+			 * constellation-size flag. The two differ by 32,
+			 * which is the only structure visible.
+			 *
+			 * As a `struct v34_receiver` offset this is +0x11e,
+			 * immediately below that struct's
+			 * `vectpp_idx`/`flags` pair; named here rather than
+			 * there because every caller has the whole object
+			 * in hand.
+			 */
+			short short_382;			/* +0x0382 */
+			unsigned char unmapped_0384[0x402 - 0x384];
+			/*
+			 * Non-zero makes fskdemodulate return without doing
+			 * anything -- not even running the detector -- so
+			 * it reads as "the FSK receiver is switched off".
+			 * Nothing here sets it.
+			 */
+			short fsk_inhibit;			/* +0x402 */
+			unsigned char unmapped_0404[0x49c - 0x404];
+			/*
+			 * +0x049c and +0x04a0, named from the object's own
+			 * exported accessors `getTimingOffset` and
+			 * `getTimingPhase` -- the same class of evidence as
+			 * a format string. What the fields mean beyond that
+			 * is not claimed: the two accessors are the only
+			 * readers anywhere in the object (exported API with
+			 * no internal caller) and no writer has been traced
+			 * to them.
+			 */
+			int timing_offset;			/* +0x049c */
+			int timing_phase;			/* +0x04a0 */
+			unsigned char unmapped_04a4[0x50c - 0x4a4];
+			/*
+			 * The timing-recovery filters, `struct v34_timing` in
+			 * v34filt.h, at +0x50c: the derivation
+			 * `v34_object_timing` carried until issue #260
+			 * embedded it.
+			 */
+			struct v34_timing timing;		/* +0x50c */
+			/*
+			 * The equaliser, `struct v34_equalizer` in v34filt.h,
+			 * at +0x630; its 0x3cc extent is asserted in
+			 * v34filters.c.
+			 */
+			struct v34_equalizer equalizer;		/* +0x630 */
+			unsigned char unmapped_09fc[0xa00 - 0x9fc];
+		} named;
+		struct v34_receiver receiver;			/* +0x264 */
+	} rxv;							/* +0x264 */
+	unsigned char unmapped_0a00[0xe74 - 0xa00];
 	/* The descrambler's shift register; see `struct v34_descrambler`. */
 	struct v34_descrambler descrambler;		/* +0x0e74 */
 	unsigned char unmapped_0e84[0x2074 - 0xe84];
@@ -1411,35 +1446,59 @@ struct v34_object {
 };
 
 /*
- * The four embedded sub-object regions, pinned.  Guarded to a 32-bit ABI,
+ * The embedded sub-object regions, pinned.  Guarded to a 32-bit ABI,
  * matching the v34ratecfg asserts and V34hshak.c's layout block: each
- * member sits exactly where the pad it replaced began.
+ * member sits exactly where the pad it replaced began.  `rxv`'s named arm
+ * is pinned member by member at its object offset, and the whole union at
+ * 0x264 with the 0x79c both arms share (the receiver arm's own size is
+ * asserted in v34recv.h).
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-typedef char v34object_off_timing[
-	((int)__builtin_offsetof(struct v34_object, timing) == 0x50c) ? 1 : -1];
-typedef char v34object_off_equalizer[
-	((int)__builtin_offsetof(struct v34_object, equalizer) == 0x630)
+typedef char v34object_off_rxv[
+	((int)__builtin_offsetof(struct v34_object, rxv) == 0x264) ? 1 : -1];
+typedef char v34object_off_rxq[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.rxq) == 0x264)
 		? 1 : -1];
+typedef char v34object_off_rxq_ring_tail[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.rxq_ring_tail)
+	 == 0x274) ? 1 : -1];
+typedef char v34object_off_short_382[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.short_382)
+	 == 0x382) ? 1 : -1];
+typedef char v34object_off_fsk_inhibit[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.fsk_inhibit)
+	 == 0x402) ? 1 : -1];
+typedef char v34object_off_timing_offset[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.timing_offset)
+	 == 0x49c) ? 1 : -1];
+typedef char v34object_off_timing_phase[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.timing_phase)
+	 == 0x4a0) ? 1 : -1];
+typedef char v34object_off_timing[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.timing) == 0x50c)
+		? 1 : -1];
+typedef char v34object_off_equalizer[
+	((int)__builtin_offsetof(struct v34_object, rxv.named.equalizer)
+	 == 0x630) ? 1 : -1];
 typedef char v34object_off_detector[
 	((int)__builtin_offsetof(struct v34_object, detector) == 0x3564)
 		? 1 : -1];
 typedef char v34object_off_msgrec[
 	((int)__builtin_offsetof(struct v34_object, msgrec) == 0xa94c)
 		? 1 : -1];
+typedef char v34object_size_rxv[
+	(sizeof(((struct v34_object *)0)->rxv) == 0x79c) ? 1 : -1];
 #endif
 
 
 /*
  * The object's remaining sub-object derivations (issue #260).  `timing`,
- * `equalizer`, `detector`, the first four message records and the rate
- * config are typed members of the struct now (the rate config as the
- * `ratecfg_v` union, the fifth message record as `rec4_v`); what is left
- * here is the regions that CANNOT be embedded.  The receiver (+0x264) is a
- * DUAL VIEW of storage the object already names member by member (`rxq`
- * ...), so an embedded member would have to overlap existing ones.  A
- * derivation point converts every site, changes no layout, and asserts
- * nothing the blob has not said.
+ * `equalizer`, `detector`, the first four message records, the rate config
+ * and now the receiver -- as the `rxv` union above, whose `named` arm is
+ * the object's own readings -- are typed members of the struct.  What is
+ * left here is the one region that cannot be embedded and has no second
+ * reading in the tree: the transmitter at +0x1450, reached by every site
+ * that has the object and none that has anything smaller.
  *
  * They are MACROS and not static inline functions because a macro is a
  * compile-time substitution: it cannot move code generation, where a
@@ -1451,10 +1510,6 @@ typedef char v34object_off_msgrec[
  * Each takes the object and nothing else, so a reader can find every
  * sub-object access by grepping the accessor's name.
  */
-
-/* The receive datapump, `struct v34_receiver` in v34recv.h, at +0x264. */
-#define v34_object_receiver(obj) \
-	((struct v34_receiver *)((char *)(obj) + 0x264))
 
 /* The transmitter, `struct v34_modulator` in v34filt.h, at +0x1450. */
 #define v34_object_modulator(obj) \
@@ -1478,7 +1533,7 @@ void fskdetect(struct v34_object *obj, const short *in, short *out,
 /**
  * @brief Run fskdetect() over one block and slice the result into bits.
  *
- * Does nothing at all if `obj->fsk_inhibit` is set.
+ * Does nothing at all if `obj->rxv.named.fsk_inhibit` is set.
  *
  * @param obj  The V.34 modem object.
  * @param in   Input samples, #V34_FSK_BLOCK of them.

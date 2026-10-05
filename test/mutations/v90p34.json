@@ -250,28 +250,28 @@
  },
  {
   "label": "case 9's quadbit is 0 rather than 15",
-  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 0);"
+  "find": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 0);"
  },
  {
   "label": "case 9's dibit is 1 rather than 3",
-  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);",
-  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 1);"
+  "find": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);",
+  "replace": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 1);"
  },
  {
   "label": "case 9 selects the sixteen-point map on 0x8990",
-  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
+  "find": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
  },
  {
   "label": "case 9 does not bump seg_symcount",
-  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
-  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);"
+  "find": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
+  "replace": "\t\t */\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);"
  },
  {
   "label": "case 8 does not consult the bit source",
-  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
-  "replace": "\t\tint done = 0;\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
+  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
+  "replace": "\t\tint done = 0;\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
  },
  {
   "label": "case 8 advances to state 10",
@@ -372,8 +372,8 @@
  },
  {
   "label": "the two bit sources are handed prev_quadrant rather than cur_quadrant",
-  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
-  "replace": "\t\tint done = (short)vp->getV90CpBits(&o->prev_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
+  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
+  "replace": "\t\tint done = (short)vp->getV90CpBits(&o->prev_quadrant);\n\n\t\tif (o->rxv.named.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
  },
  {
   "label": "the dispatch reads k56flex_receiver rather than v90_receiver",
@@ -382,7 +382,7 @@
  },
  {
   "label": "the constellation code is read at +0x384",
-  "find": "\t\tshort c = o->short_382;",
+  "find": "\t\tshort c = o->rxv.named.short_382;",
   "replace": "\t\tshort c = *(const short *)((const unsigned char *)o + 0x384);"
  },
  {
