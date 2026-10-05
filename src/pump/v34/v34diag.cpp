@@ -158,7 +158,7 @@ void
 VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
+	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 
 	if (DSPLIB_DEBUG_ON())

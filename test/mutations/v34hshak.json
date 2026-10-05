@@ -137,8 +137,8 @@
  },
  {
   "label": "mode 1 transitions the microstate it should leave alone",
-  "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\t/* No microstate transition here; mode 1 is the only body\n\t\t * that leaves it alone. */",
-  "replace": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
+  "find": "\t\ths_set_rxstate(obj, V34HS_WAIT);\n\t\t/* No microstate transition here; mode 1 is the only body\n\t\t * that leaves it alone. */",
+  "replace": "\t\ths_set_rxstate(obj, V34HS_WAIT);\n\t\ths_set_microstate(obj, V34HS_DET_SYNC);",
   "fn": "v34handshakinit"
  },
  {
@@ -558,20 +558,20 @@
  },
  {
   "label": "setuptxmit: the modulator gets the receive baud rate",
-  "find": "\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),",
-  "replace": "\t\t\t  *(short *)(m + 0xaa96), *(short *)(m + 0xaa94),",
+  "find": "\t\t\t  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.carrier,",
+  "replace": "\t\t\t  obj->ratecfg_v.named.baud_rate, obj->ratecfg_v.cfg.carrier,",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: carrier and pre-emphasis are transposed",
-  "find": "\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
-  "replace": "\t\t\t  *(short *)(m + 0xaa84), *(short *)(m + 0xaa8a),\n\t\t\t  *(short *)(m + 0xaa94), pcm, 1);",
+  "find": "\t\t\t  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.carrier,\n\t\t\t  obj->ratecfg_v.cfg.preemp, pcm, 1);",
+  "replace": "\t\t\t  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.preemp,\n\t\t\t  obj->ratecfg_v.cfg.carrier, pcm, 1);",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the modulator is not fully reset",
-  "find": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);",
-  "replace": "\t\t\t  *(short *)(m + 0xaa8a), pcm, 0);",
+  "find": "\t\t\t  obj->ratecfg_v.cfg.preemp, pcm, 1);",
+  "replace": "\t\t\t  obj->ratecfg_v.cfg.preemp, pcm, 0);",
   "fn": "v34setuptxmit"
  },
  {
@@ -600,20 +600,20 @@
  },
  {
   "label": "setuptxmit: the two states are transposed",
-  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_SSEG);\n\ths_setstate(obj, HS_TXSTATE, V34HS_WAIT);",
+  "find": "\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SSEG);",
+  "replace": "\ths_set_rxstate(obj, V34HS_SSEG);\n\ths_set_txstate(obj, V34HS_WAIT);",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the receive state goes to RECEIVE, not WAIT",
-  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
+  "find": "\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
+  "replace": "\ths_set_rxstate(obj, V34HS_RECEIVE);\n\ths_set_txstate(obj, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit state goes to SBARSEG, not SSEG",
-  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->seg_symcount = 0;",
+  "find": "\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
+  "replace": "\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SBARSEG);\n\n\tobj->seg_symcount = 0;",
   "fn": "v34setuptxmit"
  },
  {
@@ -638,8 +638,8 @@
  },
  {
   "label": "setuptxmit: the two transitions are printed before the modulator's line",
-  "find": "\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);\n\n\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  *(short *)v34_object_ratecfg(obj), *(short *)(m + 0xaa94),\n\t\t\t  *(short *)(m + 0xaa8a), pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);",
+  "find": "\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.carrier,\n\t\t\t  obj->ratecfg_v.cfg.preemp, pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);\n\n\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SSEG);",
+  "replace": "\ths_set_rxstate(obj, V34HS_WAIT);\n\ths_set_txstate(obj, V34HS_SSEG);\n\n\tV34SetupModulator(v34_object_modulator(obj),\n\t\t\t  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.carrier,\n\t\t\t  obj->ratecfg_v.cfg.preemp, pcm, 1);\n\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);",
   "fn": "v34setuptxmit"
  },
  {

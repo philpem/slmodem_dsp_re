@@ -133,10 +133,12 @@ static const char *StateName[V34HS_STATE_COUNT] = {
  * SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
  * Transposed, the RECEIVE machine would be the one entering SSEG.  The
  * table's own `TX_` and `RX_` prefixes say that is the wrong way round.
+ *
+ * The words themselves are `struct v34_object`'s `microstate`, `rxstate` and
+ * `txstate` members (v34fsk.h), and the setters below bind each one at
+ * compile time; v34hshak.h's `V34HS_*_OFF` remain for the readers that
+ * reach the words by offset.
  */
-#define HS_MICROSTATE	0x3592
-#define HS_RXSTATE	0x3594
-#define HS_TXSTATE	0x3596
 
 /*
  * The two counters every trace prints as `[1]` and `[2]`.  `[1]` is the
@@ -158,11 +160,13 @@ hs_put(struct v34_object *obj, unsigned off, short v)
 }
 
 /*
- * One state transition, with its diagnostic.
+ * One state transition, with its diagnostic -- one setter per machine.
  *
  * All thirteen sites are this idiom -- compare, print, assign -- and each
- * prints its own change plus the other two machines' current values, so the
- * three format strings differ only in which word they call the subject.
+ * prints its own change plus the other two machines' current values.  The
+ * three setters bind their word at compile time (issue #260 wave 6): the
+ * struct member IS the word, so there is no offset parameter left to hand
+ * to the wrong machine and the trace cannot be separated from its store.
  *
  * THE TWO CONTEXT SLOTS ARE NOT INTERCHANGEABLE and the order below is the
  * object's: "rxstate" prints (tx, mst), "txstate" prints (rx, mst) and
@@ -170,61 +174,89 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * order leaves every byte of the object identical, which is why the fixture
  * sweeps the three words to three DIFFERENT values and not to one.
  *
- * THE FORMAT IS A LITERAL PER BRANCH, NOT A `static const char *const fmt[3]`
- * INDEXED BY `off`.  THE OBJECT HAS NO FORMAT TABLE: all 153 `R_386_32`
+ * THE FORMAT IS A LITERAL PER SETTER, NOT A `static const char *const
+ * fmt[3]` TABLE.  THE OBJECT HAS NO FORMAT TABLE: all 153 `R_386_32`
  * references to the three strings are from `.text`, none from `.rodata` or
- * `.data`, and its `v34handshak` carries 140 of them as the inlined copies of
- * this function.  GCC 3.4.2 does NOT constant-fold `fmt[(off - HS_MICROSTATE)
- * / 2]`, so the table form emitted the indices and referenced the strings
- * through a `.rodata` table instead -- 0 direct references where the object
- * has 140 (finding F11509).  With the literal selected in the branch, the
- * inlined and constant-folded copies reference the string directly, as the
- * object does.  Do not restore a table here.
+ * `.data`, and its `v34handshak` carries 140 of them as the inlined copies
+ * of these setters.  GCC 3.4.2 does NOT constant-fold a table index into a
+ * direct string reference, so the table form emitted the indices and
+ * referenced the strings through a `.rodata` table instead -- 0 direct
+ * references where the object has 140 (finding F11509).  With a literal in
+ * each setter, the inlined and constant-folded copies reference the string
+ * directly, as the object does.  Do not restore a table here.
  *
  * The object's equality test uses the halfword before extending it for
- * signed StateName indexing on the debug path.  Compare the storage directly:
- * GCC 3.4.2 promotes a signed hs_get return before the equality test, even
- * when that helper is inlined.  A debug-local read lets GCC retain the first
- * halfword and extend it only where the index is needed.  The signed field
- * and the signed debug index remain unchanged (see docs/v34-small-rtl.md).
+ * signed StateName indexing on the debug path.  Compare and read the
+ * member directly: GCC 3.4.2 promotes a signed read before the equality
+ * test, and a debug-local read lets GCC retain the first halfword and
+ * extend it only where the index is needed.  The signed field and the
+ * signed debug index remain unchanged (see docs/v34-small-rtl.md).
  *
- * `static inline`, as are `hs_get` and `hs_put` above: the object inlines the
- * whole closure into `v34handshak` and defines no `hs_*` symbol at all
+ * `static inline`, as are `hs_get` and `hs_put` below: the object inlines
+ * the whole closure into `v34handshak` and defines no `hs_*` symbol at all
  * (finding F11506/F11507).
  */
 static inline void
-hs_setstate(struct v34_object *obj, unsigned off, short next)
+hs_set_microstate(struct v34_object *obj, short next)
 {
-	if (*(const short *)((const char *)obj + off) == next)
+	if (obj->microstate == next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = hs_get(obj, off);
-		const char *ctx1;
-		const char *ctx2;
-		const char *sel;
+		short now = obj->microstate;
+		const char *ctx1 = StateName[obj->txstate];
+		const char *ctx2 = StateName[obj->rxstate];
 
-		if (off == HS_MICROSTATE) {
-			ctx1 = StateName[obj->txstate];
-			ctx2 = StateName[obj->rxstate];
-			sel = "V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n";
-		} else if (off == HS_RXSTATE) {
-			ctx1 = StateName[obj->txstate];
-			ctx2 = StateName[obj->microstate];
-			sel = "V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n";
-		} else {
-			ctx1 = StateName[obj->rxstate];
-			ctx2 = StateName[obj->microstate];
-			sel = "V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n";
-		}
-
-		dsplibs_debug_printf(sel, StateName[now], StateName[next],
+		dsplibs_debug_printf("V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
 	}
 
-	hs_put(obj, off, next);
+	obj->microstate = next;
+}
+
+static inline void
+hs_set_rxstate(struct v34_object *obj, short next)
+{
+	if (obj->rxstate == next)
+		return;
+
+	if (DSPLIB_DEBUG_ON()) {
+		short now = obj->rxstate;
+		const char *ctx1 = StateName[obj->txstate];
+		const char *ctx2 = StateName[obj->microstate];
+
+		dsplibs_debug_printf("V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
+				     ctx1, ctx2,
+				     (long)obj->vect_idx,
+				     (long)obj->short_aa78);
+	}
+
+	obj->rxstate = next;
+}
+
+static inline void
+hs_set_txstate(struct v34_object *obj, short next)
+{
+	if (obj->txstate == next)
+		return;
+
+	if (DSPLIB_DEBUG_ON()) {
+		short now = obj->txstate;
+		const char *ctx1 = StateName[obj->rxstate];
+		const char *ctx2 = StateName[obj->microstate];
+
+		dsplibs_debug_printf("V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
+				     ctx1, ctx2,
+				     (long)obj->vect_idx,
+				     (long)obj->short_aa78);
+	}
+
+	obj->txstate = next;
 }
 
 /*
@@ -233,9 +265,6 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * field; re-declared here, file-local, for this file's own reader below.
  */
 #define PROG_TXBIT_DATA		0x10
-
-/* The transmit state machine's own word (finding F213). */
-#define TX1_TXSTATE	0x3596
 
 /*
  * +0xaa78, the counter three of these six read.  V34hshak.c calls it
@@ -258,18 +287,6 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * V34hshak.c:1480, where `v34handshakinit` clears it.
  */
 #define TX1_F358C	0x358c
-
-/* +0x3594, the RXSTATE (finding F213).  74's retrain is its only writer here. */
-#define TX1_RXSTATE	0x3594
-
-/*
- * +0x3592, the MICROSTATE (finding F213).  51 is the one arm here that reads
- * a state word belonging to another machine: it selects between two copies of
- * its own loop on `microstate == TX_L1`, having been dispatched on
- * `txstate == TX_L1`.  The two 51s are the same number in two machines and
- * `StateName` is one table for all three (docs/v34handshak.md).
- */
-#define TX1_MICROSTATE	0x3592
 
 /*
  * +0x2218, an int.  Table 2's tail reads it to choose four of its arms
@@ -524,7 +541,7 @@ v34tx1_xmit0(void *objp)
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
 		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);
-		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_set_txstate(o, V34HS_SSEG);
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
@@ -682,7 +699,7 @@ v34tx1_k56jatxmit(void *objp)
  * diagnostic in front of them, which is where +0xabec's name comes from.
  *
  * The compares against 0x52 at 0x66dc6 and 0x53 at 0x68ae3 are
- * `hs_setstate`'s own "already there" early return inlined, not a fifth
+ * the setter's own "already there" early return inlined, not a fifth
  * state test: `jne 63941` has established that the halfword holds 0x51, so
  * neither can be true.  Findings F722 and F730's shape.
  *
@@ -707,7 +724,7 @@ v34tx1_moh_silence(void *objp)
 		return V34TX1_LOOP;			/* 0x63da2 */
 
 	/* 0x66d85 */
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)
+	if (o->txstate != V34HS_MOH_SILENCE)
 		return V34TX1_LOOP;			/* 0x63941 */
 
 	if (dsplibs_debug_level > 1)			/* 0x66d98 */
@@ -716,7 +733,7 @@ v34tx1_moh_silence(void *objp)
 			o->moh_org, o->moh_message);
 
 	/* 0x66dac */
-	hs_setstate(o, TX1_TXSTATE,
+	hs_set_txstate(o,
 		    (o->moh_org == 1 || o->moh_message == 1)
 		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
 
@@ -791,7 +808,7 @@ v34tx1_txmd(void *objp)
 
 	if ((unsigned short)o->vect_idx
 	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {
-		struct v34_ratecfg *cfg = v34_object_ratecfg(o);
+		struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
 
 		if (dsplibs_debug_level > 1)		/* 0x6800d */
@@ -801,7 +818,7 @@ v34tx1_txmd(void *objp)
 		V34SetupModulator(v34_object_modulator(o),
 				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
-		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_set_txstate(o, V34HS_SSEG);
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
 		o->tx_flags = (short)((unsigned short)o->tx_flags
@@ -888,7 +905,7 @@ v34tx1_sseg(void *objp)
 	o->seg_symcount = (short)n;
 	if (n == 0x40) {
 		/* 0x66d11 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);
+		hs_set_txstate(o, V34HS_SBARSEG);
 		o->seg_symcount = 0;
 	}
 	return V34TX1_LOOP;
@@ -1016,7 +1033,13 @@ static int
 v34tx1_tx_l1(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	int doubled = tx1_get(o, TX1_MICROSTATE) == V34HS_TX_L1;
+	/* Arm 51 is the one arm here that reads a state word belonging to
+	 * another machine: it selects between two copies of its own loop on
+	 * `microstate == TX_L1`, having been dispatched on
+	 * `txstate == TX_L1`.  The two 51s are the same number in two
+	 * machines and `StateName` is one table for all three
+	 * (docs/v34handshak.md). */
+	int doubled = o->microstate == V34HS_TX_L1;
 	short buf[4];
 	int i;
 
@@ -1032,12 +1055,12 @@ v34tx1_tx_l1(void *objp)
 
 	txwritequeue(&o->txq, buf);
 
-	if (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)
+	if (o->microstate != V34HS_TX_L1)
 		return V34TX1_LOOP;
 	if ((unsigned short)o->vect_idx != 0x600u)
 		return V34TX1_LOOP;
 
-	hs_setstate(o, TX1_MICROSTATE, V34HS_TX_L2);
+	hs_set_microstate(o, V34HS_TX_L2);
 	/* 0x62d32 */
 	o->vect_idx = 0;
 	return V34TX1_LOOP;
@@ -1121,14 +1144,14 @@ v34tx1_sbarseg(void *objp)
 	/* 0x671f0 */
 	o->seg_symcount = 0;
 	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
-		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		hs_set_txstate(o, V34HS_TRNSEG4A);
 	} else if (tx1_get(o, TX1_F35A4) == 0) {
 		/* 0x68375 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
+		hs_set_txstate(o, V34HS_PPSEG);
 	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
 		/* 0x69eca */
 		o->seg_symcount = tx1_get(o, TX1_SEGLEN);
-		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
+		hs_set_txstate(o, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
 		int span;
@@ -1136,7 +1159,7 @@ v34tx1_sbarseg(void *objp)
 
 		tx1_put(o, TX1_SEGLEN,
 			(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));
-		hs_setstate(o, TX1_TXSTATE, V34HS_TXMD);
+		hs_set_txstate(o, V34HS_TXMD);
 
 		/* 0x67885 */
 		V34SetupModulator(v34_object_modulator(o),
@@ -1241,7 +1264,7 @@ v34tx1_ppseg(void *objp)
 			o->vect_idx = 0;
 		} else {
 			/* 0x680ac */
-			struct v34_ratecfg *cfg = v34_object_ratecfg(o);
+			struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
 			short v = (short)((unsigned short)o->rtd + 0x90);
 			short baud = cfg->baud;
 			int span, q, acc;
@@ -1276,7 +1299,7 @@ v34tx1_ppseg(void *objp)
 			tx1_put(o, TX1_FAA86,
 				(short)((unsigned short)tx1_get(o, TX1_FAA86)
 					+ 0x120));
-			hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);
+			hs_set_txstate(o, V34HS_TRNSEG4);
 
 			/* 0x68154 */
 			span = (0x5e8 - o->dmadelay) * (int)baud;
@@ -1386,7 +1409,7 @@ v34tx1_silence(void *objp)
 	tx1_put(o, TX1_FAA7A, 0);
 	txwritequeue(&o->txq, quiet);
 
-	txst = tx1_get(o, TX1_TXSTATE);
+	txst = o->txstate;
 
 	if (txst == V34HS_SILENCERETRAIN) {
 		/* 0x66b87 */
@@ -1403,12 +1426,12 @@ v34tx1_silence(void *objp)
 		else					/* 0x68a7c */
 			want = o->role == 0x65 ? V34HS_RX_PHASE1_CALL
 						: V34HS_TX_PHASE1_ANS;
-		hs_setstate(o, TX1_MICROSTATE, want);
+		hs_set_microstate(o, want);
 
 		/* 0x66be0 */
-		hs_setstate(o, TX1_RXSTATE, V34HS_RX_DPSK);
+		hs_set_rxstate(o, V34HS_RX_DPSK);
 		/* 0x66c10 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_set_txstate(o, V34HS_TONE_AB);
 
 		/* 0x66c32 */
 		tx1_put(o, TX1_F358C, 0);
@@ -1444,7 +1467,7 @@ v34tx1_silence(void *objp)
 		return V34TX1_LOOP;			/* 0x629cf */
 
 	/* 0x6858f */
-	hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
+	hs_set_txstate(o, V34HS_TX_DPSK);
 	o->vect_idx = 0;
 	o->paa6c = o->msgrec;
 	V34SetINFO0aBits(o, (short *)o->msgrec);
@@ -1581,10 +1604,10 @@ v34tx1_exmit(void *objp)
 	/* 0x6392c */
 	if ((unsigned short)o->vect_idx == 0x14u) {
 		/* 0x66e01 */
-		short txst = tx1_get(o, TX1_TXSTATE);
+		short txst = o->txstate;
 
 		o->vect_idx = 8;
-		hs_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);
+		hs_set_txstate(o, V34HS_DATAXMIT);
 		if (dsplibs_debug_level > 1)		/* 0x66e48 */
 			dsplibs_debug_printf("V34MP- E transmit completed\n");
 		return V34TX1_LOOP;			/* 0x6409a, 0x6431f */
@@ -1659,9 +1682,9 @@ v34tx1_exmit(void *objp)
  * `prev_quadrant` and `seg_symcount` all go to zero and the transmit machine moves to
  * TRNSEG4A.  THE OBJECT DOES NOT COMPARE FIRST here -- there is no
  * `if (txstate != ...)` guard the way every other state change in this file
- * has one.  It is written as `hs_setstate` anyway, because the enclosing
+ * has one.  It is written as the setter anyway, because the enclosing
  * `txstate == J1TXMIT` test has already established the value and
- * `hs_setstate`'s compare is therefore provably dead: same stores, same
+ * the setter's compare is therefore provably dead: same stores, same
  * transcript, and one copy of the three format strings instead of two.  The
  * blob does print the `J1TXMIT=>TRNSEG4A` line, so the diagnostic is not
  * optional even though the compare is.
@@ -1703,7 +1726,7 @@ v34tx1_jtxmit(void *objp)
 				return V34TX1_LOOP;	/* 0x63da2 */
 		}
 		/* 0x66cd1 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_XMIT0);
+		hs_set_txstate(o, V34HS_XMIT0);
 		o->vect_idx = 0;			/* 0x62d32 */
 		return V34TX1_LOOP;			/* 0x62d70 */
 	}
@@ -1712,10 +1735,10 @@ v34tx1_jtxmit(void *objp)
 	if (idx != 0)
 		return V34TX1_LOOP;			/* 0x63941 */
 
-	if (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {
+	if (o->txstate == V34HS_J1TXMIT) {
 		/* 0x65653 */
 		o->tx_scr_sr = 0;
-		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		hs_set_txstate(o, V34HS_TRNSEG4A);
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
 		return V34TX1_LOOP;			/* 0x640a1 */
@@ -1729,7 +1752,7 @@ v34tx1_jtxmit(void *objp)
 
 	/* 0x6372e */
 	tx1_put(o, TX1_F25D6, (short)0x899f);
-	hs_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);
+	hs_set_txstate(o, V34HS_J1TXMIT);
 
 	/* 0x637c8 */
 	if (tx1_get(o, TX1_COUNT) != 0) {
@@ -1816,7 +1839,7 @@ v34tx1_jtxmit(void *objp)
  * entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and 0x6b410
  * -- and each is a diagnostic on the path where the reader is reloaded or the
  * transmit machine moves.  F11502 reconstructed 0x646b5 in `tx1_mp_reload`,
- * 0x67254 in `tx1_mp_sequence_end` and 0x6b410 is `hs_setstate`'s own
+ * 0x67254 in `tx1_mp_sequence_end` and 0x6b410 is the setter's own
  * `txstate` print.  An object-first count of the blob range against this TU
  * finds no blob string absent here (F11508), which is what retired the note.
  */
@@ -1968,8 +1991,8 @@ v34tx1_jtxmit(void *objp)
  * are entered only when `dsplibs_debug_level > 1` -- 0x68704, 0x68b12,
  * 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the `cmpl $0x1` sites that
  * guard them.  The seven that name a string live as `v34tx1_tx_dpsk`'s own
- * "End of current MOH msg" print, the `MOH_ILLEGAL` message and `hs_setstate`;
- * the rest are `hs_setstate`'s three formats.  The object-first count that
+ * "End of current MOH msg" print, the `MOH_ILLEGAL` message and the setter;
+ * the rest are the setters' three formats.  The object-first count that
  * retired the note is F11508.
  *
  * AND ONE PATH THAT WRITES ONE BYTE.  `moh_message` OUTSIDE 0..3 makes the
@@ -2594,7 +2617,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x634a6 */
 	rec[8] = 0;					/* +0xaa4c */
-	hs_setstate(o, TX1_TXSTATE, V34HS_XMITMP);
+	hs_set_txstate(o, V34HS_XMITMP);
 	o->vect_idx = 0;
 	tx1_put(o, TX1_F3598, 0);
 	tx1_put(o, TX1_F359E, 0);
@@ -2627,7 +2650,7 @@ v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	struct v34_receiver *rx = v34_object_receiver(o);
-	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
+	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
 	int n, lim, baud, period;
 	short *rec;
 
@@ -2774,7 +2797,7 @@ static int
 v34tx1_trnseg4(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
+	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
 	short q;
 	int n, span, baud;
 
@@ -2823,7 +2846,7 @@ v34tx1_trnseg4(void *objp)
 		return V34TX1_LOOP;			/* 0x629c8 */
 
 	/* 0x64b24: the segment is over. */
-	hs_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);
+	hs_set_txstate(o, V34HS_JTXMIT);
 
 	if (o->rtd <= 2) {
 		/* 0x6801e */
@@ -2855,7 +2878,7 @@ v34tx1_trnseg4(void *objp)
 	/* 0x64bb2 */
 	tx1_put(o, TX1_F25D6, (short)0x8990);
 	o->prev_quadrant = o->cur_quadrant;
-	hs_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);
+	hs_set_rxstate(o, V34HS_RECEIVE);
 	setupreceiver(o);				/* 0x64c04 */
 
 	/* 0x64d37: the +0xaa0c record, in the object's order */
@@ -2877,7 +2900,7 @@ v34tx1_trnseg4(void *objp)
 	}
 
 	/* 0x64d8d */
-	hs_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);
+	hs_set_microstate(o, V34HS_DET_SYNC);
 
 	/* 0x64dba */
 	o->vect_idx = 0;
@@ -2885,16 +2908,16 @@ v34tx1_trnseg4(void *objp)
 
 	if ((unsigned)o->v90_receiver > 1u) {
 		/* 0x64de7 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);
-		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_set_txstate(o, V34HS_JaTXMIT);
+		hs_set_rxstate(o, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x629c8 */
 	}
 
 	if ((unsigned)o->k56flex_receiver > 1u) {
 		/* 0x67f91 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);
-		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_set_txstate(o, V34HS_K56JaTXMIT);
+		hs_set_rxstate(o, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
@@ -3100,7 +3123,7 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 				tx1_put(o, TX1_F3598, 1);
 			}
 			/* 0x648bf */
-			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
+			hs_set_txstate(o, V34HS_EXMIT);
 			o->vect_idx = 0;
 			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);
 			return 1;
@@ -3172,8 +3195,8 @@ tx1_dpsk_tone(struct v34_object *o, short bit)
 static void
 tx1_moh_cleardown(struct v34_object *o)
 {
-	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
-	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	hs_set_txstate(o, V34HS_MOH_CLEARDOWN);
+	hs_set_rxstate(o, V34HS_WAIT);
 	tx1_put(o, TX1_FABE4, 1);
 }
 
@@ -3224,8 +3247,8 @@ tx1_moh_hold(struct v34_object *o)
 static void
 tx1_moh_on_hold(struct v34_object *o)
 {
-	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
-	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	hs_set_txstate(o, V34HS_MOH_SILENCE);
+	hs_set_rxstate(o, V34HS_WAIT);
 	tx1_put(o, TX1_COUNT, 0);
 	o->vect_idx = 0;
 }
@@ -3377,7 +3400,7 @@ v34tx1_tx_dpsk(void *objp)
 		 * and here writes +0x3596 -- `getbit` does not.  It is
 		 * written as the object writes it.
 		 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_set_txstate(o, V34HS_TONE_AB);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
 

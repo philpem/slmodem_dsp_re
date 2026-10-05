@@ -1097,9 +1097,9 @@ decoderv34(void *objp)
 		rx->best_index = (short)V34descrambler(rx, (short)diff, 2);
 	}
 
-	if (rx->rx_blocks == (short)(obj->baud_rate >> 1))
+	if (rx->rx_blocks == (short)(obj->ratecfg_v.named.baud_rate >> 1))
 		rx->equ_step = 0x4000;
-	else if (rx->rx_blocks == obj->baud_rate)
+	else if (rx->rx_blocks == obj->ratecfg_v.named.baud_rate)
 		rx->equ_step = 0x2000;
 }
 

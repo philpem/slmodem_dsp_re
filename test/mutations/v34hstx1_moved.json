@@ -226,12 +226,12 @@
  },
  {
   "label": "67: the exit moves the transmit machine to XMIT0",
-  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "replace": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_XMIT0);"
+  "find": "\t\t\ths_set_txstate(o, V34HS_EXMIT);",
+  "replace": "\t\t\ths_set_txstate(o, V34HS_XMIT0);"
  },
  {
   "label": "67: the exit does not move the transmit machine",
-  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "find": "\t\t\ths_set_txstate(o, V34HS_EXMIT);",
   "replace": "\t\t\t(void)0;"
  },
  {
@@ -476,8 +476,8 @@
  },
  {
   "label": "67: the txstate compare at 0x648cd is deleted",
-  "find": "\t\t\ths_setstate(o, TX1_TXSTATE, V34HS_EXMIT);",
-  "replace": "\t\t\ths_put(o, TX1_TXSTATE, V34HS_EXMIT);",
+  "find": "\t\t\ths_set_txstate(o, V34HS_EXMIT);",
+  "replace": "\t\t\ths_put(o, V34HS_TXSTATE_OFF, V34HS_EXMIT);",
   "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate == 67` and nothing between the dispatch and 0x648cd writes +0x3596 -- neither `getbit` nor `initdigital`, and `txmit` does not (finding F285's sweep) and runs after this anyway -- so the compare against 0x45 can never be true and the store always happens.  Finding F342's case at 65, and the fourth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
   "fn": "tx1_mp_sequence_end"
  },
@@ -513,47 +513,47 @@
  },
  {
   "label": "24: the clear-down leaves the transmit machine alone",
-  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
+  "find": "\ths_set_txstate(o, V34HS_MOH_CLEARDOWN);",
   "replace": ""
  },
  {
   "label": "24: the clear-down moves to MOH_FRR",
-  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_FRR);"
+  "find": "\ths_set_txstate(o, V34HS_MOH_CLEARDOWN);",
+  "replace": "\ths_set_txstate(o, V34HS_MOH_FRR);"
  },
  {
   "label": "24: the clear-down leaves the receive machine alone",
-  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "find": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
   "replace": "\ttx1_put(o, TX1_FABE4, 1);"
  },
  {
   "label": "24: the clear-down's receive state is RECEIVE",
-  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
-  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
+  "find": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);",
+  "replace": "\ths_set_rxstate(o, V34HS_RECEIVE);\n\ttx1_put(o, TX1_FABE4, 1);"
  },
  {
   "label": "24: the clear-down does not raise +0xabe4",
-  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
-  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n}"
+  "find": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_set_rxstate(o, V34HS_WAIT);\n}"
  },
  {
   "label": "24: the clear-down raises +0xabe4 to two",
-  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
-  "replace": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
+  "find": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 1);\n}",
+  "replace": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_FABE4, 2);\n}"
  },
  {
   "label": "24: the hold moves to MOH_ON_HOLD",
-  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
+  "find": "\ths_set_txstate(o, V34HS_MOH_SILENCE);",
+  "replace": "\ths_set_txstate(o, V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "24: the hold leaves the transmit machine alone",
-  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);",
+  "find": "\ths_set_txstate(o, V34HS_MOH_SILENCE);",
   "replace": ""
  },
  {
   "label": "24: the hold leaves the receive machine alone",
-  "find": "\ths_setstate(o, TX1_RXSTATE, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
+  "find": "\ths_set_rxstate(o, V34HS_WAIT);\n\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;",
   "replace": "\ttx1_put(o, TX1_COUNT, 0);\n\to->vect_idx = 0;"
  },
  {
@@ -1078,18 +1078,18 @@
  },
  {
   "label": "24: the message ends in TONE_AB_CALL",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+  "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_set_txstate(o, V34HS_TONE_AB_CALL);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
  },
  {
   "label": "24: the message over leaves the transmit machine alone",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
  },
  {
   "label": "24: the txstate compare at 0x654e4 is deleted",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-  "replace": "\t\ths_put(o, TX1_TXSTATE, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+  "replace": "\t\ths_put(o, V34HS_TXSTATE_OFF, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
   "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding F342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
   "fn": "v34tx1_tx_dpsk"
  },

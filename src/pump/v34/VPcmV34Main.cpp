@@ -3115,7 +3115,7 @@ extern "C" int
 VPcmV34GetCurrentRxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
+	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
 
 	if (obj->role == PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
@@ -3135,7 +3135,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
+	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
 	const unsigned char *tx;
 	unsigned int n;
 
@@ -3190,7 +3190,7 @@ VPcmV34GetCurrentRxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return v34_object_ratecfg(obj)->rx_baud;
+	return obj->ratecfg_v.cfg.rx_baud;
 }
 
 int
@@ -3205,7 +3205,7 @@ VPcmV34GetCurrentTxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return v34_object_ratecfg(obj)->baud;
+	return obj->ratecfg_v.cfg.baud;
 }
 
 int
@@ -3220,7 +3220,7 @@ VPcmV34GetCurrentRxCarrier(void *objp)
 		return 0;
 	}
 
-	return v34_object_ratecfg(obj)->rx_carrier;
+	return obj->ratecfg_v.cfg.rx_carrier;
 }
 
 int
@@ -3235,7 +3235,7 @@ VPcmV34GetCurrentTxCarrier(void *objp)
 		return 0;
 	}
 
-	return v34_object_ratecfg(obj)->carrier;
+	return obj->ratecfg_v.cfg.carrier;
 }
 
 int
@@ -3654,7 +3654,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * there stays set.
 		 */
 		v |= (v >> 4) & 0x3c;
-		obj->info_rates = (short)v;
+		obj->rec4_v.named.info_rates = (short)v;
 
 		if (v & 1)
 			txrxdmainit((short *)(m + OB_DMA), mp);
@@ -3687,7 +3687,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "mp->data[0] = 0x%X , mp->data[1] = 0x%X\r\n",
-			    (unsigned short)obj->info_rates,
+			    (unsigned short)obj->rec4_v.named.info_rates,
 			    (unsigned short)mp[1]);
 	}
 
@@ -4426,7 +4426,7 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_receiver *rx = v34_object_receiver(obj);
-	const struct v34_ratecfg *cfg = v34_object_ratecfg(obj);
+	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
@@ -5194,8 +5194,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		/* Phase 2 completed.  0xc360. */
 		case 1:
 			if (prev == 0) {
-				int baud = PROG_S16(obj, V34_RATECFG);
-				int ofs = PROG_S16(obj, V34_RATECFG + 2);
+				int baud = obj->ratecfg_v.cfg.baud;
+				int ofs = obj->ratecfg_v.cfg.period;
 				int len;
 
 				PROG_U8(obj, O_P2STATE) = 0;

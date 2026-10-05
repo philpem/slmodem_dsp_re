@@ -145,7 +145,8 @@ extern "C" {
 struct v34_object;
 
 /*
- * `hs_get`, `hs_put` and `hs_setstate` are NO LONGER DECLARED HERE.
+ * `hs_get` and `hs_put` are NOT DECLARED HERE (the state setters live in
+ * v34hstx1_arms.h too).
  *
  * The blob defines none of them: its `v34handshak` inlines the whole
  * read/print/store closure (finding F11506).  They are now `static inline`

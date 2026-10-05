@@ -1533,7 +1533,7 @@ main(void)
 			ra->rx_blocks = rb->rx_blocks = 20;
 			ra->rtncount = rb->rtncount = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
-			oa.baud_rate = ob.baud_rate = 40;
+			oa.ratecfg_v.named.baud_rate = ob.ratecfg_v.named.baud_rate = 40;
 
 			for (it = 0; it < 10; it++) {
 				long tag = ((long)fl * 100
@@ -1805,7 +1805,7 @@ main(void)
 			rb = (struct v34_receiver *)((char *)&ob + 0x264);
 
 			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
-			oa.baud_rate = ob.baud_rate = 400;
+			oa.ratecfg_v.named.baud_rate = ob.ratecfg_v.named.baud_rate = 400;
 			ra->pllcnt = rb->pllcnt = states[si];
 			ra->timing_offset = rb->timing_offset = (short)d0;
 			ra->dwell_limit = rb->dwell_limit = 0;
@@ -1863,7 +1863,7 @@ main(void)
 						   : -700 + k * 30);
 
 			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
-			oa.baud_rate = ob.baud_rate = 400;
+			oa.ratecfg_v.named.baud_rate = ob.ratecfg_v.named.baud_rate = 400;
 			oa.v90_timing_offset = ob.v90_timing_offset = 0;
 			ra->pllcnt = rb->pllcnt = (short)st;
 			ra->slow_ramp = rb->slow_ramp = skip;
@@ -2727,7 +2727,7 @@ main(void)
 			ra->timing_integrator = rb->timing_integrator = 0;
 			ra->dwell_count = rb->dwell_count = 0;
 			oa2.role = ob2.role = 0x65;
-			oa2.baud_rate = ob2.baud_rate = 400;
+			oa2.ratecfg_v.named.baud_rate = ob2.ratecfg_v.named.baud_rate = 400;
 			oa2.v90_timing_offset = ob2.v90_timing_offset = 0;
 
 			setInitialPhase(&oa2);

@@ -1633,8 +1633,8 @@ void
 initdigital(void *obj)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	struct v34_ratecfg *cfg = v34_object_ratecfg(o);
-	unsigned info = (unsigned short)o->info_rates;
+	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
+	unsigned info = (unsigned short)o->rec4_v.named.info_rates;
 	int tx, rx, lim_tx, lim_rx;
 	int level;
 
@@ -1687,7 +1687,7 @@ initdigital(void *obj)
 	 * directions are forced to the lower of the pair, which is what makes
 	 * a V.34 connection symmetric by default.
 	 */
-	if (o->rate_mask >= 0 || (o->caps_flags & V34_CAPS_ASYMMETRIC) == 0) {
+	if (o->rec4_v.named.rate_mask >= 0 || (o->caps_flags & V34_CAPS_ASYMMETRIC) == 0) {
 		int m = ((short)tx <= (short)rx) ? (unsigned short)tx
 						 : (unsigned short)rx;
 
@@ -1705,7 +1705,7 @@ initdigital(void *obj)
 	if ((short)tx != 0) {
 		unsigned mask = (unsigned short)(1u << (((short)tx - 1) & 31));
 
-		if (!((unsigned)(unsigned short)o->rate_mask & mask)) {
+		if (!((unsigned)(unsigned short)o->rec4_v.named.rate_mask & mask)) {
 			int v = tx;
 
 			for (;;) {
@@ -1714,7 +1714,7 @@ initdigital(void *obj)
 				cfg->txbits = (short)v;
 				if ((short)v == 0)
 					break;
-				if ((unsigned short)o->rate_mask & mask)
+				if ((unsigned short)o->rec4_v.named.rate_mask & mask)
 					break;
 			}
 			tx = v;
@@ -1724,7 +1724,7 @@ initdigital(void *obj)
 	if ((short)rx != 0) {
 		unsigned mask = (unsigned short)(1u << (((short)rx - 1) & 31));
 
-		if (!((unsigned)(unsigned short)o->rate_mask & mask)) {
+		if (!((unsigned)(unsigned short)o->rec4_v.named.rate_mask & mask)) {
 			int v = rx;
 
 			for (;;) {
@@ -1733,7 +1733,7 @@ initdigital(void *obj)
 				cfg->rxbits = (short)v;
 				if ((short)v == 0)
 					break;
-				if ((unsigned short)o->rate_mask & mask)
+				if ((unsigned short)o->rec4_v.named.rate_mask & mask)
 					break;
 			}
 			rx = v;
@@ -2392,8 +2392,33 @@ V34OB_ASSERT(ptc, 0x008);
 V34OB_ASSERT(nof_tx_bits, 0x010);
 V34OB_ASSERT(v90_receiver, 0x24c);
 V34OB_ASSERT(k56flex_receiver, 0x250);
-V34OB_ASSERT(info_rates, 0xaa0c);
-V34OB_ASSERT(rate_mask, 0xaa0e);
+/*
+ * `info_rates` and `rate_mask` are the named arm of `rec4_v` now (issue
+ * #260 wave 6), so their offsets are asserted through the union: the
+ * union's own base and size, plus each named field, with the record's
+ * 0x30 extent the `rec4` arm's own type carries.  `ratecfg_v` gets the
+ * same treatment at +0xaa84, 0x2c long.
+ */
+typedef char v34ob_off_rec4_v[
+	((int)__builtin_offsetof(struct v34_object, rec4_v) == 0xaa0c)
+		? 1 : -1];
+typedef char v34ob_size_rec4_v[
+	(sizeof(((struct v34_object *)0)->rec4_v) == 0x30) ? 1 : -1];
+typedef char v34ob_off_rec4_info_rates[
+	((int)__builtin_offsetof(struct v34_object, rec4_v.named.info_rates)
+	 == 0xaa0c) ? 1 : -1];
+typedef char v34ob_off_rec4_rate_mask[
+	((int)__builtin_offsetof(struct v34_object, rec4_v.named.rate_mask)
+	 == 0xaa0e) ? 1 : -1];
+typedef char v34ob_off_ratecfg_v[
+	((int)__builtin_offsetof(struct v34_object, ratecfg_v) == 0xaa84)
+		? 1 : -1];
+typedef char v34ob_size_ratecfg_v[
+	(sizeof(((struct v34_object *)0)->ratecfg_v) == 0x2c) ? 1 : -1];
+typedef char v34ob_off_ratecfg_baud_rate[
+	((int)__builtin_offsetof(struct v34_object,
+				 ratecfg_v.named.baud_rate) == 0xaa96)
+		? 1 : -1];
 V34OB_ASSERT(info_caps, 0xaa3c);
 V34OB_ASSERT(caps_flags, 0xaa3e);
 V34OB_ASSERT(tx_bps, 0xac04);
@@ -2420,7 +2445,8 @@ V34RC_ASSERT(rx_divtab, 0x28);
 
 typedef char v34rc_aliases_baud_rate[
 	((int)(V34_RATECFG + __builtin_offsetof(struct v34_ratecfg, rx_baud))
-	 == (int)__builtin_offsetof(struct v34_object, baud_rate)) ? 1 : -1];
+	 == (int)__builtin_offsetof(struct v34_object,
+				    ratecfg_v.named.baud_rate)) ? 1 : -1];
 
 /* The three memsets' lengths are the object's own, so pin those too. */
 typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)
