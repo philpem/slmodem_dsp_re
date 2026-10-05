@@ -107,9 +107,9 @@ cid_reset(struct cid_modem *ctx)
 		reset_dtmf(ctx->dtmf);
 	if (ctx->mode != 1)
 		reset_cid(ctx->fsk);
-	ctx->samples_fill = 0;
 	if (ctx->mode == CID_MODE_AUTOMATIC)
 		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
+	ctx->samples_fill = 0;
 }
 
 /*

@@ -1,0 +1,5 @@
+# V92Precoder reset scalar expansion
+
+Three complete-TU cells: raw retained baseline, expansion retaining head/tableB order, expansion with observed first loads LC/tableB before head. Original reset56de0..56ec8 has18 straightline copied entries and no index loop; retained reset uses6/12 loops. Literal member subscripts remove dynamic induction addresses. Preserve copied values, cast widths and debug call. Predict scalar expansion restores copy graph; exact adoption requires complete232B function and no losses, not size closeness. Retained Gentoo full profile, raw baseline reproduction, all emitted bodies and metadata audited.
+
+After paired expansion retains232B with92 differing bytes, original scalar pipeline first exhausts LC/tableB copies (B0..B3, then B4/B5 overlap with head0/1), before head2..5 and tableA0..11. Add one grouped copy cell: all tableB6 then all head6 then tableA12. This tests separate array-copy statement groups supported by original pipeline, rather than arbitrary declaration/register permutation.

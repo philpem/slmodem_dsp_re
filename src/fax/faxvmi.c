@@ -333,10 +333,9 @@ faxvmi_status_fn const vxx_status[13] = {
 };
 
 /*
- * `vxx_process`.  `null_process` is declared `int` (`nulldp.h`); the eight
- * `v??tx_process`/`v??rx_process` are declared `void` (`faxadapt.h`) and need
- * the cast -- see `faxvmi.h` for why the table's own element type is
- * `int`-returning.
+ * `vxx_process`. All entries return int. The eight data-mode adapters
+ * forward the wrapped modem status after relaying and clearing the count;
+ * FAXVMI_process preserves its bits outside the framing-status mask.
  */
 faxvmi_process_fn const vxx_process[13] = {
 	null_process,
@@ -344,14 +343,14 @@ faxvmi_process_fn const vxx_process[13] = {
 	null_process,
 	null_process,
 	null_process,
-	(faxvmi_process_fn)v21tx_process,
-	(faxvmi_process_fn)v21rx_process,
-	(faxvmi_process_fn)v27tx_process,
-	(faxvmi_process_fn)v27rx_process,
-	(faxvmi_process_fn)v29tx_process,
-	(faxvmi_process_fn)v29rx_process,
-	(faxvmi_process_fn)v17tx_process,
-	(faxvmi_process_fn)v17rx_process,
+	v21tx_process,
+	v21rx_process,
+	v27tx_process,
+	v27rx_process,
+	v29tx_process,
+	v29rx_process,
+	v17tx_process,
+	v17rx_process,
 };
 
 /*

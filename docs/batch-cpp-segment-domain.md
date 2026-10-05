@@ -1,0 +1,3 @@
+# V90 segment search source control
+
+Four complete-TU cells cross helper versus member COMPONENT_REF source with for versus do-loop, keeping unsigned i, signed table comparison, early break and fixed 0..8 result. Original .text2ae90 enters loop without a jump and initializes zero index before field reads. Retained for helper emits an initial JMP and 16 bytes extra padding. Predict do-loop recovers entry topology; member factoring independently tests authentic class ownership, including inlined callers. Falsifier: no complete exact gain means neither source is adopted merely for size. Retained Gentoo profile and reproduction define appended by shared helper. Raw baseline repeat and all emitted bodies/imports/exports/data required.

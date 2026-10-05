@@ -1,0 +1,5 @@
+# V90 SD copy/result graph
+
+Four complete-TU cells cross reverse source/destination cursors with captured integer result initialized0, changed1 on count>=limit. Original process3bd70..3be24 copies with two pointer decrements and DEC/JNE, initializes EBP0 before history reads and branches into MOV1. Retained indexed-copy uses scaled addresses and return ternary compiles SETBE. Preserve all thresholds, unordered x87 routing, count wrap and result semantics. Pointer ranges valid for constructor-historyLength12; same pathological zero/one counts excluded by lifecycle on both source forms. Baseline full raw reproduction, retained Gentoo profile and all bodies/exports/data audited. Complete original180B only establishes gain.
+
+After first four cells recovered reverse copy and branch but remained SIZE7, add fifth pointer/common-result: original one early result0, result1 and result-1 assignments supports nested threshold arms assigning one captured result and common source return. Preserve unordered routing via negation of same whole predicates; no operand-swapped ordered substitute.

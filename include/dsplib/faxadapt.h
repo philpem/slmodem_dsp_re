@@ -270,8 +270,9 @@ int v29rx_status(struct faxvmi_link *dp, void *status);
  *   RX: V??RX_modem(handle, in, dp->buf, count);  *result = *count; *count=0;
  *
  * so TX's own second argument is `out` and RX's is `in`, and the count
- * pointer sits at formal index 2 for TX but index 3 for RX. `v27tx_process`
- * is the one blocked member (`V27TX_modem` unwritten) and is not declared.
+ * pointer sits at formal index 2 for TX but index 3 for RX. Each adapter
+ * returns the wrapped modem status unchanged; FAXVMI_process consumes it.
+ * The count relay leaves EAX untouched in all eight original adapters.
  */
 
 /** @brief Drive one block through the wrapped V.17 transmit modem.
@@ -279,69 +280,74 @@ int v29rx_status(struct faxvmi_link *dp, void *status);
  * @param out     Modulated samples out.
  * @param count   In/out: samples requested; zeroed once relayed to `result`.
  * @param result  Out: the sample count `V17TX_modem` produced.
+ * @return The wrapped modem status, unchanged.
  */
-void v17tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
+int v17tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 /** @brief Drive one block through the wrapped V.17 receive modem.
  * @param dp      The link handle.
  * @param in      Received samples in.
  * @param result  Out: the sample count `V17RX_modem` produced.
  * @param count   In/out: samples offered; zeroed once relayed to `result`.
+ * @return The wrapped modem status, unchanged.
  */
-void v17rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
+int v17rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 /** @brief Drive one block through the wrapped V.21 transmit modem.
  * @param dp      The link handle.
  * @param out     Modulated samples out.
  * @param count   In/out: samples requested; zeroed once relayed to `result`.
  * @param result  Out: the sample count `V21TX_modem` produced.
+ * @return The wrapped modem status, unchanged.
  */
-void v21tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
+int v21tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 /** @brief Drive one block through the wrapped V.21 receive modem.
  * @param dp      The link handle.
  * @param in      Received samples in.
  * @param result  Out: the sample count `V21RX_modem` produced.
  * @param count   In/out: samples offered; zeroed once relayed to `result`.
+ * @return The wrapped modem status, unchanged.
  */
-void v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
+int v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 /**
  * @brief Drive one block through the wrapped V.27ter transmit modem.
  *
- * Not declared: `V27TX_modem` is unwritten, so this member of the
- * F9271 block is blocked.
- *
  * @param dp      The link handle.
  * @param out     Modulated samples out.
  * @param count   In/out: samples requested; zeroed once relayed to `result`.
- * @param result  Out: the sample count `V27TX_modem` would produce.
+ * @param result  Out: the sample count `V27TX_modem` produced.
+ * @return The wrapped modem status, unchanged.
  */
-void v27tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
+int v27tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 /** @brief Drive one block through the wrapped V.27ter receive modem.
  * @param dp      The link handle.
  * @param in      Received samples in.
  * @param result  Out: the sample count `V27RX_modem` produced.
  * @param count   In/out: samples offered; zeroed once relayed to `result`.
+ * @return The wrapped modem status, unchanged.
  */
-void v27rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
+int v27rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 /** @brief Drive one block through the wrapped V.29 transmit modem.
  * @param dp      The link handle.
  * @param out     Modulated samples out.
  * @param count   In/out: samples requested; zeroed once relayed to `result`.
  * @param result  Out: the sample count `V29TX_modem` produced.
+ * @return The wrapped modem status, unchanged.
  */
-void v29tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
+int v29tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 /** @brief Drive one block through the wrapped V.29 receive modem.
  * @param dp      The link handle.
  * @param in      Received samples in.
  * @param result  Out: the sample count `V29RX_modem` produced.
  * @param count   In/out: samples offered; zeroed once relayed to `result`.
+ * @return The wrapped modem status, unchanged.
  */
-void v29rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
+int v29rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 
 /*
