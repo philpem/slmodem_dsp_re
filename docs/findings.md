@@ -136250,3 +136250,27 @@ combined parameter base0xc20; no fabricated alias/subobject is justified.
 `docs/v8-remainder-owner-results.md`; four declared domains/replay generators;
 `tools/v8_remainder_owner_audit.py`. Strict tree census unchanged1057/1852,
 114842 exact original bytes.
+
+
+## F11822. V8 unsigned tap predicates and streaming input recover separate witnesses
+
+At10ae345a, original convolution loops use JBE, while retained signed j emits
+JLE. Unsigned j changes GT/GT exits to LTU/GTU in initial RTL; final JAEs/JBE
+commute the first comparison operands but retain unsigned <=. Original signed
+outer position/top/limit semantics remain separate. An input cursor with signed
+countdown restores the first JNS backedge and increasing sample addresses.
+Five full-TU controls complete the cross, with no production/header adoption:
+original1100B; baseline1121, prior decision1089, index1041, cursor1089, both1057.
+Twenty emitted-body/20common verdicts preserve all bystanders, symbol records/
+binding, allocated data/BSS and canonical nontext relocations. Raw baseline and
+prior decision object repeat; four signed/indexed refusal and unsigned/cursor
+witness controls fire. Zero exact gains/losses, census unchanged1057/1852.
+
+Screen190779 decoded original instructions for explicit LEA/ADD base formations:
+only demod0xc2c and mod0xc20 match. Initializer uses absolute field stores. This
+does not establish an independent receive pointer or typed subobject extent;
+structure splitting is deferred. Next discriminator is the convolution sample
+versus coefficient capture order, requiring compiler-stage tracing before
+another declared domain. No #22/PR263 overlap, runtime/fuzz/mutation execution
+or reachability claim. `docs/v8-index-cursor-domain.md`;
+`tools/v8_index_cursor_reproduce.py` and `tools/v8_index_cursor_audit.py`.
