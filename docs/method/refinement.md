@@ -3569,3 +3569,22 @@ slots, permute declarations/parameters, remove checks, or tune late registers
 from near hits. Trace output storage lifetimes or the remaining source operand
 boundary before reopening a closed family. Full domains, detector controls,
 audits and replay: [loop-memory results](../gcc3-loop-memory-results.md).
+
+
+### Separate an aligned HI machine move from a wide source read (F11818)
+
+GCC3's `*movhi_1` can emit MOVL for an aligned memory address while both RTL
+operands remain HI. An original DWORD load therefore does not establish an
+int local. Trace initial output homes and the final annotated machine pattern:
+FPM_div_32's count moves from esp+18/MOVZWL to esp+16/MOVL when its two
+addressed word outputs follow the independently exact sibling's declaration
+boundary. Both separate/grouped forms match147B; the scalar-only control is
+raw-inert. This is storage ownership plus address-dependent instruction
+selection, not a late register permutation or artificial alignment fix.
+
+Sqrt transfer restores every live instruction/operand but leaves one dead
+POP byte; log result-owner controls are raw-inert. Keep those misses separate
+from the reciprocal recovery and do not adopt partial bodies. A justified
+output-order reconstruction requires actual initial addresses, source/storage
+witnesses and complete-TU controls; it does not license permutation searches.
+[Domains, causal traces and replay](../gcc3-output-storage-results.md).

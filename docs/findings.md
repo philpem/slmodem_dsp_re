@@ -136165,3 +136165,58 @@ partial source changes. Upstream b470429e; #22 and other-session #263 untouched.
 `tools/gcc3_normalization_production_audit.py`;
 `build/normalization-production-audit.json`, `build/normalization-phase.log`;
 `docs/gcc3-loop-memory-results.md`.
+
+
+## F11818. Initial output homes and aligned HI selection close FPM_div_32
+
+At f7b95e35, the now-exact FPM_div's mantissa/count declaration boundary
+supplies an independent control for the32-bit sibling. Original div32 count
+esp+16/mantissa+18 is the inverse of the prior pointed helper. 01.rtl already
+holds these homes. With the same pointed recurrence, supported separate and
+grouped declarations assign mantissa=-2/count=-4 and both yield the same raw
+EXACT147 object. Bare declaration movement in the retained scalar source is
+raw-inert; five full-TU cells complete the cross. One distinct gain, no losses.
+
+Installed -dP annotations show final UID90 is *movhi_1/3 with HI register and
+HI memory in both cells: unaligned esp+18 emits MOVZWL, aligned esp+16 emits
+MOVL. The final memory annotation remains A8; i386 aligned_operand tests the
+address components/displacement. No source int count, wide alias cast, slot
+padding, forced alignment, helper-parameter permutation or physical register
+constraint. Original zero/debug behavior, D4 sentinel, output ordering and ABI
+remain unchanged; nonzero uint normalization count0..31 cannot wrap ushort.
+Official point-release source explains the pattern; installed Gentoo dumps
+establish the result. `docs/gcc3-output-storage-results.md`;
+`tools/gcc3_output_storage_reproduce.py`, trace and audit tools.
+
+## F11819. Output-storage transfers recover live sqrt while log owner folds away
+
+Three sqrt controls restore the original143-byte live body with the supported
+output declaration boundary, but one dead POP EDX/ECX byte remains. UID171 is
+inserted in28.peephole2 with DX and unchanged through30.rnreg; this candidate
+is not a late-renaming failure. No adoption
+or scratch fitting. Four log controls keep original output homes and test
+short/int table-result ownership; both owners are raw-equal to the prior205B
+control (original203), closing that finite family. Combined12full-TU cells,
+20blob-common verdicts,45emitted-body comparisons, raw baselines reproduced,
+bystanders and metadata/data/BSS/nontext relocations stable, zero losses.
+
+Trace detector five controls: aligned/unaligned HI positives and SI/address/
+UID refusals; actual output homes and HI machine loads cross-checked against
+final dump UIDs. No allocator simulation, unique-author spelling or global
+profile claim. No #22 writes, fuzzing/mutation execution; #263 scope observed
+at97e8a10c and untouched. `docs/gcc3-output-storage-domain.md`;
+`docs/gcc3-output-storage-results.md`; all three replay tools and full-TU audit.
+
+
+## F11820. Second reciprocal gain integrates with zero losses and period green
+
+Base f7b95e35:1056→1057 exact names/1852,114695→114842 exact original bytes.
+Only src_dsp_fpm_div32.c.o changes and reproduces the independent winner raw;
+299other objects and full build configuration stay raw-identical. Complete
+metadata/data/BSS/nontext relocation checks pass. `make phase J=4` exits0,
+388period differential passes/0failures and all structural checks green.
+Static anchors:285suites/10038unique,0detached/non-unique; no retargeting,
+fuzzing or mutation execution. Other session #263 at97e8a10c and #22 untouched.
+`tools/gcc3_output_storage_production_audit.py`;
+`build/output-storage-production-audit.json`, `build/output-storage-phase.log`;
+`docs/gcc3-output-storage-results.md`.

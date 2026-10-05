@@ -35,12 +35,26 @@
  * 16-bit one, so a denominator whose top bit is already set is returned with
  * a shift of zero without the loop running at all.
  */
+/* Caller output order and the pointed recurrence reproduce the original
+ * normalization homes (F11818).  GCC keeps the final count read in HI mode,
+ * selecting the aligned MOVL form for the unsigned-short count. */
+static inline void
+normalize32(unsigned int denom, unsigned short *mantissa, unsigned short *count)
+{
+	*count = 0;
+	while ((int)denom >= 0) {
+		denom += denom;
+		(*count)++;
+	}
+	*mantissa = (unsigned short)(denom >> 16);
+}
+
 int
 FPM_div_32(unsigned int denom, unsigned short *recip, unsigned short *shift)
 {
-	unsigned short count = 0;
 	unsigned short mantissa;
-	int index;
+	unsigned short count;
+	unsigned short index;
 
 	if (denom == 0) {
 		if (DSPLIB_DEBUG_ON())
@@ -49,13 +63,7 @@ FPM_div_32(unsigned int denom, unsigned short *recip, unsigned short *shift)
 		return 1;
 	}
 
-	/* Left-normalise until the top bit is set, counting the shifts. */
-	while ((int)denom >= 0) {
-		denom += denom;
-		count++;
-	}
-
-	mantissa = (unsigned short)(denom >> 16);
+	normalize32(denom, &mantissa, &count);
 	index = (int)((mantissa + 0x80) >> 8) - 0x80;
 
 	*recip = FPM_div_table[index];
