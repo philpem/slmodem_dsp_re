@@ -136274,3 +136274,29 @@ versus coefficient capture order, requiring compiler-stage tracing before
 another declared domain. No #22/PR263 overlap, runtime/fuzz/mutation execution
 or reachability claim. `docs/v8-index-cursor-domain.md`;
 `tools/v8_index_cursor_reproduce.py` and `tools/v8_index_cursor_audit.py`.
+
+
+## F11823. V8 coefficient-first source survives allocation then reverses at sched2
+
+At8e914a86, original first coefficient load precedes sample capture in both tap
+loops; retained named sample already precedes the coefficient in initial RTL.
+Two bounded coefficient-first forms (inline products versus a named coefficient
+before the sample) emit raw-identical1057B objects, differing from prior1057B
+control by36 target bytes. Original1100, retained1121; no complete exact gain.
+Four full-TU controls/16emitted bodies/16original-common verdicts preserve all
+bystanders, symbol records/binding, allocated data/BSS and nontext relocations.
+Raw baseline/prior control repeat; zero gains/losses; no source/header adoption.
+
+The first input tap's actual memory-load UID trace shows coefficient-first
+through31.bbro, reversed at33.sched2 and retained to35.mach. Combine folds the
+word load into the sign-extension UID, which must still contain a real HI
+memory read; a register-only detector control is refused. First CSE removes
+inline repeated sample loads. Four cells/116parsed stage observations;08.gcse
+duplicate-UID diagnostic is explicitly unparsed. Initial generator refusal
+before any compile is preserved/excluded; replacements now use exact loop
+extents. This is a scheduling pass boundary, not original-RTL/allocator/profile
+recovery. Next discriminator is verbose scheduler measurement with mandatory
+raw equality, then GCC3 dependency/ready-queue implementation. No artificial
+source dependencies, #22/PR263 overlap or runtime/fuzz/mutation execution.
+`docs/v8-product-capture-domain.md`; `tools/v8_product_capture_reproduce.py`;
+`tools/v8_product_capture_audit.py`. Census unchanged1057/1852.

@@ -3625,3 +3625,22 @@ initializer writes absolute fields. An explicit LEA/ADD census is bounded
 instruction-form evidence, not typed-extent proof for a new subobject. Seek
 independent source/caller evidence rather than fabricate aliasing structures.
 [Five-cell domain, observations and replay](../v8-index-cursor-domain.md).
+
+
+### Follow real load UIDs through combine before blaming source evaluation order (F11823)
+
+V8 coefficient-first expressions and a named first coefficient both change
+initial RTL capture order and emit the same complete object. First CSE removes
+repeated inline sample loads. These forms remain nonexact. Trace actual HI
+memory reads: combine folds a load into the extension UID, so a disappeared
+word-load UID does not prove the read disappeared. A surviving register-only
+extension also does not prove a memory capture.
+
+For the first input tap, coefficient-first survives allocation/reload/renaming
+and31.bbro;33.sched2 reverses the reads to sample-first. More expression
+synonyms do not resolve this observed scheduling boundary. Use verbose
+scheduler diagnostics with a mandatory raw-object repeat, then inspect GCC3's
+dependency and ready-queue decisions. Do not invent volatile/alias dependencies
+or infer allocator causality from mnemonic order. A duplicate-stream dump
+must be explicitly unparsed rather than silently selecting one stream.
+[Four-cell domain, UID trace and replay](../v8-product-capture-domain.md).
