@@ -136220,3 +136220,33 @@ fuzzing or mutation execution. Other session #263 at97e8a10c and #22 untouched.
 `tools/gcc3_output_storage_production_audit.py`;
 `build/output-storage-production-audit.json`, `build/output-storage-phase.log`;
 `docs/gcc3-output-storage-results.md`.
+
+
+## F11821. V8 publication and captured decisions survive the register explanation
+
+At38626248, four original remainder stores precede bit pushing, guarded
+countdown branches use DEC/JNE with intervening MOVs, and four bit-input loads
+zero-extend. Pointed void run helpers, guarded-do and unsigned-short bit
+formals recover those witnesses independently. Original a/b/c/d coefficient
+provenance proves SUB78e49 computes mark-minus-space; TEST/SETG captures its
+wrapped positivity before silence selects2. Captured wrapped switch recovers
+that topology; unsigned decision changes signed JLE to original JB.
+
+Twenty complete-TU cells/80 emitted-body comparisons/80 common verdicts,
+four raw baselines and two source/raw-object repeats pass. Every bystander,
+symbol record/binding, allocated data/BSS and nontext relocation is preserved.
+Zero exact gains/losses; no source/header adoption. Original1100B; retained1121;
+wrapped signed switch1097; unsigned1089. SIZE gaps are absolute; actual ELF
+sizes supersede an initial signed interpretation in progress reporting.
+
+Six audit witness controls fire, including postdecrement refusal and the
+original countdown positive. Original DEC/JNE are separated by flag-preserving
+MOVs; an adjacent-only detector was corrected after its positive failed.
+Algebraic INT_MIN/50000 energy controls distinguish subtraction/comparison,
+but do not establish reachable modem histories. No runtime/fuzzing/mutation
+execution, #22 writes or PR263 overlap. Next discriminator is independent
+typed-extent/caller evidence for the receive parameter owner at0xc2c versus
+combined parameter base0xc20; no fabricated alias/subobject is justified.
+`docs/v8-remainder-owner-results.md`; four declared domains/replay generators;
+`tools/v8_remainder_owner_audit.py`. Strict tree census unchanged1057/1852,
+114842 exact original bytes.

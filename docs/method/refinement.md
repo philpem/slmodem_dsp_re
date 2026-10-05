@@ -3588,3 +3588,22 @@ from the reciprocal recovery and do not adopt partial bodies. A justified
 output-order reconstruction requires actual initial addresses, source/storage
 witnesses and complete-TU controls; it does not license permutation searches.
 [Domains, causal traces and replay](../gcc3-output-storage-results.md).
+
+
+### Trace run publication and captured decisions before blaming registers (F11821)
+
+An assignment receiving a helper return can publish a remainder after a loop,
+while a pointed helper publishes it before rounding and pushing. V8's original
+operands distinguish these families. Guarded-do countdown restores DEC/JNE;
+flag-preserving moves can intervene, so require the real flag dependency rather
+than adjacent mnemonics. Unsigned bit formals independently recover zero loads.
+
+Trace decision arithmetic before dispatch: original SUB/TEST/SETG captures a
+wrapped energy difference, silence replaces it with2, then a switch dispatches
+0/1/2. A direct comparison is a different family at overflow boundaries. An
+unsigned decision carrier restores original CMP1/JB where signed emits JLE.
+Twenty complete-TU controls recover these individual witnesses but no exact
+function. Do not adopt a near size, assume algebraic values are reachable modem
+histories, or force a parameter subobject from its register base. Seek an
+independent typed-extent/caller witness next.
+[Bounded controls, full audit and replay](../v8-remainder-owner-results.md).
