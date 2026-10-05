@@ -118,8 +118,8 @@
  },
  {
   "label": "mode 4 record 0xa94c: +0x24 constant off by one",
-  "find": "\n\t\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
-  "replace": "\n\t\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf73;",
+  "find": "\n\t\t\tr->acc = 0xf72;",
+  "replace": "\n\t\t\tr->acc = 0xf73;",
   "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "v34handshakinit"
  },

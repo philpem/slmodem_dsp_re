@@ -493,8 +493,8 @@
  },
  {
   "label": "the second detectorinit does not run",
-  "find": "\tdetectorinit(T41_DET(obj),",
-  "replace": "\tif (0) detectorinit(T41_DET(obj),",
+  "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)(T4_M(obj) + T4_RXCARRDESC),",
+  "replace": "\tif (0) detectorinit(&obj->detector,\n\t\t     *(const short **)(T4_M(obj) + T4_RXCARRDESC),",
   "fn": "t4_md_over"
  },
  {

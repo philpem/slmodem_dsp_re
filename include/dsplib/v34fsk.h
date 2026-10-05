@@ -24,6 +24,7 @@
 
 #include "dsplib/v34det.h"	/* struct v34_dftbin: the retrain detector's   */
 #include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one  */
+#include "dsplib/v34hshak.h"	/* struct v34_bitsource: the message records   */
 #include "dsplib/v34recv.h"	/* struct v34_receiver: the +0x264 sub-object  */
 #include "dsplib/v34rx.h"	/* struct v34_queue: the object owns both      */
 
@@ -145,9 +146,11 @@ struct v34_fskdelay {
  * This is the top-level `tagV34Object` -- the name comes from the object's
  * one surviving C++ mangling, `_Z14getMPrecvdBitsP12tagV34Object` -- and it
  * is enormous: `datapumpv34` alone touches +0xaa98, and the detector in
- * detector.c lives at +0x3564. Only the fields DPSK.c uses are named. The
- * pads are not a claim about what is in them, and the struct's size is not
- * a claim about the object's size; it is a lower bound.
+ * detector.c lives at +0x3564. Only the fields DPSK.c uses are named. Four
+ * regions ARE claims now -- `timing`, `equalizer`, `detector` and `msgrec`
+ * are typed members, each with an offset assertion below -- and the
+ * struct's size is not a claim about the object's size; it is a lower
+ * bound. Every other pad is still not a claim about what is in it.
  *
  * Every named offset is checked by a static assertion in DPSK.c, so the
  * padding cannot drift silently once the surrounding translation units
@@ -365,7 +368,19 @@ struct v34_object {
 	 */
 	int timing_offset;				/* +0x049c */
 	int timing_phase;				/* +0x04a0 */
-	unsigned char unmapped_04a4[0xe74 - 0x4a4];
+	unsigned char unmapped_04a4[0x50c - 0x4a4];
+	/*
+	 * The timing-recovery filters, `struct v34_timing` in v34filt.h, at
+	 * +0x50c: the derivation `v34_object_timing` carried until issue
+	 * #260 embedded it.
+	 */
+	struct v34_timing timing;				/* +0x50c */
+	/*
+	 * The equaliser, `struct v34_equalizer` in v34filt.h, at +0x630;
+	 * its 0x3cc extent is asserted in v34filters.c.
+	 */
+	struct v34_equalizer equalizer;				/* +0x630 */
+	unsigned char unmapped_09fc[0xe74 - 0x9fc];
 	/* The descrambler's shift register; see `struct v34_descrambler`. */
 	struct v34_descrambler descrambler;		/* +0x0e74 */
 	unsigned char unmapped_0e84[0x2074 - 0xe84];
@@ -607,13 +622,15 @@ struct v34_object {
 	 * begins. V34hshak.c reaches it there as `T3C_DETECTOR`/`T3M_DETECTOR`
 	 * and casts, and those arms are differentially tested.
 	 *
-	 * It is not embedded here, deliberately: two things meeting is
-	 * adjacency, not a bound (finding F215), and the 0x24 is our
-	 * declaration's size rather than anything the object states. So the
-	 * tiling is recorded as the measurement it is and the span stays a
-	 * pad (finding F630).
+	 * F630 deferred embedding it: two things meeting is adjacency, not a
+	 * bound (finding F215), and the 0x24 was our declaration's size
+	 * rather than anything the object states.  The owner's end-state
+	 * direction for issue #260 (2026-10-05) supersedes that deferral --
+	 * the region is a typed member now, and the extent the finding
+	 * wanted tested is compile-checked by the assertion below.  F630
+	 * stands as the record of the measurement.
 	 */
-	unsigned char unmapped_3564[0x3588 - 0x3564];
+	struct v34_detector detector;				/* +0x3564 */
 	/*
 	 * +0x3588 and +0x358a. Two 16-bit fields on 68 accesses -- 42 at
 	 * +0x3588 and 26 at +0x358a -- every one of them a halfword load, a
@@ -856,7 +873,15 @@ struct v34_object {
 	 * message bytes and 5 from the fourth.
 	 */
 	int info0_bits[V34_INFO0_BITS];			/* +0xa8a4 */
-	unsigned char unmapped_a948[0xaa0c - 0xa948];
+	unsigned char unmapped_a948[0xa94c - 0xa948];
+	/*
+	 * Records 0..3 of the five `struct v34_bitsource` message records
+	 * that begin at +0xa94c.  Record 4, +0xaa0c..+0xaa3c, is the
+	 * object's `info_rates`/`rate_mask` area -- the dual reading finding
+	 * F634 records -- and is deliberately NOT embedded; these four end
+	 * exactly where `info_rates` begins.
+	 */
+	struct v34_bitsource msgrec[4];				/* +0xa94c */
 	/*
 	 * The negotiated INFO bits, which initdigital unpacks into the rate
 	 * config at +0xaa84.
@@ -1243,6 +1268,25 @@ struct v34_object {
 };
 
 /*
+ * The four embedded sub-object regions, pinned.  Guarded to a 32-bit ABI,
+ * matching the v34ratecfg asserts and V34hshak.c's layout block: each
+ * member sits exactly where the pad it replaced began.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34object_off_timing[
+	((int)__builtin_offsetof(struct v34_object, timing) == 0x50c) ? 1 : -1];
+typedef char v34object_off_equalizer[
+	((int)__builtin_offsetof(struct v34_object, equalizer) == 0x630)
+		? 1 : -1];
+typedef char v34object_off_detector[
+	((int)__builtin_offsetof(struct v34_object, detector) == 0x3564)
+		? 1 : -1];
+typedef char v34object_off_msgrec[
+	((int)__builtin_offsetof(struct v34_object, msgrec) == 0xa94c)
+		? 1 : -1];
+#endif
+
+/*
  * The rate configuration initdigital fills, at +0xaa84 in the object.
  *
  * Two halves, transmit then receive, and the transmit one is what feeds
@@ -1320,23 +1364,22 @@ typedef char v34ratecfg_size[
 #define V34_RATECFG	0xaa84
 
 /*
- * The object's sub-object regions, each reached today by a raw cast at
- * every use (issue #260).  These are the one derivation each now has.
+ * The object's remaining sub-object derivations (issue #260).  `timing`,
+ * `equalizer`, `detector` and the first four message records are typed
+ * members of the struct now; what is left here is the regions that CANNOT
+ * be embedded.  The receiver (+0x264) and the rate config (+0xaa84) are
+ * DUAL VIEWS of storage the object already names member by member (`rxq`,
+ * `baud_rate`, `fsk` ...; `info_rates`, `rate_mask` ...), so an embedded
+ * member would have to overlap existing ones.  A derivation point
+ * converts every site, changes no layout, and asserts nothing the blob
+ * has not said.
  *
- * They are MACROS and not embedded members on purpose, for two reasons.
- * First, F630 ruled for the detector that a region our declaration tiles
- * is adjacency, not a bound -- the object states a displacement and a
- * next-field boundary, never a size -- and the same holds for every
- * region here.  The receiver (+0x264) and the rate config (+0xaa84) are
- * worse than unbounded: both are DUAL VIEWS of storage the object
- * already names member by member (`rxq`, `baud_rate`, `fsk` ...), so an
- * embedded member would have to overlap existing ones.  A derivation
- * point converts every site, changes no layout, and asserts nothing the
- * blob has not said.  Second, a macro is a compile-time substitution:
- * it cannot move code generation, where a static inline function measured
- * two grade-1 register shifts in later functions of V34hshak.c -- the
- * allocator-state bystander channel of findings 7796/7800 -- and the
- * byte-identity ratchet is the wave's own gate.
+ * They are MACROS and not static inline functions because a macro is a
+ * compile-time substitution: it cannot move code generation, where a
+ * static inline function measured two grade-1 register shifts in later
+ * functions of V34hshak.c -- the allocator-state bystander channel of
+ * findings 7796/7800 -- and the byte-identity ratchet is the wave's own
+ * gate.
  *
  * Each takes the object and nothing else, so a reader can find every
  * sub-object access by grepping the accessor's name.
@@ -1346,25 +1389,9 @@ typedef char v34ratecfg_size[
 #define v34_object_receiver(obj) \
 	((struct v34_receiver *)((char *)(obj) + 0x264))
 
-/* The timing filters, `struct v34_timing` in v34filt.h, at +0x50c. */
-#define v34_object_timing(obj) \
-	((struct v34_timing *)((char *)(obj) + 0x50c))
-
-/* The equaliser, `struct v34_equalizer` in v34filt.h, at +0x630. */
-#define v34_object_equalizer(obj) \
-	((struct v34_equalizer *)((char *)(obj) + 0x630))
-
 /* The transmitter, `struct v34_modulator` in v34filt.h, at +0x1450. */
 #define v34_object_modulator(obj) \
 	((struct v34_modulator *)((char *)(obj) + 0x1450))
-
-/*
- * The retrain detector, `struct v34_detector` in v34det.h, at +0x3564.
- * F630 measured it tiling to +0x3588 and ruled the tiling a measurement,
- * not a bound; see the finding before changing either constant.
- */
-#define v34_object_detector(obj) \
-	((struct v34_detector *)((char *)(obj) + 0x3564))
 
 /* The negotiated rate configuration, `struct v34_ratecfg`, at +0xaa84. */
 #define v34_object_ratecfg(obj) \

@@ -482,110 +482,110 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x14 is 0",
-  "find": "\t */\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
-  "replace": "\t */\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = 0;",
+  "find": "\t */\n\tr->crc = -1;",
+  "replace": "\t */\n\tr->crc = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x16 is 0",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;",
+  "find": "\tr->crc = -1;\n\tr->crc_on = 1;",
+  "replace": "\tr->crc = -1;\n\tr->crc_on = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 ignores the V.90 receiver",
-  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->role == 0x65)",
+  "find": "\tr->nbits = (f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\tr->nbits = (f->obj->role != 0x65 && f->obj->v90_receiver != 0)",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 reads the K56flex receiver",
-  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->role == 0x65 && f->obj->k56flex_receiver != 0)",
+  "find": "\tr->nbits = (f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\tr->nbits = (f->obj->role == 0x65 && f->obj->v90_receiver == 0)",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 takes 0x1e on the answer side",
-  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->role == 0x66 && f->obj->v90_receiver != 0)",
+  "find": "\tr->nbits = (f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\tr->nbits = (f->obj->role == 0x65 && f->obj->v90_receiver != 0)\n\t  && 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 has its two constants exchanged",
-  "find": "\t\t? 0x1e : 0x11;",
-  "replace": "\t\t? 0x11 : 0x1e;",
+  "find": "\t\t   ? 0x1e : 0x11;",
+  "replace": "\t\t   ? 0x11 : 0x1e;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1a is 1",
-  "find": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;",
-  "replace": "\t\t? 0x1e : 0x11;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 1;",
+  "find": "\t\t   ? 0x1e : 0x11;\n\tr->pos = 0;",
+  "replace": "\t\t   ? 0x1e : 0x11;\n\tr->pos = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1c is 9",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 9;",
+  "find": "\tr->pos = 0;\n\tr->wordbits = 8;",
+  "replace": "\tr->pos = 0;\n\tr->wordbits = 9;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x1e is 1",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 1;",
+  "find": "\tr->wordbits = 8;\n\tr->idx = 0;",
+  "replace": "\tr->wordbits = 8;\n\tr->idx = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x20 is 0",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
+  "find": "\tr->idx = 0;\n\tr->repeat = 1;",
+  "replace": "\tr->idx = 0;\n\tr->repeat = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x22 is 1",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 1;",
+  "find": "\tr->repeat = 1;\n\tr->repeats = 0;",
+  "replace": "\tr->repeat = 1;\n\tr->repeats = 1;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x24 is 0xf73",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf73;",
+  "find": "\tr->repeats = 0;\n\tr->acc = 0xf72;",
+  "replace": "\tr->repeats = 0;\n\tr->acc = 0xf73;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x24 is a halfword",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "find": "\tr->repeats = 0;\n\tr->acc = 0xf72;",
+  "replace": "\tr->repeats = 0;\n\tr->acc = (short)0xf72;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x28 is 0xd",
-  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;",
-  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xd;",
+  "find": "\tr->acc = 0xf72;\n\tr->avail = 0xc;",
+  "replace": "\tr->acc = 0xf72;\n\tr->avail = 0xd;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2a is 0xd",
-  "find": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;",
-  "replace": "\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xd;",
+  "find": "\tr->acc = 0xf72;\n\tr->avail = 0xc;\n\tr->avail0 = 0xc;",
+  "replace": "\tr->acc = 0xf72;\n\tr->avail = 0xc;\n\tr->avail0 = 0xd;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2c is 0xf73",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf73;",
+  "find": "\tr->avail0 = 0xc;\n\tr->acc0 = 0xf72;",
+  "replace": "\tr->avail0 = 0xc;\n\tr->acc0 = 0xf73;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x2c is a halfword",
-  "find": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
-  "replace": "\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;\n\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
+  "find": "\tr->avail0 = 0xc;\n\tr->acc0 = 0xf72;",
+  "replace": "\tr->avail0 = 0xc;\n\tr->acc0 = (short)0xf72;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) is at +0xa97c",
-  "find": "#define T3M_MSGREC0\t\t(V34_MSGREC_BASE + 0 * V34_MSGREC_STRIDE)",
-  "replace": "#define T3M_MSGREC0\t\t(V34_MSGREC_BASE + 1 * V34_MSGREC_STRIDE)"
+  "find": "\tstruct v34_bitsource *r = f->obj->msgrec;",
+  "replace": "\tstruct v34_bitsource *r = &f->obj->msgrec[1];"
  },
  {
   "label": "the shared reset (47, 49, 50) does not announce itself",
@@ -1402,44 +1402,44 @@
  },
  {
   "label": "51 exchanges the two carrier tables",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c1200_ : c2400_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c1200_ : c2400_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 tests the role flag against 0x66",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x66 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x66 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector limit is 0x65",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x65, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x65, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector warm-up is 0x33",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x33, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x33, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector threshold is 0x801",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x801, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x801, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector polarity is 1",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 runs the detector on the object rather than on +0x3564",
-  "find": "\t\tdetectorinit(v34_object_detector(f->obj),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit(v34_object_detector(f->obj) + 4,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit(&f->obj->detector,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit(&f->obj->detector + 4,\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
@@ -1504,26 +1504,26 @@
  },
  {
   "label": "51 aims +0xaa6c at the first message record and not the third",
-  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
-  "replace": "\t\tw = (unsigned short *)(f->m + T3M_MSGREC0);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "find": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)f->obj->msgrec;\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 does not aim +0xaa6c at all",
-  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
-  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "find": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 hands V34SetINFO1aBits the object's other record",
-  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
-  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)(f->m + T3M_MSGREC0));",
+  "find": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)f->obj->msgrec);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 does not call V34SetINFO1aBits",
-  "find": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
-  "replace": "\t\tw = (unsigned short *)(f->m + T3M_INFOREC);\n\t\t*(unsigned short **)(f->m + T3M_SELFPTR) = w;\n",
+  "find": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n\t\tV34SetINFO1aBits(f->obj, (short *)w);",
+  "replace": "\t\tw = (unsigned short *)&f->obj->msgrec[2];\n\t\tf->obj->paa6c = w;\n",
   "fn": "t3m_micro51"
  },
  {
@@ -1600,67 +1600,67 @@
  },
  {
   "label": "51's record +0x18 is 0x25",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x25;",
+  "find": "\t\tr->nbits = 0x26;",
+  "replace": "\t\tr->nbits = 0x25;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x18 is the shared reset's 0x11",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x11;",
+  "find": "\t\tr->nbits = 0x26;",
+  "replace": "\t\tr->nbits = 0x11;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x20 is 1 rather than 0",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
+  "find": "\t\tr->repeat = 0;\n\t\tr->repeats = 0;",
+  "replace": "\t\tr->repeat = 1;\n\t\tr->repeats = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x24 is 0xf72",
-  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xff72;",
-  "replace": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xf72;",
+  "find": "\t\tr->acc = 0xff72;",
+  "replace": "\t\tr->acc = 0xf72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x24 is a halfword",
-  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = 0xff72;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, acc)) = (short)0xff72;",
+  "find": "\t\tr->acc = 0xff72;",
+  "replace": "\t\tr->acc = (short)0xff72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x2c is 0xf72",
-  "find": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xff72;",
-  "replace": "\t\t*(int *)(r + __builtin_offsetof(struct v34_bitsource, acc0)) = 0xf72;",
+  "find": "\t\tr->acc0 = 0xff72;",
+  "replace": "\t\tr->acc0 = 0xf72;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x28 is 0xc",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0x10;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail)) = 0xc;",
+  "find": "\t\tr->avail = 0x10;",
+  "replace": "\t\tr->avail = 0xc;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x2a is 0xc",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0x10;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, avail0)) = 0xc;",
+  "find": "\t\tr->avail0 = 0x10;",
+  "replace": "\t\tr->avail0 = 0xc;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1c is 0",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 0;",
+  "find": "\t\tr->pos = 0;\n\t\tr->wordbits = 8;",
+  "replace": "\t\tr->pos = 0;\n\t\tr->wordbits = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x14 is 0",
-  "find": "\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;",
-  "replace": "\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = 0;",
+  "find": "\n\t\tr->crc = -1;",
+  "replace": "\n\t\tr->crc = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 reaches the record directly rather than through +0xaa6c",
-  "find": "\t\tr = *(unsigned char **)(f->m + T3M_SELFPTR);",
+  "find": "\t\tr = f->obj->paa6c;",
   "replace": "\t\tr = (unsigned char *)w;",
   "equivalent": true,
   "why": "V34SetINFO1aBits does not write +0xaa6c, so the re-read gives back the address stored three lines above it; the object re-reads and so does this, but nothing here can tell the two apart",
@@ -1892,7 +1892,7 @@
  },
  {
   "label": "59 hands tone_detect the object rather than the detector",
-  "find": "\t\t\t\t   v34_object_detector(f->obj),",
+  "find": "\t\t\t\t   &f->obj->detector,",
   "replace": "\t\t\t\t   (struct v34_detector *)f->m,",
   "fn": "t3m_micro59"
  },
@@ -2172,20 +2172,20 @@
  },
  {
   "label": "59's last block aims +0xaa6c at 51's record",
-  "find": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;",
-  "replace": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_INFOREC;",
+  "find": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\tf->obj->paa6c = f->obj->msgrec;",
+  "replace": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\tf->obj->paa6c = &f->obj->msgrec[2];",
   "fn": "t3m_micro59"
  },
  {
   "label": "59's last block does not aim +0xaa6c",
-  "find": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);",
+  "find": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);",
   "replace": "\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\tt3m_errrec_arm(f);",
   "fn": "t3m_micro59"
  },
  {
   "label": "59's last block reads +0x3588 before v34handshakinit rather than after",
-  "find": "\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x70475.  +0x3588 IS READ BACK AFTER THE CALL and not before\n\t\t * it: `v34handshakinit` writes that field, so a reading taken\n\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);",
-  "replace": "\t\tt3m_errrec_arm(f);\n\t\tv34handshakinit(f->obj, 0);\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;",
+  "find": "\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x70475.  +0x3588 IS READ BACK AFTER THE CALL and not before\n\t\t * it: `v34handshakinit` writes that field, so a reading taken\n\t\t * first would set bit 0 of the wrong value.\n\t\t */\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);",
+  "replace": "\t\tt3m_errrec_arm(f);\n\t\tv34handshakinit(f->obj, 0);\n\t\tf->obj->paa6c = f->obj->msgrec;",
   "fn": "t3m_micro59"
  },
  {
@@ -2378,26 +2378,26 @@
  },
  {
   "label": "55's last block does not aim +0xaa6c",
-  "find": "\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
+  "find": "\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
   "replace": "\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \"\n\t\t\t\t\t     \"TX_PHASE1_CALL\\n\");",
   "fn": "t3m_micro55"
  },
  {
   "label": "55's last block aims +0xaa6c at 51's record",
-  "find": "\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
-  "replace": "\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_INFOREC;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \"\n\t\t\t\t\t     \"TX_PHASE1_CALL\\n\");",
+  "find": "\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
+  "replace": "\t\tf->obj->paa6c = &f->obj->msgrec[2];\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \"\n\t\t\t\t\t     \"TX_PHASE1_CALL\\n\");",
   "fn": "t3m_micro55"
  },
  {
   "label": "55's last block stores 4 in +0x3588 rather than ORing bit 0",
-  "find": "\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
-  "replace": "\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tT3M_I16(f, T3M_F3588) = 4;\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \"\n\t\t\t\t\t     \"TX_PHASE1_CALL\\n\");",
+  "find": "\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \" \"TX_PHASE1_CALL\\n\");",
+  "replace": "\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tT3M_I16(f, T3M_F3588) = 4;\n\t\tt3m_errrec_core(f);\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 In Retrain. errorrecovery for \"\n\t\t\t\t\t     \"info0 is initialized in \"\n\t\t\t\t\t     \"TX_PHASE1_CALL\\n\");",
   "fn": "t3m_micro55"
  },
  {
   "label": "55's last block reads +0x3588 BEFORE v34handshakinit rewrites it",
-  "find": "\t\t/* 0x6fff7. */\n\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x7001c.  +0x3588 is read back AFTER the call, because\n\t\t * `v34handshakinit` writes it.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;\n\t\tt3m_errrec_arm(f);",
-  "replace": "\t\t/* 0x6fff7. */\n\t\tt3m_errrec_arm(f);\n\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x7001c.  +0x3588 is read back AFTER the call, because\n\t\t * `v34handshakinit` writes it.\n\t\t */\n\t\t*(unsigned char **)(f->m + T3M_SELFPTR) = f->m + T3M_MSGREC0;",
+  "find": "\t\t/* 0x6fff7. */\n\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x7001c.  +0x3588 is read back AFTER the call, because\n\t\t * `v34handshakinit` writes it.\n\t\t */\n\t\tf->obj->paa6c = f->obj->msgrec;\n\t\tt3m_errrec_arm(f);",
+  "replace": "\t\t/* 0x6fff7. */\n\t\tt3m_errrec_arm(f);\n\t\tv34handshakinit(f->obj, 0);\n\n\t\t/*\n\t\t * 0x7001c.  +0x3588 is read back AFTER the call, because\n\t\t * `v34handshakinit` writes it.\n\t\t */\n\t\tf->obj->paa6c = f->obj->msgrec;",
   "fn": "t3m_micro55"
  },
  {
@@ -2420,40 +2420,40 @@
  },
  {
   "label": "58's head reaches +0xa94c directly rather than through +0xaa6c",
-  "find": "\t\tunsigned char *r = *(unsigned char **)(f->m + T3M_SELFPTR);",
-  "replace": "\t\tunsigned char *r = f->m + T3M_MSGREC0;",
+  "find": "\t\tstruct v34_bitsource *r = f->obj->paa6c;",
+  "replace": "\t\tstruct v34_bitsource *r = f->obj->msgrec;",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head needs only +0x20",
-  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
-  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0)",
+  "find": "\t\tif (r->repeat != 0 && r->repeats != 0)",
+  "replace": "\t\tif (r->repeat != 0)",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head needs only +0x22",
-  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
-  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
+  "find": "\t\tif (r->repeat != 0 && r->repeats != 0)",
+  "replace": "\t\tif (r->repeats != 0)",
   "equivalent": true,
   "why": "the two readings differ only when +0x22 is non-zero and +0x20 is ZERO, and the action is a clear of +0x20 -- so on exactly the rows where they disagree the mutant writes the value the field already holds.  Held fixed: that the action is a clear and that the field it clears is the field it tests.  The mirror image, `needs only +0x20`, IS caught, because there the mutant clears a field the object leaves alone -- and that pair is what says the guard has two halves at all.",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head takes either of the two",
-  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
-  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 ||\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)",
+  "find": "\t\tif (r->repeat != 0 && r->repeats != 0)",
+  "replace": "\t\tif (r->repeat != 0 || r->repeats != 0)",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head clears +0x22 rather than +0x20",
-  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
-  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
+  "find": "\t\tif (r->repeat != 0 && r->repeats != 0)\n\t\t\tr->repeat = 0;",
+  "replace": "\t\tif (r->repeat != 0 && r->repeats != 0)\n\t\t\tr->repeats = 0;",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's head stores 1 rather than clearing",
-  "find": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;",
-  "replace": "\t\tif (*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) != 0 &&\n\t\t    *(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) != 0)\n\t\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 1;",
+  "find": "\t\tif (r->repeat != 0 && r->repeats != 0)\n\t\t\tr->repeat = 0;",
+  "replace": "\t\tif (r->repeat != 0 && r->repeats != 0)\n\t\t\tr->repeat = 1;",
   "fn": "t3m_micro58"
  },
  {
@@ -2590,14 +2590,14 @@
  },
  {
   "label": "58's second block runs v34handshakinit's mode 1",
-  "find": "\t\t\tv34handshakinit(f->obj, 0);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =",
-  "replace": "\t\t\tv34handshakinit(f->obj, 1);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =",
+  "find": "\t\t\tv34handshakinit(f->obj, 0);\n\t\t\tf->obj->paa6c =",
+  "replace": "\t\t\tv34handshakinit(f->obj, 1);\n\t\t\tf->obj->paa6c =",
   "fn": "t3m_micro58"
  },
  {
   "label": "58's second block does not aim +0xaa6c",
-  "find": "\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_MSGREC0;",
-  "replace": "\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_INFOREC;",
+  "find": "\t\t\tf->obj->paa6c = f->obj->msgrec;",
+  "replace": "\t\t\tf->obj->paa6c = &f->obj->msgrec[2];",
   "fn": "t3m_micro58"
  },
  {
@@ -2682,8 +2682,8 @@
  },
  {
   "label": "58's second block reads +0x3588 BEFORE the init rewrites it",
-  "find": "\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_MSGREC0;\n\t\t}\n\n\t\tt3m_errrec_arm(f);",
-  "replace": "\t\tt3m_errrec_arm(f);\n\n\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\t*(unsigned char **)(f->m + T3M_SELFPTR) =\n\t\t\t\tf->m + T3M_MSGREC0;\n\t\t}",
+  "find": "\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\tf->obj->paa6c = f->obj->msgrec;\n\t\t}\n\n\t\tt3m_errrec_arm(f);",
+  "replace": "\t\tt3m_errrec_arm(f);\n\n\t\tif (T3M_U16(f, T3M_F3588) == 2) {\n\t\t\tv34handshakinit(f->obj, 0);\n\t\t\tf->obj->paa6c = f->obj->msgrec;\n\t\t}",
   "fn": "t3m_micro58"
  },
  {
@@ -2700,32 +2700,32 @@
  },
  {
   "label": "51's record +0x16 is 0",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 1;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc)) = -1;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, crc_on)) = 0;",
+  "find": "\t\tr->crc = -1;\n\t\tr->crc_on = 1;",
+  "replace": "\t\tr->crc = -1;\n\t\tr->crc_on = 0;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1a is 1",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, nbits)) = 0x26;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 1;",
+  "find": "\t\tr->nbits = 0x26;\n\t\tr->pos = 0;",
+  "replace": "\t\tr->nbits = 0x26;\n\t\tr->pos = 1;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1c is 9",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, pos)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 9;",
+  "find": "\t\tr->pos = 0;\n\t\tr->wordbits = 8;",
+  "replace": "\t\tr->pos = 0;\n\t\tr->wordbits = 9;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x1e is 1",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 0;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, wordbits)) = 8;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, idx)) = 1;",
+  "find": "\t\tr->wordbits = 8;\n\t\tr->idx = 0;",
+  "replace": "\t\tr->wordbits = 8;\n\t\tr->idx = 1;",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's record +0x22 is 1",
-  "find": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 0;",
-  "replace": "\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeat)) = 0;\n\t\t*(short *)(r + __builtin_offsetof(struct v34_bitsource, repeats)) = 1;",
+  "find": "\t\tr->repeat = 0;\n\t\tr->repeats = 0;",
+  "replace": "\t\tr->repeat = 0;\n\t\tr->repeats = 1;",
   "fn": "t3m_micro51"
  }
 ]

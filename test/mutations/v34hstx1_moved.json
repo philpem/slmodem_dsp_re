@@ -136,13 +136,13 @@
  },
  {
   "label": "67: the reader is the record at +0xaa3c rather than the pointer",
-  "find": "\treturn *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);",
+  "find": "\treturn (struct v34_bitsource *)o->paa6c;",
   "replace": "\treturn (struct v34_bitsource *)((char *)o + TX1_FAA3C);"
  },
  {
   "label": "67: the reader is the record at +0xa94c",
-  "find": "\treturn *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);",
-  "replace": "\treturn (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);"
+  "find": "\treturn (struct v34_bitsource *)o->paa6c;",
+  "replace": "\treturn o->msgrec;"
  },
  {
   "label": "67: +0x359e is not counted",
@@ -625,8 +625,8 @@
  },
  {
   "label": "24: the message is built into the record it installs",
-  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
-  "replace": "\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));"
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\to->paa6c = o->msgrec;",
+  "replace": "\to->paa6c = o->msgrec;\n\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));"
  },
  {
   "label": "24: the message is not built at all",
@@ -635,7 +635,7 @@
  },
  {
   "label": "24: the reader is not re-aimed at +0xa94c",
-  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);\n\n",
+  "find": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\to->paa6c = o->msgrec;\n\n",
   "replace": "\tVPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));\n\n"
  },
  {
@@ -1064,7 +1064,7 @@
  {
   "label": "24: the reader is the record at +0xa94c rather than +0xaa6c's",
   "find": "\tbit = getbit(tx1_bitsource(o));",
-  "replace": "\tbit = getbit((struct v34_bitsource *)((char *)o + TX1_BLK_A94C));"
+  "replace": "\tbit = getbit(o->msgrec);"
  },
  {
   "label": "24: the tone is sent after the sample is transmitted",

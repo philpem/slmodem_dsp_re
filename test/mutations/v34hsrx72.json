@@ -247,14 +247,14 @@
  },
  {
   "label": "the record length is INFO1a's 0x26, not INFO1c's 0x4d",
-  "find": "\t\ths_put(obj, T72_BLK_A9DC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x4d);\t\t /* 0x67f54 */",
-  "replace": "\t\ths_put(obj, T72_BLK_A9DC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x26);\t\t /* 0x67f54 */",
+  "find": "\t\tobj->msgrec[3].nbits = 0x4d;\t\t /* 0x67f54 */",
+  "replace": "\t\tobj->msgrec[3].nbits = 0x26;\t\t /* 0x67f54 */",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the record length goes to +0x1a of the record",
-  "find": "\t\ths_put(obj, T72_BLK_A9DC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x4d);\t\t /* 0x67f54 */",
-  "replace": "\t\ths_put(obj, T72_BLK_A9DC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, pos),\n\t\t       0x4d);\t\t /* 0x67f54 */",
+  "find": "\t\tobj->msgrec[3].nbits = 0x4d;\t\t /* 0x67f54 */",
+  "replace": "\t\tobj->msgrec[3].pos = 0x4d;\t\t /* 0x67f54 */",
   "fn": "t72_rx_l1"
  },
  {
@@ -277,8 +277,8 @@
  },
  {
   "label": "+0xaa70 is aimed at the OTHER record",
-  "find": "\t\t\t (char *)obj + T72_BLK_A9DC);",
-  "replace": "\t\t\t (char *)obj + T72_BLK_A9DC - 0x30);",
+  "find": "\t\tobj->paa70 = &obj->msgrec[3];\t\t\t /* 0x67f6e */",
+  "replace": "\t\tobj->paa70 = &obj->msgrec[2];\t\t\t /* 0x67f6e */",
   "fn": "t72_rx_l1"
  },
  {

@@ -46,14 +46,14 @@
  },
  {
   "label": "the register steps one bit past the message",
-  "find": "\tif (count < t44_recget(rec, T44_R_NBITS)) {",
-  "replace": "\tif (count <= t44_recget(rec, T44_R_NBITS)) {",
+  "find": "\tif (count < rec->nbits) {",
+  "replace": "\tif (count <= rec->nbits) {",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the register steps for the whole exchange",
-  "find": "\tif (count < t44_recget(rec, T44_R_NBITS)) {",
-  "replace": "\tif (count < t44_recget(rec, T44_R_NBITS) + 0x10) {",
+  "find": "\tif (count < rec->nbits) {",
+  "replace": "\tif (count < rec->nbits + 0x10) {",
   "fn": "t44_micro_det_info"
  },
  {
@@ -130,26 +130,26 @@
  },
  {
   "label": "the restart threshold is one bit early",
-  "find": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)",
-  "replace": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x0f)",
+  "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
+  "replace": "\tif ((int)next == (int)rec->nbits + 0x0f)",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the restart threshold is one bit late",
-  "find": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)",
-  "replace": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x11)",
+  "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
+  "replace": "\tif ((int)next == (int)rec->nbits + 0x11)",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the restart threshold is at-or-beyond rather than equal",
-  "find": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)",
-  "replace": "\tif ((int)next >= (int)t44_recget(rec, T44_R_NBITS) + 0x10)",
+  "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
+  "replace": "\tif ((int)next >= (int)rec->nbits + 0x10)",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the restart threshold forgets the sixteen CRC bits",
-  "find": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS) + 0x10)",
-  "replace": "\tif ((int)next == (int)t44_recget(rec, T44_R_NBITS))",
+  "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
+  "replace": "\tif ((int)next == (int)rec->nbits)",
   "fn": "t44_micro_det_info"
  },
  {
@@ -202,38 +202,38 @@
  },
  {
   "label": "the byte stored is sign extended",
-  "find": "\t\t   (short)(unsigned char)obj->fsk.sr);",
-  "replace": "\t\t   (short)obj->fsk.sr);",
+  "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
+  "replace": "\trec->word[idx] = (short)obj->fsk.sr;",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the byte stored is the high half of sr",
-  "find": "\t\t   (short)(unsigned char)obj->fsk.sr);",
-  "replace": "\t\t   (short)(unsigned char)(obj->fsk.sr >> 8));",
+  "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
+  "replace": "\trec->word[idx] = (short)(obj->fsk.sr >> 8);",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the byte goes to the slot after the one it belongs in",
-  "find": "\tt44_recput(rec, T44_R_BYTES + 2u * (unsigned)idx,",
-  "replace": "\tt44_recput(rec, T44_R_BYTES + 2u * (unsigned)idx + 2u,",
+  "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
+  "replace": "\trec->word[idx + 1] = (short)(unsigned char)obj->fsk.sr;",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "an accepted message takes the restart",
-  "find": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    == (unsigned short)t44_recget(rec, T44_R_CRC)) {",
-  "replace": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    != (unsigned short)t44_recget(rec, T44_R_CRC)) {",
+  "find": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    == (unsigned short)rec->crc) {",
+  "replace": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    != (unsigned short)rec->crc) {",
   "fn": "t44_micro_det_info"
  },
  {
   "label": "the restart moves the microstate to DET_CJ",
-  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\tt44_recput(rec, T44_R_CRC, -1);",
-  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);\n\n\tt44_recput(rec, T44_R_CRC, -1);",
+  "find": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\n\trec->crc = -1;",
+  "replace": "\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);\n\n\trec->crc = -1;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the restart leaves the register at zero",
-  "find": "\tt44_recput(rec, T44_R_CRC, -1);\n\tobj->fsk.sr = -1;",
-  "replace": "\tt44_recput(rec, T44_R_CRC, 0);\n\tobj->fsk.sr = -1;",
+  "find": "\trec->crc = -1;\n\tobj->fsk.sr = -1;",
+  "replace": "\trec->crc = 0;\n\tobj->fsk.sr = -1;",
   "fn": "t44_det_info_restart"
  },
  {
@@ -260,14 +260,14 @@
  },
  {
   "label": "the answering side's length is 0x1f",
-  "find": "\t\tt44_recput(rec, T44_R_NBITS, 0x1e);",
-  "replace": "\t\tt44_recput(rec, T44_R_NBITS, 0x1f);",
+  "find": "\t\trec->nbits = 0x1e;",
+  "replace": "\t\trec->nbits = 0x1f;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the answering side's length goes to the installed record",
-  "find": "\t\tt44_recput(rec, T44_R_NBITS, 0x1e);",
-  "replace": "\t\tt44_recput(blk, T44_R_NBITS, 0x1e);",
+  "find": "\t\trec->nbits = 0x1e;",
+  "replace": "\t\tblk->nbits = 0x1e;",
   "fn": "t44_det_info_restart"
  },
  {
@@ -329,13 +329,13 @@
  },
  {
   "label": "the installed record is the one already in use",
-  "find": "\tt3c_putp(obj, T44_PTR_AA6C, blk);",
+  "find": "\tobj->paa6c = blk;",
   "replace": "\tt3c_putp(obj, T44_PTR_AA6C, rec);",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the record is installed at +0xaa70 instead of +0xaa6c",
-  "find": "\tt3c_putp(obj, T44_PTR_AA6C, blk);",
+  "find": "\tobj->paa6c = blk;",
   "replace": "\tt3c_putp(obj, T44_PTR_AA70, blk);",
   "fn": "t44_det_info_restart"
  },
@@ -371,78 +371,78 @@
  },
  {
   "label": "the installed record's +0x1c is 4",
-  "find": "\tt44_recput(blk, T44_R_F1C, 8);\t\t\t/* 0x6c0e8 */",
-  "replace": "\tt44_recput(blk, T44_R_F1C, 4);\t\t\t/* 0x6c0e8 */",
+  "find": "\tblk->wordbits = 8;\t\t\t\t/* 0x6c0e8 */",
+  "replace": "\tblk->wordbits = 4;\t\t\t\t/* 0x6c0e8 */",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x16 is cleared",
-  "find": "\tt44_recput(blk, T44_R_F16, 1);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
-  "replace": "\tt44_recput(blk, T44_R_F16, 0);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
+  "find": "\tblk->crc_on = 1;\n\tblk->acc = 0xf72;",
+  "replace": "\tblk->crc_on = 0;\n\tblk->acc = 0xf72;",
   "note": "RE-ANCHORED, finding F347: the 0x4d arm writes the same 1 to the same field of its own record.  The restart's copy is the one followed by the 0xf72 preamble.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x20 is cleared",
-  "find": "\tt44_recput(blk, T44_R_F20, 1);",
-  "replace": "\tt44_recput(blk, T44_R_F20, 0);",
+  "find": "\tblk->repeat = 1;",
+  "replace": "\tblk->repeat = 0;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x24 is 0xf73",
-  "find": "\tt44_recputi(blk, T44_R_F24, 0xf72);",
-  "replace": "\tt44_recputi(blk, T44_R_F24, 0xf73);",
+  "find": "\tblk->acc = 0xf72;",
+  "replace": "\tblk->acc = 0xf73;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x2c is not written",
-  "find": "\tt44_recputi(blk, T44_R_F2C, 0xf72);",
+  "find": "\tblk->acc0 = 0xf72;",
   "replace": "\t(void)0;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x24 is written sixteen bits wide",
-  "find": "\tt44_recputi(blk, T44_R_F24, 0xf72);",
-  "replace": "\tt44_recput(blk, T44_R_F24, 0xf72);",
+  "find": "\tblk->acc = 0xf72;",
+  "replace": "\tblk->acc = 0xf73;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x28 is 0xd",
-  "find": "\tt44_recput(blk, T44_R_F28, 0xc);",
-  "replace": "\tt44_recput(blk, T44_R_F28, 0xd);",
+  "find": "\tblk->avail = 0xc;",
+  "replace": "\tblk->avail = 0xd;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x2a is 0xd",
-  "find": "\tt44_recput(blk, T44_R_F2A, 0xc);",
-  "replace": "\tt44_recput(blk, T44_R_F2A, 0xd);",
+  "find": "\tblk->avail0 = 0xc;",
+  "replace": "\tblk->avail0 = 0xd;",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x1a is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "find": "\tblk->pos = 0;\n\tblk->idx = 0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
+  "replace": "\t(void)0;\n\tblk->idx = 0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
   "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x1e is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "find": "\tblk->idx = 0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
+  "replace": "\t(void)0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
   "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x22 is not cleared",
-  "find": "\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "find": "\tblk->repeats = 0;\n\tblk->nbits = nbits;",
+  "replace": "\t(void)0;\n\tblk->nbits = nbits;",
   "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's register is not reset",
-  "find": "\tt44_recput(blk, T44_R_CRC, -1);\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
+  "find": "\tblk->crc = -1;\n\tblk->pos = 0;\n\tblk->idx = 0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
+  "replace": "\t(void)0;\n\tblk->pos = 0;\n\tblk->idx = 0;\n\tblk->repeats = 0;\n\tblk->nbits = nbits;",
   "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
@@ -467,8 +467,8 @@
  },
  {
   "label": "the record is not re-read after the restart",
-  "find": "\trec = t44_record(obj, T44_PTR_AA70);\n\tt44_recput(rec, T44_R_BYTES",
-  "replace": "\tt44_recput(rec, T44_R_BYTES",
+  "find": "\trec = t44_record(obj, T44_PTR_AA70);\n\trec->word[idx]",
+  "replace": "\trec->word[idx]",
   "equivalent": true,
   "why": "0x6698e reloads +0xaa70 after the restart may have run, and the restart writes +0xaa6c and never +0xaa70 -- so the reloaded pointer is the cached one on every path that exists.  This becomes testable, and stops being equivalent, the moment an arm that moves +0xaa70 lands; the accept path at 0x6e534 is where to look.",
   "fn": "t44_micro_det_info"
@@ -527,32 +527,32 @@
  },
  {
   "label": "the other record's flag is bit 6",
-  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x40) == 0) {",
+  "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
+  "replace": "\t\tif ((blk->word[2] & 0x40) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the other record's flag test is inverted",
-  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(blk, 0x04) & 0x80) != 0) {",
+  "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
+  "replace": "\t\tif ((blk->word[2] & 0x80) != 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the other record's +0x22 is not cleared with the flag",
-  "find": "\t\t\tt44_recput(blk, __builtin_offsetof(\n\t\t\t\t\tstruct v34_bitsource, repeats), 0);",
+  "find": "\t\t\tblk->repeats = 0;",
   "replace": "\t\t\t(void)0;",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the flag is assigned rather than ored in",
-  "find": "\t\t\tt44_recput(blk, __builtin_offsetof(\n\t\t\t\t\t   struct v34_bitsource, word[2]),\n\t\t\t\t   (short)(t44_recget(blk,\n\t\t\t\t\t   __builtin_offsetof(\n\t\t\t\t\t   struct v34_bitsource, word[2])) |\n\t\t\t\t\t   0x80));",
-  "replace": "\t\t\tt44_recput(blk, 0x04, (short)0x80);",
+  "find": "\t\t\tblk->word[2] = (short)(blk->word[2] | 0x80);",
+  "replace": "\t\t\tblk->word[2] = (short)0x80;",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the flag is set on the record being clocked, not the other one",
-  "find": "\t\tif ((t44_recget(blk, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
+  "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
+  "replace": "\t\tif ((rec->word[2] & 0x80) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
@@ -593,37 +593,37 @@
  },
  {
   "label": "the copy goes the other way",
-  "find": "\t\t\ths_put(obj, T44_FABAE + 2u * (unsigned)i,\n\t\t\t       t44_recget(rec, 2u * (unsigned)i));",
-  "replace": "\t\t\tt44_recput(rec, 2u * (unsigned)i,\n\t\t\t\t   hs_get(obj, T44_FABAE + 2u * (unsigned)i));",
+  "find": "\t\t\ths_put(obj, T44_FABAE + 2u * (unsigned)i,\n\t\t\t       rec->word[i]);",
+  "replace": "\t\t\trec->word[i] = hs_get(obj, T44_FABAE + 2u * (unsigned)i);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the copy reads the other record",
-  "find": "\t\t\t       t44_recget(rec, 2u * (unsigned)i));",
-  "replace": "\t\t\t       t44_recget(blk, 2u * (unsigned)i));",
+  "find": "\t\t\t       rec->word[i]);",
+  "replace": "\t\t\t       blk->word[i]);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the record's own flag is bit 6",
-  "find": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x40) == 0) {",
+  "find": "\t\tif ((rec->word[2] & 0x80) == 0) {",
+  "replace": "\t\tif ((rec->word[2] & 0x40) == 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the record's own flag test is inverted",
-  "find": "\t\tif ((t44_recget(rec, __builtin_offsetof(\n\t\t\t     struct v34_bitsource, word[2])) & 0x80) == 0) {",
-  "replace": "\t\tif ((t44_recget(rec, 0x04) & 0x80) != 0) {",
+  "find": "\t\tif ((rec->word[2] & 0x80) == 0) {",
+  "replace": "\t\tif ((rec->word[2] & 0x80) != 0) {",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the early exit moves the microstate to DET_CJ",
-  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),",
-  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);\n\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),",
+  "find": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+  "replace": "\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);\n\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the early exit leaves the register alone",
-  "find": "\t\t\tt44_recput(t44_record(obj, T44_PTR_AA70),\n\t\t\t\t   T44_R_CRC, -1);",
+  "find": "\t\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
   "replace": "\t\t\t(void)0;",
   "fn": "t44_det_info_accept"
  },
@@ -647,13 +647,13 @@
  },
  {
   "label": "the decoder is handed the +0xaa70 record instead of the fixed address",
-  "find": "\tV34GiveINFO0dBits(obj, (const short *)((char *)obj + T44_REC_A97C));",
+  "find": "\tV34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);",
   "replace": "\tV34GiveINFO0dBits(obj, t44_record(obj, T44_PTR_AA70));",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the decoder is not called",
-  "find": "\tV34GiveINFO0dBits(obj, (const short *)((char *)obj + T44_REC_A97C));",
+  "find": "\tV34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);",
   "replace": "\t(void)0;",
   "fn": "t44_det_info_accept"
  },
@@ -754,33 +754,33 @@
  {
   "label": "0x4d takes the INFO1a body",
   "find": "\t\treturn t44_accept_len4d(obj);",
-  "replace": "\t\treturn t44_accept_len26(obj, rec);",
+  "replace": "\t\treturn t44_accept_len26(obj, (short *)rec);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "0x26 takes the MOH body",
-  "find": "\t\treturn t44_accept_len26(obj, rec);",
-  "replace": "\t\treturn t44_accept_len08(obj, rec, count2);",
+  "find": "\t\treturn t44_accept_len26(obj, (short *)rec);",
+  "replace": "\t\treturn t44_accept_len08(obj, (short *)rec, count2);",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the length's first field is three bits wide",
-  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
-  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 7) << 5)",
+  "find": "\traw = (short)(((obj->msgrec[3].word[0] & 3) << 5)",
+  "replace": "\traw = (short)(((obj->msgrec[3].word[0] & 7) << 5)",
   "equivalent": true,
   "why": "EQUIVALENT, and it says where the field ends.  Bit 2 of +0xa9dc lands at bit 7 of the assembled value, and `bitreverse(v, 7)` reads only bits 0..6 (src/pump/v34/V34RX.c), so the widened mask can reach +0x35a2 only through the first store -- which the equivalence above shows is invisible.  The cases seed +0xa9dc with bit 2 SET so that this is measured rather than assumed.  HELD FIXED: the same two conditions as above.",
   "fn": "t44_mdlength"
  },
  {
   "label": "the length's first field is shifted four",
-  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
-  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 4)",
+  "find": "\traw = (short)(((obj->msgrec[3].word[0] & 3) << 5)",
+  "replace": "\traw = (short)(((obj->msgrec[3].word[0] & 3) << 4)",
   "fn": "t44_mdlength"
  },
  {
   "label": "the length's second field is a nibble",
-  "find": "\t\t      | ((hs_get(obj, T44_REC_A9DC +\n\t\t\t\t __builtin_offsetof(struct v34_bitsource,\n\t\t\t\t\t\t    word[1])) & 0xf8) >> 3));",
-  "replace": "\t\t      | ((hs_get(obj, T44_REC_A9DC + 2) & 0xf0) >> 4));",
+  "find": "\t\t      | ((obj->msgrec[3].word[1] & 0xf8) >> 3));",
+  "replace": "\t\t      | ((obj->msgrec[3].word[1] & 0xf0) >> 4));",
   "fn": "t44_mdlength"
  },
  {
@@ -865,26 +865,26 @@
  },
  {
   "label": "the MOH resynchronise goes to DET_INFO",
-  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);",
-  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);",
+  "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
+  "replace": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_INFO);\n\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
   "fn": "t44_accept_len08"
  },
  {
   "label": "the MOH resynchronise leaves sr alone",
-  "find": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);\n\t\tobj->fsk.sr = -1;",
-  "replace": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);",
+  "find": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
+  "replace": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;",
   "fn": "t44_accept_len08"
  },
  {
   "label": "the MOH resynchronise leaves the register alone",
-  "find": "\t\tt44_recput(t44_record(obj, T44_PTR_AA70), T44_R_CRC, -1);\n\t\tobj->fsk.sr = -1;",
+  "find": "\t\tt44_record(obj, T44_PTR_AA70)->crc = -1;\n\t\tobj->fsk.sr = -1;",
   "replace": "\t\tobj->fsk.sr = -1;",
   "fn": "t44_accept_len08"
  },
  {
   "label": "the tone detector's two carriers are swapped",
-  "find": "\tdetectorinit(T3C_DET(obj), obj->role == 0x65 ? c2400_ : c1200_,",
-  "replace": "\tdetectorinit(T3C_DET(obj), obj->role == 0x65 ? c1200_ : c2400_,",
+  "find": "\tdetectorinit(&obj->detector, obj->role == 0x65 ? c2400_ : c1200_,",
+  "replace": "\tdetectorinit(&obj->detector, obj->role == 0x65 ? c1200_ : c2400_,",
   "fn": "t44_accept_len08"
  },
  {
@@ -926,8 +926,8 @@
  },
  {
   "label": "the INFO1a decoder's answer is inverted",
-  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
-  "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) == 0) {",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) == 0) {",
   "fn": "t44_accept_len26"
  },
  {
@@ -938,8 +938,8 @@
  },
  {
   "label": "the INFO1a decoder is given the installed record",
-  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
-  "replace": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0) {",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA6C)) != 0) {",
   "fn": "t44_accept_len26"
  },
  {
@@ -1035,13 +1035,13 @@
  },
  {
   "label": "neither detector set-up raises DET_PENDING",
-  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
-  "replace": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+  "replace": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
   "fn": "t44_accept_len26"
  },
  {
   "label": "the FIRST detector set-up is dropped",
-  "find": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
+  "find": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
   "replace": "\t(void)0;",
   "equivalent": true,
   "why": "EQUIVALENT, and the strongest one in this batch.  `detectorinit` writes nine fields of the detector at +0x3564 and reads nothing (src/pump/v34/detector.c); the two calls at 0x6f0d1 and 0x6f125 differ only in the warm-up, so the second writes every field the first did.  The only statement between them is the receiver flag word's DET_PENDING, which is not in the detector.  HELD FIXED: that `detectorinit` has no effect outside the struct it is given.  The mutations of the SECOND call below are what check that from the other side.",
@@ -1067,8 +1067,8 @@
  },
  {
   "label": "the detectors read the record being clocked",
-  "find": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
-  "replace": "\tdetectorinit(T3C_DET(obj), t44_record(obj, T44_PTR_AA70),\n\t\t     0, 8, 0x78, 0x600, 0);",
+  "find": "\tdetectorinit(&obj->detector,\n\t\t     (const short *)t44_record(obj, T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+  "replace": "\tdetectorinit(&obj->detector, t44_record(obj, T44_PTR_AA70),\n\t\t     0, 8, 0x78, 0x600, 0);",
   "fn": "t44_accept_len26"
  },
  {
@@ -1085,8 +1085,8 @@
  },
  {
   "label": "the rxinfo1a printout reads the answer instead",
-  "find": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9DC));",
-  "replace": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9AC));",
+  "find": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)&obj->msgrec[3]);",
+  "replace": "\t\tt44_print10(\"V34PROBE, rxinfo1a\",\n\t\t\t    (const short *)&obj->msgrec[2]);",
   "fn": "t44_accept_len26"
  },
  {
@@ -1197,20 +1197,20 @@
  },
  {
   "label": "the answer is installed at the restart's record",
-  "find": "\tt3c_putp(obj, T44_PTR_AA6C, (char *)obj + T44_REC_A9AC);",
-  "replace": "\tt3c_putp(obj, T44_PTR_AA6C, (char *)obj + T44_BLK_A94C);",
+  "find": "\tobj->paa6c = &obj->msgrec[2];\n\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
+  "replace": "\tobj->paa6c = obj->msgrec;\n\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the INFO1d answer is inverted",
-  "find": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)",
-  "replace": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) == 0)",
+  "find": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
+  "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) == 0)",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the INFO1d decoder is given the answer's record",
-  "find": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)",
-  "replace": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0)",
+  "find": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA70)) != 0)",
+  "replace": "\tif (V34GiveINFO1dBits(obj, (const short *)t44_record(obj, T44_PTR_AA6C)) != 0)",
   "fn": "t44_accept_len4d"
  },
  {
@@ -1221,50 +1221,50 @@
  },
  {
   "label": "the INFO1a answer is not built",
-  "find": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C));",
+  "find": "\tV34SetINFO1aBits(obj, (short *)t44_record(obj, T44_PTR_AA6C));",
   "replace": "\t(void)0;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the INFO1a answer is built in the clocked record",
-  "find": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA6C));",
+  "find": "\tV34SetINFO1aBits(obj, (short *)t44_record(obj, T44_PTR_AA6C));",
   "replace": "\tV34SetINFO1aBits(obj, t44_record(obj, T44_PTR_AA70));",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the answer's length is 0x27 bits",
-  "find": "\tt44_recput(blk, T44_R_NBITS, 0x26);",
-  "replace": "\tt44_recput(blk, T44_R_NBITS, 0x27);",
+  "find": "\tblk->nbits = 0x26;",
+  "replace": "\tblk->nbits = 0x27;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the answer's +0x1c is not the restart's 8",
-  "find": "\tt44_recput(blk, T44_R_F1C, 8);\n\tt44_recput(blk, T44_R_F16, 1);",
-  "replace": "\tt44_recput(blk, T44_R_F1C, 1);\n\tt44_recput(blk, T44_R_F16, 1);",
+  "find": "\tblk->wordbits = 8;\n\tblk->crc_on = 1;",
+  "replace": "\tblk->wordbits = 1;\n\tblk->crc_on = 1;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the answer's +0x28 is the restart's 0xc",
-  "find": "\tt44_recput(blk, T44_R_F28, 0x10);",
-  "replace": "\tt44_recput(blk, T44_R_F28, 0xc);",
+  "find": "\tblk->avail = 0x10;",
+  "replace": "\tblk->avail = 0xc;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the answer's +0x20 is the restart's 1",
-  "find": "\tt44_recput(blk, T44_R_F20, 0);\n\tt44_recputi(blk, T44_R_F24, 0xff72);",
-  "replace": "\tt44_recput(blk, T44_R_F20, 1);\n\tt44_recputi(blk, T44_R_F24, 0xff72);",
+  "find": "\tblk->repeat = 0;\n\tblk->acc = 0xff72;",
+  "replace": "\tblk->repeat = 1;\n\tblk->acc = 0xff72;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the preamble is the restart's 0xf72",
-  "find": "\tt44_recputi(blk, T44_R_F24, 0xff72);",
-  "replace": "\tt44_recputi(blk, T44_R_F24, 0xf72);",
+  "find": "\tblk->acc = 0xff72;",
+  "replace": "\tblk->acc = 0xf72;",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the preamble at +0x2c is a halfword",
-  "find": "\tt44_recputi(blk, T44_R_F2C, 0xff72);",
-  "replace": "\tt44_recput(blk, T44_R_F2C, (short)0xff72);",
+  "find": "\tblk->acc0 = 0xff72;",
+  "replace": "\tblk->acc0 = (short)0xff72;",
   "fn": "t44_accept_len4d"
  },
  {
@@ -1281,8 +1281,8 @@
  },
  {
   "label": "the txinfo1a printout reads the record that arrived",
-  "find": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9AC));",
-  "replace": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)((const char *)obj + T44_REC_A9DC));",
+  "find": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)&obj->msgrec[2]);",
+  "replace": "\t\tt44_print10(\"V34PROBE, txinfo1a\",\n\t\t\t    (const short *)&obj->msgrec[3]);",
   "fn": "t44_accept_len4d"
  },
  {
@@ -1305,16 +1305,16 @@
  },
  {
   "label": "the length's first field is one bit wide",
-  "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
-  "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 1) << 5)",
+  "find": "\traw = (short)(((obj->msgrec[3].word[0] & 3) << 5)",
+  "replace": "\traw = (short)(((obj->msgrec[3].word[0] & 1) << 5)",
   "fn": "t44_mdlength"
  },
  {
   "label": "the INFO1a decoder is given the cached record pointer",
   "equivalent": true,
   "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding F406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding F401's third equivalence says of the restart.",
-  "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
-  "replace": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {",
+  "find": "\tif ((short)V34GiveINFO1aBits(obj,\n\t\t\t      (const short *)t44_record(obj, T44_PTR_AA70)) != 0) {",
+  "replace": "\tif ((short)V34GiveINFO1aBits(obj, (const short *)rec) != 0) {",
   "fn": "t44_accept_len26"
  }
 ]

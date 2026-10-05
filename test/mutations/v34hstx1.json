@@ -865,12 +865,12 @@
  },
  {
   "label": "54: the self-pointer is aimed at +0xa97c",
-  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + TX1_BLK_A94C);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\t*(short **)((char *)o + TX1_PTR_AA6C) =\n\t\t(short *)((char *)o + 0xa97c);"
+  "find": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\to->paa6c = o->msgrec;",
+  "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\to->paa6c = &o->msgrec[1];"
  },
  {
   "label": "54: V34SetINFO0aBits is not called",
-  "find": "\tV34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));\n",
+  "find": "\tV34SetINFO0aBits(o, (short *)o->msgrec);\n",
   "replace": ""
  },
  {
@@ -895,33 +895,33 @@
  },
  {
   "label": "54: the record's +0x14 is cleared rather than set to -1",
-  "find": "\t\t*(short *)(r + 0x14) = -1;\n\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1e) = 0;\n\t\t*(short *)(r + 0x22) = 0;\n\t\t*(short *)(r + 0x18) = lead;",
-  "replace": "\t\t*(short *)(r + 0x14) = 0;\n\t\t*(short *)(r + 0x1a) = 0;\n\t\t*(short *)(r + 0x1e) = 0;\n\t\t*(short *)(r + 0x22) = 0;\n\t\t*(short *)(r + 0x18) = lead;"
+  "find": "\t\tr->crc = -1;\n\t\tr->pos = 0;\n\t\tr->idx = 0;\n\t\tr->repeats = 0;\n\t\tr->nbits = lead;",
+  "replace": "\t\tr->crc = 0;\n\t\tr->pos = 0;\n\t\tr->idx = 0;\n\t\tr->repeats = 0;\n\t\tr->nbits = lead;"
  },
  {
   "label": "54: the record's +0x1c is 0x10",
-  "find": "\t\t*(short *)(r + 0x1c) = 8;",
-  "replace": "\t\t*(short *)(r + 0x1c) = 0x10;"
+  "find": "\t\tr->wordbits = 8;",
+  "replace": "\t\tr->wordbits = 0x10;"
  },
  {
   "label": "54: the record's +0x16 is left alone",
-  "find": "\t\t*(short *)(r + 0x16) = 1;\n",
+  "find": "\t\tr->crc_on = 1;\n",
   "replace": ""
  },
  {
   "label": "54: the record's +0x2a is left alone",
-  "find": "\t\t*(short *)(r + 0x2a) = 0x10;\n",
+  "find": "\t\tr->avail0 = 0x10;\n",
   "replace": ""
  },
  {
   "label": "54: the record's two ints are 0xff73",
-  "find": "\t\t*(int *)(r + 0x24) = 0xff72;\n\t\t*(int *)(r + 0x2c) = 0xff72;",
-  "replace": "\t\t*(int *)(r + 0x24) = 0xff73;\n\t\t*(int *)(r + 0x2c) = 0xff73;"
+  "find": "\t\tr->acc = 0xff72;\n\t\tr->acc0 = 0xff72;",
+  "replace": "\t\tr->acc = 0xff73;\n\t\tr->acc0 = 0xff73;"
  },
  {
   "label": "54: the record's +0x2c is a short",
-  "find": "\t\t*(int *)(r + 0x2c) = 0xff72;",
-  "replace": "\t\t*(short *)(r + 0x2c) = (short)0xff72;"
+  "find": "\t\tr->acc0 = 0xff72;",
+  "replace": "\t\tr->acc0 = (short)0xff72;"
  },
  {
   "label": "54: short_358c is not cleared",
@@ -2125,13 +2125,13 @@
  },
  {
   "label": "66: prev_quadrant does not take cur_quadrant at the completion",
-  "find": "\to->prev_quadrant = (short)(unsigned short)o->cur_quadrant;\n\tmemcpy",
-  "replace": "\tmemcpy",
+  "find": "o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;\n\to->paa6c = rec;",
+  "replace": "o->paa6c = rec;",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the record pointer is left alone",
-  "find": "\tmemcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));\n",
+  "find": "\to->paa6c = rec;\n",
   "replace": "",
   "fn": "v34tx1_trnseg4a"
  },
@@ -3028,16 +3028,16 @@
   "find": "\"DET_CM_JM\",\t\"DET_SYNC\",\t\"DET_CJ\",\t\"RX_DPSK\",",
   "replace": "\"DET_CM_JM\",\t\"DET_CJ\",\t\"DET_SYNC\",\t\"RX_DPSK\","
  },
-  {
+ {
   "label": "rxstate and txstate format literals permuted",
   "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
   "replace": "\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
   "fn": "hs_setstate"
-  },
-  {
+ },
+ {
   "label": "microstate format literal moved to the rxstate slot",
   "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
   "replace": "\t\t\tsel = \"V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\\n\";",
   "fn": "hs_setstate"
-  }
+ }
 ]

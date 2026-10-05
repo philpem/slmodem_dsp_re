@@ -412,11 +412,9 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * `v34handshakinit` aims the same pair on its mode-4 path (V34hshak.c:1451),
  * and 54's completion aims it again before handing the record to
  * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
- * and checks it by offset instead (finding F324).
+ * and checks it by offset instead (finding F324).  Both are members of
+ * `struct v34_object` now (issue #260): `paa6c` and `msgrec`.
  */
-/* now the member's own offset (issue #260). */
-#define TX1_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
-#define TX1_BLK_A94C	0xa94c
 
 /*
  * +0x238 and +0x248, two of the four words of the sample-clock timer in
@@ -1448,9 +1446,8 @@ v34tx1_silence(void *objp)
 	/* 0x6858f */
 	hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
 	o->vect_idx = 0;
-	*(short **)((char *)o + TX1_PTR_AA6C) =
-		(short *)((char *)o + TX1_BLK_A94C);
-	V34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));
+	o->paa6c = o->msgrec;
+	V34SetINFO0aBits(o, (short *)o->msgrec);
 
 	{
 		/*
@@ -1460,23 +1457,23 @@ v34tx1_silence(void *objp)
 		 * this sequence.  `V34SetINFO0aBits` does not write +0xaa6c,
 		 * so nothing observable turns on it.
 		 */
-		char *r = (char *)*(short **)((char *)o + TX1_PTR_AA6C);
+		struct v34_bitsource *r = (struct v34_bitsource *)o->paa6c;
 		short lead = (o->role == 0x65 && o->v90_receiver != 0)
 			     ? 0x1e : 0x11;
 
-		*(short *)(r + 0x14) = -1;
-		*(short *)(r + 0x1a) = 0;
-		*(short *)(r + 0x1e) = 0;
-		*(short *)(r + 0x22) = 0;
-		*(short *)(r + 0x18) = lead;
+		r->crc = -1;
+		r->pos = 0;
+		r->idx = 0;
+		r->repeats = 0;
+		r->nbits = lead;
 		/* 0x68616 */
-		*(short *)(r + 0x1c) = 8;
-		*(short *)(r + 0x16) = 1;
-		*(short *)(r + 0x28) = 0x10;
-		*(short *)(r + 0x2a) = 0x10;
-		*(short *)(r + 0x20) = 0;
-		*(int *)(r + 0x24) = 0xff72;
-		*(int *)(r + 0x2c) = 0xff72;
+		r->wordbits = 8;
+		r->crc_on = 1;
+		r->avail = 0x10;
+		r->avail0 = 0x10;
+		r->repeat = 0;
+		r->acc = 0xff72;
+		r->acc0 = 0xff72;
 	}
 
 	tx1_put(o, TX1_F358C, 0);
@@ -2675,7 +2672,7 @@ v34tx1_trnseg4a(void *objp)
 	/* 0x62f22 */
 	rec = (short *)((char *)objp + TX1_FAA3C);
 	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
-	memcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));
+	o->paa6c = rec;
 
 	if (rx->flags & V34_RX_FLAG_RENEG) {
 		/* 0x62f5f */
@@ -3050,7 +3047,7 @@ emit:
 static struct v34_bitsource *
 tx1_bitsource(struct v34_object *o)
 {
-	return *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);
+	return (struct v34_bitsource *)o->paa6c;
 }
 static void
 tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
@@ -3254,11 +3251,10 @@ tx1_moh_send(struct v34_object *o)
 
 	/* 0x6a427 */
 	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
-	*(short **)((char *)o + TX1_PTR_AA6C) =
-		(short *)((char *)o + TX1_BLK_A94C);
+	o->paa6c = o->msgrec;
 
 	/* 0x6a44e */
-	b = (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);
+	b = o->msgrec;
 	b->crc = (short)0xffff;
 	b->pos = 0;
 	b->idx = 0;

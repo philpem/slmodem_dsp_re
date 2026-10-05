@@ -218,8 +218,8 @@
  },
  {
   "label": "the long and short warm-ups are the other way round",
-  "find": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x1e);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70bdd */",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj, T41_BLK_A94C, 0x1e);\t/* 0x70bdd */",
+  "find": "\t\tt41_record_head(obj->msgrec, 0x1e);\t\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj->msgrec, 0x11);\t\t/* 0x70bdd */",
+  "replace": "\t\tt41_record_head(obj->msgrec, 0x11);\t/* 0x70d47 */\n\telse\n\t\tt41_record_head(obj->msgrec, 0x1e);\t/* 0x70bdd */",
   "fn": "t41_tone_search"
  },
  {
@@ -248,26 +248,26 @@
  },
  {
   "label": "the tone search's record holds 0xf73",
-  "find": "\tt3c_puti(obj, T41_BLK_A94C +\n\t\t __builtin_offsetof(struct v34_bitsource, acc), 0xf72);",
-  "replace": "\tt3c_puti(obj, T41_BLK_A94C + 0x24, 0xf73);",
+  "find": "\tobj->msgrec[0].acc = 0xf72;",
+  "replace": "\tobj->msgrec[0].acc = 0xf73;",
   "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record holds 0xd at +0x28",
-  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0xc);",
-  "replace": "\ths_put(obj, T41_BLK_A94C + 0x28, 0xd);",
+  "find": "\tobj->msgrec[0].avail = 0xc;",
+  "replace": "\tobj->msgrec[0].avail = 0xd;",
   "fn": "t41_tone_search"
  },
  {
   "label": "the tone search's record ends with a zero at +0x20",
-  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
-  "replace": "\ths_put(obj, T41_BLK_A94C + 0x20, 0);",
+  "find": "\tobj->msgrec[0].repeat = 1;",
+  "replace": "\tobj->msgrec[0].repeat = 0;",
   "fn": "t41_tone_search"
  },
  {
   "label": "the tone search fills the record at +0xa9ac",
-  "find": "\t\tt41_record_head(obj, T41_BLK_A94C, 0x11);\t/* 0x70bdd */",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x11);\t/* 0x70bdd */",
+  "find": "\t\tt41_record_head(obj->msgrec, 0x11);\t\t/* 0x70bdd */",
+  "replace": "\t\tt41_record_head(&obj->msgrec[2], 0x11);\t\t/* 0x70bdd */",
   "fn": "t41_tone_search"
  },
  {
@@ -460,26 +460,26 @@
  },
  {
   "label": "Info1c's record warms up for 0x4e",
-  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);",
-  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4e);",
+  "find": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(&obj->msgrec[2], 0x4d);",
+  "replace": "\t\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t\tt41_record_head(&obj->msgrec[2], 0x4e);",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0x11 at +0x28",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x11);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0), 0x10);\n\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(",
+  "find": "\t\tobj->msgrec[2].avail = 0x10;\n\t\tobj->msgrec[2].avail0 = 0x10;\n\t\tobj->msgrec[2].repeat = 0;\n\t\tobj->paa6c = &obj->msgrec[2];",
+  "replace": "\t\tobj->msgrec[2].avail = 0x11;\n\t\tobj->msgrec[2].avail0 = 0x10;\n\t\tobj->msgrec[2].repeat = 0;\n\t\tobj->paa6c = &obj->msgrec[2];",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c aims +0xaa6c at the other record",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 0);\n\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A94C);",
+  "find": "\t\tobj->msgrec[2].repeat = 0;\n\t\tobj->paa6c = &obj->msgrec[2];",
+  "replace": "\t\tobj->msgrec[2].repeat = 0;\n\t\tobj->paa6c = obj->msgrec;",
   "fn": "t41_info_marks"
  },
  {
   "label": "Info1c's record holds 0xff73",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc), 0xff72);",
-  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C, (char *)obj + T41_BLK_A9AC);\n\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff73);",
+  "find": "\t\tobj->paa6c = &obj->msgrec[2];\n\t\tobj->msgrec[2].acc = 0xff72;",
+  "replace": "\t\tobj->paa6c = &obj->msgrec[2];\n\t\tobj->msgrec[2].acc = 0xff73;",
   "fn": "t41_info_marks"
  },
  {
@@ -515,8 +515,8 @@
  },
  {
   "label": "the tone search's last store happens only with the diagnostics on",
-  "find": "\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\ths_put(obj, T41_BLK_A94C +\n\t\t    __builtin_offsetof(struct v34_bitsource, repeat), 1);",
+  "find": "\tobj->msgrec[0].repeat = 1;",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tobj->msgrec[0].repeat = 1;",
   "fn": "t41_tone_search"
  },
  {

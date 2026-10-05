@@ -141,92 +141,92 @@
  },
  {
   "label": "+0xaa6c is aimed at the second record",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + T41_BLK_A9AC);",
-  "replace": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + 0xa9dc);",
+  "find": "\t\tobj->paa6c = &obj->msgrec[2];\t\t/* 0x6b1e3 */",
+  "replace": "\t\tobj->paa6c = &obj->msgrec[3];\t\t/* 0x6b1e3 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "+0xaa6c is not re-aimed",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA6C,\t\t/* 0x6b1e3 */\n\t\t\t (char *)obj + T41_BLK_A9AC);\n",
-  "replace": "",
+  "find": "\t\tobj->paa6c = &obj->msgrec[2];\t\t/* 0x6b1e3 */",
+  "replace": "\t\tobj->paa6c = &obj->msgrec[3];\t\t/* 0x6b1e3 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the encoder is handed the second record",
-  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + T41_BLK_A9AC));",
-  "replace": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + 0xa9dc));",
+  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)&obj->msgrec[2]);",
+  "replace": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)&obj->msgrec[3]);",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the encoder does not run",
-  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)((char *)obj + T41_BLK_A9AC));\n",
-  "replace": "",
+  "find": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)&obj->msgrec[2]);",
+  "replace": "\t\tV34SetINFO1aBits(obj,\t\t\t/* 0x6b1f0 */\n\t\t\t\t (short *)&obj->msgrec[3]);",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the record's length is INFO1a's",
-  "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */",
-  "replace": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x26);   /* 0x6b1fb */",
+  "find": "\t\tt41_record_head(&obj->msgrec[2], 0x4d);     /* 0x6b1fb */",
+  "replace": "\t\tt41_record_head(&obj->msgrec[2], 0x26);     /* 0x6b1fb */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the record's head is not written",
-  "find": "\t\tt41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */\n",
+  "find": "\t\tt41_record_head(&obj->msgrec[2], 0x4d);     /* 0x6b1fb */\n",
   "replace": "",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x1c takes 0 rather than 8",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, wordbits),\n\t\t       8);\t    /* 0x6b219 */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x1c, 0);\t    /* 0x6b219 */",
+  "find": "\t\tobj->msgrec[2].wordbits = 8;\t\t    /* 0x6b219 */",
+  "replace": "\t\tobj->msgrec[2].wordbits = 0;\t\t    /* 0x6b219 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x16 takes 0 rather than 1",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, crc_on),\n\t\t       1);\t    /* 0x6b21f */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x16, 0);\t    /* 0x6b21f */",
+  "find": "\t\tobj->msgrec[2].crc_on = 1;\t\t    /* 0x6b21f */",
+  "replace": "\t\tobj->msgrec[2].crc_on = 0;\t\t    /* 0x6b21f */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x28 takes 0x11",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail),\n\t\t       0x10);\t    /* 0x6b225 */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail), 0x11);\t    /* 0x6b225 */",
+  "find": "\t\tobj->msgrec[2].avail = 0x10;\t\t    /* 0x6b225 */",
+  "replace": "\t\tobj->msgrec[2].avail = 0x11;\t\t    /* 0x6b225 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2a takes 0x11",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, avail0),\n\t\t       0x10);\t    /* 0x6b22b */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2a, 0x11);\t    /* 0x6b22b */",
+  "find": "\t\tobj->msgrec[2].avail0 = 0x10;\t\t    /* 0x6b22b */",
+  "replace": "\t\tobj->msgrec[2].avail0 = 0x11;\t\t    /* 0x6b22b */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x20 is not cleared",
-  "find": "\t\ths_put(obj, T41_BLK_A9AC +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, repeat),\n\t\t       0);\t    /* 0x6b231 */\n",
+  "find": "\t\tobj->msgrec[2].repeat = 0;\t\t    /* 0x6b231 */\n",
   "replace": "",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x24 is written sixteen bits wide",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc),\n\t\t\t 0xff72); /* 0x6b23e */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x24, (short)0xff72); /* 0x6b23e */",
+  "find": "\t\tobj->msgrec[2].acc = 0xff72; /* 0x6b23e */",
+  "replace": "\t\tobj->msgrec[2].acc = (short)0xff72; /* 0x6b23e */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2c is written sixteen bits wide",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc0),\n\t\t\t 0xff72); /* 0x6b245 */",
-  "replace": "\t\ths_put(obj, T41_BLK_A9AC + 0x2c, (short)0xff72); /* 0x6b245 */",
+  "find": "\t\tobj->msgrec[2].acc0 = 0xff72; /* 0x6b245 */",
+  "replace": "\t\tobj->msgrec[2].acc0 = (short)0xff72; /* 0x6b245 */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x24 takes 0xff71",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc),\n\t\t\t 0xff72); /* 0x6b23e */",
-  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x24, 0xff71); /* 0x6b23e */",
+  "find": "\t\tobj->msgrec[2].acc = 0xff72; /* 0x6b23e */",
+  "replace": "\t\tobj->msgrec[2].acc = 0xff71; /* 0x6b23e */",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "record +0x2c takes the sign-extended value",
-  "find": "\t\tt3c_puti(obj, T41_BLK_A9AC +\n\t\t\t __builtin_offsetof(struct v34_bitsource, acc0),\n\t\t\t 0xff72); /* 0x6b245 */",
-  "replace": "\t\tt3c_puti(obj, T41_BLK_A9AC + 0x2c, (int)(short)0xff72); /* 0x6b245 */",
+  "find": "\t\tobj->msgrec[2].acc0 = 0xff72; /* 0x6b245 */",
+  "replace": "\t\tobj->msgrec[2].acc0 = (int)(short)0xff72; /* 0x6b245 */",
   "fn": "t53_rx_det_ab"
  },
  {
@@ -255,25 +255,25 @@
  },
  {
   "label": "+0xaa70 is aimed at the first record",
-  "find": "\t\tt3c_putp(obj, T41_PTR_AA70, (char *)obj + 0xa9dc);",
-  "replace": "\t\tt3c_putp(obj, T41_PTR_AA70, (char *)obj + T41_BLK_A9AC);",
+  "find": "\t\tobj->paa70 = &obj->msgrec[3];\n\t\tobj->msgrec[3].nbits = 0x26;",
+  "replace": "\t\tobj->paa70 = &obj->msgrec[2];\n\t\tobj->msgrec[3].nbits = 0x26;",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the second record's length is INFO1c's",
-  "find": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x26);",
-  "replace": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x4d);",
+  "find": "\t\tobj->paa70 = &obj->msgrec[3];\n\t\tobj->msgrec[3].nbits = 0x26;",
+  "replace": "\t\tobj->paa70 = &obj->msgrec[3];\n\t\tobj->msgrec[3].nbits = 0x4d;",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the second record's length lands at its +0x14",
-  "find": "\t\ths_put(obj, 0xa9dc +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x26);",
-  "replace": "\t\ths_put(obj, 0xa9dc + 0x14, 0x26);",
+  "find": "\t\tobj->paa70 = &obj->msgrec[3];\n\t\tobj->msgrec[3].nbits = 0x26;",
+  "replace": "\t\tobj->paa70 = &obj->msgrec[3];\n\t\tobj->msgrec[3].crc = 0x26;",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the txinfo1c dump reads the second record",
-  "find": "\t\t\t    (const unsigned short *)((const char *)obj\n\t\t\t\t\t\t     + T41_BLK_A9AC);",
+  "find": "\t\t\t    (const unsigned short *)&obj->msgrec[2];",
   "replace": "\t\t\t    (const unsigned short *)((const char *)obj\n\t\t\t\t\t\t     + 0xa9dc);",
   "fn": "t53_rx_det_ab"
  },

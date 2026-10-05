@@ -2456,7 +2456,7 @@
    }
   },
   "v34hsmst44": {
-   "key": "ccc1e5cd4d878ff42ee1f16c12a4119b2a6a19fa6b713feb4cdcf365cb6433a2",
+   "key": "ea91d8b70c1f14ff41cc64d56dc3820bbf58e8fee07966a8df334d3e97fb61da",
    "summary": "214 mutations: 207 caught (207 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
@@ -2676,7 +2676,7 @@
    }
   },
   "v34hsrx4": {
-   "key": "add3f70a3f70966526f473dc58de6788ac11a349abe58e244ef82d35261acb81",
+   "key": "4203e21f24fb939743d0f29e4ace957bf872d6fef6b506aca7506e699aba9a1a",
    "summary": "176 mutations: 170 caught (170 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa80 raises 0x100 rather than 0x200": "caught",
@@ -2858,7 +2858,7 @@
    }
   },
   "v34hsrx53": {
-   "key": "5b1ac2e2aba64b64d11e387b3fbd13fbdea342aac9f8c349d4b6c58d0888c6a1",
+   "key": "912a01a80d6f4a3bfd95da0123900f978c6eba00e24ed5a3f4677bebe4dafbd4",
    "summary": "62 mutations: 61 caught (61 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is not cleared": "caught",
@@ -2926,7 +2926,7 @@
    }
   },
   "v34hsrx72": {
-   "key": "2aaf29d748cff48bfde59ca4d2484054cc1fcca3b26b3d16638a2839e1ddbb89",
+   "key": "1d03cb37fd93b06131ef6e1c6480aa598d8c59b2ab80b4a3bfb70a0d6ece369c",
    "summary": "125 mutations: 124 caught (124 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is SET rather than toggled": "caught",
@@ -3071,8 +3071,8 @@
    }
   },
   "v34hst346": {
-   "key": "fa643552f09e8b2bf85c5a5d62df8bc8ecbba912d760b76bfefe06176e1bb818",
-   "summary": "75 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "37a9748099c7d96363d0f68029978abc5e9c3804c319bb9a21c40b31e0f3b440",
+   "summary": "75 mutations: 72 caught (72 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa7a is not stepped": "caught",
     "+0xaa7a's compare is strict": "caught",
@@ -3129,11 +3129,11 @@
     "the record's +0x1c takes 9": "caught",
     "the record's +0x20 is cleared": "caught",
     "the record's +0x22 is not cleared": "caught",
-    "the record's +0x24 is a short rather than an int": "caught",
+    "the record's +0x24 is a short rather than an int": "uncaught",
     "the record's +0x24 takes 0xf73": "caught",
     "the record's +0x28 takes 13": "caught",
     "the record's +0x2a takes 13": "caught",
-    "the record's +0x2c is a short rather than an int": "caught",
+    "the record's +0x2c is a short rather than an int": "uncaught",
     "the record's two +0x18 values are the wrong way round": "caught",
     "the reset clears nine message shorts, not ten": "caught",
     "the reset clears the message buffer after it traces": "equivalent",
@@ -3152,7 +3152,7 @@
    }
   },
   "v34hst3core": {
-   "key": "d548307a2cae579292299422d6c755278ea2c1f266526bc880fabc3a4ec72613",
+   "key": "bbae800851fd6dab4e64f786ea11474dba65f385c26eb6d9ab07d6ab09e39f73",
    "summary": "70 mutations: 70 caught (70 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -3228,7 +3228,7 @@
    }
   },
   "v34hst3m41": {
-   "key": "24bdae276801fef14d8e196758b8900fcb6b31fd2dd2e2da271d62055b7cfb0f",
+   "key": "deaaf984647735b92e8ad0a9cca311b134a3cb7607ae68b1b3336dda6dcf63d4",
    "summary": "86 mutations: 84 caught (84 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358a's 1 and 2 select each other's body": "caught",
@@ -3320,8 +3320,8 @@
    }
   },
   "v34hst3mid": {
-   "key": "c29edf9e3d4832147aed09d8e316f75039d6ab78e20cf5ed0859d94055143c6e",
-   "summary": "443 mutations: 422 caught (422 by test, 0 by strings), 0 NOT caught, 0 unusable, 21 equivalent, 0 MIScounted",
+   "key": "bcce56c0aee453fabd894c273f21066b6f571f31c803452c87c4dda9a53980bb",
+   "summary": "443 mutations: 419 caught (419 by test, 0 by strings), 2 NOT caught, 1 unusable, 21 equivalent, 0 MIScounted",
    "verdicts": {
     "47 has no second guard": "caught",
     "47 is not shared with 56": "caught",
@@ -3730,18 +3730,18 @@
     "the shared reset's record (47, 49, 50) +0x18 has its two constants exchanged": "caught",
     "the shared reset's record (47, 49, 50) +0x18 ignores the V.90 receiver": "caught",
     "the shared reset's record (47, 49, 50) +0x18 reads the K56flex receiver": "caught",
-    "the shared reset's record (47, 49, 50) +0x18 takes 0x1e on the answer side": "caught",
+    "the shared reset's record (47, 49, 50) +0x18 takes 0x1e on the answer side": "unusable",
     "the shared reset's record (47, 49, 50) +0x1a is 1": "caught",
     "the shared reset's record (47, 49, 50) +0x1c is 9": "caught",
     "the shared reset's record (47, 49, 50) +0x1e is 1": "caught",
     "the shared reset's record (47, 49, 50) +0x20 is 0": "caught",
     "the shared reset's record (47, 49, 50) +0x22 is 1": "caught",
     "the shared reset's record (47, 49, 50) +0x24 is 0xf73": "caught",
-    "the shared reset's record (47, 49, 50) +0x24 is a halfword": "caught",
+    "the shared reset's record (47, 49, 50) +0x24 is a halfword": "uncaught",
     "the shared reset's record (47, 49, 50) +0x28 is 0xd": "caught",
     "the shared reset's record (47, 49, 50) +0x2a is 0xd": "caught",
     "the shared reset's record (47, 49, 50) +0x2c is 0xf73": "caught",
-    "the shared reset's record (47, 49, 50) +0x2c is a halfword": "caught",
+    "the shared reset's record (47, 49, 50) +0x2c is a halfword": "uncaught",
     "the shared reset's record (47, 49, 50) is at +0xa97c": "caught",
     "the tail compares elapsed against the deadline signed": "caught",
     "the tail dispatches on mode 2 rather than 1": "caught",
@@ -3784,8 +3784,8 @@
    }
   },
   "v34hstx1": {
-   "key": "63c9713c174c0a03d96c7a0e4299d7e29f3a8911fd8ee83db2ada20a5935b913",
-   "summary": "535 mutations: 513 caught (513 by test, 0 by strings), 0 NOT caught, 0 unusable, 22 equivalent, 0 MIScounted",
+   "key": "3f4d1b3ee8da39b8d5dcd8f4113308f8e7900869278f5326a355d8c1fada9fae",
+   "summary": "543 mutations: 520 caught (520 by test, 0 by strings), 0 NOT caught, 1 unusable, 22 equivalent, 0 MIScounted",
    "verdicts": {
     "18: only the first symbol is transmitted": "caught",
     "18: the SBARSEG guard is deleted": "caught",
@@ -3941,7 +3941,7 @@
     "21: the quadrant is stored but the point is vect4[0]": "caught",
     "21: the receiver is moved to WAIT rather than RECEIVE": "caught",
     "21: the receiver is not moved to RECEIVE": "caught",
-    "21: the record blanked is the one at +0xa94c": "caught",
+    "21: the record blanked is the one at +0xa94c": "unusable",
     "21: the record's +0x14 is cleared rather than set to -1": "caught",
     "21: the record's +0x14 is set to -1 as an int": "equivalent",
     "21: the record's +0x16 is left alone": "caught",
@@ -4321,11 +4321,19 @@
     "86: the segment-complete test is missing": "caught",
     "86: the shared block at 0x6430c does not count the symbol": "caught",
     "86: the symbol counter is not advanced": "caught",
-    "86: the transmit machine is not moved to SSEG": "caught"
+    "86: the transmit machine is not moved to SSEG": "caught",
+    "HS_RXSTATE branch ctx1/ctx2 swapped": "caught",
+    "HS_TXSTATE branch ctx1/ctx2 swapped": "caught",
+    "StateName DET_SYNC and DET_CJ transposed": "caught",
+    "[1] and [2] counters swapped": "caught",
+    "microstate context fed from rxstate twice": "caught",
+    "microstate format literal moved to the rxstate slot": "caught",
+    "rxstate and txstate format literals permuted": "caught",
+    "rxstate and txstate offsets transposed": "caught"
    }
   },
   "v34hstx1_moved": {
-   "key": "93430b551ee591cbb1b2c9f211b1858a75eaf5b5e5aac6aef282a32b3574ead4",
+   "key": "c042fa4432ea47afae09ebc0e90908ba64a232b5cd60297f8297d2bb83dc4179",
    "summary": "241 mutations: 240 caught (240 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "24: +0xabf9 picks the two messages the other way round": "caught",

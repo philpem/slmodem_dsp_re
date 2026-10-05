@@ -340,7 +340,7 @@ rxtiminginit(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = v34_object_receiver(obj);
 
-	V34TimingFiltersInit(v34_object_timing(obj));
+	V34TimingFiltersInit(&obj->timing);
 
 	/* Where rxreadqueue leaves its four samples. */
 	rx->rx_samples = (short *)((char *)obj + 0x370);
@@ -380,7 +380,7 @@ rxinit(void *objp)
 	rx->agc_step = 0x3333;
 	rx->mix_carrier_step = 1;
 
-	V34EqualizerCleanUp(v34_object_equalizer(obj));
+	V34EqualizerCleanUp(&obj->equalizer);
 
 	/*
 	 * The fill is %ecx, which held 1 before V34EqualizerCleanUp and is
@@ -679,7 +679,7 @@ rxtiming(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = v34_object_receiver(obj);
-	struct v34_timing *t = v34_object_timing(obj);
+	struct v34_timing *t = &obj->timing;
 	short i;
 
 	/* Set before the count is even tested, so it lands on an empty call. */
@@ -1289,7 +1289,7 @@ receiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = v34_object_receiver(obj);
-	struct v34_timing *t = v34_object_timing(obj);
+	struct v34_timing *t = &obj->timing;
 	struct v34_equalizer *eq =
 		(struct v34_equalizer *)((char *)rx + V34_RX_EQ_OFFSET);
 	unsigned flags;
