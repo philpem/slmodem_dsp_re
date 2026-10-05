@@ -3001,20 +3001,20 @@
  },
  {
   "label": "microstate context fed from rxstate twice",
-  "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
-  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "find": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[obj->txstate];\n\t\t\tctx2 = StateName[obj->rxstate];",
+  "replace": "\t\tif (off == HS_MICROSTATE) {\n\t\t\tctx1 = StateName[obj->rxstate];\n\t\t\tctx2 = StateName[obj->txstate];",
   "fn": "hs_setstate"
  },
  {
   "label": "HS_RXSTATE branch ctx1/ctx2 swapped",
-  "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_TXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_TXSTATE)];",
+  "find": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[obj->txstate];\n\t\t\tctx2 = StateName[obj->microstate];",
+  "replace": "\t\t} else if (off == HS_RXSTATE) {\n\t\t\tctx1 = StateName[obj->microstate];\n\t\t\tctx2 = StateName[obj->txstate];",
   "fn": "hs_setstate"
  },
  {
   "label": "HS_TXSTATE branch ctx1/ctx2 swapped",
-  "find": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];",
-  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_RXSTATE)];",
+  "find": "\t\t} else {\n\t\t\tctx1 = StateName[obj->rxstate];\n\t\t\tctx2 = StateName[obj->microstate];",
+  "replace": "\t\t} else {\n\t\t\tctx1 = StateName[obj->microstate];\n\t\t\tctx2 = StateName[obj->rxstate];",
   "fn": "hs_setstate"
  },
  {
@@ -3030,8 +3030,8 @@
  },
  {
   "label": "rxstate and txstate format literals permuted",
-  "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
-  "replace": "\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[hs_get(obj, HS_RXSTATE)];\n\t\t\tctx2 = StateName[hs_get(obj, HS_MICROSTATE)];\n\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
+  "find": "\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[obj->rxstate];\n\t\t\tctx2 = StateName[obj->microstate];\n\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
+  "replace": "\t\t\tsel = \"V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\\n\";\n\t\t} else {\n\t\t\tctx1 = StateName[obj->rxstate];\n\t\t\tctx2 = StateName[obj->microstate];\n\t\t\tsel = \"V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\\n\";",
   "fn": "hs_setstate"
  },
  {

@@ -127,14 +127,14 @@
  },
  {
   "label": "the J gate wants 0x10 rather than 0x08",
-  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
-  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_TRN_WATCH\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && obj->role == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_TRN_WATCH\n\t    && obj->role == 0x65) {",
   "fn": "t4_receive_body"
  },
  {
   "label": "the J gate's marker is 0x66, not 0x65",
-  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x65) {",
-  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && T4_I16(obj, ((int)__builtin_offsetof(struct v34_object,\n\t\t\t    role))) == 0x66) {",
+  "find": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && obj->role == 0x65) {",
+  "replace": "\tif ((flags & 0x98) == V34_RX_FLAG_LATE_TRN\n\t    && obj->role == 0x66) {",
   "fn": "t4_receive_body"
  },
  {
@@ -217,14 +217,14 @@
  },
  {
   "label": "the MD-over door opens at +0x3570 == 2",
-  "find": "\tif (T4_I16(obj, T4_F3570) == 3) {\t\t\t/* 0x67a5b */",
-  "replace": "\tif (T4_I16(obj, T4_F3570) == 2) {\t\t\t/* 0x67a5b */",
+  "find": "\tif (obj->detector.state == 3) {\t\t\t/* 0x67a5b */",
+  "replace": "\tif (obj->detector.state == 2) {\t\t\t/* 0x67a5b */",
   "fn": "t4_receive_body"
  },
  {
   "label": "the MD-over door is +0x356c, not +0x3570",
-  "find": "\tif (T4_I16(obj, T4_F3570) == 3) {\t\t\t/* 0x67a5b */",
-  "replace": "\tif (T4_I16(obj, T4_F356C) == 3) {\t\t\t/* 0x67a5b */",
+  "find": "\tif (obj->detector.state == 3) {\t\t\t/* 0x67a5b */",
+  "replace": "\tif (obj->detector.count == 3) {\t\t\t/* 0x67a5b */",
   "fn": "t4_receive_body"
  },
  {
@@ -271,20 +271,20 @@
  },
  {
   "label": "S detected writes 0x1f to +0x356c",
-  "find": "\tT4_I16(obj, T4_F356C) = 0x1e;\t\t\t\t/* 0x67b17 */",
-  "replace": "\tT4_I16(obj, T4_F356C) = 0x1f;\t\t\t\t/* 0x67b17 */",
+  "find": "\tobj->detector.count = 0x1e;\t\t\t\t/* 0x67b17 */",
+  "replace": "\tobj->detector.count = 0x1f;\t\t\t\t/* 0x67b17 */",
   "fn": "t4_receive_body"
  },
  {
   "label": "S detected writes 2 to +0x3570",
-  "find": "\tT4_I16(obj, T4_F3570) = 3;\n\tT4_I16(obj, T4_F3576) = 0;",
-  "replace": "\tT4_I16(obj, T4_F3570) = 2;\n\tT4_I16(obj, T4_F3576) = 0;",
+  "find": "\tobj->detector.state = 3;\n\tobj->detector.level = 0;",
+  "replace": "\tobj->detector.state = 2;\n\tobj->detector.level = 0;",
   "fn": "t4_receive_body"
  },
  {
   "label": "S detected leaves +0x3576 alone",
-  "find": "\tT4_I16(obj, T4_F3570) = 3;\n\tT4_I16(obj, T4_F3576) = 0;",
-  "replace": "\tT4_I16(obj, T4_F3570) = 3;",
+  "find": "\tobj->detector.state = 3;\n\tobj->detector.level = 0;",
+  "replace": "\tobj->detector.state = 3;",
   "fn": "t4_receive_body"
  },
  {
@@ -947,7 +947,7 @@
  },
  {
   "label": "MP's end leaves the trace counter alone",
-  "find": "\t\t\t\tT4_I16(obj, T3C_COUNT) = 0;\n\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
+  "find": "\t\t\t\tobj->short_aa78 = 0;\n\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
   "replace": "\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
   "fn": "t4_mp_runlength"
  },
@@ -1003,13 +1003,13 @@
  },
  {
   "label": "E leaves +0x266 alone",
-  "find": "\trx->subframe_idx = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
-  "replace": "\tT4_I16(obj, T3C_COUNT) = 0;",
+  "find": "\trx->subframe_idx = 0;\n\tobj->short_aa78 = 0;",
+  "replace": "\tobj->short_aa78 = 0;",
   "fn": "t4_mp_e_sequence"
  },
  {
   "label": "E leaves the trace counter alone",
-  "find": "\trx->subframe_idx = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
+  "find": "\trx->subframe_idx = 0;\n\tobj->short_aa78 = 0;",
   "replace": "\trx->subframe_idx = 0;",
   "fn": "t4_mp_e_sequence"
  },

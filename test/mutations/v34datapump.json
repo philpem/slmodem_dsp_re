@@ -20,8 +20,8 @@
  },
  {
   "label": "the stale-clock compare is signed, so a mark ahead of the count is not stale",
-  "find": "\tif ((unsigned)t3c_geti(obj, DP_TIMER)\n\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
-  "replace": "\tif (t3c_geti(obj, DP_TIMER)\n\t    - t3c_geti(obj, DP_TIMER_MARK) > (int)DP_TIMER_STALE)",
+  "find": "\tif ((unsigned)obj->sample_count\n\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
+  "replace": "\tif (obj->sample_count\n\t    - t3c_geti(obj, DP_TIMER_MARK) > (int)DP_TIMER_STALE)",
   "fn": "datapumpv34"
  },
  {
@@ -38,20 +38,20 @@
  },
  {
   "label": "the handshake branch is taken at +0x2218 == 1 too",
-  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
-  "replace": "\tif ((unsigned)t3c_geti(obj, DP_MODE) >= 1u) {",
+  "find": "\tif ((unsigned)obj->hs_mode > 1u) {",
+  "replace": "\tif ((unsigned)obj->hs_mode >= 1u) {",
   "fn": "datapumpv34"
  },
  {
   "label": "the handshake branch wants +0x2218 above 2",
-  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
-  "replace": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 2u) {",
+  "find": "\tif ((unsigned)obj->hs_mode > 1u) {",
+  "replace": "\tif ((unsigned)obj->hs_mode > 2u) {",
   "fn": "datapumpv34"
  },
  {
   "label": "the +0x2218 guard is signed, so -1 takes the data path",
-  "find": "\tif ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {",
-  "replace": "\tif (t3c_geti(obj, DP_MODE) > 1) {",
+  "find": "\tif ((unsigned)obj->hs_mode > 1u) {",
+  "replace": "\tif (obj->hs_mode > 1) {",
   "fn": "datapumpv34"
  },
  {
@@ -98,8 +98,8 @@
  },
  {
   "label": "the receiver loop runs before the modulator loop",
-  "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
-  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
+  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
   "fn": "datapumpv34"
  },
  {
@@ -197,8 +197,8 @@
  },
  {
   "label": "the span is measured signed, so it is never past either threshold",
-  "find": "\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);",
-  "replace": "\t\tspan = (unsigned)(t3c_geti(obj, DP_TIMER)\n\t\t     - t3c_geti(obj, DP_TIMER_MARK)) & 0x7fffu;",
+  "find": "\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);",
+  "replace": "\t\tspan = (unsigned)(obj->sample_count\n\t\t     - t3c_geti(obj, DP_TIMER_MARK)) & 0x7fffu;",
   "fn": "datapumpv34"
  },
  {
@@ -227,28 +227,28 @@
  },
  {
   "label": "the retrain reports 2 where the object reports 3",
-  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2);",
-  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 2 : 3);",
+  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2;",
+  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 2 : 3;",
   "fn": "datapumpv34"
  },
  {
   "label": "the retrain's report compares < rather than <=",
-  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2);",
-  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) < (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2);",
+  "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2;",
+  "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) < (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2;",
   "fn": "datapumpv34"
  },
  {
   "label": "the retrain's report is decided BEFORE v34handshakinit runs",
   "equivalent": true,
   "why": "`v34handshakinit` writes neither +0x258 nor +0xaa96 on any mode -- `setupreceiver`, which its retrain path reaches, assigns +0x122, +0x124 and +0x25e and not the run counters -- so the two orders read the same two fields.  The source keeps the object's order because the object has one, not because it is observable.",
-  "find": "\t\tv34handshakinit(obj, 1);\n\t\tt3c_puti(obj, DP_MODE,\n\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2);",
-  "replace": "\t\t{\n\t\t\tint m = dp_rxget(obj, DP_RX_BAD)\n\t\t\t\t<= (short)(obj->baud_rate >> 1) ? 3 : 2;\n\t\t\tv34handshakinit(obj, 1);\n\t\t\tt3c_puti(obj, DP_MODE, m);\n\t\t}",
+  "find": "\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->baud_rate >> 1)\n\t\t\t ? 3 : 2;",
+  "replace": "\t\t{\n\t\t\tint m = dp_rxget(obj, DP_RX_BAD)\n\t\t\t\t<= (short)(obj->baud_rate >> 1) ? 3 : 2;\n\t\t\tv34handshakinit(obj, 1);\n\t\t\tobj->hs_mode = m;\n\t\t}",
   "fn": "datapumpv34"
  },
  {
   "label": "the retrain calls v34handshakinit mode 2 rather than mode 1",
-  "find": "\t\tv34handshakinit(obj, 1);\n\t\tt3c_puti(obj, DP_MODE,",
-  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE,",
+  "find": "\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =",
+  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode =",
   "fn": "datapumpv34"
  },
  {
@@ -289,8 +289,8 @@
  },
  {
   "label": "the remote block reports 5 rather than 4",
-  "find": "\t\tt3c_puti(obj, DP_MODE, 4);",
-  "replace": "\t\tt3c_puti(obj, DP_MODE, 5);",
+  "find": "\t\tobj->hs_mode = 4;",
+  "replace": "\t\tobj->hs_mode = 5;",
   "fn": "datapumpv34"
  },
  {
@@ -301,8 +301,8 @@
  },
  {
   "label": "the remote block leaves the good-block run alone, so the step up can follow",
-  "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 4);",
-  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 4;",
+  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tobj->hs_mode = 4;",
   "fn": "datapumpv34"
  },
  {
@@ -351,14 +351,14 @@
   "label": "the step down calls v34handshakinit mode 3 rather than mode 2",
   "equivalent": true,
   "why": "`v34handshakinit` is `case 2: case 3:` over one body, and v34hshak.h records that mode 3 has no caller anywhere in the object and shares 2's jump-table entry.  The two calls are the same call, and this stops holding the moment mode 3 grows a body of its own.",
-  "find": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 5);",
-  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tt3c_puti(obj, DP_MODE, 5);",
+  "find": "\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;",
+  "replace": "\t\tv34handshakinit(obj, 3);\n\t\tobj->hs_mode = 5;",
   "fn": "datapumpv34"
  },
  {
   "label": "the step down reports 4 rather than 5",
-  "find": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 5);",
-  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "find": "\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;",
+  "replace": "\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 4;",
   "fn": "datapumpv34"
  },
  {
@@ -429,8 +429,8 @@
  },
  {
   "label": "the step up reports 4 rather than 5",
-  "find": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 5);",
-  "replace": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tt3c_puti(obj, DP_MODE, 4);",
+  "find": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 5;",
+  "replace": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 4;",
   "fn": "datapumpv34"
  },
  {

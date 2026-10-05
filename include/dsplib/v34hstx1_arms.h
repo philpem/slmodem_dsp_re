@@ -205,23 +205,23 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
 		const char *sel;
 
 		if (off == HS_MICROSTATE) {
-			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_RXSTATE)];
+			ctx1 = StateName[obj->txstate];
+			ctx2 = StateName[obj->rxstate];
 			sel = "V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n";
 		} else if (off == HS_RXSTATE) {
-			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+			ctx1 = StateName[obj->txstate];
+			ctx2 = StateName[obj->microstate];
 			sel = "V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n";
 		} else {
-			ctx1 = StateName[hs_get(obj, HS_RXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
+			ctx1 = StateName[obj->rxstate];
+			ctx2 = StateName[obj->microstate];
 			sel = "V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n";
 		}
 
 		dsplibs_debug_printf(sel, StateName[now], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
-				     (long)hs_get(obj, HS_TRACE_2));
+				     (long)obj->short_aa78);
 	}
 
 	hs_put(obj, off, next);

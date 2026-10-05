@@ -19,20 +19,20 @@
  },
  {
   "label": "the entry guard's microstate is 51, not 52",
-  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
-  "replace": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L1) {",
+  "find": "\tif (obj->microstate != V34HS_TX_L2) {",
+  "replace": "\tif (obj->microstate != V34HS_TX_L1) {",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the entry guard is inverted",
-  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
-  "replace": "\tif (hs_get(obj, HS_MICROSTATE) == V34HS_TX_L2) {",
+  "find": "\tif (obj->microstate != V34HS_TX_L2) {",
+  "replace": "\tif (obj->microstate == V34HS_TX_L2) {",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the entry guard reads the receive state word",
-  "find": "\tif (hs_get(obj, HS_MICROSTATE) != V34HS_TX_L2) {",
-  "replace": "\tif (hs_get(obj, HS_RXSTATE) != V34HS_TX_L2) {",
+  "find": "\tif (obj->microstate != V34HS_TX_L2) {",
+  "replace": "\tif (obj->rxstate != V34HS_TX_L2) {",
   "fn": "t53_rx_det_ab"
  },
  {
@@ -231,7 +231,7 @@
  },
  {
   "label": "+0x358c is not cleared",
-  "find": "\t\ths_put(obj, T41_F358C, 0);\t\t/* 0x6b24c */\n",
+  "find": "\t\tobj->short_358c = 0;\t\t/* 0x6b24c */\n",
   "replace": "",
   "fn": "t53_rx_det_ab"
  },
@@ -375,7 +375,7 @@
  },
  {
   "label": "the counter is not cleared",
-  "find": "\ths_put(obj, T41_COUNT, 0);\t\t/* 0x69982 */\n",
+  "find": "\tobj->short_aa78 = 0;\t\t/* 0x69982 */\n",
   "replace": "",
   "fn": "t53_rx_det_ab"
  }

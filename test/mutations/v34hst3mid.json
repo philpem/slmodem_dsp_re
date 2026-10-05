@@ -337,8 +337,8 @@
  },
  {
   "label": "the entry reads the microstate before the demodulator runs",
-  "find": "\tfskdemodulate(obj, fskin, &obj->fsk);\n\n\tframe.mst = hs_get(obj, HS_MICROSTATE);",
-  "replace": "\tframe.mst = hs_get(obj, HS_MICROSTATE);\n\tfskdemodulate(obj, fskin, &obj->fsk);",
+  "find": "\tfskdemodulate(obj, fskin, &obj->fsk);\n\n\tframe.mst = obj->microstate;",
+  "replace": "\tframe.mst = obj->microstate;\n\tfskdemodulate(obj, fskin, &obj->fsk);",
   "equivalent": true,
   "why": "finding F285 swept the whole of .text: neither `V34agc` nor `fskdemodulate` writes +0x3592, +0x3594 or +0x3596, which is the property that makes this per-arm harness possible at all.  So the read can be moved across the call and no byte changes.  It becomes catchable again the day either function is found to write a state word.",
   "fn": "v34handshak"
@@ -354,50 +354,50 @@
  },
  {
   "label": "47's shift-register guard masks three bits",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((f->obj->fsk.sr & 0x7) == 0x7 && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((f->obj->fsk.sr & 0x7) == 0x7 && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "47's shift-register guard wants 0xe",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xe && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xe && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "47's shift-register guard is an equality on the whole word",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif (f->obj->fsk.sr == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+  "replace": "\tif (f->obj->fsk.sr == 0xf && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "47's second guard wants a non-zero +0x3588",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) != 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 != 0) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "47 has no second guard",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
   "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "47's first guard reads +0xaae0 rather than +0xaae2",
-  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((f->obj->fsk.nbits & 0xf) == 0xf && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((f->obj->fsk.nbits & 0xf) == 0xf && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro47"
  },
  {
   "label": "the shared reset (47, 49, 50) sets +0x3588 to 5",
-  "find": "\tT3M_I16(f, T3M_F3588) = 4;",
-  "replace": "\tT3M_I16(f, T3M_F3588) = 5;",
+  "find": "\tf->obj->short_3588 = 4;",
+  "replace": "\tf->obj->short_3588 = 5;",
   "fn": "t3m_errrec_reset"
  },
  {
   "label": "the shared reset (47, 49, 50) sets +0x358a to 0",
-  "find": "\tT3M_I16(f, T3M_F358A) = 1;",
-  "replace": "\tT3M_I16(f, T3M_F358A) = 0;",
+  "find": "\tf->obj->short_358a = 1;",
+  "replace": "\tf->obj->short_358a = 0;",
   "fn": "t3m_errrec_core"
  },
  {
@@ -428,13 +428,13 @@
  },
  {
   "label": "the shared reset (47, 49, 50) strides one byte through +0xabae",
-  "find": "\t\tT3M_I16(f, T3M_FABAE + 2 * k) = 0;",
-  "replace": "\t\tT3M_I16(f, T3M_FABAE + k) = 0;",
+  "find": "\t\tf->obj->short_abae[k] = 0;",
+  "replace": "\t\t*(short *)((unsigned char *)f->obj + 0xabae + k) = 0;",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset (47, 49, 50) does not clear the eleventh short",
-  "find": "\tT3M_I16(f, T3M_FABC2) = 0;\n",
+  "find": "\tf->obj->short_abc2 = 0;\n",
   "replace": "",
   "fn": "t3m_errrec_core"
  },
@@ -874,103 +874,103 @@
  },
  {
   "label": "49's first threshold is at-least rather than above",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n >= 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n >= 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's first threshold is 50's 0x32",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's reset window is filtdelay+0x50 wide",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x50\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x50\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's reset window is inclusive at the top",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n <= filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n <= filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's reset window is a constant and not filtdelay-relative",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's shift-register mask is 0x7ff",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x7ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x7ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's shift-register mask is 0xfff",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's shift-register test is 0x373",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x373)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x373)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's shift-register test is 50's above-0x200",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200)\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's +0x3588 guard is inverted",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) != 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 != 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 has no +0x3588 guard",
-  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)\n\t    && f->obj->short_3588 == 0) {",
   "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372)) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 reads filtdelay unsigned",
-  "find": "\tfilt = T3M_I16(f, T3M_FILTDELAY);\n\n\t/* 0x66a1c",
+  "find": "\tfilt = f->obj->filtdelay;\n\n\t/* 0x66a1c",
   "replace": "\tfilt = T3M_U16(f, T3M_FILTDELAY);\n\n\t/* 0x66a1c",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's second threshold is strictly below",
-  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
-  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) < filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "find": "\tif ((int)f->obj->short_aa78 <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)f->obj->short_aa78 < filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's two thresholds are the same 0x4c",
-  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
-  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x4c) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "find": "\tif ((int)f->obj->short_aa78 <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)f->obj->short_aa78 <= filt + 0x4c) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's second threshold is 0x51",
-  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
-  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x51) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "find": "\tif ((int)f->obj->short_aa78 <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)f->obj->short_aa78 <= filt + 0x51) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's second threshold is a constant",
-  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
-  "replace": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "find": "\tif ((int)f->obj->short_aa78 <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "replace": "\tif ((int)f->obj->short_aa78 <= 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 re-reads the counter as unsigned",
-  "find": "\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
+  "find": "\tif ((int)f->obj->short_aa78 <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "replace": "\tif ((int)T3M_U16(f, T3M_COUNTER) <= filt + 0x50) {\n\t\tf->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));\n\t\treturn;\n\t}\n\n\t/* 0x66a74",
   "equivalent": true,
   "why": "every trial's counter is below 0x8000 at this point, so the two readings agree; the signedness is pinned by the first threshold's 0x7fff and 0xffff trials instead",
@@ -1124,13 +1124,13 @@
  },
  {
   "label": "49's diagnostic has bulkDelay and filtDelay exchanged",
-  "find": "\t\t\t\t     (int)f->obj->is_short, (int)f->obj->rtd,\n\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY));",
-  "replace": "\t\t\t\t     (int)f->obj->is_short,\n\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY),\n\t\t\t\t     (int)f->obj->rtd);",
+  "find": "\t\t\t\t     (int)f->obj->is_short, (int)f->obj->rtd,\n\t\t\t\t     (int)f->obj->filtdelay);",
+  "replace": "\t\t\t\t     (int)f->obj->is_short,\n\t\t\t\t     (int)f->obj->filtdelay,\n\t\t\t\t     (int)f->obj->rtd);",
   "fn": "t3m_micro49"
  },
  {
   "label": "49's diagnostic prints filtDelay unsigned",
-  "find": "\t\t\t\t     (int)T3M_I16(f, T3M_FILTDELAY));",
+  "find": "\t\t\t\t     (int)f->obj->filtdelay);",
   "replace": "\t\t\t\t     (int)T3M_U16(f, T3M_FILTDELAY));",
   "fn": "t3m_micro49"
  },
@@ -1145,86 +1145,86 @@
  },
  {
   "label": "50's first threshold is at-least rather than above",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n >= 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n >= 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's first threshold is 49's 0x28",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x28 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's reset window is filtdelay+0x50 wide",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x50\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x50\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's reset window is a constant and not filtdelay-relative",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's shift-register mask is 0x1ff",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x1ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x1ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's shift-register mask is 0xfff",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0xfff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's shift-register test is at-least",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) >= 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) >= 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's shift-register test is 49's equals-0x372",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) == 0x372\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's shift-register test is below rather than above",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) < 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) < 0x200\n\t    && f->obj->short_3588 == 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's +0x3588 guard is inverted",
-  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) == 0) {",
-  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && T3M_I16(f, T3M_F3588) != 0) {",
+  "find": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 == 0) {",
+  "replace": "\tif ((short)n > 0x32 && (short)n < filt + 0x4c\n\t    && (int)((unsigned)(unsigned short)f->obj->fsk.sr & 0x3ff) > 0x200\n\t    && f->obj->short_3588 != 0) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50 reads filtdelay unsigned",
-  "find": "\tfilt = T3M_I16(f, T3M_FILTDELAY);\n\n\t/* 0x664c7",
+  "find": "\tfilt = f->obj->filtdelay;\n\n\t/* 0x664c7",
   "replace": "\tfilt = T3M_U16(f, T3M_FILTDELAY);\n\n\t/* 0x664c7",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's second threshold is strictly below",
-  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
-  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) < filt + 0x50) {",
+  "find": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 < filt + 0x50) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's two thresholds are the same 0x4c",
-  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
-  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x4c) {",
+  "find": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 <= filt + 0x4c) {",
   "fn": "t3m_micro50"
  },
  {
   "label": "50's second threshold is a constant",
-  "find": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= filt + 0x50) {",
-  "replace": "\t/* 0x66724. */\n\tif ((int)T3M_I16(f, T3M_COUNTER) <= 0x50) {",
+  "find": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 <= filt + 0x50) {",
+  "replace": "\t/* 0x66724. */\n\tif ((int)f->obj->short_aa78 <= 0x50) {",
   "fn": "t3m_micro50"
  },
  {
@@ -1668,13 +1668,13 @@
  },
  {
   "label": "51 does not clear +0x358c",
-  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n",
+  "find": "\t\tf->obj->short_358c = 0;\n",
   "replace": "",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 inverts +0x358c the way 47 and 48 do",
-  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;",
+  "find": "\t\tf->obj->short_358c = 0;",
   "replace": "\t\tT3M_U16(f, T3M_TOGGLE) ^= 1;",
   "fn": "t3m_micro51"
  },
@@ -1698,8 +1698,8 @@
  },
  {
   "label": "51 copies the four fields before the rate switch",
-  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->baud_rate = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
-  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->baud_rate = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "find": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->baud_rate = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "replace": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->baud_rate = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
   "fn": "t3m_micro51"
  },
  {
@@ -2210,14 +2210,14 @@
  },
  {
   "label": "the shared reset arms bit 1 rather than bit 0",
-  "find": "\tT3M_I16(f, T3M_F3588) = (short)(T3M_U16(f, T3M_F3588) | 1);",
-  "replace": "\tT3M_I16(f, T3M_F3588) = (short)(T3M_U16(f, T3M_F3588) | 2);",
+  "find": "\tf->obj->short_3588 = (short)(T3M_U16(f, T3M_F3588) | 1);",
+  "replace": "\tf->obj->short_3588 = (short)(T3M_U16(f, T3M_F3588) | 2);",
   "fn": "t3m_errrec_arm"
  },
  {
   "label": "the shared reset's constant form stores 5",
-  "find": "\tT3M_I16(f, T3M_F3588) = 4;\n\tt3m_errrec_core(f);",
-  "replace": "\tT3M_I16(f, T3M_F3588) = 5;\n\tt3m_errrec_core(f);",
+  "find": "\tf->obj->short_3588 = 4;\n\tt3m_errrec_core(f);",
+  "replace": "\tf->obj->short_3588 = 5;\n\tt3m_errrec_core(f);",
   "fn": "t3m_errrec_reset"
  },
  {
@@ -2500,8 +2500,8 @@
  },
  {
   "label": "58's deep path sets +0x358a to 1 rather than 2",
-  "find": "\t\t\tT3M_I16(f, T3M_F358A) = 2;",
-  "replace": "\t\t\tT3M_I16(f, T3M_F358A) = 1;",
+  "find": "\t\t\tf->obj->short_358a = 2;",
+  "replace": "\t\t\tf->obj->short_358a = 1;",
   "fn": "t3m_micro58"
  },
  {
@@ -2530,8 +2530,8 @@
  },
  {
   "label": "58's deep path prints its line after the counter has moved",
-  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34RETRAIN, RX_PHASE1_CALL received, \"\n\t\t\t\t\t\"count2=%d,rx->gain=0x%x,filtdelay=%d\\n\",\n\t\t\t\t\t(int)T3M_I16(f, T3M_COUNTER),\n\t\t\t\t\t(int)f->rx->agc_gain,\n\t\t\t\t\t(int)T3M_I16(f, T3M_FILTDELAY));\n\n\t\t\t/* 0x6c2dd.  The counter takes filtdelay BEFORE the\n\t\t\t   transition, so the `[2]` the line prints is\n\t\t\t   filtdelay and not the value that crossed 0x5f. */\n\t\t\tT3M_I16(f, T3M_F358A) = 2;\n\t\t\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);",
-  "replace": "\t\t\t/* 0x6c2dd.  The counter takes filtdelay BEFORE the\n\t\t\t   transition, so the `[2]` the line prints is\n\t\t\t   filtdelay and not the value that crossed 0x5f. */\n\t\t\tT3M_I16(f, T3M_F358A) = 2;\n\t\t\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34RETRAIN, RX_PHASE1_CALL received, \"\n\t\t\t\t\t\"count2=%d,rx->gain=0x%x,filtdelay=%d\\n\",\n\t\t\t\t\t(int)T3M_I16(f, T3M_COUNTER),\n\t\t\t\t\t(int)f->rx->agc_gain,\n\t\t\t\t\t(int)T3M_I16(f, T3M_FILTDELAY));",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34RETRAIN, RX_PHASE1_CALL received, \"\n\t\t\t\t\t\"count2=%d,rx->gain=0x%x,filtdelay=%d\\n\",\n\t\t\t\t\t(int)f->obj->short_aa78,\n\t\t\t\t\t(int)f->rx->agc_gain,\n\t\t\t\t\t(int)f->obj->filtdelay);\n\n\t\t\t/* 0x6c2dd.  The counter takes filtdelay BEFORE the\n\t\t\t   transition, so the `[2]` the line prints is\n\t\t\t   filtdelay and not the value that crossed 0x5f. */\n\t\t\tf->obj->short_358a = 2;\n\t\t\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);",
+  "replace": "\t\t\t/* 0x6c2dd.  The counter takes filtdelay BEFORE the\n\t\t\t   transition, so the `[2]` the line prints is\n\t\t\t   filtdelay and not the value that crossed 0x5f. */\n\t\t\tf->obj->short_358a = 2;\n\t\t\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"V34RETRAIN, RX_PHASE1_CALL received, \"\n\t\t\t\t\t\"count2=%d,rx->gain=0x%x,filtdelay=%d\\n\",\n\t\t\t\t\t(int)f->obj->short_aa78,\n\t\t\t\t\t(int)f->rx->agc_gain,\n\t\t\t\t\t(int)f->obj->filtdelay);",
   "fn": "t3m_micro58"
  },
  {

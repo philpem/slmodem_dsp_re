@@ -13,14 +13,14 @@
  },
  {
   "label": "the counter is not incremented at all",
-  "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
-  "replace": "\tobj->short_aa78 = (short)(obj->short_aa78 + 0);",
+  "find": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n",
+  "replace": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 0);\n",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the counter is incremented by two",
-  "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
-  "replace": "\tobj->short_aa78 = (short)(obj->short_aa78 + 2);",
+  "find": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n",
+  "replace": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 2);\n",
   "fn": "t72_rx_l1"
  },
  {
@@ -523,8 +523,8 @@
  },
  {
   "label": "the ladder reads the counter BEFORE the increment",
-  "find": "\tcount = obj->short_aa78;",
-  "replace": "\tcount = (short)(obj->short_aa78 - 1);",
+  "find": "\tn = t72_nsamples(rx);\n\tcount = obj->short_aa78;\n",
+  "replace": "\tn = t72_nsamples(rx);\n\tcount = (short)(obj->short_aa78 - 1);\n",
   "fn": "t72_ladder"
  },
  {

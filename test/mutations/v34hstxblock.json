@@ -129,8 +129,8 @@
  },
  {
   "label": "the dispatch reads the microstate word",
-  "find": "\tt3m_txblock(&f, hs_get(obj, HS_TXSTATE));",
-  "replace": "\tt3m_txblock(&f, hs_get(obj, HS_MICROSTATE));",
+  "find": "\tt3m_txblock(&f, obj->txstate);",
+  "replace": "\tt3m_txblock(&f, obj->microstate);",
   "fn": "t3c_txblock"
  },
  {

@@ -94,20 +94,20 @@
  },
  {
   "label": "mode 0 points 0xaa70 at the 0xa94c record",
-  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\ths_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
-  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\ths_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\tobj->msgrec[1].nbits = 0x11;",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\tobj->msgrec[1].nbits = 0x11;",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 0 record index 12 gets 8 rather than 0x11",
-  "find": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
-  "replace": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       8);",
+  "find": "\t\tobj->msgrec[1].nbits = 0x11;",
+  "replace": "\t\tobj->msgrec[1].nbits = 8;",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 record index 12 gets 0x11 rather than 8",
-  "find": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       8);",
-  "replace": "hs_put(obj, 0xa97c +\n\t\t\t    __builtin_offsetof(struct v34_bitsource, nbits),\n\t\t       0x11);",
+  "find": "\t\tobj->msgrec[1].nbits = 8;\n\t\t*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
+  "replace": "\t\tobj->msgrec[1].nbits = 0x11;\n\t\t*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
   "fn": "v34handshakinit"
  },
  {
@@ -125,14 +125,14 @@
  },
  {
   "label": "mode 1 bumps 0xac12 where it should bump 0xac14",
-  "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
-  "replace": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac12, n);",
+  "find": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac14 = n;",
+  "replace": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac12 = n;",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 1 does not clear the 0xac17 byte",
-  "find": "\t\t\tm[0xac17] = 0;\n\t\t\ths_put(obj, 0xac14, n);",
-  "replace": "\t\t\ths_put(obj, 0xac14, n);",
+  "find": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac14 = n;",
+  "replace": "\t\t\tobj->short_ac14 = n;",
   "fn": "v34handshakinit"
  },
  {
@@ -143,14 +143,14 @@
  },
  {
   "label": "tail: 0xaa3c and 0x2aa0 values swapped",
-  "find": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0);\n\ths_put(obj, 0x2aa0, 0x10);",
-  "replace": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0x10);\n\ths_put(obj, 0x2aa0, 0);",
+  "find": "\tobj->info_caps = 0;\n\tobj->tx_fill_target = 0x10;",
+  "replace": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0x10);\n\tobj->tx_fill_target = 0;",
   "fn": "v34handshakinit"
  },
  {
   "label": "tail: 0x2aa0 value 0x10 becomes 0x11",
-  "find": "hs_put(obj, 0x2aa0, 0x10);",
-  "replace": "hs_put(obj, 0x2aa0, 0x11);",
+  "find": "obj->tx_fill_target = 0x10;",
+  "replace": "obj->tx_fill_target = 0x11;",
   "fn": "v34handshakinit"
  },
  {
