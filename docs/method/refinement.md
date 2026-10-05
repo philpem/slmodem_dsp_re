@@ -3607,3 +3607,21 @@ function. Do not adopt a near size, assume algebraic values are reachable modem
 histories, or force a parameter subobject from its register base. Seek an
 independent typed-extent/caller witness next.
 [Bounded controls, full audit and replay](../v8-remainder-owner-results.md).
+
+
+### Compare predicate operands before attributing tap loops to scheduling (F11822)
+
+V8's original tap loops use unsigned <= predicates. Changing only j to unsigned
+changes their exit tests from GT/GT to LTU/GTU already in initial RTL. Final
+JAEs/JBE differ in mnemonic because the first operands commute; inspect both
+operands before declaring a failure to reproduce signedness. Keep signed
+outer position/limit comparisons separate. A streaming input cursor with a
+signed countdown independently restores the original first JNS loop while
+preserving increasing sample addresses. These witnesses do not produce an
+exact V8 body and are not adopted from a size fit.
+
+Only demod forms the receive base0xc2c; mod forms transmit base0xc20, and the
+initializer writes absolute fields. An explicit LEA/ADD census is bounded
+instruction-form evidence, not typed-extent proof for a new subobject. Seek
+independent source/caller evidence rather than fabricate aliasing structures.
+[Five-cell domain, observations and replay](../v8-index-cursor-domain.md).
