@@ -3747,3 +3747,16 @@ spill migration from a blanket inline-budget diagnosis. V32 source publication
 survives reload then collapses by sched2; V29's standalone arithmetic swaps an
 eq spill for a distance spill. New original storage/graph evidence is needed
 before reopening either family. [Batch limits and next phase](../byteexact-dependencies-batch-results.md).
+
+### Trace late call merging and replication before inferring source repetition (F11842–F11844)
+
+The widened C++/DSP screen nominates two branch graphs, not fixed-entry
+expansions. In V92 reset, explicit length-arm diagnostics stay separate through
+reload, merge in flow2 and duplicate again in bbro. V90 reset's arm-local DIL
+calls merge in flow2 and stay shared; the complete object is unchanged.
+Thus final relocation multiplicity cannot determine source statement count.
+Use source RTL, postreload, flow2 and block-reordering dumps to distinguish
+these mechanisms before expanding source. Preserve observable per-iteration
+mode reloads and one diagnostic per execution. These finite source controls
+gain no complete function; require a new original graph witness before reopening
+them. [Screen, controls and replay](../expansion-wide-results.md).

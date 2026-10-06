@@ -136562,3 +136562,33 @@ production audit passes. Newly staged references are checked before commit.
 
 Staged reference audit:14382references,0unresolved/held/stale;2938finding
 headings checked. Static285suites/10038anchors clean. Working diff check clean.
+
+## F11842. Widened C++ and DSP call screen nominates two branch graphs
+
+Base276d30b5:95TUs997emitted bodies,298nonexact original<=4096B functions,
+240<=800 and58larger. Four indirect/unrelocated calls explicitly excluded.
+Historical raw ConstellationPower positive fires5/1modulo6/2division.
+Only V90/V92Phase3Modulator reset nominate; complete original graphs show
+mutually exclusive arms, not literal fixed-entry expansion. No source edit
+from call counts alone. tools/expansion_wide_screen.py;
+`docs/expansion-wide-results.md`.
+
+## F11843. V92 reset exposes merge then re-duplication of the same diagnostic
+
+Four fullTU length-arm/countdown controls88live grades,0gains/losses;
+289/288/341/340B versus original351. Split calls93/117 survive greg,
+flow2 leaves117, bbro adds332/330. Final two sites do not recover source
+statement count. Raw baseline, all bystanders/bindings/data/BSS/nontext
+relocations audited; only reset changes. No adoption/near-score sweep.
+tools/v92_reset_branch_audit.py; `docs/v92-reset-branch-domain.md`.
+
+## F11844. V90 reset source duplication collapses after reload without changing a byte
+
+Two fullTU controls56live body grades and58single RTL streams: arm-local
+DIL calls260/327 survive postreload, flow2 keeps327, no later duplication.
+Complete objects raw-identical; all binding/import/export/data/BSS/nontext
+relocations and text positions equal,18/28exact in both,0gains/losses.
+Original warmup shared2c46a reloads sessionFlag2c47f each iteration; fixed-mode
+warmup refuted. Domain closed without source adoption; unique profile/source
+and blanket regalloc diagnosis not established.
+`docs/batch-cpp-p3-reset-results.md`.
