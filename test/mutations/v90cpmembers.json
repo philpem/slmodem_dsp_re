@@ -6,8 +6,8 @@
  },
  {
   "label": "the bit count is one higher",
-  "find": "\t\t\t\t+ mappingParams->word_0 - 6);",
-  "replace": "\t\t\t\t+ mappingParams->word_0 - 5);"
+  "find": "\t\t\t\t+ mappingParams->shaperSR - 6);",
+  "replace": "\t\t\t\t+ mappingParams->shaperSR - 5);"
  },
  {
   "label": "the odometer starts at the codeword count rather than one below it",
@@ -21,8 +21,8 @@
  },
  {
   "label": "the place-value product uses this size rather than the previous one",
-  "find": "\t\tproduct *= mappingParams->constellationSize[i - 1];",
-  "replace": "\t\tproduct *= mappingParams->constellationSize[i];"
+  "find": "\tproduct *= mappingParams->constellationSize[0];\n\tplaceValue[1] = product;\n\tproduct *= mappingParams->constellationSize[1];\n\tplaceValue[2] = product;\n\tproduct *= mappingParams->constellationSize[2];\n\tplaceValue[3] = product;\n\tproduct *= mappingParams->constellationSize[3];\n\tplaceValue[4] = product;\n\tproduct *= mappingParams->constellationSize[4];\n\tplaceValue[5] = product;",
+  "replace": "\tproduct *= mappingParams->constellationSize[1];\n\tplaceValue[1] = product;\n\tproduct *= mappingParams->constellationSize[2];\n\tplaceValue[2] = product;\n\tproduct *= mappingParams->constellationSize[3];\n\tplaceValue[3] = product;\n\tproduct *= mappingParams->constellationSize[4];\n\tplaceValue[4] = product;\n\tproduct *= mappingParams->constellationSize[5];\n\tplaceValue[5] = product;"
  },
  {
   "label": "the first place value is zero",

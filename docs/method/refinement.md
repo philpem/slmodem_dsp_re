@@ -3715,3 +3715,35 @@ sched2 emits freq→phase_acc→copy. Explicitly exclude the duplicate GCSE stre
 Inspect scheduler memory dependencies and priority carriers next; changing
 allocation or declaration order is not supported by this trace alone.
 [Replay tool](../../tools/fse_copy_stage_trace.py).
+
+
+### Observe memory alias edges before fitting scheduling or registers (F11835)
+
+The FSE cfg copy's type-set2 has edges to short stores but not integer fields;
+those integer stores priority6 exceed copy5 and issue first. Builtin memcpy
+set0 adds both edges, so copy8 must issue first. Two verbose raw repeats and
+actual Gentoo ready/issue tables establish this mechanism. Official alias and
+scheduler sources explain it, without recovering original memory tags or the
+complete Gentoo patch stack. Neither control is byte-exact. Do not invent
+integer/union fields, void casts, volatile or profile options to make an edge;
+require independent original field/copy/API evidence.
+[Trace, source hashes and replay](../fse-scheduler-dependencies-results.md).
+
+### Fixed-entry source expansion can restore the enclosing helper budget (F11837)
+
+calcModulusParameters622B needs original five modulo/six division sites and
+six scalar place stores; retained loops expose1/2sites. Expand both ordinary
+fixed-entry sequences, then preserve the observed heterogeneous sum operand
+roles. Full body becomes exact and getPower regains its original out-of-line
+CALL as helper complexity increases. Audit the caller too: its574B shape still
+has exchanged double homes, and all six jump-table destinations must be decoded
+and checked against ordered original cases. Do not claim source-correctness or
+profile uniqueness from recovering a helper call boundary. V92's CRC promotion
+transfer recovers mechanism/length but no complete functions and stays unadopted.
+[Complete-TU evidence](../batch-cpp-constellation-expand-results.md).
+
+F11838/F11839 additionally distinguish measured later optimization and actual
+spill migration from a blanket inline-budget diagnosis. V32 source publication
+survives reload then collapses by sched2; V29's standalone arithmetic swaps an
+eq spill for a distance spill. New original storage/graph evidence is needed
+before reopening either family. [Batch limits and next phase](../byteexact-dependencies-batch-results.md).

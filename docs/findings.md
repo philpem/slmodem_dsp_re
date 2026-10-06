@@ -136462,3 +136462,103 @@ No fuzzing/mutation execution or modern portability claim.
 Staged reference audit:14382references,0unresolved/held/stale;2931finding
 headings; static285suites/10038anchors clean. New24Python tools parse; all
 family audits and final live production audit pass. No generated outputs committed.
+
+
+## F11835. Copy memory types control FSE sched2 dependencies
+
+Two diagnostic-only verbose fullTUs raw-repeat earlier typed-copy and delayed
+memcpy objects,8live body grades. Copy19/type set2 has no edges to freq29 or
+phase_acc45; both stores priority6 beat copy5 and issue29,45,19. Copy27/set0
+has both edges, incoming store counts6→7 and copypriority8, issue27,29,45.
+Short store31 remains dependent in both. Actual Gentoo graph confirms a
+memory-type mechanism, not merely allocation colours. Official five-source
+hash-pinned implementation explains pending anti/output checks and alias
+component/zero-set rules; full Gentoo patch recovery not claimed. Original
+memory tags unknown, both458B sourcecells nonexact, no typing/flag/alias trick
+adopted. `docs/fse-scheduler-dependencies-results.md`;
+tools/fse_scheduler_dependencies_audit.py, fse_scheduler_source_fetch.py.
+
+## F11836. Diagnostic result and cap families recover only partial FSE graphs
+
+FSE_getdiag entry XOR motivates ordinary shared result; selected-count copy,
+overflow fallthrough, conditional-value cap and separate zero exit provide
+independent later discriminators. Fourteen fullTUs56live body grades,3raw
+baselines/2cross-domain raw repeats/11known changed controls. Original negative
+selected returns and clear/copy asymmetry preserved. Allbody metadata/data/
+BSS/nontext relocations fixed, only target changes, no gains/losses. Equal229B
+controls have70 or71instructions against72original, not pure reg-renaming.
+Domains closed without further synonyms/slots/types. `docs/fse-getdiag-domains-results.md`;
+tools/fse_getdiag_domains_audit.py.
+
+## F11837. Literal mixed-radix expansion recovers calcModulusParameters622B
+
+Original5modulo+6division calls and six literal place stores oppose retained
+rolled1+2sites. Both fixed-entry expansions plus observed word_0/shaperSR sum
+load roles recover completeEXACT622 under retained profile. TU6→7/9,0losses.
+getPower returns to original CALL and574B shape as helper complexity increases,
+but remainsBYTES10 (two double homes swapped); no slot/declaration fitting.
+Six caller jump-table destinations decode to ordered original offsets; seven
+other bodies and records/allocated payload/BSS fixed. Fivecells45bodies,
+full rawbaseline and table audit. Four static anchors retain same exponent/
+five-multiplier faults; no mutation execution/snapshots. `docs/batch-cpp-constellation-expand-results.md`.
+This is a recovered source family, not unique proof against unknown unrolling
+options. V92 CRC transfer4cells84bodies restores promotion/call shapes but
+adds no complete function; losing direct/rolled control's2losses recorded,
+expanded/direct restores prior exacts, no V92 change adopted.
+
+## F11838. V32 phase reversal leaves an observed later compiler collapse
+
+Twelve valid fullTUs168bodies preserve12/14 exact,0gains/losses. Direct
+short_ac publication changes initial store count2→3 and persists through
+global allocation/flow2, then collapses by sched2. RTT mode-local clamp/
+publication and shared signed extension/report controls also miss.96validated
+field-stage observations;12duplicate GCSE streams explicitly unparsed. Six
+same-string ordering changes measured, not called raw data identity. No source
+adoption or universal profile-wall claim. `docs/data-state-reversal-results.md`;
+tools/data_state_reversal_trace_audit.py.
+
+## F11839. V29 epoch graph controls migrate a spill without recovering it
+
+V29RX_epoch_det413B has no observed out-of-line helper discrepancy. Pair
+streaming removes an eqHI spill atUID51 but introduces completed-distanceSI
+spill/reload atUID173; original distance stays live. Late index acquisition
+also misses. Seven validTUs35live bodies49RTL observations conserve8multiplies/
+7shifts perstage,0gains/losses/bystander/data/metadata drift. Known spill
+positive fires; final labelled GCSE stream parsed with duplicateUID checks.
+Neither missing CFG/callback nor an inline-budget-only conclusion follows.
+Original owner/type/storage and fully inlined/TU interactions remain open
+outside these closed families. `docs/fax-v29-epoch-body-trace.md`.
+
+## F11840. Bounded repeated-helper transfer screen is empty and nonvacuous
+
+99data/service CTUs389emitted bodies,146nonexact original<=800B functions:
+zero original>=2/retained1 direct same-callee nominations. Known Constellation
+5/1modulo,6/2division positive fires.23fixed-small-loop occurrences in15eligible
+bodies include5paired graph reviews without missing literal expansion witness.
+No source experiment follows; larger/indirect/fullyinlined cases excluded and
+source correctness/unrecoverability not inferred. tools/data_literal_expansion_screen.py
+accepts baseline JSON/object args for portable replay.
+`docs/data-literal-expansion-screen.md`.
+
+## F11841. Dependency research batch retains one complete gain without losses
+
+Base6b4509bd:1069→1070/1852,116229→116851exactoriginalbytes (+622).
+44valid fullTU cells396live emitted/shared body grades, including explicitly
+losing negative control; all source/object hashes rechecked.300production
+objects:299raw unchanged,1raw-repeat independent winner; exactly2bodies change,
+one newlyexact. Complete profile/metadata/data/BSS retained;6caller switch-case
+relocation destinations explicitly decoded/bounded/ordered to original. PR263
+bcb9f83e and issue22 untouched. No partial source/profile score adoption,
+fuzz/mutation execution or modern portability claim. Requested5–20gains not
+reached; closed domains require independent new witness. `docs/byteexact-dependencies-batch-results.md`;
+tools/byteexact_dependencies_batch_audit.py. Final gate recorded below.
+
+
+Final combined make tc and make phase exit0:300/300period objects;388period
+passes/0failures and all structural gates green. Static anchors285suites/
+10038unique,0detached/nonunique, no mutation execution. All19new Python tools
+parse; modified source fetcher reports/verifies5/5files. Final whole-tree live
+production audit passes. Newly staged references are checked before commit.
+
+Staged reference audit:14382references,0unresolved/held/stale;2938finding
+headings checked. Static285suites/10038anchors clean. Working diff check clean.
