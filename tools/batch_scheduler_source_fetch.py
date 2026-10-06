@@ -23,7 +23,7 @@ def main():
   if actual!=expected:raise ValueError((name,'source hash mismatch',actual,expected))
   (root/name).write_bytes(data);records[name]={'url':url,'sha256':actual}
  (root/'provenance.json').write_text(json.dumps({'version':'GNU GCC3.4.2 release source, not verified Gentoo patch reconstruction','sources':records},indent=2)+'\n')
- print('Official GCC3.4.2 scheduler source: 3/3 hash-pinned files verified')
+ print('Official GCC3.4.2 scheduler source: %d/%d hash-pinned files verified' % (len(records), len(HASHES)))
 
 
 if __name__=='__main__':main()

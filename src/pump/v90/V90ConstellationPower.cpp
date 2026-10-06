@@ -117,11 +117,10 @@ V90ConstellationPower::~V90ConstellationPower()
 void
 V90ConstellationPower::calcModulusParameters(V90MappingParams *mappingParams)
 {
-	unsigned int i;
 	double product;
 
-	codewordCount = 1LL << (mappingParams->shaperSR
-				+ mappingParams->word_0 - 6);
+	codewordCount = 1LL << (mappingParams->word_0
+				+ mappingParams->shaperSR - 6);
 	remaining[0] = codewordCount - 1;
 
 	/*
@@ -133,12 +132,26 @@ V90ConstellationPower::calcModulusParameters(V90MappingParams *mappingParams)
 	 * of a `xor %ecx,%ecx`, so it is the truncated 32-bit value that is
 	 * subtracted and not the 64-bit remainder.
 	 */
-	for (i = 0; i < V90CP_CONSTELLATIONS - 1; i++) {
-		modulus[i] = (unsigned int)(remaining[i]
-			     % mappingParams->constellationSize[i]);
-		remaining[i + 1] = (remaining[i] - modulus[i])
-				   / mappingParams->constellationSize[i];
-	}
+	modulus[0] = (unsigned int)(remaining[0]
+	    % mappingParams->constellationSize[0]);
+	remaining[1] = (remaining[0] - modulus[0])
+	    / mappingParams->constellationSize[0];
+	modulus[1] = (unsigned int)(remaining[1]
+	    % mappingParams->constellationSize[1]);
+	remaining[2] = (remaining[1] - modulus[1])
+	    / mappingParams->constellationSize[1];
+	modulus[2] = (unsigned int)(remaining[2]
+	    % mappingParams->constellationSize[2]);
+	remaining[3] = (remaining[2] - modulus[2])
+	    / mappingParams->constellationSize[2];
+	modulus[3] = (unsigned int)(remaining[3]
+	    % mappingParams->constellationSize[3]);
+	remaining[4] = (remaining[3] - modulus[3])
+	    / mappingParams->constellationSize[3];
+	modulus[4] = (unsigned int)(remaining[4]
+	    % mappingParams->constellationSize[4]);
+	remaining[5] = (remaining[4] - modulus[4])
+	    / mappingParams->constellationSize[4];
 
 	/*
 	 * AND THE SIXTH IS A TRUNCATION.  Where the five above are a `__moddi3`
@@ -165,10 +178,16 @@ V90ConstellationPower::calcModulusParameters(V90MappingParams *mappingParams)
 	 */
 	product = 1.0;
 	placeValue[0] = product;
-	for (i = 1; i < V90CP_CONSTELLATIONS; i++) {
-		product *= mappingParams->constellationSize[i - 1];
-		placeValue[i] = product;
-	}
+	product *= mappingParams->constellationSize[0];
+	placeValue[1] = product;
+	product *= mappingParams->constellationSize[1];
+	placeValue[2] = product;
+	product *= mappingParams->constellationSize[2];
+	placeValue[3] = product;
+	product *= mappingParams->constellationSize[3];
+	placeValue[4] = product;
+	product *= mappingParams->constellationSize[4];
+	placeValue[5] = product;
 }
 
 /*
