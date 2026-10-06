@@ -136374,3 +136374,91 @@ Final corrected makephase exits0:388period differential passes/0failures and
 all structural gates green. Static anchors285suites/10038unique,0detached or
 non-unique;22new tool syntax checks pass. No modern portability claim or new
 runtime fixture; identical-function evidence is complete-body byte identity.
+
+
+## F11829. FAXVMI_process reads the published framer after callbacks
+
+Original owner load0x95523 follows processing callbacks; retained entry capture
+extends the old child across them. Delayed ordinary acquisition recovers
+EXACT327, TU3→4/6, only target changes, unchanged metadata/data/table targets.
+No inference that normal callbacks replace the framer is needed. Fax26valid
+cells/174bodies include closed accumulator/cleanup/next-state/unframe controls;
+partial reload hits unadopted. Six source-unchanged inline callers and precisely
+two reordered merge strings are separately audited in negative cells.
+`docs/fax-publication-batch-results.md`; tools/fax_publication_batch_audit.py.
+
+## F11830. A heterogeneous addition operand graph closes voice_modem
+
+Original MOVZWL detector-count, full MOV handler-count and ADD ownership
+predict det_len+saved versus saved+det_len without changing declarations,
+formal widths or callback interfaces. EXACT338, TU5→6/9, only target changes;
+all metadata/data/nontext relocations equal. Both unchanged ushort inputs
+bound promoted sum to131070; final narrowing identical. Services38valid
+TUs/402bodies,5raw baselines,30changed-body controls, one gain/zero losses.
+Read-only33TU/26small-nonexact screen fires on this known graph and finds no
+other candidate within its six-instruction window. F11774 formal-width
+negatives remain closed. `docs/services-voice-count-sum-results.md`.
+
+## F11831. Original unsigned operations and reloads do not close dp_wrapper_run
+
+Seven complete-TU cells/21bodies cross unsigned minima/span, post-copy fragment
+reloads and independently witnessed unsigned fragment compare. Signed count
+entry guard retained; no invalid negative-fragment equivalence assertion.
+JBE/JB/DIV operations reproduce individually, whole body remains nonexact;
+exact1/3 unchanged, no gain/loss. Unsigned header overlay unadopted. Raw
+baselines and metadata/data/BSS/nontext relocations audited. Stop this domain,
+not a score-selected type or local permutation. `docs/contract-wrapper-unsigned-domain.md`,
+`docs/contract-wrapper-fragment-domain.md`; tools/contract_wrapper_audit.py.
+
+## F11832. FSE copy and reversal energy recover operations but not full bodies
+
+Original FSE REP MOVSL separates four enable writes from freq/phase_acc;
+retained structure-copy scheduling hoists both. Four crossed copy-form/timing
+cells retain458bytes but remain BYTES56/56/82/49, zero exact gains/losses.
+Original reversal energy independently ADDs sample then SUBs historical
+contribution; retained subtracts contributions first. Two cells restore that
+boundary but candidate SIZE36 misses, exact7/11 unchanged. Thirteen root
+cells/59live shared bodies total include wrapper controls; metadata/data/BSS/
+nontext relocations fixed, eight known changed-body controls fire. No source
+adoption. New pass/dependency evidence required before further permutations.
+`docs/fse-config-copy-domain.md`; `docs/tone-reversal-energy-domain.md`.
+
+## F11833. Member publication and inline visibility bound another C++ domain
+
+GenericIIR13valid cells234emitted comparisons/156shared grades: member-acc,
+ordinary inline helper visibility, original reverse cursor and signed range
+facts restore individual operations without complete scalar/block identity.
+Sine common-entry2cells68bodies also misses. Total15valid cells302emitted/
+224shared grades,2raw baselines,3/3positive detectors, zero gains/losses.
+IIR zero compare-pool changes explicitly tracked; no hidden named data/BSS/
+nontext relocation drift. Proposed wider Sine type matrix rejected before
+execution, excluded and not bypassed. No production changes. `docs/batch-cpp-iir-results.md`;
+`docs/batch-cpp-sine-entry-results.md`.
+
+## F11834. Two-function integration improves strict identity without collateral
+
+Basee0052eec:1067→1069/1852,115564→116229 exact original bytes (+665).
+92valid complete-TU cells/937emitted body comparisons/859shared live grades;
+78additional emitted C++ helpers have no reference counterpart. All300
+production objects reviewed:298raw unchanged, two raw-repeat independent
+winners; only two target bodies change. Complete profile, metadata, bindings,
+allocated data/BSS and symbolic nontext relocation identities retained.
+No negative near-size source adopted, no fuzz/mutation execution, PR263 and
+issue22 untouched. `docs/byteexact-contract-batch-results.md`;
+tools/byteexact_contract_batch_audit.py. Final deciding gate recorded below.
+
+
+F11832 next-phase trace:29validated RTL stages keep copy19 before freq29 and
+phase_acc45 through bbro; sched2 first moves both stores before copy. Allocation,
+reload and renaming do not first cause this order change. Duplicate-stream
+GCSE dump explicitly unparsed/excluded. tools/fse_copy_stage_trace.py verifies
+actual baseline hash, UID field identity and known stage-change detector.
+This isolates a pass, not original source or scheduler dependency causality.
+
+F11834 final gate:make tc and make phase exit0; period388passed/0failed and
+all structural checks green. Static285suites/10038anchors,0detached/nonunique.
+No fuzzing/mutation execution or modern portability claim.
+
+Staged reference audit:14382references,0unresolved/held/stale;2931finding
+headings; static285suites/10038anchors clean. New24Python tools parse; all
+family audits and final live production audit pass. No generated outputs committed.

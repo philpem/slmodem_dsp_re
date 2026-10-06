@@ -717,7 +717,7 @@ voice_modem(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	r = v->handler(v, rx_lin, rx_flt, tx_flt, (short *)(out + det_len),
 		       hostcount, &saved);
 
-	*countp = saved + det_len;
+	*countp = det_len + saved;
 	v->int_0014 = v->mode;
 
 	if (v->dle_etx != 0 || v->dle_can != 0) {
