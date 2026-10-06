@@ -3774,3 +3774,25 @@ changes and the other functions in the TU. This improves lever13 triage rather
 than adding a source spelling with guaranteed gains. EIA6 also recovers18copy
 operations but leaves real x87 lifetime/operand differences; SIZE2 is not two
 different bytes. [Screen, graph evidence and closed controls](../fixed-index-results.md).
+
+### A nonpopping live SI conversion can constrain the source mode (F11848–F11851)
+
+GCC3 reg-stack strips FIX before handling its source and duplicates a live XF
+value if the stack has space. It adds physical REG_DEAD, so the emitter pops
+that copy. Live SF/DF sources bypass this rule. Therefore original FISTL with
+proved live input and spare capacity is evidence against that XF producer;
+final REG_DEAD alone is not evidence the logical value died. Exclude DI's
+hardware-forced pop, full-stack cases and unproven entry/call history. Actual
+Gentoo controls corroborate the hash-pinned stock rule; patch-source identity
+and unique C types are not established.
+
+The constraint is on RTL mode under the measured profile; an unknown
+long-double ABI or TU option can change the declaration-to-mode mapping.
+
+EIA6 SF/default-double math recovers FISTL/FMULP/FCOMPP, while its constant
+10000 still occupies SF storage. Constant-pool width does not determine
+expression precision. Neither it nor two beta mode transfers becomes exact.
+Trace register-zero folding at combine, register-scale folding at lreg and
+later stack physical deaths separately; do not fit declarations/registers/
+slots or remove a defined shift mask for a near-size match.
+[Complete evidence, closed domains and tools](../eia6-x87-results.md).

@@ -136623,3 +136623,41 @@ memory fmuls/fcomps; homes/copy scheduling also differ. SIZE2 is two bytes
 of length difference, not a two-byte residual. Domain closed without source
 adoption; new original use/lifetime witness needed.
 `docs/batch-cpp-prefilter-expand-results.md`.
+
+## F11848. GCC3 creates a physical death at live XF integer conversion
+
+Hash-pinned reg-stack/i386 source rule corroborated4actual Gentoo controls/
+12streams: first live XF→SI has no sched2 REG_DEAD, stack duplicates it and
+adds death, emitterFISTPL. Original EIA6 liveFISTL atoccupancy1 bounds producer
+againstXF with sparecapacity, leavesSF/DF. DI andfullstack exceptions matter.
+Zero folds atcombine;scale atlreg, independently ofstackconversion.
+`docs/gcc-x87-eia6-mechanism.md`; tools/gcc_x87_eia6_mechanism.py.
+
+## F11849. Source mode and usual math recover EIA6 forms without exactness
+
+Six mode+five defaultmath controls, plus4raw-identical diagnostic replays:
+15validTUs240live grades150RTLstreams,0gains/losses. SFdefault math recovers
+FISTL/FMULP/FCOMPP at790B BYTES339;coherentSF790BYTES260;DF790BYTES246.
+Scale/magnitude/fraction ordering,operands/homes/copies still differ. Only
+anonymous zero-pool deltas;allbystanders/bindings/BSS/nontext unchanged.
+GCC3 rejects-fdump-tree-all; invalidrun preserved/excluded. SupportedTUtree
+identifiesdecl butomits targetbody in15cells; noSSA/body proof claimed.
+`docs/eia6-x87-results.md`; tools/eia6_x87_audit.py.
+
+## F11850. Live-conversion mode screen finds two independent small beta transfers
+
+282TUs/44explicitlongdouble bodies/29mapped/15helperunmapped/0ambiguities;
+14nonexact<=800B,4SI nonpopmismatches. Known EIA6positivefires; closedVpcm
+excluded. Two350B beta setters have liveFISTL atoccupancy2,0priorcalls.
+Priorwhole/shift lifetime controls heldtypes, so newXFmodewitness is independent;
+laterF11353MMXcasts remainfixed. `docs/gcc-x87-transfer-shortlist.md`;
+tools/gcc_x87_transfer_screen.py.
+
+## F11851. Beta diagnostic SF and DF modes recover FISTL but remain nonexact
+
+Three completeTUs105live grades,0gains/losses; both350B originalsetters
+359→351 withSF/DF debugproducers.33bystanders/allbinding/data/BSS/nontext
+unchanged; exactlaterMMXsourcetails audited. Definedshiftmask/pub/order/homes
+remain separate; do not removeAND31 or callSIZE1 a one-byte residual.
+No sourceadoption orprofile/type/slotfitting. `docs/beta-x87-mode-domain.md`;
+tools/beta_x87_mode_audit.py.
