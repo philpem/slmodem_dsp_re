@@ -14,14 +14,14 @@
   },
   {
     "label": "the stale-clock compare is >= rather than >",
-    "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tobj->progress = 5;",
-    "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tobj->progress = 5;",
+    "find": "\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)\n\t\tobj->progress = 5;",
+    "replace": "\t    - (unsigned)obj->int_0248 >= DP_TIMER_STALE)\n\t\tobj->progress = 5;",
     "fn": "datapumpv34"
   },
   {
     "label": "the stale-clock compare is signed, so a mark ahead of the count is not stale",
-    "find": "\tif ((unsigned)obj->sample_count\n\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
-    "replace": "\tif (obj->sample_count\n\t    - t3c_geti(obj, DP_TIMER_MARK) > (int)DP_TIMER_STALE)",
+    "find": "\tif ((unsigned)obj->sample_count\n\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)",
+    "replace": "\tif (obj->sample_count\n\t    - obj->int_0248 > (int)DP_TIMER_STALE)",
     "fn": "datapumpv34"
   },
   {
@@ -32,8 +32,8 @@
   },
   {
     "label": "the stale clock measures from +0x23c rather than +0x248",
-    "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)",
-    "replace": "\t    - (unsigned)t3c_geti(obj, 0x023c) > DP_TIMER_STALE)",
+    "find": "\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)",
+    "replace": "\t    - (unsigned)obj->timeout_deadline > DP_TIMER_STALE)",
     "fn": "datapumpv34"
   },
   {
@@ -98,8 +98,8 @@
   },
   {
     "label": "the receiver loop runs before the modulator loop",
-    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
-    "replace": "\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
+    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
+    "replace": "\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
     "fn": "datapumpv34"
   },
   {
@@ -197,8 +197,8 @@
   },
   {
     "label": "the span is measured signed, so it is never past either threshold",
-    "find": "\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);",
-    "replace": "\t\tspan = (unsigned)(obj->sample_count\n\t\t     - t3c_geti(obj, DP_TIMER_MARK)) & 0x7fffu;",
+    "find": "\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;",
+    "replace": "\t\tspan = (unsigned)(obj->sample_count\n\t\t     - obj->int_0248) & 0x7fffu;",
     "fn": "datapumpv34"
   },
   {

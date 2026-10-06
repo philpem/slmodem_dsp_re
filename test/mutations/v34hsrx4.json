@@ -247,7 +247,7 @@
   },
   {
     "label": "+0xaa80's second raise is unconditional",
-    "find": "\tif (T4_I16(obj, T4_FAA80) != 0) {\n\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);",
+    "find": "\tif (obj->rate_change_pending != 0) {\n\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);",
     "replace": "\tif (1) {\n\t\tflags = (unsigned short)(flags | V34_RX_FLAG_DET_PENDING);",
     "fn": "t4_receive_body"
   },
@@ -383,56 +383,56 @@
   },
   {
     "label": "the rtd is taken from the receiver's other timer",
-    "find": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
-    "replace": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_HI);\t/* 0x67b84 */",
+    "find": "\tobj->rtd_scaled = rx->timing_offset;\t\t/* 0x67b84 */",
+    "replace": "\tobj->rtd_scaled = rx->timing_phase;\t\t/* 0x67b84 */",
     "fn": "t4_receive_body"
   },
   {
     "label": "the rtd is committed sixteen bits wide",
-    "find": "\tT4_I32(obj, T4_RTSCALE) = T4_I32(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
-    "replace": "\tT4_I16(obj, T4_RTSCALE) = T4_I16(rx, T3C_TIMER_LO);\t/* 0x67b84 */",
+    "find": "\tobj->rtd_scaled = rx->timing_offset;\t\t/* 0x67b84 */",
+    "replace": "\tobj->rtd_scaled = (short)rx->timing_offset;\t/* 0x67b84 */",
     "fn": "t4_receive_body"
   },
   {
     "label": "3429 baud scales by 0xb4",
-    "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;",
-    "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb4) >> 8;",
+    "find": "\t\tobj->rtd_scaled = (v * 0xb3) >> 8;",
+    "replace": "\t\tobj->rtd_scaled = (v * 0xb4) >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "3200 baud scales by 0xc1",
-    "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;",
-    "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc1) >> 8;",
+    "find": "\t\tobj->rtd_scaled = (v * 0xc0) >> 8;",
+    "replace": "\t\tobj->rtd_scaled = (v * 0xc1) >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "3000 baud scales by 204",
-    "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 205) >> 8;",
-    "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 204) >> 8;",
+    "find": "\t\tobj->rtd_scaled = (v * 205) >> 8;",
+    "replace": "\t\tobj->rtd_scaled = (v * 204) >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "2800 baud scales by 0xdc",
-    "find": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;",
-    "replace": "\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdc) >> 8;",
+    "find": "\t\tobj->rtd_scaled = (v * 0xdb) >> 8;",
+    "replace": "\t\tobj->rtd_scaled = (v * 0xdc) >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "the baud scaling shifts UNSIGNED",
-    "find": "\tint v = T4_I32(obj, T4_RTSCALE);",
-    "replace": "\tint v = (int)T4_U32(obj, T4_RTSCALE);\n\n\tif (v < 0)\n\t\tv = (int)((unsigned)v >> 8 << 8);",
+    "find": "\tint v = obj->rtd_scaled;",
+    "replace": "\tint v = (int)(unsigned)obj->rtd_scaled;\n\n\tif (v < 0)\n\t\tv = (int)((unsigned)v >> 8 << 8);",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "the baud scaling has a default arm",
-    "find": "\telse if (baud == 0xaf0)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;",
-    "replace": "\telse if (baud == 0xaf0)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xdb) >> 8;\n\telse\n\t\tT4_I32(obj, T4_RTSCALE) = v >> 8;",
+    "find": "\telse if (baud == 0xaf0)\n\t\tobj->rtd_scaled = (v * 0xdb) >> 8;",
+    "replace": "\telse if (baud == 0xaf0)\n\t\tobj->rtd_scaled = (v * 0xdb) >> 8;\n\telse\n\t\tobj->rtd_scaled = v >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
     "label": "3429 and 3200 select each other's scaling",
-    "find": "\tif (baud == 0xd65)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;\n\telse if (baud == 0xc80)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;",
-    "replace": "\tif (baud == 0xd65)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xc0) >> 8;\n\telse if (baud == 0xc80)\n\t\tT4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;",
+    "find": "\tif (baud == 0xd65)\n\t\tobj->rtd_scaled = (v * 0xb3) >> 8;\n\telse if (baud == 0xc80)\n\t\tobj->rtd_scaled = (v * 0xc0) >> 8;",
+    "replace": "\tif (baud == 0xd65)\n\t\tobj->rtd_scaled = (v * 0xc0) >> 8;\n\telse if (baud == 0xc80)\n\t\tobj->rtd_scaled = (v * 0xb3) >> 8;",
     "fn": "t4_scale_rtd"
   },
   {
@@ -481,7 +481,7 @@
   },
   {
     "label": "the MD-over path leaves +0xaa80 alone",
-    "find": "\tT4_I16(obj, T4_FAA80) = 0;\t\t\t\t/* 0x6a22c */",
+    "find": "\tobj->rate_change_pending = 0;\t\t\t/* 0x6a22c */",
     "replace": "\t;\t\t\t\t\t\t\t/* 0x6a22c */",
     "fn": "t4_md_over"
   },
@@ -493,21 +493,21 @@
   },
   {
     "label": "the second detectorinit does not run",
-    "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)(T4_M(obj) + T4_RXCARRDESC),",
-    "replace": "\tif (0) detectorinit(&obj->detector,\n\t\t     *(const short **)(T4_M(obj) + T4_RXCARRDESC),",
+    "find": "\tdetectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 10, 0x28, 0x600, 0);",
+    "replace": "\tif (0) detectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 10, 0x28, 0x600, 0);",
     "fn": "t4_md_over"
   },
   {
     "label": "the MD-over path does not re-raise the pending flag",
-    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
-    "replace": "\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
+    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tobj->md_length = 0;\t\t\t\t/* 0x6a283 */",
+    "replace": "\tobj->md_length = 0;\t\t\t\t/* 0x6a283 */",
     "fn": "t4_md_over",
     "equivalent": true,
     "why": "EQUIVALENT BECAUSE THE BIT IS ALREADY UP.  `setupreceiver` ends with its own `or $0x200` at 0x6a218, and between that and 0x6a276 the object does two things: a halfword store to +0xaa80 and a call to `detectorinit`, which src/pump/v34/detector.c shows writing only members of `struct v34_detector` -- x, y, coeff, polarity, armed, count, limit, state, thresh_hi, thresh_lo and level -- and taking no other pointer.  So the second raise is on a value that already has the bit, exactly as in microstate 44's arm at 0x6f0e9/0x6f146 -- where the same duplicate is recorded as an equivalence rather than dropped as a duplicate.  It is written because the object writes it."
   },
   {
     "label": "the MD-over path leaves the descriptor length set",
-    "find": "\tT4_I16(obj, T4_MDLEN) = 0;\t\t\t\t/* 0x6a283 */",
+    "find": "\tobj->md_length = 0;\t\t\t\t/* 0x6a283 */",
     "replace": "\t;\t\t\t\t\t\t\t/* 0x6a283 */",
     "fn": "t4_md_over"
   },
@@ -525,8 +525,8 @@
   },
   {
     "label": "the TRN2 shift takes three bits, not two",
-    "find": "\t\ta = (unsigned short)((((int)rx->best_index & 3) << 14)\n\t\t\t\t     | (T4_U16(rx, T4_RXF11C) >> 2));",
-    "replace": "\t\ta = (unsigned short)((((int)rx->best_index & 7) << 13)\n\t\t\t\t     | (T4_U16(rx, T4_RXF11C) >> 3));",
+    "find": "\t\ta = (unsigned short)((((int)rx->best_index & 3) << 14)\n\t\t\t\t     | (rx->short_380 >> 2));",
+    "replace": "\t\ta = (unsigned short)((((int)rx->best_index & 7) << 13)\n\t\t\t\t     | (rx->short_380 >> 3));",
     "fn": "t4_trn2"
   },
   {
@@ -537,7 +537,7 @@
   },
   {
     "label": "the late-TRN register is stored only when it matches",
-    "find": "\t\tT4_U16(rx, T4_RXF11C) = a;\n\t\tif (a != 0x899f)",
+    "find": "\t\trx->short_380 = a;\n\t\tif (a != 0x899f)",
     "replace": "\t\tif (a != 0x899f)",
     "fn": "t4_trn2"
   },
@@ -593,8 +593,8 @@
   },
   {
     "label": "the reported match stores the word rather than clearing it",
-    "find": "\tT4_U16(rx, T4_RXF11C) = 0;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
-    "replace": "\tT4_U16(rx, T4_RXF11C) = b;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
+    "find": "\trx->short_380 = 0;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
+    "replace": "\trx->short_380 = b;\n\tT4_U16(rx, T4_RXF120) = 0;\n\trx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);",
     "fn": "t4_trn2"
   },
   {
@@ -665,14 +665,14 @@
   },
   {
     "label": "the restart moves the microstate to DET_INFO",
-    "find": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
-    "replace": "\ths_set_microstate(obj, V34HS_DET_INFO);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
+    "find": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tobj->msgrec[4].idx = 0;\t\t\t\t/* 0x68c6e */",
+    "replace": "\ths_set_microstate(obj, V34HS_DET_INFO);\n\tobj->msgrec[4].idx = 0;\t\t\t\t/* 0x68c6e */",
     "fn": "t4_mp_packer"
   },
   {
     "label": "the restart leaves the run counter alone",
-    "find": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */\n\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */",
-    "replace": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */",
+    "find": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tobj->msgrec[4].idx = 0;\t\t\t\t/* 0x68c6e */\n\tobj->msgrec[4].pos = 0;\t\t\t\t/* 0x68c78 */",
+    "replace": "\ths_set_microstate(obj, V34HS_DET_SYNC);\n\tobj->msgrec[4].idx = 0;\t\t\t\t/* 0x68c6e */",
     "fn": "t4_mp_packer"
   },
   {
@@ -809,8 +809,8 @@
   },
   {
     "label": "the sequence end leaves the index set",
-    "find": "\tT4_I16(obj, T4_MPIDX) = 0;\t\t\t\t/* 0x68c6e */\n\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
-    "replace": "\tT4_I16(obj, T4_MPRUN) = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
+    "find": "\tobj->msgrec[4].idx = 0;\t\t\t\t/* 0x68c6e */\n\tobj->msgrec[4].pos = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
+    "replace": "\tobj->msgrec[4].pos = 0;\t\t\t\t/* 0x68c78 */\n\treturn rx->flags;\n}\n\n/*\n * 0x6cafd",
     "fn": "t4_mp_sequence_end"
   },
   {
@@ -947,8 +947,8 @@
   },
   {
     "label": "MP's end leaves the trace counter alone",
-    "find": "\t\t\t\tobj->short_aa78 = 0;\n\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
-    "replace": "\t\t\t\tT4_I16(obj, T4_MPIDX) = 0;",
+    "find": "\t\t\t\tobj->short_aa78 = 0;\n\t\t\t\tobj->msgrec[4].idx = 0;",
+    "replace": "\t\t\t\tobj->msgrec[4].idx = 0;",
     "fn": "t4_mp_runlength"
   },
   {
@@ -1045,20 +1045,20 @@
   },
   {
     "label": "the digital half comes up whatever +0x3598 says",
-    "find": "\tif (T4_I16(obj, T4_F3598) == 0) {\t\t\t/* 0x71216 */",
+    "find": "\tif (obj->short_3598 == 0) {\t\t\t\t/* 0x71216 */",
     "replace": "\tif (1) {\t\t\t\t\t\t/* 0x71216 */",
     "fn": "t4_mp_e_sequence"
   },
   {
     "label": "the digital half's guard is not marked afterwards",
-    "find": "\t\tinitdigital(obj);\n\t\tT4_I16(obj, T4_F3598) = 1;",
+    "find": "\t\tinitdigital(obj);\n\t\tobj->short_3598 = 1;",
     "replace": "\t\tinitdigital(obj);",
     "fn": "t4_mp_e_sequence"
   },
   {
     "label": "the digital half does not come up",
-    "find": "\t\tinitdigital(obj);\n\t\tT4_I16(obj, T4_F3598) = 1;",
-    "replace": "\t\tT4_I16(obj, T4_F3598) = 1;",
+    "find": "\t\tinitdigital(obj);\n\t\tobj->short_3598 = 1;",
+    "replace": "\t\tobj->short_3598 = 1;",
     "fn": "t4_mp_e_sequence"
   },
   {

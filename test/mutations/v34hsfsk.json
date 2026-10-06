@@ -219,8 +219,8 @@
   },
   {
     "label": "the samples come from the receiver's base",
-    "find": "\tfskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN);",
-    "replace": "\tfskin = (const short *)((unsigned char *)frame.rx);",
+    "find": "\tfskin = frame.rx->burst;",
+    "replace": "\tfskin = (const short *)frame.rx;",
     "fn": "v34handshak"
   },
   {

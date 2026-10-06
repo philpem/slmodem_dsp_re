@@ -249,8 +249,8 @@
   },
   {
     "label": "the counter and the sample count are the same field",
-    "find": "#define T3M_TICK\t\t0x0234",
-    "replace": "#define T3M_TICK\t\t0x0238"
+    "find": "\t\t\t\t\t\tlow_energy_count))",
+    "replace": "\t\t\t\t\t\tsample_count))"
   },
   {
     "label": "the counter limit is inclusive",

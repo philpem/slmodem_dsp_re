@@ -332,8 +332,8 @@
   },
   {
     "label": "the entry hands the demodulator the receiver's +0x10a",
-    "find": "#define T3M_RX_FSKIN\t\t0x010c",
-    "replace": "#define T3M_RX_FSKIN\t\t0x010a"
+    "find": "\tfskin = frame.rx->burst;",
+    "replace": "\tfskin = frame.rx->burst - 1;"
   },
   {
     "label": "the entry reads the microstate before the demodulator runs",
@@ -817,8 +817,8 @@
   },
   {
     "label": "63's byte guard reads +0xabfe",
-    "find": "#define T3M_FABFF\t\t0xabff",
-    "replace": "#define T3M_FABFF\t\t0xabfe"
+    "find": "\tif ((signed char)f->m[T3M_FABFF] <= 0",
+    "replace": "\tif ((signed char)f->obj->backward_clear <= 0"
   },
   {
     "label": "63's int guard is strict",
@@ -840,8 +840,8 @@
   },
   {
     "label": "63's int guard reads +0x23c",
-    "find": "#define T3M_F0240\t\t0x0240",
-    "replace": "#define T3M_F0240\t\t0x023c"
+    "find": "\t    || T3M_I32(f, T3M_F0240) <= 0x240) {",
+    "replace": "\t    || T3M_I32(f, T3M_DEADLINE) <= 0x240) {"
   },
   {
     "label": "63 does not announce the set-up",
@@ -1880,14 +1880,14 @@
   },
   {
     "label": "59 hands tone_detect the receiver rather than its +0x10c",
-    "find": "\t\t\t\t   (const short *)((unsigned char *)f->rx\n\t\t\t\t\t\t   + T3M_RX_FSKIN),\n\t\t\t\t   f->rx->rx_samples)) {",
-    "replace": "\t\t\t\t   (const short *)f->rx,\n\t\t\t\t   f->rx->rx_samples)) {",
+    "find": "\t\t\t\t   &f->obj->detector,\n\t\t\t\t   f->rx->burst,\n\t\t\t\t   f->rx->rx_samples)) {",
+    "replace": "\t\t\t\t   &f->obj->detector,\n\t\t\t\t   (const short *)f->rx,\n\t\t\t\t   f->rx->rx_samples)) {",
     "fn": "t3m_micro59"
   },
   {
     "label": "59 hands tone_detect its window the other way round",
-    "find": "\t\t\t\t   (const short *)((unsigned char *)f->rx\n\t\t\t\t\t\t   + T3M_RX_FSKIN),\n\t\t\t\t   f->rx->rx_samples)) {",
-    "replace": "\t\t\t\t   f->rx->rx_samples,\n\t\t\t\t   (const short *)((unsigned char *)f->rx\n\t\t\t\t\t\t   + T3M_RX_FSKIN))) {",
+    "find": "\t\t\t\t   &f->obj->detector,\n\t\t\t\t   f->rx->burst,\n\t\t\t\t   f->rx->rx_samples)) {",
+    "replace": "\t\t\t\t   &f->obj->detector,\n\t\t\t\t   f->rx->rx_samples,\n\t\t\t\t   f->rx->burst)) {",
     "fn": "t3m_micro59"
   },
   {

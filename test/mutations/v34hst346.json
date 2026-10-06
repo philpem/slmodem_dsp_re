@@ -75,8 +75,8 @@
   },
   {
     "label": "TONE_AB's +0xac00 test is inverted",
-    "find": "\t\t} else if (t3c_getb(obj, T46_RETRAIN) != 0) {",
-    "replace": "\t\t} else if (t3c_getb(obj, T46_RETRAIN) == 0) {",
+    "find": "\t\t} else if (obj->retrain_req != 0) {",
+    "replace": "\t\t} else if (obj->retrain_req == 0) {",
     "fn": "t46_micro_tx_phase1_ans"
   },
   {
@@ -278,7 +278,7 @@
   },
   {
     "label": "0x6f90c does not clear +0xac00",
-    "find": "\tt3c_putb(obj, T46_RETRAIN, 0);\n\tt3c_txblock(obj);",
+    "find": "\tobj->retrain_req = 0;\n\tt3c_txblock(obj);",
     "replace": "\tt3c_txblock(obj);",
     "fn": "t46_body_retrain"
   },

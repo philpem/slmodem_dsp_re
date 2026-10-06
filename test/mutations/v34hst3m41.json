@@ -77,14 +77,14 @@
   },
   {
     "label": "the FRR report's counter floor is `<` rather than `<=`",
-    "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
-    "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+    "find": "\tif (obj->short_35a0 <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+    "replace": "\tif (obj->short_35a0 < 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
     "fn": "t41_frr_nack"
   },
   {
     "label": "the FRR report's counter floor is 0x30",
-    "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
-    "replace": "\tif (hs_get(obj, T41_F35A0) <= 0x30) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+    "find": "\tif (obj->short_35a0 <= 0x31) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
+    "replace": "\tif (obj->short_35a0 <= 0x30) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6dd19 */",
     "fn": "t41_frr_nack"
   },
   {
@@ -410,8 +410,8 @@
   },
   {
     "label": "the counter is reset up to the second floor exclusive",
-    "find": "\tif ((int)aae0 <= base + 400)\n\t\ths_put(obj, T41_F35A0, 0);",
-    "replace": "\tif ((int)aae0 < base + 400)\n\t\ths_put(obj, T41_F35A0, 0);",
+    "find": "\tif ((int)aae0 <= base + 400)\n\t\tobj->short_35a0 = 0;",
+    "replace": "\tif ((int)aae0 < base + 400)\n\t\tobj->short_35a0 = 0;",
     "fn": "t41_info_marks"
   },
   {
@@ -428,14 +428,14 @@
   },
   {
     "label": "the counter steps by two",
-    "find": "\t\tnext = (short)((unsigned short)hs_get(obj, T41_F35A0) + 1);",
-    "replace": "\t\tnext = (short)((unsigned short)hs_get(obj, T41_F35A0) + 2);",
+    "find": "\t\tnext = (short)((unsigned short)obj->short_35a0 + 1);",
+    "replace": "\t\tnext = (short)((unsigned short)obj->short_35a0 + 2);",
     "fn": "t41_info_marks"
   },
   {
     "label": "the transmit state that zeroes the counter is TX_DPSK",
-    "find": "\tif (tx == V34HS_TONE_AB)\n\t\ths_put(obj, T41_F35A0, 0);\t\t/* 0x6da8e */",
-    "replace": "\tif (tx == V34HS_TX_DPSK)\n\t\ths_put(obj, T41_F35A0, 0);\t\t/* 0x6da8e */",
+    "find": "\tif (tx == V34HS_TONE_AB)\n\t\tobj->short_35a0 = 0;\t\t\t/* 0x6da8e */",
+    "replace": "\tif (tx == V34HS_TX_DPSK)\n\t\tobj->short_35a0 = 0;\t\t\t/* 0x6da8e */",
     "fn": "t41_info_marks"
   },
   {
@@ -448,8 +448,8 @@
   },
   {
     "label": "the counter's own floor is `<` rather than `<=`",
-    "find": "\tif (hs_get(obj, T41_F35A0) <= 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
-    "replace": "\tif (hs_get(obj, T41_F35A0) < 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
+    "find": "\tif (obj->short_35a0 <= 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
+    "replace": "\tif (obj->short_35a0 < 0x31) {\n\t\tt41_marks_late(obj, aae0);\t\t/* 0x6cf4e */",
     "fn": "t41_info_marks"
   },
   {

@@ -52,27 +52,50 @@ struct v34_receiver {
 	 * its own end -- so `struct v34_queue` declares one entry and this
 	 * struct carries the rest immediately after as `rxq_ring_tail`,
 	 * running to +0x10c (V34_RXQ_END); see v34rx.h for the constants.
-	 *
-	 * The four shorts at +0x10c are where rxreadqueue() dequeues each
-	 * burst -- the same four shorts `fskdemodulate` consumes as its
-	 * input (V34hshak.c's T3M_RX_FSKIN) and RX_PHASE2_CALL's
-	 * tone_detect watches for the retrain tone. Left unnamed: the
-	 * three readings are documented where each consumer is written,
-	 * and no field spans all of them.
 	 */
 	struct v34_queue rxq;				/* +0x000 (obj +0x264) */
 	int             rxq_ring_tail[V34_RXQ_RING - 1];	/* +0x010, to +0x10c */
-	unsigned char   unmapped_010c[0x11e - 0x10c];
 	/*
-	 * +0x11e (obj +0x382).  Written six times and read nowhere in this
-	 * object -- the only stores are VPcmV34Main.cpp's, four of them in
-	 * the two Indicate entry points reconstructed here, plus
-	 * v34handshakinit's 0x8990 reset. So whatever consumes it lives in
-	 * the C++ half that is still to come, and the values are all this
-	 * says about it: 0 when a Jd arrives with the silence-scrambler
-	 * flag set, otherwise 0x89b0 or 0x8990 according to a
-	 * constellation-size flag. The two differ by 32, which is the only
-	 * structure visible. Immediately below `vectpp_idx`/`flags`.
+	 * +0x10c (obj +0x370).  The burst window: `rxreadqueue` moves
+	 * V34_QUEUE_BURST entries off the ring into it, `V34agc` gains them
+	 * in place and leaves `rx_samples` just past them, and `rxtiming`
+	 * writes its own `out_count` (= 4) gained samples from the same
+	 * address.  The same four shorts are `fskdemodulate`'s input
+	 * (V34hshak.c's T3M_RX_FSKIN), RX_PHASE2_CALL's tone_detect window
+	 * and the t72 ladder's burst.  Issue #260 wave 8 left the storage
+	 * unnamed because no field spanned all three readings; the wave-9
+	 * recovery names the storage itself, which is what every reader
+	 * already agrees on.
+	 */
+	short           burst[4];	/* +0x10c (obj +0x370) */
+	/*
+	 * +0x114..+0x11c (obj +0x374..+0x380).  Eight bytes with no access
+	 * anywhere in the 1.2 MB object -- a whole-object displacement scan
+	 * at 0x114/0x118 finds nothing reachable from a V.34 base.  Not a
+	 * claim that the bytes are dead, only that nothing this tree can
+	 * see reads or writes them.
+	 */
+	unsigned char   unmapped_0114[0x11c - 0x114];
+	/*
+	 * +0x11c (obj +0x380), the high half of the two-word shift register
+	 * the TRN2 path fills (`short_382` below is the low half): the step
+	 * takes the low two bits of this word into the top of the next
+	 * through `(a & 3) << 14 | (low >> 2)`.  Every load in the object is
+	 * `movzwl` and the shifts are logical, so it is unsigned -- which is
+	 * also what lets the T4_U16 sites read it as itself.  Offset-named:
+	 * the arm's own comment ("the shift register TRN2 fills") says what
+	 * it does, not what it means downstream.
+	 */
+	unsigned short  short_380;      /* +0x11c (obj +0x380) */
+	/*
+	 * +0x11e (obj +0x382).  Two readings of one halfword (issue #260
+	 * wave 9): it is the LOW HALF of the TRN2 shift register whose high
+	 * half is `short_382`'s neighbour `short_380` -- the TRN2 arm reads
+	 * and right-shifts it -- and it is also the word the two Indicate
+	 * entry points store 0x89b0/0x8990 into (0 when a Jd arrives with
+	 * the silence-scrambler flag set).  The stores were the whole of
+	 * what wave 8 knew; the TRN2 reading is the wave-9 addition.  The
+	 * two agree on no meaning, so the field keeps its offset name.
 	 */
 	short           short_382;      /* +0x11e (obj +0x382) */
 	short           vectpp_idx;      /* +0x120 receiver: the cursor into
@@ -420,7 +443,19 @@ struct v34_receiver {
 	int             sig_energy_acc;  /* +0x24c the received-point energy
 					  accumulator paired with sig_energy
 					  (was f24c) */
-	unsigned char pad_250[0x252 - 0x250];
+	/*
+	 * +0x250 (obj +0x4b4).  Offset-named after the object offset the
+	 * transmitter's arms reach it by (`TX1_RX250`).  The rate-selection
+	 * completion writes `equerr` or `preerr` into it; the early finish
+	 * reads it back as the mark the equaliser error is measured
+	 * against, and the rate ladder reads it as the level a rate has to
+	 * stay under.  Signed, and forced: every load in the object is
+	 * `movswl` (0x655ab, 0x672b1, 0x675bc), so the ladder's thresholds
+	 * are built on the sign-extended mark.  Both readings are the
+	 * transmitter's; what it means downstream is not established, so
+	 * the name stays neutral.
+	 */
+	short           short_4b4;      /* +0x250 (obj +0x4b4) */
 	short           bad_thresh;            /* +0x252 */
 	short           bad_long_thresh;            /* +0x254 */
 	short           good_thresh;            /* +0x256 */
@@ -566,7 +601,7 @@ struct v34_receiver {
  * Seven other pad_NNNN regions in this struct were checked the same way and
  * LEFT ALONE: either the gap does not match what natural alignment would
  * insert for the following field (pad_184, pad_1a8, pad_1c2, pad_1dc,
- * pad_22c, pad_250, pad_264, pad_270), or no modelled content for them has
+ * pad_22c, pad_264, pad_270), or no modelled content for them has
  * been established. None of those is a claim their bytes are unread -- only
  * that, unlike the five above, deleting them would not reproduce the
  * object's layout by natural alignment alone, so they stay explicit per this
@@ -616,6 +651,10 @@ V34RECV_ASSERT_OFF(timing_offset,    0x238);
 V34RECV_ASSERT_OFF(timing_phase,     0x23c);
 V34RECV_ASSERT_OFF(timing,           0x2a8);
 V34RECV_ASSERT_OFF(equalizer,        0x3cc);
+/* Wave 9: the burst window, the TRN2 shift-register high half, the TX1 mark. */
+V34RECV_ASSERT_OFF(burst,            0x10c);
+V34RECV_ASSERT_OFF(short_380,        0x11c);
+V34RECV_ASSERT_OFF(short_4b4,        0x250);
 
 typedef char v34recv_size[(sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
 #endif

@@ -196,20 +196,19 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
  *
  *   OB_FILT_DELAY     "V34 filtdelay set to %d", printed by this function
  *                     out of the field it has just stored.
- *   OB_FORCE_LOW_BAUD `probeselect` opens with `if (*(short *)(m + 0x359a))
- *                     goto rate_2400`, jumping over the whole symbol-rate
- *                     ladder (src/pump/v34/V34hshak.c).  This function is the
- *                     only writer read so far and it sets it exactly when the
+ *   `force_low_baud`  (a v34fsk.h member since wave 9) `probeselect` opens
+ *                     with `if (obj->force_low_baud != 0) goto rate_2400`,
+ *                     jumping over the whole symbol-rate ladder
+ *                     (src/pump/v34/V34hshak.c).  This function is the only
+ *                     writer read so far and it sets it exactly when the
  *                     maximum bit-rate index came out as 1 -- 2400 bit/s,
  *                     which the lowest symbol rate is the only way to carry.
  *                     Two sites, one meaning; the name is descriptive and the
  *                     derivation is the pair.
  */
 #define OB_RECEIVER		0x0264
-#define OB_F0234		0x0234		/* in v34fsk.h's clock group */
 #define OB_F0254		0x0254		/* short, short, then an int */
 #define OB_F2218		0x2218		/* v34handshakinit clears it */
-#define OB_FORCE_LOW_BAUD	0x359a		/* short; see above          */
 #define OB_F35A4		0x35a4		/* signed short, scales F0254 */
 #define OB_FILT_DELAY		0xaa7c		/* short; the object's name  */
 #define OB_FAC00		0xac00		/* byte                      */
@@ -356,7 +355,6 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * whose diagnostic names it: "tx buffer backward clear is enabled".  It is
  * inside `unmapped_abfb` in `struct v34_object`, so it is reached by offset.
  */
-#define OB_BACKWARD_CLEAR	0xabfe
 
 /*
  * +0xaa86, printed as `period` beside `tx->symcnt` by case 3's diagnostic.
@@ -849,16 +847,15 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 
 /*
  * +0x0238  Samples this session has processed, masked to 31 bits on every
- * block.  `datapumpv34` reads it at its true offset and v34fsk.h's note on
- * `unmapped_0234` records the two other readers.
+ * block.  `datapumpv34` reads it at its true offset; v34fsk.h's sample-clock
+ * group comment records the other readers, and the member is
+ * `sample_count` since wave 9.
  */
-#define O_SAMPLES	0x238
 /*
- * +0x0240 and +0x0244.  The first is named by the object -- "On
- * PHASE2_COMPLETE: added Silence = %d, p2DelayCntr = %d" -- and the second by
- * "phase3halfDuplexLength = %d symbols (baud %d)".
+ * +0xa244.  Named by the object -- "phase3halfDuplexLength = %d symbols
+ * (baud %d)".  (+0x0240, the other half of this comment before wave 9, is
+ * now the member `p2_delay_cntr`.)
  */
-#define O_P2DELAY	0x240
 #define O_HDLENGTH	0xa244
 /*
  * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
@@ -894,7 +891,6 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 /* +0xabe9.  Gates the late ANSam case on an outgoing call. */
 #define O_ANSAMLATE	0xabe9
 /* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
-#define O_CLEARREQ	0xabfe
 #define O_P2STATE	0xabff
 /*
  * +0xac1c, the retrain detector's eleven words.  Four filter states, three
@@ -1313,18 +1309,15 @@ typedef char v34pcmmain_echo_fits[
 /* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
 #define OB_F000C		0x000c
 #define OB_F0238		0x0238
-#define OB_F0248		0x0248		/* = 0xfffe8900               */
 #define OB_F0262		0x0262
 #define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
 #define OB_FA248		0xa248
-#define OB_FAA80		0xaa80
 #define OB_FABC4		0xabc4
 #define OB_FABD4		0xabd4		/* three ints, then two shorts */
 #define OB_FABD8		0xabd8
 #define OB_FABDC		0xabdc
 #define OB_FABE4		0xabe4
 #define OB_FABE6		0xabe6
-#define OB_FABFC		0xabfc
 #define OB_FAC12		0xac12
 #define OB_FAC14		0xac14
 #define OB_FAC17		0xac17
@@ -2520,7 +2513,7 @@ VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 	}
 
 	if (obj->rate_max == 1)
-		*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+		obj->force_low_baud = 1;
 }
 
 void
@@ -2543,7 +2536,7 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
 				     "minSigLevel set to %d\n", level, thresh);
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 }
 
 void
@@ -2711,7 +2704,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		if (obj->rate_max > RATE_INDEX_MAX)
 			obj->rate_max = RATE_INDEX_MAX;
 		else if (obj->rate_max == 1)
-			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+			obj->force_low_baud = 1;
 	}
 
 	/* Re-read on all three arms; the object reloads it after each. */
@@ -2746,7 +2739,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 					     level, thresh);
 	}
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 
 	/*
 	 * `(delay + 2) >> 2` and NOT `(delay + 2) / 4`: the object shifts
@@ -4028,7 +4021,7 @@ v90Phase34(void *objp)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34Main: tx buffer backward "
 					     "clear is enabled...\r\n");
-		m[OB_BACKWARD_CLEAR] = 1;
+		o->backward_clear = 1;
 		return 0;
 	}
 
@@ -4273,9 +4266,9 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	 * as `v34handshakinit`'s guard writes when it rejects the span, with
 	 * +0x244 left alone here and written there.
 	 */
-	*(int *)(m + 0x238) = 0;
-	*(int *)(m + 0x248) = (int)0xfff15a00;
-	*(int *)(m + 0x23c) = 0x69780;
+	obj->sample_count = 0;
+	obj->int_0248 = (int)0xfff15a00;
+	obj->timeout_deadline = 0x69780;
 }
 
 void
@@ -4449,7 +4442,7 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 	obj->tx_scr_sr = 0;
 
 	*(short *)(m + 0x254) =
-		(short)(336 * (int)*(const short *)(m + 0x35a4) + 10000);
+		(short)(336 * (int)obj->short_35a4 + 10000);
 	*(short *)(m + 0x256) = 0;
 	*(int *)(m + 0x258) = 0;
 }
@@ -4679,7 +4672,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	sysdep_memset(rx, 0, sizeof(struct v34_receiver));
 
 	obj->pac18 = k56;
-	*(short *)(m + OB_FAA80) = 1;
+	obj->rate_change_pending = 1;
 	obj->pac3c = runtime;
 	obj->p3548 = sess;
 
@@ -4709,7 +4702,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * GCC's divide-by-ten and not a fixed-point scale.  Verified
 	 * numerically rather than read off.
 	 */
-	*(short *)(m + OB_FABFC) =
+	obj->short_abfc =
 		(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);
 
 	/*
@@ -4822,10 +4815,10 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->rate_now = 0;
 	obj->rate_want = -1;
 	obj->rx_energy_floor = 0;
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 	*(int *)(m + OB_F0238) = 0;
-	*(int *)(m + OB_F0248) = (int)0xfffe8900;
-	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
+	obj->int_0248 = (int)0xfffe8900;
+	obj->force_low_baud = 0;
 	rx->agc_start_gain = 0x600;
 	*(int *)((unsigned char *)rx + RX_F238) = 0;
 	*(int *)(m + OB_F000C) = 0;
@@ -4925,7 +4918,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		if (obj->rate_max > RATE_INDEX_MAX)
 			obj->rate_max = RATE_INDEX_MAX;
 		else if (obj->rate_max == 1)
-			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+			obj->force_low_baud = 1;
 	}
 
 	cfg = (unsigned char *)obj->pac3c;
@@ -4947,7 +4940,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 					     level, thresh);
 	}
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 
 	{
 		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
@@ -5036,7 +5029,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	if (PROG_S16(obj, O_RUNNING) == 0)
 		return obj->progress;
 
-	PROG_S32(obj, O_SAMPLES) = (PROG_S32(obj, O_SAMPLES) + n) & 0x7fffffff;
+	obj->sample_count = (obj->sample_count + n) & 0x7fffffff;
 
 	/*
 	 * 0xb46a-0xb52a.  The transmit bits are packed into whole 16-bit
@@ -5126,7 +5119,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		 * detection after %d in train".
 		 */
 		if (ret == 0) {
-			int since = PROG_S32(obj, O_SAMPLES)
+			int since = obj->sample_count
 				    - PROG_S32(obj, 0x244);
 
 			if ((unsigned int)since > 0x12bfu
@@ -5200,7 +5193,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int len;
 
 				PROG_U8(obj, O_P2STATE) = 0;
-				PROG_S32(obj, O_P2DELAY) = 0;
+				obj->p2_delay_cntr = 0;
 				if ((PROG_U8(obj->pac3c, CFG_FLAGS3)
 				     & CFG_FLAG3_PHASE2) != 0
 				    && PROG_S16(obj, O_PCMCHOSEN) != 0
@@ -5231,8 +5224,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					k56->k56FlexEnterPhase3();
 				}
 			}
-			t = PROG_S32(obj, O_P2DELAY) + n;
-			PROG_S32(obj, O_P2DELAY) = t;
+			t = obj->p2_delay_cntr + n;
+			obj->p2_delay_cntr = t;
 			r = PROG_U8(obj, O_P2STATE);
 			if (r == 0) {
 				if (t <= 0x5f) {
@@ -5245,7 +5238,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Indicating First P2 " "COMPLETE... (after %d)\r\n",
-					    PROG_S32(obj, O_P2DELAY));
+					    obj->p2_delay_cntr);
 				return 1;
 			}
 			if (r == 1) {
@@ -5253,14 +5246,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int sil = PROG_S32(obj->pac3c, CFG_SILENCE);
 
 				t += sil;
-				PROG_S32(obj, O_P2DELAY) = t;
+				obj->p2_delay_cntr = t;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "On PHASE2_COMPLETE: added Silence" " = %d, p2DelayCntr = %d\r\n",
 					    PROG_S32(obj->pac3c, CFG_SILENCE),
 					    t);
 			}
-			if (PROG_S32(obj, O_P2DELAY) <= 0x240) {
+			if (obj->p2_delay_cntr <= 0x240) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Wait (after P2 " "COMPLETE)...\r\n");
@@ -5491,7 +5484,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		case 4:
 			obj->progress = 0xb;
 			obj->status = 5;
-			PROG_S32(obj, O_SAMPLES) = 0;
+			obj->sample_count = 0;
 			break;
 		case 5:
 			VPcmV34InitiateRetrain(obj, VPCM_DP_V90);
@@ -5508,7 +5501,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		}
 		/* 0xc91b, requestOutputSampleClear. */
-		if (PROG_U8(obj, O_CLEARREQ) != 0
+		if (obj->backward_clear != 0
 		    && (unsigned int)n > 0x30u) {
 			int want = n * 2;
 
@@ -5516,7 +5509,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				dsplibs_debug_printf(
 				    "VPcmV34Main: requestOutputSampleClear "
 				    "(asking %d samples clear) !!!\r\n", want);
-			PROG_U8(obj, O_CLEARREQ) = 0;
+			obj->backward_clear = 0;
 			out -= n;
 			sysdep_memset(out, 0, (size_t)n * sizeof(float));
 			PROG_S32(obj, O_CLR_COUNT) = want;
@@ -5573,7 +5566,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		case 4:
 			obj->progress = 0xb;
 			obj->status = 5;
-			PROG_S32(obj, O_SAMPLES) = 0;
+			obj->sample_count = 0;
 			break;
 		case 5:
 			VPcmV34InitiateRetrain(obj, VPCM_DP_V92);
@@ -5741,7 +5734,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	case 5:
 		for (i = 0; i < n; i++)
 			out[i] = 0.0f;
-		if ((unsigned int)PROG_S32(obj, O_SAMPLES) > 0x464ffu) {
+		if ((unsigned int)obj->sample_count > 0x464ffu) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmV34Main: waiting for user response "

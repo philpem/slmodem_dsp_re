@@ -343,7 +343,7 @@ rxtiminginit(void *objp)
 	V34TimingFiltersInit(&obj->receiver.timing);
 
 	/* Where rxreadqueue leaves its four samples. */
-	rx->rx_samples = (short *)((char *)obj + 0x370);
+	rx->rx_samples = obj->receiver.burst;
 
 	rx->rx_blocks = 0;
 	rx->mix_carrier_step = 1;
@@ -426,7 +426,7 @@ rxinit(void *objp)
 	rx->trn_ref_sr = 0;   rx->demod_q_prev = 0;  rx->rx_blocks = 0;  rx->scrambler_sr = 0;
 	rx->demod_i_prev = 0;   rx->mix_carrier_phase = 0;  rx->energy.sum = 0;
 	rx->vectpp_idx = 0;   rx->agc_pair_count = 0;  obj->hist1_idx = 0;
-	rx->rx_samples = (short *)((char *)rx + 0x10c);
+	rx->rx_samples = rx->burst;
 	rx->sig_energy = 0;   rx->sig_energy_acc = 0;
 }
 
@@ -683,7 +683,7 @@ rxtiming(void *objp)
 	short i;
 
 	/* Set before the count is even tested, so it lands on an empty call. */
-	rx->rx_samples = (short *)((char *)obj + 0x370);
+	rx->rx_samples = obj->receiver.burst;
 
 	for (i = 0; i < rx->out_count; i = (short)(i + 1)) {
 		int wa = (unsigned short)rx->phase_frac;
@@ -1297,7 +1297,7 @@ receiver(void *objp)
 	int pherr;
 	short i;
 
-	rx->rx_samples = (short *)((char *)obj + 0x370);
+	rx->rx_samples = obj->receiver.burst;
 
 	for (i = 0; i < rx->out_count; i = (short)(i + 1)) {
 		int wa = (unsigned short)rx->phase_frac;

@@ -73,8 +73,8 @@
   },
   {
     "label": "the FSK demodulator is given the wrong buffer",
-    "find": "\t\t      (const short *)((const char *)rx + T72_RX_SAMPS),\n\t\t      &obj->fsk);",
-    "replace": "\t\t      (const short *)((const char *)rx + T72_RX_SAMPS + 2),\n\t\t      &obj->fsk);",
+    "find": "\t\t      rx->burst,\n\t\t      &obj->fsk);",
+    "replace": "\t\t      rx->burst + 1,\n\t\t      &obj->fsk);",
     "fn": "t72_rx_l1"
   },
   {
@@ -265,13 +265,13 @@
   },
   {
     "label": "the FSK gate at +0xa8a0 is left shut",
-    "find": "\t\tt3c_puti(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
-    "replace": "\t\tt3c_puti(obj, T72_FSKGATE, 0);\t\t\t /* 0x67f68 */",
+    "find": "\t\tobj->retrain_poll = 1;\t\t\t\t /* 0x67f68 */",
+    "replace": "\t\tobj->retrain_poll = 0;\t\t\t\t /* 0x67f68 */",
     "fn": "t72_rx_l1"
   },
   {
     "label": "the FSK gate is written sixteen bits wide",
-    "find": "\t\tt3c_puti(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
+    "find": "\t\tobj->retrain_poll = 1;\t\t\t\t /* 0x67f68 */",
     "replace": "\t\ths_put(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
     "fn": "t72_rx_l1"
   },
@@ -313,14 +313,14 @@
   },
   {
     "label": "the sample count is one short",
-    "find": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS));",
-    "replace": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS) - 1);",
+    "find": "\treturn (short)(rx->rx_samples - rx->burst);",
+    "replace": "\treturn (short)(rx->rx_samples - rx->burst - 1);",
     "fn": "t72_nsamples"
   },
   {
     "label": "the sample count is measured from the wrong buffer",
-    "find": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS));",
-    "replace": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS - 4));",
+    "find": "\treturn (short)(rx->rx_samples - rx->burst);",
+    "replace": "\treturn (short)(rx->rx_samples - (rx->burst - 2));",
     "fn": "t72_nsamples"
   },
   {
@@ -451,14 +451,14 @@
   },
   {
     "label": "the receiver's +0x238 is kept sixteen bits wide",
-    "find": "\tt3c_puti(obj, T72_FAACC,\t\t\t\t/* 0x67d92 */\n\t\t *(const int *)((const char *)rx + T72_RX_F238));",
-    "replace": "\ths_put(obj, T72_FAACC,\t\t\t\t\t/* 0x67d92 */\n\t\t    *(const short *)((const char *)rx + T72_RX_F238));",
+    "find": "\tobj->rtd_scaled = rx->timing_offset;\t\t/* 0x67d92 */",
+    "replace": "\tobj->rtd_scaled = (short)rx->timing_offset;\t/* 0x67d92 */",
     "fn": "t72_probe_done"
   },
   {
     "label": "the receiver's +0x23c is kept instead",
-    "find": "\t\t *(const int *)((const char *)rx + T72_RX_F238));",
-    "replace": "\t\t *(const int *)((const char *)rx + T72_RX_F238 + 4));",
+    "find": "\tobj->rtd_scaled = rx->timing_offset;\t\t/* 0x67d92 */",
+    "replace": "\tobj->rtd_scaled = rx->timing_phase;\t\t/* 0x67d92 */",
     "fn": "t72_probe_done"
   },
   {
@@ -547,13 +547,13 @@
   },
   {
     "label": "the top rung correlates four bins, not twenty-five",
-    "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
-    "replace": "\t\tdftupdate(obj->probe_bins, V34_NL_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
+    "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  rx->burst, n);",
+    "replace": "\t\tdftupdate(obj->probe_bins, V34_NL_BINS,\n\t\t\t  rx->burst, n);",
     "fn": "t72_ladder"
   },
   {
     "label": "the top rung also correlates the noise bank",
-    "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  (const short *)((const char *)rx + T72_RX_SAMPS), n);",
+    "find": "\t\tdftupdate(obj->probe_bins, V34_PROBE_BINS,\n\t\t\t  rx->burst, n);",
     "replace": "\t\tt72_update_both(obj, rx, n);",
     "fn": "t72_ladder"
   },

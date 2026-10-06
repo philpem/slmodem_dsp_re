@@ -275,11 +275,6 @@ hs_set_txstate(struct v34_object *obj, short next)
  */
 #define TX1_COUNT	0xaa78
 
-/*
- * +0x35a6.  86 compares `vect_idx` against it to decide when the modulator is
- * reconfigured.  Nothing else in the tree reads it; it is `unmapped_35a6`.
- */
-#define TX1_SEGLEN	0x35a6
 
 /*
  * +0x358c.  60 masks it with one to choose between two of `vect4`'s four
@@ -302,16 +297,6 @@ hs_set_txstate(struct v34_object *obj, short next)
  */
 #define TX1_HS_MODE	0x2218
 
-/*
- * +0x358e and +0x35a4, two more words of `unmapped_3564`.
- *
- * +0x358e is a SEGMENT COUNTER shared by 19 and 20: 20 counts it up to six
- * and 19 clears it, both on the pass that changes `txstate`.  +0x35a4 is the
- * length 19 scales by 0x53 into +0x35a6, and zero there is what sends 19 to
- * PPSEG instead of TXMD.  Neither has another reader in this tree.
- */
-#define TX1_F358E	0x358e
-#define TX1_F35A4	0x35a4
 
 /*
  * +0xaa7a, +0xaa7c and +0xaa86, the three words of the `unmapped_aa78` /
@@ -363,14 +348,13 @@ hs_set_txstate(struct v34_object *obj, short next)
 #define TX1_F25DA	0x25da
 
 /*
- * +0x35a2, one halfword of `unmapped_359e`, and +0x382, which is the
- * RECEIVER's +0x11e -- `0x74(%esp)` plus 0x11e -- and lands in that
- * structure's `pad_000`, so neither is a named field anywhere in this tree.
- * 64/68 tests +0x35a2 against zero on its `role == 0x66` path and 69 tests
- * +0x382 against 0x89b0 to choose between four points and sixteen.
+ * +0x35a2 and +0x382 are members since issue #260 wave 9 (`md_length` on the
+ * object; the receiver's `short_382`, the Indicate word whose low half the
+ * TRN2 shift register also runs through) -- the sites below read them as
+ * members now.  64/68 test `md_length` against zero on their `role == 0x66`
+ * path and 69 tests `short_382` against 0x89b0 to choose between four points
+ * and sixteen.
  */
-#define TX1_F35A2	0x35a2
-#define TX1_F382	0x382
 
 /*
  * +0x3590, +0x3598 and +0x359e -- three halfwords 67 owns, and no other site
@@ -434,15 +418,6 @@ hs_set_txstate(struct v34_object *obj, short next)
  * `struct v34_object` now (issue #260): `paa6c` and `msgrec`.
  */
 
-/*
- * +0x238 and +0x248, two of the four words of the sample-clock timer in
- * `unmapped_0234`.  `datapumpv34` reads the running count at +0x238 against
- * the mark at +0x248 and reports a stall when the span passes 287,488; 70
- * copies one onto the other, which restarts the span.  v34fsk.h's note on
- * that region is the other half of this reading.
- */
-#define TX1_TIMER	0x238
-#define TX1_TIMER_MARK	0x248
 
 /*
  * +0xaa98, a short: the negotiated rate INDEX rather than a bit rate --
@@ -808,7 +783,7 @@ v34tx1_txmd(void *objp)
 	}
 
 	if ((unsigned short)o->vect_idx
-	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {
+	    == (unsigned short)o->seg_len) {
 		struct v34_ratecfg *cfg = &o->ratecfg;
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
 
@@ -960,7 +935,7 @@ v34tx1_dataxmit(void *objp)
 
 	rx->equerr_accum = 0;
 	rx->err_symcount = 0;
-	tx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));
+	o->int_0248 = o->sample_count;
 
 	idx = tx1_get(o, TX1_RATEIDX);
 	o->rate_now = idx;
@@ -1146,20 +1121,19 @@ v34tx1_sbarseg(void *objp)
 	o->seg_symcount = 0;
 	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
 		hs_set_txstate(o, V34HS_TRNSEG4A);
-	} else if (tx1_get(o, TX1_F35A4) == 0) {
+	} else if (o->short_35a4 == 0) {
 		/* 0x68375 */
 		hs_set_txstate(o, V34HS_PPSEG);
 	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
 		/* 0x69eca */
-		o->seg_symcount = tx1_get(o, TX1_SEGLEN);
+		o->seg_symcount = o->seg_len;
 		hs_set_txstate(o, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
 		int span;
 		short q;
 
-		tx1_put(o, TX1_SEGLEN,
-			(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));
+		o->seg_len = (short)((unsigned short)o->short_35a4 * 0x53);
 		hs_set_txstate(o, V34HS_TXMD);
 
 		/* 0x67885 */
@@ -1179,13 +1153,13 @@ v34tx1_sbarseg(void *objp)
 			dsplibs_debug_printf(
 				"Moving to TX MD, would take %d symbols ,"
 				" echo start delay is %d...\r\n",
-				tx1_get(o, TX1_SEGLEN),
+				o->seg_len,
 				tx1_get(o, TX1_COUNT));
 	}
 
 	/* 0x67236 */
 	o->vect_idx = 0;
-	tx1_put(o, TX1_F358E, 0);
+	o->short_358e = 0;
 	return V34TX1_LOOP;			/* 0x63948 */
 }
 
@@ -1258,10 +1232,10 @@ v34tx1_ppseg(void *objp)
 	if ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {
 		/* 0x66d57 */
 		unsigned short n = (unsigned short)
-			((unsigned short)tx1_get(o, TX1_F358E) + 1);
+			((unsigned short)o->short_358e + 1);
 
 		if (n != 6) {
-			tx1_put(o, TX1_F358E, (short)n);
+			o->short_358e = (short)n;
 			o->vect_idx = 0;
 		} else {
 			/* 0x680ac */
@@ -1296,7 +1270,7 @@ v34tx1_ppseg(void *objp)
 			}
 
 			/* 0x680fd */
-			tx1_put(o, TX1_F358E, 0);
+			o->short_358e = 0;
 			tx1_put(o, TX1_FAA86,
 				(short)((unsigned short)tx1_get(o, TX1_FAA86)
 					+ 0x120));
@@ -1579,7 +1553,7 @@ v34tx1_exmit(void *objp)
 	short mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	short q;
 
-	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
 		/* 0x67031 */
 		short k;
 		int point;
@@ -1721,7 +1695,7 @@ v34tx1_jtxmit(void *objp)
 	if (o->role == 0x66) {
 		/* 0x66ca8 */
 		if (!(rx->flags & V34_RX_FLAG_DATA)) {
-			if (tx1_get(o, TX1_F35A2) == 0)
+			if (o->md_length == 0)
 				return V34TX1_LOOP;	/* 0x629c8 */
 			if (tx1_get(o, TX1_F25DA) == 0)
 				return V34TX1_LOOP;	/* 0x63da2 */
@@ -2213,14 +2187,6 @@ v34tx1_jtxmit(void *objp)
  * the fixture.
  */
 
-/*
- * +0x4b4, which is the RECEIVER's +0x250 -- `0x74(%esp)` plus 0x250 -- and
- * lands in that structure's `pad_250`, so it is not a named field anywhere in
- * this tree.  The completion writes it out of `preerr` or `equerr`; the early
- * finish above reads it as the mark the equaliser error is measured against,
- * and the ladder reads it as the level a rate has to stay under.
- */
-#define TX1_RX250	0x4b4
 
 /*
  * +0x359a, one more halfword of `unmapped_3564`.  v34pcmmain.cpp calls it
@@ -2353,7 +2319,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 
 		rx->flags = (unsigned short)(rx->flags | 0x4000u);
 		sysdep_memset(&rx->pred_i[0], 0, 0x10);
-		tx1_put(o, TX1_RX250, rx->preerr);
+		o->receiver.short_4b4 = rx->preerr;
 	} else {
 		/* 0x674e5 */
 		if (dsplibs_debug_level > 1)		/* 0x683b2 */
@@ -2372,7 +2338,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		rec[5] = 0;
 		rec[6] = 0;
 		rec[7] = 0;
-		tx1_put(o, TX1_RX250, rx->equerr);
+		o->receiver.short_4b4 = rx->equerr;
 	}
 
 	/* 0x674c8 */
@@ -2466,7 +2432,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 		if (dsplibs_debug_level > 1)		/* 0x66b61 */
 			dsplibs_debug_printf(
 				"V34DATARATE,threshold for data rate" " %d = %d\n", rate, term);
-		if (tx1_get(o, TX1_RX250) < (short)term)
+		if (o->receiver.short_4b4 < (short)term)
 			break;
 		rate = (short)(rate - 1);
 	}
@@ -2493,8 +2459,8 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (dsplibs_debug_level > 1)			/* 0x6759e */
 		dsplibs_debug_printf(
 			"V34DATARATE, ethresh data rate = %d,ethreh=%d," "rate2 = 0x%x,data=%d\n",
-			rate, tx1_get(o, TX1_RX250),
-			(unsigned short)tx1_get(o, TX1_F382), term);
+			rate, o->receiver.short_4b4,
+			(unsigned short)o->receiver.short_382, term);
 	if (dsplibs_debug_level > 1)			/* 0x675e6 */
 		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
 				     rx->equerr, rx->preerr);
@@ -2505,7 +2471,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 		rx->bad_long_thresh = (short)((rx->bad_long_thresh + term) >> 1);
 	} else {
 		/* 0x672ad */
-		rx->bad_long_thresh = (short)(tx1_get(o, TX1_RX250) << 3);
+		rx->bad_long_thresh = (short)(o->receiver.short_4b4 << 3);
 	}
 
 	/* 0x63234 */
@@ -2519,8 +2485,8 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rx->good_run = 0;
 	rx->bad_run = 0;
 	rec[1] = (short)0xfffd;
-	if ((unsigned)tx1_get_int(o, TX1_TIMER)
-	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
+	if ((unsigned)o->sample_count
+	    < (unsigned)(o->int_0248 + 0x17700)
 	    && (unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u) {
 		rate = (short)(rate - 2);
 		if ((short)rate < (short)ratemin)
@@ -2655,7 +2621,7 @@ v34tx1_trnseg4a(void *objp)
 	int n, lim, baud, period;
 	short *rec;
 
-	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
 		/* 0x66e59 */
 		short k = tx1_scramble2(o);
 		short q;
@@ -2688,7 +2654,7 @@ v34tx1_trnseg4a(void *objp)
 			/* 0x6559c */
 			if (n < baud + period)
 				return V34TX1_LOOP;	/* 0x6409a */
-			if ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 10)
+			if ((int)rx->equerr > (int)o->receiver.short_4b4 + 10)
 				return V34TX1_LOOP;	/* 0x6431f */
 		}
 	}
@@ -2702,7 +2668,7 @@ v34tx1_trnseg4a(void *objp)
 		/* 0x62f5f */
 		rec[2] = 0;
 		rec[0] = 0;
-		tx1_put(o, TX1_RX250, rx->equerr);
+		o->receiver.short_4b4 = rx->equerr;
 	} else {
 		tx1_ts_snapshot(o, rx, rec);
 	}
@@ -3308,7 +3274,7 @@ v34tx1_xmitmp(void *objp)
 		unsigned short flags;
 		short bit, idx;
 
-		wide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;
+		wide = (unsigned short)o->receiver.short_382 == 0x89b0u;
 		if (n > (wide ? 3 : 1))
 			break;
 
@@ -3347,7 +3313,7 @@ v34tx1_xmitmp(void *objp)
 			if (tx1_mp_sequence_end(o, rx)) {
 				/* 0x6490e */
 				wide = (unsigned short)
-				       tx1_get(o, TX1_F382) == 0x89b0u;
+				       o->receiver.short_382 == 0x89b0u;
 				break;
 			}
 		} else if ((unsigned short)o->vect_idx

@@ -791,13 +791,13 @@
   },
   {
     "label": "the length is not reversed at all",
-    "find": "\ths_put(obj, T44_F35A2, (short)rev);",
-    "replace": "\ths_put(obj, T44_F35A2, raw);",
+    "find": "\tobj->md_length = (short)rev;",
+    "replace": "\tobj->md_length = raw;",
     "fn": "t44_mdlength"
   },
   {
     "label": "the length is stored only after the reversal",
-    "find": "\ths_put(obj, T44_F35A2, raw);\n\n\trev = bitreverse((unsigned short)raw, 7);",
+    "find": "\tobj->md_length = raw;\n\n\trev = bitreverse((unsigned short)raw, 7);",
     "replace": "\trev = bitreverse((unsigned short)raw, 7);",
     "equivalent": true,
     "why": "EQUIVALENT.  0x6eea2 and 0x6f4f8 store the UNREVERSED value into +0x35a2 and 0x6eec3 and 0x6f519 store the reversed one over it four instructions later, with `bitreverse` -- which takes its argument in a register -- between.  Nothing reads +0x35a2 in between, so no fixture can see the first store.  HELD FIXED: that `bitreverse` reads nothing out of the object, which src/pump/v34/V34RX.c shows.",
@@ -975,7 +975,7 @@
   {
     "label": "the rate tables read the transmit baud rate",
     "find": "\tbaud = obj->ratecfg.rx_baud;",
-    "replace": "\tbaud = hs_get(obj, T44_TXBAUD);",
+    "replace": "\tbaud = obj->ratecfg.baud;",
     "fn": "t44_accept_len26"
   },
   {
@@ -1035,13 +1035,13 @@
   },
   {
     "label": "neither detector set-up raises DET_PENDING",
-    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
-    "replace": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+    "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tdetectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 8, 0x78, 0x600, 0);\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
+    "replace": "\tdetectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 8, 0x78, 0x600, 0);",
     "fn": "t44_accept_len26"
   },
   {
     "label": "the FIRST detector set-up is dropped",
-    "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 10, 0x600, 0);",
+    "find": "\tdetectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 8, 10, 0x600, 0);",
     "replace": "\t(void)0;",
     "equivalent": true,
     "why": "EQUIVALENT, and the strongest one in this batch.  `detectorinit` writes nine fields of the detector at +0x3564 and reads nothing (src/pump/v34/detector.c); the two calls at 0x6f0d1 and 0x6f125 differ only in the warm-up, so the second writes every field the first did.  The only statement between them is the receiver flag word's DET_PENDING, which is not in the detector.  HELD FIXED: that `detectorinit` has no effect outside the struct it is given.  The mutations of the SECOND call below are what check that from the other side.",
@@ -1067,7 +1067,7 @@
   },
   {
     "label": "the detectors read the record being clocked",
-    "find": "\tdetectorinit(&obj->detector,\n\t\t     *(const short **)((const char *)obj + T44_RXCARRDESC),\n\t\t     0, 8, 0x78, 0x600, 0);",
+    "find": "\tdetectorinit(&obj->detector,\n\t\t     obj->det_coefs,\n\t\t     0, 8, 0x78, 0x600, 0);",
     "replace": "\tdetectorinit(&obj->detector, (struct v34_bitsource *)obj->paa70,\n\t\t     0, 8, 0x78, 0x600, 0);",
     "fn": "t44_accept_len26"
   },
@@ -1079,7 +1079,7 @@
   },
   {
     "label": "+0xaa80 is not set",
-    "find": "\ths_put(obj, T44_FAA80, 1);\t\t\t/* 0x6f15c */",
+    "find": "\tobj->rate_change_pending = 1;\t\t\t/* 0x6f15c */",
     "replace": "\t(void)0;\t\t\t\t\t/* 0x6f15c */",
     "fn": "t44_accept_len26"
   },
@@ -1191,8 +1191,8 @@
   },
   {
     "label": "the probeselect diagnostic swaps its two rates",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
-    "replace": "\t\t\t\t     (int)obj->ratecfg.rx_baud,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
+    "find": "\t\t\t\t     (int)obj->ratecfg.baud,\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "replace": "\t\t\t\t     (int)obj->ratecfg.rx_baud,\n\t\t\t\t     (int)obj->ratecfg.baud);",
     "fn": "t44_accept_len4d"
   },
   {
@@ -1293,14 +1293,14 @@
   },
   {
     "label": "the probeselect diagnostic prints the carrier as the transmit rate",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
-    "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "find": "\t\t\t\t     (int)obj->ratecfg.baud,\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "replace": "\t\t\t\t     (int)obj->ratecfg.rx_carrier,\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
     "fn": "t44_accept_len4d"
   },
   {
     "label": "the probeselect diagnostic prints the carrier as the receive rate",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
-    "replace": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_CARRIER));",
+    "find": "\t\t\t\t     (int)obj->ratecfg.baud,\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "replace": "\t\t\t\t     (int)obj->ratecfg.baud,\n\t\t\t\t     (int)obj->ratecfg.rx_carrier);",
     "fn": "t44_accept_len4d"
   },
   {
