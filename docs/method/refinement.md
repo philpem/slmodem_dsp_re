@@ -3674,3 +3674,44 @@ Trace earlier ranking gates and actual ready selection before interpreting a
 fanout count; include anti/output edges created by allocation. Original hard
 register reuse can constrain order differently. Do not force registers or fake
 source dependencies to reproduce it. [Measured diagnostic controls](../batch-scheduler-trace-domain.md).
+
+
+### Recover owner acquisition at the callback boundary (F11829)
+
+FAXVMI_process327B becomes exact by reading the framer after processing
+callbacks, at the original owner load. An entry cache extends a child lifetime
+across calls even when the member is normally stable. Preserve initial scalar
+snapshots separately from later owner reads. This transfers only where the
+blob independently shows that boundary: V21 next-state and HDLC unframe reload
+controls reproduce individual operations but remain nonexact. Trace remaining
+conversion/inline graphs before further source variants. Full-TU audits must
+include source-unchanged inline callers and reordered merge strings in negative
+controls. [Domain/results](../fax-publication-batch-results.md).
+
+### Read the ownership of heterogeneous arithmetic operands (F11830)
+
+voice_modem338B closes with det_len+saved: original word-extension and full-word
+memory reads feeding ADD isolate the arithmetic operand graph. Keep existing
+local widths and interfaces fixed; do not assign registers or permute unrelated
+statements. Promoted ushort sum is bounded and final narrowing remains unchanged.
+This is separate from detector formal-width controls. The33TU/26small-symbol
+screen's known input fires, but its six-instruction pattern is a bounded triage
+rather than proof every remaining sum was examined. [Evidence/replay](../services-voice-count-sum-results.md).
+
+### When the operation matches, trace the remaining compiler dependency (F11831–F11833)
+
+Unsigned wrapper minima/remainders, original FSE copy boundary, ADD-then-SUB
+reversal energy and GenericIIR member publication can each recover operations
+without closing a function. Size proximity is not a next discriminator. Hold
+the witnessed source graph fixed, find the first changing RTL pass, and predict
+a new source or visibility boundary before reopening the finite domain. No
+register/slot/type permutation or source/profile score selection follows from
+these negative results. [Bounded batch and next phase](../byteexact-contract-batch-results.md).
+
+
+F11832's FSE trace now measures sched2 as the first changing pass:29validated
+streams preserve copy→freq→phase_acc through allocation/reload/rename, then
+sched2 emits freq→phase_acc→copy. Explicitly exclude the duplicate GCSE stream.
+Inspect scheduler memory dependencies and priority carriers next; changing
+allocation or declaration order is not supported by this trace alone.
+[Replay tool](../../tools/fse_copy_stage_trace.py).

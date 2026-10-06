@@ -432,7 +432,7 @@ int
 FAXVMI_process(struct faxvmi *vmi, unsigned short *data, short *pcm,
 	       short *count, unsigned short *result)
 {
-	struct faxvmi_framer *fr = vmi->framer;
+	struct faxvmi_framer *fr;
 	unsigned short n;
 	int ret, m, status;
 
@@ -455,6 +455,8 @@ FAXVMI_process(struct faxvmi *vmi, unsigned short *data, short *pcm,
 			  FAXVMI_STATUS_ZERORUN);
 	if (vmi->underrun)
 		status |= FAXVMI_STATUS_UNDERRUN;
+	/* The object reads the owner after all processing callbacks (0x95523). */
+	fr = vmi->framer;
 	if (fr->fifo_size - fr->count < vmi->max_frame)
 		status |= FAXVMI_STATUS_FULL;
 	if (fr->residue)
