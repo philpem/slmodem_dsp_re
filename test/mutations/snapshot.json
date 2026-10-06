@@ -1974,7 +1974,7 @@
    }
   },
   "v34datapump": {
-   "key": "06a246466a1a0a45d7e02651cdb6c430e227a1c2f2b404d1d675e00880e20eb8",
+   "key": "8cdb0b8cec9bf5f974b89c7060af8f534fab8c02f04d1cceb6f13650e76436f1",
    "summary": "78 mutations: 75 caught (75 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x124 is bumped after `receiver` rather than before it": "caught",
@@ -2456,7 +2456,7 @@
    }
   },
   "v34hsmst44": {
-   "key": "cd5d79a3f7f695db1e001db3a503c790418553ff27213c0034d696992de6188e",
+   "key": "3adacc72be27ac12ba4a2c5f2c4a8321ef03fe6a0865cc121cd55d6724d33692",
    "summary": "214 mutations: 207 caught (207 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
@@ -2676,7 +2676,7 @@
    }
   },
   "v34hsrx4": {
-   "key": "a1ef25f6d5e31649615e98af001d09cb128df9a91907c6609c0447fef0f3ff1e",
+   "key": "f4e2ae63ca2e3da503ee71216d7d64559a2cc0bdaec14561cf6f4f5406daf4bf",
    "summary": "176 mutations: 170 caught (170 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa80 raises 0x100 rather than 0x200": "caught",
@@ -3152,7 +3152,7 @@
    }
   },
   "v34hst3core": {
-   "key": "f0f90a0fdd09ca58e057bc1220df40285715fe7b25e2deb6851b4bc3c0ddf1e4",
+   "key": "46681d5d9fdbfdea78db580f8e15a348a10eb71d2a10bf430b0656a7606b5130",
    "summary": "70 mutations: 70 caught (70 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -3320,7 +3320,7 @@
    }
   },
   "v34hst3mid": {
-   "key": "f1066921faaa8b4ad3b25d0653cec40bb0c85255a7286a6150c9292d2ba0bc25",
+   "key": "e8e98c96c307d3f0cb8c436013600b67ca38e8d653e2ae1a81e6940b66283f4a",
    "summary": "443 mutations: 419 caught (419 by test, 0 by strings), 2 NOT caught, 1 unusable, 21 equivalent, 0 MIScounted",
    "verdicts": {
     "47 has no second guard": "caught",
@@ -4580,7 +4580,7 @@
    }
   },
   "v34hstxblock": {
-   "key": "c884913da17a9c2e01fd44dc74f242bd1785bc8f433643d797df9c7796d0278e",
+   "key": "23ad42872e5aec0318c1c79e31b98ce3e6a5898aa52cdeb3dbc869ce6099e265",
    "summary": "52 mutations: 50 caught (50 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x238 against +0x23c compared signed": "caught",
@@ -4826,7 +4826,7 @@
    }
   },
   "v34k56": {
-   "key": "ddaf956b64299027fca85e77c9f57ff5a479685917720830588d9e9c579d0989",
+   "key": "bbb6704e432c5a2d4730467e24aac1b2c24d77a1f4f96389050ddfb237c3b7c5",
    "summary": "28 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 13 equivalent, 0 MIScounted",
    "verdicts": {
     "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store": "equivalent",
@@ -4860,7 +4860,7 @@
    }
   },
   "v34pcmif": {
-   "key": "fedde1130826439cad2dbe7027c69f79bf35e85c2f2d5fd31d2c07f74eecba9c",
+   "key": "57e0a40299034ab5f48f5414aa2d0995c388388bf0fb0617a6528bb469edece2",
    "summary": "126 mutations: 120 caught (120 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "force: 2800 spoils only one of its two bins": "caught",
@@ -5213,7 +5213,7 @@
    }
   },
   "v34vdiag": {
-   "key": "d88566e3aebdc840ff87e4cf60323b7a1073b18f1d357902fa4fe5b49266e51e",
+   "key": "2c2cfe8e231d0c0af4bf51c6eb869aa78ea30ac199f37e59f5ec7a78c953301c",
    "summary": "28 mutations: 25 caught (25 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "selector 0: the V.34 ring is not drained": "caught",
@@ -7877,7 +7877,7 @@
    }
   },
   "v90p34": {
-   "key": "5b9937ac78b1f5a3bdcd3ead01bfe3375aea27ca71d0cf092dc44ffdb3b7cd7d",
+   "key": "18d84369ee327cc3c113c69542252e73a877a7311d4575591ab455981d1c2180",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "case 10 does not consult the bit source": "caught",

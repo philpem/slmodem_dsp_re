@@ -210,8 +210,8 @@
  },
  {
   "label": "setv90: progress gets 5",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->rxv.named.short_382",
-  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->rxv.named.short_382",
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
+  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
@@ -227,8 +227,8 @@
  },
  {
   "label": "setv90: 0x2218 gets 6",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->rxv.named.short_382",
-  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->rxv.named.short_382",
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
+  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->receiver.short_382",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {

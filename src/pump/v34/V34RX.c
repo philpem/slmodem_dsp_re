@@ -338,9 +338,9 @@ void
 rxtiminginit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
-	V34TimingFiltersInit(&obj->rxv.named.timing);
+	V34TimingFiltersInit(&obj->receiver.timing);
 
 	/* Where rxreadqueue leaves its four samples. */
 	rx->rx_samples = (short *)((char *)obj + 0x370);
@@ -352,7 +352,7 @@ rxtiminginit(void *objp)
 	rx->slow_ramp = 1;
 	rx->ppm_acc = 0;
 	rx->ppm_count = 0;
-	rx->timing_offset = 0;
+	rx->timing_ppm = 0;
 	/* The slowest V.34 rate: what the receiver assumes until told. */
 	rx->report_interval = 2400;
 	rx->f1d4 = 0;
@@ -374,13 +374,13 @@ void
 rxinit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	rx->agc_gain = 0x200;
 	rx->agc_step = 0x3333;
 	rx->mix_carrier_step = 1;
 
-	V34EqualizerCleanUp(&obj->rxv.named.equalizer);
+	V34EqualizerCleanUp(&obj->receiver.equalizer);
 
 	/*
 	 * The fill is %ecx, which held 1 before V34EqualizerCleanUp and is
@@ -678,8 +678,8 @@ void
 rxtiming(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
-	struct v34_timing *t = &obj->rxv.named.timing;
+	struct v34_receiver *rx = &obj->receiver;
+	struct v34_timing *t = &obj->receiver.timing;
 	short i;
 
 	/* Set before the count is even tested, so it lands on an empty call. */
@@ -772,7 +772,7 @@ int
 modem_serrint(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	struct v34_queue *rxq = (struct v34_queue *)rx;
 	short lag = serr_dequeue(obj);
 	short acc;
@@ -1028,7 +1028,7 @@ void
 decoderv34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	if ((rx->flags & 0x98) == 0x98) {
 		short n = rx->subframe_idx;
@@ -1097,9 +1097,9 @@ decoderv34(void *objp)
 		rx->best_index = (short)V34descrambler(rx, (short)diff, 2);
 	}
 
-	if (rx->rx_blocks == (short)(obj->ratecfg_v.named.baud_rate >> 1))
+	if (rx->rx_blocks == (short)(obj->ratecfg.rx_baud >> 1))
 		rx->equ_step = 0x4000;
-	else if (rx->rx_blocks == obj->ratecfg_v.named.baud_rate)
+	else if (rx->rx_blocks == obj->ratecfg.rx_baud)
 		rx->equ_step = 0x2000;
 }
 
@@ -1288,8 +1288,8 @@ void
 receiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
-	struct v34_timing *t = &obj->rxv.named.timing;
+	struct v34_receiver *rx = &obj->receiver;
+	struct v34_timing *t = &obj->receiver.timing;
 	struct v34_equalizer *eq =
 		(struct v34_equalizer *)((char *)rx + V34_RX_EQ_OFFSET);
 	unsigned flags;

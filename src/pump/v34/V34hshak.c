@@ -416,7 +416,7 @@ void
 dpskinit(void *objp, short mode, short high)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short carrier = (mode == 0) ? 1200 : 2400;
 	int i;
 
@@ -503,7 +503,7 @@ void
 v34modeminit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_modulator *mod =
 		v34_object_modulator(obj);
@@ -645,7 +645,7 @@ setfinalrate(void *objp)
 	unsigned short a9de = *(unsigned short *)(m + 0xa9de);
 	unsigned short a9e0 = *(unsigned short *)(m + 0xa9e0);
 	unsigned short a9e2 = *(unsigned short *)(m + 0xa9e2);
-	short *tx_baud    = &obj->ratecfg_v.cfg.baud;
+	short *tx_baud    = &obj->ratecfg.baud;
 	short *tx_preemp  = (short *)(m + 0xaa8a);
 	const short **tx_scale = (const short **)(m + 0xaa90);
 	short *tx_carrier = (short *)(m + 0xaa94);
@@ -805,7 +805,7 @@ void
 setupreceiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
 	short baud = *(short *)(m + 0xaa96);
 	short carrier = *(short *)(m + 0xaaa8);
@@ -1319,7 +1319,7 @@ void
 v34handshakinit(void *objp, int mode)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
 	int delta;
 	int base;
@@ -1432,21 +1432,28 @@ v34handshakinit(void *objp, int mode)
 		 * The message record at +0xaa0c, blanked.  Same twelve fields
 		 * and the same 0x30-byte stride as the one `VPcmV34Set-
 		 * MohMessageBits` fills at +0xa94c, which is what says the
-		 * five records from +0xa94c to +0xaa3c are one array.
+		 * five records from +0xa94c to +0xaa3c are one array.  The
+		 * blob takes the record's address into a register first
+		 * (0x5fdb2, `lea 0xaa0c(%ebx)`) and writes the twelve fields
+		 * through it -- the local view is its own spelling, not a
+		 * convenience (issue #260 wave 8: record 4 is msgrec[4] of
+		 * the one array now).
 		 */
 		{
-			obj->rec4_v.rec4.crc = -1;
-			obj->rec4_v.rec4.crc_on = 0;
-			obj->rec4_v.rec4.nbits = 0;
-			obj->rec4_v.rec4.pos = 0;
-			obj->rec4_v.rec4.wordbits = 0;
-			obj->rec4_v.rec4.idx = 0;
-			obj->rec4_v.rec4.repeat = 0;
-			obj->rec4_v.rec4.repeats = 0;
-			obj->rec4_v.rec4.acc = 0;
-			obj->rec4_v.rec4.avail = 0;
-			obj->rec4_v.rec4.avail0 = 0;
-			obj->rec4_v.rec4.acc0 = 0;
+			struct v34_bitsource *r = &obj->msgrec[4];
+
+			r->crc = -1;
+			r->crc_on = 0;
+			r->nbits = 0;
+			r->pos = 0;
+			r->wordbits = 0;
+			r->idx = 0;
+			r->repeat = 0;
+			r->repeats = 0;
+			r->acc = 0;
+			r->avail = 0;
+			r->avail0 = 0;
+			r->acc0 = 0;
 		}
 
 		obj->seg_symcount = 0;
@@ -1455,7 +1462,7 @@ v34handshakinit(void *objp, int mode)
 		obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
 
 		rx->rx_blocks = 0x21e;
-		obj->rxv.named.short_382 = (short)0x8990;
+		obj->receiver.short_382 = (short)0x8990;
 		rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
 
 		obj->vect_idx = 0;
@@ -2171,7 +2178,7 @@ probeselect(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_dftbin *bins = obj->probe_bins;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short *msg = (short *)(m + 0xa9ac);
 	const unsigned char *pcfg = (const unsigned char *)obj->pac3c;
 
@@ -2180,7 +2187,7 @@ probeselect(void *objp)
 	 * fields, plus the five per-rate pre-emphasis slots -- which are the
 	 * only thing here that function does not also write.
 	 */
-	short *tx_baud		= &obj->ratecfg_v.cfg.baud;
+	short *tx_baud		= &obj->ratecfg.baud;
 	short *tx_preemp	= (short *)(m + 0xaa8a);
 	const short **tx_scale	= (const short **)(m + 0xaa90);
 	short *tx_carrier	= (short *)(m + 0xaa94);
@@ -2797,7 +2804,7 @@ v34setuptxmit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	int pcm;
 
 	settxlevel(obj, (const short *)(m + 0xa9dc));
@@ -2805,8 +2812,8 @@ v34setuptxmit(void *objp)
 	pcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);
 
 	V34SetupModulator(v34_object_modulator(obj),
-			  obj->ratecfg_v.cfg.baud, obj->ratecfg_v.cfg.carrier,
-			  obj->ratecfg_v.cfg.preemp, pcm, 1);
+			  obj->ratecfg.baud, obj->ratecfg.carrier,
+			  obj->ratecfg.preemp, pcm, 1);
 
 	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);
 
@@ -2970,14 +2977,13 @@ ApplyBulkDelay(void *objp, short delay)
 
 /*
  * THE LAST TWO STRICT-ALIASING WARNINGS IN THE TREE WERE THE LINE THAT STOOD
- * HERE, AND FINDINGS F5300/5305's WHOLE-STRUCT OVERLAY IS WHAT THE `rxv`
- * UNION (v34fsk.h) IS FOR.  It gives the same 0x264 bytes a genuine `struct
- * v34_receiver *` -- `&obj->rxv.receiver` -- so every site that read this
- * macro now names the arm directly: no cast, no punning, no warning left.
- * The two headers' disagreement about the same 0x120 bytes
- * (`v34_receiver::pad_000[0x120]` against `rxq`..`short_382`) is two readings
- * of one union, which is what a union is for; the wave-7 asserts in
- * v34fsk.h hold both arms to their object offsets.
+ * HERE, AND `struct v34_receiver` (v34recv.h) IS WHAT FIXED THEM.  It gives
+ * the same 0x264 bytes a genuine `struct v34_receiver *` -- `&obj->receiver`
+ * -- so every site that read this macro now names a real struct member: no
+ * cast, no punning, no warning left.  Issue #260 wave 8 made that struct the
+ * ONE map of the region: the object's own readings moved into it and the
+ * wave-7 union is gone; the wave-8 asserts in v34fsk.h hold the members at
+ * their object offsets through the receiver.
  */
 
 /*
@@ -3235,7 +3241,7 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 {
 	f->obj = obj;
 	f->m = (unsigned char *)obj;
-	f->rx = &obj->rxv.receiver;
+	f->rx = &obj->receiver;
 	f->progress = &obj->progress;
 	f->mst = 0;
 	f->nbits = 0;
@@ -3265,13 +3271,13 @@ t3m_tail(struct t3m_frame *f, short tx)
 
 	if (mode == 1) {
 		/*
-		 * The block at 0x62b45: `baud_rate` is the receive baud rate and
-		 * the receiver's +0x1d2 gets three times it, by
+		 * The block at 0x62b45: `ratecfg.rx_baud` is the receive baud rate
+		 * and the receiver's +0x1d2 gets three times it, by
 		 * `lea (%ebp,%ebp,2)` on the sign-extended halfword, stored
 		 * back as one.  THE RELOAD IS THE NEXT INSTRUCTION, 0x62b5f
 		 * `movzwl 0x3596(%ebx),%ecx`, and 0x62b66 writes the 4.
 		 */
-		f->rx->report_interval = (short)(3 * (int)f->obj->ratecfg_v.named.baud_rate);
+		f->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);
 		tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
 		*f->progress = 4;
 	}
@@ -4104,11 +4110,11 @@ t3m_micro51(struct t3m_frame *f)
 		 * else.  A rate not in the six leaves the scale alone, which
 		 * is why a trial at the fixture's own fill tests none of them.
 		 */
-		baud = f->obj->ratecfg_v.cfg.baud;
+		baud = f->obj->ratecfg.baud;
 
 		switch (baud) {
 		case 0x960:		/* 2400 */
-			f->obj->ratecfg_v.cfg.divtab = scale2400;
+			f->obj->ratecfg.divtab = scale2400;
 			break;
 		case 0xab7:		/* 2743, and the only arm that
 					   REPLACES the rate it matched */
@@ -4121,22 +4127,22 @@ t3m_micro51(struct t3m_frame *f)
 					  ? 0x74b : 0x690;
 
 				T3M_U16(f, T3M_TXBAUD) = 0xaf0;
-				f->obj->ratecfg_v.cfg.divtab =
+				f->obj->ratecfg.divtab =
 					scale2800;
 				T3M_U16(f, T3M_TXCARRIER) = (unsigned short)c;
 			}
 			break;
 		case 0xaf0:		/* 2800 */
-			f->obj->ratecfg_v.cfg.divtab = scale2800;
+			f->obj->ratecfg.divtab = scale2800;
 			break;
 		case 0xbb8:		/* 3000 */
-			f->obj->ratecfg_v.cfg.divtab = scale3000;
+			f->obj->ratecfg.divtab = scale3000;
 			break;
 		case 0xc80:		/* 3200 */
-			f->obj->ratecfg_v.cfg.divtab = scale3200;
+			f->obj->ratecfg.divtab = scale3200;
 			break;
 		case 0xd65:		/* 3429 */
-			f->obj->ratecfg_v.cfg.divtab = scale3429;
+			f->obj->ratecfg.divtab = scale3429;
 			break;
 		default:
 			break;
@@ -4165,10 +4171,10 @@ t3m_micro51(struct t3m_frame *f)
 		/* 0x6bac3.  Four copies, and the rate they copy is the one the
 		   switch above may have replaced. */
 		f->obj->short_358c = 0;
-		f->obj->ratecfg_v.named.baud_rate = (short)T3M_U16(f, T3M_TXBAUD);
+		f->obj->ratecfg.rx_baud = (short)T3M_U16(f, T3M_TXBAUD);
 		T3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);
-		f->obj->ratecfg_v.cfg.rx_divtab =
-			f->obj->ratecfg_v.cfg.divtab;
+		f->obj->ratecfg.rx_divtab =
+			f->obj->ratecfg.divtab;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -4808,7 +4814,7 @@ v34handshak_txblock(struct v34_object *obj)
 static void
 t3c_micro_rx_phase3_call(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
 		/*
@@ -4848,7 +4854,7 @@ t3c_micro_rx_phase3_call(struct v34_object *obj)
 static short
 t3c_moh_step_detector(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	obj->short_aa78 = (short)(obj->short_aa78 + 1);
 
@@ -5055,7 +5061,7 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 static short
 t41_detect(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	return (short)tone_detect(rx, &obj->detector,
 				  (const short *)((const char *)rx
@@ -5161,7 +5167,7 @@ t41_after_guards(struct v34_object *obj, unsigned char abe8)
 static void
 t41_to_det_info(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short *rec = (short *)obj->paa70;
 
 	hs_set_microstate(obj, V34HS_DET_INFO);
@@ -5197,7 +5203,7 @@ t41_to_det_info(struct v34_object *obj)
 static void
 t41_tone_search(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short det;
 	int i;
 
@@ -5281,7 +5287,7 @@ t41_tone_search(struct v34_object *obj)
 static void
 t41_tone_ab(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	const unsigned char *rec;
 	short *out;
 	int i;
@@ -6493,7 +6499,7 @@ t44_setup_carrier(struct v34_receiver *rx, short carrier)
 static int
 t44_accept_len26(struct v34_object *obj, short *rec)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short baud, carrier;
 
 	V34GiveProbeResults(obj, (const char *)obj + T44_PROBE);
@@ -6524,7 +6530,7 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 	hs_set_rxstate(obj, V34HS_RECEIVE);
 	rxinit(obj);
 
-	baud = obj->ratecfg_v.named.baud_rate;
+	baud = obj->ratecfg.rx_baud;
 	carrier = hs_get(obj, T44_CARRIER);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34SetupDemodulator: baudrate %ld, "
@@ -6627,7 +6633,7 @@ t44_accept_len4d(struct v34_object *obj)
 		dsplibs_debug_printf("V34PROBESELECT, in ANSWER, txbaudrate = "
 				     "%d,rxbaudrate = %d,\n",
 				     (int)hs_get(obj, T44_TXBAUD),
-				     (int)obj->ratecfg_v.named.baud_rate);
+				     (int)obj->ratecfg.rx_baud);
 	if (DSPLIB_DEBUG_ON())
 		t44_print10("V34PROBE, rxinfo1c",
 			    (const short *)&obj->msgrec[3]);
@@ -6705,7 +6711,7 @@ static int
 t44_det_info_accept(struct v34_object *obj, struct v34_bitsource *rec,
 		    short count2)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short len = rec->nbits;
 	short count;
 	int nbytes;
@@ -7000,7 +7006,7 @@ t44_micro_det_info(struct v34_object *obj)
 static void
 t53_rx_det_ab(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	/*
 	 * 0x65473, and it runs before either guard -- so even the two exits
@@ -7351,7 +7357,7 @@ t4_mp_coeffs(struct v34_object *obj, const unsigned short *tbl)
 static unsigned short
 t4_mp_sequence_end(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned short *tbl = (unsigned short *)(T4_M(obj) + T4_MPTBL);
 
 	if ((short)tbl[0] < 0) {
@@ -7416,7 +7422,7 @@ t4_mp_sequence_end(struct v34_object *obj)
 static unsigned short
 t4_mp_word(struct v34_object *obj, unsigned acc)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned short *tbl = (unsigned short *)(T4_M(obj) + T4_MPTBL);
 	unsigned short idx = T4_U16(obj, T4_MPIDX);
 	short w = (short)acc;
@@ -7477,7 +7483,7 @@ t4_mp_word(struct v34_object *obj, unsigned acc)
 static unsigned short
 t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned short *tbl = (unsigned short *)(T4_M(obj) + T4_MPTBL);
 
 	T4_U32(obj, T4_MPACC) = acc;
@@ -7515,7 +7521,7 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 	 * cuts the product to sixteen bits before sign-extending it again,
 	 * which is what the (short) is.  +0x1d0 itself is read `movswl`.
 	 */
-	VPcmV34LogTimingOffset(obj, (short)(rx->timing_offset * 10));	/* 0x711ee */
+	VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));	/* 0x711ee */
 
 	/*
 	 * 0x711fe is `test $0x40,%ah`, bit 14 of the word loaded at 0x711f7,
@@ -7557,7 +7563,7 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 static unsigned short
 t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	/*
 	 * 0x6cbca re-reads the count from +0xaa34 at the top of every pass
@@ -7646,7 +7652,7 @@ t4_mp_runlength(struct v34_object *obj, unsigned acc, unsigned short count)
 static unsigned short
 t4_mp_packer(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	/*
 	 * %ebx IS obj+0xaa0c from 0x68bf1, so five of the packer's fields are
 	 * addressed off one base and the disassembly names them by their
@@ -7739,7 +7745,7 @@ t4_mp_packer(struct v34_object *obj)
 static unsigned short
 t4_trn2(struct v34_object *obj, unsigned short flags)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned short f = rx->flags;			/* 0x679c0, re-read */
 	unsigned short a, b, d;
 
@@ -7818,7 +7824,7 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 	T4_U16(rx, T4_RXF11C) = 0;
 	T4_U16(rx, T4_RXF120) = 0;
 	rx->flags = (unsigned short)(f | V34_RX_FLAG_LATE_TRN);
-	VPcmV34LogTimingOffset(obj, (short)(rx->timing_offset * 10));
+	VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
 	return rx->flags;
 }
 
@@ -7841,7 +7847,7 @@ t4_trn2(struct v34_object *obj, unsigned short flags)
 static void
 t4_md_over(struct v34_object *obj, unsigned short flags)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	unsigned short md = T4_U16(obj, T4_MDLEN);
 
 	/*
@@ -7919,7 +7925,7 @@ static void
 t4_scale_rtd(struct v34_object *obj)
 {
 	int v = T4_I32(obj, T4_RTSCALE);
-	short baud = obj->ratecfg_v.named.baud_rate;
+	short baud = obj->ratecfg.rx_baud;
 
 	if (baud == 0xd65)
 		T4_I32(obj, T4_RTSCALE) = (v * 0xb3) >> 8;
@@ -7938,7 +7944,7 @@ t4_scale_rtd(struct v34_object *obj)
 static void
 t4_receive_body(struct v34_object *obj, unsigned short flags)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short n;
 
 	/* 0x679a4.  `je 67a1e` -- all three up skips both TRN arms. */
@@ -8110,7 +8116,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 		 * ZERO-extended into the multiply, and 0x1e is added before
 		 * anything narrows.
 		 */
-		short md = (short)(((((int)obj->ratecfg_v.named.baud_rate * 0x23d) >> 14)
+		short md = (short)(((((int)obj->ratecfg.rx_baud * 0x23d) >> 14)
 				    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);
 
 		T4_I16(obj, T4_MDLEN) = md;
@@ -8190,7 +8196,7 @@ t4_rx_receive(struct v34_object *obj)
 	 */
 	receiver(obj);					/* 0x653ee */
 
-	rx = &obj->rxv.receiver;
+	rx = &obj->receiver;
 	/*
 	 * 0x653f7.  `movzwl 0x122(%edx),%esi` -- read once, and %esi carries
 	 * it into the whole arm as the working copy -- 0x67999 reads it as
@@ -8200,7 +8206,7 @@ t4_rx_receive(struct v34_object *obj)
 	flags = rx->flags;				/* 0x653f7 */
 
 	if ((flags & V34_RX_FLAG_RETRAIN) != 0
-	    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg_v.named.baud_rate
+	    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud
 		&& (flags & 0x80) == 0)) {
 		/*
 		 * 0x6544e.  The second argument is a literal 1, pushed at
@@ -8666,7 +8672,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 static void
 t72_rx_l1(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	/*
 	 * 0x650c6, and THE STORE PRECEDES THE BRANCH: `movzwl`, `inc`,
@@ -9461,7 +9467,7 @@ micro_txblock:
  * of this function's codegen.
  *
  * THE ACCESSORS ARE A KNOWN DEFECT AND FINDING F8044 IS THE WRITE-UP.  The
- * object holds `&obj->rxv` and `&obj->txq` in registers -- `lea 0x264(%ebx),
+ * object holds `&obj->receiver` and `&obj->txq` in registers -- `lea 0x264(%ebx),
  * %esi` and `lea 0x221c(%ebx),%edi` -- and addresses every field as a
  * constant displacement off them.  Because `off` here is a PARAMETER, ours
  * loads fold but the STORES do not, and `dp_run`'s `int failed` parameter
@@ -9491,13 +9497,13 @@ micro_txblock:
 static short
 dp_rxget(const struct v34_object *obj, unsigned off)
 {
-	return *(const short *)((const char *)&obj->rxv.receiver + off);
+	return *(const short *)((const char *)&obj->receiver + off);
 }
 
 static void
 dp_rxput(struct v34_object *obj, unsigned off, short v)
 {
-	*(short *)((char *)&obj->rxv.receiver + off) = v;
+	*(short *)((char *)&obj->receiver + off) = v;
 }
 
 /*
@@ -9530,7 +9536,7 @@ datapumpv34(void *objp)
 	 * drive this branch only with the loop already satisfied.
 	 */
 	if ((unsigned)obj->hs_mode > 1u) {
-		while (obj->txq.count < obj->tx_fill_target || obj->rxv.named.rxq.count > 5)
+		while (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count > 5)
 			v34handshak(obj);
 		return;
 	}
@@ -9538,7 +9544,7 @@ datapumpv34(void *objp)
 	while (obj->txq.count < obj->tx_fill_target)
 		modulatevector(obj);
 
-	while (obj->rxv.named.rxq.count > 5) {
+	while (obj->receiver.rxq.count > 5) {
 		unsigned span;
 		short err;
 
@@ -9569,11 +9575,11 @@ datapumpv34(void *objp)
 	 * the same test again, so a `v34handshakinit` that cleared the run
 	 * would report 3 where the entry condition was the flag.
 	 */
-	if ((obj->rxv.receiver.flags & V34_RX_FLAG_RETRAIN)
-	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg_v.named.baud_rate >> 1)) {
+	if ((obj->receiver.flags & V34_RX_FLAG_RETRAIN)
+	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {
 		v34handshakinit(obj, 1);
 		obj->hs_mode =
-			 dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg_v.named.baud_rate >> 1)
+			 dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)
 			 ? 3 : 2;
 		dp_rxput(obj, DP_RX_BAD, 0);
 		dp_rxput(obj, DP_RX_BAD_LONG, 0);
@@ -9583,7 +9589,7 @@ datapumpv34(void *objp)
 	}
 
 	/* The far end asked, on bit 5 of the same word, re-read. */
-	if (obj->rxv.receiver.flags & V34_RX_FLAG_RENEG) {
+	if (obj->receiver.flags & V34_RX_FLAG_RENEG) {
 		v34handshakinit(obj, 3);
 		dp_rxput(obj, DP_RX_GOOD, 0);
 		obj->hs_mode = 4;
@@ -9602,7 +9608,7 @@ datapumpv34(void *objp)
 	 * sign-extended and the block rate multiplied as an int, so a large
 	 * +0xaa96 does not wrap the threshold into range.
 	 */
-	if (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg_v.named.baud_rate) {
+	if (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {
 		v34handshakinit(obj, 2);
 		obj->hs_mode = 5;
 		dp_rxput(obj, DP_RX_BAD, 0);
@@ -9616,7 +9622,7 @@ datapumpv34(void *objp)
 		VPcmV34IndicateLocalRRN(obj);
 	}
 
-	if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg_v.named.baud_rate) {
+	if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {
 		v34handshakinit(obj, 2);
 		dp_rxput(obj, DP_RX_GOOD, 0);
 		obj->hs_mode = 5;
@@ -9782,7 +9788,7 @@ void
 V34SetupDemodulator(void *objp, short baud, short carrier)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -9881,7 +9887,7 @@ void
 setInitialPhase(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	short k = 1;
 	int a, b;
 	int ratio = 0;
@@ -9972,7 +9978,7 @@ setInitialPhase(void *objp)
  * splitting them would hide how little differs.
  *
  * States 0 and 1 install nothing.  States 5 and 8 additionally report the
- * timing offset to the V.90 side, as `timing_offset * 10` -- the only place that
+ * timing offset to the V.90 side, as `timing_ppm * 10` -- the only place that
  * number leaves the datapump.
  *
  * The state is compared UNSIGNED against 8, so a negative `pllcnt` misses the
@@ -9983,7 +9989,7 @@ void
 setTimingStateParameters(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	int variant = (obj->role == 0x65);
 	int state = (short)rx->pllcnt;
 	int report = 0;
@@ -10031,11 +10037,11 @@ setTimingStateParameters(void *objp)
 	}
 
 	if (report)
-		VPcmV34LogTimingOffset(obj, (short)(rx->timing_offset * 10));
+		VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
 
 	/* State 2 alone also sets the dwell from the frame length. */
 	if ((unsigned short)rx->pllcnt == 2)
-		rx->report_interval = (short)(obj->ratecfg_v.named.baud_rate >> 3);
+		rx->report_interval = (short)(obj->ratecfg.rx_baud >> 3);
 }
 
 
@@ -10065,14 +10071,14 @@ setTimingStateParameters(void *objp)
  *   timing_frac and its whole part, in units of 1/32768 of a symbol, is added to
  *   the interpolator's step phase_inc.  Every 0x1d2 symbols the accumulated
  *   offset is converted to parts per million -- the `* 10000 / n` then
- *   `* 100 / symbol_period` -- and stored in timing_offset for setTimingStateParameters to
+ *   `* 100 / symbol_period` -- and stored in timing_ppm for setTimingStateParameters to
  *   report onward.
  */
 void
 TimingV34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	int state;
 	int i0, i1;
 	int a, b;
@@ -10188,7 +10194,7 @@ TimingV34(void *objp)
 
 		ppm = (ppm * 25 * 4 + ((short)rx->symbol_period >> 1))
 		      / (short)rx->symbol_period;
-		rx->timing_offset = (short)ppm;
+		rx->timing_ppm = (short)ppm;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -10254,22 +10260,15 @@ V34HS_OFF(lpf,     struct v34_object,   fsk_lpf,    0xab00);
 /*
  * The five struct v34_bitsource records from V34_MSGREC_BASE end exactly
  * where the object's next member begins -- F634's dual reading of the
- * region, compile-checked (issue #260).
+ * region, compile-checked (issue #260).  Wave 8 made the region one
+ * `msgrec[5]` array, so the extent is the array's own: record 4's word
+ * pair (`info_rates`/`rate_mask` in the object's earlier naming) is
+ * `msgrec[4].word[0]/word[1]` by construction, and the rec4_base assert
+ * that used to pin the boundary retired with it.
  */
 typedef char v34msgrec_extent[
 	(__builtin_offsetof(struct v34_object, info_caps)
 	 == V34_MSGREC_BASE + 5 * (int)sizeof(struct v34_bitsource)) ? 1 : -1];
-
-/*
- * ...and record 4 itself -- the object's `rec4_v` union, `info_rates`'s
- * named arm on one side and the fifth `struct v34_bitsource` on the
- * other -- begins exactly where the four-array ends.  With the extent
- * assert above it, this also pins the union's size: anything wider than
- * 0x30 would push `info_caps` off its own assert.
- */
-typedef char v34rec4_base[
-	(__builtin_offsetof(struct v34_object, rec4_v)
-	 == V34_MSGREC_BASE + 4 * (int)sizeof(struct v34_bitsource)) ? 1 : -1];
 
 V34HS_OFF(out_count,    struct v34_receiver, out_count,       0x128);
 V34HS_OFF(flags,   struct v34_receiver, flags,      0x122);

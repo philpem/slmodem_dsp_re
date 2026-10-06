@@ -8,7 +8,15 @@
 #ifndef DSPLIB_V34RX_H
 #define DSPLIB_V34RX_H
 
-#include "dsplib/v34recv.h"
+/*
+ * `struct v34_receiver` is only ever a pointer parameter here, so a forward
+ * declaration is enough and this header stays includable from v34recv.h --
+ * which since issue #260 wave 8 embeds `struct v34_queue` (this header's own
+ * type) in the receiver. A real include would make the pair mutually
+ * recursive; every consumer that dereferences the receiver gets the complete
+ * type from v34recv.h or v34fsk.h.
+ */
+struct v34_receiver;
 
 #ifdef __cplusplus
 extern "C" {

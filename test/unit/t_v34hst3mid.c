@@ -156,7 +156,8 @@ struct seed {
 	int	set_baud;	short	baud;
 	int	set_vectidx;	short	vectidx;
 	/*
-	 * `fsk_inhibit` at +0x402 makes `fskdemodulate` return without doing
+	 * `receiver.retrain_gate` at +0x402 (the FSK inhibit reading,
+	 * v34recv.h) makes `fskdemodulate` return without doing
 	 * anything, and the fixture's varied fill leaves it non-zero -- so
 	 * every trial that does not clear it tests the CALL and not the
 	 * demodulator.  Clearing it is what makes the second argument, the
@@ -563,7 +564,7 @@ micro48(void)
 	saw_below = 1;
 
 	/*
-	 * The same, with `fsk_inhibit` cleared so `fskdemodulate` actually
+	 * The same, with `retrain_gate` cleared so `fskdemodulate` actually
 	 * runs.  The fixture's fill leaves +0x402 non-zero, and every other
 	 * trial in this file therefore exercises the CALL and not the
 	 * demodulator -- which leaves the second argument, the receiver's
@@ -2483,7 +2484,7 @@ tail_paths(void)
  *
  * Three families, and each says what holds the other two off:
  *
- *   A  the reset          the demodulator RUNS (`fsk_inhibit` cleared) and the
+ *   A  the reset          the demodulator RUNS (`retrain_gate` cleared) and the
  *                         bit clock is armed or not; `+0x358a` away from 2 so
  *                         block C cannot fire, and the counter far below 0x5f
  *   B  the 0x5f threshold the demodulator is INHIBITED, so `nbits` cannot move
@@ -2613,7 +2614,7 @@ micro55(void)
 		 * transitions -- which is the opposite of 47's, 49's and 50's
 		 * copies of the same body.
 		 *
-		 * THREE MORE ARE NOT THIS ARM'S.  Clearing `fsk_inhibit` also
+		 * THREE MORE ARE NOT THIS ARM'S.  Clearing `retrain_gate` also
 		 * means seeding the receive window, and `V34agc` then prints
 		 * `V34AGC, overflow = ...` three times before the microstate
 		 * is even read -- on every row of this family, reset or not.

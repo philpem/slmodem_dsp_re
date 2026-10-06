@@ -158,7 +158,7 @@ void
 VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
+	const struct v34_ratecfg *cfg = &obj->ratecfg;
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 
 	if (DSPLIB_DEBUG_ON())
@@ -384,7 +384,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    unsigned long maxCount)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = &obj->rxv.receiver;
+	struct v34_receiver *rx = &obj->receiver;
 	VPcmFloModem *xf = (VPcmFloModem *)obj->p3548;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
 	unsigned long n = 0;
@@ -484,7 +484,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerOffset(points, maxCount);
 			else
-				points[0].re = rx->timing_offset;
+				points[0].re = rx->timing_ppm;
 		}
 		points[0].im = 0;
 		n = 1;

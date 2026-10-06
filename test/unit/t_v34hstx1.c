@@ -2174,8 +2174,9 @@ aim_xmitmp_initdigital(void)
 
 	/* Calling role: tx rate 3, offered rx rate 0, depth/use-max zero. */
 	v34hs_poke_short(TX1_F359C, 0x65);
-	v34hs_poke_short(0xaa0c, 3 << 2);	/* info_rates */
-	v34hs_poke_short(0xaa0e, (short)0x8004); /* rate_mask: asymmetric, rate 3 */
+	v34hs_poke_short(0xaa0c, 3 << 2);	/* msgrec[4].word[0], the object's info_rates */
+	v34hs_poke_short(0xaa0e, (short)0x8004); /* msgrec[4].word[1], the object's rate_mask:
+						   asymmetric, rate 3 */
 	v34hs_poke_short(0xaa3c, 0x3001); /* info_caps: exit bit and tx limit 3 */
 	v34hs_poke_short(0xaa3e, 1);	/* caps_flags: permit asymmetric rates */
 	v34hs_poke_short(XM_RXBAUD, 2400);

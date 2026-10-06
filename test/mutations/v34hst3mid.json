@@ -119,8 +119,8 @@
   },
   {
     "label": "the tail's mode-1 arm scales the baud rate by 2",
-    "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->ratecfg_v.named.baud_rate);",
-    "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->ratecfg_v.named.baud_rate);",
+    "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);",
+    "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->ratecfg.rx_baud);",
     "fn": "t3m_tail"
   },
   {
@@ -1528,8 +1528,8 @@
   },
   {
     "label": "51's rate switch exchanges 2400 and 2800",
-    "find": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale2400;",
-    "replace": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale2800;",
+    "find": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\tf->obj->ratecfg.divtab = scale2400;",
+    "replace": "\t\tcase 0x960:\t\t/* 2400 */\n\t\t\tf->obj->ratecfg.divtab = scale2800;",
     "fn": "t3m_micro51"
   },
   {
@@ -1540,32 +1540,32 @@
   },
   {
     "label": "51's rate switch gives 3000 the 3200 scale",
-    "find": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3000;",
-    "replace": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3200;",
+    "find": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\tf->obj->ratecfg.divtab = scale3000;",
+    "replace": "\t\tcase 0xbb8:\t\t/* 3000 */\n\t\t\tf->obj->ratecfg.divtab = scale3200;",
     "fn": "t3m_micro51"
   },
   {
     "label": "51's rate switch gives 3200 the 3429 scale",
-    "find": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3200;",
-    "replace": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3429;",
+    "find": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\tf->obj->ratecfg.divtab = scale3200;",
+    "replace": "\t\tcase 0xc80:\t\t/* 3200 */\n\t\t\tf->obj->ratecfg.divtab = scale3429;",
     "fn": "t3m_micro51"
   },
   {
     "label": "51's rate switch gives 3429 the 3000 scale",
-    "find": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3429;",
-    "replace": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale3000;",
+    "find": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg.divtab = scale3429;",
+    "replace": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg.divtab = scale3000;",
     "fn": "t3m_micro51"
   },
   {
     "label": "51's rate switch gives 2800 the 2400 scale",
-    "find": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale2800;",
-    "replace": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale2400;",
+    "find": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\tf->obj->ratecfg.divtab = scale2800;",
+    "replace": "\t\tcase 0xaf0:\t\t/* 2800 */\n\t\t\tf->obj->ratecfg.divtab = scale2400;",
     "fn": "t3m_micro51"
   },
   {
     "label": "51's rate switch has a default that writes the 2800 scale",
     "find": "\t\tdefault:\n\t\t\tbreak;\n\t\t}",
-    "replace": "\t\tdefault:\n\t\t\tf->obj->ratecfg_v.cfg.divtab = scale2800;\n\t\t\tbreak;\n\t\t}",
+    "replace": "\t\tdefault:\n\t\t\tf->obj->ratecfg.divtab = scale2800;\n\t\t\tbreak;\n\t\t}",
     "fn": "t3m_micro51"
   },
   {
@@ -1680,8 +1680,8 @@
   },
   {
     "label": "51 copies the carrier into the receive baud rate",
-    "find": "\t\tf->obj->ratecfg_v.named.baud_rate = (short)T3M_U16(f, T3M_TXBAUD);",
-    "replace": "\t\tf->obj->ratecfg_v.named.baud_rate = (short)T3M_U16(f, T3M_TXCARRIER);",
+    "find": "\t\tf->obj->ratecfg.rx_baud = (short)T3M_U16(f, T3M_TXBAUD);",
+    "replace": "\t\tf->obj->ratecfg.rx_baud = (short)T3M_U16(f, T3M_TXCARRIER);",
     "fn": "t3m_micro51"
   },
   {
@@ -1692,14 +1692,14 @@
   },
   {
     "label": "51 does not copy the power scale across",
-    "find": "\t\tf->obj->ratecfg_v.cfg.rx_divtab =\n\t\t\tf->obj->ratecfg_v.cfg.divtab;\n",
+    "find": "\t\tf->obj->ratecfg.rx_divtab =\n\t\t\tf->obj->ratecfg.divtab;\n",
     "replace": "",
     "fn": "t3m_micro51"
   },
   {
     "label": "51 copies the four fields before the rate switch",
-    "find": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->ratecfg_v.named.baud_rate = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
-    "replace": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->ratecfg_v.named.baud_rate = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+    "find": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->ratecfg.rx_baud = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+    "replace": "\t\tf->obj->short_358c = 0;\n\t\tf->obj->ratecfg.rx_baud = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
     "fn": "t3m_micro51"
   },
   {

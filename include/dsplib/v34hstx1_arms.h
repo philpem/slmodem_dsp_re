@@ -416,8 +416,9 @@ hs_set_txstate(struct v34_object *obj, short next)
 
 /*
  * +0xaa0c, the second of the five 0x30-byte message records that run from
- * +0xa94c to +0xaa3c.  `struct v34_object` names its first halfword
- * `info_rates`; V34hshak.c:1406 blanks the SAME twelve fields at +0x14
+ * +0xa94c to +0xaa3c -- `msgrec[1]` of the one array (issue #260 wave 8);
+ * its first halfword carried the object's `info_rates` reading.
+ * V34hshak.c:1406 blanks the SAME twelve fields at +0x14
  * through +0x2c that 21's completion blanks, which is what says the two are
  * one record and not two overlapping readings of one region.  Reached by
  * offset here for the reason TX1_FAAE0 and TX1_FAA3C are.
@@ -533,7 +534,7 @@ static int
 v34tx1_xmit0(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
+	struct v34_receiver *rx = &o->receiver;
 
 	o->txpoint.c[0] = 0;
 	o->txpoint.c[1] = 0;
@@ -808,7 +809,7 @@ v34tx1_txmd(void *objp)
 
 	if ((unsigned short)o->vect_idx
 	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {
-		struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
+		struct v34_ratecfg *cfg = &o->ratecfg;
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
 
 		if (dsplibs_debug_level > 1)		/* 0x6800d */
@@ -949,7 +950,7 @@ static int
 v34tx1_dataxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
+	struct v34_receiver *rx = &o->receiver;
 	int idx;
 
 	modulatevector(o);
@@ -1264,7 +1265,7 @@ v34tx1_ppseg(void *objp)
 			o->vect_idx = 0;
 		} else {
 			/* 0x680ac */
-			struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
+			struct v34_ratecfg *cfg = &o->ratecfg;
 			short v = (short)((unsigned short)o->rtd + 0x90);
 			short baud = cfg->baud;
 			int span, q, acc;
@@ -1397,7 +1398,7 @@ static int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
+	struct v34_receiver *rx = &o->receiver;
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1693,7 +1694,7 @@ static int
 v34tx1_jtxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
+	struct v34_receiver *rx = &o->receiver;
 	unsigned shift;
 	unsigned short idx;
 	short bits, mode, q;
@@ -2649,8 +2650,8 @@ static int
 v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
-	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
+	struct v34_receiver *rx = &o->receiver;
+	struct v34_ratecfg *cfg = &o->ratecfg;
 	int n, lim, baud, period;
 	short *rec;
 
@@ -2797,7 +2798,7 @@ static int
 v34tx1_trnseg4(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
+	struct v34_ratecfg *cfg = &o->ratecfg;
 	short q;
 	int n, span, baud;
 
@@ -3296,7 +3297,7 @@ static int
 v34tx1_xmitmp(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->rxv.receiver;
+	struct v34_receiver *rx = &o->receiver;
 	int wide = 0;
 	int n = 0;
 

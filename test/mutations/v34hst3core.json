@@ -64,8 +64,8 @@
  },
  {
   "label": "the MOH counter is not stepped",
-  "find": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
-  "replace": "\tstruct v34_receiver *rx = &obj->rxv.receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
+  "find": "\tstruct v34_receiver *rx = &obj->receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
+  "replace": "\tstruct v34_receiver *rx = &obj->receiver;\n\n\tobj->short_aa78 = (short)(obj->short_aa78);\n\n\treturn (short)tone_detect(rx, &obj->detector,",
   "fn": "t3c_moh_step_detector"
  },
  {
@@ -167,8 +167,8 @@
  },
  {
   "label": "the tail doubles +0xaa96 instead of tripling it",
-  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->ratecfg_v.named.baud_rate);",
-  "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->ratecfg_v.named.baud_rate);",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);",
+  "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->ratecfg.rx_baud);",
   "fn": "t3m_tail"
  },
  {

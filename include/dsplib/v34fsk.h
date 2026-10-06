@@ -80,8 +80,9 @@ extern "C" {
 /*
  * `struct v34_object::caps_flags` at +0xaa3e.  The field's own comment
  * (beside its declaration below) already names bit 0: "the other half of
- * the asymmetric permission" -- paired with `rate_mask`'s sign bit, both
- * required before the two directions may run at different rates.
+ * the asymmetric permission" -- paired with the rate word's sign bit
+ * (`msgrec[4].word[1]`, the object's `rate_mask` reading), both required
+ * before the two directions may run at different rates.
  */
 #define V34_CAPS_ASYMMETRIC	(1u << 0)
 
@@ -153,20 +154,35 @@ struct v34_fskdelay {
  * This is the top-level `tagV34Object` -- the name comes from the object's
  * one surviving C++ mangling, `_Z14getMPrecvdBitsP12tagV34Object` -- and it
  * is enormous: `datapumpv34` alone touches +0xaa98, and the detector in
- * detector.c lives at +0x3564. Only the fields DPSK.c uses are named. Four
- * regions ARE claims now -- `timing`, `equalizer`, `detector` and `msgrec`
- * are typed members, each with an offset assertion below -- and the
- * struct's size is not a claim about the object's size; it is a lower
- * bound. Every other pad is still not a claim about what is in it.
+ * detector.c lives at +0x3564. Only the fields DPSK.c uses are named. The
+ * sub-object regions ARE claims now -- `receiver` (which nests the timing
+ * filters and the equaliser), `detector`, `msgrec[5]` and `ratecfg` are
+ * typed members, each with an offset assertion below -- and the struct's
+ * size is not a claim about the object's size; it is a lower bound. Every
+ * other pad is still not a claim about what is in it.
  *
  * Every named offset is checked by a static assertion in DPSK.c, so the
  * padding cannot drift silently once the surrounding translation units
  * arrive and start filling it in.
  *
- * v34det.h declares `struct v34_rx`, the other partial map of this same
- * object, seen from +0x264 -- so its `flags` at +0x122 is this struct's
- * +0x386. Extend one of the two when the next V.34 file needs a field, and
- * say which; do not start a third.
+ * Issue #260 wave 8 made `struct v34_receiver` (v34recv.h) the ONE map of
+ * the 0x79c bytes at +0x264: the object's own readings moved into it and
+ * the wave-7 union that held the two maps together is gone. Extend that
+ * struct when the next V.34 file needs a receiver field, and say which
+ * map you would have extended; do not start a second.
+ *
+ * THE SHELL, AND WHY IT IS NOT A UNION (issue #260 wave 8, the owner's
+ * ruling). `struct v34_shell` (v34shell.h) overlays this object from
+ * offset 0 -- the RX shell is object[0x000..0x1450], the TX shell
+ * object[0x1be0..0x3030], and `V34_SHELL_FIELDS` (0xa00) is the receive
+ * context's start in both. The shell is the original's own second
+ * decomposition of the same storage, kept by the original as a separate
+ * struct with its own pad, its own field names and its own derivation
+ * rules per function; its sites are typed-member form through one
+ * documented derivation each. It stays TWO maps and deliberately NOT a
+ * union: a union would bury the object's primary members inside a named
+ * arm to serve a secondary reading, and the two maps' fields at the same
+ * offset are documented readings, not members competing for one slot.
  */
 
 /**
@@ -198,10 +214,17 @@ struct v34_descrambler {
  * initV34 for the context at +0x25e0 while the receive one feeds +0xa00.
  * `bits` counts units of 2400 bps, so the bit rate is 2400 times it.
  *
- * `rx_baud` is `baud_rate` in `struct v34_object` below -- one store, two
+ * `rx_baud` (+0x12) is the one name for the receive symbol rate. It was
+ * carried twice -- here and as the object's `baud_rate`, one store, two
  * readings, the same situation as the echo array that is also the FSK
- * delay line (finding F100). It is declared in both places on purpose;
- * there is no third field.
+ * delay line (finding F100) -- until issue #260 wave 8 dissolved the
+ * second map into this one: `rx_baud` is the name whose evidence is the
+ * object's own (the exported getter `VPcmV34GetCurrentRxBaudRate` reads
+ * exactly +0xaa96, `movswl`, and returns it as the receive baud rate),
+ * while `baud_rate` was usage inference (F1934: it is compared against
+ * the four V.34 symbol rates 3429/3200/3000/2800, so it holds the rate
+ * itself and not an index). The losing reading is recorded here, not a
+ * second member.
  *
  * The four "current" getters name four of these, in transmit/receive
  * pairs: `VPcmV34GetCurrentTxBaudRate`/`...RxBaudRate` read `baud`/`rx_baud`,
@@ -419,87 +442,18 @@ struct v34_object {
 	 */
 	short samples_valid;				/* +0x262 */
 	/*
-	 * +0x264 to +0xa00, the receiver's storage in BOTH of its readings
-	 * (issue #260 wave 7).  The `named` arm is the object's own readings
-	 * of the same 0x79c bytes, every member at its existing offset: the
-	 * receive datapump queue (whose ring continues as `rxq_ring_tail`,
-	 * the object's continuation of `struct v34_queue`'s one declared
-	 * entry), the two words and the FSK inhibit that sit above it, the
-	 * exported accessors' timing pair, and the two filter sub-objects.
-	 * The `receiver` arm is `struct v34_receiver` (v34recv.h), whose
-	 * differential-tested 0x79c extent covers the same range and models
-	 * parts of it the object's own readings had left as pads -- and
-	 * whose `pad_000[0x120]` and `pad_2a8` are exactly those members'
-	 * and the filters' bytes seen from the receiver instead.
-	 *
-	 * Both arms are 0x79c bytes, so the union is, and `unmapped_0a00`
-	 * and everything after it keep their offsets either way.  The
-	 * wave-4-era derives `v34_object_timing` and `v34_object_equalizer`
-	 * were the previous spelling of `named.timing`/`named.equalizer`.
+	 * +0x264 to +0xa00, the receiver, one map (issue #260 wave 8).
+	 * `struct v34_receiver` (v34recv.h) absorbed the object's own
+	 * readings of these 0x79c bytes -- the receive queue and its ring
+	 * continuation, the word above them, the FSK gate, the exported
+	 * accessors' timing pair, and the two filter sub-objects -- and
+	 * the wave-7 union that held the two maps together is gone. The
+	 * members and their comments now live in v34recv.h, at
+	 * receiver-relative offsets that are exactly 0x264 below these.
+	 * The wave-4-era derives `v34_object_timing` and
+	 * `v34_object_equalizer` were the first spelling of this region.
 	 */
-	union {
-		struct {
-			struct v34_queue rxq;			/* +0x264 */
-			int rxq_ring_tail[V34_RXQ_RING - 1];	/* to +0x370 */
-			unsigned char unmapped_0370[0x382 - 0x370];
-			/*
-			 * +0x0382. Written six times and read nowhere in this
-			 * object -- the only stores are VPcmV34Main.cpp's,
-			 * four of them in the two Indicate entry points
-			 * reconstructed here. So whatever consumes it lives
-			 * in the C++ half that is still to come, and the
-			 * values are all this says about it: 0 when a Jd
-			 * arrives with the silence-scrambler flag set,
-			 * otherwise 0x89b0 or 0x8990 according to a
-			 * constellation-size flag. The two differ by 32,
-			 * which is the only structure visible.
-			 *
-			 * As a `struct v34_receiver` offset this is +0x11e,
-			 * immediately below that struct's
-			 * `vectpp_idx`/`flags` pair; named here rather than
-			 * there because every caller has the whole object
-			 * in hand.
-			 */
-			short short_382;			/* +0x0382 */
-			unsigned char unmapped_0384[0x402 - 0x384];
-			/*
-			 * Non-zero makes fskdemodulate return without doing
-			 * anything -- not even running the detector -- so
-			 * it reads as "the FSK receiver is switched off".
-			 * Nothing here sets it.
-			 */
-			short fsk_inhibit;			/* +0x402 */
-			unsigned char unmapped_0404[0x49c - 0x404];
-			/*
-			 * +0x049c and +0x04a0, named from the object's own
-			 * exported accessors `getTimingOffset` and
-			 * `getTimingPhase` -- the same class of evidence as
-			 * a format string. What the fields mean beyond that
-			 * is not claimed: the two accessors are the only
-			 * readers anywhere in the object (exported API with
-			 * no internal caller) and no writer has been traced
-			 * to them.
-			 */
-			int timing_offset;			/* +0x049c */
-			int timing_phase;			/* +0x04a0 */
-			unsigned char unmapped_04a4[0x50c - 0x4a4];
-			/*
-			 * The timing-recovery filters, `struct v34_timing` in
-			 * v34filt.h, at +0x50c: the derivation
-			 * `v34_object_timing` carried until issue #260
-			 * embedded it.
-			 */
-			struct v34_timing timing;		/* +0x50c */
-			/*
-			 * The equaliser, `struct v34_equalizer` in v34filt.h,
-			 * at +0x630; its 0x3cc extent is asserted in
-			 * v34filters.c.
-			 */
-			struct v34_equalizer equalizer;		/* +0x630 */
-			unsigned char unmapped_09fc[0xa00 - 0x9fc];
-		} named;
-		struct v34_receiver receiver;			/* +0x264 */
-	} rxv;							/* +0x264 */
+	struct v34_receiver receiver;			/* +0x264 */
 	unsigned char unmapped_0a00[0xe74 - 0xa00];
 	/* The descrambler's shift register; see `struct v34_descrambler`. */
 	struct v34_descrambler descrambler;		/* +0x0e74 */
@@ -627,6 +581,29 @@ struct v34_object {
 	unsigned char unmapped_25de[0x2a54 - 0x25de];
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
+	/*
+	 * +0x2a68..+0x2a80, TWELVE SHORTS (issue #260 wave 8, the shell
+	 * pilot).  The transmit side's modulator coefficient memory: the
+	 * handshake fills it from the MP sequence (t4_mp_coeffs, blob
+	 * 0x702a5/0x7111a -- six words as conjugate pairs), getMPrecvdBits
+	 * fills it through `txrxdmainit` (blob 0x94b8 leas it; the helper
+	 * writes the twelve), `v34modeminit` clears it in the same loop
+	 * that clears the receive twin at +0xe84 (0x5f694/0x5f69c, one
+	 * index, `cmp $0xb`), and `initdigital` hands it to the transmit
+	 * `initV34` as its `coeff` argument (v34shell.c).
+	 *
+	 * Why no name, and why not a shell member: the TX shell reads it
+	 * only THROUGH a pointer -- its own `coeff` member (shell+0xa24 ->
+	 * obj+0x2604) is aimed here by initV34 -- because in TX-shell
+	 * coordinates these twelve shorts sit inside `pad_e86`'s tail and
+	 * `sub[0..1]`, and the receive twin sits on `bitpos` and `pad_e86`
+	 * the same way: naming either as a shell member would overlap live
+	 * shell fields, which is the union patchwork this wave dissolves.
+	 * Object-side, the blob names the writer (`txrxdmainit`) and the
+	 * source (`getMPrecvdBits`) but nothing names the storage itself,
+	 * and a guessed name is worse than a recorded pad -- so the extent
+	 * is the record.
+	 */
 	unsigned char unmapped_2a68[0x2a80 - 0x2a68];
 	/*
 	 * `modulatevector`'s output: eight complex points as sixteen shorts,
@@ -996,46 +973,37 @@ struct v34_object {
 	int info0_bits[V34_INFO0_BITS];			/* +0xa8a4 */
 	unsigned char unmapped_a948[0xa94c - 0xa948];
 	/*
-	 * Records 0..3 of the five `struct v34_bitsource` message records
-	 * that begin at +0xa94c.  Record 4, +0xaa0c..+0xaa3c, is the
-	 * object's `info_rates`/`rate_mask` area -- the dual reading finding
-	 * F634 records -- and is embedded below as `rec4_v`, the one place
-	 * the two readings are held together; these four end exactly where
-	 * it begins.
-	 */
-	struct v34_bitsource msgrec[4];				/* +0xa94c */
-	/*
-	 * Record 4, in both of its readings.  The named arm is the fields
-	 * the object's own readers reach by name (`info_rates`, `rate_mask`)
-	 * plus the space they do not name; the `rec4` arm is the fifth
-	 * `struct v34_bitsource`, the one `V34_MSGREC_BASE`'s stride counts
-	 * and the blanking block in `v34handshakinit` writes -- it is the
-	 * record that `paa6c` walks onto from record 2's end.  Both arms are
-	 * 0x30 bytes, pinned by the asserts in V34hshak.c.
+	 * The five `struct v34_bitsource` message records, +0xa94c to
+	 * +0xaa3c (issue #260 wave 8: record 4 moved in from the `rec4_v`
+	 * union and the array became five).  `V34_MSGREC_BASE` (V34hshak.c)
+	 * is the stride's base and the five-record extent is asserted
+	 * there.
 	 *
-	 * `info_rates` is unsigned, and measured (issue #260 wave 6): the
-	 * blob's seven loads here are all `movzwl` and its stores are word
-	 * stores.  `rate_mask` STAYS signed: `setfinalrate`'s
-	 * `o->rate_mask >= 0` is a signed compare, and the asymmetric-rates
-	 * sign bit is the point of it.
+	 * Record 4, +0xaa0c..+0xaa3c, is ALSO the object's own
+	 * `info_rates`/`rate_mask` area -- the dual reading finding F634
+	 * records: `msgrec[4].word[0]` is the unpacked INFO rate word
+	 * `initdigital` and `probeselect` read (`info_rates`, unsigned and
+	 * measured in wave 6: seven `movzwl` loads, word stores), and
+	 * `msgrec[4].word[1]` is the available-rates bitmap `setfinalrate`
+	 * compares signed (`rate_mask`, whose sign bit is the
+	 * asymmetric-rates permission, paired with `caps_flags` bit 0).
+	 * The same twelve fields and 0x30-byte stride as the record
+	 * `v34handshakinit` blanks -- it is the record that `paa6c` walks
+	 * onto from record 2's end. The reading names retired with the
+	 * wave-6 union; the sites spell the words through the record.
 	 */
-	union {
-		struct {
-			unsigned short info_rates;		/* +0xaa0c */
-			short rate_mask;			/* +0xaa0e */
-			unsigned char unmapped_aa10[0xaa3c - 0xaa10];
-		} named;
-		struct v34_bitsource rec4;			/* +0xaa0c */
-	} rec4_v;						/* +0xaa0c */
+	struct v34_bitsource msgrec[5];				/* +0xa94c */
 	/*
 	 * The negotiated INFO bits, which initdigital unpacks into the rate
 	 * config at +0xaa84.
 	 *
-	 * `info_rates` carries two four-bit rate fields -- bits 2..5 and
-	 * 6..9, one per direction, and which is "ours" depends on the role --
-	 * plus the trellis depth at 11..12, a flag at 14, and the non-linear
-	 * encoder select at 13.  `rate_mask` is a bitmap of the rates that
-	 * are actually available, bit n-1 for rate n, and its sign bit means
+	 * `msgrec[4].word[0]` (the object's `info_rates` reading) carries
+	 * two four-bit rate fields -- bits 2..5 and 6..9, one per
+	 * direction, and which is "ours" depends on the role -- plus the
+	 * trellis depth at 11..12, a flag at 14, and the non-linear
+	 * encoder select at 13.  `msgrec[4].word[1]` (the object's
+	 * `rate_mask` reading) is a bitmap of the rates that are actually
+	 * available, bit n-1 for rate n, and its sign bit means
 	 * asymmetric rates are on the table.  `info_caps` holds two more
 	 * nibbles, at 6 and 10, which are bit-reversed before use.
 	 * `caps_flags` bit 0 is the other half of the asymmetric permission.
@@ -1120,48 +1088,42 @@ struct v34_object {
 	short rtd;					/* +0xaa7e */
 	unsigned char unmapped_aa80[0xaa84 - 0xaa80];
 	/*
-	 * The rate configuration, +0xaa84..+0xaab0, in both of its readings
-	 * (issue #260 wave 6).  The `cfg` arm is `struct v34_ratecfg` -- the
-	 * view `setfinalrate`, `probeselect`, `v34setuptxmit` and the
-	 * `VPcmV34GetCurrent*` getters take, and the one `initdigital`
-	 * unpacks INFO into.  The named arm is the object's own readings of
-	 * the same 0x2c bytes: the per-rate pre-emphasis slots and the
-	 * words neither view has named, and `baud_rate` -- the RECEIVE
-	 * symbol rate, which is `cfg.rx_baud` seen through the object's own
-	 * name.  Both arms are 0x2c bytes, pinned by the asserts in
-	 * v34shell.c; everything after +0xaab0 keeps its offset either way.
+	 * The rate configuration, +0xaa84..+0xaab0, one map (issue #260
+	 * wave 8). `struct v34_ratecfg` is the view `setfinalrate`,
+	 * `probeselect`, `v34setuptxmit` and the `VPcmV34GetCurrent*`
+	 * getters take, and the one `initdigital` unpacks INFO into; the
+	 * object's own readings of the same 0x2c bytes -- the word
+	 * +0xaa96 above the transmit half, the per-rate pre-emphasis
+	 * slots and the words neither view had named -- are members of
+	 * the struct already or retire with the wave-6 union that held
+	 * the two maps. The 0x2c extent is pinned by the asserts in
+	 * v34shell.c; everything after +0xaab0 keeps its offset.
 	 *
-	 * The symbol rate in baud, not an index and not a block count:
-	 * `V34SetupDemodulator`'s caller compares it against the four V.34
-	 * data-mode rates directly, so it holds the rate itself. Written
-	 * once, from `T3M_TXBAUD`.
+	 * +0xaa96 (the struct's `rx_baud`): the RECEIVE symbol rate in
+	 * baud, not an index and not a block count -- compared against
+	 * the four V.34 data-mode rates directly (finding F1934), and
+	 * returned as such by `VPcmV34GetCurrentRxBaudRate`. Written once,
+	 * from `T3M_TXBAUD`; the object-side reading carried the name
+	 * `baud_rate` until wave 8 retired it (see the struct's comment
+	 * above). Signed, and measured: the blob loads +0xaa96 both ways
+	 * (15 `movswl`, 6 `movzwl`), so the declaration stands (finding
+	 * F11350) and the unsigned-read sites are per-site work.
 	 *
 	 * That makes every threshold built on it a time -- multiplying by
 	 * the baud converts seconds into symbols, which is what the
 	 * recovery tests in `datapumpv34` are really expressing:
 	 *
-	 *     baud_rate >> 1   0.5 s of bad blocks -> full retrain (~10 s)
-	 *     2 * baud_rate    2 s                 -> renegotiate down
-	 *     7 * baud_rate    7 s                 -> handshake timeout
-	 *     8 * baud_rate    8 s of good blocks  -> renegotiate up
+	 *     rx_baud >> 1     0.5 s of bad blocks -> full retrain (~10 s)
+	 *     2 * rx_baud      2 s                 -> renegotiate down
+	 *     7 * rx_baud      7 s                 -> handshake timeout
+	 *     8 * rx_baud      8 s of good blocks  -> renegotiate up
 	 *
 	 * Reading them as times is what shows the ladder is inverted: half
 	 * a second of trouble buys a ten-second retrain, while the two-to-
 	 * three-second renegotiation waits four times as long and never
 	 * arrives (finding F1933).
-	 *
-	 * `baud_rate` stays signed: the blob loads +0xaa96 both ways (15
-	 * `movswl`, 6 `movzwl`), so the declaration stands (finding F11350)
-	 * and the unsigned-read sites are per-site work.
 	 */
-	union {
-		struct {
-			unsigned char unmapped_aa84[0xaa96 - 0xaa84];
-			short baud_rate;			/* +0xaa96 */
-			unsigned char unmapped_aa98[0xaab0 - 0xaa98];
-		} named;
-		struct v34_ratecfg cfg;			/* +0xaa84 */
-	} ratecfg_v;					/* +0xaa84 */
+	struct v34_ratecfg ratecfg;			/* +0xaa84 */
 	unsigned char unmapped_aab0[0xaad0 - 0xaab0];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
@@ -1448,37 +1410,35 @@ struct v34_object {
 /*
  * The embedded sub-object regions, pinned.  Guarded to a 32-bit ABI,
  * matching the v34ratecfg asserts and V34hshak.c's layout block: each
- * member sits exactly where the pad it replaced began.  `rxv`'s named arm
- * is pinned member by member at its object offset, and the whole union at
- * 0x264 with the 0x79c both arms share (the receiver arm's own size is
- * asserted in v34recv.h).
+ * member sits exactly where the pad it replaced began.  The receiver is
+ * pinned at 0x264 and its moved-in members through it (their
+ * receiver-relative offsets are asserted in v34recv.h); its 0x79c extent is
+ * asserted there too.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-typedef char v34object_off_rxv[
-	((int)__builtin_offsetof(struct v34_object, rxv) == 0x264) ? 1 : -1];
-typedef char v34object_off_rxq[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.rxq) == 0x264)
+typedef char v34object_off_receiver[
+	((int)__builtin_offsetof(struct v34_object, receiver) == 0x264)
 		? 1 : -1];
-typedef char v34object_off_rxq_ring_tail[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.rxq_ring_tail)
-	 == 0x274) ? 1 : -1];
-typedef char v34object_off_short_382[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.short_382)
+typedef char v34object_off_receiver_rxq[
+	((int)__builtin_offsetof(struct v34_object, receiver.rxq) == 0x264)
+		? 1 : -1];
+typedef char v34object_off_receiver_short_382[
+	((int)__builtin_offsetof(struct v34_object, receiver.short_382)
 	 == 0x382) ? 1 : -1];
-typedef char v34object_off_fsk_inhibit[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.fsk_inhibit)
+typedef char v34object_off_receiver_retrain_gate[
+	((int)__builtin_offsetof(struct v34_object, receiver.retrain_gate)
 	 == 0x402) ? 1 : -1];
-typedef char v34object_off_timing_offset[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.timing_offset)
+typedef char v34object_off_receiver_timing_offset[
+	((int)__builtin_offsetof(struct v34_object, receiver.timing_offset)
 	 == 0x49c) ? 1 : -1];
-typedef char v34object_off_timing_phase[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.timing_phase)
+typedef char v34object_off_receiver_timing_phase[
+	((int)__builtin_offsetof(struct v34_object, receiver.timing_phase)
 	 == 0x4a0) ? 1 : -1];
-typedef char v34object_off_timing[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.timing) == 0x50c)
+typedef char v34object_off_receiver_timing[
+	((int)__builtin_offsetof(struct v34_object, receiver.timing) == 0x50c)
 		? 1 : -1];
-typedef char v34object_off_equalizer[
-	((int)__builtin_offsetof(struct v34_object, rxv.named.equalizer)
+typedef char v34object_off_receiver_equalizer[
+	((int)__builtin_offsetof(struct v34_object, receiver.equalizer)
 	 == 0x630) ? 1 : -1];
 typedef char v34object_off_detector[
 	((int)__builtin_offsetof(struct v34_object, detector) == 0x3564)
@@ -1486,18 +1446,20 @@ typedef char v34object_off_detector[
 typedef char v34object_off_msgrec[
 	((int)__builtin_offsetof(struct v34_object, msgrec) == 0xa94c)
 		? 1 : -1];
-typedef char v34object_size_rxv[
-	(sizeof(((struct v34_object *)0)->rxv) == 0x79c) ? 1 : -1];
+typedef char v34object_off_ratecfg[
+	((int)__builtin_offsetof(struct v34_object, ratecfg) == 0xaa84)
+		? 1 : -1];
+typedef char v34object_size_receiver[
+	(sizeof(((struct v34_object *)0)->receiver) == 0x79c) ? 1 : -1];
 #endif
 
 
 /*
- * The object's remaining sub-object derivations (issue #260).  `timing`,
- * `equalizer`, `detector`, the first four message records, the rate config
- * and now the receiver -- as the `rxv` union above, whose `named` arm is
- * the object's own readings -- are typed members of the struct.  What is
- * left here is the one region that cannot be embedded and has no second
- * reading in the tree: the transmitter at +0x1450, reached by every site
+ * The object's remaining sub-object derivation (issue #260).  `timing`,
+ * `equalizer`, `detector`, the five message records, the rate config and
+ * the receiver are typed members of the struct.  What is left here is the
+ * one region that cannot be embedded and has no second reading in the
+ * tree: the transmitter at +0x1450, reached by every site
  * that has the object and none that has anything smaller.
  *
  * They are MACROS and not static inline functions because a macro is a
@@ -1533,7 +1495,10 @@ void fskdetect(struct v34_object *obj, const short *in, short *out,
 /**
  * @brief Run fskdetect() over one block and slice the result into bits.
  *
- * Does nothing at all if `obj->rxv.named.fsk_inhibit` is set.
+ * Does nothing at all if `obj->receiver.retrain_gate` is set -- the same
+ * gate RX_PHASE2_CALL arms, which retires the FSK bit path once passed
+ * (see `struct v34_receiver` in v34recv.h; the field's earlier name here
+ * was `fsk_inhibit`).
  *
  * @param obj  The V.34 modem object.
  * @param in   Input samples, #V34_FSK_BLOCK of them.

@@ -99,6 +99,30 @@ extern const signed char MMaxTable[32];
 /** The ring size initV34() picks, by index; used when `use_max` is clear. */
 extern const signed char MMinTable[32];
 
+/*
+ * THE SHELL IS THE ORIGINAL'S OWN SECOND MAP, AND STAYS ONE -- NOT A UNION
+ * (issue #260 wave 8, the owner's ruling).
+ *
+ * `struct v34_shell` overlays `struct v34_object` from offset 0: the RX
+ * shell is object[0x000..0x1450] and the TX shell object[0x1be0..0x3030]
+ * (V34_SHELL_TX), so this struct's `pad_000[0xa00]` IS the object's head,
+ * and `V34_SHELL_FIELDS` (0xa00) is where the receive context's fields
+ * begin in both. Its sites are typed-member form through one documented
+ * derivation per function -- not raw offsets -- and every offset the shell
+ * code uses lands on a `struct v34_shell` member once the derivation is
+ * subtracted (finding F137).
+ *
+ * The measured geometry is why this is NOT the wave-8 union dissolution's
+ * business: the rxv/ratecfg_v/rec4_v unions held two of OUR maps of one
+ * region, and the richer one absorbed the other. The shell is the
+ * ORIGINAL'S OWN decomposition, kept by the original as a separate struct
+ * over the same storage with its own field names and its own pad -- a
+ * second reading the object itself maintains, not patchwork we made. A
+ * union would bury the object's primary members in a named arm to serve a
+ * secondary reading, and a same-offset shell field is a documented reading
+ * of the object's storage, not a competing member. Both maps stand; the
+ * shell's derivation constants are the record of how they meet.
+ */
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           span;			/* +0xa00 */

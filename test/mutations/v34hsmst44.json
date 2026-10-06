@@ -974,7 +974,7 @@
   },
   {
     "label": "the rate tables read the transmit baud rate",
-    "find": "\tbaud = obj->ratecfg_v.named.baud_rate;",
+    "find": "\tbaud = obj->ratecfg.rx_baud;",
     "replace": "\tbaud = hs_get(obj, T44_TXBAUD);",
     "fn": "t44_accept_len26"
   },
@@ -1191,8 +1191,8 @@
   },
   {
     "label": "the probeselect diagnostic swaps its two rates",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg_v.named.baud_rate);",
-    "replace": "\t\t\t\t     (int)obj->ratecfg_v.named.baud_rate,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
+    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "replace": "\t\t\t\t     (int)obj->ratecfg.rx_baud,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
     "fn": "t44_accept_len4d"
   },
   {
@@ -1293,13 +1293,13 @@
   },
   {
     "label": "the probeselect diagnostic prints the carrier as the transmit rate",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg_v.named.baud_rate);",
-    "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->ratecfg_v.named.baud_rate);",
+    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
+    "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
     "fn": "t44_accept_len4d"
   },
   {
     "label": "the probeselect diagnostic prints the carrier as the receive rate",
-    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg_v.named.baud_rate);",
+    "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->ratecfg.rx_baud);",
     "replace": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_CARRIER));",
     "fn": "t44_accept_len4d"
   },

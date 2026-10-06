@@ -207,7 +207,7 @@ fskdemodulate(struct v34_object *obj, const short *in, struct v34_fsk *st)
 	int i;
 
 	/* Switched off: not even the detector runs. */
-	if (obj->rxv.named.fsk_inhibit != 0)
+	if (obj->receiver.retrain_gate != 0)
 		return;
 
 	fskdetect(obj, in, work, st);
@@ -305,8 +305,8 @@ V34FSK_ASSERT(line,    struct v34_fskdelay, line,        0x14);
 
 V34FSK_ASSERT(status,  struct v34_object, status,        0x000);
 V34FSK_ASSERT(enfloor, struct v34_object, rx_energy_floor, 0x230);
-V34FSK_ASSERT(inhibit, struct v34_object,
-			      rxv.named.fsk_inhibit,   0x402);
+V34FSK_ASSERT(gate,    struct v34_object,
+			      receiver.retrain_gate,   0x402);
 V34FSK_ASSERT(echo0,   struct v34_object, echo0,         0x80b8);
 V34FSK_ASSERT(e0frac,  struct v34_object, echo0_frac,    0x80d8);
 V34FSK_ASSERT(e0dline, struct v34_object, echo0_dline,   0x81f8);

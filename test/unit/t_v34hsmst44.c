@@ -36,7 +36,8 @@
  * 2's arm at 0x644c9.  That arm exists (finding F354 put it there for
  * microstate 79) and this is why the restart can be driven at all.
  *
- * THE FSK RECEIVER IS HELD STILL.  `obj->fsk_inhibit` non-zero makes
+ * THE FSK RECEIVER IS HELD STILL.  `obj->receiver.retrain_gate` non-zero --
+ * the FSK inhibit reading of the gate (v34recv.h) -- makes
  * `fskdemodulate` return before it touches `nbits` or `sr` (DPSK.c), so the
  * two fields this arm reads are the test's to choose rather than whatever the
  * fill's coefficients made of four samples.  One case at the end leaves it
@@ -66,7 +67,8 @@ extern void ref_dftenergy(void *bins, short nbins, short scale);
 
 #define T44T_V90RECV	0x024c	/* int:   `v90_receiver`                   */
 #define T44T_K56RECV	0x0250	/* int:   `k56flex_receiver`               */
-#define T44T_INHIBIT	0x0402	/* short: `fsk_inhibit`                    */
+#define T44T_INHIBIT	0x0402	/* short: `receiver.retrain_gate` (FSK     */
+						/* inhibit reading)                       */
 #define T44T_F356A	0x356a
 #define T44T_F358C	0x358c
 #define T44T_F35A2	0x35a2	/* short: the message-descriptor length    */
@@ -1640,7 +1642,7 @@ main(void)
 	/* --- downstream of the real demodulator --------------------------- */
 
 	/*
-	 * `fsk_inhibit` CLEAR, so `fskdemodulate` really runs and the bits
+	 * `retrain_gate` CLEAR, so `fskdemodulate` really runs and the bits
 	 * this arm consumes are the ones it produced.  Everything above holds
 	 * the FSK receiver still to make `nbits` and `sr` the test's to
 	 * choose; this one case gives that up in exchange for driving the arm

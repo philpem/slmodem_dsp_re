@@ -305,7 +305,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * reduction V34hshak.c computes; this clears it.
 	 */
 	if (obj->is_short != 0) {
-		struct v34_ratecfg *cfg = &obj->ratecfg_v.cfg;
+		struct v34_ratecfg *cfg = &obj->ratecfg;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(

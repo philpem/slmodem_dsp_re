@@ -123,10 +123,10 @@ txinit(void *objp)
 	sysdep_memset(obj->txq.ring, 0, V34_TXQ_RING * sizeof(int));
 
 	/* The receive queue is emptied outright. */
-	obj->rxv.named.rxq.count = 0;
-	obj->rxv.named.rxq.rd = obj->rxv.named.rxq.ring;
-	obj->rxv.named.rxq.wr = obj->rxv.named.rxq.ring;
-	sysdep_memset(obj->rxv.named.rxq.ring, 0,
+	obj->receiver.rxq.count = 0;
+	obj->receiver.rxq.rd = obj->receiver.rxq.ring;
+	obj->receiver.rxq.wr = obj->receiver.rxq.ring;
+	sysdep_memset(obj->receiver.rxq.ring, 0,
 			      V34_RXQ_RING * sizeof(int));
 
 	/* And the pre-filter's 42-tap history. */

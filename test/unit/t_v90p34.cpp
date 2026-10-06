@@ -439,7 +439,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 
 	oa.v90_receiver = ob.v90_receiver = state;
 	oa.k56flex_receiver = ob.k56flex_receiver = 0;
-	oa.rxv.named.short_382 = ob.rxv.named.short_382 = constel;
+	oa.receiver.short_382 = ob.receiver.short_382 = constel;
 	*(short *)((char *)&oa + OB_TXSTATE) = 20;
 	*(short *)((char *)&ob + OB_TXSTATE) = 20;
 	((unsigned char *)&oa)[OB_BACKCLEAR] = 0;

@@ -1619,7 +1619,8 @@ initV34(void *fields, short baud, short bitrate, short use_max,
  * printed "txbitrate", "rxbitrate", "PTC" and "nofTxBits" himself.  See
  * finding F186.
  *
- * THE ROLE SWAPS TWO NIBBLES.  `info_rates` carries one four-bit rate per
+ * THE ROLE SWAPS TWO NIBBLES.  The INFO rate word (`msgrec[4].word[0]`, the
+ * object's `info_rates` reading) carries one four-bit rate per
  * direction, at bits 2..5 and 6..9, and which one is "ours" depends on
  * `role` -- the same flag that picks the scrambler polynomial and the
  * timing table.  Everything after the unpack is role-independent.
@@ -1633,8 +1634,8 @@ void
 initdigital(void *obj)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	struct v34_ratecfg *cfg = &o->ratecfg_v.cfg;
-	unsigned info = (unsigned short)o->rec4_v.named.info_rates;
+	struct v34_ratecfg *cfg = &o->ratecfg;
+	unsigned info = (unsigned short)o->msgrec[4].word[0];
 	int tx, rx, lim_tx, lim_rx;
 	int level;
 
@@ -1687,7 +1688,7 @@ initdigital(void *obj)
 	 * directions are forced to the lower of the pair, which is what makes
 	 * a V.34 connection symmetric by default.
 	 */
-	if (o->rec4_v.named.rate_mask >= 0 || (o->caps_flags & V34_CAPS_ASYMMETRIC) == 0) {
+	if (o->msgrec[4].word[1] >= 0 || (o->caps_flags & V34_CAPS_ASYMMETRIC) == 0) {
 		int m = ((short)tx <= (short)rx) ? (unsigned short)tx
 						 : (unsigned short)rx;
 
@@ -1705,7 +1706,7 @@ initdigital(void *obj)
 	if ((short)tx != 0) {
 		unsigned mask = (unsigned short)(1u << (((short)tx - 1) & 31));
 
-		if (!((unsigned)(unsigned short)o->rec4_v.named.rate_mask & mask)) {
+		if (!((unsigned)(unsigned short)o->msgrec[4].word[1] & mask)) {
 			int v = tx;
 
 			for (;;) {
@@ -1714,7 +1715,7 @@ initdigital(void *obj)
 				cfg->txbits = (short)v;
 				if ((short)v == 0)
 					break;
-				if ((unsigned short)o->rec4_v.named.rate_mask & mask)
+				if ((unsigned short)o->msgrec[4].word[1] & mask)
 					break;
 			}
 			tx = v;
@@ -1724,7 +1725,7 @@ initdigital(void *obj)
 	if ((short)rx != 0) {
 		unsigned mask = (unsigned short)(1u << (((short)rx - 1) & 31));
 
-		if (!((unsigned)(unsigned short)o->rec4_v.named.rate_mask & mask)) {
+		if (!((unsigned)(unsigned short)o->msgrec[4].word[1] & mask)) {
 			int v = rx;
 
 			for (;;) {
@@ -1733,7 +1734,7 @@ initdigital(void *obj)
 				cfg->rxbits = (short)v;
 				if ((short)v == 0)
 					break;
-				if ((unsigned short)o->rec4_v.named.rate_mask & mask)
+				if ((unsigned short)o->msgrec[4].word[1] & mask)
 					break;
 			}
 			rx = v;
@@ -1807,6 +1808,16 @@ initdigital(void *obj)
 			(short)(unsigned short)cfg->baud,
 			(short)(unsigned short)(2400 * (short)bits),
 			(short)umax, (short)cfg->depth,
+			/* The transmit coefficient memory at obj+0x2a68 --
+			 * twelve shorts the handshake fills from the MP
+			 * sequence. Left as an offset cast on purpose (the
+			 * shell pilot, issue #260 wave 8): the TX shell reads
+			 * it only through the `coeff` pointer initV34 stores,
+			 * because in shell coordinates the twelve sit inside
+			 * `pad_e86`/`sub[0..1]` -- a shell member here would
+			 * overlap live fields -- and the blob names the
+			 * writer and the source but not the storage. See
+			 * unmapped_2a68 in v34fsk.h. */
 			(const short *)((char *)obj + 0x2a68), (short)div);
 	}
 
@@ -2393,31 +2404,26 @@ V34OB_ASSERT(nof_tx_bits, 0x010);
 V34OB_ASSERT(v90_receiver, 0x24c);
 V34OB_ASSERT(k56flex_receiver, 0x250);
 /*
- * `info_rates` and `rate_mask` are the named arm of `rec4_v` now (issue
- * #260 wave 6), so their offsets are asserted through the union: the
- * union's own base and size, plus each named field, with the record's
- * 0x30 extent the `rec4` arm's own type carries.  `ratecfg_v` gets the
- * same treatment at +0xaa84, 0x2c long.
+ * `info_rates` and `rate_mask` are `msgrec[4].word[0]`/`.word[1]` now
+ * (issue #260 wave 8: the rec4_v union retired and the message records
+ * became one five-element array), so their offsets are asserted through
+ * the array.  `ratecfg` gets the same treatment at +0xaa84, 0x2c long,
+ * with the object's `baud_rate` reading retired onto `ratecfg.rx_baud`.
  */
-typedef char v34ob_off_rec4_v[
-	((int)__builtin_offsetof(struct v34_object, rec4_v) == 0xaa0c)
-		? 1 : -1];
-typedef char v34ob_size_rec4_v[
-	(sizeof(((struct v34_object *)0)->rec4_v) == 0x30) ? 1 : -1];
-typedef char v34ob_off_rec4_info_rates[
-	((int)__builtin_offsetof(struct v34_object, rec4_v.named.info_rates)
+typedef char v34ob_off_msgrec4_word0[
+	((int)__builtin_offsetof(struct v34_object, msgrec[4].word[0])
 	 == 0xaa0c) ? 1 : -1];
-typedef char v34ob_off_rec4_rate_mask[
-	((int)__builtin_offsetof(struct v34_object, rec4_v.named.rate_mask)
+typedef char v34ob_off_msgrec4_word1[
+	((int)__builtin_offsetof(struct v34_object, msgrec[4].word[1])
 	 == 0xaa0e) ? 1 : -1];
-typedef char v34ob_off_ratecfg_v[
-	((int)__builtin_offsetof(struct v34_object, ratecfg_v) == 0xaa84)
+typedef char v34ob_off_ratecfg[
+	((int)__builtin_offsetof(struct v34_object, ratecfg) == 0xaa84)
 		? 1 : -1];
-typedef char v34ob_size_ratecfg_v[
-	(sizeof(((struct v34_object *)0)->ratecfg_v) == 0x2c) ? 1 : -1];
-typedef char v34ob_off_ratecfg_baud_rate[
+typedef char v34ob_size_ratecfg[
+	(sizeof(((struct v34_object *)0)->ratecfg) == 0x2c) ? 1 : -1];
+typedef char v34ob_off_ratecfg_rx_baud[
 	((int)__builtin_offsetof(struct v34_object,
-				 ratecfg_v.named.baud_rate) == 0xaa96)
+				 ratecfg.rx_baud) == 0xaa96)
 		? 1 : -1];
 V34OB_ASSERT(info_caps, 0xaa3c);
 V34OB_ASSERT(caps_flags, 0xaa3e);
@@ -2426,8 +2432,10 @@ V34OB_ASSERT(rx_bps, 0xac08);
 V34OB_ASSERT(rates_latched, 0xac16);
 
 /*
- * The rate config's own offsets, and the one that ties it to the object:
- * `rx_baud` sits exactly on `baud_rate`, which is the same store seen twice.
+ * The rate config's own offsets.  `rx_baud` (+0x12) is the one name for
+ * the receive symbol rate since wave 8: the object's `baud_rate` reading
+ * retired onto it (see struct v34_ratecfg in v34fsk.h), so there is no
+ * alias assert left to tie the two together.
  */
 #define V34RC_ASSERT(field, off) \
 	typedef char v34rc_off_##field[ \
@@ -2442,11 +2450,6 @@ V34RC_ASSERT(rx_baud, 0x12);
 V34RC_ASSERT(rxbits, 0x14);
 V34RC_ASSERT(rx_use_max, 0x22);
 V34RC_ASSERT(rx_divtab, 0x28);
-
-typedef char v34rc_aliases_baud_rate[
-	((int)(V34_RATECFG + __builtin_offsetof(struct v34_ratecfg, rx_baud))
-	 == (int)__builtin_offsetof(struct v34_object,
-				    ratecfg_v.named.baud_rate)) ? 1 : -1];
 
 /* The three memsets' lengths are the object's own, so pin those too. */
 typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)

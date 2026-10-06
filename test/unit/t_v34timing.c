@@ -33,8 +33,8 @@ main(void)
 
 	memset(&obj, 0x5a, sizeof(obj));
 	for (i = 0; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
-		obj.rxv.named.timing_offset = patterns[i];
-		obj.rxv.named.timing_phase = ~patterns[i];
+		obj.receiver.timing_offset = patterns[i];
+		obj.receiver.timing_phase = ~patterns[i];
 
 		diff_eq_int("getTimingOffset(pattern %ld)",
 			    getTimingOffset(&obj), ref_getTimingOffset(&obj),
