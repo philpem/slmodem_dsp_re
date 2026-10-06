@@ -111,22 +111,24 @@ v17rx_delete(struct faxvmi_link *dp)
 	V17RX_delete((void *)(long)dp->int_0014);
 }
 
-void
+int
 v17tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		     unsigned short *result)
 {
-	V17TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
+	int status = V17TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
 	*result = *count;
 	*count = 0;
+	return status;
 }
 
-void
+int
 v17rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		     unsigned short *count)
 {
-	V17RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf, count);
+	int status = V17RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf, count);
 	*result = *count;
 	*count = 0;
+	return status;
 }
 
 int

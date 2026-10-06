@@ -696,7 +696,7 @@ extern const struct faxvmi_ctl FAXVMI_CTL;
  * 6 v21rx_control, 7 v27tx_control, 8 v27rx_control, 9 v29tx_control,
  * 10 v29rx_control, 11 v17tx_control, 12 v17rx_control), read off this
  * table's own relocations (0x9560..0x9590). Every entry already returns
- * `int` (`faxadapt.h`, `nulldp.h`), so unlike `vxx_process` this table
+ * `int` (`faxadapt.h`, `nulldp.h`), so this table
  * needs no return-type cast -- only the argument-pointer casts six of the
  * eight typed entries carry, the same shape `vxx_status`/`vxx_create`
  * already use.
@@ -747,19 +747,11 @@ int FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl);
  * v21tx_process, 6 v21rx_process, 7 v27tx_process, 8 v27rx_process, 9
  * v29tx_process, 10 v29rx_process, 11 v17tx_process, 12 v17rx_process.
  *
- * The return value is not decorative. `null_process` is declared `int` and
- * returns -1 always (`nulldp.h`); the eight `v??tx_process`/`v??rx_process`
- * are declared `void` (`faxadapt.h`) -- but #FAXVMI_process (below) reads
- * `%eax` straight out of every one of these calls and folds it into the
- * status word it returns (0x954ec..0x95564), so the table's element type
- * is `int`-returning and the eight `void` entries need the same cast
- * `vxx_status` already carries for ITS mismatched four. For those eight,
- * this reproduces whatever their own last-touched register happened to
- * hold (typically the wrapped `V??[TR]X_modem`'s own return, since nothing
- * after that call inside them touches `%eax`) -- an unspecified value by
- * C's own rules that only the exact compiler which built both sides can be
- * trusted to reproduce identically; see `make period` vs the modern tier
- * in CLAUDE.md.
+ * The return value is not decorative. null_process returns -1; the eight
+ * data-mode adapters return the wrapped V??[TR]X_modem status unchanged,
+ * after relaying and clearing their count. FAXVMI_process consumes that int
+ * directly and folds it into its framing status (0x954ec..0x95564). All
+ * entries have this callback type; no return-type cast is required.
  *
  * The four formal arguments are untyped here for the same reason: TX and
  * RX entries share the same four physical slots (`faxvmi_link *`,

@@ -3644,3 +3644,33 @@ dependency and ready-queue decisions. Do not invent volatile/alias dependencies
 or infer allocator causality from mnemonic order. A duplicate-stream dump
 must be explicitly unparsed rather than silently selecting one stream.
 [Four-cell domain, UID trace and replay](../v8-product-capture-domain.md).
+
+
+### Check consumed callback returns before treating EAX as incidental (F11827)
+
+A void reconstruction adapter whose table consumer reads int status may have
+lost its original return declaration. Read the caller and all count/result stores:
+eight fax process adapters preserve the modem return across their stores in the
+blob. Explicit int forwarding makes all eight EXACT62 and removes obsolete
+callback casts without changing the dispatcher object. Audit every shared-header
+consumer and table relocation; one exact wrapper alone does not settle the API.
+[Return contract and ten-consumer proof](../fax-adapter-result-results.md).
+
+### Capture one final field result when both branches publish it (F11825–F11826)
+
+BitsToSymbol reset's if/else stores become one guarded unsigned result with a
+conditional expression; both supported accumulator/conditional forms are raw
+EXACT108. CID reset likewise needs final samples_fill publication after its
+conditional mark update; the constructor's inline consequence is reviewed too.
+Use original common-store/control-flow evidence, not arbitrary statement order.
+[Combined gains and bounded negatives](../byteexact-scheduling-batch-results.md).
+
+### Read scheduler tie-break dependencies after allocation (F11824)
+
+Equal-priority loads need not retain initial order. V8's coefficient/sample
+priority35 tie is broken by4versus5outgoing dependencies, matching the official
+GCC3 scheduler ranking path. Verbose-only diagnostics must raw-repeat the object.
+Trace earlier ranking gates and actual ready selection before interpreting a
+fanout count; include anti/output edges created by allocation. Original hard
+register reuse can constrain order differently. Do not force registers or fake
+source dependencies to reproduce it. [Measured diagnostic controls](../batch-scheduler-trace-domain.md).

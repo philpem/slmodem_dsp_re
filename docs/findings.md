@@ -136300,3 +136300,77 @@ raw equality, then GCC3 dependency/ready-queue implementation. No artificial
 source dependencies, #22/PR263 overlap or runtime/fuzz/mutation execution.
 `docs/v8-product-capture-domain.md`; `tools/v8_product_capture_reproduce.py`;
 `tools/v8_product_capture_audit.py`. Census unchanged1057/1852.
+
+
+## F11824. Scheduler fanout explains V8 capture reversal under raw-repeat diagnostics
+
+At240481e6, verbose5-only Gentoo instrumentation repeats both V8 objects raw,
+8emitted-body/common comparisons unchanged. Actual coefficient103/sample106
+have priority35/cost3,4versus5outgoing edges and enter the same ready list;
+sample106 issues first. Official GCC3.4.2 haifa-sched rank_for_schedule prefers
+higher outgoing-edge count after earlier tie-breaks. Same-block rank hooks tie,
+after-reload pressure rank is skipped and last-address-subtract104 gives both
+loads dependency-class3 (sample's edge cost1 versus coefficient independent).
+This explains observed scheduling without changing profile or forcing source
+register/dependency constraints. Release source provenance/URLs/hashes retained;
+not a full Gentoo patch recovery. Original hard-register pointer reuse can
+impose a different anti-dependency; no original RTL is claimed. FSE two-cell
+copy-after-mode publication control is complete-object raw-inert,0gains/losses.
+`docs/batch-scheduler-trace-domain.md`; `tools/batch_scheduler_trace_audit.py`.
+
+## F11825. CID final reset publication closes the complete body
+
+Original automatic-mode predicate precedes samples_fill clear; prior F11624/25
+split-branch controls do not cover common publication after mark_conf_step.
+Three full-TU cells repeat that negative and recover cid_reset EXACT118 from
+prior110B. Only this form is exact within the declared family; no unique-author
+claim. cid_create also changes by inlining and remains BYTES70; no exact loss.
+Mode/context and FSK owners in constructor/lifecycle are separately allocated;
+no fabricated alias fixture. Combined services28cells/125bodies include negative
+V23/FDSP/DTMF domains, metadata/data/BSS/relocations stable and repeat controls.
+`docs/services-exact-results.md`; `tools/services_exact_audit.py`.
+
+## F11826. Guarded common result store closes V90BitsToSymbol reset
+
+Original zero accumulator plus guarded unsigned divide joins one extraSymbols
+store; reconstructed if/else duplicates field stores and exits. Both a guarded
+local and readable conditional expression reproduce EXACT108 (previous149B),
+raw-identical complete objects. The11-function TU becomes11/11, every bystander
+unchanged, no loss. InitialRTL member refs2→1, division count remains1. C++
+16cells/207body comparisons additionally close three graph-control families
+without adoption; metadata/data/BSS/nontext relocations stable. Five static
+mutation anchors retargeted to the same operations, not executed or snapshots
+refreshed. `docs/batch-cpp-results.md`; `tools/batch_cpp_audit.py`.
+
+## F11827. Eight fax adapter returns recover the consumed modem-status contract
+
+All V17/V21/V27/V29 TX/RX wrappers preserve wrapped modem EAX through count
+relay in the original; FAXVMI_process consumes this int via its dispatch table.
+Void adapter declarations in reconstruction clobbered EAX and required casts;
+F9850's unspecified-register interpretation is refuted by caller/body evidence.
+Int status forwarding produces eight EXACT62 bodies,496originalbytes,0losses.
+All10headerconsumers audited; six unrelated objects and cast-free dispatcher
+cell raw-identical, four adapter TUs each change only two bodies. Prototype/
+binding/data/table-relocation shape preserved. Comments updated; no layouts
+or callback slots change. Fax37validcells/248bodies include two closed negative
+domains; invalid shifted-byte control preserved/excluded and corrected baseline
+repeated. Pinned-header overlays support post-adoption historical replay.
+`docs/fax-adapter-result-results.md`; `tools/fax_adapter_boundary_audit.py`.
+
+## F11828. Ten-function batch integrates with zero whole-tree losses
+
+Base240481e6:1057→1067exact/1852;114842→115564exactoriginalbytes (+722).
+Six of300objects change and raw-repeat independent winners;294others and full
+buildconfig raw-identical. Eleven bodies change (10winners plus inlined CID
+constructor); all symbol/binding/data/BSS/nontext-relocation audits pass.
+85archived valid TUcells/596bodycomparisons; no source adoption from negative
+partial patterns. Initial period passes388/0 but combined structural gate
+rejects five stale reset anchors; static retarget repairs the sameoperations,
+with no mutation/fuzz execution. Final corrected gate is recorded in
+`docs/byteexact-scheduling-batch-results.md`. PR263 at ef22230e and #22 untouched.
+`tools/byteexact_scheduling_batch_audit.py`; strict census and raw object audit.
+
+Final corrected makephase exits0:388period differential passes/0failures and
+all structural gates green. Static anchors285suites/10038unique,0detached or
+non-unique;22new tool syntax checks pass. No modern portability claim or new
+runtime fixture; identical-function evidence is complete-body byte identity.

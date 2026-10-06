@@ -86,23 +86,25 @@ v21rx_delete(struct faxvmi_link *dp)
 	V21RX_delete((void *)(long)dp->int_0014);
 }
 
-void
+int
 v21tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		     unsigned short *result)
 {
-	V21TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
+	int status = V21TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
 	*result = *count;
 	*count = 0;
+	return status;
 }
 
-void
+int
 v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		     unsigned short *count)
 {
-	V21RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf,
+	int status = V21RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf,
 		    (short *)count);
 	*result = *count;
 	*count = 0;
+	return status;
 }
 
 int

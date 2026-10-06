@@ -1,0 +1,3 @@
+# V90 bits-to-symbol guarded division result
+
+Three full-TU cells: retained if/else direct field stores, local accumulator initialized0 with guarded division and one field store, conditional expression common field store. Original reset2f8d0..2f93c initializes EAX0 before denominator test, both paths meet extraSymbols store2f91b. Retained149B duplicates stores and exits vs108B original. Keep unsigned arithmetic, divide guard, original subsequent fields and mapper call. Predict common result recovers original store CFG; no gain adopted without complete exact identity and no bystander losses. Retained Gentoo all flags, baseline raw repeat and full metadata/data auditing.

@@ -211,10 +211,8 @@ V90BitsToSymbol::reset(V90MappingParams *mp, PcmType pcm)
 
 	bitsPerFrame = mp->word_0;
 
-	if (mp->shaperSR != 0)
-		extraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;
-	else
-		extraSymbols = 0;
+	extraSymbols = mp->shaperSR != 0
+	    ? V90MAPPER_FRAME * mp->shaperId / mp->shaperSR : 0;
 
 	symbolsDone = 0;
 	symbolsBlockSize = 0;
