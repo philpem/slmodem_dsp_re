@@ -3760,3 +3760,17 @@ these mechanisms before expanding source. Preserve observable per-iteration
 mode reloads and one diagnostic per execution. These finite source controls
 gain no complete function; require a new original graph witness before reopening
 them. [Screen, controls and replay](../expansion-wide-results.md).
+
+### Compare backedges inside the witnessed arithmetic loop (F11845–F11847)
+
+A whole-function edge count can both nominate unrelated branches and miss a
+real inner-copy mismatch. V92 phase unpack has11backedges on either side, yet
+the original32input CRC loop has one and the retained loop has two. Constant
+member shifts remove the inner copy in all three receive CRC consumers, but
+none closes completely. Identify the counter comparison feeding the specific
+backedge; do not mistake a later checksum failure branch returning to reset
+for an enclosing arithmetic loop. Audit all switch destinations after layout
+changes and the other functions in the TU. This improves lever13 triage rather
+than adding a source spelling with guaranteed gains. EIA6 also recovers18copy
+operations but leaves real x87 lifetime/operand differences; SIZE2 is not two
+different bytes. [Screen, graph evidence and closed controls](../fixed-index-results.md).
