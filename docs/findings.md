@@ -136592,3 +136592,34 @@ Original warmup shared2c46a reloads sessionFlag2c47f each iteration; fixed-mode
 warmup refuted. Domain closed without source adoption; unique profile/source
 and blanket regalloc diagnosis not established.
 `docs/batch-cpp-p3-reset-results.md`.
+
+## F11845. Fully inlined fixed-loop screen requires loop-local graph review
+
+548b5edd:283TUs1744emitted bodies,675nonexact<=4096B;1210lexical headers,
+269recognized2..32bounds/941unsupported/0unmapped;68eligible fixed-loop bodies,
+10nominations. Closed V92Precoder positive fires; existing domains not retried.
+Whole-body counts miss V92 phase unpack11/11 despite missing inner CRC
+promotion. VTB/index/Detector candidates retain the relevant fixed loops.
+tools/fixed_index_screen.py; `docs/fixed-index-results.md`.
+
+## F11846. Receive CRC scalar shifts recover promotion in three untouched consumers
+
+Six fullTUs114live body grades,0gains/losses. V90 unpack525→861vs879original;
+V92data590→976vs1003;phase532→944isolated/950combinedvs987. Inner copy
+backedge disappears2→1 inside32input loop, matching original promotion.
+V90 retains232vs238instructions, not reg-renaming-only. Raw baselines/hash/
+bystanders/bindings/data/BSS pass; changed ordered switch entries retain
+offset/type/owner and decoded destinations, explicitly recorded rather than
+claimed byte-identical. Prior pack-helper domain untouched. No adoption;
+`docs/jd-unpack-fixed-shift-domain.md`; tools/jd_unpack_fixed_shift_audit.py.
+
+## F11847. EIA6 straight-line copy and single predicate do not close the x87 graph
+
+Four controls64live grades,0gains/losses:604/598/802/792vs790original.
+18scalar entries remove backedge; unequal adds4anonymous zero bytes.
+15bystanders/bindings/BSS/nontext unchanged. Original fistl retains x,
+loaded-scale fmulp/fldz-fcompp versus candidate duplicate/fistpl,
+memory fmuls/fcomps; homes/copy scheduling also differ. SIZE2 is two bytes
+of length difference, not a two-byte residual. Domain closed without source
+adoption; new original use/lifetime witness needed.
+`docs/batch-cpp-prefilter-expand-results.md`.
