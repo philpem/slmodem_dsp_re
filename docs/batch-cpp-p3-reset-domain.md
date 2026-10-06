@@ -1,0 +1,9 @@
+# V90 phase3 reset graph: DIL call factoring
+
+Base276d30b5, two complete-TU controls: retained shared DIL reset versus arm-local DIL reset after each mode's vector stores. Original reset2c2c0..2c49f has two static resetDILGenerator sites2c3ac/2c45d and distinct arm-local argument load/store order; source has one shared site. Mode-zero assigns jdBits; nonzero assigns jdV92Bits/jdV92PhaseBits, including null handling. Move DIL reset into those mode arms without changing any runtime call, argument or vector store. Preserve preceding companding/count/state/polarity stores.
+
+Correction to screen interpretation: **warmup is shared and dynamic in the original**, not mode-selected. Both paths join2c46a;2c47f reloads sessionFlag each iteration and calls V90 or V92 generator. Baseline source already matches that behavior. Do not test captured-mode or fixed-generator warmups from call count alone. Local source generators have no writes to sessionFlag but external calls/owner aliasing do not justify deleting the observed recheck.
+
+Prediction: arm-local DIL source may preserve two call sites under retained profile. Falsifier: remerge into one indicates call multiplicity is a compiler source/profile/CFG artifact, not a missing source statement. Complete479B exact body and all bystander/data/binding audits required for adoption; no declaration/register/slot/type/flag permutations. Rawbaseline first, retained Gentoo/compiler-selected assembler commands and reproduction define recorded. No source/header production change, V34/re excluded, no mutation/fuzz runtime.
+
+Completed: two valid cells, 56 emitted-body comparisons, raw baseline reproduced and both controls raw-identical. The candidate retains two calls through postreload and merges at flow2. No gain/loss/adoption. See `batch-cpp-p3-reset-results.md`; this domain is closed absent a new independent original operand/owner/CFG witness.
