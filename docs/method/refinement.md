@@ -4066,3 +4066,21 @@ recover23 stores in offset/width/value order, but leave a2-byte size residual
 and five changed nonexact bystanders. Review them all; do not claim exactness
 from the recovered component or invent a new type/extent from a register base.
 [Timing reset control](../v34-timing-reset-results.md).
+
+### Cross entry captures with return ownership before blaming call layout (F11883–F11884)
+
+An ordinary blob call versus a sibling jump can encode source result ownership.
+VPcmV34GetCurrentRxBitRate needs BOTH its observed unconditional pointer
+captures and a shared result to recover90B EXACT. Each isolated axis misses;
+56 full-TU bystanders stay unchanged.01.rtl shows load lifetimes, but all cells
+have call_placeholder;02.sibling reveals which alternative actually survives.
+No flag, return-type guess or register constraint is needed. Crossed controls
+on TX keep RX exact but fail TX, so this is not a universal recipe. Close that
+negative domain and retain all full-TU data/exports and caller audits.
+[Rate control evidence](../v34-rate-lifetime-results.md).
+
+A real interior base does not uniquely determine a containing type or size.
+VPcm's obj+4 accesses are witnessed, but full-object constructor clearing and
+tagV34Object parameter mangling give no independent control extent. Preserve
+named fields and existing maps until a typed-callee/extent witness exists;
+do not fabricate a nested header solely to reproduce ADD4 (F11882).

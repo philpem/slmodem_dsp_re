@@ -137105,3 +137105,54 @@ objects, zero failed; V34RX raw-identical to selected control. Exact-name set
 stays1075/1852 (118176 bytes), zero gains/losses; refreshed1074-name ratchet
 passes. Static anchors10038/285 suites are attached/unique. This is a measured
 component recovery, not a new whole-function byte-exact gain.
+
+## F11882. Object+4 is a measured interior base, not yet a typed control extent
+
+Review six small VPcm/INFO/Ja accessors and Create: ADD/LEA4 is explicit and
+its fields are mapped, but no independent control parameter or extent is
+established. Create clears the full object from0 for0xac4c, then receiver0x264
+for0x79c; neither determines a +4 subobject size. Six mangled entry points name
+tagV34Object*. This does not prove no subobject existed, only that a new map
+would be premature. Correct the SetMaxBlockLength comment that called this a
+free addressing artifact and asserted no second object. Earlier Ja evidence
+already separates source anchor lifetime from a layout/type claim. No new
+partial map/offset view/register forcing. `docs/v34-rate-lifetime-results.md`.
+
+## F11883. Eager session pointers plus a shared result recover the RX-rate accessor
+
+Four complete Gentoo TU controls cross original p3548/pac18 entry capture and
+one final int result.74B baseline→84B capture-only→92B result-only; both90B
+EXACT including the named getBitRate relocation. Only this function changes;
+56 TU bystanders raw-identical, metadata/nontext data/BSS/relocations agree,
+text positions shift. Original guards and conditional dereferences/call stay;
+no prototype/type/constant/flag changes.01.rtl discriminates pointer loads
+before guard;02.sibling retains one sibling-call marker in early-return cells
+and none in common-result cells. All initially contain call_placeholder, so
+initial RTL alone cannot identify the eventual sibling choice.29 stage pairs/
+58 streams compared. No syntax uniqueness or original profile claim.
+`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+
+## F11884. The same TX result/owner cross fails, preserving the RX positive
+
+Original TX fallback directly reads object txbits; source captures ratecfg
+base early. Direct fallback alone202B, common result alone236B, both218B,
+retained217B against213B. The four cells on exact RX seed preserve that gain
+but cannot close TX; no TX source adoption or size-only carrier. Combined
+RX/TX controls total13 full-TU compiles/741 verdicts, all raw baselines,
+metadata/data/bindings pass, three independent full-object repeats agree.
+Only RX/TX target bodies ever change; no exact losses. No pointer/return/literal
+synonym sweep follows this finite closed domain.
+`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+
+F11883 static apparatus: initial anchors correctly flag9 detached locators;
+retarget the same9 operations and scope all10 RX records explicitly. All3
+fallback mutants still change both default paths. Labels/count unchanged;
+no mutation execution or snapshot re-recording is claimed. The initial red
+structural run is retained; final repaired gate reported separately.
+
+F11882-F11884 final validation: repaired phase388/0 plus all structural gates;
+production300/300/0, complete VPcmV34Main raw-identical to adopted control.
+Static285 suites/10038 anchors pass; no mutation execution/snapshot update.
+Whole-tree exact1076/1852,118266 original bytes: RX accessor+90 bytes, zero
+losses;674 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED. Refreshed1074-name ratchet
+passes, unchanged. Modern portability not claimed.
