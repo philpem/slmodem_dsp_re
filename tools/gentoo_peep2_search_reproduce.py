@@ -31,6 +31,8 @@ def main():
     parser.add_argument('--fax-controls', type=Path, default=ROOT/'build/fax-quality-use/V29r_int')
     parser.add_argument('--constructor-controls', type=Path, default=ROOT/'build/v90-parameters-ratchet-ab')
     parser.add_argument('--output', type=Path, default=ROOT/'build/gentoo-peep2-search-witnesses')
+    parser.add_argument('--manifest', type=Path,
+                        help='JSON list of saved-input controls: label, directory, compiler, input')
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -65,6 +67,21 @@ def main():
         ('ctor-post', args.constructor_controls/'post-434-retype', 'cc1plus', 'V90Parameters.ii'),
         ('ctor-pre-repeat', args.constructor_controls/'pre-434-retype', 'cc1plus', 'V90Parameters.ii'),
     ]
+    if args.manifest:
+        declared = json.loads(args.manifest.read_text())
+        assert isinstance(declared, list) and declared, 'empty control denominator'
+        controls = []
+        labels = set()
+        for entry in declared:
+            assert set(entry) == {'label', 'directory', 'compiler', 'input'}
+            label, compiler, input_name = entry['label'], entry['compiler'], entry['input']
+            assert label and Path(label).name == label and label not in ('.', '..')
+            assert label not in labels and compiler in PINS
+            assert Path(input_name).name == input_name and input_name.endswith(('.i', '.ii'))
+            source = (ROOT/entry['directory']).resolve()
+            assert source.is_relative_to(ROOT) and 're' not in source.relative_to(ROOT).parts
+            labels.add(label)
+            controls.append((label, source, compiler, input_name))
     observer = ROOT/'tools/gentoo_peep2_search_trace.py'
     rows = []
     for label, source, compiler, input_name in controls:

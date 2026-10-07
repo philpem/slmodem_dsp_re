@@ -140,7 +140,8 @@ FloatFIR::process(const float *in, float *out, unsigned int count)
 	unsigned int n;
 	int i, next;
 
-	if (count == 0)
+	/* The original consumes count at both boundaries (F11876). */
+	if (count-- == 0)
 		return;
 
 	h = history;
@@ -160,7 +161,7 @@ FloatFIR::process(const float *in, float *out, unsigned int count)
 			next = i;
 			floatfir_carry_tail(h, n, bufferLength);
 		}
-	} while (--count != 0);
+	} while (count-- != 0);
 
 	index = next;
 }

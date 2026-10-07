@@ -136963,3 +136963,45 @@ shape controls pass. `make phase`:388 passed/0 failed, structural checks green;
 `make tc`:300 sources/300 objects/0 failed. Strict1074/1852 is unchanged.
 `docs/fax-extra-argument-recovery.md`;
 tools/fax_extra_argument_audit.py.
+
+## F11875. Current register-only targets split between direct scratch selection and earlier allocation
+
+Four unchanged complete Gentoo TUs raw-reproduce production:24 shared bodies.
+Five raw/traced/saved object triples include an independent V27_SDM repeat;
+80 searches/878 candidate visits satisfy the existing availability/cursor
+model, all enclosing replacements accepted. _iir_filter_create and SDMv27_init
+make zero searches; the latter has identical27flow2/28peephole2/30rnreg patterns.
+FloatFIR::reset makes one memory-subtraction split, selectingECX at cursor2;
+the register survives renaming and is the reference's remainingEDX difference.
+dp_v22_init makes three symbol-to-memory splits: selectedECX/EAX/EAX becomes
+finalEDX/EAX/ECX after renaming, against originalECX/EDX/EAX. Therefore count
+scratch opportunities separately from final register colors. Targets have one
+RTL body; other C++ clone declarations are not mapped to emitted clone symbols.
+No original cursor/source preimage or strict gain is claimed. Manifest replay
+extends the read-only observer without modifying compiler state. Existing1410
+searches/two positive pairs/two repeats/four refusal controls still pass.
+`docs/gentoo-scratch-target-results.md`;
+tools/gentoo_scratch_targets_audit.py.
+
+## F11876. FloatFIR consumes the entry count before owner loads and again at the tail
+
+The earlier while-postdecrement control retained an independent zero guard,
+creating a redundant second entry test after member loads. New bounded control
+instead consumes count in the EXISTING pre-load guard and postdecrements at
+the tail: reference0x46b1f/0x46bdb and candidate each have two DEC/CMPUINT_MAX
+sentinels. Zero count still returns before member/buffer access; for positive
+unsignedC, the guard leavesC-1 and the tail executes exactlyC iterations.
+89 nonbranch/noncounter/nonpadding instructions match the retained processor;
+all7 bystanders,8 symbol sizes/positions,bindings,nontext data and relocations
+agree. Baseline is a negative sentinel control. Processor remains287B,
+BYTES244 becomesBYTES222, no strict gains/losses; this is original countdown
+recovery, not register fitting or an exact processor claim. Period gate and
+production raw equality are recorded in the linked results after adoption.
+`docs/floatfir-consumed-count-results.md`;
+tools/floatfir_consumed_count_audit.py.
+
+F11876 validation: production FloatFIR object raw-identical to the audited
+control; period phase388/0 and structural checks green; Gentoo300/300 objects,
+0 failures. Two extra raw/traced/saved object triples validate14 searches/218
+candidates with identical function/generator/cursor/selection history, so this
+counter recovery does not move reset's scratch choice. No strict gain claimed.

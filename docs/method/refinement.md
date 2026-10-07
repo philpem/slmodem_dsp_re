@@ -3998,3 +3998,24 @@ the affected argument outsideTM. Keep these categories explicit and preserve
 the negative dispatch/result experiments rather than presenting this as a
 successful CFG or whole-function preimage (F11874).
 tools/fax_extra_argument_audit.py.
+
+### Separate direct scratch selection from allocation, then recover the counter boundary (F11875–F11876)
+
+A register-only verdict does not identify a compiler pass. Current complete-TU
+traces find zero searches in _iir_filter_create and SDMv27_init, one in
+FloatFIR::reset and three in dp_v22_init. FloatFIR's selected scratch survives
+renaming; the registration wrapper's final colors differ from its selected
+scratch colors. Use the actual event stream and successive RTL stages before
+attributing either to inherited scratch state. C++ clone declaration names
+can repeat: do not equate them with emitted C1/C2 symbol ownership.
+[Target boundary](../gentoo-scratch-target-results.md).
+
+A separate zero guard plus while(count--) can leave a redundant test after
+member loads even when the source guards the right boundary. Original DEC and
+UINT_MAX tests at both boundaries justify consuming count in the existing
+pre-load guard, then postdecrementing at the tail. This preserves the zero-input
+boundary and recovers FloatFIR's original counter structure while leaving the
+body's other work and seven bystanders unchanged. It produces no exact gain;
+do not turn that measured component recovery into a register/profile claim or
+broaden the domain to guard/variable permutations.
+[Counter recovery](../floatfir-consumed-count-results.md).
