@@ -24,17 +24,80 @@
  * reach outside this file's own blast radius (F2157/F3002); such fields
  * carry their derived name in a `-- derived: NAME, withheld (F10123)` note
  * for whoever next takes on that file.
+ *
+ * Issue #260 wave 8 reconciled the two partial maps of this memory into one:
+ * the object's own readings of the 0x79c bytes (its rx queue and ring, the
+ * word above them, the exported accessors' timing pair, and the two filter
+ * sub-objects) moved in here, replacing `pad_000`, `pad_238` and `pad_2a8`,
+ * and the object embeds this struct whole. The comments below carry both
+ * offset spellings -- receiver-relative first, then `(obj +0xNNN)` -- for
+ * the members that moved.
  */
 
 #ifndef DSPLIB_V34RECV_H
 #define DSPLIB_V34RECV_H
+
+#include "dsplib/v34filt.h"	/* struct v34_timing / v34_equalizer, nested */
+#include "dsplib/v34rx.h"	/* struct v34_queue, V34_RXQ_RING: the rxq   */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct v34_receiver {
-	unsigned char pad_000[0x120 - 0x0];
+	/*
+	 * +0x000 (obj +0x264).  The receive datapump queue, moved here
+	 * whole from the object's own readings (issue #260 wave 8).  The
+	 * ring's length is not in the object -- each function hardcodes
+	 * its own end -- so `struct v34_queue` declares one entry and this
+	 * struct carries the rest immediately after as `rxq_ring_tail`,
+	 * running to +0x10c (V34_RXQ_END); see v34rx.h for the constants.
+	 */
+	struct v34_queue rxq;				/* +0x000 (obj +0x264) */
+	int             rxq_ring_tail[V34_RXQ_RING - 1];	/* +0x010, to +0x10c */
+	/*
+	 * +0x10c (obj +0x370).  The burst window: `rxreadqueue` moves
+	 * V34_QUEUE_BURST entries off the ring into it, `V34agc` gains them
+	 * in place and leaves `rx_samples` just past them, and `rxtiming`
+	 * writes its own `out_count` (= 4) gained samples from the same
+	 * address.  The same four shorts are `fskdemodulate`'s input
+	 * (V34hshak.c's T3M_RX_FSKIN), RX_PHASE2_CALL's tone_detect window
+	 * and the t72 ladder's burst.  Issue #260 wave 8 left the storage
+	 * unnamed because no field spanned all three readings; the wave-9
+	 * recovery names the storage itself, which is what every reader
+	 * already agrees on.
+	 */
+	short           burst[4];	/* +0x10c (obj +0x370) */
+	/*
+	 * +0x114..+0x11c (obj +0x374..+0x380).  Eight bytes with no access
+	 * anywhere in the 1.2 MB object -- a whole-object displacement scan
+	 * at 0x114/0x118 finds nothing reachable from a V.34 base.  Not a
+	 * claim that the bytes are dead, only that nothing this tree can
+	 * see reads or writes them.
+	 */
+	unsigned char   unmapped_0114[0x11c - 0x114];
+	/*
+	 * +0x11c (obj +0x380), the high half of the two-word shift register
+	 * the TRN2 path fills (`short_382` below is the low half): the step
+	 * takes the low two bits of this word into the top of the next
+	 * through `(a & 3) << 14 | (low >> 2)`.  Every load in the object is
+	 * `movzwl` and the shifts are logical, so it is unsigned -- which is
+	 * also what lets the T4_U16 sites read it as itself.  Offset-named:
+	 * the arm's own comment ("the shift register TRN2 fills") says what
+	 * it does, not what it means downstream.
+	 */
+	unsigned short  short_380;      /* +0x11c (obj +0x380) */
+	/*
+	 * +0x11e (obj +0x382).  Two readings of one halfword (issue #260
+	 * wave 9): it is the LOW HALF of the TRN2 shift register whose high
+	 * half is `short_382`'s neighbour `short_380` -- the TRN2 arm reads
+	 * and right-shifts it -- and it is also the word the two Indicate
+	 * entry points store 0x89b0/0x8990 into (0 when a Jd arrives with
+	 * the silence-scrambler flag set).  The stores were the whole of
+	 * what wave 8 knew; the TRN2 reading is the wave-9 addition.  The
+	 * two agree on no meaning, so the field keeps its offset name.
+	 */
+	short           short_382;      /* +0x11e (obj +0x382) */
 	short           vectpp_idx;      /* +0x120 receiver: the cursor into
 					  `vectpp[]` during phase 3 (was f120) */
 	unsigned short  flags;           /* +0x122 */
@@ -88,15 +151,32 @@ struct v34_receiver {
 	short           rms_idx;         /* +0x19c the cursor into `rms_buf[]`,
 					  wrapping at 36 (F10123) */
 	/*
-	 * +0x19e.  A one-shot latch, not an RMS scalar: `dpskinit` and its
-	 * re-arm clear it alongside `rms_idx`, but `V34hshak.c`'s
-	 * `RX_PHASE2_CALL` step reads it as "have we already passed this gate
-	 * once" -- the first time the phase-2 symbol counter passes 0x125f it
-	 * is still zero, so the retrain tone-detector is skipped and the
-	 * field is set to 1; every call after that it runs the detector for
-	 * real.  See findings F10123/F9480.
+	 * +0x19e (obj +0x402).  One cell, one latch, two readings -- the
+	 * wave-8 reconciliation of this field and the object-level
+	 * `fsk_inhibit` (issue #260).
+	 *
+	 * The blob's whole lifecycle of the cell is five sites: dpskinit
+	 * (0x5f54d) and v34modeminit (0x5f89d) clear it alongside `rms_idx`
+	 * at +0x19c; v34handshak's RX_PHASE2_CALL step tests it at 0x662fc
+	 * and, the first time the phase-2 counter passes 0x125f, sets it to
+	 * 1 at 0x6631a -- from then on that step runs tone_detect over the
+	 * FSK input window at +0x10c and flags V34_RX_FLAG_RETRAIN when the
+	 * tone is found; and fskdemodulate (0x73d1f, reading it through the
+	 * object as +0x402, `cmpw $0x0`) returns without slicing -- not
+	 * even running fskdetect -- while it is set. No other access in the
+	 * 1.2 MB object.
+	 *
+	 * One set-site and two readers, and both consequences fire from the
+	 * one latch: passing the gate arms the retrain tone detector and
+	 * retires the FSK bit slicer over the same input window. So the
+	 * cell's one meaning is the gate itself, and `retrain_gate` is the
+	 * name kept (the reading with the writer lifecycle behind it --
+	 * F10123/F9480). The other reading is recorded: while the gate is
+	 * set, the FSK receiver's bit path is switched off -- the old
+	 * `fsk_inhibit` name described that consequence alone and had no
+	 * writer anywhere in the tree.
 	 */
-	short           retrain_gate;    /* +0x19e */
+	short           retrain_gate;    /* +0x19e (obj +0x402) */
 	int             trn_ref_sr;      /* +0x1a0 the TRN reference
 					  generator's own scrambler register,
 					  distinct from `scrambler_sr` below
@@ -158,12 +238,19 @@ struct v34_receiver {
 	short           ppm_count;       /* +0x1ce   symbols seen in that
 					  window so far (was f1ce) */
 	/*
-	 * +0x1d0.  Reported onward via `VPcmV34LogTimingOffset` as
-	 * `timing_offset * 10`; `TimingV34` computes it every
-	 * `report_interval` symbols by converting the accumulated timing
-	 * slip to parts per million.  See findings F10123/F9480.
+	 * +0x1d0.  TimingV34's running timing-offset value, in parts per
+	 * million: setTimingStateParameters computes it as the slip over
+	 * the window converted to ppm and stores it here (its own local is
+	 * `ppm`), and states 5 and 8 report it to the V.90 side through
+	 * VPcmV34LogTimingOffset as this times 10.  Was `timing_offset`
+	 * until wave 8: the object's exported accessors getTimingOffset /
+	 * getTimingPhase read the int pair at +0x238/+0x23c below, whose
+	 * names are the blob's own symbols (0x71b0/0x71c0), and the two
+	 * fields are different quantities -- this one is the receiver's
+	 * working value, that one is what the C++ side is handed. See
+	 * findings F10123/F9480.
 	 */
-	short           timing_offset;   /* +0x1d0 */
+	short           timing_ppm;      /* +0x1d0 */
 	/*
 	 * +0x1d2.  A symbol count, not a baud rate: `setTimingStateParameters`
 	 * loads it from the frame length over 8, and `TimingV34` uses it as
@@ -326,7 +413,17 @@ struct v34_receiver {
 	short           dwell_limit;     /* +0x232 (was f232) */
 	short           timing_p_gain;   /* +0x234 (was f234) */
 	short           timing_i_gain;   /* +0x236 (was f236) */
-	unsigned char pad_238[0x240 - 0x238];
+	/*
+	 * +0x238 and +0x23c (obj +0x49c and +0x4a0), moved here from the
+	 * object's map (issue #260 wave 8).  Named from the object's own
+	 * exported accessors `getTimingOffset` and `getTimingPhase` -- the
+	 * same class of evidence as a format string. What the fields mean
+	 * beyond that is not claimed: the two accessors are the only
+	 * readers anywhere in the object (exported API with no internal
+	 * caller) and no writer has been traced to them.
+	 */
+	int             timing_offset;   /* +0x238 (obj +0x49c) */
+	int             timing_phase;    /* +0x23c (obj +0x4a0) */
 	short           demod_i;         /* +0x240 this half-baud's demodulated
 					  I (was f240) */
 	short           demod_q;         /* +0x242   and Q (was f242) */
@@ -346,7 +443,19 @@ struct v34_receiver {
 	int             sig_energy_acc;  /* +0x24c the received-point energy
 					  accumulator paired with sig_energy
 					  (was f24c) */
-	unsigned char pad_250[0x252 - 0x250];
+	/*
+	 * +0x250 (obj +0x4b4).  Offset-named after the object offset the
+	 * transmitter's arms reach it by (`TX1_RX250`).  The rate-selection
+	 * completion writes `equerr` or `preerr` into it; the early finish
+	 * reads it back as the mark the equaliser error is measured
+	 * against, and the rate ladder reads it as the level a rate has to
+	 * stay under.  Signed, and forced: every load in the object is
+	 * `movswl` (0x655ab, 0x672b1, 0x675bc), so the ladder's thresholds
+	 * are built on the sign-extended mark.  Both readings are the
+	 * transmitter's; what it means downstream is not established, so
+	 * the name stays neutral.
+	 */
+	short           short_4b4;      /* +0x250 (obj +0x4b4) */
 	short           bad_thresh;            /* +0x252 */
 	short           bad_long_thresh;            /* +0x254 */
 	short           good_thresh;            /* +0x256 */
@@ -383,7 +492,15 @@ struct v34_receiver {
 	 * and four mutation fixtures.
 	 */
 	short           agc_start_gain;            /* +0x262 */
-	unsigned char pad_264[0x266 - 0x264];
+	/*
+	 * +0x264 (was `pad_264`, issue #260 wave 11).  The handshake's arm 49
+	 * writes a halfword here (V34hshak.c's `T3M_RX_F264`) and t72's
+	 * probe-done arm reads its LOW BYTE -- a written, read halfword the
+	 * alignment audit below had left alone because its two bytes are not
+	 * what natural alignment would insert.  What it counts is not
+	 * established, so the name stays neutral.
+	 */
+	short           short_264;            /* +0x264 */
 	/*
 	 * +0x266.  `demapFrame`'s sub-frame counter, stepped by `decoderv34`.
 	 * See findings F10123/F9480.
@@ -434,7 +551,21 @@ struct v34_receiver {
 	 * findings F10123/F9480.
 	 */
 	const short *   fir_coeff;       /* +0x2a4 */
-	unsigned char pad_2a8[0x798 - 0x2a8];
+	/*
+	 * +0x2a8 (obj +0x50c).  The timing-recovery filters, `struct
+	 * v34_timing` in v34filt.h: the derivation `v34_object_timing`
+	 * carried until issue #260 embedded it in the object, and wave 8
+	 * nests it here -- a member, not an overlay. Its 0x124 extent and
+	 * the equaliser's below it consume what `pad_2a8` used to spell
+	 * out, exactly.
+	 */
+	struct v34_timing timing;	/* +0x2a8 (obj +0x50c) */
+	/*
+	 * +0x3cc (obj +0x630).  The equaliser, `struct v34_equalizer` in
+	 * v34filt.h; its 0x3cc extent is asserted in V34RX.c and ends
+	 * exactly at rtncount below.
+	 */
+	struct v34_equalizer equalizer;	/* +0x3cc (obj +0x630) */
 	/*
 	 * +0x798.  A saturating up/down counter over how far the equaliser
 	 * output moves between symbols, from receiver's two retrain strings.
@@ -447,36 +578,43 @@ struct v34_receiver {
 };
 
 /*
- * PAD-REGION AUDIT (finding F10146).  Five of this struct's `pad_NNNN` gaps
- * were removed as pure compiler-alignment artefacts: in each case the field
- * immediately before the pad ends on a 2-mod-4 byte boundary and the field
- * immediately after needs 4-byte alignment (a pointer or an `int`), so the
- * gap the pad used to spell out explicitly is exactly what GCC's own default
- * alignment inserts once the pad member is deleted -- no `#pragma pack` or
- * packed attribute applies to this struct, so ordinary C alignment rules
- * govern it.  Proven two ways, matching CLAUDE.md's rule for this workstream:
- * the `offsetof` assertions below hold the following field at its ORIGINAL
- * offset with the pad gone, and a whole-object disassembly search (every
- * V.34 receive/handshake/AGC/timing function that touches this struct, plus
- * a `objdump -d` grep of the full 1.2MB blob for the exact byte displacements
- * the removed pads used to cover) found no instruction anywhere that reads or
- * writes those bytes.
+ * PAD-REGION AUDIT (finding F10146, updated issue #260 wave 8).  Five of this
+ * struct's `pad_NNNN` gaps were removed as pure compiler-alignment artefacts:
+ * in each case the field immediately before the pad ends on a 2-mod-4 byte
+ * boundary and the field immediately after needs 4-byte alignment (a pointer
+ * or an `int`), so the gap the pad used to spell out explicitly is exactly
+ * what GCC's own default alignment inserts once the pad member is deleted --
+ * no `#pragma pack` or packed attribute applies to this struct, so ordinary C
+ * alignment rules govern it.  Proven two ways, matching CLAUDE.md's rule for
+ * this workstream: the `offsetof` assertions below hold the following field
+ * at its ORIGINAL offset with the pad gone, and a whole-object disassembly
+ * search (every V.34 receive/handshake/AGC/timing function that touches this
+ * struct, plus a `objdump -d` grep of the full 1.2MB blob for the exact byte
+ * displacements the removed pads used to cover) found no instruction anywhere
+ * that reads or writes those bytes.
  *
  * Removed: pad_1b2[2] (between phase_wrap and carrier), pad_1d6[2] (between
  * f1d4 and timing_frac), pad_1f6[2] (between cloop_sin and
  * cloop_integrator), pad_21e[2] (between err_symcount and equerr_accum),
  * pad_226[2] (between preerr and preerr_acc).
  *
- * Eleven other pad_NNNN regions in this struct were checked the same way and
+ * Wave 8 dissolved three more, not as alignment gaps but by naming what is
+ * in them: pad_000 (the object's rx queue, ring continuation, and the word
+ * below them -- moved in whole from the object's own readings), pad_238
+ * (the exported accessors' timing pair), and pad_2a8 (the two filter
+ * sub-objects, whose 0x124 + 0x3cc extents tile the pad exactly, ending at
+ * rtncount). The extent asserts below and in V34RX.c hold the new members at
+ * the offsets the pads covered.
+ *
+ * Seven other pad_NNNN regions in this struct were checked the same way and
  * LEFT ALONE: either the gap does not match what natural alignment would
  * insert for the following field (pad_184, pad_1a8, pad_1c2, pad_1dc,
- * pad_22c, pad_238, pad_250, pad_264, pad_270), or the pad sits at the very
- * start of the struct with no preceding field to derive alignment from
- * (pad_000) or is a multi-hundred-byte span that is obviously not an
- * alignment gap (pad_2a8).  None of those is a claim their bytes are
- * unread -- only that, unlike the five above, deleting them would not
- * reproduce the object's layout by natural alignment alone, so they stay
- * explicit per this workstream's decision rule.
+ * pad_22c, pad_270), or no modelled content for them has
+ * been established (pad_264 has since been modelled as `short_264`, issue
+ * #260 wave 11). None of those is a claim their bytes are unread -- only
+ * that, unlike the five above, deleting them would not reproduce the
+ * object's layout by natural alignment alone, so they stay explicit per this
+ * workstream's decision rule.
  *
  * BARE-FIELD AUDIT (findings F10132, F10176).  `f1d4`, `f1e4`, `f1e8`,
  * `f1f0` and `f22e` are this struct's last five bare `fNNNN` members;
@@ -515,15 +653,26 @@ V34RECV_ASSERT_OFF(timing_frac,      0x1d8);
 V34RECV_ASSERT_OFF(cloop_integrator, 0x1f8);
 V34RECV_ASSERT_OFF(equerr_accum,     0x220);
 V34RECV_ASSERT_OFF(preerr_acc,       0x228);
+/* Wave 8: the moved-in members, at the offsets the pads they replaced had. */
+V34RECV_ASSERT_OFF(rxq,              0x000);
+V34RECV_ASSERT_OFF(short_382,        0x11e);
+V34RECV_ASSERT_OFF(timing_offset,    0x238);
+V34RECV_ASSERT_OFF(timing_phase,     0x23c);
+V34RECV_ASSERT_OFF(timing,           0x2a8);
+V34RECV_ASSERT_OFF(equalizer,        0x3cc);
+/* Wave 9: the burst window, the TRN2 shift-register high half, the TX1 mark. */
+V34RECV_ASSERT_OFF(burst,            0x10c);
+V34RECV_ASSERT_OFF(short_380,        0x11c);
+V34RECV_ASSERT_OFF(short_4b4,        0x250);
 
 typedef char v34recv_size[(sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
 #endif
 
 /*
- * The adaptive equaliser sits at +0x3cc, which is `struct v34_equalizer` --
- * declared in v34filt.h, which this header must not include, since the
- * dependency runs the other way.  Reach it with a cast at the one place that
- * needs it.
+ * The object-side offset of the equaliser, +0x3cc -- the same offset the
+ * `equalizer` member above sits at (the extent assert in V34RX.c pins the
+ * two together). v34diag.cpp and V34RX.c still reach it with this constant,
+ * and the mutation fixture v34vdiag.json pins that spelling.
  */
 #define V34_RX_EQ_OFFSET	0x3cc
 

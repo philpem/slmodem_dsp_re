@@ -370,7 +370,7 @@ main(void)
 		for (b = 0; b < sizeof(oa); b++) {
 			/* Every pointer: each side holds its own addresses. */
 			unsigned skip[][2] = {
-			  { __builtin_offsetof(struct v34_object, rxq)
+			  { __builtin_offsetof(struct v34_object, receiver.rxq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
 			  { __builtin_offsetof(struct v34_object, txq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
@@ -403,10 +403,10 @@ main(void)
 			    ob.txq.rd - ob.txq.ring, 0);
 		diff_eq_int("txq wr", oa.txq.wr - oa.txq.ring,
 			    ob.txq.wr - ob.txq.ring, 0);
-		diff_eq_int("rxq rd", oa.rxq.rd - oa.rxq.ring,
-			    ob.rxq.rd - ob.rxq.ring, 0);
-		diff_eq_int("rxq wr", oa.rxq.wr - oa.rxq.ring,
-			    ob.rxq.wr - ob.rxq.ring, 0);
+		diff_eq_int("rxq rd", oa.receiver.rxq.rd - oa.receiver.rxq.ring,
+			    ob.receiver.rxq.rd - ob.receiver.rxq.ring, 0);
+		diff_eq_int("rxq wr", oa.receiver.rxq.wr - oa.receiver.rxq.ring,
+			    ob.receiver.rxq.wr - ob.receiver.rxq.ring, 0);
 		diff_eq_int("txq primed with 32", oa.txq.count, 0x20, 0);
 	}
 	rc |= diff_end();
@@ -1346,9 +1346,9 @@ main(void)
 				oa.txq.ring[b] = ob.txq.ring[b] =
 				    (int)(short)(b * 2777 - 12000);
 			oa.txq.count = ob.txq.count = 0x30;
-			oa.rxq.count = ob.rxq.count = 0;
+			oa.receiver.rxq.count = ob.receiver.rxq.count = 0;
 			for (b = 0; b < V34_RXQ_RING; b++)
-				oa.rxq.ring[b] = ob.rxq.ring[b] = 0;
+				oa.receiver.rxq.ring[b] = ob.receiver.rxq.ring[b] = 0;
 
 			dsplibs_debug_level = lvl;
 			ref_dsplibs_debug_level = lvl;
@@ -1416,8 +1416,8 @@ main(void)
 						    * 100000 + b);
 			}
 			diff_eq_int("serrint rxq wr",
-				    (long)(oa.rxq.wr - oa.rxq.ring),
-				    (long)(ob.rxq.wr - ob.rxq.ring),
+				    (long)(oa.receiver.rxq.wr - oa.receiver.rxq.ring),
+				    (long)(ob.receiver.rxq.wr - ob.receiver.rxq.ring),
 				    (long)mode * 100 + feed * 10 + far);
 			diff_eq_int("serrint txq rd",
 				    (long)(oa.txq.rd - oa.txq.ring),
@@ -1533,7 +1533,7 @@ main(void)
 			ra->rx_blocks = rb->rx_blocks = 20;
 			ra->rtncount = rb->rtncount = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
-			oa.baud_rate = ob.baud_rate = 40;
+			oa.ratecfg.rx_baud = ob.ratecfg.rx_baud = 40;
 
 			for (it = 0; it < 10; it++) {
 				long tag = ((long)fl * 100
@@ -1805,9 +1805,9 @@ main(void)
 			rb = (struct v34_receiver *)((char *)&ob + 0x264);
 
 			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
-			oa.baud_rate = ob.baud_rate = 400;
+			oa.ratecfg.rx_baud = ob.ratecfg.rx_baud = 400;
 			ra->pllcnt = rb->pllcnt = states[si];
-			ra->timing_offset = rb->timing_offset = (short)d0;
+			ra->timing_ppm = rb->timing_ppm = (short)d0;
 			ra->dwell_limit = rb->dwell_limit = 0;
 			ra->timing_p_gain = rb->timing_p_gain = 0;
 			ra->timing_i_gain = rb->timing_i_gain = 0;
@@ -1863,7 +1863,7 @@ main(void)
 						   : -700 + k * 30);
 
 			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
-			oa.baud_rate = ob.baud_rate = 400;
+			oa.ratecfg.rx_baud = ob.ratecfg.rx_baud = 400;
 			oa.v90_timing_offset = ob.v90_timing_offset = 0;
 			ra->pllcnt = rb->pllcnt = (short)st;
 			ra->slow_ramp = rb->slow_ramp = skip;
@@ -1875,7 +1875,7 @@ main(void)
 			ra->symbol_period = rb->symbol_period = 0x3e80;
 			ra->ppm_acc = rb->ppm_acc = 0;
 			ra->ppm_count = rb->ppm_count = 0;
-			ra->timing_offset = rb->timing_offset = 0;
+			ra->timing_ppm = rb->timing_ppm = 0;
 			ra->report_interval = rb->report_interval = 40;
 			ra->timing_frac = rb->timing_frac = 0;
 			ra->timing_integrator = rb->timing_integrator = 0;
@@ -1921,7 +1921,7 @@ main(void)
 					    (long)rb->timing_frac, tag);
 				diff_eq_int("tv int",  (long)ra->timing_integrator,
 					    (long)rb->timing_integrator, tag);
-				diff_eq_int("tv ppm",   ra->timing_offset, rb->timing_offset, tag);
+				diff_eq_int("tv ppm",   ra->timing_ppm, rb->timing_ppm, tag);
 				diff_eq_int("tv dwell", ra->dwell_count, rb->dwell_count, tag);
 				diff_eq_int("tv phase", ra->phase_frac, rb->phase_frac, tag);
 			}
@@ -2721,13 +2721,13 @@ main(void)
 			ra->slow_ramp = rb->slow_ramp = 0;
 			ra->ppm_acc = rb->ppm_acc = 0;
 			ra->ppm_count = rb->ppm_count = 0;
-			ra->timing_offset = rb->timing_offset = 0;
+			ra->timing_ppm = rb->timing_ppm = 0;
 			ra->report_interval = rb->report_interval = 40;
 			ra->timing_frac = rb->timing_frac = 0;
 			ra->timing_integrator = rb->timing_integrator = 0;
 			ra->dwell_count = rb->dwell_count = 0;
 			oa2.role = ob2.role = 0x65;
-			oa2.baud_rate = ob2.baud_rate = 400;
+			oa2.ratecfg.rx_baud = ob2.ratecfg.rx_baud = 400;
 			oa2.v90_timing_offset = ob2.v90_timing_offset = 0;
 
 			setInitialPhase(&oa2);

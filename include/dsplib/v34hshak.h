@@ -142,10 +142,24 @@ extern "C" {
 #define V34HS_RXSTATE_OFF	0x3594
 #define V34HS_TXSTATE_OFF	0x3596
 
+/*
+ * ISSUE #260 WAVE 11: these three stay LITERALS on purpose.  This header
+ * precedes `struct v34_object` (v34fsk.h includes it for
+ * `struct v34_bitsource`), so `__builtin_offsetof` cannot be spelled here --
+ * and their sites are frame reads (`T3M_U16(f, V34HS_TXSTATE_OFF)`), which
+ * wave 6 measured as `f->m` loads distinct from `f->obj` and deliberately
+ * left helpers.  The compile-time anchor is V34hshak.c's `HS_OFF_ASSERT`
+ * trio against `microstate`/`rxstate`/`txstate` (finding F632), kept instead
+ * of tautological defines for F637's reason: v34hstxblock.json mutates
+ * `#define T3M_F0E4C`, and a define whose text a mutation rewrites must stay
+ * a literal.
+ */
+
 struct v34_object;
 
 /*
- * `hs_get`, `hs_put` and `hs_setstate` are NO LONGER DECLARED HERE.
+ * `hs_get` and `hs_put` are NOT DECLARED HERE (the state setters live in
+ * v34hstx1_arms.h too).
  *
  * The blob defines none of them: its `v34handshak` inlines the whole
  * read/print/store closure (finding F11506).  They are now `static inline`
@@ -701,6 +715,10 @@ struct v34_bitsource {
 	short	avail0;				/* +0x2a */
 	int	acc0;				/* +0x2c */
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34bitsource_size[(sizeof(struct v34_bitsource) == 0x30) ? 1 : -1];
+#endif
 
 /**
  * @brief Set the far-end echo canceller's bulk delay, and decide whether it

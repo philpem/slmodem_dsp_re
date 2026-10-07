@@ -123,10 +123,11 @@ txinit(void *objp)
 	sysdep_memset(obj->txq.ring, 0, V34_TXQ_RING * sizeof(int));
 
 	/* The receive queue is emptied outright. */
-	obj->rxq.count = 0;
-	obj->rxq.rd = obj->rxq.ring;
-	obj->rxq.wr = obj->rxq.ring;
-	sysdep_memset(obj->rxq.ring, 0, V34_RXQ_RING * sizeof(int));
+	obj->receiver.rxq.count = 0;
+	obj->receiver.rxq.rd = obj->receiver.rxq.ring;
+	obj->receiver.rxq.wr = obj->receiver.rxq.ring;
+	sysdep_memset(obj->receiver.rxq.ring, 0,
+			      V34_RXQ_RING * sizeof(int));
 
 	/* And the pre-filter's 42-tap history. */
 	sysdep_memset(obj->prefilter.state, 0,
@@ -163,7 +164,7 @@ txmit(void *objp)
 	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
 		    | (unsigned short)obj->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
-		(struct v34_modulator *)((char *)obj + 0x1450), sym, local);
+		v34_object_modulator(obj), sym, local);
 
 	if (n > 0) {
 		int *wr = txq->wr;

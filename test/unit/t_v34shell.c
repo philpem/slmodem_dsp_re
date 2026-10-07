@@ -1427,9 +1427,11 @@ mv_next:		;
 			cb = (struct v34_ratecfg *)((char *)&ob + V34_RATECFG);
 
 			oa.role = ob.role = (short)((c & 1) ? 0x65 : 0x12);
-			oa.info_rates = ob.info_rates = (short)info;
+			oa.msgrec[4].word[0] =
+				ob.msgrec[4].word[0] = (unsigned short)info;
 			oa.info_caps  = ob.info_caps  = (short)caps;
-			oa.rate_mask  = ob.rate_mask  = (short)mask;
+			oa.msgrec[4].word[1] =
+				ob.msgrec[4].word[1]  = (short)mask;
 			oa.caps_flags = ob.caps_flags = (short)flags;
 			oa.ptc = ob.ptc = (int)(c * 13 + 64);
 			oa.v90_receiver = ob.v90_receiver = (int)((c >> 7) & 1);

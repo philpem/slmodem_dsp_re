@@ -416,7 +416,7 @@ static const struct poke pk_rt_flag[] = {
 };
 
 static const struct poke pk_rt_run[] = {
-	{ O_BAD,	2, 51 },	/* baud_rate 100, so half is 50 */
+	{ O_BAD,	2, 51 },	/* rx_baud 100, so half is 50 */
 	PK_END
 };
 

@@ -434,12 +434,12 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	oa.tx_flags = ob.tx_flags = tx_flags;
 
 	oa.p3548 = vp[0];    ob.p3548 = vp[1];
-	oa.pac3c = cfgbuf[0]; ob.pac3c = cfgbuf[1];
+	oa.pac3c = (_tagModemParameters *)cfgbuf[0]; ob.pac3c = (_tagModemParameters *)cfgbuf[1];
 	oa.pac18 = ob.pac18 = 0;
 
 	oa.v90_receiver = ob.v90_receiver = state;
 	oa.k56flex_receiver = ob.k56flex_receiver = 0;
-	oa.short_382 = ob.short_382 = constel;
+	oa.receiver.short_382 = ob.receiver.short_382 = constel;
 	*(short *)((char *)&oa + OB_TXSTATE) = 20;
 	*(short *)((char *)&ob + OB_TXSTATE) = 20;
 	((unsigned char *)&oa)[OB_BACKCLEAR] = 0;

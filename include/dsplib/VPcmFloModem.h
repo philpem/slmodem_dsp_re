@@ -713,8 +713,14 @@ public:
 	 * 0x7f68 and not 0x7f5c: the three of them plus three bytes of
 	 * alignment fill the object exactly.
 	 *
-	 * `byte_7f5c` stays offset-named: nothing this tree has read touches
-	 * it beyond the constructor's clear.
+	 * `entranceFilterApplied` is named by the reader that decides it:
+	 * `VPcmV34Create`'s entrance-filter arm writes it from the
+	 * configuration's +0x70 mode (-1 asks the hardware, 1 forces it on,
+	 * anything else off) and the same function's closing diagnostic
+	 * prints it back -- "VPcmFlo: YES! entrance filter applied = %d".
+	 * The constructor's clear was, until that reader was found, the only
+	 * touch; the file comment on this class used to record exactly that,
+	 * and it was true of this tree's own survey at the time.
 	 *
 	 * `ecMode`/`ecRampCounter` are named: `runPcmModem` reads and writes
 	 * both, and `VPCM_EC_RAMP_MODE`/`_START`/`_SENTINEL` below are the
@@ -730,11 +736,12 @@ public:
 	 * below). Usage inference: the object never prints either field's
 	 * name.
 	 */
-	unsigned char byte_7f5c;			/* +0x7f5c         */
+	unsigned char entranceFilterApplied;	/* +0x7f5c         */
 
 	/*
-	 * +0x7f5d..+0x7f5f was `pad_7f5d[3]`: `byte_7f5c` ends at +0x7f5d and
-	 * `ecMode` below is a 4-byte-aligned `unsigned int` at +0x7f60, so
+	 * +0x7f5d..+0x7f5f was `pad_7f5d[3]`: `entranceFilterApplied` ends at
+	 * +0x7f5d and `ecMode` below is a 4-byte-aligned `unsigned int` at
+	 * +0x7f60, so
 	 * natural alignment inserts exactly these three bytes with the member
 	 * deleted -- proved by adding `VPCM_OFF(ecMode, 0x7f60, ecmode)` to
 	 * VpcmFloModem.cpp. Zero readers/writers anywhere in the object

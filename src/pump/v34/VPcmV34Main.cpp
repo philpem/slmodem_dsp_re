@@ -27,12 +27,18 @@
 #include <stdlib.h>
 
 #include "dsplib/K56FlexFloModem.h"
+#include "dsplib/V90BitsToSymbol.h"	/* V90Mapper::bitsPerFrame     */
+#include "dsplib/V90Mapper.h"
 #include "dsplib/V90ConstellationDesigner.h"
+#include "dsplib/V92BitsToSymbol.h"	/* V92Transmitter::K           */
 #include "dsplib/V92EchoCanceller.h"
+#include "dsplib/V92Modulator.h"	/* phase, bitsToSymbol         */
+#include "dsplib/V92Transmitter.h"
 #include "dsplib/VPcmFloModem.h"
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/modem_params.h"	/* pac3c's complete type: flags3 etc. */
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34info.h"
 #include "dsplib/v34pcm_tables.h"
@@ -54,13 +60,6 @@
 #include "dsplib/mohdet.h"
 
 /*
- * The session object's MP block.  Six flag bytes and seven shorts, read as a
- * group and never written; the field names come from the diagnostics the
- * function prints out of them -- "V90mp - drn", "type", "trellisState",
- * "nonlinearEncoder", "constellationShaping" and "rateMask" -- so five of the
- * six bytes are named by the object and the sixth, at +5, is not.
- */
-/*
  * The two receiver counters as `indicateJaTransmission` reaches them: the
  * object anchors a pointer at `obj + 4` and reads them at +0x248 and +0x24c
  * through it, so
@@ -76,8 +75,11 @@
  * somebody will permute it.
  */
 #define OB4_ANCHOR		4
-#define OB4_V90_RECEIVER	0x248		/* v34fsk.h's v90_receiver     */
-#define OB4_K56_RECEIVER	0x24c		/* v34fsk.h's k56flex_receiver */
+#define OB4_V90_RECEIVER	((int)__builtin_offsetof(struct v34_object, \
+						v90_receiver) - OB4_ANCHOR)
+#define OB4_K56_RECEIVER	((int)__builtin_offsetof(struct v34_object, \
+						k56flex_receiver) - OB4_ANCHOR)
+	/* The offsets are the members' less the anchor (issue #260 wave 11). */
 
 /*
  * And tie them to the header, because nothing else does: `make phase`'s
@@ -94,28 +96,16 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
     (int)__builtin_offsetof(struct v34_object, k56flex_receiver)) ? 1 : -1];
 #endif
 
-#define SESS_MP			0x1744
-#define SESS_PCM		0x610c
-#define SESS_GATE		0x6120
-
-/* Inside the block the session hands over. */
-#define MP_TYPE			0x00
-#define MP_DRN			0x01
-#define MP_TRELLIS		0x02
-#define MP_NONLINEAR		0x03
-#define MP_SHAPING		0x04
-#define MP_FLAG5		0x05
-#define MP_RATEMASK		0x06
-
-/* The PCM receiver's two words, and the configuration's one. */
-#define PCM_SENS		0x04f8
-#define PCM_RATE		0x04fc
-#define CFG_RATE		0x003c
+/*
+ * The session object's MP block, the V.90 received-modulation-parameter
+ * image, is `VPcmFloModem`'s own `mpType`..`mpH3Imag` members now
+ * (VPcmFloModem.h); `getMPrecvdBits` reads them by name.  The session
+ * pointer's other former offsets are members too: +0x610c is
+ * `modem.params`, +0x6120 `info0Layout`, +0x175c `modem.demodulator`,
+ * +0x6bd0 the echo canceller and +0x6f5c the ANSam detector.
+ */
 
 /* Where the answer goes. */
-#define OB_INFO			0xaa0c		/* seven shorts follow  */
-#define OB_CAPS			0xaa3c
-#define OB_CAPS_PTR		0xaa6c
 #define OB_DMA			0x2a68
 
 /*
@@ -129,28 +119,18 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
  * And the rest of the session object, for `VPcmV34InitiateRetrain` below.
  *
  * `p3548` IS A `VPcmFloModem`, and this function is what settles it: it hands
- * that pointer straight to `VPcmFloModem::setPcmSessionType` as `this`.  Every
- * offset below then agrees with include/dsplib/VPcmFloModem.h --
- * `SESS_GATE` is its `info0Layout`, `SESS_PCM` its `modem.params` and
- * `SESS_DEMOD` its `modem.demodulator` -- which is three independent
- * confirmations of a map that was built without this function.
+ * that pointer straight to `VPcmFloModem::setPcmSessionType` as `this`.  The
+ * offsets it used to reach by hand all agree with
+ * include/dsplib/VPcmFloModem.h and are its members now -- `info0Layout`
+ * at +0x6120, `modem.params` at +0x610c, `modem.demodulator` at +0x175c,
+ * the echo canceller at +0x6bd0, the ANSam detector at +0x6f5c and
+ * `verificationStatus` at +0x6fb4 -- which is independent confirmation of a
+ * map that was built without this function.
  *
- * Spelled as offsets all the same, the way v34pcmif.c spells the same chain:
- * `SESS_ECHO` and `SESS_RETRAIN_FLAG` fall inside that header's `pad_6130`
- * and naming them there would be a claim its owner has not checked.
+ * K56_ENABLED stays an offset, because `pac18`'s twenty bytes have no typed
+ * home (see below).
  */
-#define SESS_DEMOD		0x175c		/* V90Modem::demodulator     */
-#define SESS_ECHO		0x6bd0		/* a V92EchoCanceller, `lea` */
-#define SESS_TONE		0x6f5c		/* a GenericToneDetector     */
-#define SESS_RETRAIN_FLAG	0x6fb4		/* an int, cleared           */
-
-/*
- * +0x208 of the demodulator is a `V90ConstellationDesigner *`, and the
- * mangling of the call target is what says so.  Neither the pointer nor the
- * demodulator is modelled as a struct here, for the reason v34pcmif.c gives
- * for the neighbouring `+0x20c -> +0x8c` chain.
- */
-#define DEMOD_DESIGNER		0x0208
+#define K56_ENABLED		0x08
 
 /*
  * The K56flex object at `pac18`.  A byte at +8 gates the whole K56flex arm,
@@ -159,61 +139,38 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
  * no members it can bound, and adding one would change a `sizeof` its own
  * fixture relies on.  v34info.c reads `pac18 + 0xc` the same way.
  */
-#define K56_ENABLED		0x08
 
 /*
- * The configuration object at `pac3c`.  +0x3c, +0x44, +0x50 and +0x54 are
- * already described in v34fsk.h; these are the six this function adds.
- *
- * +0x50 is the same byte `chkForceBaudRate` reads bits 5..7 of as the maximum
- * V.34 baud rate index.  Bit 3 of it is set here and by nothing else read so
- * far, so the byte is a bag of unrelated fields rather than one number.
+ * The configuration at `pac3c` is `struct _tagModemParameters`
+ * (modem_params.h), and its fields are that struct's members now --
+ * `sessionFlags` (bit 3 V.90, bit 4 K56flex), `qcFlags` (bit 4 quick
+ * connect, bit 7 V.92Lite), `unnamed_0051`, `modeFlags` (bit 3 the
+ * sensitive-ISP latch), `vpcmRateLimitLow`/`High` (+0x30/+0x34),
+ * `maxRate` (+0x3c), `unnamed_0044` (+0x44), `unnamed_0060` (+0x60),
+ * `hwDelay` (+0x64), `dmaDelay` (+0x68), `codecType` (+0x54) and
+ * `unnamed_0070` (the entrance-filter mode).  The three bit-mask
+ * constants below survive because they are BITS, not offsets.
  */
-#define CFG_FLAGS		0x00		/* bit 3 v90, bit 4 flex     */
-#define CFG_MIN_RATE		0x30		/* bits per second, unsigned */
-#define CFG_MAX_RATE		0x34
-#define CFG_ISP			0x50		/* bit 3: a sensitive ISP    */
-#define CFG_MIN_LEVEL		0x60		/* signed, biased by 0x30    */
-#define CFG_FILT_DELAY		0x64		/* "params initial delay"    */
-#define CFG_EXT_DELAY		0x68		/* "ext delay"               */
-
 #define CFG_FLAG_V90		0x08
 #define CFG_FLAG_FLEX		0x10
 #define CFG_ISP_SENSITIVE	0x08
 
 /*
- * +0x02, and the same shape as +0x50 above: a bag of bits and not a number.
- * `V34GiveINFO1dBits` tests it by its SIGN -- `cmpb $0x0; js` -- so bit 7 set
- * bars the V.92Lite retrain and everything else permits it, while
- * `VPcmV34Progress` tests bit 5 of the very same byte for something else.
- * Offset-named for that reason; neither reader names the byte as a whole.
- */
-#define CFG_V92LITE		0x02
-
-/*
- * The V.34 object's own fields, for the regions v34fsk.h leaves unmapped.
- * OFFSET-NAMED except for the two the object itself names:
+ * The V.34 object's own fields.  The former OB_FILT_DELAY, OB_FAC00,
+ * OB_F35A4, OB_FAC1C, OB_F0254 and OB_F2218 are members now -- `filtdelay`,
+ * `retrain_req`, `short_35a4`, the embedded `retrainReqDet`, the DC
+ * estimator's dc_count/dc_est/dc_acc (whose +0x254 extent the OB_F0254
+ * "short, short, then an int" record was) and `hs_mode` (issue #260
+ * wave 11).
  *
- *   OB_FILT_DELAY     "V34 filtdelay set to %d", printed by this function
- *                     out of the field it has just stored.
- *   OB_FORCE_LOW_BAUD `probeselect` opens with `if (*(short *)(m + 0x359a))
- *                     goto rate_2400`, jumping over the whole symbol-rate
- *                     ladder (src/pump/v34/V34hshak.c).  This function is the
- *                     only writer read so far and it sets it exactly when the
- *                     maximum bit-rate index came out as 1 -- 2400 bit/s,
- *                     which the lowest symbol rate is the only way to carry.
- *                     Two sites, one meaning; the name is descriptive and the
- *                     derivation is the pair.
+ * `force_low_baud` (a v34fsk.h member since wave 9) `probeselect` opens
+ * with `if (obj->force_low_baud != 0) goto rate_2400`, jumping over the
+ * whole symbol-rate ladder (src/pump/v34/V34hshak.c).
+ * `VPcmV34InitiateRetrain` is the only writer read so far and it sets it
+ * exactly when the maximum bit-rate index came out as 1 -- 2400 bit/s,
+ * which the lowest symbol rate is the only way to carry.  Two sites, one
+ * meaning; the name is descriptive and the derivation is the pair.
  */
-#define OB_RECEIVER		0x0264
-#define OB_F0234		0x0234		/* in v34fsk.h's clock group */
-#define OB_F0254		0x0254		/* short, short, then an int */
-#define OB_F2218		0x2218		/* v34handshakinit clears it */
-#define OB_FORCE_LOW_BAUD	0x359a		/* short; see above          */
-#define OB_F35A4		0x35a4		/* signed short, scales F0254 */
-#define OB_FILT_DELAY		0xaa7c		/* short; the object's name  */
-#define OB_FAC00		0xac00		/* byte                      */
-#define OB_FAC1C		0xac1c		/* 32 bytes, cleared below   */
 
 /* The datapump codes, which are the modulation numbers themselves. */
 #define DP_KEEP			0
@@ -348,21 +305,22 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * written: there is no variable shift.
  */
 
-/* The handshake's transmit state machine; see V34hshak.c. */
-#define OB_TXSTATE		0x3596
+/*
+ * The handshake's transmit state machine is `txstate`, a v34fsk.h member
+ * since wave 9; `v90Phase34`, `v90RateReneg(Silence)` and `k56FlexPhase34`
+ * read and write it by name.
+ */
 
 /*
  * +0xabfe.  A byte `v34handshakinit` clears and this sets, on the one path
  * whose diagnostic names it: "tx buffer backward clear is enabled".  It is
  * inside `unmapped_abfb` in `struct v34_object`, so it is reached by offset.
  */
-#define OB_BACKWARD_CLEAR	0xabfe
 
 /*
  * +0xaa86, printed as `period` beside `tx->symcnt` by case 3's diagnostic.
- * That is `V34_RATECFG + 2`; see `struct v34_ratecfg`.
+ * That is `ratecfg.period`; see `struct v34_ratecfg`.
  */
-#define OB_PERIOD		0xaa86
 
 /*
  * The negotiated configuration at `pac3c`; see v34fsk.h.
@@ -374,7 +332,6 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * Two batches wrote into this file in parallel and picked the same name for
  * two things; finding F325 is what that cost.
  */
-#define P34_CFG_FLAGS		0x50
 #define P34_CFG_BACKWARD_CLEAR	0x04
 
 /*
@@ -465,9 +422,9 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * independent reader (v34rx.h, and `v34FreezeEcho` is its writer), and
  * nothing about an echo canceller is a detector of anything.  That is
  * inference, which is CLAUDE.md's weakest rank, and it is why the byte itself
- * keeps its offset.
+ * keeps its offset name (`flags3` in modem_params.h; the byte is
+ * reached as a member now and only the BIT stays a constant).
  */
-#define CFG_FLAGS03		0x03
 #define CFG_SAS_DETECT		0x04
 
 
@@ -716,23 +673,26 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 
 /*
  * The transmit chain the two PCM arms walk, which is TWO DIFFERENT OBJECTS
- * read at the same two shapes.  Neither is modelled anywhere in this tree, so
- * these are offsets and not fields:
+ * read at the same two shapes.  Both are modelled now, and the offsets are
+ * their members:
  *
- *     6fc7  83 7a 2c 03   cmpl $0x3,0x2c(%edx)    the gate, both arms
- *     6ff1  8b 4a 40      mov  0x40(%edx),%ecx    V.90: the frame record
- *     7057  8b 42 4c      mov  0x4c(%edx),%eax    V.92: the frame record
- *     6ff8  69 48 04 ..   imul $0x1f40,0x4(%eax)  and its +0x04, both arms
+ *     6fc7  83 7a 2c 03   cmpl $0x3,0x2c(%edx)    the gate: V90Modulator::
+ *                                                 `state` / V92Modulator::
+ *                                                 `phase`, both arms
+ *     6ff1  8b 4a 40      mov  0x40(%edx),%ecx    V.90: the frame record,
+ *                                                 V90Modulator::bitsToSymbol
+ *     7057  8b 42 4c      mov  0x4c(%edx),%eax    V.92: the frame record,
+ *                                                 V92Modulator::bitsToSymbol
+ *     6ff8  69 48 04 ..   imul $0x1f40,0x4(%eax)  and its +0x04, both arms:
+ *                                                 V90Mapper::bitsPerFrame /
+ *                                                 V92Transmitter::K
  *
  * The last is one indirection deeper than it looks: +0x40 and +0x4c hold a
  * pointer to a pointer, and the count is at +0x04 of what the SECOND one
- * addresses.
+ * addresses -- V90BitsToSymbol's `mapper` and V92BitsToSymbol's
+ * `transmitter`, each with the count at its own +0x04.
  */
-#define PCMTX_STATE		0x2c
 #define PCMTX_READY		3
-#define PCMTX_V90_FRAME		0x40
-#define PCMTX_V92_FRAME		0x4c
-#define PCMTX_FRAME_BITS	0x04
 
 /*
  * 0x7530.  The K56flex transmit rate is a CONSTANT in this object -- there is
@@ -848,71 +808,34 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 #define PROG_U8(o, off)		(*(unsigned char *)((unsigned char *)(o) + (off)))
 
 /*
- * +0x0238  Samples this session has processed, masked to 31 bits on every
- * block.  `datapumpv34` reads it at its true offset and v34fsk.h's note on
- * `unmapped_0234` records the two other readers.
+ * The members whose sites read as members now (issue #260 wave 11):
+ * O_HDLENGTH/O_HDSET are `phase3_hd_length`/`hd_set` (the first named by the
+ * object's own "phase3halfDuplexLength = %d symbols (baud %d)", blob 0xcb950;
+ * the second usage inference, set with the length and cleared by three arms);
+ * O_RUNNING is `samples_valid`; O_DCCOUNT/O_DCEST/O_DCACC are
+ * dc_count/dc_est/dc_acc ("Estimated DC = %d  (acc = %d)", blob 0xcb868);
+ * O_MODEMUP is `modem_up`; O_PCMCHOSEN is `pcm_chosen`; O_MOHLIMIT/O_MOHCOUNT
+ * are `moh_limit`/`moh_timer` ("Modem On Hold approved by phase2 (ISP timeout
+ * is %d seconds)"); OB_MOH_W4/W6 are `short_abe4`/`short_abe6` and
+ * OB_MOH_FLAG `moh_path_sel`; O_ANSAMLATE is `ansam_late` (blob 0xcba0c, the
+ * "later case" it picks).
+ *
+ * O_P2STATE stays a constant: +0xabff is `p2_state`, a SIGNED byte whose C++
+ * side reads are zero-extending loads, so the sites keep `PROG_U8` and the
+ * offset is the member's own (issue #260 wave 11).
  */
-#define O_SAMPLES	0x238
+#define O_P2STATE	((int)__builtin_offsetof(struct v34_object, \
+							p2_state))
 /*
- * +0x0240 and +0x0244.  The first is named by the object -- "On
- * PHASE2_COMPLETE: added Silence = %d, p2DelayCntr = %d" -- and the second by
- * "phase3halfDuplexLength = %d symbols (baud %d)".
+ * +0xac1c, the retrain detector's eleven words -- `struct tag_retrainReqDet`
+ * (mohdet.h), whose members the arms read as members now (issue #260 wave
+ * 11); "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_
+ * RATIO_SHIFT = %d energyOut = %d" named the counter and the two energies.
+ * O_NOTCH_S3 stays for its one UNSIGNED read (`PROG_U16` of a signed member,
+ * finding F11350's use-site case); the offset is the member's own.
  */
-#define O_P2DELAY	0x240
-#define O_HDLENGTH	0xa244
-/*
- * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
- * loop subtracts from every sample, and the accumulator averaged into it
- * every 128 samples.  "Estimated DC = %d  (acc = %d)" names the last two.
- */
-#define O_DCCOUNT	0x254
-#define O_DCEST		0x256
-#define O_DCACC		0x258
-/* +0x0262.  Zero means the object is not running and the function returns. */
-#define O_RUNNING	0x262
-/* +0xa248.  Set with the half-duplex length and cleared by three arms. */
-#define O_HDSET		0xa248
-/* +0x0e4c.  A short set to 1 by each of the three "modem is up" arms. */
-#define O_MODEMUP	0xe4c
-/* +0xabc4.  Non-zero once the session has settled which PCM modem it is. */
-#define O_PCMCHOSEN	0xabc4
-/*
- * +0xabd8 and +0xabdc.  "Modem On Hold approved by phase2 (ISP timeout is %d
- * seconds)" names the first; the second counts samples against it.  -1 is
- * "no limit" and is tested for as such.
- */
-#define O_MOHLIMIT	0xabd8
-#define O_MOHCOUNT	0xabdc
-/*
- * +0xabe4, +0xabe6 and +0xabf9, the three words of the modem-on-hold request
- * `VPcmV34InitMOH` clears or stores and nothing here reads.  Offsets, not
- * names: no string and no reader says what any of them carries.
- */
-#define OB_MOH_W4	0xabe4
-#define OB_MOH_W6	0xabe6
-#define OB_MOH_FLAG	0xabf9
-/* +0xabe9.  Gates the late ANSam case on an outgoing call. */
-#define O_ANSAMLATE	0xabe9
-/* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
-#define O_CLEARREQ	0xabfe
-#define O_P2STATE	0xabff
-/*
- * +0xac1c, the retrain detector's eleven words.  Four filter states, three
- * coefficients, a signal counter and two energies with a block counter --
- * "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_RATIO_
- * SHIFT = %d energyOut = %d" names the last three and the counter.
- */
-#define O_NOTCH_S0	0xac1c
-#define O_NOTCH_S1	0xac1e
-#define O_NOTCH_S2	0xac20
-#define O_NOTCH_S3	0xac22
-#define O_NOTCH_CNT	0xac24
-#define O_NOTCH_K0	0xac28
-#define O_NOTCH_K1	0xac2a
-#define O_NOTCH_K2	0xac2c
-#define O_NOTCH_EIN	0xac30
-#define O_NOTCH_EOUT	0xac34
-#define O_NOTCH_BLK	0xac38
+#define O_NOTCH_S3	((int)__builtin_offsetof(struct v34_object, \
+						retrainReqDet.x2))
 /*
  * +0xac40 to +0xac48, the three words `requestOutputSampleClear` writes and
  * nothing here reads.  v34fsk.h's `unmapped_ac40` is the twelve bytes this
@@ -932,18 +855,26 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 
 /* The `+0x6c0c` block of VPcmFloModem, read as floats by the V.PCM arm. */
 #define SESS_OUTBLOCK		0x6c0c
-/* `V92Phase2Info::shortPhase2Local`, cleared through the session. */
-#define SESS_V92_P2INFO		0x612c
 
-/* `pac3c`'s flag bytes, `orb`/`andb`/`testb` sites. */
-#define CFG_FLAGS3		3
+/* `pac3c`'s flag-bit values (`flags3`/`qcFlags`/`flags51` are the members;
+ * CFG_FLAGS3/CFG_FLAGS2/CFG_FLAGS51/CFG_SILENCE were the byte/int offsets
+ * and are members now, issue #260 wave 11). */
 #define CFG_FLAG3_RETRAIN	4
 #define CFG_FLAG3_PHASE2	2
-#define CFG_FLAGS2		2
 #define CFG_FLAG2_SAMELINE	0x20
-#define CFG_FLAGS51		0x51
 #define CFG_FLAG51_CLEAR	1
-#define CFG_SILENCE		0x6c
+
+/*
+ * +0x44 of `pac3c`, `unnamed_0044` in modem_params.h: a transmit power
+ * reduction in dB, written 32-bit by the host and read here as a SHORT
+ * (`movswl 0x44`, clamped to [-10,+7]).  The member is the `int` the object's
+ * own 32-bit store proves, so the member keeps its width and this reader
+ * keeps a raw halfword read of the member's own offset (issue #260 wave 11);
+ * punning through `unsigned char *` is what keeps the strict-aliasing story
+ * the same as the object's.
+ */
+#define CFG_MINPWR_DB	((int)__builtin_offsetof(struct _tagModemParameters, \
+							unnamed_0044))
 
 /* The retrain detector's three thresholds and its block length. */
 #define NOTCH_BLOCK		0x40
@@ -1130,7 +1061,7 @@ V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
 /* And the receiver trio, reached as `obj + 0x264 + 0x258`. */
 #define V34PCMMAIN_RXASSERT(name, field, off) \
 	typedef char v34pcmmain_rxoff_##name[ \
-		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		((int)(__builtin_offsetof(struct v34_object, receiver) \
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
@@ -1145,7 +1076,8 @@ V34PCMMAIN_RXASSERT(good_run, good_run, 0x4c0);
  * embedded V92EchoCanceller must still fit inside what VPcmFloModem declares.
  */
 typedef char v34pcmmain_echo_fits[
-	(SESS_ECHO + (int)sizeof(V92EchoCanceller)
+	((int)__builtin_offsetof(VPcmFloModem, echoCanceller)
+	 + (int)sizeof(V92EchoCanceller)
 	 <= (int)sizeof(VPcmFloModem)) ? 1 : -1];
 
 #endif /* 32-bit */
@@ -1263,43 +1195,33 @@ typedef char v34pcmmain_echo_fits[
 
 /*
  * ---------------------------------------------------------------------------
- * And what `VPcmV34Create` adds to the three maps above.  Same rule as the
- * rest of the file: offset-named unless the object names the field itself.
+ * And what `VPcmV34Create` adds.  Same rule as the rest of the file:
+ * offset-named unless the object names the field itself.
  *
- * CFG_ANSPCM_LEVEL and CFG_UQTS ARE THE OBJECT'S OWN NAMES -- "VPcmV34Create:
+ * CFG_ANSPCM_LEVEL and CFG_UQTS WERE THE OBJECT'S OWN NAMES -- "VPcmV34Create:
  * ANSpcm level index is %d" and "VPcmV34Create: Uqts index is %d" are printed
- * out of exactly these two words.  Both are loaded as `int` (a plain 32-bit
+ * out of exactly these two words, now `_tagModemParameters`'s
+ * `unnamed_000c` and `qcIndex`.  Both are loaded as `int` (a plain 32-bit
  * `mov`, not a `movswl`) and both are TRUNCATED TO SHORT at the one place
  * they are used for anything, which is `enterChannelVerification`.
  *
- * CFG_QUICKCONNECT is bit 4 of the byte v34pcmmain already calls CFG_V92LITE
- * for its sign bit and `VPcmV34Progress` reads bit 5 of: a third unrelated
- * reader of one byte, which is why that byte still has no name as a whole.
+ * CFG_QUICKCONNECT is bit 4 of the byte the old CFG_V92LITE named: read for
+ * its sign bit by `V34GiveINFO1dBits`, bit 5 by `VPcmV34Progress` and bit 4
+ * here -- a third unrelated reader of one byte, which is why the byte
+ * (`qcFlags`) still has no name beyond the parameter block's own.
  */
-#define CFG_ANSPCM_LEVEL	0x0c
-#define CFG_UQTS		0x10
-#define CFG_TXMD		0x14		/* scaled by 2.4 into +0xabfc */
-#define CFG_F54			0x54		/* == 14 turns the filter on  */
-#define CFG_ENTRANCE		0x70		/* -1 HW, 1 on, anything off  */
-
-#define CFG_QUICKCONNECT	0x10		/* bit 4 of CFG_V92LITE       */
+#define CFG_QUICKCONNECT	0x10		/* bit 4 of qcFlags           */
 
 /*
- * The session object again.  SESS_PCMTYPE is the same `int` VPcmFloModem.h
- * describes at +0x611c and `setPcmSessionType` writes; SESS_PCMV92 is the
- * V.92 Phase 2 record POINTER at +0x612c, which is not SESS_PCM at +0x610c.
- * SESS_ENTRANCE is the byte the three-way fork at the bottom of the function
- * sets and the last diagnostic reads back -- "entrance filter applied".
+ * The session object again.  The former SESS_PCMTYPE is `pcmSessionType`
+ * (+0x611c, the same `int` `setPcmSessionType` writes); the former
+ * SESS_PCMV92 is the V.92 Phase 2 record POINTER at +0x612c, which is
+ * `v92modem.phase2Info`; the former SESS_IIR is the embedded
+ * `GenericIIR<float,double>` `entFilt` at +0x7f28; and the former
+ * SESS_ENTRANCE is the byte the three-way fork at the bottom of the
+ * function sets and the last diagnostic reads back, `entranceFilterApplied`
+ * at +0x7f5c.
  */
-#define SESS_PCMTYPE		0x611c
-#define SESS_PCMV92		0x612c
-#define SESS_IIR		0x7f28		/* a GenericIIR<float,double> */
-#define SESS_ENTRANCE		0x7f5c
-
-/* Inside the V.92 Phase 2 record. */
-#define PCMV92_QUICK		0x10
-#define PCMV92_FLAG11		0x11
-#define PCMV92_COPIED		0x14		/* four bytes, +0x14..+0x17   */
 
 /*
  * The K56flex object's A-law/mu-law selector at +0xc.  THE OBJECT NAMES IT:
@@ -1310,27 +1232,13 @@ typedef char v34pcmmain_echo_fits[
  */
 #define K56_AORMU		0x0c
 
-/* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
+/* The V.34 object's own, for the regions v34fsk.h leaves unmapped.
+ * OB_FA248/OB_FABC4/OB_FABD4 are members now -- `hd_set`, `pcm_chosen` and
+ * `v90_high_carrier` (issue #260 wave 11); OB_FABD4's "three ints, then two
+ * shorts" note described the row it sat in, not the field, and the member
+ * comment carries the copy derivation. */
 #define OB_F000C		0x000c
-#define OB_F0238		0x0238
-#define OB_F0248		0x0248		/* = 0xfffe8900               */
-#define OB_F0262		0x0262
 #define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
-#define OB_FA248		0xa248
-#define OB_FAA80		0xaa80
-#define OB_FABC4		0xabc4
-#define OB_FABD4		0xabd4		/* three ints, then two shorts */
-#define OB_FABD8		0xabd8
-#define OB_FABDC		0xabdc
-#define OB_FABE4		0xabe4
-#define OB_FABE6		0xabe6
-#define OB_FABFC		0xabfc
-#define OB_FAC12		0xac12
-#define OB_FAC14		0xac14
-#define OB_FAC17		0xac17
-
-/* Inside `struct v34_receiver`, which v34fsk.h leaves as padding at +0x238. */
-#define RX_F238			0x0238
 
 /*
  * ---------------------------------------------------------------------------
@@ -1546,19 +1454,6 @@ typedef char v34pcmcreate_objlen[
 #include "dsplib/vpcm.h"
 
 /*
- * The modulation numbers, which are the same five `VPcmV34InitiateRetrain`
- * takes and `v34pcmmain.cpp` spells out at its own head -- both files are
- * halves of `VPcmV34Main.cpp` and each carries the constants it uses, since
- * splitting one translation unit by language leaves no shared private header
- * to put them in.  56 is not one of `v8dp.h`'s ids and there is no V.8 code
- * for it; finding F1090 has why.
- */
-#define DP_V34			34
-#define DP_K56FLEX		56
-#define DP_V90			90
-#define DP_V92			92
-
-/*
  * The answerer's value of `role`, the same 0x65/0x66 pair `v34modeminit`,
  * `preinitdigital` and `v34handshakinit` all test it against and the same
  * constant v34pcmmain.cpp spells `PCM_ROLE`.  Named here too because the four
@@ -1575,51 +1470,23 @@ typedef char v34pcmcreate_objlen[
 #define PCMIF_PCM_BAUD		8000
 
 /*
- * The configuration byte `VPcmV34RequestDPNotification` clears a bit of, and
- * the bit.  `requestOutputSampleClear` in v34pcmmain.cpp SETS the same bit
- * beside the same three words, and that file spells the pair the same way --
- * both halves of `VPcmV34Main.cpp` carry the constants they use, since
- * splitting one translation unit by language leaves no shared private header.
- *
- * Named rather than written `&= 0xfe` because a mask states a bit position
- * and hides a meaning: this one is "a sample clear is outstanding", which is
- * what the setter and this clearer agree on.  A macro is a compile-time
- * substitution and cannot move code generation, so the name is free.
- */
-#define CFG_FLAGS51		0x51
-#define CFG_FLAG51_CLEAR	0x01
-
-/*
  * The three-link chain `VPcmV34InitiateRateRenegotiation` and
  * `VPcmV34InitiateHangUp` both walk to hand a request to the V.90 side:
- * `p3548` (the session, a `VPcmFloModem *`) to its `V90Demodulator` at
+ * `p3548` (the session, a `VPcmFloModem *`) to its `modem.demodulator` at
  * +0x175c, to that demodulator's `connectionEvaluator` at +0x20c
  * (`include/dsplib/V90Demodulator.h`), to `externalDemandCode` at +0x8c of
  * THAT object (`include/dsplib/V90ConnectionEvaluator.h`, which derives the
  * name from `evaluateConnection`'s own dispatch on it).
  *
- * NAMED HERE, NOT TYPED, AND THAT IS DELIBERATE RATHER THAN LEFT OVER.  Both
- * classes at the far end are fully reconstructed now, but `p3548` stays
- * `void *` in `v34fsk.h` because this is a `.c` file and cannot include a
- * C++ class header, so reaching a real field needs a call across the
- * boundary -- the same move `V34hshak.c` makes into `V34SetINFO1aBits`.
- * That move is right where the object ITSELF calls: `V34SetINFO1aBits` is a
- * real `call` with a relocation.  It is wrong here, because the object is
- * not calling anything.  `tools/dis.py` on the blob at both use sites --
- * 0x655e (`VPcmV34InitiateRateRenegotiation`) and 0x6c16
- * (`VPcmV34InitiateHangUp`) -- shows a plain three- or four-instruction
- * load/load/store with no `call`, and `build/tc_out/src_pump_v34_v34pcmif.c.o`
- * already reproduces those exact instructions.  A wrapper function would put
+ * BOTH CLASSES AT THE FAR END ARE FULLY RECONSTRUCTED, and the chain is
+ * spelled through them as members -- which is what the object emits: the
+ * blob at both use sites, 0x655e (`VPcmV34InitiateRateRenegotiation`) and
+ * 0x6c16 (`VPcmV34InitiateHangUp`), shows a plain three- or
+ * four-instruction load/load/store with no `call`, and member chains are
+ * exactly that.  Nothing here may become a wrapper function: that would put
  * a `call` where the object has none, costing byte identity at a site that
- * currently has it -- the same reasoning `v34pcmmain.cpp` gives for spelling
- * the neighbouring `+0x208` (`DEMOD_DESIGNER`) chain the same way up to the
- * point a real member call is reached.  So the chase stays raw pointer
- * arithmetic through these three NAMED offsets rather than becoming either a
- * guessed struct or a function call.
+ * currently has it.
  */
-#define SESS_DEMOD		0x175c	/* V90Modem::demodulator, a V90Demodulator*  */
-#define DEMOD_CONNEVAL		0x020c	/* V90Demodulator::connectionEvaluator       */
-#define CONNEVAL_EXTERNAL_DEMAND 0x8c	/* V90ConnectionEvaluator::externalDemandCode */
 
 /*
  * ---------------------------------------------------------------------------
@@ -1704,13 +1571,11 @@ typedef char v34pcmcreate_objlen[
  * demodulator -- `VPcmV34GetCurrentRxBitRate` passes exactly that field to
  * `V90Demodulator::getBitRate` -- and +0x20c of the demodulator is
  * `connectionEvaluator`, a `V90ConnectionEvaluator *` whose +0x8c is
- * `externalDemandCode`.  THIS IS STALE AS OF THE PARAGRAPH BELOW: at the time
- * it was written none of the three was reconstructed, so the offsets were
- * spelled out rather than dressed in structs that would be guesses.  All
- * three now ARE reconstructed (`include/dsplib/V90Demodulator.h`,
- * `include/dsplib/V90ConnectionEvaluator.h`), and the macro block above this
- * section is what keeps the chase a pointer walk through named offsets
- * rather than a guess -- see it for why that is still right.
+ * `externalDemandCode`.  All three are reconstructed
+ * (`include/dsplib/V90Demodulator.h`, `include/dsplib/V90ConnectionEvaluator.h`)
+ * and the chain is spelled through them as members -- `modem.demodulator->
+ * connectionEvaluator->externalDemandCode` -- which is the same three loads
+ * the object emits, with no `call` on any path.
  */
 
 /*
@@ -2313,7 +2178,7 @@ typedef char v34pcmcreate_objlen[
 V34PCMIF_ASSERT(txscale, tx_scale,           0x25d4);
 V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
-V34PCMIF_ASSERT(short_382,    short_382,             0x0382);
+V34PCMIF_ASSERT(short_382,    receiver.short_382,    0x0382);
 V34PCMIF_ASSERT(seg_symcount,   seg_symcount,            0x25c0);
 V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
 V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
@@ -2337,7 +2202,7 @@ V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
  */
 #define V34PCMIF_RXASSERT(name, field, off) \
 	typedef char v34pcmif_rxoff_##name[ \
-		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		((int)(__builtin_offsetof(struct v34_object, receiver) \
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
@@ -2506,35 +2371,28 @@ void
 VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	const unsigned char *cfg;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 
-	if (obj->v90_receiver != 0
-	    && *(const int *)(sess + SESS_GATE) != 0) {
-		V90Demodulator *demod =
-		    *(V90Demodulator *const *)(sess + SESS_DEMOD);
+	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
+		V90Demodulator *demod = sess->modem.demodulator;
 
-		cfg = (const unsigned char *)obj->pac3c;
 		demod->constellationDesigner->setMinMaxRates(
-			(unsigned)*(const int *)(cfg + CFG_MIN_RATE),
-			(unsigned)*(const int *)(cfg + CFG_MAX_RATE));
+			obj->pac3c->vpcmRateLimitLow,
+			obj->pac3c->vpcmRateLimitHigh);
 		return;
 	}
 
 	if (obj->k56flex_receiver != 0
 	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
-		cfg = (const unsigned char *)obj->pac3c;
 		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
-			*(const int *)(cfg + CFG_MIN_RATE),
-			*(const int *)(cfg + CFG_MAX_RATE));
+			(int)obj->pac3c->vpcmRateLimitLow,
+			(int)obj->pac3c->vpcmRateLimitHigh);
 		return;
 	}
 
-	cfg = (const unsigned char *)obj->pac3c;
-	obj->rate_min = (int)(*(const unsigned int *)(cfg + CFG_MIN_RATE)
+	obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
 			      / (unsigned)RATE_STEP);
-	obj->rate_max = (int)(*(const unsigned int *)(cfg + CFG_MAX_RATE)
+	obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
 			      / (unsigned)RATE_STEP);
 
 	if (obj->rate_min > 14)
@@ -2549,16 +2407,14 @@ VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 	}
 
 	if (obj->rate_max == 1)
-		*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+		obj->force_low_baud = 1;
 }
 
 void
 VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+	int level = obj->pac3c->unnamed_0060;
 	unsigned idx = (unsigned)level + 0x30u;
 	int thresh;
 
@@ -2572,32 +2428,29 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
 				     "minSigLevel set to %d\n", level, thresh);
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 }
 
 void
 VPcmV34SetDelays(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 
 	{
-		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int delay = obj->pac3c->hwDelay;
 		int biased = (int)((unsigned)delay + 2u);
 
-		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		obj->filtdelay = (short)((biased >> 2) + 0x22);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 filtdelay set to %d "
 					     "(params initial delay = %d)\n",
-					     (int)*(short *)(m + OB_FILT_DELAY),
+					     (int)obj->filtdelay,
 					     delay);
 	}
 
 	{
-		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+		int ext = obj->pac3c->dmaDelay;
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
@@ -2605,10 +2458,8 @@ VPcmV34SetDelays(struct tagV34Object *objp)
 					     (int)obj->dmadelay, ext);
 	}
 
-	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned)*(const int *)
-		    ((const unsigned char *)obj->pac3c + CFG_EXT_DELAY)
-		+ 0x68u);
+	sess->echoCanceller.setEchoDelay(
+		(unsigned)obj->pac3c->dmaDelay + 0x68u);
 }
 
 int
@@ -2634,16 +2485,14 @@ void
 VPcmV34InitiateRateRenegotiation(void *objp, int req)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = &obj->receiver;
 	int want;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
-		unsigned char *sess = (unsigned char *)obj->p3548;
-		unsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);
+		VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+		V90Demodulator *demod = sess->modem.demodulator;
 
-		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
-			 + CONNEVAL_EXTERNAL_DEMAND) = req;
+		demod->connectionEvaluator->externalDemandCode = req;
 		return;
 	}
 
@@ -2691,7 +2540,7 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 	rx->bad_long_run = 0;
 	rx->good_run = 0;
 
-	*(int *)(m + 0x2218) = 5;
+	obj->hs_mode = 5;
 
 	/* The same event `VPcmV34IndicateLocalRRN` exists to count. */
 	obj->rrn_local = (short)(obj->rrn_local + 1);
@@ -2702,36 +2551,30 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	unsigned char *cfg;
+	struct v34_receiver *rx = &obj->receiver;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	unsigned char dp = requestedDp;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Initiating retrain, "
 				     "requested DP is %d\r\n", (int)dp);
 
-	if (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {
+	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
 		V90ConstellationDesigner *cd;
 
-		cfg = (unsigned char *)obj->pac3c;
-		cd = *(V90ConstellationDesigner **)
-		     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);
-		cd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),
-				   *(const unsigned int *)(cfg + CFG_MAX_RATE));
+		cd = sess->modem.demodulator->constellationDesigner;
+		cd->setMinMaxRates(obj->pac3c->vpcmRateLimitLow,
+				   obj->pac3c->vpcmRateLimitHigh);
 	} else if (obj->k56flex_receiver != 0
 		   && ((const unsigned char *)obj->pac18)[K56_ENABLED] != 0) {
-		cfg = (unsigned char *)obj->pac3c;
 		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
-			*(const int *)(cfg + CFG_MIN_RATE),
-			*(const int *)(cfg + CFG_MAX_RATE));
+			(int)obj->pac3c->vpcmRateLimitLow,
+			(int)obj->pac3c->vpcmRateLimitHigh);
 	} else {
-		cfg = (unsigned char *)obj->pac3c;
-
-		obj->rate_min = (int)(*(const unsigned int *)
-				      (cfg + CFG_MIN_RATE) / RATE_STEP);
-		obj->rate_max = (int)(*(const unsigned int *)
-				      (cfg + CFG_MAX_RATE) / RATE_STEP);
+		obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
+				      / RATE_STEP);
+		obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
+				      / RATE_STEP);
 
 		if (obj->rate_min > RATE_INDEX_MAX)
 			obj->rate_min = RATE_INDEX_MAX;
@@ -2740,11 +2583,10 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		if (obj->rate_max > RATE_INDEX_MAX)
 			obj->rate_max = RATE_INDEX_MAX;
 		else if (obj->rate_max == 1)
-			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+			obj->force_low_baud = 1;
 	}
 
 	/* Re-read on all three arms; the object reloads it after each. */
-	cfg = (unsigned char *)obj->pac3c;
 
 	/*
 	 * The disconnect threshold, indexed EXACTLY as
@@ -2760,7 +2602,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * sentence are the same statement reached from two directions.
 	 */
 	{
-		int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+		int level = obj->pac3c->unnamed_0060;
 		unsigned idx = (unsigned)level + 0x30u;
 		int thresh;
 
@@ -2775,7 +2617,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 					     level, thresh);
 	}
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 
 	/*
 	 * `(delay + 2) >> 2` and NOT `(delay + 2) / 4`: the object shifts
@@ -2785,19 +2627,19 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * and undefined on a signed int.
 	 */
 	{
-		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int delay = obj->pac3c->hwDelay;
 		int biased = (int)((unsigned)delay + 2u);
 
-		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		obj->filtdelay = (short)((biased >> 2) + 0x22);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 filtdelay set to %d "
 					     "(params initial delay = %d)\n",
-					     (int)*(short *)(m + OB_FILT_DELAY),
+					     (int)obj->filtdelay,
 					     delay);
 	}
 
 	{
-		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+		int ext = obj->pac3c->dmaDelay;
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
@@ -2805,25 +2647,23 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 					     (int)obj->dmadelay, ext);
 	}
 
-	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
+	sess->echoCanceller.setEchoDelay(
+		(unsigned)obj->pac3c->dmaDelay + 0x68u);
 
 	/*
 	 * The sensitive-ISP notice.  Through `edprintf` and NOT through a
 	 * level gate, unlike the three above -- the same inconsistency
 	 * v34pcmif.c records for `VPcmV34SetTxScale`, and the original's.
 	 */
-	if (*(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)
-			   + PCM_SENS) != 0) {
+	if (sess->modem.params->SENSITIVE_ISP_DETECTED != 0) {
 		edprintf("VPcmV34Main: Notifying Sensitive ISP " "detected...\r\n");
-		cfg = (unsigned char *)obj->pac3c;
-		cfg[CFG_ISP] = (unsigned char)(cfg[CFG_ISP]
-					       | CFG_ISP_SENSITIVE);
+		obj->pac3c->modeFlags = (unsigned char)
+			(obj->pac3c->modeFlags | CFG_ISP_SENSITIVE);
 	}
 
 	obj->is_short = 0;
 	obj->local_short = 0;
-	*(int *)(sess + SESS_RETRAIN_FLAG) = 0;
+	sess->verificationStatus = 0;
 
 	/*
 	 * SWITCH ONE: is the caller allowed what it asked for?  Skipped
@@ -2831,13 +2671,11 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * for -- see the note at the top of the function for why that matters.
 	 */
 	if (obj->v90_receiver == 0 && dp != DP_KEEP) {
-		cfg = (unsigned char *)obj->pac3c;
-
 		switch (dp) {
 		case DP_V34:
 			break;
 		case DP_K56FLEX:
-			if ((cfg[CFG_FLAGS] & CFG_FLAG_FLEX) != 0)
+			if ((obj->pac3c->sessionFlags & CFG_FLAG_FLEX) != 0)
 				break;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
@@ -2847,7 +2685,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 			break;
 		case DP_V90:
 		case DP_V92:
-			if ((cfg[CFG_FLAGS] & CFG_FLAG_V90) != 0)
+			if ((obj->pac3c->sessionFlags & CFG_FLAG_V90) != 0)
 				break;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
@@ -2885,7 +2723,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		break;
 
 	case DP_V90:
-		((VPcmFloModem *)sess)->setPcmSessionType(0);
+		sess->setPcmSessionType(0);
 		obj->v90_receiver = 1;
 		/*
 		 * The one place `status` is read here, and only on this arm.
@@ -2893,11 +2731,11 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		 * line"; this singles 2 out.
 		 */
 		if (obj->status == 2)
-			m[OB_FAC00] = 1;
+			obj->retrain_req = 1;
 		break;
 
 	case DP_V92:
-		((VPcmFloModem *)sess)->setPcmSessionType(1);
+		sess->setPcmSessionType(1);
 		obj->v90_receiver = 1;
 		break;
 
@@ -2914,7 +2752,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 
 	obj->progress = 7;
 	obj->status = 0;
-	*(int *)(m + OB_F2218) = 2;
+	obj->hs_mode = 2;
 
 	rx->bad_run = 0;
 	rx->bad_long_run = 0;
@@ -2925,10 +2763,10 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * The source short is read SIGNED, so a negative one gives a result
 	 * below 10000.
 	 */
-	*(short *)(m + OB_F0254) =
-		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
-	*(short *)(m + OB_F0254 + 2) = 0;
-	*(int *)(m + OB_F0254 + 4) = 0;
+	obj->dc_count =
+		(short)(336 * (int)obj->short_35a4 + 10000);
+	obj->dc_est = 0;
+	obj->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, cleared -- except for a three-short group
@@ -2944,29 +2782,30 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * the pair 0x5a82/0x55fc that distinguishes them is 32768/sqrt(2) and
 	 * a neighbour of it, which is what a quadrature pair looks like -- but
 	 * nothing here reads the block back, so that is an observation and not
-	 * a name.
+	 * a name.  THE BLOCK IS `struct tag_retrainReqDet` (v34fsk.h) and the
+	 * fork is `resetRetrainDetector`'s two coefficient sets.
 	 */
 	{
-		unsigned char *st = m + OB_FAC1C;
+		struct tag_retrainReqDet *st = &obj->retrainReqDet;
 		short role = obj->role;
 
-		*(short *)(st + 0x00) = 0;
-		*(short *)(st + 0x02) = 0;
-		*(short *)(st + 0x04) = 0;
-		*(short *)(st + 0x06) = 0;
-		*(int *)(st + 0x08) = 0;
-		*(int *)(st + 0x14) = 0;
-		*(int *)(st + 0x18) = 0;
-		*(int *)(st + 0x1c) = 0;
+		st->y1 = 0;
+		st->y2 = 0;
+		st->x1 = 0;
+		st->x2 = 0;
+		st->notchDetectSigCnt = 0;
+		st->energyInp = 0;
+		st->energyOut = 0;
+		st->nsamples = 0;
 
 		if (role == 0x65) {
-			*(short *)(st + 0x0c) = 0;
-			*(short *)(st + 0x0e) = 0;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = 0;
+			st->a1_q14 = 0;
+			st->a2_q14 = (short)0x39c3;
 		} else if (role == 0x66) {
-			*(short *)(st + 0x0c) = (short)0x5a82;
-			*(short *)(st + 0x0e) = (short)0x55fc;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = (short)0x5a82;
+			st->a1_q14 = (short)0x55fc;
+			st->a2_q14 = (short)0x39c3;
 		}
 	}
 }
@@ -2975,8 +2814,7 @@ void
 VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	struct v34_receiver *rx = &obj->receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -2987,20 +2825,19 @@ VPcmV34InitiateHangUp(void *objp)
 	obj->rate_max = 0;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
-		unsigned char *sess = (unsigned char *)obj->p3548;
-		unsigned char *demod;
+		VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+		V90Demodulator *demod;
 
-		sess[0x173e] = 1;
-		demod = *(unsigned char **)(sess + SESS_DEMOD);
-		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
-			 + CONNEVAL_EXTERNAL_DEMAND) = 2;
+		sess->clr = 1;
+		demod = sess->modem.demodulator;
+		demod->connectionEvaluator->externalDemandCode = 2;
 		return;
 	}
 
 	v34handshakinit(obj, 2);
 
 	obj->progress = 6;
-	*(int *)(m + 0x2218) = 5;
+	obj->hs_mode = 5;
 
 	rx->bad_run = 0;
 	rx->bad_long_run = 0;
@@ -3012,11 +2849,10 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	       unsigned char flag)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	struct v34_receiver *rx = &obj->receiver;
 
-	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
+	obj->pac3c->unnamed_0003 &= (unsigned char)~CFG_FLAG3_RETRAIN;
 
 	obj->moh_org = message;
 
@@ -3026,19 +2862,19 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 			    "VPcmV34Main: Special bypass - sending MOHreq "
 			    "instead of MOHFRR...\r\n");
 		obj->moh_message = 0;
-		PROG_U8(obj, OB_MOH_FLAG) = 0;
+		obj->moh_path_sel = 0;
 	} else {
 		obj->moh_message = message;
-		PROG_U8(obj, OB_MOH_FLAG) = flag;
+		obj->moh_path_sel = flag;
 	}
 
 	obj->moh_recvd = 5;
 	obj->moh_clrd_sel = (unsigned char)(late != 0);
-	PROG_U8(obj, O_ANSAMLATE) = late;
+	obj->ansam_late = late;
 
 	obj->short_abe2 = 0;
-	PROG_S16(obj, OB_MOH_W6) = 0;
-	PROG_S16(obj, OB_MOH_W4) = 0;
+	obj->short_abe6 = 0;
+	obj->short_abe4 = 0;
 	obj->moh_holdtime_code = 0;
 	obj->moh_limit = 0;
 
@@ -3050,32 +2886,32 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	rx->bad_long_run = 0;
 	rx->good_run = 0;
 
-	PROG_S32(obj, OB_F2218) = 2;
+	obj->hs_mode = 2;
 	obj->status = 0;
 
-	((GenericToneDetector *)(sess + SESS_TONE))->reset();
+	sess->ansam.reset();
 
 	{
-		unsigned char *st = m + OB_FAC1C;
+		struct tag_retrainReqDet *st = &obj->retrainReqDet;
 		short role = obj->role;
 
-		*(short *)(st + 0x00) = 0;
-		*(short *)(st + 0x02) = 0;
-		*(short *)(st + 0x04) = 0;
-		*(short *)(st + 0x06) = 0;
-		*(int *)(st + 0x08) = 0;
-		*(int *)(st + 0x14) = 0;
-		*(int *)(st + 0x18) = 0;
-		*(int *)(st + 0x1c) = 0;
+		st->y1 = 0;
+		st->y2 = 0;
+		st->x1 = 0;
+		st->x2 = 0;
+		st->notchDetectSigCnt = 0;
+		st->energyInp = 0;
+		st->energyOut = 0;
+		st->nsamples = 0;
 
 		if (role == 0x65) {
-			*(short *)(st + 0x0c) = 0;
-			*(short *)(st + 0x0e) = 0;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = 0;
+			st->a1_q14 = 0;
+			st->a2_q14 = (short)0x39c3;
 		} else if (role == 0x66) {
-			*(short *)(st + 0x0c) = (short)0x5a82;
-			*(short *)(st + 0x0e) = (short)0x55fc;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = (short)0x5a82;
+			st->a1_q14 = (short)0x55fc;
+			st->a2_q14 = (short)0x39c3;
 		}
 	}
 }
@@ -3144,8 +2980,7 @@ extern "C" int
 VPcmV34GetCurrentRxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const struct v34_ratecfg *cfg = &obj->ratecfg;
 
 	if (obj->role == PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
@@ -3165,9 +3000,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
-	const unsigned char *tx;
+	const struct v34_ratecfg *cfg = &obj->ratecfg;
 	unsigned int n;
 
 	/*
@@ -3181,25 +3014,23 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 	 */
 	if (obj->role != PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
-			tx = (const unsigned char *)sess->modem.modulator;
-			if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+			V90Modulator *tx = sess->modem.modulator;
+
+			if (tx->state != PCMTX_READY)
 				return 0;
 
-			n = *(const unsigned int *)
-			    (**(const unsigned char *const *const *)
-			       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);
+			n = tx->bitsToSymbol->mapper->bitsPerFrame;
 
 			return (int)(unsigned)(n * 8000u * (1.0f / 6.0f)
 					       + 0.5f);
 		}
 	} else if (obj->status == 2) {
-		tx = (const unsigned char *)sess->v92modem.modulator;
-		if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+		V92Modulator *tx = sess->v92modem.modulator;
+
+		if (tx->phase != PCMTX_READY)
 			return 0;
 
-		n = *(const unsigned int *)
-		    (**(const unsigned char *const *const *)
-		       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);
+		n = tx->bitsToSymbol->transmitter->K;
 
 		return (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);
 	} else if (obj->status == 3) {
@@ -3221,8 +3052,7 @@ VPcmV34GetCurrentRxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->rx_baud;
+	return obj->ratecfg.rx_baud;
 }
 
 int
@@ -3237,8 +3067,7 @@ VPcmV34GetCurrentTxBaudRate(void *objp)
 		return PCMIF_PCM_BAUD;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->baud;
+	return obj->ratecfg.baud;
 }
 
 int
@@ -3253,8 +3082,7 @@ VPcmV34GetCurrentRxCarrier(void *objp)
 		return 0;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->rx_carrier;
+	return obj->ratecfg.rx_carrier;
 }
 
 int
@@ -3269,16 +3097,14 @@ VPcmV34GetCurrentTxCarrier(void *objp)
 		return 0;
 	}
 
-	return ((const struct v34_ratecfg *)
-	    ((unsigned char *)obj + V34_RATECFG))->carrier;
+	return obj->ratecfg.carrier;
 }
 
 int
 VPcmV34GetSNR(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)
-	    ((unsigned char *)obj + 0x264);
+	struct v34_receiver *rx = &obj->receiver;
 	int db = 0;
 	int last = 0;
 
@@ -3310,7 +3136,7 @@ getTimingOffset(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	return obj->timing_offset;
+	return obj->receiver.timing_offset;
 }
 
 int
@@ -3318,7 +3144,7 @@ getTimingPhase(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	return obj->timing_phase;
+	return obj->receiver.timing_phase;
 }
 
 void *
@@ -3400,8 +3226,7 @@ VPcmV34RequestDPNotification(void *objp, int *flag, int *count, int *done)
 	obj->clr_done = 0;
 	obj->clr_count = 0;
 
-	*((unsigned char *)obj->pac3c + CFG_FLAGS51) &=
-		(unsigned char)~CFG_FLAG51_CLEAR;
+	obj->pac3c->unnamed_0051 &= (unsigned char)~CFG_FLAG51_CLEAR;
 
 	return 1;
 }
@@ -3419,10 +3244,10 @@ short
 GetVPcmMinimalTxPowerReduction(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *sess = (unsigned char *)obj->p3548;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	unsigned char *pcm = *(unsigned char **)(sess + 0x610c);
-	short want = *(const short *)(cfg + 0x44);
+	V90Parameters *pcm = sess->modem.params;
+	short want = *(const short *)(cfg + CFG_MINPWR_DB);
 	short red;
 
 	if (want < -10)
@@ -3432,18 +3257,18 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	else
 		red = want;
 
-	if (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0
-	      && *(const int *)(pcm + 0x4f8) == 0)
+	if (!(sess->info0Layout != 0 && obj->v90_receiver != 0
+	      && pcm->SENSITIVE_ISP_DETECTED == 0)
 	    && obj->k56flex_receiver == 0)
 		red = 0;
 
 	if (red > 0) {
-		*(int *)(pcm + 0x4f4) = 0;
+		pcm->HIGH_LEVEL_TX_ACTIVE = 0;
 		obj->echo_decay_start = 0x7d0;
 		obj->echo_decay_fact = 0x7fdf;
 		obj->echo_beta = 2;
 	} else {
-		*(int *)(pcm + 0x4f4) = 1;
+		pcm->HIGH_LEVEL_TX_ACTIVE = 1;
 		obj->echo_decay_start = 0x7d0;
 		obj->echo_decay_fact = 0x7fcb;
 		/*
@@ -3451,7 +3276,7 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
+		obj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
@@ -3467,7 +3292,7 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	 */
 	edprintf("VPcmV34Main: Get Minimal power reduction - returning %d "
 		 "(cfg flag set to %d)\r\n",
-		 (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f4));
+		 (int)red, sess->modem.params->HIGH_LEVEL_TX_ACTIVE);
 
 	return red;
 }
@@ -3476,16 +3301,15 @@ int
 VPcmV34GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const unsigned char *sess = (const unsigned char *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	int rate = *(const int *)(cfg + 0x3c);
+	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
+	int rate = (int)obj->pac3c->maxRate;
 
-	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
-		const unsigned char *pcm =
-			*(unsigned char *const *)(sess + 0x610c);
+	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+		const V90Parameters *pcm = sess->modem.params;
 
-		if (*(const int *)(pcm + 0x4f8) != 0) {
-			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
+			int cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP
+				  * 0x960;
 
 			if (rate > cap)
 				rate = cap;
@@ -3505,16 +3329,15 @@ int
 V34XF_GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const unsigned char *sess = (const unsigned char *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	int rate = *(const int *)(cfg + 0x3c);
+	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
+	int rate = (int)obj->pac3c->maxRate;
 
-	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
-		const unsigned char *pcm =
-			*(unsigned char *const *)(sess + 0x610c);
+	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+		const V90Parameters *pcm = sess->modem.params;
 
-		if (*(const int *)(pcm + 0x4f8) != 0) {
-			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
+			int cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP
+				  * 0x960;
 
 			if (rate > cap)
 				rate = cap;
@@ -3557,7 +3380,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	const struct _tagModemParameters *cfg = obj->pac3c;
 	int ispcm;
 
 	sess->pcmSessionType = 0;
@@ -3607,7 +3430,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 	if (sess->pcmSessionType == 0)
 		return 0;
 
-	if (*(const signed char *)(cfg + CFG_V92LITE) < 0)
+	if ((signed char)cfg->qcFlags < 0)
 		return 0;
 
 	if (DSPLIB_DEBUG_ON())
@@ -3616,7 +3439,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 			"(after Info1d), retraining to V.34 upstream...\r\n");
 
 	VPcmV34InitiateRetrain(obj, DP_V90);
-	*((unsigned char *)obj + OB_FAC00) = 1;
+	obj->retrain_req = 1;
 
 	return 1;
 }
@@ -3642,12 +3465,11 @@ getMPrecvdBits(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	short *mp = (short *)(m + OB_INFO);
-	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	short *mp = obj->msgrec[4].word;
+	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate;
 
 	if (obj->v90_receiver > 0) {
-		const unsigned char *d = sess + SESS_MP;
 		int v;
 
 		/*
@@ -3656,31 +3478,34 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * 11, and three more flags at 13, 14 and 15.  The masks are
 		 * the object's -- `and $0xf` and `and $0x3` -- so a byte
 		 * larger than its field is truncated rather than rejected.
+		 * The bytes are the session's own MP block (VPcmFloModem.h):
+		 * mpType..mpCPack, copied there by copyMpInfoForInterface
+		 * and named by V90MP.h's source fields.
 		 */
-		v = (d[MP_TYPE] != 0) ? 1 : 0;
-		v |= (d[MP_DRN] & 0xf) << 6;
-		v |= (d[MP_TRELLIS] & 3) << 11;
-		if (d[MP_NONLINEAR] != 0)
+		v = (sess->mpType != 0) ? 1 : 0;
+		v |= ((unsigned char)sess->mpRate & 0xf) << 6;
+		v |= ((unsigned char)sess->mpTrellis & 3) << 11;
+		if (sess->mpNonLin != 0)
 			v |= 0x2000;
-		if (d[MP_SHAPING] != 0)
+		if (sess->mpShaping != 0)
 			v |= 0x4000;
-		if (d[MP_FLAG5] != 0)
+		if (sess->mpCPack != 0)
 			v |= 0x8000;
 
 		/*
 		 * Seven shorts straight across, except the first, which comes
-		 * back with its top bit forced on.  `rate_mask`'s sign bit is
-		 * "asymmetric rates are on the table" (v34fsk.h), so this says
-		 * a V.90 MP always permits them.
+		 * back with its top bit forced on.  The rate word's sign bit
+		 * (`msgrec[4].word[1]`, the object's `rate_mask` reading;
+		 * v34fsk.h) is "asymmetric rates are on the table", so this
+		 * says a V.90 MP always permits them.
 		 */
-		mp[1] = (short)(*(const unsigned short *)(d + MP_RATEMASK)
-				| 0x8000);
-		mp[2] = *(const short *)(d + 0x08);
-		mp[3] = *(const short *)(d + 0x0a);
-		mp[4] = *(const short *)(d + 0x0c);
-		mp[5] = *(const short *)(d + 0x0e);
-		mp[6] = *(const short *)(d + 0x10);
-		mp[7] = *(const short *)(d + 0x12);
+		mp[1] = (short)((unsigned short)sess->mpRateMask | 0x8000);
+		mp[2] = sess->mpH1Real;
+		mp[3] = sess->mpH1Imag;
+		mp[4] = sess->mpH2Real;
+		mp[5] = sess->mpH2Imag;
+		mp[6] = sess->mpH3Real;
+		mp[7] = sess->mpH3Imag;
 
 		/*
 		 * And the four-bit field at 6 is COPIED DOWN over bits 2..5,
@@ -3690,7 +3515,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * there stays set.
 		 */
 		v |= (v >> 4) & 0x3c;
-		obj->info_rates = (short)v;
+		obj->msgrec[4].word[0] = (short)v;
 
 		if (v & 1)
 			txrxdmainit((short *)(m + OB_DMA), mp);
@@ -3702,28 +3527,28 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - drn = %d\r\n",
-					     (signed char)d[MP_DRN]);
+					     (signed char)sess->mpRate);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - type = %d\r\n",
-					     (signed char)d[MP_TYPE]);
+					     (signed char)sess->mpType);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - trellisState = %d\r\n",
-					     (signed char)d[MP_TRELLIS]);
+					     (signed char)sess->mpTrellis);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90mp - nonlinearEncoder = %d\r\n",
-			    (signed char)d[MP_NONLINEAR]);
+			    (signed char)sess->mpNonLin);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90mp - constellationShaping = %d\r\n",
-			    (signed char)d[MP_SHAPING]);
+			    (signed char)sess->mpShaping);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - rateMask = 0x%X\r\n",
-					     *(const short *)(d + MP_RATEMASK));
+					     sess->mpRateMask);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "mp->data[0] = 0x%X , mp->data[1] = 0x%X\r\n",
-			    (unsigned short)obj->info_rates,
+			    (unsigned short)obj->msgrec[4].word[0],
 			    (unsigned short)mp[1]);
 	}
 
@@ -3744,18 +3569,16 @@ getMPrecvdBits(struct tagV34Object *objp)
 	 * which is what says this word is a message the handshake will clock
 	 * out through `getbit` -- that is the only reader of +0xaa6c.
 	 */
-	*(short *)(m + OB_CAPS) = (short)0x9dc3;
+	obj->info_caps = (unsigned short)0x9dc3;
 	/* Spelled as `v34handshakinit` spells the same two fields. */
-	*(short **)(m + OB_CAPS_PTR) = (short *)(m + OB_CAPS);
+	obj->paa6c = &obj->info_caps;
 
-	rate = *(const int *)((const unsigned char *)obj->pac3c + CFG_RATE);
+	rate = (int)obj->pac3c->maxRate;
 
-	if (*(const int *)(sess + SESS_GATE) != 0 && obj->v90_receiver > 1
-	    && *(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)
-			      + PCM_SENS) != 0) {
-		int cap = *(const int *)(
-		    *(const unsigned char *const *)(sess + SESS_PCM)
-		    + PCM_RATE) * 0x960;
+	if (sess->info0Layout != 0 && obj->v90_receiver > 1
+	    && sess->modem.params->SENSITIVE_ISP_DETECTED != 0) {
+		int cap = sess->modem.params
+			  ->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP * 0x960;
 
 		if (rate > cap)
 			rate = cap;
@@ -3780,14 +3603,13 @@ getMPrecvdBits(struct tagV34Object *objp)
 		int k;
 
 		for (k = 0; k <= 3; k++) {
-			unsigned short w = *(const unsigned short *)
-			    (m + OB_CAPS);
+			unsigned short w = obj->info_caps;
 
 			if ((rev >> k) & 1)
 				w = (unsigned short)(w | (unsigned)~mask);
 			else
 				w = (unsigned short)(w & (unsigned)mask);
-			*(short *)(m + OB_CAPS) = (short)w;
+			obj->info_caps = w;
 			mask = (short)(mask * 2 + 1);
 		}
 	}
@@ -3798,7 +3620,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 	 * writes them in an order the compiler chose; nothing reads any of
 	 * them in between, so this is the same state.
 	 */
-	*(short *)(m + 0xaa3e) = 0x7ffd;
+	obj->caps_flags = (short)0x7ffd;
 	*(short *)(m + 0xaa40) = 0;
 	*(short *)(m + 0xaa42) = 0;
 	*(short *)(m + 0xaa44) = 0;
@@ -3812,7 +3634,6 @@ extern "C" int
 v90RateRenegSilence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	int r = o->v90_receiver;
 	short n;
@@ -3852,7 +3673,7 @@ v90RateRenegSilence(void *objp)
 	}
 
 	if (r == 17) {
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -3870,7 +3691,7 @@ v90RateRenegSilence(void *objp)
 		 */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -3882,7 +3703,7 @@ v90RateRenegSilence(void *objp)
 					     "(disabling SAS detector on " "silence)\r\n");
 		o->v90_receiver = 19;
 		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
-		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
+		o->pac3c->unnamed_0003 &= (unsigned char)~CFG_SAS_DETECT;
 		return 0;
 	}
 
@@ -3893,7 +3714,7 @@ v90RateRenegSilence(void *objp)
 		 */
 		int q;
 
-		if (o->short_382 == OB_CONSTEL_16) {
+		if (o->receiver.short_382 == OB_CONSTEL_16) {
 			int d;
 
 			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
@@ -3930,7 +3751,7 @@ v90RateRenegSilence(void *objp)
 		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
 		done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -3939,8 +3760,8 @@ v90RateRenegSilence(void *objp)
 
 		getMPrecvdBits((struct tagV34Object *)objp);
 		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		if (o->txstate != V34HS_EXMIT)
+			o->txstate = V34HS_EXMIT;
 		o->v90_receiver = 2;
 		return 0;
 	}
@@ -3952,7 +3773,6 @@ extern "C" int
 v90RateReneg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	int r = o->v90_receiver;
 	short n;
@@ -3998,7 +3818,7 @@ v90RateReneg(void *objp)
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -4010,7 +3830,7 @@ v90RateReneg(void *objp)
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4019,8 +3839,8 @@ v90RateReneg(void *objp)
 
 		getMPrecvdBits((struct tagV34Object *)objp);
 		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		if (o->txstate != V34HS_EXMIT)
+			o->txstate = V34HS_EXMIT;
 		o->v90_receiver = 2;
 		return 0;
 	}
@@ -4032,8 +3852,7 @@ extern "C" int
 v90Phase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	unsigned short fl = rx->flags;
 	short n;
@@ -4057,13 +3876,12 @@ v90Phase34(void *objp)
 			return 0;
 
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DATA);
-		if (!(((const unsigned char *)o->pac3c)[P34_CFG_FLAGS]
-		      & P34_CFG_BACKWARD_CLEAR))
+		if (!(o->pac3c->modeFlags & P34_CFG_BACKWARD_CLEAR))
 			return 0;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34Main: tx buffer backward "
 					     "clear is enabled...\r\n");
-		m[OB_BACKWARD_CLEAR] = 1;
+		o->backward_clear = 1;
 		return 0;
 	}
 
@@ -4116,8 +3934,7 @@ v90Phase34(void *objp)
 			dsplibs_debug_printf("Entered v34m->v90Receiver == "
 					     "V90RCV_P3_THIRD_S with " "tx->symcnt = %d period = %d\n",
 					     (int)n,
-					     (int)*(const short *)
-					     (m + OB_PERIOD));
+					     (int)o->ratecfg.period);
 		}
 		o->v90_receiver = 4;
 		o->seg_symcount = 0;
@@ -4175,7 +3992,7 @@ v90Phase34(void *objp)
 
 	case 5: {
 		/* The idle symbol.  See the note at the top of this block. */
-		short c = o->short_382;
+		short c = o->receiver.short_382;
 		int q;
 
 		if (c == OB_CONSTEL_16) {
@@ -4212,7 +4029,7 @@ v90Phase34(void *objp)
 		 * scrambled with `tx_flags`'s polynomial and IS differentially
 		 * encoded, unlike case 5.
 		 */
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
@@ -4229,7 +4046,7 @@ v90Phase34(void *objp)
 		 */
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4242,7 +4059,7 @@ v90Phase34(void *objp)
 	case 10: {
 		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4260,8 +4077,8 @@ v90Phase34(void *objp)
 		 */
 		getMPrecvdBits((struct tagV34Object *)objp);
 		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		if (o->txstate != V34HS_EXMIT)
+			o->txstate = V34HS_EXMIT;
 		o->v90_receiver = 2;
 		return 0;
 	}
@@ -4274,7 +4091,6 @@ void
 VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -4296,21 +4112,21 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	preinitdigital(obj);
 
 	/* The `[1]` counter every handshake trace prints; see V34hshak.c. */
-	*(short *)(m + 0x2aa2) = 0;
+	obj->vect_idx = 0;
 
 	obj->progress = 6;
-	*(int *)(m + 0x2218) = 5;
+	obj->hs_mode = 5;
 
-	obj->short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+	obj->receiver.short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
 
 	/*
 	 * The timer, reset: the same three fields and the same two constants
 	 * as `v34handshakinit`'s guard writes when it rejects the span, with
 	 * +0x244 left alone here and written there.
 	 */
-	*(int *)(m + 0x238) = 0;
-	*(int *)(m + 0x248) = (int)0xfff15a00;
-	*(int *)(m + 0x23c) = 0x69780;
+	obj->sample_count = 0;
+	obj->int_0248 = (int)0xfff15a00;
+	obj->timeout_deadline = 0x69780;
 }
 
 void
@@ -4327,11 +4143,11 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 	obj->v90_receiver = 3;
 
 	if (silence_scr != 0)
-		obj->short_382 = 0;
+		obj->receiver.short_382 = 0;
 	else if (constel != 0)
-		obj->short_382 = (short)0x89b0;
+		obj->receiver.short_382 = (short)0x89b0;
 	else
-		obj->short_382 = (short)0x8990;
+		obj->receiver.short_382 = (short)0x8990;
 }
 
 void
@@ -4348,9 +4164,9 @@ V34XF_IndicateDilReceived(void *objp, unsigned char constel)
 	obj->seg_symcount = 0;
 
 	if (constel != 0)
-		obj->short_382 = (short)0x89b0;
+		obj->receiver.short_382 = (short)0x89b0;
 	else
-		obj->short_382 = (short)0x8990;
+		obj->receiver.short_382 = (short)0x8990;
 }
 
 void
@@ -4414,7 +4230,7 @@ chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 
 	if (obj->v90_receiver) {
 		allow[5] = 1;			/* dead -- see the note above */
-		sel = (unsigned char *)obj->p3548 + 0x217;
+		sel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;
 	} else if (obj->k56flex_receiver) {
 		allow[5] = 0;
 		sel = allow;
@@ -4461,13 +4277,12 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)(m + V34_RATECFG);
+	struct v34_receiver *rx = &obj->receiver;
+	const struct v34_ratecfg *cfg = &obj->ratecfg;
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
-	obj->short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
+	obj->receiver.short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -4485,7 +4300,7 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 	obj->tx_scr_sr = 0;
 
 	*(short *)(m + 0x254) =
-		(short)(336 * (int)*(const short *)(m + 0x35a4) + 10000);
+		(short)(336 * (int)obj->short_35a4 + 10000);
 	*(short *)(m + 0x256) = 0;
 	*(int *)(m + 0x258) = 0;
 }
@@ -4539,7 +4354,7 @@ k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
 
 	if (!(rx->flags & V34_RX_FLAG_DATA)) {
@@ -4610,7 +4425,7 @@ k56FlexPhase34(void *objp)
 		/* The idle symbol.  See the note at the top of this file. */
 		int q;
 
-		if (o->short_382 == OB_CONSTEL_16) {
+		if (o->receiver.short_382 == OB_CONSTEL_16) {
 			int d;
 
 			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
@@ -4642,7 +4457,7 @@ k56FlexPhase34(void *objp)
 		 */
 		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
 
-		if (o->short_382 == OB_CONSTEL_16)
+		if (o->receiver.short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, o->cur_quadrant);
 		else
 			txmitdibit(o, o->cur_quadrant);
@@ -4661,8 +4476,8 @@ k56FlexPhase34(void *objp)
 		 */
 		getMPrecvdBits((struct tagV34Object *)objp);
 		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		if (o->txstate != V34HS_EXMIT)
+			o->txstate = V34HS_EXMIT;
 		o->k56flex_receiver = 2;
 		return 0;
 	}
@@ -4676,20 +4491,19 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	unsigned char *cfg = (unsigned char *)runtime;
-	unsigned char *sess = (unsigned char *)obj->p3548;
+	struct _tagModemParameters *cfg = (struct _tagModemParameters *)runtime;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	unsigned char *k56 = (unsigned char *)obj->pac18;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-	unsigned char *v92;
+	struct v34_receiver *rx = &obj->receiver;
 	/*
 	 * All three are read BEFORE the memset, out of `runtime` rather than
 	 * out of the object, so the memset cannot reach them -- but the object
 	 * still keeps them in stack slots across it, and the two `int`s are
 	 * re-read as SHORTS at the one place they are used.
 	 */
-	int quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;
-	int ansLevel = *(const int *)(cfg + CFG_ANSPCM_LEVEL);
-	int uqts = *(const int *)(cfg + CFG_UQTS);
+	int quick = (cfg->qcFlags & CFG_QUICKCONNECT) != 0;
+	int ansLevel = cfg->unnamed_000c;
+	int uqts = cfg->qcIndex;
 
 	/*
 	 * FIVE SEPARATE GATES AND NOT ONE.  Each re-loads `dsplibs_debug_level`
@@ -4715,8 +4529,8 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	sysdep_memset(rx, 0, sizeof(struct v34_receiver));
 
 	obj->pac18 = k56;
-	*(short *)(m + OB_FAA80) = 1;
-	obj->pac3c = runtime;
+	obj->rate_change_pending = 1;
+	obj->pac3c = (struct _tagModemParameters *)runtime;
 	obj->p3548 = sess;
 
 	V34InitializeImplementationSpecific(obj);
@@ -4727,12 +4541,12 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->bulk_ring = (short *)(m + OB_BULK_RING);
 	obj->bulk_len = 0x2580;
 
-	*(int *)(m + OB_FABD8) = 0;
-	*(int *)(m + OB_FABDC) = 0;
+	obj->moh_limit = 0;
+	obj->moh_timer = 0;
 	obj->moh_holdtime_code = 0;
 	obj->short_abe2 = 0;
-	*(short *)(m + OB_FABE4) = 0;
-	*(short *)(m + OB_FABE6) = 0;
+	obj->short_abe4 = 0;
+	obj->short_abe6 = 0;
 	obj->short_35a4 = 0;
 
 	if (DSPLIB_DEBUG_ON())
@@ -4745,21 +4559,19 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * GCC's divide-by-ten and not a fixed-point scale.  Verified
 	 * numerically rather than read off.
 	 */
-	*(short *)(m + OB_FABFC) =
-		(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);
+	obj->short_abfc =
+		(short)((cfg->unnamed_0014 * 24u) / 10u);
 
 	/*
 	 * The V.92 record is re-loaded between the two byte stores, which is
 	 * what the object does and is not an optimisation this file may fold:
 	 * nothing says the two loads have to give the same pointer.
 	 */
-	v92 = *(unsigned char **)(sess + SESS_PCMV92);
-	v92[PCMV92_QUICK] = 0;
-	v92 = *(unsigned char **)(sess + SESS_PCMV92);
-	v92[PCMV92_FLAG11] = 0;
-	*(int *)(sess + SESS_PCMTYPE) = 0;
+	sess->v92modem.phase2Info->shortPhase2Local = 0;
+	sess->v92modem.phase2Info->v92CapabilitiesLocal = 0;
+	sess->pcmSessionType = 0;
 
-	*(short *)(m + OB_FABC4) = 0;
+	obj->pcm_chosen = 0;
 	obj->local_v92 = 0;
 	obj->remote_v92 = 0;
 	obj->local_short = 0;
@@ -4767,7 +4579,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->short_abce = 0;
 	obj->short_abd0 = 0;
 	obj->short_abd2 = 0;
-	*(short *)(m + OB_FABD4) = 0;
+	obj->v90_high_carrier = 0;
 
 	obj->status = 0;
 	obj->progress = 0;
@@ -4781,7 +4593,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	if (sessionType == 2) {
 		*(int *)(k56 + K56_AORMU) = 0;
 		obj->v90_receiver = 1;
-		((VPcmFloModem *)sess)->externalReset();
+		sess->externalReset();
 
 		obj->local_v92 = 1;
 		obj->local_short = (short)quick;
@@ -4790,16 +4602,21 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		 * The four bytes `V34GiveINFO1aBits` copied INTO the session
 		 * object at +0x14..+0x16, read back out of it -- and a fourth
 		 * at +0x17 that no writer reconstructed here accounts for.
+		 * The V.92 record is re-loaded here too, as at the two stores
+		 * above.
 		 */
-		v92 = *(unsigned char **)(sess + SESS_PCMV92);
-		*(short *)(m + OB_FABD4) = v92[PCMV92_COPIED + 3];
-		obj->short_abd2 = v92[PCMV92_COPIED + 2];
-		obj->short_abd0 = v92[PCMV92_COPIED + 1];
-		obj->short_abce = v92[PCMV92_COPIED + 0];
-		v92[PCMV92_FLAG11] = 1;
+		obj->v90_high_carrier =
+			sess->v92modem.phase2Info->v90UseHighCarrier;
+		obj->short_abd2 =
+			sess->v92modem.phase2Info->maxNofCoeffsInEachSection;
+		obj->short_abd0 =
+			sess->v92modem.phase2Info->maxTotalNofCoeffs;
+		obj->short_abce =
+			sess->v92modem.phase2Info->nofFilterSections;
+		sess->v92modem.phase2Info->v92CapabilitiesLocal = 1;
 
-		v92 = *(unsigned char **)(sess + SESS_PCMV92);
-		v92[PCMV92_QUICK] = (unsigned char)quick;
+		sess->v92modem.phase2Info->shortPhase2Local =
+			(unsigned char)quick;
 
 		/*
 		 * Channel verification only when the far end asked for a quick
@@ -4809,23 +4626,22 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		 */
 		if (quick != 0 && side == 0) {
 			obj->status = 4;
-			(*(V90Demodulator **)(sess + SESS_DEMOD))
-				->enterChannelVerification((short)uqts,
-							   (short)ansLevel);
+			sess->modem.demodulator->enterChannelVerification(
+				(short)uqts, (short)ansLevel);
 			obj->progress = 10;
 		}
 
 		if (side == 0) {
 			side = 1;
 		} else {
-			*(int *)(sess + SESS_PCMTYPE) = 1;
+			sess->pcmSessionType = 1;
 			side = 0;
 		}
 	} else if (sessionType == 1) {
 		*(int *)(k56 + K56_AORMU) = 0;
 		obj->v90_receiver = 1;
 		side = (side == 0);
-		((VPcmFloModem *)sess)->externalReset();
+		sess->externalReset();
 	} else if (sessionType == 3 || sessionType == 4) {
 		*(int *)(k56 + K56_AORMU) = (sessionType == 4);
 		obj->v90_receiver = 0;
@@ -4858,12 +4674,13 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->rate_now = 0;
 	obj->rate_want = -1;
 	obj->rx_energy_floor = 0;
-	*(int *)(m + OB_F0234) = 0;
-	*(int *)(m + OB_F0238) = 0;
-	*(int *)(m + OB_F0248) = (int)0xfffe8900;
-	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
+	obj->low_energy_count = 0;
+	obj->sample_count = 0;
+	obj->int_0248 = (int)0xfffe8900;
+	obj->force_low_baud = 0;
 	rx->agc_start_gain = 0x600;
-	*(int *)((unsigned char *)rx + RX_F238) = 0;
+	rx->timing_offset = 0;
+	/* OB_F000C stays: object+0xc has no member. */
 	*(int *)(m + OB_F000C) = 0;
 	obj->nof_tx_bits = 0;
 
@@ -4876,11 +4693,11 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
 	 * signed, so a negative one gives a result below 10000.
 	 */
-	*(short *)(m + OB_F0254) =
-		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
+	obj->dc_count =
+		(short)(336 * (int)obj->short_35a4 + 10000);
 	obj->hist2_idx = 0;
-	*(short *)(m + OB_F0254 + 2) = 0;
-	*(int *)(m + OB_F0254 + 4) = 0;
+	obj->dc_est = 0;
+	obj->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, byte for byte the same block
@@ -4888,41 +4705,41 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * is not repeated.  +0xac2e is again the one short left alone.
 	 */
 	{
-		unsigned char *st = m + OB_FAC1C;
+		struct tag_retrainReqDet *st = &obj->retrainReqDet;
 		short role = obj->role;
 
-		*(short *)(st + 0x00) = 0;
-		*(short *)(st + 0x02) = 0;
-		*(short *)(st + 0x04) = 0;
-		*(short *)(st + 0x06) = 0;
-		*(int *)(st + 0x08) = 0;
-		*(int *)(st + 0x14) = 0;
-		*(int *)(st + 0x18) = 0;
-		*(int *)(st + 0x1c) = 0;
+		st->y1 = 0;
+		st->y2 = 0;
+		st->x1 = 0;
+		st->x2 = 0;
+		st->notchDetectSigCnt = 0;
+		st->energyInp = 0;
+		st->energyOut = 0;
+		st->nsamples = 0;
 
 		if (role == 0x65) {
-			*(short *)(st + 0x0c) = 0;
-			*(short *)(st + 0x0e) = 0;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = 0;
+			st->a1_q14 = 0;
+			st->a2_q14 = (short)0x39c3;
 		} else if (role == 0x66) {
-			*(short *)(st + 0x0c) = (short)0x5a82;
-			*(short *)(st + 0x0e) = (short)0x55fc;
-			*(short *)(st + 0x10) = (short)0x39c3;
+			st->b1_q14 = (short)0x5a82;
+			st->a1_q14 = (short)0x55fc;
+			st->a2_q14 = (short)0x39c3;
 		}
 	}
 
 	obj->rates_latched = 0;
 	obj->v90_timing_offset = 0;
-	m[OB_FAC17] = 0;
-	*(short *)(m + OB_F0262) = 1;
+	obj->remote_retrain_ind = 0;
+	obj->samples_valid = 1;
 	obj->tx_bps = 0;
 	obj->rx_bps = 0;
 	obj->rrn_local = 0;
 	obj->rrn_remote = 0;
-	*(short *)(m + OB_FAC12) = 0;
-	*(short *)(m + OB_FAC14) = 0;
+	obj->short_ac12 = 0;
+	obj->short_ac14 = 0;
 	obj->echo_decay_start = 0x7d0;
-	*(short *)(m + OB_FA248) = 0;
+	obj->hd_set = 0;
 	obj->echo_decay_fact = 0x7fdf;
 	obj->echo_beta = 2;
 
@@ -4933,26 +4750,21 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * of the `else` rather than being tested separately.  Two functions,
 	 * one block; see that one for why each step is the shape it is.
 	 */
-	if (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {
+	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
 		V90ConstellationDesigner *cd;
 
-		cfg = (unsigned char *)obj->pac3c;
-		cd = *(V90ConstellationDesigner **)
-		     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);
-		cd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),
-				   *(const unsigned int *)(cfg + CFG_MAX_RATE));
+		cd = sess->modem.demodulator->constellationDesigner;
+		cd->setMinMaxRates(obj->pac3c->vpcmRateLimitLow,
+				   obj->pac3c->vpcmRateLimitHigh);
 	} else if (obj->k56flex_receiver != 0 && k56[K56_ENABLED] != 0) {
-		cfg = (unsigned char *)obj->pac3c;
 		((K56FlexFloModem *)k56)->setMinMaxRates(
-			*(const int *)(cfg + CFG_MIN_RATE),
-			*(const int *)(cfg + CFG_MAX_RATE));
+			(int)obj->pac3c->vpcmRateLimitLow,
+			(int)obj->pac3c->vpcmRateLimitHigh);
 	} else {
-		cfg = (unsigned char *)obj->pac3c;
-
-		obj->rate_min = (int)(*(const unsigned int *)
-				      (cfg + CFG_MIN_RATE) / RATE_STEP);
-		obj->rate_max = (int)(*(const unsigned int *)
-				      (cfg + CFG_MAX_RATE) / RATE_STEP);
+		obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
+				      / RATE_STEP);
+		obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
+				      / RATE_STEP);
 
 		if (obj->rate_min > RATE_INDEX_MAX)
 			obj->rate_min = RATE_INDEX_MAX;
@@ -4961,14 +4773,14 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		if (obj->rate_max > RATE_INDEX_MAX)
 			obj->rate_max = RATE_INDEX_MAX;
 		else if (obj->rate_max == 1)
-			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+			obj->force_low_baud = 1;
 	}
 
-	cfg = (unsigned char *)obj->pac3c;
+	/* Re-read on all three arms; the object reloads it after each. */
 
 	/* The disconnect threshold, indexed as `VPcmV34InitiateRetrain`. */
 	{
-		int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+		int level = obj->pac3c->unnamed_0060;
 		unsigned idx = (unsigned)level + 0x30u;
 		int thresh;
 
@@ -4983,22 +4795,22 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 					     level, thresh);
 	}
 
-	*(int *)(m + OB_F0234) = 0;
+	obj->low_energy_count = 0;
 
 	{
-		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int delay = obj->pac3c->hwDelay;
 		int biased = (int)((unsigned)delay + 2u);
 
-		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		obj->filtdelay = (short)((biased >> 2) + 0x22);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 filtdelay set to %d "
 					     "(params initial delay = %d)\n",
-					     (int)*(short *)(m + OB_FILT_DELAY),
+					     (int)obj->filtdelay,
 					     delay);
 	}
 
 	{
-		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+		int ext = obj->pac3c->dmaDelay;
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
@@ -5006,8 +4818,8 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 					     (int)obj->dmadelay, ext);
 	}
 
-	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
+	sess->echoCanceller.setEchoDelay(
+		(unsigned)obj->pac3c->dmaDelay + 0x68u);
 
 	/*
 	 * THE ENTRANCE FILTER, three ways, and only the first two are named by
@@ -5016,35 +4828,34 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * ANYTHING ELSE forces it off, which is why this is not a `switch` --
 	 * the object decrements and tests, so 0 and 7 take the same arm.
 	 */
-	cfg = (unsigned char *)obj->pac3c;
 	{
-		int stream = *(const int *)(cfg + CFG_ENTRANCE);
+		int stream = obj->pac3c->unnamed_0070;
 
 		if (stream == -1) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter according"
 						     " to HW...\r\n");
-			cfg = (unsigned char *)obj->pac3c;
-			sess[SESS_ENTRANCE] = (unsigned char)
-				(*(const int *)(cfg + CFG_F54) == 14);
+			cfg = obj->pac3c;
+			sess->entranceFilterApplied = (unsigned char)
+				(cfg->codecType == 14);
 		} else if (stream == 1) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
 						     "enabled...\r\n");
-			sess[SESS_ENTRANCE] = 1;
+			sess->entranceFilterApplied = 1;
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
 						     "disabled...\r\n");
-			sess[SESS_ENTRANCE] = 0;
+			sess->entranceFilterApplied = 0;
 		}
 	}
 
-	((GenericIIR<float, double> *)(sess + SESS_IIR))->reset();
+	sess->entFilt.reset();
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmFlo: YES! entrance filter applied ="
-				     " %d\r\n", (int)sess[SESS_ENTRANCE]);
+				     " %d\r\n", (int)sess->entranceFilterApplied);
 
 	return 0;
 }
@@ -5069,10 +4880,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	 * the tail: the object is not running, so nothing is consumed and the
 	 * last progress code is repeated.
 	 */
-	if (PROG_S16(obj, O_RUNNING) == 0)
+	if (obj->samples_valid == 0)
 		return obj->progress;
 
-	PROG_S32(obj, O_SAMPLES) = (PROG_S32(obj, O_SAMPLES) + n) & 0x7fffffff;
+	obj->sample_count = (obj->sample_count + n) & 0x7fffffff;
 
 	/*
 	 * 0xb46a-0xb52a.  The transmit bits are packed into whole 16-bit
@@ -5109,7 +4920,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	 * runs in place over the caller's buffer, and the state is re-read
 	 * afterwards because the filter is allowed to change it.
 	 */
-	if (sess->byte_7f5c != 0) {
+	if (sess->entranceFilterApplied != 0) {
 		sess->entFilt.process(in, in, (unsigned int)n);
 		st = obj->status;
 	}
@@ -5134,7 +4945,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				modem_serrint(obj);
 				*out++ = (float)obj->tx_sample;
 				if (obj->txq.count < obj->tx_fill_target
-				    || obj->rxq.count > 5) {
+				    || obj->receiver.rxq.count > 5) {
 					if (obj->tx_flags & PROG_TXBIT_DATA)
 						datapumpv34(obj);
 					else
@@ -5150,7 +4961,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		 */
 		if (ret != prev) {
 			if ((unsigned int)(ret - 4) <= 1) {
-				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				obj->pac3c->unnamed_0003
 				    |= CFG_FLAG3_RETRAIN;
 				ret = obj->progress;
 			}
@@ -5162,8 +4973,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		 * detection after %d in train".
 		 */
 		if (ret == 0) {
-			int since = PROG_S32(obj, O_SAMPLES)
-				    - PROG_S32(obj, 0x244);
+			int since = obj->sample_count
+				    - obj->int_0244;
 
 			if ((unsigned int)since > 0x12bfu
 			    && (unsigned int)since < (unsigned int)(n + 0x12c0)) {
@@ -5171,7 +4982,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Masking CAS " "detection after %d in train..."
 					    "\r\n", since);
-				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				obj->pac3c->unnamed_0003
 				    &= (unsigned char)~CFG_FLAG3_RETRAIN;
 				ret = obj->progress;
 			}
@@ -5231,23 +5042,23 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		/* Phase 2 completed.  0xc360. */
 		case 1:
 			if (prev == 0) {
-				int baud = PROG_S16(obj, V34_RATECFG);
-				int ofs = PROG_S16(obj, V34_RATECFG + 2);
+				int baud = obj->ratecfg.baud;
+				int ofs = obj->ratecfg.period;
 				int len;
 
 				PROG_U8(obj, O_P2STATE) = 0;
-				PROG_S32(obj, O_P2DELAY) = 0;
-				if ((PROG_U8(obj->pac3c, CFG_FLAGS3)
+				obj->p2_delay_cntr = 0;
+				if ((obj->pac3c->unnamed_0003
 				     & CFG_FLAG3_PHASE2) != 0
-				    && PROG_S16(obj, O_PCMCHOSEN) != 0
-				    && PROG_S16(obj, O_HDSET) == 0) {
+				    && obj->pcm_chosen != 0
+				    && obj->hd_set == 0) {
 					/*
 					 * 0xc3ae.  Five symbol periods per
 					 * baud unit plus the configured
 					 * offset, less 588 -- and this is the
 					 * only path that latches +0xa248.
 					 */
-					PROG_S16(obj, O_HDSET) = 1;
+					obj->hd_set = 1;
 					len = baud * 5 + ofs - 0x24c;
 				} else {
 					/*
@@ -5257,7 +5068,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					len = (((baud << 4) - baud) >> 3)
 					      + ofs - 0x24c;
 				}
-				PROG_S32(obj, O_HDLENGTH) = len;
+				obj->phase3_hd_length = len;
 				edprintf("VPcmV34Main: phase3halfDuplexLength"
 					 " = %d symbols (baud %d)\r\n",
 					 len, baud);
@@ -5267,8 +5078,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					k56->k56FlexEnterPhase3();
 				}
 			}
-			t = PROG_S32(obj, O_P2DELAY) + n;
-			PROG_S32(obj, O_P2DELAY) = t;
+			t = obj->p2_delay_cntr + n;
+			obj->p2_delay_cntr = t;
 			r = PROG_U8(obj, O_P2STATE);
 			if (r == 0) {
 				if (t <= 0x5f) {
@@ -5281,22 +5092,22 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Indicating First P2 " "COMPLETE... (after %d)\r\n",
-					    PROG_S32(obj, O_P2DELAY));
+					    obj->p2_delay_cntr);
 				return 1;
 			}
 			if (r == 1) {
 				/* 0xcfa3, the configured extra silence. */
-				int sil = PROG_S32(obj->pac3c, CFG_SILENCE);
+				int sil = obj->pac3c->addedDelay;
 
 				t += sil;
-				PROG_S32(obj, O_P2DELAY) = t;
+				obj->p2_delay_cntr = t;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "On PHASE2_COMPLETE: added Silence" " = %d, p2DelayCntr = %d\r\n",
-					    PROG_S32(obj->pac3c, CFG_SILENCE),
+					    obj->pac3c->addedDelay,
 					    t);
 			}
-			if (PROG_S32(obj, O_P2DELAY) <= 0x240) {
+			if (obj->p2_delay_cntr <= 0x240) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Wait (after P2 " "COMPLETE)...\r\n");
@@ -5324,7 +5135,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				PROG_S16(obj, O_DCCOUNT) = 0;
+				obj->dc_count = 0;
 			}
 			goto reload;
 
@@ -5348,7 +5159,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				PROG_S16(obj, O_DCCOUNT) = 0;
+				obj->dc_count = 0;
 			}
 			goto reload;
 
@@ -5373,18 +5184,18 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			case 13:	secs = -1;	break;
 			default:	secs = 0;	break;
 			}
-			PROG_S32(obj, O_MOHLIMIT) = secs;
-			PROG_S32(obj, O_MOHCOUNT) = 0;
+			obj->moh_limit = secs;
+			obj->moh_timer = 0;
 			if (DSPLIB_DEBUG_ON()) {
 				dsplibs_debug_printf(
 				    "VPcmV34Main: Modem On Hold approved by "
 				    "phase2 (ISP timeout is %d seconds) !!\r\n",
 				    secs);
 				ret = obj->progress;
-				secs = PROG_S32(obj, O_MOHLIMIT);
+				secs = obj->moh_limit;
 			}
 			if (secs > 0)
-				PROG_S32(obj, O_MOHLIMIT) = secs * 0x2580;
+				obj->moh_limit = secs * 0x2580;
 			obj->status = 7;
 			goto done;
 		}
@@ -5398,7 +5209,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			lim = ((unsigned short)obj->short_abe2 < 1u ? 0xbb80 : 0)
 			      + 0x2580;
 			obj->train_symcount = 0;
-			PROG_S32(obj, O_MOHCOUNT) = lim;
+			obj->moh_timer = lim;
 			obj->progress = 0;
 			/*
 			 * 0xc2a8, `xor %esi,%esi`, and it is easy to miss:
@@ -5463,31 +5274,28 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (PROG_U16(obj, O_DCCOUNT) != 0) {
-					int acc = PROG_S32(obj, O_DCACC) + s;
+				if (obj->dc_count != 0) {
+					int acc = obj->dc_acc + s;
 
-					PROG_U16(obj, O_DCCOUNT)--;
-					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
-					    == 0) {
-						int e = (PROG_S16(obj, O_DCEST)
+					obj->dc_count--;
+					if ((obj->dc_count & 0x7f) == 0) {
+						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
-						PROG_S16(obj, O_DCEST) =
-						    (short)e;
+						obj->dc_est = (short)e;
 						if (DSPLIB_DEBUG_ON()) {
-							PROG_S32(obj, O_DCACC)
-							    = acc;
+							obj->dc_acc = acc;
 							dsplibs_debug_printf(
 							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
-						PROG_S32(obj, O_DCACC) = 0;
+						obj->dc_acc = 0;
 					} else {
-						PROG_S32(obj, O_DCACC) = acc;
+						obj->dc_acc = acc;
 					}
 					s = obj->echo_residual;
 				}
-				s = (short)(s - PROG_S16(obj, O_DCEST));
+				s = (short)(s - obj->dc_est);
 				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
@@ -5505,29 +5313,29 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			obj->progress = 3;
 			break;
 		case 2:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			if (obj->rates_latched == 0)
 				obj->rx_bps = (int)sess->modem.demodulator
 						  ->getBitRate();
-			if (PROG_S16(obj, O_PCMCHOSEN) == 0) {
+			if (obj->pcm_chosen == 0) {
 				int both = 0;
 
 				if (obj->local_v92 != 0
 				    && obj->remote_v92 != 0)
 					both = 1;
-				PROG_S16(obj, O_PCMCHOSEN) = (short)both;
+				obj->pcm_chosen = (short)both;
 			}
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 3:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			obj->progress = 5;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 4:
 			obj->progress = 0xb;
 			obj->status = 5;
-			PROG_S32(obj, O_SAMPLES) = 0;
+			obj->sample_count = 0;
 			break;
 		case 5:
 			VPcmV34InitiateRetrain(obj, VPCM_DP_V90);
@@ -5544,7 +5352,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		}
 		/* 0xc91b, requestOutputSampleClear. */
-		if (PROG_U8(obj, O_CLEARREQ) != 0
+		if (obj->backward_clear != 0
 		    && (unsigned int)n > 0x30u) {
 			int want = n * 2;
 
@@ -5552,13 +5360,13 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				dsplibs_debug_printf(
 				    "VPcmV34Main: requestOutputSampleClear "
 				    "(asking %d samples clear) !!!\r\n", want);
-			PROG_U8(obj, O_CLEARREQ) = 0;
+			obj->backward_clear = 0;
 			out -= n;
 			sysdep_memset(out, 0, (size_t)n * sizeof(float));
 			PROG_S32(obj, O_CLR_COUNT) = want;
 			PROG_S32(obj, O_CLR_FLAG) = 1;
 			PROG_S32(obj, O_CLR_DONE) = 0;
-			PROG_U8(obj->pac3c, CFG_FLAGS51) |= CFG_FLAG51_CLEAR;
+			obj->pac3c->unnamed_0051 |= CFG_FLAG51_CLEAR;
 			V34EchoHistoryBackwardClean(obj,
 						    (unsigned)(want + n));
 		}
@@ -5574,42 +5382,36 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		case 2:
 			if (obj->rates_latched == 0) {
-				const unsigned char *tx;
+				V92Modulator *tx;
 				unsigned int bits;
 
 				obj->rx_bps = (int)sess->modem.demodulator
 						  ->getBitRate();
-				tx = (const unsigned char *)
-				     sess->v92modem.modulator;
+				tx = sess->v92modem.modulator;
 				bits = 0;
-				if (*(const int *)(tx + PCMTX_STATE)
-				    == PCMTX_READY)
-					bits = *(const unsigned int *)
-					       (**(const unsigned char *const *
-						  const *)
-						  (tx + PCMTX_V92_FRAME)
-						+ PCMTX_FRAME_BITS);
-				obj->tx_bps = (*(const int *)(tx + PCMTX_STATE)
-					       == PCMTX_READY)
+				if (tx->phase == PCMTX_READY)
+					bits = tx->bitsToSymbol->transmitter
+						       ->K;
+				obj->tx_bps = (tx->phase == PCMTX_READY)
 					      ? (int)(unsigned)
 						(bits * 8000u * (1.0f / 12.0f)
 						 + 0.5f)
 					      : 0;
 				obj->rates_latched = 1;
 			}
-			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->pcm_chosen = 1;
 			obj->progress = 4;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 3:
-			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->pcm_chosen = 1;
 			obj->progress = 5;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 4:
 			obj->progress = 0xb;
 			obj->status = 5;
-			PROG_S32(obj, O_SAMPLES) = 0;
+			obj->sample_count = 0;
 			break;
 		case 5:
 			VPcmV34InitiateRetrain(obj, VPCM_DP_V92);
@@ -5663,31 +5465,28 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (PROG_U16(obj, O_DCCOUNT) != 0) {
-					int acc = PROG_S32(obj, O_DCACC) + s;
+				if (obj->dc_count != 0) {
+					int acc = obj->dc_acc + s;
 
-					PROG_U16(obj, O_DCCOUNT)--;
-					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
-					    == 0) {
-						int e = (PROG_S16(obj, O_DCEST)
+					obj->dc_count--;
+					if ((obj->dc_count & 0x7f) == 0) {
+						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
-						PROG_S16(obj, O_DCEST) =
-						    (short)e;
+						obj->dc_est = (short)e;
 						if (DSPLIB_DEBUG_ON()) {
-							PROG_S32(obj, O_DCACC)
-							    = acc;
+							obj->dc_acc = acc;
 							dsplibs_debug_printf(
 							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
-						PROG_S32(obj, O_DCACC) = 0;
+						obj->dc_acc = 0;
 					} else {
-						PROG_S32(obj, O_DCACC) = acc;
+						obj->dc_acc = acc;
 					}
 					s = obj->echo_residual;
 				}
-				s = (short)(s - PROG_S16(obj, O_DCEST));
+				s = (short)(s - obj->dc_est);
 				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
@@ -5709,12 +5508,12 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			obj->progress = 5;
 			/* FALLTHROUGH -- 0xc8c1 falls into 0xc8cc. */
 		case 2:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			if (obj->rates_latched == 0) {
 				obj->rx_bps = *(const int *)k56;
 				obj->rates_latched = 1;
 			}
-			PROG_U8(obj->pac3c, CFG_FLAGS3) |= CFG_FLAG3_RETRAIN;
+			obj->pac3c->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 			break;
 		case 4:
 			VPcmV34InitiateRetrain(obj, 0x38);
@@ -5742,7 +5541,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmV34Main: Line verification period " "completed !!!\r\n");
-			if ((PROG_U8(obj->pac3c, CFG_FLAGS2)
+			if ((obj->pac3c->qcFlags
 			     & CFG_FLAG2_SAMELINE) == 0) {
 				obj->is_short = 0;
 				if (DSPLIB_DEBUG_ON())
@@ -5764,7 +5563,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "verification...\r\n");
 			}
 			if (obj->is_short == 0) {
-				PROG_U8(sess->v92modem.phase2Info, 0x10) = 0;
+				sess->v92modem.phase2Info->shortPhase2Local = 0;
 				obj->local_short = 0;
 				sess->modem.params->init();
 			}
@@ -5777,7 +5576,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	case 5:
 		for (i = 0; i < n; i++)
 			out[i] = 0.0f;
-		if ((unsigned int)PROG_S32(obj, O_SAMPLES) > 0x464ffu) {
+		if ((unsigned int)obj->sample_count > 0x464ffu) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmV34Main: waiting for user response "
@@ -5792,7 +5591,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	/* --- 6: the reconnect delay, which falls into 7 --------------- */
 	case 6:
 	{
-		int held = PROG_S32(obj, O_MOHCOUNT);
+		int held = obj->moh_timer;
 		int want = obj->train_symcount;
 
 		if (held < want) {
@@ -5820,10 +5619,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		if (st == 7)
 			obj->progress = 0xd;
 		{
-			int held = PROG_S32(obj, O_MOHCOUNT);
-			int lim = PROG_S32(obj, O_MOHLIMIT);
+			int held = obj->moh_timer;
+			int lim = obj->moh_limit;
 
-			PROG_S32(obj, O_MOHCOUNT) = held + n;
+			obj->moh_timer = held + n;
 			if (lim != -1 && (held + n) >= lim) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
@@ -5836,9 +5635,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		r = sess->ansam.process(in, (unsigned int)n);
 		if (r != 0) {
 			if (obj->status == 7) {
-				int held = PROG_S32(obj, O_MOHCOUNT);
+				int held = obj->moh_timer;
 
-				if (PROG_U8(obj, O_ANSAMLATE) != 0
+				if (obj->ansam_late != 0
 				    && held <= 0xbb7f) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
@@ -5871,7 +5670,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		*nbits = 0;
 		t = obj->train_symcount + n;
 		obj->train_symcount = t;
-		if (t < PROG_S32(obj, O_MOHCOUNT)) {
+		if (t < obj->moh_timer) {
 			obj->progress = 0;
 			ret = 0;
 			goto done;
@@ -5971,16 +5770,16 @@ done:
 	if ((unsigned int)(ret - 3) <= 3) {
 		const short *hist = obj->hist_2f58;
 		int limit = obj->hist2_idx;
-		int k0 = PROG_S16(obj, O_NOTCH_K0);
-		int k1 = PROG_S16(obj, O_NOTCH_K1);
-		int k2 = PROG_S16(obj, O_NOTCH_K2);
+		int k0 = obj->retrainReqDet.b1_q14;
+		int k1 = obj->retrainReqDet.a1_q14;
+		int k2 = obj->retrainReqDet.a2_q14;
 		int retrain = 0;
 
 		for (i = 0; i < limit; i++) {
-			int t1 = (PROG_S16(obj, O_NOTCH_S1) * k2 + 0x2000)
+			int t1 = (obj->retrainReqDet.y2 * k2 + 0x2000)
 				 >> 14;
 			int x = *hist++;
-			int s0 = PROG_S16(obj, O_NOTCH_S0);
+			int s0 = obj->retrainReqDet.y1;
 			int t2;
 			int s2;
 			int t3;
@@ -5989,20 +5788,20 @@ done:
 			int eout;
 			int blk;
 
-			PROG_S16(obj, O_NOTCH_S1) = (short)s0;
+			obj->retrainReqDet.y2 = (short)s0;
 			t2 = (s0 * k1 + 0x2000) >> 14;
-			s2 = PROG_S16(obj, O_NOTCH_S2);
-			PROG_S16(obj, O_NOTCH_S2) = (short)x;
+			s2 = obj->retrainReqDet.x1;
+			obj->retrainReqDet.x1 = (short)x;
 			t3 = (s2 * k0 + 0x2000) >> 14;
 			y = (short)(x + (short)t2 - (short)t1 - (short)t3
 				    + PROG_U16(obj, O_NOTCH_S3));
-			PROG_S16(obj, O_NOTCH_S3) = (short)s2;
-			PROG_S16(obj, O_NOTCH_S0) = (short)y;
+			obj->retrainReqDet.x2 = (short)s2;
+			obj->retrainReqDet.y1 = (short)y;
 
-			ein = PROG_S32(obj, O_NOTCH_EIN) + ((x * x + 0x20) >> 6);
-			eout = PROG_S32(obj, O_NOTCH_EOUT)
+			ein = obj->retrainReqDet.energyInp + ((x * x + 0x20) >> 6);
+			eout = obj->retrainReqDet.energyOut
 			       + ((y * y + 0x20) >> 6);
-			blk = PROG_S32(obj, O_NOTCH_BLK) + 1;
+			blk = obj->retrainReqDet.nsamples + 1;
 			if (blk == NOTCH_BLOCK) {
 				int ratio = ein >> 2;
 
@@ -6010,29 +5809,29 @@ done:
 				    && eout <= NOTCH_EOUT_MAX) {
 					int cnt;
 
-					PROG_S32(obj, O_NOTCH_EIN) = ein;
-					cnt = PROG_S32(obj, O_NOTCH_CNT);
-					PROG_S32(obj, O_NOTCH_EOUT) = eout;
-					PROG_S32(obj, O_NOTCH_BLK) =
+					obj->retrainReqDet.energyInp = ein;
+					cnt = obj->retrainReqDet.notchDetectSigCnt;
+					obj->retrainReqDet.energyOut = eout;
+					obj->retrainReqDet.nsamples =
 					    NOTCH_BLOCK;
-					PROG_S32(obj, O_NOTCH_CNT) = ++cnt;
+					obj->retrainReqDet.notchDetectSigCnt = ++cnt;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
 						    "********** " "retrainDetector() " "notchDetectSigCnt = %d "
 						    "energyInp>>NOTCH_IN_OUT_" "RATIO_SHIFT = %d " "energyOut = %d\r\n",
 						    cnt, ratio, eout);
 				} else {
-					PROG_S32(obj, O_NOTCH_CNT) = 0;
+					obj->retrainReqDet.notchDetectSigCnt = 0;
 				}
-				PROG_S32(obj, O_NOTCH_EIN) = 0;
-				PROG_S32(obj, O_NOTCH_EOUT) = 0;
-				PROG_S32(obj, O_NOTCH_BLK) = 0;
+				obj->retrainReqDet.energyInp = 0;
+				obj->retrainReqDet.energyOut = 0;
+				obj->retrainReqDet.nsamples = 0;
 			} else {
-				PROG_S32(obj, O_NOTCH_BLK) = blk;
-				PROG_S32(obj, O_NOTCH_EOUT) = eout;
-				PROG_S32(obj, O_NOTCH_EIN) = ein;
+				obj->retrainReqDet.nsamples = blk;
+				obj->retrainReqDet.energyOut = eout;
+				obj->retrainReqDet.energyInp = ein;
 			}
-			if (PROG_S32(obj, O_NOTCH_CNT) > NOTCH_SIGCNT_MAX) {
+			if (obj->retrainReqDet.notchDetectSigCnt > NOTCH_SIGCNT_MAX) {
 				retrain = 1;
 				break;
 			}

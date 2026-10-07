@@ -1272,7 +1272,7 @@ run_setv90(const struct req_case *c, short rrn_type, unsigned char constel,
 	diff_eq_int("SetV90RateReneg v90_receiver",
 		    oa.v90_receiver, rrn_type != 0 ? 15 : 11, tag);
 	diff_eq_int("SetV90RateReneg short_382",
-		    (int)(unsigned short)oa.short_382,
+		    (int)(unsigned short)oa.receiver.short_382,
 		    constel != 0 ? 0x89b0 : 0x8990, tag);
 	/* And it goes nowhere near the session object. */
 	check_session_chain("SetV90RateReneg chain", 0, 0, 0, tag);

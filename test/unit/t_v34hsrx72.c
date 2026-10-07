@@ -24,7 +24,7 @@
  * AND THE FSK-GATED SUBTREE IS REACHABLE FROM A SEED, which the analysis
  * this file was written from said it was not.  `fsk.nbits` and `fsk.sr` are
  * both written by `fskdemodulate` on the same step, from a burst `V34agc`
- * has just rewritten -- but `obj->fsk_inhibit` at +0x402 makes
+ * has just rewritten -- but `obj->receiver.retrain_gate` at +0x402 makes
  * `fskdemodulate` return without doing anything at all, not even running the
  * detector (v34fsk.h, DPSK.c:210).  Nothing on this path writes it, so
  * setting it leaves the two fields exactly as poked and the gate at 0x65145
@@ -741,7 +741,7 @@ suite_ends(void)
 /* --- the FSK gate, and the timeout ladder behind it --------------------- */
 
 /*
- * 0x65145 onwards, reached with `fsk_inhibit` set so that `fskdemodulate`
+ * 0x65145 onwards, reached with `retrain_gate` set so that `fskdemodulate`
  * returns without touching either field -- see the head of this file.
  *
  * The gate is `nbits <= 0x14 || (sr & 0xfff)`, and both halves are driven:

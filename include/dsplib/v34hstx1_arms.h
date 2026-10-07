@@ -133,17 +133,24 @@ static const char *StateName[V34HS_STATE_COUNT] = {
  * SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
  * Transposed, the RECEIVE machine would be the one entering SSEG.  The
  * table's own `TX_` and `RX_` prefixes say that is the wrong way round.
+ *
+ * The words themselves are `struct v34_object`'s `microstate`, `rxstate` and
+ * `txstate` members (v34fsk.h), and the setters below bind each one at
+ * compile time; v34hshak.h's `V34HS_*_OFF` remain for the readers that
+ * reach the words by offset.
  */
-#define HS_MICROSTATE	0x3592
-#define HS_RXSTATE	0x3594
-#define HS_TXSTATE	0x3596
 
 /*
  * The two counters every trace prints as `[1]` and `[2]`.  `[1]` is the
  * second short of the pair at +0x2aa0, whose first `v34modeminit` sets to 6
  * and this function's tail sets to 0x10.
+ *
+ * Struct-anchored (issue #260 wave 11): the offset is the member's own, so
+ * the frame's byte reads cannot drift from the declaration.  REQUIRES the
+ * consumer to include v34fsk.h first (V34hshak.c and t_v34hstx1.c both do).
  */
-#define HS_TRACE_2	0xaa78
+#define HS_TRACE_2	((int)__builtin_offsetof(struct v34_object, \
+							short_aa78))
 
 static inline short
 hs_get(const struct v34_object *obj, unsigned off)
@@ -151,18 +158,22 @@ hs_get(const struct v34_object *obj, unsigned off)
 	return *(const short *)((const char *)obj + off);
 }
 
-static inline void
-hs_put(struct v34_object *obj, unsigned off, short v)
-{
-	*(short *)((char *)obj + off) = v;
-}
+/*
+ * `hs_put` is GONE (issue #260 wave 11): wave 6 typed the writes through the
+ * three setters below, and every bare `hs_put` call site since became a
+ * member store, so no real caller was left.  `hs_get` survives -- its three
+ * remaining callers are `datapumpv34`'s, where the whole accessor rewrite
+ * was measured and DECLINED (findings F8044/F8045).
+ */
 
 /*
- * One state transition, with its diagnostic.
+ * One state transition, with its diagnostic -- one setter per machine.
  *
  * All thirteen sites are this idiom -- compare, print, assign -- and each
- * prints its own change plus the other two machines' current values, so the
- * three format strings differ only in which word they call the subject.
+ * prints its own change plus the other two machines' current values.  The
+ * three setters bind their word at compile time (issue #260 wave 6): the
+ * struct member IS the word, so there is no offset parameter left to hand
+ * to the wrong machine and the trace cannot be separated from its store.
  *
  * THE TWO CONTEXT SLOTS ARE NOT INTERCHANGEABLE and the order below is the
  * object's: "rxstate" prints (tx, mst), "txstate" prints (rx, mst) and
@@ -170,61 +181,89 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * order leaves every byte of the object identical, which is why the fixture
  * sweeps the three words to three DIFFERENT values and not to one.
  *
- * THE FORMAT IS A LITERAL PER BRANCH, NOT A `static const char *const fmt[3]`
- * INDEXED BY `off`.  THE OBJECT HAS NO FORMAT TABLE: all 153 `R_386_32`
+ * THE FORMAT IS A LITERAL PER SETTER, NOT A `static const char *const
+ * fmt[3]` TABLE.  THE OBJECT HAS NO FORMAT TABLE: all 153 `R_386_32`
  * references to the three strings are from `.text`, none from `.rodata` or
- * `.data`, and its `v34handshak` carries 140 of them as the inlined copies of
- * this function.  GCC 3.4.2 does NOT constant-fold `fmt[(off - HS_MICROSTATE)
- * / 2]`, so the table form emitted the indices and referenced the strings
- * through a `.rodata` table instead -- 0 direct references where the object
- * has 140 (finding F11509).  With the literal selected in the branch, the
- * inlined and constant-folded copies reference the string directly, as the
- * object does.  Do not restore a table here.
+ * `.data`, and its `v34handshak` carries 140 of them as the inlined copies
+ * of these setters.  GCC 3.4.2 does NOT constant-fold a table index into a
+ * direct string reference, so the table form emitted the indices and
+ * referenced the strings through a `.rodata` table instead -- 0 direct
+ * references where the object has 140 (finding F11509).  With a literal in
+ * each setter, the inlined and constant-folded copies reference the string
+ * directly, as the object does.  Do not restore a table here.
  *
  * The object's equality test uses the halfword before extending it for
- * signed StateName indexing on the debug path.  Compare the storage directly:
- * GCC 3.4.2 promotes a signed hs_get return before the equality test, even
- * when that helper is inlined.  A debug-local read lets GCC retain the first
- * halfword and extend it only where the index is needed.  The signed field
- * and the signed debug index remain unchanged (see docs/v34-small-rtl.md).
+ * signed StateName indexing on the debug path.  Compare and read the
+ * member directly: GCC 3.4.2 promotes a signed read before the equality
+ * test, and a debug-local read lets GCC retain the first halfword and
+ * extend it only where the index is needed.  The signed field and the
+ * signed debug index remain unchanged (see docs/v34-small-rtl.md).
  *
- * `static inline`, as are `hs_get` and `hs_put` above: the object inlines the
- * whole closure into `v34handshak` and defines no `hs_*` symbol at all
+ * `static inline`, as are `hs_get` and `hs_put` below: the object inlines
+ * the whole closure into `v34handshak` and defines no `hs_*` symbol at all
  * (finding F11506/F11507).
  */
 static inline void
-hs_setstate(struct v34_object *obj, unsigned off, short next)
+hs_set_microstate(struct v34_object *obj, short next)
 {
-	if (*(const short *)((const char *)obj + off) == next)
+	if (obj->microstate == next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = hs_get(obj, off);
-		const char *ctx1;
-		const char *ctx2;
-		const char *sel;
+		short now = obj->microstate;
+		const char *ctx1 = StateName[obj->txstate];
+		const char *ctx2 = StateName[obj->rxstate];
 
-		if (off == HS_MICROSTATE) {
-			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_RXSTATE)];
-			sel = "V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n";
-		} else if (off == HS_RXSTATE) {
-			ctx1 = StateName[hs_get(obj, HS_TXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
-			sel = "V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n";
-		} else {
-			ctx1 = StateName[hs_get(obj, HS_RXSTATE)];
-			ctx2 = StateName[hs_get(obj, HS_MICROSTATE)];
-			sel = "V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n";
-		}
-
-		dsplibs_debug_printf(sel, StateName[now], StateName[next],
+		dsplibs_debug_printf("V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
-				     (long)hs_get(obj, HS_TRACE_2));
+				     (long)obj->short_aa78);
 	}
 
-	hs_put(obj, off, next);
+	obj->microstate = next;
+}
+
+static inline void
+hs_set_rxstate(struct v34_object *obj, short next)
+{
+	if (obj->rxstate == next)
+		return;
+
+	if (DSPLIB_DEBUG_ON()) {
+		short now = obj->rxstate;
+		const char *ctx1 = StateName[obj->txstate];
+		const char *ctx2 = StateName[obj->microstate];
+
+		dsplibs_debug_printf("V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
+				     ctx1, ctx2,
+				     (long)obj->vect_idx,
+				     (long)obj->short_aa78);
+	}
+
+	obj->rxstate = next;
+}
+
+static inline void
+hs_set_txstate(struct v34_object *obj, short next)
+{
+	if (obj->txstate == next)
+		return;
+
+	if (DSPLIB_DEBUG_ON()) {
+		short now = obj->txstate;
+		const char *ctx1 = StateName[obj->rxstate];
+		const char *ctx2 = StateName[obj->microstate];
+
+		dsplibs_debug_printf("V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n",
+				     StateName[now], StateName[next],
+				     ctx1, ctx2,
+				     (long)obj->vect_idx,
+				     (long)obj->short_aa78);
+	}
+
+	obj->txstate = next;
 }
 
 /*
@@ -234,48 +273,24 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  */
 #define PROG_TXBIT_DATA		0x10
 
-/* The receiver sub-object; `0x74(%esp)` above. */
-#define TX1_RECEIVER	0x264
-
-/* The transmit state machine's own word (finding F213). */
-#define TX1_TXSTATE	0x3596
-
 /*
  * +0xaa78, the counter three of these six read.  V34hshak.c calls it
  * `HS_TRACE_2` because every handshake diagnostic prints it as `[2]`;
  * `v34handshakinit` zeroes it and the arms here count it DOWN to zero (78,
- * 85) or count `vect_idx` UP to it (86).  It is inside `unmapped_aa78`, so
- * it is reached by offset exactly as V34hshak.c:421 reaches it.
+ * 85) or count `vect_idx` UP to it (86).  V34hshak.c calls the same member
+ * `T3M_COUNTER`; both names are its own offset now (issue #260 wave 11).
  */
-#define TX1_COUNT	0xaa78
+#define TX1_COUNT	((int)__builtin_offsetof(struct v34_object, \
+							short_aa78))
 
-/*
- * +0x35a6.  86 compares `vect_idx` against it to decide when the modulator is
- * reconfigured.  Nothing else in the tree reads it; it is `unmapped_35a6`.
- */
-#define TX1_SEGLEN	0x35a6
-
-/* The modulator, where V34SetupModulator writes it -- V34hshak.c:302. */
-#define TX1_MODULATOR	0x1450
 
 /*
  * +0x358c.  60 masks it with one to choose between two of `vect4`'s four
- * points.  It is inside `unmapped_3564`; the only other site in the tree is
- * V34hshak.c:1480, where `v34handshakinit` clears it.
+ * points.  The member's own offset (issue #260 wave 11); the only other
+ * site in the tree is V34hshak.c:1480, where `v34handshakinit` clears it.
  */
-#define TX1_F358C	0x358c
-
-/* +0x3594, the RXSTATE (finding F213).  74's retrain is its only writer here. */
-#define TX1_RXSTATE	0x3594
-
-/*
- * +0x3592, the MICROSTATE (finding F213).  51 is the one arm here that reads
- * a state word belonging to another machine: it selects between two copies of
- * its own loop on `microstate == TX_L1`, having been dispatched on
- * `txstate == TX_L1`.  The two 51s are the same number in two machines and
- * `StateName` is one table for all three (docs/v34handshak.md).
- */
-#define TX1_MICROSTATE	0x3592
+#define TX1_F358C	((int)__builtin_offsetof(struct v34_object, \
+							short_358c))
 
 /*
  * +0x2218, an int.  Table 2's tail reads it to choose four of its arms
@@ -288,30 +303,25 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * than reached as `o->hs_mode`, matching every other field here that a
  * second file also reaches by offset (`v34hstxblock.c`'s own `TB_F2218`) --
  * see `TX1_FAAE0`/`TX1_FAA3C` above for why that convention is deliberate.
+ * The VALUE is the member's own offset now (issue #260 wave 11).
  */
-#define TX1_HS_MODE	0x2218
+#define TX1_HS_MODE	((int)__builtin_offsetof(struct v34_object, \
+							hs_mode))
+
 
 /*
- * +0x358e and +0x35a4, two more words of `unmapped_3564`.
- *
- * +0x358e is a SEGMENT COUNTER shared by 19 and 20: 20 counts it up to six
- * and 19 clears it, both on the pass that changes `txstate`.  +0x35a4 is the
- * length 19 scales by 0x53 into +0x35a6, and zero there is what sends 19 to
- * PPSEG instead of TXMD.  Neither has another reader in this tree.
+ * +0xaa7a, +0xaa7c and +0xaa86, the three words beside the counter these
+ * arms touch.  5/54/74 clears +0xaa7a before it writes the queue; 20 adds
+ * +0xaa7c into the counter and accumulates +0xaa86.  Each is the member's
+ * own offset (issue #260 wave 11): +0xaa7a is `short_aa7a`, +0xaa7c the
+ * object's own `filtdelay`, and +0xaa86 the rate config's `period`.
  */
-#define TX1_F358E	0x358e
-#define TX1_F35A4	0x35a4
-
-/*
- * +0xaa7a, +0xaa7c and +0xaa86, the three words of the `unmapped_aa78` /
- * `unmapped_aa80` region these arms touch besides the counter at +0xaa78.
- * 5/54/74 clears +0xaa7a before it writes the queue; 20 adds +0xaa7c into the
- * counter and accumulates +0xaa86.  `rtd` at +0xaa7e is named in
- * `struct v34_object` and is reached as a field.
- */
-#define TX1_FAA7A	0xaa7a
-#define TX1_FAA7C	0xaa7c
-#define TX1_FAA86	0xaa86
+#define TX1_FAA7A	((int)__builtin_offsetof(struct v34_object, \
+							short_aa7a))
+#define TX1_FAA7C	((int)__builtin_offsetof(struct v34_object, \
+							filtdelay))
+#define TX1_FAA86	((int)__builtin_offsetof(struct v34_object, ratecfg) \
+			 + (int)__builtin_offsetof(struct v34_ratecfg, period))
 
 /*
  * +0xaae0 and +0xaae2.  `struct v34_object` names them `fsk.nbits` and
@@ -319,10 +329,13 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * uses them as two words of its own -- V34hshak.c's table-3 core reaches them
  * by offset as `T3C_FAAE0` and `T3C_FAAE2` for the same reason, and 74's
  * retrain writes -1 and 0 into them.  Reached by offset here so that the
- * name of the other reader is not asserted to be the meaning here.
+ * name of the other reader is not asserted to be the meaning here; the
+ * VALUE is the member's own offset (issue #260 wave 11).
  */
-#define TX1_FAAE0	0xaae0
-#define TX1_FAAE2	0xaae2
+#define TX1_FAAE0	((int)__builtin_offsetof(struct v34_object, fsk) \
+			 + (int)__builtin_offsetof(struct v34_fsk, nbits))
+#define TX1_FAAE2	((int)__builtin_offsetof(struct v34_object, fsk) \
+			 + (int)__builtin_offsetof(struct v34_fsk, sr))
 
 /*
  * +0xabe8, a BYTE.  `v34handshakinit`'s Modem-on-Hold bring-up sets it to one
@@ -331,9 +344,11 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  *
  * Named `moh_active` in `struct v34_object` (`v34fsk.h`) -- kept as a
  * raw-offset macro here rather than `o->moh_active`, matching this file's own
- * convention for fields also reached elsewhere by offset.
+ * convention for fields also reached elsewhere by offset.  The VALUE is the
+ * member's own offset (issue #260 wave 11).
  */
-#define TX1_MOH_ACTIVE	0xabe8
+#define TX1_MOH_ACTIVE	((int)__builtin_offsetof(struct v34_object, \
+							moh_active))
 
 /*
  * +0x25d6, +0x25d8 and +0x25da -- the three halfwords of `unmapped_25d6` that
@@ -352,14 +367,13 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
 #define TX1_F25DA	0x25da
 
 /*
- * +0x35a2, one halfword of `unmapped_359e`, and +0x382, which is the
- * RECEIVER's +0x11e -- `0x74(%esp)` plus 0x11e -- and lands in that
- * structure's `pad_000`, so neither is a named field anywhere in this tree.
- * 64/68 tests +0x35a2 against zero on its `role == 0x66` path and 69 tests
- * +0x382 against 0x89b0 to choose between four points and sixteen.
+ * +0x35a2 and +0x382 are members since issue #260 wave 9 (`md_length` on the
+ * object; the receiver's `short_382`, the Indicate word whose low half the
+ * TRN2 shift register also runs through) -- the sites below read them as
+ * members now.  64/68 test `md_length` against zero on their `role == 0x66`
+ * path and 69 tests `short_382` against 0x89b0 to choose between four points
+ * and sixteen.
  */
-#define TX1_F35A2	0x35a2
-#define TX1_F382	0x382
 
 /*
  * +0x3590, +0x3598 and +0x359e -- three halfwords 67 owns, and no other site
@@ -371,9 +385,12 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * that stops `initdigital` being called twice.  All three are inside
  * `unmapped_3564` and `unmapped_359e`.
  */
-#define TX1_F3590	0x3590
-#define TX1_F3598	0x3598
-#define TX1_F359E	0x359e
+#define TX1_F3590	((int)__builtin_offsetof(struct v34_object, \
+							short_3590))
+#define TX1_F3598	((int)__builtin_offsetof(struct v34_object, \
+							short_3598))
+#define TX1_F359E	((int)__builtin_offsetof(struct v34_object, \
+							short_359e))
 
 /*
  * +0xaa3c, read as a BYTE.  `struct v34_object` names the halfword there
@@ -387,59 +404,60 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * tests bit 0 at obj+0xaa3c; 0x647db tests bit 0 of `*(+0xaa6c)` and 0x647ef
  * sets it there.  Reached by offset here rather than as `info_caps` so that
  * the other reader's name is not asserted to be the meaning, exactly as
- * TX1_FAAE0 and TX1_FAAE2 are.
+ * TX1_FAAE0 and TX1_FAAE2 are; the VALUE is the member's own offset
+ * (issue #260 wave 11).
  */
-#define TX1_FAA3C	0xaa3c
+#define TX1_FAA3C	((int)__builtin_offsetof(struct v34_object, \
+							info_caps))
 
 /*
  * +0xa244, an INT, and +0xaa80, a halfword.
  *
  * 21 reads +0xa244 three ways in one compare chain -- against its half, its
- * whole and nothing else -- and no other site in this tree reads it; it is
- * inside `unmapped_a242`.  +0xaa80 is the first halfword of `unmapped_aa80`,
- * the region whose +4 and +6 are the rate configuration's baud and 20's
- * +0xaa86; 21 stores one into it and nothing here reads it back.
+ * whole and nothing else -- and no other site in this tree reads it.  It is
+ * `phase3_hd_length` now (issue #260 wave 11), and the low half its chain
+ * tests is that int's low halfword, so the half reads stay helper reads of
+ * the same anchored offset.  +0xaa80 is `rate_change_pending`: 21 stores one
+ * into it and nothing here reads it back.
  */
-#define TX1_FA244	0xa244
-#define TX1_FAA80	0xaa80
+#define TX1_FA244	((int)__builtin_offsetof(struct v34_object, \
+						phase3_hd_length))
+#define TX1_FAA80	((int)__builtin_offsetof(struct v34_object, \
+						rate_change_pending))
 
 /*
- * +0xaa0c, the second of the five 0x30-byte message records that run from
- * +0xa94c to +0xaa3c.  `struct v34_object` names its first halfword
- * `info_rates`; V34hshak.c:1406 blanks the SAME twelve fields at +0x14
- * through +0x2c that 21's completion blanks, which is what says the two are
- * one record and not two overlapping readings of one region.  Reached by
- * offset here for the reason TX1_FAAE0 and TX1_FAA3C are.
+ * +0xaa0c, `msgrec[4]` of the one array that runs from +0xa94c to +0xaa3c
+ * (issue #260 wave 8; V34hshak.c:1450 blanks the same record and its own
+ * comment records that record 4 is msgrec[4] -- the "second of the five"
+ * this comment used to say was this define's arithmetic error, caught by
+ * the t_v34hstx1 fixture the moment the offset was spelled through the
+ * member in issue #260 wave 11 and corrected here).  Its first halfword
+ * carried the object's `info_rates` reading, and the MP transmitter builds
+ * its message into it.  Reached by offset here for the reason TX1_FAAE0
+ * and TX1_FAA3C are; the VALUE is the record's own offset.
  */
-#define TX1_INFOREC	0xaa0c
+#define TX1_INFOREC	((int)__builtin_offsetof(struct v34_object, \
+						msgrec[4]))
 
 /*
  * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
  * `v34handshakinit` aims the same pair on its mode-4 path (V34hshak.c:1451),
  * and 54's completion aims it again before handing the record to
  * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
- * and checks it by offset instead (finding F324).
+ * and checks it by offset instead (finding F324).  Both are members of
+ * `struct v34_object` now (issue #260): `paa6c` and `msgrec`.
  */
-#define TX1_PTR_AA6C	0xaa6c
-#define TX1_BLK_A94C	0xa94c
 
-/*
- * +0x238 and +0x248, two of the four words of the sample-clock timer in
- * `unmapped_0234`.  `datapumpv34` reads the running count at +0x238 against
- * the mark at +0x248 and reports a stall when the span passes 287,488; 70
- * copies one onto the other, which restarts the span.  v34fsk.h's note on
- * that region is the other half of this reading.
- */
-#define TX1_TIMER	0x238
-#define TX1_TIMER_MARK	0x248
 
 /*
  * +0xaa98, a short: the negotiated rate INDEX rather than a bit rate --
  * `VPcmV34GetCurrentRxBitRate` multiplies the same units by 2400.  70 copies
  * it, sign-extended, into `rate_now` and `rate_want`; v34fsk.h names those
- * two off this site and off 0x63395's read-back.
+ * two off this site and off 0x63395's read-back.  The offset is the rate
+ * config's `rxbits` member (issue #260 wave 11).
  */
-#define TX1_RATEIDX	0xaa98
+#define TX1_RATEIDX	((int)__builtin_offsetof(struct v34_object, \
+						ratecfg.rxbits))
 
 /*
  * +0xaa88, a short: the TRANSMIT side's rate index, the other half of the
@@ -449,9 +467,11 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  * $0x960`, on its way out.  The data-mode diagnostic at 0x63d1a reads it and
  * TX1_RATEIDX together and multiplies both by 2400; the format string calls
  * the first `Tx bit rate` and the second `Rx bit Rate`, which is the order
- * the object passes them and not a transcription slip.
+ * the object passes them and not a transcription slip.  The offset is the
+ * member's own (issue #260 wave 11).
  */
-#define TX1_TXRATEIDX	0xaa88
+#define TX1_TXRATEIDX	((int)__builtin_offsetof(struct v34_object, \
+						ratecfg.txbits))
 
 /*
  * The transmitted point.  `txpoint` is two shorts and every arm that sends a
@@ -482,17 +502,11 @@ tx1_put(void *objp, unsigned off, short v)
 	*(short *)((char *)objp + off) = v;
 }
 
-static int
-tx1_get_int(const void *objp, unsigned off)
-{
-	return *(const int *)((const char *)objp + off);
-}
-
-static void
-tx1_put_int(void *objp, unsigned off, int v)
-{
-	*(int *)((char *)objp + off) = v;
-}
+/*
+ * `tx1_get_int`/`tx1_put_int` are GONE (issue #260 wave 11): their sites --
+ * `hs_mode`, `phase3_hd_length`, `msg_acc`, `msg_acc0` -- became member
+ * reads and stores, and no caller is left.
+ */
 
 /*
  * ---------------------------------------------------------------------------
@@ -523,8 +537,7 @@ static int
 v34tx1_xmit0(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 
 	o->txpoint.c[0] = 0;
 	o->txpoint.c[1] = 0;
@@ -532,7 +545,7 @@ v34tx1_xmit0(void *objp)
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
 		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);
-		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_set_txstate(o, V34HS_SSEG);
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
@@ -617,13 +630,13 @@ v34tx1_txlevel(void *objp)
 static int
 tx1_ja_common(struct v34_object *o, const char *msg)
 {
-	unsigned short c = (unsigned short)tx1_get(o, TX1_COUNT);
+	unsigned short c = (unsigned short)o->short_aa78;
 
 	if (c == 0)
 		return 0;
 
 	c = (unsigned short)(c - 1);
-	tx1_put(o, TX1_COUNT, (short)c);
+	o->short_aa78 = (short)c;
 	if (c != 0)
 		return 0;
 
@@ -690,7 +703,7 @@ v34tx1_k56jatxmit(void *objp)
  * diagnostic in front of them, which is where +0xabec's name comes from.
  *
  * The compares against 0x52 at 0x66dc6 and 0x53 at 0x68ae3 are
- * `hs_setstate`'s own "already there" early return inlined, not a fifth
+ * the setter's own "already there" early return inlined, not a fifth
  * state test: `jne 63941` has established that the halfword holds 0x51, so
  * neither can be true.  Findings F722 and F730's shape.
  *
@@ -715,7 +728,7 @@ v34tx1_moh_silence(void *objp)
 		return V34TX1_LOOP;			/* 0x63da2 */
 
 	/* 0x66d85 */
-	if (tx1_get(o, TX1_TXSTATE) != V34HS_MOH_SILENCE)
+	if (o->txstate != V34HS_MOH_SILENCE)
 		return V34TX1_LOOP;			/* 0x63941 */
 
 	if (dsplibs_debug_level > 1)			/* 0x66d98 */
@@ -724,7 +737,7 @@ v34tx1_moh_silence(void *objp)
 			o->moh_org, o->moh_message);
 
 	/* 0x66dac */
-	hs_setstate(o, TX1_TXSTATE,
+	hs_set_txstate(o,
 		    (o->moh_org == 1 || o->moh_message == 1)
 		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
 
@@ -784,7 +797,7 @@ v34tx1_txmd(void *objp)
 
 	o->vect_idx = (short)(o->vect_idx + 1);
 	if ((unsigned short)o->vect_idx
-	    == (unsigned short)tx1_get(o, TX1_COUNT)) {
+	    == (unsigned short)o->short_aa78) {
 		/* 0x66fe9 */
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
@@ -798,20 +811,18 @@ v34tx1_txmd(void *objp)
 	}
 
 	if ((unsigned short)o->vect_idx
-	    == (unsigned short)tx1_get(o, TX1_SEGLEN)) {
-		struct v34_ratecfg *cfg =
-			(struct v34_ratecfg *)((char *)o + V34_RATECFG);
+	    == (unsigned short)o->seg_len) {
+		struct v34_ratecfg *cfg = &o->ratecfg;
 		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
 
 		if (dsplibs_debug_level > 1)		/* 0x6800d */
 			dsplibs_debug_printf(
 				"TX: Done with MD, moving to S/Sbar" " again...\r\n");
 
-		V34SetupModulator((struct v34_modulator *)
-				  ((char *)o + TX1_MODULATOR),
+		V34SetupModulator(v34_object_modulator(o),
 				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
-		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
+		hs_set_txstate(o, V34HS_SSEG);
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
 		o->tx_flags = (short)((unsigned short)o->tx_flags
@@ -848,7 +859,7 @@ static int
 v34tx1_tone_ab(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	int sel = tx1_get(o, TX1_F358C) & 1;
+	int sel = o->short_358c & 1;
 
 	tx1_put_point(o, vect4[2 * sel]);
 	txmit(o);
@@ -898,7 +909,7 @@ v34tx1_sseg(void *objp)
 	o->seg_symcount = (short)n;
 	if (n == 0x40) {
 		/* 0x66d11 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);
+		hs_set_txstate(o, V34HS_SBARSEG);
 		o->seg_symcount = 0;
 	}
 	return V34TX1_LOOP;
@@ -942,8 +953,7 @@ static int
 v34tx1_dataxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	int idx;
 
 	modulatevector(o);
@@ -953,9 +963,9 @@ v34tx1_dataxmit(void *objp)
 
 	rx->equerr_accum = 0;
 	rx->err_symcount = 0;
-	tx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));
+	o->int_0248 = o->sample_count;
 
-	idx = tx1_get(o, TX1_RATEIDX);
+	idx = o->ratecfg.rxbits;
 	o->rate_now = idx;
 	o->rate_want = idx;
 
@@ -971,13 +981,13 @@ v34tx1_dataxmit(void *objp)
 	 * on 0xaa88 and its sibling on 0xaa98, and 0xaa88 lands in the first
 	 * vararg slot.  Finding F11444's residual, closed here.
 	 */
-	if (tx1_get_int(o, TX1_HS_MODE) == 0 && DSPLIB_DEBUG_ON())
+	if (o->hs_mode == 0 && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"V34DATA, getting into data mode from Handshake, "
 			"Tx bit rate - %d, Rx bit Rate - %d\n",
-			tx1_get(o, TX1_TXRATEIDX) * 2400, idx * 2400);
+			o->ratecfg.txbits * 2400, idx * 2400);
 
-	tx1_put_int(o, TX1_HS_MODE, 1);
+	o->hs_mode = 1;
 	return V34TX1_LOOP;
 }
 
@@ -1027,7 +1037,13 @@ static int
 v34tx1_tx_l1(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	int doubled = tx1_get(o, TX1_MICROSTATE) == V34HS_TX_L1;
+	/* Arm 51 is the one arm here that reads a state word belonging to
+	 * another machine: it selects between two copies of its own loop on
+	 * `microstate == TX_L1`, having been dispatched on
+	 * `txstate == TX_L1`.  The two 51s are the same number in two
+	 * machines and `StateName` is one table for all three
+	 * (docs/v34handshak.md). */
+	int doubled = o->microstate == V34HS_TX_L1;
 	short buf[4];
 	int i;
 
@@ -1043,12 +1059,12 @@ v34tx1_tx_l1(void *objp)
 
 	txwritequeue(&o->txq, buf);
 
-	if (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)
+	if (o->microstate != V34HS_TX_L1)
 		return V34TX1_LOOP;
 	if ((unsigned short)o->vect_idx != 0x600u)
 		return V34TX1_LOOP;
 
-	hs_setstate(o, TX1_MICROSTATE, V34HS_TX_L2);
+	hs_set_microstate(o, V34HS_TX_L2);
 	/* 0x62d32 */
 	o->vect_idx = 0;
 	return V34TX1_LOOP;
@@ -1132,26 +1148,24 @@ v34tx1_sbarseg(void *objp)
 	/* 0x671f0 */
 	o->seg_symcount = 0;
 	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
-		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
-	} else if (tx1_get(o, TX1_F35A4) == 0) {
+		hs_set_txstate(o, V34HS_TRNSEG4A);
+	} else if (o->short_35a4 == 0) {
 		/* 0x68375 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
+		hs_set_txstate(o, V34HS_PPSEG);
 	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
 		/* 0x69eca */
-		o->seg_symcount = tx1_get(o, TX1_SEGLEN);
-		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
+		o->seg_symcount = o->seg_len;
+		hs_set_txstate(o, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
 		int span;
 		short q;
 
-		tx1_put(o, TX1_SEGLEN,
-			(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));
-		hs_setstate(o, TX1_TXSTATE, V34HS_TXMD);
+		o->seg_len = (short)((unsigned short)o->short_35a4 * 0x53);
+		hs_set_txstate(o, V34HS_TXMD);
 
 		/* 0x67885 */
-		V34SetupModulator((struct v34_modulator *)
-				  ((char *)o + TX1_MODULATOR),
+		V34SetupModulator(v34_object_modulator(o),
 				  4800, 2400, 0, 0, 0);
 
 		/*
@@ -1162,18 +1176,18 @@ v34tx1_sbarseg(void *objp)
 		 */
 		span = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);
 		q = (short)(span / 9600);
-		tx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));
+		o->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);
 		if (dsplibs_debug_level > 1)		/* 0x67916 */
 			dsplibs_debug_printf(
 				"Moving to TX MD, would take %d symbols ,"
 				" echo start delay is %d...\r\n",
-				tx1_get(o, TX1_SEGLEN),
-				tx1_get(o, TX1_COUNT));
+				o->seg_len,
+				o->short_aa78);
 	}
 
 	/* 0x67236 */
 	o->vect_idx = 0;
-	tx1_put(o, TX1_F358E, 0);
+	o->short_358e = 0;
 	return V34TX1_LOOP;			/* 0x63948 */
 }
 
@@ -1246,15 +1260,14 @@ v34tx1_ppseg(void *objp)
 	if ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {
 		/* 0x66d57 */
 		unsigned short n = (unsigned short)
-			((unsigned short)tx1_get(o, TX1_F358E) + 1);
+			((unsigned short)o->short_358e + 1);
 
 		if (n != 6) {
-			tx1_put(o, TX1_F358E, (short)n);
+			o->short_358e = (short)n;
 			o->vect_idx = 0;
 		} else {
 			/* 0x680ac */
-			struct v34_ratecfg *cfg = (struct v34_ratecfg *)
-						  ((char *)o + V34_RATECFG);
+			struct v34_ratecfg *cfg = &o->ratecfg;
 			short v = (short)((unsigned short)o->rtd + 0x90);
 			short baud = cfg->baud;
 			int span, q, acc;
@@ -1262,56 +1275,56 @@ v34tx1_ppseg(void *objp)
 			o->vect_idx = v;
 			switch ((unsigned short)baud) {
 			case 2400:
-				tx1_put(o, TX1_FAA86, (short)(v >> 2));
+				o->ratecfg.period = (short)(v >> 2);
 				break;
 			case 2800:
-				tx1_put(o, TX1_FAA86,
-					(short)(((int)v * 0x12ab) >> 14));
+				o->ratecfg.period =
+					(short)(((int)v * 0x12ab) >> 14);
 				break;
 			case 3000:
-				tx1_put(o, TX1_FAA86,
-					(short)(((int)v * 0x1400) >> 14));
+				o->ratecfg.period =
+					(short)(((int)v * 0x1400) >> 14);
 				break;
 			case 3200:
-				tx1_put(o, TX1_FAA86,
-					(short)(((int)v * 0x1555) >> 14));
+				o->ratecfg.period =
+					(short)(((int)v * 0x1555) >> 14);
 				break;
 			case 3429:
-				tx1_put(o, TX1_FAA86,
-					(short)(((int)v * 0x16dc) >> 14));
+				o->ratecfg.period =
+					(short)(((int)v * 0x16dc) >> 14);
 				break;
 			default:
 				break;
 			}
 
 			/* 0x680fd */
-			tx1_put(o, TX1_F358E, 0);
-			tx1_put(o, TX1_FAA86,
-				(short)((unsigned short)tx1_get(o, TX1_FAA86)
-					+ 0x120));
-			hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);
+			o->short_358e = 0;
+			o->ratecfg.period =
+				(short)((unsigned short)o->ratecfg.period
+					+ 0x120);
+			hs_set_txstate(o, V34HS_TRNSEG4);
 
 			/* 0x68154 */
 			span = (0x5e8 - o->dmadelay) * (int)baud;
 			q = span / 9600;
-			tx1_put(o, TX1_COUNT, (short)q);	/* 0x6818d */
+			o->short_aa78 = (short)q;	/* 0x6818d */
 
-			acc = q + (unsigned short)tx1_get(o, TX1_FAA7C)
+			acc = q + (unsigned short)o->filtdelay
 				+ (unsigned short)o->seg_symcount + 1;
 			if (o->role == 0x65)			/* 0x6926d */
 				acc += (unsigned short)o->rtd;
-			tx1_put(o, TX1_COUNT, (short)acc);
+			o->short_aa78 = (short)acc;
 
 			/* 0x681c6 */
-			tx1_put(o, TX1_FAA86,
-				(short)((unsigned short)tx1_get(o, TX1_FAA86)
-					+ (unsigned short)tx1_get(o, TX1_COUNT)));
+			o->ratecfg.period =
+				(short)((unsigned short)o->ratecfg.period
+					+ (unsigned short)o->short_aa78);
 			if (dsplibs_debug_level > 1)	/* 0x681ef */
 				dsplibs_debug_printf(
 					"V34Hshak: echo start wait time would" " be: NEC %d symbols, FEC %d"
 					" symbols...\r\n",
-					tx1_get(o, TX1_COUNT),
-					tx1_get(o, TX1_FAA86));
+					o->short_aa78,
+					o->ratecfg.period);
 			return V34TX1_LOOP;		/* 0x63da2 */
 		}
 	}
@@ -1387,8 +1400,7 @@ static int
 v34tx1_silence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	short quiet[4];
 	short txst;
 	unsigned short n;
@@ -1397,10 +1409,10 @@ v34tx1_silence(void *objp)
 	quiet[1] = 0;
 	quiet[2] = 0;
 	quiet[3] = 0;
-	tx1_put(o, TX1_FAA7A, 0);
+	o->short_aa7a = 0;
 	txwritequeue(&o->txq, quiet);
 
-	txst = tx1_get(o, TX1_TXSTATE);
+	txst = o->txstate;
 
 	if (txst == V34HS_SILENCERETRAIN) {
 		/* 0x66b87 */
@@ -1412,24 +1424,24 @@ v34tx1_silence(void *objp)
 			return V34TX1_LOOP;		/* 0x63da2 */
 
 		/* 0x66ba1 */
-		if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
+		if (o->moh_active != 0)
 			want = V34HS_MOH_TONE;
 		else					/* 0x68a7c */
 			want = o->role == 0x65 ? V34HS_RX_PHASE1_CALL
 						: V34HS_TX_PHASE1_ANS;
-		hs_setstate(o, TX1_MICROSTATE, want);
+		hs_set_microstate(o, want);
 
 		/* 0x66be0 */
-		hs_setstate(o, TX1_RXSTATE, V34HS_RX_DPSK);
+		hs_set_rxstate(o, V34HS_RX_DPSK);
 		/* 0x66c10 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_set_txstate(o, V34HS_TONE_AB);
 
 		/* 0x66c32 */
-		tx1_put(o, TX1_F358C, 0);
+		o->short_358c = 0;
 		o->vect_idx = 0;
-		tx1_put(o, TX1_COUNT, 0);
-		tx1_put(o, TX1_FAAE2, -1);
-		tx1_put(o, TX1_FAAE0, 0);
+		o->short_aa78 = 0;
+		o->fsk.sr = -1;
+		o->fsk.nbits = 0;
 		if (dsplibs_debug_level > 1)		/* 0x66c72 */
 			dsplibs_debug_printf(
 				"V34RETRAIN, SILENCERETRAIN finished," " rx->rxflgs,=0x%x,rx->gain=0x%x,"
@@ -1458,11 +1470,10 @@ v34tx1_silence(void *objp)
 		return V34TX1_LOOP;			/* 0x629cf */
 
 	/* 0x6858f */
-	hs_setstate(o, TX1_TXSTATE, V34HS_TX_DPSK);
+	hs_set_txstate(o, V34HS_TX_DPSK);
 	o->vect_idx = 0;
-	*(short **)((char *)o + TX1_PTR_AA6C) =
-		(short *)((char *)o + TX1_BLK_A94C);
-	V34SetINFO0aBits(o, (short *)((char *)o + TX1_BLK_A94C));
+	o->paa6c = o->msgrec;
+	V34SetINFO0aBits(o, (short *)o->msgrec);
 
 	{
 		/*
@@ -1472,26 +1483,26 @@ v34tx1_silence(void *objp)
 		 * this sequence.  `V34SetINFO0aBits` does not write +0xaa6c,
 		 * so nothing observable turns on it.
 		 */
-		char *r = (char *)*(short **)((char *)o + TX1_PTR_AA6C);
+		struct v34_bitsource *r = (struct v34_bitsource *)o->paa6c;
 		short lead = (o->role == 0x65 && o->v90_receiver != 0)
 			     ? 0x1e : 0x11;
 
-		*(short *)(r + 0x14) = -1;
-		*(short *)(r + 0x1a) = 0;
-		*(short *)(r + 0x1e) = 0;
-		*(short *)(r + 0x22) = 0;
-		*(short *)(r + 0x18) = lead;
+		r->crc = -1;
+		r->pos = 0;
+		r->idx = 0;
+		r->repeats = 0;
+		r->nbits = lead;
 		/* 0x68616 */
-		*(short *)(r + 0x1c) = 8;
-		*(short *)(r + 0x16) = 1;
-		*(short *)(r + 0x28) = 0x10;
-		*(short *)(r + 0x2a) = 0x10;
-		*(short *)(r + 0x20) = 0;
-		*(int *)(r + 0x24) = 0xff72;
-		*(int *)(r + 0x2c) = 0xff72;
+		r->wordbits = 8;
+		r->crc_on = 1;
+		r->avail = 0x10;
+		r->avail0 = 0x10;
+		r->repeat = 0;
+		r->acc = 0xff72;
+		r->acc0 = 0xff72;
 	}
 
-	tx1_put(o, TX1_F358C, 0);
+	o->short_358c = 0;
 	return V34TX1_LOOP;				/* 0x640a1 */
 }
 
@@ -1570,7 +1581,7 @@ v34tx1_exmit(void *objp)
 	short mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	short q;
 
-	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
 		/* 0x67031 */
 		short k;
 		int point;
@@ -1596,10 +1607,10 @@ v34tx1_exmit(void *objp)
 	/* 0x6392c */
 	if ((unsigned short)o->vect_idx == 0x14u) {
 		/* 0x66e01 */
-		short txst = tx1_get(o, TX1_TXSTATE);
+		short txst = o->txstate;
 
 		o->vect_idx = 8;
-		hs_setstate(o, TX1_TXSTATE, V34HS_DATAXMIT);
+		hs_set_txstate(o, V34HS_DATAXMIT);
 		if (dsplibs_debug_level > 1)		/* 0x66e48 */
 			dsplibs_debug_printf("V34MP- E transmit completed\n");
 		return V34TX1_LOOP;			/* 0x6409a, 0x6431f */
@@ -1674,9 +1685,9 @@ v34tx1_exmit(void *objp)
  * `prev_quadrant` and `seg_symcount` all go to zero and the transmit machine moves to
  * TRNSEG4A.  THE OBJECT DOES NOT COMPARE FIRST here -- there is no
  * `if (txstate != ...)` guard the way every other state change in this file
- * has one.  It is written as `hs_setstate` anyway, because the enclosing
+ * has one.  It is written as the setter anyway, because the enclosing
  * `txstate == J1TXMIT` test has already established the value and
- * `hs_setstate`'s compare is therefore provably dead: same stores, same
+ * the setter's compare is therefore provably dead: same stores, same
  * transcript, and one copy of the three format strings instead of two.  The
  * blob does print the `J1TXMIT=>TRNSEG4A` line, so the diagnostic is not
  * optional even though the compare is.
@@ -1685,8 +1696,7 @@ static int
 v34tx1_jtxmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	unsigned shift;
 	unsigned short idx;
 	short bits, mode, q;
@@ -1713,13 +1723,13 @@ v34tx1_jtxmit(void *objp)
 	if (o->role == 0x66) {
 		/* 0x66ca8 */
 		if (!(rx->flags & V34_RX_FLAG_DATA)) {
-			if (tx1_get(o, TX1_F35A2) == 0)
+			if (o->md_length == 0)
 				return V34TX1_LOOP;	/* 0x629c8 */
 			if (tx1_get(o, TX1_F25DA) == 0)
 				return V34TX1_LOOP;	/* 0x63da2 */
 		}
 		/* 0x66cd1 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_XMIT0);
+		hs_set_txstate(o, V34HS_XMIT0);
 		o->vect_idx = 0;			/* 0x62d32 */
 		return V34TX1_LOOP;			/* 0x62d70 */
 	}
@@ -1728,10 +1738,10 @@ v34tx1_jtxmit(void *objp)
 	if (idx != 0)
 		return V34TX1_LOOP;			/* 0x63941 */
 
-	if (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {
+	if (o->txstate == V34HS_J1TXMIT) {
 		/* 0x65653 */
 		o->tx_scr_sr = 0;
-		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
+		hs_set_txstate(o, V34HS_TRNSEG4A);
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
 		return V34TX1_LOOP;			/* 0x640a1 */
@@ -1745,16 +1755,16 @@ v34tx1_jtxmit(void *objp)
 
 	/* 0x6372e */
 	tx1_put(o, TX1_F25D6, (short)0x899f);
-	hs_setstate(o, TX1_TXSTATE, V34HS_J1TXMIT);
+	hs_set_txstate(o, V34HS_J1TXMIT);
 
 	/* 0x637c8 */
-	if (tx1_get(o, TX1_COUNT) != 0) {
+	if (o->short_aa78 != 0) {
 		if (dsplibs_debug_level > 1)		/* 0x6c725 */
 			dsplibs_debug_printf(
 				"V34Hshak: on J1TXMIT - forced freeze echo" " (count2 = %d)...\r\n",
-				tx1_get(o, TX1_COUNT));
+				o->short_aa78);
 		v34FreezeEcho(o);
-		tx1_put(o, TX1_COUNT, 0);
+		o->short_aa78 = 0;
 		return V34TX1_LOOP;			/* 0x64326 */
 	}
 	return V34TX1_LOOP;				/* 0x629c8 */
@@ -1832,7 +1842,7 @@ v34tx1_jtxmit(void *objp)
  * entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and 0x6b410
  * -- and each is a diagnostic on the path where the reader is reloaded or the
  * transmit machine moves.  F11502 reconstructed 0x646b5 in `tx1_mp_reload`,
- * 0x67254 in `tx1_mp_sequence_end` and 0x6b410 is `hs_setstate`'s own
+ * 0x67254 in `tx1_mp_sequence_end` and 0x6b410 is the setter's own
  * `txstate` print.  An object-first count of the blob range against this TU
  * finds no blob string absent here (F11508), which is what retired the note.
  */
@@ -1984,8 +1994,8 @@ v34tx1_jtxmit(void *objp)
  * are entered only when `dsplibs_debug_level > 1` -- 0x68704, 0x68b12,
  * 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the `cmpl $0x1` sites that
  * guard them.  The seven that name a string live as `v34tx1_tx_dpsk`'s own
- * "End of current MOH msg" print, the `MOH_ILLEGAL` message and `hs_setstate`;
- * the rest are `hs_setstate`'s three formats.  The object-first count that
+ * "End of current MOH msg" print, the `MOH_ILLEGAL` message and the setter;
+ * the rest are the setters' three formats.  The object-first count that
  * retired the note is F11508.
  *
  * AND ONE PATH THAT WRITES ONE BYTE.  `moh_message` OUTSIDE 0..3 makes the
@@ -1999,12 +2009,14 @@ v34tx1_jtxmit(void *objp)
  * rewrites both state words, and the tail's clear-down IS the clear-down.
  */
 
-/* +0xabe4 and +0xabe6, two halfwords of `unmapped_abe4`; +0xabe8 is
- * TX1_MOH_ACTIVE above and is the same region's Modem-on-Hold flag.  The
- * clear-down raises +0xabe4 and the two `v34handshakinit` paths raise
- * +0xabe6; no other site in this tree reads either. */
-#define TX1_FABE4	0xabe4
-#define TX1_FABE6	0xabe6
+/* +0xabe4 and +0xabe6, `short_abe4`/`short_abe6` (issue #260 wave 9); the
+ * offsets are the members' own now (wave 11).  The clear-down raises
+ * +0xabe4 and the two `v34handshakinit` paths raise +0xabe6; no other site
+ * in this tree reads either. */
+#define TX1_FABE4	((int)__builtin_offsetof(struct v34_object, \
+							short_abe4))
+#define TX1_FABE6	((int)__builtin_offsetof(struct v34_object, \
+							short_abe6))
 
 /*
  * +0xabf8 and +0xabf9, two BYTES of `unmapped_abf8`, read with `cmpb`.
@@ -2017,8 +2029,12 @@ v34tx1_jtxmit(void *objp)
  * chooses twice -- which message is built at 0x6a3f3, and which of the tail's
  * three ways out is taken at 0x65012.  Neither has another reader here.
  */
-#define TX1_MOH_MSG_PENDING	0xabf8
-#define TX1_MOH_PATH_SEL	0xabf9
+/* now the member's own offset (issue #260). */
+#define TX1_MOH_MSG_PENDING \
+	((int)__builtin_offsetof(struct v34_object, moh_msg_pending))
+/* now the member's own offset (issue #260). */
+#define TX1_MOH_PATH_SEL \
+	((int)__builtin_offsetof(struct v34_object, moh_path_sel))
 
 /*
  * 0x64a13 and 0x67d07, the same nine instructions twice.  The message bit is
@@ -2201,29 +2217,26 @@ v34tx1_jtxmit(void *objp)
  * the fixture.
  */
 
-/*
- * +0x4b4, which is the RECEIVER's +0x250 -- `0x74(%esp)` plus 0x250 -- and
- * lands in that structure's `pad_250`, so it is not a named field anywhere in
- * this tree.  The completion writes it out of `preerr` or `equerr`; the early
- * finish above reads it as the mark the equaliser error is measured against,
- * and the ladder reads it as the level a rate has to stay under.
- */
-#define TX1_RX250	0x4b4
 
 /*
- * +0x359a, one more halfword of `unmapped_3564`.  v34pcmmain.cpp calls it
+ * +0x359a, the object's own `force_low_baud` (the offset is the member's
+ * own, issue #260 wave 11).  v34pcmmain.cpp calls the same halfword
  * `OB_FORCE_LOW_BAUD` after `probeselect`'s use of it; here it is the first
  * of four conditions deciding whether the receiver's predictor is kept, and
  * this arm neither writes it nor asserts that meaning.
  */
-#define TX1_F359A	0x359a
+#define TX1_F359A	((int)__builtin_offsetof(struct v34_object, \
+						force_low_baud))
 
 /*
  * +0xa97e, read as a BYTE and tested for bit 2.  It gates the one adjustment
- * the completion makes to the rate the baud implies.  Inside `unmapped_a948`;
- * no other site in this tree reads it.
+ * the completion makes to the rate the baud implies.  It is `msgrec[1]`'s
+ * word[1] (the record array, issue #260 wave 8), and the offset is the
+ * member's own (issue #260 wave 11); the byte-wide read stays for the same
+ * reason T3C_FAAE2 does.
  */
-#define TX1_FA97E	0xa97e
+#define TX1_FA97E	((int)__builtin_offsetof(struct v34_object, \
+						msgrec[1].word[1]))
 
 /*
  * +0xe84, twelve shorts of `unmapped_0e84`.  `initdigital` hands exactly this
@@ -2241,13 +2254,18 @@ v34tx1_jtxmit(void *objp)
  * it with a single counter from zero to five across both halves, so the two
  * arrays' adjacency is what that loop is written on.  Reached by offset for
  * that reason -- `pred_b[4]` would be out of bounds and would be a claim the
- * object does not make.
+ * object does not make.  The VALUE is `pred_b`'s own offset, whose six
+ * halfwords run straight into `pred_a`'s (issue #260 wave 11).
  */
-#define TX1_RX_PRED	0x288
+#define TX1_RX_PRED	((int)__builtin_offsetof(struct v34_receiver, \
+							pred_b))
 
-/* Two 32-bit constants of the record, at +0xaa60 and +0xaa68. */
-#define TX1_FAA60	0xaa60
-#define TX1_FAA68	0xaa68
+/* The sixth message record's `acc` and `acc0`, the two 32-bit fields at
+ * +0xaa60 and +0xaa68 (issue #260 wave 11). */
+#define TX1_FAA60	((int)__builtin_offsetof(struct v34_object, \
+							msg_acc))
+#define TX1_FAA68	((int)__builtin_offsetof(struct v34_object, \
+							msg_acc0))
 
 static short
 tx1_ts_scale(const struct v34_ratecfg *cfg, int rate, int off)
@@ -2302,7 +2320,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 	if (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)
 		sum = 0x5000;
 
-	if (tx1_get(o, TX1_F359A) == 0 && rx->equerr <= 0x1ff
+	if (o->force_low_baud == 0 && rx->equerr <= 0x1ff
 	    && rx->preerr < rx->equerr && sum <= 0x3fff) {
 		/* 0x6738c */
 		if (dsplibs_debug_level > 1)		/* 0x6adf6 */
@@ -2341,7 +2359,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 
 		rx->flags = (unsigned short)(rx->flags | 0x4000u);
 		sysdep_memset(&rx->pred_i[0], 0, 0x10);
-		tx1_put(o, TX1_RX250, rx->preerr);
+		o->receiver.short_4b4 = rx->preerr;
 	} else {
 		/* 0x674e5 */
 		if (dsplibs_debug_level > 1)		/* 0x683b2 */
@@ -2360,7 +2378,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		rec[5] = 0;
 		rec[6] = 0;
 		rec[7] = 0;
-		tx1_put(o, TX1_RX250, rx->equerr);
+		o->receiver.short_4b4 = rx->equerr;
 	}
 
 	/* 0x674c8 */
@@ -2454,7 +2472,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 		if (dsplibs_debug_level > 1)		/* 0x66b61 */
 			dsplibs_debug_printf(
 				"V34DATARATE,threshold for data rate" " %d = %d\n", rate, term);
-		if (tx1_get(o, TX1_RX250) < (short)term)
+		if (o->receiver.short_4b4 < (short)term)
 			break;
 		rate = (short)(rate - 1);
 	}
@@ -2481,8 +2499,8 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (dsplibs_debug_level > 1)			/* 0x6759e */
 		dsplibs_debug_printf(
 			"V34DATARATE, ethresh data rate = %d,ethreh=%d," "rate2 = 0x%x,data=%d\n",
-			rate, tx1_get(o, TX1_RX250),
-			(unsigned short)tx1_get(o, TX1_F382), term);
+			rate, o->receiver.short_4b4,
+			(unsigned short)o->receiver.short_382, term);
 	if (dsplibs_debug_level > 1)			/* 0x675e6 */
 		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
 				     rx->equerr, rx->preerr);
@@ -2493,7 +2511,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 		rx->bad_long_thresh = (short)((rx->bad_long_thresh + term) >> 1);
 	} else {
 		/* 0x672ad */
-		rx->bad_long_thresh = (short)(tx1_get(o, TX1_RX250) << 3);
+		rx->bad_long_thresh = (short)(o->receiver.short_4b4 << 3);
 	}
 
 	/* 0x63234 */
@@ -2507,9 +2525,9 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rx->good_run = 0;
 	rx->bad_run = 0;
 	rec[1] = (short)0xfffd;
-	if ((unsigned)tx1_get_int(o, TX1_TIMER)
-	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
-	    && (unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u) {
+	if ((unsigned)o->sample_count
+	    < (unsigned)(o->int_0248 + 0x17700)
+	    && (unsigned)o->hs_mode <= 3u) {
 		rate = (short)(rate - 2);
 		if ((short)rate < (short)ratemin)
 			rate = ratemin;
@@ -2550,8 +2568,8 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x633b5 */
 	rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
-	tx1_put(o, TX1_F358C,
-		(short)bitreverse((unsigned short)cfg->txbits, 4));
+	o->short_358c =
+		(short)bitreverse((unsigned short)cfg->txbits, 4);
 	if (dsplibs_debug_level > 1)			/* 0x676f3 */
 		dsplibs_debug_printf(
 			"V34DATARATE, Final choice data rate = %d,"
@@ -2561,13 +2579,13 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	/* 0x6340f */
 	if (o->role == 0x65)
 		rec[0] = (short)((unsigned)(unsigned short)rec[0]
-				 | ((unsigned)tx1_get(o, TX1_F358C) << 10)
+				 | ((unsigned)o->short_358c << 10)
 				 | ((unsigned)rate << 6));
 	else {
 		rec[0] = (short)((unsigned)(unsigned short)rec[0]
 				 | ((unsigned)rate << 10));
 		rec[0] = (short)((unsigned)(unsigned short)rec[0]
-				 | ((unsigned)tx1_get(o, TX1_F358C) << 6));
+				 | ((unsigned)o->short_358c << 6));
 	}
 
 	/* 0x63453 */
@@ -2606,10 +2624,10 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x634a6 */
 	rec[8] = 0;					/* +0xaa4c */
-	hs_setstate(o, TX1_TXSTATE, V34HS_XMITMP);
+	hs_set_txstate(o, V34HS_XMITMP);
 	o->vect_idx = 0;
-	tx1_put(o, TX1_F3598, 0);
-	tx1_put(o, TX1_F359E, 0);
+	o->short_3598 = 0;
+	o->short_359e = 0;
 	if (dsplibs_debug_level > 1)			/* 0x67653 */
 		dsplibs_debug_printf(
 			"V34DATARATE, txmp bits 0x%x,0x%x,0x%x,0x%x,0x%x\n",
@@ -2618,8 +2636,8 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			(unsigned short)rec[4]);
 
 	/* 0x63510 */
-	tx1_put_int(o, TX1_FAA60, 0x3fffe);
-	tx1_put_int(o, TX1_FAA68, 0x3fffe);
+	o->msg_acc = 0x3fffe;
+	o->msg_acc0 = 0x3fffe;
 	rec[10] = -1;					/* +0xaa50 */
 	rec[13] = 0;					/* +0xaa56 */
 	rec[15] = 0;					/* +0xaa5a */
@@ -2630,7 +2648,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rec[20] = 0x12;					/* +0xaa64 */
 	rec[21] = 0x12;					/* +0xaa66 */
 	rec[16] = 0;					/* +0xaa5c */
-	tx1_put(o, TX1_F3590, 0x22);
+	o->short_3590 = 0x22;
 	return V34TX1_LOOP;				/* 0x62d70 */
 }
 
@@ -2638,14 +2656,12 @@ static int
 v34tx1_trnseg4a(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
-	struct v34_ratecfg *cfg =
-		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	struct v34_receiver *rx = &o->receiver;
+	struct v34_ratecfg *cfg = &o->ratecfg;
 	int n, lim, baud, period;
 	short *rec;
 
-	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
+	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
 		/* 0x66e59 */
 		short k = tx1_scramble2(o);
 		short q;
@@ -2672,13 +2688,13 @@ v34tx1_trnseg4a(void *objp)
 	lim = baud + (baud >> 1) + period;
 
 	if (n != lim) {
-		if ((unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u)
+		if ((unsigned)o->hs_mode <= 3u)
 			return V34TX1_LOOP;		/* 0x63941 */
 		if (n < lim) {
 			/* 0x6559c */
 			if (n < baud + period)
 				return V34TX1_LOOP;	/* 0x6409a */
-			if ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 10)
+			if ((int)rx->equerr > (int)o->receiver.short_4b4 + 10)
 				return V34TX1_LOOP;	/* 0x6431f */
 		}
 	}
@@ -2686,13 +2702,13 @@ v34tx1_trnseg4a(void *objp)
 	/* 0x62f22 */
 	rec = (short *)((char *)objp + TX1_FAA3C);
 	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
-	memcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));
+	o->paa6c = rec;
 
 	if (rx->flags & V34_RX_FLAG_RENEG) {
 		/* 0x62f5f */
 		rec[2] = 0;
 		rec[0] = 0;
-		tx1_put(o, TX1_RX250, rx->equerr);
+		o->receiver.short_4b4 = rx->equerr;
 	} else {
 		tx1_ts_snapshot(o, rx, rec);
 	}
@@ -2788,8 +2804,7 @@ static int
 v34tx1_trnseg4(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_ratecfg *cfg =
-		(struct v34_ratecfg *)((char *)objp + V34_RATECFG);
+	struct v34_ratecfg *cfg = &o->ratecfg;
 	short q;
 	int n, span, baud;
 
@@ -2802,7 +2817,7 @@ v34tx1_trnseg4(void *objp)
 	/* 0x643dc */
 	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 
-	if (tx1_get(o, TX1_COUNT) == o->seg_symcount) {
+	if (o->short_aa78 == o->seg_symcount) {
 		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
 		o->echo_calls = 0;
 		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
@@ -2814,12 +2829,12 @@ v34tx1_trnseg4(void *objp)
 
 	/* 0x643f8 */
 	if (((unsigned short)o->tx_flags & 0x100u) == 0
-	    && o->seg_symcount >= tx1_get(o, TX1_FAA86))
+	    && o->seg_symcount >= o->ratecfg.period)
 		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);
 
 	/* 0x64ae4 */
 	n = o->seg_symcount;
-	span = tx1_get_int(o, TX1_FA244);
+	span = o->phase3_hd_length;
 
 	if (n == (span >> 1)) {
 		VPcmV34ReportMiddleOfEchoAdapt(o);	/* 0x67734 */
@@ -2838,19 +2853,19 @@ v34tx1_trnseg4(void *objp)
 		return V34TX1_LOOP;			/* 0x629c8 */
 
 	/* 0x64b24: the segment is over. */
-	hs_setstate(o, TX1_TXSTATE, V34HS_JTXMIT);
+	hs_set_txstate(o, V34HS_JTXMIT);
 
 	if (o->rtd <= 2) {
 		/* 0x6801e */
 		v34FreezeEcho(o);
-		tx1_put(o, TX1_COUNT, 0);
+		o->short_aa78 = 0;
 	} else {
 		if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
 			/* 0x68ad0 and 0x69de7, two copies of one store */
-			tx1_put(o, TX1_COUNT, o->rtd);
+			o->short_aa78 = o->rtd;
 		} else {
 			/* 0x64b96 */
-			tx1_put(o, TX1_COUNT, (short)(o->rtd >> 1));
+			o->short_aa78 = (short)(o->rtd >> 1);
 		}
 
 		/*
@@ -2864,13 +2879,13 @@ v34tx1_trnseg4(void *objp)
 			dsplibs_debug_printf(
 				"V34Hshak: On J TX start, would freeze EC" " after bulk delay (%d samples,"
 				" bulk=%d)\r\n",
-				tx1_get(o, TX1_COUNT), o->rtd);
+				o->short_aa78, o->rtd);
 	}
 
 	/* 0x64bb2 */
 	tx1_put(o, TX1_F25D6, (short)0x8990);
 	o->prev_quadrant = o->cur_quadrant;
-	hs_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);
+	hs_set_rxstate(o, V34HS_RECEIVE);
 	setupreceiver(o);				/* 0x64c04 */
 
 	/* 0x64d37: the +0xaa0c record, in the object's order */
@@ -2892,24 +2907,24 @@ v34tx1_trnseg4(void *objp)
 	}
 
 	/* 0x64d8d */
-	hs_setstate(o, TX1_MICROSTATE, V34HS_DET_SYNC);
+	hs_set_microstate(o, V34HS_DET_SYNC);
 
 	/* 0x64dba */
 	o->vect_idx = 0;
-	tx1_put(o, TX1_FAA80, 1);
+	o->rate_change_pending = 1;
 
 	if ((unsigned)o->v90_receiver > 1u) {
 		/* 0x64de7 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_JaTXMIT);
-		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_set_txstate(o, V34HS_JaTXMIT);
+		hs_set_rxstate(o, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x629c8 */
 	}
 
 	if ((unsigned)o->k56flex_receiver > 1u) {
 		/* 0x67f91 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_K56JaTXMIT);
-		hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+		hs_set_txstate(o, V34HS_K56JaTXMIT);
+		hs_set_rxstate(o, V34HS_WAIT);
 		indicateJaTransmission(o);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
@@ -3062,7 +3077,7 @@ emit:
 static struct v34_bitsource *
 tx1_bitsource(struct v34_object *o)
 {
-	return *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);
+	return (struct v34_bitsource *)o->paa6c;
 }
 static void
 tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
@@ -3083,7 +3098,7 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 
 	/* 0x646a1 */
 	o->vect_idx = 0;
-	tx1_put(o, TX1_F3590, 0x22);
+	o->short_3590 = 0x22;
 
 	/*
 	 * 0x646b5.  `flags` IS the receiver's word and the object re-reads
@@ -3093,7 +3108,7 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf(
 			"V34MP, Starting txmit MP again(%d)," " rxflgs=0x%x,txflags=0x%x\n",
-			tx1_get(o, TX1_F359E), flags, o->tx_flags);
+			o->short_359e, flags, o->tx_flags);
 }
 
 static int
@@ -3103,19 +3118,19 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 	short seq;
 	int stamp;
 
-	seq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);
-	tx1_put(o, TX1_F359E, seq);
+	seq = (short)((unsigned short)o->short_359e + 1);
+	o->short_359e = seq;
 
 	if ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {
 		flags = rx->flags;			/* 0x645f9 */
 		if ((flags & 0x90u) == 0x90u && seq > 3) {
 			/* 0x648b1 */
-			if (tx1_get(o, TX1_F3598) == 0) {
+			if (o->short_3598 == 0) {
 				initdigital(o);
-				tx1_put(o, TX1_F3598, 1);
+				o->short_3598 = 1;
 			}
 			/* 0x648bf */
-			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
+			hs_set_txstate(o, V34HS_EXMIT);
 			o->vect_idx = 0;
 			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);
 			return 1;
@@ -3132,12 +3147,12 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 	 * Nothing between the two writes it, so the two are the same number;
 	 * it is written as the object writes it.
 	 */
-	if (stamp && tx1_get(o, TX1_F359E) > 1) {
+	if (stamp && o->short_359e > 1) {
 		/* 0x647d3 */
 		struct v34_bitsource *b = tx1_bitsource(o);
 
 		if ((b->word[0] & 1) == 0)
-			tx1_put(o, TX1_F359E, 0);
+			o->short_359e = 0;
 		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
 		if (dsplibs_debug_level > 1)		/* 0x67254 */
 			dsplibs_debug_printf(
@@ -3177,19 +3192,19 @@ tx1_mp4(struct v34_object *o, short src)
 static void
 tx1_dpsk_tone(struct v34_object *o, short bit)
 {
-	short sel = (short)((unsigned short)tx1_get(o, TX1_F358C)
+	short sel = (short)((unsigned short)o->short_358c
 			    ^ (unsigned short)bit);
 
-	tx1_put(o, TX1_F358C, sel);
+	o->short_358c = sel;
 	tx1_put_point(o, vect4[2 * (sel & 1)]);
 }
 
 static void
 tx1_moh_cleardown(struct v34_object *o)
 {
-	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
-	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
-	tx1_put(o, TX1_FABE4, 1);
+	hs_set_txstate(o, V34HS_MOH_CLEARDOWN);
+	hs_set_rxstate(o, V34HS_WAIT);
+	o->short_abe4 = 1;
 }
 
 static void
@@ -3198,7 +3213,7 @@ tx1_moh_reinit(struct v34_object *o, const char *msg)
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf(msg);
 	v34handshakinit(o, 1);
-	tx1_put(o, TX1_FABE6, 1);
+	o->short_abe6 = 1;
 }
 
 static int
@@ -3207,7 +3222,7 @@ tx1_moh_hold(struct v34_object *o)
 	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
 		return V34TX1_LOOP;			/* 0x6431f */
 
-	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {
+	if (o->moh_path_sel != 0) {
 		if (dsplibs_debug_level > 1)		/* 0x6889f */
 			dsplibs_debug_printf(
 				"MOH: Timeout waiting for MH sequence under"
@@ -3239,9 +3254,9 @@ tx1_moh_hold(struct v34_object *o)
 static void
 tx1_moh_on_hold(struct v34_object *o)
 {
-	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
-	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
-	tx1_put(o, TX1_COUNT, 0);
+	hs_set_txstate(o, V34HS_MOH_SILENCE);
+	hs_set_rxstate(o, V34HS_WAIT);
+	o->short_aa78 = 0;
 	o->vect_idx = 0;
 }
 
@@ -3252,7 +3267,7 @@ tx1_moh_send(struct v34_object *o)
 
 	if (o->short_abe2 != 3)
 		o->short_abe2 = 1;
-	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {
+	if (o->moh_path_sel == 0) {
 		if (dsplibs_debug_level > 1)	/* 0x7041b */
 			dsplibs_debug_printf(
 				"MOH: MHnack received for MHreq," " sending MHfrr\r\n");
@@ -3266,11 +3281,10 @@ tx1_moh_send(struct v34_object *o)
 
 	/* 0x6a427 */
 	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
-	*(short **)((char *)o + TX1_PTR_AA6C) =
-		(short *)((char *)o + TX1_BLK_A94C);
+	o->paa6c = o->msgrec;
 
 	/* 0x6a44e */
-	b = (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);
+	b = o->msgrec;
 	b->crc = (short)0xffff;
 	b->pos = 0;
 	b->idx = 0;
@@ -3289,8 +3303,7 @@ static int
 v34tx1_xmitmp(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx =
-		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	struct v34_receiver *rx = &o->receiver;
 	int wide = 0;
 	int n = 0;
 
@@ -3301,7 +3314,7 @@ v34tx1_xmitmp(void *objp)
 		unsigned short flags;
 		short bit, idx;
 
-		wide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;
+		wide = (unsigned short)o->receiver.short_382 == 0x89b0u;
 		if (n > (wide ? 3 : 1))
 			break;
 
@@ -3340,18 +3353,17 @@ v34tx1_xmitmp(void *objp)
 			if (tx1_mp_sequence_end(o, rx)) {
 				/* 0x6490e */
 				wide = (unsigned short)
-				       tx1_get(o, TX1_F382) == 0x89b0u;
+				       o->receiver.short_382 == 0x89b0u;
 				break;
 			}
 		} else if ((unsigned short)o->vect_idx
-			   == (unsigned short)tx1_get(o, TX1_F3590)) {
+			   == (unsigned short)o->short_3590) {
 			/* 0x64727 */
 			b = tx1_bitsource(o);
 			b->acc = (int)((unsigned)b->acc << 1);
 			b->avail = (short)((unsigned short)b->avail + 1);
-			tx1_put(o, TX1_F3590,
-				(short)((unsigned short)
-					tx1_get(o, TX1_F3590) + 0x11));
+			o->short_3590 =
+				(short)((unsigned short)o->short_3590 + 0x11);
 		}
 
 		n = (short)(n + 1);			/* 0x63b38 */
@@ -3373,7 +3385,7 @@ v34tx1_tx_dpsk(void *objp)
 	short bit;
 
 	/* 0x62b9d */
-	if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
+	if (o->moh_active != 0)
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
 
 	/* 0x62bb5, and 0x684bb where it does not inline */
@@ -3386,7 +3398,7 @@ v34tx1_tx_dpsk(void *objp)
 	}
 
 	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
-	if (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0) {
+	if (o->moh_active == 0) {
 		/*
 		 * 0x654dd.  The compare against TONE_AB cannot be false, for
 		 * finding F342's reason at 65: the arm is reached only through
@@ -3394,7 +3406,7 @@ v34tx1_tx_dpsk(void *objp)
 		 * and here writes +0x3596 -- `getbit` does not.  It is
 		 * written as the object writes it.
 		 */
-		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		hs_set_txstate(o, V34HS_TONE_AB);
 		return V34TX1_LOOP;			/* 0x63948 */
 	}
 
@@ -3404,7 +3416,7 @@ v34tx1_tx_dpsk(void *objp)
 			*((signed char *)o + TX1_MOH_MSG_PENDING), o->vect_idx,
 			tx1_bitsource(o)->repeats);
 
-	if (*((unsigned char *)o + TX1_MOH_MSG_PENDING) == 0) {
+	if (o->moh_msg_pending == 0) {
 		/*
 		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
 		 * `getbit`'s own restart arm with the `repeat` test taken out,
@@ -3454,7 +3466,7 @@ v34tx1_tx_dpsk(void *objp)
 	}
 
 	/* 0x64fde */
-	*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;
+	o->moh_msg_pending = 0;
 	return tx1_moh_hold(o);				/* 0x64fec */
 }
 

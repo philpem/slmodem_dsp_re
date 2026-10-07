@@ -15,8 +15,9 @@
  * parent's layout is not needed to reconstruct them and they are declared as
  * their own types. `struct v34_object` (v34fsk.h) is that parent, and embeds
  * `struct v34_echo` and `struct v34_echo_prefilter` directly (finding F98);
- * the equaliser is reached from `struct v34_receiver` (v34recv.h) by a
- * documented offset instead, to keep that header's dependency one-way.
+ * the timing filters and the equaliser are nested in `struct v34_receiver`
+ * (v34recv.h) since issue #260 wave 8, which includes this header for their
+ * definitions.
  *
  * V34RX.c keeps a pair of echo cancellers and chooses between them on a
  * flag -- one for each of the two paths a V.34 receiver has to cancel.

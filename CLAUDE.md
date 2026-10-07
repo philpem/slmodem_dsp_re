@@ -934,6 +934,15 @@ Task numbers are not safe across sessions either: two task stores exist whose
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
+- **`pgrep -f PATTERN` matches the poller's own command line**, because the
+  shell that runs it carries the pattern as its own `/bin/bash -c` text.
+  A wait loop built on it reports RUNNING for ever and the session burns
+  its turns believing work is still alive -- three sessions in the #260
+  cleanup lost time to exactly this (`make phase`, `byteident`,
+  `mutsnap`).  Poll the LOG's completion line instead
+  (`grep -q "period differential:" log && ...`), or break the self-match
+  with a character class: `pgrep -f "byteiden[t].py"` -- the real process
+  matches, the poller's own `[t]` spelling cannot.
 - **A bare `cd` in a compound command FAILS OPEN: everything after it runs in
   the tree you were already in.** Use `git -C <dir>` in preference, and where a
   `cd` is unavoidable write `cd <dir> || exit 1`. A worktree that had been

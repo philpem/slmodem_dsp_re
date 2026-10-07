@@ -1,709 +1,709 @@
 [
- {
-  "note": "Recovered from the session that wrote these three functions; finding F189's tally is this set.  The two survivors are recorded as equivalent, not removed."
- },
- {
-  "label": "hangup: status fork <=1 becomes <=2",
-  "find": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
-  "replace": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {"
- },
- {
-  "label": "reneg: status fork <=1 becomes <=2",
-  "find": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
-  "replace": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "setv90: rrn_type polarity swapped",
-  "find": "(rrn_type != 0) ? 15 : 11",
-  "replace": "(rrn_type != 0) ? 11 : 15",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: rrn_type tested for sign",
-  "find": "(rrn_type != 0) ? 15 : 11",
-  "replace": "(rrn_type > 0) ? 15 : 11",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: constel polarity swapped",
-  "find": "constel_size != 0 ? 0x89b0 : 0x8990",
-  "replace": "constel_size != 0 ? 0x8990 : 0x89b0",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: constel read signed",
-  "find": "constel_size != 0 ? 0x89b0 : 0x8990",
-  "replace": "(signed char)constel_size > 0 ? 0x89b0 : 0x8990",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: v90_receiver not set",
-  "find": "\tobj->v90_receiver = (rrn_type != 0) ? 15 : 11;\n",
-  "replace": "",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "reneg: case 5 no longer steps down",
-  "find": "\tcase 0:\n\tcase 2:\n\tcase 5:\n",
-  "replace": "\tcase 0:\n\tcase 2:\n\tcase 9:\n",
-  "fn": "VPcmV34InitiateRateRenegotiation",
-  "why": "Anchor extended with the two cases above it -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `\\tcase 5:` occurs five times; this two-case lead-in makes it unique to VPcmV34InitiateRateRenegotiation.  The mutation is unchanged."
- },
- {
-  "label": "reneg: case 2 no longer steps down",
-  "note": "CARRIES THE NEXT LINE, and it has to.  `VPcmV34GetCurrentSessionDP` arrived in the same file with its own one-tab `case 2:` and `case 3:`, and `anchorcheck` reported both of these as NOT UNIQUE -- which is right, and is the gate doing its job: a two-site anchor patches the first match and the label then names an arm the mutation did not touch.  The fix is context, not a looser rule, and the context chosen is the FALL-THROUGH that makes this arm this arm.",
-  "find": "\tcase 2:\n\tcase 5:\n",
-  "replace": "\tcase 9:\n\tcase 5:\n",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: case 0 no longer steps down",
-  "find": "\tcase 0:\n\tcase 2:",
-  "replace": "\tcase 9:\n\tcase 2:",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: case 3 becomes case 4",
-  "note": "Carries its body for the reason the `case 2` anchor above carries its fall-through.",
-  "find": "\tcase 3:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
-  "replace": "\tcase 4:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: down clamp >= becomes >",
-  "find": "want >= obj->rate_min",
-  "replace": "want > obj->rate_min",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: up clamp <= becomes <",
-  "find": "want <= obj->rate_max",
-  "replace": "want < obj->rate_max",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: down clamp bounded by rate_max",
-  "find": "want >= obj->rate_min",
-  "replace": "want >= obj->rate_max",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: step reads rate_want not rate_now",
-  "find": "want = (int)((unsigned)obj->rate_now - 1u);",
-  "replace": "want = (int)((unsigned)obj->rate_want - 1u);",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: up step reads rate_want not rate_now",
-  "find": "want = (int)((unsigned)obj->rate_now + 1u);",
-  "replace": "want = (int)((unsigned)obj->rate_want + 1u);",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: default writes 0 rather than -1",
-  "find": "\tdefault:\n\t\tobj->rate_want = -1;\n\t\tbreak;\n\t}",
-  "replace": "\tdefault:\n\t\tobj->rate_want = 0;\n\t\tbreak;\n\t}",
-  "fn": "VPcmV34InitiateRateRenegotiation",
-  "why": "Anchor extended with its default arm and the switch close -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_want = -1;` also occurs in VPcmV34Create and vpcmcreate.json mutates it; this context makes it unique to the reneg switch.  The mutation is unchanged."
- },
- {
-  "label": "hangup: session flag byte not written",
-  "find": "\t\tsess[0x173e] = 1;\n",
-  "replace": ""
- },
- {
-  "label": "hangup: session flag byte written as 2",
-  "find": "sess[0x173e] = 1;",
-  "replace": "sess[0x173e] = 2;"
- },
- {
-  "label": "hangup: leaf code 1 rather than 2",
-  "note": "Anchor updated when the chain was named (SESS_DEMOD/DEMOD_CONNEVAL/CONNEVAL_EXTERNAL_DEMAND); same store, same offsets, new spelling.",
-  "find": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
-  "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 1;"
- },
- {
-  "label": "reneg: leaf gets a constant 2 rather than req",
-  "find": "+ CONNEVAL_EXTERNAL_DEMAND) = req;",
-  "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: PCM arm writes the flag byte too",
-  "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n",
-  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n\n\t\tsess[0x173e] = 1;\n",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: PCM arm falls through instead of returning",
-  "find": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;\n\t\treturn;",
-  "replace": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
-  "find": "\t\tsess[0x173e] = 1;\n\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);",
-  "replace": "\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);\n\t\tsess[0x173e] = 1;",
-  "equivalent": true,
-  "why": "`sess + 0x173e` is a byte in the session and `sess + SESS_DEMOD` (0x175c) is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
- },
- {
-  "label": "hangup: clears rate_now as well",
-  "find": "\tobj->rate_max = 0;\n",
-  "replace": "\tobj->rate_max = 0;\n\tobj->rate_now = 0;\n"
- },
- {
-  "label": "hangup: skips rate_min",
-  "find": "\tobj->rate_want = 0;\n\tobj->rate_min = 0;\n\tobj->rate_max = 0;",
-  "replace": "\tobj->rate_want = 0;\n\tobj->rate_max = 0;",
-  "why": "Anchor extended with the two neighbour stores -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_min = 0;` also occurs in VPcmV34Create.  The mutation is unchanged."
- },
- {
-  "label": "setv90: tx_flags mask ~0x4018 becomes ~0x4010",
-  "find": "~0x4018",
-  "replace": "~0x4010",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: tx_flags mask ~0x4018 becomes ~0x0018",
-  "find": "~0x4018",
-  "replace": "~0x0018",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: tx_flags OR 0x2000 becomes 0x4000",
-  "find": "| 0x2000)",
-  "replace": "| 0x4000)",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: preinitdigital not called",
-  "find": "\tpreinitdigital(obj);\n",
-  "replace": "",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: [1] counter not cleared",
-  "find": "\t*(short *)(m + 0x2aa2) = 0;\n",
-  "replace": "",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: preinitdigital before the mask rather than after",
-  "find": "\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
-  "replace": "\tpreinitdigital(obj);\n\n\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);",
-  "equivalent": true,
-  "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for.",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: progress gets 5",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
-  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;"
- },
- {
-  "label": "reneg: progress gets 5",
-  "find": "\tobj->progress = 6;\n\n\trx->bad_run = 0;",
-  "replace": "\tobj->progress = 5;\n\n\trx->bad_run = 0;",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "setv90: progress gets 5",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
-  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: 0x2218 gets 6",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
-  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->bad_run = 0;"
- },
- {
-  "label": "reneg: 0x2218 gets 6",
-  "find": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
-  "replace": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "setv90: 0x2218 gets 6",
-  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
-  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->short_382",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: rx bad_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
-  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
-  "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names.  The comment after the closing brace was not moved with the function into VPcmV34Main.cpp (F11432), so the old anchor matched zero times; the three clears and the closing brace are a unique sequence in the merged file.  The mutation is unchanged."
- },
- {
-  "label": "hangup: rx good_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
-  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n}\n",
-  "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names, same reason as the entry above.  The mutation is unchanged."
- },
- {
-  "label": "reneg: rx bad_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: rx good_run not cleared",
-  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\t*(int *)(m + 0x2218)",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "hangup: handshakinit asked for mode 1",
-  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)"
- },
- {
-  "label": "reneg: handshakinit asked for mode 1",
-  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "setv90: timer stride constant off by 0x80",
-  "find": "= 0x69780;",
-  "replace": "= 0x69781;",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: timer mark constant off by one",
-  "find": "(int)0xfff15a00;",
-  "replace": "(int)0xfff15a01;",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: timer not cleared",
-  "find": "\t*(int *)(m + 0x238) = 0;\n",
-  "replace": "",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: message loses a space before the bang",
-  "find": "VPcmV34InitiateHangUp called !",
-  "replace": "VPcmV34InitiateHangUp called!"
- },
- {
-  "label": "setv90: message loses a space after 'type'",
-  "find": "rrn type = %d",
-  "replace": "rrn type= %d",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "setv90: the two arguments swapped",
-  "find": "(int)rrn_type, (int)constel_size",
-  "replace": "(int)constel_size, (int)rrn_type",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: print ungated",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
-  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
- },
- {
-  "label": "setv90: print ungated",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "hangup: print never",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
-  "replace": "if (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
- },
- {
-  "label": "hangup: gate is >= 1 rather than > 1",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
-  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
- },
- {
-  "label": "setv90: gate is >= 1 rather than > 1",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
-  "fn": "VPcmV34SetV90RateReneg"
- },
- {
-  "label": "reneg: rrn counter not bumped",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
-  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: rrn counter is the remote one",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
-  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "label": "reneg: rrn counter saturates rather than wrapping",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-  "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
-  "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
-  "fn": "VPcmV34InitiateRateRenegotiation"
- },
- {
-  "note": "The two echo-adapt reports.  Neither touches the object, so every one of these is invisible to a state comparison and visible only in the transcript -- which is why the section that drives them sweeps the level to 1 as well as 2."
- },
- {
-  "label": "the two echo-adapt strings transposed",
-  "find": "\"VPcmV34Main: Echo adapt start \"",
-  "replace": "\"VPcmV34Main: Echo adapt middle \""
- },
- {
-  "label": "the start report is ungated",
-  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
-  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
- },
- {
-  "label": "the start report's gate is >= 1",
-  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
-  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
- },
- {
-  "label": "the middle report is ungated",
-  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
-  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
- },
- {
-  "label": "the middle report's gate is >= 1",
-  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
-  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
- },
- {
-  "note": "chkForceBaudRate.  Three claims to break: where the cap comes from (the byte, the shift), how it turns into cleared flags (the guard on zero and the five comparisons), and which bin each cleared flag spoils."
- },
- {
-  "label": "force: the cap is read from the wrong byte",
-  "find": "\tmaxidx = cfg[0x50] >> 5;",
-  "replace": "\tmaxidx = cfg[0x51] >> 5;"
- },
- {
-  "label": "force: the cap is shifted down by four, not five",
-  "find": "\tmaxidx = cfg[0x50] >> 5;",
-  "replace": "\tmaxidx = cfg[0x50] >> 4;"
- },
- {
-  "label": "force: the cap is shifted down by six, not five",
-  "find": "\tmaxidx = cfg[0x50] >> 5;",
-  "replace": "\tmaxidx = cfg[0x50] >> 6;"
- },
- {
-  "label": "force: the cap is read signed",
-  "find": "\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tunsigned char allow[6] = { 0 };",
-  "replace": "\tconst signed char *cfg = (const signed char *)obj->pac3c;\n\tunsigned char allow[6] = { 0 };"
- },
- {
-  "label": "force: index zero is no longer special-cased",
-  "find": "\tif (maxidx != 0) {\n\t\tif (maxidx <= 1)",
-  "replace": "\tif (maxidx != -1) {\n\t\tif (maxidx <= 1)"
- },
- {
-  "label": "force: rate 1 barred one index early",
-  "find": "\t\tif (maxidx <= 1)\n\t\t\tsel[1] = 0;",
-  "replace": "\t\tif (maxidx < 1)\n\t\t\tsel[1] = 0;"
- },
- {
-  "label": "force: rate 2 barred one index late",
-  "find": "\t\tif (maxidx <= 2)\n\t\t\tsel[2] = 0;",
-  "replace": "\t\tif (maxidx <= 3)\n\t\t\tsel[2] = 0;"
- },
- {
-  "label": "force: rate 3 barred one index early",
-  "find": "\t\tif (maxidx <= 3)\n\t\t\tsel[3] = 0;",
-  "replace": "\t\tif (maxidx < 3)\n\t\t\tsel[3] = 0;"
- },
- {
-  "label": "force: rate 4 barred one index early",
-  "find": "\t\tif (maxidx <= 4)\n\t\t\tsel[4] = 0;",
-  "replace": "\t\tif (maxidx < 4)\n\t\t\tsel[4] = 0;"
- },
- {
-  "label": "force: rate 5 barred one index early",
-  "find": "\t\tif (maxidx <= 5)\n\t\t\tsel[5] = 0;",
-  "replace": "\t\tif (maxidx < 5)\n\t\t\tsel[5] = 0;"
- },
- {
-  "label": "force: the V.90 test compares with one instead of zero",
-  "find": "\tif (obj->v90_receiver) {",
-  "replace": "\tif (obj->v90_receiver == 1) {"
- },
- {
-  "label": "force: the V.90 test reads a short",
-  "find": "\tif (obj->v90_receiver) {",
-  "replace": "\tif ((short)obj->v90_receiver) {"
- },
- {
-  "label": "force: the K56Flex test compares with one instead of zero",
-  "find": "\t} else if (obj->k56flex_receiver) {",
-  "replace": "\t} else if (obj->k56flex_receiver == 1) {"
- },
- {
-  "label": "force: the K56Flex arm allows the top rate",
-  "find": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 0;",
-  "replace": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 1;"
- },
- {
-  "label": "force: the neither arm bars the top rate",
-  "find": "\t} else {\n\t\tallow[5] = 1;\n\t\tsel = allow;\n\t}",
-  "replace": "\t} else {\n\t\tallow[5] = 0;\n\t\tsel = allow;\n\t}"
- },
- {
-  "label": "force: the session flags are one byte along",
-  "find": "\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
-  "replace": "\t\tsel = (unsigned char *)obj->p3548 + 0x218;"
- },
- {
-  "label": "force: the V.90 arm edits the local array instead of the session",
-  "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
-  "replace": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = allow;"
- },
- {
-  "label": "force: the local array starts out all barred",
-  "find": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 1;",
-  "replace": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 0;"
- },
- {
-  "label": "force: 3429 spoils the wrong bin",
-  "find": "\t\tbins[24].shift = 11;",
-  "replace": "\t\tbins[23].shift = 11;"
- },
- {
-  "label": "force: 3429 is spoiled by seven like the rest",
-  "find": "\t\tbins[24].shift = 11;",
-  "replace": "\t\tbins[24].shift = 7;"
- },
- {
-  "label": "force: 3200 spoils the wrong bin",
-  "find": "\t\tbins[22].shift = 7;",
-  "replace": "\t\tbins[21].shift = 7;"
- },
- {
-  "label": "force: 3000's low bin is the wrong one",
-  "find": "\t\tbins[2].shift = 7;",
-  "replace": "\t\tbins[3].shift = 7;"
- },
- {
-  "label": "force: 3000's high bin is the wrong one",
-  "find": "\t\tbins[2].shift = 7;\n\t\tbins[21].shift = 7;",
-  "replace": "\t\tbins[2].shift = 7;\n\t\tbins[20].shift = 7;"
- },
- {
-  "label": "force: 2800 spoils only one of its two bins",
-  "find": "\t\tbins[20].shift = 7;\n\t\tbins[19].shift = 7;",
-  "replace": "\t\tbins[20].shift = 7;"
- },
- {
-  "label": "force: the bin's energy is spoiled rather than its shift",
-  "find": "\t\tbins[22].shift = 7;",
-  "replace": "\t\tbins[22].energy = 7;"
- },
- {
-  "label": "force: the top rate's test has the wrong polarity",
-  "find": "\tif (sel[5] == 0)\n\t\tbins[24].shift = 11;",
-  "replace": "\tif (sel[5] != 0)\n\t\tbins[24].shift = 11;"
- },
- {
-  "label": "force: the flags are consulted one index along",
-  "find": "\tif (sel[4] == 0)\n\t\tbins[22].shift = 7;",
-  "replace": "\tif (sel[3] == 0)\n\t\tbins[22].shift = 7;"
- },
- {
-  "label": "force: the trace names the wrong module",
-  "find": "\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
-  "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Main: max V34 baud rate index \""
- },
- {
-  "label": "force: the trace is not gated",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
-  "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \""
- },
- {
-  "label": "force: the dead store on the V.90 arm is dropped",
-  "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n",
-  "replace": "",
-  "equivalent": true,
-  "why": "`sel` is set to the session object on that arm and `allow` is never read again, so nothing can observe the store.  It is reproduced because the object performs it, not because it does anything; D49 records it.  A mutation of it being CAUGHT would mean the arm's `sel` had moved."
- },
- {
-  "note": "GetVPcmMinimalTxPowerReduction and VPcmV34GetMaxUpstreamRateIndex.  The arm selection is four separate words combined by an && whose middle term is a `je`, so most of these break the combining rather than the arithmetic."
- },
- {
-  "label": "power: the clamp floor is -11",
-  "find": "\tif (want < -10)\n\t\tred = -10;",
-  "replace": "\tif (want < -11)\n\t\tred = -11;"
- },
- {
-  "label": "power: the clamp floor is inclusive",
-  "find": "\tif (want < -10)",
-  "replace": "\tif (want <= -10)",
-  "equivalent": true,
-  "why": "`want <= -10` and `want < -10` differ only at -10, and both spellings then produce -10 -- the first from the assignment, the second from the pass-through.  The clamp's floor is still tested, by `the clamp floor is -11`."
- },
- {
-  "label": "power: the clamp ceiling is 8",
-  "find": "\telse if (want > 7)\n\t\tred = 7;",
-  "replace": "\telse if (want > 8)\n\t\tred = 8;"
- },
- {
-  "label": "power: the clamp ceiling is inclusive",
-  "find": "\telse if (want > 7)",
-  "replace": "\telse if (want >= 7)",
-  "equivalent": true,
-  "why": "The same at the other end: at exactly 7 both arms give 7.  `the clamp ceiling is 8` is what tests the edge."
- },
- {
-  "label": "power: the wanted reduction is read as a byte",
-  "find": "\tshort want = *(const short *)(cfg + 0x44);",
-  "replace": "\tshort want = *(const signed char *)(cfg + 0x44);"
- },
- {
-  "label": "power: the wanted reduction is one field along",
-  "find": "\tshort want = *(const short *)(cfg + 0x44);",
-  "replace": "\tshort want = *(const short *)(cfg + 0x46);"
- },
- {
-  "label": "power: the session gate is ignored",
-  "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)",
-  "replace": "\tif (!(obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)"
- },
- {
-  "label": "power: the sensitive-ISP test has the polarity it looks like",
-  "find": "\t      && *(const int *)(pcm + 0x4f8) == 0)\n\t    && obj->k56flex_receiver == 0)",
-  "replace": "\t      && *(const int *)(pcm + 0x4f8) != 0)\n\t    && obj->k56flex_receiver == 0)"
- },
- {
-  "label": "power: the two arms are or-ed rather than nested",
-  "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
-  "replace": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;"
- },
- {
-  "label": "power: the V.90 test is > 1 like the other function's",
-  "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)",
-  "replace": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1\n\t      && *(const int *)(pcm + 0x4f8) == 0)"
- },
- {
-  "label": "power: nothing is forced to zero",
-  "find": "\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
-  "replace": "\t    && obj->k56flex_receiver == 0)\n\t\tred = red;"
- },
- {
-  "label": "power: the sign test includes zero",
-  "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-  "replace": "\tif (red >= 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;"
- },
- {
-  "label": "power: the sign test is unsigned",
-  "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-  "replace": "\tif ((unsigned short)red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;"
- },
- {
-  "label": "power: the PCM flag's two values are swapped",
-  "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-  "replace": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 1;"
- },
- {
-  "label": "power: the positive arm's decay factor is the negative arm's",
-  "find": "\t\tobj->echo_decay_fact = 0x7fdf;",
-  "replace": "\t\tobj->echo_decay_fact = 0x7fcb;"
- },
- {
-  "label": "power: the positive arm's beta is four",
-  "find": "\t\tobj->echo_beta = 2;",
-  "replace": "\t\tobj->echo_beta = 4;"
- },
- {
-  "label": "power: decay start differs between the arms",
-  "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d0;",
-  "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d1;"
- },
- {
-  "label": "power: the beta choice tests the wrong constant",
-  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
- },
- {
-  "label": "power: the beta choice is inverted",
-  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
- },
- {
-  "label": "power: beta's other value is five, as adaptecho's ladder has it",
-  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
- },
- {
-  "label": "power: the returned value is the unclamped one",
-  "find": "\t\t (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);",
-  "replace": "\t\t (int)want, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);"
- },
- {
-  "label": "power: the second report prints the flag before the write",
-  "find": "\t\t (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f4));",
-  "replace": "\t\t (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f8));"
- },
- {
-  "label": "rate: the configured rate is one field along",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x40);"
- },
- {
-  "label": "rate: the V.90 test is != 0 rather than > 1",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0) {"
- },
- {
-  "label": "rate: the V.90 test is >= 1",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver >= 1) {"
- },
- {
-  "label": "rate: the session gate is ignored",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (obj->v90_receiver > 1) {"
- },
- {
-  "label": "rate: the sensitive-ISP test is inverted",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) == 0) {"
- },
- {
-  "label": "rate: the cap's multiplier is 2400 spelled as 2401",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x961;"
- },
- {
-  "label": "rate: the cap is computed without wrapping",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tlong long cap = (long long)*(const int *)(pcm + 0x4fc)\n\t\t\t\t\t* 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = (int)cap;"
- },
- {
-  "label": "rate: the cap is taken rather than the smaller",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\trate = cap;"
- },
- {
-  "label": "rate: the comparison is >=",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate >= cap)\n\t\t\t\trate = cap;",
-  "equivalent": true,
-  "why": "At `rate == cap` the assignment is a no-op, so `>` and `>=` cannot be told apart.  Which of the two is taken is tested by `the larger is taken` and `the cap is taken rather than the smaller`."
- },
- {
-  "label": "rate: the larger is taken",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate < cap)\n\t\t\t\trate = cap;"
- },
- {
-  "label": "rate: the two ISP reports are transposed",
-  "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on sensitive ISP, \"",
-  "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on regular ISP, \""
- }
+  {
+    "note": "Recovered from the session that wrote these three functions; finding F189's tally is this set.  The two survivors are recorded as equivalent, not removed."
+  },
+  {
+    "label": "hangup: status fork <=1 becomes <=2",
+    "find": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
+    "replace": "\tobj->rate_max = 0;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {"
+  },
+  {
+    "label": "reneg: status fork <=1 becomes <=2",
+    "find": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 1) {",
+    "replace": "\tint want;\n\n\tif ((unsigned)(obj->status - 1) <= 2) {",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "setv90: rrn_type polarity swapped",
+    "find": "(rrn_type != 0) ? 15 : 11",
+    "replace": "(rrn_type != 0) ? 11 : 15",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: rrn_type tested for sign",
+    "find": "(rrn_type != 0) ? 15 : 11",
+    "replace": "(rrn_type > 0) ? 15 : 11",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: constel polarity swapped",
+    "find": "constel_size != 0 ? 0x89b0 : 0x8990",
+    "replace": "constel_size != 0 ? 0x8990 : 0x89b0",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: constel read signed",
+    "find": "constel_size != 0 ? 0x89b0 : 0x8990",
+    "replace": "(signed char)constel_size > 0 ? 0x89b0 : 0x8990",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: v90_receiver not set",
+    "find": "\tobj->v90_receiver = (rrn_type != 0) ? 15 : 11;\n",
+    "replace": "",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "reneg: case 5 no longer steps down",
+    "find": "\tcase 0:\n\tcase 2:\n\tcase 5:\n",
+    "replace": "\tcase 0:\n\tcase 2:\n\tcase 9:\n",
+    "fn": "VPcmV34InitiateRateRenegotiation",
+    "why": "Anchor extended with the two cases above it -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `\\tcase 5:` occurs five times; this two-case lead-in makes it unique to VPcmV34InitiateRateRenegotiation.  The mutation is unchanged."
+  },
+  {
+    "label": "reneg: case 2 no longer steps down",
+    "note": "CARRIES THE NEXT LINE, and it has to.  `VPcmV34GetCurrentSessionDP` arrived in the same file with its own one-tab `case 2:` and `case 3:`, and `anchorcheck` reported both of these as NOT UNIQUE -- which is right, and is the gate doing its job: a two-site anchor patches the first match and the label then names an arm the mutation did not touch.  The fix is context, not a looser rule, and the context chosen is the FALL-THROUGH that makes this arm this arm.",
+    "find": "\tcase 2:\n\tcase 5:\n",
+    "replace": "\tcase 9:\n\tcase 5:\n",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: case 0 no longer steps down",
+    "find": "\tcase 0:\n\tcase 2:",
+    "replace": "\tcase 9:\n\tcase 2:",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: case 3 becomes case 4",
+    "note": "Carries its body for the reason the `case 2` anchor above carries its fall-through.",
+    "find": "\tcase 3:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
+    "replace": "\tcase 4:\n\t\twant = (int)((unsigned)obj->rate_now + 1u);\n",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: down clamp >= becomes >",
+    "find": "want >= obj->rate_min",
+    "replace": "want > obj->rate_min",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: up clamp <= becomes <",
+    "find": "want <= obj->rate_max",
+    "replace": "want < obj->rate_max",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: down clamp bounded by rate_max",
+    "find": "want >= obj->rate_min",
+    "replace": "want >= obj->rate_max",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: step reads rate_want not rate_now",
+    "find": "want = (int)((unsigned)obj->rate_now - 1u);",
+    "replace": "want = (int)((unsigned)obj->rate_want - 1u);",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: up step reads rate_want not rate_now",
+    "find": "want = (int)((unsigned)obj->rate_now + 1u);",
+    "replace": "want = (int)((unsigned)obj->rate_want + 1u);",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: default writes 0 rather than -1",
+    "find": "\tdefault:\n\t\tobj->rate_want = -1;\n\t\tbreak;\n\t}",
+    "replace": "\tdefault:\n\t\tobj->rate_want = 0;\n\t\tbreak;\n\t}",
+    "fn": "VPcmV34InitiateRateRenegotiation",
+    "why": "Anchor extended with its default arm and the switch close -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_want = -1;` also occurs in VPcmV34Create and vpcmcreate.json mutates it; this context makes it unique to the reneg switch.  The mutation is unchanged."
+  },
+  {
+    "label": "hangup: session flag byte not written",
+    "find": "\t\tsess->clr = 1;\n",
+    "replace": ""
+  },
+  {
+    "label": "hangup: session flag byte written as 2",
+    "find": "sess->clr = 1;",
+    "replace": "sess->clr = 2;"
+  },
+  {
+    "label": "hangup: leaf code 1 rather than 2",
+    "note": "Anchor updated when the chain was named (SESS_DEMOD/DEMOD_CONNEVAL/CONNEVAL_EXTERNAL_DEMAND); same store, same offsets, new spelling.",
+    "find": "->externalDemandCode = 2;",
+    "replace": "->externalDemandCode = 1;"
+  },
+  {
+    "label": "reneg: leaf gets a constant 2 rather than req",
+    "find": "->externalDemandCode = req;",
+    "replace": "->externalDemandCode = 2;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: PCM arm writes the flag byte too",
+    "find": "\t\tV90Demodulator *demod = sess->modem.demodulator;\n\n\t\tdemod->connectionEvaluator->externalDemandCode = req;",
+    "replace": "\t\tV90Demodulator *demod = sess->modem.demodulator;\n\n\t\tsess->droppedToV34 = 1;\n\t\tdemod->connectionEvaluator->externalDemandCode = req;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: PCM arm falls through instead of returning",
+    "find": "demod->connectionEvaluator->externalDemandCode = req;\n\t\treturn;",
+    "replace": "demod->connectionEvaluator->externalDemandCode = req;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
+    "find": "\t\tsess->clr = 1;\n\t\tdemod = sess->modem.demodulator;",
+    "replace": "\t\tdemod = sess->modem.demodulator;\n\t\tsess->clr = 1;",
+    "equivalent": true,
+    "why": "`sess + 0x173e` is a byte in the session and `sess + SESS_DEMOD` (0x175c) is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
+  },
+  {
+    "label": "hangup: clears rate_now as well",
+    "find": "\tobj->rate_max = 0;\n",
+    "replace": "\tobj->rate_max = 0;\n\tobj->rate_now = 0;\n"
+  },
+  {
+    "label": "hangup: skips rate_min",
+    "find": "\tobj->rate_want = 0;\n\tobj->rate_min = 0;\n\tobj->rate_max = 0;",
+    "replace": "\tobj->rate_want = 0;\n\tobj->rate_max = 0;",
+    "why": "Anchor extended with the two neighbour stores -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->rate_min = 0;` also occurs in VPcmV34Create.  The mutation is unchanged."
+  },
+  {
+    "label": "setv90: tx_flags mask ~0x4018 becomes ~0x4010",
+    "find": "~0x4018",
+    "replace": "~0x4010",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: tx_flags mask ~0x4018 becomes ~0x0018",
+    "find": "~0x4018",
+    "replace": "~0x0018",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: tx_flags OR 0x2000 becomes 0x4000",
+    "find": "| 0x2000)",
+    "replace": "| 0x4000)",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: preinitdigital not called",
+    "find": "\tpreinitdigital(obj);\n",
+    "replace": "",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: [1] counter not cleared",
+    "find": "\tobj->vect_idx = 0;\n",
+    "replace": "",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: preinitdigital before the mask rather than after",
+    "find": "\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
+    "replace": "\tpreinitdigital(obj);\n\n\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);",
+    "equivalent": true,
+    "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for.",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: progress gets 5",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;",
+    "replace": "\tobj->progress = 5;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;"
+  },
+  {
+    "label": "reneg: progress gets 5",
+    "find": "\tobj->progress = 6;\n\n\trx->bad_run = 0;",
+    "replace": "\tobj->progress = 5;\n\n\trx->bad_run = 0;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "setv90: progress gets 5",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
+    "replace": "\tobj->progress = 5;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: 0x2218 gets 6",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;",
+    "replace": "\tobj->progress = 6;\n\tobj->hs_mode = 6;\n\n\trx->bad_run = 0;"
+  },
+  {
+    "label": "reneg: 0x2218 gets 6",
+    "find": "\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->good_run = 0;\n\n\tobj->hs_mode = 6;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "setv90: 0x2218 gets 6",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
+    "replace": "\tobj->progress = 6;\n\tobj->hs_mode = 6;\n\n\tobj->receiver.short_382",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: rx bad_run not cleared",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+    "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names.  The comment after the closing brace was not moved with the function into VPcmV34Main.cpp (F11432), so the old anchor matched zero times; the three clears and the closing brace are a unique sequence in the merged file.  The mutation is unchanged."
+  },
+  {
+    "label": "hangup: rx good_run not cleared",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n",
+    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n}\n",
+    "why": "Anchor TRUNCATED of its trailing comment -- the suite-anchor consolidation F11414 names, same reason as the entry above.  The mutation is unchanged."
+  },
+  {
+    "label": "reneg: rx bad_run not cleared",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: rx good_run not cleared",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\tobj->hs_mode = 5;",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "hangup: handshakinit asked for mode 1",
+    "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\tobj->hs_mode",
+    "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\tobj->hs_mode"
+  },
+  {
+    "label": "reneg: handshakinit asked for mode 1",
+    "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
+    "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "setv90: timer stride constant off by 0x80",
+    "find": "= 0x69780;",
+    "replace": "= 0x69781;",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: timer mark constant off by one",
+    "find": "(int)0xfff15a00;",
+    "replace": "(int)0xfff15a01;",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: timer not cleared",
+    "find": "\tobj->sample_count = 0;\n\tobj->int_0248 = (int)0xfff15a00;\n\tobj->timeout_deadline = 0x69780;",
+    "replace": "\tobj->int_0248 = (int)0xfff15a00;\n\tobj->timeout_deadline = 0x69780;",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: message loses a space before the bang",
+    "find": "VPcmV34InitiateHangUp called !",
+    "replace": "VPcmV34InitiateHangUp called!"
+  },
+  {
+    "label": "setv90: message loses a space after 'type'",
+    "find": "rrn type = %d",
+    "replace": "rrn type= %d",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "setv90: the two arguments swapped",
+    "find": "(int)rrn_type, (int)constel_size",
+    "replace": "(int)constel_size, (int)rrn_type",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: print ungated",
+    "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
+    "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
+  },
+  {
+    "label": "setv90: print ungated",
+    "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+    "replace": "if (1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "hangup: print never",
+    "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
+    "replace": "if (0)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
+  },
+  {
+    "label": "hangup: gate is >= 1 rather than > 1",
+    "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");",
+    "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"VPcmV34Main: VPcmV34InitiateHangUp called !\\r\\n\");"
+  },
+  {
+    "label": "setv90: gate is >= 1 rather than > 1",
+    "find": "if (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+    "replace": "if (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\n\t\t\t\"setV90RateReneg",
+    "fn": "VPcmV34SetV90RateReneg"
+  },
+  {
+    "label": "reneg: rrn counter not bumped",
+    "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: rrn counter is the remote one",
+    "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "label": "reneg: rrn counter saturates rather than wrapping",
+    "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
+    "fn": "VPcmV34InitiateRateRenegotiation"
+  },
+  {
+    "note": "The two echo-adapt reports.  Neither touches the object, so every one of these is invisible to a state comparison and visible only in the transcript -- which is why the section that drives them sweeps the level to 1 as well as 2."
+  },
+  {
+    "label": "the two echo-adapt strings transposed",
+    "find": "\"VPcmV34Main: Echo adapt start \"",
+    "replace": "\"VPcmV34Main: Echo adapt middle \""
+  },
+  {
+    "label": "the start report is ungated",
+    "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
+    "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
+  },
+  {
+    "label": "the start report's gate is >= 1",
+    "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
+    "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
+  },
+  {
+    "label": "the middle report is ungated",
+    "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
+    "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
+  },
+  {
+    "label": "the middle report's gate is >= 1",
+    "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
+    "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
+  },
+  {
+    "note": "chkForceBaudRate.  Three claims to break: where the cap comes from (the byte, the shift), how it turns into cleared flags (the guard on zero and the five comparisons), and which bin each cleared flag spoils."
+  },
+  {
+    "label": "force: the cap is read from the wrong byte",
+    "find": "\tmaxidx = cfg[0x50] >> 5;",
+    "replace": "\tmaxidx = cfg[0x51] >> 5;"
+  },
+  {
+    "label": "force: the cap is shifted down by four, not five",
+    "find": "\tmaxidx = cfg[0x50] >> 5;",
+    "replace": "\tmaxidx = cfg[0x50] >> 4;"
+  },
+  {
+    "label": "force: the cap is shifted down by six, not five",
+    "find": "\tmaxidx = cfg[0x50] >> 5;",
+    "replace": "\tmaxidx = cfg[0x50] >> 6;"
+  },
+  {
+    "label": "force: the cap is read signed",
+    "find": "\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tunsigned char allow[6] = { 0 };",
+    "replace": "\tconst signed char *cfg = (const signed char *)obj->pac3c;\n\tunsigned char allow[6] = { 0 };"
+  },
+  {
+    "label": "force: index zero is no longer special-cased",
+    "find": "\tif (maxidx != 0) {\n\t\tif (maxidx <= 1)",
+    "replace": "\tif (maxidx != -1) {\n\t\tif (maxidx <= 1)"
+  },
+  {
+    "label": "force: rate 1 barred one index early",
+    "find": "\t\tif (maxidx <= 1)\n\t\t\tsel[1] = 0;",
+    "replace": "\t\tif (maxidx < 1)\n\t\t\tsel[1] = 0;"
+  },
+  {
+    "label": "force: rate 2 barred one index late",
+    "find": "\t\tif (maxidx <= 2)\n\t\t\tsel[2] = 0;",
+    "replace": "\t\tif (maxidx <= 3)\n\t\t\tsel[2] = 0;"
+  },
+  {
+    "label": "force: rate 3 barred one index early",
+    "find": "\t\tif (maxidx <= 3)\n\t\t\tsel[3] = 0;",
+    "replace": "\t\tif (maxidx < 3)\n\t\t\tsel[3] = 0;"
+  },
+  {
+    "label": "force: rate 4 barred one index early",
+    "find": "\t\tif (maxidx <= 4)\n\t\t\tsel[4] = 0;",
+    "replace": "\t\tif (maxidx < 4)\n\t\t\tsel[4] = 0;"
+  },
+  {
+    "label": "force: rate 5 barred one index early",
+    "find": "\t\tif (maxidx <= 5)\n\t\t\tsel[5] = 0;",
+    "replace": "\t\tif (maxidx < 5)\n\t\t\tsel[5] = 0;"
+  },
+  {
+    "label": "force: the V.90 test compares with one instead of zero",
+    "find": "\tif (obj->v90_receiver) {",
+    "replace": "\tif (obj->v90_receiver == 1) {"
+  },
+  {
+    "label": "force: the V.90 test reads a short",
+    "find": "\tif (obj->v90_receiver) {",
+    "replace": "\tif ((short)obj->v90_receiver) {"
+  },
+  {
+    "label": "force: the K56Flex test compares with one instead of zero",
+    "find": "\t} else if (obj->k56flex_receiver) {",
+    "replace": "\t} else if (obj->k56flex_receiver == 1) {"
+  },
+  {
+    "label": "force: the K56Flex arm allows the top rate",
+    "find": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 0;",
+    "replace": "\t} else if (obj->k56flex_receiver) {\n\t\tallow[5] = 1;"
+  },
+  {
+    "label": "force: the neither arm bars the top rate",
+    "find": "\t} else {\n\t\tallow[5] = 1;\n\t\tsel = allow;\n\t}",
+    "replace": "\t} else {\n\t\tallow[5] = 0;\n\t\tsel = allow;\n\t}"
+  },
+  {
+    "label": "force: the session flags are one byte along",
+    "find": "\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;",
+    "replace": "\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow + 1;"
+  },
+  {
+    "label": "force: the V.90 arm edits the local array instead of the session",
+    "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;",
+    "replace": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = allow;"
+  },
+  {
+    "label": "force: the local array starts out all barred",
+    "find": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 1;",
+    "replace": "\tallow[0] = 1;\n\tallow[1] = 1;\n\tallow[2] = 1;\n\tallow[3] = 1;\n\tallow[4] = 0;"
+  },
+  {
+    "label": "force: 3429 spoils the wrong bin",
+    "find": "\t\tbins[24].shift = 11;",
+    "replace": "\t\tbins[23].shift = 11;"
+  },
+  {
+    "label": "force: 3429 is spoiled by seven like the rest",
+    "find": "\t\tbins[24].shift = 11;",
+    "replace": "\t\tbins[24].shift = 7;"
+  },
+  {
+    "label": "force: 3200 spoils the wrong bin",
+    "find": "\t\tbins[22].shift = 7;",
+    "replace": "\t\tbins[21].shift = 7;"
+  },
+  {
+    "label": "force: 3000's low bin is the wrong one",
+    "find": "\t\tbins[2].shift = 7;",
+    "replace": "\t\tbins[3].shift = 7;"
+  },
+  {
+    "label": "force: 3000's high bin is the wrong one",
+    "find": "\t\tbins[2].shift = 7;\n\t\tbins[21].shift = 7;",
+    "replace": "\t\tbins[2].shift = 7;\n\t\tbins[20].shift = 7;"
+  },
+  {
+    "label": "force: 2800 spoils only one of its two bins",
+    "find": "\t\tbins[20].shift = 7;\n\t\tbins[19].shift = 7;",
+    "replace": "\t\tbins[20].shift = 7;"
+  },
+  {
+    "label": "force: the bin's energy is spoiled rather than its shift",
+    "find": "\t\tbins[22].shift = 7;",
+    "replace": "\t\tbins[22].energy = 7;"
+  },
+  {
+    "label": "force: the top rate's test has the wrong polarity",
+    "find": "\tif (sel[5] == 0)\n\t\tbins[24].shift = 11;",
+    "replace": "\tif (sel[5] != 0)\n\t\tbins[24].shift = 11;"
+  },
+  {
+    "label": "force: the flags are consulted one index along",
+    "find": "\tif (sel[4] == 0)\n\t\tbins[22].shift = 7;",
+    "replace": "\tif (sel[3] == 0)\n\t\tbins[22].shift = 7;"
+  },
+  {
+    "label": "force: the trace names the wrong module",
+    "find": "\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
+    "replace": "\t\tdsplibs_debug_printf(\"VPcmV34Main: max V34 baud rate index \""
+  },
+  {
+    "label": "force: the trace is not gated",
+    "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \"",
+    "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VpcmV34Main: max V34 baud rate index \""
+  },
+  {
+    "label": "force: the dead store on the V.90 arm is dropped",
+    "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n",
+    "replace": "",
+    "equivalent": true,
+    "why": "`sel` is set to the session object on that arm and `allow` is never read again, so nothing can observe the store.  It is reproduced because the object performs it, not because it does anything; D49 records it.  A mutation of it being CAUGHT would mean the arm's `sel` had moved."
+  },
+  {
+    "note": "GetVPcmMinimalTxPowerReduction and VPcmV34GetMaxUpstreamRateIndex.  The arm selection is four separate words combined by an && whose middle term is a `je`, so most of these break the combining rather than the arithmetic."
+  },
+  {
+    "label": "power: the clamp floor is -11",
+    "find": "\tif (want < -10)\n\t\tred = -10;",
+    "replace": "\tif (want < -11)\n\t\tred = -11;"
+  },
+  {
+    "label": "power: the clamp floor is inclusive",
+    "find": "\tif (want < -10)",
+    "replace": "\tif (want <= -10)",
+    "equivalent": true,
+    "why": "`want <= -10` and `want < -10` differ only at -10, and both spellings then produce -10 -- the first from the assignment, the second from the pass-through.  The clamp's floor is still tested, by `the clamp floor is -11`."
+  },
+  {
+    "label": "power: the clamp ceiling is 8",
+    "find": "\telse if (want > 7)\n\t\tred = 7;",
+    "replace": "\telse if (want > 8)\n\t\tred = 8;"
+  },
+  {
+    "label": "power: the clamp ceiling is inclusive",
+    "find": "\telse if (want > 7)",
+    "replace": "\telse if (want >= 7)",
+    "equivalent": true,
+    "why": "The same at the other end: at exactly 7 both arms give 7.  `the clamp ceiling is 8` is what tests the edge."
+  },
+  {
+    "label": "power: the wanted reduction is read as a byte",
+    "find": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB);",
+    "replace": "\tshort want = *(const signed char *)(cfg + CFG_MINPWR_DB);"
+  },
+  {
+    "label": "power: the wanted reduction is one field along",
+    "find": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB);",
+    "replace": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB + 2);"
+  },
+  {
+    "label": "power: the session gate is ignored",
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)",
+    "replace": "\tif (!(obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)"
+  },
+  {
+    "label": "power: the sensitive-ISP test has the polarity it looks like",
+    "find": "\t      && pcm->SENSITIVE_ISP_DETECTED == 0)\n\t    && obj->k56flex_receiver == 0)",
+    "replace": "\t      && pcm->SENSITIVE_ISP_DETECTED != 0)\n\t    && obj->k56flex_receiver == 0)"
+  },
+  {
+    "label": "power: the two arms are or-ed rather than nested",
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
+    "replace": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;"
+  },
+  {
+    "label": "power: the V.90 test is > 1 like the other function's",
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)",
+    "replace": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver > 1\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)"
+  },
+  {
+    "label": "power: nothing is forced to zero",
+    "find": "\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
+    "replace": "\t    && obj->k56flex_receiver == 0)\n\t\tred = red;"
+  },
+  {
+    "label": "power: the sign test includes zero",
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif (red >= 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;"
+  },
+  {
+    "label": "power: the sign test is unsigned",
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif ((unsigned short)red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;"
+  },
+  {
+    "label": "power: the PCM flag's two values are swapped",
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;"
+  },
+  {
+    "label": "power: the positive arm's decay factor is the negative arm's",
+    "find": "\t\tobj->echo_decay_fact = 0x7fdf;",
+    "replace": "\t\tobj->echo_decay_fact = 0x7fcb;"
+  },
+  {
+    "label": "power: the positive arm's beta is four",
+    "find": "\t\tobj->echo_beta = 2;",
+    "replace": "\t\tobj->echo_beta = 4;"
+  },
+  {
+    "label": "power: decay start differs between the arms",
+    "find": "\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;\n\t\tobj->echo_decay_start = 0x7d0;",
+    "replace": "\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;\n\t\tobj->echo_decay_start = 0x7d1;"
+  },
+  {
+    "label": "power: the beta choice tests the wrong constant",
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
+    "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
+  },
+  {
+    "label": "power: the beta choice is inverted",
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
+    "replace": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 6 : 4;"
+  },
+  {
+    "label": "power: beta's other value is five, as adaptecho's ladder has it",
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
+    "replace": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 5;"
+  },
+  {
+    "label": "power: the returned value is the unclamped one",
+    "find": "\t\t (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);",
+    "replace": "\t\t (int)want, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);"
+  },
+  {
+    "label": "power: the second report prints the flag before the write",
+    "find": "\t\t (int)red, sess->modem.params->HIGH_LEVEL_TX_ACTIVE);",
+    "replace": "\t\t (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f8));"
+  },
+  {
+    "label": "rate: the configured rate is one field along",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = *(const int *)((const unsigned char *)obj->pac3c + 0x40);"
+  },
+  {
+    "label": "rate: the V.90 test is != 0 rather than > 1",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver != 0) {"
+  },
+  {
+    "label": "rate: the V.90 test is >= 1",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver >= 1) {"
+  },
+  {
+    "label": "rate: the session gate is ignored",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (obj->v90_receiver > 1) {"
+  },
+  {
+    "label": "rate: the sensitive-ISP test is inverted",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED == 0) {"
+  },
+  {
+    "label": "rate: the cap's multiplier is 2400 spelled as 2401",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x961;"
+  },
+  {
+    "label": "rate: the cap is computed without wrapping",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tlong long cap = (long long)pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t\t* 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = (int)cap;"
+  },
+  {
+    "label": "rate: the cap is taken rather than the smaller",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\trate = cap;"
+  },
+  {
+    "label": "rate: the comparison is >=",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate >= cap)\n\t\t\t\trate = cap;",
+    "equivalent": true,
+    "why": "At `rate == cap` the assignment is a no-op, so `>` and `>=` cannot be told apart.  Which of the two is taken is tested by `the larger is taken` and `the cap is taken rather than the smaller`."
+  },
+  {
+    "label": "rate: the larger is taken",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate < cap)\n\t\t\t\trate = cap;"
+  },
+  {
+    "label": "rate: the two ISP reports are transposed",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on sensitive ISP, \"",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on regular ISP, \""
+  }
 ]

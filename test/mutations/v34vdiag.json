@@ -76,13 +76,13 @@
  },
  {
   "label": "selector 4: the offset comes from the phase's field",
-  "find": "\t\t\t\tpoints[0].re = rx->timing_offset;",
+  "find": "\t\t\t\tpoints[0].re = rx->timing_ppm;",
   "replace": "\t\t\t\tpoints[0].re = rx->timing_frac;"
  },
  {
   "label": "selector 4: the offset is widened unsigned",
-  "find": "\t\t\t\tpoints[0].re = rx->timing_offset;\n\t\t}",
-  "replace": "\t\t\t\tpoints[0].re = (unsigned short)rx->timing_offset;\n\t\t}"
+  "find": "\t\t\t\tpoints[0].re = rx->timing_ppm;\n\t\t}",
+  "replace": "\t\t\t\tpoints[0].re = (unsigned short)rx->timing_ppm;\n\t\t}"
  },
  {
   "label": "selectors 3 and 4 return no points",
