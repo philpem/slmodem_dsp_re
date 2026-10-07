@@ -137034,3 +137034,49 @@ passes. Both full-TU bystanders stay raw-identical.
 Final strict census: 1,075/1,852 exact, 118,176 original bytes; gain
 SDMv27_init (+89 bytes), zero losses. REGALLOC decreases32→31. The historical810-name floor remains unchanged;
 its known V90Parameters C2 loss is not cleared by this gain.
+
+## F11878. Shared-result follow-up closes four finite domains without a strict gain
+
+26 full Gentoo TU controls/166 body verdicts reproduce all raw baselines and
+preserve bindings, allocated data/BSS/nontext relocations. Shared receiver
+results and true CID common-store conditional assignments yield no exact gain.
+Guarded V90 quotient assignments also yield none; SignBits reset loses its
+existing exact identity in an unadopted control. Cold-arm tracing corrects the
+initial receiver nomination: their immediate wrap stores are separate and jump
+AFTER normal stores. Preserve the original domain prediction and its explicit
+correction. No width/flag/forced-register or token-order search follows.
+`docs/shared-value-followup-results.md`; tools/shared_value_batch_audit.py.
+
+## F11879. Direct field increment recovers three receiver counter components
+
+V27RX_eq_train, V27RX_decision and V29RX_eq_train now reproduce the original
+MOVZWL/INC/word CMP/JE/normal word store and separate immediate wrap store.
+The baseline had an extra post-INC MOVZWL. Fields stay unsigned short, constants
+and preceding alias-sensitive reads stay fixed; both formulas have identical
+modulo-65536 output including wrap. Seven TU bystanders are raw-identical.
+No strict function gain is claimed. V29 decision remains unchanged because the
+validated store-path observer refuses its base-changing control. Period gate
+and production comparison are recorded in the results after validation.
+`docs/shared-value-followup-results.md`; tools/receiver_counter_boundary_audit.py.
+
+## F11880. Store-site tracing prevents false common-result nominations
+
+Read-only branch_store_paths follows both straight-line arms to their first
+explicit field store and compares physical instruction sites. Three known
+common joins, three separate receiver joins and three malformed refusals fire
+in receiver_counter_boundary_audit. Calls, nested conditions, cycles, unknown
+writes and changed base registers are barriers; no arbitrary alias inference.
+The initial four-counter audit is explicitly excluded after its correct refusal
+on V29 decision, rather than broadening the observer just to accept a candidate.
+`docs/shared-value-followup-results.md`; tools/branch_store_paths.py.
+
+F11878-F11880 validation: 388/0 period phase, structural gates green;
+300/300 production objects, zero failed; both receiver objects raw-identical
+to their selected full-TU controls. Fresh references14,389/findings2,977 and
+static anchors10,038 across285 suites have zero failures. No modern
+portability claim or historical-floor reset.
+
+Final F11879 census: 1,075/1,852 exact and118,176 exact bytes; exact-name set
+unchanged from04eee73f, zero strict gains/losses. Remainder675 SIZE/66 BYTES/
+31 REGALLOC/5 UNRESOLVED. This component recovery does not clear the
+historical V90Parameters constructor floor loss.

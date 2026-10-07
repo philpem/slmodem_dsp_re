@@ -4035,3 +4035,23 @@ store has separate source assignments; merely reversing branch arms is a
 separate closed domain. Do not assume every register-only function has this
 cause or claim the conditional syntax is uniquely recovered.
 [Control and audit](../sdmv27-common-value-results.md).
+
+### Follow cold arms before inferring a common source result (F11878, F11880)
+
+A normal-path field store does not prove both arms feed it. Receiver wrap arms
+store immediate 0x4000 separately and jump after the normal store; CID's cold
+arms really return to the same instruction. Use `tools/branch_store_paths.py`
+with an independently identified branch/field/base to discriminate. The tool
+refuses aliases/base changes and nested CFG instead of inventing a source
+preimage. Positive and refusal controls are in receiver_counter_boundary_audit.
+The 26-TU follow-up domain is closed in shared-value-followup-results.md.
+
+### A local truncation boundary can introduce an extra extension (F11879)
+
+For an unsigned-short field increment followed by a wrap check, a temporary
+assignment/cast can add MOVZWL after INC under this compiler. Direct field ++
+reproduces the original load/INC/word comparison/store in three receiver
+methods. Check both cold and normal stores and prior alias-sensitive reads;
+this is a component recovery, not a general permission to remove narrowing.
+No whole-function exact gain follows here. Leave unsupported base-changing
+paths unadopted; source syntax is not uniquely identified by this observation.

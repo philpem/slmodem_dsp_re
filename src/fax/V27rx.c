@@ -575,7 +575,6 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v27_rx_decoder *dec = state->cfg.owner;
 	const short *tbl;
-	unsigned short count;
 	short step;
 	short diff;
 	short err;
@@ -584,11 +583,10 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	short i;
 
 	/* Saturating, and it restarts at half scale -- V27RX_decision's. */
-	count = (unsigned short)(dec->sym_count + 1);
-	if (count == V27DEC_PHASE_FULL)
+	/* Direct field update preserves the original word comparison (F11879). */
+	++dec->sym_count;
+	if (dec->sym_count == V27DEC_PHASE_FULL)
 		dec->sym_count = V27DEC_PHASE_FULL / 2;
-	else
-		dec->sym_count = count;
 
 	/* Half the constellation: 4 of 8, or 2 of 4. */
 	step = dec->eight_phase ? 4 : 2;
@@ -660,18 +658,16 @@ V27RX_decision(struct fpm_fse *state, short *angle, short *mag)
 	const short *tbl = (const short *)dec->angles;
 	const short *pmap = (const short *)dec->pmap;
 	short n = dec->eight_phase ? 8 : 4;
-	unsigned short count;
 	short best, bi, k;
 	int diff;
 
 	diff = *angle - tbl[dec->last];
 
 	/* Saturating, and it restarts at half scale rather than at zero. */
-	count = (unsigned short)(dec->sym_count + 1);
-	if (count == V27DEC_PHASE_FULL)
+	/* Direct field update preserves the original word comparison (F11879). */
+	++dec->sym_count;
+	if (dec->sym_count == V27DEC_PHASE_FULL)
 		dec->sym_count = V27DEC_PHASE_FULL / 2;
-	else
-		dec->sym_count = count;
 
 	/* One revolution, taken as [0, V27DEC_PHASE_FULL]. */
 	if (diff < 0)
