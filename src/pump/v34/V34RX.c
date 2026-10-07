@@ -345,29 +345,32 @@ rxtiminginit(void *objp)
 	/* Where rxreadqueue leaves its four samples. */
 	rx->rx_samples = obj->receiver.burst;
 
-	rx->rx_blocks = 0;
-	rx->mix_carrier_step = 1;
-	rx->mix_carrier_phase = 0;
-	rx->pllcnt = -1;
-	rx->slow_ramp = 1;
+	/* Reset timing groups in the original store order (F11881). */
+	rx->f1d4 = 0;
+	rx->f1e4 = 0;
+	rx->f1e8 = 0;
+	rx->timing_frac = 0;
+	rx->timing_integrator = 0;
+	rx->f1f0 = 0;
 	rx->ppm_acc = 0;
 	rx->ppm_count = 0;
 	rx->timing_ppm = 0;
 	/* The slowest V.34 rate: what the receiver assumes until told. */
 	rx->report_interval = 2400;
-	rx->f1d4 = 0;
-	rx->timing_frac = 0;
-	rx->timing_integrator = 0;
-	rx->f1e4 = 0;
-	rx->f1e8 = 0;
-	rx->f1f0 = 0;
+	rx->pllcnt = -1;
+	rx->slow_ramp = 1;
+	rx->mix_carrier_step = 1;
+	rx->dwell_count = 0;
+	rx->f22e = 0;
+	rx->rx_blocks = 0;
+	rx->mix_carrier_phase = 0;
+	/* Timing history uses the separate IIR taps, not the decision view. */
+	rx->dp.iir2.q = 0;
+	rx->dp.iir2.i = 0;
 	rx->f208 = 0;
 	rx->f20a = 0;
-	rx->dp.point = 0;
-	rx->f22e = 0;
-	rx->dwell_count = 0;
-	rx->demod_i_prev = 0;
 	rx->demod_q_prev = 0;
+	rx->demod_i_prev = 0;
 }
 
 void

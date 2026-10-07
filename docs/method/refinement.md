@@ -4055,3 +4055,14 @@ methods. Check both cold and normal stores and prior alias-sensitive reads;
 this is a component recovery, not a general permission to remove narrowing.
 No whole-function exact gain follows here. Leave unsupported base-changing
 paths unadopted; source syntax is not uniquely identified by this observation.
+
+### Choose the active typed overlay at initialization too (F11881)
+
+A reset of a packed decision point is not necessarily the original timing
+history reset, even when both leave identical zero bytes. rxtiminginit's blob
+clears existing dp.iir2.q/i separately in its timing-group order; choosing the
+packed dp.point view hid that access-width evidence. Four full-TU controls
+recover23 stores in offset/width/value order, but leave a2-byte size residual
+and five changed nonexact bystanders. Review them all; do not claim exactness
+from the recovered component or invent a new type/extent from a register base.
+[Timing reset control](../v34-timing-reset-results.md).

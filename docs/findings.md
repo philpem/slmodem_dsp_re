@@ -137080,3 +137080,28 @@ Final F11879 census: 1,075/1,852 exact and118,176 exact bytes; exact-name set
 unchanged from04eee73f, zero strict gains/losses. Remainder675 SIZE/66 BYTES/
 31 REGALLOC/5 UNRESOLVED. This component recovery does not clear the
 historical V90Parameters constructor floor loss.
+
+## F11881. Timing reset uses the IIR half-word view and non-field-order reset groups
+
+After rebasing onto merged issue260/master16cb3384, all1075 exact names survive
+and the refreshed1074-name floor passes. Original rxtiminginit clears Q(-2)
+and I(-2) separately; source instead chose dp.point's packed-decision view.
+Existing dp.iir2.q/i supplies the actual timing view, without a new map/cast.
+Four full Gentoo V34RX TU cells/48 verdicts cross original store order and
+separate halves: combined control matches23 original offset/width/value
+stores in order, while all3 axis negatives disagree.249B/SIZE12 becomes
+259B/SIZE2 against261B; no strict gain. Metadata/data/BSS/nontext relocations
+agree;6 bodies unchanged,6 change including5 measured nonexact bystanders.
+29 RTL stage pairs/58 streams diverge initially at01.rtl, with22→23
+observable immediate-store splits. Two raw/traced/saved triples validate249 searches/1620 candidate visits;
+target23→24 searches include the epilogue, both entering cursor50. No original
+scratch history, source syntax uniqueness or regalloc-only explanation is claimed. Keep the finite domain
+closed, gate the component recovery, and do not fabricate a subobject from
+VPcm's separate obj+4 base clue. `docs/v34-timing-reset-results.md`;
+tools/v34_timing_reset_audit.py.
+
+F11881 validation:388/0 period phase, structural gates green;300/300 production
+objects, zero failed; V34RX raw-identical to selected control. Exact-name set
+stays1075/1852 (118176 bytes), zero gains/losses; refreshed1074-name ratchet
+passes. Static anchors10038/285 suites are attached/unique. This is a measured
+component recovery, not a new whole-function byte-exact gain.
