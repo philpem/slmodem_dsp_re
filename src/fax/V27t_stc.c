@@ -36,7 +36,7 @@ V27TX_control(void *modem, void *req)
 {
 	struct v27tx_ctl *ctl = (struct v27tx_ctl *)req;
 	struct v27_tx_source *prm;
-	struct fpm_pps *pps;
+	struct v27_tx_block *block;
 	short rate;
 	unsigned char mask;
 	unsigned char flags;
@@ -45,14 +45,14 @@ V27TX_control(void *modem, void *req)
 		return 0;
 
 	prm = ((struct v27_tx *)modem)->source;
-	pps = (struct fpm_pps *)(void *)
-		&((struct v27_tx *)modem)->tx->pps;
+	block = ((struct v27_tx *)modem)->tx;
 	rate = prm->rate;
 
-	pps->cfg.scale = ctl->scale_mul *
-		V27TX_PPS_SCALE[rate];
+	block->pps.cfg.scale = ctl->scale_mul;
+	int scaled = block->pps.cfg.scale * V27TX_PPS_SCALE[rate];
 
 	((struct v27_tx *)modem)->cfg.int_0018 = ctl->int_0010;
+	block->pps.cfg.scale = scaled;
 	((struct v27_tx *)modem)->cfg.int_0008 = ctl->int_0004;
 
 	mask = ctl->mask;
@@ -61,10 +61,9 @@ V27TX_control(void *modem, void *req)
 
 	prm->int_0008 = 0;
 
-	flags = ctl->flags;
-	if (flags & V27TXCTL_FLAGS_FORCE_INT_0008)
+	if (ctl->flags & V27TXCTL_FLAGS_FORCE_INT_0008)
 		prm->int_0008 = 1;
-	if (flags & V27TXCTL_FLAGS_REINIT)
+	if (ctl->flags & V27TXCTL_FLAGS_REINIT)
 		V27TX_create(modem, &((struct v27_tx *)modem)->cfg);
 
 	return 1;

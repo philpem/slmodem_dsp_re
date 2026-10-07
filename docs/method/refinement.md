@@ -3824,3 +3824,42 @@ count. Publication must precede it to preserve the original full count.
 Do not remove defined masking or retry source order without a proved domain
 bound or independent redundant-mask computation.
 [Bounded controls, full-TU audits and replay](../eia6-scheduler-results.md).
+
+### Separate captured arithmetic from alias-visible publication (F11856)
+
+Two writes to one field can use different source values. V17TX_control first
+publishes request scale, multiplies that stored value, then delays the product
+store across another configuration write. Re-reading request or publishing
+the product earlier changes unknown-overlap behavior and the register graph.
+Whole-owner addressing plus common return recovers most of the body; an
+explicit product lifetime and its original delayed store close strict identity.
+V27's independent original also needs the first store and fresh request flag
+reads after the conditional member write. Transfer each observed use age,
+not an assumption that owner/request pointers are disjoint.
+
+### Cross common results with the original dispatch tree (F11857)
+
+A shared return can still leave different state comparisons and duplicate
+tails. fax_class1_status closes only when its common zero/one result is crossed
+with ordinary switch groups4..6 and12..13, matching the original ordered
+range tree. Keep callbacks and their effects intact. Extra current epilogues
+are a screening clue, not proof of missing source statements.
+[Full-TU controls, declines and validation](../callback-value-age-batch-results.md).
+
+Historical floors need source/profile provenance too (F11855): V90Parameters
+C2 was genuinely exact when recorded. A later supported float-field recovery
+changed only its register choices, even though the changed writer stayed
+byte-identical. Do not blame the comparison tool or compiler version without
+crossed historical replays, and do not undo correct typing or lower a floor
+merely to make the check green.
+
+
+The constructor retype control now locates the first divergence precisely
+(F11861): patterns agree through27.flow2; scratch selection differs first at
+28.peephole2, and30.rnreg maps the later register colors. A prior writer can
+retain its final bytes while changing SI-immediate scratch opportunities to
+SF-register moves. Use pre-pass patterns and actual raw-preserving dumps;
+final writer identity does not preserve compiler scratch-search state. This
+corroborates the existing scratch-cursor lever, without measuring the full
+historical dynamic cursor-event sequence or justifying literal permutations.
+[Actual field-era stage proof](../v90-parameters-constructor-stage-proof.md).

@@ -109,3 +109,8 @@ order. For beta, require an original lifecycle/domain bound or independently
 supported defined computation that makes masking redundant. Do not remove
 defined masks by opcode proximity. This pass makes no global byte ceiling
 claim and does not reopen #22.
+
+Follow-up F11855/F11861 localizes the previously preserved constructor floor
+failure to2efa968b and28.peephole2; see [historical controls](v90-parameters-constructor-ratchet-history.md)
+and [stage proof](v90-parameters-constructor-stage-proof.md). No type rollback
+or floor lowering is adopted.

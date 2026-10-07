@@ -136698,3 +136698,80 @@ constant could make mask redundant, but original guards do not bound converted
 logarithmic counts. No new source variant or mask removal justified. Require
 original lifecycle/domain or independent defined redundant-mask evidence.
 `docs/beta-shift-publication-trace.md`; tools/beta_shift_publication_trace.py.
+
+## F11855. Constructor ratchet was valid; correct float recovery caused a collateral loss
+
+Eight forensic full-TU cells/72 body grades reproduce historical C2 EXACT
+and current BYTES4 under stock/Gentoo and both CXX profiles. Actual commit
+2efa968b changes +434 int bits to float250; only C2 changes ECX/EDX roles,
+with all8bystanders—including writer—data/bindings/BSS/nontext/textpositions
+identical. This localizes the legitimate historical loss, not its internal
+GCC pass yet. Preserve correct typing and membership floor; do not re-bless
+or blame compiler choice. `docs/v90-parameters-constructor-ratchet-history.md`;
+tools/v90_parameters_ratchet_audit.py.
+
+## F11856. Scale capture/publication and fresh flag ages close two transmit controls
+
+V17TX_control148B: eight value/whole-owner/common-return controls reachBYTES8;
+four independent original-store controls close only captured product published
+after owner+18. Original request scale first stores to PPS, then that value is
+multiplied; a later request reread is not the same alias-visible graph.
+V27TX_control148B independently needs that missing first store/delayed product
+plus flag-byte reread after conditional member assignment. Four crossed cells
+close only combined graph; original exact V27TX_status preserved. Complete
+production objects repeat controls, allbystanders/data/metadata fixed. No
+assumed disjoint owners or prototype/profile changes.
+`docs/callback-value-age-batch-results.md`; tools/callback_value_age_batch_audit.py.
+
+## F11857. Grouped switch plus common callback result closes fax_class1_status
+
+Original150B has ordered groups4..6/12..13, earlyzero result and shared
+callback/epilogue. Result-only if control misses; four crossed dispatch/result
+controls close only switch/shared result. Default0/eligible1 and initializer
+unchanged;16bystanders and all data/metadata fixed. Repeated-return screen
+335small nonexactC bodies finds5extra-epilogue candidates, a nomination not
+proof. `docs/fax-status-dispatch-domain.md`;
+`docs/callback-value-age-batch-results.md`.
+
+## F11858. Callback graph transfer domains remain bounded after negative controls
+
+selectFilter8cells/128livegrades cross fresh pointers, known earlytype carriers
+and switches, preserving exactEIA6;0gains/losses. Switch-negative merge-string
+pool reorder audited by extent/fullstringmultiset, no otherdata/metadata change.
+V29control8cells, V17/V29status12cells miss; actual flag-byte ages and original
+register-mask forms remain evidence, no closest-size/bitfield/alias/slotfit
+adopted. Root audit50cells/302livegrades/10rawbaselines,3strictgains/0losses.
+`docs/callback-value-age-batch-results.md`.
+
+## F11859. V27 EQ-conditioning read ages are source leads, not a regalloc dismissal
+
+21complete-TU controls/210livegrades/2rawbaselines;9bystanders and allmetadata/
+data/BSS/nontext fixed,0gains/losses. Original unsignedbudget, member subtraction,
+per-outputrate reads and pointer/postdecrement graph crossed; then original
+pre-call cursor/count lifetimes. FirstCSE removes extra countdown read,
+branchrate reads survive. High-bit budget and output/rate alias histories can
+matter; no original-reaching domain claim or partialbody adoption.
+`docs/fax-eqcond-reload-results.md`; tools/fax_eqcond_reload_audit.py.
+
+## F11860. Energy callback sequencing is real; its ABI and inline blocker are separate
+
+Four full-TU controls/24livegrades cross common-success result with RMS
+capture before history-index read. InitialRTL age detector fires;0gains/losses.
+Original/current helper effectiveABI is EAXbuf/EDXn/fourstackargs, bothlocal;
+external/ordinary-convention sourcecomment is stale. Original FDSPInitObjcall1
+versusallcandidatecalls0/inlined remains; no prototype/flags/sourcecoercion.
+Separate RXreview8functions/4TUs,3alreadyexact, no freshcommon-return witness;
+closed flag/snapshot families not repeated. `docs/energy-callback-result-results.md`;
+`docs/rx-callback-sibling-review.md`; tools/energy_callback_result_audit.py.
+
+## F11861. Constructor first diverges at peephole2 after an identical-byte writer
+
+Actual2efa pre/post dump-only replays preserve2rawobjects/18bodies;116clone
+streams. Bothconstructor patterns—includingallocatedregs—agree through27flow2.
+C2 fourteen materialization choosesECXpre/EAXpost at28peephole2;30rnreg maps
+finalprezeroEDX/14ECX versuspostzeroECX/14EDX. Priorwriter+434SIimmediate
+scratchsplit pre versusSFregisterstore post differs despitefinalbodyidentity.
+Pinnedstockrecog persistentsearch_ofs explainsconsistentknownscratchcursor;
+fullactual dynamiccursor events notmeasured. Correctfloat/floorpreserved;
+no source/literal/profilefit. `docs/v90-parameters-constructor-stage-proof.md`;
+tools/v90_parameters_constructor_stage_trace.py.
