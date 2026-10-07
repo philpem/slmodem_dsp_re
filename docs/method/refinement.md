@@ -3791,8 +3791,75 @@ long-double ABI or TU option can change the declaration-to-mode mapping.
 
 EIA6 SF/default-double math recovers FISTL/FMULP/FCOMPP, while its constant
 10000 still occupies SF storage. Constant-pool width does not determine
-expression precision. Neither it nor two beta mode transfers becomes exact.
+expression precision. Those isolated controls and the two beta mode transfers
+did not become exact. F11852–F11853 below close EIA6 with independent use,
+lifetime and tail-reload evidence.
 Trace register-zero folding at combine, register-scale folding at lreg and
 later stack physical deaths separately; do not fit declarations/registers/
 slots or remove a defined shift mask for a near-size match.
 [Complete evidence, closed domains and tools](../eia6-x87-results.md).
+
+### Trace argument conversions, then verify the actual tail edge (F11852–F11854)
+
+An apparent x87 scheduling difference may begin at combine: a fractional
+FIX used by a conditional argument can sink into that argument after another
+conversion. EIA6's builtin integer abs and explicit earlier if keep fraction
+conversion earlier and restore magnitude conversion directly to outgoing+8.
+They emit identical complete objects; neither alone proves original source.
+An independently observed early FABS/live result then recovers the diagnostic
+prefix exactly. Follow source uses and conversion homes through the passes;
+do not fit types or stack slots to partial opcode agreement.
+
+When a remaining copy arm has fewer available registers, compare the actual
+tail jump target. EIA6's original bypasses a common pointer reload; ours lands
+on it, keeping this live. Moving that reload to the else path, while retaining
+reloads after both callbacks, frees the original copy pipeline and makes the
+complete790B body strict EXACT. Real operand/use and branch-target evidence
+supports this graph; register-colored rejoin addresses alone do not. Review
+both paths and all callback effects before transferring the lever.
+
+Conversely, an explicit count mask can create a genuine preservation edge:
+beta's mask is in initial RTL, and regmove coalesces it destructively with the
+count. Publication must precede it to preserve the original full count.
+Do not remove defined masking or retry source order without a proved domain
+bound or independent redundant-mask computation.
+[Bounded controls, full-TU audits and replay](../eia6-scheduler-results.md).
+
+### Separate captured arithmetic from alias-visible publication (F11856)
+
+Two writes to one field can use different source values. V17TX_control first
+publishes request scale, multiplies that stored value, then delays the product
+store across another configuration write. Re-reading request or publishing
+the product earlier changes unknown-overlap behavior and the register graph.
+Whole-owner addressing plus common return recovers most of the body; an
+explicit product lifetime and its original delayed store close strict identity.
+V27's independent original also needs the first store and fresh request flag
+reads after the conditional member write. Transfer each observed use age,
+not an assumption that owner/request pointers are disjoint.
+
+### Cross common results with the original dispatch tree (F11857)
+
+A shared return can still leave different state comparisons and duplicate
+tails. fax_class1_status closes only when its common zero/one result is crossed
+with ordinary switch groups4..6 and12..13, matching the original ordered
+range tree. Keep callbacks and their effects intact. Extra current epilogues
+are a screening clue, not proof of missing source statements.
+[Full-TU controls, declines and validation](../callback-value-age-batch-results.md).
+
+Historical floors need source/profile provenance too (F11855): V90Parameters
+C2 was genuinely exact when recorded. A later supported float-field recovery
+changed only its register choices, even though the changed writer stayed
+byte-identical. Do not blame the comparison tool or compiler version without
+crossed historical replays, and do not undo correct typing or lower a floor
+merely to make the check green.
+
+
+The constructor retype control now locates the first divergence precisely
+(F11861): patterns agree through27.flow2; scratch selection differs first at
+28.peephole2, and30.rnreg maps the later register colors. A prior writer can
+retain its final bytes while changing SI-immediate scratch opportunities to
+SF-register moves. Use pre-pass patterns and actual raw-preserving dumps;
+final writer identity does not preserve compiler scratch-search state. This
+corroborates the existing scratch-cursor lever, without measuring the full
+historical dynamic cursor-event sequence or justifying literal permutations.
+[Actual field-era stage proof](../v90-parameters-constructor-stage-proof.md).

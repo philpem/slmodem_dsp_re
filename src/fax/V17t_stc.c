@@ -49,7 +49,6 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 {
 	struct v17tx_priv *priv;
 	struct v17tx_fp *block;
-	struct fpm_pps *pps;
 	short mode;
 
 	if (req == 0)
@@ -59,11 +58,11 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 	block = TXBLOCK(fp);
 	mode = priv->mode;
 
-	pps = &block->pps;
-	pps->cfg.scale = req->scale_mul;
-	pps->cfg.scale = V17TX_PPS_SCALE[mode] * req->scale_mul;
+	block->pps.cfg.scale = req->scale_mul;
+	int scaled = block->pps.cfg.scale * V17TX_PPS_SCALE[mode];
 
 	((struct v17tx_cfg *)fp)->int_0018 = req->int_0010;
+	block->pps.cfg.scale = scaled;
 	((struct v17tx_cfg *)fp)->int_0008 = req->int_0004;
 
 	if (req->ctl0 & V17TXCTL_CTL0_BIT2)
@@ -75,10 +74,8 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 	if (req->ctl1 & V17TXCTL_CTL1_BIT4)
 		priv->r08 = 1;
 
-	if (req->ctl1 & V17TXCTL_CTL1_BIT1) {
+	if (req->ctl1 & V17TXCTL_CTL1_BIT1)
 		V17TX_create(fp, fp);
-		return 1;
-	}
 
 	return 1;
 }

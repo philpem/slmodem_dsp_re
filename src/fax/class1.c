@@ -1117,17 +1117,23 @@ const struct faxvmi_status FAXVMI_STS = { 0 };
 int
 fax_class1_status(struct fax_class1 *ctx, void *modem_status)
 {
+	int result = 0;
 	struct faxvmi_status st = FAXVMI_STS;
 
 	st.modem_status = modem_status;
 
-	if (ctx->state >= 4 && ctx->state <= 6) {
+	switch (ctx->state) {
+	case CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE:
+	case CLASS1_HDLC_RECEIVE_STATE:
+	case CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE:
 		FAXVMI_status(ctx->vmi_a, &st);
-		return 1;
-	}
-	if ((unsigned)(ctx->state - 12) <= 1) {
+		result = 1;
+		break;
+	case CLASS1_RX_LOOK_CARRIER:
+	case CLASS1_RX_DATA_STATE:
 		FAXVMI_status(ctx->vmi_b, &st);
-		return 1;
+		result = 1;
+		break;
 	}
-	return 0;
+	return result;
 }

@@ -28,3 +28,8 @@ python3 tools/batch_cpp_prefilter_expand_audit.py
 ```
 
 Complete recorded commands, Gentoo compiler/selected assembler identity, header/source/object hashes and body verdicts are in `build/batch-cpp-prefilter-expand/results.json`; full audit and backedge locations in `audit.json`; original disassembly in `original-eia6.dis`; all compiler dumps and annotated assembly in each cell. The reproduction define is last in actual commands. No mutation/fuzz/runtime was executed. The audit's initial whole-blob metadata traversal was stopped and replaced with direct target-symbol decoding; the completed audit covers every candidate object's metadata/data and the original target graph without auditing unrelated original functions.
+
+Follow-up F11852–F11853: independent combine/use, early magnitude lifetime
+and actual tail-reload edge evidence closes setParamEia6 strict EXACT790B;
+see [the later full-TU controls](eia6-scheduler-results.md). The earlier
+finite-domain measurements above remain historical, not a global ceiling.

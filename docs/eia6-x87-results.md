@@ -132,3 +132,8 @@ Final make refs exit0:14383references/2948finding headings,0unresolved/held/
 stale;285static suites10038anchors,0detached/nonunique/no-op/wrong-arm. No
 mutation execution. All8new Python tools parse; live EIA6/beta audits and
 source-rule/transfer detectors pass on their named positive controls.
+
+Follow-up F11852–F11853: independent combine/use, early magnitude lifetime
+and actual tail-reload edge evidence closes setParamEia6 strict EXACT790B;
+see [the later full-TU controls](eia6-scheduler-results.md). The earlier
+finite-domain measurements above remain historical, not a global ceiling.
