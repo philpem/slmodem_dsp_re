@@ -136931,3 +136931,35 @@ are audited; code relocation owners/boundaries are recorded, and all BSS,
 bindings and named data stay fixed. Close these finite families without fresh
 use, alias or CFG evidence. `docs/fax-service-values-results.md`;
 tools/fax_service_values_audit.py.
+
+## F11873. Installed scratch-search histories explain two unchanged-target divergences
+
+Read-only pinned Gentoo cc1/cc1plus traces validate 1,410 searches and 8,428
+candidate visits across six complete-TU raw/traced/saved triples. Two positive
+pairs, two equal repeats and four malformed-trace refusals pass. EpochDetectV29
+enters with cursor2/selects ECX versus cursor3/selects EAX; historical C2 enters
+with cursor2/ECX versus cursor52/EAX. The writer's 158/157 sites differ by the
+old +0x434 immediate-SI search despite equal final bytes; the correct SF field
+stays. The actual 53-slot order ends in five EAX entries, as the backend's
+explicit zero fill predicts. All observed enclosing matches return replacements;
+the rejected-match explanation was not observed. No failed scratch search or
+other mode/class claim. Invalid caller/layout probes are excluded, and the
+host-debugger/image-assembler runtime distinction is explicit.
+`docs/gentoo-peep2-search-proof.md`;
+tools/gentoo_peep2_search_reproduce.py; tools/gentoo_peep2_search_audit.py.
+
+## F11874. Fax default extra argument is recovered independently of whole-body identity
+
+F11872's original call-argument witness is adopted under the owner's request
+for source-fidelity improvements as well as exact gains: extra starts at zero
+and FTM alone overwrites it with80. This removes the uninitialized caller
+argument whose period object passed80 on every arm. The actual callee ignores
+arg4 outside TM, where both already agreed; no public operational failure is
+claimed. The complete-TU extra-only control has no strict gains/losses; only
+FAX_class1_command changes, SIZE8 becomes SIZE5. This is a directly recovered
+argument, not adoption of a near-size dispatch or converter-result hypothesis.
+The production raw object equals the audited control; three original argument
+shape controls pass. `make phase`:388 passed/0 failed, structural checks green;
+`make tc`:300 sources/300 objects/0 failed. Strict1074/1852 is unchanged.
+`docs/fax-extra-argument-recovery.md`;
+tools/fax_extra_argument_audit.py.

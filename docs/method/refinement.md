@@ -3971,3 +3971,30 @@ from public behavior and synthetic replacement-callee probes. Its corrected
 argument and original six-case dispatch still miss full identity; do not
 claim a gain or invent an operational failure (F11872).
 [Complete dispatch/result controls](../fax-service-values-results.md).
+
+### Observe scratch history, including the actual allocation-order table (F11873)
+
+The installed Gentoo C and C++ compilers now have raw-preserving dynamic
+controls for the persistent scratch-search cursor. Model the actual candidate
+order, class/mode restrictions, live/reserved bits, save/restore restriction
+and frame protection; validate returned registers and cursor transitions.
+All1410 observed searches agree. The53-slot order ends in five EAX entries,
+explicitly zero-filled by the target backend; a uniform register rotation
+model is insufficient.
+
+An identical final writer can make a different number of searches. The
+historical +0x434 retype removes one immediate-SI search, and that difference
+reaches the unchanged C2 constructor. Correct float typing remains supported
+independently and must stay. The fax bystander supplies a second dynamic
+positive. No rejected enclosing matcher or failed scratch search occurred in
+these controls: do not claim either mechanism was observed or broaden to
+other modes/classes without controls. [Installed compiler proof](../gentoo-peep2-search-proof.md).
+
+A directly observed call-argument value is recoverable separately from a
+complete function's register/profile residual. Under fidelity work, the fax
+default-zero correction is adopted after full-TU auditing and period388/0;
+SIZE8 becomesSIZE5 but no exact function is claimed. Its actual callee ignores
+the affected argument outsideTM. Keep these categories explicit and preserve
+the negative dispatch/result experiments rather than presenting this as a
+successful CFG or whole-function preimage (F11874).
+tools/fax_extra_argument_audit.py.
