@@ -92,9 +92,9 @@ The current plain and compound HI rereads are eliminated because the actual
 postreload value table retains the HI stored value in AX across the old-cursor
 copy and cursor advance. This is now a dynamic compiler observation, stronger
 than attributing the rewrite from the before/after dumps alone. The original's
-late wide load is a next width/use discriminator, but the present trace supplies
-no uniquely recovered source widening and no authorization to tune types for a
-byte score. Any further control needs an independently supported original
+late MOVZWL does not establish wider RTL: the emitter follow-up finds the same
+opcode from plain HI movhi_1. That refutes the proposed source-width discriminator.
+The actual forwarding trace remains valid and supplies no source widening. Any further control needs an independently supported original
 operand/use graph, complete unchanged raw baseline and full-TU audit.
 
 Final integration validation: `make phase`388passed/0failed, structural gates

@@ -3914,3 +3914,20 @@ control has a surviving extra early read and a removed late read. Equal or near
 total load counts and size can therefore hide the very boundary being sought.
 Keep old source families closed until independent original/use evidence changes
 the discriminator; don't add casts or volatile to coerce a surviving load.
+
+### A widening load opcode need not represent wide RTL (F11868)
+
+GCC3's i686-tuned movhi_1 can emit MOVZWL for a plain HI memory-to-register
+move to avoid partial-word stalls. SDM's saved UID118 and the installed emitter
+prove that mapping; an explicit SI zero-extend UID38 emits the same opcode under
+a different pattern. Consult the backend move rule and real -dP annotation
+before inferring an explicit promotion or source width from MOVZWL/MOVZBL.
+The memory access remains word-sized in both cases. Extra physical destination
+bits written by an instruction do not establish which bits the RTL required.
+
+This corrects the proposed SDM late-wide-versus-HI discriminator above: original
+MOVZWL does not distinguish those modes. The candidate read is HI from initial
+RTL, so there is also no combine narrowing to explain. Keep the valid dynamic
+value-forwarding result, close the unsupported width family, and require an
+independent original use/alias/profile witness for further source controls.
+[Annotated and dynamic emitter proof](../sdm-movhi-emitter-width-refutation.md).

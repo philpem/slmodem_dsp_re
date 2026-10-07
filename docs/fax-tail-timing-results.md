@@ -75,10 +75,10 @@ memory-to-AX forwarding. It is not an arbitrary register-number explanation.
 Next bounded discriminator is read-only observation of the installed compiler
 at UID56: record whether simplify_set or operand fallback performs validation,
 the known source value's mode/address/register locations, and invalidations
-between UID47 and56. Compare initial/global RTL to the original instruction's
-explicit ZERO_EXTEND:SI(MEM:HI) role. Whole-expression lookup of a widened read
-can differ from HI lookup, but operand fallback means width alone is not a
-proven barrier. Original RTL is unavailable, so why its read survived remains
+between UID47 and56. Compare initial/global RTL with the original instruction's observed MOVZWL.
+Correction: MOVZWL alone does not establish ZERO_EXTEND:SI RTL; an actual
+plain HI move emits it under movhi_1. A widened-read family is not justified
+by that opcode. See the emitter follow-up below. Original RTL is unavailable, so why its read survived remains
 unmeasured; address identity, value-mode identity, and available HI locations
 are alternatives to discriminate, not conclusions. No new flag control,
 volatile/coercive source or register/slot/order permutation is justified here.
@@ -107,3 +107,12 @@ SDM replay adds pass evidence; it does not reopen that source family. A new
 matched replay confirms the168B compound result also forwards its late reread
 at postreload, while an extra early reload-added read survives. SIZE1 therefore
 does not indicate recovery of the original read boundary.
+
+## Width-inference correction
+
+The compound control's UID118 is `SET(REG:HI,MEM:HI)` through machine RTL,
+yet annotated assembly emits MOVZWL under movhi_1/3. The earlier inference of
+original ZERO_EXTEND:SI from MOVZWL was incorrect. The plain late reread also
+starts HI in initial RTL; there is no combine narrowing to recover here.
+The dynamic forwarding observation remains valid, while source-width recovery
+from this opcode is underdetermined.

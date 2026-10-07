@@ -136855,3 +136855,19 @@ UID118 introducedbyreload survives. Anear-sizecounterexample canhideonewrong
 readreplacinganother; compareoccurrence/lifetime, notloadcount/size. Known
 sourcefamiliesremainclosed; current3cells arecausal replay, notnewspellings.
 `docs/fax-tail-timing-results.md`; tools/sdm_postreload_audit.py.
+
+## F11868. MOVZWL can be a tuned HI move, refuting the SDM width premise
+
+Five savedstage checks showplainlateUID56 alreadyHI in01rtl, unchangedthrough
+combine/allocation; nonarrowingtransition exists. CompoundUID118 retains
+SET(REG:HI,MEM:HI) through35mach but dPannotatesMOVZWL asmovhi_1/3, whileactual
+SIzeroextendUID38 emitssameopcode underzero_extendhisi2. Saved/replayedannotated
+assemblyequal. Installedhashpinnedcc1 emitter:1output_40UID118visit, zero-based
+alternative2/PENTIUMPRO/tunebits8/8/0 selectTYPE_IMOVX/MOVZWLtemplate. Three
+raw/emitter-debugged/priorrawcompleteobjects equal; priorraw equalscontainer.
+StockbackendHIloadIMOVX stallavoidancerule corroborated byactualGentoo; no
+inferiorcalls/RTL/sourcewrites. CorrectF11865/F11866 linkedwidth interpretation:
+originalmachineMOVZWL doesnotestablishexplicitZERO_EXTEND:SI orsourcepromotion.
+Postreloadforwardingproofremainsvalid. No casts/types/widthfamilyexpansion,
+no sourceadoption, strict1074/1852 unchanged. `docs/sdm-movhi-emitter-width-refutation.md`;
+tools/sdm_movhi_emission_audit.py; tools/gentoo_cc1_sdm_movhi_reproduce.py.
