@@ -264,7 +264,18 @@ struct _tagModemParameters {
 	unsigned char	sessionFlags;		/* +0x000 */
 	unsigned char	unmapped_0001[0x02 - 0x01];
 	unsigned char	qcFlags;		/* +0x002 */
-	unsigned char	unnamed_0003;		/* +0x003 */  /* low 3 bits cleared */
+	/*
+	 * +0x003.  Offset-named on purpose: the byte's bit 2 (4) is the
+	 * retrain request VPcmV34Main.cpp's own `CFG_FLAG3_RETRAIN` and the
+	 * V.90 side both OR in and clear, bit 1 (2) is that file's
+	 * `CFG_FLAG3_PHASE2`, and `dp_runtime_create` clears the low three
+	 * bits -- but the byte is reached through `unnamed_0003` by five
+	 * translation units across the V.34 and V.90 sides and four of
+	 * their mutation suites key on that spelling, so renaming it is a
+	 * cross-service change of its own (issue #260 wave 11 records the
+	 * decision to leave it).
+	 */
+	unsigned char	unnamed_0003;		/* +0x003 */
 	int		unnamed_0004;		/* +0x004 */  /* = 60 */
 	int		unnamed_0008;		/* +0x008 */  /* = 40 */
 	int		unnamed_000c;		/* +0x00c */  /* = 0 */

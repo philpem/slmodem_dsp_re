@@ -492,7 +492,15 @@ struct v34_receiver {
 	 * and four mutation fixtures.
 	 */
 	short           agc_start_gain;            /* +0x262 */
-	unsigned char pad_264[0x266 - 0x264];
+	/*
+	 * +0x264 (was `pad_264`, issue #260 wave 11).  The handshake's arm 49
+	 * writes a halfword here (V34hshak.c's `T3M_RX_F264`) and t72's
+	 * probe-done arm reads its LOW BYTE -- a written, read halfword the
+	 * alignment audit below had left alone because its two bytes are not
+	 * what natural alignment would insert.  What it counts is not
+	 * established, so the name stays neutral.
+	 */
+	short           short_264;            /* +0x264 */
 	/*
 	 * +0x266.  `demapFrame`'s sub-frame counter, stepped by `decoderv34`.
 	 * See findings F10123/F9480.
@@ -601,8 +609,9 @@ struct v34_receiver {
  * Seven other pad_NNNN regions in this struct were checked the same way and
  * LEFT ALONE: either the gap does not match what natural alignment would
  * insert for the following field (pad_184, pad_1a8, pad_1c2, pad_1dc,
- * pad_22c, pad_264, pad_270), or no modelled content for them has
- * been established. None of those is a claim their bytes are unread -- only
+ * pad_22c, pad_270), or no modelled content for them has
+ * been established (pad_264 has since been modelled as `short_264`, issue
+ * #260 wave 11). None of those is a claim their bytes are unread -- only
  * that, unlike the five above, deleting them would not reproduce the
  * object's layout by natural alignment alone, so they stay explicit per this
  * workstream's decision rule.

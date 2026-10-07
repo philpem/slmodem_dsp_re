@@ -142,6 +142,19 @@ extern "C" {
 #define V34HS_RXSTATE_OFF	0x3594
 #define V34HS_TXSTATE_OFF	0x3596
 
+/*
+ * ISSUE #260 WAVE 11: these three stay LITERALS on purpose.  This header
+ * precedes `struct v34_object` (v34fsk.h includes it for
+ * `struct v34_bitsource`), so `__builtin_offsetof` cannot be spelled here --
+ * and their sites are frame reads (`T3M_U16(f, V34HS_TXSTATE_OFF)`), which
+ * wave 6 measured as `f->m` loads distinct from `f->obj` and deliberately
+ * left helpers.  The compile-time anchor is V34hshak.c's `HS_OFF_ASSERT`
+ * trio against `microstate`/`rxstate`/`txstate` (finding F632), kept instead
+ * of tautological defines for F637's reason: v34hstxblock.json mutates
+ * `#define T3M_F0E4C`, and a define whose text a mutation rewrites must stay
+ * a literal.
+ */
+
 struct v34_object;
 
 /*

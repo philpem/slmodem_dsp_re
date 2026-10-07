@@ -266,7 +266,23 @@ struct v34_ratecfg {
 	short carrier;			/* +0x10 transmit carrier, Hz    */
 	short rx_baud;			/* +0x12 receive symbol rate     */
 	short rxbits;			/* +0x14                         */
-	unsigned char pad_16[0x22 - 0x16];
+	/*
+	 * +0x16 to +0x22, the five per-rate pre-emphasis slots (issue #260
+	 * wave 11): `probeselect` writes one at the rung of each V.34 symbol
+	 * rate -- 2400, 2800, 3000, 3200 and 3429 baud -- as the index of the
+	 * pre-emphasis filter chosen for that rate, and `setfinalrate` gives
+	 * the same five offsets its own `pe2400`..`pe3429` locals, which are
+	 * the names below.  Usage inference from those two writers; nothing
+	 * reconstructed reads a slot back.  +0x1a has no access anywhere in
+	 * the object and stays offset-named: if the slots are indexed by rate
+	 * it is the one rate the ladder never selects, but nothing says so.
+	 */
+	short pe_2400;			/* +0x16                         */
+	short pe_2800;			/* +0x18                         */
+	short short_aa9a;		/* +0x1a no access in the object */
+	short pe_3000;			/* +0x1c                         */
+	short pe_3200;			/* +0x1e                         */
+	short pe_3429;			/* +0x20                         */
 	short rx_use_max;		/* +0x22                         */
 	/*
 	 * The receive carrier: the field `VPcmV34GetCurrentRxCarrier`
@@ -455,7 +471,21 @@ struct v34_object {
 	 * treats the pair as one "is a PCM receiver running" test.
 	 */
 	int k56flex_receiver;				/* +0x0250 */
-	unsigned char unmapped_0254[0x25c - 0x254];
+	/*
+	 * +0x254 to +0x25c, adaptecho's DC estimator (issue #260 wave 11).
+	 * `VPcmV34Create` and `VPcmV34InitiateRetrain` load the first with
+	 * `(short)(336 * short_35a4 + 10000)` -- a sample budget scaled by the
+	 * negotiated rate -- `VPcmV34Progress` counts it down per received
+	 * sample while accumulating the residual's energy into the third, and
+	 * every 128th sample (`& 0x7f`) folds `acc >> 8` into the second, which
+	 * is then subtracted from every sample.  The object's own diagnostic
+	 * names the last two: "Estimated DC = %d  (acc = %d)" (blob 0xcb868).
+	 * `dc_count` is read zero-extending only (`PROG_U16`, `movzwl`), so it
+	 * is unsigned while the other two are signed.
+	 */
+	unsigned short dc_count;				/* +0x0254 */
+	short dc_est;					/* +0x0256 */
+	int dc_acc;					/* +0x0258 */
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * `dmadelay` is the base the echo filter's lag is measured from,
@@ -491,7 +521,16 @@ struct v34_object {
 	 * `v34_object_equalizer` were the first spelling of this region.
 	 */
 	struct v34_receiver receiver;			/* +0x264 */
-	unsigned char unmapped_0a00[0xe74 - 0xa00];
+	unsigned char unmapped_0a00[0xe4c - 0xa00];
+	/*
+	 * +0xe4c.  A short set to 1 by each of the three "modem is up" arms
+	 * of `VPcmV34Progress`'s status ladder (usage inference; no reader
+	 * reconstructed and no string prints it, so what "up" hands on
+	 * downstream is not established).  Reached through VPcmV34Main.cpp's
+	 * `O_MODEMUP`; the span around it stays unmapped.
+	 */
+	short modem_up;					/* +0x0e4c */
+	unsigned char unmapped_0e4e[0xe74 - 0xe4e];
 	/* The descrambler's shift register; see `struct v34_descrambler`. */
 	struct v34_descrambler descrambler;		/* +0x0e74 */
 	unsigned char unmapped_0e84[0x2074 - 0xe84];
@@ -978,7 +1017,24 @@ struct v34_object {
 	short echo_correction;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
 	short echo_resid_energy;					/* +0xa240 */
-	unsigned char unmapped_a242[0xa24a - 0xa242];
+	unsigned char unmapped_a242[0xa244 - 0xa242];
+	/*
+	 * +0xa244, the phase-3 half-duplex length in symbols, and the int
+	 * `VPcmV34Progress`'s phase-2 tail latches from `baud * 5 + ofs - 0x24c`
+	 * when the V.92 short-phase-2 arm runs, or from fifteen eighths of the
+	 * baud unit otherwise.  The object's own diagnostic names it:
+	 * "phase3halfDuplexLength = %d symbols (baud %d)" (blob 0xcb950).
+	 *
+	 * +0xa248 is that int's HIGH HALFWORD, kept as its own short: the
+	 * transmitter's arm 21 reads +0xa244 three ways in one compare chain --
+	 * against its half, its whole, and nothing else -- and the half it
+	 * tests is this one.  `VPcmV34Progress` sets it to 1 on the one path
+	 * that latches the length and three arms clear it, so it is a
+	 * requested/not-requested flag (usage inference; nothing prints it).
+	 * One region, two widths, both the object's -- finding F553's shape.
+	 */
+	int phase3_hd_length;					/* +0xa244 */
+	short hd_set;					/* +0xa248 */
 	/*
 	 * The retrain-request detector's five scalars, all five written by
 	 * `dftRetrainDetInit` and all five read by `detectRetrainReq`, which
@@ -1122,7 +1178,38 @@ struct v34_object {
 	 */
 	unsigned short info_caps;				/* +0xaa3c */
 	short caps_flags;				/* +0xaa3e */
-	unsigned char unmapped_aa40[0xaa6c - 0xaa40];
+	/*
+	 * +0xaa40 to +0xaa6c, THE SIXTH MESSAGE RECORD (issue #260 wave 11).
+	 * `0xaa6c - 0xaa3c` is exactly one `struct v34_bitsource` stride, and
+	 * `info_caps`/`caps_flags` above are its word[0]/word[1] -- the dual
+	 * reading finding F634 records.  The words here are the rest of that
+	 * record, and every access lands on a `v34_bitsource` member at the
+	 * member's own offset: `tx1_ts_rates`' MP-message build writes -1 to
+	 * `crc`, 1 to `crc_on`, 0x30 or 0x90 to `nbits`, 0x10 to `wordbits`
+	 * and 0x3fffe to BOTH of the `int` fields `acc` and `acc0` (v34hstx1_arms.h's
+	 * `TX1_FAA60`/`TX1_FAA68`); the MOH arm's `rec[8]`/`rec[10..17]` are
+	 * `msg_word[8]` and the fields up to `repeats`; and `getMPrecvdBits`
+	 * clears `msg_word[0..6]` as "the rest of the record".  Nothing in
+	 * this tree reads any of it -- the words go out with the MP sequence
+	 * -- so the names are the record's fields, not established meanings.
+	 * `struct v34_bitsource` is NOT embedded here: `info_caps` is the
+	 * measured `unsigned short` (wave 6) and `caps_flags` the signed
+	 * halfword their own sites prove, which a second record reading
+	 * would overwrite with `word[]`'s `short`.
+	 */
+	short msg_word[8];				/* +0xaa40 word[2..9] */
+	short msg_crc;					/* +0xaa50 */
+	short msg_crc_on;				/* +0xaa52 */
+	short msg_nbits;				/* +0xaa54 */
+	short msg_pos;					/* +0xaa56 */
+	short msg_wordbits;				/* +0xaa58 */
+	short msg_idx;					/* +0xaa5a */
+	short msg_repeat;				/* +0xaa5c */
+	short msg_repeats;				/* +0xaa5e */
+	int msg_acc;					/* +0xaa60 */
+	short msg_avail;				/* +0xaa64 */
+	short msg_avail0;				/* +0xaa66 */
+	int msg_acc0;					/* +0xaa68 */
 	/*
 	 * Two pointers, and pointers rather than ints: fifty-eight accesses
 	 * between them, every one a 32-bit `mov`, with stores putting an
@@ -1302,7 +1389,14 @@ struct v34_object {
 	 */
 	short short_abae[10];				/* +0xabae */
 	short short_abc2;					/* +0xabc2 */
-	unsigned char unmapped_abc4[0xabc6 - 0xabc4];
+	/*
+	 * +0xabc4.  Non-zero once the session has settled which PCM modem it
+	 * is: `VPcmV34Progress` sets it to 1 in two arms and to the AND of
+	 * `local_v92 && remote_v92` in a third, and tests it non-zero before
+	 * latching the half-duplex length (usage inference; nothing prints
+	 * it).  Reached through VPcmV34Main.cpp's `O_PCMCHOSEN`/`OB_FABC4`.
+	 */
+	short pcm_chosen;					/* +0xabc4 */
 	/*
 	 * The V.92 short-phase-2 negotiation, four shorts, and the object
 	 * names all four itself -- `V34GiveINFO0dBits` prints
@@ -1329,7 +1423,17 @@ struct v34_object {
 	short short_abce;					/* +0xabce */
 	short short_abd0;					/* +0xabd0 */
 	short short_abd2;					/* +0xabd2 */
-	unsigned char unmapped_abd4[0xabd8 - 0xabd4];
+	/*
+	 * +0xabd4.  `VPcmV34Create` copies `V92Phase2Info::v90UseHighCarrier`
+	 * here in the same block that re-stuffs `short_abd2`/`short_abd0`
+	 * from the V.92 phase-2 record, and the create's own wipe zeroes it.
+	 * Named after that copied value (usage inference): no reader is
+	 * reconstructed, so what consumes it downstream is not established.
+	 * Reached through VPcmV34Main.cpp's `OB_FABD4`.  +0xabd6 stays
+	 * unmapped.
+	 */
+	short v90_high_carrier;				/* +0xabd4 */
+	unsigned char unmapped_abd6[0xabd8 - 0xabd6];
 	/*
 	 * +0xabd8 and +0xabdc, the modem-on-hold timer and its limit.
 	 * `VPcmV34Progress` names the first from "Modem On Hold approved by
@@ -1381,7 +1485,15 @@ struct v34_object {
 	 * offsets. +0xabea is still unmapped.
 	 */
 	unsigned char moh_active;				/* +0xabe8 */
-	unsigned char unmapped_abe9;
+	/*
+	 * +0xabe9.  `VPcmV34InitMOH` stores the late-ANSam selector here and
+	 * `VPcmV34Progress`'s three-way arm tests it non-zero: the object's
+	 * own string at 0xcba0c, "VPcmV34Main: ANSam detected on out going
+	 * call (later case, after %d smp) ! assuming no 3-way call...", is
+	 * the "later case" the flag picks.  Reached through
+	 * VPcmV34Main.cpp's `O_ANSAMLATE`.  +0xabea is still unmapped.
+	 */
+	unsigned char ansam_late;				/* +0xabe9 */
 	unsigned char unmapped_abea[0xabec - 0xabea];
 	/*
 	 * The Modem-on-Hold message this end originally asked for, against

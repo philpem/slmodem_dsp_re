@@ -38,6 +38,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/v34fsk.h"
+#include "dsplib/modem_params.h"	/* pac3c's complete type: flags3 etc. */
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34info.h"
 #include "dsplib/v34pcm_tables.h"
@@ -74,8 +75,11 @@
  * somebody will permute it.
  */
 #define OB4_ANCHOR		4
-#define OB4_V90_RECEIVER	0x248		/* v34fsk.h's v90_receiver     */
-#define OB4_K56_RECEIVER	0x24c		/* v34fsk.h's k56flex_receiver */
+#define OB4_V90_RECEIVER	((int)__builtin_offsetof(struct v34_object, \
+						v90_receiver) - OB4_ANCHOR)
+#define OB4_K56_RECEIVER	((int)__builtin_offsetof(struct v34_object, \
+						k56flex_receiver) - OB4_ANCHOR)
+	/* The offsets are the members' less the anchor (issue #260 wave 11). */
 
 /*
  * And tie them to the header, because nothing else does: `make phase`'s
@@ -152,31 +156,21 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
 #define CFG_ISP_SENSITIVE	0x08
 
 /*
- * The V.34 object's own fields, for the regions v34fsk.h leaves unmapped.
- * The former OB_FILT_DELAY, OB_FAC00, OB_F35A4 and OB_FAC1C are members
- * now (`filtdelay`, `retrain_req`, `short_35a4` and the embedded
- * `retrainReqDet`); what is left here is UNMAPPED in v34fsk.h and stays
- * offset-named:
+ * The V.34 object's own fields.  The former OB_FILT_DELAY, OB_FAC00,
+ * OB_F35A4, OB_FAC1C, OB_F0254 and OB_F2218 are members now -- `filtdelay`,
+ * `retrain_req`, `short_35a4`, the embedded `retrainReqDet`, the DC
+ * estimator's dc_count/dc_est/dc_acc (whose +0x254 extent the OB_F0254
+ * "short, short, then an int" record was) and `hs_mode` (issue #260
+ * wave 11).
  *
- *   OB_F0254          +0x254, short + short + int, written by
- *                     `VPcmV34InitiateRetrain`, `VPcmV34Create` and
- *                     `V34XF_IndicateK56FlexJdReceived`, read by nothing.
- *   OB_F2218          +0x2218, the handshake mode `v34handshakinit`
- *                     clears -- a v34fsk.h member (`hs_mode`), kept as a
- *                     constant only because `VPcmV34InitMOH` still writes
- *                     it through the PROG_S32 helper.
- *   `force_low_baud`  (a v34fsk.h member since wave 9) `probeselect` opens
- *                     with `if (obj->force_low_baud != 0) goto rate_2400`,
- *                     jumping over the whole symbol-rate ladder
- *                     (src/pump/v34/V34hshak.c).  `VPcmV34InitiateRetrain`
- *                     is the only writer read so far and it sets it exactly
- *                     when the maximum bit-rate index came out as 1 --
- *                     2400 bit/s, which the lowest symbol rate is the only
- *                     way to carry.  Two sites, one meaning; the name is
- *                     descriptive and the derivation is the pair.
+ * `force_low_baud` (a v34fsk.h member since wave 9) `probeselect` opens
+ * with `if (obj->force_low_baud != 0) goto rate_2400`, jumping over the
+ * whole symbol-rate ladder (src/pump/v34/V34hshak.c).
+ * `VPcmV34InitiateRetrain` is the only writer read so far and it sets it
+ * exactly when the maximum bit-rate index came out as 1 -- 2400 bit/s,
+ * which the lowest symbol rate is the only way to carry.  Two sites, one
+ * meaning; the name is descriptive and the derivation is the pair.
  */
-#define OB_F0254		0x0254		/* short, short, then an int */
-#define OB_F2218		0x2218		/* v34handshakinit clears it */
 
 /* The datapump codes, which are the modulation numbers themselves. */
 #define DP_KEEP			0
@@ -428,7 +422,7 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * independent reader (v34rx.h, and `v34FreezeEcho` is its writer), and
  * nothing about an echo canceller is a detector of anything.  That is
  * inference, which is CLAUDE.md's weakest rank, and it is why the byte itself
- * keeps its offset name (`unnamed_0003` in modem_params.h; the byte is
+ * keeps its offset name (`flags3` in modem_params.h; the byte is
  * reached as a member now and only the BIT stays a constant).
  */
 #define CFG_SAS_DETECT		0x04
@@ -814,69 +808,34 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 #define PROG_U8(o, off)		(*(unsigned char *)((unsigned char *)(o) + (off)))
 
 /*
- * +0x0238  Samples this session has processed, masked to 31 bits on every
- * block.  `datapumpv34` reads it at its true offset; v34fsk.h's sample-clock
- * group comment records the other readers, and the member is
- * `sample_count` since wave 9.
+ * The members whose sites read as members now (issue #260 wave 11):
+ * O_HDLENGTH/O_HDSET are `phase3_hd_length`/`hd_set` (the first named by the
+ * object's own "phase3halfDuplexLength = %d symbols (baud %d)", blob 0xcb950;
+ * the second usage inference, set with the length and cleared by three arms);
+ * O_RUNNING is `samples_valid`; O_DCCOUNT/O_DCEST/O_DCACC are
+ * dc_count/dc_est/dc_acc ("Estimated DC = %d  (acc = %d)", blob 0xcb868);
+ * O_MODEMUP is `modem_up`; O_PCMCHOSEN is `pcm_chosen`; O_MOHLIMIT/O_MOHCOUNT
+ * are `moh_limit`/`moh_timer` ("Modem On Hold approved by phase2 (ISP timeout
+ * is %d seconds)"); OB_MOH_W4/W6 are `short_abe4`/`short_abe6` and
+ * OB_MOH_FLAG `moh_path_sel`; O_ANSAMLATE is `ansam_late` (blob 0xcba0c, the
+ * "later case" it picks).
+ *
+ * O_P2STATE stays a constant: +0xabff is `p2_state`, a SIGNED byte whose C++
+ * side reads are zero-extending loads, so the sites keep `PROG_U8` and the
+ * offset is the member's own (issue #260 wave 11).
  */
+#define O_P2STATE	((int)__builtin_offsetof(struct v34_object, \
+							p2_state))
 /*
- * +0xa244.  Named by the object -- "phase3halfDuplexLength = %d symbols
- * (baud %d)".  (+0x0240, the other half of this comment before wave 9, is
- * now the member `p2_delay_cntr`.)
+ * +0xac1c, the retrain detector's eleven words -- `struct tag_retrainReqDet`
+ * (mohdet.h), whose members the arms read as members now (issue #260 wave
+ * 11); "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_
+ * RATIO_SHIFT = %d energyOut = %d" named the counter and the two energies.
+ * O_NOTCH_S3 stays for its one UNSIGNED read (`PROG_U16` of a signed member,
+ * finding F11350's use-site case); the offset is the member's own.
  */
-#define O_HDLENGTH	0xa244
-/*
- * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
- * loop subtracts from every sample, and the accumulator averaged into it
- * every 128 samples.  "Estimated DC = %d  (acc = %d)" names the last two.
- */
-#define O_DCCOUNT	0x254
-#define O_DCEST		0x256
-#define O_DCACC		0x258
-/* +0x0262.  Zero means the object is not running and the function returns. */
-#define O_RUNNING	0x262
-/* +0xa248.  Set with the half-duplex length and cleared by three arms. */
-#define O_HDSET		0xa248
-/* +0x0e4c.  A short set to 1 by each of the three "modem is up" arms. */
-#define O_MODEMUP	0xe4c
-/* +0xabc4.  Non-zero once the session has settled which PCM modem it is. */
-#define O_PCMCHOSEN	0xabc4
-/*
- * +0xabd8 and +0xabdc.  "Modem On Hold approved by phase2 (ISP timeout is %d
- * seconds)" names the first; the second counts samples against it.  -1 is
- * "no limit" and is tested for as such.
- */
-#define O_MOHLIMIT	0xabd8
-#define O_MOHCOUNT	0xabdc
-/*
- * +0xabe4, +0xabe6 and +0xabf9, the three words of the modem-on-hold request
- * `VPcmV34InitMOH` clears or stores and nothing here reads.  Offsets, not
- * names: no string and no reader says what any of them carries.
- */
-#define OB_MOH_W4	0xabe4
-#define OB_MOH_W6	0xabe6
-#define OB_MOH_FLAG	0xabf9
-/* +0xabe9.  Gates the late ANSam case on an outgoing call. */
-#define O_ANSAMLATE	0xabe9
-/* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
-#define O_P2STATE	0xabff
-/*
- * +0xac1c, the retrain detector's eleven words.  Four filter states, three
- * coefficients, a signal counter and two energies with a block counter --
- * "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_RATIO_
- * SHIFT = %d energyOut = %d" names the last three and the counter.
- */
-#define O_NOTCH_S0	0xac1c
-#define O_NOTCH_S1	0xac1e
-#define O_NOTCH_S2	0xac20
-#define O_NOTCH_S3	0xac22
-#define O_NOTCH_CNT	0xac24
-#define O_NOTCH_K0	0xac28
-#define O_NOTCH_K1	0xac2a
-#define O_NOTCH_K2	0xac2c
-#define O_NOTCH_EIN	0xac30
-#define O_NOTCH_EOUT	0xac34
-#define O_NOTCH_BLK	0xac38
+#define O_NOTCH_S3	((int)__builtin_offsetof(struct v34_object, \
+						retrainReqDet.x2))
 /*
  * +0xac40 to +0xac48, the three words `requestOutputSampleClear` writes and
  * nothing here reads.  v34fsk.h's `unmapped_ac40` is the twelve bytes this
@@ -896,18 +855,26 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 
 /* The `+0x6c0c` block of VPcmFloModem, read as floats by the V.PCM arm. */
 #define SESS_OUTBLOCK		0x6c0c
-/* `V92Phase2Info::shortPhase2Local`, cleared through the session. */
-#define SESS_V92_P2INFO		0x612c
 
-/* `pac3c`'s flag bytes, `orb`/`andb`/`testb` sites. */
-#define CFG_FLAGS3		3
+/* `pac3c`'s flag-bit values (`flags3`/`qcFlags`/`flags51` are the members;
+ * CFG_FLAGS3/CFG_FLAGS2/CFG_FLAGS51/CFG_SILENCE were the byte/int offsets
+ * and are members now, issue #260 wave 11). */
 #define CFG_FLAG3_RETRAIN	4
 #define CFG_FLAG3_PHASE2	2
-#define CFG_FLAGS2		2
 #define CFG_FLAG2_SAMELINE	0x20
-#define CFG_FLAGS51		0x51
 #define CFG_FLAG51_CLEAR	1
-#define CFG_SILENCE		0x6c
+
+/*
+ * +0x44 of `pac3c`, `unnamed_0044` in modem_params.h: a transmit power
+ * reduction in dB, written 32-bit by the host and read here as a SHORT
+ * (`movswl 0x44`, clamped to [-10,+7]).  The member is the `int` the object's
+ * own 32-bit store proves, so the member keeps its width and this reader
+ * keeps a raw halfword read of the member's own offset (issue #260 wave 11);
+ * punning through `unsigned char *` is what keeps the strict-aliasing story
+ * the same as the object's.
+ */
+#define CFG_MINPWR_DB	((int)__builtin_offsetof(struct _tagModemParameters, \
+							unnamed_0044))
 
 /* The retrain detector's three thresholds and its block length. */
 #define NOTCH_BLOCK		0x40
@@ -1265,12 +1232,13 @@ typedef char v34pcmmain_echo_fits[
  */
 #define K56_AORMU		0x0c
 
-/* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
+/* The V.34 object's own, for the regions v34fsk.h leaves unmapped.
+ * OB_FA248/OB_FABC4/OB_FABD4 are members now -- `hd_set`, `pcm_chosen` and
+ * `v90_high_carrier` (issue #260 wave 11); OB_FABD4's "three ints, then two
+ * shorts" note described the row it sat in, not the field, and the member
+ * comment carries the copy derivation. */
 #define OB_F000C		0x000c
 #define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
-#define OB_FA248		0xa248
-#define OB_FABC4		0xabc4
-#define OB_FABD4		0xabd4		/* three ints, then two shorts */
 
 /*
  * ---------------------------------------------------------------------------
@@ -2795,10 +2763,10 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * The source short is read SIGNED, so a negative one gives a result
 	 * below 10000.
 	 */
-	*(short *)(m + OB_F0254) =
+	obj->dc_count =
 		(short)(336 * (int)obj->short_35a4 + 10000);
-	*(short *)(m + OB_F0254 + 2) = 0;
-	*(int *)(m + OB_F0254 + 4) = 0;
+	obj->dc_est = 0;
+	obj->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, cleared -- except for a three-short group
@@ -2884,7 +2852,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	struct v34_receiver *rx = &obj->receiver;
 
-	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
+	obj->pac3c->unnamed_0003 &= (unsigned char)~CFG_FLAG3_RETRAIN;
 
 	obj->moh_org = message;
 
@@ -2894,19 +2862,19 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 			    "VPcmV34Main: Special bypass - sending MOHreq "
 			    "instead of MOHFRR...\r\n");
 		obj->moh_message = 0;
-		PROG_U8(obj, OB_MOH_FLAG) = 0;
+		obj->moh_path_sel = 0;
 	} else {
 		obj->moh_message = message;
-		PROG_U8(obj, OB_MOH_FLAG) = flag;
+		obj->moh_path_sel = flag;
 	}
 
 	obj->moh_recvd = 5;
 	obj->moh_clrd_sel = (unsigned char)(late != 0);
-	PROG_U8(obj, O_ANSAMLATE) = late;
+	obj->ansam_late = late;
 
 	obj->short_abe2 = 0;
-	PROG_S16(obj, OB_MOH_W6) = 0;
-	PROG_S16(obj, OB_MOH_W4) = 0;
+	obj->short_abe6 = 0;
+	obj->short_abe4 = 0;
 	obj->moh_holdtime_code = 0;
 	obj->moh_limit = 0;
 
@@ -2918,7 +2886,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	rx->bad_long_run = 0;
 	rx->good_run = 0;
 
-	PROG_S32(obj, OB_F2218) = 2;
+	obj->hs_mode = 2;
 	obj->status = 0;
 
 	sess->ansam.reset();
@@ -3279,7 +3247,7 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
 	V90Parameters *pcm = sess->modem.params;
-	short want = *(const short *)(cfg + 0x44);
+	short want = *(const short *)(cfg + CFG_MINPWR_DB);
 	short red;
 
 	if (want < -10)
@@ -4603,7 +4571,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	sess->v92modem.phase2Info->v92CapabilitiesLocal = 0;
 	sess->pcmSessionType = 0;
 
-	*(short *)(m + OB_FABC4) = 0;
+	obj->pcm_chosen = 0;
 	obj->local_v92 = 0;
 	obj->remote_v92 = 0;
 	obj->local_short = 0;
@@ -4611,7 +4579,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->short_abce = 0;
 	obj->short_abd0 = 0;
 	obj->short_abd2 = 0;
-	*(short *)(m + OB_FABD4) = 0;
+	obj->v90_high_carrier = 0;
 
 	obj->status = 0;
 	obj->progress = 0;
@@ -4637,7 +4605,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		 * The V.92 record is re-loaded here too, as at the two stores
 		 * above.
 		 */
-		*(short *)(m + OB_FABD4) =
+		obj->v90_high_carrier =
 			sess->v92modem.phase2Info->v90UseHighCarrier;
 		obj->short_abd2 =
 			sess->v92modem.phase2Info->maxNofCoeffsInEachSection;
@@ -4712,6 +4680,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->force_low_baud = 0;
 	rx->agc_start_gain = 0x600;
 	rx->timing_offset = 0;
+	/* OB_F000C stays: object+0xc has no member. */
 	*(int *)(m + OB_F000C) = 0;
 	obj->nof_tx_bits = 0;
 
@@ -4724,11 +4693,11 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
 	 * signed, so a negative one gives a result below 10000.
 	 */
-	*(short *)(m + OB_F0254) =
+	obj->dc_count =
 		(short)(336 * (int)obj->short_35a4 + 10000);
 	obj->hist2_idx = 0;
-	*(short *)(m + OB_F0254 + 2) = 0;
-	*(int *)(m + OB_F0254 + 4) = 0;
+	obj->dc_est = 0;
+	obj->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, byte for byte the same block
@@ -4770,7 +4739,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->short_ac12 = 0;
 	obj->short_ac14 = 0;
 	obj->echo_decay_start = 0x7d0;
-	*(short *)(m + OB_FA248) = 0;
+	obj->hd_set = 0;
 	obj->echo_decay_fact = 0x7fdf;
 	obj->echo_beta = 2;
 
@@ -4911,7 +4880,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	 * the tail: the object is not running, so nothing is consumed and the
 	 * last progress code is repeated.
 	 */
-	if (PROG_S16(obj, O_RUNNING) == 0)
+	if (obj->samples_valid == 0)
 		return obj->progress;
 
 	obj->sample_count = (obj->sample_count + n) & 0x7fffffff;
@@ -4992,7 +4961,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		 */
 		if (ret != prev) {
 			if ((unsigned int)(ret - 4) <= 1) {
-				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				obj->pac3c->unnamed_0003
 				    |= CFG_FLAG3_RETRAIN;
 				ret = obj->progress;
 			}
@@ -5005,7 +4974,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		 */
 		if (ret == 0) {
 			int since = obj->sample_count
-				    - PROG_S32(obj, 0x244);
+				    - obj->int_0244;
 
 			if ((unsigned int)since > 0x12bfu
 			    && (unsigned int)since < (unsigned int)(n + 0x12c0)) {
@@ -5013,7 +4982,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Masking CAS " "detection after %d in train..."
 					    "\r\n", since);
-				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				obj->pac3c->unnamed_0003
 				    &= (unsigned char)~CFG_FLAG3_RETRAIN;
 				ret = obj->progress;
 			}
@@ -5079,17 +5048,17 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 				PROG_U8(obj, O_P2STATE) = 0;
 				obj->p2_delay_cntr = 0;
-				if ((PROG_U8(obj->pac3c, CFG_FLAGS3)
+				if ((obj->pac3c->unnamed_0003
 				     & CFG_FLAG3_PHASE2) != 0
-				    && PROG_S16(obj, O_PCMCHOSEN) != 0
-				    && PROG_S16(obj, O_HDSET) == 0) {
+				    && obj->pcm_chosen != 0
+				    && obj->hd_set == 0) {
 					/*
 					 * 0xc3ae.  Five symbol periods per
 					 * baud unit plus the configured
 					 * offset, less 588 -- and this is the
 					 * only path that latches +0xa248.
 					 */
-					PROG_S16(obj, O_HDSET) = 1;
+					obj->hd_set = 1;
 					len = baud * 5 + ofs - 0x24c;
 				} else {
 					/*
@@ -5099,7 +5068,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					len = (((baud << 4) - baud) >> 3)
 					      + ofs - 0x24c;
 				}
-				PROG_S32(obj, O_HDLENGTH) = len;
+				obj->phase3_hd_length = len;
 				edprintf("VPcmV34Main: phase3halfDuplexLength"
 					 " = %d symbols (baud %d)\r\n",
 					 len, baud);
@@ -5128,14 +5097,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			}
 			if (r == 1) {
 				/* 0xcfa3, the configured extra silence. */
-				int sil = PROG_S32(obj->pac3c, CFG_SILENCE);
+				int sil = obj->pac3c->addedDelay;
 
 				t += sil;
 				obj->p2_delay_cntr = t;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "On PHASE2_COMPLETE: added Silence" " = %d, p2DelayCntr = %d\r\n",
-					    PROG_S32(obj->pac3c, CFG_SILENCE),
+					    obj->pac3c->addedDelay,
 					    t);
 			}
 			if (obj->p2_delay_cntr <= 0x240) {
@@ -5166,7 +5135,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				PROG_S16(obj, O_DCCOUNT) = 0;
+				obj->dc_count = 0;
 			}
 			goto reload;
 
@@ -5190,7 +5159,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				PROG_S16(obj, O_DCCOUNT) = 0;
+				obj->dc_count = 0;
 			}
 			goto reload;
 
@@ -5215,18 +5184,18 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			case 13:	secs = -1;	break;
 			default:	secs = 0;	break;
 			}
-			PROG_S32(obj, O_MOHLIMIT) = secs;
-			PROG_S32(obj, O_MOHCOUNT) = 0;
+			obj->moh_limit = secs;
+			obj->moh_timer = 0;
 			if (DSPLIB_DEBUG_ON()) {
 				dsplibs_debug_printf(
 				    "VPcmV34Main: Modem On Hold approved by "
 				    "phase2 (ISP timeout is %d seconds) !!\r\n",
 				    secs);
 				ret = obj->progress;
-				secs = PROG_S32(obj, O_MOHLIMIT);
+				secs = obj->moh_limit;
 			}
 			if (secs > 0)
-				PROG_S32(obj, O_MOHLIMIT) = secs * 0x2580;
+				obj->moh_limit = secs * 0x2580;
 			obj->status = 7;
 			goto done;
 		}
@@ -5240,7 +5209,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			lim = ((unsigned short)obj->short_abe2 < 1u ? 0xbb80 : 0)
 			      + 0x2580;
 			obj->train_symcount = 0;
-			PROG_S32(obj, O_MOHCOUNT) = lim;
+			obj->moh_timer = lim;
 			obj->progress = 0;
 			/*
 			 * 0xc2a8, `xor %esi,%esi`, and it is easy to miss:
@@ -5305,31 +5274,28 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (PROG_U16(obj, O_DCCOUNT) != 0) {
-					int acc = PROG_S32(obj, O_DCACC) + s;
+				if (obj->dc_count != 0) {
+					int acc = obj->dc_acc + s;
 
-					PROG_U16(obj, O_DCCOUNT)--;
-					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
-					    == 0) {
-						int e = (PROG_S16(obj, O_DCEST)
+					obj->dc_count--;
+					if ((obj->dc_count & 0x7f) == 0) {
+						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
-						PROG_S16(obj, O_DCEST) =
-						    (short)e;
+						obj->dc_est = (short)e;
 						if (DSPLIB_DEBUG_ON()) {
-							PROG_S32(obj, O_DCACC)
-							    = acc;
+							obj->dc_acc = acc;
 							dsplibs_debug_printf(
 							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
-						PROG_S32(obj, O_DCACC) = 0;
+						obj->dc_acc = 0;
 					} else {
-						PROG_S32(obj, O_DCACC) = acc;
+						obj->dc_acc = acc;
 					}
 					s = obj->echo_residual;
 				}
-				s = (short)(s - PROG_S16(obj, O_DCEST));
+				s = (short)(s - obj->dc_est);
 				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
@@ -5347,24 +5313,24 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			obj->progress = 3;
 			break;
 		case 2:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			if (obj->rates_latched == 0)
 				obj->rx_bps = (int)sess->modem.demodulator
 						  ->getBitRate();
-			if (PROG_S16(obj, O_PCMCHOSEN) == 0) {
+			if (obj->pcm_chosen == 0) {
 				int both = 0;
 
 				if (obj->local_v92 != 0
 				    && obj->remote_v92 != 0)
 					both = 1;
-				PROG_S16(obj, O_PCMCHOSEN) = (short)both;
+				obj->pcm_chosen = (short)both;
 			}
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 3:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			obj->progress = 5;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 4:
 			obj->progress = 0xb;
@@ -5400,7 +5366,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			PROG_S32(obj, O_CLR_COUNT) = want;
 			PROG_S32(obj, O_CLR_FLAG) = 1;
 			PROG_S32(obj, O_CLR_DONE) = 0;
-			PROG_U8(obj->pac3c, CFG_FLAGS51) |= CFG_FLAG51_CLEAR;
+			obj->pac3c->unnamed_0051 |= CFG_FLAG51_CLEAR;
 			V34EchoHistoryBackwardClean(obj,
 						    (unsigned)(want + n));
 		}
@@ -5433,14 +5399,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					      : 0;
 				obj->rates_latched = 1;
 			}
-			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->pcm_chosen = 1;
 			obj->progress = 4;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 3:
-			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->pcm_chosen = 1;
 			obj->progress = 5;
-			PROG_S16(obj, O_HDSET) = 0;
+			obj->hd_set = 0;
 			break;
 		case 4:
 			obj->progress = 0xb;
@@ -5499,31 +5465,28 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (PROG_U16(obj, O_DCCOUNT) != 0) {
-					int acc = PROG_S32(obj, O_DCACC) + s;
+				if (obj->dc_count != 0) {
+					int acc = obj->dc_acc + s;
 
-					PROG_U16(obj, O_DCCOUNT)--;
-					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
-					    == 0) {
-						int e = (PROG_S16(obj, O_DCEST)
+					obj->dc_count--;
+					if ((obj->dc_count & 0x7f) == 0) {
+						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
-						PROG_S16(obj, O_DCEST) =
-						    (short)e;
+						obj->dc_est = (short)e;
 						if (DSPLIB_DEBUG_ON()) {
-							PROG_S32(obj, O_DCACC)
-							    = acc;
+							obj->dc_acc = acc;
 							dsplibs_debug_printf(
 							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
-						PROG_S32(obj, O_DCACC) = 0;
+						obj->dc_acc = 0;
 					} else {
-						PROG_S32(obj, O_DCACC) = acc;
+						obj->dc_acc = acc;
 					}
 					s = obj->echo_residual;
 				}
-				s = (short)(s - PROG_S16(obj, O_DCEST));
+				s = (short)(s - obj->dc_est);
 				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
@@ -5545,12 +5508,12 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			obj->progress = 5;
 			/* FALLTHROUGH -- 0xc8c1 falls into 0xc8cc. */
 		case 2:
-			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->modem_up = 1;
 			if (obj->rates_latched == 0) {
 				obj->rx_bps = *(const int *)k56;
 				obj->rates_latched = 1;
 			}
-			PROG_U8(obj->pac3c, CFG_FLAGS3) |= CFG_FLAG3_RETRAIN;
+			obj->pac3c->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 			break;
 		case 4:
 			VPcmV34InitiateRetrain(obj, 0x38);
@@ -5578,7 +5541,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmV34Main: Line verification period " "completed !!!\r\n");
-			if ((PROG_U8(obj->pac3c, CFG_FLAGS2)
+			if ((obj->pac3c->qcFlags
 			     & CFG_FLAG2_SAMELINE) == 0) {
 				obj->is_short = 0;
 				if (DSPLIB_DEBUG_ON())
@@ -5600,7 +5563,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "verification...\r\n");
 			}
 			if (obj->is_short == 0) {
-				PROG_U8(sess->v92modem.phase2Info, 0x10) = 0;
+				sess->v92modem.phase2Info->shortPhase2Local = 0;
 				obj->local_short = 0;
 				sess->modem.params->init();
 			}
@@ -5628,7 +5591,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	/* --- 6: the reconnect delay, which falls into 7 --------------- */
 	case 6:
 	{
-		int held = PROG_S32(obj, O_MOHCOUNT);
+		int held = obj->moh_timer;
 		int want = obj->train_symcount;
 
 		if (held < want) {
@@ -5656,10 +5619,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		if (st == 7)
 			obj->progress = 0xd;
 		{
-			int held = PROG_S32(obj, O_MOHCOUNT);
-			int lim = PROG_S32(obj, O_MOHLIMIT);
+			int held = obj->moh_timer;
+			int lim = obj->moh_limit;
 
-			PROG_S32(obj, O_MOHCOUNT) = held + n;
+			obj->moh_timer = held + n;
 			if (lim != -1 && (held + n) >= lim) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
@@ -5672,9 +5635,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		r = sess->ansam.process(in, (unsigned int)n);
 		if (r != 0) {
 			if (obj->status == 7) {
-				int held = PROG_S32(obj, O_MOHCOUNT);
+				int held = obj->moh_timer;
 
-				if (PROG_U8(obj, O_ANSAMLATE) != 0
+				if (obj->ansam_late != 0
 				    && held <= 0xbb7f) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
@@ -5707,7 +5670,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		*nbits = 0;
 		t = obj->train_symcount + n;
 		obj->train_symcount = t;
-		if (t < PROG_S32(obj, O_MOHCOUNT)) {
+		if (t < obj->moh_timer) {
 			obj->progress = 0;
 			ret = 0;
 			goto done;
@@ -5807,16 +5770,16 @@ done:
 	if ((unsigned int)(ret - 3) <= 3) {
 		const short *hist = obj->hist_2f58;
 		int limit = obj->hist2_idx;
-		int k0 = PROG_S16(obj, O_NOTCH_K0);
-		int k1 = PROG_S16(obj, O_NOTCH_K1);
-		int k2 = PROG_S16(obj, O_NOTCH_K2);
+		int k0 = obj->retrainReqDet.b1_q14;
+		int k1 = obj->retrainReqDet.a1_q14;
+		int k2 = obj->retrainReqDet.a2_q14;
 		int retrain = 0;
 
 		for (i = 0; i < limit; i++) {
-			int t1 = (PROG_S16(obj, O_NOTCH_S1) * k2 + 0x2000)
+			int t1 = (obj->retrainReqDet.y2 * k2 + 0x2000)
 				 >> 14;
 			int x = *hist++;
-			int s0 = PROG_S16(obj, O_NOTCH_S0);
+			int s0 = obj->retrainReqDet.y1;
 			int t2;
 			int s2;
 			int t3;
@@ -5825,20 +5788,20 @@ done:
 			int eout;
 			int blk;
 
-			PROG_S16(obj, O_NOTCH_S1) = (short)s0;
+			obj->retrainReqDet.y2 = (short)s0;
 			t2 = (s0 * k1 + 0x2000) >> 14;
-			s2 = PROG_S16(obj, O_NOTCH_S2);
-			PROG_S16(obj, O_NOTCH_S2) = (short)x;
+			s2 = obj->retrainReqDet.x1;
+			obj->retrainReqDet.x1 = (short)x;
 			t3 = (s2 * k0 + 0x2000) >> 14;
 			y = (short)(x + (short)t2 - (short)t1 - (short)t3
 				    + PROG_U16(obj, O_NOTCH_S3));
-			PROG_S16(obj, O_NOTCH_S3) = (short)s2;
-			PROG_S16(obj, O_NOTCH_S0) = (short)y;
+			obj->retrainReqDet.x2 = (short)s2;
+			obj->retrainReqDet.y1 = (short)y;
 
-			ein = PROG_S32(obj, O_NOTCH_EIN) + ((x * x + 0x20) >> 6);
-			eout = PROG_S32(obj, O_NOTCH_EOUT)
+			ein = obj->retrainReqDet.energyInp + ((x * x + 0x20) >> 6);
+			eout = obj->retrainReqDet.energyOut
 			       + ((y * y + 0x20) >> 6);
-			blk = PROG_S32(obj, O_NOTCH_BLK) + 1;
+			blk = obj->retrainReqDet.nsamples + 1;
 			if (blk == NOTCH_BLOCK) {
 				int ratio = ein >> 2;
 
@@ -5846,29 +5809,29 @@ done:
 				    && eout <= NOTCH_EOUT_MAX) {
 					int cnt;
 
-					PROG_S32(obj, O_NOTCH_EIN) = ein;
-					cnt = PROG_S32(obj, O_NOTCH_CNT);
-					PROG_S32(obj, O_NOTCH_EOUT) = eout;
-					PROG_S32(obj, O_NOTCH_BLK) =
+					obj->retrainReqDet.energyInp = ein;
+					cnt = obj->retrainReqDet.notchDetectSigCnt;
+					obj->retrainReqDet.energyOut = eout;
+					obj->retrainReqDet.nsamples =
 					    NOTCH_BLOCK;
-					PROG_S32(obj, O_NOTCH_CNT) = ++cnt;
+					obj->retrainReqDet.notchDetectSigCnt = ++cnt;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
 						    "********** " "retrainDetector() " "notchDetectSigCnt = %d "
 						    "energyInp>>NOTCH_IN_OUT_" "RATIO_SHIFT = %d " "energyOut = %d\r\n",
 						    cnt, ratio, eout);
 				} else {
-					PROG_S32(obj, O_NOTCH_CNT) = 0;
+					obj->retrainReqDet.notchDetectSigCnt = 0;
 				}
-				PROG_S32(obj, O_NOTCH_EIN) = 0;
-				PROG_S32(obj, O_NOTCH_EOUT) = 0;
-				PROG_S32(obj, O_NOTCH_BLK) = 0;
+				obj->retrainReqDet.energyInp = 0;
+				obj->retrainReqDet.energyOut = 0;
+				obj->retrainReqDet.nsamples = 0;
 			} else {
-				PROG_S32(obj, O_NOTCH_BLK) = blk;
-				PROG_S32(obj, O_NOTCH_EOUT) = eout;
-				PROG_S32(obj, O_NOTCH_EIN) = ein;
+				obj->retrainReqDet.nsamples = blk;
+				obj->retrainReqDet.energyOut = eout;
+				obj->retrainReqDet.energyInp = ein;
 			}
-			if (PROG_S32(obj, O_NOTCH_CNT) > NOTCH_SIGCNT_MAX) {
+			if (obj->retrainReqDet.notchDetectSigCnt > NOTCH_SIGCNT_MAX) {
 				retrain = 1;
 				break;
 			}

@@ -325,7 +325,7 @@
   {
     "label": "79's MOH path stores the microstate without the trace",
     "find": "\t\ths_set_microstate(obj, V34HS_MOH_TONE_DROP);\n\t} else {",
-    "replace": "\t\ths_put(obj, V34HS_MICROSTATE_OFF, V34HS_MOH_TONE_DROP);\n\t} else {"
+    "replace": "\t\tobj->microstate = V34HS_MOH_TONE_DROP;\n\t} else {"
   },
   {
     "label": "80's disconnect guard reads +0xabf9 sixteen bits wide",
@@ -355,7 +355,7 @@
   {
     "label": "80's disconnect stores the transmit state without the trace",
     "find": "\t\ths_set_txstate(obj, V34HS_MOH_CLEARDOWN);",
-    "replace": "\t\ths_put(obj, V34HS_TXSTATE_OFF, V34HS_MOH_CLEARDOWN);"
+    "replace": "\t\tobj->txstate = V34HS_MOH_CLEARDOWN;"
   },
   {
     "label": "80's disconnect does not move the receive machine",

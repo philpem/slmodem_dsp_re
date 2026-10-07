@@ -356,7 +356,7 @@ fsk_clear(struct v34_object *obj)
 	short i;
 
 	for (i = 0; i <= 0x63; i++)
-		*(short *)((char *)obj + 0xaae6 + 2 * i) = 0;
+		obj->fsk_interp[i] = 0;
 }
 
 /*
@@ -516,23 +516,23 @@ v34modeminit(void *objp)
 	 * two constants and its own value at +2: 0x600, 0x800, 0xa00.
 	 */
 	for (i = 0; i < 3; i++) {
-		unsigned char *r = m + 0xa81c + i * 0x2c;
+		struct v34_dftbin *r = &obj->retrain_bins[i];
 
-		*(short *)(r + 0x28) = 0x50;
-		*(short *)(r + 0x2a) = 3000;
-		*(short *)(r + 0x00) = 0;
-		*(int *)(r + 0x04) = 0;
-		*(int *)(r + 0x08) = 0;
+		r->thresh_lo = 0x50;
+		r->thresh_hi = 3000;
+		r->phase = 0;
+		r->acc_re = 0;
+		r->acc_im = 0;
 	}
-	*(short *)(m + 0xa81e) = 0x600;
-	*(short *)(m + 0xa84a) = 0x800;
-	*(short *)(m + 0xa876) = 0xa00;
+	obj->retrain_bins[0].inc = 0x600;
+	obj->retrain_bins[1].inc = 0x800;
+	obj->retrain_bins[2].inc = 0xa00;
 
-	*(short *)(m + 0xa24a) = 1;
-	*(int *)(m + 0xa24c) = 0;
-	*(short *)(m + 0xa250) = 0;
-	*(short *)(m + 0xa252) = 3;
-	*(short *)(m + 0xa254) = 9;
+	obj->retrain_state = 1;
+	obj->retrain_phase = 0;
+	obj->retrain_runs = 0;
+	obj->retrain_quiet_runs = 3;
+	obj->retrain_tone_runs = 9;
 	obj->retrain_poll = 0;
 
 	rx->rrn_local_dir = 0;
@@ -540,11 +540,11 @@ v34modeminit(void *objp)
 	obj->is_short = 0;
 	obj->tx_flags = V34_EC_FROZEN;
 	obj->echo_calls = 0;
-	*(short *)(m + 0x3588) = 0;
-	*(short *)(m + 0x358a) = 0;
-	*(short *)(m + 0xaa78) = 0;
-	*(short *)(m + 0x2aa0) = 6;
-	*(short *)(m + 0x2aa2) = 0;
+	obj->short_3588 = 0;
+	obj->short_358a = 0;
+	obj->short_aa78 = 0;
+	obj->tx_fill_target = 6;
+	obj->vect_idx = 0;
 	*(short *)(m + 0x25d6) = (short)0x8990;
 	*(short *)(m + 0x25d8) = 0;
 	*(short *)(m + 0x25da) = 0;
@@ -646,11 +646,11 @@ setfinalrate(void *objp)
 	unsigned short a9e0 = *(unsigned short *)(m + 0xa9e0);
 	unsigned short a9e2 = *(unsigned short *)(m + 0xa9e2);
 	short *tx_baud    = &obj->ratecfg.baud;
-	short *tx_preemp  = (short *)(m + 0xaa8a);
-	const short **tx_scale = (const short **)(m + 0xaa90);
-	short *tx_carrier = (short *)(m + 0xaa94);
-	short *rx_baud    = (short *)(m + 0xaa96);
-	short *rx_carrier = (short *)(m + 0xaaa8);
+	short *tx_preemp  = &obj->ratecfg.preemp;
+	const short **tx_scale = &obj->ratecfg.divtab;
+	short *tx_carrier = &obj->ratecfg.carrier;
+	short *rx_baud    = &obj->ratecfg.rx_baud;
+	short *rx_carrier = &obj->ratecfg.rx_carrier;
 	const short **rx_scale = &obj->ratecfg.rx_divtab;
 	const short **rx_cdesc = &obj->det_coefs;
 	int code;
@@ -807,8 +807,8 @@ setupreceiver(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
-	short baud = *(short *)(m + 0xaa96);
-	short carrier = *(short *)(m + 0xaaa8);
+	short baud = obj->ratecfg.rx_baud;
+	short carrier = obj->ratecfg.rx_carrier;
 	const short *cdesc = obj->det_coefs;
 
 	rxinit(obj);
@@ -1297,7 +1297,10 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
  * no codegen presence -- the tokens at every use site are identical either
  * way -- so this is preprocessor data moved, not a statement reordered.
  */
-#define T3C_F358C	0x358c	/* short: cleared by MOH_TONE's body        */
+#define T3C_F358C	((int)__builtin_offsetof(struct v34_object, \
+					    short_358c))
+	/* short: cleared by MOH_TONE's body; the member's own
+	   offset (issue #260 wave 11)        */
 /*
  * +0x356a IS THE DETECTOR'S OWN `armed`, AND THE OBJECT SAYS SO RATHER THAN
  * THE STRUCTURE DOING.  +0x3564 is the base `detectorinit` is handed one
@@ -1312,9 +1315,13 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
  * override that decision from the far side.  The name records what it is;
  * the access stays as the tree writes every other offset.  Finding F751.
  */
-#define T3M_F3588		0x3588	/* short, arm 47's second entry guard;
-					   `v34handshakinit` also writes it  */
-#define T3M_F358A		0x358a	/* short, set to 1 beside it           */
+#define T3M_F3588		((int)__builtin_offsetof(struct v34_object, \
+					    short_3588))
+	/* short, arm 47's second entry guard; the member's own offset
+	   (issue #260 wave 11); `v34handshakinit` also writes it  */
+#define T3M_F358A		((int)__builtin_offsetof(struct v34_object, \
+					    short_358a))
+	/* short, set to 1 beside it; the member's own offset    */
 void
 v34handshakinit(void *objp, int mode)
 {
@@ -1324,7 +1331,7 @@ v34handshakinit(void *objp, int mode)
 	int delta;
 	int base;
 
-	*(int *)(m + 0x2218) = 0;
+	obj->hs_mode = 0;
 
 	delta = obj->int_0248;
 	if (delta > 0) {
@@ -1367,7 +1374,7 @@ v34handshakinit(void *objp, int mode)
 		hs_set_microstate(obj, V34HS_DET_SYNC);
 
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
-		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
+		obj->paa70 = &obj->msgrec[1];
 		obj->msgrec[1].nbits = 0x11;
 		obj->tx_pwr_reduction = 0;
 
@@ -1379,7 +1386,7 @@ v34handshakinit(void *objp, int mode)
 		 * told the two tests apart.
 		 */
 		if (obj->role == 0x66)
-			V34SetINFO0dBits(obj, (short *)(m + 0xa97c));
+			V34SetINFO0dBits(obj, obj->msgrec[1].word);
 		break;
 
 	case 1:
@@ -1391,10 +1398,10 @@ v34handshakinit(void *objp, int mode)
 		 * are counters of two kinds of retrain, and which kind is
 		 * which the object does not say.
 		 */
-		if ((rx->flags & V34_RX_FLAG_RETRAIN) || m[0xac17] != 0) {
+		if ((rx->flags & V34_RX_FLAG_RETRAIN) || obj->remote_retrain_ind != 0) {
 			short n = (short)(*(unsigned short *)(m + 0xac14) + 1);
 
-			m[0xac17] = 0;
+			obj->remote_retrain_ind = 0;
 			obj->short_ac14 = n;
 		} else {
 			obj->short_ac12 = (short)(*(unsigned short *)(m + 0xac12) + 1);
@@ -1493,9 +1500,9 @@ v34handshakinit(void *objp, int mode)
 
 		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
 		obj->msgrec[1].nbits = 8;
-		*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);
+		obj->paa6c = obj->msgrec;
 
-		VPcmV34SetMohMessageBits(obj, (short *)(m + 0xa94c));
+		VPcmV34SetMohMessageBits(obj, obj->msgrec[0].word);
 
 		/*
 		 * RE-READ, not the pointer just stored: the object reloads
@@ -1506,7 +1513,7 @@ v34handshakinit(void *objp, int mode)
 		 */
 		{
 			struct v34_bitsource *r =
-				*(struct v34_bitsource **)(m + 0xaa6c);
+				(struct v34_bitsource *)obj->paa6c;
 
 			r->crc = -1;
 			r->crc_on = 1;
@@ -2188,18 +2195,18 @@ probeselect(void *objp)
 	 * only thing here that function does not also write.
 	 */
 	short *tx_baud		= &obj->ratecfg.baud;
-	short *tx_preemp	= (short *)(m + 0xaa8a);
-	const short **tx_scale	= (const short **)(m + 0xaa90);
-	short *tx_carrier	= (short *)(m + 0xaa94);
-	short *rx_baud		= (short *)(m + 0xaa96);
-	short *rx_carrier	= (short *)(m + 0xaaa8);
+	short *tx_preemp	= &obj->ratecfg.preemp;
+	const short **tx_scale	= &obj->ratecfg.divtab;
+	short *tx_carrier	= &obj->ratecfg.carrier;
+	short *rx_baud		= &obj->ratecfg.rx_baud;
+	short *rx_carrier	= &obj->ratecfg.rx_carrier;
 	const short **rx_scale	= &obj->ratecfg.rx_divtab;
 	const short **rx_cdesc	= &obj->det_coefs;
-	short *pe2400		= (short *)(m + 0xaa9a);
-	short *pe2800		= (short *)(m + 0xaa9c);
-	short *pe3000		= (short *)(m + 0xaaa0);
-	short *pe3200		= (short *)(m + 0xaaa2);
-	short *pe3429		= (short *)(m + 0xaaa4);
+	short *pe2400		= &obj->ratecfg.pe_2400;
+	short *pe2800		= &obj->ratecfg.pe_2800;
+	short *pe3000		= &obj->ratecfg.pe_3000;
+	short *pe3200		= &obj->ratecfg.pe_3200;
+	short *pe3429		= &obj->ratecfg.pe_3429;
 
 	int snr_l1, snr_l2;
 	unsigned ratio = 0;
@@ -2446,7 +2453,7 @@ band_edges:
 	 * back below its first band-edge test and 3000's comes back above its
 	 * own.  Nesting that would have to duplicate a test.
 	 */
-	role = *(short *)(m + 0x359c);
+	role = obj->role;
 
 	if (obj->force_low_baud != 0)
 		goto rate_2400;
@@ -2729,7 +2736,7 @@ settxlevel(void *objp, const short *mp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
-	int scale = *(short *)(m + 0x25d4);
+	int scale = obj->tx_scale;
 	short extra;
 	short want;
 	short n;
@@ -2772,10 +2779,10 @@ settxlevel(void *objp, const short *mp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
 				     "reduced txscale is %d dB," "final txscale is %d\n",
-				     (int)*(short *)(m + 0x25d4), (int)want,
+				     (int)obj->tx_scale, (int)want,
 				     scale);
 
-	*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);
+	obj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);
 }
 
 /*
@@ -2807,7 +2814,7 @@ v34setuptxmit(void *objp)
 	struct v34_receiver *rx = &obj->receiver;
 	int pcm;
 
-	settxlevel(obj, (const short *)(m + 0xa9dc));
+	settxlevel(obj, (const short *)&obj->msgrec[3]);
 
 	pcm = (obj->v90_receiver != 0 || obj->k56flex_receiver != 0);
 
@@ -2959,10 +2966,22 @@ ApplyBulkDelay(void *objp, short delay)
 							timing_offset))
 #define T3C_TIMER_HI	((int)__builtin_offsetof(struct v34_receiver, \
 							timing_phase))
-#define T3C_MODE	0x2218	/* int:   selects what the tail reports     */
-#define V34_MSGREC_BASE	0xa94c	/* five struct v34_bitsource records */
-#define T3C_COUNT	0xaa78	/* short: the counter, and HS_TRACE_2       */
-#define T3C_COUNT_SRC	0xaa7c	/* short: RX_PHASE3_CALL copies it in       */
+#define T3C_MODE	((int)__builtin_offsetof(struct v34_object, \
+					    hs_mode))
+	/* int:   selects what the tail reports; the member's own
+	   offset (issue #260 wave 11)       */
+#define V34_MSGREC_BASE	((int)__builtin_offsetof(struct v34_object, \
+					    msgrec))
+	/* five struct v34_bitsource records; the member's own
+	   offset (issue #260 wave 11) */
+#define T3C_COUNT	((int)__builtin_offsetof(struct v34_object, \
+					    short_aa78))
+	/* short: the counter, and HS_TRACE_2; the member's own
+	   offset (issue #260 wave 11)       */
+#define T3C_COUNT_SRC	((int)__builtin_offsetof(struct v34_object, \
+					    filtdelay))
+	/* short: RX_PHASE3_CALL copies it in; the member's own
+	   offset (issue #260 wave 11)       */
 /* now the member's own offset (issue #260). */
 #define T3C_PTR_AA6C	((int)__builtin_offsetof(struct v34_object, paa6c))
 /* now the member's own offset (issue #260). */
@@ -2977,7 +2996,10 @@ ApplyBulkDelay(void *objp, short delay)
  * it would be a codegen regression that nothing in this tree could catch.
  * The offset stays for that one read.  Finding F553.
  */
-#define T3C_FAAE2	0xaae2	/* THE LOW BYTE of `fsk.sr`; see above     */
+#define T3C_FAAE2	((int)__builtin_offsetof(struct v34_object, fsk) \
+			 + (int)__builtin_offsetof(struct v34_fsk, sr))
+	/* THE LOW BYTE of `fsk.sr`; see above; the member's own offset
+	   (issue #260 wave 11)   */
 
 /*
  * THE LAST TWO STRICT-ALIASING WARNINGS IN THE TREE WERE THE LINE THAT STOOD
@@ -3036,12 +3058,17 @@ ApplyBulkDelay(void *objp, short delay)
 							timeout_deadline))
 	/* int, ELAPSED plus 431,488; the two are compared UNSIGNED at
 	   0x62a84 */
-#define T3M_COUNTER		0xaa78	/* short, the counter six of these arms
-					   bump; it is the `[2]` every trace
-					   prints (V34hshak.c's HS_TRACE_2)  */
+#define T3M_COUNTER		((int)__builtin_offsetof(struct v34_object, \
+					    short_aa78))
+	/* short, the counter six of these arms bump; it is the `[2]`
+	   every trace prints (V34hshak.c's HS_TRACE_2); the member's
+	   own offset (issue #260 wave 11)  */
 #define T3M_FSKGATE		((int)__builtin_offsetof(struct v34_object, \
 							retrain_poll))
-#define T3M_TOGGLE		0x358c	/* short, arm 48 inverts bit 0 of it   */
+#define T3M_TOGGLE		((int)__builtin_offsetof(struct v34_object, \
+					    short_358c))
+	/* short, arm 48 inverts bit 0 of it; the member's own
+	   offset (issue #260 wave 11)  */
 
 /*
  * Arms 47 and 63.  `short_abae`/`short_abc2` have been members since the
@@ -3049,8 +3076,13 @@ ApplyBulkDelay(void *objp, short delay)
  * VPcmV34Progress's phase-2 substate ladder, and `p2_delay_cntr` (+0x240)
  * is the object's own "p2DelayCntr".
  */
-#define T3M_FABAE		0xabae	/* ten shorts arm 47 clears            */
-#define T3M_FABC2		0xabc2	/* the eleventh, cleared separately    */
+#define T3M_FABAE		((int)__builtin_offsetof(struct v34_object, \
+					    short_abae))
+	/* ten shorts arm 47 clears; the member's own offset   */
+#define T3M_FABC2		((int)__builtin_offsetof(struct v34_object, \
+					    short_abc2))
+	/* the eleventh, cleared separately; the member's own
+	   offset (issue #260 wave 11)  */
 #define T3M_FABFF		((int)__builtin_offsetof(struct v34_object, \
 							p2_state))
 	/* SIGNED byte, arm 63's third guard */
@@ -3064,9 +3096,10 @@ ApplyBulkDelay(void *objp, short delay)
  * "On RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d".  The rest are
  * offsets because what they are FOR was not measured here.
  */
-#define T3M_FILTDELAY		0xaa7c	/* short; three of arm 49's and arm
-					   50's four thresholds are it plus a
-					   constant                          */
+#define T3M_FILTDELAY		((int)__builtin_offsetof(struct v34_object, \
+					    filtdelay))
+	/* short; three of arm 49's and arm 50's four thresholds are
+	   it plus a constant; the member's own offset (wave 11) */
 #define T3M_F35A0		((int)__builtin_offsetof(struct v34_object, \
 							short_35a0))
 	/* short, arm 51 clears on both paths  */
@@ -3083,7 +3116,11 @@ ApplyBulkDelay(void *objp, short delay)
 	/* short, arm 51 copies the transmit carrier here */
 
 /* Within the receiver, and reached from `rx` and not from the object. */
-#define T3M_RX_F264		0x0264	/* short, arm 49's last write          */
+#define T3M_RX_F264		((int)__builtin_offsetof(struct v34_receiver, \
+					    short_264))
+	/* short, arm 49's last write; the receiver member's own
+	   offset (issue #260 wave 11); t72's read of it stays a
+	   BYTE wide (finding F553's shape)     */
 
 /* The microstate table: 40 entries, index = microstate - 41. */
 #define T3M_TBL3_FIRST		41
@@ -5064,7 +5101,10 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  * branches that could never be taken.
  */
 
-#define T41_FABE8	0xabe8	/* byte: non-zero takes the second door     */
+#define T41_FABE8	((int)__builtin_offsetof(struct v34_object, \
+					    moh_active))
+	/* byte: non-zero takes the second door; the member's
+	   own offset (issue #260 wave 11) */
 
 /*
  * The detector, run over exactly the samples `V34agc` just delivered.
@@ -5314,7 +5354,7 @@ t41_tone_ab(struct v34_object *obj)
 	 * the re-read the note above says is why `abe8` is a parameter.
 	 */
 	if (t41_detect(obj) == 0) {
-		t41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */
+		t41_after_guards(obj, obj->moh_active); /* 0x6de83 */
 		return;
 	}
 
@@ -5325,7 +5365,7 @@ t41_tone_ab(struct v34_object *obj)
 		 * points at, and 0x6de70 re-reads +0xabe8 exactly as 0x6de83
 		 * does -- two stubs three instructions apart, one junction.
 		 */
-		t41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de70 */
+		t41_after_guards(obj, obj->moh_active); /* 0x6de70 */
 		return;
 	}
 
@@ -5595,7 +5635,7 @@ t41_micro_det_sync(struct v34_object *obj)
 		return;
 	}
 
-	abe8 = t3c_getb(obj, T41_FABE8);
+	abe8 = obj->moh_active;
 	short_358a = obj->short_358a;
 
 	if (abe8 == 0 && short_358a == 0) {
@@ -6118,7 +6158,10 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
  * INFO1c -- three different messages through one bit clock, so each arm ends
  * somewhere else.
  */
-#define T44_PROBE	0xa320	/* the probe bins V34GiveProbeResults takes*/
+#define T44_PROBE	((int)__builtin_offsetof(struct v34_object, \
+					    probe_bins))
+	/* the probe bins V34GiveProbeResults takes; the member's
+	   own offset (issue #260 wave 11) */
 
 /*
  * The record reached through +0xaa70, and the one the restart installs at
@@ -7278,7 +7321,10 @@ t53_rx_det_ab(struct v34_object *obj)
  */
 #define T4_RXF11E	((int)__builtin_offsetof(struct v34_receiver, \
 							short_382))
-#define T4_RXF120	0x0120	/* receiver: cleared when either matches   */
+#define T4_RXF120	((int)__builtin_offsetof(struct v34_receiver, \
+					    vectpp_idx))
+	/* receiver: cleared when either matches; the member's own
+	   offset (issue #260 wave 11)   */
 #define T4_PLLCNT	0x25da	/* short: obj+0x221c+0x3be, the arm's own
 				   counter -- 0x4c(%esp) plus 0x3be        */
 #define T4_MPCOEF	0x2a68	/* twelve shorts, `getMPrecvdBits`' other
@@ -7309,9 +7355,11 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_MPBITS	((int)__builtin_offsetof(struct v34_object, \
 							msgrec[4].avail))
 	/* short: how many bits are in it          */
-#define T4_MPCAPS	0xaa3c	/* THE LOW BYTE of `info_caps`; the three
-				   readers are all `testb $1`, which is
-				   finding F553's case again                */
+#define T4_MPCAPS	((int)__builtin_offsetof(struct v34_object, \
+					    info_caps))
+	/* THE LOW BYTE of `info_caps`; the three readers are all
+	   `testb $1`, which is finding F553's case again; the
+	   member's own offset (issue #260 wave 11) */
 
 #define T4_M(p)		((unsigned char *)(p))
 #define T4_I16(p, off)	(*(short *)(T4_M(p) + (off)))
@@ -9504,7 +9552,10 @@ micro_txblock:
  * count reads as an enormous span rather than a negative one.
  */
 
-#define DP_FAA98	0xaa98	/* short: copied into the receiver's +0x260  */
+#define DP_FAA98	((int)__builtin_offsetof(struct v34_object, \
+					    ratecfg.rxbits))
+	/* short: copied into the receiver's +0x260; the member's own
+	   offset (issue #260 wave 11)  */
 
 /*
  * The receiver's own fields.  THESE ARE ALL MEMBERS OF `struct v34_receiver`
@@ -9526,16 +9577,31 @@ micro_txblock:
  * which also records that the two byte-CLOSEST cells compute something the
  * object does not.
  */
-#define DP_RX_ERR	0x021a	/* short: the block's error measure          */
-#define DP_RX_BLOCKS	0x0124	/* short: blocks received, capped at 30,000  */
-#define DP_RX_THR_A	0x0252	/* short: +0x258's threshold                 */
-#define DP_RX_THR_B	0x0254	/* short: +0x25a's                          */
-#define DP_RX_THR_C	0x0256	/* short: +0x25c's                          */
-#define DP_RX_BAD	0x0258	/* short: consecutive blocks over THR_A      */
-#define DP_RX_BAD_LONG	0x025a	/* short: consecutive blocks over THR_B      */
-#define DP_RX_GOOD	0x025c	/* short: consecutive blocks under THR_C     */
-#define DP_RX_WHY	0x025e	/* short: 1 remote, 2 down, 3 up            */
-#define DP_RX_RATE	0x0260	/* short: the rate index the change was at   */
+#define DP_RX_ERR	((int)__builtin_offsetof(struct v34_receiver, equerr))
+#define DP_RX_BLOCKS	((int)__builtin_offsetof(struct v34_receiver, \
+					    rx_blocks))
+#define DP_RX_THR_A	((int)__builtin_offsetof(struct v34_receiver, \
+					    bad_thresh))
+#define DP_RX_THR_B	((int)__builtin_offsetof(struct v34_receiver, \
+					    bad_long_thresh))
+#define DP_RX_THR_C	((int)__builtin_offsetof(struct v34_receiver, \
+					    good_thresh))
+#define DP_RX_BAD	((int)__builtin_offsetof(struct v34_receiver, bad_run))
+#define DP_RX_BAD_LONG	((int)__builtin_offsetof(struct v34_receiver, \
+					    bad_long_run))
+#define DP_RX_GOOD	((int)__builtin_offsetof(struct v34_receiver, good_run))
+#define DP_RX_WHY	((int)__builtin_offsetof(struct v34_receiver, \
+					    rrn_local_dir))
+#define DP_RX_RATE	((int)__builtin_offsetof(struct v34_receiver, \
+					    baud_copy))
+	/* All ten are the members' own offsets now (issue #260 wave 11);
+	   the original comments -- "the block's error measure",
+	   "blocks received, capped at 30,000", the thresholds, the
+	   consecutive-run counters, "1 remote, 2 down, 3 up" and "the
+	   rate index the change was at" -- stay as the record of what
+	   each does.  The sites STAY on the dp_rxget/dp_rxput helpers:
+	   converting the parameterised accessors was measured and DECLINED
+	   (findings F8044/F8045), and the offset stays their parameter. */
 
 #define DP_TIMER_STALE	288000u		/* 0x46500, 36 s at 8 kHz  */
 #define DP_TIMER_MID	144000u		/* 0x23280, 18 s           */

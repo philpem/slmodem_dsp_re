@@ -143,8 +143,8 @@
   },
   {
     "label": "+0x3558 is one less",
-    "find": "\tobj->echo_decay_start = 0x7d0;\n\t*(short *)(m + OB_FA248) = 0;\n\tobj->echo_decay_fact = 0x7fdf;",
-    "replace": "\tobj->echo_decay_start = 0x7d0;\n\t*(short *)(m + OB_FA248) = 0;\n\tobj->echo_decay_fact = 0x7fde;",
+    "find": "\tobj->echo_decay_start = 0x7d0;\n\tobj->hd_set = 0;\n\tobj->echo_decay_fact = 0x7fdf;",
+    "replace": "\tobj->echo_decay_start = 0x7d0;\n\tobj->hd_set = 0;\n\tobj->echo_decay_fact = 0x7fde;",
     "why": "Anchor extended with the two preceding stores -- the suite-anchor consolidation F11414 names.  With v34pcmif.c merged into VPcmV34Main.cpp (F11432) the bare `obj->echo_decay_fact = 0x7fdf;` also occurs in GetVPcmMinimalTxPowerReduction; this context makes it unique to VPcmV34Create.  The mutation is unchanged."
   },
   {
@@ -185,8 +185,8 @@
   },
   {
     "label": "+0x254's scale short is read unsigned",
-    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
-    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)(unsigned short)obj->short_35a4 + 10000);",
+    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)(unsigned short)obj->short_35a4 + 10000);",
     "equivalent": true,
     "why": "336 * 65536 is exactly 336 * 2^16 and so zero modulo 2^16, and a signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them at any entry point; `v34retrain` records the identical mutation on the identical block as equivalent for the same reason.  `movswl` is what the object writes and so is this.",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
@@ -215,8 +215,8 @@
   },
   {
     "label": "+0x254's offset is 10001 rather than 10000",
-    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
-    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10001);",
+    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10001);",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   }
 ]

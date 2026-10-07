@@ -272,8 +272,8 @@
   },
   {
     "label": "the tone body runs on a silent detector",
-    "find": "\tif (t41_detect(obj) == 0) {\n\t\tt41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */",
-    "replace": "\tif (t41_detect(obj) != 0) {\n\t\tt41_after_guards(obj, t3c_getb(obj, T41_FABE8)); /* 0x6de83 */",
+    "find": "\tif (t41_detect(obj) == 0) {\n\t\tt41_after_guards(obj, obj->moh_active); /* 0x6de83 */",
+    "replace": "\tif (t41_detect(obj) != 0) {\n\t\tt41_after_guards(obj, obj->moh_active); /* 0x6de83 */",
     "fn": "t41_tone_ab"
   },
   {

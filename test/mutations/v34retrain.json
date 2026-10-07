@@ -358,8 +358,8 @@
   },
   {
     "label": "+0x2218 becomes 5",
-    "find": "\tobj->hs_mode = 2;",
-    "replace": "\t*(int *)(m + OB_F2218) = 5;"
+    "find": "\tobj->status = 0;\n\tobj->hs_mode = 2;",
+    "replace": "\tobj->status = 0;\n\tobj->hs_mode = 5;"
   },
   {
     "label": "the three receiver scalars are left alone",
@@ -368,28 +368,28 @@
   },
   {
     "label": "+0x254's scale is 335",
-    "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
-    "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(335 * (int)obj->short_35a4 + 10000);",
+    "find": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(335 * (int)obj->short_35a4 + 10000);",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
     "label": "+0x254's offset is 10001",
-    "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
-    "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10001);",
+    "find": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10001);",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
     "label": "+0x254's scale short is read unsigned",
-    "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
-    "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)(unsigned short)obj->short_35a4 + 10000);",
+    "find": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * below 10000.\n\t */\n\tobj->dc_count =\n\t\t(short)(336 * (int)(unsigned short)obj->short_35a4 + 10000);",
     "equivalent": true,
     "why": "336 * 65536 = 22,020,096, which is exactly 336 * 2^16 and therefore zero modulo 2^16.  A signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them -- the sweep drives -1, -100 and 0x8000, and the mutations that change the multiplier to 335 and the offset to 10001 are both caught, so the arithmetic itself is tested.  `movswl` is what the object writes and so is this.",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
     "label": "+0x258 is cleared as a short rather than an int",
-    "find": "\t\t(short)(336 * (int)obj->short_35a4 + 10000);\n\t*(short *)(m + OB_F0254 + 2) = 0;\n\t*(int *)(m + OB_F0254 + 4) = 0;",
-    "replace": "\t\t(short)(336 * (int)obj->short_35a4 + 10000);\n\t*(short *)(m + OB_F0254 + 2) = 0;\n\t*(short *)(m + OB_F0254 + 4) = 0;",
+    "find": "\t\t(short)(336 * (int)obj->short_35a4 + 10000);\n\tobj->dc_est = 0;\n\tobj->dc_acc = 0;",
+    "replace": "\t\t(short)(336 * (int)obj->short_35a4 + 10000);\n\tobj->dc_est = 0;\n\tPROG_S16(obj, (int)__builtin_offsetof(struct v34_object, dc_acc)) = 0;",
     "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {

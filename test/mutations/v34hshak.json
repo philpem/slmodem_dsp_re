@@ -25,14 +25,14 @@
   },
   {
     "label": "mode 1's || becomes &&",
-    "find": "if ((rx->flags & V34_RX_FLAG_RETRAIN) || m[0xac17] != 0) {",
-    "replace": "if ((rx->flags & V34_RX_FLAG_RETRAIN) && m[0xac17] != 0) {",
+    "find": "if ((rx->flags & V34_RX_FLAG_RETRAIN) || obj->remote_retrain_ind != 0) {",
+    "replace": "if ((rx->flags & V34_RX_FLAG_RETRAIN) && obj->remote_retrain_ind != 0) {",
     "fn": "v34handshakinit"
   },
   {
     "label": "mode 0 tests 0x65 rather than 0x66",
-    "find": "\t\tif (obj->role == 0x66)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
-    "replace": "\t\tif (obj->role == 0x65)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
+    "find": "\t\tif (obj->role == 0x66)\n\t\t\tV34SetINFO0dBits(obj, obj->msgrec[1].word);",
+    "replace": "\t\tif (obj->role == 0x65)\n\t\t\tV34SetINFO0dBits(obj, obj->msgrec[1].word);",
     "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
     "fn": "v34handshakinit"
   },
@@ -94,8 +94,8 @@
   },
   {
     "label": "mode 0 points 0xaa70 at the 0xa94c record",
-    "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);\n\t\tobj->msgrec[1].nbits = 0x11;",
-    "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\t*(short **)(m + 0xaa70) = (short *)(m + 0xa94c);\n\t\tobj->msgrec[1].nbits = 0x11;",
+    "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\tobj->paa70 = &obj->msgrec[1];\n\t\tobj->msgrec[1].nbits = 0x11;",
+    "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);\n\t\tobj->paa70 = &obj->msgrec[0];\n\t\tobj->msgrec[1].nbits = 0x11;",
     "fn": "v34handshakinit"
   },
   {
@@ -106,14 +106,14 @@
   },
   {
     "label": "mode 4 record index 12 gets 0x11 rather than 8",
-    "find": "\t\tobj->msgrec[1].nbits = 8;\n\t\t*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
-    "replace": "\t\tobj->msgrec[1].nbits = 0x11;\n\t\t*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
+    "find": "\t\tobj->msgrec[1].nbits = 8;\n\t\tobj->paa6c = obj->msgrec;",
+    "replace": "\t\tobj->msgrec[1].nbits = 0x11;\n\t\tobj->paa6c = obj->msgrec;",
     "fn": "v34handshakinit"
   },
   {
     "label": "mode 4 points 0xaa6c at the 0xa97c record",
-    "find": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa94c);",
-    "replace": "*(short **)(m + 0xaa6c) = (short *)(m + 0xa97c);",
+    "find": "\t\tobj->paa6c = obj->msgrec;",
+    "replace": "\t\tobj->paa6c = &obj->msgrec[1];",
     "fn": "v34handshakinit"
   },
   {
@@ -125,13 +125,13 @@
   },
   {
     "label": "mode 1 bumps 0xac12 where it should bump 0xac14",
-    "find": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac14 = n;",
-    "replace": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac12 = n;",
+    "find": "\t\t\tobj->remote_retrain_ind = 0;\n\t\t\tobj->short_ac14 = n;",
+    "replace": "\t\t\tobj->remote_retrain_ind = 0;\n\t\t\tobj->short_ac12 = n;",
     "fn": "v34handshakinit"
   },
   {
     "label": "mode 1 does not clear the 0xac17 byte",
-    "find": "\t\t\tm[0xac17] = 0;\n\t\t\tobj->short_ac14 = n;",
+    "find": "\t\t\tobj->remote_retrain_ind = 0;\n\t\t\tobj->short_ac14 = n;",
     "replace": "\t\t\tobj->short_ac14 = n;",
     "fn": "v34handshakinit"
   },
@@ -144,7 +144,7 @@
   {
     "label": "tail: 0xaa3c and 0x2aa0 values swapped",
     "find": "\tobj->info_caps = 0;\n\tobj->tx_fill_target = 0x10;",
-    "replace": "\ths_put(obj, ((int)__builtin_offsetof(struct v34_object, info_caps)), 0x10);\n\tobj->tx_fill_target = 0;",
+    "replace": "\tobj->info_caps = 0x10;\n\tobj->tx_fill_target = 0;",
     "fn": "v34handshakinit"
   },
   {
@@ -248,14 +248,14 @@
   },
   {
     "label": "the two run limits transposed",
-    "find": "\tobj->retrain_quiet_runs = 3;\n\tobj->retrain_tone_runs = 9;",
-    "replace": "\tobj->retrain_quiet_runs = 9;\n\tobj->retrain_tone_runs = 3;",
+    "find": "bins[2].inc = DFT_BIN(10);\n\n\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;\n\tobj->retrain_runs = 0;\n\tobj->retrain_quiet_runs = 3;\n\tobj->retrain_tone_runs = 9;",
+    "replace": "bins[2].inc = DFT_BIN(10);\n\n\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;\n\tobj->retrain_runs = 0;\n\tobj->retrain_quiet_runs = 9;\n\tobj->retrain_tone_runs = 3;",
     "fn": "dftRetrainDetInit"
   },
   {
     "label": "the detector arms in state 2",
-    "find": "\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;",
-    "replace": "\tobj->retrain_state = 2;\n\tobj->retrain_phase = 0;",
+    "find": "bins[2].inc = DFT_BIN(10);\n\n\tobj->retrain_state = 1;\n\tobj->retrain_phase = 0;",
+    "replace": "bins[2].inc = DFT_BIN(10);\n\n\tobj->retrain_state = 2;\n\tobj->retrain_phase = 0;",
     "fn": "dftRetrainDetInit"
   },
   {
@@ -528,19 +528,19 @@
   },
   {
     "label": "txlevel: the final multiply has no rounding term",
-    "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+    "find": "\tobj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);",
     "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b) >> 14);",
     "fn": "settxlevel"
   },
   {
     "label": "txlevel: the final multiply's rounding term is 0x1000",
-    "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+    "find": "\tobj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);",
     "replace": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x1000) >> 14);",
     "fn": "settxlevel"
   },
   {
     "label": "txlevel: the final multiply is skipped",
-    "find": "\t*(short *)(m + 0x25d4) = (short)((scale * 0x4b4b + 0x2000) >> 14);",
+    "find": "\tobj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);",
     "replace": "\t*(short *)(m + 0x25d4) = (short)scale;",
     "fn": "settxlevel"
   },
@@ -552,7 +552,7 @@
   },
   {
     "label": "txlevel: the second report prints the scale it just computed",
-    "find": "\t\t\t\t     (int)*(short *)(m + 0x25d4), (int)want,",
+    "find": "\t\t\t\t     (int)obj->tx_scale, (int)want,",
     "replace": "\t\t\t\t     (int)(short)((scale * 0x4b4b + 0x2000) >> 14),\n\t\t\t\t     (int)want,",
     "fn": "settxlevel"
   },
@@ -968,8 +968,8 @@
   },
   {
     "label": "probe: the role flag is 0x64",
-    "find": "\trole = *(short *)(m + 0x359c);",
-    "replace": "\trole = (short)(*(short *)(m + 0x359c) == 0x64 ? 0x65 : 0);",
+    "find": "\trole = obj->role;",
+    "replace": "\trole = (short)(obj->role == 0x64 ? 0x65 : 0);",
     "fn": "probeselect"
   },
   {

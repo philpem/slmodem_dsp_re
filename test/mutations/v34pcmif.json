@@ -245,14 +245,14 @@
   },
   {
     "label": "reneg: rx bad_run not cleared",
-    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
-    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: rx good_run not cleared",
-    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
-    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\tobj->hs_mode",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\tobj->hs_mode = 5;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
@@ -561,13 +561,13 @@
   },
   {
     "label": "power: the wanted reduction is read as a byte",
-    "find": "\tshort want = *(const short *)(cfg + 0x44);",
-    "replace": "\tshort want = *(const signed char *)(cfg + 0x44);"
+    "find": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB);",
+    "replace": "\tshort want = *(const signed char *)(cfg + CFG_MINPWR_DB);"
   },
   {
     "label": "power: the wanted reduction is one field along",
-    "find": "\tshort want = *(const short *)(cfg + 0x44);",
-    "replace": "\tshort want = *(const short *)(cfg + 0x46);"
+    "find": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB);",
+    "replace": "\tshort want = *(const short *)(cfg + CFG_MINPWR_DB + 2);"
   },
   {
     "label": "power: the session gate is ignored",

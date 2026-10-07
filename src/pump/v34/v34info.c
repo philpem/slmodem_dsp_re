@@ -60,17 +60,34 @@ pcm_name(const struct v34_object *obj)
  * answer-versus-call: the flag also swaps two bit POSITIONS and their two
  * SOURCES between its branches, which a plain role would not.
  */
+/* +0x6120, `VPcmFloModem::info0Layout` (see the SESSION_CAPS verdict). */
 #define SESSION_VARIANT		0x6120
 
 /*
  * +0x611c.  ONE LOCATION, TWO WIDTHS: `V34GiveINFO1aBits` writes it as an
  * int -- 0 on entry, 1 when the upstream baud index is 6 -- and reads it
  * back with `movswl` as a short.  The same aliasing the receiver
- * object's +0x12c has, and recorded for the same reason (v34recv.h).
+ * object's +0x12c has, and recorded for the same reason (v34recv.h).  It is
+ * `VPcmFloModem::pcmSessionType` (see the SESSION_CAPS verdict below).
  */
 #define SESSION_UINFO6		0x611c
 
-/* +0x612c and +0x1760.  Two further pointers, into blocks of bytes. */
+/*
+ * +0x612c and +0x1760.  Two further pointers, into blocks of bytes.
+ *
+ * ISSUE #260 WAVE 11, THE FINAL VERDICT: all four of these offsets are
+ * members of the session the caller hangs off `p3548`, and that session is
+ * `VPcmFloModem` (VPcmFloModem.h) -- the C++ side's own class.  The members
+ * are named there: +0x611c is `pcmSessionType`, +0x6120 is `info0Layout`,
+ * +0x612c is the `V92Modem`'s embedded `phase2Info` pointer (the V.92 Phase 2
+ * record whose +0x08 this file writes "shortPhase2Local" and the three
+ * INFO1a nibbles into), and +0x1760 is the embedded `V90Modem`'s
+ * `phase2Info` (V90SessionFlag.h).  None of that can be reached from this
+ * translation unit: it is C, the offsets are against a `void *` the C++
+ * side owns, and `offsetof(VPcmFloModem, ...)` is not spellable here.  The
+ * constants stay literals with this record; the byte reads/writes through
+ * the two pointers are the same below +0x612c and +0x1760.
+ */
 #define SESSION_CAPS		0x612c
 #define SESSION_UPSTREAM	0x1760
 

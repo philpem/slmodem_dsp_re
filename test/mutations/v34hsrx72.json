@@ -272,7 +272,7 @@
   {
     "label": "the FSK gate is written sixteen bits wide",
     "find": "\t\tobj->retrain_poll = 1;\t\t\t\t /* 0x67f68 */",
-    "replace": "\t\ths_put(obj, T72_FSKGATE, 1);\t\t\t /* 0x67f68 */",
+    "replace": "\t\t*(short *)((char *)obj + T72_FSKGATE) = 1;\t\t\t /* 0x67f68 */",
     "fn": "t72_rx_l1"
   },
   {
@@ -422,7 +422,7 @@
   {
     "label": "the totals are stored sixteen bits wide",
     "find": "\tt3c_puti(obj, signal_off, signal);\t\t/* 0x69d55 */",
-    "replace": "\ths_put(obj, signal_off, (short)signal);\t\t/* 0x69d55 */",
+    "replace": "\t*(short *)((char *)obj + signal_off) = (short)signal;\t\t/* 0x69d55 */",
     "fn": "t72_measure"
   },
   {

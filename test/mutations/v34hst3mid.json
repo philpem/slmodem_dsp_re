@@ -82,7 +82,7 @@
   {
     "label": "48's forcing arm stores without announcing",
     "find": "\t\t/* 0x6c670. */\n\t\ths_set_txstate(f->obj, V34HS_SILENCE);",
-    "replace": "\t\t/* 0x6c670. */\n\t\ths_put(f->obj, V34HS_TXSTATE_OFF, V34HS_SILENCE);",
+    "replace": "\t\t/* 0x6c670. */\n\t\tf->obj->txstate = V34HS_SILENCE;",
     "fn": "t3m_micro48"
   },
   {
@@ -465,7 +465,7 @@
   {
     "label": "the shared reset (47, 49, 50) stores the two states without announcing them",
     "find": "\ths_set_txstate(f->obj, V34HS_TX_DPSK);\n\ths_set_microstate(f->obj, V34HS_DET_SYNC);",
-    "replace": "\ths_put(f->obj, V34HS_TXSTATE_OFF, V34HS_TX_DPSK);\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_DET_SYNC);",
+    "replace": "\tf->obj->txstate = V34HS_TX_DPSK;\n\tf->obj->microstate = V34HS_DET_SYNC;",
     "fn": "t3m_errrec_core"
   },
   {
@@ -668,7 +668,7 @@
   {
     "label": "47's high arm stores the microstate without announcing it",
     "find": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_set_microstate(f->obj, V34HS_TX_L1);",
-    "replace": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_L1);",
+    "replace": "\tT3M_U16(f, T3M_TOGGLE) ^= 1;\n\tf->obj->microstate = V34HS_TX_L1;",
     "fn": "t3m_micro47"
   },
   {
@@ -1101,7 +1101,7 @@
   {
     "label": "49 stores the microstate without announcing it",
     "find": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_set_microstate(f->obj, V34HS_TX_PHASE2_ANS);",
-    "replace": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\ths_put(f->obj, V34HS_MICROSTATE_OFF, V34HS_TX_PHASE2_ANS);",
+    "replace": "\tT3M_U16(f, T3M_COUNTER) = T3M_U16(f, T3M_FILTDELAY);\n\tf->obj->microstate = V34HS_TX_PHASE2_ANS;",
     "fn": "t3m_micro49"
   },
   {
@@ -1294,7 +1294,7 @@
   {
     "label": "50 stores the rxstate without announcing it",
     "find": "\n\ths_set_rxstate(f->obj, V34HS_RX_L1);",
-    "replace": "\n\ths_put(f->obj, V34HS_RXSTATE_OFF, V34HS_RX_L1);",
+    "replace": "\n\tf->obj->rxstate = V34HS_RX_L1;",
     "fn": "t3m_micro50"
   },
   {
@@ -1457,7 +1457,7 @@
   {
     "label": "51's detector body stores the rxstate without announcing it",
     "find": "\t\ths_set_rxstate(f->obj, V34HS_DET_AB);",
-    "replace": "\t\ths_put(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+    "replace": "\t\tf->obj->rxstate = V34HS_DET_AB;",
     "fn": "t3m_micro51"
   },
   {
