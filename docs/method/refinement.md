@@ -4019,3 +4019,19 @@ body's other work and seven bystanders unchanged. It produces no exact gain;
 do not turn that measured component recovery into a register/profile claim or
 broaden the domain to guard/variable permutations.
 [Counter recovery](../floatfir-consumed-count-results.md).
+
+### Share branch values before allocation, not only their final machine tail (F11877)
+
+A REGALLOC residual can still have a source preimage. SDMv27_init makes no
+scratch search and no rnreg changes. Two source stores compile to one final
+machine tail but retain separate branch-result pseudos through local allocation;
+both takeEAX before the owner pointer is assigned. The original common
+load-result/store supports one conditional assignment. Its shared HI pseudo
+spans the branches, changes allocation, and yields the full89-byte exact
+initializer with both bystanders and all TU metadata unchanged. This is
+source factoring, not a request for specific registers or a cursor edit.
+Inspect24lreg/25greg and branch-result definitions when a common original
+store has separate source assignments; merely reversing branch arms is a
+separate closed domain. Do not assume every register-only function has this
+cause or claim the conditional syntax is uniquely recovered.
+[Control and audit](../sdmv27-common-value-results.md).

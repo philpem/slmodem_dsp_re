@@ -54,10 +54,8 @@ SDMv27_init(struct sdmv27 *sdm, const struct sdmv27_cfg *cfg)
 	 * original.  Reproduced, and not reachable in service -- both callers
 	 * (`V27RX_create`, `SetScramblerV27`) pass a stack local.  D1043.
 	 */
-	if (cfg != 0)
-		sdm->nbits = cfg->nbits;
-	else
-		sdm->nbits = SDMv27_CFG.nbits;
+	/* One shared branch result reproduces allocation too (F11877). */
+	sdm->nbits = cfg != 0 ? cfg->nbits : SDMv27_CFG.nbits;
 
 	sdm->reg = SDMV27_REG_SEED;
 	sdm->run = 0;

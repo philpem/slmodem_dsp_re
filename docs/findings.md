@@ -137005,3 +137005,32 @@ control; period phase388/0 and structural checks green; Gentoo300/300 objects,
 0 failures. Two extra raw/traced/saved object triples validate14 searches/218
 candidates with identical function/generator/cursor/selection history, so this
 counter recovery does not move reset's scratch choice. No strict gain claimed.
+
+## F11877. A common branch-result value makes SDMv27_init byte-exact
+
+F11875's zero-search/no-renaming target is recoverable through source factoring.
+Its retained24lreg dump has separate HI branch results60/61, locally allocated
+inEAX before allocating owner/config pointers. One conditional-value assignment
+instead produces pseudo60 with two definitions and one common store; the owner
+is thenEAX and the resultEDX, exactly as the blob. Two full Gentoo controls raw
+reproduce baseline, review6 body verdicts and preserve all3 function sizes,
+positions,bindings,allocated data,BSS and canonical nontext relocations. Only
+SDMv27_init changes: all89 original bytes and its named data relocation match;
+both scrambler/descrambler bodies are unchanged. The later unguardedcfg read
+and original null-config defect remain byte-exact. No forced registers, width
+changes, token permutations, flags or syntax-uniqueness claim. A register-only
+residual can still encode an earlier source-sharing choice; final tail sharing
+does not imply the allocation input was shared. Next application requires the
+same independently observed common result/store and allocation witness.
+`docs/sdmv27-common-value-results.md`;
+tools/sdmv27_common_value_audit.py.
+
+F11877 validation: complete production V27_SDM object raw-identical to the
+audited candidate; final period phase388/0 and structural gates green,
+Gentoo300 sources/300 objects/0 failures. Candidate patterns agree through
+27flow2/28peephole2/30rnreg; the exact colors are determined before both
+passes. Both full-TU bystanders stay raw-identical.
+
+Final strict census: 1,075/1,852 exact, 118,176 original bytes; gain
+SDMv27_init (+89 bytes), zero losses. REGALLOC decreases32→31. The historical810-name floor remains unchanged;
+its known V90Parameters C2 loss is not cleared by this gain.
