@@ -3863,3 +3863,34 @@ final writer identity does not preserve compiler scratch-search state. This
 corroborates the existing scratch-cursor lever, without measuring the full
 historical dynamic cursor-event sequence or justifying literal permutations.
 [Actual field-era stage proof](../v90-parameters-constructor-stage-proof.md).
+
+### Separate assembly-layout clues from executed value ages (F11862–F11864)
+
+A broad binary screen can find candidates missed by repeated-return/source-text
+heuristics, but a load's position after a call in disassembly does not establish
+that it executes after that call. Branches can lay out mutually exclusive arms
+in either order. Bound streams by ELF symbol size, retain original operands and
+actual branch destinations, resolve callees and trace paths before attributing
+a displacement-count difference to stale values. Same displacement also does
+not identify the same object. Known historical positives and current exact
+negatives establish detector operation, not source recoverability.
+
+Use matching full-TU controls to locate the earliest observed RTL-pattern or
+instruction-order divergence. Preserve registers, modes and immediates; inspect
+all constructor clones independently. Later rnreg can eliminate a peephole2
+difference in one clone and retain it in another. Static immediate-store splits
+are scratch opportunities, not counts of dynamic searches or cursor events.
+The generic [stage diagnostic](../gcc3-stage-divergence-diagnostic.md) enforces
+explicit clone selection and rejects incomplete/ambiguous paired stage sets.
+Identical earlier emitted bytes remain insufficient to establish compiler-state
+identity. Do not tune earlier source tokens to manufacture register colors.
+
+A recovered pointer lifetime can preserve two stores and a second memory read
+through allocation yet still lose that read in postreload (F11865). In SDM's
+control, UID56 MEM:HI becomes an AX selfcopy at that pass; the baseline instead
+loses its reread in first CSE and its first store by combine. Track the specific
+read at each stage before attributing the final absence to source factoring or
+register allocation. Compare value/address/mode knowledge and invalidations;
+a widened original load is a discriminator, not proof that a cast prevents
+forwarding. The installed compiler's actual replacement branch remains to be
+observed. [Bounded controls and static rule](../fax-tail-timing-results.md).

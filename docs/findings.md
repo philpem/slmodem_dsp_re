@@ -136775,3 +136775,56 @@ Pinnedstockrecog persistentsearch_ofs explainsconsistentknownscratchcursor;
 fullactual dynamiccursor events notmeasured. Correctfloat/floorpreserved;
 no source/literal/profilefit. `docs/v90-parameters-constructor-stage-proof.md`;
 tools/v90_parameters_constructor_stage_trace.py.
+
+## F11862. Wider binary value/tail screen nominates clues without equating layout with execution
+
+Merged fa941457 screen:204 scoped TUs/1399 shared emitted bodies/404 small
+nonexact bodies;219 equal nonzero call-count pairs and192 nominations after
+one tiny-thunk exclusion. ELF-sized streams compare nonstack/nonindexed memory
+displacements by linear call position, extra returns and reload-target edges.
+Two historical positive/two current exact negative controls pass. Offsets are
+not field identities and linear call epochs are not executed-path history.
+Closed Boolean/ring families stay closed; FSE_decision_trn's omitted empty
+loop belongs to F1604, not a fresh common-return fix. No source adoption.
+`docs/value-timing-stage-screen-results.md`; tools/value_timing_tail_screen.py.
+
+## F11863. Earliest-stage diagnostic preserves colors and exposes transient peephole divergence
+
+Generic dump-directory/function/clone CLI passes14/14 detector controls.
+Historical constructor positive/equal controls each29 stage pairs/116 streams;
+positive first differs at28peephole2 for both clones, but clone1 converges at
+30rnreg. Writer29/58 first01rtl,153/152 static immediate-store splits; pre-only
++434 transformation independently agrees with F11861. Preserves UID order,
+registers/modes/immediates, normalizes only explicit tree pointers, refuses
+ambiguous/missing/unequal streams. Notes/prose are outside comparison; dynamic
+scratch searches/cursor values not measured. No source/profile fitting.
+`docs/gcc3-stage-divergence-diagnostic.md`; tools/gcc3_stage_divergence.py;
+tools/gcc3_stage_divergence_validate.py.
+
+## F11864. V8 bit-reader value/count graph fires without a complete preimage
+
+Four full-V8global controls cross signed-word/captured-count/word-load graph
+with CRC-helper reuse. Original453B, baselineSIZE70, alternativesSIZE62/58/78;
+length gaps are not differing-byte counts. Word graph initialRTL word compares
+4→9 and arithmetic right shifts2→0. Rawbaseline repeats;52 live body grades,
+zero gains/losses, onlyv8_getbit changes;12siblings/bindings/BSS/nontext and
+canonical nontext relocations fixed. Generictrace29stages/58streams first01rtl.
+No source adoption/runtime claim; negative-wordbits semantics require valid
+caller/boundary proof. Close this four-cell domain absent fresh original
+use/CRC/caller evidence, not more cast/declaration/register variants.
+`docs/value-timing-stage-screen-results.md`; tools/v8_getbit_value_age_reproduce.py;
+tools/v8_getbit_value_age_audit.py.
+
+## F11865. Fax cursor reread survives allocation but is forwarded by postreload
+
+Read-only fax screen78TUs/317 shared functions/97 smallnonexact originals.
+Four full-TU cells/20 live grades/2rawbaselines: SDM postincrement and V17
+branch-local output controls give0gains/losses, all8bystanders/data/bindings/
+nontextrelocs fixed. SDM preserves bothstores and secondHIread through25greg;
+26postreload UID56 MEM:HI→AXselfcopy removesread. Baseline instead losesread
+at06cse and firststore by20combine. Originalstillzeroextendssecondwordread.
+V17eqtrn reaches251B butBYTES199 andsharedtail, noadoptionbysize. Staticpinned
+GCCpostreload/cselib supports known-value forwarding, exactvalidationbranch
+unmeasured; nextdiscriminator installedUID56 lookup/mode/address/locations/
+invalidations, notvolatile/reg/ordercoercion. `docs/fax-tail-timing-results.md`;
+tools/fax_binary_timing_screen.py; tools/fax_tail_timing_audit.py.
