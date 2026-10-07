@@ -3931,3 +3931,43 @@ RTL, so there is also no combine narrowing to explain. Keep the valid dynamic
 value-forwarding result, close the unsupported width family, and require an
 independent original use/alias/profile witness for further source controls.
 [Annotated and dynamic emitter proof](../sdm-movhi-emitter-width-refutation.md).
+
+### Restoring one source boundary does not recover the complete function (F11869)
+
+The V32 cleaned-sample getter's accepted-count-first arm restores the original
+branch, but its owner reload is still missing. The V22 permutation counter's
+early lifetime plus separated increment leaves a one-byte size difference
+with different allocation and schedule. Neither is a byte-exact improvement.
+Bound original coefficient capture independently; do not expand a near-size
+result into declaration/register permutations.
+
+A reciprocal's stack one is not unique evidence of an unsuffixed double
+literal. The float RMS control restores FLD1 at the wrong lifetime and adds
+an original-absent final narrowing; it also changes inlined callers. Audit
+the complete expression graph and complete TU, including pooled constants.
+The ordinary reciprocal-first reversal emits the retained raw object; close
+it rather than retrying synonyms. [Eleven-cell audit](../small-counter-use-results.md).
+
+An unchanged sibling can first diverge at peephole scratch selection after
+matching allocation/reload. EpochDetectV29 transfers the constructor-stage
+diagnostic: the new scratch and its compare differ at28peephole2, followed by
+renaming at30rnreg. Keep the losing full-TU controls and trace the origin;
+do not alter the sibling to restore a score (F11870).
+[Quality and bystander stage evidence](../fax-quality-use-results.md).
+
+Validate a nomination's complete operation stream before interpreting its
+source controls. ResamplerTiming's 'missingFABS' premise was refuted by three
+FABS in every control; an earlier comparison computes sign. Preserve invalid
+premises and exclude their axes from source-family closure claims. A remaining
+DF-versus-XF operand witness is independent, and its bounded negative does
+not authorize a general type matrix (F11871).
+[Corrected diagnostic-mode nomination](../v90-timing-diagnostic-math-domain.md).
+
+A wrong callee-entry argument can be a source-fidelity gap even if the actual
+callee ignores it on that arm. Fax command's uninitialized default `extra`
+emits80 instead of the original0 outsideFTM; the existing real callee consumes
+it onlyFTM, where both supply80. Distinguish measured argument reconstruction
+from public behavior and synthetic replacement-callee probes. Its corrected
+argument and original six-case dispatch still miss full identity; do not
+claim a gain or invent an operational failure (F11872).
+[Complete dispatch/result controls](../fax-service-values-results.md).

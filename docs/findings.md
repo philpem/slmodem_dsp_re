@@ -136871,3 +136871,63 @@ originalmachineMOVZWL doesnotestablishexplicitZERO_EXTEND:SI orsourcepromotion.
 Postreloadforwardingproofremainsvalid. No casts/types/widthfamilyexpansion,
 no sourceadoption, strict1074/1852 unchanged. `docs/sdm-movhi-emitter-width-refutation.md`;
 tools/sdm_movhi_emission_audit.py; tools/gentoo_cc1_sdm_movhi_reproduce.py.
+
+## F11869. Small value-use witnesses survive bounded controls without strict gains
+
+Three raw complete-TU repeats, eleven cells and 99 shared body grades test
+V32's accepted-count fallthrough, V22's early permutation counter/separate
+increment/coefficient capture, and the float RMS reciprocal's expression mode
+and operand order. Zero strict gains or losses. V32 restores the branch but
+lacks the original owner reload; V22's combined SIZE1 still differs in register
+lifetimes and scheduling. Native double RMS emits FLD1 late plus a final SF
+narrowing absent from the original, changes three inlined callers and removes
+only the pooled SF one; operand reversal is raw identical. Complete data,
+metadata and nontext relocation audits explain all changes. No production edit
+or nearest-size adoption; these families close pending independent evidence.
+`docs/small-counter-use-results.md`; tools/small_counter_use_audit.py.
+
+## F11870. Fax quality controls expose another peephole2 scratch bystander
+
+Twenty-two complete-TU cells, 164 live body grades and three raw repeats cross
+original count tests, averaging/judgement tails and early AGC narrowing with
+known owner controls. Zero gains; two rejected V29 cells lose untouched
+EpochDetectV29. All allocated nontext, data, BSS, bindings and canonical nontext
+relocations stay fixed. The unchanged bystander agrees through 27flow2;
+28peephole2 introduces scratch UID38 CX versus AX and dependent compare39,
+then 30rnreg changes owner/scratch colors. Initial RTL, CSE/combine and
+allocation patterns agree. This stage-localized compiler-state effect does
+not justify rewriting the bystander. Early AGC narrowing raw-merges with its
+controls; close the tested families without fitting near-size candidates.
+`docs/fax-quality-use-results.md`; tools/fax_quality_use_audit.py.
+
+## F11871. V90 value-age and diagnostic-mode controls miss; false FABS nomination corrected
+
+An early output slot consumes the old count before conversion in ordinary
+source. Three complete objects/102 body grades give baseline135B and
+candidate138B versus original149B, with no gains/losses and all 33 bystanders,
+data, metadata and nontext relocations fixed. No early count store across a
+potentially trapping conversion is introduced. Five timing-diagnostic objects/
+70 body grades also miss; the DF fraction operand does not restore original
+loads. The initial missing-FABS nomination was false: all objects contain
+three hardware FABS; the earlier FCOMP computes sign. Preserve those whole-axis
+cells as unsupported controls, excluded from recovery/closure inference.
+Thirteen bystanders, named data, BSS and bindings stay fixed; constant-pool
+changes are audited. No source adoption or broader type matrix.
+`docs/v90-sample-slot-domain.md`; `docs/v90-timing-diagnostic-math-domain.md`;
+tools/v90_sample_slot_audit.py; tools/v90_timing_diagnostic_math_audit.py.
+
+## F11872. Fax argument and dispatch/result graphs are witnesses, not exact preimages
+
+Eleven complete-TU cells/44 live body grades/two raw baselines cross default
+extra initialization, pre-S7 config mode, six-case dispatch and common
+converter result. Zero gains/losses. Original extra is zero except FTM's80;
+uninitialized retained extra compiles to80 in every arm. The callee consumes
+arg4 only for TM, where both match: an observed argument-fidelity gap, not a
+measured public behavior defect. Initialization restores the argument but
+leaves SIZE5. Mode reaches constructor SIZE1; common result and explicit
+dispatch still miss and change unchanged siblings. No partial source adoption.
+The 375B merge-string pool multiset and six-versus-five command table slots
+are audited; code relocation owners/boundaries are recorded, and all BSS,
+bindings and named data stay fixed. Close these finite families without fresh
+use, alias or CFG evidence. `docs/fax-service-values-results.md`;
+tools/fax_service_values_audit.py.
