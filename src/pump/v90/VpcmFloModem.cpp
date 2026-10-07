@@ -2920,7 +2920,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	pcmSessionType = 0;
 	progressState = 0;
 
-	byte_7f5c = 0;
+	entranceFilterApplied = 0;
 	ecMode = 0;
 	ecRampCounter = 0;
 }

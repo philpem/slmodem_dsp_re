@@ -434,7 +434,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	oa.tx_flags = ob.tx_flags = tx_flags;
 
 	oa.p3548 = vp[0];    ob.p3548 = vp[1];
-	oa.pac3c = cfgbuf[0]; ob.pac3c = cfgbuf[1];
+	oa.pac3c = (_tagModemParameters *)cfgbuf[0]; ob.pac3c = (_tagModemParameters *)cfgbuf[1];
 	oa.pac18 = ob.pac18 = 0;
 
 	oa.v90_receiver = ob.v90_receiver = state;

@@ -76,13 +76,13 @@
   },
   {
     "label": "the TX MD scale is 3 rather than 2.4",
-    "find": "\t\t(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);",
-    "replace": "\t\t(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 8u);"
+    "find": "\t\t(short)((cfg->unnamed_0014 * 24u) / 10u);",
+    "replace": "\t\t(short)((cfg->unnamed_0014 * 24u) / 8u);"
   },
   {
     "label": "the quick-connect bit is bit 5 rather than bit 4",
-    "find": "\tint quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;",
-    "replace": "\tint quick = (cfg[CFG_V92LITE] & 0x20) != 0;"
+    "find": "\tint quick = (cfg->qcFlags & CFG_QUICKCONNECT) != 0;",
+    "replace": "\tint quick = (cfg->qcFlags & 0x20) != 0;"
   },
   {
     "label": "channel verification is entered on either condition, not both",
@@ -91,8 +91,8 @@
   },
   {
     "label": "the channel-verification progress code is 9",
-    "find": "\t\t\t\t\t\t\t   (short)ansLevel);\n\t\t\tobj->progress = 10;",
-    "replace": "\t\t\t\t\t\t\t   (short)ansLevel);\n\t\t\tobj->progress = 9;",
+    "find": "\t\t\t\t(short)uqts, (short)ansLevel);\n\t\t\tobj->progress = 10;",
+    "replace": "\t\t\t\t(short)uqts, (short)ansLevel);\n\t\t\tobj->progress = 9;",
     "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
@@ -149,8 +149,8 @@
   },
   {
     "label": "the hardware entrance-filter test is inverted",
-    "find": "\t\t\t\t(*(const int *)(cfg + CFG_F54) == 14);",
-    "replace": "\t\t\t\t(*(const int *)(cfg + CFG_F54) != 14);"
+    "find": "\t\t\t\t(cfg->codecType == 14);",
+    "replace": "\t\t\t\t(cfg->codecType != 14);"
   },
   {
     "label": "the entrance filter is forced on by 2 rather than by 1",
@@ -180,21 +180,21 @@
   },
   {
     "label": "the two indices reach channel verification the other way round",
-    "find": "\t\t\t\t->enterChannelVerification((short)uqts,\n\t\t\t\t\t\t\t   (short)ansLevel);",
-    "replace": "\t\t\t\t->enterChannelVerification((short)ansLevel,\n\t\t\t\t\t\t\t   (short)uqts);"
+    "find": "\t\t\t\t(short)uqts, (short)ansLevel);",
+    "replace": "\t\t\t\t(short)ansLevel, (short)uqts);"
   },
   {
     "label": "+0x254's scale short is read unsigned",
-    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
+    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)(unsigned short)obj->short_35a4 + 10000);",
     "equivalent": true,
     "why": "336 * 65536 is exactly 336 * 2^16 and so zero modulo 2^16, and a signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them at any entry point; `v34retrain` records the identical mutation on the identical block as equivalent for the same reason.  `movswl` is what the object writes and so is this.",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
     "label": "+0x262 is left at zero",
-    "find": "\t*(short *)(m + OB_F0262) = 1;",
-    "replace": "\t*(short *)(m + OB_F0262) = 0;"
+    "find": "\tobj->remote_retrain_ind = 0;\n\tobj->samples_valid = 1;",
+    "replace": "\tobj->remote_retrain_ind = 0;\n\tobj->samples_valid = 0;"
   },
   {
     "_": [
@@ -215,8 +215,8 @@
   },
   {
     "label": "+0x254's offset is 10001 rather than 10000",
-    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);",
+    "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10000);",
+    "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)obj->short_35a4 + 10001);",
     "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   }
 ]

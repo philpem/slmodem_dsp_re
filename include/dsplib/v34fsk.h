@@ -22,11 +22,14 @@
 #ifndef DSPLIB_V34FSK_H
 #define DSPLIB_V34FSK_H
 
+#include "dsplib/mohdet.h"	/* struct tag_retrainReqDet: the +0xac1c block */
 #include "dsplib/v34det.h"	/* struct v34_dftbin: the retrain detector's   */
 #include "dsplib/v34filt.h"	/* struct v34_echo: the FSK delay line is one  */
 #include "dsplib/v34hshak.h"	/* struct v34_bitsource: the message records   */
 #include "dsplib/v34recv.h"	/* struct v34_receiver: the +0x264 sub-object  */
 #include "dsplib/v34rx.h"	/* struct v34_queue: the object owns both      */
+
+struct _tagModemParameters;	/* pac3c points at one; see modem_params.h    */
 
 #ifdef __cplusplus
 extern "C" {
@@ -1551,7 +1554,21 @@ struct v34_object {
 	 * type: local %d, remote %d (A=1, Mu=0)".
 	 */
 	void *pac18;					/* +0xac18 */
-	unsigned char unmapped_ac1c[0xac3c - 0xac1c];
+	/*
+	 * +0xac1c, the V.92 MOH retrain-request detector, a whole
+	 * `struct tag_retrainReqDet` (mohdet.h), 32 bytes.  Three writers
+	 * spell it out in this tree -- `VPcmV34InitiateRetrain`,
+	 * `VPcmV34InitMOH` and `VPcmV34Create`, each writing the same
+	 * eleven words as `resetRetrainDetector`'s body with the same two
+	 * coefficient sets `mohdet.h` records (0x65 zeroes b1/a1 and puts
+	 * 0x39c3 in a2; 0x66 writes 0x5a82/0x55fc/0x39c3) -- and the one
+	 * short none of them touches, +0x12, is the struct's own alignment
+	 * gap (finding F10151 removed it from the model for exactly that
+	 * reason).  `VPcmV34Progress`'s MOH arms drive the fields through
+	 * the file's own `O_NOTCH_*` constants; its format string names
+	 * `notchDetectSigCnt`, `energyInp` and `energyOut`.
+	 */
+	struct tag_retrainReqDet retrainReqDet;		/* +0xac1c */
 	/*
 	 * A third pointer into the C++ side, and the busiest of the three:
 	 * forty-odd loads of it, all inside `VPcmV34Main.cpp`'s C exports.
@@ -1572,11 +1589,18 @@ struct v34_object {
 	 *                 clear is enabled". It gates the byte at +0xabfe
 	 *   +0x54  int    compared against 4 by GetVPcmMinimalTxPowerReduction
 	 *
-	 * Reconstructed as a `void *` with each field spelled out at its use,
-	 * for the reason `p3548`'s note gives: a struct here would be a
-	 * guess, and the object never states one.
+	 * THE TARGET IS `_tagModemParameters` (modem_params.h), and the
+	 * identification is the allocator's, not a guess: `vpcm_create`
+	 * stores `dp_param_get(modem)` -- slmodemd's `m->dp_runtime`,
+	 * `dp_runtime_create`'s 0x88-byte block (findings F820-823) -- at its
+	 * root and hands it to `VPcmV34Create` as its `runtime` argument,
+	 * whose first act is `obj->pac3c = runtime` (blob .text+0xaa70's
+	 * tail).  `VPCMXF_Create` passes the same pointer to
+	 * `VPcmFloModem`'s constructor, whose mangling types the argument
+	 * `_tagModemParameters *`.  Every offset above agrees with
+	 * modem_params.h's own field map.
 	 */
-	void *pac3c;					/* +0xac3c */
+	struct _tagModemParameters *pac3c;		/* +0xac3c */
 	/*
 	 * The object is 0xac4c bytes; `VPcmV34Progress`'s
 	 * `requestOutputSampleClear` arm writes all three words here (a

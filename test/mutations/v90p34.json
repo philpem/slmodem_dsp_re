@@ -51,8 +51,8 @@
   },
   {
     "label": "the Ja completion arm reads the configuration byte at +0x54",
-    "find": "#define P34_CFG_FLAGS\t\t0x50",
-    "replace": "#define P34_CFG_FLAGS\t\t0x54"
+    "find": "\t\tif (!(o->pac3c->modeFlags & P34_CFG_BACKWARD_CLEAR))",
+    "replace": "\t\tif (!(((const unsigned char *)o->pac3c)[0x54]\n\t\t      & P34_CFG_BACKWARD_CLEAR))"
   },
   {
     "label": "the backward-clear byte is set to 2 rather than 1",
@@ -290,8 +290,8 @@
   },
   {
     "label": "case 10 hands over to state 3",
-    "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;\n\t\to->v90_receiver = 2;\n\t\treturn 0;",
-    "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;\n\t\to->v90_receiver = 3;\n\t\treturn 0;"
+    "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->receiver.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\t/*\n\t\t * The end of phase 3/4: unpack what the far end sent, set the\n\t\t * data rates up and hand the handshake to its transmit state.\n\t\t *\n\t\t * The state store is a compare-then-store in the object and\n\t\t * is written as one here; it is indistinguishable from a\n\t\t * plain store by any test, since the value written is the\n\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_EXMIT)\n\t\t\to->txstate = V34HS_EXMIT;\n\t\to->v90_receiver = 2;\n\t\treturn 0;",
+    "replace": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->receiver.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\t/*\n\t\t * The end of phase 3/4: unpack what the far end sent, set the\n\t\t * data rates up and hand the handshake to its transmit state.\n\t\t *\n\t\t * The state store is a compare-then-store in the object and\n\t\t * is written as one here; it is indistinguishable from a\n\t\t * plain store by any test, since the value written is the\n\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_EXMIT)\n\t\t\to->txstate = V34HS_EXMIT;\n\t\to->v90_receiver = 3;\n\t\treturn 0;"
   },
   {
     "label": "case 10 skips getMPrecvdBits",
@@ -307,21 +307,21 @@
   },
   {
     "label": "case 10 writes V34HS_DATAXMIT",
-    "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-    "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_DATAXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;",
+    "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_EXMIT)\n\t\t\to->txstate = V34HS_EXMIT;",
+    "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_DATAXMIT)\n\t\t\to->txstate = V34HS_DATAXMIT;",
     "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
     "label": "case 10's transmit state is at +0x3594",
-    "find": "#define OB_TXSTATE\t\t0x3596",
-    "replace": "#define OB_TXSTATE\t\t0x3594"
+    "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->receiver.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\t/*\n\t\t * The end of phase 3/4: unpack what the far end sent, set the\n\t\t * data rates up and hand the handshake to its transmit state.\n\t\t *\n\t\t * The state store is a compare-then-store in the object and\n\t\t * is written as one here; it is indistinguishable from a\n\t\t * plain store by any test, since the value written is the\n\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_EXMIT)\n\t\t\to->txstate = V34HS_EXMIT;\n\t\to->v90_receiver = 2;\n\t\treturn 0;",
+    "replace": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->receiver.short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\t/*\n\t\t * The end of phase 3/4: unpack what the far end sent, set the\n\t\t * data rates up and hand the handshake to its transmit state.\n\t\t *\n\t\t * The state store is a compare-then-store in the object and\n\t\t * is written as one here; it is indistinguishable from a\n\t\t * plain store by any test, since the value written is the\n\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->rxstate != V34HS_EXMIT)\n\t\t\to->rxstate = V34HS_EXMIT;\n\t\to->v90_receiver = 2;\n\t\treturn 0;"
   },
   {
     "label": "case 10's compare-then-store becomes a plain store",
     "equivalent": true,
     "why": "The value written is the value compared against, so the branch decides only whether a store of X happens where X is already there.  No test can separate them and no ordering can: nothing runs between the compare and the store.  Held fixed: that OB_TXSTATE is ordinary memory rather than a device register, which is true of every other access to it in the tree.  The compare is transcribed because the object performs it.",
-    "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-    "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+    "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (o->txstate != V34HS_EXMIT)\n\t\t\to->txstate = V34HS_EXMIT;",
+    "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\to->txstate = V34HS_EXMIT;",
     "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
   },
   {
@@ -341,13 +341,13 @@
   },
   {
     "label": "case 3's diagnostic prints its two arguments the other way round",
-    "find": "\t\t\t\t\t     (int)n,\n\t\t\t\t\t     (int)*(const short *)\n\t\t\t\t\t     (m + OB_PERIOD));",
-    "replace": "\t\t\t\t\t     (int)*(const short *)\n\t\t\t\t\t     (m + OB_PERIOD),\n\t\t\t\t\t     (int)n);"
+    "find": "\t\t\t\t\t     (int)n,\n\t\t\t\t\t     (int)o->ratecfg.period);",
+    "replace": "\t\t\t\t\t     (int)o->ratecfg.period,\n\t\t\t\t\t     (int)n);"
   },
   {
     "label": "case 3's diagnostic reads the period at +0xaa84",
-    "find": "#define OB_PERIOD\t\t0xaa86",
-    "replace": "#define OB_PERIOD\t\t0xaa84"
+    "find": "(int)o->ratecfg.period);",
+    "replace": "(int)o->ratecfg.baud);"
   },
   {
     "label": "case 3's diagnostic prints the count before this call's increment",

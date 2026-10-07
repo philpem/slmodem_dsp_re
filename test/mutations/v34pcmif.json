@@ -109,42 +109,42 @@
   },
   {
     "label": "hangup: session flag byte not written",
-    "find": "\t\tsess[0x173e] = 1;\n",
+    "find": "\t\tsess->clr = 1;\n",
     "replace": ""
   },
   {
     "label": "hangup: session flag byte written as 2",
-    "find": "sess[0x173e] = 1;",
-    "replace": "sess[0x173e] = 2;"
+    "find": "sess->clr = 1;",
+    "replace": "sess->clr = 2;"
   },
   {
     "label": "hangup: leaf code 1 rather than 2",
     "note": "Anchor updated when the chain was named (SESS_DEMOD/DEMOD_CONNEVAL/CONNEVAL_EXTERNAL_DEMAND); same store, same offsets, new spelling.",
-    "find": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
-    "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 1;"
+    "find": "->externalDemandCode = 2;",
+    "replace": "->externalDemandCode = 1;"
   },
   {
     "label": "reneg: leaf gets a constant 2 rather than req",
-    "find": "+ CONNEVAL_EXTERNAL_DEMAND) = req;",
-    "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
+    "find": "->externalDemandCode = req;",
+    "replace": "->externalDemandCode = 2;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: PCM arm writes the flag byte too",
-    "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n",
-    "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n\n\t\tsess[0x173e] = 1;\n",
+    "find": "\t\tV90Demodulator *demod = sess->modem.demodulator;\n\n\t\tdemod->connectionEvaluator->externalDemandCode = req;",
+    "replace": "\t\tV90Demodulator *demod = sess->modem.demodulator;\n\n\t\tsess->droppedToV34 = 1;\n\t\tdemod->connectionEvaluator->externalDemandCode = req;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: PCM arm falls through instead of returning",
-    "find": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;\n\t\treturn;",
-    "replace": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;",
+    "find": "demod->connectionEvaluator->externalDemandCode = req;\n\t\treturn;",
+    "replace": "demod->connectionEvaluator->externalDemandCode = req;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
-    "find": "\t\tsess[0x173e] = 1;\n\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);",
-    "replace": "\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);\n\t\tsess[0x173e] = 1;",
+    "find": "\t\tsess->clr = 1;\n\t\tdemod = sess->modem.demodulator;",
+    "replace": "\t\tdemod = sess->modem.demodulator;\n\t\tsess->clr = 1;",
     "equivalent": true,
     "why": "`sess + 0x173e` is a byte in the session and `sess + SESS_DEMOD` (0x175c) is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
   },
@@ -185,7 +185,7 @@
   },
   {
     "label": "setv90: [1] counter not cleared",
-    "find": "\t*(short *)(m + 0x2aa2) = 0;\n",
+    "find": "\tobj->vect_idx = 0;\n",
     "replace": "",
     "fn": "VPcmV34SetV90RateReneg"
   },
@@ -199,8 +199,8 @@
   },
   {
     "label": "hangup: progress gets 5",
-    "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
-    "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;"
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;",
+    "replace": "\tobj->progress = 5;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;"
   },
   {
     "label": "reneg: progress gets 5",
@@ -210,25 +210,25 @@
   },
   {
     "label": "setv90: progress gets 5",
-    "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
-    "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
+    "replace": "\tobj->progress = 5;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
     "fn": "VPcmV34SetV90RateReneg"
   },
   {
     "label": "hangup: 0x2218 gets 6",
-    "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
-    "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->bad_run = 0;"
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\trx->bad_run = 0;",
+    "replace": "\tobj->progress = 6;\n\tobj->hs_mode = 6;\n\n\trx->bad_run = 0;"
   },
   {
     "label": "reneg: 0x2218 gets 6",
-    "find": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
-    "replace": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
+    "find": "\trx->good_run = 0;\n\n\tobj->hs_mode = 5;",
+    "replace": "\trx->good_run = 0;\n\n\tobj->hs_mode = 6;",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "setv90: 0x2218 gets 6",
-    "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->receiver.short_382",
-    "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->receiver.short_382",
+    "find": "\tobj->progress = 6;\n\tobj->hs_mode = 5;\n\n\tobj->receiver.short_382",
+    "replace": "\tobj->progress = 6;\n\tobj->hs_mode = 6;\n\n\tobj->receiver.short_382",
     "fn": "VPcmV34SetV90RateReneg"
   },
   {
@@ -245,20 +245,20 @@
   },
   {
     "label": "reneg: rx bad_run not cleared",
-    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
-    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
+    "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: rx good_run not cleared",
-    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
-    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\t*(int *)(m + 0x2218)",
+    "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\tobj->hs_mode",
+    "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\tobj->hs_mode",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "hangup: handshakinit asked for mode 1",
-    "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)",
-    "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)"
+    "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\tobj->hs_mode",
+    "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\tobj->hs_mode"
   },
   {
     "label": "reneg: handshakinit asked for mode 1",
@@ -331,22 +331,22 @@
   {
     "label": "reneg: rrn counter not bumped",
     "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-    "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
-    "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: rrn counter is the remote one",
     "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-    "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
-    "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
     "label": "reneg: rrn counter saturates rather than wrapping",
     "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
-    "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
-    "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
+    "find": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
+    "replace": "\tobj->hs_mode = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
     "fn": "VPcmV34InitiateRateRenegotiation"
   },
   {
@@ -457,12 +457,12 @@
   },
   {
     "label": "force: the session flags are one byte along",
-    "find": "\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
-    "replace": "\t\tsel = (unsigned char *)obj->p3548 + 0x218;"
+    "find": "\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;",
+    "replace": "\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow + 1;"
   },
   {
     "label": "force: the V.90 arm edits the local array instead of the session",
-    "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = (unsigned char *)obj->p3548 + 0x217;",
+    "find": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;",
     "replace": "\t\tallow[5] = 1;\t\t\t/* dead -- see the note above */\n\t\tsel = allow;"
   },
   {
@@ -571,23 +571,23 @@
   },
   {
     "label": "power: the session gate is ignored",
-    "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)",
-    "replace": "\tif (!(obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)"
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)",
+    "replace": "\tif (!(obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)"
   },
   {
     "label": "power: the sensitive-ISP test has the polarity it looks like",
-    "find": "\t      && *(const int *)(pcm + 0x4f8) == 0)\n\t    && obj->k56flex_receiver == 0)",
-    "replace": "\t      && *(const int *)(pcm + 0x4f8) != 0)\n\t    && obj->k56flex_receiver == 0)"
+    "find": "\t      && pcm->SENSITIVE_ISP_DETECTED == 0)\n\t    && obj->k56flex_receiver == 0)",
+    "replace": "\t      && pcm->SENSITIVE_ISP_DETECTED != 0)\n\t    && obj->k56flex_receiver == 0)"
   },
   {
     "label": "power: the two arms are or-ed rather than nested",
-    "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
-    "replace": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;"
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;",
+    "replace": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0)\n\t    && obj->k56flex_receiver == 0)\n\t\tred = 0;"
   },
   {
     "label": "power: the V.90 test is > 1 like the other function's",
-    "find": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0\n\t      && *(const int *)(pcm + 0x4f8) == 0)",
-    "replace": "\tif (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1\n\t      && *(const int *)(pcm + 0x4f8) == 0)"
+    "find": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver != 0\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)",
+    "replace": "\tif (!(sess->info0Layout != 0 && obj->v90_receiver > 1\n\t      && pcm->SENSITIVE_ISP_DETECTED == 0)"
   },
   {
     "label": "power: nothing is forced to zero",
@@ -596,18 +596,18 @@
   },
   {
     "label": "power: the sign test includes zero",
-    "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-    "replace": "\tif (red >= 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;"
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif (red >= 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;"
   },
   {
     "label": "power: the sign test is unsigned",
-    "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-    "replace": "\tif ((unsigned short)red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;"
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif ((unsigned short)red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;"
   },
   {
     "label": "power: the PCM flag's two values are swapped",
-    "find": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 0;",
-    "replace": "\tif (red > 0) {\n\t\t*(int *)(pcm + 0x4f4) = 1;"
+    "find": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 0;",
+    "replace": "\tif (red > 0) {\n\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;"
   },
   {
     "label": "power: the positive arm's decay factor is the negative arm's",
@@ -621,23 +621,23 @@
   },
   {
     "label": "power: decay start differs between the arms",
-    "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d0;",
-    "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d1;"
+    "find": "\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;\n\t\tobj->echo_decay_start = 0x7d0;",
+    "replace": "\t\tpcm->HIGH_LEVEL_TX_ACTIVE = 1;\n\t\tobj->echo_decay_start = 0x7d1;"
   },
   {
     "label": "power: the beta choice tests the wrong constant",
-    "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
     "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
   },
   {
     "label": "power: the beta choice is inverted",
-    "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-    "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
+    "replace": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 6 : 4;"
   },
   {
     "label": "power: beta's other value is five, as adaptecho's ladder has it",
-    "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-    "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
+    "find": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;",
+    "replace": "\t\tobj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 5;"
   },
   {
     "label": "power: the returned value is the unclamped one",
@@ -646,64 +646,64 @@
   },
   {
     "label": "power: the second report prints the flag before the write",
-    "find": "\t\t (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f4));",
+    "find": "\t\t (int)red, sess->modem.params->HIGH_LEVEL_TX_ACTIVE);",
     "replace": "\t\t (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f8));"
   },
   {
     "label": "rate: the configured rate is one field along",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x40);"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = *(const int *)((const unsigned char *)obj->pac3c + 0x40);"
   },
   {
     "label": "rate: the V.90 test is != 0 rather than > 1",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0) {"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver != 0) {"
   },
   {
     "label": "rate: the V.90 test is >= 1",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver >= 1) {"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver >= 1) {"
   },
   {
     "label": "rate: the session gate is ignored",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (obj->v90_receiver > 1) {"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (obj->v90_receiver > 1) {"
   },
   {
     "label": "rate: the sensitive-ISP test is inverted",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) == 0) {"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED == 0) {"
   },
   {
     "label": "rate: the cap's multiplier is 2400 spelled as 2401",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;",
     "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x961;"
   },
   {
     "label": "rate: the cap is computed without wrapping",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tlong long cap = (long long)*(const int *)(pcm + 0x4fc)\n\t\t\t\t\t* 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = (int)cap;"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tlong long cap = (long long)pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t\t* 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = (int)cap;"
   },
   {
     "label": "rate: the cap is taken rather than the smaller",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\trate = cap;"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\trate = cap;"
   },
   {
     "label": "rate: the comparison is >=",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate >= cap)\n\t\t\t\trate = cap;",
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate >= cap)\n\t\t\t\trate = cap;",
     "equivalent": true,
     "why": "At `rate == cap` the assignment is a no-op, so `>` and `>=` cannot be told apart.  Which of the two is taken is tested by `the larger is taken` and `the cap is taken rather than the smaller`."
   },
   {
     "label": "rate: the larger is taken",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate < cap)\n\t\t\t\trate = cap;"
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate < cap)\n\t\t\t\trate = cap;"
   },
   {
     "label": "rate: the two ISP reports are transposed",
-    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on sensitive ISP, \"",
-    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst unsigned char *sess = (const unsigned char *)obj->p3548;\n\tconst unsigned char *cfg = (const unsigned char *)obj->pac3c;\n\tint rate = *(const int *)(cfg + 0x3c);\n\n\tif (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {\n\t\tconst unsigned char *pcm =\n\t\t\t*(unsigned char *const *)(sess + 0x610c);\n\n\t\tif (*(const int *)(pcm + 0x4f8) != 0) {\n\t\t\tint cap = *(const int *)(pcm + 0x4fc) * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on regular ISP, \""
+    "find": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on sensitive ISP, \"",
+    "replace": "VPcmV34GetMaxUpstreamRateIndex(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tconst VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;\n\tint rate = (int)obj->pac3c->maxRate;\n\n\tif (sess->info0Layout != 0 && obj->v90_receiver > 1) {\n\t\tconst V90Parameters *pcm = sess->modem.params;\n\n\t\tif (pcm->SENSITIVE_ISP_DETECTED != 0) {\n\t\t\tint cap = pcm->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\n\t\t\t\t  * 0x960;\n\n\t\t\tif (rate > cap)\n\t\t\t\trate = cap;\n\n\t\t\tedprintf(\"on get max upstream rate, on regular ISP, \""
   }
 ]

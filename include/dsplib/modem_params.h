@@ -178,12 +178,27 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  *           `vpcm_create` OVERWRITES bit 4 with (session type == V.92) at
  *           0x3ba4-0x3bb4 and clears bit 5 again at 0x3bbf, and reads bit 4
  *           back at 0x3bca to compute root +0xd250.  One byte throughout.
+ *           The V.34 interface reads it as a bit bag too: `VPcmV34Create`
+ *           takes bit 4 as "quick connect indication from phase1",
+ *           `V34GiveINFO1dBits` tests bit 7 BY SIGN to bar the V.92Lite
+ *           retrain, and `VPcmV34Progress` tests bit 5.
+ *   +0x003  low 3 bits cleared by `dp_runtime_create`; bit 2 is the SAS
+ *           detector flag `v90RateRenegSilence` clears under "disabling
+ *           SAS detector on silence" and `VPcmFloModem::runPcmModem`
+ *           sets again leaving the V.92 CPt (the byte keeps its offset
+ *           name because the same statement clears TWO bits and the
+ *           message does not say which; see VPcmV34Main.cpp).
  *   +0x010  `dsp_info.qc_index` if non-zero, otherwise the literal 9
  *           (0x5963-0x5975 with the `mov $0x9` arm at 0x5a00).
  *   +0x030  the pair `vpcm: VPCM rate limits: %d-%d\n` prints, straight from
  *   +0x034  `modem_get_param`'s MDMPRM_MIN_RATE and MDMPRM_MAX_RATE, the
  *           second clamped to 0xdac0 = 56000 (0x3b39-0x3b8d).  NOT the pair
- *           below: these two are the host's window and are never divided.
+ *           below: these two are the host's window.  `loadModemParamsData`
+ *           divides only +0x038/+0x03c by 2400; the V.34 interface divides
+ *           THESE two -- `VPcmV34SetMinMaxBitRates` reads both with
+ *           `mov 0x30/0x34(%ecx)` and turns them into rate indices
+ *           (blob 0x6263/0x6273), so "never divided" was wrong as a
+ *           universal claim and is retired.
  *   +0x038  `mull 0x38(%ebx)` at +0x29971, against 0x1b4e81b5 with the
  *   +0x03c  product's high half shifted right 8: the exact unsigned
  *           magic-number division by 2400, so both are `unsigned int` bit
@@ -202,8 +217,29 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  *           round trip.  Declared `int` and not `long`: this tree also builds
  *           64-bit and the object's width is four bytes.
  *   +0x050  `movzbl 0x50(%ebx)` twice in `loadModemParamsData`, bit 1 at
- *           +0x2a7bb and bit 0 at +0x2a7fa -- one byte.
+ *           +0x2a7bb and bit 0 at +0x2a7fa -- one byte.  The V.34
+ *           interface reads the same byte as a bag of unrelated fields:
+ *           `chkForceBaudRate` takes bits 5..7 as the maximum V.34 baud
+ *           rate index, and `VPcmV34InitiateRetrain` sets bit 3 under
+ *           "Notifying Sensitive ISP detected" (its `CFG_ISP` byte).
+ *   +0x051  one byte, bit 0: `VPcmV34Progress`'s
+ *           requestOutputSampleClear arm sets it and
+ *           `VPcmV34RequestDPNotification` clears it -- the two ends of
+ *           the +0xac40 request mailbox.  Carved out of `unmapped_0051`
+ *           (issue #260); named by neither reader, usage inference.
  *   +0x054  `modem_get_param(modem, MDMPRM_CODECTYPE)` at 0x59c0.
+ *   +0x060  biased by 0x30 into a disconnect-threshold index by
+ *           `VPcmV34SetMinimumSigLevel` and `VPcmV34InitiateRetrain`
+ *           ("minLevel given is %d"); signed, and out of range falls back
+ *           on entry 3, not on either end.  Carved from `unnamed_0060`'s
+ *           neighbours' evidence -- the same ladder `v34fsk.h` records at
+ *           `.data + 0xc0`.
+ *   +0x070  the entrance-filter mode `VPcmV34Create` switches on: -1
+ *           means "according to HW", 1 forces it on, anything else off
+ *           ("VPcmFlo: From Stream - Entrance Filter...").  Its own
+ *           comment in that function says the object decrements and
+ *           tests, so 0 and 7 share the off arm.  Carved out of
+ *           `unmapped_0070` (issue #260); usage inference.
  *   +0x064  the pair `vpcm: Delays: HW %d, DMA %d\n` prints (0x3d00-0x3d15).
  *   +0x068  HW is MDMPRM_IODELAY + 4; DMA is HW - 0x30 plus root +0xd254,
  *           and 0x30 = 48 is slmodemd's own `ST7554_HW_IODELAY (48)`
@@ -240,11 +276,21 @@ struct _tagModemParameters {
 	unsigned int	minRate;		/* +0x038 */
 	unsigned int	maxRate;		/* +0x03c */
 	unsigned int	powerReductionTenths;	/* +0x040 */
-	int		unnamed_0044;		/* +0x044 */  /* = 6 */
+	int		unnamed_0044;		/* +0x044 */  /* = 6; the transmit
+			 * power reduction in whole dB.  Written 32-bit by
+			 * loadModemParamsData but read as a `short` by
+			 * GetVPcmMinimalTxPowerReduction (movswl 0x44,
+			 * clamped to [-10,+7]) -- the widths disagree, so
+			 * the field stays `int` and that reader keeps its
+			 * raw access. */
 	int		connectionType;		/* +0x048 */
 	int		clockDeviation;		/* +0x04c */
 	unsigned char	modeFlags;		/* +0x050 */
-	unsigned char	unmapped_0051[0x54 - 0x51];
+	unsigned char	unnamed_0051;		/* +0x051 the +0xac40 request
+			 * mailbox's flag byte; bit 0 set by
+			 * VPcmV34Progress's requestOutputSampleClear arm,
+			 * cleared by VPcmV34RequestDPNotification. */
+	unsigned char	unmapped_0052[0x54 - 0x52];
 	int		codecType;		/* +0x054 */
 	int		unnamed_0058;		/* +0x058 */  /* = 0 */
 	int		unnamed_005c;		/* +0x05c */  /* = 0 */
@@ -252,7 +298,10 @@ struct _tagModemParameters {
 	int		hwDelay;		/* +0x064 */
 	int		dmaDelay;		/* +0x068 */
 	int		addedDelay;		/* +0x06c */
-	unsigned char	unmapped_0070[0x78 - 0x70];
+	int		unnamed_0070;		/* +0x070 the entrance-filter
+			 * mode: -1 "according to HW", 1 forced on,
+			 * anything else off. */
+	unsigned char	unmapped_0074[0x78 - 0x74];
 	char		*paramFile;		/* +0x078 */
 	unsigned char	unmapped_007c[0x88 - 0x7c];
 };
@@ -284,5 +333,23 @@ struct dsp_info {
 	unsigned int	qc_lapm;		/* +0x008 */
 	unsigned int	qc_index;		/* +0x00c */
 };
+
+/*
+ * The two spans carved out for issue #260's census wave did not move the
+ * block: `unnamed_0051` took one byte of the three `unmapped_0051` held and
+ * `unnamed_0070` four of `unmapped_0070`'s eight, both replaced by shrunken
+ * spans at the same offsets.  0x88 is dp_runtime_create's sysdep_malloc size
+ * (findings F820-823) and is the whole point of the layout.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char modemparams_size_is_88[
+    (sizeof(struct _tagModemParameters) == 0x88) ? 1 : -1];
+typedef char modemparams_off_unnamed_0051[
+    ((int)__builtin_offsetof(struct _tagModemParameters, unnamed_0051)
+     == 0x51) ? 1 : -1];
+typedef char modemparams_off_unnamed_0070[
+    ((int)__builtin_offsetof(struct _tagModemParameters, unnamed_0070)
+     == 0x70) ? 1 : -1];
+#endif
 
 #endif /* DSPLIB_MODEM_PARAMS_H */

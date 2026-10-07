@@ -168,7 +168,8 @@ static struct vpcm_root root;
 
 /*
  * The session `VPcmV34Progress` reads one byte of before it dispatches --
- * `p3548->byte_7f5c`, the entrance-filter switch at .text+0xb4dc.  Zeroed, so
+ * `p3548->entranceFilterApplied`, the entrance-filter switch at
+ * .text+0xb4dc.  Zeroed, so
  * the filter is off; it exists only because the load is unconditional and a
  * null `p3548` would fault before any guard could fire.  0x7f68 is
  * `sizeof(VPcmFloModem)`, spelled as a literal because this is a C file.

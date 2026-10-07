@@ -4759,7 +4759,7 @@
    }
   },
   "v34info1d": {
-   "key": "f024ab6c7bcf2e295a385b71a7457947c042382afd5f61f3bbce9f4e82e8ab4b",
+   "key": "e81efac5ec825e9a775eb39fbdc9849c39a7b5e7e1cb53d9a36efd4058538b4d",
    "summary": "42 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "a negative V.90 receiver counts as none": "caught",
@@ -4826,7 +4826,7 @@
    }
   },
   "v34k56": {
-   "key": "bbb6704e432c5a2d4730467e24aac1b2c24d77a1f4f96389050ddfb237c3b7c5",
+   "key": "fe9d0c8f652b7f45720b76030e872a898d3d77e1494fe4704a721e24ed20e88f",
    "summary": "28 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 13 equivalent, 0 MIScounted",
    "verdicts": {
     "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store": "equivalent",
@@ -4860,7 +4860,7 @@
    }
   },
   "v34pcmif": {
-   "key": "a20ebd3c574ea85f06598cb1cd9a29b9a5fa28363966eaf999831826731ecd1f",
+   "key": "5cdd1b930a9080aa93b601df0ddda226c91c82bd040d4da031276d64d5a13052",
    "summary": "126 mutations: 120 caught (120 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "force: 2800 spoils only one of its two bins": "caught",
@@ -4992,7 +4992,7 @@
    }
   },
   "v34pcmrates": {
-   "key": "6b78e6cab3ccf645c630df013520828552637be0cb2f568f24a3af704863b3c4",
+   "key": "e02bb156d40b23d42c20e4c31a635e3c8e8856addec098e7dbb8ba1bf87a94d7",
    "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone": "caught",
@@ -5037,7 +5037,7 @@
    }
   },
   "v34retrain": {
-   "key": "a6f836e3ddaef1a95ba5d40b2fa27afb09a3ed26f07148cc5814822f82f050cf",
+   "key": "02d07e02009e490f8d7aa68dce214062af393aa127084aa313674af903891800",
    "summary": "74 mutations: 67 caught (67 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x2218 becomes 5": "caught",
@@ -7877,7 +7877,7 @@
    }
   },
   "v90p34": {
-   "key": "e4b512d9cc14583f85239678e47dea499583cbc253e8703684d0d77bc5c798d9",
+   "key": "81fb662f75a427402dc4b19037098f7397d11162de2b800d32a5e04443006c62",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "case 10 does not consult the bit source": "caught",
@@ -11218,7 +11218,7 @@
    }
   },
   "vpcmcreate": {
-   "key": "2445bd5e310d3b883885325d74de53cd84c263dda23e708ec8a028cef35265cd",
+   "key": "8b8b2857a1bbdcd10d6738c0c585e1a87a6c2629fb8d87088897f43150b30d12",
    "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x254's offset is 10001 rather than 10000": "caught",
@@ -11255,7 +11255,7 @@
    }
   },
   "vpcmctor": {
-   "key": "6c823f9447ba8e8b4d632f83965dd740ec8de216eb0f213902314611d3dae5a2",
+   "key": "25e3edba69b1cf2068710916f5f2f6fda99972ef8f4192ca52a3fde9f338fe49",
    "summary": "38 mutations: 36 caught (36 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "clear one of v34initialbauds' six allowances": "caught",

@@ -204,7 +204,7 @@
  },
  {
   "label": "the three tail fields after the entrance filter are not cleared",
-  "find": "\tbyte_7f5c = 0;\n\tecMode = 0;\n\tecRampCounter = 0;",
+  "find": "\tentranceFilterApplied = 0;\n\tecMode = 0;\n\tecRampCounter = 0;",
   "replace": "\t(void)0;"
  },
  {
