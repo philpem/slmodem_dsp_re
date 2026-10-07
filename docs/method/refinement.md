@@ -3791,8 +3791,36 @@ long-double ABI or TU option can change the declaration-to-mode mapping.
 
 EIA6 SF/default-double math recovers FISTL/FMULP/FCOMPP, while its constant
 10000 still occupies SF storage. Constant-pool width does not determine
-expression precision. Neither it nor two beta mode transfers becomes exact.
+expression precision. Those isolated controls and the two beta mode transfers
+did not become exact. F11852–F11853 below close EIA6 with independent use,
+lifetime and tail-reload evidence.
 Trace register-zero folding at combine, register-scale folding at lreg and
 later stack physical deaths separately; do not fit declarations/registers/
 slots or remove a defined shift mask for a near-size match.
 [Complete evidence, closed domains and tools](../eia6-x87-results.md).
+
+### Trace argument conversions, then verify the actual tail edge (F11852–F11854)
+
+An apparent x87 scheduling difference may begin at combine: a fractional
+FIX used by a conditional argument can sink into that argument after another
+conversion. EIA6's builtin integer abs and explicit earlier if keep fraction
+conversion earlier and restore magnitude conversion directly to outgoing+8.
+They emit identical complete objects; neither alone proves original source.
+An independently observed early FABS/live result then recovers the diagnostic
+prefix exactly. Follow source uses and conversion homes through the passes;
+do not fit types or stack slots to partial opcode agreement.
+
+When a remaining copy arm has fewer available registers, compare the actual
+tail jump target. EIA6's original bypasses a common pointer reload; ours lands
+on it, keeping this live. Moving that reload to the else path, while retaining
+reloads after both callbacks, frees the original copy pipeline and makes the
+complete790B body strict EXACT. Real operand/use and branch-target evidence
+supports this graph; register-colored rejoin addresses alone do not. Review
+both paths and all callback effects before transferring the lever.
+
+Conversely, an explicit count mask can create a genuine preservation edge:
+beta's mask is in initial RTL, and regmove coalesces it destructively with the
+count. Publication must precede it to preserve the original full count.
+Do not remove defined masking or retry source order without a proved domain
+bound or independent redundant-mask computation.
+[Bounded controls, full-TU audits and replay](../eia6-scheduler-results.md).

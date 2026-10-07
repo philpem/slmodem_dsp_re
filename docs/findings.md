@@ -136661,3 +136661,40 @@ unchanged; exactlaterMMXsourcetails audited. Definedshiftmask/pub/order/homes
 remain separate; do not removeAND31 or callSIZE1 a one-byte residual.
 No sourceadoption orprofile/type/slotfitting. `docs/beta-x87-mode-domain.md`;
 tools/beta_x87_mode_audit.py.
+
+## F11852. EIA6 fraction argument use and early magnitude lifetime recover its prefix
+
+Base75e7ef4b, retained Gentoo3.4.2-r2. Two diagnostic raw repeats separate
+combine sinking fraction FIX183 into argument207 from sched2 hoisting scale181.
+Builtin integer abs and explicit earlier if emit identical full objects,
+recover fraction-before-magnitude conversion and magnitude outgoing+8, but
+remain SIZE8. Original early FABS/live result independently motivates a third
+lifetime control:790B BYTES132, first109 canonical instructions exactly equal
+including relocations/branch targets. Partial prefix is evidence, not adoption.
+`docs/eia6-scheduler-results.md`; tools/eia6_scheduler_audit.py.
+
+## F11853. Conditional parameter reload releases this and closes EIA6 byte-exactly
+
+Original conditional-arm jump bypasses shared params reload (+485 versus
+candidate+482). Candidate needs live this/EBX for reload; original can reuse
+EBX as a third copy register. Put the final reload in else; nonzero arm keeps
+its reload after callback. Both callback effects remain respected. With the
+independently recovered precision/use/lifetime/copy graph, complete EIA6 is
+strict EXACT790B, TU6/16→7/16,0losses;15bystanders and all data/binding/BSS/
+nontext relocations unchanged.12 full-TU cells/192 live grades/108 RTL streams/
+8 raw repeats. No fixed registers, slots or profile changes. Source adopted;
+not a uniquely recovered C spelling. `docs/eia6-tail-reload-domain.md`;
+`docs/eia6-scheduler-results.md`; tools/eia6_tail_reload_reproduce.py.
+
+## F11854. Beta mask publication is expansion plus destructive regmove, not scheduling
+
+Three existing cells/two setters/24 streams. AND31 appears initially from
+defined one_shifted_by.21.ce2 uses distinct mask destination;22.regmove
+coalesces it destructively with the unmasked count. Publication-before-mask
+then preserves a value, while original SHL leaves ECX intact and publishes
+later. Pinned stock backend leaves SHIFT_COUNT_TRUNCATED undefined; no direct
+variable AND31/SHL absorption pattern found. A proved low-five-bit input or
+constant could make mask redundant, but original guards do not bound converted
+logarithmic counts. No new source variant or mask removal justified. Require
+original lifecycle/domain or independent defined redundant-mask evidence.
+`docs/beta-shift-publication-trace.md`; tools/beta_shift_publication_trace.py.

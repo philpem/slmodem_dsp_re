@@ -410,7 +410,7 @@ V90PreFilter::setParamEia6()
 {
 	V90Parameters *p;
 	const int *blk;
-	long double x;
+	float x;
 	float xf;
 	int whole, frac, i;
 
@@ -446,42 +446,47 @@ V90PreFilter::setParamEia6()
 
 	/* The block +0x00 points at; the deviation is the int at its +0x4c. */
 	blk = *(const int *const *)&V90PB(p)[0];
-	x = (long double)blk[0x4c / 4] * 0.001f;
+	x = (float)blk[0x4c / 4] * 0.001f;
 	whole = (int)x;
-	frac = (int)(10000.0f * (x - (long double)whole));
+	double magnitude = fabs(x);
+	frac = (int)(10000.0 * (x - (float)whole));
 	xf = (float)x;
 
 	edprintf("V90PreFilter: prev params ClockDeviation is = %c%d.%04d\r\n",
-		 (x > 0.0L) ? '+' : '-', (int)fabsl(x),
-		 (frac < 0) ? -frac : frac);
+		 (x > 0.0) ? '+' : '-', (int)magnitude,
+		 __builtin_abs(frac));
 
-	/*
-	 * `fcompp; sahf; jne`, and the zero flag comes from C3, which is set
-	 * for equal AND for unordered -- so the object treats a NaN deviation
-	 * as zero where C's `!=` would not.
-	 *
-	 * THE ARGUMENT FOR THIS SPELLING IS NOW THE ARGUMENT AGAINST IT, and
-	 * the code is left alone anyway.  It was written as two relational
-	 * tests because C's `!=` acquires a parity test under `-mieee-fp`;
-	 * `period_inner.sh` now carries `-mno-ieee-fp`, where `!=` IS the
-	 * object's single `fcompp`/`jne` and this pair is one compare too many
-	 * (finding F2300, which corrected nine such sites).  This is the tenth.
-	 * It is not one of the nine because its suite is green either way --
-	 * `x` is an int times 0.001f and cannot be a NaN, so the two tests
-	 * agree over every value that reaches them -- so there was no
-	 * differential failure to drive the change and nothing to prove it
-	 * with beyond the codegen tier.  Whoever measures that next should
-	 * take it.
+	/* F11852: the period non-IEEE compare emits the original fcompp/jne.
+	 * The integer-derived deviation cannot be NaN. Keep the arm's params
+	 * reload after its callback and reuse p through the shared final copies;
+	 * only the zero arm needs the additional reload (F11853).
 	 */
-	if (xf < 0.0f || xf > 0.0f) {
+	if (xf != 0.0) {
 		edprintf("V90PreFilter: Setting timing parameters " "(registry)...\r\n");
 		p = params;
 		V90PF(p)[0x84 / 4] = xf;
-		for (i = 0; i < 18; i++)
-			V90PW(p)[0x88 / 4 + i] = V90PW(p)[0x110 / 4 + i];
+		V90PW(p)[0x088 / 4] = V90PW(p)[0x110 / 4];
+		V90PW(p)[0x08c / 4] = V90PW(p)[0x114 / 4];
+		V90PW(p)[0x090 / 4] = V90PW(p)[0x118 / 4];
+		V90PW(p)[0x094 / 4] = V90PW(p)[0x11c / 4];
+		V90PW(p)[0x098 / 4] = V90PW(p)[0x120 / 4];
+		V90PW(p)[0x09c / 4] = V90PW(p)[0x124 / 4];
+		V90PW(p)[0x0a0 / 4] = V90PW(p)[0x128 / 4];
+		V90PW(p)[0x0a4 / 4] = V90PW(p)[0x12c / 4];
+		V90PW(p)[0x0a8 / 4] = V90PW(p)[0x130 / 4];
+		V90PW(p)[0x0ac / 4] = V90PW(p)[0x134 / 4];
+		V90PW(p)[0x0b0 / 4] = V90PW(p)[0x138 / 4];
+		V90PW(p)[0x0b4 / 4] = V90PW(p)[0x13c / 4];
+		V90PW(p)[0x0b8 / 4] = V90PW(p)[0x140 / 4];
+		V90PW(p)[0x0bc / 4] = V90PW(p)[0x144 / 4];
+		V90PW(p)[0x0c0 / 4] = V90PW(p)[0x148 / 4];
+		V90PW(p)[0x0c4 / 4] = V90PW(p)[0x14c / 4];
+		V90PW(p)[0x0c8 / 4] = V90PW(p)[0x150 / 4];
+		V90PW(p)[0x0cc / 4] = V90PW(p)[0x154 / 4];
+	} else {
+		p = params;
 	}
 
-	p = params;
 	V90PW(p)[0x460 / 4] = V90PW(p)[0x490 / 4];
 	V90PW(p)[0x40c / 4] = V90PW(p)[0x488 / 4];
 	V90PW(p)[0x410 / 4] = V90PW(p)[0x484 / 4];
