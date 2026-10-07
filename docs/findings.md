@@ -136828,3 +136828,30 @@ GCCpostreload/cselib supports known-value forwarding, exactvalidationbranch
 unmeasured; nextdiscriminator installedUID56 lookup/mode/address/locations/
 invalidations, notvolatile/reg/ordercoercion. `docs/fax-tail-timing-results.md`;
 tools/fax_binary_timing_screen.py; tools/fax_tail_timing_audit.py.
+
+## F11866. Installed postreload follows stored HI value across cursor copy and advance
+
+Three known SDM controls/9live grades repeat0gains/losses. Hash-pinned installed
+Gentoo cc1 under hostGDB/host32runtime, imageassembler2.15.92.0.2:3complete
+raw/debugged/saved object triples equal,6independent object comparisons.
+Six selectedUID plus6existingwide-input visits;2forwarding positives,1baseline
+negative and2missing-event refusals. PlainUID47 store recordsHIvalue7 inAX and
+memory atSIaddressvalue1; UID54 copiesaddress1, UID53 advancescursor tonewSI
+value8746. UID56 lookup recoversoldaddress1/HIvalue7, AXcost2 versusmemory4;
+actualsimplify_set/cselib returns1. CompoundUID57 same. Laterfallback sees
+selfcopy; it did not performfirstmemoryforwarding. WideUID38 beforestore
+lookupNULL is notprooflatewidewouldmiss. No inferiorcalls/source/RTLwrites,
+compilerfileunmodified; hostruntime distinctionexplicit/fulloutputcontrolled.
+No sourcepreimage/adoption; `docs/sdm-postreload-dynamic-trace.md`;
+tools/gentoo_cc1_sdm_trace_reproduce.py; tools/gentoo_cc1_sdm_trace_audit.py.
+
+## F11867. Prior compound-postincrement family already covered the identical FPM sibling
+
+F11865's passwitness is new, its pointer-sourceproperty is not: batch50's
+fourcell FPM family already crossedcompoundXOR/postincrement onoriginally
+byte-identical body. Correctinitialfaxdomain's contrarypremise. CurrentfullSDM
+compound replay168B/SIZE1 stillloseslateUID57 atpostreload; extraearlyHIread
+UID118 introducedbyreload survives. Anear-sizecounterexample canhideonewrong
+readreplacinganother; compareoccurrence/lifetime, notloadcount/size. Known
+sourcefamiliesremainclosed; current3cells arecausal replay, notnewspellings.
+`docs/fax-tail-timing-results.md`; tools/sdm_postreload_audit.py.

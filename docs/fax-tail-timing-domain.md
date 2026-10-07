@@ -8,7 +8,7 @@ bases are not equated across instructions or objects. ESP references excluded;
 EBP can be a data cursor under omitted frame pointers, so remains included.
 Memory/call/branch events only rank manual operand/path inspection.
 
-Two independently new witnesses, two cells per complete TU (four compilations):
+Two diagnostic witnesses, two cells per complete TU (four compilations):
 
 - SDM.c / SDM_descrambler: original 9f26e stores unmasked word; 9f273 advances
   cursor; 9f276 reads the old word via preserved old cursor; 9f279 masks and
@@ -19,7 +19,8 @@ Two independently new witnesses, two cells per complete TU (four compilations):
   publication or volatile access, so abstract-machine outputs remain equal.
   Prediction: the original pointer lifetime may preserve its second load/store
   boundary. Falsifier: initial CSE folds this form too, or whole body not exact.
-  Prior output width/feedback order cells do not test cursor lifetime.
+  The older FPM sibling compound/postincrement family already tested this
+  cursor property; this replay adds the pass trace, not a new source domain.
 - V17rxdec.c / FSE_decision_eqtrn: original has two complete final angle,
   magnitude and return publications (continuing TRN and completing TRN),
   whereas reconstructed source has one common final publication. Place the
@@ -35,3 +36,8 @@ under F11614; SMCv17 traversal/wrap already tested and not reopened.
 Require raw baseline reproduction, complete flags/assembler/bugdefine-last,
 all emitted body/binding/data/nontext relocation audits. No adoption by size.
 No fuzz/mutation/runtime harness execution; parent owns final gates/commit.
+
+Provenance correction during the follow-up: batch50 already crossed compound
+XOR with mask postincrement on the byte-identical FPM sibling. The initial
+claim that prior controls did not test cursor lifetime was incorrect. Existing
+source families remain closed; current replay is for dynamic pass diagnosis.

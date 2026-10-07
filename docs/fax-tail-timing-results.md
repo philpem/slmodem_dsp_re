@@ -98,3 +98,12 @@ period_compat.h and pointer-size define. Helper appends DSPLIB_REPRODUCE_BUGS
 last after -v -save-temps -da -dP, retaining the identical baseline bug define.
 Artifacts: build/fax-binary-timing-screen.json, build/fax-tail-timing/results.json,
 build/fax-tail-timing-audit.json. No candidate runtime/fuzz/mutation runs or source adoption.
+
+## Source-control provenance correction
+
+The earlier [FPM postincrement family](batch50-sdm-postincrement-mask.md)
+already crossed compound-XOR with this mask-postincrement property. The current
+SDM replay adds pass evidence; it does not reopen that source family. A new
+matched replay confirms the168B compound result also forwards its late reread
+at postreload, while an extra early reload-added read survives. SIZE1 therefore
+does not indicate recovery of the original read boundary.

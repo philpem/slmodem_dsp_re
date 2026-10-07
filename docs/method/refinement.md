@@ -3894,3 +3894,23 @@ register allocation. Compare value/address/mode knowledge and invalidations;
 a widened original load is a discriminator, not proof that a cast prevents
 forwarding. The installed compiler's actual replacement branch remains to be
 observed. [Bounded controls and static rule](../fax-tail-timing-results.md).
+
+F11866 now dynamically identifies SDM's decisive replacement as
+`reload_cse_simplify_set`/cselib: the stored HI value keeps AX as a known location,
+old-cursor copy preserves its address value, and register cost2 beats memory4.
+A later operand fallback visits the resulting selfcopy; its successful return
+alone is not evidence it performed the original memory forwarding. Observe the
+pattern and value identities at the first changing visit. Preserve complete
+raw/debugged/container object equality and distinguish an extracted compiler's
+host runtime from its original container runtime. Read-only GDB observations
+need no inferior calls or RTL writes; pin the actual binary for optimized-frame
+and instruction-address observations. [Dynamic replay](../sdm-postreload-dynamic-trace.md).
+
+An existing wide input lookup before a store does not prove a wide reread after
+that store resists forwarding. Mode, address and available register locations
+must be compared at the relevant use. Also audit prior identical siblings before
+calling a source boundary new (F11867): the older compound/postincrement168B
+control has a surviving extra early read and a removed late read. Equal or near
+total load counts and size can therefore hide the very boundary being sought.
+Keep old source families closed until independent original/use evidence changes
+the discriminator; don't add casts or volatile to coerce a surviving load.
