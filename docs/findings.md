@@ -137156,3 +137156,51 @@ Static285 suites/10038 anchors pass; no mutation execution/snapshot update.
 Whole-tree exact1076/1852,118266 original bytes: RX accessor+90 bytes, zero
 losses;674 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED. Refreshed1074-name ratchet
 passes, unchanged. Modern portability not claimed.
+
+## F11885. A denominator-bearing direct-call screen isolates five small candidates
+
+At 511a7c14, 300 TUs / 1886 shared emitted bodies (copies), 1102 exact copies
+excluded, 550 small nonexact bodies <=650 original bytes, 41 unequal named
+transfer multisets excluded, five nominations. Match canonical named PC32
+E8/E9 targets/addends; no indirect-call, source, alias or layout inference.
+Historical RX74B fires; current exact90B clears. Three allocator wrappers are
+closed prototype/ABI leads, not new source bugs; retain their signatures and
+existing guards. Two new crossed domains are declared before compilation.
+`docs/small-call-result-results.md`; tools/small_call_result_screen.py.
+
+## F11886. Direct side dispatch crossed with asymmetric switch recovers V90 session flag
+
+Four full-TU controls: capture/if64B SIZE7; direct/if64B SIZE7; capture/switch71B
+BYTES7; direct/switch71B EXACT. Digital return and analog break recover the
+original sibling-jump/ordinary-call pair. Initial RTL has two call_placeholders
+in every cell; 02.sibling retains two markers for if/else and one for switch.
+The extra source capture changes operands; the scheduled pre-store side load
+alone does not prove it existed in source. Distinct fields cannot alias and no
+call intervenes. Adopt direct switch, preserving values/types/flags/layouts.
+Seven bystanders raw-identical, exact5/8 to6/8, metadata/data/BSS/relocations
+unchanged apart from text placement. This is a source family, not unique syntax
+or a recovered global profile. tools/small_call_result_reproduce.py and audit.
+
+## F11887. Common-exit DialerAbort does not change sibling selection
+
+Cross existing signed/unsigned guard with early return / structured if/else
+common exit, containing all original normal/release code. All147B versus145B;
+02.sibling retains two sibling markers in all cells, four initial placeholders.
+Each common-exit whole object equals its corresponding early-return object.
+Five bystanders and metadata/data unchanged. Unsigned guard alone was already
+known to miss; this adds a separate negative terminal-control discrimination.
+No Dialer source adoption or reachability claim for negative states. Eight
+combined cells / 56 function verdicts, both raw baselines reproduce; close this
+finite domain without claiming general exhaustion. No fuzzing/mutation runs.
+
+F11885–F11887 production census: 1077/1852 EXACT, 118337 original exact bytes;
++1 function / 71 bytes, zero losses. Remainder673 SIZE/66 BYTES/31 REGALLOC/
+5 UNRESOLVED; existing1074-name ratchet unchanged and green. Gentoo300/300/0;
+full V90Modem object raw-identical to winner. Initial phase period388/0 but
+structural red with six detached locators; retarget their operations, scope
+all six, reverse/rename the already-equivalent read-order control. No mutation
+execution or snapshot rerecording; final repaired gate recorded separately.
+
+F11885–F11887 final repaired phase:388/0, all structural checks green,
+14417 references /2984 headings,285 suites /10038 static anchors, zero detached,
+nonunique or wrong-arm anchors. Modern portability not claimed.

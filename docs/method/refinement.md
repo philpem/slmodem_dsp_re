@@ -4084,3 +4084,22 @@ VPcm's obj+4 accesses are witnessed, but full-object constructor clearing and
 tagV34Object parameter mangling give no independent control extent. Preserve
 named fields and existing maps until a typed-callee/extent witness exists;
 do not fabricate a nested header solely to reproduce ADD4 (F11882).
+
+### A pre-store load need not be a source capture (F11885–F11887)
+
+V90Modem::setSessionFlag closes only with direct side dispatch crossed with a
+switch whose digital arm returns and analog arm breaks. The original ordinary
+analog call and digital sibling jump bound the terminal structure; GCC still
+schedules the side load before storing the distinct sessionFlag member. An
+explicit source capture introduces different register operands. Neither direct
+access alone nor the previously tested switch alone closes the function.
+Inspect 02.sibling: initial call_placeholder alternatives are not final calls.
+
+Use small_call_result_screen to nominate equal named-transfer multisets with
+an ordinary/sibling mismatch; this is a screen, not source or ABI evidence.
+550 small nonexact emitted bodies yield five candidates, including three
+closed allocator wrappers. Eight crossed full-TU controls preserve all data,
+bindings and bystanders. DialerAbort's structured common exit compiles identically
+to the early return and remains nonexact even with its unsigned guard; close
+that domain. Do not change allocator prototypes or sweep return synonyms.
+[Controls and audit](../small-call-result-results.md).
