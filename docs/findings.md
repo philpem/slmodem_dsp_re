@@ -136775,3 +136775,384 @@ Pinnedstockrecog persistentsearch_ofs explainsconsistentknownscratchcursor;
 fullactual dynamiccursor events notmeasured. Correctfloat/floorpreserved;
 no source/literal/profilefit. `docs/v90-parameters-constructor-stage-proof.md`;
 tools/v90_parameters_constructor_stage_trace.py.
+
+## F11862. Wider binary value/tail screen nominates clues without equating layout with execution
+
+Merged fa941457 screen:204 scoped TUs/1399 shared emitted bodies/404 small
+nonexact bodies;219 equal nonzero call-count pairs and192 nominations after
+one tiny-thunk exclusion. ELF-sized streams compare nonstack/nonindexed memory
+displacements by linear call position, extra returns and reload-target edges.
+Two historical positive/two current exact negative controls pass. Offsets are
+not field identities and linear call epochs are not executed-path history.
+Closed Boolean/ring families stay closed; FSE_decision_trn's omitted empty
+loop belongs to F1604, not a fresh common-return fix. No source adoption.
+`docs/value-timing-stage-screen-results.md`; tools/value_timing_tail_screen.py.
+
+## F11863. Earliest-stage diagnostic preserves colors and exposes transient peephole divergence
+
+Generic dump-directory/function/clone CLI passes14/14 detector controls.
+Historical constructor positive/equal controls each29 stage pairs/116 streams;
+positive first differs at28peephole2 for both clones, but clone1 converges at
+30rnreg. Writer29/58 first01rtl,153/152 static immediate-store splits; pre-only
++434 transformation independently agrees with F11861. Preserves UID order,
+registers/modes/immediates, normalizes only explicit tree pointers, refuses
+ambiguous/missing/unequal streams. Notes/prose are outside comparison; dynamic
+scratch searches/cursor values not measured. No source/profile fitting.
+`docs/gcc3-stage-divergence-diagnostic.md`; tools/gcc3_stage_divergence.py;
+tools/gcc3_stage_divergence_validate.py.
+
+## F11864. V8 bit-reader value/count graph fires without a complete preimage
+
+Four full-V8global controls cross signed-word/captured-count/word-load graph
+with CRC-helper reuse. Original453B, baselineSIZE70, alternativesSIZE62/58/78;
+length gaps are not differing-byte counts. Word graph initialRTL word compares
+4→9 and arithmetic right shifts2→0. Rawbaseline repeats;52 live body grades,
+zero gains/losses, onlyv8_getbit changes;12siblings/bindings/BSS/nontext and
+canonical nontext relocations fixed. Generictrace29stages/58streams first01rtl.
+No source adoption/runtime claim; negative-wordbits semantics require valid
+caller/boundary proof. Close this four-cell domain absent fresh original
+use/CRC/caller evidence, not more cast/declaration/register variants.
+`docs/value-timing-stage-screen-results.md`; tools/v8_getbit_value_age_reproduce.py;
+tools/v8_getbit_value_age_audit.py.
+
+## F11865. Fax cursor reread survives allocation but is forwarded by postreload
+
+Read-only fax screen78TUs/317 shared functions/97 smallnonexact originals.
+Four full-TU cells/20 live grades/2rawbaselines: SDM postincrement and V17
+branch-local output controls give0gains/losses, all8bystanders/data/bindings/
+nontextrelocs fixed. SDM preserves bothstores and secondHIread through25greg;
+26postreload UID56 MEM:HI→AXselfcopy removesread. Baseline instead losesread
+at06cse and firststore by20combine. Originalstillzeroextendssecondwordread.
+V17eqtrn reaches251B butBYTES199 andsharedtail, noadoptionbysize. Staticpinned
+GCCpostreload/cselib supports known-value forwarding, exactvalidationbranch
+unmeasured; nextdiscriminator installedUID56 lookup/mode/address/locations/
+invalidations, notvolatile/reg/ordercoercion. `docs/fax-tail-timing-results.md`;
+tools/fax_binary_timing_screen.py; tools/fax_tail_timing_audit.py.
+
+## F11866. Installed postreload follows stored HI value across cursor copy and advance
+
+Three known SDM controls/9live grades repeat0gains/losses. Hash-pinned installed
+Gentoo cc1 under hostGDB/host32runtime, imageassembler2.15.92.0.2:3complete
+raw/debugged/saved object triples equal,6independent object comparisons.
+Six selectedUID plus6existingwide-input visits;2forwarding positives,1baseline
+negative and2missing-event refusals. PlainUID47 store recordsHIvalue7 inAX and
+memory atSIaddressvalue1; UID54 copiesaddress1, UID53 advancescursor tonewSI
+value8746. UID56 lookup recoversoldaddress1/HIvalue7, AXcost2 versusmemory4;
+actualsimplify_set/cselib returns1. CompoundUID57 same. Laterfallback sees
+selfcopy; it did not performfirstmemoryforwarding. WideUID38 beforestore
+lookupNULL is notprooflatewidewouldmiss. No inferiorcalls/source/RTLwrites,
+compilerfileunmodified; hostruntime distinctionexplicit/fulloutputcontrolled.
+No sourcepreimage/adoption; `docs/sdm-postreload-dynamic-trace.md`;
+tools/gentoo_cc1_sdm_trace_reproduce.py; tools/gentoo_cc1_sdm_trace_audit.py.
+
+## F11867. Prior compound-postincrement family already covered the identical FPM sibling
+
+F11865's passwitness is new, its pointer-sourceproperty is not: batch50's
+fourcell FPM family already crossedcompoundXOR/postincrement onoriginally
+byte-identical body. Correctinitialfaxdomain's contrarypremise. CurrentfullSDM
+compound replay168B/SIZE1 stillloseslateUID57 atpostreload; extraearlyHIread
+UID118 introducedbyreload survives. Anear-sizecounterexample canhideonewrong
+readreplacinganother; compareoccurrence/lifetime, notloadcount/size. Known
+sourcefamiliesremainclosed; current3cells arecausal replay, notnewspellings.
+`docs/fax-tail-timing-results.md`; tools/sdm_postreload_audit.py.
+
+## F11868. MOVZWL can be a tuned HI move, refuting the SDM width premise
+
+Five savedstage checks showplainlateUID56 alreadyHI in01rtl, unchangedthrough
+combine/allocation; nonarrowingtransition exists. CompoundUID118 retains
+SET(REG:HI,MEM:HI) through35mach but dPannotatesMOVZWL asmovhi_1/3, whileactual
+SIzeroextendUID38 emitssameopcode underzero_extendhisi2. Saved/replayedannotated
+assemblyequal. Installedhashpinnedcc1 emitter:1output_40UID118visit, zero-based
+alternative2/PENTIUMPRO/tunebits8/8/0 selectTYPE_IMOVX/MOVZWLtemplate. Three
+raw/emitter-debugged/priorrawcompleteobjects equal; priorraw equalscontainer.
+StockbackendHIloadIMOVX stallavoidancerule corroborated byactualGentoo; no
+inferiorcalls/RTL/sourcewrites. CorrectF11865/F11866 linkedwidth interpretation:
+originalmachineMOVZWL doesnotestablishexplicitZERO_EXTEND:SI orsourcepromotion.
+Postreloadforwardingproofremainsvalid. No casts/types/widthfamilyexpansion,
+no sourceadoption, strict1074/1852 unchanged. `docs/sdm-movhi-emitter-width-refutation.md`;
+tools/sdm_movhi_emission_audit.py; tools/gentoo_cc1_sdm_movhi_reproduce.py.
+
+## F11869. Small value-use witnesses survive bounded controls without strict gains
+
+Three raw complete-TU repeats, eleven cells and 99 shared body grades test
+V32's accepted-count fallthrough, V22's early permutation counter/separate
+increment/coefficient capture, and the float RMS reciprocal's expression mode
+and operand order. Zero strict gains or losses. V32 restores the branch but
+lacks the original owner reload; V22's combined SIZE1 still differs in register
+lifetimes and scheduling. Native double RMS emits FLD1 late plus a final SF
+narrowing absent from the original, changes three inlined callers and removes
+only the pooled SF one; operand reversal is raw identical. Complete data,
+metadata and nontext relocation audits explain all changes. No production edit
+or nearest-size adoption; these families close pending independent evidence.
+`docs/small-counter-use-results.md`; tools/small_counter_use_audit.py.
+
+## F11870. Fax quality controls expose another peephole2 scratch bystander
+
+Twenty-two complete-TU cells, 164 live body grades and three raw repeats cross
+original count tests, averaging/judgement tails and early AGC narrowing with
+known owner controls. Zero gains; two rejected V29 cells lose untouched
+EpochDetectV29. All allocated nontext, data, BSS, bindings and canonical nontext
+relocations stay fixed. The unchanged bystander agrees through 27flow2;
+28peephole2 introduces scratch UID38 CX versus AX and dependent compare39,
+then 30rnreg changes owner/scratch colors. Initial RTL, CSE/combine and
+allocation patterns agree. This stage-localized compiler-state effect does
+not justify rewriting the bystander. Early AGC narrowing raw-merges with its
+controls; close the tested families without fitting near-size candidates.
+`docs/fax-quality-use-results.md`; tools/fax_quality_use_audit.py.
+
+## F11871. V90 value-age and diagnostic-mode controls miss; false FABS nomination corrected
+
+An early output slot consumes the old count before conversion in ordinary
+source. Three complete objects/102 body grades give baseline135B and
+candidate138B versus original149B, with no gains/losses and all 33 bystanders,
+data, metadata and nontext relocations fixed. No early count store across a
+potentially trapping conversion is introduced. Five timing-diagnostic objects/
+70 body grades also miss; the DF fraction operand does not restore original
+loads. The initial missing-FABS nomination was false: all objects contain
+three hardware FABS; the earlier FCOMP computes sign. Preserve those whole-axis
+cells as unsupported controls, excluded from recovery/closure inference.
+Thirteen bystanders, named data, BSS and bindings stay fixed; constant-pool
+changes are audited. No source adoption or broader type matrix.
+`docs/v90-sample-slot-domain.md`; `docs/v90-timing-diagnostic-math-domain.md`;
+tools/v90_sample_slot_audit.py; tools/v90_timing_diagnostic_math_audit.py.
+
+## F11872. Fax argument and dispatch/result graphs are witnesses, not exact preimages
+
+Eleven complete-TU cells/44 live body grades/two raw baselines cross default
+extra initialization, pre-S7 config mode, six-case dispatch and common
+converter result. Zero gains/losses. Original extra is zero except FTM's80;
+uninitialized retained extra compiles to80 in every arm. The callee consumes
+arg4 only for TM, where both match: an observed argument-fidelity gap, not a
+measured public behavior defect. Initialization restores the argument but
+leaves SIZE5. Mode reaches constructor SIZE1; common result and explicit
+dispatch still miss and change unchanged siblings. No partial source adoption.
+The 375B merge-string pool multiset and six-versus-five command table slots
+are audited; code relocation owners/boundaries are recorded, and all BSS,
+bindings and named data stay fixed. Close these finite families without fresh
+use, alias or CFG evidence. `docs/fax-service-values-results.md`;
+tools/fax_service_values_audit.py.
+
+## F11873. Installed scratch-search histories explain two unchanged-target divergences
+
+Read-only pinned Gentoo cc1/cc1plus traces validate 1,410 searches and 8,428
+candidate visits across six complete-TU raw/traced/saved triples. Two positive
+pairs, two equal repeats and four malformed-trace refusals pass. EpochDetectV29
+enters with cursor2/selects ECX versus cursor3/selects EAX; historical C2 enters
+with cursor2/ECX versus cursor52/EAX. The writer's 158/157 sites differ by the
+old +0x434 immediate-SI search despite equal final bytes; the correct SF field
+stays. The actual 53-slot order ends in five EAX entries, as the backend's
+explicit zero fill predicts. All observed enclosing matches return replacements;
+the rejected-match explanation was not observed. No failed scratch search or
+other mode/class claim. Invalid caller/layout probes are excluded, and the
+host-debugger/image-assembler runtime distinction is explicit.
+`docs/gentoo-peep2-search-proof.md`;
+tools/gentoo_peep2_search_reproduce.py; tools/gentoo_peep2_search_audit.py.
+
+## F11874. Fax default extra argument is recovered independently of whole-body identity
+
+F11872's original call-argument witness is adopted under the owner's request
+for source-fidelity improvements as well as exact gains: extra starts at zero
+and FTM alone overwrites it with80. This removes the uninitialized caller
+argument whose period object passed80 on every arm. The actual callee ignores
+arg4 outside TM, where both already agreed; no public operational failure is
+claimed. The complete-TU extra-only control has no strict gains/losses; only
+FAX_class1_command changes, SIZE8 becomes SIZE5. This is a directly recovered
+argument, not adoption of a near-size dispatch or converter-result hypothesis.
+The production raw object equals the audited control; three original argument
+shape controls pass. `make phase`:388 passed/0 failed, structural checks green;
+`make tc`:300 sources/300 objects/0 failed. Strict1074/1852 is unchanged.
+`docs/fax-extra-argument-recovery.md`;
+tools/fax_extra_argument_audit.py.
+
+## F11875. Current register-only targets split between direct scratch selection and earlier allocation
+
+Four unchanged complete Gentoo TUs raw-reproduce production:24 shared bodies.
+Five raw/traced/saved object triples include an independent V27_SDM repeat;
+80 searches/878 candidate visits satisfy the existing availability/cursor
+model, all enclosing replacements accepted. _iir_filter_create and SDMv27_init
+make zero searches; the latter has identical27flow2/28peephole2/30rnreg patterns.
+FloatFIR::reset makes one memory-subtraction split, selectingECX at cursor2;
+the register survives renaming and is the reference's remainingEDX difference.
+dp_v22_init makes three symbol-to-memory splits: selectedECX/EAX/EAX becomes
+finalEDX/EAX/ECX after renaming, against originalECX/EDX/EAX. Therefore count
+scratch opportunities separately from final register colors. Targets have one
+RTL body; other C++ clone declarations are not mapped to emitted clone symbols.
+No original cursor/source preimage or strict gain is claimed. Manifest replay
+extends the read-only observer without modifying compiler state. Existing1410
+searches/two positive pairs/two repeats/four refusal controls still pass.
+`docs/gentoo-scratch-target-results.md`;
+tools/gentoo_scratch_targets_audit.py.
+
+## F11876. FloatFIR consumes the entry count before owner loads and again at the tail
+
+The earlier while-postdecrement control retained an independent zero guard,
+creating a redundant second entry test after member loads. New bounded control
+instead consumes count in the EXISTING pre-load guard and postdecrements at
+the tail: reference0x46b1f/0x46bdb and candidate each have two DEC/CMPUINT_MAX
+sentinels. Zero count still returns before member/buffer access; for positive
+unsignedC, the guard leavesC-1 and the tail executes exactlyC iterations.
+89 nonbranch/noncounter/nonpadding instructions match the retained processor;
+all7 bystanders,8 symbol sizes/positions,bindings,nontext data and relocations
+agree. Baseline is a negative sentinel control. Processor remains287B,
+BYTES244 becomesBYTES222, no strict gains/losses; this is original countdown
+recovery, not register fitting or an exact processor claim. Period gate and
+production raw equality are recorded in the linked results after adoption.
+`docs/floatfir-consumed-count-results.md`;
+tools/floatfir_consumed_count_audit.py.
+
+F11876 validation: production FloatFIR object raw-identical to the audited
+control; period phase388/0 and structural checks green; Gentoo300/300 objects,
+0 failures. Two extra raw/traced/saved object triples validate14 searches/218
+candidates with identical function/generator/cursor/selection history, so this
+counter recovery does not move reset's scratch choice. No strict gain claimed.
+
+## F11877. A common branch-result value makes SDMv27_init byte-exact
+
+F11875's zero-search/no-renaming target is recoverable through source factoring.
+Its retained24lreg dump has separate HI branch results60/61, locally allocated
+inEAX before allocating owner/config pointers. One conditional-value assignment
+instead produces pseudo60 with two definitions and one common store; the owner
+is thenEAX and the resultEDX, exactly as the blob. Two full Gentoo controls raw
+reproduce baseline, review6 body verdicts and preserve all3 function sizes,
+positions,bindings,allocated data,BSS and canonical nontext relocations. Only
+SDMv27_init changes: all89 original bytes and its named data relocation match;
+both scrambler/descrambler bodies are unchanged. The later unguardedcfg read
+and original null-config defect remain byte-exact. No forced registers, width
+changes, token permutations, flags or syntax-uniqueness claim. A register-only
+residual can still encode an earlier source-sharing choice; final tail sharing
+does not imply the allocation input was shared. Next application requires the
+same independently observed common result/store and allocation witness.
+`docs/sdmv27-common-value-results.md`;
+tools/sdmv27_common_value_audit.py.
+
+F11877 validation: complete production V27_SDM object raw-identical to the
+audited candidate; final period phase388/0 and structural gates green,
+Gentoo300 sources/300 objects/0 failures. Candidate patterns agree through
+27flow2/28peephole2/30rnreg; the exact colors are determined before both
+passes. Both full-TU bystanders stay raw-identical.
+
+Final strict census: 1,075/1,852 exact, 118,176 original bytes; gain
+SDMv27_init (+89 bytes), zero losses. REGALLOC decreases32→31. The historical810-name floor remains unchanged;
+its known V90Parameters C2 loss is not cleared by this gain.
+
+## F11878. Shared-result follow-up closes four finite domains without a strict gain
+
+26 full Gentoo TU controls/166 body verdicts reproduce all raw baselines and
+preserve bindings, allocated data/BSS/nontext relocations. Shared receiver
+results and true CID common-store conditional assignments yield no exact gain.
+Guarded V90 quotient assignments also yield none; SignBits reset loses its
+existing exact identity in an unadopted control. Cold-arm tracing corrects the
+initial receiver nomination: their immediate wrap stores are separate and jump
+AFTER normal stores. Preserve the original domain prediction and its explicit
+correction. No width/flag/forced-register or token-order search follows.
+`docs/shared-value-followup-results.md`; tools/shared_value_batch_audit.py.
+
+## F11879. Direct field increment recovers three receiver counter components
+
+V27RX_eq_train, V27RX_decision and V29RX_eq_train now reproduce the original
+MOVZWL/INC/word CMP/JE/normal word store and separate immediate wrap store.
+The baseline had an extra post-INC MOVZWL. Fields stay unsigned short, constants
+and preceding alias-sensitive reads stay fixed; both formulas have identical
+modulo-65536 output including wrap. Seven TU bystanders are raw-identical.
+No strict function gain is claimed. V29 decision remains unchanged because the
+validated store-path observer refuses its base-changing control. Period gate
+and production comparison are recorded in the results after validation.
+`docs/shared-value-followup-results.md`; tools/receiver_counter_boundary_audit.py.
+
+## F11880. Store-site tracing prevents false common-result nominations
+
+Read-only branch_store_paths follows both straight-line arms to their first
+explicit field store and compares physical instruction sites. Three known
+common joins, three separate receiver joins and three malformed refusals fire
+in receiver_counter_boundary_audit. Calls, nested conditions, cycles, unknown
+writes and changed base registers are barriers; no arbitrary alias inference.
+The initial four-counter audit is explicitly excluded after its correct refusal
+on V29 decision, rather than broadening the observer just to accept a candidate.
+`docs/shared-value-followup-results.md`; tools/branch_store_paths.py.
+
+F11878-F11880 validation: 388/0 period phase, structural gates green;
+300/300 production objects, zero failed; both receiver objects raw-identical
+to their selected full-TU controls. Fresh references14,389/findings2,977 and
+static anchors10,038 across285 suites have zero failures. No modern
+portability claim or historical-floor reset.
+
+Final F11879 census: 1,075/1,852 exact and118,176 exact bytes; exact-name set
+unchanged from04eee73f, zero strict gains/losses. Remainder675 SIZE/66 BYTES/
+31 REGALLOC/5 UNRESOLVED. This component recovery does not clear the
+historical V90Parameters constructor floor loss.
+
+## F11881. Timing reset uses the IIR half-word view and non-field-order reset groups
+
+After rebasing onto merged issue260/master16cb3384, all1075 exact names survive
+and the refreshed1074-name floor passes. Original rxtiminginit clears Q(-2)
+and I(-2) separately; source instead chose dp.point's packed-decision view.
+Existing dp.iir2.q/i supplies the actual timing view, without a new map/cast.
+Four full Gentoo V34RX TU cells/48 verdicts cross original store order and
+separate halves: combined control matches23 original offset/width/value
+stores in order, while all3 axis negatives disagree.249B/SIZE12 becomes
+259B/SIZE2 against261B; no strict gain. Metadata/data/BSS/nontext relocations
+agree;6 bodies unchanged,6 change including5 measured nonexact bystanders.
+29 RTL stage pairs/58 streams diverge initially at01.rtl, with22→23
+observable immediate-store splits. Two raw/traced/saved triples validate249 searches/1620 candidate visits;
+target23→24 searches include the epilogue, both entering cursor50. No original
+scratch history, source syntax uniqueness or regalloc-only explanation is claimed. Keep the finite domain
+closed, gate the component recovery, and do not fabricate a subobject from
+VPcm's separate obj+4 base clue. `docs/v34-timing-reset-results.md`;
+tools/v34_timing_reset_audit.py.
+
+F11881 validation:388/0 period phase, structural gates green;300/300 production
+objects, zero failed; V34RX raw-identical to selected control. Exact-name set
+stays1075/1852 (118176 bytes), zero gains/losses; refreshed1074-name ratchet
+passes. Static anchors10038/285 suites are attached/unique. This is a measured
+component recovery, not a new whole-function byte-exact gain.
+
+## F11882. Object+4 is a measured interior base, not yet a typed control extent
+
+Review six small VPcm/INFO/Ja accessors and Create: ADD/LEA4 is explicit and
+its fields are mapped, but no independent control parameter or extent is
+established. Create clears the full object from0 for0xac4c, then receiver0x264
+for0x79c; neither determines a +4 subobject size. Six mangled entry points name
+tagV34Object*. This does not prove no subobject existed, only that a new map
+would be premature. Correct the SetMaxBlockLength comment that called this a
+free addressing artifact and asserted no second object. Earlier Ja evidence
+already separates source anchor lifetime from a layout/type claim. No new
+partial map/offset view/register forcing. `docs/v34-rate-lifetime-results.md`.
+
+## F11883. Eager session pointers plus a shared result recover the RX-rate accessor
+
+Four complete Gentoo TU controls cross original p3548/pac18 entry capture and
+one final int result.74B baseline→84B capture-only→92B result-only; both90B
+EXACT including the named getBitRate relocation. Only this function changes;
+56 TU bystanders raw-identical, metadata/nontext data/BSS/relocations agree,
+text positions shift. Original guards and conditional dereferences/call stay;
+no prototype/type/constant/flag changes.01.rtl discriminates pointer loads
+before guard;02.sibling retains one sibling-call marker in early-return cells
+and none in common-result cells. All initially contain call_placeholder, so
+initial RTL alone cannot identify the eventual sibling choice.29 stage pairs/
+58 streams compared. No syntax uniqueness or original profile claim.
+`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+
+## F11884. The same TX result/owner cross fails, preserving the RX positive
+
+Original TX fallback directly reads object txbits; source captures ratecfg
+base early. Direct fallback alone202B, common result alone236B, both218B,
+retained217B against213B. The four cells on exact RX seed preserve that gain
+but cannot close TX; no TX source adoption or size-only carrier. Combined
+RX/TX controls total13 full-TU compiles/741 verdicts, all raw baselines,
+metadata/data/bindings pass, three independent full-object repeats agree.
+Only RX/TX target bodies ever change; no exact losses. No pointer/return/literal
+synonym sweep follows this finite closed domain.
+`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+
+F11883 static apparatus: initial anchors correctly flag9 detached locators;
+retarget the same9 operations and scope all10 RX records explicitly. All3
+fallback mutants still change both default paths. Labels/count unchanged;
+no mutation execution or snapshot re-recording is claimed. The initial red
+structural run is retained; final repaired gate reported separately.
+
+F11882-F11884 final validation: repaired phase388/0 plus all structural gates;
+production300/300/0, complete VPcmV34Main raw-identical to adopted control.
+Static285 suites/10038 anchors pass; no mutation execution/snapshot update.
+Whole-tree exact1076/1852,118266 original bytes: RX accessor+90 bytes, zero
+losses;674 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED. Refreshed1074-name ratchet
+passes, unchanged. Modern portability not claimed.

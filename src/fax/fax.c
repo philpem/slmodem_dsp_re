@@ -217,7 +217,7 @@ FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
 {
 	int rate = (int)(long)arg;
 	int inner_cmd;
-	int extra;
+	int extra = 0; /* Original default argument; FTM overrides it (F11874). */
 
 	if (ctx == NULL || ctx->class1 == NULL)
 		return -1;

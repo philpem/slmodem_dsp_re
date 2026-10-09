@@ -603,15 +603,13 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	short st = dec->train_lfsr;
 	unsigned int x = (unsigned int)st;
 	unsigned int odd = x & 1u;
-	unsigned short count;
 	unsigned short tc;
 	short idx;
 
-	count = (unsigned short)(dec->sym_count + 1);
-	if (count == V29DEC_SYM_COUNT_WRAP)
+	/* Direct field update preserves the original word comparison (F11879). */
+	++dec->sym_count;
+	if (dec->sym_count == V29DEC_SYM_COUNT_WRAP)
 		dec->sym_count = V29DEC_SYM_COUNT_RESTART;
-	else
-		dec->sym_count = count;
 
 	state->lms_on = 1;
 	state->mu_sel = 0;

@@ -5,52 +5,62 @@
   {
     "label": "the receiver takes its PCM arm when the role is NOT 0x66 -- the fork read backwards",
     "find": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
-    "replace": "\tif (obj->role != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
+    "replace": "\tif (obj->role != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the receiver's PCM window is statuses 1..3 rather than 1..2",
-    "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;",
-    "replace": "\t\tif ((unsigned)(obj->status - 1) <= 2) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;"
+    "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();",
+    "replace": "\t\tif ((unsigned)(obj->status - 1) <= 2) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the receiver's window is SIGNED, so status 0 joins it",
-    "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;",
-    "replace": "\t\tif (obj->status - 1 <= 1) {\n\t\t\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;"
+    "find": "\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();",
+    "replace": "\t\tif (obj->status - 1 <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the receiver's middle arm is status 2, not status 3",
-    "find": "\t} else if (obj->status == 3) {\n\t\treturn *(const int *)obj->pac18;",
-    "replace": "\t} else if (obj->status == 2) {\n\t\treturn *(const int *)obj->pac18;"
+    "find": "\t} else if (obj->status == 3) {\n\t\trate = *k56;",
+    "replace": "\t} else if (obj->status == 2) {\n\t\trate = *k56;",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the middle arm reads pac18's +0x04 rather than its first word",
-    "find": "\t\treturn *(const int *)obj->pac18;",
-    "replace": "\t\treturn *(const int *)((const unsigned char *)obj->pac18 + 4);"
+    "find": "\t\trate = *k56;",
+    "replace": "\t\trate = *(const int *)((const unsigned char *)k56 + 4);",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the middle arm scales pac18 by 2400 like the configuration arm",
-    "find": "\t\treturn *(const int *)obj->pac18;",
-    "replace": "\t\treturn *(const int *)obj->pac18 * (int)RATE_STEP;"
+    "find": "\t\trate = *k56;",
+    "replace": "\t\trate = *k56 * (int)RATE_STEP;",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the demodulator is reached at +0x1758 -- the modulator -- rather than +0x175c",
-    "find": "\t\t\treturn (int)sess->modem.demodulator->getBitRate();",
-    "replace": "\t\t\treturn (int)((V90Demodulator *)sess->modem.modulator)\n\t\t\t\t->getBitRate();"
+    "find": "\t\t\trate = (int)sess->modem.demodulator->getBitRate();",
+    "replace": "\t\t\trate = (int)((V90Demodulator *)sess->modem.modulator)\n\t\t\t\t->getBitRate();",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the receiver's default arm hands back txbits, the transmitter's half of the record",
-    "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
-    "replace": "\treturn cfg->txbits * (int)RATE_STEP;"
+    "find": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t}\n\treturn rate;",
+    "replace": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = cfg->txbits * (int)RATE_STEP;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = cfg->txbits * (int)RATE_STEP;\n\t}\n\treturn rate;",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "rxbits is read UNSIGNED -- movzwl where the object has movswl",
-    "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
-    "replace": "\treturn (int)(unsigned short)cfg->rxbits * (int)RATE_STEP;"
+    "find": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t}\n\treturn rate;",
+    "replace": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = (int)(unsigned short)cfg->rxbits * (int)RATE_STEP;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = (int)(unsigned short)cfg->rxbits * (int)RATE_STEP;\n\t}\n\treturn rate;",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the rate index is handed back unscaled",
-    "find": "\treturn cfg->rxbits * (int)RATE_STEP;",
-    "replace": "\treturn cfg->rxbits;"
+    "find": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = cfg->rxbits * (int)RATE_STEP;\n\t}\n\treturn rate;",
+    "replace": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {\n\t\t\trate = (int)sess->modem.demodulator->getBitRate();\n\t\t} else {\n\t\t\trate = cfg->rxbits;\n\t\t}\n\t} else if (obj->status == 3) {\n\t\trate = *k56;\n\t} else {\n\t\trate = cfg->rxbits;\n\t}\n\treturn rate;",
+    "fn": "VPcmV34GetCurrentRxBitRate"
   },
   {
     "label": "the transmitter takes its V.90 arm when the role IS 0x66 -- the fork read backwards",

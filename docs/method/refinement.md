@@ -3863,3 +3863,224 @@ final writer identity does not preserve compiler scratch-search state. This
 corroborates the existing scratch-cursor lever, without measuring the full
 historical dynamic cursor-event sequence or justifying literal permutations.
 [Actual field-era stage proof](../v90-parameters-constructor-stage-proof.md).
+
+### Separate assembly-layout clues from executed value ages (F11862–F11864)
+
+A broad binary screen can find candidates missed by repeated-return/source-text
+heuristics, but a load's position after a call in disassembly does not establish
+that it executes after that call. Branches can lay out mutually exclusive arms
+in either order. Bound streams by ELF symbol size, retain original operands and
+actual branch destinations, resolve callees and trace paths before attributing
+a displacement-count difference to stale values. Same displacement also does
+not identify the same object. Known historical positives and current exact
+negatives establish detector operation, not source recoverability.
+
+Use matching full-TU controls to locate the earliest observed RTL-pattern or
+instruction-order divergence. Preserve registers, modes and immediates; inspect
+all constructor clones independently. Later rnreg can eliminate a peephole2
+difference in one clone and retain it in another. Static immediate-store splits
+are scratch opportunities, not counts of dynamic searches or cursor events.
+The generic [stage diagnostic](../gcc3-stage-divergence-diagnostic.md) enforces
+explicit clone selection and rejects incomplete/ambiguous paired stage sets.
+Identical earlier emitted bytes remain insufficient to establish compiler-state
+identity. Do not tune earlier source tokens to manufacture register colors.
+
+A recovered pointer lifetime can preserve two stores and a second memory read
+through allocation yet still lose that read in postreload (F11865). In SDM's
+control, UID56 MEM:HI becomes an AX selfcopy at that pass; the baseline instead
+loses its reread in first CSE and its first store by combine. Track the specific
+read at each stage before attributing the final absence to source factoring or
+register allocation. Compare value/address/mode knowledge and invalidations;
+a widened original load is a discriminator, not proof that a cast prevents
+forwarding. The installed compiler's actual replacement branch remains to be
+observed. [Bounded controls and static rule](../fax-tail-timing-results.md).
+
+F11866 now dynamically identifies SDM's decisive replacement as
+`reload_cse_simplify_set`/cselib: the stored HI value keeps AX as a known location,
+old-cursor copy preserves its address value, and register cost2 beats memory4.
+A later operand fallback visits the resulting selfcopy; its successful return
+alone is not evidence it performed the original memory forwarding. Observe the
+pattern and value identities at the first changing visit. Preserve complete
+raw/debugged/container object equality and distinguish an extracted compiler's
+host runtime from its original container runtime. Read-only GDB observations
+need no inferior calls or RTL writes; pin the actual binary for optimized-frame
+and instruction-address observations. [Dynamic replay](../sdm-postreload-dynamic-trace.md).
+
+An existing wide input lookup before a store does not prove a wide reread after
+that store resists forwarding. Mode, address and available register locations
+must be compared at the relevant use. Also audit prior identical siblings before
+calling a source boundary new (F11867): the older compound/postincrement168B
+control has a surviving extra early read and a removed late read. Equal or near
+total load counts and size can therefore hide the very boundary being sought.
+Keep old source families closed until independent original/use evidence changes
+the discriminator; don't add casts or volatile to coerce a surviving load.
+
+### A widening load opcode need not represent wide RTL (F11868)
+
+GCC3's i686-tuned movhi_1 can emit MOVZWL for a plain HI memory-to-register
+move to avoid partial-word stalls. SDM's saved UID118 and the installed emitter
+prove that mapping; an explicit SI zero-extend UID38 emits the same opcode under
+a different pattern. Consult the backend move rule and real -dP annotation
+before inferring an explicit promotion or source width from MOVZWL/MOVZBL.
+The memory access remains word-sized in both cases. Extra physical destination
+bits written by an instruction do not establish which bits the RTL required.
+
+This corrects the proposed SDM late-wide-versus-HI discriminator above: original
+MOVZWL does not distinguish those modes. The candidate read is HI from initial
+RTL, so there is also no combine narrowing to explain. Keep the valid dynamic
+value-forwarding result, close the unsupported width family, and require an
+independent original use/alias/profile witness for further source controls.
+[Annotated and dynamic emitter proof](../sdm-movhi-emitter-width-refutation.md).
+
+### Restoring one source boundary does not recover the complete function (F11869)
+
+The V32 cleaned-sample getter's accepted-count-first arm restores the original
+branch, but its owner reload is still missing. The V22 permutation counter's
+early lifetime plus separated increment leaves a one-byte size difference
+with different allocation and schedule. Neither is a byte-exact improvement.
+Bound original coefficient capture independently; do not expand a near-size
+result into declaration/register permutations.
+
+A reciprocal's stack one is not unique evidence of an unsuffixed double
+literal. The float RMS control restores FLD1 at the wrong lifetime and adds
+an original-absent final narrowing; it also changes inlined callers. Audit
+the complete expression graph and complete TU, including pooled constants.
+The ordinary reciprocal-first reversal emits the retained raw object; close
+it rather than retrying synonyms. [Eleven-cell audit](../small-counter-use-results.md).
+
+An unchanged sibling can first diverge at peephole scratch selection after
+matching allocation/reload. EpochDetectV29 transfers the constructor-stage
+diagnostic: the new scratch and its compare differ at28peephole2, followed by
+renaming at30rnreg. Keep the losing full-TU controls and trace the origin;
+do not alter the sibling to restore a score (F11870).
+[Quality and bystander stage evidence](../fax-quality-use-results.md).
+
+Validate a nomination's complete operation stream before interpreting its
+source controls. ResamplerTiming's 'missingFABS' premise was refuted by three
+FABS in every control; an earlier comparison computes sign. Preserve invalid
+premises and exclude their axes from source-family closure claims. A remaining
+DF-versus-XF operand witness is independent, and its bounded negative does
+not authorize a general type matrix (F11871).
+[Corrected diagnostic-mode nomination](../v90-timing-diagnostic-math-domain.md).
+
+A wrong callee-entry argument can be a source-fidelity gap even if the actual
+callee ignores it on that arm. Fax command's uninitialized default `extra`
+emits80 instead of the original0 outsideFTM; the existing real callee consumes
+it onlyFTM, where both supply80. Distinguish measured argument reconstruction
+from public behavior and synthetic replacement-callee probes. Its corrected
+argument and original six-case dispatch still miss full identity; do not
+claim a gain or invent an operational failure (F11872).
+[Complete dispatch/result controls](../fax-service-values-results.md).
+
+### Observe scratch history, including the actual allocation-order table (F11873)
+
+The installed Gentoo C and C++ compilers now have raw-preserving dynamic
+controls for the persistent scratch-search cursor. Model the actual candidate
+order, class/mode restrictions, live/reserved bits, save/restore restriction
+and frame protection; validate returned registers and cursor transitions.
+All1410 observed searches agree. The53-slot order ends in five EAX entries,
+explicitly zero-filled by the target backend; a uniform register rotation
+model is insufficient.
+
+An identical final writer can make a different number of searches. The
+historical +0x434 retype removes one immediate-SI search, and that difference
+reaches the unchanged C2 constructor. Correct float typing remains supported
+independently and must stay. The fax bystander supplies a second dynamic
+positive. No rejected enclosing matcher or failed scratch search occurred in
+these controls: do not claim either mechanism was observed or broaden to
+other modes/classes without controls. [Installed compiler proof](../gentoo-peep2-search-proof.md).
+
+A directly observed call-argument value is recoverable separately from a
+complete function's register/profile residual. Under fidelity work, the fax
+default-zero correction is adopted after full-TU auditing and period388/0;
+SIZE8 becomesSIZE5 but no exact function is claimed. Its actual callee ignores
+the affected argument outsideTM. Keep these categories explicit and preserve
+the negative dispatch/result experiments rather than presenting this as a
+successful CFG or whole-function preimage (F11874).
+tools/fax_extra_argument_audit.py.
+
+### Separate direct scratch selection from allocation, then recover the counter boundary (F11875–F11876)
+
+A register-only verdict does not identify a compiler pass. Current complete-TU
+traces find zero searches in _iir_filter_create and SDMv27_init, one in
+FloatFIR::reset and three in dp_v22_init. FloatFIR's selected scratch survives
+renaming; the registration wrapper's final colors differ from its selected
+scratch colors. Use the actual event stream and successive RTL stages before
+attributing either to inherited scratch state. C++ clone declaration names
+can repeat: do not equate them with emitted C1/C2 symbol ownership.
+[Target boundary](../gentoo-scratch-target-results.md).
+
+A separate zero guard plus while(count--) can leave a redundant test after
+member loads even when the source guards the right boundary. Original DEC and
+UINT_MAX tests at both boundaries justify consuming count in the existing
+pre-load guard, then postdecrementing at the tail. This preserves the zero-input
+boundary and recovers FloatFIR's original counter structure while leaving the
+body's other work and seven bystanders unchanged. It produces no exact gain;
+do not turn that measured component recovery into a register/profile claim or
+broaden the domain to guard/variable permutations.
+[Counter recovery](../floatfir-consumed-count-results.md).
+
+### Share branch values before allocation, not only their final machine tail (F11877)
+
+A REGALLOC residual can still have a source preimage. SDMv27_init makes no
+scratch search and no rnreg changes. Two source stores compile to one final
+machine tail but retain separate branch-result pseudos through local allocation;
+both takeEAX before the owner pointer is assigned. The original common
+load-result/store supports one conditional assignment. Its shared HI pseudo
+spans the branches, changes allocation, and yields the full89-byte exact
+initializer with both bystanders and all TU metadata unchanged. This is
+source factoring, not a request for specific registers or a cursor edit.
+Inspect24lreg/25greg and branch-result definitions when a common original
+store has separate source assignments; merely reversing branch arms is a
+separate closed domain. Do not assume every register-only function has this
+cause or claim the conditional syntax is uniquely recovered.
+[Control and audit](../sdmv27-common-value-results.md).
+
+### Follow cold arms before inferring a common source result (F11878, F11880)
+
+A normal-path field store does not prove both arms feed it. Receiver wrap arms
+store immediate 0x4000 separately and jump after the normal store; CID's cold
+arms really return to the same instruction. Use `tools/branch_store_paths.py`
+with an independently identified branch/field/base to discriminate. The tool
+refuses aliases/base changes and nested CFG instead of inventing a source
+preimage. Positive and refusal controls are in receiver_counter_boundary_audit.
+The 26-TU follow-up domain is closed in shared-value-followup-results.md.
+
+### A local truncation boundary can introduce an extra extension (F11879)
+
+For an unsigned-short field increment followed by a wrap check, a temporary
+assignment/cast can add MOVZWL after INC under this compiler. Direct field ++
+reproduces the original load/INC/word comparison/store in three receiver
+methods. Check both cold and normal stores and prior alias-sensitive reads;
+this is a component recovery, not a general permission to remove narrowing.
+No whole-function exact gain follows here. Leave unsupported base-changing
+paths unadopted; source syntax is not uniquely identified by this observation.
+
+### Choose the active typed overlay at initialization too (F11881)
+
+A reset of a packed decision point is not necessarily the original timing
+history reset, even when both leave identical zero bytes. rxtiminginit's blob
+clears existing dp.iir2.q/i separately in its timing-group order; choosing the
+packed dp.point view hid that access-width evidence. Four full-TU controls
+recover23 stores in offset/width/value order, but leave a2-byte size residual
+and five changed nonexact bystanders. Review them all; do not claim exactness
+from the recovered component or invent a new type/extent from a register base.
+[Timing reset control](../v34-timing-reset-results.md).
+
+### Cross entry captures with return ownership before blaming call layout (F11883–F11884)
+
+An ordinary blob call versus a sibling jump can encode source result ownership.
+VPcmV34GetCurrentRxBitRate needs BOTH its observed unconditional pointer
+captures and a shared result to recover90B EXACT. Each isolated axis misses;
+56 full-TU bystanders stay unchanged.01.rtl shows load lifetimes, but all cells
+have call_placeholder;02.sibling reveals which alternative actually survives.
+No flag, return-type guess or register constraint is needed. Crossed controls
+on TX keep RX exact but fail TX, so this is not a universal recipe. Close that
+negative domain and retain all full-TU data/exports and caller audits.
+[Rate control evidence](../v34-rate-lifetime-results.md).
+
+A real interior base does not uniquely determine a containing type or size.
+VPcm's obj+4 accesses are witnessed, but full-object constructor clearing and
+tagV34Object parameter mangling give no independent control extent. Preserve
+named fields and existing maps until a typed-callee/extent witness exists;
+do not fabricate a nested header solely to reproduce ADD4 (F11882).

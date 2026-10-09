@@ -1527,8 +1527,8 @@ typedef char v34pcmcreate_objlen[
  * rather than resolved by preferring whichever string was read last.
  *
  * The store is reached through `obj + 4` as `0x4(%eax)`, which is the same
- * addressing artefact v34fsk.h describes on the rate group and not a second
- * object.
+ * explicit interior base seen on the rate group too. This does not establish
+ * a separate type or its extent; see F11882.
  */
 
 
@@ -2981,18 +2981,25 @@ VPcmV34GetCurrentRxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	const struct v34_ratecfg *cfg = &obj->ratecfg;
+	/* Both pointer values precede the guards in the blob (F11883). */
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	const int *k56 = (const int *)obj->pac18;
+
+	/* One result owner also preserves the original call/return boundary. */
+	int rate;
 
 	if (obj->role == PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
-			VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-
-			return (int)sess->modem.demodulator->getBitRate();
+			rate = (int)sess->modem.demodulator->getBitRate();
+		} else {
+			rate = cfg->rxbits * (int)RATE_STEP;
 		}
 	} else if (obj->status == 3) {
-		return *(const int *)obj->pac18;
+		rate = *k56;
+	} else {
+		rate = cfg->rxbits * (int)RATE_STEP;
 	}
-
-	return cfg->rxbits * (int)RATE_STEP;
+	return rate;
 }
 
 extern "C" int
