@@ -4124,3 +4124,24 @@ not only surviving instructions or accepted replacements. Seven controls validat
 382 searches/3784 visits; V90MP's QI/q events are explicitly outside the current
 HI/SI r model. This observes current GCC behavior, not original cursor values,
 and does not authorize tuning source history to manufacture a register color.
+
+### Capture before publish when the ordinary inline loses that lifetime (F11892–F11895)
+
+V92's block-size setter needs pre-store symbolsDone capture and explicit query
+dataflow to recover108B. Expanding the helper normally is raw-identical and
+argument use alone misses; both early-capture forms match, so original syntax
+is not uniquely identified. Preserve multiply-before-divide on the divisible
+arm: simplifying rounding changes unsigned overflow behavior. Nine bystanders
+and standalone query stay exact. Conversely echo-history reset closes by
+REMOVING its unnecessary params capture, leaving the member-valued bound.
+Pointer reg/v/f lifetime and scalar pre-publish lifetime are different axes;
+inspect01rtl and24lreg/25greg rather than always adding or always removing locals.
+The SDM cross misses both initializers and is closed. Do not transfer to already
+exact siblings or reopen SpectralShaper's previously fitted owner-anchor domain.
+[Full-TU controls](../residual-value-owner-results.md).
+
+Mutation fn verifies trailing function ownership AFTER unique substring matching;
+it does not scope the find. Use unique context for duplicated arithmetic and
+correct unsupported function metadata. Show detached/nonunique locators firing,
+repair the same labelled operations, and keep static checks separate from any
+claim that a mutation harness was executed.

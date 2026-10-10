@@ -3,19 +3,19 @@
   "label": "modem's two sides are swapped",
   "find": "\tswitch (side) {\n\tcase 0:\n\t\tmodulator->setSessionFlag(flag);\n\t\treturn;\n\tcase 1:\n\t\tdemodulator->setSessionFlag(flag);\n\t\tbreak;\n\t}",
   "replace": "\tswitch (side) {\n\tcase 1:\n\t\tmodulator->setSessionFlag(flag);\n\t\treturn;\n\tcase 0:\n\t\tdemodulator->setSessionFlag(flag);\n\t\tbreak;\n\t}",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  },
  {
   "label": "modem falls through to the modulator",
   "find": "\tswitch (side) {\n\tcase 0:\n\t\tmodulator->setSessionFlag(flag);\n\t\treturn;\n\tcase 1:\n\t\tdemodulator->setSessionFlag(flag);\n\t\tbreak;\n\t}",
   "replace": "\tswitch (side) {\n\tcase 1:\n\t\tdemodulator->setSessionFlag(flag);\n\t\tbreak;\n\tdefault:\n\t\tmodulator->setSessionFlag(flag);\n\t\treturn;\n\t}",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  },
  {
   "label": "modem stores the flag only when it calls something",
   "find": "\tsessionFlag = flag;\n\n\tswitch (side)",
   "replace": "\tif (side == 0 || side == 1)\n\t\tsessionFlag = flag;\n\n\tswitch (side)",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  },
  {
   "label": "modem captures the side before storing the flag",
@@ -23,18 +23,18 @@
   "replace": "\tint which = side;\n\n\tsessionFlag = flag;\n\n\tswitch (which)",
   "equivalent": true,
   "why": "Capturing side before storing sessionFlag is equivalent to direct dispatch after that store: they are distinct members, cannot alias, and no call intervenes. This is the reverse of the former equivalent read-order mutation, retargeted after F11886 removed the source capture.",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  },
  {
   "label": "the modem's flag goes to +0x49bc, where the side is",
   "find": "\tsessionFlag = flag;\n\n\tswitch (side)",
   "replace": "\t*(unsigned int *)((char *)this + 0x49bc) = flag;\n\n\tswitch (side)",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  },
  {
   "label": "the modem takes its two halves from the wrong offsets",
   "find": "\tswitch (side) {\n\tcase 0:\n\t\tmodulator->setSessionFlag(flag);\n\t\treturn;\n\tcase 1:\n\t\tdemodulator->setSessionFlag(flag);\n\t\tbreak;\n\t}",
   "replace": "\tswitch (side) {\n\tcase 0:\n\t\t(*(V90Modulator **)((char *)this + 4))->setSessionFlag(flag);\n\t\treturn;\n\tcase 1:\n\t\t(*(V90Demodulator **)this)->setSessionFlag(flag);\n\t\tbreak;\n\t}",
-  "function": "V90Modem::setSessionFlag"
+  "fn": "setSessionFlag"
  }
 ]

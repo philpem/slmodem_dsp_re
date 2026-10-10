@@ -137247,3 +137247,52 @@ objects agree but five QI/q searches are refused by the HI/SI r model, not count
 as validated availability controls. No tolerances, profile/src workaround or
 model widening. Zero new gains/source adoptions in this evidence checkpoint;
 no fuzz/mutation execution or modern portability claim.
+
+## F11892. The SDM shared-short/shift2-first cross misses both initializers
+
+Two original86B bodies; eight full-TU cells24verdicts. Opening reg/cfg stores
+unchanged, so prior reversed-opening and pointer-alias controls not repeated.
+Existing-type short capture alone107B SIZE21; derived shift2-first104B SIZE18;
+both109B SIZE23; baseline86B BYTES18. Only targets change; two bystanders perTU
+and metadata/data unchanged. No source adoption; close finite cross without
+claiming exhaustion. docs/residual-value-owner-results.md.
+
+## F11893. Pre-publish counter lifetime recovers the V92 block-size setter
+
+Five complete-TU cells50verdicts. Explicit query alone raw-object-identical to
+normal helper inline, BYTES48; argument use alone also misses. Pre-store
+symbolsDone capture plus explicit query108B EXACT, using either stored size or
+argument, both whole objects raw-identical. Choose incoming n, keeping both
+original unsigned overflow-distinct rounding forms. Counter load/store/copy
+witness supports lifetime family, not uniquely open-coded author source.
+All nine bystanders and metadata/data unchanged; TU9/10 to10/10.01rtl/24lreg
+preserve counter user pseudo before publish rather than anonymous helper read
+later. Standalone query remains exact. docs/residual-value-owner-results.md.
+
+## F11894. Removing an unnecessary pointer capture recovers echo-history reset
+
+Four complete-TU cells60verdicts; original62B. Existing blk/member-bound
+REGALLOC(rawBYTES12); direct params/member-bound EXACT62B; local unsigned length
+alone or combined BYTES15, declined. Pointer local is reg/v/f in01rtl/24lreg and
+AX in25greg; direct access changes allocation. Pre-store scheduled load does not
+prove source capture; params/historyIndex distinct, pointed-data read remains
+after clear. Fourteen bystanders and metadata unchanged; TU5/15 to6/15. No type,
+layout, flag or register constraint. Old SpectralShaper anchor fitting remains
+closed; exact V90 setter/query need no transfer. docs/residual-value-owner-results.md.
+
+## F11895. Ownership assertions do not disambiguate substring mutation locators
+
+Initial targeted static check catches6nonunique anchors after new source.
+Retarget four query operations with complete unique function-body context,
+two echo operations with original reset's unique expression, and two setter
+locators to their same defects; labels/count preserved. fn is the supported
+trailing-method assertion, not function and not a match scope. Correct earlier
+session-flag function metadata to fn without changing operations. No mutation
+execution/snapshot rerecording.17totalfullTUcells134bodyverdicts,2distinctgains,
+all bystanders/metadata preserved; source/gate validation recorded separately.
+
+Final production census: 1079/1852 EXACT, 118507 original bytes, +2 functions
+and +170 original bytes against the 1077 baseline; zero exact losses.
+`make phase J=8` exits 0: period differential 388 passed / 0 failed; structural
+gate clean, including 285 suites / 10038 static mutation anchors and 14417
+references. No mutation or fuzzing harness execution; no portability claim.
