@@ -137368,3 +137368,28 @@ unchanged. Two finite crosses closed, no nearby declaration/color expansion.
 New tools compile; production1079/1852 unchanged, prior period388/0 applies to
 unchanged source, no fuzzing/mutation execution.
  docs/residual-echo-append-results.md.
+
+## F11902. V.22 ACK square/verdict/count lifetime crosses all miss
+
+Eight complete-TU cells80shared verdicts atdf4b23b9, raw baseline and combined
+repeat; original209B. Square/verdict cross209BYTES187,189SIZE20,205SIZE4,
+185SIZE24. EarlyRTL ideal squareUID75→25 before sampleUID41/68, verdictzero
+UID31→91. Count after ideal changes baseline toBYTES194 and combined still
+SIZE24; count definitionUID13→25 after idealEnergyUID22. Intended changes
+fire, noneexact, TU4/10 preserved; no adoption/nearby declaration fitting.
+All metadata/data/bindings/relocations agree, only ACK and named nonexact
+Detect_1s change. Production1079/1852 unchanged, no candidate runtime claim.
+ docs/residual-v22-ack-results.md.
+
+## F11903. Unchanged following detector first differs at global allocation/reload
+
+ACK combined control leaves Detect_1s source and01rtl/24lreg instruction patterns
+and UIDs identical. Twelve patterns differ at25greg, eleven at27flow2,
+thirteen at28peephole2 and seventeen at30rnreg. This is earlier than the closed
+constructor scratch examples. No original RTL/state is available; global
+allocation and reload are not separated by these dumps, so root cause remains
+unproven. Next discriminator: raw-reproducing observation of those two passes
+on the unchanged bystander, not compensation in its source. Eight-cell audit
+fires lifetime/negative controls, reports80verdicts, new tools compile and
+refcheck/diff clean. No flags/source adoption or fuzzing/mutation execution.
+ docs/residual-v22-ack-results.md.

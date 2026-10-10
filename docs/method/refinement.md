@@ -4192,3 +4192,14 @@ with both source forms in this domain. A post-guard register copy likewise does
 not uniquely establish a guard-local declaration. Close the bounded cross on its
 misses; require a new independent witness before another spelling experiment.
 [Nine-cell full-TU audit](../residual-echo-append-results.md).
+
+### A remote bystander can first differ before peephole2 (F11902–F11903)
+
+After changing only ACK detector value lifetimes, the following Detect_1s has
+identical01rtl/24lreg patterns but differs at25greg. Do not generalize the
+constructor scratch explanation to every complete-TU history effect. Locate the
+first evidenced boundary in the unchanged body, then separate global allocation
+from reload with direct diagnostics; the25greg dump alone contains both. This
+is a diagnostic discriminator, not a recovered source lever. ACK's square,
+verdict and count timing domains miss and are closed without adoption.
+[Eight-cell controls](../residual-v22-ack-results.md).
