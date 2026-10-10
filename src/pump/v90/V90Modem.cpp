@@ -516,23 +516,24 @@ V90Modem::reset(unsigned int qcFlag)
  * ===========================================================================
  */
 /*
- * `mov 0x49bc(%eax),%edx` is read BEFORE the store to +0x49b8, which matters
- * only if the two could alias and they cannot -- they are distinct members of
- * one object.  Written in the order the object reads them anyway.
- *
- * The flag is stored on every path, including the one that calls nothing.
+ * Store the flag on every path, then dispatch directly on side.  The switch's
+ * digital return and analog break preserve the blob's asymmetric sibling jump
+ * and ordinary call.  An extra side capture changes register allocation even
+ * though GCC schedules the direct side load before the flag store.  F11886.
  */
 void
 V90Modem::setSessionFlag(unsigned int flag)
 {
-	int which = side;
-
 	sessionFlag = flag;
 
-	if (which == 0)
+	switch (side) {
+	case 0:
 		modulator->setSessionFlag(flag);
-	else if (which == 1)
+		return;
+	case 1:
 		demodulator->setSessionFlag(flag);
+		break;
+	}
 }
 
 void
