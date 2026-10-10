@@ -4180,3 +4180,15 @@ No original cursor or new source spelling follows from this mechanism alone.
 When comparing dumps, strip explicit string_cst heap-pointer annotations only;
 keep pool names, real constants and all operand structure. Three refusal/value
 controls verify that boundary. [Replay](../residual-constructor-scratch-results.md).
+
+### Shared machine cleanup does not distinguish source exits (F11900–F11901)
+
+Echo append's advancing-input/countdown and preincrement length witnesses recover
+individual original shapes, but their combination still misses the complete body.
+Do not adopt a one-byte size gap: count instructions and inspect complete paths.
+An early return and common if/else exit produce raw-identical complete objects
+at both remaining-counter timings. Shared machine cleanup is therefore compatible
+with both source forms in this domain. A post-guard register copy likewise does
+not uniquely establish a guard-local declaration. Close the bounded cross on its
+misses; require a new independent witness before another spelling experiment.
+[Nine-cell full-TU audit](../residual-echo-append-results.md).

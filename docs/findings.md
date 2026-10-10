@@ -137345,3 +137345,26 @@ is not inferred. Three annotation/value controls distinguish compiler heap
 string_cst addresses from real pool identities/immediates. No production gain,
 source/header/profile edit, original cursor claim or harness execution.
  docs/residual-constructor-scratch-results.md.
+
+## F11900. Echo append's cursor and next-length shapes do not close its body
+
+Four pinned complete-TU cells at5b552950,60common verdicts; original244B.
+Indexed/test-plus-one baseline225B; advancing-input/countdown261B;
+preincrement/member last-sample209B; combined245B SIZE1. Combined recovers
+countdown, input advance, increment-before-compare and previous-sample address,
+but81nonpadding instructions versus80original and register/loop placement differ.
+Fourteen bystanders and all metadata/data preserved, exact6/15 unchanged.
+No source adoption, size fitting or candidate runtime claim.
+ docs/residual-echo-append-results.md.
+
+## F11901. Echo append's common exit is raw-inert at both count timings
+
+Five follow-up complete-TU cells75verdicts include raw baseline and combined
+repeat. Common if/else exit equals early-return complete object at both timings:
+245B with pre-guard remaining initialization,226B with guard-owned initialization.
+Both miss244B original; machine counter copy after guard does not identify unique
+source scope. All9cells135verdicts audited,14bystanders percell and metadata/data
+unchanged. Two finite crosses closed, no nearby declaration/color expansion.
+New tools compile; production1079/1852 unchanged, prior period388/0 applies to
+unchanged source, no fuzzing/mutation execution.
+ docs/residual-echo-append-results.md.
