@@ -137296,3 +137296,27 @@ and +170 original bytes against the 1077 baseline; zero exact losses.
 `make phase J=8` exits 0: period differential 388 passed / 0 failed; structural
 gate clean, including 285 suites / 10038 static mutation anchors and 14417
 references. No mutation or fuzzing harness execution; no portability claim.
+
+## F11896. Queue's exact helper query still loses C2 in the corrected TU
+
+Three full-TU controls at57dbbf52,90common verdicts, raw baseline reproduced.
+Existing isFull query and unsigned space local give identical complete objects:
+write85B EXACT, C2 loses734B exact toBYTES7; progress remains nonexact. Only
+those three bodies change, all27bystanders and metadata/data preserved.
+F11679's loss survives the two earlier state-publication corrections. No source
+or header adoption, no constructor permutation/argument fitting. Clone-aware
+trace locates constant materialization at28.peephole2 and later renaming rather
+than earlier local allocation. docs/residual-queue-context-results.md.
+
+## F11897. Emitted labels and machine RTL resolve repeated clone headings
+
+Twelve archived ambiguous nominations, nine resolved, three refused; includes
+three substring nomination errors rather than twelve constructors. Printed
+CODE_LABEL numbers identify emitted .L labels; independently require -dP's
+printed patterns to match35.mach. Never infer C1/C2 from heading order. Earlier
+stages link only unique shared labels; Phase3Demodulator only final-stage and
+Parameters four late-stage availability remain explicit. Eleven positive/refusal
+checks fire. Register-only differing-row links25/31 to27/31; original RTL and
+cursor unknown. Queue C2 separately links29stages percell. New reproducible
+tools, archived hash verification and full-TU audit in
+ docs/residual-queue-context-results.md. Production1079/1852 unchanged.

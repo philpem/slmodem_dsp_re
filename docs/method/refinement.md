@@ -4145,3 +4145,21 @@ it does not scope the find. Use unique context for duplicated arithmetic and
 correct unsupported function metadata. Show detached/nonunique locators firing,
 repair the same labelled operations, and keep static checks separate from any
 claim that a mutation harness was executed.
+
+### Match clone labels and printed RTL before using a repeated heading (F11896–F11897)
+
+A C++ dump heading can name both C1 and C2, with repeated instruction UIDs.
+Identify an assembly symbol by its boundary, then match emitted .L numbers to
+CODE_LABEL numbers and check its printed -dP patterns against35.mach. Do not
+use heading order as ownership. Earlier stages require unique shared label
+witnesses independently; a final-stage match does not make every earlier stage
+available. Missing/ambiguous witnesses are explicit refusals. This resolves nine
+of twelve prior ambiguous nominations and increases register-row links25/31
+to27/31. Three nominations were substring collisions, not constructor clones.
+
+A helper query's exact leaf can still alter a remote constructor's scratch
+history. Current Queue replay again gains85B and loses734B; no adoption. Its
+argument constant loads first appear atpeephole2, then change at renaming.
+Use those pass boundaries to investigate the history; do not rewrite the
+constructor to repair a color without an independent source witness.
+[Replay and limits](../residual-queue-context-results.md).
