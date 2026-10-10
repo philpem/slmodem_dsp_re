@@ -137204,3 +137204,46 @@ execution or snapshot rerecording; final repaired gate recorded separately.
 F11885–F11887 final repaired phase:388/0, all structural checks green,
 14417 references /2984 headings,285 suites /10038 static anchors, zero detached,
 nonunique or wrong-arm anchors. Modern portability not claimed.
+
+## F11888. Ninety-seven residual nominations now have complete current TU controls
+
+Merged PR283 at736cf61c. Inventory canonical worst defining copy before alpha
+comparison:1077 EXACT/673 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED over1852.
+97 REGALLOC/BYTES nominations/59 TUs; all59 unchanged baselines reproduce raw
+production and metadata/data/BSS/relocations,804 shared body verdicts. Scope
+copies separately from unique symbols. Types/profiles/source unchanged;
+_iir_filter_create positive and exact V90 session negative fire/clear. First
+alpha rejection is not a complete diagnosis. docs/residual-stage-family-results.md.
+
+## F11889. Differing machine rows map to retained UIDs, not original compiler state
+
+85/97 have unique dump headers,12 repeated-constructor ambiguities. Strict
+annotated-assembly cardinality/opcode checks link25/31 REGALLOC targets; five
+constructor ambiguities and ADID annotation absence refused. FloatFIR's scratch
+load appears at peephole2. _iir_filter_create's zero searches still allow8
+peephole changes and6 renaming changes; an initial zero-search=>zero-change
+assertion correctly failed and is withdrawn. No original RTL/cursor/clone
+ownership guessed. tools/residual_register_uid_trace.py and stage_audit.py.
+
+## F11890. Failed peephole replacements still reset the persistent scratch cursor
+
+Eight saved/raw/traced full-object triples agree. Seven controls validate382
+searches/3784 candidate visits/382 replacement attempts. Five rejected attempts
+at three distinct sites: V92 setEchoDelay and two v8_process sites, plus the two
+v8 repeats. Failed searches select none and reset cursor zero; subsequent events
+validate it. Initial all-replacements-accepted assertion failed on real controls;
+repaired audit preserves/counts rejection. Independent v8 event streams agree.
+17 distinct REGALLOC targets covered; two scored Scrambler process methods make
+zero direct searches, not a claim about earlier history. No source/state edits
+or original cursor claim. tools/residual_scratch_audit.py.
+
+## F11891. Diagnostic failure and observer refusal do not become source hypotheses
+
+ADID full-da/dP, independent repeat and no-dP attempt all fail with Gentoo ICE;
+preserve/exclude three attempts. Prior r/c/R/S subset raw-reproduces, missing
+windows unavailable.58 other TUs have full streams. A source-list wrapper
+NameError produced no compiler cell, then was corrected. V90MP's raw/traced
+objects agree but five QI/q searches are refused by the HI/SI r model, not counted
+as validated availability controls. No tolerances, profile/src workaround or
+model widening. Zero new gains/source adoptions in this evidence checkpoint;
+no fuzz/mutation execution or modern portability claim.

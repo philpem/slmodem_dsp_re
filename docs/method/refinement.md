@@ -4103,3 +4103,24 @@ bindings and bystanders. DialerAbort's structured common exit compiles identical
 to the early return and remains nonexact even with its unsigned guard; close
 that domain. Do not change allocator prototypes or sweep return synonyms.
 [Controls and audit](../small-call-result-results.md).
+
+### Link mismatching rows to UIDs before attributing a register residual (F11888–F11891)
+
+Residual_stage_inventory applies the canonical worst-copy rule; 97 REGALLOC/
+BYTES nominations are not 97 diagnoses. Unchanged complete-TU reproduction and
+-dP annotation cardinality/opcode checks let residual_register_uid_trace link
+25/31 REGALLOC targets to RTL patterns. Repeated clone headers and unavailable
+annotation/stage windows stay ambiguous or unavailable, never guessed or zero.
+A changed peephole UID need not consume scratch: _iir_filter_create's zero
+searches coexist with eight transformed UIDs. Inspect actual events before
+attributing a row to the persistent cursor; two scored Scrambler process bodies
+have no direct search. [Baseline and UID evidence](../residual-stage-family-results.md).
+
+A failed scratch search can reset the persistent cursor even when its enclosing
+peephole emits no replacement. The new V92 setEchoDelay and v8_process controls
+observe three distinct failed sites (five attempts including a repeat), setting
+cursor zero; subsequent searches confirm the state. Count rejected attempts,
+not only surviving instructions or accepted replacements. Seven controls validate
+382 searches/3784 visits; V90MP's QI/q events are explicitly outside the current
+HI/SI r model. This observes current GCC behavior, not original cursor values,
+and does not authorize tuning source history to manufacture a register color.
