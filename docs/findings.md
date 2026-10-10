@@ -137320,3 +137320,28 @@ checks fire. Register-only differing-row links25/31 to27/31; original RTL and
 cursor unknown. Queue C2 separately links29stages percell. New reproducible
 tools, archived hash verification and full-TU audit in
  docs/residual-queue-context-results.md. Production1079/1852 unchanged.
+
+## F11898. A removed leaf cleanup search changes the later constructor cursor
+
+Five read-only raw-equal controls,638searches/4304visits validate under HI/SI r;
+zero rejected replacements, independent baseline event stream repeated exactly.
+Queue contexts agree for22searchgroups; baseline scalar write additionally
+searches its4B cleanup, absent under isFull's MOV-save frame. Later C2 enters
+cursor0 versus2; constant99/23/5 stores select AX/AX/DX versusDX/CX/DI before
+renaming. Complete C2 patterns agree throughflow2,12different peephole patterns
+and6renaming residuals. No constructor/source compensation justified; gain85B
+still costs734B, source/census unchanged. docs/residual-constructor-scratch-results.md.
+
+## F11899. Jd clone differences begin at scratch splitting, not byte allocation
+
+Emitted-label/printed-RTL clone association proves C1/C2 patterns identical
+throughflow2, lookpseudo60 allocatedAX in both. Actual UID30 zero-store search:
+C2 cursor0→DX→2, C1 cursor2→BX→13. Peephole UIDs263/264 differ; renaming
+expands to9patterns, including lookaheadAX/BX. Original final register versus
+our earlier allocated register was an invalid stage comparison; opening-domain
+premise preserved and corrected, no source experiment followed it. Parameters
+names identify four searches dynamically but unavailable early label ownership
+is not inferred. Three annotation/value controls distinguish compiler heap
+string_cst addresses from real pool identities/immediates. No production gain,
+source/header/profile edit, original cursor claim or harness execution.
+ docs/residual-constructor-scratch-results.md.

@@ -4163,3 +4163,20 @@ argument constant loads first appear atpeephole2, then change at renaming.
 Use those pass boundaries to investigate the history; do not rewrite the
 constructor to repair a color without an independent source witness.
 [Replay and limits](../residual-queue-context-results.md).
+
+### Trace scratch → renaming before attributing a captured local (F11898–F11899)
+
+Jd's two constructor clones allocate the same lookahead byte to AX and retain
+identical patterns throughflow2. A different zero-store scratch atpeephole2 then
+changes which register renaming chooses for that byte. Thus an original final
+register versus our allocation-stage register does not locate the divergence.
+Compare independently owned clone streams and actual emitted-name search events.
+One scratch difference can spread to nine late patterns without a different local.
+
+An exact helper leaf can remove a dead-stack cleanup search and change a later
+constructor's inherited cursor. The Queue85B gain still loses734B: observe the
+complete event history, including all predecessors, before source fitting.
+No original cursor or new source spelling follows from this mechanism alone.
+When comparing dumps, strip explicit string_cst heap-pointer annotations only;
+keep pool names, real constants and all operand structure. Three refusal/value
+controls verify that boundary. [Replay](../residual-constructor-scratch-results.md).
