@@ -4228,3 +4228,25 @@ layout but misses bytes; symbol publication is a different axis because its two
 initial RTL stores already merge in machine RTL. Count both source-stage and
 machine-stage publications rather than inferring missing behavior from code size.
 [Four complete-TU controls](../residual-v8-cursor-results.md).
+
+### Screen indirect callbacks and validate their iteration graph (F11910–F11911)
+
+Direct helper-call counts omit indirect callbacks. Pair literal source-loop
+inventory with original/retained graph review: putFrame's four-group loop hides
+sixteen fixed-offset original calls. Its static head-call count differs from
+initial RTL because alternative paths share a call; neither count is the number
+executed on one path. Expansion restores the group operations without recovering
+the complete body. Width, capture and typed-owner crosses still miss, and unchanged
+neighbors change through TU history. Count all bystanders; do not adopt the nearest
+size or claim a uniquely recovered substructure from one base-pointer instruction.
+[Uncapped screen and22-cell full-TU audit](../helper-caller-screen-results.md).
+
+### A narrow loop counter is an independent witness, not a whole-function fix (F11912)
+
+Original snapshot index increments sign-extend from16 bits; the six-entry loops
+remain rolled, so expanding them would contradict the graph. Test the local width
+without changing the inlining/profile domain, and distinguish raw-inert narrowing
+already expressed by assignment casts from changes to target/unchanged neighbors.
+The four short-local controls miss complete identity. Reopen from a new operand
+or ownership witness, not from another declaration spelling.
+[Bounded domain](../v34-snapshot-width-domain.md).

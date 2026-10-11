@@ -137470,3 +137470,48 @@ operand orientation andzero/registerslots still differ. No score-basedsource
 adoption, strict gain/loss or nearbycarrier expansion; finite crossclosed.
 Production1079/1852 unchanged, previousgate388/0; tools/refcheck/diff pass;
 no candidate runtime/fuzzing/mutation. docs/residual-v8-cursor-results.md.
+
+## F11910. Uncapped helper/caller screen finds a fixed-group indirect-callback lead
+
+Baseline7edfb734 Gentoo objects,1079/1852 distinct exact symbols. All299 C/C++
+TUs screened:1934 emitted copies,1105 exact excluded,781 nonexact eligible,
+48 without originals; one assembly TU excluded.315/1367 lexical for headers
+recognized,1052 unsupported,0 unmapped;83 eligible fixed-loop bodies. Three
+positive/negative detector controls fire. Incorrect initial TU/control-count
+assertions were preserved as invalid runs and rerun.24 nominations, nine beyond
+prior size/service scopes; most revisit known calls or loops retained in the
+original. putFrame is different: original sixteen fixed-offset group callbacks
+versus four rolled statements. These are indirect, outside canonical direct-call
+counting; the fixed-loop/backedge screen nominated it. Copy counts are not the
+production-symbol denominator, and included-header/macro loops remain outside
+the screen. No source adoption, gain, ceiling or original-profile claim.
+[Screen and graph review](helper-caller-screen-results.md).
+
+## F11911. putFrame expansion recovers sixteen group callbacks; crossed widths/owners still miss
+
+Original584B, retained376B/SIZE208. Eight complete v34shell TU cells cross
+literal group expansion, short nb and short small/small_last; expansion recovers
+sixteen group sites and577/576/578/578B, all misses. Initial RTL7→19 calls;
+final6→18, matching original18 total sites because one head call is shared
+between paths. Four follow-up main-path/default-capture cells stay578B/SIZE6.
+A typed +a00 subobject owner restores original base access but yields565B/SIZE19,
+not original structure recovery. Four owner/capture cells plus baseline: all miss.
+Expansion changes unchanged decodeDepth; header-owner controls also change
+getFrame/modulatevector.18 full-TU cells/216 common verdicts,3/12 exact preserved,
+all symbol metadata, named data and relocation-cleared allocated nontext unchanged.
+No source adopted. Bounded domain closed; further controls require an independent
+remaining witness rather than nearer-size initialization permutations.
+[Domain](v34-putframe-expansion-domain.md), [results/replay](helper-caller-screen-results.md).
+
+## F11912. V34 snapshot short-counter witnesses do not close the full TU
+
+Original retains both six-entry snapshot loops, sign-extending their index
+updates at672ed/67473 and comparing words. Four complete V34hshak TU cells cross
+short i/t through an isolated header overlay; all leave v34handshak12867B against
+61541B (SIZE48674),9/29 exact common bodies preserved. Short i changes the target;
+short t alone is target-raw-inert. Every nonbaseline cell changes unchanged
+v34tx1_trnseg4a, a TU-history observation rather than a reason to permute that
+arm.4 cells/116 common verdicts, metadata/data controls clean, no source adoption.
+Combined helper/caller audit:22 cells/332 common body verdicts, zero gains/losses.
+Production remains1079/1852; no additional runtime gate or fuzzing/mutation run.
+[Width domain](v34-snapshot-width-domain.md), [audit/replay](helper-caller-screen-results.md).
