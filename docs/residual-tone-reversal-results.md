@@ -20,6 +20,18 @@ controls remove that final reload, so neither is supported, regardless of size.
 The compile measurements are valid; the source hypothesis is refuted. No runtime
 alias result is claimed from ordinary disjoint-buffer fixtures.
 
+**Production already preserves this reload.** Current source writes rev_age,
+then evaluates samples[n] for the history store. The retained period object
+stores age at+0xc9, reloads input at+0xd1 and stores history at+0xda (function
+start0x720); blob equivalents are0xab239/0xab245/0xab24e. Missing reloads belong
+only to rejected build-directory controls, never retained reconstruction source.
+No production behavioral deviation or corrective source edit follows from this
+finding. The different energy grouping is also value-equivalent here: each
+shifted short square is0..32768, initial energy is a signed short, and positive
+signed-short count admits at most32767 steps. Both grouped and sequential sums
+stay in[-1073741824,1073741823], safely inside int32. Saturation follows the
+complete update in both. This does not claim arbitrary alias histories tested.
+
 The follow-up retains that final read and fixes sequential energy updates:
 
 | Arithmetic current capture | Outgoing history capture | Bytes | Strict verdict |

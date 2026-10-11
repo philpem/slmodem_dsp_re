@@ -4217,3 +4217,14 @@ uses across intervening writes before proposing capture. InitialRTL read/age
 boundaries detect the two unsupported controls; arithmetic-only captures keep
 that boundary and still miss, closing the finite source domains without adoption.
 [Nine-cell audit](../residual-tone-reversal-results.md).
+
+### Distinguish rejected experiments and static paths from production bugs (F11908–F11909)
+
+Tone's lost reload occurs only in an unadopted control; retained source and period
+object already read input after age publication, like the blob. Audit production
+before reporting a deviation. Likewise V8's two static ring stores are alternative
+paths, not two writes per sample. A local publication recovers the original loop
+layout but misses bytes; symbol publication is a different axis because its two
+initial RTL stores already merge in machine RTL. Count both source-stage and
+machine-stage publications rather than inferring missing behavior from code size.
+[Four complete-TU controls](../residual-v8-cursor-results.md).

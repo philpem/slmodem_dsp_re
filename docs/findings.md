@@ -137445,3 +137445,28 @@ on both unsupported cells. Existing disjoint fixtures do not establish arbitrary
 input/state alias behavior. Production1079/1852 unchanged, no candidate runtime
 claim, previous source period388/0; tools compile, refcheck/diff clean. No
 fuzzing/mutation execution. docs/residual-tone-reversal-results.md.
+
+## F11908. Tone reversal's rejected capture is not a production deviation
+
+Verified retainedsource and currentperiodobject: rev_age store+0xc9 precedes
+inputreload+0xd1 and history store+0xda, blob0xab239/0xab245/0xab24e. The
+unsupported full-capture variants live only in build controls and were never
+adopted. No productionfix required at this boundary. Energy grouping also
+value-equivalent: eachshiftedsquare0..32768, signedshort seed/count bounds
+both complete update forms within[-1073741824,1073741823], no int32overflow.
+Not an arbitrary alias runtime claim. docs/residual-tone-reversal-results.md.
+
+## F11909. V8Process local ring publication recovers layout but misses bytes
+
+Four full-TU cells28verdicts at153b22b0, all731B. BaselineBYTES233,
+ringlocalBYTES73,symbollocalBYTES233,bothBYTES71. Ring's initialRTL/machine
+stores2→1 and forward sampleloop matches original. Symbolinitial stores2→1,
+but both already1machine publication; different axis. Duplicate static stores
+are alternative paths, not doubled runtimewrites or measuredbehavioralbug.
+Six bystanders and metadata/data/bindings/relocations preserved, exact2/7
+unchanged, rawbaseline reproduced. Seven uniquelyowned stages/cell, positive/
+negative publication controls fire. Original input/pole order, symbolbound
+operand orientation andzero/registerslots still differ. No score-basedsource
+adoption, strict gain/loss or nearbycarrier expansion; finite crossclosed.
+Production1079/1852 unchanged, previousgate388/0; tools/refcheck/diff pass;
+no candidate runtime/fuzzing/mutation. docs/residual-v8-cursor-results.md.
