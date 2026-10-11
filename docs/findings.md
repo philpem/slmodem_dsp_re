@@ -137204,3 +137204,314 @@ execution or snapshot rerecording; final repaired gate recorded separately.
 F11885–F11887 final repaired phase:388/0, all structural checks green,
 14417 references /2984 headings,285 suites /10038 static anchors, zero detached,
 nonunique or wrong-arm anchors. Modern portability not claimed.
+
+## F11888. Ninety-seven residual nominations now have complete current TU controls
+
+Merged PR283 at736cf61c. Inventory canonical worst defining copy before alpha
+comparison:1077 EXACT/673 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED over1852.
+97 REGALLOC/BYTES nominations/59 TUs; all59 unchanged baselines reproduce raw
+production and metadata/data/BSS/relocations,804 shared body verdicts. Scope
+copies separately from unique symbols. Types/profiles/source unchanged;
+_iir_filter_create positive and exact V90 session negative fire/clear. First
+alpha rejection is not a complete diagnosis. docs/residual-stage-family-results.md.
+
+## F11889. Differing machine rows map to retained UIDs, not original compiler state
+
+85/97 have unique dump headers,12 repeated-constructor ambiguities. Strict
+annotated-assembly cardinality/opcode checks link25/31 REGALLOC targets; five
+constructor ambiguities and ADID annotation absence refused. FloatFIR's scratch
+load appears at peephole2. _iir_filter_create's zero searches still allow8
+peephole changes and6 renaming changes; an initial zero-search=>zero-change
+assertion correctly failed and is withdrawn. No original RTL/cursor/clone
+ownership guessed. tools/residual_register_uid_trace.py and stage_audit.py.
+
+## F11890. Failed peephole replacements still reset the persistent scratch cursor
+
+Eight saved/raw/traced full-object triples agree. Seven controls validate382
+searches/3784 candidate visits/382 replacement attempts. Five rejected attempts
+at three distinct sites: V92 setEchoDelay and two v8_process sites, plus the two
+v8 repeats. Failed searches select none and reset cursor zero; subsequent events
+validate it. Initial all-replacements-accepted assertion failed on real controls;
+repaired audit preserves/counts rejection. Independent v8 event streams agree.
+17 distinct REGALLOC targets covered; two scored Scrambler process methods make
+zero direct searches, not a claim about earlier history. No source/state edits
+or original cursor claim. tools/residual_scratch_audit.py.
+
+## F11891. Diagnostic failure and observer refusal do not become source hypotheses
+
+ADID full-da/dP, independent repeat and no-dP attempt all fail with Gentoo ICE;
+preserve/exclude three attempts. Prior r/c/R/S subset raw-reproduces, missing
+windows unavailable.58 other TUs have full streams. A source-list wrapper
+NameError produced no compiler cell, then was corrected. V90MP's raw/traced
+objects agree but five QI/q searches are refused by the HI/SI r model, not counted
+as validated availability controls. No tolerances, profile/src workaround or
+model widening. Zero new gains/source adoptions in this evidence checkpoint;
+no fuzz/mutation execution or modern portability claim.
+
+## F11892. The SDM shared-short/shift2-first cross misses both initializers
+
+Two original86B bodies; eight full-TU cells24verdicts. Opening reg/cfg stores
+unchanged, so prior reversed-opening and pointer-alias controls not repeated.
+Existing-type short capture alone107B SIZE21; derived shift2-first104B SIZE18;
+both109B SIZE23; baseline86B BYTES18. Only targets change; two bystanders perTU
+and metadata/data unchanged. No source adoption; close finite cross without
+claiming exhaustion. docs/residual-value-owner-results.md.
+
+## F11893. Pre-publish counter lifetime recovers the V92 block-size setter
+
+Five complete-TU cells50verdicts. Explicit query alone raw-object-identical to
+normal helper inline, BYTES48; argument use alone also misses. Pre-store
+symbolsDone capture plus explicit query108B EXACT, using either stored size or
+argument, both whole objects raw-identical. Choose incoming n, keeping both
+original unsigned overflow-distinct rounding forms. Counter load/store/copy
+witness supports lifetime family, not uniquely open-coded author source.
+All nine bystanders and metadata/data unchanged; TU9/10 to10/10.01rtl/24lreg
+preserve counter user pseudo before publish rather than anonymous helper read
+later. Standalone query remains exact. docs/residual-value-owner-results.md.
+
+## F11894. Removing an unnecessary pointer capture recovers echo-history reset
+
+Four complete-TU cells60verdicts; original62B. Existing blk/member-bound
+REGALLOC(rawBYTES12); direct params/member-bound EXACT62B; local unsigned length
+alone or combined BYTES15, declined. Pointer local is reg/v/f in01rtl/24lreg and
+AX in25greg; direct access changes allocation. Pre-store scheduled load does not
+prove source capture; params/historyIndex distinct, pointed-data read remains
+after clear. Fourteen bystanders and metadata unchanged; TU5/15 to6/15. No type,
+layout, flag or register constraint. Old SpectralShaper anchor fitting remains
+closed; exact V90 setter/query need no transfer. docs/residual-value-owner-results.md.
+
+## F11895. Ownership assertions do not disambiguate substring mutation locators
+
+Initial targeted static check catches6nonunique anchors after new source.
+Retarget four query operations with complete unique function-body context,
+two echo operations with original reset's unique expression, and two setter
+locators to their same defects; labels/count preserved. fn is the supported
+trailing-method assertion, not function and not a match scope. Correct earlier
+session-flag function metadata to fn without changing operations. No mutation
+execution/snapshot rerecording.17totalfullTUcells134bodyverdicts,2distinctgains,
+all bystanders/metadata preserved; source/gate validation recorded separately.
+
+Final production census: 1079/1852 EXACT, 118507 original bytes, +2 functions
+and +170 original bytes against the 1077 baseline; zero exact losses.
+`make phase J=8` exits 0: period differential 388 passed / 0 failed; structural
+gate clean, including 285 suites / 10038 static mutation anchors and 14417
+references. No mutation or fuzzing harness execution; no portability claim.
+
+## F11896. Queue's exact helper query still loses C2 in the corrected TU
+
+Three full-TU controls at57dbbf52,90common verdicts, raw baseline reproduced.
+Existing isFull query and unsigned space local give identical complete objects:
+write85B EXACT, C2 loses734B exact toBYTES7; progress remains nonexact. Only
+those three bodies change, all27bystanders and metadata/data preserved.
+F11679's loss survives the two earlier state-publication corrections. No source
+or header adoption, no constructor permutation/argument fitting. Clone-aware
+trace locates constant materialization at28.peephole2 and later renaming rather
+than earlier local allocation. docs/residual-queue-context-results.md.
+
+## F11897. Emitted labels and machine RTL resolve repeated clone headings
+
+Twelve archived ambiguous nominations, nine resolved, three refused; includes
+three substring nomination errors rather than twelve constructors. Printed
+CODE_LABEL numbers identify emitted .L labels; independently require -dP's
+printed patterns to match35.mach. Never infer C1/C2 from heading order. Earlier
+stages link only unique shared labels; Phase3Demodulator only final-stage and
+Parameters four late-stage availability remain explicit. Eleven positive/refusal
+checks fire. Register-only differing-row links25/31 to27/31; original RTL and
+cursor unknown. Queue C2 separately links29stages percell. New reproducible
+tools, archived hash verification and full-TU audit in
+ docs/residual-queue-context-results.md. Production1079/1852 unchanged.
+
+## F11898. A removed leaf cleanup search changes the later constructor cursor
+
+Five read-only raw-equal controls,638searches/4304visits validate under HI/SI r;
+zero rejected replacements, independent baseline event stream repeated exactly.
+Queue contexts agree for22searchgroups; baseline scalar write additionally
+searches its4B cleanup, absent under isFull's MOV-save frame. Later C2 enters
+cursor0 versus2; constant99/23/5 stores select AX/AX/DX versusDX/CX/DI before
+renaming. Complete C2 patterns agree throughflow2,12different peephole patterns
+and6renaming residuals. No constructor/source compensation justified; gain85B
+still costs734B, source/census unchanged. docs/residual-constructor-scratch-results.md.
+
+## F11899. Jd clone differences begin at scratch splitting, not byte allocation
+
+Emitted-label/printed-RTL clone association proves C1/C2 patterns identical
+throughflow2, lookpseudo60 allocatedAX in both. Actual UID30 zero-store search:
+C2 cursor0→DX→2, C1 cursor2→BX→13. Peephole UIDs263/264 differ; renaming
+expands to9patterns, including lookaheadAX/BX. Original final register versus
+our earlier allocated register was an invalid stage comparison; opening-domain
+premise preserved and corrected, no source experiment followed it. Parameters
+names identify four searches dynamically but unavailable early label ownership
+is not inferred. Three annotation/value controls distinguish compiler heap
+string_cst addresses from real pool identities/immediates. No production gain,
+source/header/profile edit, original cursor claim or harness execution.
+ docs/residual-constructor-scratch-results.md.
+
+## F11900. Echo append's cursor and next-length shapes do not close its body
+
+Four pinned complete-TU cells at5b552950,60common verdicts; original244B.
+Indexed/test-plus-one baseline225B; advancing-input/countdown261B;
+preincrement/member last-sample209B; combined245B SIZE1. Combined recovers
+countdown, input advance, increment-before-compare and previous-sample address,
+but81nonpadding instructions versus80original and register/loop placement differ.
+Fourteen bystanders and all metadata/data preserved, exact6/15 unchanged.
+No source adoption, size fitting or candidate runtime claim.
+ docs/residual-echo-append-results.md.
+
+## F11901. Echo append's common exit is raw-inert at both count timings
+
+Five follow-up complete-TU cells75verdicts include raw baseline and combined
+repeat. Common if/else exit equals early-return complete object at both timings:
+245B with pre-guard remaining initialization,226B with guard-owned initialization.
+Both miss244B original; machine counter copy after guard does not identify unique
+source scope. All9cells135verdicts audited,14bystanders percell and metadata/data
+unchanged. Two finite crosses closed, no nearby declaration/color expansion.
+New tools compile; production1079/1852 unchanged, prior period388/0 applies to
+unchanged source, no fuzzing/mutation execution.
+ docs/residual-echo-append-results.md.
+
+## F11902. V.22 ACK square/verdict/count lifetime crosses all miss
+
+Eight complete-TU cells80shared verdicts atdf4b23b9, raw baseline and combined
+repeat; original209B. Square/verdict cross209BYTES187,189SIZE20,205SIZE4,
+185SIZE24. EarlyRTL ideal squareUID75→25 before sampleUID41/68, verdictzero
+UID31→91. Count after ideal changes baseline toBYTES194 and combined still
+SIZE24; count definitionUID13→25 after idealEnergyUID22. Intended changes
+fire, noneexact, TU4/10 preserved; no adoption/nearby declaration fitting.
+All metadata/data/bindings/relocations agree, only ACK and named nonexact
+Detect_1s change. Production1079/1852 unchanged, no candidate runtime claim.
+ docs/residual-v22-ack-results.md.
+
+## F11903. Literal following-detector dump differences (interpretation corrected by F11904)
+
+ACK combined control leaves Detect_1s source and01rtl/24lreg instruction patterns
+and UIDs identical. Twelve patterns differ at25greg, eleven at27flow2,
+thirteen at28peephole2 and seventeen at30rnreg. The initial attribution to
+global allocation/reload is REFUTED by F11904–F11905: printed alias IDs differ,
+but actual allocations/reloads agree and first instruction differences are
+peephole scratch choices. Preserve these literal counts, not the old attribution.
+The original observation could not separate global allocation from reload;
+F11904 supplies that direct observation and F11905 establishes the scratch cause.
+Original RTL/state remains unavailable. Eight-cell audit
+fires lifetime/negative controls, reports80verdicts, new tools compile and
+refcheck/diff clean. No flags/source adoption or fuzzing/mutation execution.
+ docs/residual-v22-ack-results.md.
+
+## F11904. Alias-set ID bijection refutes the V.22 global/reload lead
+
+Three raw-object controls9boundary snapshots45per-instruction reload choices
+are identical across unchanged Detect_1s baseline/combined/repeat. Twelve25greg
+pattern differences are memory aliasIDs only, bijection11→10,12→11,13→12,14→13;
+other IDs stable. Addresses/registers/offsets/sizes/alignment/alias relationships
+preserved; through27flow2 checked patterns agree. Six positive/refusal controls
+retain register/offset changes and refuse alias split/merge/universal0 changes.
+Do not erase aliases or call literal-ID changes instruction divergence. Corrects
+F11903/its Playbook/results. Three optional stack names unavailable, no inference.
+Two invalid heap-comment equality runs and an invalid union observer preserved;
+final controls rerun. docs/residual-v22-allocator-results.md.
+
+## F11905. ACK's scratch exits change two unchanged Detect_1s scratch choices
+
+Three complete-TU saved/raw/traced controls validate46 searches283visits;
+independent baseline repeat identical. First3Detect_Retrain searches agree.
+ACK baseline3searches exits50, combined1search exits13. Detect_1s thresholdUID94
+selectsEDX(50→2) versusESI(13→14), zero-resultUID33 selectsECX(2→3) versus
+EAX(14→49). Four198/199/201/202patterns first differ at28peephole2; seven after
+renaming. Existing persistent cursor mechanism corroborated, no original cursor
+inference, new source lever or compensation. No source/header/profile adoption;
+production1079/1852 unchanged, previous source period388/0. New tools compile,
+refcheck/diff and positive/refusal audits pass, no fuzzing/mutation execution.
+ docs/residual-v22-allocator-results.md.
+
+## F11906. Tone reversal's energy/sample ownership domains miss without adoption
+
+Nine complete-TU cells99common verdicts at9c020b45, original547B. Opening
+sequential/full-sample cross547BYTES463,583SIZE36,543SIZE4,546SIZE1. Follow-up
+preserves final reload and fixes sequential updates:583SIZE36 repeat,
+current-only547BYTES473,outgoing-only531SIZE16,both532SIZE15, plus rawbaseline.
+All10bystanders and metadata/data/bindings/relocations unchanged, TU7/11 stable.
+InitialRTL independently shows energyinit/add/sub vsinit/add. Eight stages/cell
+reviewed, both full-object repeats rawequal, no strict gain/loss or sourceedit.
+Finite domains closed; no register/local synonyms from size scores.
+ docs/residual-tone-reversal-results.md.
+
+## F11907. Original tone reversal reloads current sample after age store
+
+Opening full-capture hypothesis REFUTED: original retains sample for arithmetic
+at0xab295 but reloads at0xab245 after age store0xab239. Full capture removes
+observable alias boundary; a546B near-hit cannot be adopted. Arithmetic-only
+current/outgoing captures preserve late read but still miss. InitialRTL sample
+read counts3uncaptured/1full/2arithmetic-only; last-read vsage-store audit fires
+on both unsupported cells. Existing disjoint fixtures do not establish arbitrary
+input/state alias behavior. Production1079/1852 unchanged, no candidate runtime
+claim, previous source period388/0; tools compile, refcheck/diff clean. No
+fuzzing/mutation execution. docs/residual-tone-reversal-results.md.
+
+## F11908. Tone reversal's rejected capture is not a production deviation
+
+Verified retainedsource and currentperiodobject: rev_age store+0xc9 precedes
+inputreload+0xd1 and history store+0xda, blob0xab239/0xab245/0xab24e. The
+unsupported full-capture variants live only in build controls and were never
+adopted. No productionfix required at this boundary. Energy grouping also
+value-equivalent: eachshiftedsquare0..32768, signedshort seed/count bounds
+both complete update forms within[-1073741824,1073741823], no int32overflow.
+Not an arbitrary alias runtime claim. docs/residual-tone-reversal-results.md.
+
+## F11909. V8Process local ring publication recovers layout but misses bytes
+
+Four full-TU cells28verdicts at153b22b0, all731B. BaselineBYTES233,
+ringlocalBYTES73,symbollocalBYTES233,bothBYTES71. Ring's initialRTL/machine
+stores2→1 and forward sampleloop matches original. Symbolinitial stores2→1,
+but both already1machine publication; different axis. Duplicate static stores
+are alternative paths, not doubled runtimewrites or measuredbehavioralbug.
+Six bystanders and metadata/data/bindings/relocations preserved, exact2/7
+unchanged, rawbaseline reproduced. Seven uniquelyowned stages/cell, positive/
+negative publication controls fire. Original input/pole order, symbolbound
+operand orientation andzero/registerslots still differ. No score-basedsource
+adoption, strict gain/loss or nearbycarrier expansion; finite crossclosed.
+Production1079/1852 unchanged, previousgate388/0; tools/refcheck/diff pass;
+no candidate runtime/fuzzing/mutation. docs/residual-v8-cursor-results.md.
+
+## F11910. Uncapped helper/caller screen finds a fixed-group indirect-callback lead
+
+Baseline7edfb734 Gentoo objects,1079/1852 distinct exact symbols. All299 C/C++
+TUs screened:1934 emitted copies,1105 exact excluded,781 nonexact eligible,
+48 without originals; one assembly TU excluded.315/1367 lexical for headers
+recognized,1052 unsupported,0 unmapped;83 eligible fixed-loop bodies. Three
+positive/negative detector controls fire. Incorrect initial TU/control-count
+assertions were preserved as invalid runs and rerun.24 nominations, nine beyond
+prior size/service scopes; most revisit known calls or loops retained in the
+original. putFrame is different: original sixteen fixed-offset group callbacks
+versus four rolled statements. These are indirect, outside canonical direct-call
+counting; the fixed-loop/backedge screen nominated it. Copy counts are not the
+production-symbol denominator, and included-header/macro loops remain outside
+the screen. No source adoption, gain, ceiling or original-profile claim.
+[Screen and graph review](helper-caller-screen-results.md).
+
+## F11911. putFrame expansion recovers sixteen group callbacks; crossed widths/owners still miss
+
+Original584B, retained376B/SIZE208. Eight complete v34shell TU cells cross
+literal group expansion, short nb and short small/small_last; expansion recovers
+sixteen group sites and577/576/578/578B, all misses. Initial RTL7→19 calls;
+final6→18, matching original18 total sites because one head call is shared
+between paths. Four follow-up main-path/default-capture cells stay578B/SIZE6.
+A typed +a00 subobject owner restores original base access but yields565B/SIZE19,
+not original structure recovery. Four owner/capture cells plus baseline: all miss.
+Expansion changes unchanged decodeDepth; header-owner controls also change
+getFrame/modulatevector.18 full-TU cells/216 common verdicts,3/12 exact preserved,
+all symbol metadata, named data and relocation-cleared allocated nontext unchanged.
+No source adopted. Bounded domain closed; further controls require an independent
+remaining witness rather than nearer-size initialization permutations.
+[Domain](v34-putframe-expansion-domain.md), [results/replay](helper-caller-screen-results.md).
+
+## F11912. V34 snapshot short-counter witnesses do not close the full TU
+
+Original retains both six-entry snapshot loops, sign-extending their index
+updates at672ed/67473 and comparing words. Four complete V34hshak TU cells cross
+short i/t through an isolated header overlay; all leave v34handshak12867B against
+61541B (SIZE48674),9/29 exact common bodies preserved. Short i changes the target;
+short t alone is target-raw-inert. Every nonbaseline cell changes unchanged
+v34tx1_trnseg4a, a TU-history observation rather than a reason to permute that
+arm.4 cells/116 common verdicts, metadata/data controls clean, no source adoption.
+Combined helper/caller audit:22 cells/332 common body verdicts, zero gains/losses.
+Production remains1079/1852; no additional runtime gate or fuzzing/mutation run.
+[Width domain](v34-snapshot-width-domain.md), [audit/replay](helper-caller-screen-results.md).

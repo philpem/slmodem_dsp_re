@@ -4103,3 +4103,150 @@ bindings and bystanders. DialerAbort's structured common exit compiles identical
 to the early return and remains nonexact even with its unsigned guard; close
 that domain. Do not change allocator prototypes or sweep return synonyms.
 [Controls and audit](../small-call-result-results.md).
+
+### Link mismatching rows to UIDs before attributing a register residual (F11888–F11891)
+
+Residual_stage_inventory applies the canonical worst-copy rule; 97 REGALLOC/
+BYTES nominations are not 97 diagnoses. Unchanged complete-TU reproduction and
+-dP annotation cardinality/opcode checks let residual_register_uid_trace link
+25/31 REGALLOC targets to RTL patterns. Repeated clone headers and unavailable
+annotation/stage windows stay ambiguous or unavailable, never guessed or zero.
+A changed peephole UID need not consume scratch: _iir_filter_create's zero
+searches coexist with eight transformed UIDs. Inspect actual events before
+attributing a row to the persistent cursor; two scored Scrambler process bodies
+have no direct search. [Baseline and UID evidence](../residual-stage-family-results.md).
+
+A failed scratch search can reset the persistent cursor even when its enclosing
+peephole emits no replacement. The new V92 setEchoDelay and v8_process controls
+observe three distinct failed sites (five attempts including a repeat), setting
+cursor zero; subsequent searches confirm the state. Count rejected attempts,
+not only surviving instructions or accepted replacements. Seven controls validate
+382 searches/3784 visits; V90MP's QI/q events are explicitly outside the current
+HI/SI r model. This observes current GCC behavior, not original cursor values,
+and does not authorize tuning source history to manufacture a register color.
+
+### Capture before publish when the ordinary inline loses that lifetime (F11892–F11895)
+
+V92's block-size setter needs pre-store symbolsDone capture and explicit query
+dataflow to recover108B. Expanding the helper normally is raw-identical and
+argument use alone misses; both early-capture forms match, so original syntax
+is not uniquely identified. Preserve multiply-before-divide on the divisible
+arm: simplifying rounding changes unsigned overflow behavior. Nine bystanders
+and standalone query stay exact. Conversely echo-history reset closes by
+REMOVING its unnecessary params capture, leaving the member-valued bound.
+Pointer reg/v/f lifetime and scalar pre-publish lifetime are different axes;
+inspect01rtl and24lreg/25greg rather than always adding or always removing locals.
+The SDM cross misses both initializers and is closed. Do not transfer to already
+exact siblings or reopen SpectralShaper's previously fitted owner-anchor domain.
+[Full-TU controls](../residual-value-owner-results.md).
+
+Mutation fn verifies trailing function ownership AFTER unique substring matching;
+it does not scope the find. Use unique context for duplicated arithmetic and
+correct unsupported function metadata. Show detached/nonunique locators firing,
+repair the same labelled operations, and keep static checks separate from any
+claim that a mutation harness was executed.
+
+### Match clone labels and printed RTL before using a repeated heading (F11896–F11897)
+
+A C++ dump heading can name both C1 and C2, with repeated instruction UIDs.
+Identify an assembly symbol by its boundary, then match emitted .L numbers to
+CODE_LABEL numbers and check its printed -dP patterns against35.mach. Do not
+use heading order as ownership. Earlier stages require unique shared label
+witnesses independently; a final-stage match does not make every earlier stage
+available. Missing/ambiguous witnesses are explicit refusals. This resolves nine
+of twelve prior ambiguous nominations and increases register-row links25/31
+to27/31. Three nominations were substring collisions, not constructor clones.
+
+A helper query's exact leaf can still alter a remote constructor's scratch
+history. Current Queue replay again gains85B and loses734B; no adoption. Its
+argument constant loads first appear atpeephole2, then change at renaming.
+Use those pass boundaries to investigate the history; do not rewrite the
+constructor to repair a color without an independent source witness.
+[Replay and limits](../residual-queue-context-results.md).
+
+### Trace scratch → renaming before attributing a captured local (F11898–F11899)
+
+Jd's two constructor clones allocate the same lookahead byte to AX and retain
+identical patterns throughflow2. A different zero-store scratch atpeephole2 then
+changes which register renaming chooses for that byte. Thus an original final
+register versus our allocation-stage register does not locate the divergence.
+Compare independently owned clone streams and actual emitted-name search events.
+One scratch difference can spread to nine late patterns without a different local.
+
+An exact helper leaf can remove a dead-stack cleanup search and change a later
+constructor's inherited cursor. The Queue85B gain still loses734B: observe the
+complete event history, including all predecessors, before source fitting.
+No original cursor or new source spelling follows from this mechanism alone.
+When comparing dumps, strip explicit string_cst heap-pointer annotations only;
+keep pool names, real constants and all operand structure. Three refusal/value
+controls verify that boundary. [Replay](../residual-constructor-scratch-results.md).
+
+### Shared machine cleanup does not distinguish source exits (F11900–F11901)
+
+Echo append's advancing-input/countdown and preincrement length witnesses recover
+individual original shapes, but their combination still misses the complete body.
+Do not adopt a one-byte size gap: count instructions and inspect complete paths.
+An early return and common if/else exit produce raw-identical complete objects
+at both remaining-counter timings. Shared machine cleanup is therefore compatible
+with both source forms in this domain. A post-guard register copy likewise does
+not uniquely establish a guard-local declaration. Close the bounded cross on its
+misses; require a new independent witness before another spelling experiment.
+[Nine-cell full-TU audit](../residual-echo-append-results.md).
+
+### Check memory alias identities before locating a stage difference (F11902–F11905)
+
+V.22's literal25greg differences first looked like a global/reload boundary.
+Direct traces refute that: mappings and every observed reload choice agree;
+only printed memory alias IDs differ. Require a bijection preserving all alias
+relationships, universal class0, addresses, offsets, registers, sizes and
+alignments before treating renumbering as equivalent. Never erase alias data.
+The checked streams agree throughflow2; two scratch choices first differ at
+peephole2 and register renaming spreads them. This is the existing inherited
+cursor mechanism, not a new allocator lever. Six controls show harmless identity
+renumbering, real register/offset differences and refused alias split/merge.
+ACK's finite source domains remain closed without adoption.
+[Correction and read-only raw controls](../residual-v22-allocator-results.md).
+
+### Bound a captured sample by every observable reload (F11906–F11907)
+
+Tone reversal retains current and outgoing samples for correlation/energy, but
+reloads current input after rev_age is written for the history store. Extending
+one local through that store removes a possible alias observation, even though
+arithmetic still agrees on disjoint buffers and size nearly matches. Check all
+uses across intervening writes before proposing capture. InitialRTL read/age
+boundaries detect the two unsupported controls; arithmetic-only captures keep
+that boundary and still miss, closing the finite source domains without adoption.
+[Nine-cell audit](../residual-tone-reversal-results.md).
+
+### Distinguish rejected experiments and static paths from production bugs (F11908–F11909)
+
+Tone's lost reload occurs only in an unadopted control; retained source and period
+object already read input after age publication, like the blob. Audit production
+before reporting a deviation. Likewise V8's two static ring stores are alternative
+paths, not two writes per sample. A local publication recovers the original loop
+layout but misses bytes; symbol publication is a different axis because its two
+initial RTL stores already merge in machine RTL. Count both source-stage and
+machine-stage publications rather than inferring missing behavior from code size.
+[Four complete-TU controls](../residual-v8-cursor-results.md).
+
+### Screen indirect callbacks and validate their iteration graph (F11910–F11911)
+
+Direct helper-call counts omit indirect callbacks. Pair literal source-loop
+inventory with original/retained graph review: putFrame's four-group loop hides
+sixteen fixed-offset original calls. Its static head-call count differs from
+initial RTL because alternative paths share a call; neither count is the number
+executed on one path. Expansion restores the group operations without recovering
+the complete body. Width, capture and typed-owner crosses still miss, and unchanged
+neighbors change through TU history. Count all bystanders; do not adopt the nearest
+size or claim a uniquely recovered substructure from one base-pointer instruction.
+[Uncapped screen and22-cell full-TU audit](../helper-caller-screen-results.md).
+
+### A narrow loop counter is an independent witness, not a whole-function fix (F11912)
+
+Original snapshot index increments sign-extend from16 bits; the six-entry loops
+remain rolled, so expanding them would contradict the graph. Test the local width
+without changing the inlining/profile domain, and distinguish raw-inert narrowing
+already expressed by assignment casts from changes to target/unchanged neighbors.
+The four short-local controls miss complete identity. Reopen from a new operand
+or ownership witness, not from another declaration spelling.
+[Bounded domain](../v34-snapshot-width-domain.md).
