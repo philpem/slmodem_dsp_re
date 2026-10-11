@@ -137566,3 +137566,38 @@ fskdemodulate and metadata/data unchanged.13 cells/26 verdicts, no source edit,
 no production bug or runtime alias/reachability claim. Combined widened-control
 audit33 cells/158 verdicts, zero exact gains/losses; production1079/1852 unchanged.
 [Domain/correction](fskdetect-phase-delay-domain.md), [audit/replay](callback-preprocessed-loop-results.md).
+
+## F11917. ADID grouping's excess backedges reflect guard joins, not missing expansion
+
+Original uniteLinMappInfoOfUnsuspectedPhases601B at41550 retains all five loop
+classes; retained635B. Eight full-TU cells cross late count/best definitions
+with positive outer grouping/pooling guards. Both guards recover601B/BYTES147;
+late definitions narrow toBYTES61. No exact gain or loss,33 bystanders unchanged.
+The9/11 backedge screen is a nomination, not an expansion preimage. Threshold
+before distance, ordered-not-below skip and D283/D284 preserved. No source adopted.
+[Domain](adid-phase-grouping-domain.md), [results/replay](adid-phase-grouping-results.md).
+
+## F11918. ADID rounded-value consumer and half mode recover operations but not spill homes
+
+Four double-half controls miss; late/both guards601B/BYTES59. Five consumer
+controls preserve signed-short conversion: unsigned carrier changes one opcode
+byte to zero-extension (not raw-inert); direct short-store conversion narrows
+toBYTES36 with float half orBYTES10 with double half. The direct/double form
+recovers the original rounded reload and x87 operation sequence. Guarded source
+conversion timing is not a general floating-exception equivalence claim; emitted
+conversion precedes the publication loop. No adoption from equal sizes/counts.
+[Complete-TU results](adid-phase-grouping-results.md).
+
+## F11919. ADID first-definition controls close at eight exchanged stack operands
+
+Five controls including raw baseline cross same-boundary count/best and pool
+zero first definitions, without moving declarations. Floating zeros first fixes
+zero scheduling, leaving601B/BYTES8: audit fires on exactly eight exchanged
+0x20/0x24 stack operands, all remaining instructions identical. Best-first adds
+differences, not identity. Our initial RTL pseudo71 count precedes pseudo61 best;
+original RTL/declaration order is unknown. Larger permutation search is declined.
+Combined22 cells/748 verdicts,16/34 exact in every full TU,33 bystanders and all
+symbol metadata/named data/allocated nontext unchanged. Zero exact gains/losses,
+production1079/1852 unchanged, no src edit or new runtime/fuzzing/mutation runs.
+Next witness: observe spill-home assignment stage and a supported lifetime/owner
+difference, with an exact same-TU control. [Replay/audit](adid-phase-grouping-results.md).

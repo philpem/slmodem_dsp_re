@@ -4279,3 +4279,23 @@ must preserve coefficient read before the store; the coefficient table is
 writable. Arithmetic and loop counts alone miss that boundary. Keep rejected
 controls separate from corrected ones and production, and do not mistake equal
 sizes for raw identity. [Controls and read-age audit](../callback-preprocessed-loop-results.md).
+
+### Separate guard joins, rounded consumers and spill homes (F11917–F11919)
+
+Extra aggregate backedges can come from replicated loop increments rather than
+missing expansion. ADID phase grouping retains every original loop; positive
+guards recover its shared joins and original length. Cross this graph evidence
+with initialization age and expression/consumer mode independently. A short
+destination does not force a local rounded carrier to receive the same promotion:
+direct conversion at the store recovers the original reload where signed and
+unsigned carriers retain an extra extension. Check the emitted conversion age
+before claiming behavior at guarded floating-exception boundaries.
+
+The closest complete control leaves eight exchanged spill displacements. Same-
+boundary first definitions can fix scheduling without fixing those homes; original
+machine stack offsets do not uniquely imply source declaration order. Close the
+finite source domain and seek observational allocator evidence before reopening.
+Compare raw bodies: equal original-relative byte counts hid a one-opcode change
+between signed/unsigned controls. Audit every bystander and data owner even when
+the target is the only body expected to change.
+[22-cell control and positive residual detector](../adid-phase-grouping-results.md).
