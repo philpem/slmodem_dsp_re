@@ -31,14 +31,14 @@ following nonexact Detect_1s. All other bodies stay identical. No source/header
 adoption, type change, flag change, artificial scope or register fitting.
 The finite domains are closed. Production remains1079/1852 EXACT.
 
-Detect_1s has identical instruction patterns and UIDs in01.rtl and24.lreg;
-twelve patterns differ at25.greg, eleven at27.flow2, thirteen at28.peephole2
-and seventeen at30.rnreg. This is a global-allocation/reload boundary, earlier
-than the previous constructor scratch examples. It does not identify the
-responsible state or prove original allocation history. Next diagnostic, if
-pursued: inspect global/reload decisions for the same unchanged function in
-raw-reproducing baseline and combined TUs, rather than changing its source to
-compensate. Distinguish the two passes before claiming allocator causality.
+The literal dump comparison found twelve differences at25.greg and initially
+attributed them to global allocation/reload. **That interpretation is refuted**:
+they are bijectively renumbered memory alias-set IDs. Read-only allocation and
+per-instruction reload traces agree. The first instruction differences are four
+peephole2 patterns, caused by the preceding ACK control's inherited scratch
+cursor, expanding to seven at renaming. See
+[the correction and raw controls](residual-v22-allocator-results.md),
+F11904–F11905. Original RTL and allocation history remain unknown.
 
 Replay tools: residual_v22_ack_reproduce.py, residual_v22_ack_count_reproduce.py,
 residual_v22_ack_audit.py under tools/. Audit outputs

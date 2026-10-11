@@ -4193,13 +4193,16 @@ not uniquely establish a guard-local declaration. Close the bounded cross on its
 misses; require a new independent witness before another spelling experiment.
 [Nine-cell full-TU audit](../residual-echo-append-results.md).
 
-### A remote bystander can first differ before peephole2 (F11902–F11903)
+### Check memory alias identities before locating a stage difference (F11902–F11905)
 
-After changing only ACK detector value lifetimes, the following Detect_1s has
-identical01rtl/24lreg patterns but differs at25greg. Do not generalize the
-constructor scratch explanation to every complete-TU history effect. Locate the
-first evidenced boundary in the unchanged body, then separate global allocation
-from reload with direct diagnostics; the25greg dump alone contains both. This
-is a diagnostic discriminator, not a recovered source lever. ACK's square,
-verdict and count timing domains miss and are closed without adoption.
-[Eight-cell controls](../residual-v22-ack-results.md).
+V.22's literal25greg differences first looked like a global/reload boundary.
+Direct traces refute that: mappings and every observed reload choice agree;
+only printed memory alias IDs differ. Require a bijection preserving all alias
+relationships, universal class0, addresses, offsets, registers, sizes and
+alignments before treating renumbering as equivalent. Never erase alias data.
+The checked streams agree throughflow2; two scratch choices first differ at
+peephole2 and register renaming spreads them. This is the existing inherited
+cursor mechanism, not a new allocator lever. Six controls show harmless identity
+renumbering, real register/offset differences and refused alias split/merge.
+ACK's finite source domains remain closed without adoption.
+[Correction and read-only raw controls](../residual-v22-allocator-results.md).

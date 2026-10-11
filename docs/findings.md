@@ -137381,15 +137381,43 @@ All metadata/data/bindings/relocations agree, only ACK and named nonexact
 Detect_1s change. Production1079/1852 unchanged, no candidate runtime claim.
  docs/residual-v22-ack-results.md.
 
-## F11903. Unchanged following detector first differs at global allocation/reload
+## F11903. Literal following-detector dump differences (interpretation corrected by F11904)
 
 ACK combined control leaves Detect_1s source and01rtl/24lreg instruction patterns
 and UIDs identical. Twelve patterns differ at25greg, eleven at27flow2,
-thirteen at28peephole2 and seventeen at30rnreg. This is earlier than the closed
-constructor scratch examples. No original RTL/state is available; global
-allocation and reload are not separated by these dumps, so root cause remains
-unproven. Next discriminator: raw-reproducing observation of those two passes
-on the unchanged bystander, not compensation in its source. Eight-cell audit
+thirteen at28peephole2 and seventeen at30rnreg. The initial attribution to
+global allocation/reload is REFUTED by F11904–F11905: printed alias IDs differ,
+but actual allocations/reloads agree and first instruction differences are
+peephole scratch choices. Preserve these literal counts, not the old attribution.
+The original observation could not separate global allocation from reload;
+F11904 supplies that direct observation and F11905 establishes the scratch cause.
+Original RTL/state remains unavailable. Eight-cell audit
 fires lifetime/negative controls, reports80verdicts, new tools compile and
 refcheck/diff clean. No flags/source adoption or fuzzing/mutation execution.
  docs/residual-v22-ack-results.md.
+
+## F11904. Alias-set ID bijection refutes the V.22 global/reload lead
+
+Three raw-object controls9boundary snapshots45per-instruction reload choices
+are identical across unchanged Detect_1s baseline/combined/repeat. Twelve25greg
+pattern differences are memory aliasIDs only, bijection11→10,12→11,13→12,14→13;
+other IDs stable. Addresses/registers/offsets/sizes/alignment/alias relationships
+preserved; through27flow2 checked patterns agree. Six positive/refusal controls
+retain register/offset changes and refuse alias split/merge/universal0 changes.
+Do not erase aliases or call literal-ID changes instruction divergence. Corrects
+F11903/its Playbook/results. Three optional stack names unavailable, no inference.
+Two invalid heap-comment equality runs and an invalid union observer preserved;
+final controls rerun. docs/residual-v22-allocator-results.md.
+
+## F11905. ACK's scratch exits change two unchanged Detect_1s scratch choices
+
+Three complete-TU saved/raw/traced controls validate46 searches283visits;
+independent baseline repeat identical. First3Detect_Retrain searches agree.
+ACK baseline3searches exits50, combined1search exits13. Detect_1s thresholdUID94
+selectsEDX(50→2) versusESI(13→14), zero-resultUID33 selectsECX(2→3) versus
+EAX(14→49). Four198/199/201/202patterns first differ at28peephole2; seven after
+renaming. Existing persistent cursor mechanism corroborated, no original cursor
+inference, new source lever or compensation. No source/header/profile adoption;
+production1079/1852 unchanged, previous source period388/0. New tools compile,
+refcheck/diff and positive/refusal audits pass, no fuzzing/mutation execution.
+ docs/residual-v22-allocator-results.md.
