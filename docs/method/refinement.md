@@ -4322,3 +4322,23 @@ before retention. Always audit other-function context: moving an intact exact
 helper changed five raw bodies only through relocated addends. Compare canonical
 targets and masked bytes before claiming inherited allocator/scratch effects.
 [Source/context cross and observational replay](../adid-spill-context-results.md).
+
+### Cross floating expression modes at their actual consumers (F11923–F11925)
+
+ADID first-study's explicit mean conversion used0.5f while its already exact
+helper used0.5. The double expression recovers the original inner variance/mean
+operations even though the complete function grows16 bytes. Helper reuse emits
+the same object, so it does not uniquely recover factoring. Retain the supported
+operation recovery after period validation; byte-exact function count is not
+the only progress measure.
+
+Consumer matters: changing threshold2.5f to2.5 at a float destination is raw-inert,
+but the diagnostic multiplication feeding a short conversion changes initial
+RTL from SF to DF and restores the opening evaluation sequence. An explicit
+upper-clamp guard independently restores the original branch/pop selection;
+crossing them recovers66 opening rows. EqualSIZE16 scores initially hid these
+differences: full hash/body checks rejected the false erasure interpretation.
+Separate n's initialization placement from merged byte publication: moving n
+inside the admitted scan restores placement; duplicating source arms still
+emits a shared store. Bound and close that domain without register forcing.
+[22-cell controls, positive block detectors and retained partial recovery](../adid-first-study-results.md).

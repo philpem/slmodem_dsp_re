@@ -834,18 +834,18 @@
  },
  {
   "label": "take the larger of the clamp and the maximum neighbour distance",
-  "find": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? t : (float)neighborUcodeMaxDistance;",
-  "replace": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? (float)neighborUcodeMaxDistance : t;"
+  "find": "\tsqrDiffThresh = t;\n\tif (!((float)neighborUcodeMaxDistance >= sqrDiffThresh))\n\t\tsqrDiffThresh = (float)neighborUcodeMaxDistance;",
+  "replace": "\tsqrDiffThresh = t;\n\tif ((float)neighborUcodeMaxDistance >= sqrDiffThresh)\n\t\tsqrDiffThresh = (float)neighborUcodeMaxDistance;"
  },
  {
   "label": "report the threshold before the maximum clamp",
-  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
-  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(t + 0.5));"
+  "find": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(t + 0.5));"
  },
  {
   "label": "drop the rounding from the reported threshold",
-  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
-  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)sqrDiffThresh);"
+  "find": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)sqrDiffThresh);"
  },
  {
   "label": "study one code fewer",
@@ -889,13 +889,13 @@
  },
  {
   "label": "drop the first study's rounding term",
-  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5);",
   "replace": "\t\t\tlinMapp[phase][code] = (short)mean;"
  },
  {
   "label": "write the first study's mean into the alternate table",
-  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
-  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5f);"
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5);",
+  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5);"
  },
  {
   "label": "count the roughness from zero",
@@ -941,8 +941,8 @@
  },
  {
   "label": "count the roughness of an already-flagged phase too",
-  "find": "\t\tif (altRbsFlag[phase] == 0) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
-  "replace": "\t\tif (altRbsFlag[phase] != 1) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
+  "find": "\t\tif (altRbsFlag[phase] == 0) {\n\t\t\tshort n = 1;\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\tif (altRbsFlag[phase] != 1) {\n\t\t\tshort n = 1;\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
  },
  {
   "label": "suspect the trusted phases and trust the suspected ones",

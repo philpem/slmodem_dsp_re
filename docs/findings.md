@@ -137639,3 +137639,54 @@ production ADID raw-identical to winner. Final make phase388/0, all structural
 checks green,285 suites/10038 anchors and14424 references/3018 headings clean.
 Initial guard-only phase388/0 was structurally red with14 locator failures;
 retarget same operations/methods, no mutation execution or snapshot rerecording.
+
+## F11922. The reload-slot screen has no further same-graph candidate among95 worst copies
+
+Current9aa census1080/1852 yields65 BYTES/30 REGALLOC worst copies. Erasing simple
+esp displacements nominates only SDM_init/FPM_SDM_init, whose callee-save accesses
+do not form a consistent slot bijection. Actual ADID eight-slot control fires;
+exact identity, nonstack change and inconsistent mapping refuse. No new reload
+candidate/source adoption. SIZE/other graphs excluded, no exhaustion claim.
+[Screen/replay](adid-first-study-results.md).
+
+## F11923. First-study double-half recovers the original24-instruction mean/variance block
+
+Six full-TU controls cross explicit float/double mean half or exact helper reuse
+with first-use counters. Counters raw-inert; helper and explicit double forms
+raw-identical. Double-half recovers inner24 instruction/operand rows and original
+frame0x5c, but whole body779B/BYTES445→795B/SIZE16 still misses. Adopt smallest
+supported literal change after deciding validation, no helper-factoring claim
+or nearest-size fit. Metadata/named data unchanged; anonymous cst4 -4/cst8 +8.
+Only first-study changes canonically; eight other raw bodies differ by relocation
+addends. Final integrated gate in [results/replay](adid-first-study-results.md).
+
+## F11924. Equal first-study SIZE16 scores hide independent diagnostic and clamp recoveries
+
+Five opening cells cross threshold multiplication mode and upper-clamp guard;
+five diagnostic-consumer literal crosses complete that expression-mode family.
+Threshold mode raw-inert, but upper guard restores original jae/pop join and
+diagnostic2.5 (DF product) restores opening evaluation. Initial RTL SF/SF versus
+SF/DF products distinguishes consumers; full object hashes refute the initial
+erasure assertion. Two combined cells reproduce first66 original instruction/
+operand rows. All still795B/SIZE16; equal scores are not equal bodies. Retain
+supported evaluation/guard forms after deciding validation, no unique spelling.
+[Domain](adid-first-study-domain.md), [audit/results](adid-first-study-results.md).
+
+## F11925. First-study n begins inside the admitted scan; publication remains merged
+
+Four full-TU controls: raw baseline, recovered opening, n inside alt-flag-zero
+scan and nested selection arms. Late n restores original initialization after
+admission; nested form raw-identical to late n. Byte-zero/byte-one stores still
+merge, unlike original, and later clearing/debug rows differ. No nested-factoring
+adoption or register forcing. Combined22 cells/748 verdicts,17/34 exact perTU,
+zero gains/losses,33 canonical bystanders/metadata/named data unchanged. Anonymous
+constant section changes documented. Production retains supported mean/diagnostic
+modes, upper guard and n first-use declaration; whole-function identity unclaimed.
+[Remaining boundaries and validation](adid-first-study-results.md).
+
+F11923–F11925 integration: production ADID raw-identical to combined-count-inside
+control; make tc300/300/0. Final make phase388/0, all structural checks green,
+285 suites/10038 static anchors and14426 references/3022 headings clean. Whole
+census1080/1852 EXACT/119108 bytes unchanged, zero losses;673 SIZE/64 BYTES/
+30 REGALLOC/5 UNRESOLVED. Six locators retargeted/scoped, no mutation execution.
+Partial-link fixed300-input before/after stays DIFFERENT (strict exit1).

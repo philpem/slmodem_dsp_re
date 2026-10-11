@@ -1138,12 +1138,13 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 	t = trn1Sigma * 2.5f;
 	t = (t >= (float)neighborUcodeMinDistance)
 		? t : (float)neighborUcodeMinDistance;
-	sqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)
-		? t : (float)neighborUcodeMaxDistance;
+	sqrDiffThresh = t;
+	if (!((float)neighborUcodeMaxDistance >= sqrDiffThresh))
+		sqrDiffThresh = (float)neighborUcodeMaxDistance;
 
 	edprintf("V90AutoDigitalImpDetector::porcessFirstStudy()  "
 		 "2.5*trn1Sigma=%d , sqrDiffThresh=%d\n",
-		 (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));
+		 (short)(trn1Sigma * 2.5 + 0.5), (short)(sqrDiffThresh + 0.5));
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		for (code = 0x40; code <= 0x4f; code++) {
@@ -1159,16 +1160,15 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 
 			linearMappingVar[phase][code] =
 			    inv * magnitudeSqSum[phase][code] - mean * mean;
-			linMapp[phase][code] = (short)(mean + 0.5f);
+			linMapp[phase][code] = (short)(mean + 0.5);
 		}
 	}
 
 	suspectedPhaseCount = 0;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		short n = 1;
-
 		if (altRbsFlag[phase] == 0) {
+			short n = 1;
 			for (code = 0x40; code <= 0x4e; code++) {
 				float d = (float)(linMapp[phase][code + 1]
 						  - linMapp[phase][code]);
