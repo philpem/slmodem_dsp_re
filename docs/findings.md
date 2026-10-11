@@ -137421,3 +137421,27 @@ inference, new source lever or compensation. No source/header/profile adoption;
 production1079/1852 unchanged, previous source period388/0. New tools compile,
 refcheck/diff and positive/refusal audits pass, no fuzzing/mutation execution.
  docs/residual-v22-allocator-results.md.
+
+## F11906. Tone reversal's energy/sample ownership domains miss without adoption
+
+Nine complete-TU cells99common verdicts at9c020b45, original547B. Opening
+sequential/full-sample cross547BYTES463,583SIZE36,543SIZE4,546SIZE1. Follow-up
+preserves final reload and fixes sequential updates:583SIZE36 repeat,
+current-only547BYTES473,outgoing-only531SIZE16,both532SIZE15, plus rawbaseline.
+All10bystanders and metadata/data/bindings/relocations unchanged, TU7/11 stable.
+InitialRTL independently shows energyinit/add/sub vsinit/add. Eight stages/cell
+reviewed, both full-object repeats rawequal, no strict gain/loss or sourceedit.
+Finite domains closed; no register/local synonyms from size scores.
+ docs/residual-tone-reversal-results.md.
+
+## F11907. Original tone reversal reloads current sample after age store
+
+Opening full-capture hypothesis REFUTED: original retains sample for arithmetic
+at0xab295 but reloads at0xab245 after age store0xab239. Full capture removes
+observable alias boundary; a546B near-hit cannot be adopted. Arithmetic-only
+current/outgoing captures preserve late read but still miss. InitialRTL sample
+read counts3uncaptured/1full/2arithmetic-only; last-read vsage-store audit fires
+on both unsupported cells. Existing disjoint fixtures do not establish arbitrary
+input/state alias behavior. Production1079/1852 unchanged, no candidate runtime
+claim, previous source period388/0; tools compile, refcheck/diff clean. No
+fuzzing/mutation execution. docs/residual-tone-reversal-results.md.

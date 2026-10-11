@@ -4206,3 +4206,14 @@ cursor mechanism, not a new allocator lever. Six controls show harmless identity
 renumbering, real register/offset differences and refused alias split/merge.
 ACK's finite source domains remain closed without adoption.
 [Correction and read-only raw controls](../residual-v22-allocator-results.md).
+
+### Bound a captured sample by every observable reload (F11906–F11907)
+
+Tone reversal retains current and outgoing samples for correlation/energy, but
+reloads current input after rev_age is written for the history store. Extending
+one local through that store removes a possible alias observation, even though
+arithmetic still agrees on disjoint buffers and size nearly matches. Check all
+uses across intervening writes before proposing capture. InitialRTL read/age
+boundaries detect the two unsupported controls; arithmetic-only captures keep
+that boundary and still miss, closing the finite source domains without adoption.
+[Nine-cell audit](../residual-tone-reversal-results.md).
