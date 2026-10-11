@@ -137515,3 +137515,54 @@ arm.4 cells/116 common verdicts, metadata/data controls clean, no source adoptio
 Combined helper/caller audit:22 cells/332 common body verdicts, zero gains/losses.
 Production remains1079/1852; no additional runtime gate or fuzzing/mutation run.
 [Width domain](v34-snapshot-width-domain.md), [audit/replay](helper-caller-screen-results.md).
+
+## F11913. Period preprocessing widens callback/loop triage without claiming a source ceiling
+
+Baseline80da7b0c production1079/1852.299 period-preprocessed C/C++ TUs,1934
+emitted copies/781 eligible nonexact.537 project loops among1553 for headers;
+964 unsupported,52 outside2..64 iterations. Four included-header loops,47
+without emitted owners, nine ambiguous owners explicitly retained. Seven detector
+controls fire. Initial missing DCR override and old-control/new-nomination
+assertion were preserved invalid and corrected. Eleven nominations; getFrame's
+6/3 indirect calls, dftenergy's hexadecimal bound and fskdetect's macro loops
+supply new graph/read-age controls. Prior putFrame/CRC/Demapper domains not
+reopened from counts; ADID grouping/fax unframing remain screened, uncompiled.
+No source/profile adoption or completeness/ceiling claim.
+[Domain](callback-preprocessed-loop-domain.md), [inventory/replay](callback-preprocessed-loop-results.md).
+
+## F11914. getFrame's captured callback and four fixed groups still miss full identity
+
+Original1028B captures callback579dd, then uses the saved stack slot for all
+six calls. Retained597B reads the member at three static sites in rolled groups.
+Eight full-TU cells cross fixed groups, callback capture and word locals.
+Expansion1036/1046B, expansion+capture1041/1052B: all misses. Audit confirms
+six/three sites and one captured-owner read versus a read at each call. Eleven
+bystanders and complete metadata/data unchanged,3/12 exact preserved;8 cells/
+96 verdicts. No production edit or callback-rebinding runtime claim. Finite
+family closed; recovered operations are not complete byte identity.
+[Domain](getframe-callback-expansion-domain.md), [results](callback-preprocessed-loop-results.md).
+
+## F11915. DFT searched-index exit forms narrow the gap; byte/direct count forms are raw-inert
+
+Original209B retains the bit search, stores k+1 on success and directly joins
+bin advancement; default20 follows exhaustion. Retained221B break/post-check
+becomes215B with success jump or207B with single post-search publication, neither
+exact. Both already publish integer energy before double energy, so the proposed
+store-order lead is refuted. Nine exit/count crosses preserve&31 and are raw-inert
+within each exit column.3+9 full-TU cells/9+27 common verdicts; both bystanders,
+metadata/data unchanged,2/3 exact retained. No source adoption or bare-mask retry.
+[Finite domain](dftenergy-loop-exit-domain.md), [results](callback-preprocessed-loop-results.md).
+
+## F11916. Combining the FSK phase/transfer loop requires coefficient read before history store
+
+Original692B combines third-phase multiplication/history transfer and captures
+a delayed-tap pointer before twelve iterations. Eight full-TU loop/tap/short-counter
+cells all miss (461baseline;429/445/557/605 alternatives). Four combined controls
+are unsupported preimages: their history store precedes writable intcoef3 read;
+original73b56 reads before store73b60. Five follow-up cells capture coefficient
+first and recover that machine boundary but still miss429/557B. Original plus
+four negative/four corrected read-age checks fire. Only fskdetect changes;
+fskdemodulate and metadata/data unchanged.13 cells/26 verdicts, no source edit,
+no production bug or runtime alias/reachability claim. Combined widened-control
+audit33 cells/158 verdicts, zero exact gains/losses; production1079/1852 unchanged.
+[Domain/correction](fskdetect-phase-delay-domain.md), [audit/replay](callback-preprocessed-loop-results.md).

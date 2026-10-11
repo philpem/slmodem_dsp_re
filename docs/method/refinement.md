@@ -4250,3 +4250,32 @@ already expressed by assignment casts from changes to target/unchanged neighbors
 The four short-local controls miss complete identity. Reopen from a new operand
 or ownership witness, not from another declaration spelling.
 [Bounded domain](../v34-snapshot-width-domain.md).
+
+### Expand macros with the deciding compiler and retain owner uncertainty (F11913)
+
+A decimal-only lexical scan misses hexadecimal bounds and macros. Period
+preprocessing with complete per-file flags recovers those without guessing
+constant values. Preserve line provenance and use balanced for headers with
+checked start/update, then report unsupported bounds and missing/ambiguous
+emitted owners. Inline header helpers do not acquire a parent by name alone.
+Fixed iteration counts and aggregate backedges remain nominations for graph
+review. [537-loop inventory and controls](../callback-preprocessed-loop-results.md).
+
+### Recover callback identity separately from repeated call sites (F11914)
+
+getFrame's original captures one callback before all six calls; repeating four
+groups and retaining that pointer are distinct axes. Verify both the machine
+site count and member read count. Their crossed forms can reproduce these
+boundaries without recovering the whole function, so neither size closeness nor
+matching callback counts establishes original source or a functional lifecycle.
+[Full-TU cross](../getframe-callback-expansion-domain.md).
+
+### Check reads across a combined loop's stores before adopting fusion (F11915–F11916)
+
+A source break/post-check and an explicit success jump can differ even when
+both retain the search loop. Count-consumer synonyms may remain raw-inert across
+those graph forms. Likewise, combining FSK multiplication and history transfer
+must preserve coefficient read before the store; the coefficient table is
+writable. Arithmetic and loop counts alone miss that boundary. Keep rejected
+controls separate from corrected ones and production, and do not mistake equal
+sizes for raw identity. [Controls and read-age audit](../callback-preprocessed-loop-results.md).
