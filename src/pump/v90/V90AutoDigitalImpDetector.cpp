@@ -1276,10 +1276,8 @@ void
 V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 {
 	short group[V90ADID_PHASES];
-	short best = 0;
 	short total;
 	float fsum, fsq, inv, mean, var;
-	short r;
 	unsigned char i, j;
 
 	/*
@@ -1290,7 +1288,6 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 	 * and "the biggest group" is really "the last group that merged
 	 * anything".  docs/deviations.md D283.
 	 */
-	short count = 1;
 
 	/*
 	 * Left uninitialised because the object leaves it uninitialised: the
@@ -1299,67 +1296,70 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 	 * of its inputs at all.  docs/deviations.md D284, and the test keeps
 	 * off it for D281's reason.
 	 */
-	short bestGroup;
 
 	for (i = 0; i < V90ADID_PHASES; i++)
 		group[i] = ADID_NO_GROUP;
+	/* F11920: grouping state begins here; reload follows this pseudo order. */
+	short count = 1;
+	short best = 0;
+	short bestGroup;
 
 	/*
 	 * i stops at 4: the inner loop only ever looks forward, so the last
 	 * phase can never lead a group.
 	 */
 	for (i = 0; i < V90ADID_PHASES - 1; i++) {
-		if (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)
-			continue;
+		if (byte_280c[i] == 0 && group[i] == ADID_NO_GROUP) {
 
-		group[i] = i;
+			group[i] = i;
 
-		for (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {
-			float lim;
-			float d;
+			for (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {
+				float lim;
+				float d;
 
-			if (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)
-				continue;
+				if (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)
+					continue;
 
-			/*
-			 * The tolerance is formed FIRST so that the squared
-			 * distance is the one in %st(0) at the `fcompp`, which
-			 * is what makes the object's `jae` merge an unordered
-			 * compare rather than skip it.  Head comment.
-			 */
-			lim = linearMappingVar[i][at] * 0.25f;
-			d = (float)(linMapp[i][at] - linMapp[j][at]);
+				/*
+				 * The tolerance is formed FIRST so that the squared
+				 * distance is the one in %st(0) at the `fcompp`, which
+				 * is what makes the object's `jae` merge an unordered
+				 * compare rather than skip it.  Head comment.
+				 */
+				lim = linearMappingVar[i][at] * 0.25f;
+				d = (float)(linMapp[i][at] - linMapp[j][at]);
 
-			if (d * d >= lim)
-				continue;
+				if (d * d >= lim)
+					continue;
 
-			group[j] = i;
-			count = (short)(count + 1);
-		}
+				group[j] = i;
+				count = (short)(count + 1);
+			}
 
-		if (count > best) {
-			best = count;
-			bestGroup = i;
+			if (count > best) {
+				best = count;
+				bestGroup = i;
+			}
 		}
 	}
 
-	total = 0;
 	fsum = 0.0f;
 	fsq = 0.0f;
+	total = 0;
 
 	for (j = 0; j < V90ADID_PHASES; j++) {
-		if (byte_280c[j] != 0 || group[j] != bestGroup)
-			continue;
+		if (byte_280c[j] == 0 && group[j] == bestGroup) {
 
-		fsum += magnitudeSum[j][at];
-		fsq += magnitudeSqSum[j][at];
+			fsum += magnitudeSum[j][at];
+			fsq += magnitudeSqSum[j][at];
 
-		/*
-		 * The pooled count is a `short` and the counts it pools are
-		 * `unsigned int`: the object truncates with `cwtl` after every
-		 * add, the same as `unitePhasesInfoOfUref`.
-		 */
-		total = (short)(total + magnitudeCount[j][at]);
+			/*
+			 * The pooled count is a `short` and the counts it pools are
+			 * `unsigned int`: the object truncates with `cwtl` after every
+			 * add, the same as `unitePhasesInfoOfUref`.
+			 */
+			total = (short)(total + magnitudeCount[j][at]);
+		}
 	}
 
 	/*
@@ -1374,7 +1374,6 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 	inv = 1.0f / total;
 	mean = fsum * inv;
 	var = fsq * inv - mean * mean;
-	r = (short)(mean + 0.5f);
 
 	/*
 	 * EVERY unsuspected phase gets the answer, not just the members of the
@@ -1384,7 +1383,7 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 	 */
 	for (j = 0; j < V90ADID_PHASES; j++) {
 		if (byte_280c[j] == 0) {
-			linMapp[j][at] = r;
+			linMapp[j][at] = (short)(mean + 0.5);
 			linearMappingVar[j][at] = var;
 		}
 

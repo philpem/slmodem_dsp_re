@@ -1,9 +1,10 @@
 """Observe installed cc1plus stack requests; no inferior calls or state writes."""
 import json
+import os
 from pathlib import Path
 import gdb
 
-TARGET = 'updateUref'
+TARGET = os.environ.get('GCC3_STACK_TARGET', 'updateUref')
 events, errors, pending = [], [], []
 counts = {}
 frames = []
@@ -54,14 +55,25 @@ class Stack(gdb.Breakpoint):
             if name != TARGET:
                 return False
             frames = []
+            caller_values = []
             frame = gdb.newest_frame()
             while frame and len(frames) < 10:
                 frames.append(frame.name())
+                if frame.name() in ('alter_reg', 'assign_stack_local_for_pseudo_reg'):
+                    values = {}
+                    for variable in ('i', 'regno', 'from_reg'):
+                        try:
+                            value = frame.read_var(variable)
+                            if not value.is_optimized_out:
+                                values[variable] = int(value)
+                        except Exception:
+                            pass
+                    caller_values.append({'function': frame.name(), 'available_values': values})
                 frame = frame.older()
             event = {'function': name, 'function_pointer': function,
                      'mode': enum(arg(4), 'enum machine_mode'), 'size': signed(arg(8)),
                      'align': signed(arg(12)), 'frame_before': integer('((struct function *)%d)->x_frame_offset' % function),
-                     'callers': frames}
+                     'callers': frames, 'caller_values': caller_values}
             assert 0 <= event['size'] <= 1024 and -1 <= event['align'] <= 128
             events.append(event)
             pending.append(event)

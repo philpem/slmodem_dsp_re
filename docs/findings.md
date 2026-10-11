@@ -137601,3 +137601,41 @@ symbol metadata/named data/allocated nontext unchanged. Zero exact gains/losses,
 production1079/1852 unchanged, no src edit or new runtime/fuzzing/mutation runs.
 Next witness: observe spill-home assignment stage and a supported lifetime/owner
 difference, with an exact same-TU control. [Replay/audit](adid-phase-grouping-results.md).
+
+## F11920. ADID grouping-state phase boundary closes the eight spill bytes
+
+New observational evidence reopens F11919's closed assignment-order domain:
+reload allocates best/count homes in ascending pseudo order. Declare count,
+best and uninitialized bestGroup together after group clearing, at the grouping
+phase boundary. Five full-TU controls cross this declaration boundary with
+guard-only/closest forms; closest becomes601B EXACT,16→17/34, zero exact losses.
+This combines recovered guards/initialization age, double-half/direct signed
+short consumer, floating pool zeros first and grouping-state declaration scope.
+Original source is not unique. D283/D284 and all original instructions preserved.
+Integrated source and complete production object equal the winner raw; final
+period/structural and whole-tree validation recorded in the linked results.
+[Domain](adid-spill-context-domain.md), [audit/results](adid-spill-context-results.md).
+
+## F11921. ADID homes are reload spills; preceding exact helper control leaves them unchanged
+
+Four complete-TU saved controls reproduce raw. Read-only installed cc1plus
+observations distinguish expansion array allocation, three target x87 word
+temporaries, eight alter_reg→reload spills and final padding:13 requests/cell.
+Closest pseudo61 best→-28, pseudo70 count→-32; phase-state winner pseudo70
+count→-28, pseudo71 best→-32. Final stack-pointer homes become original+24/+20.
+Moving intact exact updateUref after target leaves target body/spill requests
+identical to closest. Five raw body changes including target are only relocated
+addends; every masked body/canonical target agrees. Unnamed allocated constants
+change; metadata/named data unchanged, no gains/losses. Context control unadopted,
+not original definition-order evidence. Nine source cells/306 common verdicts;
+four+five target observations and five exact updateUref positive observations
+require saved/plain/observed assembly and complete-object equality. No inferior
+writes, forced registers, global profile changes or fuzzing/mutation execution.
+[Trace/replay/results](adid-spill-context-results.md).
+
+F11920–F11921 final integration:1080/1852 EXACT,119108 original exact bytes,
++1 function/+601 bytes, zero losses against1079 baseline. make tc300/300/0;
+production ADID raw-identical to winner. Final make phase388/0, all structural
+checks green,285 suites/10038 anchors and14424 references/3018 headings clean.
+Initial guard-only phase388/0 was structurally red with14 locator failures;
+retarget same operations/methods, no mutation execution or snapshot rerecording.

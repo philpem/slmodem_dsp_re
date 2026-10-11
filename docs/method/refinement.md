@@ -4299,3 +4299,26 @@ Compare raw bodies: equal original-relative byte counts hid a one-opcode change
 between signed/unsigned controls. Audit every bystander and data owner even when
 the target is the only body expected to change.
 [22-cell control and positive residual detector](../adid-phase-grouping-results.md).
+
+### Observe reload-created slots before interpreting local declaration order (F11920–F11921)
+
+ADID's eight displaced operands were best/count spill homes. Read-only installed
+cc1plus tracing identifies `alter_reg` during reload assigning those slots in
+ascending pseudo order. Assignment timing alone did not change the pseudo order.
+This new evidence justified a bounded phase-state declaration control: count,
+best and bestGroup declared at the start of grouping after clearing the array.
+Crossing it with the recovered guard/rounded-consumer form closes all601 bytes.
+The complete TU gains one exact body with no loss; original source remains
+nonunique. A closed assignment-order experiment did not exhaust declaration
+scope, but reopening required a concrete allocation witness, not a larger
+permutation search.
+
+Keep independent partial reconstruction improvements eligible for validation:
+supported call boundaries, operand order and joins need not close a whole body
+to be useful. Separate their acceptance from nearest-size source fitting and
+cross them with later independently evidenced controls. Here guard recovery
+was supported and period-green; the allocation cross achieved full identity
+before retention. Always audit other-function context: moving an intact exact
+helper changed five raw bodies only through relocated addends. Compare canonical
+targets and masked bytes before claiming inherited allocator/scratch effects.
+[Source/context cross and observational replay](../adid-spill-context-results.md).
