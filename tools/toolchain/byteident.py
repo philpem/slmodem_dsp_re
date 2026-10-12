@@ -262,8 +262,12 @@ def body(path, sym):
         try:
             proof = jumptable.prove(path, sym)
         except jumptable.Refused:
-            pass
-        else:
+            import induction_jumptable
+            try:
+                proof = induction_jumptable.prove(path, sym)
+            except jumptable.Refused:
+                proof = None
+        if proof is not None:
             off = proof['relocation_offset']
             expected = ("R_386_32", ("section", proof['table_section'],
                                       proof['table_offset']))

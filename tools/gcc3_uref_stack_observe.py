@@ -21,6 +21,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--reproduction-dir', type=Path, default=ROOT/'build/gcc3-uref-stack-reproduction')
     ap.add_argument('--target', default='updateUref')
+    ap.add_argument('--family', default='V90AutoDigitalImpDetector',
+                    help='complete-TU family name in the reproduction manifest')
     ap.add_argument('--output-dir', type=Path, default=ROOT/'build/gcc3-uref-stack-observation')
     ap.add_argument('--generic-trace', action='store_true',
                     help='audit raw output and complete traces without historical Uref layout assertions')
@@ -35,7 +37,8 @@ def main():
         subprocess.run(['docker', 'run', '--rm', '--platform', 'linux/386', image, 'cat',
                         '/usr/libexec/gcc/i386-pc-linux-gnu/3.4.2/cc1plus'], stdout=stream, check=True)
     compiler.chmod(0o755)
-    family = 'V90AutoDigitalImpDetector'
+    family = args.family
+    assert family in prior['families'], 'unknown reproduction family'
     result = {'revision': prior['revision'], 'config': prior['config'], 'target': args.target,
               'compiler_sha256': hashlib.sha256(compiler.read_bytes()).hexdigest(), 'cells': {}}
     for label, cell in prior['families'][family]['cells'].items():

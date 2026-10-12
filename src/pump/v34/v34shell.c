@@ -627,7 +627,6 @@ putFrame(void *shellp)
 	int small_last = 2;
 	int sum;
 	int nb;
-	int g;
 
 	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
 
@@ -649,14 +648,25 @@ putFrame(void *shellp)
 		small_last = (short)(nb + small);
 	}
 
-	for (g = 0; g < 4; g++) {
-		const short *p = &v[2 + g * 4];
+	put(s, (unsigned short)v[2], 1);
+	put(s, (unsigned short)v[3], small);
+	put(s, (unsigned short)v[4], w);
+	put(s, (unsigned short)v[5], w);
 
-		put(s, (unsigned short)p[0], 1);
-		put(s, (unsigned short)p[1], g == 3 ? small_last : small);
-		put(s, (unsigned short)p[2], w);
-		put(s, (unsigned short)p[3], w);
-	}
+	put(s, (unsigned short)v[6], 1);
+	put(s, (unsigned short)v[7], small);
+	put(s, (unsigned short)v[8], w);
+	put(s, (unsigned short)v[9], w);
+
+	put(s, (unsigned short)v[10], 1);
+	put(s, (unsigned short)v[11], small);
+	put(s, (unsigned short)v[12], w);
+	put(s, (unsigned short)v[13], w);
+
+	put(s, (unsigned short)v[14], 1);
+	put(s, (unsigned short)v[15], small_last);
+	put(s, (unsigned short)v[16], w);
+	put(s, (unsigned short)v[17], w);
 }
 
 
@@ -1127,13 +1137,14 @@ getFrame(void *objp)
 {
 	struct v34_shell *s =
 	    (struct v34_shell *)((char *)objp + V34_SHELL_TX);
+	v34_scramble_fn scramble = s->scramble;
 	int w = s->idx_width;
 	int small = 2;
 	int small_last = 2;
 	int sum;
 	int nb;
 	int pos;
-	int g;
+	unsigned bitbuf;
 
 	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
 
@@ -1153,7 +1164,7 @@ getFrame(void *objp)
 	 * -- which matters because the split below reads it back out.
 	 */
 	while (pos > 15) {
-		pos = s->scramble(objp, (short)pos);
+		pos = scramble(objp, (short)pos);
 		s->bitpos = (short)pos;
 	}
 
@@ -1175,7 +1186,7 @@ getFrame(void *objp)
 		 * this tree to drive `nb` above 16.  Finding F185.
 		 */
 		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
-		(void)s->scramble(objp, 0);
+		(void)scramble(objp, 0);
 		pos = (unsigned short)s->bitpos;
 		s->frame[1] = (short)(((unsigned)s->bitbuf >> (pos & 31))
 				      & lsbMask[nb & 15]);
@@ -1198,16 +1209,17 @@ getFrame(void *objp)
 		small_last = (short)(nb + small);
 	}
 
-	for (g = 0; g < 4; g++) {
-		short *p = &s->frame[2 + g * 4];
-		int sw = (g == 3) ? small_last : small;
+	{
+		short *p = &s->frame[2];
+		int sw = small;
 		unsigned v;
 
 		if (pos > 15)
-			pos = s->scramble(objp, (short)pos);
+			pos = scramble(objp, (short)pos);
 
 		s->bitpos = (short)pos;
-		v = (unsigned)s->bitbuf >> (pos & 31);
+		bitbuf = (unsigned)s->bitbuf;
+		v = bitbuf >> (pos & 31);
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1219,9 +1231,114 @@ getFrame(void *objp)
 		 * the fixture stays inside and says so.
 		 */
 		p[0] = (short)(v & 1);
-		p[1] = (short)((v >> 1) & lsbMask[sw]);
-		p[2] = (short)((v >> ((1 + sw) & 31)) & lsbMask[w & 31]);
-		p[3] = (short)((v >> ((1 + sw + w) & 31)) & lsbMask[w & 31]);
+		v >>= 1;
+		p[1] = (short)(v & lsbMask[sw]);
+		v >>= sw & 31;
+		p[2] = (short)(v & lsbMask[w & 31]);
+		v >>= w & 31;
+		p[3] = (short)(v & lsbMask[w & 31]);
+
+		pos += 1 + sw + 2 * w;
+		s->bitpos = (short)pos;
+	}
+
+	{
+		short *p = &s->frame[6];
+		int sw = small;
+		unsigned v;
+
+		if (pos > 15) {
+			pos = scramble(objp, (short)pos);
+			bitbuf = (unsigned)s->bitbuf;
+		}
+
+		s->bitpos = (short)pos;
+		v = bitbuf >> (pos & 31);
+
+		/*
+		 * `sw` is NOT bounds-checked, here or in the object.  On the
+		 * no-wide-field path it is `nb + small`, so an `nb` below -2
+		 * makes it negative and the object reads `.rodata` BEFORE
+		 * lsbMask -- deterministic in that build, not reproducible
+		 * here, and outside anything a real caller produces since a
+		 * field width is never negative.  Same shape as finding F129;
+		 * the fixture stays inside and says so.
+		 */
+		p[0] = (short)(v & 1);
+		v >>= 1;
+		p[1] = (short)(v & lsbMask[sw]);
+		v >>= sw & 31;
+		p[2] = (short)(v & lsbMask[w & 31]);
+		v >>= w & 31;
+		p[3] = (short)(v & lsbMask[w & 31]);
+
+		pos += 1 + sw + 2 * w;
+		s->bitpos = (short)pos;
+	}
+
+	{
+		short *p = &s->frame[10];
+		int sw = small;
+		unsigned v;
+
+		if (pos > 15) {
+			pos = scramble(objp, (short)pos);
+			bitbuf = (unsigned)s->bitbuf;
+		}
+
+		s->bitpos = (short)pos;
+		v = bitbuf >> (pos & 31);
+
+		/*
+		 * `sw` is NOT bounds-checked, here or in the object.  On the
+		 * no-wide-field path it is `nb + small`, so an `nb` below -2
+		 * makes it negative and the object reads `.rodata` BEFORE
+		 * lsbMask -- deterministic in that build, not reproducible
+		 * here, and outside anything a real caller produces since a
+		 * field width is never negative.  Same shape as finding F129;
+		 * the fixture stays inside and says so.
+		 */
+		p[0] = (short)(v & 1);
+		v >>= 1;
+		p[1] = (short)(v & lsbMask[sw]);
+		v >>= sw & 31;
+		p[2] = (short)(v & lsbMask[w & 31]);
+		v >>= w & 31;
+		p[3] = (short)(v & lsbMask[w & 31]);
+
+		pos += 1 + sw + 2 * w;
+		s->bitpos = (short)pos;
+	}
+
+	{
+		short *p = &s->frame[14];
+		int sw = small_last;
+		unsigned v;
+
+		if (pos > 15) {
+			pos = scramble(objp, (short)pos);
+			bitbuf = (unsigned)s->bitbuf;
+		}
+
+		s->bitpos = (short)pos;
+		v = bitbuf >> (pos & 31);
+
+		/*
+		 * `sw` is NOT bounds-checked, here or in the object.  On the
+		 * no-wide-field path it is `nb + small`, so an `nb` below -2
+		 * makes it negative and the object reads `.rodata` BEFORE
+		 * lsbMask -- deterministic in that build, not reproducible
+		 * here, and outside anything a real caller produces since a
+		 * field width is never negative.  Same shape as finding F129;
+		 * the fixture stays inside and says so.
+		 */
+		p[0] = (short)(v & 1);
+		v >>= 1;
+		p[1] = (short)(v & lsbMask[sw]);
+		v >>= sw & 31;
+		p[2] = (short)(v & lsbMask[w & 31]);
+		v >>= w & 31;
+		p[3] = (short)(v & lsbMask[w & 31]);
 
 		pos += 1 + sw + 2 * w;
 		s->bitpos = (short)pos;

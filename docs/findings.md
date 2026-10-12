@@ -137795,3 +137795,103 @@ two locator ownership checks and14426 references/3030 headings clean. Exact-set
 ratchet1080/1852/119108 original bytes unchanged, no gain/loss. Faithful300-input
 partial text701452 unchanged length; strict before/after DIFFERENT/exit1. No
 fuzz/mutation execution, snapshot rerecording or modern portability claim.
+
+
+## F11934. A proved induction table reveals the stack exchange the old screen missed
+
+At f420cd89 getPower574B/BYTES10 has ten consistent 0x28/0x30 stack
+exchanges, but the anonymous table's section offset3300/24 causes the old
+same-graph screen to reject it. Six ordered destinations agree at boundaries.
+Current shared table proof makes the historical95-copy replay nominate one
+real spill lead, plus two already-closed SDM save-area artefacts. Five explicit
+archived input overlays are SHA-checked; no historical input drift is tolerated.
+
+Widened local screening covers1852 common symbols/772 nonexact, including673
+SIZE; four firing controls, five nominations. getConstellationsIndex has a
+real count/i exchange, Psd::process a real frames/pos/frame cycle. V32 ring
+response's swap is outgoing arguments, not locals; definitions preserve argument
+meanings. Fax nomination deferred. Next step is read-only allocation ownership
+for the two real SIZE leads, whose independent CFG differences stay open.
+[getPower and screen evidence](getpower-stack-results.md).
+
+## F11935. Fraction-first reload allocation makes getPower byte exact
+
+Three complete-TU cells/27 verdicts. Baseline power pseudo63 spills before
+fraction85, producing original-opposite homes30/28. Lifted fraction after
+power changes pseudo85 to64 but is full-object raw-inert. Lifted fraction
+before power gives fraction63/power64, homes30/28 and original574B identity.
+Four raw-equal read-only compiler observations/24 stack requests map both DF
+alter_reg spills and final frame homes. Eight bystanders, exact622B helper,
+data and metadata stay unchanged. Production source/object equals winner raw.
+Original arithmetic, power initialization before helper call and all original
+bugs stay fixed; no register constraint, profile or arithmetic adjustment.
+[Domain](getpower-stack-domain.md), [replay/results](getpower-stack-results.md).
+
+## F11936. Bounded induction CFG proves table identity without assuming a guard
+
+The adjacent CMP/JA proof refuses getPower correctly: its index starts zero,
+advances once per constellation, and dispatches through a loop bound. New
+fallback explores exact callee-saved index/unsigned flags over entry CFG,
+unknown branches conservatively both ways, direct relocated ABI calls,
+full-width balanced stacks/save ownership, table extent/ordered boundaries
+and incoming/overlapping relocations. Original/current each653 abstract states,
+index domain0..5 and equal ordered identities. This does not claim runtime
+reachability of every case or recover original compiler RTL.
+
+Twenty ELF controls: two proved with distinct identities,18 refused. Independent
+review exposed partial-SP, word-push, foreign-interior-relocation and duplicate
+CALL-field refusal gaps; repaired before publication and retained as controls.
+Saved/return-slot overwrites, wrong restores, invalid targets and unknown
+indexes/calls/flags are refused too. Existing47 synthetic/two real table controls
+and59 relocation self-tests pass. Proof-only unchanged census1080/1852; exact
+getPower comes from source recovery, not changed grading. CI runs new controls
+and keys caches on the new proof module. [Limits and proof](getpower-stack-results.md).
+
+## F11937. V34 fixed groups recover successive extraction and callback-refreshed buffer ages
+
+Eleven full-TU controls/132 verdicts plus four combinations/48. putFrame fixed
+groups restore18 callback sites from6;577B/SIZE7 against584B. getFrame fixed
+groups/capture restore6 sites/one callback acquisition. New binary witness:
+four destructive SHR1/SHRsmall/SHRw chains replace independent absolute shifts.
+Original retains unshifted bitbuf between groups, refreshing it after callbacks;
+candidate recovers first-load/publication and three later refresh boundaries.
+Static owner-read count7/7 alone conceals the gain. Original0x5c frame returns.
+
+Retain combined getFrame1064B/SIZE36 despite plain expansion1041B/SIZE13:
+operation/read-age witnesses decide. Width controls remain unadopted. Combined
+candidate raw-equals production; both targets equal independent controls;
+known decodeDepth ten-row allocation/scheduling collateral stays SIZE239,
+nine other bodies and data/metadata unchanged. Period388/0 covers existing
+component/roundtrip/initialized modulatevector fixtures. No universal malformed
+width/callback claim. [Domain](v34-frame-sequence-domain.md),
+[results](v34-frame-retention-results.md).
+
+## F11938. V32 getter's missing owner read is an alias-option interaction
+
+Two identical-source full-TU cells/12 verdicts. Diagnostic-fno-strict-aliasing
+restores53B exact getter from47B/SIZE6, three owner loads versus one. It changes
+V32FP_create/recreate too; metadata/named data/nontext sizes unchanged, string
+pool order differs with its full multiset preserved. Production source/profile
+unchanged. Twenty-nine actual instruction streams per cell: both have two
+owner-load SETs through07.addressof;09.loop has baseline1/control2. Duplicate
+08.gcse snapshots excluded, no eliminating-pass attribution inside that window.
+
+Original field/access typing versus compiler alias profile remains unresolved.
+Do not force reload via volatile/cast/invented union or adopt diagnostic flag
+from one exact getter. No candidate-runtime or alias-reachability result claimed.
+[Domain](v32-cleaned-alias-domain.md), [results](v32-cleaned-alias-results.md).
+
+## F11939. getPower/V34 integration gains574 exact bytes and passes the full gate
+
+Exactly2/300 production objects change,298/configuration unchanged; both chosen
+full objects equal independent candidate controls raw. Census1081/1852 exact,
+119682 original exact bytes: +1/+574, zero losses;673 SIZE/63 BYTES/30 REGALLOC/
+5 UNRESOLVED. Proof-only control unchanged at1080. Full make phase J=8 exits0:
+388 period passed/0 failed, all structural checks green. Static285 suites/
+10038 anchors attached/unique/correct-arm without edits. No fuzz/mutation
+execution or tolerance/profile changes. Twenty source-control cells/219 complete
+body verdicts in this batch, excluding unchanged diagnostic preparation replay.
+Faithful300-input partial text701452→702044 (V34 groups), both strict before/
+after comparisons DIFFERENT/exit1. Function gains are not whole-object closure.
+Artifacts build/getpower-v34-integration, byteident-getpower-v34-final.json,
+getpower-v34-phase.log and documented per-domain reproducers.

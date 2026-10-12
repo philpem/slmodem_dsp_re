@@ -4407,3 +4407,55 @@ the pair. That cross changes the object even at an equal BYTES233 score. Close
 the tested source read-boundary domain and seek a scheduling/lifetime witness,
 rather than retrying names or asserting that the compiler erased the source.
 [Current path retention and nine-stage read trace](../partial-path-retention-results.md).
+
+
+### Account for proved table identity before screening spill homes (F11934–F11936)
+
+An otherwise exact instruction graph can be rejected by anonymous section
+relocations. getPower's six ordered dispatch targets agree, but the old screen
+compared table offsets3300/24 and missed ten exchanged double stack operands.
+Use a shared conservative ELF proof; never blank arbitrary relocation targets.
+The induction fallback tracks entry index/flags/CFG and validates every table
+entry, ABI call, stack width/save slot and incoming relocation. Known negative
+ELF controls must refuse partial stack writes, word pushes, alternate interior
+entries and overlapping CALL fields. CI cache keys include the proof module.
+
+After table proof, unchanged-production exact count stays fixed. A separate
+source change puts fraction before power; observed ascending-pseudo reload
+allocation exchanges the original-opposite homes and makes getPower574B exact.
+Lifting scope with power still first is raw-inert. Declaration scope/order is
+only a bounded lever when named allocation requests and original homes supply
+an independent witness. [Trace/replay](../getpower-stack-results.md).
+
+### A local SIZE window nominates homes, not their meaning (F11934)
+
+Extend stack screening beyond equal-sized bodies, using matching local graphs
+with all real values/registers/relocations preserved. getConstellationsIndex and
+Psd::process expose consistent named local-home exchanges despite independent
+CFG differences. V32 ring response instead exchanges outgoing argument slots
+and corresponding defining registers: it is a false local-spill nomination.
+Inspect reaching definitions/consumers before allocation experiments. Window
+identity cannot establish whole-function or CFG recovery.
+
+### Successive extraction and refreshed buffers are independent of group expansion (F11937)
+
+V34 getFrame's group fields use SHR1, SHRsmall, SHRw destructively, and retain
+unshifted input between groups while refreshing it after callbacks. Source
+absolute shifts and per-group member reads can be equivalent over normal widths
+yet miss both original boundaries. Cross these witnessed graphs separately from
+fixed groups/callback capture/word widths. Static read counts do not locate
+refreshes. Retain supported operations after full-TU/period validation even
+when another incomplete graph has a smaller byte distance. Do not hold a
+snapshot across a callback without the original refresh boundary.
+[Domain/results](../v34-frame-retention-results.md).
+
+### Diagnose alias-driven reload loss without forcing a source read (F11938)
+
+V32 getter already repeats the owner expression at return. With type-based
+alias analysis, the post-count-store read disappears between07.addressof and
+first available09.loop; withdrawing strict alias analysis restores the exact
+53B getter while also changing constructors. Count actual load SETs rather
+than duplicated REG_EQUIV text; preserve unavailable duplicate snapshots.
+The option demonstrates an interaction, not original field typing or profile.
+Seek an independently supported access/API type or crossed full-TU profile
+explanation before source adoption. [Diagnostic](../v32-cleaned-alias-results.md).

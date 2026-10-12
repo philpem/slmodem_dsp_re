@@ -18,6 +18,8 @@ OUT_NAME='playbook-parent-patterns'
 DUMP_FLAGS=('-da',)
 # Optional candidate-only public headers; production hashes stay authoritative.
 HEADER_OVERLAYS = lambda path, label: {}
+# Diagnostic option controls are explicit per cell and never alter production.
+CELL_FLAGS = lambda path, label: ()
 
 def function(source,name):
     start=source.index('\n'+name+'(')+1
@@ -120,7 +122,8 @@ def main():
                 if not args.historical_headers:assert hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()==headers[rel]
                 (cd/local.name).write_bytes(contents)
             dst='/work/'+family+'/'+label
-            cell_flags = flags + list(DUMP_FLAGS)
+            diagnostic_flags = list(CELL_FLAGS(path, label))
+            cell_flags = flags + list(DUMP_FLAGS) + diagnostic_flags
             if file.suffix == '.cpp':
                 cell_flags += shlex.split(next(x[6:] for x in config.splitlines() if x.startswith('cxx   ')))
             overlays = HEADER_OVERLAYS(path, label)
@@ -137,7 +140,7 @@ def main():
                 assert shell.count('exec gcc -c ') == 1
                 shell = shell.replace('exec gcc -c ', 'exec g++ -c ', 1)
             command=tc.docker_prefix(image,ROOT,out,True)+['/bin/sh','-c','cd '+shlex.quote(dst)+' && '+shell]
-            entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command,'overlay_header_hashes':overlay_hashes};fr['cells'][label]=entry
+            entry={'source_hash':hashlib.sha256(text.encode()).hexdigest(),'command':command,'overlay_header_hashes':overlay_hashes,'diagnostic_flags':diagnostic_flags};fr['cells'][label]=entry
             actual_headers=snapshot if args.historical_headers else ROOT
             assert all(hashlib.sha256((actual_headers/p).read_bytes()).hexdigest()==d for p,d in headers.items())
             with (cd/'compile.log').open('w') as log:entry['compile_exit']=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT).returncode
