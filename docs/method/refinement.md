@@ -4361,3 +4361,32 @@ order separately: ADID count/sum remains count-first through block reorder and
 reverses at sched2. Its source already has the original order; repeating source
 permutations without a new scheduling witness would not test the explanation.
 [Raw-equal eleven-stage replay and six-search observation](../adid-first-study-stage-results.md).
+
+### Inspect target packet reordering after scheduler priority sorting (F11928–F11929)
+
+The highest-priority ready operation need not issue first. First-study's integer
+xor has priority6 against the float store's1, and ready_sort ranks xor first.
+The i686/PentiumPro target then moves the float store ahead to fill its complex
+decoder and packs the xor alongside it. Verbose ready-list/packet/issue tables
+show this directly. Follow target sched.reorder and actual issue order before
+explaining a mismatch with priority or source order alone.
+
+Read age must recover the surrounding owner/operation graph too: capturing the
+high-loop reference before clearing produces count-first stores but adds an
+extra index load and discards the original maintained index. Three capture/
+counter-ownership forms emit the same unsupported complete object; decline them
+and close that domain. A partial recovery is not merely one desired store order
+surrounded by invented operations.
+[Packet trace and bounded capture domain](../adid-first-study-scheduling-results.md).
+
+### Reconsider retention separately from a closed exactness experiment (F11930)
+
+Unsigned constellation clearing counters already measured two original JBE
+predicates replacing JLE, with just the two inline copies changing in their
+caller. The source family correctly failed to close either130-byte function.
+That does not refute its supported counter-type recovery. Under partial-recovery
+scope, replay against current production, audit isolated controls and all
+bystanders, then period-validate and retain the operation improvement. Do not
+reopen nearby index/declaration/spelling permutations or claim a whole-body
+gain. Count partial functions and inline operations separately from exactness.
+[Current four-cell revalidation and integration](../constellation-counter-retention-results.md).

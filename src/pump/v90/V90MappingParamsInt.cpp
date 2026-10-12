@@ -174,7 +174,8 @@ getConstellationMask(V90MappingParams *params, int which, short *mask)
 	const unsigned char *table;
 	unsigned int length;
 	unsigned int n;
-	int k, i;
+	int k;
+	unsigned int i;
 
 	if (which >= 6)
 		which = 0;
@@ -198,7 +199,8 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
 	const unsigned char *table;
 	unsigned int length;
 	unsigned int n;
-	int k, i;
+	int k;
+	unsigned int i;
 
 	if (which >= 6)
 		which = 0;

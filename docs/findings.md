@@ -137713,3 +137713,42 @@ helper-placement-only experiments; not a claim about all source contexts or
 profiles. Seek changed lifetime/site/traversal evidence or sched2 dependencies
 before new source controls. Production1080/1852 unchanged, zero gains/losses;
 no source/test change or mutation/fuzzing execution. [Replay](adid-first-study-stage-results.md).
+
+## F11928. Target PPRO packet reorder overrides first-study's sorted xor priority
+
+Verbose diagnostic completeTU raw-reproduces production. Middle-region xor977
+priority6, count978 priority5, float stores497/508 priority1, reload912 priority5.
+Sorted ready508,497,977 becomes508,977,497 before issue: target packets497,977
+and emits sum before xor/count. Scratch dx creates xor/count→reload edges;
+stores have no mutual dependence. Official scheduler/backend rules explain the
+actual Gentoo ready/packet trace, not original RTL. [Proof](adid-first-study-scheduling-results.md).
+
+## F11929. First-study early reference capture loses its maintained middle index
+
+Four completeTU cells/136 verdicts: baseline795B/SIZE16; early high capture,
+shared middle/high capture and separate high counter all raw-identical803B/
+SIZE24. Extra index load/lea and second high reload miss original block despite
+count-first stores. Decline all three, close bounded domain;33 bystanders/data/
+metadata unchanged, no exact gains/losses. No runtime/fuzz/mutation execution
+for declined cells. Seek original index lifetime plus packet graph, not more
+counter names. [Domain/results](adid-first-study-scheduling-results.md).
+
+## F11930. Retain two original unsigned constellation clearing predicates as partial recovery
+
+Owner scope permits supported nonexact source improvements. Revalidate existing
+counter domain against347b5b89:4 cells/44 verdicts,4/11 exact unchanged. Both
+130-byte helpers change justJLE→originalJBE; caller changes precisely both
+inline copies. Helper BYTES38→37 and40→39, no whole-function gain. Eight
+canonical bystanders/all data/metadata unchanged. Counter range0..8 preserves
+all eight writes and termination; signed which/index untouched. Retain unsigned
+counter source after deciding integration gate. Exactness domain remains closed;
+no index/spelling/control permutations reopened. [Retention](constellation-counter-retention-results.md).
+
+F11930 integrated: combined source/object raw-equal to independent cell,1/300
+objects changed/299 unchanged, full compiler configuration unchanged. make
+phase388/0 exits0/all structural gates green; static locators clean. Whole
+exact-set ratchet1080/1852/119108 bytes unchanged, no gain/loss. Refcheck14426
+references/3027 headings clean. No modern portability or fuzz/mutation claim.
+Faithful300-input partial link retains701452 text bytes; only four opcode bytes
+change JLE0x7e→JBE0x76. Both strict before/after comparisons DIFFERENT/exit1;
+whole-object identity unclaimed.
