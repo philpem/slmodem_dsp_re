@@ -387,9 +387,11 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 
 		/* One sample out of the transmit ring. */
 		v->tx_avail = (short)(v->tx_avail - 1);
-		*out++ = *v->tx_ring_base++;
-		if (v->tx_ring_base >= v->tx_ring + V8_TX_RING_END)
-			v->tx_ring_base = v->tx_ring;
+		short *tx = v->tx_ring_base;
+		*out++ = *tx++;
+		if (tx >= v->tx_ring + V8_TX_RING_END)
+			tx = v->tx_ring;
+		v->tx_ring_base = tx;
 
 		/*
 		 * And one in, through a single pole, into the symbol buffer.

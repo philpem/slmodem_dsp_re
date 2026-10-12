@@ -137752,3 +137752,46 @@ references/3027 headings clean. No modern portability or fuzz/mutation claim.
 Faithful300-input partial link retains701452 text bytes; only four opcode bytes
 change JLE0x7e→JBE0x76. Both strict before/after comparisons DIFFERENT/exit1;
 whole-object identity unclaimed.
+
+## F11931. V32 cleaned-sample getter restores accepted-count fallthrough as partial recovery
+
+Two current completeTU cells restore original unsignedJA/accepted count-store
+fallthrough at boundary160. Both47B/SIZE6, owner reload still absent; no forced
+read or alias control. Count/input types, stores and return unchanged; five
+canonical bystanders/data/metadata unchanged,2/6 exact unchanged. Retain original
+path after deciding gate under current partial scope, not a full identity claim.
+[Domain and replay](partial-path-retention-results.md).
+
+## F11932. V8 per-sample ring cursor recovers the original one-publication wrap join
+
+Current fullTU raw baseline plus ring local:731B/BYTES233→73,2/7 exact unchanged.
+Only V8Process changes; six bystanders/all data/metadata preserved. Original
+tx_ring_base publication at0x745e0 is one joined store; retained code emits two.
+Seven RTL streams verify2→1, exact five-row output/acquire/advance block and
+original unsigned wrap/join operations recover. Capture after tx_avail decrement,
+publish before handshake, no local across calls/iterations; filter/symbol/home
+residuals remain. Retain supported source join after deciding gate; no dynamic
+store-loss or race claim. [Results](partial-path-retention-results.md).
+
+## F11933. V8 pole-before-input capture is reversed by sched2, not erased
+
+Four fullTU ring/pole crosses:233/73/233/74 BYTES; four distinct raw objects.
+Nine streams inspected: combined snapshot precedes input through31.bbro,
+reversed at33.sched2 and35.mach. It fails original load placement;
+decline snapshot and close its bounded cross. All other bodies/data/metadata
+unchanged. Combined revalidation8cells/54verdicts, no exact gains/losses. No
+fuzz/mutation/runtime testing of declined pole controls. [Trace](partial-path-retention-results.md).
+
+Initial integration period388/0 but phase exits2: two V32 anchors detached by
+branch inversion. Retarget row1 to reject exactly boundary160 (<=→<), correcting
+its old misleading label; row2 still clamps overlong counts instead of zero.
+Both scoped to V32FP_GetCleanedSamples, unique intended finds. No mutation
+execution or snapshot rerecording; final repaired gate recorded separately.
+
+F11931–F11933 final integration: both sources/objects raw-equal to independent
+selected cells,2/300 objects change/298 unchanged/config unchanged. Final make
+phase388/0 exits0/all structural checks green,285 suites/10038 static anchors,
+two locator ownership checks and14426 references/3030 headings clean. Exact-set
+ratchet1080/1852/119108 original bytes unchanged, no gain/loss. Faithful300-input
+partial text701452 unchanged length; strict before/after DIFFERENT/exit1. No
+fuzz/mutation execution, snapshot rerecording or modern portability claim.

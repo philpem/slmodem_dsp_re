@@ -1034,9 +1034,9 @@ V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
 	unsigned short have;
 
 	have = FP(modem)->clean_n;
-	if (have > V32FP_CLEAN_MAX)
-		*n = 0;
-	else
+	if (have <= V32FP_CLEAN_MAX)
 		*n = (short)have;
+	else
+		*n = 0;
 	return (short *)FP(modem)->clean_buf;
 }

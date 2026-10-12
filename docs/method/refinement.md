@@ -4390,3 +4390,20 @@ bystanders, then period-validate and retain the operation improvement. Do not
 reopen nearby index/declaration/spelling permutations or claim a whole-body
 gain. Count partial functions and inline operations separately from exactness.
 [Current four-cell revalidation and integration](../constellation-counter-retention-results.md).
+
+### Retain evidenced path joins while keeping their independent read residuals open (F11931–F11933)
+
+V32 accepted-count fallthrough restores the original unsigned JA/accepted-store
+arm while its owner reload remains missing. V8 per-sample ring local restores
+the original one-publication wrap join while its filter-load order and stack
+homes remain different. Retain these supported path recoveries after complete
+TU audit and period validation; do not force the independent missing reads or
+claim a full exact gain. Local cursors must respect original capture/publication
+boundaries and cannot silently cross a callback or loop iteration.
+
+A read-age source change can survive to block reorder and still fail in the
+final object. V8's pole snapshot is before input through31.bbro; sched2 reverses
+the pair. That cross changes the object even at an equal BYTES233 score. Close
+the tested source read-boundary domain and seek a scheduling/lifetime witness,
+rather than retrying names or asserting that the compiler erased the source.
+[Current path retention and nine-stage read trace](../partial-path-retention-results.md).
