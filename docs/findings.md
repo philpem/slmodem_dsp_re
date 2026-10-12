@@ -137895,3 +137895,51 @@ Faithful300-input partial text701452→702044 (V34 groups), both strict before/
 after comparisons DIFFERENT/exit1. Function gains are not whole-object closure.
 Artifacts build/getpower-v34-integration, byteident-getpower-v34-final.json,
 getpower-v34-phase.log and documented per-domain reproducers.
+
+## F11940. Mapping and PSD recover original reload homes without an exact-function gain
+
+Six declared full-TU cells/72 live body verdicts; six raw-equal control compiler
+observations/42 requests plus two unchanged preparation observations/14.
+Mapping i-first recovers count4/i8, propagated as count10/i14 in its inlined
+setV92CPpckFromParamsInfo caller. PSD frame/pos declarations before division
+recover frame20/pos1c/frames18. The frames spill belongs to the surviving udiv
+result pseudo, not the named local; initial RTL SET and observed alter_reg
+requests explain the order. Scope/adjacency controls are raw-inert.
+
+Changed instruction streams are exactly the checked local-home permutations;
+all other operations/registers/branches/relocations remain unchanged. Mapping
+changes two of11 bodies, PSD one of13; data/metadata/nontext relocations unchanged.
+No gains/losses: Mapping4/11 and PSD8/13 exact; targets SIZE4/SIZE9 remain.
+Adopt only the two witnessed declaration boundaries, with executable
+initialization/arithmetic preserved. Independent search/output-option graphs
+remain; close the declaration domain and investigate those graphs separately.
+[Reproduction and limits](size-spill-results.md).
+
+## F11941. PSD switch recovers ordered dispatch, independently of its integer homes
+
+Two full-TU cells/26 live body verdicts. Recovered-home baseline raw-reproduces
+canonical object. Three-case switch preserves all case arithmetic and default
+no-op, and recovers original cmp1/je/jle/cmp2/je/default epilogue. Peak target
+is +385 in both. Process alone changes; twelve bystanders/data/metadata/nontext
+relocations unchanged, all eight exact bodies retained. Process618B/SIZE17
+versus original635B, compared with if-chain626B/SIZE9. Retain the witnessed
+graph despite the larger size gap; no exact-function gain. Lower/linear paths,
+peak/x87 scheduling and zero-bin normalization boundaries remain independent.
+[Domain, audit and limits](psd-dispatch-domain.md).
+
+## F11942. Local-home and PSD dispatch integration passes period and structural gates
+
+Chosen Mapping/PSD sources and canonical production objects equal their
+independent full-TU controls raw. Eight compiled source cells/seven distinct
+texts,98 live body verdicts across the two domains. Whole-tree strict census
+unchanged1081/1852,119682 original exact bytes;673 SIZE/63 BYTES/30 REGALLOC/
+5 UNRESOLVED, ratchet green. These are partial recoveries, zero exact gains.
+
+Final make phase J=8 exits0:388 period differential passed/0 failed, structural
+checks green;285 suites/10038 static anchors,zero detached/nonunique/wrong-arm.
+Earlier runs passed388/0 but were red for one declaration locator then four
+if-chain locators; all five retargeted without changing their defect intent.
+No mutation/fuzz execution, tolerance change, profile change or modern
+portability claim. Refcheck14429 existing references still point correctly.
+Artifacts byteident-size-spill-dispatch-final.json, size-spill-dispatch-phase-final.log,
+size-spill-refcheck-final.log and the two replay audits.

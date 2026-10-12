@@ -162,8 +162,9 @@ void
 Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 {
 	unsigned int bins = m_length >> 1;
+	unsigned int frame, pos;
 	unsigned int frames = (count - m_overlap) / (m_length - m_overlap);
-	unsigned int frame, i, j, pos;
+	unsigned int i, j;
 
 	for (i = 0; i < bins; i++)
 		out[i] = 0.0f;
@@ -192,7 +193,8 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 	 * reaching the logarithm as a zero, and it is a `double` constant
 	 * where the 10 is a `float` one -- both as the object loads them.
 	 */
-	if (option == OUTPUT_DB_PEAK) {
+	switch (option) {
+	case OUTPUT_DB_PEAK: {
 		long double peak = 0.0L;
 		long double scale;
 
@@ -212,12 +214,16 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 
 			out[i] = (float)(l * 10.0f);
 		}
-	} else if (option == OUTPUT_LINEAR) {
+		break;
+	}
+	case OUTPUT_LINEAR: {
 		long double scale = 1.0L / (long double)frames;
 
 		for (i = 0; i < bins; i++)
 			out[i] = (float)((long double)out[i] * scale);
-	} else if (option == OUTPUT_DB) {
+		break;
+	}
+	case OUTPUT_DB: {
 		long double scale = 1.0L / (long double)frames;
 
 		for (i = 0; i < bins; i++) {
@@ -226,5 +232,9 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 
 			out[i] = (float)(l * 10.0f);
 		}
+		break;
+	}
+	default:
+		break;
 	}
 }

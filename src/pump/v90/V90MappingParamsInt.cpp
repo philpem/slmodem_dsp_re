@@ -108,8 +108,8 @@
 extern "C" unsigned int
 getConstellationsIndex(V90MappingParams *params, int *group)
 {
-	unsigned int count = 1;
 	unsigned int i;
+	unsigned int count = 1;
 
 	params->distinctIndex[0] = 0;
 	group[0] = 0;

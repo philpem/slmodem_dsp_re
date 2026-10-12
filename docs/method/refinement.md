@@ -4459,3 +4459,28 @@ than duplicated REG_EQUIV text; preserve unavailable duplicate snapshots.
 The option demonstrates an interaction, not original field typing or profile.
 Seek an independently supported access/API type or crossed full-TU profile
 explanation before source adoption. [Diagnostic](../v32-cleaned-alias-results.md).
+
+### Follow the surviving pseudo when recovering spill order (F11940)
+
+A named local can disappear while its defining temporary owns the spill.
+PSD's frames local copies the unsigned division-result pseudo; declaring only
+nearby loop locals after that result leaves its home unchanged. Declaring
+frame/pos before division moves their pseudo creation before the surviving
+quotient and recovers all three original homes. Mapping's i/count exchange
+also propagates into its inlined caller. Six bounded cells/72 body verdicts
+and read-only raw-equal compiler observations establish both exchanges.
+Scope/adjacency controls are inert. Validate initial SET ownership, reload
+requests and final frame adjustment; require all altered operands to be the
+identified home permutation. Local recovery need not close a SIZE body.
+Do not continue declaration permutations after the independently witnessed
+homes agree. [Domain/results](../size-spill-results.md).
+
+### Ordered enum dispatch can identify switch lowering (F11941)
+
+An if-chain's cmp1/cmp2/test0 differed from PSD's original cmp1/je/jle/cmp2/je.
+A bounded three-case switch preserves the case bodies and default no-op while
+recovering that ordered dispatch. Review destination blocks as well as compare
+mnemonics. Full-TU audit may support the structural recovery even when overall
+SIZE distance grows; do not mistake independent x87/loop/register differences
+for a failure of the recovered dispatch. Close case-order spelling searches
+once the original category agrees. [Control](../psd-dispatch-domain.md).
