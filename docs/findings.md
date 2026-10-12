@@ -137690,3 +137690,26 @@ control; make tc300/300/0. Final make phase388/0, all structural checks green,
 census1080/1852 EXACT/119108 bytes unchanged, zero losses;673 SIZE/64 BYTES/
 30 REGALLOC/5 UNRESOLVED. Six locators retargeted/scoped, no mutation execution.
 Partial-link fixed300-input before/after stays DIFFERENT (strict exit1).
+
+## F11926. First-study publication merges at crossjump cleanup after peephole scratch splitting
+
+One unchanged complete ADID TU reproduces retained object raw with selected
+diagnostics. Eleven stages: two byte-publication stores through peephole2, one
+fromce3. Installed read-only tracing shows both byte sites choose ax; ce3 reports
+one common tail instruction crossjumped. Original bl/cl stores cannot share
+that tail. Middle clearing independently retains count/sum through block reorder,
+then sched2 reverses it. No source adoption/flag change, no unique source-arm
+inference. Full-da ICE preserved invalid, excluded; successful selected replay
+and raw-equal observation decide. [Stage proof](adid-first-study-stage-results.md).
+
+## F11927. First-study incoming scratch cursor cannot explain the byte-store colors alone
+
+137 complete observed searches/six target searches, assembly/object raw-equal.
+updateUrefAlt leaves cursor50; first-study inherits it. Source-derived scalar
+model reproduces all six actual picks/returns. All53 incoming cursors under
+fixed observed liveness/order/eligibility converge to bp,ax,bp,ax,ax,ax: its
+first search only admits bp and erases incoming-state differences. This bounds
+helper-placement-only experiments; not a claim about all source contexts or
+profiles. Seek changed lifetime/site/traversal evidence or sched2 dependencies
+before new source controls. Production1080/1852 unchanged, zero gains/losses;
+no source/test change or mutation/fuzzing execution. [Replay](adid-first-study-stage-results.md).

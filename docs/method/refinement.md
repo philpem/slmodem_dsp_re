@@ -4342,3 +4342,22 @@ Separate n's initialization placement from merged byte publication: moving n
 inside the admitted scan restores placement; duplicating source arms still
 emits a shared store. Bound and close that domain without register forcing.
 [22-cell controls, positive block detectors and retained partial recovery](../adid-first-study-results.md).
+
+### Separate scratch-created tail sharing from source joins (F11926–F11927)
+
+Follow immediate stores through reload, peephole2 and ce3. In ADID first-study,
+separate zero/one stores survive reload, then peephole2 chooses ax for both;
+ce3's CFG cleanup crossjumps the identical register stores. The blob's distinct
+byte registers keep the tails apart. This is evidence about scratch selection
+and late cleanup, not proof that source arms need more duplication.
+
+Test whether preceding TU context can actually influence the target before
+moving helpers. Read-only installed tracing plus a validated scalar search
+model shows all53 incoming scratch cursors converge after this target's first
+forced bp selection. Incoming cursor alone cannot change its later byte picks
+with fixed eligibility/order/sites. This bounded negative result does not rule
+out independently evidenced lifetime or traversal changes. Also localize store
+order separately: ADID count/sum remains count-first through block reorder and
+reverses at sched2. Its source already has the original order; repeating source
+permutations without a new scheduling witness would not test the explanation.
+[Raw-equal eleven-stage replay and six-search observation](../adid-first-study-stage-results.md).
