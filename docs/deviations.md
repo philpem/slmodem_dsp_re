@@ -444,6 +444,15 @@ the C.
 
 ## D6 — `AGC_DEF_ALPHA`'s slow pair is copy-pasted, breaking unity gain 🐛 💤
 
+**Scope correction (F11967):** the historical relocation census below describes
+initial config pointers. Callers later select element1 in V32 and V17/V27/V29,
+whose slow pairs are correct. This pass does not establish selection of the three
+broken B103/V23 pairs; D85's contrary live-trigger claim remains unproven. Do not
+use either entry to infer a universal AGC shift range. Initialized nonnegative
+unity pairs give shift0..14; arbitrary config/state and retained frozen counts
+require separate evidence. Original invalid-count behavior is the period x86
+mask, not defined C semantics. See [shift audit](agc-shift-results.md).
+
 **Dormant: nothing selects the affected element.** Recorded because it is one
 config field away from being live, and because it is the only thing that could
 make `FPM_AGC_agc`'s shift go negative (finding F29).
@@ -3308,6 +3317,14 @@ measurement nobody has made.
 ---
 
 ## D85 🐛 the slow AGC pair does not sum to unity
+
+**Reachability correction (F11967):** the older “FIRES TODAY”/live B103 and V23
+statements below are not established by this entry's relocation evidence. Those
+relocations describe initial element0 selections. Other callers select correct
+slow pairs; this pass has not proved a live selection of the broken B103/V23
+pairs. Their stored values are32604/1638; the16384 below is also a historical
+transcription error. Preserve the defect record, but do not treat that trigger
+claim as measured lifecycle evidence.
 
 *Task #98 sweep, from fix list §5.10. **Reachability: FIRES TODAY.** Status: CONFIRMED. Already in this register as D6 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: **opt-in.*
 

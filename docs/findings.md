@@ -138253,3 +138253,44 @@ equal69557→69524/943398; both strict DIFFERENT/exit1. Adopted original graph/
 operand categories have a measured size/layout cost; no byte-count improvement,
 new exact, full gain-graph identity, mutation/fuzz or modern-portability claim.
 [Results](agc-arm-ownership-results.md).
+
+## F11967. AGC initialized unity-pair shift bound is conditional, not relocation reachability
+
+Nonnegative unity coefficients and initialized level0..32703 keep the smoother
+in that interval;32769 coefficient corner checks establish the monotone bound.
+65535 nonzero unsigned denominators give norm0..15; positive signed levels give
+shift0..14, top-bit values give-1. Freeze preserves a previous count. Config
+relocations establish initial pointers, not later selections: live V32 and
+V17/V27/V29 code changes to correct unity slow pairs. D6's global nothing-selects-
+element1 wording and D85's live-broken-B103/V23 claim cannot jointly establish a
+whole-program range. This pass does not prove broken-pair modem reachability.
+Raw shift outside0..31 is not defined C; compiled period CL masking is separately
+measured,65536 signed-word count identities with wrong-mask control32768 hits.
+No invalid C shift execution or new reachability claim. [Results](agc-shift-results.md).
+
+## F11968. AGC raw int count becomes byte reload, then MOVZBL through x86 output selection
+
+Four full-TU cells/16 shared verdicts: baseline mask SIZE22, raw count SIZE5,
+byte cast SIZE20, byte+mask SIZE22. Only raw reproduces original stack MOVZBL
+before multiply/SAR/CWTL/SHL CL. Initial RTL uses QI subreg of cached SI count;
+global reload supplies memQI count home, retained through sched2. GCC3.4.2
+movqi_1 output selects MOVZBL under TARGET_MOVX/i686; no explicit byte type or
+zero extension is required in source/RTL. Adopt raw count on operand/use evidence,
+not minimum size, retaining unsigned value arithmetic and original period
+invalid-count behavior. Valid initialized unity-pair range0..14; no universal
+C-semantics/portability claim. Metadata/data/calls/three exact bystanders unchanged;
+raw baseline/selected production match. [Trace and source](agc-shift-results.md).
+
+## F11969. AGC raw-count recovery validates and improves measured partial layout
+
+Final make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors
+green. Initial phase period388/0 but refs red on two unwritten findings;
+preserved/repaired, final full gate green. Unchanged initialized AGC10 groups/
+51643 hard checks,476 result trials34 zero/442 one; V23 lifecycle22 groups/
+4656926 checks pass. Selected producer raw-matches control;1/300 objects changes,
+299/config unchanged,300 faithful inputs raw-equal canonical. Census1082/1852
+EXACT/119759 bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED, ratchet
+green. Partial .text702412→702396,allocated918420→918404, positioned equal
+69524→69567/943398; both strict DIFFERENT/exit1. No new exact, near-exact,
+all-input C proof, broken-pair reachability, fuzz/mutation or modern-portability
+claim. [Results](agc-shift-results.md).

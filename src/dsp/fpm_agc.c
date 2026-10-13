@@ -55,7 +55,7 @@
  *     under-estimated for very loud blocks; nothing goes negative.
  *
  * ---------------------------------------------------------------------------
- * Why `shift` is never negative here
+ * When the shift count is bounded
  *
  * `shift` is `norm - 1`, so it is negative exactly when FPM_div sees a
  * denominator with its top bit already set, i.e. level >= 0x8000.  That
@@ -65,14 +65,20 @@
  *     never exceeds 32703 -- not even when the accumulator overflows (D2).
  *     So `level` is in [0, 32703], and never negative.
  *
- *   - the smoother keeps `level_est` inside that range too, because
- *     alpha[0] + beta[0] == 32768 exactly in every shipped configuration.
+ *   - an initialized unity-coefficient smoother keeps `level_est` in
+ *     that range too: alpha[0] + beta[0] == 32768 with both nonnegative.
  *
- * It is only the *second* of those that a different config could break: an
- * alpha/beta pair summing to more than 1.0 would let level_est climb until
- * the truncation to short made it negative, and then `shift` would go to -1
- * and the apply loop would shift left by 31.  Such a pair exists in the blob
- * but is never selected -- see D6 in docs/deviations.md.
+ * That smoother bound assumes nonnegative coefficients summing to 32768
+ * and an initialized nonnegative level.  Callers can change coefficient
+ * pointers after init, so the initial config relocations alone cannot prove
+ * a whole-program bound.  A non-unity pair can wrap the estimate negative;
+ * FPM_div then returns norm 0 and shift becomes -1.
+ *
+ * The original uses the raw shift count.  GCC 3.4.2 reloads its low byte
+ * into CL and x86 masks that to five bits, including the -1 case.  This
+ * reproduces the period object's behavior; C itself does not define shifts
+ * with negative or >=32 counts.  Findings F11967-F11968 distinguish the
+ * valid initialized range from that target/compiler behavior.
  */
 
 #include "dsplib/debug.h"
@@ -150,8 +156,8 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 			/*
 			 * First-order smoother.  Note the asymmetry: the alpha term is
 			 * left at full width and only the *sum* is truncated back to
-			 * 16 bits.  Both coefficients are 16384 for every configuration
-			 * in the blob, i.e. level = (level + measured) / 2.
+			 * 16 bits.  The fast pair is 16384/16384, i.e.
+			 * level = (level + measured) / 2; selected slow pairs differ.
 			 */
 			level_est = (agc->cfg.alpha[0] * level_est) >> 15;
 			level_est = (short)(level_est +
@@ -171,14 +177,13 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 				int v = (short)((*p * mult) >> 15);
 
 				/*
-				 * The original loads `shift` with movzbl and shifts
-				 * with `shl %cl`, so the count is masked to five bits.
-				 * That only matters if `shift` is negative, which no
-				 * shipped configuration can produce -- see the header
-				 * comment.  Masked here so the two still agree if one
-				 * ever does.
+				 * The original uses the raw count; GCC3 reloads its
+				 * low byte for SHL CL.  The initialized unity-pair
+				 * range is 0..14.  x86 masks other counts to five bits,
+				 * but that is period behavior, not defined C semantics
+				 * for negative or >=32 counts.  Finding F11968.
 				 */
-				v = (int)((unsigned)v << (shift & 31));
+				v = (int)((unsigned)v << shift);
 
 				if (v > 32767)
 					*p = 32767;

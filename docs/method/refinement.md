@@ -4614,3 +4614,20 @@ when SIZE gets worse. A restored arm boundary can expose pointer spills or
 remaining arithmetic/shift differences; the smallest-size control may retain
 wrong source structure. This is a partial lever, not a promise of exactness.
 [AGC controls and limits](../agc-arm-ownership-results.md).
+
+### A byte instruction can be a narrow use/output choice (F11967–F11968)
+
+Do not infer an unsigned-char declaration or cast from MOVZBL alone. AGC's
+raw cached int shift expands to a QI subreg use; reload loads a memQI home into
+CL, and GCC3's movqi_1 output selects MOVZBL under i686 TARGET_MOVX. The QI
+load persists through saved late stages; it is not an explicit zero-extension
+node. An explicit byte cast instead introduces a temporary and changes its
+lifetime/hoisting. Cross raw count, byte cast and masking while preserving
+value arithmetic, and inspect output-selection rules as well as RTL.
+
+Count-width evidence and C semantics are separate: initialized nonnegative
+unity-pair AGC histories give counts0..14, but initial config relocations cannot
+bound later pointer selections or frozen/planted states. Document original
+period hardware behavior outside C's count range, demonstrate finite count
+identities with a wrong-mask control, and never present invalid shifts as
+portable C or fixture reachability. [Replay/limits](../agc-shift-results.md).
