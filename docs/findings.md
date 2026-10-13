@@ -138041,3 +138041,51 @@ none executed. Faithful partial .text702012 unchanged; positioned text equal
 33833→33832/728304 and both strict comparisons DIFFERENT/exit1. Local function
 identity is not final-object identity. PSD process remains635B/BYTES6, bounded
 by measured rename chains. [Integration and next lead](psd-conversion-results.md).
+
+## F11951. Expansion-temporary screen bounds ninety small floating residual names
+
+Baseline3986addf:778 residual copies/770 names,92 floating copies/90 names up to
+700 original bytes. Screen reports every body/operand difference and prologue
+reservation, not a causal classification from frame size. Historical PSD getter
+SIZE1/extraSF4 and current EXACT77B clear positive/negative frame controls.
+Three raw-equal complete-TU preparations retain73 shared-body verdicts. Existing
+spectral native/capture domains remain closed. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11952. Scalar SineWave mode removes expansion storage and recovers the original read boundary
+
+Six scalar/sine/entry cells,three phase-owner cells,two publication cells:11
+retained controls/374 body verdicts. Scalar producers remove SF4 gen_truncxfsf2,
+leaving HI2/HI2/SI4 and BLK0:12→8 locals, original8. Sinl/sinf controls raw-equal
+within each scalar entry class. Guarded phase acquisition with original i<n
+comparison reaches134B/BYTES50: every nonbranch instruction/operand multiplicity
+matches original, with the zero-length block placed before the common wrap
+rather than after return. Source-publication-before-output control worsens to
+SIZE12 and is declined. Only generate changes;33 bystanders/metadata/named data
+and non-executable allocated data unchanged. Production adopts scalar/read
+boundary subject to period gate; this is supported partial recovery, not exact.
+Seven raw-equal SineWave observations/31 stack requests; FloatFIR control9
+requests across two overloads shows its SF4 is also reserved by original scalar
+method, so no return rewrite. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11953. AGC scalar controls retain the temporary and introduce unsupported narrowing
+
+Unchanged complete V90Demodulator observation records3 process-group requests,
+2 AGC (SF4 gen_truncdfsf2/BLK0) and1 Descrambler BLK0, resolved by assembler names.
+AGC locals4 reserve20B including padding. Four producer/floor-mode controls/124
+body verdicts retain the SF4 request; five raw-equal observations/15 requests.
+Both changes reduce SIZE23→15 but add fstps/flds at the fsqrt result absent in
+original. No adoption or candidate-runtime claim. Producer edits also change
+reset/progress callers and constant pool; full-TU audit includes them. Preserve
+validated double sqrt boundary and reject score-only transfer. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11954. SineWave partial recovery passes the period gate and improves positioned bytes
+
+15 retained source-control cells/498 body verdicts plus3 raw preparations/73
+verdicts;13 raw-equal observations/55 stack requests. Selected canonical object
+raw-equal independent control. One SineWave defining copy,1/300 objects changes,
+299/configuration unchanged. Census1082/1852 EXACT/119759 exact bytes unchanged,
+SIZE671→670/BYTES63→64,REGALLOC31/UNRESOLVED5 unchanged;no exact losses,ratchet green.
+make phase J=8 exits0:388 passed/0 failed,structural/static285-suite10038-anchor
+checks green. No mutations/fuzzing executed. Faithful .text702012 unchanged;
+generate127→134B,positioned equal10→75/134,allocated equal69312→69377/943398.
+Both strict partial comparisons DIFFERENT/exit1. [Results/replay](expansion-temporary-transfer-results.md).

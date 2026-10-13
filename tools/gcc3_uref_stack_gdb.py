@@ -70,7 +70,7 @@ class Stack(gdb.Breakpoint):
                             pass
                     caller_values.append({'function': frame.name(), 'available_values': values})
                 frame = frame.older()
-            event = {'function': name, 'function_pointer': function,
+            event = {'function': name, 'assembler_name': gdb.parse_and_eval('((struct function *)%d)->decl->decl.assembler_name->identifier.id.str' % function).string(), 'function_pointer': function,
                      'mode': enum(arg(4), 'enum machine_mode'), 'size': signed(arg(8)),
                      'align': signed(arg(12)), 'frame_before': integer('((struct function *)%d)->x_frame_offset' % function),
                      'callers': frames, 'caller_values': caller_values}
@@ -103,7 +103,9 @@ class Frame(gdb.Breakpoint):
             if name != TARGET:
                 return False
             pointer = integer('*(unsigned int*)($esp+4)')
-            event = {'locals_size': -integer('cfun->x_frame_offset'),
+            event = {'assembler_name': gdb.parse_and_eval('cfun->decl->decl.assembler_name->identifier.id.str').string(),
+                     'function_pointer': integer('(unsigned long)cfun'),
+                     'locals_size': -integer('cfun->x_frame_offset'),
                      'stack_alignment_needed': integer('cfun->stack_alignment_needed'),
                      'preferred_stack_boundary': integer('cfun->preferred_stack_boundary'),
                      'outgoing_args_size': integer('cfun->outgoing_args_size'),

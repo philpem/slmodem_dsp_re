@@ -4522,3 +4522,19 @@ register renaming. PSD's remaining conversion high words exist before peephole2;
 read-only installed-compiler observation attributes final substitutions to local
 use-age ticks. Earlier-function cursor interventions do not transfer directly.
 [Results and replay](../psd-conversion-results.md).
+
+### Expansion-word removal is transferable, arithmetic narrowing is not (F11951–F11953)
+
+Trace assign_386_stack_local requests and their returned homes, including
+zero-size reload/alignment requests. SineWave's scalar producers remove the
+same gen_truncxfsf2 SF4 word as PSD and restore the original8B frame; delayed
+phase acquisition recovers the original operand multiset while cold-exit layout
+remains nonexact. FloatFIR's scalar method already has the original4B reservation,
+so a similar request alone does not warrant changing its return arithmetic.
+
+AGC falsifies a broad scalar rewrite: its gen_truncdfsf2 request survives, and
+an apparently closer control narrows fsqrt through memory where original does
+not. Audit the operation graph, narrowing sites and coupled inlined callers,
+not just frame size or SIZE score. Record assembler names in read-only method
+traces to distinguish overloads and unrelated process methods in one TU.
+[Bounded domains](../expansion-temporary-transfer-domain.md).
