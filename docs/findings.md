@@ -138225,3 +138225,31 @@ allocated918388→918404, positioned equal69537→69557/943398. Both strict part
 comparisons remain DIFFERENT/exit1. Initial missing-relative-blob comparison is
 invalid/excluded and correctly rerun. No fuzz/mutation execution, new exact,
 modern portability or whole-object identity claim. [Results](v23-agc-return-results.md).
+
+## F11965. AGC pointer countdown and explicit arms interact before STC tail duplication
+
+Original quiet/gain exits share sample advance at0xa6852; both gates precede
+quiet, gain follows sole epilogue. Four-cell explicit-if/else × pointer-countdown
+cross: initial RTL advances2→1, CFG25/39→24/38. Indexed arms acquire three STC
+copies/bbro27/41; combined acquires one/bbro25/38. Only combined restores all
+selected original quiet/gain/gate/countdown/common-exit categories. Raw baseline
+and winner match production; metadata/data/calls/three bystanders unchanged over
+4 full-TU cells/16 shared verdicts. Adopt supported graph/operands although
+SIZE3→22; original178 versus selected184 instructions, register/spill/arithmetic/
+shift/entry differences remain. No exact gain/loss or unique spelling claim.
+Detectors fire on original/combined and refuse three negative controls.
+[Replay/limits](agc-arm-ownership-results.md).
+
+## F11966. AGC arm recovery passes period with no exact gains/losses and measured layout cost
+
+make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors green.
+Unchanged AGC fixture10 groups/51643 hard checks,476 returned-value trials
+34 zero/442 one; V23 debug lifecycle22 groups/4656926 checks pass. Selected AGC
+object raw-matches independent control;1/300 objects changes,299/configuration
+raw-identical, all300 faithful inputs match canonical. Census1082/1852 EXACT,
+119759 original exact bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED,
+ratchet green. Partial .text702396→702412, allocated918404→918420, positioned
+equal69557→69524/943398; both strict DIFFERENT/exit1. Adopted original graph/
+operand categories have a measured size/layout cost; no byte-count improvement,
+new exact, full gain-graph identity, mutation/fuzz or modern-portability claim.
+[Results](agc-arm-ownership-results.md).

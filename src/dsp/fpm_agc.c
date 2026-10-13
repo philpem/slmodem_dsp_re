@@ -130,7 +130,8 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	for (i = (short)(blocks - 1); i >= 0; i--) {
 		unsigned short len = (unsigned short)(i ? block_len : tail);
 		short level = FPM_rms(samples, len);
-		int k;
+		unsigned short k;
+		short *p;
 
 		/*
 		 * The gate.  Which threshold applies depends on whether a gain
@@ -139,51 +140,54 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 		 */
 		if ((level < acquire_level && mult == 0) ||
 		    (level < squelch_level && mult != 0)) {
-			for (k = 0; k < (int)len; k++)
-				samples[k] = 0;
-			samples += len;
-			continue;
-		}
-
-		adjusted = (short)(adjusted + 1);
-
-		/*
-		 * First-order smoother.  Note the asymmetry: the alpha term is
-		 * left at full width and only the *sum* is truncated back to
-		 * 16 bits.  Both coefficients are 16384 for every configuration
-		 * in the blob, i.e. level = (level + measured) / 2.
-		 */
-		level_est = (agc->cfg.alpha[0] * level_est) >> 15;
-		level_est = (short)(level_est +
-				    ((agc->cfg.beta[0] * level) >> 15));
-
-		if (agc->freeze == 0 && level_est != 0) {
-			unsigned short recip, norm;
-
-			FPM_div((unsigned short)level_est, &recip, &norm);
-			mult = (short)(((int)recip * ref_level) >> 15);
-			shift = (short)(norm - 1);	/* the /2; see above */
-		}
-
-		for (k = 0; k < (int)len; k++) {
-			int v = (short)((samples[k] * mult) >> 15);
+			p = samples;
+			k = len;
+			while (k--)
+				*p++ = 0;
+		} else {
+			adjusted = (short)(adjusted + 1);
 
 			/*
-			 * The original loads `shift` with movzbl and shifts
-			 * with `shl %cl`, so the count is masked to five bits.
-			 * That only matters if `shift` is negative, which no
-			 * shipped configuration can produce -- see the header
-			 * comment.  Masked here so the two still agree if one
-			 * ever does.
+			 * First-order smoother.  Note the asymmetry: the alpha term is
+			 * left at full width and only the *sum* is truncated back to
+			 * 16 bits.  Both coefficients are 16384 for every configuration
+			 * in the blob, i.e. level = (level + measured) / 2.
 			 */
-			v = (int)((unsigned)v << (shift & 31));
+			level_est = (agc->cfg.alpha[0] * level_est) >> 15;
+			level_est = (short)(level_est +
+					    ((agc->cfg.beta[0] * level) >> 15));
 
-			if (v > 32767)
-				samples[k] = 32767;
-			else if (v < -32768)
-				samples[k] = -32768;	/* not -32767; cf. FPM_iir_filt */
-			else
-				samples[k] = (short)v;
+			if (agc->freeze == 0 && level_est != 0) {
+				unsigned short recip, norm;
+
+				FPM_div((unsigned short)level_est, &recip, &norm);
+				mult = (short)(((int)recip * ref_level) >> 15);
+				shift = (short)(norm - 1);	/* the /2; see above */
+			}
+
+			p = samples;
+			k = len;
+			while (k--) {
+				int v = (short)((*p * mult) >> 15);
+
+				/*
+				 * The original loads `shift` with movzbl and shifts
+				 * with `shl %cl`, so the count is masked to five bits.
+				 * That only matters if `shift` is negative, which no
+				 * shipped configuration can produce -- see the header
+				 * comment.  Masked here so the two still agree if one
+				 * ever does.
+				 */
+				v = (int)((unsigned)v << (shift & 31));
+
+				if (v > 32767)
+					*p = 32767;
+				else if (v < -32768)
+					*p = -32768;	/* not -32767; cf. FPM_iir_filt */
+				else
+					*p = (short)v;
+				p++;
+			}
 		}
 
 		samples += len;

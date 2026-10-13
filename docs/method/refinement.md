@@ -4597,3 +4597,20 @@ and gain-local widths. AGC recovers the first two categories, but the remaining
 gain graph is not established by its quiet loop or a SIZE3 gap. Retain informative
 losing controls, and stop the finite domain absent another witness.
 [Replay and limits](../v23-agc-return-results.md).
+
+### Cross arm ownership with sample-loop operands (F11965)
+
+A common advance in original disassembly can justify explicit if/else factoring
+when reconstruction uses an early continue. Cross it with independently
+witnessed pointer/countdown loops: AGC's indexed if/else makes initial CFG
+smaller but later STC duplicates three blocks; the combined source keeps one
+copy and restores quiet-before-return-before-gain plus the shared exit. Initial
+RTL's two-versus-one advance assignments separate source ownership from later
+allocation/layout. Inspect saved CFG and bbro transformations and use known
+negative controls; do not call equal block counts equal graphs.
+
+Adopt original graph/operand recovery on evidence and period validation, even
+when SIZE gets worse. A restored arm boundary can expose pointer spills or
+remaining arithmetic/shift differences; the smallest-size control may retain
+wrong source structure. This is a partial lever, not a promise of exactness.
+[AGC controls and limits](../agc-arm-ownership-results.md).
