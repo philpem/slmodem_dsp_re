@@ -4538,3 +4538,21 @@ not. Audit the operation graph, narrowing sites and coupled inlined callers,
 not just frame size or SIZE score. Record assembler names in read-only method
 traces to distinguish overloads and unrelated process methods in one TU.
 [Bounded domains](../expansion-temporary-transfer-domain.md).
+
+### Separate branch prediction, trace placement and x87 edge repair (F11955–F11956)
+
+A floating function can match every nonbranch operand yet differ in cold-exit
+placement. Trace prediction12.bp, ordering31.bbro and stack34.stack separately:
+SineWave's entry50/50 and exit10% place its zero-trip block before wrap; edge
+pops appear afterward. Compare complete CFG paths, not just operand multisets.
+A natural first-iteration owner can change prediction but retain hot tests and
+cause block copying. Record copies created during trace connection explicitly;
+require known copy-source and final-order coverage rather than silently ignoring
+new blocks. Positive4→8 and malformed99→8 controls exercise the reader.
+
+Inspect allocated constants too: this control adds QNaN and an entry fld only
+at stack conversion. Live-at-entry x87 initialization can explain a constant
+absent from source; it does not by itself establish reachable undefined behavior.
+Reject the control when its original graph is lost. The92-copy small-floating
+screen nominates only SineWave for this layout-only family; it is not evidence
+that all other source recovery is exhausted. [Replay/results](../sine-cold-layout-results.md).

@@ -138089,3 +138089,39 @@ make phase J=8 exits0:388 passed/0 failed,structural/static285-suite10038-anchor
 checks green. No mutations/fuzzing executed. Faithful .text702012 unchanged;
 generate127→134B,positioned equal10→75/134,allocated equal69312→69377/943398.
 Both strict partial comparisons DIFFERENT/exit1. [Results/replay](expansion-temporary-transfer-results.md).
+
+## F11955. SineWave cold placement follows prediction and STC before x87 repair
+
+Unchanged full VpcmFloModem object raw-reproduces production134B/BYTES50. Entry
+no-heuristic50/50 and loop-exit10% yield final order0,1,3,2,4,5; zero-trip4 and
+wrap5 share round1 trace at entry-frequency threshold1000. Stack conversion
+later adds edge cleanup. Historical common-loop64/36 predicts differently but
+has wrong first-phase read boundary; not a new candidate. Three traces total8
+prediction sites/8 traces/19 ordered blocks/29 x87 edges. Generic reader records
+explicit copy4→8 and refuses malformed99→8. Installed dumps decide behavior;
+stock release sources explain it without claiming original RTL/profile.
+[Results/replay](sine-cold-layout-results.md).
+
+## F11956. First-iteration ownership worsens SineWave and adds compiler NaN repair
+
+Two full-TU cells/68 verdicts; candidate174B/SIZE40 retains hot tests and copies
+block4→8. Exact23/34 set unchanged; only generate changes,33 bystanders and
+metadata/named data unchanged. Target section and .rodata.cst4 change, latter
+52→56B with exact prefix plus0000c07f. LC92 absent33.sched2, introduced UID219
+at34.stack before function-begin, matches entry-live x87 initialization in
+convert_regs_entry. Not an author constant or proof of reachable uninitialized
+use. Candidate unvalidated/declined; no production source change.92 small
+floating copies yield1 matching nonbranch multiset (SineWave); bound does not
+classify all residuals. Close this two-cell domain pending distinct witness.
+[Results/replay](sine-cold-layout-results.md).
+
+## F11957. Cold-layout diagnosis preserves production and faithful partial object
+
+No src/header or static-anchor change. Census1082/1852 EXACT/119759 exact bytes,
+SIZE670/BYTES64/REGALLOC31/UNRESOLVED5 unchanged, ratchet green. make phase J=8:
+388/0 and structural checks green; this validates production, not rejected
+candidate. All300 faithful objects raw-equal canonical; rebuilt partial raw-equal
+retained pre-pass partial, .text702012, allocated candidate917705, positioned
+69377/943398. Strict original comparisons both DIFFERENT/exit1. Refcheck since
+2180f9d0:14429 checked,0 point elsewhere. No mutation/fuzz execution, modern
+portability claim, source adoption or new exact function. [Replay](sine-cold-layout-results.md).
