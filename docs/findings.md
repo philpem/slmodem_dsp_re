@@ -138347,3 +138347,40 @@ frame0x4c versus0x3c: not near-exact or register-only. Partial .text702396 and
 allocated918404 unchanged; positioned equal69567→69558/943398, both strict
 DIFFERENT/exit1. Original guard/length/argument/partition categories improve,
 not the exact count or positioned byte total. [Results](agc-predicate-results.md).
+
+## F11974. Whole-tree extension windows nominate boundaries, not prototypes
+
+At4de483e2,300 objects/1934 emitted bodies include1886 shared names;1744 have
+equal ordered named-PC32-call sequences,142 differ,48 lack an original.
+4671 matched calls yield62 extra-extension windows in39 bodies. Historical
+RMS length-only positive and identity negative fire/pass. Initial wrong
+positive fixture aborted, excluded; no report used. Four manual reviews:
+MTD conversion is outside window; TONE and settxlevel conversions belong to
+other values; FSE supplies a paired-error lifetime. Other35 bodies unclassified.
+Not the1852-symbol strict denominator, not ABI recovery.
+[Method, controls and replay](lms-paired-error-results.md).
+
+## F11975. Paired LMS errors must survive the first opaque update call
+
+Original FPM_FSE_receive narrows both scaled errors before its first
+FPM_lmsupd call; retained source forms the second afterward. Three full-TU
+cells/12 shared verdicts compare baseline, paired short locals and reassigned
+existing carriers. Both paired controls are raw-identical; explicit locals
+adopted. Initial RTL and native inter-call multiply/shift/narrowing disappear,
+matching original ownership. SIZE35→26, zero exact gains/losses. Raw baseline,
+metadata/named/allocated data/call targets/all bystanders pass; only receive
+changes. Helper ABI and exact helper body unchanged. This is a pre-allocation
+lifetime recovery, not a unique original spelling or complete-function match.
+[Declared domain](lms-paired-error-domain.md), [results](lms-paired-error-results.md).
+
+## F11976. Paired LMS recovery production validation
+
+Final make phase J=8 exits0:388 period tests passed/0 failed,285 suites/10038
+static anchors green. Existing FSE receive fixture includes8824 LMS-gate checks;
+no new fixture or tolerance. Census1082/1852 EXACT/119759 original exact bytes,
+669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED unchanged; ratchet green. Only FSE
+changes in300 objects,299 raw-identical and300 faithful inputs raw-match
+canonical. Selected cell raw reproduced. Partial .text702396→702380,
+allocated918404→918388, positioned equal69558→69540/943398; strict
+DIFFERENT/exit1. No exact-count or positioned-byte gain. No fuzzing, mutation
+execution or modern-portability claim. [Results](lms-paired-error-results.md).

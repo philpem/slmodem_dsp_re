@@ -472,12 +472,15 @@ FPM_FSE_receive(struct fpm_fse *state, const short *in, unsigned short *out,
 		if ((state->mse > 0 && state->lms_on) || state->lms_force) {
 			short mu = state->cfg.mu[state->mu_sel];
 
+			short update_i = (short)((err_i * mu + FPM_FSE_MU_ROUND)
+					   >> FPM_FSE_MU_SHIFT);
+			short update_q = (short)((err_q * mu + FPM_FSE_MU_ROUND)
+					   >> FPM_FSE_MU_SHIFT);
+
 			FPM_lmsupd(icoeff, hist, widx, taps,
-				   (short)((err_i * mu + FPM_FSE_MU_ROUND)
-					   >> FPM_FSE_MU_SHIFT));
+				   update_i);
 			FPM_lmsupd(qcoeff, hist, widx, taps,
-				   (short)((err_q * mu + FPM_FSE_MU_ROUND)
-					   >> FPM_FSE_MU_SHIFT));
+				   update_q);
 		}
 
 		/*

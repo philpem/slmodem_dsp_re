@@ -4656,3 +4656,20 @@ Object-data audits must represent COMMON storage by size, binding and alignment;
 it has no section contents. The class1 table is a76-byte/32-aligned positive
 control across six cells. Passing it as a section index is an inspector failure,
 not a reconstruction result or a reason to skip the TU.
+
+### Trace paired argument lifetimes across opaque calls (F11974–F11975)
+
+An extra extension near a call need not mean a wrong prototype. FSE narrows
+both scaled LMS errors before the original first update, keeping the second
+across that call. Reconstruction had formed the second afterward. Capturing
+both first restores this boundary already in initial RTL; two natural local
+forms emit the same complete object. Preserve helper types and validate all
+bystanders. The SIZE gap improves without making the function exact.
+
+Fixed pre-call windows nominate, never certify: MTD's original conversion falls
+just outside eight rows; TONE and settxlevel convert unrelated values. Report
+matched calls, excluded bodies and per-object duplicate weak bodies separately
+from the strict function census. A known length-only RMS positive and identity
+negative validate this detector; an incorrect positive fixture must abort, not
+be excused. Inspect full def/use chains before testing interface changes.
+[Controls, partial-link limits and next discriminators](../lms-paired-error-results.md).

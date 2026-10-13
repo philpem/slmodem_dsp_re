@@ -210,13 +210,13 @@
  },
  {
   "label": "the LMS step is formed without its rounding term",
-  "find": "\t\t\tFPM_lmsupd(icoeff, hist, widx, taps,\n\t\t\t\t   (short)((err_i * mu + FPM_FSE_MU_ROUND)",
-  "replace": "\t\t\tFPM_lmsupd(icoeff, hist, widx, taps,\n\t\t\t\t   (short)((err_i * mu + 0)"
+  "find": "\t\t\tshort update_i = (short)((err_i * mu + FPM_FSE_MU_ROUND)",
+  "replace": "\t\t\tshort update_i = (short)((err_i * mu + 0)"
  },
  {
   "label": "the two LMS halves are handed each other's step",
-  "find": "\t\t\tFPM_lmsupd(qcoeff, hist, widx, taps,\n\t\t\t\t   (short)((err_q * mu + FPM_FSE_MU_ROUND)",
-  "replace": "\t\t\tFPM_lmsupd(qcoeff, hist, widx, taps,\n\t\t\t\t   (short)((err_i * mu + FPM_FSE_MU_ROUND)"
+  "find": "\t\t\tshort update_q = (short)((err_q * mu + FPM_FSE_MU_ROUND)",
+  "replace": "\t\t\tshort update_q = (short)((err_i * mu + FPM_FSE_MU_ROUND)"
  },
  {
   "label": "the report counter is charged per call, not per sample",
