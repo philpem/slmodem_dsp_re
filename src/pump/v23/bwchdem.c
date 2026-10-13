@@ -235,11 +235,10 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 
 	/*
 	 * F11613 retains the observed fourth argument, literal 1. The object
-	 * also uses EAX, equal to the stored signal flag. This reconstruction
-	 * still reads that field; original return semantics are a separate axis.
+	 * consumes the signed low word of AGC's published boolean return,
+	 * rather than reloading the signal field. Finding F11962.
 	 */
-	FPM_AGC_agc(&bw->agc, samples, (unsigned short)count, 1);
-	signal = bw->agc.signal;
+	signal = (short)FPM_AGC_agc(&bw->agc, samples, (unsigned short)count, 1);
 
 	if (bw->carrier_blocks <= BWCH_CARRIER_BLOCKS) {
 		/*

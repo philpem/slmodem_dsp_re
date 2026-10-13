@@ -4578,3 +4578,22 @@ Audit the fixture's temporal claims too: V23's acquisition deadline is one minut
 and the tested host retains carrier through24 seconds of silence. Preserve those
 measured histories and exact comparisons; never repair source to meet a guessed
 modern timeout. Distinguish object-recovered sites from those observed firing.
+
+### Trace returned values and word operands independently (F11962–F11963)
+
+A callee can publish the right field while returning the wrong register value;
+a field-reading substitute can hide that reconstruction defect. Compare the
+original epilogue with callers' EAX/AX captures, recover the shared return
+boundary, and test explicit results as well as samples/state. Include ignored
+callers in the complete-TU audit: changing AGC's return declaration exchanges
+argument-store order in unchanged B103 source. A closer body is not necessarily
+an exact gain.
+
+For countdown loops, distinguish narrowing only the initial int index from
+re-narrowing every decrement. Original MOVSWL AX plus TEST SI can independently
+support a short counter; signed word compares can support short measured/cached
+gate operands. Cross these witnesses separately from pointer/countdown factoring
+and gain-local widths. AGC recovers the first two categories, but the remaining
+gain graph is not established by its quiet loop or a SIZE3 gap. Retain informative
+losing controls, and stop the finite domain absent another witness.
+[Replay and limits](../v23-agc-return-results.md).

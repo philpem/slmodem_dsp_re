@@ -138183,3 +138183,45 @@ Partial .text702012→702380, allocated positioned equal69377→69537/943398,
 original diagnostic strings/imports recovered. Both strict comparisons remain
 DIFFERENT/exit1. No new exact-function, all-site reachability, mutation/fuzz,
 modern portability or whole-object identity claim. [Results](missing-debug-boundary-results.md).
+
+## F11962. AGC explicit return restores V23 register-value ownership after diagnostic recovery
+
+F11614's old finite family remains closed; changed V23 diagnostic boundaries
+justify one bounded interaction control. Twelve TUs/five cells/580 shared-body
+verdicts restore full boolean EAX return and two signed AX consumers, with no
+exact gains/losses or size-gap changes. Source recovers original value ownership,
+not a minimum-size spelling or uniquely inferred formal type. Original single
+AGC epilogue stores/returns the boolean; retained void body leaves a pointer in
+EAX. Existing callers' field substitutions were value-equivalent, so no new
+normal-value behavior defect is claimed. Four changed bodies: callee, two V23
+receivers, ignored-result RxDetMarkB103 collateral; all audited. Shared prototype
+and definition agree; fourth slots unchanged. New component checks compare the
+explicit result against blob and each published signal, with true/false trial
+coverage. Period/structural/integration results follow. [Domain](v23-agc-return-domain.md).
+
+## F11963. AGC word counter and gate operands are independent source witnesses
+
+Original repeats signed AX narrowing at each outer decrement and compares both
+RMS gates as words. Eight crossed cells isolate short counter, short gate values
+and unsigned-word pointer countdowns. Adopt counter+gates: each restores its
+predicted instruction category, SIZE10→3; no exact gain/loss. Initial RTL adds
+the decrement sign extension and two HI-subreg compares before allocation. Pointer countdown
+restores the quiet-loop category but leaves gain-loop differences. A distinct
+word-zero-test witness motivates eight more gain-local cells; complete gain graph
+still differs, none adopted. Seventy-six total full-TU cells/644 shared verdicts
+with prior caller cross; all metadata/data/bystanders audited. Do not read SIZE3
+as near-exact, or reopen closed spelling palettes. [Results](v23-agc-return-results.md).
+
+## F11964. AGC return/counter integration passes period and preserves the exact set
+
+make phase J=8 exits0:388 passed/0 failed. AGC component10 groups/51643 checks;
+476 explicit return trials34 zero/442 one match blob and each published signal.
+1431 added hard checks, existing sample/state/debug comparisons unchanged.
+V23 lifecycle22 groups/4656926 checks remain exact. Four selected objects raw
+match controls;4/300 change,296/configuration unchanged, all300 faithful inputs
+raw-equal canonical. Census1082/1852 EXACT/119759 bytes unchanged;669 SIZE,
+65 BYTES,31 REGALLOC,5 UNRESOLVED; ratchet green. Partial .text702380→702396,
+allocated918388→918404, positioned equal69537→69557/943398. Both strict partial
+comparisons remain DIFFERENT/exit1. Initial missing-relative-blob comparison is
+invalid/excluded and correctly rerun. No fuzz/mutation execution, new exact,
+modern portability or whole-object identity claim. [Results](v23-agc-return-results.md).

@@ -29,7 +29,7 @@
 #include "dsplib/fpm.h"
 
 extern void ref_FPM_AGC_init(void *agc, const void *cfg, int reset);
-extern void ref_FPM_AGC_agc(void *agc, short *samples, unsigned short count);
+extern int ref_FPM_AGC_agc(void *agc, short *samples, unsigned short count, int unused);
 extern void ref_FPM_AGC_Freeze(void *agc);
 extern void ref_FPM_AGC_Release(void *agc);
 extern short ref_FPM_rms(const short *samples, unsigned short count);
@@ -170,6 +170,23 @@ rng_next(void)
 	return (int)((rng_state >> 16) & 0x7fff);
 }
 
+static int return_calls, return_zero, return_one;
+
+static void
+agc_call(struct fpm_agc *a, struct fpm_agc *b, short *ours, short *ref,
+         unsigned short count, long tag)
+{
+	int ra = FPM_AGC_agc(a, ours, count, 1);
+	int rb = ref_FPM_AGC_agc(b, ref, count, 1);
+
+	diff_eq_int("AGC return (%ld)", ra, rb, tag);
+	diff_eq_int("original return equals published signal (%ld)", rb, b->signal, tag);
+	diff_eq_int("reconstructed return equals published signal (%ld)", ra, a->signal, tag);
+	return_calls++;
+	return_zero += rb == 0;
+	return_one += rb == 1;
+}
+
 /*
  * Drive a stream of `frags` fragments of `len` samples at the given amplitude
  * through both sides, comparing state and samples after every fragment.
@@ -198,8 +215,7 @@ stream(const char *what, struct fpm_agc *a, struct fpm_agc *b,
 		}
 
 		before = *b;
-		FPM_AGC_agc(a, ours, (unsigned short)len, 1);
-		ref_FPM_AGC_agc(b, ref, (unsigned short)len);
+		agc_call(a, b, ours, ref, (unsigned short)len, f);
 
 		compare_state(what, a, b, f);
 		compare_samples(what, ours, ref, len);
@@ -258,8 +274,7 @@ main(void)
 			ref[i] = (short)v;
 		}
 
-		FPM_AGC_agc(&a, ours, (unsigned short)n, 1);
-		ref_FPM_AGC_agc(&b, ref, (unsigned short)n);
+		agc_call(&a, &b, ours, ref, (unsigned short)n, n);
 
 		compare_state("len", &a, &b, n);
 		compare_samples("len", ours, ref, n);
@@ -293,8 +308,7 @@ main(void)
 
 		FPM_AGC_init(&a, &cfg, 1);
 		ref_FPM_AGC_init(&b, &cfg, 1);
-		FPM_AGC_agc(&a, ours, 53, 1);
-		ref_FPM_AGC_agc(&b, ref, 53);
+		agc_call(&a, &b, ours, ref, 53, 0);
 		compare_state("loud", &a, &b, 0);
 		compare_samples("loud", ours, ref, 53);
 		diff_eq_int("shift did not go negative (%ld)", b.shift >= 0, 1, 0);
@@ -409,6 +423,13 @@ main(void)
 	       "signal set %d, clamp hi/lo %d/%d, attributable blocks %d\n",
 	       seen_silence_acquire, seen_silence_squelch, seen_gain,
 	       seen_clamp_hi, seen_clamp_lo, seen_one_block);
+
+	diff_begin("AGC return coverage");
+	diff_eq_int("original false return reached (%ld)", return_zero > 0, 1, return_zero);
+	diff_eq_int("original true return reached (%ld)", return_one > 0, 1, return_one);
+	diff_eq_int("all returns are boolean (%ld)", return_zero + return_one, return_calls, return_calls);
+	rc |= diff_end();
+	printf("AGC return trials: %d calls, %d zero, %d one\n", return_calls, return_zero, return_one);
 
 	/*
 	 * The DIAGNOSTIC paths, restored by finding F134 and comparable only

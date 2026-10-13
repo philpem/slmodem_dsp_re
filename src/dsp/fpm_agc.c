@@ -98,13 +98,13 @@ FPM_AGC_Release(struct fpm_agc *agc)
 	agc->level = 0;	/* the level estimate, but deliberately not the gain */
 }
 
-void
+int
 FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused)
 {
 	(void)unused;
 	const unsigned block_len = agc->cfg.block_len;
-	const int acquire_level = agc->cfg.acquire_level;
-	const int squelch_level = agc->cfg.squelch_level;
+	const short acquire_level = agc->cfg.acquire_level;
+	const short squelch_level = agc->cfg.squelch_level;
 	const int ref_level = agc->cfg.ref_level;
 
 	int level_est = agc->level;
@@ -112,7 +112,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	int shift = agc->shift;
 	int adjusted = 0;		/* blocks that took the gain path */
 	unsigned blocks, tail;
-	int i;
+	short i;
 
 	blocks = (unsigned short)(count / block_len);
 	tail = (unsigned short)(count % block_len);
@@ -129,7 +129,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	 */
 	for (i = (short)(blocks - 1); i >= 0; i--) {
 		unsigned short len = (unsigned short)(i ? block_len : tail);
-		int level = FPM_rms(samples, len);
+		short level = FPM_rms(samples, len);
 		int k;
 
 		/*
@@ -195,6 +195,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 
 	/* "Most of this buffer was above the gate." */
 	agc->signal = adjusted > (int)(blocks >> 1);
+	return agc->signal;
 }
 
 void

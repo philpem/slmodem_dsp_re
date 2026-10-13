@@ -107,8 +107,10 @@ void FPM_AGC_Release(struct fpm_agc *agc);
  * @param count    Number of samples. Counts shorter than half a block are
  *                 left completely untouched; see the partitioning note in
  *                 src/dsp/fpm_agc.c.
+ * @return The published signal flag: 1 when most measurement blocks
+ *         passed the gate, otherwise 0.
  */
 /* F11613: callers supply a fourth scalar; the callee never reads it. */
-void FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused);
+int FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused);
 
 #endif /* DSPLIB_FPM_AGC_H */
