@@ -4556,3 +4556,25 @@ absent from source; it does not by itself establish reachable undefined behavior
 Reject the control when its original graph is lost. The92-copy small-floating
 screen nominates only SineWave for this layout-only family; it is not evidence
 that all other source recovery is exhausted. [Replay/results](../sine-cold-layout-results.md).
+
+### Missing diagnostics can conceal the original return contract (F11958–F11960)
+
+Compare original diagnostic relocations and value arguments before declaring a
+small SIZE gap allocator-only. V23 glue had comments where original debug>1
+branches/calls belonged. Restoring raw-status printf exposes an unjustified HI
+return: original consumes EAX, and initial RTL shows our extra sign extension
+before scheduling. Recover shared declarations and definitions together, audit
+callees/callers and include every affected TU; do not use local cast workarounds.
+
+Compare debug transcripts on valid lifecycle boundaries at levels1/2/3, with
+callback markers and overflow checks. Matching outputs at debug0 misses original
+state/tone/timeout messages and their effects on codegen. Nine recovered sites
+bring five functions closer while all remain nonexact. Follow original newline,
+argument and publication order. A SIZE2 body can still have a different frame,
+dispatch and sibling-call graph. Inspect complete bodies before choosing next
+controls. [Replay/results](../missing-debug-boundary-results.md).
+
+Audit the fixture's temporal claims too: V23's acquisition deadline is one minute,
+and the tested host retains carrier through24 seconds of silence. Preserve those
+measured histories and exact comparisons; never repair source to meet a guessed
+modern timeout. Distinguish object-recovered sites from those observed firing.

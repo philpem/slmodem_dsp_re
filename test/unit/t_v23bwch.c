@@ -29,7 +29,7 @@
 
 extern void *ref_BwChDem_Create(void *bw, const void *cfg);
 extern void ref_BwChDem_Delete(void *bw);
-extern short ref_BwChDem_Progress(void *bw, short *samples, short count,
+extern int ref_BwChDem_Progress(void *bw, short *samples, short count,
 				  int *bits, int *nbits);
 
 #define BW_MARK		390

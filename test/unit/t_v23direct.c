@@ -30,6 +30,9 @@
 
 #include "harness.h"
 #include "dsplib/v23.h"
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 /*
  * By name, for the REFERENCE side: `symmap.py --globals` promotes the blob's
@@ -147,14 +150,19 @@ normalise(struct v23_dp *dst, const struct v23_dp *src,
 }
 
 static int
-drive(const char *what, int caller, const short *signal, int frames)
+drive(const char *what, int caller, const short *signal, int frames, unsigned level, int silent_tail)
 {
 	static short in_a[512], in_b[512], out_a[512], out_b[512];
 	static struct v23_dp na, nb, at_create;
 	struct dp *da, *db;
 	int f, i, changed = 0;
+	int raw_zero_logged = 0, error_seen = 0, timeout_logged = 0;
+	int transcripts_reported = 0;
 
 	diff_begin(what);
+	dsplibs_debug_level = ref_dsplibs_debug_level = level;
+	dsplib_debug_capture_on = level != 0;
+	dsplib_debug_capture_reset();
 
 	harness_modem_reset(pattern, (int)sizeof(pattern));
 	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
@@ -165,23 +173,56 @@ drive(const char *what, int caller, const short *signal, int frames)
 	if (da == 0 || db == 0)
 		return diff_end();
 
+	if (level) {
+		diff_eq_int("create transcript complete (%ld)",
+			dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1), 1, level);
+		diff_eq_int("create transcript equal (%ld)",
+			strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, level);
+		diff_eq_int("original create threshold (%ld)",
+			strstr(dsplib_debug_capture_text(1), "v23: create...\n") != 0, level > 1, level);
+	}
+
 	/* The constructor, whole-object, before anything has run. */
 	normalise(&na, (struct v23_dp *)da, our_ops, "ours", -1);
 	normalise(&nb, (struct v23_dp *)db, ref_ops, "ref", -1);
 	diff_eq_obj("after create", struct v23_dp, &na, &nb, caller);
 	at_create = na;
 
-	for (f = 0; f < frames; f++) {
+	for (f = 0; f < frames + silent_tail; f++) {
 		int ra, rb;
 
-		memcpy(in_a, signal + f * 160, 160 * sizeof(short));
-		memcpy(in_b, signal + f * 160, 160 * sizeof(short));
+		if (signal && f < frames) {
+			memcpy(in_a, signal + f * 160, 160 * sizeof(short));
+			memcpy(in_b, signal + f * 160, 160 * sizeof(short));
+		} else {
+			memset(in_a, 0, 160 * sizeof(short));
+			memset(in_b, 0, 160 * sizeof(short));
+		}
 		memset(out_a, 0x33, sizeof(out_a));
 		memset(out_b, 0x33, sizeof(out_b));
 
+		dsplib_debug_capture_reset();
 		rb = ref_v23_process(db, in_b, out_b, 160);
 		ra = our_process_of(da)(da, in_a, out_a, 160);
 
+		if (rb == DPSTAT_ERROR)
+			error_seen = 1;
+		if (level) {
+			diff_eq_int("block %ld: transcript complete",
+				dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1), 1, f);
+			if (strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) && transcripts_reported++ < 3)
+				fprintf(stderr, "V23 diagnostics caller=%d level=%u block=%d\nours: %s\nref: %s\n",
+					caller, level, f, dsplib_debug_capture_text(0), dsplib_debug_capture_text(1));
+			diff_eq_int("block %ld: transcript equal",
+				strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, f);
+			if (strstr(dsplib_debug_capture_text(1), "v23: V23STAT: --> 0\n"))
+				raw_zero_logged++;
+			if (strstr(dsplib_debug_capture_text(1), "Carrier Detection Time Out ") ||
+			    strstr(dsplib_debug_capture_text(1), "Energy drop detected......\n") ||
+			    strstr(dsplib_debug_capture_text(1), "V23 no carrier detected...\r\n") ||
+			    strstr(dsplib_debug_capture_text(1), "V23Debug: Timeout waiting for V23 signal...\r\n"))
+				timeout_logged++;
+		}
 		diff_eq_int("block %ld: status", ra, rb, f);
 		for (i = 0; i < 160; i++)
 			diff_eq_int("transmitted[%ld]", out_a[i], out_b[i], i);
@@ -199,11 +240,26 @@ drive(const char *what, int caller, const short *signal, int frames)
 	 */
 	diff_eq_int("the state moved off what create built (%ld)", changed, 1,
 		    0);
-	diff_eq_int("the data path ran (%ld)", harness_modem_ref.gets > 0, 1,
-		    harness_modem_ref.gets);
-	diff_eq_int("bits were handed back (%ld)",
-		    harness_modem_ref.rx_len > 0, 1, harness_modem_ref.rx_len);
+	if (signal) {
+		diff_eq_int("the data path ran (%ld)", harness_modem_ref.gets > 0, 1,
+			    harness_modem_ref.gets);
+		diff_eq_int("bits were handed back (%ld)",
+			    harness_modem_ref.rx_len > 0, 1, harness_modem_ref.rx_len);
+	}
 
+	if (level && signal)
+		diff_eq_int("raw-zero status diagnostic threshold (%ld)", raw_zero_logged > 0, level > 1, level);
+	if (!signal || silent_tail) {
+		/* The blob retains carrier on this host signal-loss history even
+		 * after 24 seconds. Keep that observation distinct from timeout
+		 * histories; neither value nor transcript comparison is relaxed. */
+		int expected_error = !signal || caller != 0;
+		diff_eq_int("observed history error outcome (%ld)", error_seen, expected_error, caller);
+		diff_eq_int("history timeout diagnostic threshold (%ld)",
+			timeout_logged > 0, expected_error && level > 1, level);
+	}
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 	diff_eq_int("v23_delete returns (%ld)", our_ops->destroy(da),
 		    ref_v23_delete(db), 0);
 
@@ -242,8 +298,24 @@ main(void)
 		return diff_end();
 	rc |= diff_end();
 
-	rc |= drive("v23 terminal: whole object", 1, fw_signal, NFRAME);
-	rc |= drive("v23 host: whole object", 0, bw_signal, HOST_FRAME);
+	rc |= drive("v23 terminal: whole object", 1, fw_signal, NFRAME, 0, 0);
+	rc |= drive("v23 host: whole object", 0, bw_signal, HOST_FRAME, 0, 0);
+
+	for (i = 1; i <= 3; i++) {
+		char title[80];
+		snprintf(title, sizeof(title), "v23 terminal diagnostics: level %d", i);
+		rc |= drive(title, 1, fw_signal, NFRAME, (unsigned)i, 0);
+		snprintf(title, sizeof(title), "v23 host diagnostics: level %d", i);
+		rc |= drive(title, 0, bw_signal, HOST_FRAME, (unsigned)i, 0);
+		snprintf(title, sizeof(title), "v23 terminal no carrier: level %d", i);
+		rc |= drive(title, 1, 0, 3100, (unsigned)i, 0);
+		snprintf(title, sizeof(title), "v23 host no carrier: level %d", i);
+		rc |= drive(title, 0, 0, 3100, (unsigned)i, 0);
+		snprintf(title, sizeof(title), "v23 terminal signal loss: level %d", i);
+		rc |= drive(title, 1, fw_signal, NFRAME, (unsigned)i, 100);
+		snprintf(title, sizeof(title), "v23 host retains carrier in silence: level %d", i);
+		rc |= drive(title, 0, bw_signal, HOST_FRAME, (unsigned)i, 1200);
+	}
 
 	/* v23_delete through the registered table: that it balances as well as returns. */
 	diff_begin("v23_delete: balance");

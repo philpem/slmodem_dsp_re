@@ -53,6 +53,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
@@ -108,7 +109,8 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	(void)max_frag;
 
-	/* The original prints "v23: create...\n" here at debug level 2. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v23: create...\n");
 
 	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
@@ -217,6 +219,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	int n_tx = self->tx_bits_wanted;
 	int n_rx = 0;
 	int status;
+	int modem_status;
 	int i;
 
 	if (self->connected != 0 && n_tx > 0) {
@@ -236,6 +239,8 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 
 	status = V23ModemMain(self->modem, self->tx_bits, &n_tx, (short *)out,
 			      count, (short *)in, count, self->rx_bits, &n_rx);
+
+	modem_status = status;
 
 	if (self->connected != 0 && n_rx > 0) {
 		for (i = 0; i < n_rx; i++)
@@ -274,7 +279,8 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 		status = DPSTAT_ERROR;
 	}
 
-	/* The original prints "v23: V23STAT: --> %d\n" on a change. */
+	if (dp->status != (unsigned)status && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v23: V23STAT: --> %d\n", modem_status);
 	dp->status = (unsigned)status;
 	return status;
 }

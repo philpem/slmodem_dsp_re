@@ -338,7 +338,7 @@ void BwChDem_Delete(struct bwchdem *bw);
  * @param nbits   Output: how many bits were written.
  * @return 0 once carrier is up, 1 while acquiring it, 2 after giving up on it.
  */
-short BwChDem_Progress(struct bwchdem *bw, short *samples, short count,
+int BwChDem_Progress(struct bwchdem *bw, short *samples, short count,
 		       int *bits, int *nbits);
 
 /*
@@ -421,7 +421,7 @@ void DeleteV23Modem(struct v23modem *m);
  * @return 1 throughout the answer-tone sequence, and after that whatever
  *         the receiver returns: 0 carrier up, 1 acquiring, 2 given up.
  */
-short V23ModemMain(struct v23modem *m, int *tx_bits, int *tx_nbits,
+int V23ModemMain(struct v23modem *m, int *tx_bits, int *tx_nbits,
 		   short *tx_out, int tx_count, short *rx_in, int rx_count,
 		   int *rx_bits, int *rx_nbits);
 

@@ -325,8 +325,11 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		 * is why an exactly-equal limit still fires.
 		 */
 		rx->acquire = (unsigned short)(rx->acquire + V23RX_TICK_MS);
-		if (rx->acquire_limit <= rx->acquire)
+		if (rx->acquire_limit <= rx->acquire) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Carrier Detection Time Out ");
 			return V23RX_GIVEN_UP;
+		}
 
 		/*
 		 * The detector gets its own copy, because everything below
@@ -350,6 +353,9 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 			 */
 			rx->rx_state = (short)(rx->rx_state
 					       + V23RX_DETECT_STEP);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("v23 tone detected, counter = %d,threshold = 2\n",
+					(short)(rx->rx_state / V23RX_DETECT_STEP));
 		}
 	}
 
@@ -390,8 +396,11 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		rx->silence = 0;
 	} else {
 		rx->silence = (unsigned short)(rx->silence + V23RX_TICK_MS);
-		if (rx->silence_limit <= rx->silence)
+		if (rx->silence_limit <= rx->silence) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Energy drop detected......\n");
 			return V23RX_GIVEN_UP;
+		}
 	}
 
 	rx->nbits = FPM_FSD_demodulate(&rx->fsd, samples, rx->bits,

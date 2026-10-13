@@ -138125,3 +138125,61 @@ retained pre-pass partial, .text702012, allocated candidate917705, positioned
 69377/943398. Strict original comparisons both DIFFERENT/exit1. Refcheck since
 2180f9d0:14429 checked,0 point elsewhere. No mutation/fuzz execution, modern
 portability claim, source adoption or new exact function. [Replay](sine-cold-layout-results.md).
+
+## F11958. V23 glue drops two original diagnostic sites and valid lifecycle exposes them
+
+Fresh135-copy <=350B C data/voice mnemonic screen nominates v23_create274/242B.
+Original unsigned debug>1 gate and create merge-string/call precede allocation;
+source has only a comment. Original process compares translated DPSTAT with
+stored status but prints raw modem status before publishing. Five full-TU
+controls/25 shared verdicts recover both sites; create SIZE32→BYTES10/274B,
+process SIZE18→10. Adjacent ID/modem assignment reversal worsens BYTES10→17 and changes colors
+and scheduling, not adopted. No exact gain or loss. Existing direct lifecycle extended with
+per-boundary complete transcript comparison at levels1/2/3 for both ends.
+Unchanged production negative: period0/1; level1 passes, levels2/3 fail4/51016
+terminal and13/68016 host checks each. No planted state or mutation execution.
+[Domain](missing-debug-boundary-domain.md).
+
+## F11959. Preserved raw status exposes V23's original complete-EAX return contract
+
+Original v23_process consumes full EAX; short V23ModemMain prototype adds an
+AX sign-extension when its raw value survives to printf. Original V23ModemMain
+widens short v23FP_rx_progress but returns BwChDem_Progress EAX directly.
+Both V23ModemMain and BwChDem_Progress reconstructed with int declarations and
+definitions together; receiver remains short. BwChDem's complete return paths
+are sign-extended short status or literal2, so its full-TU object is raw-inert.
+Four crossed cells over8 affected TUs/92 shared-body verdicts preserve existing
+metadata/data/bystanders; diagnostics restore two undefined host imports; modem-main SIZE122→94, glue remains nonexact. Caller/callee
+boundary, not arbitrary width spelling, supports recovery. Runtime/integration
+results follow after gates. [Domain](missing-debug-boundary-domain.md).
+
+## F11960. Valid V23 transcripts expose seven additional omitted component diagnostics
+
+First glue/type phase387/1: value checks pass but level2/3 transcripts retain2
+terminal/11 host failures. Original object supplies modem state-report, receiver
+tone-count/acquire-timeout/energy-drop and Bw tone/no-carrier/wait-timeout sites.
+Three TU pairs/18 verdicts restore exact strings, guards, arguments and field
+publication order; original printf counts1/3/3 and merge strings reproduce.
+Combined43 TU cells/135 verdicts preserve exports/named data/bystanders; new
+allocated data is only original diagnostic strings. Modem SIZE122→2, Bw61→13,
+receiver126→30; no exact gains. Modem's remaining SIZE2 hides substantial frame,
+dispatch/loop/sibling-call differences, not two-byte instruction identity.
+Fixture rejects1300 frames as too short for60000ms acquire;3100 crosses it.
+Host post-carrier24s silence produces no original error, preserved as retention
+control rather than altering source. Missing fixture brace was apparatus failure,
+excluded/repaired. All value/state/transcript comparisons remain exact; no
+mutation/fuzz execution. [Replay/limits](missing-debug-boundary-results.md).
+
+## F11961. V23 diagnostic recovery validates five improved bodies with no exact losses
+
+43 full-TU cells/135 shared-body verdicts; selected four complete production
+objects raw-equal independent controls,4/300 objects change and296/configuration
+unchanged. All300 faithful inputs raw-equal canonical. Census1082/1852 EXACT,
+119759 original exact bytes unchanged; SIZE670→669/BYTES64→65,REGALLOC31 and
+UNRESOLVED5 unchanged, ratchet green. make phase J=8 exits0:388 passed/0 failed,
+structural285-suite10038-anchor checks green. Direct lifecycle22 groups/4656926
+checks pass, including real acquisition/loss/retention transcripts at1/2/3.
+Partial .text702012→702380, allocated positioned equal69377→69537/943398,
+original diagnostic strings/imports recovered. Both strict comparisons remain
+DIFFERENT/exit1. No new exact-function, all-site reachability, mutation/fuzz,
+modern portability or whole-object identity claim. [Results](missing-debug-boundary-results.md).

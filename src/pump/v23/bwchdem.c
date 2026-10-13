@@ -26,6 +26,7 @@
 
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_iir.h"
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v23fp.h"
 
@@ -220,7 +221,7 @@ decide_bit(short mark, short space)
  * being acquired, and BWCH_GIVEN_UP if carrier never arrived or the line went
  * quiet for longer than the configuration allows.
  */
-short
+int
 BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 		 int *nbits)
 {
@@ -247,14 +248,18 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 		 * advances; anything else resets it.
 		 */
 		if (FPM_TONE_detect(bw->tone, samples, count)
-		    == FPM_TONE_PRESENT)
+		    == FPM_TONE_PRESENT) {
 			bw->carrier_blocks = (short)(bw->carrier_blocks + 1);
-		else
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V23 backward channel: Tone detected 390[Hz]\n");
+		} else
 			bw->carrier_blocks = 0;
 
 		/* Tested before the increment, exactly as the original does. */
 		if (bw->blocks > BWCH_CARRIER_TIMEOUT) {
 			bw->blocks = (short)(bw->blocks + 1);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V23Debug: Timeout waiting for V23 signal...\r\n");
 			return BWCH_GIVEN_UP;
 		}
 		bw->blocks = (short)(bw->blocks + 1);
@@ -272,8 +277,11 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 		 * units and not a sample count.
 		 */
 		bw->silence = (short)(bw->silence + BWCH_SILENCE_PER_BLOCK);
-		if ((int)(unsigned short)bw->silence >= bw->silence_limit)
+		if ((int)(unsigned short)bw->silence >= bw->silence_limit) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V23 no carrier detected...\r\n");
 			return BWCH_GIVEN_UP;
+		}
 	} else {
 		bw->silence = 0;
 	}
