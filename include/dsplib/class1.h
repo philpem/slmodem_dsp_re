@@ -719,7 +719,7 @@ int _idle_state_init(struct fax_class1 *ctx);
  *
  *   ctx        the session.  Certain -- every handler writes its fields.
  *   rx         the received block.  `_recieve_silence_state` hands it to
- *              `FPM_rms(const short *, unsigned short)`, which types it.
+ *              `FPM_rms(const short *, unsigned)`, which types the samples.
  *   tx         the block to transmit.
  *   word3      not read by any handler this batch writes.  Only the
  *   word4      WIDTH is established (a 32-bit argument slot); `int` is

@@ -138294,3 +138294,56 @@ green. Partial .text702412→702396,allocated918420→918404, positioned equal
 69524→69567/943398; both strict DIFFERENT/exit1. No new exact, near-exact,
 all-input C proof, broken-pair reachability, fuzz/mutation or modern-portability
 claim. [Results](agc-shift-results.md).
+
+## F11970. AGC cached gain and eager narrow level predicate are separate boundaries
+
+Nine width/use cells distinguish short cached gain from use-only casts and
+short level cache. Short gain restores two original word tests. Use-only level
+under && emits short-circuit branches unlike original SETE/word TEST/SETNE/
+MOVZBL/combined TEST. Four additional eager/logical × narrowed/retained predicate
+cells restore original graph only with eager boolean & and narrow level use;
+logical/narrow SIZE3 is rejected, not adopted for score. Keep int level carrier
+and full-width alpha arithmetic. Thirteen full-TU cells/52 shared verdicts,
+zero exact gains/losses; raw controls/data/exports/bystanders preserved.
+[Domain](agc-predicate-domain.md); [results](agc-predicate-results.md).
+
+## F11971. AGC partition fallthrough and chosen length expose different source uses
+
+Two partition cells restore original JBE to cold increment and small-tail
+fallthrough by inverting the structured comparison/arms; SIZE6→1. Two length
+cells distinguish chosen SI block length from HI sample countdown: full unsigned
+len restores two original cached MOV loads but exposes an extra RMS argument
+extension, SIZE18. Do not accept/reject by size/frame or infer a unique type
+from width alone. Original smoother intermediate homes/LEA remain unresolved;
+saved reload trace reports substitutions, not recovered original allocator state.
+[Results](agc-predicate-results.md).
+
+## F11972. RMS full argument and word countdown reproduce the same callee and original AGC boundary
+
+Full2x2 count-formal × AGC chosen-length cross over10 TUs/40 cells/388 shared
+verdicts: RMS remains raw-identical/EXACT62 bytes; full/full restores original
+AGC length loads and argument boundary. Only collateral caller is SRE_recover,
+whose signed rms_len becomes MOVSWL rather than original MOVZWL. Another20 cells/
+194 verdicts normalize that one argument explicitly to unsigned short; SRE again
+raw-equals canonical, other8 caller/callee objects unchanged. Do not retag its
+signed field globally. Source declaration/definition agree and callee explicitly
+consumes low16 bits. No uniquely recovered formal width or old-prototype bug
+claim. Selected source recovers original value/operand boundaries with no exact
+gains/losses. [Replay and limits](agc-predicate-results.md).
+
+## F11973. AGC predicate/RMS recovery passes period with exact set unchanged
+
+Final make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors
+green. Initial period388/0 but one SRE locator detached by count normalization;
+find/replace retargeted to the same threshold operation, no mutation execution
+or snapshot rerecording. COMMON inspector repaired on class1_state_functions,
+76 bytes/alignment32, explicitly checked in6 cells; no section read/skip.
+77 full-TU cells/650 shared verdicts,10 raw selected objects. Only AGC changes
+in300 production objects;299/config unchanged and300 faithful inputs raw-match
+canonical. RMS stays raw-identical/EXACT62; SRE raw-identical. Census1082/1852
+EXACT/119759 bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED, ratchet
+green. AGC567 versus original566 bytes,179 versus175 nonpadding instructions,
+frame0x4c versus0x3c: not near-exact or register-only. Partial .text702396 and
+allocated918404 unchanged; positioned equal69567→69558/943398, both strict
+DIFFERENT/exit1. Original guard/length/argument/partition categories improve,
+not the exact count or positioned byte total. [Results](agc-predicate-results.md).

@@ -114,7 +114,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	const int ref_level = agc->cfg.ref_level;
 
 	int level_est = agc->level;
-	int mult = agc->mult;
+	short mult = agc->mult;
 	int shift = agc->shift;
 	int adjusted = 0;		/* blocks that took the gain path */
 	unsigned blocks, tail;
@@ -123,10 +123,10 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	blocks = (unsigned short)(count / block_len);
 	tail = (unsigned short)(count % block_len);
 
-	if ((unsigned short)(block_len >> 1) <= (unsigned short)tail)
-		blocks = (unsigned short)(blocks + 1);
-	else
+	if ((unsigned short)(block_len >> 1) > (unsigned short)tail)
 		tail = (unsigned short)(tail + block_len);
+	else
+		blocks = (unsigned short)(blocks + 1);
 
 	/*
 	 * Counted down, and the *last* block is the one carrying `tail`.
@@ -134,7 +134,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	 * loop does not run at all.
 	 */
 	for (i = (short)(blocks - 1); i >= 0; i--) {
-		unsigned short len = (unsigned short)(i ? block_len : tail);
+		unsigned len = i ? block_len : tail;
 		short level = FPM_rms(samples, len);
 		unsigned short k;
 		short *p;
@@ -163,7 +163,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 			level_est = (short)(level_est +
 					    ((agc->cfg.beta[0] * level) >> 15));
 
-			if (agc->freeze == 0 && level_est != 0) {
+			if ((agc->freeze == 0) & ((short)level_est != 0)) {
 				unsigned short recip, norm;
 
 				FPM_div((unsigned short)level_est, &recip, &norm);

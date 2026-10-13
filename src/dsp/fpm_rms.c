@@ -25,8 +25,9 @@
 #define FPM_RMS_SCALE 0x38e
 
 short
-FPM_rms(const short *samples, unsigned short count)
+FPM_rms(const short *samples, unsigned length)
 {
+	unsigned short count = (unsigned short)length;
 	int sum = 0;
 
 	/* The blob uses a 16-bit countdown and advances the input (F11554). */

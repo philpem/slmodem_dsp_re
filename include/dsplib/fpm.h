@@ -38,7 +38,7 @@ unsigned short FPM_sqrt_dp(unsigned int x);
  * @param count    Number of samples.
  * @return The scaled RMS.
  */
-short FPM_rms(const short *samples, unsigned short count);
+short FPM_rms(const short *samples, unsigned length);
 
 /**
  * @brief Reciprocal lookup for fixed-point division.

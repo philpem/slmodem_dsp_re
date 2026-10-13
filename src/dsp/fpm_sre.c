@@ -394,7 +394,7 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, short count)
 		 */
 		if (sre->rms_on != 0) {
 			if (sre->cfg.rms_min < FPM_rms(sre->rms_buf,
-						       sre->cfg.rms_len))
+						       (unsigned short)sre->cfg.rms_len))
 				sre->rms_on = 0;
 			else
 				d = 0;

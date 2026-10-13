@@ -4631,3 +4631,28 @@ bound later pointer selections or frozen/planted states. Document original
 period hardware behavior outside C's count range, demonstrate finite count
 identities with a wrong-mask control, and never present invalid shifts as
 portable C or fixture reachability. [Replay/limits](../agc-shift-results.md).
+
+### Separate predicate width, eager booleans and argument normalization (F11970–F11972)
+
+A narrower cached carrier and a narrower use need different controls. AGC's
+short gain cache restores two word tests; use-only level narrowing under &&
+branchifies the original two-SETcc/combined-TEST guard. Cross eager boolean &
+with that narrow predicate when the original explicitly combines both values.
+Here the operands have no evaluation side effects. Retain the wide arithmetic
+carrier and reject a smaller wrong-CFG result. A complementary structured
+comparison with swapped arms can restore witnessed hot/cold partition placement;
+do not add branch hints or reason from frame size alone.
+
+When full-width local data adds an argument extension absent from original,
+check the helper interface as well as the caller. RMS can receive a full unsigned
+length while its local countdown remains16-bit, preserving its entire exact
+body. Audit all callers: SRE needs explicit word normalization at that boundary
+to retain its original zero-extending argument load. Do not change the signed
+field globally or mistake identical callee bytes for proof of a unique formal
+type. Known length-only, width-only and normalized controls distinguish these
+interactions. [Complete controls/replay](../agc-predicate-results.md).
+
+Object-data audits must represent COMMON storage by size, binding and alignment;
+it has no section contents. The class1 table is a76-byte/32-aligned positive
+control across six cells. Passing it as a section index is an inspector failure,
+not a reconstruction result or a reason to skip the TU.
