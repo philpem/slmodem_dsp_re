@@ -138007,3 +138007,37 @@ exit1. Previous cached partial predates d13949ad and is excluded; before-link
 rebuilt from archived actual baseline objects in recovered order. Invalid scalar
 baseline attempt preserved/excluded. No fuzzing/mutation execution, profile/
 tolerance change or modern portability claim. [Results/replay](search-psd-results.md).
+
+## F11948. PSD conversion register choices are local rename decisions, not scratch pushes
+
+Two unchanged preparations reproduce the complete raw object. Annotated assembly
+scratch replay refuses address-bearing comment equality and is excluded; plain
+saved/observed assembly/object equality passes. Nine scratch events/five process
+UIDs464,196,130,71,65, none at residual conversions. High-word zeros already occupy
+DX at flow2; peephole2 changes SET to XOR without selecting a scratch. Read-only
+installed cc1plus observation records44 rename decisions and four conversion
+chains: AX→SI/DX→DX and AX→BX/DX→AX. Per-function ticks explain retained choices,
+not unavailable original compiler state. process635B/BYTES6 and all60 x87/27 branch
+rows unchanged. No compiler writes/profile changes. [Trace](psd-conversion-results.md).
+
+## F11949. Natural scalar mode and comparison ownership make the PSD getter exact
+
+Four full-TU cells/52 verdicts: baseline SIZE1, scalar BYTES23, comparison SIZE1,
+both EXACT77B. Preserve (i*sampleRate)*reciprocal and final narrowing; bins>i
+recovers original guard/backedge ownership. Five raw-equal getter observations/
+eight stack requests show scalar cells remove SF4 expansion temporary via
+ gen_truncxfsf2, leaving zero locals. Only getter changes; twelve bystanders,
+symbol metadata, named/allocated data unchanged. Existing static getter locators
+retargeted preserving defect intent, none executed. [Domain](psd-frequency-scalar-domain.md),
+[results/audit](psd-conversion-results.md).
+
+## F11950. PSD getter gain passes the period gate without bystander loss
+
+Chosen canonical source/object equal independent winner raw;1/300 objects
+changes,299/configuration unchanged. Census1081→1082/1852 EXACT and119682→119759
+exact bytes, SIZE672→671, REGALLOC31/BYTES63/UNRESOLVED5 unchanged. Ratchet green.
+make phase J=8 exits0:388 passed/0 failed;285 suites/10038 static anchors clean,
+none executed. Faithful partial .text702012 unchanged; positioned text equal
+33833→33832/728304 and both strict comparisons DIFFERENT/exit1. Local function
+identity is not final-object identity. PSD process remains635B/BYTES6, bounded
+by measured rename chains. [Integration and next lead](psd-conversion-results.md).

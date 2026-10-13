@@ -4506,3 +4506,19 @@ of n<length preserves cmp0/JBE and CMP/JA in GCC3. Cross only independently
 witnessed boundaries; audit inlined callers. Matching branch orientation does
 not justify local/register permutations to close remaining allocation.
 [Control/results](../search-psd-results.md).
+
+### Trace conversion temporaries before changing precision (F11948–F11949)
+
+A spare stack word can be an expansion temporary, even when final assembly has
+no narrowing instruction at that word. PSD's explicit long-double getter creates
+SF4 through gen_truncxfsf2. Ordinary scalar arithmetic removes it while period
+x87 retains the original extended operation graph. Cross the independently
+observed comparison orientation: scalar mode alone changes many rows; bins>i
+alone leaves SIZE1; both yield EXACT77B. Review the full TU and narrowing sites,
+then run the period differential; this is not a blanket precision rewrite.
+
+Separately distinguish persistent peephole scratch selection from function-local
+register renaming. PSD's remaining conversion high words exist before peephole2;
+read-only installed-compiler observation attributes final substitutions to local
+use-age ticks. Earlier-function cursor interventions do not transfer directly.
+[Results and replay](../psd-conversion-results.md).

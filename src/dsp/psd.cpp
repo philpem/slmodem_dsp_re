@@ -113,9 +113,9 @@ Psd::getFrequencies(float *freq, float sampleRate) const
 	unsigned int i;
 	unsigned int bins = m_length >> 1;
 
-	for (i = 0; i < bins; i++)
-		freq[i] = (float)((long double)i * sampleRate *
-				  (1.0L / m_length));
+	for (i = 0; bins > i; i++)
+		freq[i] = (float)(i * sampleRate *
+				  (1.0f / m_length));
 }
 
 /*
