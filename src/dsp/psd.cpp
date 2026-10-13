@@ -161,9 +161,9 @@ Psd::getFrequencies(float *freq, float sampleRate) const
 void
 Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 {
-	unsigned int bins = m_length >> 1;
 	unsigned int frame, pos;
 	unsigned int frames = (count - m_overlap) / (m_length - m_overlap);
+	unsigned int bins = m_length >> 1;
 	unsigned int i, j;
 
 	for (i = 0; i < bins; i++)
@@ -172,7 +172,7 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 	pos = 0;
 	for (frame = 0; frame < frames; frame++) {
 		for (j = 0; j < m_length; j++)
-			m_fft[1 + j] = in[pos + j] * m_window[j];
+			m_fft[1 + j] = m_window[j] * in[pos + j];
 
 		realfft(m_fft, m_length, 1);
 
@@ -195,8 +195,7 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 	 */
 	switch (option) {
 	case OUTPUT_DB_PEAK: {
-		long double peak = 0.0L;
-		long double scale;
+		float peak = 0.0f;
 
 		/*
 		 * `fcom` + `ja`, so an unordered comparison does NOT replace
@@ -207,28 +206,25 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 			if (out[i] > peak)
 				peak = out[i];
 
-		scale = 1.0L / peak;
 		for (i = 0; i < bins; i++) {
-			float l = (float)log10l((long double)out[i]
-						       * scale + 1e-25);
+			float l = (float)log10l(out[i]
+						       / peak + 1e-25);
 
 			out[i] = (float)(l * 10.0f);
 		}
 		break;
 	}
 	case OUTPUT_LINEAR: {
-		long double scale = 1.0L / (long double)frames;
 
 		for (i = 0; i < bins; i++)
-			out[i] = (float)((long double)out[i] * scale);
+			out[i] = (float)(out[i] / frames);
 		break;
 	}
 	case OUTPUT_DB: {
-		long double scale = 1.0L / (long double)frames;
 
 		for (i = 0; i < bins; i++) {
-			float l = (float)log10l((long double)out[i]
-						       * scale + 1e-25);
+			float l = (float)log10l(out[i]
+						       / frames + 1e-25);
 
 			out[i] = (float)(l * 10.0f);
 		}

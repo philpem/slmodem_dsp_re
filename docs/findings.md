@@ -137943,3 +137943,67 @@ No mutation/fuzz execution, tolerance change, profile change or modern
 portability claim. Refcheck14429 existing references still point correctly.
 Artifacts byteident-size-spill-dispatch-final.json, size-spill-dispatch-phase-final.log,
 size-spill-refcheck-final.log and the two replay audits.
+
+## F11943. Mapping recovers guarded length, count publication and comparison ownership
+
+Four initial full-TU cells/44 body verdicts cross delayed length and
+postincrement. Original j<count guard precedes constellationSize[i] load;
+length inside search recovers six entry rows. Original unmatched tail publishes
+incremented count before group=count-1; postincrement recovers it. Four further
+comparison cells/44 verdicts: size-operand reversal raw-inert, length>n restores
+cmp0/JBE guard and CMP/JA backedge. Retain that orientation with both boundaries.
+Target280B/SIZE6 and inlined caller SIZE22 remain; nine bystanders/data unchanged,
+zero exact gains/losses. No outer expansion or unsupported loop/type changes.
+[Domains/results](search-psd-results.md).
+
+## F11944. PSD normalization belongs to guarded loop preheaders
+
+Four full-TU cells/52 verdicts cross loop-expression division and float peak.
+Original bin guards precede reciprocal/conversion in all three output arms.
+In-loop division recovers this through hoisting; float peak separately restores
+direct fcom when combined. Baseline SIZE17; division-only SIZE2, peak-only SIZE19,
+both635B/BYTES56. No extra narrowing in emitted candidate. Twelve bystanders/data
+unchanged, no exact gains/losses. Float peak receives only float bins/exact zero;
+type is a tested supported hypothesis, not uniquely recovered original tokens.
+[Domain](search-psd-boundaries-domain.md), [results](search-psd-results.md).
+
+## F11945. Ordinary scalar modes and source operand order recover PSD's entire x87 stream
+
+Four full-TU cells/52 verdicts: scalar/window cross gives BYTES56/41/40/25.
+Natural float-bin division by float peak/unsigned frames uses SF in initial RTL;
+retained excess precision emits the original operations without intermediate
+narrowing. Window*input restores input load/window memory multiply. Combined
+candidate matches all60 original x87 instruction/operand rows and27 branch rows.
+Float logarithm narrowing/constants unchanged. Twelve bystanders/data unchanged,
+no exact gains/losses. Scalar run with wrong archived baseline refused raw check,
+preserved invalid and excluded; valid baseline reproduces previous combined cell.
+[Domain](psd-scalar-operands-domain.md), [results](search-psd-results.md).
+
+## F11946. PSD initial read order leaves only six integer register substitutions
+
+Two full-TU cells/26 verdicts. Computing bins after frame count recovers original
+overlap-before-length/division preparation and integer initialization rows.
+Existing homes,60 x87 rows and27 branch rows stay original. process635B/BYTES6,
+complete graph accepted by existing live-range alpha comparison. Remaining six
+rows are two unsigned-to-float conversion sequences' XOR/MOV/PUSH registers;
+no new grading rule or claim about original compiler state. Twelve bystanders/
+data unchanged, no exact gains/losses. Close source-order family and trace
+conversion/scratch history before further source changes.
+[Domain](psd-initial-read-domain.md), [results](search-psd-results.md).
+
+## F11947. PSD reaches grade1 and the boundary batch passes period validation
+
+Eighteen compiled cells/15 distinct source texts/218 live body verdicts. Chosen
+Mapping and PSD canonical objects/sources raw-equal independent controls;
+2/300 objects change,298/configuration unchanged. Census1081/1852 EXACT and
+119682 exact bytes unchanged;673→672 SIZE,30→31 REGALLOC,63 BYTES/5 UNRESOLVED.
+PSD635B with six register-only rows reaches existing grade1, not byte identity.
+Ratchet green. Final make phase J=8 exits0:388 passed/0 failed and structural
+checks green;285 suites/10038 static anchors attached/unique/correct-arm. PSD
+static locators retargeted with defect intent preserved; none executed.
+
+Faithful300-input partial text702028→702012, both strict comparisons DIFFERENT/
+exit1. Previous cached partial predates d13949ad and is excluded; before-link
+rebuilt from archived actual baseline objects in recovered order. Invalid scalar
+baseline attempt preserved/excluded. No fuzzing/mutation execution, profile/
+tolerance change or modern portability claim. [Results/replay](search-psd-results.md).

@@ -4484,3 +4484,25 @@ mnemonics. Full-TU audit may support the structural recovery even when overall
 SIZE distance grows; do not mistake independent x87/loop/register differences
 for a failure of the recovered dispatch. Close case-order spelling searches
 once the original category agrees. [Control](../psd-dispatch-domain.md).
+
+### Normalize inside the loop when the blob guards evaluation (F11944–F11946)
+
+PSD's precomputed scale evaluated even with no bins; original guards evaluation
+in each arm. In-loop division hoists into a guarded preheader. Cross this lifetime
+with peak's scalar mode and arithmetic operands instead of freezing explicit
+long-double casts: natural float division still stays extended in period x87
+until the original float narrowing. Require emitted rounding/operand graph and
+period validation, not a modern precision intuition. Window*input also restores
+which value is loaded versus used as a memory operand. Initial overlap/length
+read order is independent. All60 floating rows/27 branches can agree while six
+integer conversion register rows remain. [Replay](../search-psd-results.md).
+
+### Search-entry and publication order are independent of compare spelling (F11943)
+
+Place a value initialization after an evidenced guard when original loads occur
+there. Mapping's guarded length and count postincrement recover distinct
+boundaries. Reversing source equality operands is inert, but length>n instead
+of n<length preserves cmp0/JBE and CMP/JA in GCC3. Cross only independently
+witnessed boundaries; audit inlined callers. Matching branch orientation does
+not justify local/register permutations to close remaining allocation.
+[Control/results](../search-psd-results.md).
