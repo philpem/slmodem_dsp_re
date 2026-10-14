@@ -4716,3 +4716,23 @@ boundaries. State the component boundary and allocation extents; a constructor
 result does not prove an end-to-end reachable configuration. Keep a failing
 pre-fix control, and distinguish static arithmetic enumeration from executed
 blob comparisons. [Controls and results](../v34-vmi-boundary-results.md).
+
+### Check result provenance and evaluation boundaries separately (F11985–F11986)
+
+A pre-call extension screen can miss the useful return boundary. Compare fresh
+EAX extensions after matched calls, stopping at intervening writes and control
+transfers. Demonstrate the detector on a historical wrong-return caller, and
+include identity and overwritten-EAX negatives. Print zero nominations and all
+excluded/matched denominators explicitly. A bounded straight-line null does
+not certify inlined calls, masks, branches or unmatched call sequences.
+
+Native full-width character arguments do not uniquely imply an int-return
+helper. Spectral display's direct-argument controls remove byte extensions
+with the char helper unchanged; its late sign comparison is a separate value
+lifetime. Cross those explanations before editing a declaration. Likewise,
+removing an XF load by switching fractional intermediates to DF may produce a
+memory multiply instead of the original double load. Audit operand categories,
+constant-pool payloads and full bodies; a SIZE1 result cannot settle that
+storage lifetime. Preserve the negative domain and require a new witness to
+reopen it. [Complete queue ledger](../call-boundary-lead-ledger.md),
+[spectral controls](../spectral-sign-carrier-results.md).

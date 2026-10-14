@@ -138485,3 +138485,36 @@ All structural checks pass: 285 suites/10038 static anchors, 14445 references,
 zero unresolved or repointed citations. No full-phase, fuzz/mutation or
 portability claim.
 [Results and validation scope](v34-vmi-boundary-results.md).
+
+## F11985. The remaining call-window queue has bounded dispositions
+
+All28 previously untouched bodies in the historical39-body argument screen
+now have explicit dispositions: outside-window original extensions, unrelated
+values/cold blocks, existing closed domains, or the new spectral cross.
+Current replay yields36 bodies/53 calls; the three removed nominations are
+scalar Descrambler, v23_process and V34GiveINFO1aBits. No new body enters.
+A new fresh-EAX-result screen finds0 bodies/0 calls at both6- and12-instruction
+bounds over300 objects/1934 emitted bodies/1886 shared bodies/1744 equal
+named-call sequences/4671 calls. Historical pre-fix Descrambler consumption
+fires; identity and intervening-EAX-write controls stay clear. Unequal call
+sequences, branches, masks and conversions beyond the window remain outside
+its certification. This closes the supported queue, not the global source
+search or a byte-exactness ceiling.
+[Ledger, exclusions and replay](call-boundary-lead-ledger.md).
+
+## F11986. Spectral sign width is not a unique helper-return witness
+
+Original displaySpectralParams performs four late FCOMPP comparisons and
+forms full-width sign arguments, while retained caches byte signs early.
+Cross helper/cache width, retained/sign-last/direct-argument factoring and
+DF/XF fractional intermediates:24 complete-TU cells/20 unique sources/9 raw
+emissions/264 shared verdicts, no exact gains/losses. Return-width-only pairs
+are raw-identical. Direct arguments remove byte extensions even with char
+helper return; late comparison alone therefore does not establish the
+signature. DF controls remove FLDT but emit four FMULL rather than the
+original four FLDL scale loads, including its stack rematerialisation.
+Only target changes; ten bystanders, metadata/named data/call sequence agree;
+only two expected constant pools change in DF cells. No source adoption,
+including the misleading SIZE1 candidate. Closed finite domain; new evidence
+must identify scale capture/storage or a helper/TU boundary.
+[Domain](spectral-sign-carrier-domain.md), [results](spectral-sign-carrier-results.md).
