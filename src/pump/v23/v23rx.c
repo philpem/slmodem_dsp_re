@@ -362,7 +362,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 	FPM_iir_filt_II(samples, rx->iir_coeff, rx->iir_state,
 			rx->iir_sections, (short)count);
 
-	nout = FPM_MRF_filter(&rx->mrf, samples, samples, (short)count);
+	nout = FPM_MRF_filter(&rx->mrf, samples, samples, (unsigned short)count);
 
 	/*
 	 * The object consumes the signed low word of AGC's boolean return.

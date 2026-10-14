@@ -140,16 +140,20 @@ RxNextStateV21(void *modem)
 
 	switch (hdx->state) {
 	case V21RX_STATE_START:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21RX_STATE_START\n");
+			hdx = rx->hdx;
+		}
 		hdx->countdown = 1;
 		hdx->handler = RxHdxWaitV21;
 		hdx->state = V21RX_STATE_WAIT;
 		break;
 
 	case V21RX_STATE_WAIT:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21RX_STATE_WAIT\n");
+			hdx = rx->hdx;
+		}
 		hdx->countdown = 0;
 		hdx->handler = RxHdxDataV21;
 		hdx->state = V21RX_STATE_DATA;
@@ -157,8 +161,10 @@ RxNextStateV21(void *modem)
 		break;
 
 	case V21RX_STATE_DATA:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21RX_STATE_DATA\n");
+			hdx = rx->hdx;
+		}
 		hdx->handler = RxHdxIdleV21;
 		hdx->state = V21RX_STATE_IDLE;
 		hdx->countdown = 0;

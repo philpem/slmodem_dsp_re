@@ -138518,3 +138518,34 @@ only two expected constant pools change in DF cells. No source adoption,
 including the misleading SIZE1 candidate. Closed finite domain; new evidence
 must identify scale capture/storage or a helper/TU boundary.
 [Domain](spectral-sign-carrier-domain.md), [results](spectral-sign-carrier-results.md).
+
+## F11987. Three earlier exact misses support partial source recovery
+
+Review the existing V23 MRF handoff, V21 diagnostic owner and HDLC current-parent
+controls as partial fidelity recoveries rather than repeat spelling searches.
+Six current full-TU cells/24 verdicts raw-reproduce all baselines; no exact
+gains/losses. V23's changed diagnostic/AGC-return context now gives SIZE30→15
+with unsigned-low-word MRF argument, already sign→zero in sibling RTL.
+RxNextStateV21 restores three original post-debug owner loads, SIZE20→3;
+three source-unchanged inlined callers also change, retaining direct-call
+inventories; their gaps12→1/24→3/4→7 include one three-byte size regression. HDLC unframe restores current-parent reads across CRC/debug,
+SIZE209→58; other body unchanged. Its197-byte literal pool swaps two strings
+without changing any literal. Metadata/data/nontext relocations pass throughout.
+No new reachable-alias-history or unique source/type claim; no near-size fitting.
+The earlier finite negative measurements stand; their no-adoption decision is
+superseded for these explicitly reviewed boundaries only.
+[Domain](partial-boundary-recoveries-domain.md), [results](partial-boundary-recoveries-results.md).
+
+## F11988. Partial-boundary aggregate validation
+
+Permitted period387 passed/0 failed, targeted3/0, t_fuzz excluded; V21 repeats
+existing next-state trials at debug2, with no input or assertion weakened. Census1085/1852 EXACT/120105 original exact bytes unchanged,
+668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED, ratchet passes. Only3/300 canonical
+objects change,297 raw-identical, all three selected controls raw-match, all300
+faithful inputs match canonical, configuration unchanged. Partial .text grows
+702364→702524 and allocated918366→918526; positioned equal69398→69544/943398.
+Both strict comparisons DIFFERENT/exit1. Initial nonexistent comparison-tool
+path stopped before measurement; invalid log retained and proper path rerun.
+Static anchors285 suites/10038 locations pass without retargeting. No fuzzing,
+mutation execution, new input history, full-phase or portability claim.
+[Full results and collateral](partial-boundary-recoveries-results.md).

@@ -1181,7 +1181,8 @@ run_start(void)
 static int
 run_next(void)
 {
-	diff_begin("RxNextStateV21");
+	diff_begin(dsplibs_debug_level > 1
+		   ? "RxNextStateV21 debug" : "RxNextStateV21");
 
 	plant_ones_run = 0;
 	plant_mark_seq = 0;
@@ -1221,6 +1222,11 @@ main(void)
 	rc |= run_data();
 	rc |= run_start();
 	rc |= run_next();
+
+	/* Repeat the same component trials through the actual debug arms. */
+	dsplibs_debug_level = 2;
+	rc |= run_next();
+	dsplibs_debug_level = 0;
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a

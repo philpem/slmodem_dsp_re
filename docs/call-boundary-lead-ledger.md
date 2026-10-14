@@ -88,3 +88,12 @@ caller/callee width contradiction, a value loaded on the wrong side of an
 opaque call/store, or a demonstrated earlier compiler-stage difference.
 Neither this finite null nor the rejected local domains establishes a global
 byte-exactness ceiling or proves every residual is register allocation.
+
+## Later partial-adoption review
+
+F11987–F11988 supersede the no-adoption decision for the three explicitly
+reviewed boundaries in v23FP_rx_progress, RxNextStateV21 and HDLC unframe.
+The historical finite measurements and this ledger's e8393850 screening result
+remain valid. This is a separate partial-fidelity review, not a new exact win
+or a reopening of neighbouring source/profile domains.
+See [current controls and validation](partial-boundary-recoveries-results.md).

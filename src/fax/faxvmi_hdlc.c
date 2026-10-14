@@ -249,10 +249,10 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			acc = (acc << 1) | b;
 			bit = (unsigned short)(bit + 1);
 			if (bit == 8) {
-				if (fr->flags_wanted == 0
-				    && (int)flen < (int)fr->frame_size) {
-					fr->in_frame = 1;
-					fr->frame[flen] =
+				if (vmi->framer->flags_wanted == 0
+				    && (int)flen < (int)vmi->framer->frame_size) {
+					vmi->framer->in_frame = 1;
+					vmi->framer->frame[flen] =
 					    (unsigned short)(acc & 0xff);
 					flen = (short)(flen + 1);
 				}
@@ -262,16 +262,16 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 		}
 
 		/* ones == 6: a flag, 0111 1110, and `b` is its closing zero */
-		if (b == 0 && fr->flags_wanted != 0) {
-			fr->flags_wanted =
-			    (unsigned short)(fr->flags_wanted - 1);
+		if (b == 0 && vmi->framer->flags_wanted != 0) {
+			vmi->framer->flags_wanted =
+			    (unsigned short)(vmi->framer->flags_wanted - 1);
 			goto close_flag;
 		}
-		if (b != 0 || fr->in_frame == 0)
+		if (b != 0 || vmi->framer->in_frame == 0)
 			goto close_flag;
 
 		/* a closing flag over octets that were kept: a whole frame */
-		fcs = (unsigned short)faxvmi_gen_fcs16(fr->frame, flen);
+		fcs = (unsigned short)faxvmi_gen_fcs16(vmi->framer->frame, flen);
 		if (fcs == FAXVMI_FCS16_GOOD)
 			goto emit;
 
@@ -279,23 +279,23 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			dsplibs_debug_printf("Frame with bad CRC\n");
 		for (i = 0; i < flen; i++)
 			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("%2x ", fr->frame[i]);
+				dsplibs_debug_printf("%2x ", vmi->framer->frame[i]);
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("\n");
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("Replacing the first byte...\n");
 
-		save0 = (short)fr->frame[0];
-		fr->frame[0] = FAXVMI_T30_ADDRESS;
-		fcs = (unsigned short)faxvmi_gen_fcs16(fr->frame, flen);
+		save0 = (short)vmi->framer->frame[0];
+		vmi->framer->frame[0] = FAXVMI_T30_ADDRESS;
+		fcs = (unsigned short)faxvmi_gen_fcs16(vmi->framer->frame, flen);
 		if (fcs == FAXVMI_FCS16_GOOD)
 			goto emit;
 
-		save1 = (short)fr->frame[1];
+		save1 = (short)vmi->framer->frame[1];
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("Replacing the second byte...\n");
-		fr->frame[1] = FAXVMI_T30_CONTROL;
-		fcs = (unsigned short)faxvmi_gen_fcs16(fr->frame, flen);
+		vmi->framer->frame[1] = FAXVMI_T30_CONTROL;
+		fcs = (unsigned short)faxvmi_gen_fcs16(vmi->framer->frame, flen);
 		if (fcs == FAXVMI_FCS16_GOOD)
 			goto emit;
 
@@ -305,8 +305,8 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 		 * the whole buffer one bit to the left up to seven times,
 		 * trying all three readings after each step.
 		 */
-		fr->frame[0] = (unsigned short)save0;
-		fr->frame[1] = (unsigned short)save1;
+		vmi->framer->frame[0] = (unsigned short)save0;
+		vmi->framer->frame[1] = (unsigned short)save1;
 		len = flen;
 		flen = (short)(flen - 1);
 
@@ -320,21 +320,21 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			 * octets that were stored -- D1074.
 			 */
 			for (i = 0; i < len; i++) {
-				short nxt = (short)fr->frame[i + 1];
+				short nxt = (short)vmi->framer->frame[i + 1];
 
-				fr->frame[i] = (unsigned short)
-				    (((fr->frame[i] << 1) & 0xfe)
+				vmi->framer->frame[i] = (unsigned short)
+				    (((vmi->framer->frame[i] << 1) & 0xfe)
 				     | ((nxt >> 7) & 1));
 			}
 			for (i = 0; i < flen; i++)
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf("%2x ",
-							     fr->frame[i]);
+							     vmi->framer->frame[i]);
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf("\n");
 
 			fcs = (unsigned short)
-			    faxvmi_gen_fcs16(fr->frame, flen);
+			    faxvmi_gen_fcs16(vmi->framer->frame, flen);
 			if (fcs == FAXVMI_FCS16_GOOD) {
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
@@ -346,31 +346,31 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "Replacing first byte ...\n");
-			save0 = (short)fr->frame[0];
-			fr->frame[0] = FAXVMI_T30_ADDRESS;
+			save0 = (short)vmi->framer->frame[0];
+			vmi->framer->frame[0] = FAXVMI_T30_ADDRESS;
 			fcs = (unsigned short)
-			    faxvmi_gen_fcs16(fr->frame, flen);
+			    faxvmi_gen_fcs16(vmi->framer->frame, flen);
 			if (fcs == FAXVMI_FCS16_GOOD) {
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
 					    "CRC is now OK!\n");
 				break;
 			}
-			save1 = (short)fr->frame[1];
+			save1 = (short)vmi->framer->frame[1];
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "Replacing the second byte ...\n");
-			fr->frame[1] = FAXVMI_T30_CONTROL;
+			vmi->framer->frame[1] = FAXVMI_T30_CONTROL;
 			fcs = (unsigned short)
-			    faxvmi_gen_fcs16(fr->frame, flen);
+			    faxvmi_gen_fcs16(vmi->framer->frame, flen);
 			if (fcs == FAXVMI_FCS16_GOOD) {
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
 					    "CRC is now OK!\n");
 				break;
 			}
-			fr->frame[0] = (unsigned short)save0;
-			fr->frame[1] = (unsigned short)save1;
+			vmi->framer->frame[0] = (unsigned short)save0;
+			vmi->framer->frame[1] = (unsigned short)save1;
 		}
 		/*
 		 * Give up: emit the frame with a length of ZERO rather than
@@ -385,7 +385,7 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 		} else {
 			*dst++ = (unsigned short)flen;
 			for (i = 0; i < flen; i++)
-				*dst++ = fr->frame[i];
+				*dst++ = vmi->framer->frame[i];
 			/*
 			 * D1073 again: the object's store here is
 			 * `emitted = emitted`, so nothing accumulates.
@@ -401,7 +401,7 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 		 */
 
 	close_flag:
-		fr->in_frame = 0;
+		vmi->framer->in_frame = 0;
 		bit = 0;
 
 	next_bit:
@@ -411,12 +411,12 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			ones = 0;
 	}
 
-	fr->unpack_mask = mask;
-	fr->unpack_bit = bit;
-	fr->unpack_word = word;
-	fr->frame_len = flen;
-	fr->unpack_acc = acc;
-	fr->ones = ones;
+	vmi->framer->unpack_mask = mask;
+	vmi->framer->unpack_bit = bit;
+	vmi->framer->unpack_word = word;
+	vmi->framer->frame_len = flen;
+	vmi->framer->unpack_acc = acc;
+	vmi->framer->ones = ones;
 	vmi->overflow = overflow;
 	return nframes;
 }

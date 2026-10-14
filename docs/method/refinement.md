@@ -4736,3 +4736,21 @@ constant-pool payloads and full bodies; a SIZE1 result cannot settle that
 storage lifetime. Preserve the negative domain and require a new witness to
 reopen it. [Complete queue ledger](../call-boundary-lead-ledger.md),
 [spectral controls](../spectral-sign-carrier-results.md).
+
+### Review partial source recovery separately from exact closure (F11987–F11988)
+
+A finite experiment's failure to close an entire body does not refute every
+original operand boundary it restored. Keep that negative measurement, then
+review a supported partial change on its own evidence when partial fidelity
+is the authorised objective. Reproduce the current full-TU baseline, especially
+if diagnostics or helper return ownership changed since the old control.
+Do not reopen neighbouring spellings or profile options merely for a closer size.
+
+V23's original MRF outgoing word is unsigned even though the callee narrows
+signed at use. V21 reloads its owner after each actual known-state diagnostic;
+its inlined callers must be audited as changed bodies. HDLC unframe keeps entry
+scalar snapshots but reads the current parent across CRC/debug calls; recover
+that lifetime without claiming arbitrary alias histories are reachable.
+All three pass the permitted period gate without becoming exact. Report size
+and positioned-byte effects separately from recovered operands and exact counts.
+[Three controls, collateral and validation](../partial-boundary-recoveries-results.md).
