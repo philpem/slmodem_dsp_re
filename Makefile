@@ -1082,7 +1082,7 @@ COVCOUNTS  := build-cov/measured.txt
 # Modern GCC, 64-bit cleanliness, SpanDSP interop and coverage remain valuable,
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
-               banners partial-compare-selftest tumap-selftest
+               banners partial-compare-selftest tumap-selftest period-selection-selftest
 
 PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov \
                      mutation-snapshot
@@ -1389,6 +1389,10 @@ partial-compare-selftest:
 
 tumap-selftest:
 	@$(PYTHON) tools/tumap.py $(BLOB) --self-test
+
+.PHONY: period-selection-selftest
+period-selection-selftest:
+	@$(PYTHON) tools/toolchain/period_selection_selftest.py
 
 # The anchor aligner's firing proof.  NOT a phase tier: it needs `tc`'s
 # build/tc_out, which `make phase` does not build, and it is apparatus rather

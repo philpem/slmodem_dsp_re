@@ -26,9 +26,9 @@
  * register across the calls instead.
  *
  * F11613 retains the observed fourth argument, literal 1, which the callee
- * never reads. The object also consumes EAX, equal to agc.signal. This
- * source still reads the field; original return semantics are a separate
- * hypothesis, not established by unread frame slots.
+ * never reads. F11989 captures the explicit int return before evaluating
+ * the destination owner, matching the original post-call DSP reload.
+ * Direct member assignment can evaluate that destination before the call.
  *
  * The squelch loop indexes with an `unsigned short` and compares `jb`
  * (0x0a57be..0x0a57c4), so a count with the top bit set walks forward rather
@@ -40,9 +40,11 @@ DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 	struct v21_rx *rx = (struct v21_rx *)modem;
 	short nsamples;
 
-	FPM_AGC_agc(&rx->dsp->agc, in, count, 1);
+	{
+		int signal = FPM_AGC_agc(&rx->dsp->agc, in, count, 1);
 
-	rx->dsp->int_0004 = rx->dsp->agc.signal;
+		rx->dsp->int_0004 = signal;
+	}
 	rx->dsp->int_0008 = 1;
 
 	if (FPM_MTD_detect(rx->dsp->mtd, in, (short)count)
@@ -58,7 +60,7 @@ DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 	}
 
 	nsamples = FPM_MRF_filter(&rx->dsp->mrf, in,
-				  rx->dsp->mag, (short)count);
+				  rx->dsp->mag, count);
 
 	return (unsigned short)
 		FPM_FSD_demodulate(&rx->dsp->fsd,

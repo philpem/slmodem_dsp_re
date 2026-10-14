@@ -259,7 +259,7 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 
 	n_rate = (unsigned short)V22_MRF_filter(&fp->dsp->mrf, in,
 						fp->dsp->rx_scratch,
-						(short)count);
+						count);
 	fp->dsp->rx_count = (short)n_rate;
 
 	/*

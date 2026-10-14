@@ -8935,6 +8935,15 @@ the object either side of it.
 
 ## D490 -- `FPM_AGC_agc` is called with four arguments and defined with three  `unmeasured`
 
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
+
 Every V.32 call site pushes a fourth outgoing slot holding the constant 1 --
 `DemodDataV32` at 81ce6, `RxHdxTone` at 83937, `RxHdxNoSignal` at 83a37 -- and
 `FPM_AGC_agc` (0xa6750, 566 bytes) reads only 0x50, 0x54 and 0x58 off its
@@ -10465,6 +10474,15 @@ everything would agree and pass.
 
 ## D1030 ⚠ `DemodDataV21` stores the value `FPM_AGC_agc` leaves in `%eax`, and that function returns `void`
 
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
+
 *2026-08-31.* `unmeasured`.
 
     a576d   call   <== R_386_PC32 FPM_AGC_agc
@@ -10572,6 +10590,15 @@ so nothing says whether any bit the assignment destroys was ever set.
 
 ## D1036 🐛 `DemodDataV29` reads a return value from a `void` function, and only the object's register allocation makes it work
 
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
+
 `DemodDataV29` (0x0a5ff0) calls `FPM_AGC_agc` and uses `%eax` afterwards as the
 carrier bit, ANDing it into three of the receiver's enable words. `FPM_AGC_agc`
 returns `void` and takes three arguments; the call site pushes four and consumes
@@ -10670,6 +10697,15 @@ that need a phase table the author's own constructor never installs reach
 them. Whether they guard a configuration that existed in some other product
 using the same source, or are simply belt and braces, the object does not say.
 ## D1031 -- both V.17 callers pass `FPM_AGC_agc` a FOURTH argument, and we pass three  `equivalent`
+
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
 
 *2026-08-31.* `DataCarrierDetectV17` at a539f and `DemodDataV17` at a50b1 both
 write the constant 1 into `0xc(%esp)` before their `FPM_AGC_agc` call, on top
@@ -11411,6 +11447,15 @@ faults on a precondition, assert the precondition instead of pretending to
 cover the arm.
 ## D1091 ⚠ `DemodDataV17` uses `%eax` from a `void` function, and this reads the field it happens to hold
 
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
+
 `FPM_AGC_agc` returns nothing. `include/dsplib/fpm_agc.h` declares it `void`
 and that is measured, not assumed: the object's definition reads frame slots
 0x50, 0x54 and 0x58 and never 0x5c, so it takes three arguments, and it has no
@@ -11518,6 +11563,15 @@ writes `_init_receiver` should take all three back to `static` in the same
 commit -- at which point the test must reach them another way or be retired
 in favour of driving `_init_receiver` itself.
 ## D1094 🐛 `DemodDataV27` reads a return value from a `void` function, exactly as `DemodDataV29` does
+
+**Historical inference superseded (F11989–F11990).** An unread stack slot
+does not establish the absence of a formal argument, and the binary does
+not establish a void return. The consistent reconstruction now takes four
+arguments and returns the published int signal. The V17/V21/V27/V29
+consumers now use that result directly, preserving original destination
+read timing. No mismatched prototype or original undefined behaviour is
+established by this entry. The earlier reasoning below is retained as
+history, not a description of the current source or a unique original type.
 
 `DemodDataV27` (0x0a5950) pushes four arguments to `FPM_AGC_agc` and then uses
 `%eax` as the carrier bit, ANDing it into `fpm_sre::adapt`, `fpm_fse::lms_on`

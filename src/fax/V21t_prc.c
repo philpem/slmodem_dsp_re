@@ -110,8 +110,10 @@ TxNextStateV21(void *modem)
 
 	switch (state) {
 	case V21TX_STATE_DATA:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21TX_STATE_DATA\n");
+			hdx = tx->hdx;
+		}
 		hdx->handler = TxHdxIdleV21;
 		hdx->state = V21TX_STATE_IDLE;
 		tx->result.byte.flags2 |= V21TX_RESULT_B2_BIT0;
@@ -120,8 +122,10 @@ TxNextStateV21(void *modem)
 		break;
 
 	case V21TX_STATE_IDLE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21TX_STATE_IDLE\n");
+			hdx = tx->hdx;
+		}
 		hdx->short_000e = 0;
 		hdx->handler = TxHdxStartV21;
 		hdx->state = V21TX_STATE_START;
@@ -131,8 +135,10 @@ TxNextStateV21(void *modem)
 		break;
 
 	case V21TX_STATE_START:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V21TX_STATE_START\n");
+			hdx = tx->hdx;
+		}
 		hdx->short_000e = 0;
 		hdx->handler = TxHdxDataV21;
 		hdx->state = V21TX_STATE_DATA;

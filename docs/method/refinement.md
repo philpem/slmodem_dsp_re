@@ -4754,3 +4754,45 @@ that lifetime without claiming arbitrary alias histories are reachable.
 All three pass the permitted period gate without becoming exact. Report size
 and positioned-byte effects separately from recovered operands and exact counts.
 [Three controls, collateral and validation](../partial-boundary-recoveries-results.md).
+
+### Sequence a call result before reading a mutable destination owner (F11989)
+
+In `root->child->field = helper(...)`, the assignment store follows the call,
+but evaluating the destination address can precede it. Compare the owner's
+load age, not just the return register or final store. DemodDataV21's original
+reloads the child after AGC; a local int result followed by the member assignment
+recovers that boundary. Cross it with the independent unsigned MRF slot: each
+incomplete control misses, all observed boundaries together recover EXACT217.
+This is statement sequencing, not a request for a particular register.
+
+Do not propagate the local blindly. Other nested assignments already capture
+their owners before calls in the original; indexed embedded arrays do not read
+a second owner pointer. The seven nested and18 indexed nominations were reviewed
+without another justified rewrite. A fresh-return detector must stop when EAX
+is overwritten, or it can mistake a field reload for a returned value.
+[Native controls and bounded screen](../boundary-transfer-results.md).
+
+### Review source publications and API slots without hiding collateral (F11990–F11992)
+
+An unread argument slot does not prove a missing formal; an epilogue that
+publishes and returns the same int does not establish a void-return ABI bug.
+Review caller and producer together, and retire historical inference once a
+consistent source contract is supported. Keep signed use-site narrowing when
+recovering unsigned outgoing slots. Require raw equality of a callee TU whose
+API spelling changes without changing its actual word computation.
+
+Accumulator stores and separate ADD/SUB update boundaries can be supported
+partial recoveries even when the whole function misses. Validate values under
+the period compiler and audit all unmatched helper bodies too. Preserve
+original high-count defects; do not execute an unsafe wrap/nontermination case
+merely to add coverage. Report larger size gaps and exact-loss controls openly;
+V32's unresolved collateral is withheld, not fitted with local permutations.
+[Complete partial-recovery table](../boundary-transfer-results.md).
+
+### Fail an unknown test selection before claiming a denominator (F11993)
+
+A runner that skips an unknown requested name can report a green subset. Check
+requested names against actual fixture sources before Docker or partial runs.
+Test unknown-only and mixed valid/unknown lists with Docker replaced by a
+failure sentinel. Keep the valid full selection as the positive control and
+compare requested and reported counts. A warning is not a failing gate.

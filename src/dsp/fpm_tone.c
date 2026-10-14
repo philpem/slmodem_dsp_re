@@ -646,8 +646,8 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		else
 			corr_s = corr;
 
-		energy += ((samples[n] * samples[n]) >> 15)
-			  - ((hist[idx] * hist[idx]) >> 15);
+		energy += (samples[n] * samples[n]) >> 15;
+		energy -= (hist[idx] * hist[idx]) >> 15;
 		if (energy > 32767)
 			energy_s = 32767;
 		else if (energy < -32768)

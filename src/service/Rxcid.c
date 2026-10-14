@@ -403,7 +403,7 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 	if (cid->mark_conf > (m * 12 >> 8)) {
 		nsamp = ncount;
 		if (cid->rate != CID_RATE_9600)
-			nsamp = FPM_MRF_filter(&cid->mrf, buf, buf, ncount);
+			nsamp = FPM_MRF_filter(&cid->mrf, buf, buf, count);
 
 		/*
 		 * Re-tested, and re-read from the object, because the two

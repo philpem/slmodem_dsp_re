@@ -138549,3 +138549,77 @@ path stopped before measurement; invalid log retained and proper path rerun.
 Static anchors285 suites/10038 locations pass without retargeting. No fuzzing,
 mutation execution, new input history, full-phase or portability claim.
 [Full results and collateral](partial-boundary-recoveries-results.md).
+
+## F11989. AGC result capture must precede destination evaluation
+
+DemodDataV21 becomes EXACT217 when unsigned MRF count, direct AGC result and
+post-call destination read are recovered together. Four count/result cells
+remain SIZE9: direct member assignment captures the child before AGC. Two
+block-local controls separate result production from destination evaluation;
+cache alone remains SIZE9, cache+unsigned count is exact. Original a5772 reads
+current DSP before a5778 stores EAX; cached candidate matches that age. Two TU
+bystanders unchanged. The capture distinction precedes allocation and does not
+require a forced register, frame or declaration order. A fresh-EAX proof must
+stop at intervening writes; the initial failed apparatus assertion is retained
+as invalid, then corrected. Seven nested and18 indexed source nominations yield
+no further supported destination-age mismatch. [Results](boundary-transfer-results.md).
+
+## F11990. Remaining helper handoffs support partial recovery
+
+The fixed int/four-slot AGC contract supports original EAX consumers in
+V17/V21/V27/V29; V32/B103 independently read the field and remain so. Adopt
+unsigned MRF slots in B103/V17/V21/V27/V29/CID and V22's separate full-slot
+formal with signed-word narrowing inside its callee. All V22 callee cells are
+raw-identical. V32's count control loses SetAdaptEqV32 exactness and changes
+three bystanders; recorded, withheld, no register/source fitting. D490/D1030/
+D1031/D1036/D1091/D1094 retire unsupported void/three-argument inference rather
+than asserting original prototype UB or a uniquely recovered type. B103 size
+worsens70→86, CID remains54; original outgoing value is the adoption criterion.
+[Controls, table and collateral](boundary-transfer-results.md).
+
+## F11991. TX owner reads and V27 training boundaries are distinct from size
+
+Restore TxNextStateV21's three original post-debug root+20 reads. Size worsens
+3→27; inlined Data69→78, Idle13→4, Start15→23, same source/call inventories,
+no exact loss. Existing cycle/underrun cases repeat at debug2. Restore GenEQ27
+signed fill index, unsigned postdecrement output cursor and per-output rate
+reread, SIZE15→11; decline the incomplete SIZE1 single-axis spelling. Countbit15
+original wrap/nontermination remains outside safe executed inputs; preserve
+original next-word access and existing fixed component coverage. No new input
+history, reachable alias or exact-body claim. [Evidence](boundary-transfer-results.md).
+
+## F11992. Accumulator publication controls recover original operations
+
+FPM_TONE_find_rev's separate ADD/SUB energy pair matches the original category,
+while same-size baseline has no such pair; candidate remains SIZE36. GenericIIR
+scalar restores four nonpopping member-accumulator FSTL sites versus baseline
+two; initial RTL publications also increase. SIZE99→85;17 emitted bystanders
+unchanged, including six without original counterparts. Only numeric-zero
+comparison pool changes. IIR targeted period passes, followed by permitted
+whole-suite validation. Two Tone static locators retarget the same mutation
+meanings; no mutation execution/snapshot changes. [Results](boundary-transfer-results.md).
+
+## F11993. Unknown requested period tests must not produce a clean partial gate
+
+A ten-name selection contained three nonexistent fixture names; old runner
+warned then reported7/0 with exit0. Preserve as incomplete, exclude as a ten-test
+gate. Validate explicit T before Docker, failing any unknown name without a
+partial run. Two host self-tests cover unknown-only and mixed valid/unknown
+lists; fake Docker proves no Docker invocation. Both pass and become the
+period-selection-selftest structural tier. Final387-name selection is the
+positive control:387 requested/0 unknown and387 passed/0 failed. No test input,
+tolerance or failure criterion is weakened. [Reproduction](boundary-transfer-results.md).
+
+## F11994. Boundary transfer aggregate checkpoint
+
+Final permitted period387/0, all387 requested names valid, t_fuzz excluded;
+IIR targeted1/0 and TX same-input debug155+8 checks pass. Census1086/1852 EXACT/
+120322 original exact bytes: +1/+217B, no adopted exact loss;667 SIZE/65 BYTES/
+29 REGALLOC/5 UNRESOLVED, ratchet green.46 full-TU cells/406 shared verdicts/
+418 emitted comparisons include the rejected V32 loss. Only11/300 canonical
+objects change,289 raw-identical,12 selected controls match raw, all300 faithful
+inputs match canonical; profile unchanged. Partial .text702524→702476,
+allocated918526→918484, positioned equal69544→69472/943398, strict DIFFERENT/exit1.
+Two host selection self-tests pass;285 suites/10038 static anchors retain two
+Tone locator retargets only. No mutation/fuzz execution, snapshot update,
+full-phase or portability claim. [Complete results and stopping scope](boundary-transfer-results.md).

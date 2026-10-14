@@ -57,9 +57,7 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 	unsigned short n;
 	struct v29_rx_block *rx;
 
-	FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count, 1);
-	/* Not the object's `%eax`; the same value.  D1036. */
-	signal = ((struct v29_rx *)modem)->rx->agc.signal;
+	signal = FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count, 1);
 
 	if (((struct v29_rx *)modem)->det->state == 0) {
 		short *buf = (short *)((struct v29_rx *)modem)->det->buf;
@@ -85,7 +83,7 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 			&((struct v29_rx *)modem)->rx->mrf,
 			in,
 			(short *)((struct v29_rx *)modem)->rx->buf_mrf,
-			(short)count);
+			count);
 
 	rx = ((struct v29_rx *)modem)->rx;
 	rx->sre.adapt = signal & rx->int_0004;
