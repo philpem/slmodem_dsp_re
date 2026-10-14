@@ -138435,3 +138435,53 @@ because t_fuzz is excluded by user. Initial387/1 was an old member-pointer
 overload compile error, not runtime divergence; fixture selector alone now
 uses int, inputs/checks unchanged. No final full-phase claim.
 [Results and exact validation boundary](scalar-boundary-results.md).
+
+## F11981. Jump-table alignment needs the standard dis module
+
+Decision-caller CLI alignment failed because local tools/dis.py shadowed the
+standard module during elftools/inspect imports. Preload standard dis while
+excluding the tools directory; comparison logic is unchanged. The 759/752-row
+Decision comparison now runs, differing control fires on four groups, and the
+exact 43-row control stays clean. Its 76 mnemonic groups and frame difference
+do not identify a new source boundary; no Decision source experiment adopted.
+reset_cid's original CWTL disproves its loop-width nomination.
+[Evidence and limits](v34-vmi-boundary-results.md).
+
+## F11982. INFO1a caches a word result and both destinations before storing
+
+The original sign-extends bitreverse's result before its debug branch and
+loads both session destination pointers before either byte store. Six full-TU
+controls cross retained/short/int-narrow cache with pointer capture. Short and
+int-narrow pairs emit identical objects; short plus captures restores both
+native/initial-RTL boundaries. Only target changes, all six bystanders and
+metadata/data/calls preserved. SIZE16 remains; no unique type spelling, new
+exact gain or reachable alias-history claim.
+[Domain](v34-info1a-capture-domain.md), [results](v34-vmi-boundary-results.md).
+
+## F11983. Ring requirement narrowing caused a constructor mismatch
+
+FAXVMI_create originally compares promoted max_frame+3 with FIFO capacity,
+then narrows its selected fallback. Retained word need narrowed too early:
+max_frame65534/capacity8 produced8 instead of blob1. Nine fixed null-slot
+constructor cases fail6/172 checks before correction and pass172/172 after;
+no modem-processing or end-to-end reachability claim. Four requirement/ring
+carrier controls restore int need and fallback-only word narrowing, keeping
+word ring. Only target changes; SIZE103 remains, all five bystanders/data/
+metadata/calls preserved. Static arithmetic separately checks196608 wrap-edge
+pairs: old formula196602 disagreements, repaired0. Combined with INFO1a,
+10 full-TU cells/66 shared verdicts, raw baselines reproduced, no exact losses.
+[Domain](vmi-ring-capacity-domain.md), [results](v34-vmi-boundary-results.md).
+
+## F11984. INFO1a and ring-capacity validation checkpoint
+
+Final permitted period387 passed/0 failed, excluding t_fuzz; targeted2/0
+also passes. Constructor regression172/172 follows the preserved6/172 failure.
+Census1085/1852 EXACT/120105 original exact bytes unchanged, ratchet green;
+668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED. Only2/300 canonical objects change;
+298 raw-identical, both selected cells match raw, all300 faithful inputs match
+canonical, complete profile unchanged. Partial .text702364/allocated918366
+unchanged; positioned equal69392→69398/943398, strict DIFFERENT/exit1.
+All structural checks pass: 285 suites/10038 static anchors, 14445 references,
+zero unresolved or repointed citations. No full-phase, fuzz/mutation or
+portability claim.
+[Results and validation scope](v34-vmi-boundary-results.md).

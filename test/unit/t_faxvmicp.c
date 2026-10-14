@@ -321,6 +321,58 @@ run_create_fresh(void)
 	return diff_end();
 }
 
+/* Compare the promoted capacity expression at the constructor boundary. */
+static int
+run_create_ring_boundary(void)
+{
+	static const struct {
+		unsigned short fifo, max_frame, expected;
+	} cases[] = {
+		{ 8, 1, 8 }, { 8, 5, 8 }, { 0, 3, 6 },
+		{ 8, 65533, 0 }, { 8, 65534, 1 }, { 8, 65535, 2 },
+		{ 0, 65533, 0 }, { 0, 65534, 1 }, { 0, 65535, 2 }
+	};
+	unsigned c;
+
+	/* Constructor arguments, not planted modem histories. Null slot 0 never
+	 * processes a modem frame; selected ring allocations contain at most 8 words.
+	 * The original compares the promoted sum, then narrows its selected arm. */
+	diff_begin("FAXVMI_create: ring comparison before word narrowing");
+	for (c = 0; c < sizeof(cases) / sizeof(cases[0]); c++) {
+		struct faxvmi_cfg cfg = { 0, 0, 0, 0, 0, 2, 0, NULL, NULL };
+		struct faxvmi *pair[2];
+		unsigned k, common;
+
+		cfg.fifo_size = cases[c].fifo;
+		cfg.max_frame = cases[c].max_frame;
+		pair[0] = ref_FAXVMI_create(NULL, &cfg);
+		pair[1] = FAXVMI_create(NULL, &cfg);
+		diff_eq_int("blob selected capacity (%ld)", pair[0]->framer->fifo_size,
+			    cases[c].expected, c);
+		diff_eq_int("source selected capacity (%ld)", pair[1]->framer->fifo_size,
+			    cases[c].expected, c);
+		cmp_vmi_scalars("ring boundary config", pair[0], pair[1], c);
+		cmp_framer("ring boundary framer", pair[0]->framer, pair[1]->framer, c);
+		cmp_link("ring boundary link", pair[0]->link, pair[1]->link, c);
+		common = pair[0]->framer->fifo_size;
+		if (pair[1]->framer->fifo_size < common)
+			common = pair[1]->framer->fifo_size;
+		/* Keep the pre-fix refusal safe when the allocations have different sizes. */
+		cmp_u16("ring initialized content (%ld)", pair[1]->framer->fifo,
+			pair[0]->framer->fifo, common, c);
+		for (k = 0; k < 2; k++) {
+			sysdep_free(pair[k]->framer->fifo);
+			sysdep_free(pair[k]->framer->frame);
+			sysdep_free(pair[k]->framer);
+			sysdep_free(pair[k]->link->buf);
+			sysdep_free(pair[k]->link->ptr_0000);
+			sysdep_free(pair[k]->link);
+			sysdep_free(pair[k]);
+		}
+	}
+	return diff_end();
+}
+
 /*
  * Reinit (`vmi != NULL`), reusing the instances `run_create_fresh` built.
  * The runtime state is scribbled to a non-zero pattern -- identically on
@@ -590,5 +642,6 @@ main(void)
 	rc |= run_create_reinit();
 	rc |= run_process();
 	rc |= run_control();
+	rc |= run_create_ring_boundary();
 	return rc;
 }

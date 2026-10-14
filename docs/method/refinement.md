@@ -4697,3 +4697,22 @@ correct declaration and removal of invented word casts to recover original
 full arguments. B103 still needs its original normalization at use. A shared
 contract does not imply every caller has the same conversion boundary.
 [Complete domains, negative controls and validation exclusions](../scalar-boundary-results.md).
+
+### Separate capture age from narrowing placement (F11982–F11983)
+
+An extension near a debug call can belong to the cached source value. INFO1a
+narrows the reversed-bit result before its debug branch; narrowing only the
+printf argument delays that boundary. Cross narrow-at-assignment with explicit
+destination capture when the original loads both pointers before the first
+byte store. Inspect native def/use and initial RTL; call placeholders may hide
+a baseline result assignment. Both supported cache spellings can emit the same
+object, so retain the clearer declaration without claiming uniqueness.
+
+The location of narrowing can also change behaviour. The fax constructor
+compares a promoted max_frame+3 requirement before narrowing the selected ring
+value. A word requirement instead compares the wrapped value. Cross requirement
+and selected-carrier widths, and use fixed safe constructor cases at wrap
+boundaries. State the component boundary and allocation extents; a constructor
+result does not prove an end-to-end reachable configuration. Keep a failing
+pre-fix control, and distinguish static arithmetic enumeration from executed
+blob comparisons. [Controls and results](../v34-vmi-boundary-results.md).

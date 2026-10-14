@@ -60,6 +60,12 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Jump-table inspection imports elftools, then inspect. Keep this directory's
+# dis.py CLI from shadowing the standard-library dis module in that import.
+_script_path = sys.path[:]
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or '.') != HERE]
+import dis as _stdlib_dis  # noqa: E402,F401
+sys.path[:] = _script_path
 sys.path.insert(0, os.path.join(HERE, "toolchain"))
 
 import byteident  # noqa: E402
