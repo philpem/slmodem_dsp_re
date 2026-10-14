@@ -138384,3 +138384,54 @@ canonical. Selected cell raw reproduced. Partial .text702396→702380,
 allocated918404→918388, positioned equal69558→69540/943398; strict
 DIFFERENT/exit1. No exact-count or positioned-byte gain. No fuzzing, mutation
 execution or modern-portability claim. [Results](lms-paired-error-results.md).
+
+## F11977. Output-return and scalar tap order jointly recover two descramblers
+
+Original HI scalar returns fullEAX and its MP caller consumes it without byte
+extension. Retained T return/cast imposes narrowing. Consistent I return with
+plain r restores producer/caller boundaries; body-only raw-inert, return-only
+keeps producer cast. Independent original pTap2-before-pTap1 write-back crossed
+with that interface recovers HI118B; II110B needs order alone. Initial RTL
+store order changes before allocation. Both complete original bodies EXACT;
+no unique template spelling or normal-value bug claim. All27 transitive
+consumer controls preserve data/metadata/calls and account for both nonexact
+Decision callers (V90 SIZE20→25 despite corrected consumption).
+[Domain](descrambler-output-domain.md), [results](scalar-boundary-results.md).
+
+## F11978. Vendored modem count contract corrects V23 full-width handoffs
+
+Host modem_dp.h and modem.c define get/put_bits count as int; B103/V23 local
+ushort declarations disagree. Eight full-TU controls cross int declarations
+with caller cast removal. Each axis alone raw-inert; both restore original
+V23 full n_tx/n_rx arguments, SIZE10→7. B103 independently normalizes words;
+its cast removal SIZE11→13 is rejected, int declarations alone adopted raw-
+inert. V32 comment corrected, raw-inert. No huge-count reachability claim.
+[Domain](modem-bit-count-domain.md), [results](scalar-boundary-results.md).
+
+## F11979. Scalar scrambler transfer preserves exact HH and recovers HI
+
+Original HI tap2 write-back precedes tap1; original HH has the opposite native
+order. Shared scalar tap2-first source makes HI118B exact in both V90/V92
+Phase3Modulator copies while entire exact-HH V92Phase4Modulator object stays
+raw-identical. Native order alone does not prescribe source: exact sibling
+and complete-TU controls discriminate scheduling. No bulk/XOR/type/declaration
+permutations. Combined27-consumer proof plus all domains:242 full-TU cells/
+4820 shared verdicts, all raw baselines/metadata/named/allocated data/calls/
+bystanders audited; three distinct exact names346B, zero exact losses.
+[Transfer domain](scrambler-scalar-order-domain.md), [results](scalar-boundary-results.md).
+
+## F11980. Scalar-boundary batch permitted validation checkpoint
+
+Final census1085/1852 EXACT/120105 original exact bytes: +3 names/+346B, zero
+losses;668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED. Only5/300 canonical objects
+change,295 raw-identical, all27 selected consumer cells raw-match production,
+all300 faithful inputs raw-match canonical; configuration unchanged. Partial
+.text702380→702364, allocated918388→918366, positioned equal69540→69392/943398;
+strict DIFFERENT/exit1. No whole-object identity or positioned-byte gain.
+Final selected period387 passed/0 failed (all388 minus t_fuzz); all structural
+checks pass, including285 suites/10038 static anchors. Full make phase rejected
+by automatic approval review
+because t_fuzz is excluded by user. Initial387/1 was an old member-pointer
+overload compile error, not runtime divergence; fixture selector alone now
+uses int, inputs/checks unchanged. No final full-phase claim.
+[Results and exact validation boundary](scalar-boundary-results.md).

@@ -537,7 +537,7 @@ static int fuzz_shi_proc1(void)
 static int fuzz_dhi_proc1(void)
 {
 	return fuzz_scal("Descrambler<h,i>::process(h), fuzz",
-			 (unsigned char (Descrambler<unsigned char,
+			 (int (Descrambler<unsigned char,
 			   int>::*)(unsigned char))
 			   &Descrambler<unsigned char, int>::process,
 			 ref_dhi_proc1, 20000u, 50u);

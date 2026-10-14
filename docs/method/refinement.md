@@ -4673,3 +4673,27 @@ from the strict function census. A known length-only RMS positive and identity
 negative validate this detector; an incorrect positive fixture must abort, not
 be excused. Inspect full def/use chains before testing interface changes.
 [Controls, partial-link limits and next discriminators](../lms-paired-error-results.md).
+
+### Cross producer return width with original scalar write-back order (F11977–F11979)
+
+A C++ member name may omit its return type. Inspect producers and consumers
+together: Descrambler<T,I> returned T although the original HI returns and
+consumes fullEAX. Cross declaration width with final narrowing; fixing the
+caller alone need not fix the producer. Then cross an independently observed
+scalar tap write-back order. Return alone leaves HI ten bytes different; order
+alone leaves its SIZE mismatch; both recover the complete118B body. II110B
+needs order only. Confirm the changed order in initial RTL before attributing
+it to allocation.
+
+Transfer needs independent controls. Scrambler HI's original tap2-first writes
+and HH's tap1-first native writes can still share the same tap2-first source:
+HI becomes EXACT while the entire exact-HH TU stays raw-identical. Native
+write order alone is not a universal source-order oracle. Preserve bulk loops,
+XOR spelling and declarations, and compare every header consumer.
+
+An imported function's vendored declaration/definition is stronger than a
+local prototype guess. B103/V23 modem bit counts are int; V23 needs both the
+correct declaration and removal of invented word casts to recover original
+full arguments. B103 still needs its original normalization at use. A shared
+contract does not imply every caller has the same conversion boundary.
+[Complete domains, negative controls and validation exclusions](../scalar-boundary-results.md).

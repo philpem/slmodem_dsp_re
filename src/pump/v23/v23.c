@@ -64,9 +64,9 @@
 extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
-			  unsigned short count);
+			  int count);
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
-			  unsigned short count);
+			  int count);
 
 /*
  * The three entry points are FILE-STATIC in the object -- `nm` shows a
@@ -231,7 +231,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 		 */
 		n_tx = modem_get_bits(dp->modem, 1,
 				      (unsigned char *)self->tx_bits,
-				      (unsigned short)n_tx);
+				      n_tx);
 		for (i = n_tx - 1; i >= 0; i--)
 			self->tx_bits[i] =
 				((unsigned char *)self->tx_bits)[i] & 1;
@@ -247,7 +247,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 			((unsigned char *)self->rx_bits)[i] =
 				(unsigned char)(self->rx_bits[i] & 1);
 		modem_put_bits(dp->modem, 1, (unsigned char *)self->rx_bits,
-			       (unsigned short)n_rx);
+			       n_rx);
 	}
 
 	self->tx_bits_wanted = n_tx;

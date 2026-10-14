@@ -45,7 +45,8 @@
  * declaration calls the parameter `chan` and gets away with it.
  *
  * The count is an `int` here and nothing zero-extends it, which is the other
- * half of the same correction: `v23.c` declares it `unsigned short`.
+ * half of the same correction. B103/V23 now declare the same int contract;
+ * B103 retains its independently witnessed word normalization at each use.
  *
  * ---------------------------------------------------------------------------
  * THE BLOCK IS 40 SAMPLES, WHICH IS TWELVE SYMBOLS
