@@ -1109,12 +1109,67 @@ test_set_scrambler_direct(void)
 
 /* ------------------------------------------------------------------------- */
 
+/* Fixed component boundary: constructor and real START transition only.
+ * The public modem wrapper uses a small budget; no public high-word claim.
+ * At4800 bps the resampler is5/1: eight samples/symbol bounds the old wrong
+ * 65535-symbol selection. The untouched output tail is compared as well. */
+static int
+test_countdown_budget_words(void)
+{
+	static short outa[524288], outb[524288];
+	const unsigned short words[] = { 0x7fff, 0x8000, 0xffff };
+	unsigned short ina[1] = { 0 }, inb[1] = { 0 };
+	int row;
+
+	diff_begin("v27txcreate: installed countdown handler budget words");
+	for (row = 0; row < 3; row++) {
+		struct v27tx_cfg ca = V27TX_CFG, cb = V27TX_CFG;
+		void *a, *b;
+
+		void *pa, *pb;
+		short ba = (short)words[row], bb = (short)words[row];
+		short ra, rb;
+
+		ca.bitrate = cb.bitrate = 4800;
+		a = V27TX_create(0, &ca);
+		b = ref_V27TX_create(0, &cb);
+		diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, row);
+		if (!a || !b)
+			continue;
+		TxNextStateV27(a);
+		ref_TxNextStateV27(b);
+		pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+		pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+		diff_eq_int("installed handler ours (%ld)",
+			fn_id(FIELD_PTR(pa, V27TXP_PROCESS)), 1, row);
+		diff_eq_int("installed handler blob (%ld)",
+			fn_id(FIELD_PTR(pb, V27TXP_PROCESS)), 1, row);
+		diff_eq_int("original seeded countdown (%ld)",
+			AT_S(pb, V27TXP_COUNTDOWN), 32, row);
+		memset(outa, 0x5a, sizeof outa);
+		memset(outb, 0x5a, sizeof outb);
+		ra = TxHdxQuietV27(a, ina, outa, &ba);
+		rb = ref_TxHdxQuietV27(b, inb, outb, &bb);
+		diff_eq_int("return (%ld)", ra, rb, row);
+		diff_eq_int("budget remainder (%ld)", ba, bb, row);
+		diff_eq_int("countdown (%ld)", AT_S(pa, V27TXP_COUNTDOWN),
+			AT_S(pb, V27TXP_COUNTDOWN), row);
+		diff_eq_int("blob consumes32 (%ld)", (unsigned short)bb,
+			(unsigned short)(words[row] - 32), row);
+		cmp_shorts("entire output and tail (%ld)", outa, outb, 524288);
+		compare_tree("budget words", a, b, row);
+		V27TX_delete(a);
+		ref_V27TX_delete(b);
+	}
+	return diff_end();
+}
 int
 main(void)
 {
 	int rc = 0;
 
 	rc |= test_shape();
+	rc |= test_countdown_budget_words();
 	rc |= test_create_self_allocating();
 	rc |= test_reinit();
 	rc |= test_tx_cycle();

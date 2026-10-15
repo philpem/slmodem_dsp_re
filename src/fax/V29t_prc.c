@@ -454,7 +454,7 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -501,7 +501,7 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -549,7 +549,7 @@ TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -584,7 +584,7 @@ TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 

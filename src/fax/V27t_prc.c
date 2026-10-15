@@ -503,7 +503,7 @@ TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
@@ -542,7 +542,7 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	for (i = 0; i < taken; i++)
@@ -594,7 +594,7 @@ TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
@@ -627,7 +627,7 @@ TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);

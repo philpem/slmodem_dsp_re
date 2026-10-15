@@ -64,3 +64,10 @@ changes; root owns the integrated byte census and final period gate.
 Each finite domain has its own `docs/batch50-*-domain.md`, replay tool and
 `build/batch50-*/results.json`. These are additional to the stable initial
 83-cell, 16-gain package; its files and winning objects remain unchanged.
+
+Later partial-fidelity review: F11995 fixes the ten recorded budget comparison
+mismatches and transfers the independently confirmed correction to four V27
+handlers. F11996 adopts V29 request snapshots after current full-TU replay.
+The finite exactness negatives above remain valid; their historical no-adoption
+decision is superseded for these specific boundaries. See
+[fixed differential evidence](transmitter-budget-fidelity-results.md).

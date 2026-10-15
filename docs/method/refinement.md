@@ -4796,3 +4796,22 @@ requested names against actual fixture sources before Docker or partial runs.
 Test unknown-only and mixed valid/unknown lists with Docker replaced by a
 failure sentinel. Keep the valid full selection as the positive control and
 compare requested and reported counts. A warning is not a failing gate.
+
+### Follow the promoted comparison operands through the selected value (F11995–F11998)
+
+A short-pointer API does not mean every read is signed. Transmitter countdown
+handlers compare a signed positive remaining value against an unsigned budget
+word. Preserve those promotions at the comparison use; changing the selected
+carrier or public prototype is a different hypothesis. Test0x7fff/0x8000/0xffff
+at an explicitly constructed component boundary, with output buffers large enough
+for the incorrect control too. Separate public-wrapper reachability from a valid
+component invocation. A faithful correction can increase a size gap.
+
+Revisit a declined exactness control for partial adoption when the original
+operations are independently established and partial fidelity is authorised.
+V29 request bytes retain their age across child stores; V34 FSK combines products
+and history updates, reading coefficients first. Keep current full-TU raw controls,
+all bystanders and period validation. Do not promote a near-size follow-up into
+source truth: V27 Quiet's one-byte gap still contains different read/extension
+boundaries, and the four selected-count/member controls fail complete identity.
+[Domain and evidence](../transmitter-budget-fidelity-results.md).

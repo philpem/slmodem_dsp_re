@@ -141,3 +141,9 @@ nominees, or trace getFrame's retained owner/capture transformations against its
 remaining operand boundaries. Do not reopen these finite spelling products
 solely because they got closer in size. Included header helpers without emitted
 owners need a separate closure attribution, not automatic parent assignment.
+
+Later partial-fidelity review: F11997 adopts the corrected fused FSK phase,
+coefficient-read age, delayed tap and word counters after current full-TU replay
+and fixed period validation. The negative exactness product above remains valid;
+no neighbouring spelling/profile search is reopened. See
+[current evidence](transmitter-budget-fidelity-results.md).

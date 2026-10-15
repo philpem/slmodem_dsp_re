@@ -138623,3 +138623,46 @@ allocated918526→918484, positioned equal69544→69472/943398, strict DIFFERENT
 Two host selection self-tests pass;285 suites/10038 static anchors retain two
 Tone locator retargets only. No mutation/fuzz execution, snapshot update,
 full-phase or portability claim. [Complete results and stopping scope](boundary-transfer-results.md).
+
+## F11995. Fourteen transmitter min comparisons used the wrong budget signedness
+
+Original V17/V29/V27 countdown handlers sign-extend remaining and zero-extend
+budget before signed32-bit CMP. Retained source treated the budget as signed,
+selecting32768 symbols instead of48 (V17/V29) or32 (V27) at0x8000. Correct the
+comparison use in six/four/four handlers without changing any public type or
+other carrier. Fixed constructor/START/installed no-carrier component fixtures
+fail16/138,14/159,16/174 checks before correction and pass all471 afterward.
+Outputs bound the old wrong counts too; no planted internal state or public
+high-budget reachability claim. Several size gaps worsen; semantic fidelity,
+not size, decides retention. [Domain](transmitter-budget-fidelity-domain.md),
+[controls and evidence](transmitter-budget-fidelity-results.md).
+
+## F11996. V29 receiver request bytes survive child stores as snapshots
+
+Original V29RX_control reads ctl1 and ctl0 once each across subsequent child
+stores. Baseline reads each twice. Adopt the previously measured joint local
+snapshots after current full-TU replay; BYTES74→24, status bystander unchanged,
+metadata/data/calls unchanged, zero exact gain/loss. Existing t_v29fax period
+fixture passes; no arbitrary overlapping-request lifecycle is asserted.
+[Results](transmitter-budget-fidelity-results.md).
+
+## F11997. V34 FSK third-phase multiply and history transfer share one loop
+
+Adopt the previously corrected fused loop, reading sample and coefficient before
+the history store, with signed-word counters and captured delayed tap. Gap231→135;
+fskdemodulate bystander unchanged, metadata/data/calls unchanged. Wrong earlier
+store-before-coefficient controls remain rejected. Existing fixed FSK fixtures
+pass; no new mutable-coefficient alias history or exact-body claim. The source
+comment no longer describes the history shift as deliberately separate.
+[Controls and stopping boundary](transmitter-budget-fidelity-results.md).
+
+## F11998. V27 Quiet remains structurally nonexact after the budget correction
+
+Original chosen count is zero-extended at the no-carrier call; original member
+subtraction reloads countdown. Four full-TU controls cross unsigned chosen count
+and compound member decrement on the corrected comparison baseline: SIZE1,
+SIZE1,SIZE20,BYTES76, four distinct objects, zero exact gains/losses. Joint form
+still reuses the old member value and moves sign extension before the initial
+gate; no further adoption or source/register permutation follows. Across this
+review14 full-TU cells/110 shared-body verdicts preserve all bystanders and
+metadata/data/nontext/call inventories. [Replay](transmitter-budget-fidelity-results.md).
