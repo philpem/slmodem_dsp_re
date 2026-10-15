@@ -100,8 +100,8 @@
  },
  {
   "label": "the level gate forces the discriminant to zero on the wrong side of the threshold",
-  "find": "\t\t\tif (sre->cfg.rms_min < FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;",
-  "replace": "\t\t\tif (sre->cfg.rms_min > FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;"
+  "find": "\t\t\tif (sre->cfg.rms_min < FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       (unsigned short)sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;",
+  "replace": "\t\t\tif (sre->cfg.rms_min > FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       (unsigned short)sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;"
  },
  {
   "label": "the quadrature accumulator adds where it should subtract",

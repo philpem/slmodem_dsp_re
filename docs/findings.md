@@ -10942,6 +10942,11 @@ rather than the check being dropped or the failure smoothed over.
 
 37 of 279 sites dead, from 42.  Line coverage 97.0% to 97.2%.
 
+Later resolution (F12001): the default working type is DIAL, while returned
+metadata independently clamps the descriptor to INVALID after the report.
+The same tone4/9 cases now compare transcripts at every level and pass; the
+historical exclusion above has been removed without a tolerance.
+
 ### F202. DialerAbort's two sites, and the pattern is now the whole finding
 
 `run_abort` already drove all sixteen combinations of the three fields
@@ -137204,3 +137209,1537 @@ execution or snapshot rerecording; final repaired gate recorded separately.
 F11885–F11887 final repaired phase:388/0, all structural checks green,
 14417 references /2984 headings,285 suites /10038 static anchors, zero detached,
 nonunique or wrong-arm anchors. Modern portability not claimed.
+
+## F11888. Ninety-seven residual nominations now have complete current TU controls
+
+Merged PR283 at736cf61c. Inventory canonical worst defining copy before alpha
+comparison:1077 EXACT/673 SIZE/66 BYTES/31 REGALLOC/5 UNRESOLVED over1852.
+97 REGALLOC/BYTES nominations/59 TUs; all59 unchanged baselines reproduce raw
+production and metadata/data/BSS/relocations,804 shared body verdicts. Scope
+copies separately from unique symbols. Types/profiles/source unchanged;
+_iir_filter_create positive and exact V90 session negative fire/clear. First
+alpha rejection is not a complete diagnosis. docs/residual-stage-family-results.md.
+
+## F11889. Differing machine rows map to retained UIDs, not original compiler state
+
+85/97 have unique dump headers,12 repeated-constructor ambiguities. Strict
+annotated-assembly cardinality/opcode checks link25/31 REGALLOC targets; five
+constructor ambiguities and ADID annotation absence refused. FloatFIR's scratch
+load appears at peephole2. _iir_filter_create's zero searches still allow8
+peephole changes and6 renaming changes; an initial zero-search=>zero-change
+assertion correctly failed and is withdrawn. No original RTL/cursor/clone
+ownership guessed. tools/residual_register_uid_trace.py and stage_audit.py.
+
+## F11890. Failed peephole replacements still reset the persistent scratch cursor
+
+Eight saved/raw/traced full-object triples agree. Seven controls validate382
+searches/3784 candidate visits/382 replacement attempts. Five rejected attempts
+at three distinct sites: V92 setEchoDelay and two v8_process sites, plus the two
+v8 repeats. Failed searches select none and reset cursor zero; subsequent events
+validate it. Initial all-replacements-accepted assertion failed on real controls;
+repaired audit preserves/counts rejection. Independent v8 event streams agree.
+17 distinct REGALLOC targets covered; two scored Scrambler process methods make
+zero direct searches, not a claim about earlier history. No source/state edits
+or original cursor claim. tools/residual_scratch_audit.py.
+
+## F11891. Diagnostic failure and observer refusal do not become source hypotheses
+
+ADID full-da/dP, independent repeat and no-dP attempt all fail with Gentoo ICE;
+preserve/exclude three attempts. Prior r/c/R/S subset raw-reproduces, missing
+windows unavailable.58 other TUs have full streams. A source-list wrapper
+NameError produced no compiler cell, then was corrected. V90MP's raw/traced
+objects agree but five QI/q searches are refused by the HI/SI r model, not counted
+as validated availability controls. No tolerances, profile/src workaround or
+model widening. Zero new gains/source adoptions in this evidence checkpoint;
+no fuzz/mutation execution or modern portability claim.
+
+## F11892. The SDM shared-short/shift2-first cross misses both initializers
+
+Two original86B bodies; eight full-TU cells24verdicts. Opening reg/cfg stores
+unchanged, so prior reversed-opening and pointer-alias controls not repeated.
+Existing-type short capture alone107B SIZE21; derived shift2-first104B SIZE18;
+both109B SIZE23; baseline86B BYTES18. Only targets change; two bystanders perTU
+and metadata/data unchanged. No source adoption; close finite cross without
+claiming exhaustion. docs/residual-value-owner-results.md.
+
+## F11893. Pre-publish counter lifetime recovers the V92 block-size setter
+
+Five complete-TU cells50verdicts. Explicit query alone raw-object-identical to
+normal helper inline, BYTES48; argument use alone also misses. Pre-store
+symbolsDone capture plus explicit query108B EXACT, using either stored size or
+argument, both whole objects raw-identical. Choose incoming n, keeping both
+original unsigned overflow-distinct rounding forms. Counter load/store/copy
+witness supports lifetime family, not uniquely open-coded author source.
+All nine bystanders and metadata/data unchanged; TU9/10 to10/10.01rtl/24lreg
+preserve counter user pseudo before publish rather than anonymous helper read
+later. Standalone query remains exact. docs/residual-value-owner-results.md.
+
+## F11894. Removing an unnecessary pointer capture recovers echo-history reset
+
+Four complete-TU cells60verdicts; original62B. Existing blk/member-bound
+REGALLOC(rawBYTES12); direct params/member-bound EXACT62B; local unsigned length
+alone or combined BYTES15, declined. Pointer local is reg/v/f in01rtl/24lreg and
+AX in25greg; direct access changes allocation. Pre-store scheduled load does not
+prove source capture; params/historyIndex distinct, pointed-data read remains
+after clear. Fourteen bystanders and metadata unchanged; TU5/15 to6/15. No type,
+layout, flag or register constraint. Old SpectralShaper anchor fitting remains
+closed; exact V90 setter/query need no transfer. docs/residual-value-owner-results.md.
+
+## F11895. Ownership assertions do not disambiguate substring mutation locators
+
+Initial targeted static check catches6nonunique anchors after new source.
+Retarget four query operations with complete unique function-body context,
+two echo operations with original reset's unique expression, and two setter
+locators to their same defects; labels/count preserved. fn is the supported
+trailing-method assertion, not function and not a match scope. Correct earlier
+session-flag function metadata to fn without changing operations. No mutation
+execution/snapshot rerecording.17totalfullTUcells134bodyverdicts,2distinctgains,
+all bystanders/metadata preserved; source/gate validation recorded separately.
+
+Final production census: 1079/1852 EXACT, 118507 original bytes, +2 functions
+and +170 original bytes against the 1077 baseline; zero exact losses.
+`make phase J=8` exits 0: period differential 388 passed / 0 failed; structural
+gate clean, including 285 suites / 10038 static mutation anchors and 14417
+references. No mutation or fuzzing harness execution; no portability claim.
+
+## F11896. Queue's exact helper query still loses C2 in the corrected TU
+
+Three full-TU controls at57dbbf52,90common verdicts, raw baseline reproduced.
+Existing isFull query and unsigned space local give identical complete objects:
+write85B EXACT, C2 loses734B exact toBYTES7; progress remains nonexact. Only
+those three bodies change, all27bystanders and metadata/data preserved.
+F11679's loss survives the two earlier state-publication corrections. No source
+or header adoption, no constructor permutation/argument fitting. Clone-aware
+trace locates constant materialization at28.peephole2 and later renaming rather
+than earlier local allocation. docs/residual-queue-context-results.md.
+
+## F11897. Emitted labels and machine RTL resolve repeated clone headings
+
+Twelve archived ambiguous nominations, nine resolved, three refused; includes
+three substring nomination errors rather than twelve constructors. Printed
+CODE_LABEL numbers identify emitted .L labels; independently require -dP's
+printed patterns to match35.mach. Never infer C1/C2 from heading order. Earlier
+stages link only unique shared labels; Phase3Demodulator only final-stage and
+Parameters four late-stage availability remain explicit. Eleven positive/refusal
+checks fire. Register-only differing-row links25/31 to27/31; original RTL and
+cursor unknown. Queue C2 separately links29stages percell. New reproducible
+tools, archived hash verification and full-TU audit in
+ docs/residual-queue-context-results.md. Production1079/1852 unchanged.
+
+## F11898. A removed leaf cleanup search changes the later constructor cursor
+
+Five read-only raw-equal controls,638searches/4304visits validate under HI/SI r;
+zero rejected replacements, independent baseline event stream repeated exactly.
+Queue contexts agree for22searchgroups; baseline scalar write additionally
+searches its4B cleanup, absent under isFull's MOV-save frame. Later C2 enters
+cursor0 versus2; constant99/23/5 stores select AX/AX/DX versusDX/CX/DI before
+renaming. Complete C2 patterns agree throughflow2,12different peephole patterns
+and6renaming residuals. No constructor/source compensation justified; gain85B
+still costs734B, source/census unchanged. docs/residual-constructor-scratch-results.md.
+
+## F11899. Jd clone differences begin at scratch splitting, not byte allocation
+
+Emitted-label/printed-RTL clone association proves C1/C2 patterns identical
+throughflow2, lookpseudo60 allocatedAX in both. Actual UID30 zero-store search:
+C2 cursor0→DX→2, C1 cursor2→BX→13. Peephole UIDs263/264 differ; renaming
+expands to9patterns, including lookaheadAX/BX. Original final register versus
+our earlier allocated register was an invalid stage comparison; opening-domain
+premise preserved and corrected, no source experiment followed it. Parameters
+names identify four searches dynamically but unavailable early label ownership
+is not inferred. Three annotation/value controls distinguish compiler heap
+string_cst addresses from real pool identities/immediates. No production gain,
+source/header/profile edit, original cursor claim or harness execution.
+ docs/residual-constructor-scratch-results.md.
+
+## F11900. Echo append's cursor and next-length shapes do not close its body
+
+Four pinned complete-TU cells at5b552950,60common verdicts; original244B.
+Indexed/test-plus-one baseline225B; advancing-input/countdown261B;
+preincrement/member last-sample209B; combined245B SIZE1. Combined recovers
+countdown, input advance, increment-before-compare and previous-sample address,
+but81nonpadding instructions versus80original and register/loop placement differ.
+Fourteen bystanders and all metadata/data preserved, exact6/15 unchanged.
+No source adoption, size fitting or candidate runtime claim.
+ docs/residual-echo-append-results.md.
+
+## F11901. Echo append's common exit is raw-inert at both count timings
+
+Five follow-up complete-TU cells75verdicts include raw baseline and combined
+repeat. Common if/else exit equals early-return complete object at both timings:
+245B with pre-guard remaining initialization,226B with guard-owned initialization.
+Both miss244B original; machine counter copy after guard does not identify unique
+source scope. All9cells135verdicts audited,14bystanders percell and metadata/data
+unchanged. Two finite crosses closed, no nearby declaration/color expansion.
+New tools compile; production1079/1852 unchanged, prior period388/0 applies to
+unchanged source, no fuzzing/mutation execution.
+ docs/residual-echo-append-results.md.
+
+## F11902. V.22 ACK square/verdict/count lifetime crosses all miss
+
+Eight complete-TU cells80shared verdicts atdf4b23b9, raw baseline and combined
+repeat; original209B. Square/verdict cross209BYTES187,189SIZE20,205SIZE4,
+185SIZE24. EarlyRTL ideal squareUID75→25 before sampleUID41/68, verdictzero
+UID31→91. Count after ideal changes baseline toBYTES194 and combined still
+SIZE24; count definitionUID13→25 after idealEnergyUID22. Intended changes
+fire, noneexact, TU4/10 preserved; no adoption/nearby declaration fitting.
+All metadata/data/bindings/relocations agree, only ACK and named nonexact
+Detect_1s change. Production1079/1852 unchanged, no candidate runtime claim.
+ docs/residual-v22-ack-results.md.
+
+## F11903. Literal following-detector dump differences (interpretation corrected by F11904)
+
+ACK combined control leaves Detect_1s source and01rtl/24lreg instruction patterns
+and UIDs identical. Twelve patterns differ at25greg, eleven at27flow2,
+thirteen at28peephole2 and seventeen at30rnreg. The initial attribution to
+global allocation/reload is REFUTED by F11904–F11905: printed alias IDs differ,
+but actual allocations/reloads agree and first instruction differences are
+peephole scratch choices. Preserve these literal counts, not the old attribution.
+The original observation could not separate global allocation from reload;
+F11904 supplies that direct observation and F11905 establishes the scratch cause.
+Original RTL/state remains unavailable. Eight-cell audit
+fires lifetime/negative controls, reports80verdicts, new tools compile and
+refcheck/diff clean. No flags/source adoption or fuzzing/mutation execution.
+ docs/residual-v22-ack-results.md.
+
+## F11904. Alias-set ID bijection refutes the V.22 global/reload lead
+
+Three raw-object controls9boundary snapshots45per-instruction reload choices
+are identical across unchanged Detect_1s baseline/combined/repeat. Twelve25greg
+pattern differences are memory aliasIDs only, bijection11→10,12→11,13→12,14→13;
+other IDs stable. Addresses/registers/offsets/sizes/alignment/alias relationships
+preserved; through27flow2 checked patterns agree. Six positive/refusal controls
+retain register/offset changes and refuse alias split/merge/universal0 changes.
+Do not erase aliases or call literal-ID changes instruction divergence. Corrects
+F11903/its Playbook/results. Three optional stack names unavailable, no inference.
+Two invalid heap-comment equality runs and an invalid union observer preserved;
+final controls rerun. docs/residual-v22-allocator-results.md.
+
+## F11905. ACK's scratch exits change two unchanged Detect_1s scratch choices
+
+Three complete-TU saved/raw/traced controls validate46 searches283visits;
+independent baseline repeat identical. First3Detect_Retrain searches agree.
+ACK baseline3searches exits50, combined1search exits13. Detect_1s thresholdUID94
+selectsEDX(50→2) versusESI(13→14), zero-resultUID33 selectsECX(2→3) versus
+EAX(14→49). Four198/199/201/202patterns first differ at28peephole2; seven after
+renaming. Existing persistent cursor mechanism corroborated, no original cursor
+inference, new source lever or compensation. No source/header/profile adoption;
+production1079/1852 unchanged, previous source period388/0. New tools compile,
+refcheck/diff and positive/refusal audits pass, no fuzzing/mutation execution.
+ docs/residual-v22-allocator-results.md.
+
+## F11906. Tone reversal's energy/sample ownership domains miss without adoption
+
+Nine complete-TU cells99common verdicts at9c020b45, original547B. Opening
+sequential/full-sample cross547BYTES463,583SIZE36,543SIZE4,546SIZE1. Follow-up
+preserves final reload and fixes sequential updates:583SIZE36 repeat,
+current-only547BYTES473,outgoing-only531SIZE16,both532SIZE15, plus rawbaseline.
+All10bystanders and metadata/data/bindings/relocations unchanged, TU7/11 stable.
+InitialRTL independently shows energyinit/add/sub vsinit/add. Eight stages/cell
+reviewed, both full-object repeats rawequal, no strict gain/loss or sourceedit.
+Finite domains closed; no register/local synonyms from size scores.
+ docs/residual-tone-reversal-results.md.
+
+## F11907. Original tone reversal reloads current sample after age store
+
+Opening full-capture hypothesis REFUTED: original retains sample for arithmetic
+at0xab295 but reloads at0xab245 after age store0xab239. Full capture removes
+observable alias boundary; a546B near-hit cannot be adopted. Arithmetic-only
+current/outgoing captures preserve late read but still miss. InitialRTL sample
+read counts3uncaptured/1full/2arithmetic-only; last-read vsage-store audit fires
+on both unsupported cells. Existing disjoint fixtures do not establish arbitrary
+input/state alias behavior. Production1079/1852 unchanged, no candidate runtime
+claim, previous source period388/0; tools compile, refcheck/diff clean. No
+fuzzing/mutation execution. docs/residual-tone-reversal-results.md.
+
+## F11908. Tone reversal's rejected capture is not a production deviation
+
+Verified retainedsource and currentperiodobject: rev_age store+0xc9 precedes
+inputreload+0xd1 and history store+0xda, blob0xab239/0xab245/0xab24e. The
+unsupported full-capture variants live only in build controls and were never
+adopted. No productionfix required at this boundary. Energy grouping also
+value-equivalent: eachshiftedsquare0..32768, signedshort seed/count bounds
+both complete update forms within[-1073741824,1073741823], no int32overflow.
+Not an arbitrary alias runtime claim. docs/residual-tone-reversal-results.md.
+
+## F11909. V8Process local ring publication recovers layout but misses bytes
+
+Four full-TU cells28verdicts at153b22b0, all731B. BaselineBYTES233,
+ringlocalBYTES73,symbollocalBYTES233,bothBYTES71. Ring's initialRTL/machine
+stores2→1 and forward sampleloop matches original. Symbolinitial stores2→1,
+but both already1machine publication; different axis. Duplicate static stores
+are alternative paths, not doubled runtimewrites or measuredbehavioralbug.
+Six bystanders and metadata/data/bindings/relocations preserved, exact2/7
+unchanged, rawbaseline reproduced. Seven uniquelyowned stages/cell, positive/
+negative publication controls fire. Original input/pole order, symbolbound
+operand orientation andzero/registerslots still differ. No score-basedsource
+adoption, strict gain/loss or nearbycarrier expansion; finite crossclosed.
+Production1079/1852 unchanged, previousgate388/0; tools/refcheck/diff pass;
+no candidate runtime/fuzzing/mutation. docs/residual-v8-cursor-results.md.
+
+## F11910. Uncapped helper/caller screen finds a fixed-group indirect-callback lead
+
+Baseline7edfb734 Gentoo objects,1079/1852 distinct exact symbols. All299 C/C++
+TUs screened:1934 emitted copies,1105 exact excluded,781 nonexact eligible,
+48 without originals; one assembly TU excluded.315/1367 lexical for headers
+recognized,1052 unsupported,0 unmapped;83 eligible fixed-loop bodies. Three
+positive/negative detector controls fire. Incorrect initial TU/control-count
+assertions were preserved as invalid runs and rerun.24 nominations, nine beyond
+prior size/service scopes; most revisit known calls or loops retained in the
+original. putFrame is different: original sixteen fixed-offset group callbacks
+versus four rolled statements. These are indirect, outside canonical direct-call
+counting; the fixed-loop/backedge screen nominated it. Copy counts are not the
+production-symbol denominator, and included-header/macro loops remain outside
+the screen. No source adoption, gain, ceiling or original-profile claim.
+[Screen and graph review](helper-caller-screen-results.md).
+
+## F11911. putFrame expansion recovers sixteen group callbacks; crossed widths/owners still miss
+
+Original584B, retained376B/SIZE208. Eight complete v34shell TU cells cross
+literal group expansion, short nb and short small/small_last; expansion recovers
+sixteen group sites and577/576/578/578B, all misses. Initial RTL7→19 calls;
+final6→18, matching original18 total sites because one head call is shared
+between paths. Four follow-up main-path/default-capture cells stay578B/SIZE6.
+A typed +a00 subobject owner restores original base access but yields565B/SIZE19,
+not original structure recovery. Four owner/capture cells plus baseline: all miss.
+Expansion changes unchanged decodeDepth; header-owner controls also change
+getFrame/modulatevector.18 full-TU cells/216 common verdicts,3/12 exact preserved,
+all symbol metadata, named data and relocation-cleared allocated nontext unchanged.
+No source adopted. Bounded domain closed; further controls require an independent
+remaining witness rather than nearer-size initialization permutations.
+[Domain](v34-putframe-expansion-domain.md), [results/replay](helper-caller-screen-results.md).
+
+## F11912. V34 snapshot short-counter witnesses do not close the full TU
+
+Original retains both six-entry snapshot loops, sign-extending their index
+updates at672ed/67473 and comparing words. Four complete V34hshak TU cells cross
+short i/t through an isolated header overlay; all leave v34handshak12867B against
+61541B (SIZE48674),9/29 exact common bodies preserved. Short i changes the target;
+short t alone is target-raw-inert. Every nonbaseline cell changes unchanged
+v34tx1_trnseg4a, a TU-history observation rather than a reason to permute that
+arm.4 cells/116 common verdicts, metadata/data controls clean, no source adoption.
+Combined helper/caller audit:22 cells/332 common body verdicts, zero gains/losses.
+Production remains1079/1852; no additional runtime gate or fuzzing/mutation run.
+[Width domain](v34-snapshot-width-domain.md), [audit/replay](helper-caller-screen-results.md).
+
+## F11913. Period preprocessing widens callback/loop triage without claiming a source ceiling
+
+Baseline80da7b0c production1079/1852.299 period-preprocessed C/C++ TUs,1934
+emitted copies/781 eligible nonexact.537 project loops among1553 for headers;
+964 unsupported,52 outside2..64 iterations. Four included-header loops,47
+without emitted owners, nine ambiguous owners explicitly retained. Seven detector
+controls fire. Initial missing DCR override and old-control/new-nomination
+assertion were preserved invalid and corrected. Eleven nominations; getFrame's
+6/3 indirect calls, dftenergy's hexadecimal bound and fskdetect's macro loops
+supply new graph/read-age controls. Prior putFrame/CRC/Demapper domains not
+reopened from counts; ADID grouping/fax unframing remain screened, uncompiled.
+No source/profile adoption or completeness/ceiling claim.
+[Domain](callback-preprocessed-loop-domain.md), [inventory/replay](callback-preprocessed-loop-results.md).
+
+## F11914. getFrame's captured callback and four fixed groups still miss full identity
+
+Original1028B captures callback579dd, then uses the saved stack slot for all
+six calls. Retained597B reads the member at three static sites in rolled groups.
+Eight full-TU cells cross fixed groups, callback capture and word locals.
+Expansion1036/1046B, expansion+capture1041/1052B: all misses. Audit confirms
+six/three sites and one captured-owner read versus a read at each call. Eleven
+bystanders and complete metadata/data unchanged,3/12 exact preserved;8 cells/
+96 verdicts. No production edit or callback-rebinding runtime claim. Finite
+family closed; recovered operations are not complete byte identity.
+[Domain](getframe-callback-expansion-domain.md), [results](callback-preprocessed-loop-results.md).
+
+## F11915. DFT searched-index exit forms narrow the gap; byte/direct count forms are raw-inert
+
+Original209B retains the bit search, stores k+1 on success and directly joins
+bin advancement; default20 follows exhaustion. Retained221B break/post-check
+becomes215B with success jump or207B with single post-search publication, neither
+exact. Both already publish integer energy before double energy, so the proposed
+store-order lead is refuted. Nine exit/count crosses preserve&31 and are raw-inert
+within each exit column.3+9 full-TU cells/9+27 common verdicts; both bystanders,
+metadata/data unchanged,2/3 exact retained. No source adoption or bare-mask retry.
+[Finite domain](dftenergy-loop-exit-domain.md), [results](callback-preprocessed-loop-results.md).
+
+## F11916. Combining the FSK phase/transfer loop requires coefficient read before history store
+
+Original692B combines third-phase multiplication/history transfer and captures
+a delayed-tap pointer before twelve iterations. Eight full-TU loop/tap/short-counter
+cells all miss (461baseline;429/445/557/605 alternatives). Four combined controls
+are unsupported preimages: their history store precedes writable intcoef3 read;
+original73b56 reads before store73b60. Five follow-up cells capture coefficient
+first and recover that machine boundary but still miss429/557B. Original plus
+four negative/four corrected read-age checks fire. Only fskdetect changes;
+fskdemodulate and metadata/data unchanged.13 cells/26 verdicts, no source edit,
+no production bug or runtime alias/reachability claim. Combined widened-control
+audit33 cells/158 verdicts, zero exact gains/losses; production1079/1852 unchanged.
+[Domain/correction](fskdetect-phase-delay-domain.md), [audit/replay](callback-preprocessed-loop-results.md).
+
+## F11917. ADID grouping's excess backedges reflect guard joins, not missing expansion
+
+Original uniteLinMappInfoOfUnsuspectedPhases601B at41550 retains all five loop
+classes; retained635B. Eight full-TU cells cross late count/best definitions
+with positive outer grouping/pooling guards. Both guards recover601B/BYTES147;
+late definitions narrow toBYTES61. No exact gain or loss,33 bystanders unchanged.
+The9/11 backedge screen is a nomination, not an expansion preimage. Threshold
+before distance, ordered-not-below skip and D283/D284 preserved. No source adopted.
+[Domain](adid-phase-grouping-domain.md), [results/replay](adid-phase-grouping-results.md).
+
+## F11918. ADID rounded-value consumer and half mode recover operations but not spill homes
+
+Four double-half controls miss; late/both guards601B/BYTES59. Five consumer
+controls preserve signed-short conversion: unsigned carrier changes one opcode
+byte to zero-extension (not raw-inert); direct short-store conversion narrows
+toBYTES36 with float half orBYTES10 with double half. The direct/double form
+recovers the original rounded reload and x87 operation sequence. Guarded source
+conversion timing is not a general floating-exception equivalence claim; emitted
+conversion precedes the publication loop. No adoption from equal sizes/counts.
+[Complete-TU results](adid-phase-grouping-results.md).
+
+## F11919. ADID first-definition controls close at eight exchanged stack operands
+
+Five controls including raw baseline cross same-boundary count/best and pool
+zero first definitions, without moving declarations. Floating zeros first fixes
+zero scheduling, leaving601B/BYTES8: audit fires on exactly eight exchanged
+0x20/0x24 stack operands, all remaining instructions identical. Best-first adds
+differences, not identity. Our initial RTL pseudo71 count precedes pseudo61 best;
+original RTL/declaration order is unknown. Larger permutation search is declined.
+Combined22 cells/748 verdicts,16/34 exact in every full TU,33 bystanders and all
+symbol metadata/named data/allocated nontext unchanged. Zero exact gains/losses,
+production1079/1852 unchanged, no src edit or new runtime/fuzzing/mutation runs.
+Next witness: observe spill-home assignment stage and a supported lifetime/owner
+difference, with an exact same-TU control. [Replay/audit](adid-phase-grouping-results.md).
+
+## F11920. ADID grouping-state phase boundary closes the eight spill bytes
+
+New observational evidence reopens F11919's closed assignment-order domain:
+reload allocates best/count homes in ascending pseudo order. Declare count,
+best and uninitialized bestGroup together after group clearing, at the grouping
+phase boundary. Five full-TU controls cross this declaration boundary with
+guard-only/closest forms; closest becomes601B EXACT,16→17/34, zero exact losses.
+This combines recovered guards/initialization age, double-half/direct signed
+short consumer, floating pool zeros first and grouping-state declaration scope.
+Original source is not unique. D283/D284 and all original instructions preserved.
+Integrated source and complete production object equal the winner raw; final
+period/structural and whole-tree validation recorded in the linked results.
+[Domain](adid-spill-context-domain.md), [audit/results](adid-spill-context-results.md).
+
+## F11921. ADID homes are reload spills; preceding exact helper control leaves them unchanged
+
+Four complete-TU saved controls reproduce raw. Read-only installed cc1plus
+observations distinguish expansion array allocation, three target x87 word
+temporaries, eight alter_reg→reload spills and final padding:13 requests/cell.
+Closest pseudo61 best→-28, pseudo70 count→-32; phase-state winner pseudo70
+count→-28, pseudo71 best→-32. Final stack-pointer homes become original+24/+20.
+Moving intact exact updateUref after target leaves target body/spill requests
+identical to closest. Five raw body changes including target are only relocated
+addends; every masked body/canonical target agrees. Unnamed allocated constants
+change; metadata/named data unchanged, no gains/losses. Context control unadopted,
+not original definition-order evidence. Nine source cells/306 common verdicts;
+four+five target observations and five exact updateUref positive observations
+require saved/plain/observed assembly and complete-object equality. No inferior
+writes, forced registers, global profile changes or fuzzing/mutation execution.
+[Trace/replay/results](adid-spill-context-results.md).
+
+F11920–F11921 final integration:1080/1852 EXACT,119108 original exact bytes,
++1 function/+601 bytes, zero losses against1079 baseline. make tc300/300/0;
+production ADID raw-identical to winner. Final make phase388/0, all structural
+checks green,285 suites/10038 anchors and14424 references/3018 headings clean.
+Initial guard-only phase388/0 was structurally red with14 locator failures;
+retarget same operations/methods, no mutation execution or snapshot rerecording.
+
+## F11922. The reload-slot screen has no further same-graph candidate among95 worst copies
+
+Current9aa census1080/1852 yields65 BYTES/30 REGALLOC worst copies. Erasing simple
+esp displacements nominates only SDM_init/FPM_SDM_init, whose callee-save accesses
+do not form a consistent slot bijection. Actual ADID eight-slot control fires;
+exact identity, nonstack change and inconsistent mapping refuse. No new reload
+candidate/source adoption. SIZE/other graphs excluded, no exhaustion claim.
+[Screen/replay](adid-first-study-results.md).
+
+## F11923. First-study double-half recovers the original24-instruction mean/variance block
+
+Six full-TU controls cross explicit float/double mean half or exact helper reuse
+with first-use counters. Counters raw-inert; helper and explicit double forms
+raw-identical. Double-half recovers inner24 instruction/operand rows and original
+frame0x5c, but whole body779B/BYTES445→795B/SIZE16 still misses. Adopt smallest
+supported literal change after deciding validation, no helper-factoring claim
+or nearest-size fit. Metadata/named data unchanged; anonymous cst4 -4/cst8 +8.
+Only first-study changes canonically; eight other raw bodies differ by relocation
+addends. Final integrated gate in [results/replay](adid-first-study-results.md).
+
+## F11924. Equal first-study SIZE16 scores hide independent diagnostic and clamp recoveries
+
+Five opening cells cross threshold multiplication mode and upper-clamp guard;
+five diagnostic-consumer literal crosses complete that expression-mode family.
+Threshold mode raw-inert, but upper guard restores original jae/pop join and
+diagnostic2.5 (DF product) restores opening evaluation. Initial RTL SF/SF versus
+SF/DF products distinguishes consumers; full object hashes refute the initial
+erasure assertion. Two combined cells reproduce first66 original instruction/
+operand rows. All still795B/SIZE16; equal scores are not equal bodies. Retain
+supported evaluation/guard forms after deciding validation, no unique spelling.
+[Domain](adid-first-study-domain.md), [audit/results](adid-first-study-results.md).
+
+## F11925. First-study n begins inside the admitted scan; publication remains merged
+
+Four full-TU controls: raw baseline, recovered opening, n inside alt-flag-zero
+scan and nested selection arms. Late n restores original initialization after
+admission; nested form raw-identical to late n. Byte-zero/byte-one stores still
+merge, unlike original, and later clearing/debug rows differ. No nested-factoring
+adoption or register forcing. Combined22 cells/748 verdicts,17/34 exact perTU,
+zero gains/losses,33 canonical bystanders/metadata/named data unchanged. Anonymous
+constant section changes documented. Production retains supported mean/diagnostic
+modes, upper guard and n first-use declaration; whole-function identity unclaimed.
+[Remaining boundaries and validation](adid-first-study-results.md).
+
+F11923–F11925 integration: production ADID raw-identical to combined-count-inside
+control; make tc300/300/0. Final make phase388/0, all structural checks green,
+285 suites/10038 static anchors and14426 references/3022 headings clean. Whole
+census1080/1852 EXACT/119108 bytes unchanged, zero losses;673 SIZE/64 BYTES/
+30 REGALLOC/5 UNRESOLVED. Six locators retargeted/scoped, no mutation execution.
+Partial-link fixed300-input before/after stays DIFFERENT (strict exit1).
+
+## F11926. First-study publication merges at crossjump cleanup after peephole scratch splitting
+
+One unchanged complete ADID TU reproduces retained object raw with selected
+diagnostics. Eleven stages: two byte-publication stores through peephole2, one
+fromce3. Installed read-only tracing shows both byte sites choose ax; ce3 reports
+one common tail instruction crossjumped. Original bl/cl stores cannot share
+that tail. Middle clearing independently retains count/sum through block reorder,
+then sched2 reverses it. No source adoption/flag change, no unique source-arm
+inference. Full-da ICE preserved invalid, excluded; successful selected replay
+and raw-equal observation decide. [Stage proof](adid-first-study-stage-results.md).
+
+## F11927. First-study incoming scratch cursor cannot explain the byte-store colors alone
+
+137 complete observed searches/six target searches, assembly/object raw-equal.
+updateUrefAlt leaves cursor50; first-study inherits it. Source-derived scalar
+model reproduces all six actual picks/returns. All53 incoming cursors under
+fixed observed liveness/order/eligibility converge to bp,ax,bp,ax,ax,ax: its
+first search only admits bp and erases incoming-state differences. This bounds
+helper-placement-only experiments; not a claim about all source contexts or
+profiles. Seek changed lifetime/site/traversal evidence or sched2 dependencies
+before new source controls. Production1080/1852 unchanged, zero gains/losses;
+no source/test change or mutation/fuzzing execution. [Replay](adid-first-study-stage-results.md).
+
+## F11928. Target PPRO packet reorder overrides first-study's sorted xor priority
+
+Verbose diagnostic completeTU raw-reproduces production. Middle-region xor977
+priority6, count978 priority5, float stores497/508 priority1, reload912 priority5.
+Sorted ready508,497,977 becomes508,977,497 before issue: target packets497,977
+and emits sum before xor/count. Scratch dx creates xor/count→reload edges;
+stores have no mutual dependence. Official scheduler/backend rules explain the
+actual Gentoo ready/packet trace, not original RTL. [Proof](adid-first-study-scheduling-results.md).
+
+## F11929. First-study early reference capture loses its maintained middle index
+
+Four completeTU cells/136 verdicts: baseline795B/SIZE16; early high capture,
+shared middle/high capture and separate high counter all raw-identical803B/
+SIZE24. Extra index load/lea and second high reload miss original block despite
+count-first stores. Decline all three, close bounded domain;33 bystanders/data/
+metadata unchanged, no exact gains/losses. No runtime/fuzz/mutation execution
+for declined cells. Seek original index lifetime plus packet graph, not more
+counter names. [Domain/results](adid-first-study-scheduling-results.md).
+
+## F11930. Retain two original unsigned constellation clearing predicates as partial recovery
+
+Owner scope permits supported nonexact source improvements. Revalidate existing
+counter domain against347b5b89:4 cells/44 verdicts,4/11 exact unchanged. Both
+130-byte helpers change justJLE→originalJBE; caller changes precisely both
+inline copies. Helper BYTES38→37 and40→39, no whole-function gain. Eight
+canonical bystanders/all data/metadata unchanged. Counter range0..8 preserves
+all eight writes and termination; signed which/index untouched. Retain unsigned
+counter source after deciding integration gate. Exactness domain remains closed;
+no index/spelling/control permutations reopened. [Retention](constellation-counter-retention-results.md).
+
+F11930 integrated: combined source/object raw-equal to independent cell,1/300
+objects changed/299 unchanged, full compiler configuration unchanged. make
+phase388/0 exits0/all structural gates green; static locators clean. Whole
+exact-set ratchet1080/1852/119108 bytes unchanged, no gain/loss. Refcheck14426
+references/3027 headings clean. No modern portability or fuzz/mutation claim.
+Faithful300-input partial link retains701452 text bytes; only four opcode bytes
+change JLE0x7e→JBE0x76. Both strict before/after comparisons DIFFERENT/exit1;
+whole-object identity unclaimed.
+
+## F11931. V32 cleaned-sample getter restores accepted-count fallthrough as partial recovery
+
+Two current completeTU cells restore original unsignedJA/accepted count-store
+fallthrough at boundary160. Both47B/SIZE6, owner reload still absent; no forced
+read or alias control. Count/input types, stores and return unchanged; five
+canonical bystanders/data/metadata unchanged,2/6 exact unchanged. Retain original
+path after deciding gate under current partial scope, not a full identity claim.
+[Domain and replay](partial-path-retention-results.md).
+
+## F11932. V8 per-sample ring cursor recovers the original one-publication wrap join
+
+Current fullTU raw baseline plus ring local:731B/BYTES233→73,2/7 exact unchanged.
+Only V8Process changes; six bystanders/all data/metadata preserved. Original
+tx_ring_base publication at0x745e0 is one joined store; retained code emits two.
+Seven RTL streams verify2→1, exact five-row output/acquire/advance block and
+original unsigned wrap/join operations recover. Capture after tx_avail decrement,
+publish before handshake, no local across calls/iterations; filter/symbol/home
+residuals remain. Retain supported source join after deciding gate; no dynamic
+store-loss or race claim. [Results](partial-path-retention-results.md).
+
+## F11933. V8 pole-before-input capture is reversed by sched2, not erased
+
+Four fullTU ring/pole crosses:233/73/233/74 BYTES; four distinct raw objects.
+Nine streams inspected: combined snapshot precedes input through31.bbro,
+reversed at33.sched2 and35.mach. It fails original load placement;
+decline snapshot and close its bounded cross. All other bodies/data/metadata
+unchanged. Combined revalidation8cells/54verdicts, no exact gains/losses. No
+fuzz/mutation/runtime testing of declined pole controls. [Trace](partial-path-retention-results.md).
+
+Initial integration period388/0 but phase exits2: two V32 anchors detached by
+branch inversion. Retarget row1 to reject exactly boundary160 (<=→<), correcting
+its old misleading label; row2 still clamps overlong counts instead of zero.
+Both scoped to V32FP_GetCleanedSamples, unique intended finds. No mutation
+execution or snapshot rerecording; final repaired gate recorded separately.
+
+F11931–F11933 final integration: both sources/objects raw-equal to independent
+selected cells,2/300 objects change/298 unchanged/config unchanged. Final make
+phase388/0 exits0/all structural checks green,285 suites/10038 static anchors,
+two locator ownership checks and14426 references/3030 headings clean. Exact-set
+ratchet1080/1852/119108 original bytes unchanged, no gain/loss. Faithful300-input
+partial text701452 unchanged length; strict before/after DIFFERENT/exit1. No
+fuzz/mutation execution, snapshot rerecording or modern portability claim.
+
+
+## F11934. A proved induction table reveals the stack exchange the old screen missed
+
+At f420cd89 getPower574B/BYTES10 has ten consistent 0x28/0x30 stack
+exchanges, but the anonymous table's section offset3300/24 causes the old
+same-graph screen to reject it. Six ordered destinations agree at boundaries.
+Current shared table proof makes the historical95-copy replay nominate one
+real spill lead, plus two already-closed SDM save-area artefacts. Five explicit
+archived input overlays are SHA-checked; no historical input drift is tolerated.
+
+Widened local screening covers1852 common symbols/772 nonexact, including673
+SIZE; four firing controls, five nominations. getConstellationsIndex has a
+real count/i exchange, Psd::process a real frames/pos/frame cycle. V32 ring
+response's swap is outgoing arguments, not locals; definitions preserve argument
+meanings. Fax nomination deferred. Next step is read-only allocation ownership
+for the two real SIZE leads, whose independent CFG differences stay open.
+[getPower and screen evidence](getpower-stack-results.md).
+
+## F11935. Fraction-first reload allocation makes getPower byte exact
+
+Three complete-TU cells/27 verdicts. Baseline power pseudo63 spills before
+fraction85, producing original-opposite homes30/28. Lifted fraction after
+power changes pseudo85 to64 but is full-object raw-inert. Lifted fraction
+before power gives fraction63/power64, homes30/28 and original574B identity.
+Four raw-equal read-only compiler observations/24 stack requests map both DF
+alter_reg spills and final frame homes. Eight bystanders, exact622B helper,
+data and metadata stay unchanged. Production source/object equals winner raw.
+Original arithmetic, power initialization before helper call and all original
+bugs stay fixed; no register constraint, profile or arithmetic adjustment.
+[Domain](getpower-stack-domain.md), [replay/results](getpower-stack-results.md).
+
+## F11936. Bounded induction CFG proves table identity without assuming a guard
+
+The adjacent CMP/JA proof refuses getPower correctly: its index starts zero,
+advances once per constellation, and dispatches through a loop bound. New
+fallback explores exact callee-saved index/unsigned flags over entry CFG,
+unknown branches conservatively both ways, direct relocated ABI calls,
+full-width balanced stacks/save ownership, table extent/ordered boundaries
+and incoming/overlapping relocations. Original/current each653 abstract states,
+index domain0..5 and equal ordered identities. This does not claim runtime
+reachability of every case or recover original compiler RTL.
+
+Twenty ELF controls: two proved with distinct identities,18 refused. Independent
+review exposed partial-SP, word-push, foreign-interior-relocation and duplicate
+CALL-field refusal gaps; repaired before publication and retained as controls.
+Saved/return-slot overwrites, wrong restores, invalid targets and unknown
+indexes/calls/flags are refused too. Existing47 synthetic/two real table controls
+and59 relocation self-tests pass. Proof-only unchanged census1080/1852; exact
+getPower comes from source recovery, not changed grading. CI runs new controls
+and keys caches on the new proof module. [Limits and proof](getpower-stack-results.md).
+
+## F11937. V34 fixed groups recover successive extraction and callback-refreshed buffer ages
+
+Eleven full-TU controls/132 verdicts plus four combinations/48. putFrame fixed
+groups restore18 callback sites from6;577B/SIZE7 against584B. getFrame fixed
+groups/capture restore6 sites/one callback acquisition. New binary witness:
+four destructive SHR1/SHRsmall/SHRw chains replace independent absolute shifts.
+Original retains unshifted bitbuf between groups, refreshing it after callbacks;
+candidate recovers first-load/publication and three later refresh boundaries.
+Static owner-read count7/7 alone conceals the gain. Original0x5c frame returns.
+
+Retain combined getFrame1064B/SIZE36 despite plain expansion1041B/SIZE13:
+operation/read-age witnesses decide. Width controls remain unadopted. Combined
+candidate raw-equals production; both targets equal independent controls;
+known decodeDepth ten-row allocation/scheduling collateral stays SIZE239,
+nine other bodies and data/metadata unchanged. Period388/0 covers existing
+component/roundtrip/initialized modulatevector fixtures. No universal malformed
+width/callback claim. [Domain](v34-frame-sequence-domain.md),
+[results](v34-frame-retention-results.md).
+
+## F11938. V32 getter's missing owner read is an alias-option interaction
+
+Two identical-source full-TU cells/12 verdicts. Diagnostic-fno-strict-aliasing
+restores53B exact getter from47B/SIZE6, three owner loads versus one. It changes
+V32FP_create/recreate too; metadata/named data/nontext sizes unchanged, string
+pool order differs with its full multiset preserved. Production source/profile
+unchanged. Twenty-nine actual instruction streams per cell: both have two
+owner-load SETs through07.addressof;09.loop has baseline1/control2. Duplicate
+08.gcse snapshots excluded, no eliminating-pass attribution inside that window.
+
+Original field/access typing versus compiler alias profile remains unresolved.
+Do not force reload via volatile/cast/invented union or adopt diagnostic flag
+from one exact getter. No candidate-runtime or alias-reachability result claimed.
+[Domain](v32-cleaned-alias-domain.md), [results](v32-cleaned-alias-results.md).
+
+## F11939. getPower/V34 integration gains574 exact bytes and passes the full gate
+
+Exactly2/300 production objects change,298/configuration unchanged; both chosen
+full objects equal independent candidate controls raw. Census1081/1852 exact,
+119682 original exact bytes: +1/+574, zero losses;673 SIZE/63 BYTES/30 REGALLOC/
+5 UNRESOLVED. Proof-only control unchanged at1080. Full make phase J=8 exits0:
+388 period passed/0 failed, all structural checks green. Static285 suites/
+10038 anchors attached/unique/correct-arm without edits. No fuzz/mutation
+execution or tolerance/profile changes. Twenty source-control cells/219 complete
+body verdicts in this batch, excluding unchanged diagnostic preparation replay.
+Faithful300-input partial text701452→702044 (V34 groups), both strict before/
+after comparisons DIFFERENT/exit1. Function gains are not whole-object closure.
+Artifacts build/getpower-v34-integration, byteident-getpower-v34-final.json,
+getpower-v34-phase.log and documented per-domain reproducers.
+
+## F11940. Mapping and PSD recover original reload homes without an exact-function gain
+
+Six declared full-TU cells/72 live body verdicts; six raw-equal control compiler
+observations/42 requests plus two unchanged preparation observations/14.
+Mapping i-first recovers count4/i8, propagated as count10/i14 in its inlined
+setV92CPpckFromParamsInfo caller. PSD frame/pos declarations before division
+recover frame20/pos1c/frames18. The frames spill belongs to the surviving udiv
+result pseudo, not the named local; initial RTL SET and observed alter_reg
+requests explain the order. Scope/adjacency controls are raw-inert.
+
+Changed instruction streams are exactly the checked local-home permutations;
+all other operations/registers/branches/relocations remain unchanged. Mapping
+changes two of11 bodies, PSD one of13; data/metadata/nontext relocations unchanged.
+No gains/losses: Mapping4/11 and PSD8/13 exact; targets SIZE4/SIZE9 remain.
+Adopt only the two witnessed declaration boundaries, with executable
+initialization/arithmetic preserved. Independent search/output-option graphs
+remain; close the declaration domain and investigate those graphs separately.
+[Reproduction and limits](size-spill-results.md).
+
+## F11941. PSD switch recovers ordered dispatch, independently of its integer homes
+
+Two full-TU cells/26 live body verdicts. Recovered-home baseline raw-reproduces
+canonical object. Three-case switch preserves all case arithmetic and default
+no-op, and recovers original cmp1/je/jle/cmp2/je/default epilogue. Peak target
+is +385 in both. Process alone changes; twelve bystanders/data/metadata/nontext
+relocations unchanged, all eight exact bodies retained. Process618B/SIZE17
+versus original635B, compared with if-chain626B/SIZE9. Retain the witnessed
+graph despite the larger size gap; no exact-function gain. Lower/linear paths,
+peak/x87 scheduling and zero-bin normalization boundaries remain independent.
+[Domain, audit and limits](psd-dispatch-domain.md).
+
+## F11942. Local-home and PSD dispatch integration passes period and structural gates
+
+Chosen Mapping/PSD sources and canonical production objects equal their
+independent full-TU controls raw. Eight compiled source cells/seven distinct
+texts,98 live body verdicts across the two domains. Whole-tree strict census
+unchanged1081/1852,119682 original exact bytes;673 SIZE/63 BYTES/30 REGALLOC/
+5 UNRESOLVED, ratchet green. These are partial recoveries, zero exact gains.
+
+Final make phase J=8 exits0:388 period differential passed/0 failed, structural
+checks green;285 suites/10038 static anchors,zero detached/nonunique/wrong-arm.
+Earlier runs passed388/0 but were red for one declaration locator then four
+if-chain locators; all five retargeted without changing their defect intent.
+No mutation/fuzz execution, tolerance change, profile change or modern
+portability claim. Refcheck14429 existing references still point correctly.
+Artifacts byteident-size-spill-dispatch-final.json, size-spill-dispatch-phase-final.log,
+size-spill-refcheck-final.log and the two replay audits.
+
+## F11943. Mapping recovers guarded length, count publication and comparison ownership
+
+Four initial full-TU cells/44 body verdicts cross delayed length and
+postincrement. Original j<count guard precedes constellationSize[i] load;
+length inside search recovers six entry rows. Original unmatched tail publishes
+incremented count before group=count-1; postincrement recovers it. Four further
+comparison cells/44 verdicts: size-operand reversal raw-inert, length>n restores
+cmp0/JBE guard and CMP/JA backedge. Retain that orientation with both boundaries.
+Target280B/SIZE6 and inlined caller SIZE22 remain; nine bystanders/data unchanged,
+zero exact gains/losses. No outer expansion or unsupported loop/type changes.
+[Domains/results](search-psd-results.md).
+
+## F11944. PSD normalization belongs to guarded loop preheaders
+
+Four full-TU cells/52 verdicts cross loop-expression division and float peak.
+Original bin guards precede reciprocal/conversion in all three output arms.
+In-loop division recovers this through hoisting; float peak separately restores
+direct fcom when combined. Baseline SIZE17; division-only SIZE2, peak-only SIZE19,
+both635B/BYTES56. No extra narrowing in emitted candidate. Twelve bystanders/data
+unchanged, no exact gains/losses. Float peak receives only float bins/exact zero;
+type is a tested supported hypothesis, not uniquely recovered original tokens.
+[Domain](search-psd-boundaries-domain.md), [results](search-psd-results.md).
+
+## F11945. Ordinary scalar modes and source operand order recover PSD's entire x87 stream
+
+Four full-TU cells/52 verdicts: scalar/window cross gives BYTES56/41/40/25.
+Natural float-bin division by float peak/unsigned frames uses SF in initial RTL;
+retained excess precision emits the original operations without intermediate
+narrowing. Window*input restores input load/window memory multiply. Combined
+candidate matches all60 original x87 instruction/operand rows and27 branch rows.
+Float logarithm narrowing/constants unchanged. Twelve bystanders/data unchanged,
+no exact gains/losses. Scalar run with wrong archived baseline refused raw check,
+preserved invalid and excluded; valid baseline reproduces previous combined cell.
+[Domain](psd-scalar-operands-domain.md), [results](search-psd-results.md).
+
+## F11946. PSD initial read order leaves only six integer register substitutions
+
+Two full-TU cells/26 verdicts. Computing bins after frame count recovers original
+overlap-before-length/division preparation and integer initialization rows.
+Existing homes,60 x87 rows and27 branch rows stay original. process635B/BYTES6,
+complete graph accepted by existing live-range alpha comparison. Remaining six
+rows are two unsigned-to-float conversion sequences' XOR/MOV/PUSH registers;
+no new grading rule or claim about original compiler state. Twelve bystanders/
+data unchanged, no exact gains/losses. Close source-order family and trace
+conversion/scratch history before further source changes.
+[Domain](psd-initial-read-domain.md), [results](search-psd-results.md).
+
+## F11947. PSD reaches grade1 and the boundary batch passes period validation
+
+Eighteen compiled cells/15 distinct source texts/218 live body verdicts. Chosen
+Mapping and PSD canonical objects/sources raw-equal independent controls;
+2/300 objects change,298/configuration unchanged. Census1081/1852 EXACT and
+119682 exact bytes unchanged;673→672 SIZE,30→31 REGALLOC,63 BYTES/5 UNRESOLVED.
+PSD635B with six register-only rows reaches existing grade1, not byte identity.
+Ratchet green. Final make phase J=8 exits0:388 passed/0 failed and structural
+checks green;285 suites/10038 static anchors attached/unique/correct-arm. PSD
+static locators retargeted with defect intent preserved; none executed.
+
+Faithful300-input partial text702028→702012, both strict comparisons DIFFERENT/
+exit1. Previous cached partial predates d13949ad and is excluded; before-link
+rebuilt from archived actual baseline objects in recovered order. Invalid scalar
+baseline attempt preserved/excluded. No fuzzing/mutation execution, profile/
+tolerance change or modern portability claim. [Results/replay](search-psd-results.md).
+
+## F11948. PSD conversion register choices are local rename decisions, not scratch pushes
+
+Two unchanged preparations reproduce the complete raw object. Annotated assembly
+scratch replay refuses address-bearing comment equality and is excluded; plain
+saved/observed assembly/object equality passes. Nine scratch events/five process
+UIDs464,196,130,71,65, none at residual conversions. High-word zeros already occupy
+DX at flow2; peephole2 changes SET to XOR without selecting a scratch. Read-only
+installed cc1plus observation records44 rename decisions and four conversion
+chains: AX→SI/DX→DX and AX→BX/DX→AX. Per-function ticks explain retained choices,
+not unavailable original compiler state. process635B/BYTES6 and all60 x87/27 branch
+rows unchanged. No compiler writes/profile changes. [Trace](psd-conversion-results.md).
+
+## F11949. Natural scalar mode and comparison ownership make the PSD getter exact
+
+Four full-TU cells/52 verdicts: baseline SIZE1, scalar BYTES23, comparison SIZE1,
+both EXACT77B. Preserve (i*sampleRate)*reciprocal and final narrowing; bins>i
+recovers original guard/backedge ownership. Five raw-equal getter observations/
+eight stack requests show scalar cells remove SF4 expansion temporary via
+ gen_truncxfsf2, leaving zero locals. Only getter changes; twelve bystanders,
+symbol metadata, named/allocated data unchanged. Existing static getter locators
+retargeted preserving defect intent, none executed. [Domain](psd-frequency-scalar-domain.md),
+[results/audit](psd-conversion-results.md).
+
+## F11950. PSD getter gain passes the period gate without bystander loss
+
+Chosen canonical source/object equal independent winner raw;1/300 objects
+changes,299/configuration unchanged. Census1081→1082/1852 EXACT and119682→119759
+exact bytes, SIZE672→671, REGALLOC31/BYTES63/UNRESOLVED5 unchanged. Ratchet green.
+make phase J=8 exits0:388 passed/0 failed;285 suites/10038 static anchors clean,
+none executed. Faithful partial .text702012 unchanged; positioned text equal
+33833→33832/728304 and both strict comparisons DIFFERENT/exit1. Local function
+identity is not final-object identity. PSD process remains635B/BYTES6, bounded
+by measured rename chains. [Integration and next lead](psd-conversion-results.md).
+
+## F11951. Expansion-temporary screen bounds ninety small floating residual names
+
+Baseline3986addf:778 residual copies/770 names,92 floating copies/90 names up to
+700 original bytes. Screen reports every body/operand difference and prologue
+reservation, not a causal classification from frame size. Historical PSD getter
+SIZE1/extraSF4 and current EXACT77B clear positive/negative frame controls.
+Three raw-equal complete-TU preparations retain73 shared-body verdicts. Existing
+spectral native/capture domains remain closed. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11952. Scalar SineWave mode removes expansion storage and recovers the original read boundary
+
+Six scalar/sine/entry cells,three phase-owner cells,two publication cells:11
+retained controls/374 body verdicts. Scalar producers remove SF4 gen_truncxfsf2,
+leaving HI2/HI2/SI4 and BLK0:12→8 locals, original8. Sinl/sinf controls raw-equal
+within each scalar entry class. Guarded phase acquisition with original i<n
+comparison reaches134B/BYTES50: every nonbranch instruction/operand multiplicity
+matches original, with the zero-length block placed before the common wrap
+rather than after return. Source-publication-before-output control worsens to
+SIZE12 and is declined. Only generate changes;33 bystanders/metadata/named data
+and non-executable allocated data unchanged. Production adopts scalar/read
+boundary subject to period gate; this is supported partial recovery, not exact.
+Seven raw-equal SineWave observations/31 stack requests; FloatFIR control9
+requests across two overloads shows its SF4 is also reserved by original scalar
+method, so no return rewrite. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11953. AGC scalar controls retain the temporary and introduce unsupported narrowing
+
+Unchanged complete V90Demodulator observation records3 process-group requests,
+2 AGC (SF4 gen_truncdfsf2/BLK0) and1 Descrambler BLK0, resolved by assembler names.
+AGC locals4 reserve20B including padding. Four producer/floor-mode controls/124
+body verdicts retain the SF4 request; five raw-equal observations/15 requests.
+Both changes reduce SIZE23→15 but add fstps/flds at the fsqrt result absent in
+original. No adoption or candidate-runtime claim. Producer edits also change
+reset/progress callers and constant pool; full-TU audit includes them. Preserve
+validated double sqrt boundary and reject score-only transfer. [Domain](expansion-temporary-transfer-domain.md).
+
+## F11954. SineWave partial recovery passes the period gate and improves positioned bytes
+
+15 retained source-control cells/498 body verdicts plus3 raw preparations/73
+verdicts;13 raw-equal observations/55 stack requests. Selected canonical object
+raw-equal independent control. One SineWave defining copy,1/300 objects changes,
+299/configuration unchanged. Census1082/1852 EXACT/119759 exact bytes unchanged,
+SIZE671→670/BYTES63→64,REGALLOC31/UNRESOLVED5 unchanged;no exact losses,ratchet green.
+make phase J=8 exits0:388 passed/0 failed,structural/static285-suite10038-anchor
+checks green. No mutations/fuzzing executed. Faithful .text702012 unchanged;
+generate127→134B,positioned equal10→75/134,allocated equal69312→69377/943398.
+Both strict partial comparisons DIFFERENT/exit1. [Results/replay](expansion-temporary-transfer-results.md).
+
+## F11955. SineWave cold placement follows prediction and STC before x87 repair
+
+Unchanged full VpcmFloModem object raw-reproduces production134B/BYTES50. Entry
+no-heuristic50/50 and loop-exit10% yield final order0,1,3,2,4,5; zero-trip4 and
+wrap5 share round1 trace at entry-frequency threshold1000. Stack conversion
+later adds edge cleanup. Historical common-loop64/36 predicts differently but
+has wrong first-phase read boundary; not a new candidate. Three traces total8
+prediction sites/8 traces/19 ordered blocks/29 x87 edges. Generic reader records
+explicit copy4→8 and refuses malformed99→8. Installed dumps decide behavior;
+stock release sources explain it without claiming original RTL/profile.
+[Results/replay](sine-cold-layout-results.md).
+
+## F11956. First-iteration ownership worsens SineWave and adds compiler NaN repair
+
+Two full-TU cells/68 verdicts; candidate174B/SIZE40 retains hot tests and copies
+block4→8. Exact23/34 set unchanged; only generate changes,33 bystanders and
+metadata/named data unchanged. Target section and .rodata.cst4 change, latter
+52→56B with exact prefix plus0000c07f. LC92 absent33.sched2, introduced UID219
+at34.stack before function-begin, matches entry-live x87 initialization in
+convert_regs_entry. Not an author constant or proof of reachable uninitialized
+use. Candidate unvalidated/declined; no production source change.92 small
+floating copies yield1 matching nonbranch multiset (SineWave); bound does not
+classify all residuals. Close this two-cell domain pending distinct witness.
+[Results/replay](sine-cold-layout-results.md).
+
+## F11957. Cold-layout diagnosis preserves production and faithful partial object
+
+No src/header or static-anchor change. Census1082/1852 EXACT/119759 exact bytes,
+SIZE670/BYTES64/REGALLOC31/UNRESOLVED5 unchanged, ratchet green. make phase J=8:
+388/0 and structural checks green; this validates production, not rejected
+candidate. All300 faithful objects raw-equal canonical; rebuilt partial raw-equal
+retained pre-pass partial, .text702012, allocated candidate917705, positioned
+69377/943398. Strict original comparisons both DIFFERENT/exit1. Refcheck since
+2180f9d0:14429 checked,0 point elsewhere. No mutation/fuzz execution, modern
+portability claim, source adoption or new exact function. [Replay](sine-cold-layout-results.md).
+
+## F11958. V23 glue drops two original diagnostic sites and valid lifecycle exposes them
+
+Fresh135-copy <=350B C data/voice mnemonic screen nominates v23_create274/242B.
+Original unsigned debug>1 gate and create merge-string/call precede allocation;
+source has only a comment. Original process compares translated DPSTAT with
+stored status but prints raw modem status before publishing. Five full-TU
+controls/25 shared verdicts recover both sites; create SIZE32→BYTES10/274B,
+process SIZE18→10. Adjacent ID/modem assignment reversal worsens BYTES10→17 and changes colors
+and scheduling, not adopted. No exact gain or loss. Existing direct lifecycle extended with
+per-boundary complete transcript comparison at levels1/2/3 for both ends.
+Unchanged production negative: period0/1; level1 passes, levels2/3 fail4/51016
+terminal and13/68016 host checks each. No planted state or mutation execution.
+[Domain](missing-debug-boundary-domain.md).
+
+## F11959. Preserved raw status exposes V23's original complete-EAX return contract
+
+Original v23_process consumes full EAX; short V23ModemMain prototype adds an
+AX sign-extension when its raw value survives to printf. Original V23ModemMain
+widens short v23FP_rx_progress but returns BwChDem_Progress EAX directly.
+Both V23ModemMain and BwChDem_Progress reconstructed with int declarations and
+definitions together; receiver remains short. BwChDem's complete return paths
+are sign-extended short status or literal2, so its full-TU object is raw-inert.
+Four crossed cells over8 affected TUs/92 shared-body verdicts preserve existing
+metadata/data/bystanders; diagnostics restore two undefined host imports; modem-main SIZE122→94, glue remains nonexact. Caller/callee
+boundary, not arbitrary width spelling, supports recovery. Runtime/integration
+results follow after gates. [Domain](missing-debug-boundary-domain.md).
+
+## F11960. Valid V23 transcripts expose seven additional omitted component diagnostics
+
+First glue/type phase387/1: value checks pass but level2/3 transcripts retain2
+terminal/11 host failures. Original object supplies modem state-report, receiver
+tone-count/acquire-timeout/energy-drop and Bw tone/no-carrier/wait-timeout sites.
+Three TU pairs/18 verdicts restore exact strings, guards, arguments and field
+publication order; original printf counts1/3/3 and merge strings reproduce.
+Combined43 TU cells/135 verdicts preserve exports/named data/bystanders; new
+allocated data is only original diagnostic strings. Modem SIZE122→2, Bw61→13,
+receiver126→30; no exact gains. Modem's remaining SIZE2 hides substantial frame,
+dispatch/loop/sibling-call differences, not two-byte instruction identity.
+Fixture rejects1300 frames as too short for60000ms acquire;3100 crosses it.
+Host post-carrier24s silence produces no original error, preserved as retention
+control rather than altering source. Missing fixture brace was apparatus failure,
+excluded/repaired. All value/state/transcript comparisons remain exact; no
+mutation/fuzz execution. [Replay/limits](missing-debug-boundary-results.md).
+
+## F11961. V23 diagnostic recovery validates five improved bodies with no exact losses
+
+43 full-TU cells/135 shared-body verdicts; selected four complete production
+objects raw-equal independent controls,4/300 objects change and296/configuration
+unchanged. All300 faithful inputs raw-equal canonical. Census1082/1852 EXACT,
+119759 original exact bytes unchanged; SIZE670→669/BYTES64→65,REGALLOC31 and
+UNRESOLVED5 unchanged, ratchet green. make phase J=8 exits0:388 passed/0 failed,
+structural285-suite10038-anchor checks green. Direct lifecycle22 groups/4656926
+checks pass, including real acquisition/loss/retention transcripts at1/2/3.
+Partial .text702012→702380, allocated positioned equal69377→69537/943398,
+original diagnostic strings/imports recovered. Both strict comparisons remain
+DIFFERENT/exit1. No new exact-function, all-site reachability, mutation/fuzz,
+modern portability or whole-object identity claim. [Results](missing-debug-boundary-results.md).
+
+## F11962. AGC explicit return restores V23 register-value ownership after diagnostic recovery
+
+F11614's old finite family remains closed; changed V23 diagnostic boundaries
+justify one bounded interaction control. Twelve TUs/five cells/580 shared-body
+verdicts restore full boolean EAX return and two signed AX consumers, with no
+exact gains/losses or size-gap changes. Source recovers original value ownership,
+not a minimum-size spelling or uniquely inferred formal type. Original single
+AGC epilogue stores/returns the boolean; retained void body leaves a pointer in
+EAX. Existing callers' field substitutions were value-equivalent, so no new
+normal-value behavior defect is claimed. Four changed bodies: callee, two V23
+receivers, ignored-result RxDetMarkB103 collateral; all audited. Shared prototype
+and definition agree; fourth slots unchanged. New component checks compare the
+explicit result against blob and each published signal, with true/false trial
+coverage. Period/structural/integration results follow. [Domain](v23-agc-return-domain.md).
+
+## F11963. AGC word counter and gate operands are independent source witnesses
+
+Original repeats signed AX narrowing at each outer decrement and compares both
+RMS gates as words. Eight crossed cells isolate short counter, short gate values
+and unsigned-word pointer countdowns. Adopt counter+gates: each restores its
+predicted instruction category, SIZE10→3; no exact gain/loss. Initial RTL adds
+the decrement sign extension and two HI-subreg compares before allocation. Pointer countdown
+restores the quiet-loop category but leaves gain-loop differences. A distinct
+word-zero-test witness motivates eight more gain-local cells; complete gain graph
+still differs, none adopted. Seventy-six total full-TU cells/644 shared verdicts
+with prior caller cross; all metadata/data/bystanders audited. Do not read SIZE3
+as near-exact, or reopen closed spelling palettes. [Results](v23-agc-return-results.md).
+
+## F11964. AGC return/counter integration passes period and preserves the exact set
+
+make phase J=8 exits0:388 passed/0 failed. AGC component10 groups/51643 checks;
+476 explicit return trials34 zero/442 one match blob and each published signal.
+1431 added hard checks, existing sample/state/debug comparisons unchanged.
+V23 lifecycle22 groups/4656926 checks remain exact. Four selected objects raw
+match controls;4/300 change,296/configuration unchanged, all300 faithful inputs
+raw-equal canonical. Census1082/1852 EXACT/119759 bytes unchanged;669 SIZE,
+65 BYTES,31 REGALLOC,5 UNRESOLVED; ratchet green. Partial .text702380→702396,
+allocated918388→918404, positioned equal69537→69557/943398. Both strict partial
+comparisons remain DIFFERENT/exit1. Initial missing-relative-blob comparison is
+invalid/excluded and correctly rerun. No fuzz/mutation execution, new exact,
+modern portability or whole-object identity claim. [Results](v23-agc-return-results.md).
+
+## F11965. AGC pointer countdown and explicit arms interact before STC tail duplication
+
+Original quiet/gain exits share sample advance at0xa6852; both gates precede
+quiet, gain follows sole epilogue. Four-cell explicit-if/else × pointer-countdown
+cross: initial RTL advances2→1, CFG25/39→24/38. Indexed arms acquire three STC
+copies/bbro27/41; combined acquires one/bbro25/38. Only combined restores all
+selected original quiet/gain/gate/countdown/common-exit categories. Raw baseline
+and winner match production; metadata/data/calls/three bystanders unchanged over
+4 full-TU cells/16 shared verdicts. Adopt supported graph/operands although
+SIZE3→22; original178 versus selected184 instructions, register/spill/arithmetic/
+shift/entry differences remain. No exact gain/loss or unique spelling claim.
+Detectors fire on original/combined and refuse three negative controls.
+[Replay/limits](agc-arm-ownership-results.md).
+
+## F11966. AGC arm recovery passes period with no exact gains/losses and measured layout cost
+
+make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors green.
+Unchanged AGC fixture10 groups/51643 hard checks,476 returned-value trials
+34 zero/442 one; V23 debug lifecycle22 groups/4656926 checks pass. Selected AGC
+object raw-matches independent control;1/300 objects changes,299/configuration
+raw-identical, all300 faithful inputs match canonical. Census1082/1852 EXACT,
+119759 original exact bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED,
+ratchet green. Partial .text702396→702412, allocated918404→918420, positioned
+equal69557→69524/943398; both strict DIFFERENT/exit1. Adopted original graph/
+operand categories have a measured size/layout cost; no byte-count improvement,
+new exact, full gain-graph identity, mutation/fuzz or modern-portability claim.
+[Results](agc-arm-ownership-results.md).
+
+## F11967. AGC initialized unity-pair shift bound is conditional, not relocation reachability
+
+Nonnegative unity coefficients and initialized level0..32703 keep the smoother
+in that interval;32769 coefficient corner checks establish the monotone bound.
+65535 nonzero unsigned denominators give norm0..15; positive signed levels give
+shift0..14, top-bit values give-1. Freeze preserves a previous count. Config
+relocations establish initial pointers, not later selections: live V32 and
+V17/V27/V29 code changes to correct unity slow pairs. D6's global nothing-selects-
+element1 wording and D85's live-broken-B103/V23 claim cannot jointly establish a
+whole-program range. This pass does not prove broken-pair modem reachability.
+Raw shift outside0..31 is not defined C; compiled period CL masking is separately
+measured,65536 signed-word count identities with wrong-mask control32768 hits.
+No invalid C shift execution or new reachability claim. [Results](agc-shift-results.md).
+
+## F11968. AGC raw int count becomes byte reload, then MOVZBL through x86 output selection
+
+Four full-TU cells/16 shared verdicts: baseline mask SIZE22, raw count SIZE5,
+byte cast SIZE20, byte+mask SIZE22. Only raw reproduces original stack MOVZBL
+before multiply/SAR/CWTL/SHL CL. Initial RTL uses QI subreg of cached SI count;
+global reload supplies memQI count home, retained through sched2. GCC3.4.2
+movqi_1 output selects MOVZBL under TARGET_MOVX/i686; no explicit byte type or
+zero extension is required in source/RTL. Adopt raw count on operand/use evidence,
+not minimum size, retaining unsigned value arithmetic and original period
+invalid-count behavior. Valid initialized unity-pair range0..14; no universal
+C-semantics/portability claim. Metadata/data/calls/three exact bystanders unchanged;
+raw baseline/selected production match. [Trace and source](agc-shift-results.md).
+
+## F11969. AGC raw-count recovery validates and improves measured partial layout
+
+Final make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors
+green. Initial phase period388/0 but refs red on two unwritten findings;
+preserved/repaired, final full gate green. Unchanged initialized AGC10 groups/
+51643 hard checks,476 result trials34 zero/442 one; V23 lifecycle22 groups/
+4656926 checks pass. Selected producer raw-matches control;1/300 objects changes,
+299/config unchanged,300 faithful inputs raw-equal canonical. Census1082/1852
+EXACT/119759 bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED, ratchet
+green. Partial .text702412→702396,allocated918420→918404, positioned equal
+69524→69567/943398; both strict DIFFERENT/exit1. No new exact, near-exact,
+all-input C proof, broken-pair reachability, fuzz/mutation or modern-portability
+claim. [Results](agc-shift-results.md).
+
+## F11970. AGC cached gain and eager narrow level predicate are separate boundaries
+
+Nine width/use cells distinguish short cached gain from use-only casts and
+short level cache. Short gain restores two original word tests. Use-only level
+under && emits short-circuit branches unlike original SETE/word TEST/SETNE/
+MOVZBL/combined TEST. Four additional eager/logical × narrowed/retained predicate
+cells restore original graph only with eager boolean & and narrow level use;
+logical/narrow SIZE3 is rejected, not adopted for score. Keep int level carrier
+and full-width alpha arithmetic. Thirteen full-TU cells/52 shared verdicts,
+zero exact gains/losses; raw controls/data/exports/bystanders preserved.
+[Domain](agc-predicate-domain.md); [results](agc-predicate-results.md).
+
+## F11971. AGC partition fallthrough and chosen length expose different source uses
+
+Two partition cells restore original JBE to cold increment and small-tail
+fallthrough by inverting the structured comparison/arms; SIZE6→1. Two length
+cells distinguish chosen SI block length from HI sample countdown: full unsigned
+len restores two original cached MOV loads but exposes an extra RMS argument
+extension, SIZE18. Do not accept/reject by size/frame or infer a unique type
+from width alone. Original smoother intermediate homes/LEA remain unresolved;
+saved reload trace reports substitutions, not recovered original allocator state.
+[Results](agc-predicate-results.md).
+
+## F11972. RMS full argument and word countdown reproduce the same callee and original AGC boundary
+
+Full2x2 count-formal × AGC chosen-length cross over10 TUs/40 cells/388 shared
+verdicts: RMS remains raw-identical/EXACT62 bytes; full/full restores original
+AGC length loads and argument boundary. Only collateral caller is SRE_recover,
+whose signed rms_len becomes MOVSWL rather than original MOVZWL. Another20 cells/
+194 verdicts normalize that one argument explicitly to unsigned short; SRE again
+raw-equals canonical, other8 caller/callee objects unchanged. Do not retag its
+signed field globally. Source declaration/definition agree and callee explicitly
+consumes low16 bits. No uniquely recovered formal width or old-prototype bug
+claim. Selected source recovers original value/operand boundaries with no exact
+gains/losses. [Replay and limits](agc-predicate-results.md).
+
+## F11973. AGC predicate/RMS recovery passes period with exact set unchanged
+
+Final make phase J=8 exits0:388 passed/0 failed,285 suites/10038 static anchors
+green. Initial period388/0 but one SRE locator detached by count normalization;
+find/replace retargeted to the same threshold operation, no mutation execution
+or snapshot rerecording. COMMON inspector repaired on class1_state_functions,
+76 bytes/alignment32, explicitly checked in6 cells; no section read/skip.
+77 full-TU cells/650 shared verdicts,10 raw selected objects. Only AGC changes
+in300 production objects;299/config unchanged and300 faithful inputs raw-match
+canonical. RMS stays raw-identical/EXACT62; SRE raw-identical. Census1082/1852
+EXACT/119759 bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED, ratchet
+green. AGC567 versus original566 bytes,179 versus175 nonpadding instructions,
+frame0x4c versus0x3c: not near-exact or register-only. Partial .text702396 and
+allocated918404 unchanged; positioned equal69567→69558/943398, both strict
+DIFFERENT/exit1. Original guard/length/argument/partition categories improve,
+not the exact count or positioned byte total. [Results](agc-predicate-results.md).
+
+## F11974. Whole-tree extension windows nominate boundaries, not prototypes
+
+At4de483e2,300 objects/1934 emitted bodies include1886 shared names;1744 have
+equal ordered named-PC32-call sequences,142 differ,48 lack an original.
+4671 matched calls yield62 extra-extension windows in39 bodies. Historical
+RMS length-only positive and identity negative fire/pass. Initial wrong
+positive fixture aborted, excluded; no report used. Four manual reviews:
+MTD conversion is outside window; TONE and settxlevel conversions belong to
+other values; FSE supplies a paired-error lifetime. Other35 bodies unclassified.
+Not the1852-symbol strict denominator, not ABI recovery.
+[Method, controls and replay](lms-paired-error-results.md).
+
+## F11975. Paired LMS errors must survive the first opaque update call
+
+Original FPM_FSE_receive narrows both scaled errors before its first
+FPM_lmsupd call; retained source forms the second afterward. Three full-TU
+cells/12 shared verdicts compare baseline, paired short locals and reassigned
+existing carriers. Both paired controls are raw-identical; explicit locals
+adopted. Initial RTL and native inter-call multiply/shift/narrowing disappear,
+matching original ownership. SIZE35→26, zero exact gains/losses. Raw baseline,
+metadata/named/allocated data/call targets/all bystanders pass; only receive
+changes. Helper ABI and exact helper body unchanged. This is a pre-allocation
+lifetime recovery, not a unique original spelling or complete-function match.
+[Declared domain](lms-paired-error-domain.md), [results](lms-paired-error-results.md).
+
+## F11976. Paired LMS recovery production validation
+
+Final make phase J=8 exits0:388 period tests passed/0 failed,285 suites/10038
+static anchors green. Existing FSE receive fixture includes8824 LMS-gate checks;
+no new fixture or tolerance. Census1082/1852 EXACT/119759 original exact bytes,
+669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED unchanged; ratchet green. Only FSE
+changes in300 objects,299 raw-identical and300 faithful inputs raw-match
+canonical. Selected cell raw reproduced. Partial .text702396→702380,
+allocated918404→918388, positioned equal69558→69540/943398; strict
+DIFFERENT/exit1. No exact-count or positioned-byte gain. No fuzzing, mutation
+execution or modern-portability claim. [Results](lms-paired-error-results.md).
+
+## F11977. Output-return and scalar tap order jointly recover two descramblers
+
+Original HI scalar returns fullEAX and its MP caller consumes it without byte
+extension. Retained T return/cast imposes narrowing. Consistent I return with
+plain r restores producer/caller boundaries; body-only raw-inert, return-only
+keeps producer cast. Independent original pTap2-before-pTap1 write-back crossed
+with that interface recovers HI118B; II110B needs order alone. Initial RTL
+store order changes before allocation. Both complete original bodies EXACT;
+no unique template spelling or normal-value bug claim. All27 transitive
+consumer controls preserve data/metadata/calls and account for both nonexact
+Decision callers (V90 SIZE20→25 despite corrected consumption).
+[Domain](descrambler-output-domain.md), [results](scalar-boundary-results.md).
+
+## F11978. Vendored modem count contract corrects V23 full-width handoffs
+
+Host modem_dp.h and modem.c define get/put_bits count as int; B103/V23 local
+ushort declarations disagree. Eight full-TU controls cross int declarations
+with caller cast removal. Each axis alone raw-inert; both restore original
+V23 full n_tx/n_rx arguments, SIZE10→7. B103 independently normalizes words;
+its cast removal SIZE11→13 is rejected, int declarations alone adopted raw-
+inert. V32 comment corrected, raw-inert. No huge-count reachability claim.
+[Domain](modem-bit-count-domain.md), [results](scalar-boundary-results.md).
+
+## F11979. Scalar scrambler transfer preserves exact HH and recovers HI
+
+Original HI tap2 write-back precedes tap1; original HH has the opposite native
+order. Shared scalar tap2-first source makes HI118B exact in both V90/V92
+Phase3Modulator copies while entire exact-HH V92Phase4Modulator object stays
+raw-identical. Native order alone does not prescribe source: exact sibling
+and complete-TU controls discriminate scheduling. No bulk/XOR/type/declaration
+permutations. Combined27-consumer proof plus all domains:242 full-TU cells/
+4820 shared verdicts, all raw baselines/metadata/named/allocated data/calls/
+bystanders audited; three distinct exact names346B, zero exact losses.
+[Transfer domain](scrambler-scalar-order-domain.md), [results](scalar-boundary-results.md).
+
+## F11980. Scalar-boundary batch permitted validation checkpoint
+
+Final census1085/1852 EXACT/120105 original exact bytes: +3 names/+346B, zero
+losses;668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED. Only5/300 canonical objects
+change,295 raw-identical, all27 selected consumer cells raw-match production,
+all300 faithful inputs raw-match canonical; configuration unchanged. Partial
+.text702380→702364, allocated918388→918366, positioned equal69540→69392/943398;
+strict DIFFERENT/exit1. No whole-object identity or positioned-byte gain.
+Final selected period387 passed/0 failed (all388 minus t_fuzz); all structural
+checks pass, including285 suites/10038 static anchors. Full make phase rejected
+by automatic approval review
+because t_fuzz is excluded by user. Initial387/1 was an old member-pointer
+overload compile error, not runtime divergence; fixture selector alone now
+uses int, inputs/checks unchanged. No final full-phase claim.
+[Results and exact validation boundary](scalar-boundary-results.md).
+
+## F11981. Jump-table alignment needs the standard dis module
+
+Decision-caller CLI alignment failed because local tools/dis.py shadowed the
+standard module during elftools/inspect imports. Preload standard dis while
+excluding the tools directory; comparison logic is unchanged. The 759/752-row
+Decision comparison now runs, differing control fires on four groups, and the
+exact 43-row control stays clean. Its 76 mnemonic groups and frame difference
+do not identify a new source boundary; no Decision source experiment adopted.
+reset_cid's original CWTL disproves its loop-width nomination.
+[Evidence and limits](v34-vmi-boundary-results.md).
+
+## F11982. INFO1a caches a word result and both destinations before storing
+
+The original sign-extends bitreverse's result before its debug branch and
+loads both session destination pointers before either byte store. Six full-TU
+controls cross retained/short/int-narrow cache with pointer capture. Short and
+int-narrow pairs emit identical objects; short plus captures restores both
+native/initial-RTL boundaries. Only target changes, all six bystanders and
+metadata/data/calls preserved. SIZE16 remains; no unique type spelling, new
+exact gain or reachable alias-history claim.
+[Domain](v34-info1a-capture-domain.md), [results](v34-vmi-boundary-results.md).
+
+## F11983. Ring requirement narrowing caused a constructor mismatch
+
+FAXVMI_create originally compares promoted max_frame+3 with FIFO capacity,
+then narrows its selected fallback. Retained word need narrowed too early:
+max_frame65534/capacity8 produced8 instead of blob1. Nine fixed null-slot
+constructor cases fail6/172 checks before correction and pass172/172 after;
+no modem-processing or end-to-end reachability claim. Four requirement/ring
+carrier controls restore int need and fallback-only word narrowing, keeping
+word ring. Only target changes; SIZE103 remains, all five bystanders/data/
+metadata/calls preserved. Static arithmetic separately checks196608 wrap-edge
+pairs: old formula196602 disagreements, repaired0. Combined with INFO1a,
+10 full-TU cells/66 shared verdicts, raw baselines reproduced, no exact losses.
+[Domain](vmi-ring-capacity-domain.md), [results](v34-vmi-boundary-results.md).
+
+## F11984. INFO1a and ring-capacity validation checkpoint
+
+Final permitted period387 passed/0 failed, excluding t_fuzz; targeted2/0
+also passes. Constructor regression172/172 follows the preserved6/172 failure.
+Census1085/1852 EXACT/120105 original exact bytes unchanged, ratchet green;
+668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED. Only2/300 canonical objects change;
+298 raw-identical, both selected cells match raw, all300 faithful inputs match
+canonical, complete profile unchanged. Partial .text702364/allocated918366
+unchanged; positioned equal69392→69398/943398, strict DIFFERENT/exit1.
+All structural checks pass: 285 suites/10038 static anchors, 14445 references,
+zero unresolved or repointed citations. No full-phase, fuzz/mutation or
+portability claim.
+[Results and validation scope](v34-vmi-boundary-results.md).
+
+## F11985. The remaining call-window queue has bounded dispositions
+
+All28 previously untouched bodies in the historical39-body argument screen
+now have explicit dispositions: outside-window original extensions, unrelated
+values/cold blocks, existing closed domains, or the new spectral cross.
+Current replay yields36 bodies/53 calls; the three removed nominations are
+scalar Descrambler, v23_process and V34GiveINFO1aBits. No new body enters.
+A new fresh-EAX-result screen finds0 bodies/0 calls at both6- and12-instruction
+bounds over300 objects/1934 emitted bodies/1886 shared bodies/1744 equal
+named-call sequences/4671 calls. Historical pre-fix Descrambler consumption
+fires; identity and intervening-EAX-write controls stay clear. Unequal call
+sequences, branches, masks and conversions beyond the window remain outside
+its certification. This closes the supported queue, not the global source
+search or a byte-exactness ceiling.
+[Ledger, exclusions and replay](call-boundary-lead-ledger.md).
+
+## F11986. Spectral sign width is not a unique helper-return witness
+
+Original displaySpectralParams performs four late FCOMPP comparisons and
+forms full-width sign arguments, while retained caches byte signs early.
+Cross helper/cache width, retained/sign-last/direct-argument factoring and
+DF/XF fractional intermediates:24 complete-TU cells/20 unique sources/9 raw
+emissions/264 shared verdicts, no exact gains/losses. Return-width-only pairs
+are raw-identical. Direct arguments remove byte extensions even with char
+helper return; late comparison alone therefore does not establish the
+signature. DF controls remove FLDT but emit four FMULL rather than the
+original four FLDL scale loads, including its stack rematerialisation.
+Only target changes; ten bystanders, metadata/named data/call sequence agree;
+only two expected constant pools change in DF cells. No source adoption,
+including the misleading SIZE1 candidate. Closed finite domain; new evidence
+must identify scale capture/storage or a helper/TU boundary.
+[Domain](spectral-sign-carrier-domain.md), [results](spectral-sign-carrier-results.md).
+
+## F11987. Three earlier exact misses support partial source recovery
+
+Review the existing V23 MRF handoff, V21 diagnostic owner and HDLC current-parent
+controls as partial fidelity recoveries rather than repeat spelling searches.
+Six current full-TU cells/24 verdicts raw-reproduce all baselines; no exact
+gains/losses. V23's changed diagnostic/AGC-return context now gives SIZE30→15
+with unsigned-low-word MRF argument, already sign→zero in sibling RTL.
+RxNextStateV21 restores three original post-debug owner loads, SIZE20→3;
+three source-unchanged inlined callers also change, retaining direct-call
+inventories; their gaps12→1/24→3/4→7 include one three-byte size regression. HDLC unframe restores current-parent reads across CRC/debug,
+SIZE209→58; other body unchanged. Its197-byte literal pool swaps two strings
+without changing any literal. Metadata/data/nontext relocations pass throughout.
+No new reachable-alias-history or unique source/type claim; no near-size fitting.
+The earlier finite negative measurements stand; their no-adoption decision is
+superseded for these explicitly reviewed boundaries only.
+[Domain](partial-boundary-recoveries-domain.md), [results](partial-boundary-recoveries-results.md).
+
+## F11988. Partial-boundary aggregate validation
+
+Permitted period387 passed/0 failed, targeted3/0, t_fuzz excluded; V21 repeats
+existing next-state trials at debug2, with no input or assertion weakened. Census1085/1852 EXACT/120105 original exact bytes unchanged,
+668 SIZE/65 BYTES/29 REGALLOC/5 UNRESOLVED, ratchet passes. Only3/300 canonical
+objects change,297 raw-identical, all three selected controls raw-match, all300
+faithful inputs match canonical, configuration unchanged. Partial .text grows
+702364→702524 and allocated918366→918526; positioned equal69398→69544/943398.
+Both strict comparisons DIFFERENT/exit1. Initial nonexistent comparison-tool
+path stopped before measurement; invalid log retained and proper path rerun.
+Static anchors285 suites/10038 locations pass without retargeting. No fuzzing,
+mutation execution, new input history, full-phase or portability claim.
+[Full results and collateral](partial-boundary-recoveries-results.md).
+
+## F11989. AGC result capture must precede destination evaluation
+
+DemodDataV21 becomes EXACT217 when unsigned MRF count, direct AGC result and
+post-call destination read are recovered together. Four count/result cells
+remain SIZE9: direct member assignment captures the child before AGC. Two
+block-local controls separate result production from destination evaluation;
+cache alone remains SIZE9, cache+unsigned count is exact. Original a5772 reads
+current DSP before a5778 stores EAX; cached candidate matches that age. Two TU
+bystanders unchanged. The capture distinction precedes allocation and does not
+require a forced register, frame or declaration order. A fresh-EAX proof must
+stop at intervening writes; the initial failed apparatus assertion is retained
+as invalid, then corrected. Seven nested and18 indexed source nominations yield
+no further supported destination-age mismatch. [Results](boundary-transfer-results.md).
+
+## F11990. Remaining helper handoffs support partial recovery
+
+The fixed int/four-slot AGC contract supports original EAX consumers in
+V17/V21/V27/V29; V32/B103 independently read the field and remain so. Adopt
+unsigned MRF slots in B103/V17/V21/V27/V29/CID and V22's separate full-slot
+formal with signed-word narrowing inside its callee. All V22 callee cells are
+raw-identical. V32's count control loses SetAdaptEqV32 exactness and changes
+three bystanders; recorded, withheld, no register/source fitting. D490/D1030/
+D1031/D1036/D1091/D1094 retire unsupported void/three-argument inference rather
+than asserting original prototype UB or a uniquely recovered type. B103 size
+worsens70→86, CID remains54; original outgoing value is the adoption criterion.
+[Controls, table and collateral](boundary-transfer-results.md).
+
+## F11991. TX owner reads and V27 training boundaries are distinct from size
+
+Restore TxNextStateV21's three original post-debug root+20 reads. Size worsens
+3→27; inlined Data69→78, Idle13→4, Start15→23, same source/call inventories,
+no exact loss. Existing cycle/underrun cases repeat at debug2. Restore GenEQ27
+signed fill index, unsigned postdecrement output cursor and per-output rate
+reread, SIZE15→11; decline the incomplete SIZE1 single-axis spelling. Countbit15
+original wrap/nontermination remains outside safe executed inputs; preserve
+original next-word access and existing fixed component coverage. No new input
+history, reachable alias or exact-body claim. [Evidence](boundary-transfer-results.md).
+
+## F11992. Accumulator publication controls recover original operations
+
+FPM_TONE_find_rev's separate ADD/SUB energy pair matches the original category,
+while same-size baseline has no such pair; candidate remains SIZE36. GenericIIR
+scalar restores four nonpopping member-accumulator FSTL sites versus baseline
+two; initial RTL publications also increase. SIZE99→85;17 emitted bystanders
+unchanged, including six without original counterparts. Only numeric-zero
+comparison pool changes. IIR targeted period passes, followed by permitted
+whole-suite validation. Two Tone static locators retarget the same mutation
+meanings; no mutation execution/snapshot changes. [Results](boundary-transfer-results.md).
+
+## F11993. Unknown requested period tests must not produce a clean partial gate
+
+A ten-name selection contained three nonexistent fixture names; old runner
+warned then reported7/0 with exit0. Preserve as incomplete, exclude as a ten-test
+gate. Validate explicit T before Docker, failing any unknown name without a
+partial run. Two host self-tests cover unknown-only and mixed valid/unknown
+lists; fake Docker proves no Docker invocation. Both pass and become the
+period-selection-selftest structural tier. Final387-name selection is the
+positive control:387 requested/0 unknown and387 passed/0 failed. No test input,
+tolerance or failure criterion is weakened. [Reproduction](boundary-transfer-results.md).
+
+## F11994. Boundary transfer aggregate checkpoint
+
+Final permitted period387/0, all387 requested names valid, t_fuzz excluded;
+IIR targeted1/0 and TX same-input debug155+8 checks pass. Census1086/1852 EXACT/
+120322 original exact bytes: +1/+217B, no adopted exact loss;667 SIZE/65 BYTES/
+29 REGALLOC/5 UNRESOLVED, ratchet green.46 full-TU cells/406 shared verdicts/
+418 emitted comparisons include the rejected V32 loss. Only11/300 canonical
+objects change,289 raw-identical,12 selected controls match raw, all300 faithful
+inputs match canonical; profile unchanged. Partial .text702524→702476,
+allocated918526→918484, positioned equal69544→69472/943398, strict DIFFERENT/exit1.
+Two host selection self-tests pass;285 suites/10038 static anchors retain two
+Tone locator retargets only. No mutation/fuzz execution, snapshot update,
+full-phase or portability claim. [Complete results and stopping scope](boundary-transfer-results.md).
+
+## F11995. Fourteen transmitter min comparisons used the wrong budget signedness
+
+Original V17/V29/V27 countdown handlers sign-extend remaining and zero-extend
+budget before signed32-bit CMP. Retained source treated the budget as signed,
+selecting32768 symbols instead of48 (V17/V29) or32 (V27) at0x8000. Correct the
+comparison use in six/four/four handlers without changing any public type or
+other carrier. Fixed constructor/START/installed no-carrier component fixtures
+fail16/138,14/159,16/174 checks before correction and pass all471 afterward.
+Outputs bound the old wrong counts too; no planted internal state or public
+high-budget reachability claim. Several size gaps worsen; semantic fidelity,
+not size, decides retention. [Domain](transmitter-budget-fidelity-domain.md),
+[controls and evidence](transmitter-budget-fidelity-results.md).
+
+## F11996. V29 receiver request bytes survive child stores as snapshots
+
+Original V29RX_control reads ctl1 and ctl0 once each across subsequent child
+stores. Baseline reads each twice. Adopt the previously measured joint local
+snapshots after current full-TU replay; BYTES74→24, status bystander unchanged,
+metadata/data/calls unchanged, zero exact gain/loss. Existing t_v29fax period
+fixture passes; no arbitrary overlapping-request lifecycle is asserted.
+[Results](transmitter-budget-fidelity-results.md).
+
+## F11997. V34 FSK third-phase multiply and history transfer share one loop
+
+Adopt the previously corrected fused loop, reading sample and coefficient before
+the history store, with signed-word counters and captured delayed tap. Gap231→135;
+fskdemodulate bystander unchanged, metadata/data/calls unchanged. Wrong earlier
+store-before-coefficient controls remain rejected. Existing fixed FSK fixtures
+pass; no new mutable-coefficient alias history or exact-body claim. The source
+comment no longer describes the history shift as deliberately separate.
+[Controls and stopping boundary](transmitter-budget-fidelity-results.md).
+
+## F11998. V27 Quiet remains structurally nonexact after the budget correction
+
+Original chosen count is zero-extended at the no-carrier call; original member
+subtraction reloads countdown. Four full-TU controls cross unsigned chosen count
+and compound member decrement on the corrected comparison baseline: SIZE1,
+SIZE1,SIZE20,BYTES76, four distinct objects, zero exact gains/losses. Joint form
+still reuses the old member value and moves sign extension before the initial
+gate; no further adoption or source/register permutation follows. Across this
+review14 full-TU cells/110 shared-body verdicts preserve all bystanders and
+metadata/data/nontext/call inventories. [Replay](transmitter-budget-fidelity-results.md).
+
+## F11999. Unsupported unequal wrapper rates must fail the first converter check
+
+Original dp_wrapper_create leaves the first converter NULL for an unsupported
+unequal pair, tests it unconditionally and cleans up before reverse dispatch.
+Source skipped checks when lookup returned-1. Six fixed constructor inputs
+fail6/12 checks before correction. Restore literal immediate converter creation,
+sequential checks and shared cleanup in original emission order. SIZE282→2,
+not exact; delete remainsEXACT85 and run unchanged. Only invented72B lookup
+object removed, all other metadata/data/calls/bystanders unchanged. The near
+size does not justify prologue/register fitting. [Domain](service-constructor-fidelity-domain.md),
+[evidence](service-constructor-fidelity-results.md).
+
+## F12000. Cadence bank mapping and interior on durations were reconstructed incorrectly
+
+Original indices6/7 select100_550/350_500 banks for subindices1..7, retaining
+450_630/100_550 fallbacks. Source omitted those banks. Actual DIAL constructors
+cover72 fixed index/subindex combinations; old source fails199 checks in14 cases.
+Restore literal switch/map with explicit192B banks.0 removal and32B jump table,
+all ordinary names/strings preserved. Conservative table prover still refuses;
+eight native destinations and runtime cases are evidence, not a complete proof.
+
+Original looped matcher compares interior on as well as off durations. A genuine
+BUSY constructor and sample stream with equal first/last500ms tones and1000ms
+middle produces a source-only match at28159,12/40454 pre-fix checks fail; equal
+positive control passes35429. Restore the missing comparison. No period/filter
+state is planted or tolerance widened. First corrected targeted gate2/0;
+delete/reset exact and all unselected bodies unchanged. [Controls](service-constructor-fidelity-results.md).
+
+## F12001. Cadence TYPE and returned name have different original ownership
+
+The default branch normalises working type toDIAL before parameter calls;
+TYPE uses it at7d86e. Returned metadata reloads descriptor.w6/tone after report
+and usable gate, then clamps name toINVALID. Removing the old invalid-tone
+transcript skip yields four failures at tones4/9 and levels2/3; original TYPE
+DIAL assertions pass. Restore working type diagnostic plus complete late
+extra/int_2a4/name bundle. Four full-TU cells give SIZE249/239/239/255; adopt
+original read/publication age, not the smaller gap. Sibling RTL confirms late
+loads across the final report; all bystanders/data/calls preserved apart from
+expected internal switch destination offsets. [Replay](service-constructor-fidelity-results.md).
+
+## F12002. Medium read recovery exposes a source-unchanged peephole bystander
+
+Six current full-TU cells/28 shared verdicts recover _tx_scrambled_ones_state's
+late output-count read and signed readiness comparison (originalSETGE versus
+baselineSETAE, SIZE20→3), plus faxvmi_hdlc_frame's parent reads across debug/name
+calls (SIZE37→99). No negative-rate or callback-rebinding fixture is invented.
+
+Initial audit rejects unexpected unframe collateral; the classified control has
+identical source,393 instructions and all rows after the first jump unchanged.
+Three prefix rows exchange two zero-store slots1c/24 and move the same EDX/20
+store; both private slots hold zero at the join, flags preserved. Five raw bytes
+differ, SIZE58 remains58, no exact loss. Six observer controls/eight stages show
+initial RTL through flow2 equal under checked alias bijection; first differences
+at28.peephole2,10 UIDs, then four at rnreg/sched2. This is retained compiler
+history, not an original preimage
+or a reason to fit unframe declarations. Metadata/data/nontext/calls preserved;
+merge-string contents/counts unchanged. [Trace, controls and limits](service-constructor-fidelity-results.md).
+
+## F12003. Explicit tree constant annotations caused false early-stage divergence
+
+Stage normalization handled _decl/_type tree pointers but missed _cst and the
+closing angle bracket attached to an address token. Fourteen apparent lreg
+changes in the HDLC bystander were string_cst identities for unchanged symbols,
+not instruction differences. Preserve the invalid report; normalize only an
+explicit _decl/_type/_cst tree address, preserving its terminator. Parsed controls
+retain symbol identities, flags, registers, stack offsets and large immediates;
+historical positive/equal traces still pass,19/19 controls total. The corrected
+bystander trace is equal through flow2 and first differs at peephole2. This fixes
+an observer, without changing native byte grading or inferring original state.
+[Diagnostic](gcc3-stage-divergence-diagnostic.md),
+[corrected trace](service-constructor-fidelity-results.md).

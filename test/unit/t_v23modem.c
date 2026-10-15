@@ -30,7 +30,7 @@
 
 extern void *ref_CreateV23Modem(void *m, int mode, const void *cfg);
 extern void ref_DeleteV23Modem(void *m);
-extern short ref_V23ModemMain(void *m, int *tx_bits, int *tx_nbits,
+extern int ref_V23ModemMain(void *m, int *tx_bits, int *tx_nbits,
 			      short *tx_out, int tx_count, short *rx_in,
 			      int rx_count, int *rx_bits, int *rx_nbits);
 

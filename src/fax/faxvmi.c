@@ -202,7 +202,8 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 	struct faxvmi_link *lk;
 	const struct faxvmi_cfg *src;
 	int created = 0;
-	unsigned short need, ring;
+	int need;
+	unsigned short ring;
 	int i;
 
 	if (vmi == NULL) {
@@ -226,8 +227,8 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 	fr = vmi->framer;
 
 	if (created) {
-		need = (unsigned short)(vmi->max_frame + 3);
-		ring = (vmi->fifo_size >= need) ? vmi->fifo_size : need;
+		need = vmi->max_frame + 3;
+		ring = (vmi->fifo_size >= need) ? vmi->fifo_size : (unsigned short)need;
 		fr->fifo = sysdep_malloc((unsigned int)ring * 2);
 		fr->fifo_size = ring;
 	}

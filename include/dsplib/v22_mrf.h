@@ -130,8 +130,9 @@ void V22_MRF_free(struct v22_mrf *state);
  * @param count  How many input samples.
  * @return The number of outputs written, roughly `count * 9 / 20`.
  */
+/* F11990: full caller slot, signed-word narrowing inside the callee. */
 short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
-		     short count);
+		     int count);
 
 /*
  * The configuration template, and the one object in this pair that is in

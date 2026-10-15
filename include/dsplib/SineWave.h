@@ -150,72 +150,36 @@ template <class Tout, class Tparam>
 void SineWave<Tout, Tparam>::generate(Tout *out, unsigned long n)
 {
 	/*
-	 * `long double` THROUGHOUT, and not for extra accuracy.  Under
-	 * `-mfpmath=387` the intermediates live in x87 registers at 64-bit
-	 * mantissa and are rounded to `float` only where the object stores
-	 * them.  `double` gives the same answers here ONLY because the same
-	 * thing happens to it; on any target where doubles round at each step
-	 * it would diverge.  The type is written to say what is meant.
+	 * Scalar expression modes reproduce the period x87 operation graph:
+	 * the tentative phase and sine stay in registers until explicit stores.
+	 * An XF local creates an unused SF expansion word absent from the blob.
+	 * The arithmetic is recovered under the period profile; see F11952.
 	 */
-	const long double k = SW_TWO_PI;
-	const long double ik = SW_INV_2PI;
-	const long double step = (long double)frequency * k / sampleRate;
-	long double x;
+	const Tparam k = SW_TWO_PI;
+	const Tparam ik = SW_INV_2PI;
+	const Tparam step = frequency * k / sampleRate;
+	Tparam x;
 
-	if (n == 0) {
-		/*
-		 * NOT A NO-OP.  The loop is skipped but the wrap below still
-		 * runs, so a zero-length call still rewrites `phase` -- 100.0
-		 * comes back as 5.75221777.  The step is computed before the
-		 * test too, so a zero `sampleRate` still raises the masked
-		 * divide-by-zero.
-		 */
+	/*
+	 * Read the first phase only after the positive loop guard. Even n==0
+	 * computes the step, reads phase and runs the final wrap. The advance
+	 * follows every output, including the last; publish intermediate phase
+	 * only when another sample remains. sinl expands to the original fsin
+	 * on its unrounded register argument in the period compiler.
+	 */
+	unsigned long i = 0;
+	if (i < n) {
 		x = phase;
-	} else {
-		unsigned long i = 0;
-
-		x = phase;
-		for (;;) {
-			long double s;
-			bool more;
-
-			/*
-			 * The period compiler/header expands sinl under the C++ source
-			 * fast-math flags to `fsin`.  In the object its argument is
-			 * the UNROUNDED 80-bit register
-			 * value -- the `fsts` below rounds a copy for memory
-			 * and the sine is taken of what is still in st(0).
-			 * Feeding `fsin` the float-rounded phase instead is a
-			 * real difference: 17,650 mismatches.
-			 *
-			 * Above |x| = 2^63 the instruction sets C2 and leaves
-			 * st(0) alone, so the "sine" comes back as the angle.
-			 * The object does not test C2 and neither does this.
-			 */
-			s = sinl(x);
-			out[i] = (Tout)(s * (long double)amplitude);
+		do {
+			Tparam s = sinl(x);
+			out[i] = (Tout)(s * amplitude);
 			++i;
-			more = (i < n);
-			/*
-			 * THE ADVANCE IS UNCONDITIONAL and runs one more time
-			 * than there are samples.  In the object it sits
-			 * between the `cmp` at +0x3b and the `jb` at +0x42, so
-			 * after the last sample the phase steps once more and
-			 * THAT is the value the wrap stores.  `generate(buf,1)`
-			 * on a 1200 Hz tone at 9600 leaves phase = 0.785398185,
-			 * a full delta, not 0.  Moving the advance inside the
-			 * `if` is the natural tidy-up and costs 50,686
-			 * mismatches.
-			 *
-			 * It also re-reads `phase` from memory rather than
-			 * carrying the accumulator in the register, which is
-			 * what makes the running value a float at every step.
-			 */
-			x = (long double)phase + step;
-			if (!more)
-				break;
-			phase = (Tparam)x;
-		}
+			x = phase + step;
+			if (i < n)
+				phase = (Tparam)x;
+		} while (i < n);
+	} else {
+		x = phase;
 	}
 
 	/*
@@ -237,7 +201,7 @@ void SineWave<Tout, Tparam>::generate(Tout *out, unsigned long n)
 	{
 		int t = (int)(x * ik);
 
-		phase = (Tparam)(x - (long double)t * k);
+		phase = (Tparam)(x - t * k);
 	}
 }
 

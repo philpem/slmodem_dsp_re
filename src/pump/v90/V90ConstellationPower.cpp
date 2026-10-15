@@ -272,6 +272,7 @@ V90ConstellationPower::getPower(V90MappingParams *mappingParams,
 				V90TxPowerMeasurementPoint point,
 				PcmType pcmType)
 {
+	double fraction;
 	double power;
 	unsigned int i;
 
@@ -284,7 +285,6 @@ V90ConstellationPower::getPower(V90MappingParams *mappingParams,
 		getConstellationInfo(mappingParams, point, i);
 
 		for (j = 0; j < constellationSize; j++) {
-			double fraction;
 
 			if (modulus[i] > j)
 				fraction = placeValue[i] / (double)codewordCount

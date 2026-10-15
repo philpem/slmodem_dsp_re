@@ -55,6 +55,26 @@
 set -e
 cd "$(dirname "$0")/../.."
 
+# A requested binary without a source used to be skipped as a clean result.
+# Validate the complete explicit selection before Docker or any partial run.
+if [ -n "${T:-}" ]; then
+	period_requested=0
+	period_missing=0
+	for period_test in $T; do
+		period_requested=$((period_requested + 1))
+		if [ ! -f "test/unit/$period_test.c" ] &&
+		   [ ! -f "test/unit/$period_test.cpp" ]; then
+			echo "period: unknown test '$period_test'" >&2
+			period_missing=$((period_missing + 1))
+		fi
+	done
+	echo "period selection: $period_requested requested, $period_missing unknown"
+	if [ "$period_missing" -ne 0 ]; then
+		echo "period: invalid selection; no tests run" >&2
+		exit 1
+	fi
+fi
+
 # THE DEFAULT IMAGE IS THE PUBLISHED GENTOO-PATCHED GCC 3.4.2-r2 NAMED BY THE
 # BLOB.  Its compiler and binutils are the reconstruction authority.
 # `PERIOD_IMG=dsplibs-tc342` and

@@ -85,7 +85,7 @@ V22_MRF_free(struct v22_mrf *state)
 }
 
 short
-V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, short count)
+V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, int count)
 {
 	short *coeff = state->cfg.coeff;
 	short need = state->need;
@@ -94,7 +94,7 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, short count)
 	short hlen = state->history_len;
 	short *history = state->history;
 	short produced = 0;
-	short remaining = count;
+	short remaining = (short)count;
 
 	while (remaining != 0) {
 		int acc;

@@ -251,7 +251,7 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 		in[i] = (short)((in[i] * lo[i]) >> 14);
 
 	count = (unsigned short)FPM_MRF_filter(&dsp->rx_mrf, in, dsp->scratch,
-					       (short)count);
+					       count);
 
 	dsp->agc.f18 = dsp->r00;
 	FPM_AGC_agc(&dsp->agc, dsp->scratch, count, original_count);

@@ -59,9 +59,7 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	struct v27_rx_block *rx;
 	struct v27_rx_shared *sh;
 
-	FPM_AGC_agc(&((struct v27_rx *)modem)->rx->agc, in, count, 1);
-	/* Not the object's `%eax`; the same value.  D1094. */
-	signal = ((struct v27_rx *)modem)->rx->agc.signal;
+	signal = FPM_AGC_agc(&((struct v27_rx *)modem)->rx->agc, in, count, 1);
 
 	sh = ((struct v27_rx *)modem)->shared;
 	/*
@@ -79,7 +77,7 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	rx = ((struct v27_rx *)modem)->rx;
 	n = (unsigned short)FPM_MRF_filter((&rx->mrf), in,
 					   (short *)rx->buf_a,
-					   (short)count);
+					   count);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	(&rx->sre)->adapt = signal & rx->en_sre_adapt;

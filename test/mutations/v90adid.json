@@ -493,8 +493,8 @@
  },
  {
   "label": "record the group under the member rather than the leader",
-  "find": "\t\t\t\tgroup[j] = i;",
-  "replace": "\t\t\t\tgroup[j] = j;"
+  "find": "\t\t\t\tgroup[j] = i;\n\t\t\t\tfsum += magnitudeSum[j][at];",
+  "replace": "\t\t\t\tgroup[j] = j;\n\t\t\t\tfsum += magnitudeSum[j][at];"
  },
  {
   "label": "do not propagate the leader's entry to the group",
@@ -508,13 +508,13 @@
  },
  {
   "label": "do not count the group's members",
-  "find": "\t\t\t\tcount = (short)(count + 1);",
-  "replace": "\t\t\t\t/* deliberately removed */"
+  "find": "\t\t\t\tlinearMappingVar[j][at] = linearMappingVar[i][at];\n\t\t\t\tcount = (short)(count + 1);",
+  "replace": "\t\t\t\tlinearMappingVar[j][at] = linearMappingVar[i][at];\n\t\t\t\t/* deliberately removed */"
  },
  {
   "label": "let a tie replace the best group",
-  "find": "\t\t\tif (count > best) {",
-  "replace": "\t\t\tif (count >= best) {"
+  "find": "\t\t\tif (count > best) {\n\t\t\t\tbest = count;\n\t\t\t\tbestValue = linMapp[i][at];",
+  "replace": "\t\t\tif (count >= best) {\n\t\t\t\tbest = count;\n\t\t\t\tbestValue = linMapp[i][at];"
  },
  {
   "label": "remember the wrong group's entry",
@@ -666,74 +666,74 @@
  },
  {
   "label": "group on the short at +0x2800 rather than the byte at +0x280c",
-  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
-  "replace": "\t\tif (altRbsFlag[i] != 0 || group[i] != ADID_NO_GROUP)"
+  "find": "\t\tif (byte_280c[i] == 0 && group[i] == ADID_NO_GROUP) {",
+  "replace": "\t\tif (altRbsFlag[i] == 0 && group[i] == ADID_NO_GROUP) {"
  },
  {
   "label": "let an already-grouped phase lead a second group",
-  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
-  "replace": "\t\tif (byte_280c[i] != 0)"
+  "find": "\t\tif (byte_280c[i] == 0 && group[i] == ADID_NO_GROUP) {",
+  "replace": "\t\tif (byte_280c[i] == 0) {"
  },
  {
   "label": "let the last phase lead a group",
-  "find": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {\n\t\tif (byte_280c[i] != 0",
-  "replace": "\tfor (i = 0; i < V90ADID_PHASES; i++) {\n\t\tif (byte_280c[i] != 0",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {\n\t\tif (byte_280c[i] == 0",
+  "replace": "\tfor (i = 0; i < V90ADID_PHASES; i++) {\n\t\tif (byte_280c[i] == 0",
   "equivalent": true,
   "why": "`count` never decreases and `best` is set to `count` whenever it is exceeded, so after every group `best == count` and the test at a sixth leader can never fire.  Phase 5 would take a group number without ever becoming `bestGroup`, and the pooling compares against `bestGroup`, which is always one of 0..4 -- so nothing downstream reads the change.  The one path where it WOULD differ is the one where no group forms at all, and that path reads `bestGroup` uninitialised (D284).  The bound is real and D283's running counter is what makes it unobservable."
  },
  {
   "label": "let a phase join a group it is already in",
-  "find": "\t\t\tif (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)",
-  "replace": "\t\t\tif (byte_280c[j] != 0)"
+  "find": "\t\t\t\tif (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)",
+  "replace": "\t\t\t\tif (byte_280c[j] != 0)"
  },
  {
   "label": "look backwards as well as forwards for group members",
-  "find": "\t\tfor (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {",
-  "replace": "\t\tfor (j = 0; j < V90ADID_PHASES; j++) {",
+  "find": "\n\t\t\tfor (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {",
+  "replace": "\n\t\t\tfor (j = 0; j < V90ADID_PHASES; j++) {",
   "equivalent": true,
   "why": "A phase below the current leader is either suspected -- caught by the first half of the same test -- or was itself a leader and has a group number, which the second half catches.  There is no third state: the outer loop makes every unsuspected ungrouped phase a leader when it reaches it.  So the extra iterations j < i can only ever `continue`."
  },
  {
   "label": "merge on a quarter of the CANDIDATE's variance",
-  "find": "\t\t\tlim = linearMappingVar[i][at] * 0.25f;",
-  "replace": "\t\t\tlim = linearMappingVar[j][at] * 0.25f;"
+  "find": "\n\t\t\t\tlim = linearMappingVar[i][at] * 0.25f;",
+  "replace": "\n\t\t\t\tlim = linearMappingVar[j][at] * 0.25f;"
  },
  {
   "label": "merge on half the leader's variance",
-  "find": "\t\t\tlim = linearMappingVar[i][at] * 0.25f;",
-  "replace": "\t\t\tlim = linearMappingVar[i][at] * 0.5f;"
+  "find": "\n\t\t\t\tlim = linearMappingVar[i][at] * 0.25f;",
+  "replace": "\n\t\t\t\tlim = linearMappingVar[i][at] * 0.5f;"
  },
  {
   "label": "merge when the difference EXCEEDS the tolerance",
-  "find": "\t\t\tif (d * d >= lim)",
-  "replace": "\t\t\tif (d * d < lim)"
+  "find": "\n\t\t\t\tif (d * d >= lim)",
+  "replace": "\n\t\t\t\tif (d * d < lim)"
  },
  {
   "label": "merge on an exactly equal difference too",
-  "find": "\t\t\tif (d * d >= lim)",
-  "replace": "\t\t\tif (d * d > lim)"
+  "find": "\n\t\t\t\tif (d * d >= lim)",
+  "replace": "\n\t\t\t\tif (d * d > lim)"
  },
  {
   "label": "merge on the distance rather than on its square",
-  "find": "\t\t\tif (d * d >= lim)",
-  "replace": "\t\t\tif (d >= lim)"
+  "find": "\n\t\t\t\tif (d * d >= lim)",
+  "replace": "\n\t\t\t\tif (d >= lim)"
  },
  {
   "label": "form the merge tolerance inside the test rather than before the distance",
-  "find": "\t\t\tlim = linearMappingVar[i][at] * 0.25f;\n\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\tif (d * d >= lim)",
-  "replace": "\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\tif (d * d >= linearMappingVar[i][at] * 0.25f)"
+  "find": "\t\t\t\tlim = linearMappingVar[i][at] * 0.25f;\n\t\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\t\tif (d * d >= lim)",
+  "replace": "\t\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\t\tif (d * d >= linearMappingVar[i][at] * 0.25f)"
  },
  {
   "label": "take the merge distance backwards",
-  "find": "\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);",
-  "replace": "\t\t\td = (float)(linMapp[j][at] - linMapp[i][at]);",
+  "find": "\n\t\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);",
+  "replace": "\n\t\t\t\td = (float)(linMapp[j][at] - linMapp[i][at]);",
   "equivalent": true,
   "why": "The distance is used only as `d * d`, negation of a float is exact, and the difference of two shorts is exactly representable -- so (a-b)^2 and (b-a)^2 are the same bit pattern for every input.  The object's operand order is recorded in the source; it cannot be measured."
  },
  {
   "label": "reset the running group size at every group, as the readable spelling would",
-  "find": "\n\n\t\tgroup[i] = i;\n\n\t\tfor (j = (unsigned char)(i + 1);",
-  "replace": "\n\n\t\tgroup[i] = i;\n\t\tcount = 1;\n\n\t\tfor (j = (unsigned char)(i + 1);"
+  "find": "\n\n\t\t\tgroup[i] = i;\n\n\t\t\tfor (j = (unsigned char)(i + 1);",
+  "replace": "\n\n\t\t\tgroup[i] = i;\n\t\t\tcount = 1;\n\n\t\t\tfor (j = (unsigned char)(i + 1);"
  },
  {
   "label": "start the running group size at zero",
@@ -742,30 +742,30 @@
  },
  {
   "label": "keep the FIRST group of the largest size rather than the last",
-  "find": "\t\tif (count > best) {\n\t\t\tbest = count;",
-  "replace": "\t\tif (count >= best) {\n\t\t\tbest = count;"
+  "find": "\n\t\t\tif (count > best) {\n\t\t\t\tbest = count;\n\t\t\t\tbestGroup = i;",
+  "replace": "\n\t\t\tif (count >= best) {\n\t\t\t\tbest = count;\n\t\t\t\tbestGroup = i;"
  },
  {
   "label": "pool every unsuspected phase rather than the chosen group",
-  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
-  "replace": "\t\tif (byte_280c[j] != 0)\n\t\t\tcontinue;"
+  "find": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {",
+  "replace": "\t\tif (byte_280c[j] == 0) {"
  },
  {
   "label": "pool the chosen group's suspected members too",
-  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
-  "replace": "\t\tif (group[j] != bestGroup)\n\t\t\tcontinue;",
+  "find": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {",
+  "replace": "\t\tif (group[j] == bestGroup) {",
   "equivalent": true,
   "why": "A suspected phase is never given a group number: the inner loop skips it before the assignment and `group[]` starts at -1.  `bestGroup` is one of 0..4, so `group[j] != bestGroup` already excludes every suspected phase and the flag test in front of it decides nothing.  It is written because the object writes it -- `cmpb $0x0,0x280c(%eax,%edi,1)` at 0x415f3 precedes the group compare -- not because it is reachable."
  },
  {
   "label": "subtract the pooled samples rather than adding them",
-  "find": "\t\ttotal = (short)(total + magnitudeCount[j][at]);\n\t}",
-  "replace": "\t\ttotal = (short)(total - magnitudeCount[j][at]);\n\t}"
+  "find": "\n\t\t\ttotal = (short)(total + magnitudeCount[j][at]);\n\t\t}",
+  "replace": "\n\t\t\ttotal = (short)(total - magnitudeCount[j][at]);\n\t\t}"
  },
  {
   "label": "count one per pooled phase rather than its samples",
-  "find": "\t\ttotal = (short)(total + magnitudeCount[j][at]);\n\t}",
-  "replace": "\t\ttotal = (short)(total + 1);\n\t}"
+  "find": "\n\t\t\ttotal = (short)(total + magnitudeCount[j][at]);\n\t\t}",
+  "replace": "\n\t\t\ttotal = (short)(total + 1);\n\t\t}"
  },
  {
   "label": "read the pooled count back as unsigned",
@@ -794,18 +794,18 @@
  },
  {
   "label": "drop the pooled mean's rounding term",
-  "find": "\tr = (short)(mean + 0.5f);",
-  "replace": "\tr = (short)mean;"
+  "find": "\t\t\tlinMapp[j][at] = (short)(mean + 0.5);\n\t\t\tlinearMappingVar[j][at] = var;",
+  "replace": "\t\t\tlinMapp[j][at] = (short)mean;\n\t\t\tlinearMappingVar[j][at] = var;"
  },
  {
   "label": "write the pooled answer only to the chosen group",
-  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
-  "replace": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {\n\t\t\tlinMapp[j][at] = r;"
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = (short)(mean + 0.5);",
+  "replace": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {\n\t\t\tlinMapp[j][at] = (short)(mean + 0.5);"
  },
  {
   "label": "write the pooled answer to the suspected phases instead",
-  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
-  "replace": "\t\tif (byte_280c[j] != 0) {\n\t\t\tlinMapp[j][at] = r;"
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = (short)(mean + 0.5);",
+  "replace": "\t\tif (byte_280c[j] != 0) {\n\t\t\tlinMapp[j][at] = (short)(mean + 0.5);"
  },
  {
   "label": "clear only the phases that got the pooled answer",
@@ -814,8 +814,8 @@
  },
  {
   "label": "write the pooled mean into the alternate table",
-  "find": "\t\t\tlinMapp[j][at] = r;\n\t\t\tlinearMappingVar[j][at] = var;",
-  "replace": "\t\t\tlinMappAlt[j][at] = r;\n\t\t\tlinearMappingVar[j][at] = var;"
+  "find": "\t\t\tlinMapp[j][at] = (short)(mean + 0.5);\n\t\t\tlinearMappingVar[j][at] = var;",
+  "replace": "\t\t\tlinMappAlt[j][at] = (short)(mean + 0.5);\n\t\t\tlinearMappingVar[j][at] = var;"
  },
  {
   "label": "study two sigma rather than two and a half",
@@ -834,18 +834,18 @@
  },
  {
   "label": "take the larger of the clamp and the maximum neighbour distance",
-  "find": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? t : (float)neighborUcodeMaxDistance;",
-  "replace": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? (float)neighborUcodeMaxDistance : t;"
+  "find": "\tsqrDiffThresh = t;\n\tif (!((float)neighborUcodeMaxDistance >= sqrDiffThresh))\n\t\tsqrDiffThresh = (float)neighborUcodeMaxDistance;",
+  "replace": "\tsqrDiffThresh = t;\n\tif ((float)neighborUcodeMaxDistance >= sqrDiffThresh)\n\t\tsqrDiffThresh = (float)neighborUcodeMaxDistance;"
  },
  {
   "label": "report the threshold before the maximum clamp",
-  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
-  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(t + 0.5));"
+  "find": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(t + 0.5));"
  },
  {
   "label": "drop the rounding from the reported threshold",
-  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
-  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)sqrDiffThresh);"
+  "find": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5 + 0.5), (short)sqrDiffThresh);"
  },
  {
   "label": "study one code fewer",
@@ -889,13 +889,13 @@
  },
  {
   "label": "drop the first study's rounding term",
-  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5);",
   "replace": "\t\t\tlinMapp[phase][code] = (short)mean;"
  },
  {
   "label": "write the first study's mean into the alternate table",
-  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
-  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5f);"
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5);",
+  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5);"
  },
  {
   "label": "count the roughness from zero",
@@ -941,8 +941,8 @@
  },
  {
   "label": "count the roughness of an already-flagged phase too",
-  "find": "\t\tif (altRbsFlag[phase] == 0) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
-  "replace": "\t\tif (altRbsFlag[phase] != 1) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
+  "find": "\t\tif (altRbsFlag[phase] == 0) {\n\t\t\tshort n = 1;\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\tif (altRbsFlag[phase] != 1) {\n\t\t\tshort n = 1;\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
  },
  {
   "label": "suspect the trusted phases and trust the suspected ones",

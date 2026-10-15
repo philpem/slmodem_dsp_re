@@ -9,3 +9,8 @@ Four initial cells miss: gaps282,331,41,38B respectively. The literal+sequential
 Creation helper and direct arms miss (SIZE3/SIZE19). Full body shows both cells duplicate the inlined delete cleanup and use a common return register; blob has a single shared cleanup with one clear/store and one pair of conditional delete calls. This is independent shared-cleanup topology, not size evidence. Declare five controls: raw baseline, pointer-helper or direct-arm creation each with one goto failure cleanup, crossed with reference-backed delete-before-create emission order (blob delete5a20/create5a80/run5d40). No register/order permutations beyond this actual function-order witness.
 
 Final five-cell stage:helper shared-failure and helper/delete-first bothSIZE2, direct formsSIZE18. Alltwelve controls have no exact gains/losses; onlycreatebody changes, delete85B exact and runbody unchanged. Audit allows only explicit extra dpw_rate_pairs object/72B section removal. No source adopted. Close family; next discriminator would need original result or emission mechanism evidence, not nearest-size local variants.
+
+Later partial-fidelity adoption: F11999 demonstrates unsupported-rate constructor
+failures and adopts the original literal/sequential/shared-cleanup boundaries
+without claiming complete exactness. The finite negatives above remain valid.
+See [current fixed evidence](service-constructor-fidelity-results.md).

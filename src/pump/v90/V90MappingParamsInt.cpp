@@ -108,17 +108,17 @@
 extern "C" unsigned int
 getConstellationsIndex(V90MappingParams *params, int *group)
 {
-	unsigned int count = 1;
 	unsigned int i;
+	unsigned int count = 1;
 
 	params->distinctIndex[0] = 0;
 	group[0] = 0;
 
 	for (i = 1; i <= 5; i++) {
 		unsigned int j;
-		unsigned int length = params->constellationSize[i];
 
 		for (j = 0; j < count; j++) {
+			unsigned int length = params->constellationSize[i];
 			int k = params->distinctIndex[j];
 			unsigned int n;
 
@@ -129,7 +129,7 @@ getConstellationsIndex(V90MappingParams *params, int *group)
 			 * `n` survives the loop and is the acceptance test,
 			 * which is why the zero-length case reads as a match.
 			 */
-			for (n = 0; n < length; n++) {
+			for (n = 0; length > n; n++) {
 				if (params->constellation[k][n] !=
 				    params->constellation[i][n])
 					break;
@@ -144,9 +144,8 @@ getConstellationsIndex(V90MappingParams *params, int *group)
 		}
 
 		if (j == count) {
-			params->distinctIndex[count] = (int)i;
-			group[i] = (int)count;
-			count++;
+			params->distinctIndex[count++] = (int)i;
+			group[i] = (int)(count - 1);
 		}
 	}
 
@@ -174,7 +173,8 @@ getConstellationMask(V90MappingParams *params, int which, short *mask)
 	const unsigned char *table;
 	unsigned int length;
 	unsigned int n;
-	int k, i;
+	int k;
+	unsigned int i;
 
 	if (which >= 6)
 		which = 0;
@@ -198,7 +198,8 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
 	const unsigned char *table;
 	unsigned int length;
 	unsigned int n;
-	int k, i;
+	int k;
+	unsigned int i;
 
 	if (which >= 6)
 		which = 0;

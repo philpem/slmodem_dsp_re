@@ -53,6 +53,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
@@ -63,9 +64,9 @@
 extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
-			  unsigned short count);
+			  int count);
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
-			  unsigned short count);
+			  int count);
 
 /*
  * The three entry points are FILE-STATIC in the object -- `nm` shows a
@@ -108,7 +109,8 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	(void)max_frag;
 
-	/* The original prints "v23: create...\n" here at debug level 2. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v23: create...\n");
 
 	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
@@ -217,6 +219,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	int n_tx = self->tx_bits_wanted;
 	int n_rx = 0;
 	int status;
+	int modem_status;
 	int i;
 
 	if (self->connected != 0 && n_tx > 0) {
@@ -228,7 +231,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 		 */
 		n_tx = modem_get_bits(dp->modem, 1,
 				      (unsigned char *)self->tx_bits,
-				      (unsigned short)n_tx);
+				      n_tx);
 		for (i = n_tx - 1; i >= 0; i--)
 			self->tx_bits[i] =
 				((unsigned char *)self->tx_bits)[i] & 1;
@@ -237,12 +240,14 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	status = V23ModemMain(self->modem, self->tx_bits, &n_tx, (short *)out,
 			      count, (short *)in, count, self->rx_bits, &n_rx);
 
+	modem_status = status;
+
 	if (self->connected != 0 && n_rx > 0) {
 		for (i = 0; i < n_rx; i++)
 			((unsigned char *)self->rx_bits)[i] =
 				(unsigned char)(self->rx_bits[i] & 1);
 		modem_put_bits(dp->modem, 1, (unsigned char *)self->rx_bits,
-			       (unsigned short)n_rx);
+			       n_rx);
 	}
 
 	self->tx_bits_wanted = n_tx;
@@ -274,7 +279,8 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 		status = DPSTAT_ERROR;
 	}
 
-	/* The original prints "v23: V23STAT: --> %d\n" on a change. */
+	if (dp->status != (unsigned)status && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v23: V23STAT: --> %d\n", modem_status);
 	dp->status = (unsigned)status;
 	return status;
 }

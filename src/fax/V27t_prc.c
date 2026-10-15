@@ -91,7 +91,7 @@ V27TX_modem(void *modem, unsigned short *in, short *out,
 void
 GenEQTrnSequenceV27(void *modem, unsigned short *buf, unsigned short count)
 {
-	unsigned short i;
+	short i;
 
 	for (i = 0; i < count; i++)
 		buf[i] = 7;
@@ -100,15 +100,18 @@ GenEQTrnSequenceV27(void *modem, unsigned short *buf, unsigned short count)
 
 	if (count != 0) {
 		struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
-		short rate = prm->rate;
 
-		for (i = 0; i < count; i++) {
-			if (buf[i + 1] & 0x04)
-				buf[i] = (unsigned short)
-					V27TX_PATTERN_ALT[rate];
+		unsigned short n;
+		unsigned short *p = buf;
+
+		for (n = count; n-- != 0;) {
+			unsigned short *q = p++;
+			if (q[1] & 0x04)
+				*q = (unsigned short)
+					V27TX_PATTERN_ALT[prm->rate];
 			else
-				buf[i] = (unsigned short)
-					V27TX_PATTERN_CARR[rate];
+				*q = (unsigned short)
+					V27TX_PATTERN_CARR[prm->rate];
 		}
 	}
 }
@@ -500,7 +503,7 @@ TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
@@ -539,7 +542,7 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	for (i = 0; i < taken; i++)
@@ -591,7 +594,7 @@ TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
@@ -624,7 +627,7 @@ TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
 	prm->countdown = (short)(countdown - taken);
 
 	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);

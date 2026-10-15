@@ -347,7 +347,7 @@ public:
 	 * @param in  Input symbol.
 	 * @return The descrambled symbol.
 	 */
-	T process(T in);
+	I process(T in);
 
 	/**
 	 * @brief Descramble @p n symbols in bulk.
@@ -704,8 +704,8 @@ I Scrambler<T, I>::process(T in)
 	I r;
 
 	r = (I)(in ^ *pTap1 ^ *pTap2);
-	pTap1--;
 	pTap2--;
+	pTap1--;
 	*out = r;
 	if (--pOut < pLimit) {
 		resetHistoryIndexes();
@@ -787,19 +787,19 @@ void Scrambler<T, I>::processAllZeros(I *out, unsigned int n)
 }
 
 template <class T, class I>
-T Descrambler<T, I>::process(T in)
+I Descrambler<T, I>::process(T in)
 {
 	I r;
 
 	*pOut = in;
 	r = (I)(*pOut ^ *pTap1 ^ *pTap2);
-	pTap1--;
 	pTap2--;
+	pTap1--;
 	if (--pOut < pLimit) {
 		resetHistoryIndexes();
 		copyHistoryTail();
 	}
-	return (T)r;
+	return r;
 }
 
 /*

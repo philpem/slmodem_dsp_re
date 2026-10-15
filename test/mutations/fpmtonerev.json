@@ -35,12 +35,12 @@
  },
  {
   "label": "the energy window subtracts the delayed tap rather than the oldest",
-  "find": "\t\t\t  - ((hist[idx] * hist[idx]) >> 15);",
-  "replace": "\t\t\t  - ((hist[j] * hist[j]) >> 15);"
+  "find": "\t\tenergy -= (hist[idx] * hist[idx]) >> 15;",
+  "replace": "\t\tenergy -= (hist[j] * hist[j]) >> 15;"
  },
  {
   "label": "the two energy terms share one truncation instead of one each",
-  "find": "\t\tenergy += ((samples[n] * samples[n]) >> 15)\n\t\t\t  - ((hist[idx] * hist[idx]) >> 15);",
+  "find": "\t\tenergy += (samples[n] * samples[n]) >> 15;\n\t\tenergy -= (hist[idx] * hist[idx]) >> 15;",
   "replace": "\t\tenergy += (samples[n] * samples[n] - hist[idx] * hist[idx]) >> 15;"
  },
  {

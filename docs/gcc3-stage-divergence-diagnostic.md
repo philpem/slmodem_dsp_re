@@ -78,9 +78,11 @@ python3 tools/gcc3_stage_divergence.py \
   --output build/stage-divergence-validation/writer.json
 ```
 
-The validator passes **14/14 controls**, including historical positive/equal
+The validator passes **19/19 controls**, including historical positive/equal
 controls, significant large-hex/register/order changes, notes-only equality,
-tree-address normalization, parser/selection refusals and store-split positive
+explicit _decl/_type/_cst tree-address normalization (including attached closing
+brackets), significant symbol/flags/stack-offset changes, parser/selection
+refusals and store-split positive
 and negative checks. The two historical constructor comparisons each contain
 29 stage pairs, two selected clones and 116 RTL streams. Pre/post first diverges
 at `28.peephole2` for both clones; pre/pre has no divergence. In the positive
@@ -107,3 +109,9 @@ source typing and ratchet floors; a historical exact result can compensate for
 different prior TU state. Without a dynamic allocator trace, report the stateful
 mechanism and static witness separately, and do not infer cursor values or tune
 earlier source tokens to manufacture a colour.
+
+F12003 corrects a false early-stage report in the HDLC bystander trace. Internal
+`string_cst` addresses differed while the referenced symbols agreed. The invalid
+report remains archived; corrected comparison agrees through flow2 and first
+differs at peephole2. This annotation handling does not normalize real addresses,
+immediates, symbols, registers or native object bytes.

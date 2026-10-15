@@ -55,7 +55,7 @@
  *     under-estimated for very loud blocks; nothing goes negative.
  *
  * ---------------------------------------------------------------------------
- * Why `shift` is never negative here
+ * When the shift count is bounded
  *
  * `shift` is `norm - 1`, so it is negative exactly when FPM_div sees a
  * denominator with its top bit already set, i.e. level >= 0x8000.  That
@@ -65,14 +65,20 @@
  *     never exceeds 32703 -- not even when the accumulator overflows (D2).
  *     So `level` is in [0, 32703], and never negative.
  *
- *   - the smoother keeps `level_est` inside that range too, because
- *     alpha[0] + beta[0] == 32768 exactly in every shipped configuration.
+ *   - an initialized unity-coefficient smoother keeps `level_est` in
+ *     that range too: alpha[0] + beta[0] == 32768 with both nonnegative.
  *
- * It is only the *second* of those that a different config could break: an
- * alpha/beta pair summing to more than 1.0 would let level_est climb until
- * the truncation to short made it negative, and then `shift` would go to -1
- * and the apply loop would shift left by 31.  Such a pair exists in the blob
- * but is never selected -- see D6 in docs/deviations.md.
+ * That smoother bound assumes nonnegative coefficients summing to 32768
+ * and an initialized nonnegative level.  Callers can change coefficient
+ * pointers after init, so the initial config relocations alone cannot prove
+ * a whole-program bound.  A non-unity pair can wrap the estimate negative;
+ * FPM_div then returns norm 0 and shift becomes -1.
+ *
+ * The original uses the raw shift count.  GCC 3.4.2 reloads its low byte
+ * into CL and x86 masks that to five bits, including the -1 case.  This
+ * reproduces the period object's behavior; C itself does not define shifts
+ * with negative or >=32 counts.  Findings F11967-F11968 distinguish the
+ * valid initialized range from that target/compiler behavior.
  */
 
 #include "dsplib/debug.h"
@@ -98,29 +104,29 @@ FPM_AGC_Release(struct fpm_agc *agc)
 	agc->level = 0;	/* the level estimate, but deliberately not the gain */
 }
 
-void
+int
 FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unused)
 {
 	(void)unused;
 	const unsigned block_len = agc->cfg.block_len;
-	const int acquire_level = agc->cfg.acquire_level;
-	const int squelch_level = agc->cfg.squelch_level;
+	const short acquire_level = agc->cfg.acquire_level;
+	const short squelch_level = agc->cfg.squelch_level;
 	const int ref_level = agc->cfg.ref_level;
 
 	int level_est = agc->level;
-	int mult = agc->mult;
+	short mult = agc->mult;
 	int shift = agc->shift;
 	int adjusted = 0;		/* blocks that took the gain path */
 	unsigned blocks, tail;
-	int i;
+	short i;
 
 	blocks = (unsigned short)(count / block_len);
 	tail = (unsigned short)(count % block_len);
 
-	if ((unsigned short)(block_len >> 1) <= (unsigned short)tail)
-		blocks = (unsigned short)(blocks + 1);
-	else
+	if ((unsigned short)(block_len >> 1) > (unsigned short)tail)
 		tail = (unsigned short)(tail + block_len);
+	else
+		blocks = (unsigned short)(blocks + 1);
 
 	/*
 	 * Counted down, and the *last* block is the one carrying `tail`.
@@ -128,9 +134,10 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 	 * loop does not run at all.
 	 */
 	for (i = (short)(blocks - 1); i >= 0; i--) {
-		unsigned short len = (unsigned short)(i ? block_len : tail);
-		int level = FPM_rms(samples, len);
-		int k;
+		unsigned len = i ? block_len : tail;
+		short level = FPM_rms(samples, len);
+		unsigned short k;
+		short *p;
 
 		/*
 		 * The gate.  Which threshold applies depends on whether a gain
@@ -139,51 +146,53 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 		 */
 		if ((level < acquire_level && mult == 0) ||
 		    (level < squelch_level && mult != 0)) {
-			for (k = 0; k < (int)len; k++)
-				samples[k] = 0;
-			samples += len;
-			continue;
-		}
-
-		adjusted = (short)(adjusted + 1);
-
-		/*
-		 * First-order smoother.  Note the asymmetry: the alpha term is
-		 * left at full width and only the *sum* is truncated back to
-		 * 16 bits.  Both coefficients are 16384 for every configuration
-		 * in the blob, i.e. level = (level + measured) / 2.
-		 */
-		level_est = (agc->cfg.alpha[0] * level_est) >> 15;
-		level_est = (short)(level_est +
-				    ((agc->cfg.beta[0] * level) >> 15));
-
-		if (agc->freeze == 0 && level_est != 0) {
-			unsigned short recip, norm;
-
-			FPM_div((unsigned short)level_est, &recip, &norm);
-			mult = (short)(((int)recip * ref_level) >> 15);
-			shift = (short)(norm - 1);	/* the /2; see above */
-		}
-
-		for (k = 0; k < (int)len; k++) {
-			int v = (short)((samples[k] * mult) >> 15);
+			p = samples;
+			k = len;
+			while (k--)
+				*p++ = 0;
+		} else {
+			adjusted = (short)(adjusted + 1);
 
 			/*
-			 * The original loads `shift` with movzbl and shifts
-			 * with `shl %cl`, so the count is masked to five bits.
-			 * That only matters if `shift` is negative, which no
-			 * shipped configuration can produce -- see the header
-			 * comment.  Masked here so the two still agree if one
-			 * ever does.
+			 * First-order smoother.  Note the asymmetry: the alpha term is
+			 * left at full width and only the *sum* is truncated back to
+			 * 16 bits.  The fast pair is 16384/16384, i.e.
+			 * level = (level + measured) / 2; selected slow pairs differ.
 			 */
-			v = (int)((unsigned)v << (shift & 31));
+			level_est = (agc->cfg.alpha[0] * level_est) >> 15;
+			level_est = (short)(level_est +
+					    ((agc->cfg.beta[0] * level) >> 15));
 
-			if (v > 32767)
-				samples[k] = 32767;
-			else if (v < -32768)
-				samples[k] = -32768;	/* not -32767; cf. FPM_iir_filt */
-			else
-				samples[k] = (short)v;
+			if ((agc->freeze == 0) & ((short)level_est != 0)) {
+				unsigned short recip, norm;
+
+				FPM_div((unsigned short)level_est, &recip, &norm);
+				mult = (short)(((int)recip * ref_level) >> 15);
+				shift = (short)(norm - 1);	/* the /2; see above */
+			}
+
+			p = samples;
+			k = len;
+			while (k--) {
+				int v = (short)((*p * mult) >> 15);
+
+				/*
+				 * The original uses the raw count; GCC3 reloads its
+				 * low byte for SHL CL.  The initialized unity-pair
+				 * range is 0..14.  x86 masks other counts to five bits,
+				 * but that is period behavior, not defined C semantics
+				 * for negative or >=32 counts.  Finding F11968.
+				 */
+				v = (int)((unsigned)v << shift);
+
+				if (v > 32767)
+					*p = 32767;
+				else if (v < -32768)
+					*p = -32768;	/* not -32767; cf. FPM_iir_filt */
+				else
+					*p = (short)v;
+				p++;
+			}
 		}
 
 		samples += len;
@@ -195,6 +204,7 @@ FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count, int unuse
 
 	/* "Most of this buffer was above the gate." */
 	agc->signal = adjusted > (int)(blocks >> 1);
+	return agc->signal;
 }
 
 void

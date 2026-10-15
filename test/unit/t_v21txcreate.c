@@ -43,6 +43,7 @@
 
 #include "harness.h"
 
+#include "dsplib/debug.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_mrf.h"
@@ -479,7 +480,9 @@ test_modem_cycle(void)
 	unsigned seed = 424242u;
 	int block;
 
-	diff_begin("v21txcreate: the half-duplex machine through V21TX_modem");
+	diff_begin(dsplibs_debug_level > 1
+		   ? "v21txcreate: modem cycle debug"
+		   : "v21txcreate: the half-duplex machine through V21TX_modem");
 
 	ca = V21TX_CFG;
 	cb = V21TX_CFG;
@@ -754,6 +757,12 @@ main(void)
 	rc |= test_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
 	rc |= test_control();
+
+	/* Repeat existing lifecycle and underrun cases through debug arms. */
+	dsplibs_debug_level = 2;
+	rc |= test_modem_cycle();
+	rc |= test_underrun_bypass_arm();
+	dsplibs_debug_level = 0;
 
 	return rc;
 }

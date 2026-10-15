@@ -4103,3 +4103,757 @@ bindings and bystanders. DialerAbort's structured common exit compiles identical
 to the early return and remains nonexact even with its unsigned guard; close
 that domain. Do not change allocator prototypes or sweep return synonyms.
 [Controls and audit](../small-call-result-results.md).
+
+### Link mismatching rows to UIDs before attributing a register residual (F11888–F11891)
+
+Residual_stage_inventory applies the canonical worst-copy rule; 97 REGALLOC/
+BYTES nominations are not 97 diagnoses. Unchanged complete-TU reproduction and
+-dP annotation cardinality/opcode checks let residual_register_uid_trace link
+25/31 REGALLOC targets to RTL patterns. Repeated clone headers and unavailable
+annotation/stage windows stay ambiguous or unavailable, never guessed or zero.
+A changed peephole UID need not consume scratch: _iir_filter_create's zero
+searches coexist with eight transformed UIDs. Inspect actual events before
+attributing a row to the persistent cursor; two scored Scrambler process bodies
+have no direct search. [Baseline and UID evidence](../residual-stage-family-results.md).
+
+A failed scratch search can reset the persistent cursor even when its enclosing
+peephole emits no replacement. The new V92 setEchoDelay and v8_process controls
+observe three distinct failed sites (five attempts including a repeat), setting
+cursor zero; subsequent searches confirm the state. Count rejected attempts,
+not only surviving instructions or accepted replacements. Seven controls validate
+382 searches/3784 visits; V90MP's QI/q events are explicitly outside the current
+HI/SI r model. This observes current GCC behavior, not original cursor values,
+and does not authorize tuning source history to manufacture a register color.
+
+### Capture before publish when the ordinary inline loses that lifetime (F11892–F11895)
+
+V92's block-size setter needs pre-store symbolsDone capture and explicit query
+dataflow to recover108B. Expanding the helper normally is raw-identical and
+argument use alone misses; both early-capture forms match, so original syntax
+is not uniquely identified. Preserve multiply-before-divide on the divisible
+arm: simplifying rounding changes unsigned overflow behavior. Nine bystanders
+and standalone query stay exact. Conversely echo-history reset closes by
+REMOVING its unnecessary params capture, leaving the member-valued bound.
+Pointer reg/v/f lifetime and scalar pre-publish lifetime are different axes;
+inspect01rtl and24lreg/25greg rather than always adding or always removing locals.
+The SDM cross misses both initializers and is closed. Do not transfer to already
+exact siblings or reopen SpectralShaper's previously fitted owner-anchor domain.
+[Full-TU controls](../residual-value-owner-results.md).
+
+Mutation fn verifies trailing function ownership AFTER unique substring matching;
+it does not scope the find. Use unique context for duplicated arithmetic and
+correct unsupported function metadata. Show detached/nonunique locators firing,
+repair the same labelled operations, and keep static checks separate from any
+claim that a mutation harness was executed.
+
+### Match clone labels and printed RTL before using a repeated heading (F11896–F11897)
+
+A C++ dump heading can name both C1 and C2, with repeated instruction UIDs.
+Identify an assembly symbol by its boundary, then match emitted .L numbers to
+CODE_LABEL numbers and check its printed -dP patterns against35.mach. Do not
+use heading order as ownership. Earlier stages require unique shared label
+witnesses independently; a final-stage match does not make every earlier stage
+available. Missing/ambiguous witnesses are explicit refusals. This resolves nine
+of twelve prior ambiguous nominations and increases register-row links25/31
+to27/31. Three nominations were substring collisions, not constructor clones.
+
+A helper query's exact leaf can still alter a remote constructor's scratch
+history. Current Queue replay again gains85B and loses734B; no adoption. Its
+argument constant loads first appear atpeephole2, then change at renaming.
+Use those pass boundaries to investigate the history; do not rewrite the
+constructor to repair a color without an independent source witness.
+[Replay and limits](../residual-queue-context-results.md).
+
+### Trace scratch → renaming before attributing a captured local (F11898–F11899)
+
+Jd's two constructor clones allocate the same lookahead byte to AX and retain
+identical patterns throughflow2. A different zero-store scratch atpeephole2 then
+changes which register renaming chooses for that byte. Thus an original final
+register versus our allocation-stage register does not locate the divergence.
+Compare independently owned clone streams and actual emitted-name search events.
+One scratch difference can spread to nine late patterns without a different local.
+
+An exact helper leaf can remove a dead-stack cleanup search and change a later
+constructor's inherited cursor. The Queue85B gain still loses734B: observe the
+complete event history, including all predecessors, before source fitting.
+No original cursor or new source spelling follows from this mechanism alone.
+When comparing dumps, strip explicit string_cst heap-pointer annotations only;
+keep pool names, real constants and all operand structure. Three refusal/value
+controls verify that boundary. [Replay](../residual-constructor-scratch-results.md).
+
+### Shared machine cleanup does not distinguish source exits (F11900–F11901)
+
+Echo append's advancing-input/countdown and preincrement length witnesses recover
+individual original shapes, but their combination still misses the complete body.
+Do not adopt a one-byte size gap: count instructions and inspect complete paths.
+An early return and common if/else exit produce raw-identical complete objects
+at both remaining-counter timings. Shared machine cleanup is therefore compatible
+with both source forms in this domain. A post-guard register copy likewise does
+not uniquely establish a guard-local declaration. Close the bounded cross on its
+misses; require a new independent witness before another spelling experiment.
+[Nine-cell full-TU audit](../residual-echo-append-results.md).
+
+### Check memory alias identities before locating a stage difference (F11902–F11905)
+
+V.22's literal25greg differences first looked like a global/reload boundary.
+Direct traces refute that: mappings and every observed reload choice agree;
+only printed memory alias IDs differ. Require a bijection preserving all alias
+relationships, universal class0, addresses, offsets, registers, sizes and
+alignments before treating renumbering as equivalent. Never erase alias data.
+The checked streams agree throughflow2; two scratch choices first differ at
+peephole2 and register renaming spreads them. This is the existing inherited
+cursor mechanism, not a new allocator lever. Six controls show harmless identity
+renumbering, real register/offset differences and refused alias split/merge.
+ACK's finite source domains remain closed without adoption.
+[Correction and read-only raw controls](../residual-v22-allocator-results.md).
+
+### Bound a captured sample by every observable reload (F11906–F11907)
+
+Tone reversal retains current and outgoing samples for correlation/energy, but
+reloads current input after rev_age is written for the history store. Extending
+one local through that store removes a possible alias observation, even though
+arithmetic still agrees on disjoint buffers and size nearly matches. Check all
+uses across intervening writes before proposing capture. InitialRTL read/age
+boundaries detect the two unsupported controls; arithmetic-only captures keep
+that boundary and still miss, closing the finite source domains without adoption.
+[Nine-cell audit](../residual-tone-reversal-results.md).
+
+### Distinguish rejected experiments and static paths from production bugs (F11908–F11909)
+
+Tone's lost reload occurs only in an unadopted control; retained source and period
+object already read input after age publication, like the blob. Audit production
+before reporting a deviation. Likewise V8's two static ring stores are alternative
+paths, not two writes per sample. A local publication recovers the original loop
+layout but misses bytes; symbol publication is a different axis because its two
+initial RTL stores already merge in machine RTL. Count both source-stage and
+machine-stage publications rather than inferring missing behavior from code size.
+[Four complete-TU controls](../residual-v8-cursor-results.md).
+
+### Screen indirect callbacks and validate their iteration graph (F11910–F11911)
+
+Direct helper-call counts omit indirect callbacks. Pair literal source-loop
+inventory with original/retained graph review: putFrame's four-group loop hides
+sixteen fixed-offset original calls. Its static head-call count differs from
+initial RTL because alternative paths share a call; neither count is the number
+executed on one path. Expansion restores the group operations without recovering
+the complete body. Width, capture and typed-owner crosses still miss, and unchanged
+neighbors change through TU history. Count all bystanders; do not adopt the nearest
+size or claim a uniquely recovered substructure from one base-pointer instruction.
+[Uncapped screen and22-cell full-TU audit](../helper-caller-screen-results.md).
+
+### A narrow loop counter is an independent witness, not a whole-function fix (F11912)
+
+Original snapshot index increments sign-extend from16 bits; the six-entry loops
+remain rolled, so expanding them would contradict the graph. Test the local width
+without changing the inlining/profile domain, and distinguish raw-inert narrowing
+already expressed by assignment casts from changes to target/unchanged neighbors.
+The four short-local controls miss complete identity. Reopen from a new operand
+or ownership witness, not from another declaration spelling.
+[Bounded domain](../v34-snapshot-width-domain.md).
+
+### Expand macros with the deciding compiler and retain owner uncertainty (F11913)
+
+A decimal-only lexical scan misses hexadecimal bounds and macros. Period
+preprocessing with complete per-file flags recovers those without guessing
+constant values. Preserve line provenance and use balanced for headers with
+checked start/update, then report unsupported bounds and missing/ambiguous
+emitted owners. Inline header helpers do not acquire a parent by name alone.
+Fixed iteration counts and aggregate backedges remain nominations for graph
+review. [537-loop inventory and controls](../callback-preprocessed-loop-results.md).
+
+### Recover callback identity separately from repeated call sites (F11914)
+
+getFrame's original captures one callback before all six calls; repeating four
+groups and retaining that pointer are distinct axes. Verify both the machine
+site count and member read count. Their crossed forms can reproduce these
+boundaries without recovering the whole function, so neither size closeness nor
+matching callback counts establishes original source or a functional lifecycle.
+[Full-TU cross](../getframe-callback-expansion-domain.md).
+
+### Check reads across a combined loop's stores before adopting fusion (F11915–F11916)
+
+A source break/post-check and an explicit success jump can differ even when
+both retain the search loop. Count-consumer synonyms may remain raw-inert across
+those graph forms. Likewise, combining FSK multiplication and history transfer
+must preserve coefficient read before the store; the coefficient table is
+writable. Arithmetic and loop counts alone miss that boundary. Keep rejected
+controls separate from corrected ones and production, and do not mistake equal
+sizes for raw identity. [Controls and read-age audit](../callback-preprocessed-loop-results.md).
+
+### Separate guard joins, rounded consumers and spill homes (F11917–F11919)
+
+Extra aggregate backedges can come from replicated loop increments rather than
+missing expansion. ADID phase grouping retains every original loop; positive
+guards recover its shared joins and original length. Cross this graph evidence
+with initialization age and expression/consumer mode independently. A short
+destination does not force a local rounded carrier to receive the same promotion:
+direct conversion at the store recovers the original reload where signed and
+unsigned carriers retain an extra extension. Check the emitted conversion age
+before claiming behavior at guarded floating-exception boundaries.
+
+The closest complete control leaves eight exchanged spill displacements. Same-
+boundary first definitions can fix scheduling without fixing those homes; original
+machine stack offsets do not uniquely imply source declaration order. Close the
+finite source domain and seek observational allocator evidence before reopening.
+Compare raw bodies: equal original-relative byte counts hid a one-opcode change
+between signed/unsigned controls. Audit every bystander and data owner even when
+the target is the only body expected to change.
+[22-cell control and positive residual detector](../adid-phase-grouping-results.md).
+
+### Observe reload-created slots before interpreting local declaration order (F11920–F11921)
+
+ADID's eight displaced operands were best/count spill homes. Read-only installed
+cc1plus tracing identifies `alter_reg` during reload assigning those slots in
+ascending pseudo order. Assignment timing alone did not change the pseudo order.
+This new evidence justified a bounded phase-state declaration control: count,
+best and bestGroup declared at the start of grouping after clearing the array.
+Crossing it with the recovered guard/rounded-consumer form closes all601 bytes.
+The complete TU gains one exact body with no loss; original source remains
+nonunique. A closed assignment-order experiment did not exhaust declaration
+scope, but reopening required a concrete allocation witness, not a larger
+permutation search.
+
+Keep independent partial reconstruction improvements eligible for validation:
+supported call boundaries, operand order and joins need not close a whole body
+to be useful. Separate their acceptance from nearest-size source fitting and
+cross them with later independently evidenced controls. Here guard recovery
+was supported and period-green; the allocation cross achieved full identity
+before retention. Always audit other-function context: moving an intact exact
+helper changed five raw bodies only through relocated addends. Compare canonical
+targets and masked bytes before claiming inherited allocator/scratch effects.
+[Source/context cross and observational replay](../adid-spill-context-results.md).
+
+### Cross floating expression modes at their actual consumers (F11923–F11925)
+
+ADID first-study's explicit mean conversion used0.5f while its already exact
+helper used0.5. The double expression recovers the original inner variance/mean
+operations even though the complete function grows16 bytes. Helper reuse emits
+the same object, so it does not uniquely recover factoring. Retain the supported
+operation recovery after period validation; byte-exact function count is not
+the only progress measure.
+
+Consumer matters: changing threshold2.5f to2.5 at a float destination is raw-inert,
+but the diagnostic multiplication feeding a short conversion changes initial
+RTL from SF to DF and restores the opening evaluation sequence. An explicit
+upper-clamp guard independently restores the original branch/pop selection;
+crossing them recovers66 opening rows. EqualSIZE16 scores initially hid these
+differences: full hash/body checks rejected the false erasure interpretation.
+Separate n's initialization placement from merged byte publication: moving n
+inside the admitted scan restores placement; duplicating source arms still
+emits a shared store. Bound and close that domain without register forcing.
+[22-cell controls, positive block detectors and retained partial recovery](../adid-first-study-results.md).
+
+### Separate scratch-created tail sharing from source joins (F11926–F11927)
+
+Follow immediate stores through reload, peephole2 and ce3. In ADID first-study,
+separate zero/one stores survive reload, then peephole2 chooses ax for both;
+ce3's CFG cleanup crossjumps the identical register stores. The blob's distinct
+byte registers keep the tails apart. This is evidence about scratch selection
+and late cleanup, not proof that source arms need more duplication.
+
+Test whether preceding TU context can actually influence the target before
+moving helpers. Read-only installed tracing plus a validated scalar search
+model shows all53 incoming scratch cursors converge after this target's first
+forced bp selection. Incoming cursor alone cannot change its later byte picks
+with fixed eligibility/order/sites. This bounded negative result does not rule
+out independently evidenced lifetime or traversal changes. Also localize store
+order separately: ADID count/sum remains count-first through block reorder and
+reverses at sched2. Its source already has the original order; repeating source
+permutations without a new scheduling witness would not test the explanation.
+[Raw-equal eleven-stage replay and six-search observation](../adid-first-study-stage-results.md).
+
+### Inspect target packet reordering after scheduler priority sorting (F11928–F11929)
+
+The highest-priority ready operation need not issue first. First-study's integer
+xor has priority6 against the float store's1, and ready_sort ranks xor first.
+The i686/PentiumPro target then moves the float store ahead to fill its complex
+decoder and packs the xor alongside it. Verbose ready-list/packet/issue tables
+show this directly. Follow target sched.reorder and actual issue order before
+explaining a mismatch with priority or source order alone.
+
+Read age must recover the surrounding owner/operation graph too: capturing the
+high-loop reference before clearing produces count-first stores but adds an
+extra index load and discards the original maintained index. Three capture/
+counter-ownership forms emit the same unsupported complete object; decline them
+and close that domain. A partial recovery is not merely one desired store order
+surrounded by invented operations.
+[Packet trace and bounded capture domain](../adid-first-study-scheduling-results.md).
+
+### Reconsider retention separately from a closed exactness experiment (F11930)
+
+Unsigned constellation clearing counters already measured two original JBE
+predicates replacing JLE, with just the two inline copies changing in their
+caller. The source family correctly failed to close either130-byte function.
+That does not refute its supported counter-type recovery. Under partial-recovery
+scope, replay against current production, audit isolated controls and all
+bystanders, then period-validate and retain the operation improvement. Do not
+reopen nearby index/declaration/spelling permutations or claim a whole-body
+gain. Count partial functions and inline operations separately from exactness.
+[Current four-cell revalidation and integration](../constellation-counter-retention-results.md).
+
+### Retain evidenced path joins while keeping their independent read residuals open (F11931–F11933)
+
+V32 accepted-count fallthrough restores the original unsigned JA/accepted-store
+arm while its owner reload remains missing. V8 per-sample ring local restores
+the original one-publication wrap join while its filter-load order and stack
+homes remain different. Retain these supported path recoveries after complete
+TU audit and period validation; do not force the independent missing reads or
+claim a full exact gain. Local cursors must respect original capture/publication
+boundaries and cannot silently cross a callback or loop iteration.
+
+A read-age source change can survive to block reorder and still fail in the
+final object. V8's pole snapshot is before input through31.bbro; sched2 reverses
+the pair. That cross changes the object even at an equal BYTES233 score. Close
+the tested source read-boundary domain and seek a scheduling/lifetime witness,
+rather than retrying names or asserting that the compiler erased the source.
+[Current path retention and nine-stage read trace](../partial-path-retention-results.md).
+
+
+### Account for proved table identity before screening spill homes (F11934–F11936)
+
+An otherwise exact instruction graph can be rejected by anonymous section
+relocations. getPower's six ordered dispatch targets agree, but the old screen
+compared table offsets3300/24 and missed ten exchanged double stack operands.
+Use a shared conservative ELF proof; never blank arbitrary relocation targets.
+The induction fallback tracks entry index/flags/CFG and validates every table
+entry, ABI call, stack width/save slot and incoming relocation. Known negative
+ELF controls must refuse partial stack writes, word pushes, alternate interior
+entries and overlapping CALL fields. CI cache keys include the proof module.
+
+After table proof, unchanged-production exact count stays fixed. A separate
+source change puts fraction before power; observed ascending-pseudo reload
+allocation exchanges the original-opposite homes and makes getPower574B exact.
+Lifting scope with power still first is raw-inert. Declaration scope/order is
+only a bounded lever when named allocation requests and original homes supply
+an independent witness. [Trace/replay](../getpower-stack-results.md).
+
+### A local SIZE window nominates homes, not their meaning (F11934)
+
+Extend stack screening beyond equal-sized bodies, using matching local graphs
+with all real values/registers/relocations preserved. getConstellationsIndex and
+Psd::process expose consistent named local-home exchanges despite independent
+CFG differences. V32 ring response instead exchanges outgoing argument slots
+and corresponding defining registers: it is a false local-spill nomination.
+Inspect reaching definitions/consumers before allocation experiments. Window
+identity cannot establish whole-function or CFG recovery.
+
+### Successive extraction and refreshed buffers are independent of group expansion (F11937)
+
+V34 getFrame's group fields use SHR1, SHRsmall, SHRw destructively, and retain
+unshifted input between groups while refreshing it after callbacks. Source
+absolute shifts and per-group member reads can be equivalent over normal widths
+yet miss both original boundaries. Cross these witnessed graphs separately from
+fixed groups/callback capture/word widths. Static read counts do not locate
+refreshes. Retain supported operations after full-TU/period validation even
+when another incomplete graph has a smaller byte distance. Do not hold a
+snapshot across a callback without the original refresh boundary.
+[Domain/results](../v34-frame-retention-results.md).
+
+### Diagnose alias-driven reload loss without forcing a source read (F11938)
+
+V32 getter already repeats the owner expression at return. With type-based
+alias analysis, the post-count-store read disappears between07.addressof and
+first available09.loop; withdrawing strict alias analysis restores the exact
+53B getter while also changing constructors. Count actual load SETs rather
+than duplicated REG_EQUIV text; preserve unavailable duplicate snapshots.
+The option demonstrates an interaction, not original field typing or profile.
+Seek an independently supported access/API type or crossed full-TU profile
+explanation before source adoption. [Diagnostic](../v32-cleaned-alias-results.md).
+
+### Follow the surviving pseudo when recovering spill order (F11940)
+
+A named local can disappear while its defining temporary owns the spill.
+PSD's frames local copies the unsigned division-result pseudo; declaring only
+nearby loop locals after that result leaves its home unchanged. Declaring
+frame/pos before division moves their pseudo creation before the surviving
+quotient and recovers all three original homes. Mapping's i/count exchange
+also propagates into its inlined caller. Six bounded cells/72 body verdicts
+and read-only raw-equal compiler observations establish both exchanges.
+Scope/adjacency controls are inert. Validate initial SET ownership, reload
+requests and final frame adjustment; require all altered operands to be the
+identified home permutation. Local recovery need not close a SIZE body.
+Do not continue declaration permutations after the independently witnessed
+homes agree. [Domain/results](../size-spill-results.md).
+
+### Ordered enum dispatch can identify switch lowering (F11941)
+
+An if-chain's cmp1/cmp2/test0 differed from PSD's original cmp1/je/jle/cmp2/je.
+A bounded three-case switch preserves the case bodies and default no-op while
+recovering that ordered dispatch. Review destination blocks as well as compare
+mnemonics. Full-TU audit may support the structural recovery even when overall
+SIZE distance grows; do not mistake independent x87/loop/register differences
+for a failure of the recovered dispatch. Close case-order spelling searches
+once the original category agrees. [Control](../psd-dispatch-domain.md).
+
+### Normalize inside the loop when the blob guards evaluation (F11944–F11946)
+
+PSD's precomputed scale evaluated even with no bins; original guards evaluation
+in each arm. In-loop division hoists into a guarded preheader. Cross this lifetime
+with peak's scalar mode and arithmetic operands instead of freezing explicit
+long-double casts: natural float division still stays extended in period x87
+until the original float narrowing. Require emitted rounding/operand graph and
+period validation, not a modern precision intuition. Window*input also restores
+which value is loaded versus used as a memory operand. Initial overlap/length
+read order is independent. All60 floating rows/27 branches can agree while six
+integer conversion register rows remain. [Replay](../search-psd-results.md).
+
+### Search-entry and publication order are independent of compare spelling (F11943)
+
+Place a value initialization after an evidenced guard when original loads occur
+there. Mapping's guarded length and count postincrement recover distinct
+boundaries. Reversing source equality operands is inert, but length>n instead
+of n<length preserves cmp0/JBE and CMP/JA in GCC3. Cross only independently
+witnessed boundaries; audit inlined callers. Matching branch orientation does
+not justify local/register permutations to close remaining allocation.
+[Control/results](../search-psd-results.md).
+
+### Trace conversion temporaries before changing precision (F11948–F11949)
+
+A spare stack word can be an expansion temporary, even when final assembly has
+no narrowing instruction at that word. PSD's explicit long-double getter creates
+SF4 through gen_truncxfsf2. Ordinary scalar arithmetic removes it while period
+x87 retains the original extended operation graph. Cross the independently
+observed comparison orientation: scalar mode alone changes many rows; bins>i
+alone leaves SIZE1; both yield EXACT77B. Review the full TU and narrowing sites,
+then run the period differential; this is not a blanket precision rewrite.
+
+Separately distinguish persistent peephole scratch selection from function-local
+register renaming. PSD's remaining conversion high words exist before peephole2;
+read-only installed-compiler observation attributes final substitutions to local
+use-age ticks. Earlier-function cursor interventions do not transfer directly.
+[Results and replay](../psd-conversion-results.md).
+
+### Expansion-word removal is transferable, arithmetic narrowing is not (F11951–F11953)
+
+Trace assign_386_stack_local requests and their returned homes, including
+zero-size reload/alignment requests. SineWave's scalar producers remove the
+same gen_truncxfsf2 SF4 word as PSD and restore the original8B frame; delayed
+phase acquisition recovers the original operand multiset while cold-exit layout
+remains nonexact. FloatFIR's scalar method already has the original4B reservation,
+so a similar request alone does not warrant changing its return arithmetic.
+
+AGC falsifies a broad scalar rewrite: its gen_truncdfsf2 request survives, and
+an apparently closer control narrows fsqrt through memory where original does
+not. Audit the operation graph, narrowing sites and coupled inlined callers,
+not just frame size or SIZE score. Record assembler names in read-only method
+traces to distinguish overloads and unrelated process methods in one TU.
+[Bounded domains](../expansion-temporary-transfer-domain.md).
+
+### Separate branch prediction, trace placement and x87 edge repair (F11955–F11956)
+
+A floating function can match every nonbranch operand yet differ in cold-exit
+placement. Trace prediction12.bp, ordering31.bbro and stack34.stack separately:
+SineWave's entry50/50 and exit10% place its zero-trip block before wrap; edge
+pops appear afterward. Compare complete CFG paths, not just operand multisets.
+A natural first-iteration owner can change prediction but retain hot tests and
+cause block copying. Record copies created during trace connection explicitly;
+require known copy-source and final-order coverage rather than silently ignoring
+new blocks. Positive4→8 and malformed99→8 controls exercise the reader.
+
+Inspect allocated constants too: this control adds QNaN and an entry fld only
+at stack conversion. Live-at-entry x87 initialization can explain a constant
+absent from source; it does not by itself establish reachable undefined behavior.
+Reject the control when its original graph is lost. The92-copy small-floating
+screen nominates only SineWave for this layout-only family; it is not evidence
+that all other source recovery is exhausted. [Replay/results](../sine-cold-layout-results.md).
+
+### Missing diagnostics can conceal the original return contract (F11958–F11960)
+
+Compare original diagnostic relocations and value arguments before declaring a
+small SIZE gap allocator-only. V23 glue had comments where original debug>1
+branches/calls belonged. Restoring raw-status printf exposes an unjustified HI
+return: original consumes EAX, and initial RTL shows our extra sign extension
+before scheduling. Recover shared declarations and definitions together, audit
+callees/callers and include every affected TU; do not use local cast workarounds.
+
+Compare debug transcripts on valid lifecycle boundaries at levels1/2/3, with
+callback markers and overflow checks. Matching outputs at debug0 misses original
+state/tone/timeout messages and their effects on codegen. Nine recovered sites
+bring five functions closer while all remain nonexact. Follow original newline,
+argument and publication order. A SIZE2 body can still have a different frame,
+dispatch and sibling-call graph. Inspect complete bodies before choosing next
+controls. [Replay/results](../missing-debug-boundary-results.md).
+
+Audit the fixture's temporal claims too: V23's acquisition deadline is one minute,
+and the tested host retains carrier through24 seconds of silence. Preserve those
+measured histories and exact comparisons; never repair source to meet a guessed
+modern timeout. Distinguish object-recovered sites from those observed firing.
+
+### Trace returned values and word operands independently (F11962–F11963)
+
+A callee can publish the right field while returning the wrong register value;
+a field-reading substitute can hide that reconstruction defect. Compare the
+original epilogue with callers' EAX/AX captures, recover the shared return
+boundary, and test explicit results as well as samples/state. Include ignored
+callers in the complete-TU audit: changing AGC's return declaration exchanges
+argument-store order in unchanged B103 source. A closer body is not necessarily
+an exact gain.
+
+For countdown loops, distinguish narrowing only the initial int index from
+re-narrowing every decrement. Original MOVSWL AX plus TEST SI can independently
+support a short counter; signed word compares can support short measured/cached
+gate operands. Cross these witnesses separately from pointer/countdown factoring
+and gain-local widths. AGC recovers the first two categories, but the remaining
+gain graph is not established by its quiet loop or a SIZE3 gap. Retain informative
+losing controls, and stop the finite domain absent another witness.
+[Replay and limits](../v23-agc-return-results.md).
+
+### Cross arm ownership with sample-loop operands (F11965)
+
+A common advance in original disassembly can justify explicit if/else factoring
+when reconstruction uses an early continue. Cross it with independently
+witnessed pointer/countdown loops: AGC's indexed if/else makes initial CFG
+smaller but later STC duplicates three blocks; the combined source keeps one
+copy and restores quiet-before-return-before-gain plus the shared exit. Initial
+RTL's two-versus-one advance assignments separate source ownership from later
+allocation/layout. Inspect saved CFG and bbro transformations and use known
+negative controls; do not call equal block counts equal graphs.
+
+Adopt original graph/operand recovery on evidence and period validation, even
+when SIZE gets worse. A restored arm boundary can expose pointer spills or
+remaining arithmetic/shift differences; the smallest-size control may retain
+wrong source structure. This is a partial lever, not a promise of exactness.
+[AGC controls and limits](../agc-arm-ownership-results.md).
+
+### A byte instruction can be a narrow use/output choice (F11967–F11968)
+
+Do not infer an unsigned-char declaration or cast from MOVZBL alone. AGC's
+raw cached int shift expands to a QI subreg use; reload loads a memQI home into
+CL, and GCC3's movqi_1 output selects MOVZBL under i686 TARGET_MOVX. The QI
+load persists through saved late stages; it is not an explicit zero-extension
+node. An explicit byte cast instead introduces a temporary and changes its
+lifetime/hoisting. Cross raw count, byte cast and masking while preserving
+value arithmetic, and inspect output-selection rules as well as RTL.
+
+Count-width evidence and C semantics are separate: initialized nonnegative
+unity-pair AGC histories give counts0..14, but initial config relocations cannot
+bound later pointer selections or frozen/planted states. Document original
+period hardware behavior outside C's count range, demonstrate finite count
+identities with a wrong-mask control, and never present invalid shifts as
+portable C or fixture reachability. [Replay/limits](../agc-shift-results.md).
+
+### Separate predicate width, eager booleans and argument normalization (F11970–F11972)
+
+A narrower cached carrier and a narrower use need different controls. AGC's
+short gain cache restores two word tests; use-only level narrowing under &&
+branchifies the original two-SETcc/combined-TEST guard. Cross eager boolean &
+with that narrow predicate when the original explicitly combines both values.
+Here the operands have no evaluation side effects. Retain the wide arithmetic
+carrier and reject a smaller wrong-CFG result. A complementary structured
+comparison with swapped arms can restore witnessed hot/cold partition placement;
+do not add branch hints or reason from frame size alone.
+
+When full-width local data adds an argument extension absent from original,
+check the helper interface as well as the caller. RMS can receive a full unsigned
+length while its local countdown remains16-bit, preserving its entire exact
+body. Audit all callers: SRE needs explicit word normalization at that boundary
+to retain its original zero-extending argument load. Do not change the signed
+field globally or mistake identical callee bytes for proof of a unique formal
+type. Known length-only, width-only and normalized controls distinguish these
+interactions. [Complete controls/replay](../agc-predicate-results.md).
+
+Object-data audits must represent COMMON storage by size, binding and alignment;
+it has no section contents. The class1 table is a76-byte/32-aligned positive
+control across six cells. Passing it as a section index is an inspector failure,
+not a reconstruction result or a reason to skip the TU.
+
+### Trace paired argument lifetimes across opaque calls (F11974–F11975)
+
+An extra extension near a call need not mean a wrong prototype. FSE narrows
+both scaled LMS errors before the original first update, keeping the second
+across that call. Reconstruction had formed the second afterward. Capturing
+both first restores this boundary already in initial RTL; two natural local
+forms emit the same complete object. Preserve helper types and validate all
+bystanders. The SIZE gap improves without making the function exact.
+
+Fixed pre-call windows nominate, never certify: MTD's original conversion falls
+just outside eight rows; TONE and settxlevel convert unrelated values. Report
+matched calls, excluded bodies and per-object duplicate weak bodies separately
+from the strict function census. A known length-only RMS positive and identity
+negative validate this detector; an incorrect positive fixture must abort, not
+be excused. Inspect full def/use chains before testing interface changes.
+[Controls, partial-link limits and next discriminators](../lms-paired-error-results.md).
+
+### Cross producer return width with original scalar write-back order (F11977–F11979)
+
+A C++ member name may omit its return type. Inspect producers and consumers
+together: Descrambler<T,I> returned T although the original HI returns and
+consumes fullEAX. Cross declaration width with final narrowing; fixing the
+caller alone need not fix the producer. Then cross an independently observed
+scalar tap write-back order. Return alone leaves HI ten bytes different; order
+alone leaves its SIZE mismatch; both recover the complete118B body. II110B
+needs order only. Confirm the changed order in initial RTL before attributing
+it to allocation.
+
+Transfer needs independent controls. Scrambler HI's original tap2-first writes
+and HH's tap1-first native writes can still share the same tap2-first source:
+HI becomes EXACT while the entire exact-HH TU stays raw-identical. Native
+write order alone is not a universal source-order oracle. Preserve bulk loops,
+XOR spelling and declarations, and compare every header consumer.
+
+An imported function's vendored declaration/definition is stronger than a
+local prototype guess. B103/V23 modem bit counts are int; V23 needs both the
+correct declaration and removal of invented word casts to recover original
+full arguments. B103 still needs its original normalization at use. A shared
+contract does not imply every caller has the same conversion boundary.
+[Complete domains, negative controls and validation exclusions](../scalar-boundary-results.md).
+
+### Separate capture age from narrowing placement (F11982–F11983)
+
+An extension near a debug call can belong to the cached source value. INFO1a
+narrows the reversed-bit result before its debug branch; narrowing only the
+printf argument delays that boundary. Cross narrow-at-assignment with explicit
+destination capture when the original loads both pointers before the first
+byte store. Inspect native def/use and initial RTL; call placeholders may hide
+a baseline result assignment. Both supported cache spellings can emit the same
+object, so retain the clearer declaration without claiming uniqueness.
+
+The location of narrowing can also change behaviour. The fax constructor
+compares a promoted max_frame+3 requirement before narrowing the selected ring
+value. A word requirement instead compares the wrapped value. Cross requirement
+and selected-carrier widths, and use fixed safe constructor cases at wrap
+boundaries. State the component boundary and allocation extents; a constructor
+result does not prove an end-to-end reachable configuration. Keep a failing
+pre-fix control, and distinguish static arithmetic enumeration from executed
+blob comparisons. [Controls and results](../v34-vmi-boundary-results.md).
+
+### Check result provenance and evaluation boundaries separately (F11985–F11986)
+
+A pre-call extension screen can miss the useful return boundary. Compare fresh
+EAX extensions after matched calls, stopping at intervening writes and control
+transfers. Demonstrate the detector on a historical wrong-return caller, and
+include identity and overwritten-EAX negatives. Print zero nominations and all
+excluded/matched denominators explicitly. A bounded straight-line null does
+not certify inlined calls, masks, branches or unmatched call sequences.
+
+Native full-width character arguments do not uniquely imply an int-return
+helper. Spectral display's direct-argument controls remove byte extensions
+with the char helper unchanged; its late sign comparison is a separate value
+lifetime. Cross those explanations before editing a declaration. Likewise,
+removing an XF load by switching fractional intermediates to DF may produce a
+memory multiply instead of the original double load. Audit operand categories,
+constant-pool payloads and full bodies; a SIZE1 result cannot settle that
+storage lifetime. Preserve the negative domain and require a new witness to
+reopen it. [Complete queue ledger](../call-boundary-lead-ledger.md),
+[spectral controls](../spectral-sign-carrier-results.md).
+
+### Review partial source recovery separately from exact closure (F11987–F11988)
+
+A finite experiment's failure to close an entire body does not refute every
+original operand boundary it restored. Keep that negative measurement, then
+review a supported partial change on its own evidence when partial fidelity
+is the authorised objective. Reproduce the current full-TU baseline, especially
+if diagnostics or helper return ownership changed since the old control.
+Do not reopen neighbouring spellings or profile options merely for a closer size.
+
+V23's original MRF outgoing word is unsigned even though the callee narrows
+signed at use. V21 reloads its owner after each actual known-state diagnostic;
+its inlined callers must be audited as changed bodies. HDLC unframe keeps entry
+scalar snapshots but reads the current parent across CRC/debug calls; recover
+that lifetime without claiming arbitrary alias histories are reachable.
+All three pass the permitted period gate without becoming exact. Report size
+and positioned-byte effects separately from recovered operands and exact counts.
+[Three controls, collateral and validation](../partial-boundary-recoveries-results.md).
+
+### Sequence a call result before reading a mutable destination owner (F11989)
+
+In `root->child->field = helper(...)`, the assignment store follows the call,
+but evaluating the destination address can precede it. Compare the owner's
+load age, not just the return register or final store. DemodDataV21's original
+reloads the child after AGC; a local int result followed by the member assignment
+recovers that boundary. Cross it with the independent unsigned MRF slot: each
+incomplete control misses, all observed boundaries together recover EXACT217.
+This is statement sequencing, not a request for a particular register.
+
+Do not propagate the local blindly. Other nested assignments already capture
+their owners before calls in the original; indexed embedded arrays do not read
+a second owner pointer. The seven nested and18 indexed nominations were reviewed
+without another justified rewrite. A fresh-return detector must stop when EAX
+is overwritten, or it can mistake a field reload for a returned value.
+[Native controls and bounded screen](../boundary-transfer-results.md).
+
+### Review source publications and API slots without hiding collateral (F11990–F11992)
+
+An unread argument slot does not prove a missing formal; an epilogue that
+publishes and returns the same int does not establish a void-return ABI bug.
+Review caller and producer together, and retire historical inference once a
+consistent source contract is supported. Keep signed use-site narrowing when
+recovering unsigned outgoing slots. Require raw equality of a callee TU whose
+API spelling changes without changing its actual word computation.
+
+Accumulator stores and separate ADD/SUB update boundaries can be supported
+partial recoveries even when the whole function misses. Validate values under
+the period compiler and audit all unmatched helper bodies too. Preserve
+original high-count defects; do not execute an unsafe wrap/nontermination case
+merely to add coverage. Report larger size gaps and exact-loss controls openly;
+V32's unresolved collateral is withheld, not fitted with local permutations.
+[Complete partial-recovery table](../boundary-transfer-results.md).
+
+### Fail an unknown test selection before claiming a denominator (F11993)
+
+A runner that skips an unknown requested name can report a green subset. Check
+requested names against actual fixture sources before Docker or partial runs.
+Test unknown-only and mixed valid/unknown lists with Docker replaced by a
+failure sentinel. Keep the valid full selection as the positive control and
+compare requested and reported counts. A warning is not a failing gate.
+
+### Follow the promoted comparison operands through the selected value (F11995–F11998)
+
+A short-pointer API does not mean every read is signed. Transmitter countdown
+handlers compare a signed positive remaining value against an unsigned budget
+word. Preserve those promotions at the comparison use; changing the selected
+carrier or public prototype is a different hypothesis. Test0x7fff/0x8000/0xffff
+at an explicitly constructed component boundary, with output buffers large enough
+for the incorrect control too. Separate public-wrapper reachability from a valid
+component invocation. A faithful correction can increase a size gap.
+
+Revisit a declined exactness control for partial adoption when the original
+operations are independently established and partial fidelity is authorised.
+V29 request bytes retain their age across child stores; V34 FSK combines products
+and history updates, reading coefficients first. Keep current full-TU raw controls,
+all bystanders and period validation. Do not promote a near-size follow-up into
+source truth: V27 Quiet's one-byte gap still contains different read/extension
+boundaries, and the four selected-count/member controls fail complete identity.
+[Domain and evidence](../transmitter-budget-fidelity-results.md).
+
+### Validate documented semantic leads at actual constructor boundaries (F11999–F12001)
+
+A closed exactness experiment can leave a real reconstruction mismatch. Review
+its original operands, then demonstrate fixed failures before partial adoption.
+Wrapper failure checks must run even when no supported converter was selected;
+a cadence subindex must select the actual original bank. Compare constructed
+objects and selected payloads, not only a source table or its byte count.
+
+For state-machine predicates, construct the component and feed its real input.
+Equal first/last tones with a longer middle distinguish the missing interior
+comparison without planting period history. Retain an all-equal positive control
+and record the first differing sample. Keep existing synthetic probes labelled.
+
+A diagnostic value can differ intentionally from returned metadata. Cadence's
+working default type is DIAL while its returned name is INVALID. Trace both
+loads and their publication ages across calls; do not reuse one merely because
+the strings usually agree. Remove an old transcript exclusion only after the
+original operation is understood and a failing control is preserved.
+[Finite controls and limits](../service-constructor-fidelity-results.md).
+
+### Inspect unchanged bystanders before accepting a read-boundary transfer (F12002)
+
+A preceding function change can alter another function's peephole output. Preserve the failed audit, compare complete source
+and instruction streams, then identify the actual changed values. In the HDLC
+pair, two independently zeroed registers initialise exchanged private spill
+slots before the first jump; all subsequent instructions agree. Check the rows
+and the join state explicitly, while continuing to report five raw differing
+bytes and a nonexact body. Trace stages with a checked alias-set bijection:
+agreement through flow2 and a28.peephole2 difference locate the retained transformation,
+without recovering original compiler state or authorising source fitting.
+[Reproduction and limits](../service-constructor-fidelity-results.md).
+
+### Separate explicit GCC tree annotations from RTL operands (F12003)
+
+An unchanged symbol can carry a different `<string_cst 0x...>` annotation on
+another compiler invocation. Compare its symbol, flags and operands, while
+normalizing only the explicitly tagged tree address. Test the actual parsed
+form, including a closing bracket attached to the address token. Retain negative
+controls for symbol names, flags, real constants, register colours and stack
+offsets. Preserve and retract an invalid early-stage report before attributing
+a source-unchanged bystander to allocation. [Controls](../gcc3-stage-divergence-diagnostic.md).

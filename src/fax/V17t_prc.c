@@ -523,7 +523,7 @@ TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -551,7 +551,7 @@ TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -593,7 +593,7 @@ TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -629,7 +629,7 @@ TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -660,7 +660,7 @@ TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 
@@ -700,7 +700,7 @@ TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
 	prm->countdown = (short)(remaining - n);
 

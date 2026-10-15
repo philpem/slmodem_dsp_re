@@ -5,23 +5,27 @@
  },
  {
   "label": "the two arms of the rounding are one expression",
-  "find": "\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;",
-  "replace": "\t\telse\n\t\t\tbits = left / V92BTOS_SYMBOLS_PER_FRAME\n\t\t\t       * bitsPerFrame;"
+  "find": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "replace": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left / V92BTOS_SYMBOLS_PER_FRAME\n\t\t\t       * bitsPerFrame;\n\t}\n\n\treturn bits;\n}",
+  "fn": "nofBitsForNextTime"
  },
  {
   "label": "the residue arm multiplies first too",
-  "find": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;",
-  "replace": "\t\t\tbits = (left * bitsPerFrame + bitsPerFrame)\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;"
+  "find": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "replace": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left * bitsPerFrame + bitsPerFrame)\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "fn": "nofBitsForNextTime"
  },
  {
   "label": "the rounding does not round up",
-  "find": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)",
-  "replace": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME)"
+  "find": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "replace": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "fn": "nofBitsForNextTime"
  },
  {
   "label": "the two arms are swapped",
-  "find": "\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)",
-  "replace": "\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME == 0)"
+  "find": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "replace": "V92BitsToSymbol::nofBitsForNextTime()\n{\n\tunsigned int bits = 0;\n\n\tif (symbolsBlockSize > symbolsDone) {\n\t\tunsigned int left = symbolsBlockSize - symbolsDone;\n\n\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME == 0)\n\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;\n\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;\n\t}\n\n\treturn bits;\n}",
+  "fn": "nofBitsForNextTime"
  },
  {
   "label": "the empty-block test is inclusive",
@@ -62,13 +66,15 @@
  },
  {
   "label": "setSymbolsBlockSize reports the count from before the store",
-  "find": "\tsymbolsBlockSize = n;\n\n\treturn nofBitsForNextTime();",
-  "replace": "\tunsigned int r = nofBitsForNextTime();\n\n\tsymbolsBlockSize = n;\n\n\treturn r;"
+  "find": "\tunsigned int done = symbolsDone;\n\n\tsymbolsBlockSize = n;\n\tunsigned int bits = 0;\n\n\tif (n > done) {\n\t\tunsigned int left = n - done;",
+  "replace": "\tunsigned int done = symbolsDone;\n\tunsigned int oldBlock = symbolsBlockSize;\n\n\tsymbolsBlockSize = n;\n\tunsigned int bits = 0;\n\n\tif (oldBlock > done) {\n\t\tunsigned int left = oldBlock - done;",
+  "fn": "setSymbolsBlockSize"
  },
  {
   "label": "setSymbolsBlockSize stores into the cursor instead",
-  "find": "\tsymbolsBlockSize = n;\n\n\treturn",
-  "replace": "\tsymbolsDone = n;\n\n\treturn"
+  "find": "\tsymbolsBlockSize = n;\n\tunsigned int bits = 0;",
+  "replace": "\tsymbolsDone = n;\n\tunsigned int bits = 0;",
+  "fn": "setSymbolsBlockSize"
  },
  {
   "label": "the two-argument overload's overflow test is inclusive",

@@ -38,9 +38,9 @@
 
 extern int modem_dp_register(int id, void *op);
 extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
-			  unsigned short count);
+			  int count);
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
-			  unsigned short count);
+			  int count);
 
 extern void modem_dp_deregister(int id, void *op);
 

@@ -100,7 +100,7 @@ static int
 interp_phase(const short *coeff, const short *hist)
 {
 	unsigned acc = V34_FSK_ROUND;
-	int k;
+	short k;
 
 	for (k = 0; k < V34_FSK_TAPS; k++)
 		acc += (unsigned)(coeff[k] * hist[V34_FSK_TAPS - 1 - k]);
@@ -121,7 +121,7 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 	 */
 	struct v34_fskdelay *d = (struct v34_fskdelay *)obj->echo0.coeff_frac;
 	short *hist = obj->fsk_interp;
-	int i, j, k;
+	short i, j, k;
 
 	/* --- 1: interpolate 4 samples to 12 --- */
 	for (i = 0; i < V34_FSK_BLOCK; i++) {
@@ -131,19 +131,25 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 			(short)interp_phase(intcoef1, hist);
 		work[i * V34_FSK_PHASES + 1] =
 			(short)interp_phase(intcoef2, hist);
-		work[i * V34_FSK_PHASES + 2] =
-			(short)interp_phase(intcoef3, hist);
 
 		/*
 		 * Only the last phase advances the history, and the original
 		 * folds the shift into that phase's own loop -- reading
 		 * hist[TAPS-1-k] and writing hist[TAPS-k] in the same
 		 * iteration.  Walking downwards, so nothing is overwritten
-		 * before it has been read.  Kept separate here because the
-		 * multiply uses the pre-shift value either way.
+		 * before it has been read.  Read the coefficient before the
+		 * history store too, as in the original (F11997).
 		 */
-		for (k = V34_FSK_TAPS; k > 0; k--)
-			hist[k] = hist[k - 1];
+		{
+			unsigned acc = V34_FSK_ROUND;
+			for (k = 0; k < V34_FSK_TAPS; k++) {
+				short sample = hist[V34_FSK_TAPS - 1 - k];
+				short coefficient = intcoef3[k];
+				hist[V34_FSK_TAPS - k] = sample;
+				acc += (unsigned)(coefficient * sample);
+			}
+			work[i * V34_FSK_PHASES + 2] = (short)((int)acc >> 14);
+		}
 		/*
 		 * The history is 13 entries and only 12 are ever read: the
 		 * shift writes hist[12] and no filter tap reaches it.  It is
@@ -155,27 +161,30 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 	}
 
 	/* --- 2: delay and multiply --- */
-	for (j = 0; j < V34_FSK_INTERP; j++) {
-		for (k = V34_FSK_DELAY_LINE - 1; k > 0; k--)
-			d->line[k] = d->line[k - 1];
-		d->line[0] = work[j];
+	{
+		const short *delayed = &d->line[cfg->delay];
+		for (j = 0; j < V34_FSK_INTERP; j++) {
+			for (k = V34_FSK_DELAY_LINE - 1; k > 0; k--)
+				d->line[k] = d->line[k - 1];
+			d->line[0] = work[j];
 
-		/*
-		 * `delay` indexes the line AFTER the new sample went in at
-		 * zero, so a delay of 0 squares the sample rather than
-		 * multiplying it by the previous one.  The original computes
-		 * this address once, before the loop, and it stays correct
-		 * only because the line shifts under it rather than the index
-		 * moving.
-		 *
-		 * NOT bounds-checked, and deliberately so: the original does
-		 * not check either, and a `delay` past the end of the line
-		 * reads whatever follows it in both.  Adding a clamp would
-		 * be added hardening on an input no caller has been seen to
-		 * get wrong -- and would make the two disagree exactly where
-		 * a differential test could not tell which was right.
-		 */
-		work[j] = (short)((work[j] * d->line[cfg->delay]) >> 14);
+			/*
+			 * `delay` indexes the line AFTER the new sample went in at
+			 * zero, so a delay of 0 squares the sample rather than
+			 * multiplying it by the previous one.  The original computes
+			 * this address once, before the loop, and it stays correct
+			 * only because the line shifts under it rather than the index
+			 * moving.
+			 *
+			 * NOT bounds-checked, and deliberately so: the original does
+			 * not check either, and a `delay` past the end of the line
+			 * reads whatever follows it in both.  Adding a clamp would
+			 * be added hardening on an input no caller has been seen to
+			 * get wrong -- and would make the two disagree exactly where
+			 * a differential test could not tell which was right.
+			 */
+			work[j] = (short)((work[j] * *delayed) >> 14);
+		}
 	}
 
 	/* --- 3: low-pass, decimating 4:1 --- */

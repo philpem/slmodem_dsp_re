@@ -249,7 +249,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			 int unused_out_count, int *tx_data_count)
 {
 	short cnt;
-	unsigned short result = (unsigned short)*tx_count;
+	unsigned short result;
 	int status;
 	int i;
 
@@ -290,7 +290,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 				    ctx->clock_sec, ctx->clock_frac);
 		}
 
-		ctx->tx_fifo_ready = (ctx->tx_fifo->count >= (unsigned)ctx->tx_bytes_per_block) ? 1
+		ctx->tx_fifo_ready = ((int)ctx->tx_fifo->count >= ctx->tx_bytes_per_block) ? 1
 									  : 0;
 	}
 
@@ -313,6 +313,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	}
 
 	cnt = (short)*tx_data_count;
+	result = (unsigned short)*tx_count;
 	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx,
 	    &cnt, &result);
 

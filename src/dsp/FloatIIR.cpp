@@ -180,28 +180,26 @@ Sample
 GenericIIR<Sample, Coeff>::process(Sample x)
 {
 	/*
-	 * Extended precision throughout, rounded to Coeff only on the way out
-	 * -- see the note at the top of this file.  On x87 this is the natural
-	 * evaluation width, so it costs nothing and matches the original bit
-	 * for bit.
+	 * Publish the accumulator at the original update boundaries (F11992).
+	 * The period compiler retains the live x87 value while emitting the
+	 * observed non-popping double stores; see the precision note above.
 	 */
-	long double acc = 0;
+	m_acc = 0;
 
 	m_inHist[m_inPos] = x;
 
 	/* Feedforward: the numerator over the input history. */
 	for (m_i = 0; m_i < m_nnum; m_i++)
-		acc = acc + m_num[m_i] * m_inHist[m_inPos + m_i];
+		m_acc = m_acc + m_num[m_i] * m_inHist[m_inPos + m_i];
 
 	/* Feedback: the denominator over the output history, from index 1. */
 	for (m_i = 1; m_i < m_nden; m_i++)
-		acc = acc - m_den[m_i] * m_outHist[m_outPos + m_i];
+		m_acc = m_acc - m_den[m_i] * m_outHist[m_outPos + m_i];
 
 	/* See the header: a zero den[0] means "already normalised". */
 	if (m_den[0] != 0)
-		acc = acc / m_den[0];
+		m_acc = m_acc / m_den[0];
 
-	m_acc = (Coeff)acc;
 	m_outHist[m_outPos] = m_acc;
 
 	if (m_outPos == 0)

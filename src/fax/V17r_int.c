@@ -78,9 +78,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	unsigned short n;
 	struct v17rx_state *rxs;
 
-	FPM_AGC_agc(&RXS(modem)->agc.value, in, count, 1);
-	/* Not the object's `%eax`; the same value.  D1091. */
-	signal = RXS(modem)->agc.value.signal;
+	signal = FPM_AGC_agc(&RXS(modem)->agc.value, in, count, 1);
 
 	if (RXCTL(modem)->state == V17RX_STATE_START) {
 		short *buf = (short *)RXCTL(modem)->scratch;
@@ -107,7 +105,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 			&RXS(modem)->mrf,
 			in,
 			(short *)RXSTATE(modem)->buf_mrf,
-			(short)count);
+			count);
 
 	rxs = RXS(modem);
 	rxs->sre.adapt = signal & rxs->r04;

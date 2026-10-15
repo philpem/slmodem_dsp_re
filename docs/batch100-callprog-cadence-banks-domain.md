@@ -5,3 +5,8 @@ Before compilation, pinned 856c1ecb fullTU domain: four cells cross reconstructe
 ## Measured hold
 
 Four completeTUs rawbaseline reproduces: create baseline SIZE502; correctedtable samecode/dataonly; switchcurrentmap SIZE276; switchoriginalmap SIZE249. No exactgain/loss,onlycreatebodychanges. All ordinary nameddata/exports/records preserved except intentional banks.0 removal; stringmultisets identical; full canonical nontext differences retained in build/batch100-callprog-changed-data-audit.json. Original boundedjumptable prover refuses unsupported control/stack instruction; preserve refusal and explicit8relocation/destination observations without calling it proved. No adoption: original6/7 map correction needs its own reachable lifecycle fixture while nonexact.
+
+Later partial-fidelity adoption: F12000 supplies actual constructor comparisons
+for all72 bank/subindex pairs and adopts the original mapping/switch. Full table
+prover refusal is preserved; no complete byte/table proof is claimed. See
+[current evidence](service-constructor-fidelity-results.md).

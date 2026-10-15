@@ -1,12 +1,10 @@
 /*
  * t_cadence.c -- differential test of the cadence detector.
  *
- * cadence_create is not reconstructed yet, so the objects here are built by
- * hand: the same 732 bytes, filled field by field, with a toneiir underneath
- * that reads its own side's coefficient tables.  That is not a workaround --
- * it is the only way to reach the configurations the country table can
- * produce but the four call-progress tones happen not to use, and those are
- * exactly where a reconstruction is most likely to be wrong.
+ * Covers constructor-selected filters and constructor-created BUSY audio
+ * lifecycles. Older direct matcher configurations initialise component state
+ * by hand; they remain synthetic component probes, not public modem lifecycle
+ * evidence. The constructor/audio cases below plant no period or filter state.
  *
  * The stimulus is a real cadence: a 550 Hz tone switched on and off at
  * configurable rates, run through the detector a sample at a time. 62.5 ms
@@ -533,19 +531,11 @@ run_create(const char *label, int tone, int extra, int index, int sub,
 	if (opt_level) {
 		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 		dsplib_debug_capture_on = 0;
-		/*
-		 * KNOWN OPEN DIVERGENCE, tones past RING only.  The line
-		 * counts agree and the content does not, so it is one field
-		 * inside the nine-line report and not a missing or extra
-		 * site.  `name` is clamped to CADENCE_TONE_INVALID by `>`,
-		 * which makes 4 and 9 both print INVALID here; the object
-		 * disagrees somewhere in that block.  Compared for the four
-		 * real tones, which is where the five dead sites were, and
-		 * skipped past RING rather than the whole check being
-		 * dropped or the failure being papered over.  Finding F201.
-		 */
-		if (tone > CADENCE_TONE_RING)
-			goto counted;
+		/* Original default working type is DIAL; metadata remains INVALID. */
+		if (tone > CADENCE_TONE_RING && opt_level > 1)
+			diff_eq_int("original default TYPE is DIAL (%ld)",
+				strstr(dsplib_debug_capture_text(1), "TYPE DIAL\n") != 0,
+				1, tone);
 		diff_eq_int("create transcript (%ld)",
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1,
@@ -554,7 +544,6 @@ run_create(const char *label, int tone, int extra, int index, int sub,
 			    (int)dsplib_debug_capture_lines(0),
 			    (int)dsplib_debug_capture_lines(1),
 			    (long)opt_level);
-counted:
 		if (opt_level == 1)
 			diff_eq_int("level 1 silent (%ld)",
 				    (int)dsplib_debug_capture_lines(1), 0,
@@ -624,6 +613,73 @@ counted:
 	ref_cadence_delete(a);
 	cadence_delete(b);
 
+	return diff_end();
+}
+
+/* Constructor-created BUSY component, driven only by audio samples.
+ * Equal first/last tones isolate the missing middle-tone comparison. */
+static int
+run_created_loop(int middle_ms)
+{
+	struct cadence_setup sa, sb;
+	struct cadence *a, *b;
+	int segment, samples = 0, reference_hits = 0, ours_hits = 0;
+	int saw_interior_mismatch = 0;
+
+	diff_begin(middle_ms == 500 ? "cadence: created equal loop" :
+		   "cadence: created unequal middle tone");
+	harness_param_reset();
+	harness_param_set(GetBusyToneCallProgressFilterIndex, 6);
+	harness_param_set(GetDialToneCallProgressFilterIndex, 6);
+	harness_param_set(GetDialToneDetectionThreshold, 40);
+	harness_param_set(GetBusyDetectionCyclesNumber, 3);
+	harness_param_set(GetBusyToneLooseDetectionEnabled, 1);
+	harness_param_set(GetBusyToneDiffTime, 6);
+	harness_param_set(GetMaxBusyCadenceOnTime, 200);
+	harness_param_set(GetMinBusyCadenceOnTime, 20);
+	harness_param_set(GetMaxBusyCadenceOffTime, 200);
+	harness_param_set(GetMinBusyCadenceOffTime, 20);
+	memset(&sa, 0, sizeof sa);
+	sa.tone = CADENCE_TONE_BUSY;
+	sb = sa;
+	a = ref_cadence_create(0, &sa, 0, (void *)0xD00Du);
+	b = cadence_create(0, &sb, 0, (void *)0xD00Du);
+	diff_eq_int("both constructed (%ld)", a != 0 && b != 0, 1, 0);
+	if (!a || !b) {
+		if (a) ref_cadence_delete(a);
+		if (b) cadence_delete(b);
+		return diff_end();
+	}
+	diff_eq_int("original looped mode (%ld)", a->looped_match, 1, 0);
+	diff_eq_int("original cycle count (%ld)", a->cycles, 3, 0);
+	for (segment = 0; segment < 7; segment++) {
+		int ms = segment == 3 ? middle_ms : 500;
+		int i;
+		phase = 0.0;
+		for (i = 0; i < ms * 8; i++) {
+			short v = segment & 1 ? tone_sample(i, 0, 0,
+				CADENCE_TEST_AMPLITUDE) : 0;
+			int ra = ref_cadence_progress(a, v);
+			int rb = cadence_progress(b, v);
+			diff_eq_int("created sample return (%ld)", rb, ra, samples);
+			if (ra || rb || samples % 499 == 0)
+				compare(b, a, samples);
+			reference_hits += ra == CADENCE_DETECTED;
+			ours_hits += rb == CADENCE_DETECTED;
+			if (a->n >= 3 && abs(a->on[1] - a->on[2]) >= 6)
+				saw_interior_mismatch = 1;
+			samples++;
+		}
+	}
+	diff_eq_int("detected count (%ld)", ours_hits, reference_hits, middle_ms);
+	if (middle_ms == 500)
+		diff_eq_int("equal loop positive (%ld)", reference_hits > 0, 1, samples);
+	else {
+		diff_eq_int("original rejects unequal middle (%ld)", reference_hits, 0, samples);
+		diff_eq_int("original records unequal interior (%ld)", saw_interior_mismatch, 1, samples);
+	}
+	ref_cadence_delete(a);
+	cadence_delete(b);
 	return diff_end();
 }
 
@@ -724,6 +780,24 @@ main(void)
 
 	rc |= run_reset_and_delete();
 	rc |= run_filter_dispatch();
+	rc |= run_created_loop(500);
+	rc |= run_created_loop(1000);
+	/* Constructor cases for every original bank and its fallback boundary. */
+	{
+		int bank, sub, trials = 0;
+		for (bank = 0; bank < 8; bank++)
+			for (sub = 0; sub <= 8; sub++) {
+				char label[80];
+				snprintf(label, sizeof label, "cadence: constructor bank %d sub %d", bank, sub);
+				rc |= run_create(label,
+					1, 0, bank, sub, 0, 666, 3, 0);
+				trials++;
+			}
+		diff_begin("cadence: constructor bank case denominator");
+		diff_eq_int("fixed bank/subindex trials (%ld)", trials, 72, trials);
+		rc |= diff_end();
+	}
+
 	rc |= run_elliptic_tables();
 
 	{

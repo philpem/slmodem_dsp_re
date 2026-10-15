@@ -325,8 +325,11 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		 * is why an exactly-equal limit still fires.
 		 */
 		rx->acquire = (unsigned short)(rx->acquire + V23RX_TICK_MS);
-		if (rx->acquire_limit <= rx->acquire)
+		if (rx->acquire_limit <= rx->acquire) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Carrier Detection Time Out ");
 			return V23RX_GIVEN_UP;
+		}
 
 		/*
 		 * The detector gets its own copy, because everything below
@@ -350,21 +353,23 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 			 */
 			rx->rx_state = (short)(rx->rx_state
 					       + V23RX_DETECT_STEP);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("v23 tone detected, counter = %d,threshold = 2\n",
+					(short)(rx->rx_state / V23RX_DETECT_STEP));
 		}
 	}
 
 	FPM_iir_filt_II(samples, rx->iir_coeff, rx->iir_state,
 			rx->iir_sections, (short)count);
 
-	nout = FPM_MRF_filter(&rx->mrf, samples, samples, (short)count);
+	nout = FPM_MRF_filter(&rx->mrf, samples, samples, (unsigned short)count);
 
 	/*
-	 * The object uses EAX, equal to the stored signal flag. This source
-	 * still reads the field; original return semantics remain a separate
-	 * axis. F11613 restores the fourth slot: original signed count, not nout.
+	 * The object consumes the signed low word of AGC's boolean return.
+	 * F11613 restores the fourth slot: original signed count, not nout.
+	 * Finding F11962 restores the return boundary without a field reload.
 	 */
-	FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout, (short)count);
-	signal = rx->agc.signal;
+	signal = (short)FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout, (short)count);
 
 	/*
 	 * Exactly one block sees state 10, so the gain is frozen once and the
@@ -390,8 +395,11 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		rx->silence = 0;
 	} else {
 		rx->silence = (unsigned short)(rx->silence + V23RX_TICK_MS);
-		if (rx->silence_limit <= rx->silence)
+		if (rx->silence_limit <= rx->silence) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Energy drop detected......\n");
 			return V23RX_GIVEN_UP;
+		}
 	}
 
 	rx->nbits = FPM_FSD_demodulate(&rx->fsd, samples, rx->bits,

@@ -16,6 +16,12 @@ def inspect(path):
    name=symbol.name;v=symbol.entry;index=v['st_shndx'];section=names[index] if isinstance(index,int) else index
    if name:records[name]=[v['st_info']['type'],v['st_info']['bind'],v['st_other']['visibility'],section,v['st_size'] if v['st_info']['type']!='STT_FUNC' else None]
    if v['st_info']['type']=='STT_OBJECT':
+    if not isinstance(index,int):
+     assert index in ('SHN_COMMON','SHN_ABS','SHN_UNDEF'), (name,index)
+     # COMMON's value is alignment, not an offset into a section.  Size,
+     # binding and storage live in records; there are no bytes/relocations.
+     objects[name]={'section':section,'offset':v['st_value'],'bytes':None,'relocations':{}}
+     continue
     data=bytearray(elf.get_section(index).data()[v['st_value']:v['st_value']+v['st_size']]);relocations={}
     for relsec in elf.iter_sections():
      if not isinstance(relsec,RelocationSection) or relsec['sh_info']!=index:continue

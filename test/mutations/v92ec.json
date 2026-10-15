@@ -56,13 +56,15 @@
  },
  {
   "label": "the parameter block's delay offset is left out of the tap count",
-  "find": "\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;",
-  "replace": "\t\t     + 0u;"
+  "find": "\techoLength = (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;",
+  "replace": "\techoLength = (filterLength >> 1) + echoDelay\n\t\t     + 0u;",
+  "fn": "reset"
  },
  {
   "label": "the tap count is built from the initial delay, not the delay offset",
-  "find": "params->V92_ECHO_DELAY_OFFSET;",
-  "replace": "params->V92_ECHO_INITIAL_DELAY;"
+  "find": "\techoLength = (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;",
+  "replace": "\techoLength = (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_INITIAL_DELAY;",
+  "fn": "reset"
  },
  {
   "label": "the history loop uses the filter length, not the tap count",

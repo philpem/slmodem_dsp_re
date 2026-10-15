@@ -1034,12 +1034,65 @@ run_v17tx_control(void)
 
 /* ------------------------------------------------------------------------- */
 
+/* Fixed component boundary: constructor and real START transition only.
+ * The public modem wrapper uses a small budget; no public high-word claim.
+ * Default resampler is10/3: four samples/symbol bounds even the old wrong
+ * 65535-symbol selection. The untouched output tail is compared as well. */
+static int
+test_countdown_budget_words(void)
+{
+	static short outa[262144], outb[262144];
+	const unsigned short words[] = { 0x7fff, 0x8000, 0xffff };
+	unsigned short ina[1] = { 0 }, inb[1] = { 0 };
+	int row;
+
+	diff_begin("v17txcreate: installed countdown handler budget words");
+	for (row = 0; row < 3; row++) {
+		struct v17tx_cfg ca = V17TX_CFG, cb = V17TX_CFG;
+		void *a = V17TX_create(0, &ca);
+		void *b = ref_V17TX_create(0, &cb);
+		void *pa, *pb;
+		short ba = (short)words[row], bb = (short)words[row];
+		short ra, rb;
+
+		diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, row);
+		if (!a || !b)
+			continue;
+		TxNextStateV17(a);
+		ref_TxNextStateV17(b);
+		pa = FIELD_PTR(a, V17TX_OBJ_PARAMS);
+		pb = FIELD_PTR(b, V17TX_OBJ_PARAMS);
+		diff_eq_int("installed handler ours (%ld)",
+			fn_id(FIELD_PTR(pa, V17TXP_PROCESS)), 1, row);
+		diff_eq_int("installed handler blob (%ld)",
+			fn_id(FIELD_PTR(pb, V17TXP_PROCESS)), 1, row);
+		diff_eq_int("original seeded countdown (%ld)",
+			AT_S(pb, V17TXP_SHORT_001A), 48, row);
+		memset(outa, 0x5a, sizeof outa);
+		memset(outb, 0x5a, sizeof outb);
+		ra = TxHdxSilenceV17(a, ina, outa, &ba);
+		rb = ref_TxHdxSilenceV17(b, inb, outb, &bb);
+		diff_eq_int("return (%ld)", ra, rb, row);
+		diff_eq_int("budget remainder (%ld)", ba, bb, row);
+		diff_eq_int("countdown (%ld)", AT_S(pa, V17TXP_SHORT_001A),
+			AT_S(pb, V17TXP_SHORT_001A), row);
+		diff_eq_int("blob consumes48 (%ld)", (unsigned short)bb,
+			(unsigned short)(words[row] - 48), row);
+		cmp_shorts("entire output and tail (%ld)", outa, outb, 262144);
+		compare_tree("budget words", a, b, row);
+		V17TX_delete(a);
+		ref_V17TX_delete(b);
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 
 	rc |= test_shape();
+	rc |= test_countdown_budget_words();
 	rc |= test_create_self_allocating();
 	rc |= test_reinit();
 	rc |= test_tx_cycle_long_train();

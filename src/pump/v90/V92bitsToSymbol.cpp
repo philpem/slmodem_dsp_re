@@ -235,23 +235,34 @@ V92BitsToSymbol::nofBitsForNextTime()
  * ===========================================================================
  * V92BitsToSymbol::setSymbolsBlockSize (.text+0x4e130, 108 bytes)
  *
- * Two statements.  The object holds `nofBitsForNextTime` INLINED here rather
- * than called -- there is no relocation on any call in the range and the 108
- * bytes are the 100 above plus the store and one extra `mov`.  Nothing here
- * re-reads +0x18 after storing it, which is what an inline of a member the
- * compiler can see through gives.
- *
- * `nofBitsForNextTime` matches the blob's instruction sequence and THIS DOES
- * NOT, so the inline is not reproduced exactly; the differential tier is
- * green either way and 100% was never the target.
+ * Capture symbolsDone before publishing the new block size, then compute the
+ * demand from the argument. This reproduces all 108 bytes, including the extra
+ * remaining-count copy, while a normal inline of nofBitsForNextTime does not.
+ * The arithmetic is the same query, preserving its multiply-before-divide
+ * overflow behavior. F11893 identifies this dataflow family, not unique author
+ * syntax or whether the original compiler inlined a different helper body.
  * ===========================================================================
  */
 unsigned int
 V92BitsToSymbol::setSymbolsBlockSize(unsigned int n)
 {
-	symbolsBlockSize = n;
+	unsigned int done = symbolsDone;
 
-	return nofBitsForNextTime();
+	symbolsBlockSize = n;
+	unsigned int bits = 0;
+
+	if (n > done) {
+		unsigned int left = n - done;
+
+		if (left % V92BTOS_SYMBOLS_PER_FRAME != 0)
+			bits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)
+			       * bitsPerFrame;
+		else
+			bits = left * bitsPerFrame
+			       / V92BTOS_SYMBOLS_PER_FRAME;
+	}
+
+	return bits;
 }
 
 /*

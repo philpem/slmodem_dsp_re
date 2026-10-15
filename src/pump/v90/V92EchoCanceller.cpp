@@ -264,21 +264,20 @@ V92EchoCanceller::zeroEchoCoeff()
  * the arithmetic), and the history cleared to that length.  D72's unclamped
  * bound, exactly as in `reset` below.
  *
- * THE IDENTIFIERS DIFFER FROM `reset`'s ON PURPOSE (`n` for `i`, `blk` for a
- * bare `params->`), in both members above: the mutation suite anchors on
- * `reset`'s exact text and an anchor must match exactly once (`make refs`).
- * An identifier is not a codegen carrier, so nothing else moves.
+ * Direct params access reproduces the blob.  The former local pointer capture
+ * changed allocation even though the compiler can schedule this member load
+ * before the historyIndex clear; those distinct fields cannot alias. F11894.
+ * Keep the pointed-data read after the clear and the member-valued loop bound.
  */
 void
 V92EchoCanceller::resetEchoHistory()
 {
-	V92Parameters *blk = params;
 	unsigned int n;
 
 	historyIndex = 0;
 	/* the three-term rebuild; the header walks the arithmetic */
 	echoLength = echoDelay + (filterLength >> 1)
-		     + (unsigned int)blk->V92_ECHO_DELAY_OFFSET;
+		     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;
 	for (n = 0; n < echoLength; n++)
 		echoHistory[n] = 0.0f;
 }

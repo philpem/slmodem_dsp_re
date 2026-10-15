@@ -24,18 +24,18 @@
  },
  {
   "label": "single-value Scrambler omits the near feedback term",
-  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;",
-  "replace": "\tr = (I)(in ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;"
+  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap2--;\n\tpTap1--;\n\t*out = r;",
+  "replace": "\tr = (I)(in ^ *pTap2);\n\tpTap2--;\n\tpTap1--;\n\t*out = r;"
  },
  {
   "label": "single-value Scrambler omits the far feedback term",
-  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;",
-  "replace": "\tr = (I)(in ^ *pTap1);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;"
+  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap2--;\n\tpTap1--;\n\t*out = r;",
+  "replace": "\tr = (I)(in ^ *pTap1);\n\tpTap2--;\n\tpTap1--;\n\t*out = r;"
  },
  {
   "label": "single-value Scrambler feeds the input rather than quotient back",
-  "find": "\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
-  "replace": "\tpTap1--;\n\tpTap2--;\n\t*out = in;\n\tif (--pOut < pLimit) {"
+  "find": "\tpTap2--;\n\tpTap1--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+  "replace": "\tpTap2--;\n\tpTap1--;\n\t*out = in;\n\tif (--pOut < pLimit) {"
  },
  {
   "label": "bulk Scrambler omits the near feedback term",
@@ -54,8 +54,8 @@
  },
  {
   "label": "single-value Descrambler feeds its decoded result back",
-  "find": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\tpTap1--;",
-  "replace": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t*pOut = (T)r;\n\tpTap1--;"
+  "find": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\tpTap2--;",
+  "replace": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t*pOut = (T)r;\n\tpTap2--;"
  },
  {
   "label": "bulk Descrambler feeds its decoded result back",

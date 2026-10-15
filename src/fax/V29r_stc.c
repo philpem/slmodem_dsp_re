@@ -35,19 +35,22 @@
 int
 V29RX_control(void *modem, const struct v29rx_control_req *req)
 {
+	unsigned char ctl1, ctl0;
 	if (req == 0)
 		return 0;
 
 	((struct v29_rx *)modem)->cfg.int_0008 = req->int_0004;
+	ctl1 = req->ctl1;
 	((struct v29_rx *)modem)->det->int_0008 =
-		(req->ctl1 & V29RXCTL_CTL1_BIT4) != 0;
+		(ctl1 & V29RXCTL_CTL1_BIT4) != 0;
 
-	if (req->ctl1 & V29RXCTL_CTL1_BIT1)
+	if (ctl1 & V29RXCTL_CTL1_BIT1)
 		V29RX_create(modem, modem);
 
-	if (req->ctl0 & V29RXCTL_CTL0_BIT3)
+	ctl0 = req->ctl0;
+	if (ctl0 & V29RXCTL_CTL0_BIT3)
 		((struct v29_rx *)modem)->rx->int_0000 = 0;
-	if (req->ctl0 & V29RXCTL_CTL0_BIT5)
+	if (ctl0 & V29RXCTL_CTL0_BIT5)
 		((struct v29_rx *)modem)->rx->int_0020 = 0;
 
 	return 1;

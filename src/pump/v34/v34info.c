@@ -462,7 +462,7 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 	void *sess = obj->p3548;
 	const void *pcm = obj->pac18;
 	int baud_index;
-	int uinfo;
+	short uinfo;
 
 	*(int *)((char *)sess + SESSION_UINFO6) = 0;
 
@@ -566,9 +566,13 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 		dsplibs_debug_printf("VPcmV34Main: Uinfo is %d\r\n",
 				     (short)uinfo);
 
-	*((char *)session_ptr(sess, SESSION_CAPS) + 8) = (char)(short)uinfo;
-	*((char *)session_ptr(sess, SESSION_UPSTREAM) + 8) =
-		(char)(short)uinfo;
+	{
+		char *upstream = (char *)session_ptr(sess, SESSION_UPSTREAM);
+		char *caps = (char *)session_ptr(sess, SESSION_CAPS);
+
+		caps[8] = (char)(short)uinfo;
+		upstream[8] = (char)(short)uinfo;
+	}
 
 out:
 	return *(const short *)((const char *)sess + SESSION_UINFO6);
