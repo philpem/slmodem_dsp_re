@@ -22,7 +22,6 @@
 #include "dsplib/fp_math.h"
 #include "dsplib/dualtone.h"
 
-
 void
 cadence_delete(struct cadence *c)
 {
@@ -136,7 +135,8 @@ match_looped(struct cadence *c, int last, int tol)
 
 	if (cycles > 2) {
 		for (k = 1; cycles - 1 > k; k++)
-			if (adiff(off_last, c->off[last - k]) >= tol)
+			if (adiff(off_last, c->off[last - k]) >= tol
+			    || adiff(c->on[last], c->on[last - k]) >= tol)
 				ok = 0;
 	}
 
@@ -378,65 +378,78 @@ to_intervals(int fp, int t)
 	return ((fp * t) * 5 << 4) >> 14;
 }
 
-/*
- * The filter-bank dispatch.  Five of the eight indices select a bank of seven
- * designs and need a subindex in 1..7; the rest are single designs.  Each
- * bank falls back to its OWN nearest CP_* design rather than a common one,
- * which is why this is a table of three pointers rather than one.
- */
-struct cadence_bank {
-	const short	*a, *b, *scales;	/* the bank, or NULL         */
-	const short	*fb_a, *fb_b, *fb_scales;	/* its fallback      */
-};
-
+/* Original eight-way dispatch: three seven-design banks with per-case
+ * fallback filters. Indices6/7 also accept valid one-based subindices. */
 static void
 select_filter(struct cadence *c, int index, int sub)
 {
-	static const struct cadence_bank banks[8] = {
-		{ Filter_350_500_a, Filter_350_500_b, Filter_350_500_scales,
-		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
-		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
-		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
-		{ Filter_350_500_a, Filter_350_500_b, Filter_350_500_scales,
-		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
-		{ Filter_276_504_a, Filter_276_504_b, Filter_276_504_scales,
-		  CP_276_504_a, CP_276_504_b, CP_276_504_scales },
-		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
-		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
-		{ Filter_100_550_a, Filter_100_550_b, Filter_100_550_scales,
-		  CP_350_600_a, CP_350_600_b, CP_350_600_scales },
-		{ 0, 0, 0, CP_450_630_a, CP_450_630_b, CP_450_630_scales },
-		{ 0, 0, 0, CP_100_550_a, CP_100_550_b, CP_100_550_scales }
-	};
-	const struct cadence_bank *bank;
-
 	c->sel_n_a = IIR_FILTER_COEFF;
 	c->sel_n_b = IIR_FILTER_COEFF;
-
-	if ((unsigned)index > 7) {
+	switch (index) {
+	case 0:
+	case 2:
+		if ((unsigned)(sub - 1) <= 6) {
+			c->sel_a = Filter_350_500_a + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_b = Filter_350_500_b + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_scales = Filter_350_500_scales + IIR_FILTER_SCALES * (sub - 1);
+			break;
+		}
 		c->sel_a = CP_350_600_a;
 		c->sel_b = CP_350_600_b;
 		c->sel_scales = CP_350_600_scales;
-		return;
+		break;
+	case 1:
+	case 4:
+	case 5:
+		if ((unsigned)(sub - 1) <= 6) {
+			c->sel_a = Filter_100_550_a + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_b = Filter_100_550_b + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_scales = Filter_100_550_scales + IIR_FILTER_SCALES * (sub - 1);
+			break;
+		}
+		c->sel_a = CP_350_600_a;
+		c->sel_b = CP_350_600_b;
+		c->sel_scales = CP_350_600_scales;
+		break;
+	case 3:
+		if ((unsigned)(sub - 1) <= 6) {
+			c->sel_a = Filter_276_504_a + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_b = Filter_276_504_b + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_scales = Filter_276_504_scales + IIR_FILTER_SCALES * (sub - 1);
+			break;
+		}
+		c->sel_a = CP_276_504_a;
+		c->sel_b = CP_276_504_b;
+		c->sel_scales = CP_276_504_scales;
+		break;
+	case 6:
+		if ((unsigned)(sub - 1) <= 6) {
+			c->sel_a = Filter_100_550_a + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_b = Filter_100_550_b + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_scales = Filter_100_550_scales + IIR_FILTER_SCALES * (sub - 1);
+			break;
+		}
+		c->sel_a = CP_450_630_a;
+		c->sel_b = CP_450_630_b;
+		c->sel_scales = CP_450_630_scales;
+		break;
+	case 7:
+		if ((unsigned)(sub - 1) <= 6) {
+			c->sel_a = Filter_350_500_a + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_b = Filter_350_500_b + IIR_FILTER_COEFF * (sub - 1);
+			c->sel_scales = Filter_350_500_scales + IIR_FILTER_SCALES * (sub - 1);
+			break;
+		}
+		c->sel_a = CP_100_550_a;
+		c->sel_b = CP_100_550_b;
+		c->sel_scales = CP_100_550_scales;
+		break;
+	default:
+		c->sel_a = CP_350_600_a;
+		c->sel_b = CP_350_600_b;
+		c->sel_scales = CP_350_600_scales;
+		break;
 	}
-
-	bank = &banks[index];
-
-	/*
-	 * One-based, and checked unsigned, so a subindex of 0 -- which is what
-	 * slmodemd supplies, always -- lands here rather than reading behind
-	 * the table.
-	 */
-	if (bank->a == 0 || (unsigned)(sub - 1) > 6) {
-		c->sel_a = bank->fb_a;
-		c->sel_b = bank->fb_b;
-		c->sel_scales = bank->fb_scales;
-		return;
-	}
-
-	c->sel_a = bank->a + IIR_FILTER_COEFF * (sub - 1);
-	c->sel_b = bank->b + IIR_FILTER_COEFF * (sub - 1);
-	c->sel_scales = bank->scales + IIR_FILTER_SCALES * (sub - 1);
 }
 
 /* Windows the busy and ringback cases fall back on, in 10 ms units. */
@@ -625,6 +638,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 			default_windows(c);
 		}
 	} else {
+		tone = CADENCE_TONE_DIAL;
 		/* DIAL, and anything that is not 0, 2 or 3. */
 		filter_index = modem_get_param(modem,
 					       GetDialToneCallProgressFilterIndex);
@@ -666,31 +680,17 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	/* Computed from the already-converted max_off. */
 	c->max_silence = silence_mult * c->max_off;
 
-	if (extra > 0)
-		c->continuous = 0;
 
-	c->int_2a4 = s->w6;
-
-	/*
-	 * The clamp is for the NAME only, and it is written back into the
-	 * caller's descriptor.  Behaviour was already decided above, so a
-	 * tone of 7 is configured as dial tone and labelled INVALID.
-	 */
-	name = s->tone;
-	if ((unsigned)name > CADENCE_TONE_INVALID)
-		name = CADENCE_TONE_INVALID;
-	s->tone = name;
-	c->name = CadenceNames[name];
 
 	/*
 	 * Nine consecutive gated prints in the object (0x7d87e onward), the
-	 * whole configuration in one block.  It comes after the name is
-	 * resolved because the first line needs it, and after the window
-	 * conversion because every time it prints is in intervals, not in the
-	 * country table's units.
+	 * whole configuration in one block, after window conversion. TYPE
+	 * reports the working branch type; the default arm is DIAL even when
+	 * the descriptor is later clamped to INVALID for returned metadata.
+	 * The original publishes that metadata after this report (F12001).
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("TYPE %s\n", c->name);
+		dsplibs_debug_printf("TYPE %s\n", CadenceNames[tone]);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("Filter index %d\n", filter_index);
 	if (DSPLIB_DEBUG_ON())
@@ -731,6 +731,22 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		sysdep_free(c);
 		return 0;
 	}
+
+	if (extra > 0)
+		c->continuous = 0;
+
+	c->int_2a4 = s->w6;
+
+	/*
+	 * The clamp is for the NAME only, and it is written back into the
+	 * caller's descriptor.  Behaviour was already decided above, so a
+	 * tone of 7 is configured as dial tone and labelled INVALID.
+	 */
+	name = s->tone;
+	if ((unsigned)name > CADENCE_TONE_INVALID)
+		name = CADENCE_TONE_INVALID;
+	s->tone = name;
+	c->name = CadenceNames[name];
 
 	cfg.a = c->sel_a;
 	cfg.b = c->sel_b;

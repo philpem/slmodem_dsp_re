@@ -108,6 +108,31 @@ run_case(const char *label, int dp_frag, int host_srate, int dp_srate,
 	return rc;
 }
 
+/* Constructor API: positive unequal rates outside the six supported pairs.
+ * Do not run a wrapper which the original refuses to construct. */
+static int
+unsupported_rates(void)
+{
+	static const int pairs[][2] = {
+		{7200,8000}, {8000,7200}, {16000,9600},
+		{9600,16000}, {44100,48000}, {48000,44100}
+	};
+	unsigned row;
+
+	diff_begin("dpw unsupported unequal rate constructors");
+	for (row = 0; row < sizeof pairs / sizeof pairs[0]; row++) {
+		void *a = ref_dp_wrapper_create(0, fake_dp_process, 16,
+			pairs[row][0], pairs[row][1]);
+		struct dp_wrapper *b = dp_wrapper_create(0, fake_dp_process, 16,
+			pairs[row][0], pairs[row][1]);
+		diff_eq_int("constructor refusal (%ld)", b == 0, a == 0, row);
+		diff_eq_int("original refuses (%ld)", a == 0, 1, row);
+		if (a) ref_dp_wrapper_delete(a);
+		if (b) dp_wrapper_delete(b);
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -117,6 +142,7 @@ main(void)
 	int rc = 0;
 
 	make_input();
+	rc |= unsupported_rates();
 
 	/* Equal rates: the wrapper should build no resampler at all. */
 	rc |= run_case("dpw 9600=9600 bulk", 48, 9600, 9600, bulk, 1, 0);

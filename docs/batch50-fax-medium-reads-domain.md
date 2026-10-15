@@ -17,3 +17,8 @@ control plus baseline, scalar bitpacking snapshots unchanged. No parameter,
 field-type, header, spill, register or arbitrary loop factoring controls.
 Audit all TU bodies, metadata, data/nontext, relocations and bystanders.
 No test/fuzz/mutation execution; root final period/integrated census.
+
+Later partial-fidelity adoption: F12002 replays these boundaries in current
+source, with explicit source-unchanged unframe allocation collateral, and
+validates normal fixed period fixtures. No negative-rate or callback-rebinding
+history is asserted. [Controls and trace](service-constructor-fidelity-results.md).

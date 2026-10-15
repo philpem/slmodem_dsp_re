@@ -42,6 +42,24 @@ def validate(controls, output):
             result = compare(left, right, 'probe')
             assert (result['first_pattern_or_order_divergence']['0'] is not None) == divergent
             records.append({'control': label, 'passed': True})
+        annotated = '(insn 3 0 0 0 (set (reg:SI 0) (symbol_ref:SI ("*.LC4") [flags 0x2] <string_cst 0x12345678>)) 0 (nil) (nil))\n'
+        write(left, annotated)
+        for label, body, divergent in [
+            ('parsed-string-tree-address', annotated.replace('0x12345678>', '0x87654321>'), False),
+            ('parsed-symbol-identity', annotated.replace('*.LC4', '*.LC5'), True),
+            ('parsed-symbol-flags', annotated.replace('[flags 0x2]', '[flags 0x4]'), True),
+            ('parsed-symbol-register', annotated.replace('reg:SI 0', 'reg:SI 2'), True),
+        ]:
+            write(right, body)
+            result = compare(left, right, 'probe')
+            assert (result['first_pattern_or_order_divergence']['0'] is not None) == divergent
+            records.append({'control': label, 'passed': True})
+        stack = '(insn 4 0 0 0 (set (reg:SI 0) (mem:SI (plus:SI (reg:SI 7) (const_int 28)))) 0 (nil) (nil))\n'
+        write(left, stack)
+        write(right, stack.replace('const_int 28', 'const_int 36'))
+        assert compare(left, right, 'probe')['first_pattern_or_order_divergence']['0'] == '01.rtl'
+        records.append({'control': 'parsed-stack-offset', 'passed': True})
+        write(left, a)
         refusals = [
             ('duplicate-UID', lambda: instructions(insn(1, 0) + insn(1, 1))),
             ('truncated-RTL', lambda: instructions(insn(1, 0)[:-2])),

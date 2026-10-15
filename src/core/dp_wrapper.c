@@ -21,49 +21,37 @@
  * caller-side position therefore just alternate between 0 and host_frag.
  */
 
-/*
- * Rate pairs the original supports, and the RcFixed mode for each.
- *
- * The original spells this out as a chain of literal comparisons rather than
- * calling RcFixed_Check_Combination -- which is why that function, though
- * exported, is dead code (deviation D3).
- *
- * Worth recording: these six entries are *exactly* what Check_Combination
- * returns for the same pairs. 8000->9600 reduces to 5:6 = mode 2, 9600->8000
- * to 6:5 = mode 3, 8000->48000 to 1:6 = mode 4, and so on. The wrapper simply
- * inlined the general lookup for the rates it cared about.
- *
- * The table is kept explicit rather than delegating to Check_Combination,
- * because the two are only equivalent over these pairs: Check_Combination
- * would happily build a converter for, say, 7200->8000, where the original
- * builds none.  Matching the original's silence there is the point.
- */
-struct dpw_rate_pair {
-	int from;
-	int to;
-	int mode;
-};
-
-static const struct dpw_rate_pair dpw_rate_pairs[] = {
-	{  8000,  9600, 2 },		/* x6/5 */
-	{  9600,  8000, 3 },		/* x5/6 */
-	{  8000, 48000, 4 },		/* x6   */
-	{ 48000,  8000, 5 },		/* /6   */
-	{  9600, 48000, 6 },		/* x5   */
-	{ 48000,  9600, 7 },		/* /5   */
-};
-
-/* Returns the RcFixed mode, or -1 if this conversion is not offered. */
-static int
-dpw_mode_for(int from, int to)
+/* Six literal rate pairs, with their original immediate converter modes.
+ * An unsupported unequal pair leaves the first converter NULL and fails
+ * before reverse dispatch. Both failures share the original cleanup. */
+static struct rc *
+dpw_create_for(int from, int to)
 {
-	unsigned i;
+	struct rc *result = 0;
+	if (from == 8000 && to == 9600)
+		result = RcFixed_Create(2);
+	else if (from == 9600 && to == 8000)
+		result = RcFixed_Create(3);
+	else if (from == 8000 && to == 48000)
+		result = RcFixed_Create(4);
+	else if (from == 48000 && to == 8000)
+		result = RcFixed_Create(5);
+	else if (from == 9600 && to == 48000)
+		result = RcFixed_Create(6);
+	else if (from == 48000 && to == 9600)
+		result = RcFixed_Create(7);
+	return result;
+}
 
-	for (i = 0; i < sizeof(dpw_rate_pairs) / sizeof(dpw_rate_pairs[0]); i++) {
-		if (dpw_rate_pairs[i].from == from && dpw_rate_pairs[i].to == to)
-			return dpw_rate_pairs[i].mode;
-	}
-	return -1;
+void
+dp_wrapper_delete(struct dp_wrapper *w)
+{
+	w->dp_data = NULL;
+	if (w->rc_to_dp)
+		RcFixed_Delete(w->rc_to_dp);
+	if (w->rc_to_host)
+		RcFixed_Delete(w->rc_to_host);
+	sysdep_free(w);
 }
 
 struct dp_wrapper *
@@ -106,34 +94,29 @@ dp_wrapper_create(void *dp_data, dp_process_fn process, int dp_frag,
 
 	/* Equal rates need no conversion at all -- the common 8 kHz case. */
 	if (host_srate != dp_srate) {
-		int to_dp = dpw_mode_for(host_srate, dp_srate);
-		int to_host = dpw_mode_for(dp_srate, host_srate);
+		struct rc *to_dp = 0;
+		struct rc *to_host = 0;
 
-		if (to_dp >= 0)
-			w->rc_to_dp = RcFixed_Create(to_dp);
-		if (to_host >= 0)
-			w->rc_to_host = RcFixed_Create(to_host);
-
-		if ((to_dp >= 0 && w->rc_to_dp == NULL)
-		    || (to_host >= 0 && w->rc_to_host == NULL)) {
-			dp_wrapper_delete(w);
-			return NULL;
+		to_dp = dpw_create_for(host_srate, dp_srate);
+		w->rc_to_dp = to_dp;
+		if (to_dp == 0) {
+			goto failed;
+		}
+		to_host = dpw_create_for(dp_srate, host_srate);
+		w->rc_to_host = to_host;
+		if (to_host == 0) {
+			goto failed;
 		}
 	}
 
 	return w;
+
+failed:
+	dp_wrapper_delete(w);
+	return NULL;
 }
 
-void
-dp_wrapper_delete(struct dp_wrapper *w)
-{
-	w->dp_data = NULL;
-	if (w->rc_to_dp)
-		RcFixed_Delete(w->rc_to_dp);
-	if (w->rc_to_host)
-		RcFixed_Delete(w->rc_to_host);
-	sysdep_free(w);
-}
+
 
 static int
 imin(int a, int b)

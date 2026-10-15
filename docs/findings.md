@@ -10942,6 +10942,11 @@ rather than the check being dropped or the failure smoothed over.
 
 37 of 279 sites dead, from 42.  Line coverage 97.0% to 97.2%.
 
+Later resolution (F12001): the default working type is DIAL, while returned
+metadata independently clamps the descriptor to INVALID after the report.
+The same tone4/9 cases now compare transcripts at every level and pass; the
+historical exclusion above has been removed without a tolerance.
+
 ### F202. DialerAbort's two sites, and the pattern is now the whole finding
 
 `run_abort` already drove all sixteen combinations of the three fields
@@ -138666,3 +138671,75 @@ still reuses the old member value and moves sign extension before the initial
 gate; no further adoption or source/register permutation follows. Across this
 review14 full-TU cells/110 shared-body verdicts preserve all bystanders and
 metadata/data/nontext/call inventories. [Replay](transmitter-budget-fidelity-results.md).
+
+## F11999. Unsupported unequal wrapper rates must fail the first converter check
+
+Original dp_wrapper_create leaves the first converter NULL for an unsupported
+unequal pair, tests it unconditionally and cleans up before reverse dispatch.
+Source skipped checks when lookup returned-1. Six fixed constructor inputs
+fail6/12 checks before correction. Restore literal immediate converter creation,
+sequential checks and shared cleanup in original emission order. SIZE282→2,
+not exact; delete remainsEXACT85 and run unchanged. Only invented72B lookup
+object removed, all other metadata/data/calls/bystanders unchanged. The near
+size does not justify prologue/register fitting. [Domain](service-constructor-fidelity-domain.md),
+[evidence](service-constructor-fidelity-results.md).
+
+## F12000. Cadence bank mapping and interior on durations were reconstructed incorrectly
+
+Original indices6/7 select100_550/350_500 banks for subindices1..7, retaining
+450_630/100_550 fallbacks. Source omitted those banks. Actual DIAL constructors
+cover72 fixed index/subindex combinations; old source fails199 checks in14 cases.
+Restore literal switch/map with explicit192B banks.0 removal and32B jump table,
+all ordinary names/strings preserved. Conservative table prover still refuses;
+eight native destinations and runtime cases are evidence, not a complete proof.
+
+Original looped matcher compares interior on as well as off durations. A genuine
+BUSY constructor and sample stream with equal first/last500ms tones and1000ms
+middle produces a source-only match at28159,12/40454 pre-fix checks fail; equal
+positive control passes35429. Restore the missing comparison. No period/filter
+state is planted or tolerance widened. First corrected targeted gate2/0;
+delete/reset exact and all unselected bodies unchanged. [Controls](service-constructor-fidelity-results.md).
+
+## F12001. Cadence TYPE and returned name have different original ownership
+
+The default branch normalises working type toDIAL before parameter calls;
+TYPE uses it at7d86e. Returned metadata reloads descriptor.w6/tone after report
+and usable gate, then clamps name toINVALID. Removing the old invalid-tone
+transcript skip yields four failures at tones4/9 and levels2/3; original TYPE
+DIAL assertions pass. Restore working type diagnostic plus complete late
+extra/int_2a4/name bundle. Four full-TU cells give SIZE249/239/239/255; adopt
+original read/publication age, not the smaller gap. Sibling RTL confirms late
+loads across the final report; all bystanders/data/calls preserved apart from
+expected internal switch destination offsets. [Replay](service-constructor-fidelity-results.md).
+
+## F12002. Medium read recovery exposes a source-unchanged peephole bystander
+
+Six current full-TU cells/28 shared verdicts recover _tx_scrambled_ones_state's
+late output-count read and signed readiness comparison (originalSETGE versus
+baselineSETAE, SIZE20→3), plus faxvmi_hdlc_frame's parent reads across debug/name
+calls (SIZE37→99). No negative-rate or callback-rebinding fixture is invented.
+
+Initial audit rejects unexpected unframe collateral; the classified control has
+identical source,393 instructions and all rows after the first jump unchanged.
+Three prefix rows exchange two zero-store slots1c/24 and move the same EDX/20
+store; both private slots hold zero at the join, flags preserved. Five raw bytes
+differ, SIZE58 remains58, no exact loss. Six observer controls/eight stages show
+initial RTL through flow2 equal under checked alias bijection; first differences
+at28.peephole2,10 UIDs, then four at rnreg/sched2. This is retained compiler
+history, not an original preimage
+or a reason to fit unframe declarations. Metadata/data/nontext/calls preserved;
+merge-string contents/counts unchanged. [Trace, controls and limits](service-constructor-fidelity-results.md).
+
+## F12003. Explicit tree constant annotations caused false early-stage divergence
+
+Stage normalization handled _decl/_type tree pointers but missed _cst and the
+closing angle bracket attached to an address token. Fourteen apparent lreg
+changes in the HDLC bystander were string_cst identities for unchanged symbols,
+not instruction differences. Preserve the invalid report; normalize only an
+explicit _decl/_type/_cst tree address, preserving its terminator. Parsed controls
+retain symbol identities, flags, registers, stack offsets and large immediates;
+historical positive/equal traces still pass,19/19 controls total. The corrected
+bystander trace is equal through flow2 and first differs at peephole2. This fixes
+an observer, without changing native byte grading or inferring original state.
+[Diagnostic](gcc3-stage-divergence-diagnostic.md),
+[corrected trace](service-constructor-fidelity-results.md).

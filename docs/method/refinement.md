@@ -4815,3 +4815,45 @@ all bystanders and period validation. Do not promote a near-size follow-up into
 source truth: V27 Quiet's one-byte gap still contains different read/extension
 boundaries, and the four selected-count/member controls fail complete identity.
 [Domain and evidence](../transmitter-budget-fidelity-results.md).
+
+### Validate documented semantic leads at actual constructor boundaries (F11999–F12001)
+
+A closed exactness experiment can leave a real reconstruction mismatch. Review
+its original operands, then demonstrate fixed failures before partial adoption.
+Wrapper failure checks must run even when no supported converter was selected;
+a cadence subindex must select the actual original bank. Compare constructed
+objects and selected payloads, not only a source table or its byte count.
+
+For state-machine predicates, construct the component and feed its real input.
+Equal first/last tones with a longer middle distinguish the missing interior
+comparison without planting period history. Retain an all-equal positive control
+and record the first differing sample. Keep existing synthetic probes labelled.
+
+A diagnostic value can differ intentionally from returned metadata. Cadence's
+working default type is DIAL while its returned name is INVALID. Trace both
+loads and their publication ages across calls; do not reuse one merely because
+the strings usually agree. Remove an old transcript exclusion only after the
+original operation is understood and a failing control is preserved.
+[Finite controls and limits](../service-constructor-fidelity-results.md).
+
+### Inspect unchanged bystanders before accepting a read-boundary transfer (F12002)
+
+A preceding function change can alter another function's peephole output. Preserve the failed audit, compare complete source
+and instruction streams, then identify the actual changed values. In the HDLC
+pair, two independently zeroed registers initialise exchanged private spill
+slots before the first jump; all subsequent instructions agree. Check the rows
+and the join state explicitly, while continuing to report five raw differing
+bytes and a nonexact body. Trace stages with a checked alias-set bijection:
+agreement through flow2 and a28.peephole2 difference locate the retained transformation,
+without recovering original compiler state or authorising source fitting.
+[Reproduction and limits](../service-constructor-fidelity-results.md).
+
+### Separate explicit GCC tree annotations from RTL operands (F12003)
+
+An unchanged symbol can carry a different `<string_cst 0x...>` annotation on
+another compiler invocation. Compare its symbol, flags and operands, while
+normalizing only the explicitly tagged tree address. Test the actual parsed
+form, including a closing bracket attached to the address token. Retain negative
+controls for symbol names, flags, real constants, register colours and stack
+offsets. Preserve and retract an invalid early-stage report before attributing
+a source-unchanged bystander to allocation. [Controls](../gcc3-stage-divergence-diagnostic.md).

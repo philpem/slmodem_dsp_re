@@ -21,10 +21,10 @@ def normalize(node):
     output = [normalize(child) for child in node]
     for index in range(1, len(output)):
         if (isinstance(output[index-1], str)
-                and re.fullmatch(r'<[a-z_]+(?:_decl|_type)', output[index-1])
+                and re.fullmatch(r'<[a-z_]+(?:_decl|_type|_cst)', output[index-1])
                 and isinstance(output[index], str)
-                and re.fullmatch(r'0x[0-9a-f]+', output[index])):
-            output[index] = '<tree-address>'
+                and re.fullmatch(r'0x[0-9a-f]+>?', output[index])):
+            output[index] = '<tree-address>' + ('>' if output[index].endswith('>') else '')
     return output
 
 

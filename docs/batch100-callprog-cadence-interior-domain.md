@@ -5,3 +5,8 @@ Pinned856c1ecb Cadence.c fullTU baseline. Original cadence_progress0x7d300..7d34
 ## Measured hold
 
 Both raw-completeTU cells compile. Restoring interior on test reduces Progress SIZE135→87, no exact gain/loss and onlyProgress changes. Original also has purecountdown guardloop0x7cfb9..7cfd3 after parameter getter/clamp: loadn,positiveguard,copy,DEC/JNE with no call/data work. This loop is independently retained in disassembly, has no unique source preimage, and is not recreated with invented delay/padding. Candidate has a genuine behavioral difference requiring reachable lifecyclefixture; production untouched, separate followupafterbytebatch.
+
+Later partial-fidelity adoption: F12000 supplies constructor-created audio
+lifecycles, including a separating unequal-middle sequence and equal positive
+control, and restores the missing interior comparison. The original empty
+countdown loop remains unrecovered. [Evidence](service-constructor-fidelity-results.md).
