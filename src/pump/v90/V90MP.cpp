@@ -28,6 +28,7 @@
  */
 
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/V90MP.h"
@@ -427,17 +428,22 @@ V90MP::calcCRC()
 	}
 }
 
+/* Fixed field/CRC regions and read boundaries follow the original graph.
+ * The finite controls and remaining differences are in
+ * docs/recovery-bitpacker-results.md. */
+
 void
 V90MP::infoToBits()
 {
-	unsigned int i;
+	unsigned int i, end;
 	int k;
 	int v;
-	unsigned char t = (unsigned char)Type;
-	unsigned char x, n, end, len;
+	unsigned char t;
+	unsigned char x, n, len;
 
 	for (i = 0; i <= 0x10; i++)
 		bits[i] = 1;
+	t = (unsigned char)Type;
 	bits[0x11] = 0;
 	bits[0x12] = t;
 	for (i = 0x13; i <= 0x17; i++)
@@ -546,43 +552,89 @@ V90MP::infoToBits()
 		for (i = 0x9a; i <= 0xa9; i++)
 			bits[i] = 0;
 		bits[0xaa] = 0;
-	} else {
-		for (i = 0x34; i <= 0x43; i++)
-			bits[i] = 0;
-		bits[0x44] = 0;
-	}
 
-	/*
-	 * The CRC covers the message but not its framing bits, and it stops at
-	 * the last frame before the CRC's own -- 0xaa for the long message,
-	 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
-	 * object, taken from the type flag and not from +0x119.
-	 */
-	end = t ? 0xaa : 0x44;
 
-	for (k = 0; k <= 15; k++)
-		crc[k] = 1;
+		/*
+		 * The CRC covers the message but not its framing bits, and it stops at
+		 * the last frame before the CRC's own -- 0xaa for the long message,
+		 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
+		 * object, taken from the type flag and not from +0x119.
+		 */
+		end = t ? 0xaa : 0x44;
 
-	for (i = 0x12; i < end; i++) {
-		if (i % 17 == 0)
-			i++;
-		x = (unsigned char)(crc[0] + bits[i]);
-		for (k = 0; k < 15; k++)
-			crc[k] = crc[k + 1];
-		crc[3] = (unsigned char)((crc[3] + x) & 1);
-		crc[10] = (unsigned char)((crc[10] + x) & 1);
-		crc[15] = (unsigned char)(x & 1);
-	}
+		for (k = 0; k <= 15; k++)
+			crc[k] = 1;
 
-	for (k = 0; k <= 15; k++)
-		bits[end + 1 + k] = crc[k];
+		for (i = 0x12; i < end; i++) {
+			if (i % 17 == 0)
+				i++;
+			x = (unsigned char)(crc[0] + bits[i]);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[15] = (unsigned char)(x & 1);
+		}
 
-	len = seqLength;
-	if (t != 0) {
+		for (i = 0xab; i <= 0xba; i++)
+			bits[i] = crc[i - 0xab];
+		len = seqLength;
 		bits[0xbb] = 0;
 		for (i = 0xbc; i < len; i++)
 			bits[i] = 0;
 	} else {
+		for (i = 0x34; i <= 0x43; i++)
+			bits[i] = 0;
+		bits[0x44] = 0;
+
+
+		/*
+		 * The CRC covers the message but not its framing bits, and it stops at
+		 * the last frame before the CRC's own -- 0xaa for the long message,
+		 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
+		 * object, taken from the type flag and not from +0x119.
+		 */
+		end = t ? 0xaa : 0x44;
+
+		for (k = 0; k <= 15; k++)
+			crc[k] = 1;
+
+		for (i = 0x12; i < end; i++) {
+			if (i % 17 == 0)
+				i++;
+			x = (unsigned char)(crc[0] + bits[i]);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[15] = (unsigned char)(x & 1);
+		}
+
+		for (i = 0x45; i <= 0x54; i++)
+			bits[i] = crc[i - 0x45];
+		len = seqLength;
 		bits[0x45] = 0;
 		for (i = 0x45; i < len; i++)
 			bits[i] = 0;
@@ -839,10 +891,10 @@ V90MP::PrintBase2(char *out, unsigned long value, unsigned short nofBits)
 int
 V90MP::bitsToInfo(int bit)
 {
-	unsigned int i;
+	unsigned int i, end;
 	int k;
 	int rc = 0;
-	unsigned char x, sum, n, next, end;
+	unsigned char x, sum, n, next;
 	char str[76];
 
 	if (bit != 0) {
@@ -910,26 +962,37 @@ V90MP::bitsToInfo(int bit)
 			break;
 		}
 
-		end = type ? 0xaa : 0x44;
-
 		for (k = 0; k <= 15; k++)
 			crc[k] = 1;
+
+		end = type ? 0xaa : 0x44;
 		for (i = 0x12; i < end; i++) {
 			if (i % 17 == 0)
 				i++;
 			x = (unsigned char)(crc[0] + bits[i]);
-			for (k = 0; k < 15; k++)
-				crc[k] = crc[k + 1];
-			crc[3] = (unsigned char)((crc[3] + x) & 1);
-			crc[10] = (unsigned char)((crc[10] + x) & 1);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[15] = (unsigned char)(x & 1);
 		}
 
 		sum = 0;
-		for (k = 0; k <= 15; k++) {
-			int d = (int)crc[k] - (int)bits[n - 0x10 + k];
+		for (i = 0; i <= 15; i++) {
+			int d = (int)crc[i] - (int)bits[n - 0x10 + i];
 
-			sum += (unsigned char)(d < 0 ? -d : d);
+			sum += (unsigned char)abs(d);
 		}
 
 		if (sum == 0) {
@@ -948,18 +1011,29 @@ V90MP::bitsToInfo(int bit)
 			if (i % 17 == 0)
 				i++;
 			x = (unsigned char)(crc[0] + bits[i]);
-			for (k = 0; k < 15; k++)
-				crc[k] = crc[k + 1];
-			crc[3] = (unsigned char)((crc[3] + x) & 1);
-			crc[10] = (unsigned char)((crc[10] + x) & 1);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[15] = (unsigned char)(x & 1);
 		}
 
 		sum = 0;
-		for (k = 0; k <= 15; k++) {
-			int d = (int)crc[k] - (int)bits[n - 0x10 + k];
+		for (i = 0; i <= 15; i++) {
+			int d = (int)crc[i] - (int)bits[n - 0x10 + i];
 
-			sum += (unsigned char)(d < 0 ? -d : d);
+			sum += (unsigned char)abs(d);
 		}
 
 		if (sum == 0) {
