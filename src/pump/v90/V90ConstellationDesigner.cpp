@@ -570,10 +570,12 @@ V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
  * F2150's shape), and factoring the two into one helper would be wrong in a
  * way no test could catch.  So they stay apart.
  *
- * THE PRODUCT OF THE SIX SCALED SIZES IS A `double`.  0x47d9b spills it with
- * `fstpl` and 0x47da5 and 0x482b6 reload it with `fldl` -- 64 bits, so the
- * variable is a `double` and not a `float`, and the rounding at that spill is
- * observable: it feeds a truncation two steps later.
+ * THE PRODUCT IS NARROWED TO DOUBLE AFTER THE LOOP.  0x47d9b stores it with
+ * `fstpl`; 0x47da5 and 0x482b6 reload it with `fldl`. These establish a
+ * 64-bit boundary before both logarithms, not the accumulator's declaration.
+ * The loop itself has no product spill, so its register keeps x87 precision.
+ * A double accumulator alone does not preserve that final boundary: GCC can
+ * extend it before spilling, keeping the unrounded value in an XF slot.
  *
  * THE UNINITIALISED READ IS THE OBJECT'S.  When the rrn-down loop does not
  * run once, `prevNofUcodes` and `prevDmin` are read at 0x4815b and 0x48280
@@ -625,10 +627,13 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	 * zero and the reciprocal is an infinity.  The object divides anyway;
 	 * D331.
 	 */
-	m = 1.0;
-	for (k = 0; k <= 5; k++) {
-		mm[k] = mappingParams->constellationSize[k] * (1.0f / maxSize);
-		m *= mm[k];
+	{
+		long double product = 1.0;
+		for (k = 0; k <= 5; k++) {
+			mm[k] = mappingParams->constellationSize[k] * (1.0f / maxSize);
+			product *= mm[k];
+		}
+		m = product;
 	}
 
 	/*
