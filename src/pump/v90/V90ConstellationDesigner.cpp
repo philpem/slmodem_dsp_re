@@ -576,6 +576,9 @@ V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
  * The loop itself has no product spill, so its register keeps x87 precision.
  * A double accumulator alone does not preserve that final boundary: GCC can
  * extend it before spilling, keeping the unrounded value in an XF slot.
+ * Keep both logarithm inputs double as well. Promoting them to long double
+ * lets GCSE share one extension across the intervening diagnostics, requiring
+ * a twelve-byte spill; the original reloads the eight-byte product instead.
  *
  * THE UNINITIALISED READ IS THE OBJECT'S.  When the rrn-down loop does not
  * run once, `prevNofUcodes` and `prevDmin` are read at 0x4815b and 0x48280
@@ -644,7 +647,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	 */
 	{
 		float downTarget = rrn - 0.75f;
-		float lm = (float)log10l((long double)m);
+		float lm = (float)log10(m);
 		float l2 = (float)log10l((long double)2.0f);
 		long double x = ((long double)(downTarget)
 				 - lm * (1.0f / l2)) * (1.0f / 6.0f);
@@ -737,7 +740,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	 * It divides where its twin multiplied. */
 	{
 		float upTarget = rrn + 1.05f;
-		float lm = (float)log10l((long double)m);
+		float lm = (float)log10(m);
 		float l2 = (float)log10l((long double)2.0f);
 		long double x = ((long double)(upTarget) - lm / l2)
 			      * (1.0f / 6.0f);
