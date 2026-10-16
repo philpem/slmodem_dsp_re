@@ -5122,3 +5122,9 @@ predicates and split smoother publications can remain negative despite a
 proved failure. Preserve the hard-failing probe separately from the existing
 suite, label that suite's coverage limit, and require both the value failure
 and the original operand/publication graph to close a follow-up.
+
+The scalar threshold failure is tracked in [issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292).
+After building the period objects, `tools/probe_generic_tone_unordered.py`
+runs the constructor-based probe from `test/explore/` and preserves its
+nonzero exit. It is outside the default unit-test discovery; a passing
+`make phase` does not imply that this separately demonstrated failure is fixed.
