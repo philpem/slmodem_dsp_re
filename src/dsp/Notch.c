@@ -22,7 +22,7 @@ notch(float x, float *state, const float *coef)
 	float in = coef[3] * x;
 	float w = state[0] + in;
 
-	state[0] = coef[1] * w + coef[0] * in + state[1];
+	state[0] = coef[1] * w + (coef[0] * in + state[1]);
 	state[1] = in + coef[2] * w;
 
 	return w;

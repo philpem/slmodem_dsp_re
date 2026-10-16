@@ -633,12 +633,15 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 
 	/*
 	 * The rate-down target.  See the header comment for why this one
-	 * multiplies by the reciprocal and its twin below divides.
+	 * multiplies by the reciprocal and its twin below divides. The original
+	 * converts rrn and subtracts the target offset before either logarithm
+	 * (0x47d88..0x47da5); keep that live value across the logarithms.
 	 */
 	{
+		float downTarget = rrn - 0.75f;
 		float lm = (float)log10l((long double)m);
 		float l2 = (float)log10l((long double)2.0f);
-		long double x = ((long double)(rrn - 0.75f)
+		long double x = ((long double)(downTarget)
 				 - lm * (1.0f / l2)) * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
 		unsigned int frac = (unsigned int)((x - n) * 100.0f);
@@ -725,11 +728,13 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 		    "V90ConstellationDesigner:: rrnDownDmin = %d\r\n",
 		    rrnDownDmin);
 
-	/* And the rate-up target, which divides where its twin multiplied. */
+	/* The rate-up target is likewise evaluated first (0x4829d..0x482b6).
+	 * It divides where its twin multiplied. */
 	{
+		float upTarget = rrn + 1.05f;
 		float lm = (float)log10l((long double)m);
 		float l2 = (float)log10l((long double)2.0f);
-		long double x = ((long double)(rrn + 1.05f) - lm / l2)
+		long double x = ((long double)(upTarget) - lm / l2)
 			      * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
 		unsigned int frac = (unsigned int)((x - n) * 100.0f);
