@@ -4927,3 +4927,20 @@ existing code, with unchanged object hashes, separately from source gains.
 [SETcc](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-setcc-proof.md),
 [guard and frame](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-corridor-proof.md).
 
+
+
+### Keep refused call pairs as evidence
+
+A return-use screen must retain the comparisons it refuses, not only count
+refusal reasons. Record the defining object, symbol, call ordinal, both call
+sites and both first-use traces. Retain unequal target sequences separately,
+without inventing a correspondence. The return-mode screen writes these as
+`call_pairs` and `unequal_sequences`, with their counts checked against the
+summary denominators.
+
+This ledger makes a next experiment specific: an unproved branch edge needs
+an ownership proof; an aliasing store needs a storage argument. Aggregate
+counts cannot identify either site. Equal target sequences still align only
+physical call ordinals, not control-flow paths or arguments. Repeated calls
+need independent correspondence before a difference can justify a source
+change. Saving a refusal does not resolve it or increase analysis coverage.
