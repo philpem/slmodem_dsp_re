@@ -5108,8 +5108,8 @@ that definition and use before blaming x87 stack allocation. Keep the
 publication recovery even when the independent predicate control fails.
 
 Comparison orientation can expose a value failure as well as a codegen
-residual. Under the period flags, the scalar tone detector's reconstructed
-threshold-first comparison accepts unordered input, whereas the original
+residual. Under the period flags, the scalar tone detector's earlier
+threshold-first comparison accepted unordered input, whereas the original
 mean-output-first comparison rejects it. A constructor-created detector with
 finite positive controls and one external quiet-NaN sample demonstrates the
 difference without planting internal state. This establishes a component
@@ -5123,8 +5123,76 @@ proved failure. Preserve the hard-failing probe separately from the existing
 suite, label that suite's coverage limit, and require both the value failure
 and the original operand/publication graph to close a follow-up.
 
-The scalar threshold failure is tracked in [issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292).
-After building the period objects, `tools/probe_generic_tone_unordered.py`
-runs the constructor-based probe from `test/explore/` and preserves its
-nonzero exit. It is outside the default unit-test discovery; a passing
-`make phase` does not imply that this separately demonstrated failure is fixed.
+### Inspect expression folding before initial RTL
+
+An operand order already wrong in initial RTL needs an earlier explanation.
+GCC 3.4.2's `tree_swap_operands_p` in `fold-const.c` prefers a non-declaration
+on the left when the other operand is a declaration. A named `meanOut` local
+compared with the `threshold` member therefore becomes a threshold-first
+comparison before RTL expansion. Reversing or complementing the comparison
+spelling does not remove this source-tree distinction.
+
+Use the original producer and consumer graph to choose a new control. The
+tone detector's original shares the output-mean product between smoothing
+and a direct comparison with the threshold in memory. Writing `out * inv`
+at the comparison preserves that orientation during tree folding. CSE then
+shares the product with the existing mean, and combine folds the threshold
+load into the comparison. The final scalar method becomes byte-exact;
+no NaN-specific branch or compiler-profile change is needed.
+
+Retain the stage evidence: the original-tree dump distinguishes declaration,
+member and arithmetic expressions; initial RTL shows the comparison order;
+CSE confirms shared computation. Do not infer duplicated runtime arithmetic
+from repeated source expressions, or assume a named temporary is codegen-neutral.
+This mechanism is a candidate discriminator elsewhere, not a blanket rule to
+inline all expressions into their consumers.
+
+The constructor-based boundary regression from
+[issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292) now runs in
+the normal tone-detector fixture: its 64 checks raise the fixture total from
+82,372 to 82,436. The standalone `tools/probe_generic_tone_unordered.py`
+reuses that same test definition and preserves its exit status. Keep the
+historical failing run as evidence of the coverage gap; the new passing
+regression closes the demonstrated component failure, without claiming a
+nonfinite input is reachable through the modem lifecycle.
+
+### Recover original recurrences and entry snapshots before tuning registers
+
+A mathematically equivalent shortcut can hide the original source graph.
+`GetFP_Value` used direct ceiling division in the reconstruction, while the
+object accumulates subtraction steps in a wrapping short. Restoring the
+negative-step recurrence, integer absolute values and original guard removes
+the division and recovers the original function length. It remains nonexact.
+Bounded short-extreme and counter-wrap tests support the terminating input
+domain; zero-divisor nontermination is documented, not executed as a test.
+No finite-input value defect was established for the old arithmetic shortcut.
+
+Inspect operand constraints when a mnemonic still differs. The recovered
+absolute-value shift exists in initial RTL, but allocation puts its source
+in EAX and destination in EDX, allowing the machine pattern to emit CDQ.
+The original uses SAR. That difference does not establish a missing source
+operation or justify spelling the absolute value as fabricated bit operations.
+
+FSM modulation captures its scale, sample count and genuine frequency-array
+base at entry, before calling the tone helpers. Recover those lifetimes with
+the observed unsigned-short countdowns and wrapped total. A candidate without
+the array-base capture had a smaller size gap, but omitted the original
+address lifetime. Preserve the complete owner and reload the child pointer
+where the original does; do not invent a field alias to improve allocation.
+
+### Recheck old fixture exclusions against the deciding compiler
+
+An exclusion written for a combined modern/period gate can outlive that gate.
+It is not evidence that the period reconstruction fails or that the input
+cannot be supplied at a component boundary. The connection evaluator's
+constructor/public-update probes pass finite and quiet-NaN controls for
+phase-4 ratio and enabled rate-up decisions: eight trials, 24 checks, including
+whole-object comparisons. `tools/probe_v90_connection_boundaries.py` retains
+those explicit period probes outside default discovery. It makes no modern
+portability or modem-path reachability claim and changes no tolerance.
+
+Audit original call slots and owner reloads alongside tests. The checked
+V92 RT receive, phase-3 reset and V90 AT report boundaries matched the
+reconstruction; their 19 witnesses establish those reviewed boundaries, not
+complete coverage of all three functions. Preserve negative audits so the
+same comments and branches are not repeatedly treated as new defects.

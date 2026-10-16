@@ -2,8 +2,8 @@
   "bytes": 66,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1098,
-  "exact_bytes": 125389,
+  "exact": 1099,
+  "exact_bytes": 125707,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -634,6 +634,7 @@
     "_ZN18V92Phase4ModulatorD1Ev",
     "_ZN18V92Phase4ModulatorD2Ev",
     "_ZN19GenericToneDetector5resetEv",
+    "_ZN19GenericToneDetector7processEf",
     "_ZN19GenericToneDetectorC1EjjPdS0_jjfjfjj",
     "_ZN19GenericToneDetectorC2EjjPdS0_jjfjfjj",
     "_ZN19GenericToneDetectorD1Ev",
@@ -1108,6 +1109,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 658,
+  "size": 657,
   "unresolved": 1
 }

@@ -49,8 +49,8 @@ main()
 		mp.vpcmRateLimitLow = 28000;
 		mp.vpcmRateLimitHigh = 56000;
 		V90Parameters p(&mp);
-		unsigned char a[sizeof(V90ConnectionEvaluator)];
-		unsigned char b[sizeof(V90ConnectionEvaluator)];
+		unsigned char a[sizeof(V90ConnectionEvaluator)] __attribute__((aligned(8)));
+		unsigned char b[sizeof(V90ConnectionEvaluator)] __attribute__((aligned(8)));
 		memset(a, 0, sizeof a);
 		memset(b, 0, sizeof b);
 		p.PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.0f;
@@ -80,8 +80,8 @@ main()
 		mp.vpcmRateLimitLow = 28000;
 		mp.vpcmRateLimitHigh = 56000;
 		V90Parameters p(&mp);
-		unsigned char a[sizeof(V90ConnectionEvaluator)];
-		unsigned char b[sizeof(V90ConnectionEvaluator)];
+		unsigned char a[sizeof(V90ConnectionEvaluator)] __attribute__((aligned(8)));
+		unsigned char b[sizeof(V90ConnectionEvaluator)] __attribute__((aligned(8)));
 		memset(a, 0, sizeof a);
 		memset(b, 0, sizeof b);
 		p.ENABLE_RRN_UP = 1;
