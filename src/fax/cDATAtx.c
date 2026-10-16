@@ -203,7 +203,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_handle_data_input(ctx, (const unsigned char *)(long)word4,
 		    (unsigned short *)(void *)ctx, word8);
 
-		n = FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		n = (unsigned short)FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    (unsigned short)*word8);
 		if (*word8 > n) {
 			if (dsplibs_debug_level > 1)
@@ -225,7 +225,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		 * untouched), not assumed correct from a first disassembly
 		 * pass.
 		 */
-		*word8 = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		*word8 = (unsigned short)FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    ctx->tx_bytes_per_block);
 		if (*word8 < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
@@ -239,7 +239,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx, &cnt,
 	    &result);
 
-	*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1;
+	*word8 = (unsigned short)ctx->tx_fifo->size - ctx->tx_fifo->count - 1;
 	return 0;
 }
 
@@ -302,10 +302,10 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		int rd;
 
 		ctx->state = CLASS1_TX_DATA_STATE;
-		rd = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		rd = (unsigned short)FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    (unsigned short)ctx->tx_bytes_per_block);
 		*tx_data_count = rd;
-		if (rd < ctx->tx_bytes_per_block) {
+		if (*tx_data_count < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "class1 object fifo under run in " "_tx_scrambled_ones_state !!!\n");
