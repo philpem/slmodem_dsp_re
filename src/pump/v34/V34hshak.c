@@ -1,61 +1,24 @@
 /*
- * V34hshak.c -- ITU-T V.34: the handshake's support functions.
+ * V34hshak.c -- V.34 handshake, training support and datapump supervision.
  *
- * `V34hshak.c` is the object's largest C translation unit, 0x5dd10 to
- * 0x71960, and almost all of it is `v34handshak` -- 61,541 bytes across the
- * eighty-seven states of `include/dsplib/v34hshak.h`.  This file is the rest:
- * the routines that state machine calls to bring a receiver or a transmitter
- * up once the negotiation has settled something.
+ * This file implements v34handshak, its state-name table and training
+ * helpers, and datapumpv34, which invokes the handshake or supervises the
+ * trained receive/transmit paths. v34hshak.h names the three cooperating
+ * state machines; v34fsk.h and v34recv.h own their recovered object maps.
  *
- * The TU boundary is not inferred.  `ApplyBulkDelay` and `getbit` are the two
- * local .text symbols that follow V34hshak.c's `STT_FILE` entry, so the
- * anchor is exact at the bottom; `v34handshak` ends at 0x71955 and
- * `datapumpv34` starts at 0x71960, which fixes the top.
+ * The reference's local ApplyBulkDelay/getbit symbols and STT_FILE record
+ * anchor the original V34hshak.c region (F117). v34handshak ends at
+ * 0x71955 and datapumpv34 starts at 0x71960. These addresses describe the
+ * reference object, not this build's current function placement.
  *
- * WHAT IS HERE, AND WHAT IS NOT.  Fourteen functions and one table, chosen by
- * testability rather than by theme -- see docs/fastpass.md, whose one
- * unrelaxed rule is that nothing commits without a differential test:
- *
- *     dpskDetectInfo1Init   setfinalrate   setupreceiver   v34modeminit
- *     dpskinit              preempindex    v34handshakinit
- *     dftfreqinit           dftnlinitSignalBins    dftnlinitNoiseBins
- *     dftRetrainDetInit     detectRetrainReq
- *     getbit                ApplyBulkDelay
- *     StateName
- *
- * WHAT CHANGED ABOUT THE LAST TWO.  This note used to say that `getbit` and
- * `ApplyBulkDelay` could not be here at all: both are file-local, so
- * `objcopy --redefine-syms` could not give them a `ref_` alias, and the
- * project's answer for a local was to drive it through a reconstructed
- * caller -- which for these two means `v34handshak`, 61 KB that is still
- * unwritten.  0x6484c, 0x684bb and 0x706a9 call `getbit`; 0x6639f and
- * 0x66af5 call `ApplyBulkDelay`; there is not one relocation against either
- * name, because a call to a local in the same section needs none.  All of
- * that is still true and none of it blocks them any more.
- *
- * The claim that failed was the one about `objcopy`.  A local can be
- * PROMOTED first -- `--globalize-symbols` in one pass, `--redefine-syms` in a
- * second -- and then it renames like any other global, so `ref_getbit` and
- * `ref_ApplyBulkDelay` link and both are tested directly rather than through
- * a caller.  Finding F221 is the general result and finding F227 is these two.
- * Finding F117, which drew the original conclusion, stands as the reading of
- * the call graph and is superseded only in what it says can be tested.
- *
- * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  Nothing reaches
- * `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`, `preempindex` or any
- * of the five DFT routines -- no relocation, no `call`, no `jmp`, and no
- * little-endian copy of their addresses in `.text`, `.data` or `.rodata`.
- * Only `setfinalrate` has a caller, in `v34handshak`.  The `jmp` and the
- * data scans are not belt and braces: this object tail-calls constantly, and
- * a section-symbol relocation with an addend does not answer to a grep for a
- * name.  Finding F212 gives the controls each scan was checked against.
- *
- * They are global, so they are testable regardless, but it means their
- * arguments and their bank sizes have to be read out of the code rather than
- * off a call site.  Finding F89 recorded the same shape twice already.
- *
- * `v34handshakinit` is the exception and has six callers, which is where its
- * mode numbers come from; see the declaration in `v34hshak.h`.
+ * Historical fast-pass scope: the first version of this file implemented
+ * fourteen support functions and StateName while the handshake was still
+ * pending. That restriction is retired; the functions below are now
+ * reconstructed. F221 established that file-local reference functions can
+ * be globalised and renamed for direct tests, and F227 applies that method
+ * to getbit and ApplyBulkDelay. F212 records the no-internal-caller audit
+ * of several exported training helpers; F89 explains why those helpers
+ * still need independently established component input boundaries.
  */
 
 #include "dsplib/debug.h"
@@ -9532,10 +9495,11 @@ micro_txblock:
  * rejoins at the second test, the remote-renegotiation block rejoins at the
  * third, the step down rejoins at the fourth -- so a single block can
  * retrain, notice a remote renegotiation and start one of its own, calling
- * `v34handshakinit` three times.  Each block reads `+0xaa96` and the
- * receiver's counters AFTER its `v34handshakinit` call, which is why the
- * reads below are inside the blocks rather than hoisted: `v34handshakinit`
- * is free to move them and the object gives it the chance.
+ * `v34handshakinit` three times. Retrain rechecks the block rate and run
+ * count AFTER
+ * `v34handshakinit`; renegotiation copies the rate index after init.
+ * Later tests reload fields after the preceding indication calls too.
+ * Keep those reads at their original call boundaries.
  *
  * THE THREE COUNTERS are the receiver's +0x258, +0x25a and +0x25c, and they
  * are consecutive-run counts rather than totals: each is bumped when this
@@ -9547,96 +9511,29 @@ micro_txblock:
  * the other way round: it counts symbols whose error is SMALL, which is what
  * makes it the step UP.
  *
- * The three timer spans -- 287,488 here, 144,000 and 1,152,000 in the loop --
+ * The three timer spans -- 288,000 here, 144,000 and 1,152,000 in the loop --
  * are all UNSIGNED compares of one int minus another, so a mark ahead of the
  * count reads as an enormous span rather than a negative one.
  */
 
-#define DP_FAA98	((int)__builtin_offsetof(struct v34_object, \
-					    ratecfg.rxbits))
-	/* short: copied into the receiver's +0x260; the member's own
-	   offset (issue #260 wave 11)  */
-
-/*
- * The receiver's own fields.  THESE ARE ALL MEMBERS OF `struct v34_receiver`
- * ALREADY -- `rx_blocks`, `equerr`, `bad_thresh`, `bad_long_thresh`, `good_thresh`, `bad_run`, `bad_long_run`, `good_run`,
- * `tx_sample`, `echo_residual` and `flags`, at exactly these offsets, in
- * `include/dsplib/v34recv.h`.  This comment used to say none of them was
- * mapped, which is how the offset-passing accessors below survived a reading
- * of this function's codegen.
- *
- * THE ACCESSORS ARE A KNOWN DEFECT AND FINDING F8044 IS THE WRITE-UP.  The
- * object holds `&obj->receiver` and `&obj->txq` in registers -- `lea 0x264(%ebx),
- * %esi` and `lea 0x221c(%ebx),%edi` -- and addresses every field as a
- * constant displacement off them.  Because `off` here is a PARAMETER, ours
- * loads fold but the STORES do not, and `dp_run`'s `int failed` parameter
- * materialises a boolean where the object branches.  Rewriting through a
- * local `struct v34_receiver *rx` takes this from 40 differing bytes to 34
- * with every extension site right, and was DECLINED under F7782 because no
- * cell in a fourteen-cell enumeration maps onto the object -- see F8045,
- * which also records that the two byte-CLOSEST cells compute something the
- * object does not.
+/* The object keeps receiver and transmit-queue bases in registers.  Use
+ * those owners directly: every supervisor word is already modelled in
+ * v34_receiver. Receiver-loop comparisons are signed 16-bit despite
+ * zero-extending loads; increments store the low 16 bits. Down/up threshold
+ * comparisons below use 32 bits. See issue #286 and
+ * docs/maintainer-offset-access.md for the operand audit.
  */
-#define DP_RX_ERR	((int)__builtin_offsetof(struct v34_receiver, equerr))
-#define DP_RX_BLOCKS	((int)__builtin_offsetof(struct v34_receiver, \
-					    rx_blocks))
-#define DP_RX_THR_A	((int)__builtin_offsetof(struct v34_receiver, \
-					    bad_thresh))
-#define DP_RX_THR_B	((int)__builtin_offsetof(struct v34_receiver, \
-					    bad_long_thresh))
-#define DP_RX_THR_C	((int)__builtin_offsetof(struct v34_receiver, \
-					    good_thresh))
-#define DP_RX_BAD	((int)__builtin_offsetof(struct v34_receiver, bad_run))
-#define DP_RX_BAD_LONG	((int)__builtin_offsetof(struct v34_receiver, \
-					    bad_long_run))
-#define DP_RX_GOOD	((int)__builtin_offsetof(struct v34_receiver, good_run))
-#define DP_RX_WHY	((int)__builtin_offsetof(struct v34_receiver, \
-					    rrn_local_dir))
-#define DP_RX_RATE	((int)__builtin_offsetof(struct v34_receiver, \
-					    baud_copy))
-	/* All ten are the members' own offsets now (issue #260 wave 11);
-	   the original comments -- "the block's error measure",
-	   "blocks received, capped at 30,000", the thresholds, the
-	   consecutive-run counters, "1 remote, 2 down, 3 up" and "the
-	   rate index the change was at" -- stay as the record of what
-	   each does.  The sites STAY on the dp_rxget/dp_rxput helpers:
-	   converting the parameterised accessors was measured and DECLINED
-	   (findings F8044/F8045), and the offset stays their parameter. */
-
 #define DP_TIMER_STALE	288000u		/* 0x46500, 36 s at 8 kHz  */
 #define DP_TIMER_MID	144000u		/* 0x23280, 18 s           */
 #define DP_TIMER_LONG	1152000u	/* 0x119400, 144 s         */
 #define DP_RX_BLOCK_CAP	0x752f		/* the last value that still bumps  */
 
-static short
-dp_rxget(const struct v34_object *obj, unsigned off)
-{
-	return *(const short *)((const char *)&obj->receiver + off);
-}
-
-static void
-dp_rxput(struct v34_object *obj, unsigned off, short v)
-{
-	*(short *)((char *)&obj->receiver + off) = v;
-}
-
-/*
- * One consecutive-run counter: bumped while the measure fails, cleared the
- * moment it passes.  All three sites are this shape and the only difference
- * between them is which way the compare runs, so the caller passes the
- * verdict.  Sixteen-bit, and it wraps.
- */
-static void
-dp_run(struct v34_object *obj, unsigned counter, int failed)
-{
-	dp_rxput(obj, counter,
-		 failed ? (short)(dp_rxget(obj, counter) + 1) : 0);
-}
-
 void
 datapumpv34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = &obj->receiver;
+	struct v34_queue *tx = &obj->txq;
 
 	if ((unsigned)obj->sample_count
 	    - (unsigned)obj->int_0248 > DP_TIMER_STALE)
@@ -9646,40 +9543,48 @@ datapumpv34(void *objp)
 	 * The handshake, and the only path that calls `v34handshak`.  Its own
 	 * prologue reads the same two guards, so an iteration whose arm moves
 	 * neither the cursor nor the queue count repeats forever; that is the
-	 * object's shape and not a reading of it, and it is why the test can
-	 * drive this branch only with the loop already satisfied.
+	 * object's shape. A fixture must establish progress in the selected
+	 * handshake arm, or enter with the loop already satisfied.
 	 */
 	if ((unsigned)obj->hs_mode > 1u) {
-		while (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count > 5)
+		while (tx->count < obj->tx_fill_target || rx->rxq.count > 5)
 			v34handshak(obj);
 		return;
 	}
 
-	while (obj->txq.count < obj->tx_fill_target)
+	while (tx->count < obj->tx_fill_target)
 		modulatevector(obj);
 
-	while (obj->receiver.rxq.count > 5) {
+	while (rx->rxq.count > 5) {
 		unsigned span;
 		short err;
 
-		if (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)
-			dp_rxput(obj, DP_RX_BLOCKS,
-				 (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));
+		if (rx->rx_blocks <= DP_RX_BLOCK_CAP)
+			rx->rx_blocks = (short)(rx->rx_blocks + 1);
 
 		receiver(obj);
 
-		err = dp_rxget(obj, DP_RX_ERR);
-		dp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));
+		err = rx->equerr;
+		if (err > rx->bad_thresh)
+			rx->bad_run = (short)(rx->bad_run + 1);
+		else
+			rx->bad_run = 0;
 
 		span = (unsigned)obj->sample_count
 		     - (unsigned)obj->int_0248;
 
-		if (span > DP_TIMER_MID)
-			dp_run(obj, DP_RX_BAD_LONG,
-			       err > dp_rxget(obj, DP_RX_THR_B));
-		if (span > DP_TIMER_LONG)
-			dp_run(obj, DP_RX_GOOD,
-			       err < dp_rxget(obj, DP_RX_THR_C));
+		if (span > DP_TIMER_MID) {
+			if (err > rx->bad_long_thresh)
+				rx->bad_long_run = (short)(rx->bad_long_run + 1);
+			else
+				rx->bad_long_run = 0;
+		}
+		if (span > DP_TIMER_LONG) {
+			if (err < rx->good_thresh)
+				rx->good_run = (short)(rx->good_run + 1);
+			else
+				rx->good_run = 0;
+		}
 	}
 
 	/*
@@ -9689,28 +9594,28 @@ datapumpv34(void *objp)
 	 * the same test again, so a `v34handshakinit` that cleared the run
 	 * would report 3 where the entry condition was the flag.
 	 */
-	if ((obj->receiver.flags & V34_RX_FLAG_RETRAIN)
-	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {
+	if ((rx->flags & V34_RX_FLAG_RETRAIN)
+	    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {
 		v34handshakinit(obj, 1);
 		obj->hs_mode =
-			 dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)
+			 rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)
 			 ? 3 : 2;
-		dp_rxput(obj, DP_RX_BAD, 0);
-		dp_rxput(obj, DP_RX_BAD_LONG, 0);
-		dp_rxput(obj, DP_RX_GOOD, 0);
+		rx->bad_run = 0;
+		rx->bad_long_run = 0;
+		rx->good_run = 0;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34TIMING,Retrain started\n");
 	}
 
 	/* The far end asked, on bit 5 of the same word, re-read. */
-	if (obj->receiver.flags & V34_RX_FLAG_RENEG) {
+	if (rx->flags & V34_RX_FLAG_RENEG) {
 		v34handshakinit(obj, 3);
-		dp_rxput(obj, DP_RX_GOOD, 0);
+		rx->good_run = 0;
 		obj->hs_mode = 4;
-		dp_rxput(obj, DP_RX_BAD, 0);
-		dp_rxput(obj, DP_RX_BAD_LONG, 0);
-		dp_rxput(obj, DP_RX_WHY, 1);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		rx->bad_run = 0;
+		rx->bad_long_run = 0;
+		rx->rrn_local_dir = 1;
+		rx->baud_copy = obj->ratecfg.rxbits;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"V34RNEG, rate renegotiation detected \n");
@@ -9722,28 +9627,28 @@ datapumpv34(void *objp)
 	 * sign-extended and the block rate multiplied as an int, so a large
 	 * +0xaa96 does not wrap the threshold into range.
 	 */
-	if (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {
+	if (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {
 		v34handshakinit(obj, 2);
 		obj->hs_mode = 5;
-		dp_rxput(obj, DP_RX_BAD, 0);
-		dp_rxput(obj, DP_RX_BAD_LONG, 0);
-		dp_rxput(obj, DP_RX_GOOD, 0);
-		dp_rxput(obj, DP_RX_WHY, 2);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		rx->bad_run = 0;
+		rx->bad_long_run = 0;
+		rx->good_run = 0;
+		rx->rrn_local_dir = 2;
+		rx->baud_copy = obj->ratecfg.rxbits;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
 					     "DOWN initiated due to large " "error \n");
 		VPcmV34IndicateLocalRRN(obj);
 	}
 
-	if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {
+	if (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {
 		v34handshakinit(obj, 2);
-		dp_rxput(obj, DP_RX_GOOD, 0);
+		rx->good_run = 0;
 		obj->hs_mode = 5;
-		dp_rxput(obj, DP_RX_BAD, 0);
-		dp_rxput(obj, DP_RX_BAD_LONG, 0);
-		dp_rxput(obj, DP_RX_WHY, 3);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		rx->bad_run = 0;
+		rx->bad_long_run = 0;
+		rx->rrn_local_dir = 3;
+		rx->baud_copy = obj->ratecfg.rxbits;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
 					     "UP initiated due to small " "error \n");

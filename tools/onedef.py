@@ -28,12 +28,10 @@ for the period compiler to accept them at all.  So the duplication was not a
 tidiness question; it was the thing standing between this tree and building
 under the compiler that built the object.  See docs/method/compilers.md.
 
-THE ENTRY BELOW IS A DEBT, NOT AN EXEMPTION.  It is a class modelled twice at
-two different sizes, which is a gap in the reconstruction rather than a
-mistake in the headers -- reconciling it means establishing which size is
-right, which is reverse-engineering and not refactoring.  It is listed so the
-gate can pass today and so a SECOND one cannot appear quietly.  Removing an
-entry is progress; adding one needs a reason written here.
+The known-debt register is empty. The last carried duplicate, the phase 4
+V.90 demodulator prefix model, was retired after consolidation preserved all
+period source objects byte for byte. See docs/phase4-type-consolidation.md.
+Adding an entry still needs an evidence-backed reason written here.
 """
 
 import argparse
@@ -43,12 +41,7 @@ import re
 import sys
 
 # type name -> why two definitions are tolerated, for now.
-KNOWN = {
-    "V90Phase4Demodulator":
-        "a partial model in V90SessionFlag.h -- sessionFlag plus an embedded "
-        "V90Phase4Modulator, bounded at 0x2ffc and explicitly 'a floor, not a "
-        "size' -- beside the fuller one in V90Phase4Demodulator.h.",
-}
+KNOWN = {}
 
 DEFN = re.compile(r'^(class|struct|enum|union)\s+(\w+)\s*(?::[^{;]*)?\{', re.M)
 

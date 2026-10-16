@@ -64,8 +64,15 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
+#include "dsplib/v34shell.h"
+#include "dsplib/v34rx.h"
 
 extern void ref_datapumpv34(void *obj);
+extern void ref_preinitdigital(void *obj);
+extern int ref_initV34(void *fields, short baud, short bitrate, short use_max,
+		       short depth, const short *coeff, short divisor);
+extern void ref_decoderv34(void *obj);
+extern void ref_modulatevector(void *obj);
 extern void ref_VPcmV34IndicateLocalRRN(void *obj);
 extern void ref_VPcmV34IndicateRemoteRRN(void *obj);
 
@@ -645,6 +652,39 @@ static const struct poke pk_rx_cap_over[] = {
 };
 
 /*
+ * Synthetic fidelity probe: a negative acquisition count has no demonstrated
+ * lifecycle history. The blob loads it with movzwl at 0x71a2a, but compares
+ * AX with a signed branch at 0x71a31..0x71a35. An unsigned comparison would
+ * skip the increment; -1 must instead become zero before receiver runs.
+ */
+static const struct poke pk_rx_cap_negative[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_BLOCKS,	2, -1 },
+	PK_END
+};
+
+/*
+ * Synthetic fidelity probes, with no demonstrated lifecycle history for the
+ * planted error/run values. The same receiver boundary leaves equerr intact
+ * (checked below), so these isolate the supervisor's signed compare and its
+ * low-16-bit counter increment. Neither claims a reachable public call state.
+ */
+static const struct poke pk_rx_negative_err[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_ERR,	2, -1 },
+	{ O_THR_A,	2, 0 },
+	{ O_BAD,	2, 11 },
+	PK_END
+};
+
+static const struct poke pk_rx_bad_wrap[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_THR_A,	2, 0 },
+	{ O_BAD,	2, 0x7fff },
+	PK_END
+};
+
+/*
  * The two timed counters inside the loop.  Below 144,000 elapsed neither
  * +0x25a nor +0x25c moves whatever the error does; above 1,152,000 both do.
  */
@@ -991,7 +1031,13 @@ static const struct trial trials[] = {
   { "+0x124 is bumped before receiver at the PP boundary", pk_rx_prebump,
     { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 612 },
   { "the supervisor reads the error published by receiver", pk_rx_fresh_err,
-    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 613 }
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 613 },
+  { "synthetic: negative +0x124 uses the signed cap comparison",
+    pk_rx_cap_negative, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 614 },
+  { "synthetic: a negative error passes a zero threshold",
+    pk_rx_negative_err, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 615 },
+  { "synthetic: bad_run wraps from 32767 to -32768",
+    pk_rx_bad_wrap, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 616 }
 };
 
 #define NTRIALS	((int)(sizeof(trials) / sizeof(trials[0])))
@@ -1029,6 +1075,114 @@ differ(const char *what, long a, long b)
 			 || seen[0][i].changed != seen[0][j].changed), 1, a);
 }
 
+/*
+ * The loops share the receive shell's training latch. demapFrame sets it
+ * after its frame warm-up; modulatevector reads it before advancing the
+ * transmit training counter. Echo cancellation is not the dependency here:
+ * modem_serrint already handled that before queuing the receive samples.
+ *
+ * Build the shell history with real initialisers and decoder calls, and
+ * prime eight transmit symbols through the real mapper. No latch or training
+ * count is planted. The final receiver flags, acquisition count and queued
+ * sample boundary are synthetic: this isolates a component contract and
+ * does not establish that a public modem call reaches this combination.
+ * The neighbour stops one decoder symbol earlier and must not latch.
+ */
+static void
+loop_order_cases(void)
+{
+	static const short coeff[12] = { 0 };
+	int control_run, crossing, side;
+
+	for (control_run = 0; control_run <= 1; control_run++)
+	for (crossing = 0; crossing <= 1; crossing++) {
+		int last = 0;
+		long tag = 700 + crossing + control_run * 100;
+
+		v34hs_debug(0);
+		v34hs_refinit(control_run);
+		v34hs_setup(0);
+		apply(base);
+		for (side = 0; side < 2; side++) {
+			struct v34_object *o = v34hs_object(side);
+			struct v34_shell *rs = (struct v34_shell *)o;
+			struct v34_shell *ts = (struct v34_shell *)
+				((char *)o + V34_SHELL_TX);
+			int ref = side || control_run;
+			int n;
+
+			if (ref) {
+				ref_preinitdigital(o);
+				ref_initV34((char *)rs + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+				ref_initV34((char *)ts + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+			} else {
+				preinitdigital(o);
+				initV34((char *)rs + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+				initV34((char *)ts + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+			}
+			o->receiver.flags = V34_RX_FLAG_DATA | 0x98;
+			o->receiver.subframe_idx = 0;
+			o->rx_n = o->tx_n = o->tx_rd = 0;
+			last = ((0x40 + rs->span * 8) | 7) - !crossing;
+			for (n = 0; n < last; n++) {
+				o->receiver.target_re = 0;
+				o->receiver.target_im = 0;
+				if (ref)
+					ref_decoderv34(o);
+				else
+					decoderv34(o);
+			}
+			diff_eq_int("decoder warm-up has not latched",
+				    rs->latched, 0, tag + side * 1000);
+			diff_eq_int("decoder calls built the subframe history",
+				    o->receiver.subframe_idx, last,
+				    tag + side * 1000);
+
+			/* First mapper entry is its documented fresh-vector boundary;
+			 * eight genuine calls return it there for the tested step. */
+			o->vect_idx = 8;
+			o->tx_flags = 0;
+			for (n = 0; n < 8; n++) {
+				if (ref)
+					ref_modulatevector(o);
+				else
+					modulatevector(o);
+			}
+			diff_eq_int("mapper history ends at a vector boundary",
+				    o->vect_idx, 8, tag + side * 1000);
+			diff_eq_int("unlatched receive history delays tx training",
+				    o->train_symcount, 0, tag + side * 1000);
+			o->tx_fill_target = (short)(o->txq.count + 4);
+			o->receiver.rxq.count = 8;
+			o->receiver.rx_blocks = 0x333;
+			o->receiver.rtncount = 0;
+		}
+		v34hs_compare("loop-order component history before step", tag);
+		v34hs_entry(control_run ? ref_datapumpv34 : datapumpv34,
+			       ref_datapumpv34, control_run);
+		v34hs_step();
+		v34hs_compare("loop-order component boundary after step", tag);
+		for (side = 0; side < 2; side++) {
+			struct v34_object *o = v34hs_object(side);
+			struct v34_shell *rs = (struct v34_shell *)o;
+
+			diff_eq_int("pending decoder symbol crosses latch only at boundary",
+				    rs->latched, crossing, tag + side * 1000);
+			diff_eq_int("transmit loop observes the pre-receive latch",
+				    o->train_symcount, 0, tag + side * 1000);
+			diff_eq_int("receiver processed the pending decoder symbol",
+				    o->receiver.subframe_idx, last + 1,
+				    tag + side * 1000);
+		}
+	}
+	v34hs_refinit(0);
+	v34hs_entry(NULL, NULL, 0);
+}
+
 int
 main(void)
 {
@@ -1038,6 +1192,7 @@ main(void)
 	diff_begin("datapumpv34 and the two rate-renegotiation counters");
 
 	rrn_cases();
+	loop_order_cases();
 
 	for (debug_on = 0; debug_on <= 1; debug_on++) {
 		v34hs_debug(debug_on);
@@ -1071,12 +1226,11 @@ main(void)
 	}
 
 	/*
-	 * Second: how many trials wrote NOTHING AT ALL.  Eleven of the
-	 * thirty-nine are "this arm must not run" cases, and for those the
+	 * Second: how many trials wrote NOTHING AT ALL. Eleven trials are
+	 * "this arm must not run" cases, and for those the
 	 * differential comparison alone is a comparison of two silences; the
 	 * count is what stops a change that quietly turned an armed case
-	 * inert from still passing.  The other twenty-eight must all have
-	 * moved the object.
+	 * inert from still passing. Every other trial must move the object.
 	 */
 	{
 		int inert = 0;
@@ -1151,6 +1305,16 @@ main(void)
 		    seen[0][index_of(613)].bad, 8, 613);
 	diff_eq_int("the receiver publishes the accumulated error before supervision",
 		    seen[0][index_of(613)].err, 160, 613);
+
+	diff_eq_int("the synthetic negative rx_blocks increments to zero",
+		    seen[0][index_of(614)].blocks, 0, 614);
+
+	diff_eq_int("the synthetic negative error survives receiver",
+		    seen[0][index_of(615)].err, -1, 615);
+	diff_eq_int("the synthetic negative error clears the bad run",
+		    seen[0][index_of(615)].bad, 0, 615);
+	diff_eq_int("the synthetic bad run wraps in sixteen bits",
+		    seen[0][index_of(616)].bad, -32768, 616);
 
 	/* The absolute oracle that separates OR from AND in the handshake loop. */
 	diff_eq_int("the transmit-only handshake condition completes the block",

@@ -100,6 +100,11 @@ Training-to-data handover also transfers scrambler history and negotiated
 parameters. A correct standalone bit recurrence does not prove that the
 handover occurs at the right symbol.
 
+For V.34, [`datapumpv34` supervises each block](signal-processing.md#per-block-supervision)
+after the data engines run. Its error-run counters decide retrain and rate
+changes. Preserve engine order, signed counter widths and reads after
+initialisation/indication calls when changing that boundary.
+
 ## 5. Tear down and preserve session information
 
 Use the owning adapter's destructor. It releases family resources and the

@@ -79,6 +79,31 @@ When improving test coverage, demonstrate that a meaningful perturbation is
 detected. Maintain affected mutation anchors and report uncaught/unusable
 cases. A stale mutation snapshot is historical evidence, not a fresh result.
 
+### Example: detecting a scheduling regression
+
+The V.34 datapump's loop-order test exercises the receive-shell latch described
+in [per-block supervision](signal-processing.md#per-block-supervision).
+The decoder history is built through real initialisation and processing calls;
+the final combined receiver-queue boundary is labelled synthetic. A neighbouring
+non-crossing case checks that the test responds to the latch transition.
+Reversing the two data loops must fail its training-counter oracle and state
+comparison. Merely showing both loops run would miss that dependency.
+
+Run the focused period test and measure the complete owning mutation suite:
+
+```sh
+make period T=t_v34datapump J=4
+python3 tools/mutsnap.py --update --jobs 4 v34datapump
+python3 tools/mutsnap.py --check
+```
+
+`--update` runs the mutations before recording their verdicts and dependency
+key. Finish source, fixture and mutation edits first; never refresh keys by
+hand. A current result for this suite does not refresh other suites. The
+[coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md#loop-order-coverage)
+keeps the measured denominators and the distinction between component,
+synthetic and public-call evidence.
+
 ## Measure the claim you are making
 
 | Claim | Measurement | Limit |

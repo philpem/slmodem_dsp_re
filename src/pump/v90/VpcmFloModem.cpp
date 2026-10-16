@@ -1,5 +1,5 @@
 /*
- * VpcmFloModem.cpp -- six of the twenty-six members of the PCM modem class.
+ * VpcmFloModem.cpp -- PCM session lifecycle, negotiation and processing.
  *
  * `include/dsplib/VPcmFloModem.h` carries the object map, the argument for
  * why the object really is 32 KB, and the three measurements that put a
@@ -7,7 +7,7 @@
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
- * WHAT THE FIVE ARE, in the order they were written:
+ * Early helper recoveries, in historical implementation order:
  *
  *   getV90JaBits       two bits out of `bitVector` into one short, wrapping
  *                      the pointer at `nofBits`; no calls at all
@@ -69,13 +69,9 @@
  * constellation codes, and the decoded MP message it copies out for the V.34
  * interface.
  *
- * THE FOURTH IT NEEDS IS `V90Phase4Demodulator` AND IT MUST NOT BE INCLUDED
- * HERE.  That class is `tools/onedef.py`'s one carried duplicate, and the
- * definition this translation unit already has is V90SessionFlag.h's partial
- * model, arriving through VPcmFloModem.h.  Including the fuller header
- * alongside it is a redefinition the compiler rejects outright, so the two
- * fields the MPnot arm reads were carved out of that model's own pad instead;
- * V90SessionFlag.h says so at the site.
+ * `V90Phase4Demodulator` reaches this translation unit through
+ * VPcmFloModem.h and V90SessionFlag.h. Its complete definition now shares
+ * the same layout authority as the demodulator's own implementation.
  */
 #include "dsplib/V90CPpck.h"
 #include "dsplib/V90Jd.h"
@@ -98,12 +94,11 @@
  * `make check64` lays them out differently -- the layout the blob has is a
  * 32-bit layout.
  *
- * OFFSETS, AND ONE BORROWED SIZE.  No size is asserted for VPcmFloModem: the
- * five members here reach +0x7f27 and that is a floor.  `sizeof(V90Modem)`
- * IS asserted, and it is not a claim about the blob -- it is the hook that
- * makes every offset past +0x6118 fail loudly if a later batch gives
- * V90Modem more modelled prefix.  V90SessionFlag.h deliberately asserts no
- * size of its own, so this file has to.
+ * The offsets and the embedded V90Modem's 0x49c0-byte size are checked
+ * below. The enclosing VPcmFloModem's 0x7f68-byte extent is checked by
+ * t_vpcmctor.cpp alongside constructor/destructor reference comparisons.
+ * The earlier +0x7f28 displacement floor was a partial-view bound, not
+ * the current extent of the recovered object.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define VPCM_OFF(field, off, tag) \

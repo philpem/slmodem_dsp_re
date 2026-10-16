@@ -493,6 +493,61 @@ align_errors(const unsigned char *rx, int n, const unsigned char *pat,
 	return -1;
 }
 
+/* The second pass partitions each host block without changing the wire.
+ * Every run has its own construction, runtime snapshot and writable samples.
+ * No queue, modem or handshake state is planted. */
+static int queue_chunks;
+static int queue_pending[4], queue_no_process, queue_muted, queue_active;
+struct queue_observation {
+	short output[FRAG], pending[3], tail[4];
+	int status, in_count, out_count, progress, mode, nbits, mute;
+};
+static struct queue_observation queue_oracle[NEP][V34_BLOCKS][4];
+
+static int
+process_chunks(struct dp *dp, short *input, short *output,
+               int run, int ep, int blk)
+{
+	static const int chunks[] = { 1, 2, 3, 42 };
+	struct vpcm_root *s = (struct vpcm_root *)dp->dp_data;
+	int k, off = 0, status = DPSTAT_OK;
+	for (k = 0; k < 4; k++) {
+		struct queue_observation obs;
+		int count = chunks[k], pending = s->inq.count;
+		int nproc = ((pending + count) / 4) * 4;
+		int muted = s->mute > 0;
+		int rc;
+		long tag = ((run * NEP + ep) * V34_BLOCKS + blk) * 4 + k;
+		if ((run >> ep) & 1)
+			rc = g_our34->process(dp, input + off, output + off, count);
+		else
+			rc = ref_vpcm_run(dp, input + off, output + off, count);
+		if (rc != DPSTAT_OK)
+			status = rc;
+		queue_pending[pending]++;
+		if (!nproc) queue_no_process++;
+		else if (muted) queue_muted++;
+		else queue_active++;
+		diff_eq_int("chunk input occupancy (%ld)", s->inq.count,
+			    pending + count - nproc, tag);
+		diff_eq_int("chunk output occupancy (%ld)", s->outq.count,
+			    4 - s->inq.count, tag);
+		memset(&obs, 0, sizeof(obs));
+		memcpy(obs.output, output + off, count * sizeof(short));
+		memcpy(obs.pending, s->inq.buf, s->inq.count * sizeof(short));
+		memcpy(obs.tail, s->outq.buf, s->outq.count * sizeof(short));
+		obs.status = rc; obs.in_count = s->inq.count;
+		obs.out_count = s->outq.count; obs.progress = s->status;
+		obs.mode = s->mode; obs.nbits = s->nbits; obs.mute = s->mute;
+		if (run == 0)
+			queue_oracle[ep][blk][k] = obs;
+		else diff_eq_obj("chunk status/samples/queues", struct queue_observation,
+		                &obs, &queue_oracle[ep][blk][k], tag);
+		off += count;
+	}
+	return status;
+}
+
 static void
 run_v34(struct dp_operations *ops, int run)
 {
@@ -544,7 +599,10 @@ run_v34(struct dp_operations *ops, int run)
 			 * blob's, through its own registered table, on the same
 			 * blob-built object.
 			 */
-			if ((run >> ep) & 1)
+			if (queue_chunks)
+				rc = process_chunks(dp[ep], in[ep], out[ep],
+		              run, ep, blk);
+			else if ((run >> ep) & 1)
 				rc = g_our34->process(dp[ep], in[ep], out[ep],
 						      FRAG);
 			else
@@ -755,6 +813,59 @@ run_stall(void)
 	diff_eq_int("...and ours agrees", ra->mode, rb->mode, 0);
 
 	rc |= diff_end();
+	return rc;
+}
+
+static int
+run_queue_calls(struct dp_operations *ops)
+{
+	typedef unsigned char bit_transcript[HARNESS_SHIM_BITS];
+	static bit_transcript oracle_bits[NEP];
+	int run, ep, rc, captured_bits = 0;
+	diff_begin("V.PCM chunked connecting lifecycle: 1/2/3/42 samples");
+	queue_chunks = 1;
+	for (run = 0; run < NRUN; run++) {
+		run_v34(ops, run);
+		for (ep = 0; ep < NEP; ep++) {
+			const struct v34res *r = &v34res[run][ep];
+			struct modem_shim *shim = shim_for_ep(run, ep);
+			captured_bits += r->rx_len;
+			if (run == 0)
+				memcpy(oracle_bits[ep], shim->rx, sizeof(bit_transcript));
+			else diff_eq_obj("chunk received bit transcript", bit_transcript,
+		                 shim->rx, oracle_bits[ep], run*2+ep);
+			diff_eq_int("chunk call constructed (%ld)", r->built, 1, run*2+ep);
+			diff_eq_int("chunk call connected (%ld)", r->mode,
+			    MODE_CONNECTED, run*2+ep);
+			diff_eq_int("chunk call connect once (%ld)", r->nconnect, 1, run*2+ep);
+			diff_eq_int("chunk call no link error (%ld)", r->nerror, 0, run*2+ep);
+			diff_eq_int("chunk payload observer live (%ld)", r->aligned > 1000,
+			    1, run*2+ep);
+			diff_eq_int("chunk payload BER (%ld)", r->errors, 0, run*2+ep);
+			diff_eq_int("chunk payload length (%ld)", r->rx_len,
+			    v34res[0][ep].rx_len, run*2+ep);
+			diff_eq_int("chunk payload alignment (%ld)", r->lag,
+			    v34res[0][ep].lag, run*2+ep);
+			diff_eq_int("chunk bit fetch count (%ld)", r->gets,
+			    v34res[0][ep].gets, run*2+ep);
+			diff_eq_int("chunk bit delivery count (%ld)", r->puts,
+			    v34res[0][ep].puts, run*2+ep);
+		}
+	}
+	queue_chunks = 0;
+	printf("  chunk lifecycle: %d runs x %d endpoints x %d blocks x 4 calls; "
+	       "pending 0/1/2/3 = %d/%d/%d/%d; "
+	       "no-process/muted/active = %d/%d/%d; captured bits = %d\n",
+	       NRUN, NEP, V34_BLOCKS, queue_pending[0], queue_pending[1],
+	       queue_pending[2], queue_pending[3], queue_no_process,
+	       queue_muted, queue_active, captured_bits);
+	for (ep = 0; ep < 4; ep++)
+		diff_eq_int("pending occupancy exercised (%ld)", queue_pending[ep] > 0,
+			    1, ep);
+	diff_eq_int("zero-process calls exercised", queue_no_process > 0, 1, 0);
+	diff_eq_int("muted queue calls exercised", queue_muted > 0, 1, 0);
+	diff_eq_int("active queue calls exercised", queue_active > 0, 1, 0);
+	rc = diff_end();
 	return rc;
 }
 
@@ -1195,6 +1306,7 @@ main(void)
 				       v34res[run][ep].codeseq);
 
 	rc |= run_stall();
+	rc |= run_queue_calls(ops34);
 
 	return rc;
 }

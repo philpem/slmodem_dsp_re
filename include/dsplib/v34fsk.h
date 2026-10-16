@@ -883,11 +883,10 @@ struct v34_object {
 	 * `hs_set_microstate`, `hs_set_rxstate` and `hs_set_txstate`
 	 * (v34hstx1_arms.h) each bind their own word at compile time and
 	 * carry the state-trace diagnostic with it, so there is no offset
-	 * parameter left to get wrong.  `hs_get` and `hs_put` remain, for
-	 * the sites that read a word whose OWN reading belongs to another
-	 * viewer (V34hshak.c's `T3C_*`/`T41_*`/`T44_*`/`DP_*` offsets);
-	 * v34hshak.h's `V34HS_*_OFF` stay what those sites pass, checked
-	 * against these three fields at compile time (finding F632).
+	 * parameter left to get wrong. The former hs_get/hs_put raw-word
+	 * accessors have no remaining callers and are removed. The offset
+	 * constants in v34hshak.h still document the original layout and
+	 * are checked against these three fields at compile time (F632).
 	 */
 	short microstate;				/* +0x3592 */
 	short rxstate;					/* +0x3594 */

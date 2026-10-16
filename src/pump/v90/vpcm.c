@@ -127,11 +127,11 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 	 * everything downstream -- the float conversion at 0x4008 and the
 	 * leftover copy at 0x3f36 -- reads the QUEUE, not the caller's buffer.
 	 *
-	 * UNEXERCISED, and recorded rather than assumed: with the host's
-	 * `count` of 48 and the queue starting empty, `nproc` is 48 and the
-	 * leftover is zero for ever, so no test in this tree has ever had
-	 * `pending > 0`.  It is written from the disassembly and it is not
-	 * proved by anything green.
+	 * The usual 48-sample host calls leave no remainder.  t_vpcmrun.c
+	 * also partitions each block as 1/2/3/42 samples, from construction
+	 * through a connecting V.34 call.  That fixture observes all four
+	 * pending counts, queue-backed processing and output compaction;
+	 * docs/vpcm-queue-coverage.md records its boundary and controls.
 	 */
 	if (pending > 0) {
 		sysdep_memcpy(&s->inq.buf[pending], in,

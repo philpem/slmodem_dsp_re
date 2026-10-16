@@ -93,9 +93,74 @@ machines determine when work actually happens.
 
 The receive map in
 [`v34recv.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34recv.h)
-is a view into the larger `v34_object` beginning at `+0x264`. Some bytes
-named in the root view remain unmodelled in the receive view. Treat the base
-pointer as part of an offset's meaning, especially when comparing raw objects.
+defines the `0x79c`-byte `receiver` member embedded in `v34_object` at
+`+0x264`. The receive queue, burst window, timing filters and equalizer all
+belong to that member. Root and receiver-relative offsets therefore identify
+the same fields with a `0x264` displacement between their bases; for example,
+`receiver.short_382` is at root `+0x382` and receiver `+0x11e`. Both headers
+assert the layout. See [MG-02](reconstruction-debt.md#mg-02-overlapping-v34-root-and-receiver-views)
+for the ownership map and the correction to the guide's earlier overlap claim.
+
+### Per-block supervision
+
+`datapumpv34` in `V34hshak.c` schedules the V.34 engines and decides when to
+retrain or renegotiate. It holds the existing receiver and transmit queue
+through typed pointers; the supervisor's state belongs to `v34_object` and
+its embedded `v34_receiver`, rather than a separate supervisor allocation.
+
+First it checks the unsigned span `sample_count - int_0248`. A value greater
+than 288,000 sets `progress` to 5. The dispatch then depends on `hs_mode`:
+
+| Path | Work performed |
+|---|---|
+| Unsigned `hs_mode > 1` | Call `v34handshak` while transmit space remains **or** the receive queue contains more than five samples, then return |
+| Data path | Fill the transmit block with `modulatevector`, drain receive bursts with `receiver`, then evaluate the four supervisor decisions |
+
+Preserve the transmit-before-receive order. `demapFrame`, reached through
+`receiver` and `decoderv34`, can set the receive shell's `latched` member at
+a frame boundary. On a fresh vector, `modulatevector` reads that latch to
+advance `train_symcount` and eventually set `data_enable`. Reversing the loops
+can make transmit processing observe a latch established in the same block.
+
+Queue guards are rechecked after the engine calls; a handshake fixture must
+establish that its selected state can advance those guards. The data-path receiver loop increments `rx_blocks`
+through its signed 16-bit cap test before calling `receiver`. It then reads
+the error that the receiver has just published and updates consecutive-run
+counters:
+
+| Receiver member | Qualifying error | When updated |
+|---|---|---|
+| `bad_run` | `equerr > bad_thresh` | Every receive burst |
+| `bad_long_run` | `equerr > bad_long_thresh` | Unsigned elapsed span greater than 144,000 |
+| `good_run` | `equerr < good_thresh` | Unsigned elapsed span greater than 1,152,000 |
+
+A qualifying burst increments the relevant 16-bit counter; a nonqualifying
+burst clears it. A delayed counter stays untouched until its timer opens.
+These constants count the implementation's sample clock; convert them to
+seconds only after establishing the clock at the boundary being investigated.
+Error/threshold comparisons and the block-cap comparison are signed 16-bit.
+A zero-extending load in the binary does not by itself establish unsigned
+source semantics.
+
+The four decisions are independent `if` statements, evaluated in order:
+
+1. A retrain flag or `bad_run` above half `ratecfg.rx_baud` starts a retrain.
+2. A remote-renegotiation flag starts remote rate renegotiation.
+3. `bad_long_run > 2 * ratecfg.rx_baud` requests a local step down.
+4. `good_run > 8 * ratecfg.rx_baud` requests a local step up.
+
+The down/up comparisons sign-extend the counter and retain a 32-bit product.
+Each selected action clears run counters. Renegotiation records direction
+in `rrn_local_dir` (1 remote, 2 down, 3 up), copies `ratecfg.rxbits` into
+`baud_copy` after initialisation, and reports the corresponding indication.
+Retrain rechecks its mode decision after `v34handshakinit`. Later decisions
+read state after earlier initialisation and indication calls. Hoisting those
+reads or changing the four decisions into an `else if` chain changes the
+observed call boundaries.
+
+For the original-operand audit, signedness correction and remaining code
+generation differences, see the
+[supervisor recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md).
 
 ## V.90 and V.92
 

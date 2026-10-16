@@ -43,7 +43,7 @@ it in would break a working modem, and every such fix sits behind
 `DSPLIB_REPRODUCE_BUGS` so bit-exactness stays provable:
 
 ```sh
-make test      # -DDSPLIB_REPRODUCE_BUGS: proves equivalence with the blob
+make phase     # period differential and structural reconstruction gate
 make interop   # without it: proves the fixed build is a working modem
 ```
 
@@ -54,8 +54,9 @@ faithfully and recorded in [docs/deviations.md](docs/deviations.md).
 
 ### Fixing the blob itself
 
-The reconstruction is unfinished, so anything running today still links the
-blob, and a defect in the register is a defect that ships. Two of them —
+Deployments that still link the reference blob also retain its defects.
+Source-symbol reconstruction is complete, while behavioural validation and
+final-object byte identity remain separate milestones. Two original defects —
 **D1** and **D4**, both a table declared one entry shorter than its own index
 expression can reach — can now be repaired *in the object*, without modifying
 `slmodemd/dsplibs.o`:

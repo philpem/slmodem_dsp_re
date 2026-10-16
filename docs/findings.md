@@ -90767,6 +90767,15 @@ name; `test/unit/t_vpcmdp.c` compares `vpcm_op` against the blob's
 
 ### F8044. `datapumpv34`: THE `movswl`/`movzwl` DELTA IS NOT THE DEFECT -- `dp_rxget`/`dp_rxput`'s OFFSET PARAMETER IS, AND IT CARRIES THE BRANCH SHAPE TOO
 
+**Correction for issue #286 (2026-10-16):** the table below incorrectly
+classifies receiver `+0x124` as a forced unsigned field. At `0x71a31`,
+`66 3d 2f 75` compares **AX**, followed by signed `jg` at `0x71a35`.
+The preceding `movzwl` does not make that comparison unsigned. The retained
+signed `short rx_blocks` and `rx_blocks <= 0x752f` preserve the original
+behaviour, including incrementing negative values. The original historical
+classification remains below so the erroneous inference is identifiable.
+
+
 F8007 named this the biggest lever-8 surface in the tree: `movswl +16
 movzwl -9` per mnemonic, 25 extension sites, 40 differing bytes of 1028.
 **The extensions are downstream.**  What the object shows first is two
@@ -90842,6 +90851,14 @@ per-mnemonic delta would have got three of those wrong in three different
 ways.**
 
 ### F8045. THE BYTE-CLOSEST CELL OF `datapumpv34` IS BEHAVIOURALLY WRONG, WHICH IS WHY THE REWRITE WAS DECLINED
+
+**Correction for issue #286 (2026-10-16):** this finding's final paragraph
+repeats F8044's incorrect claim that an unsigned `rx_blocks` declaration is
+forced. The signed 16-bit comparison documented in F8044's correction
+supersedes that claim. The signed error-comparison warning below remains
+valid; a zero-extending load alone establishes neither comparison width nor
+signedness.
+
 
 Fourteen cells were built over the rewritten function -- a local
 `struct v34_receiver *rx` and `struct v34_queue *tx` replacing
@@ -122519,6 +122536,18 @@ coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
 (2026-09-08)
 
 ## F10247. Three legal datapump boundaries close three ordering gaps; the two complete data loops still commute
+
+**Correction (2026-10-16):** the final paragraph's read/write-set audit
+missed an indirect write. `receiver` calls `decoderv34`, which calls
+`demapFrame`; the latter can set the receive shell's `latched` field at
+root `+0xe4c`. `modulatevector` reads that same field before advancing
+`train_symcount`. Original writes/reads are visible at `0x596e3` and
+`0x5a910..0x5a937`. The loop-swap mutation is now caught by the component
+boundary described in the
+[supervisor recovery record](maintainer-offset-access.md#loop-order-coverage).
+The historical result below remains identifiable; it is superseded by this
+indirect dependency and the new measured witness.
+
 
 The four surviving `v34datapump` mutations were all statement-order claims,
 but the fixture's explanation for two of them had gone stale as neighbouring

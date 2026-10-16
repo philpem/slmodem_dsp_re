@@ -1,57 +1,18 @@
 /**
  * @file V90SessionFlag.h
- * @brief The remaining classes of the V.90 `setSessionFlag` chain.
+ * @brief Compatibility includes for the V.90 session-flag propagation chain.
  *
- * `V90Modem::setSessionFlag` fans out to the modulator or the demodulator,
- * each of which fans out to its phase 3 and phase 4 halves; five classes,
- * 274 bytes of code, and every one of them is a store and a tail call. They
- * were declared together originally because they form a closed set only
- * together -- `tools/closure.py` on all five reports CLOSED, and on any
- * four of them does not.
+ * `V90Modem::setSessionFlag` selects the modulator or demodulator, which
+ * forwards the flag to its phase 3 and phase 4 halves. These classes were
+ * first modelled together from that closed call chain (finding F226).
+ * Their complete definitions now live in their respective headers.
  *
- * The tree's convention is one class per header, and this file broke it
- * because the five are mutually recursive at the declaration level, not
- * just the call level: `V90Modem` needs `V90Modulator` and `V90Demodulator`,
- * and `V90Demodulator` needs `V90Phase3Demodulator` and
- * `V90Phase4Demodulator`, which embed the two modulators. The rule adopted
- * here was that the first class to earn real weight (a full field map, not
- * just this chain's one method) should be split out rather than grown in
- * place, and later waves did that for two of the five: `V90Phase3Demodulator`
- * is now in V90Phase3Demodulator.h and `V90Demodulator` in
- * V90Demodulator.h, both included below with their sizes settled and their
- * field maps filled in. Nothing recorded here was dropped in the move --
- * see the historical notes further down for what carried over.
- *
- * The three classes still declared in this file deliberately assert no
- * size. Every other class in this project was sized from the largest
- * `this`-relative displacement across all its members (finding F215), but
- * that scan does not check the base register, and running it naively here
- * gives numbers that are not `this`-relative at all:
- *
- *     cmpw $0x0,0xa948(%ecx)              %ecx is a V90AutoDigitalImpDetector*,
- *     mov  0xa95c(%eax),%ecx              which is 0xa9b0 bytes (finding F251)
- *     lea  0x28230(%edx,%edx,4),%eax      a scaled index: a table address
- *     lea  0x1388(%esi,%ebp,1),%eax       likewise
- *
- * So the classes below model only the prefix these five methods actually
- * touch, every unmodelled span is `pad_`, and the tests compare the whole
- * seeded slot rather than `sizeof` -- a stronger check than a size assertion
- * would have been, since it catches a store anywhere in the slot rather
- * than only one inside a guessed bound.
- *
- * What does settle a size here is the allocation, not a displacement scan:
- * every one of these classes is built on the heap, and the `sysdep_malloc`
- * immediately before its constructor call gives the size (finding F291).
- * That is how `V90Phase3Demodulator`'s 0x42c and `V90Demodulator`'s 0x298
- * were obtained, and it is why those two now assert their sizes while the
- * three below do not -- nobody has yet found the allocation for
- * `V90Modulator`, `V90Modem` or `V90Phase4Demodulator`. `V90Modem`'s
- * constructor is the place to look; it allocates 0x42d8 for something just
- * before the 0x298 it hands the demodulator.
- *
- * Data member names are invented; the mangling never carries one (finding
- * F226). `sessionFlag` is named for the method that writes it, as in
- * V90Phase3Modulator.h and V90Phase4Modulator.h.
+ * In particular, V90Phase4Demodulator.h is the single layout authority for
+ * the phase 4 demodulator, including the embedded modulator at +0x50.
+ * The prefix model formerly here ended at +0x2ffc; the constructor's
+ * allocation establishes the complete object's size as 0x351c. See
+ * docs/phase4-type-consolidation.md for the inclusion and code-generation
+ * checks that retired the duplicate recorded in finding F7584.
  */
 
 #ifndef DSPLIB_V90SESSIONFLAG_H
@@ -64,6 +25,7 @@
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
+#include "dsplib/V90Phase4Demodulator.h"
 
 /*
  * `V90Phase3Demodulator` used to be declared here, as
@@ -81,49 +43,6 @@
  * printed value is the argument and the field still holds the old one at
  * that instant.
  */
-
-/**
- * @brief Partial, duplicate model of the V.90 phase 4 demodulator; see the
- *        note above the class for why a second definition exists.
- *
- * `mov %edx,(%eax); add $0x50,%eax; jmp V90Phase4Modulator::setSessionFlag`
- * -- the same shape as the other four classes in this chain, and the
- * subobject is the 0x2fac-byte `V90Phase4Modulator`, so this class is at
- * least 0x2ffc bytes. That is a floor, not a size.
- */
-class V90Phase4Demodulator {
-public:
-	/**
-	 * @brief Store the session-negotiation flag and tail-call into the
-	 *        embedded phase 4 modulator's own `setSessionFlag`.
-	 * @param flag  The session flag value to propagate.
-	 */
-	void setSessionFlag(unsigned int flag);
-
-	unsigned int sessionFlag;		/* +0x00                  */
-	unsigned char pad_04[0x34];		/* +0x04 not modelled     */
-
-	/*
-	 * +0x38 and +0x3c: a pair carved out of `pad_04` because
-	 * `VPcmFloModem::v90RunDemodulator`'s MPnot arm reads both, and this
-	 * partial model is the definition that reaches that translation
-	 * unit. Same offsets, same spelling and same derivation as
-	 * include/dsplib/V90Phase4Demodulator.h's fuller model: always
-	 * written together, `resetBeforRRN` and `detectRRN` set both to 1
-	 * and `reset` sets +0x38 to 1 and +0x3c to 0.
-	 *
-	 * This is the duplicate `tools/onedef.py` carries, and carving a pad
-	 * out of one half of it makes the two models agree on more, not
-	 * less. The right repair is still to delete this class and include
-	 * the fuller header; finding F7584 records what that costs and why
-	 * this batch did not take it.
-	 */
-	int int_0038;
-	int int_003c;
-
-	unsigned char pad_40[0x10];		/* +0x40 not modelled     */
-	V90Phase4Modulator phase4Modulator;	/* +0x50 embedded, 0x2fac */
-};
 
 /*
  * `V90Modulator` was declared here too, as
@@ -155,7 +74,7 @@ public:
  * constructor's switch has exactly that shape at exactly that field, which is
  * why `side` is now a `V90ModemSide` rather than an `int`: the destructor
  * compares it unsigned (`cmpl $0x1,0x49bc(%esi); jbe`), and V90Modem.h
- * carries that argument. `int which = side;` below is unaffected.
+ * carries that argument.
  */
 
 #endif /* DSPLIB_V90SESSIONFLAG_H */

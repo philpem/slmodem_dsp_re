@@ -57,15 +57,28 @@ struct dp_wrapper {
 /**
  * @brief Build a rate/fragment adapter around a datapump.
  *
- * @param dp_data     Opaque state handed back to @p process unchanged.
+ * For streaming, the caller must supply positive rates and a positive
+ * fragment. The product dp_frag * host_srate must fit in an int; the
+ * scaled host fragment must be integral and in 1..DPW_MAX_FRAG, so both
+ * halves fit in each ring. These are caller preconditions, not additional
+ * checks performed by the recovered constructor.
+ *
+ * Equal rates need no converter. Unequal rates must be one of the six
+ * ordered pairs between 8000, 9600 and 48000 samples/s. An unsupported
+ * unequal pair fails before the reverse converter is attempted.
+ *
+ * @param dp_data     Opaque family state stored in wrapper->dp_data. The
+ *                    callback receives the outer dp, whose dp_data points
+ *                    to the wrapper, and retrieves the family state there.
  * @param process     The datapump's process entry point.
  * @param dp_frag     Fragment size the datapump wants, in samples at
  *                    @p dp_srate. Must be nonzero and at most #DPW_MAX_FRAG.
  * @param host_srate  The sample rate the caller will supply.
  * @param dp_srate    The datapump's native sample rate.
  * @return A new wrapper, or NULL if @p dp_frag is zero or above
- *         #DPW_MAX_FRAG, if either rate is zero, or if a needed rate
- *         conversion could not be built.
+ *         #DPW_MAX_FRAG, if either rate is zero, if unequal rates are not
+ *         supported, or if allocation of a needed converter fails. Other
+ *         invalid geometry is not guaranteed to be rejected.
  */
 struct dp_wrapper *dp_wrapper_create(void *dp_data, dp_process_fn process,
 				     int dp_frag, int host_srate,
@@ -88,7 +101,8 @@ void dp_wrapper_delete(struct dp_wrapper *w);
  * @param dp     The wrapped datapump (`dp->dp_data` is the `dp_wrapper`).
  * @param in     @p count host-rate input samples.
  * @param out    @p count host-rate output samples.
- * @param count  Number of samples to push through.
+ * @param count  Non-negative number of samples to push through, with both
+ *               buffers holding at least this many short samples.
  * @return The last non-zero status the datapump reported, or 0.
  */
 int dp_wrapper_run(struct dp *dp, void *in, void *out, int count);
