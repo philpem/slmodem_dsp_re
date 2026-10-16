@@ -141,21 +141,27 @@ audit as follow-up work.
 
 ## MG-06: Queue-path coverage claim needs reconciliation
 
-**Confirmed evidence-documentation gap; coverage status needs measurement.**
-[`vpcm.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v90/vpcm.c)
-labels `pending > 0` unexercised because the normal 48-sample host call leaves
-no remainder after four-sample quantisation.
+**Resolved: constructor-created chunked-call coverage.**
 [`t_vpcmrun.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/test/unit/t_vpcmrun.c)
-documents a whole-call comparison at that normal block size. This reading
-audit does not establish whether all other tests now cover fragmented input.
+now repeats its four reference/reconstruction endpoint combinations with each
+48-sample wire block partitioned into calls of 1, 2, 3 and 42 samples. V.8
+negotiates the call; the fixture does not plant queues or handshake state.
+Each run has separate writable samples, runtime state and payload observers.
 
-The queue rebinding and subsequent compaction are real code paths. A green
-whole-call comparison at a multiple-of-four count does not establish their
-coverage. Conversely, an old “unexercised” comment is not enough to declare
-them untested today.
+The added group passes 352,093 exact checks over 128,000 chunk calls. Entry
+queue occupancies 0, 1, 2 and 3 each occur 32,000 times; 64,000 calls process
+no full group, 176 use the initial mute path and 63,824 process active samples.
+Returned samples, per-chunk statuses, active queue contents, progress and
+captured receive transcripts agree with the blob. The original 310 checks
+remain unchanged, and the full period suite stays at 388 binaries, all passing.
 
-**Next step:** inspect the complete relevant fixture set, then measure
-remainder occupancy and the queue-backed reads during valid chunked processing.
-Use distinct reference/reconstructed input histories and compare samples,
-statuses and payload observers. Close with a named fixture and its exercised
-denominators, or explicitly document the host boundary that excludes this path.
+A temporary pending-sample corruption caused 16,000 failures in the new
+group while the original groups remained green. It was removed before the
+retained gate. This establishes observation of the remainder path, rather than
+merely a clean test result. The source's obsolete unexercised-path comment has
+been replaced with a pointer to the coverage evidence.
+
+See [the queue-coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/vpcm-queue-coverage.md)
+for fixtures, exact denominators and controls. The result establishes reachable
+datapump-component processing; the stock host still calls with 48 samples, and
+this is not evidence of digital-side V.90/V.92 connectivity.
