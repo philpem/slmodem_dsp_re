@@ -6,6 +6,11 @@ Link soft-modem datapump (Bell 103 through V.92, fax Class 1, Caller ID, DTMF,
 call progress, voice). The slmodem tree is BSD-licensed with rights waived, but
 the source for this one object was lost.
 
+The **[maintainer's guide](docs/maintainer/index.md)** explains modem operation,
+source structure, call lifecycle and reconstruction maintenance, with standards
+references and an evidence-based register of structural debt. It can be built
+and previewed with MkDocs Material; the guide includes the commands.
+
 The reconstruction must be **functionally equivalent** — same input, same
 output — and filter coefficients are traced back to their original design
 intent so they can be *regenerated* at a different sample rate rather than
