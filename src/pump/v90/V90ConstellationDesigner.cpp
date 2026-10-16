@@ -422,19 +422,23 @@ V90ConstellationDesigner::maxK(V90MappingParams *p)
  * place.  What shows it is the pair `fld1; fld %st(0)` at the top: the
  * compiler loaded the constant 1 once and duplicated it because the source
  * uses 1.0f twice, once to seed the accumulator and once as this numerator.
+ * Keep both logarithms in the return expression: the original evaluates
+ * log10(k) first (0x47b15..0x47b19), loads 2.0f before narrowing that result
+ * (0x47b1b..0x47b26), then evaluates and narrows log10(2.0f). A separate
+ * l2 assignment reverses the logarithms; a separate logK assignment puts
+ * its narrowing before the constant load. Both change the x87 graph.
  */
 float
 V90ConstellationDesigner::calcK(unsigned int m, float *f)
 {
 	float k = 1.0f;
-	float l2;
 	short i;
 
 	for (i = 0; i < 6; i++)
 		k *= m * f[i];
 
-	l2 = (float)log10l((long double)2.0f);
-	return (float)log10l((long double)k) * (1.0f / l2);
+	return (float)log10l((long double)k) *
+	    (1.0f / (float)log10l((long double)2.0f));
 }
 
 
