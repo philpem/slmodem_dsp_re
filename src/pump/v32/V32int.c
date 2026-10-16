@@ -4,7 +4,7 @@
  *
  * Reconstructed from dsplibs.o.  The blob's STT_FILE order places this file
  * between V32dec.c and V32mod.c, and its .text run is
- * [SetTxModeV32 0x081680, V32FP_modem 0x0827a0) -- twenty-five functions,
+ * [SetTxModeV32 0x081680, V32FP_modem 0x082630) -- twenty-four functions,
  * plus the three rate tables and the three length tables their code reads.
  *
  *   SetTxModeV32             .text 0x081680  520
@@ -31,7 +31,6 @@
  *   DecodeRateSeq            .text 0x0824b0  152
  *   TxNoCarrierV32           .text 0x082550  152
  *   RxClampV32               .text 0x0825f0   49
- *   V32FP_modem              .text 0x082630  356
  *
  *   V32_RATE_SEQ             .data 0x007690   14
  *   V32_FINAL_RATE_SEQ       .data 0x00769e   14
@@ -142,8 +141,6 @@ short V32_TURNAROUND_DLY[2] = { 64, 360 };
 short V32_SYMBOL_LEN[2] = { 12, 48 };
 short V32_SAMPLE_LEN[2] = { 40, 160 };
 
-static unsigned short tx_in_internal[V32_BIT_BUFFER];
-static unsigned short rx_out_internal[V32_BIT_BUFFER];
 
 /*
  * The best rate index this station and `seq` have in common.
@@ -945,73 +942,4 @@ RxClampV32(struct v32_modem *modem, short *in, short *out, unsigned short count)
 		*out++ = 0xff;
 
 	return hdx->symbol_len;
-}
-
-/*
- * V32FP_modem -- .text 0x082630.
- *
- * One block.  The two counts are in/out and they CROSS OVER: `nout` arrives as
- * a count of transmit BITS and leaves as a count of output SAMPLES, `nin`
- * arrives as input samples and leaves as receive bits.  Everything around the
- * dispatch is marshalling -- the caller's `int` arrays are narrowed into the
- * two `short` statics and widened back.
- *
- * THE RETURN IS A 32-BIT LOAD OF obj + 0x30 (82779), where every other access
- * to that byte in this tree is `movb` or `movzbl`.  Reproduced as a 32-bit
- * read: the status is the low byte and `v32.c` masks it, so `V32_OBJ_FLAGS`
- * and the two bytes above it reach the caller and are discarded.
- */
-int
-V32FP_modem(struct v32_modem *modem, const int *txbits, short *out, const short *in,
-	    int *rxbits, int *nout, int *nin)
-{
-	struct v32_fp *fp;
-	struct v32_hdx *hdx;
-	short nsamples;
-	unsigned short rxcount;
-	int scale;
-	int n;
-	int i;
-
-	nsamples = (short)*nout;
-	rxcount = (unsigned short)*nin;
-
-	fp = FP(modem);
-	if (*nin > 0) {
-		short *clean = (short *)fp->clean_buf;
-
-		for (i = 0; i < *nin; i++)
-			clean[i] = in[i];
-	}
-	fp->clean_n = (unsigned short)*nin;
-
-	for (i = 0; i < *nout; i++)
-		tx_in_internal[i] = (unsigned short)txbits[i];
-
-	modem->flags &= (unsigned char)~V32_FLAG_FAULT;
-	hdx = HDX(modem);
-	V32_PROTOCOL[hdx->mode](modem, tx_in_internal, out,
-						  (short *)in, rx_out_internal,
-						  &nsamples, &rxcount);
-
-	*nout = (int)(unsigned short)nsamples;
-	*nin = (int)rxcount;
-
-	for (i = 0; i < *nin; i++)
-		rxbits[i] = (int)rx_out_internal[i];
-
-	if ((modem->flags & V32_FLAG_DATA) != 0) {
-		hdx = HDX(modem);
-		hdx->mode = V32_PROTO_DATA;
-		hdx->state = V32_STATE_DONT_CARE;
-	}
-
-	n = *nout;
-	if (n > 0) {
-		scale = PARAMS(modem)->tx_scale;
-		for (i = 0; i < n; i++)
-			out[i] = (short)((out[i] * scale) >> 15);
-	}
-
-	return modem->status_word;
 }
