@@ -2,8 +2,8 @@
   "bytes": 65,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1096,
-  "exact_bytes": 125253,
+  "exact": 1098,
+  "exact_bytes": 125389,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -806,6 +806,7 @@
     "_ZN5V92CPC2Ev",
     "_ZN5V92CPD1Ev",
     "_ZN5V92CPD2Ev",
+    "_ZN5V92Jd10getJdPhaseEv",
     "_ZN5V92Jd12getRatesMaskEv",
     "_ZN5V92Jd12setRatesMaskEi",
     "_ZN5V92Jd13unPackJdResetEv",
@@ -986,6 +987,7 @@
     "init_vmi_v29rx",
     "linear2alaw",
     "linear2ulaw",
+    "notch",
     "notch_filter",
     "null_control",
     "null_create",
@@ -1106,6 +1108,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 661,
+  "size": 659,
   "unresolved": 1
 }

@@ -6,18 +6,18 @@
  },
  {
   "label": "the numerator's middle coefficient and the denominator's are swapped",
-  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
-  "replace": "\tstate[0] = coef[0] * w + coef[1] * in + state[1];"
+  "find": "\tstate[0] = coef[1] * w + (coef[0] * in + state[1]);",
+  "replace": "\tstate[0] = coef[0] * w + (coef[1] * in + state[1]);"
  },
  {
   "label": "the second state word is dropped from the first's update",
-  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
+  "find": "\tstate[0] = coef[1] * w + (coef[0] * in + state[1]);",
   "replace": "\tstate[0] = coef[1] * w + coef[0] * in;"
  },
  {
   "label": "the first state word takes the input rather than the gained input",
-  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];",
-  "replace": "\tstate[0] = coef[1] * w + coef[0] * x + state[1];"
+  "find": "\tstate[0] = coef[1] * w + (coef[0] * in + state[1]);",
+  "replace": "\tstate[0] = coef[1] * w + (coef[0] * x + state[1]);"
  },
  {
   "label": "the second state word loses the feed-forward term",
@@ -36,7 +36,7 @@
  },
  {
   "label": "the two state words are updated in the other order",
-  "find": "\tstate[0] = coef[1] * w + coef[0] * in + state[1];\n\tstate[1] = in + coef[2] * w;",
-  "replace": "\tstate[1] = in + coef[2] * w;\n\tstate[0] = coef[1] * w + coef[0] * in + state[1];"
+  "find": "\tstate[0] = coef[1] * w + (coef[0] * in + state[1]);\n\tstate[1] = in + coef[2] * w;",
+  "replace": "\tstate[1] = in + coef[2] * w;\n\tstate[0] = coef[1] * w + (coef[0] * in + state[1]);"
  }
 ]

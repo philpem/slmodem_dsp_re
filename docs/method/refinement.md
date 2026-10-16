@@ -5000,3 +5000,54 @@ and export audit, and caller diagnostics. An exact standalone result does
 not establish that every inline copy is exact or that the expression is the
 unique original spelling. The six-cell `recovery_v90_calck_expression.py`
 replay preserves the separate-order and separate-capture controls.
+
+### Test the conversion boundary, not only the constant type
+
+A double constant does not guarantee double arithmetic after simplification.
+In `V92Jd::getJdPhase`, retaining the early `(float)phase` conversion let GCC
+fold the expression back to SF even with a double denominator. The useful
+cross tests both the integer-to-floating conversion and the scale type.
+Only the direct integer producer with the default-double denominator
+reproduces the original final float store/reload. Initial RTL exposes the
+winning DF conversion, DF multiply and SF truncation; the earlier controls
+have SF conversion and multiplication without that final truncation.
+
+The original `FILDLL`, `FMULS`, `FSTPS`, `FLDS` sequence provides the independent
+witness. The memory operand's single-precision constant does not establish
+an SF source expression: a double expression can use an exactly representable
+SF constant in the instruction. Audit the complete TU and test the returned
+values. A scale-only negative result excludes that control, not the combined
+conversion boundary. Preserve the other three cells as explanatory controls.
+
+### Read the spill mode before blaming allocation
+
+Trace an unwanted spill backwards from reload to initial expansion. The
+constellation designer's product is declared `double`, yet its logarithm
+input expands into an XF lifetime and `25.greg` spills it as XF. Later
+peephole, register-renaming, scheduling and x87 passes preserve that mode.
+The original's final DF spill remains unexplained; changing the logarithm
+overload introduces per-iteration DF rounding that the original does not
+perform. A narrower spill is not sufficient if its lifetime is wrong.
+
+A separate original lifetime can still justify progress. Capturing the RRN
+target before the logarithms restores its witnessed conversion and arithmetic
+order while leaving the product spill unresolved. If that change reorders a
+constant pool, compare each relocation's resolved value in its owning
+function and operation, not just the pool's multiset. A same-sized reordered
+pool can still send a consumer to the wrong constant.
+
+### Check source grouping before investigating late x87 passes
+
+In `notch`, the original adds the feedforward product to the second state
+value before adding the feedback product. Parenthesising that addition
+restores the complete function. The changed dependency is already visible
+in initial RTL and survives x87 stack conversion; no register or scheduling
+control is needed. Use the original operand graph to choose the grouping,
+then verify period rounding and the whole TU.
+
+Conversely, independently recovering `FPM_MTD_detect`'s short countdown,
+advancing sample pointer and final word comparisons does not settle its clamp
+or return allocation. Its remaining arithmetic shift differs despite a
+one-byte length gap. Describe each restored operation and remaining
+mismatch; neither the gap nor the stage that exposes it proves a unique
+source declaration.

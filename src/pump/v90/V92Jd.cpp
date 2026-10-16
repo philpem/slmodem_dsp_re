@@ -240,10 +240,15 @@ V92Jd::~V92Jd()
  * the constructor and unlike the two mask loops.
  *
  * THE DIVISION IS THE SOURCE'S AND THE MULTIPLY IS THE COMPILER'S.  Dividing
- * by 65536.0f and multiplying by 2**-16 are the same function of the same
+ * by 65536.0 and multiplying by 2**-16 are the same function of the same
  * argument -- the scale is a power of two, so neither rounds -- and GCC turns
  * the first into the second.  It is written as the division because the
- * constructor states the same constant that way round.
+ * constructor states the same constant that way round.  The integer converts
+ * directly to double in this expression and the return narrows to float.
+ * This reproduces the original boundary: it keeps the
+ * FILDLL result through FMULS, then FSTPS/FLDS rounds once at the return.  An
+ * earlier float cast lets GCC fold the expression to SF and omit that final
+ * narrowing, even with a double denominator.
  * ===========================================================================
  */
 float
@@ -256,7 +261,7 @@ V92Jd::getJdPhase()
 		if (phaseBits[i])
 			phase |= 1u << i;
 
-	return (float)phase / 65536.0f;
+	return phase / 65536.0;
 }
 
 int
