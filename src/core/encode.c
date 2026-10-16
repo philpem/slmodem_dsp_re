@@ -64,14 +64,12 @@ static int iEncodeOffset;
  * object (F11449); `cEncodedTemp` is declared first, which is what makes it
  * `.1` and `temp` `.0` under GCC 3.4.2.
  *
- * ONE BYTE LARGER THAN THE ORIGINAL'S.  `cEncodedTemp` is 0x10e = 270 bytes
- * there, and the length guard admits `2 * len + 8 <= 270`; at the boundary
+ * `cEncodedTemp` is 0x10e = 270 bytes in the faithful build, as in the
+ * object, and the length guard admits `2 * len + 8 <= 270`; at the boundary
  * that is a 4-byte prefix, 262 encoded characters and a 4-byte suffix, whose
- * terminator goes to index 270 -- one past the end.  See D39.  The array
- * here is 271 so that terminator has somewhere legal to land; nothing else
- * changes, because the guard is reproduced exactly and every character of
- * every string is at the same index either way.  This leaves a deliberate
- * size mismatch against the object's `cEncodedTemp.1` (270).
+ * terminator goes to index 270 -- one past the end, into alignment padding
+ * in the original object.  See D39.  The fixed build keeps the extra byte
+ * for that terminator.  The guard and every character's index are unchanged.
  */
 
 /*
@@ -162,7 +160,11 @@ edprintf(const char *fmt, ...)
 	unsigned o;
 
 	static char temp[ENCODE_FMT_MAX];
+#ifdef DSPLIB_REPRODUCE_BUGS
+	static char cEncodedTemp[ENCODE_OUT_MAX];
+#else
 	static char cEncodedTemp[ENCODE_OUT_MAX + 1];
+#endif
 
 	va_start(ap, fmt);
 	sysdep_vsnprintf(temp, ENCODE_FMT_MAX, fmt, ap);
