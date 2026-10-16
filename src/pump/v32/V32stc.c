@@ -278,10 +278,10 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 		}
 	}
 
-	if ((short)((unsigned short *)&modem->params.r2c)[0]
+	if (modem->params.snr_settle_blocks
 	    <= V32_SNR_SETTLE_BLOCKS) {
-		((unsigned short *)&modem->params.r2c)[0] = (unsigned short)
-			(((unsigned short *)&modem->params.r2c)[0] + 1);
+		modem->params.snr_settle_blocks = (unsigned short)
+			(modem->params.snr_settle_blocks + 1);
 		snr = V32_SNR_SETTLED_VALUE;
 	}
 
@@ -336,7 +336,7 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	st->r1c = (fp->agc.signal != 1);
 
 	if (SnrToRetrainTable[rate_idx] <= (short)snr) {
-		((unsigned short *)&modem->params.r20)[0] = 0;
+		modem->params.snr_drops = 0;
 		return 1;
 	}
 
@@ -350,18 +350,18 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 					     FP(modem)->decision_error);
 	}
 
-	if ((short)((unsigned short *)&modem->params.r20)[0] > V32_SNR_DROPS_LIMIT) {
+	if (modem->params.snr_drops > V32_SNR_DROPS_LIMIT) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("%d coseq SNR drops detected "
 					     "local retrain is initiated\n",
 					     V32_SNR_DROPS_LIMIT);
 		ctl.ctl1 |= V32_CTL1_RETRAIN;
-		((unsigned short *)&modem->params.r20)[0] = 0;
-		((unsigned short *)&modem->params.r2c)[0] = 0;
+		modem->params.snr_drops = 0;
+		modem->params.snr_settle_blocks = 0;
 		FP(modem)->rate_fallback = 1;
 	} else {
-		((unsigned short *)&modem->params.r20)[0] = (unsigned short)
-			(((unsigned short *)&modem->params.r20)[0] + 1);
+		modem->params.snr_drops = (unsigned short)
+			(modem->params.snr_drops + 1);
 	}
 
 	ctl.ctl0 = (unsigned char)

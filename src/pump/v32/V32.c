@@ -169,11 +169,12 @@ const struct v32fp_params V32_CFG = {
 	0,			/* symlen_sel                                */
 	0,			/* r1a                                       */
 	0,			/* trellis                                   */
-	0,			/* r20                                       */
+	0,			/* snr_drops                                 */
+	0,			/* short_22                                  */
 	0,			/* r24                                       */
 	103,			/* disconnect_thresh -- never survives       */
 	0,			/* energy_drop_time                          */
-	0,			/* r2c                                       */
+	0,			/* snr_settle_blocks                         */
 	0			/* r2e                                       */
 };
 
@@ -465,7 +466,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 
 	p = &modem->params;
 	p->disconnect_thresh = V32DiconnectThreshTable[3];
-	p->r2c = 0;
+	p->snr_settle_blocks = 0;
 
 	fp = FP(modem);
 
