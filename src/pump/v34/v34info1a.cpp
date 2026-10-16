@@ -98,17 +98,19 @@
  * drives all four and the fourth simply lands in the V.34 branch.
  *
  * ===========================================================================
- * NOT REPRODUCED, AND DELIBERATELY
+ * THE SEVEN PCM-UPSTREAM PUBLICATIONS
  * ===========================================================================
  *
- * The PCM-upstream branch stores `bits[0]` SEVEN times -- once with 0 and
- * then after each of the six flag tests -- and the V.34 branch does not.
- * Only the last store is reproduced.  The intermediate values are
- * unobservable: the three fields being tested are at +0xabce..+0xabd3 of the
- * V.34 object and `bits` is `obj + 0xa9ac` at all three call sites in
- * `v34handshak`, so nothing the function reads can alias what it writes, and
- * a differential test cannot distinguish the two.  Recorded here rather than
- * left to be rediscovered, the way VpcmFloModem.cpp records its two.
+ * The PCM-upstream branch stores `bits[0]` seven times: zero at 0x8f7b,
+ * then the accumulator after each of six flag tests at 0x8f90..0x8fe5.
+ * Keep those ordinary word stores between the original low-byte flag reads.
+ * The V.34 branch does not have this sequence.
+ *
+ * The three known callers in `v34handshak` put `bits` at obj + 0xa9ac,
+ * disjoint from the flag fields at +0xabce..+0xabd3. Consequently their
+ * final messages cannot distinguish these publications from the former
+ * collapsed assignment. The instruction audit checks the seven-stage
+ * boundary separately; this is not evidence for an overlapping modem call.
  *
  * THE RETURN VALUE IS 0 ON EVERY PATH AND NO CALLER LOOKS AT IT.  All three
  * call sites in `v34handshak` step straight on to a load; nothing tests
@@ -342,16 +344,22 @@ V34SetINFO1aBits(void *objp, short *bits)
 		 * `V34GiveINFO1aBits` undoes when it fills them in.
 		 */
 		r = 0;
+		bits[0] = 0;
 		if (obj->short_abce & 1)
 			r = 0x80;
+		bits[0] = (short)r;
 		if (obj->short_abce & 2)
 			r |= 0x40;
+		bits[0] = (short)r;
 		if (obj->short_abd0 & 1)
 			r |= 0x20;
+		bits[0] = (short)r;
 		if (obj->short_abd0 & 2)
 			r |= 0x10;
+		bits[0] = (short)r;
 		if (obj->short_abd2 & 1)
 			r |= 8;
+		bits[0] = (short)r;
 		if (obj->short_abd2 & 2)
 			r |= 4;
 		bits[0] = (short)r;
