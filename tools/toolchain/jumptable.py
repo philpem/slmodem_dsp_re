@@ -233,7 +233,18 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
     operations = {}
     for i,(address,raw,mnemonic,operands) in enumerate(rows):
         op = base(mnemonic)
-        require(op in basic or mnemonic.startswith('j'), 'unsupported ABI-frame instruction')
+        # SETcc has no implicit register or flag writes. Admit only its exact
+        # unprefixed i386 register-byte encoding; memory forms need a separate
+        # alias/stack-extent proof. ModRM /0 excludes unsupported encodings.
+        setcc = mnemonic.startswith('set')
+        if setcc:
+            byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
+            require(len(raw) == 3 and raw[0] == 0x0f and
+                    0x90 <= raw[1] <= 0x9f and raw[2] & 0xf8 == 0xc0 and
+                    operands == '%' + byte_registers[raw[2] & 7],
+                    'unsupported ABI SETcc destination/encoding')
+        require(op in basic or mnemonic.startswith('j') or setcc,
+                'unsupported ABI-frame instruction')
         require(re.search(r'%sp\b',operands) is None, 'partial ABI stack pointer')
         if op == 'push':
             require(i < prefix, 'nonentry ABI push')
