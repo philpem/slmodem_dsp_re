@@ -34,10 +34,10 @@ TC_OUT=build/tc_repro python3 tools/toolchain/jumptable_setcc_controls.py
 ```
 
 The controls exercise all 16 conditions across eight byte registers: 128
-positive identical-pair EXACT decisions. Twelve unsafe or unsupported cases
+positive identical-pair EXACT decisions. Fourteen unsafe or unsupported cases
 are refused and remain UNRESOLVED through the shared verdict, including
 saved/return/outgoing memory writes, prefixes, a nonzero ModRM extension,
-BL/BH writes after restoration, guard bypass, and an overlapping relocation.
+unsaved BL/BH writes, BL/BH writes after restoration, guard bypass, and an overlapping relocation.
 A changed ordered table produces RELOC. The script also reruns the inherited
 35 ABI controls (three accepted, 32 refused).
 

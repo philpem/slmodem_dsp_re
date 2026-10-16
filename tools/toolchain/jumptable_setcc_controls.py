@@ -55,6 +55,19 @@ for register in ('bl', 'bh'):
         raise AssertionError('callee restore clobber accepted')
     body = b.body(str(obj), 'sample')
     assert b.verdict(*body, *body)[0] == 'UNRESOLVED'
+# Save/use ESI instead, so BL/BH are the only unsaved EBX writes.
+for register in ('bl', 'bh'):
+    obj, _ = fixture('setcc-unsaved-' + register, change=lambda s, r=register:
+                     s.replace('%ebx', '%esi').replace('.Lfirst:',
+                     '.Lfirst:\nsete %' + r))
+    try:
+        p.prove(str(obj), 'sample')
+    except p.Refused as error:
+        records['unsaved-' + register] = str(error)
+    else:
+        raise AssertionError('unsaved callee byte write accepted')
+    body = b.body(str(obj), 'sample')
+    assert b.verdict(*body, *body)[0] == 'UNRESOLVED'
 # A relocated field overlapping SETcc cannot be normalized away.
 obj, _ = fixture('setcc-overlap-relocation', change=lambda s: s.replace(
     '.Lfirst:', '.Lfirst:\n.Lset:\nsete %al\nnop\n.reloc .Lset,R_386_32,message'))
@@ -105,4 +118,4 @@ for proof in real:
 assert b.verdict(*b.body(blob, 'RxNextStateV17'),
                  *b.body(str(current), 'RxNextStateV17'))[0] == 'EXACT'
 (out / 'setcc-results.json').write_text(json.dumps({'controls': records, 'real': real}, indent=2) + '\n')
-print('SETcc: 128 register positives EXACT; 12 unsafe/unsupported refusals UNRESOLVED; altered targets RELOC; real RxNextStateV17 pair EXACT; inherited 35 ABI controls passed')
+print('SETcc: 128 register positives EXACT; 14 unsafe/unsupported refusals UNRESOLVED; altered targets RELOC; real RxNextStateV17 pair EXACT; inherited 35 ABI controls passed')
