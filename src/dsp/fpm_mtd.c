@@ -194,8 +194,8 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 
 	/* Never negative: a tone estimate above the total would be nonsense. */
 	out_of_band = (short)(wideband - tone);
-	if (out_of_band < 0)
-		out_of_band = 0;
+	/* The original clears negative shorts with NOT, SAR 15, then AND. */
+	out_of_band &= ~out_of_band >> 15;
 	state->out_of_band = (short)out_of_band;
 
 	if (wideband < state->cfg.min_level)
