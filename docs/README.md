@@ -10,6 +10,7 @@ operation, ownership, lifecycle and the algorithms used by each module.
 | Filter design and clock assumptions | [Coefficients](maintainer/coefficients.md), [sample rates](maintainer/sample-rates.md), [resampler banks](maintainer/resampler-banks.md) | Understand the retained tables and the separate retarget work |
 | Maintenance procedure | [Maintenance](maintainer/maintenance.md), [reconstruction method](method/README.md) | Establish evidence boundaries and run the deciding gates |
 | Repeating the work on another project | [Recovery workflow](method/recovering-source.md), [object-reading techniques](method/reading-object-code.md), [GCC build recovery](method/recovering-build.md) | Recover interfaces, source structure and behaviour from a compiled object |
+| Project history | [Recovery timeline](method/timeline.md) | Follow dated milestones, progress measurements and identifiable tools |
 | Current objectives | [Phase ledger and remaining work](remaining.md) | Separate completed source coverage from validation and final-object identity |
 | Primary evidence | [Findings](findings.md), [deviations](deviations.md), [attribution](attribution.md), [input modules](modules.md) | Check observations and their original scope |
 | Generated measurements and registers | [Coverage](coverage.md), attribution JSON, issue ledgers and the [portability review](tolerance-split-register-review.md) | Reproduce measurements; counts apply to their stated baseline |
