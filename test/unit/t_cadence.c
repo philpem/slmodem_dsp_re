@@ -819,6 +819,7 @@ main(void)
 		 { "cadence_create: BUSY loose",  0, 0, 3, 2, 0, 160, 5, 1 },
 		 { "cadence_create: extra 1",     1, 1, 7, 0, 0, 666, 3, 0 },
 		 { "cadence_create: extra 4",     0, 4, 6, 0, 0, 200, 2, 0 },
+		 { "cadence_create: wide interval", 1, 0, 1, 0, 0, 66036, 3, 0 },
 		 { "cadence_create: buflen 160",  2, 0, 5, 3, 0, 160, 4, 0 }
 		};
 		unsigned k;

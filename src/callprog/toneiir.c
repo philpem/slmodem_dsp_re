@@ -100,7 +100,6 @@ static const struct toneiir_cfg toneiir_configuration_default = {
 	.n_a		= 12,
 	.n_b		= 12,
 	.interval	= 500,
-	.pad12		= 0,
 	.stability	= 11467,		/* 0.7 in Q14 */
 	.status		= 2,
 	.threshold	= 80,
@@ -263,7 +262,7 @@ toneiir_progress(struct toneiir *st, short sample)
 	 * reason: nothing here has a side effect, but the intent is the
 	 * original's.
 	 */
-	present = (st->env_band >= st->env_in / 4)
+	present = (st->env_band >= (st->env_in >> 2))
 		& (st->env_band >= (int)((st->env_prev * st->cfg.stability)
 					 >> 14))
 		& (st->env_prev >= (int)((st->env_band * st->cfg.stability)

@@ -167,7 +167,7 @@ void _iir_filter_progress(struct iir_filter *f, int count, short *samples);
 /*
  * The configuration, copied whole into the head of the object.  cadence_create
  * builds one on the stack from `toneiir_get_default_configuration` and then
- * overwrites everything except `stability`, `status` and `pad`.
+ * overwrites everything except `stability` and `status`.
  */
 struct toneiir_cfg {
 	/*
@@ -186,8 +186,7 @@ struct toneiir_cfg {
 	int		n_b;		/* +0x0c */
 
 	/* Samples between verdicts.  500, which is 62.5 ms at 8000 Hz. */
-	short		interval;	/* +0x10 */
-	short		pad12;		/* +0x12 */
+	int		interval;	/* +0x10: stored/compared at full width */
 
 	/*
 	 * How closely consecutive intervals must agree for the band envelope
