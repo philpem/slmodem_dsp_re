@@ -24,7 +24,7 @@
 short
 FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 {
-	int acc_in = x;
+	short acc_in = x;
 
 	while (sections--) {
 		int w1 = state[0];
