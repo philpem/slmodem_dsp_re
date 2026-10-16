@@ -97,6 +97,9 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	(void)caller;
 	(void)max_frag;
 
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: create...\n");
+
 	st = sysdep_malloc(sizeof(struct call_dp));
 	if (st == 0)
 		return 0;
@@ -139,6 +142,10 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	 * null and the block path treats that as 8 kHz.
 	 */
 	if (srate != CALL_NATIVE_RATE) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("call: create RC: %d <-> %d...\n",
+					    srate, CALL_NATIVE_RATE);
+
 		st->rc_in = srate == 9600 ? RcFixed_Create(RC_9600_IN)
 			  : srate == 48000 ? RcFixed_Create(RC_48000_IN) : 0;
 		st->rc_out = srate == 9600 ? RcFixed_Create(RC_9600_OUT)
@@ -228,6 +235,7 @@ call_block(struct call_dp *st)
 	short *out;
 	int count;
 	int rc;
+	int message;
 
 	if (st->answered != 0) {
 		/* The call is over; keep the outgoing side quiet. */
@@ -247,7 +255,7 @@ call_block(struct call_dp *st)
 		out = to_line;
 	}
 
-	st->message = CALLPROG_Progress(&st->callprog, in, out, count);
+	message = CALLPROG_Progress(&st->callprog, in, out, count);
 
 	if (st->rc_out != 0) {
 		int produced = CALL_SCRATCH_SAMPLES;
@@ -256,7 +264,14 @@ call_block(struct call_dp *st)
 				 &produced);
 	}
 
-	rc = call_status(st, st->message);
+	if (message != st->message) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("call: process: msg %d --> %d\n",
+					    st->message, message);
+		st->message = message;
+	}
+
+	rc = call_status(st, message);
 	return rc;
 }
 
