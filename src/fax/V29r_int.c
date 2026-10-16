@@ -60,11 +60,13 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 	signal = FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count, 1);
 
 	if (((struct v29_rx *)modem)->det->state == 0) {
-		short *buf = (short *)((struct v29_rx *)modem)->det->buf;
 		unsigned short i;
 
-		for (i = 0; i < count; i++)
+		for (i = 0; i < count; i++) {
+			short *buf = (short *)((struct v29_rx *)modem)->det->buf;
+
 			buf[i] = (short)(in[i] >> 1);
+		}
 
 		FPM_TONE_kill((struct fpm_tone *)
 				((struct v29_rx *)modem)->det->tone,
@@ -91,7 +93,7 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 	n = FPM_SRE_recover(&((struct v29_rx *)modem)->rx->sre,
 			    (const short *)((struct v29_rx *)modem)->rx->buf_mrf,
 			    (short *)((struct v29_rx *)modem)->rx->buf_sre,
-			    (short)n);
+			    n);
 
 	if (n > V29RX_SRE_MAX && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", n);

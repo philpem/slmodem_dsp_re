@@ -353,14 +353,14 @@ sre_meter(struct fpm_sre *sre)
 }
 
 unsigned short
-FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, short count)
+FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 {
 	short *hist = sre->hist;
 	short taps = sre->taps;
 	short fill = sre->fill;
 	short need = sre->need;
 	short produced = 0;
-	short remaining = count;
+	short remaining = (short)count;
 
 	while (remaining != 0) {
 		short y, d, tick, mode, extra;

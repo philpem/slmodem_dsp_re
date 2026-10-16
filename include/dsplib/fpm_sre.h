@@ -287,13 +287,15 @@ void FPM_SRE_free(struct fpm_sre *sre, int unused);
  * @param sre    Recovery state.
  * @param in     Input samples.
  * @param out    Output buffer for the recovered samples.
- * @param count  Number of input samples to consume.
+ * @param count  Input sample slot, narrowed to a signed word inside the callee.
+ *               Fax callers supply the unsigned MRF result; V.32 explicitly
+ *               sign-extends it. The exact original formal width is unproved.
  * @return Number of output samples produced, zero-extended from the
  *         object's own `short` counter (so declared `unsigned short`
  *         rather than `short`, per the object's `movzwl` on return).
  */
 unsigned short FPM_SRE_recover(struct fpm_sre *sre, const short *in,
-			       short *out, short count);
+			       short *out, int count);
 
 /*
  * `FPM_SRE_CFG` -- .rodata 0x00c4e0, 56 bytes, the built-in configuration --

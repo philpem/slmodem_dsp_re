@@ -81,12 +81,14 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	signal = FPM_AGC_agc(&RXS(modem)->agc.value, in, count, 1);
 
 	if (RXCTL(modem)->state == V17RX_STATE_START) {
-		short *buf = (short *)RXCTL(modem)->scratch;
 		unsigned short i;
 
 		/* No `>> 1` here.  F9103. */
-		for (i = 0; i < count; i++)
+		for (i = 0; i < count; i++) {
+			short *buf = (short *)RXCTL(modem)->scratch;
+
 			buf[i] = in[i];
+		}
 
 		FPM_TONE_kill((struct fpm_tone *)
 				RXCTL(modem)->tone,
@@ -114,7 +116,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 			    (const short *)
 				RXSTATE(modem)->buf_mrf,
 			    (short *)RXSTATE(modem)->buf_sre,
-			    (short)n);
+			    n);
 
 	if (n > V17RXS_SRE_MAX && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("ERROR: SRE buffer violation!(%d)", n);
