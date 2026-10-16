@@ -27,20 +27,20 @@
  },
  {
   "label": "the feedforward terms round like the recursive ones",
-  "find": "\t\tff = (coeff[1] * w1) >> 14;",
-  "replace": "\t\tff = (coeff[1] * w1 + 0x2000) >> 14;"
+  "find": "\t\tff = (*coeff++ * w1) >> 14;",
+  "replace": "\t\tff = (*coeff++ * w1 + 0x2000) >> 14;"
  },
  {
   "label": "the recursive terms truncate like the feedforward ones",
-  "find": "\t\tacc = acc_in + ((coeff[0] * w1 + 0x2000) >> 14);",
-  "replace": "\t\tacc = acc_in + ((coeff[0] * w1) >> 14);"
+  "find": "\t\tacc = acc_in + ((*coeff++ * w1 + 0x2000) >> 14);",
+  "replace": "\t\tacc = acc_in + ((*coeff++ * w1) >> 14);"
  },
  {
   "label": "the section output is not narrowed to 16 bits before the last term",
-  "find": "\t\tacc_in = (short)((short)ff + ((coeff[4] * w) >> 14));",
-  "replace": "\t\tacc_in = (short)(ff + ((coeff[4] * w) >> 14));",
+  "find": "\t\tff = (short)ff;\n\n\t\t/* Saturate only here, and asymmetrically -- see the note above. */\n\t\tif (acc > 0x7fff)\n\t\t\tw = 0x7fff;\n\t\telse if (acc <= -0x8000)\n\t\t\tw = -0x7fff;\n\t\telse\n\t\t\tw = (short)acc;\n\n\t\t*state++ = (short)w;\n\n\t\t/* The section output becomes the next section's input. */\n\t\tacc_in = (short)((short)ff + ((*coeff++ * w) >> 14));",
+  "replace": "\n\t\t/* Saturate only here, and asymmetrically -- see the note above. */\n\t\tif (acc > 0x7fff)\n\t\t\tw = 0x7fff;\n\t\telse if (acc <= -0x8000)\n\t\t\tw = -0x7fff;\n\t\telse\n\t\t\tw = (short)acc;\n\n\t\t*state++ = (short)w;\n\n\t\t/* The section output becomes the next section's input. */\n\t\tacc_in = (short)(ff + ((*coeff++ * w) >> 14));",
   "equivalent": true,
-  "why": "A CODEGEN CLAIM, NOT A BEHAVIOURAL ONE, AND THIS TIER CANNOT REACH IT. `(short)ff` is congruent to `ff` modulo 65536, and the whole expression is narrowed to `short` again on assignment, so `(short)((short)ff + x)` and `(short)(ff + x)` agree on EVERY input by construction -- there is no history, coefficient set or clamp state that separates them, and widening the fixture cannot help. What the inner cast buys is the object's own `movswl %cx,%ecx` at 0x0a8bc8: without it GCC 3.4.2 has no reason to emit that instruction. So the claim is real, it is adjudicated by `make similarity` and `byteident.py`, and it is recorded here as equivalent rather than deleted so that nobody re-derives the same negative result. It expires if the harness ever gains an instruction-level observable (tiers.md, F651)."
+  "why": "Both explicit feedforward narrowings are removed. A CODEGEN CLAIM, NOT A BEHAVIOURAL ONE, AND THIS TIER CANNOT REACH IT. `(short)ff` is congruent to `ff` modulo 65536, and the whole expression is narrowed to `short` again on assignment, so `(short)((short)ff + x)` and `(short)(ff + x)` agree on EVERY input by construction -- there is no history, coefficient set or clamp state that separates them, and widening the fixture cannot help. What the inner cast buys is the object's own `movswl %cx,%ecx` at 0x0a8bc8: without it GCC 3.4.2 has no reason to emit that instruction. So the claim is real, it is adjudicated by `make similarity` and `byteident.py`, and it is recorded here as equivalent rather than deleted so that nobody re-derives the same negative result. It expires if the harness ever gains an instruction-level observable (tiers.md, F651)."
  },
  {
   "label": "the form I cascade's coefficients are in textbook order",
