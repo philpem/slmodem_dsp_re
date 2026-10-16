@@ -5310,3 +5310,45 @@ finite/quiet-NaN constructor thresholds, four limits and two public input
 sequences, including reset. All 7,680 return/state/history checks pass across
 64 cases. It remains outside default test discovery and does not establish
 nonfinite modem-path reachability or complete SD-detector coverage.
+
+### Separate missing storage from alignment and declaration order
+
+A smaller BSS section does not establish a missing field or variable. Inventory
+named objects, including duplicate local names, before interpreting its extent.
+The whole-object audit finds equal sizes for all 38 named BSS objects, covering
+2,506 bytes on each side. The 24-byte section deficit lies entirely outside
+those named extents. COMMON symbol values encode alignment requirements;
+positioned symbols expose their section alignment, not their original source
+alignment. Do not assign global ownership from the nearest FILE record.
+
+Callprog provides a bounded source recovery within that inventory. Reordering
+its declarations restores all eleven local BSS offsets relative to the first
+object. Six functions retain their instructions and canonical relocation
+targets; three raw bodies change only relocation addends. The three exact
+bystanders remain exact. This improves storage fidelity without adding an
+exact function or closing the whole-object BSS deficit.
+
+Use `tools/storage_layout_audit.py` to distinguish named-size differences,
+alignment gaps, COMMON alignment and nonallocated records. Its five controls
+exercise these distinctions before reporting the comparison. Table extents
+need a separate behavioural review: the extra FPM entries and PreFilter loop
+row deliberately reproduce observed reads beyond the original symbols.
+Recover their physical neighbours before shortening those declarations.
+
+### Establish a carrier discrepancy before changing its type
+
+The V8 lifetime trace follows the output argument from initial RTL through
+global allocation into EBP. The original reloads that by-value argument from
+its stack home; the byte-only `charFlip` call cannot modify the argument.
+That reload alone supplies no mutable-owner or stale-pointer defect. Reopen
+this source domain only with independent evidence about a carrier or callee
+visibility that affects allocation.
+
+Likewise, INFO1a's original Uinfo producer sign-extends AX and stores a full
+dword. Its later low-word load does not establish a short local. The retained
+source already produces that signed dword and later zero-extends its low word.
+The original also keeps an independent pointer at owner +4 live; the current
+flat layout only establishes a progress integer there. Investigate independent
+callee and layout evidence for an aggregate boundary before introducing a
+nested owner to influence spills. The unchanged full-TU replay and a rejected
+wrong-producer control preserve this negative result.

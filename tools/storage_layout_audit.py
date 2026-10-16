@@ -25,7 +25,8 @@ def inventory(path):
     owners = {entry['name']: entry for entry in sections}
     records = []
     for kind, bind, visibility, section, value, size, name in symbols:
-        if kind != 'OBJECT' or section not in owners and section != 'COM':
+        if kind != 'OBJECT' or (section != 'COM' and
+                                (section not in owners or 'A' not in owners[section]['flags'])):
             continue
         records.append({'name': name, 'bind': bind, 'visibility': visibility,
                         'section': section, 'size': size,
@@ -75,10 +76,14 @@ def controls():
             target = root / (name + '.o')
             source.write_text('.bss\n.type first,@object\nfirst:\n.zero 4\n.size first,4\n'
                               '.p2align %d\n.type second,@object\nsecond:\n.zero %d\n.size second,%d\n'
-                              '.comm common_slot,8,%d\n' % (align, width, width, common_align))
+                              '.comm common_slot,8,%d\n'
+                              '.section .debug_storage,"",@progbits\n'
+                              '.type debug_slot,@object\ndebug_slot:\n.zero 4\n.size debug_slot,4\n'
+                              % (align, width, width, common_align))
             subprocess.run(['as', '--32', '-o', str(target), str(source)], check=True)
             return inventory(target)
         baseline = build('baseline')
+        assert all(row['name'] != 'debug_slot' for row in baseline['storage'])
         same = compare(baseline, baseline)
         alignment = compare(baseline, build('alignment', align=4))
         width = compare(baseline, build('width', width=8))
@@ -88,7 +93,7 @@ def controls():
         assert alignment['nobits_uncovered_delta'] == 16
         assert not width['nobits_named_multiset_equal'] and width['reference_only_storage_records']
         assert common['reference_only_storage_records'] == [('common_slot', 'GLOBAL', 'DEFAULT', 'COM', 8, 16)]
-    return 4
+    return 5
 
 
 def main():
@@ -103,7 +108,7 @@ def main():
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps({'reference': reference, 'candidate': candidate,
                                    'comparison': result, 'controls': denominator}, indent=2) + '\n')
-    print('%d controls passed: equal, alignment-only gap, named-size mutation, COMMON-alignment mutation' % denominator)
+    print('%d controls passed: equal, alignment-only gap, named-size mutation, COMMON-alignment mutation, nonallocated exclusion' % denominator)
     print('allocated storage records: reference %d, candidate %d, matched %d' %
           (len(reference['storage']), len(candidate['storage']), result['matched_storage_records']))
     print('NOBITS named multiset equal: %s; extent delta %d; uncovered delta %d' %
