@@ -59,7 +59,7 @@ could have said so* without the Recommendation.
 
 **SHAPE 3 — AN INDEPENDENTLY DERIVABLE CONSTANT.** A polynomial, a table entry,
 a rate, a limit, a timing bound. The discriminator is
-`docs/deviation-triage.md`'s, taken over from D250: **the correct value must be
+`docs/history/project/deviation-triage.md`'s, taken over from D250: **the correct value must be
 derivable without reading the object.** A constant that can only be checked by
 reading it back off the blob is not a candidate — it is a differential check
 wearing a spec's clothes.

@@ -6,6 +6,10 @@ The transmit and receive paths share negotiated parameters but keep their own
 histories and progress. A sample, a symbol and a payload bit are different
 units; never convert between them without the mode's rate and mapping.
 
+The [module catalogue](modules.md) identifies the implementing files for every
+production module. [V.34 training algorithms](training-algorithms.md) develops
+the probing, adaptive equalisation and recovery loops described here.
+
 ## The basic signal chain
 
 Conceptually, a quadrature amplitude modulation (QAM) transmitter performs:
@@ -43,7 +47,7 @@ The DSP names in this tree make these responsibilities easier to locate:
 | PSD | Spectral power estimation; `src/dsp/psd.cpp` |
 
 These are navigation aids, not interchangeable APIs. Use the
-[glossary](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/glossary.md)
+[glossary](glossary.md)
 for project-specific expansions and misleading legacy names.
 
 ## Low-rate FSK: Bell 103, V.21 and V.23
@@ -75,7 +79,7 @@ The half-duplex training states prepare that full-duplex operation; “Hdx”
 in a training filename does not mean the final data service is half duplex.
 Trace `V32FP_modem`, the transmit/receive training states, then the data
 modulator and demodulator. The
-[V.32 structure record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/v32-structure-reconstruction.md)
+[V.32 structure record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/v32/v32-structure-reconstruction.md)
 explains recovered object ownership. Keep V.32 work together across original
 span labels: those labels can split a single protocol subsystem.
 
@@ -160,7 +164,7 @@ observed call boundaries.
 
 For the original-operand audit, signedness correction and remaining code
 generation differences, see the
-[supervisor recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md).
+[supervisor recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/project/maintainer-offset-access.md).
 
 ## V.90 and V.92
 
@@ -209,8 +213,8 @@ FSK core uses a 7200 samples/s design. Changing the host rate alone cannot
 retarget every loop or coefficient bank.
 
 Use the existing
-[sample-rate register](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/rate_assumptions.md),
-[coefficient derivations](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/coefficients.md)
-and [resampler bank record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/rc_banks.md).
+[sample-rate register](sample-rates.md),
+[coefficient derivations](coefficients.md)
+and [resampler bank record](resampler-banks.md).
 Preserve original coefficients for reconstruction. The separate 8 kHz
 retarget needs design-based regeneration and its own functional evidence.

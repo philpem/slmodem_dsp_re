@@ -541,7 +541,7 @@ ratio is one the resampler supports — but `dp_wrapper`'s rate table lists only
 the conversion and everything is native" is too simple for Bell 103. Moving the
 host to 8000 removes the outer conversion, but the inner 8000 → 7200 stage
 remains, because 7200 is what makes 300 baud come out as an integer. Recorded
-as R-8 in `docs/rate_assumptions.md`.
+as R-8 in `docs/maintainer/sample-rates.md`.
 
 ## F18. `fpm_tone.c` and `FPM_phasor` — structure (reconstruction pending)
 
@@ -929,7 +929,7 @@ against `state[0x54]`.
 **Possible rate dependency, unconfirmed.** The `/20` with a floor of 700 has
 the shape of a duration in samples or milliseconds. If `state[0x0c]` carries a
 rate or a sample count, the divisor moves with it. Logged as a candidate
-rather than a confirmed entry in `docs/rate_assumptions.md`, because
+rather than a confirmed entry in `docs/maintainer/sample-rates.md`, because
 `B103_CFG`'s field meanings are not yet established —
 `B103_CFG = { 2, 0, 0, 0, 0, 0, 14000, 0, 1, 0, 0, 0, 3200, 0 }` as int16, and
 `state[0x0c]` is the 14000.
@@ -2297,7 +2297,7 @@ unquantised and 1.6 dB better in Q14, but sits 180 LSB from the original.
 
 So the two objectives answer different questions:
 
-- **Reproducing** the original — which is what `docs/coefficients.md` is for —
+- **Reproducing** the original — which is what `docs/maintainer/coefficients.md` is for —
   wants coefficient distance. 180 LSB is not the same filter.
 - **Regenerating** at another sample rate — which is the project's actual goal
   for phase 12 — wants response. There is no original to be near.
@@ -2580,7 +2580,7 @@ specific enough to read the call-progress code almost directly:
 `GetMinBusyCadenceOnTime`, `GetDialToneCallProgressFilterIndex`,
 `GetRingbackDetectionCyclesNumber`, `GetCallingToneFlag`.
 
-The whole table is in `docs/parameters.md` and the constants in
+The whole table is in `docs/maintainer/parameters.md` and the constants in
 `include/dsplib/modem_params.h`. Sixteen of them are per-country homologation
 settings, carried in `struct homolog_params`.
 
@@ -2997,7 +2997,7 @@ so the fallbacks are the specified values rather than arbitrary ones.
 ### `GetPulseBetweenDigitsInterval` is multiplied by ten
 
 The only arithmetic in the function. It confirms the 10 ms convention
-established for the cadence times (docs/parameters.md) outside cadence for the
+established for the cadence times (docs/maintainer/parameters.md) outside cadence for the
 first time: the parameter is in centiseconds and the dialler wants
 milliseconds.
 
@@ -3127,7 +3127,7 @@ relay rather than a filter. Dialer.c calls across to them; nothing else does.
 
 returning true once the count reaches zero. The tick is a literal `5` in the
 code, so every duration here is milliseconds -- unlike the cadence timings,
-which are centiseconds (docs/parameters.md), and unlike everything in the
+which are centiseconds (docs/maintainer/parameters.md), and unlike everything in the
 call-progress detector, which counts filter intervals. Three different time
 units inside one phase, and none of them is stated anywhere.
 
@@ -3695,7 +3695,7 @@ time in `CALLPROG_WAIT_DIAL`, hears nothing because it is not listening, and
 moves on when the timeout expires -- which is seconds, longer than the first
 version of the test ran. `t_call` had S56 at 0.
 
-This corrects `docs/callprog_states.md`, which recorded the `w0 = 0` shape as
+This corrects `docs/maintainer/call-progress.md`, which recorded the `w0 = 0` shape as
 though it were the only one. `t_call` now covers both halves of the split,
 and with S56 = 2 the dialler's DTMF reaches the line -- 13840 non-silent
 samples where there were none.
@@ -5495,7 +5495,7 @@ So the whole function is: two complex band-passes at ±baud/2, their cross
 product as a phase discriminator, and a high-pass on the result. That is a
 textbook V.34 timing recovery loop, and every constant in it has now been
 traced — the 0.7 input gain, the ±1/8-sample-rate poles
-(`docs/coefficients.md`), the implicit `a0`, and the doubled high-pass gain.
+(`docs/maintainer/coefficients.md`), the implicit `a0`, and the doubled high-pass gain.
 
 **Three traps for whoever writes it**, all of which produce plausible output:
 
@@ -6662,7 +6662,7 @@ Q14 denominator, i.e. 1/16.
 **Its poles are at 45 degrees.** Normalising, the denominator is
 `1 - 1.4002 z^-1 + 0.9800 z^-2`: radius `0.98995`, angle `45.0` degrees —
 **an eighth of the sample rate**, exactly like the half-baud band-pass pair
-in `docs/coefficients.md`. That is the third structure in V.34 tuned to
+in `docs/maintainer/coefficients.md`. That is the third structure in V.34 tuned to
 `baud/2` at four samples per symbol, after `posHalfBaud`/`negHalfBaud` and
 the fourth-order `V34TimingIIR` pair.
 
@@ -9834,7 +9834,7 @@ forces the range, so it is 1..18, and the longest block any of those selects
 is 105 entries against a table of 128.  `initG248` cannot overrun `t3`.  It
 says nothing about `shellDemapper`'s reads, which remain finding F129's.
 
-Recorded rather than turned into a generator: `docs/fastpass.md` defers
+Recorded rather than turned into a generator: `docs/history/project/fastpass.md` defers
 coefficient derivation to task #47, and a byte-exact copy is what the
 differential test proves.  The derivation is here so #47 does not have to
 find it twice.
@@ -12175,7 +12175,7 @@ divergence is somewhere the reconstruction has not modelled as fields yet.
 
 Spiked on branch `spike-objdiff`.  The ordered set of remedies, including the
 per-dispatch-case testing that would make `v34handshak`'s 16 microstate cases
-independently committable, is in `docs/largefunctions.md`.
+independently committable, is in `docs/history/project/largefunctions.md`.
 
 #### A trap found on the way
 
@@ -13066,7 +13066,7 @@ directions and its word is not — `unPackJdReset` clears +0xd4,
 
 #### The sizes are one word larger than the displacements
 
-`docs/v90cpp.md` gave 140 and 216, which are the largest `this`-relative
+`docs/history/pcm/v90cpp.md` gave 140 and 216, which are the largest `this`-relative
 displacements each class uses (finding F215's method).  Both are four-byte
 stores, so `sizeof(V90Jd)` is **0x90 = 144** and `sizeof(V92Jd)` is
 **0xdc = 220**.  The bound is a displacement and the size is the bound plus
@@ -13171,7 +13171,7 @@ thirty-one such symbols across `Scrambler<h,h>`, `Scrambler<h,i>`,
 `ref__ZN9ScramblerIhiE7processEh` exists and can never satisfy a reference
 from our side.  **A batch that leaves one unwritten fails the link for all
 seventy test binaries, with `make phase` stopping at `t_encode`** — exactly
-the symptom `docs/v90cpp.md` describes for an ordinary unwritten callee, from
+the symptom `docs/history/pcm/v90cpp.md` describes for an ordinary unwritten callee, from
 a cause that document does not mention and the tool cannot see.
 
 So the closure of a C++ batch is `callgraph.py`'s answer **plus** the weak
@@ -13396,7 +13396,7 @@ deliberately.  Declaring either makes the class non-trivial, which deletes the
 default members of the union the test uses to overlay the object on a byte
 array — `use of deleted function` naming the union, not the declaration that
 caused it — and makes `__builtin_offsetof` conditionally supported.  The
-signatures stay on the record in `docs/v90cpp.md`.  The offset assertions
+signatures stay on the record in `docs/history/pcm/v90cpp.md`.  The offset assertions
 themselves sit behind `#if __SIZEOF_POINTER__ == 4`, because ten of them are
 pointers or follow one and `make phase` compiles every source for a 64-bit
 host (`src/v8/v8util.c` has the same guard for the same reason).
@@ -13481,14 +13481,14 @@ readelf -r -W ../slmodemd/dsplibs.o     # then filter to .rel.data and to the
 ```
 
 Batch 3's real payload is therefore **2,742 bytes of code and 23,860 of
-data**, and `docs/v90cpp.md`'s 10,596-byte figure for all of #60's static data
+data**, and `docs/history/pcm/v90cpp.md`'s 10,596-byte figure for all of #60's static data
 is 23,924 once the six are counted.  Nothing else in #60 is affected: the
 three coefficient banks and all six loop tables were checked for outgoing
 relocations and have none.
 
 #### The object is forty bytes; 1,280 was a different object's displacement
 
-`docs/v90cpp.md` carried 1,280 for `sizeof(V90PreFilter)`, as a bound from the
+`docs/history/pcm/v90cpp.md` carried 1,280 for `sizeof(V90PreFilter)`, as a bound from the
 largest `this`-relative displacement.  It is not a `this` displacement.
 `setParamEia6` reads `this` at **exactly one offset**, +0x1c, and then does
 every one of its forty-eight stores inside the `V90Parameters` block that
@@ -15395,7 +15395,7 @@ One candidate is newly surfaced by the wider window and is NOT investigated:
 
 *Renumbered from **360** in the ninth collision; see finding F543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
-`docs/fastpass.md` deferred coefficient derivations to #47 on the grounds that
+`docs/history/project/fastpass.md` deferred coefficient derivations to #47 on the grounds that
 a byte-exact copy is byte-exact and the differential test proves it without
 one. True, and the derivations still matter for the 8 kHz retarget, where the
 tables have to be regenerated rather than copied. Two are now done.
@@ -15662,7 +15662,7 @@ answers eliminated rather than untried.
 
 *Renumbered from **361** in the ninth collision; see finding F543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
-`docs/fastpass.md` deferred "reachability measurement for deviations" to #47 on
+`docs/history/project/fastpass.md` deferred "reachability measurement for deviations" to #47 on
 the grounds that the entry is cheap and measuring whether it fires is not. It
 is cheaper than it looked, at least for the necessary condition:
 `tools/devaudit.py` asks, for each of the 59 entries, whether any compiled test
@@ -15816,8 +15816,8 @@ hypothetical worry. In master's tree, in exactly this range:
                           -85, 99, -98, 70, 0, -133, 361, -744, 14
   src/pump/b103/b103_tables.c     619, 355, 123, -67
   src/dsp/fpm_tone_cfg.c          220, 286, 357, 434, 516
-  docs/v90cpp.md                  byte counts of 350 and 359
-  docs/largefunctions.md          359,920 and 623,348
+  docs/history/pcm/v90cpp.md                  byte counts of 350 and 359
+  docs/history/project/largefunctions.md          359,920 and 623,348
 ```
 
 Filter coefficients and byte counts, indistinguishable from a citation to
@@ -15999,7 +15999,7 @@ unused.
 Only two of the thirty-two are defined. The other thirty are declared for the
 record and deliberately left undefined: defining a method whose callees are
 not written breaks the link for the whole suite, with `t_encode` as the
-symptom and nothing naming the cause (`docs/v90cpp.md`). Neither of the two
+symptom and nothing naming the cause (`docs/history/pcm/v90cpp.md`). Neither of the two
 calls an undefined one; between them they call only `alaw2linear` and
 `ulaw2linear`, which `src/service/pcm.c` already provides.
 
@@ -16068,7 +16068,7 @@ them means modelling `V90Parameters`, which nothing in this tree does yet.
 constructor and `setToDefault` reach it with a four-byte access, so the object
 is 0x24. `printInfo` alone reaches only +0x1c; sizing from the member you
 happen to be writing is the mistake finding F215 is about, and the `V90Jd`
-0x8c -> 144 worked example in `docs/v90cpp.md` is the same shape.
+0x8c -> 144 worked example in `docs/history/pcm/v90cpp.md` is the same shape.
 
 **The field names are the author's own**, recovered from the format strings
 `printInfo` hands to the diagnostic channel -- which is what makes a
@@ -16434,7 +16434,7 @@ test.
 
 `refcheck.py` now also reports a line that begins with seven `<`, `=` or `>`
 in any tracked `.c`, `.h`, `.md` or `.py`, and exits non-zero for it. Proved
-to fire before it was committed -- a marker appended to `docs/glossary.md`
+to fire before it was committed -- a marker appended to `docs/maintainer/glossary.md`
 gives `exit=1` and naming the file and line, and removing it gives `exit=0`.
 Finding F134's argument is that a check nobody runs decays into a check that
 passes because it never ran; this one runs in `make phase`'s `refs` target,
@@ -16655,7 +16655,7 @@ transcription error in the middle would break without disturbing either end.
 
 721 bytes at .text+0xa790, unmangled, and the first of task #59's six to come
 free. `tools/closure.py k56FlexPhase34 --missing` reports one symbol -- itself
--- once `build/` exists; the "3 symbols" in `docs/v90rest.md` was computed
+-- once `build/` exists; the "3 symbols" in `docs/history/pcm/v90rest.md` was computed
 against a worktree that had never been built, and an empty `have` set makes
 every callee look unwritten. **Build before you believe a closure.**
 
@@ -16665,7 +16665,7 @@ The signature is `int k56FlexPhase34(void *obj)`.
   is read from the incoming frame.
 - IT IS THE V.34 OBJECT, not a sub-object: `mov %esi,%eax; call
   _Z14getMPrecvdBitsP12tagV34Object` passes it where that symbol's own
-  mangling says `tagV34Object *`, and `docs/v90cpp.md`'s note that
+  mangling says `tagV34Object *`, and `docs/history/pcm/v90cpp.md`'s note that
   `tagV34Object` is the object's name for `struct v34_object` closes it.
 - IT RETURNS 0. Three `ret`s, and `xor %eax,%eax` reaches every one of them --
   a7f2 for the shared exit, a862 for the Ja completion arm and a8dc for case
@@ -16921,7 +16921,7 @@ nor `fskdemodulate` is one of them. A microstate written before the call is
 still there when the dispatch reads it, and the same holds for the two
 transmit tables, which are read before anything is called at all.
 
-This is the fact `docs/largefunctions.md` item 2 assumed without checking. It
+This is the fact `docs/history/project/largefunctions.md` item 2 assumed without checking. It
 happens to be true; it did not have to be.
 
 ### F286. The three jump tables, read with their relocations
@@ -17155,16 +17155,16 @@ field the fill happens to satisfy would separate, and the same case might not
 under a different fill. They are asserted because they are reproducible, not
 because they are intrinsic. The gap is the useful half --
 a target that cannot be told from its neighbour cold is one whose case reads
-a companion field the fixture has not set, and `docs/v34handshak.md` lists
+a companion field the fixture has not set, and `docs/history/v34/v34handshak.md` lists
 which those are.
 
-**Findings F285-290 were carved out of the 279-300 block `docs/v90rest.md`
+**Findings F285-290 were carved out of the 279-300 block `docs/history/pcm/v90rest.md`
 reserves for "#59's six".** The brief for this worktree allocated them
 explicitly. Whoever writes #59's findings should start at 291, and
 `refcheck.py` will only catch the collision if it is literal.
 ### F273. `VPcmFloModem` really is 32 KB, and finding F268's check is what says so
 
-`docs/v90cpp.md` recorded that `VPcmFloModem` "reaches +32,612, which almost
+`docs/history/pcm/v90cpp.md` recorded that `VPcmFloModem` "reaches +32,612, which almost
 certainly means it indexes *through* `this` into an enclosing session object
 rather than being that large". That sentence has been corrected: for this
 class it is wrong, and the thing that decides it is finding F268's own method
@@ -18750,7 +18750,7 @@ are exactly the six that write nothing below +0x234.
 
 > **Deviation D137** (`docs/deviations.md`): the blob disagrees with itself on the receive path.
 
-`docs/v34handshak.md` listed one hole in the harness: a pointer that lands
+`docs/history/v34/v34handshak.md` listed one hole in the harness: a pointer that lands
 outside the object was checked only for landing outside, never for what it
 now points at, so a case that re-aims +0xaa90, +0xaaac, +0xaab0 or +0x3564 got
 a signature saying "these four bytes changed" and nothing more. The reason it
@@ -18790,7 +18790,7 @@ Two consequences:
   select the same table. The assertion is made only on the ordinary run, and
   says so.
 
-**Findings F319-324 are the block `docs/v90rest.md` allocated to this
+**Findings F319-324 are the block `docs/history/pcm/v90rest.md` allocated to this
 worktree.** Finding F290's note that #59's findings start at 291 still stands.
 
 
@@ -19055,7 +19055,7 @@ mutations that CAN fail are both in the suite and both caught: the mark set on
 the barred path, and the mark cleared rather than set. The `status` column
 exists so that the second writer is entered and left in the same run.
 
-**Findings F332-337 are the block `docs/v90rest.md` allocated to this
+**Findings F332-337 are the block `docs/history/pcm/v90rest.md` allocated to this
 worktree.** Verified against `origin/master` (237... 246) and against the
 local maximum (331) before use, as that file instructs.
 ======================================================================
@@ -19127,7 +19127,7 @@ which is why it is here rather than beside D46.
 ======================================================================
 ### F361. Three routes reach the once-per-block dispatch, not two, and they converge exactly
 
-`docs/v34handshak.md` gives two ways into table 2: the guard at 0x629f1 when
+`docs/history/v34/v34handshak.md` gives two ways into table 2: the guard at 0x629f1 when
 the receiver's count is at most 5, and the fall-through of the rxstate compare
 chain. There is a third, and it is in the chain the second one does not
 reach:
@@ -19883,7 +19883,7 @@ first build.
 
 #### The swap the harness needed, and it is four lines
 
-`docs/v34handshak.md` said the first agent to land a case defines
+`docs/history/v34/v34handshak.md` said the first agent to land a case defines
 `V34HS_OURS`. It cannot: that replaces side A in **every** binary linking the
 fixture, so it only works once the whole function exists. `v34hs_side_a(fn)`
 sets side A at run time with the blob as the default, so `t_v34hsstep.c` goes
@@ -19964,7 +19964,7 @@ a different line.
 #### 63 `INFODONE` at 0x6591e -- the txstate is the selector
 
 63 measured cold is indistinguishable from the twenty-four-state shared arm,
-and `docs/v34handshak.md` says of such a case "read the head of its arm and
+and `docs/history/v34/v34handshak.md` says of such a case "read the head of its arm and
 seed what it reads". What it reads is not a companion field. It is **the
 txstate**, and the arm is a switch on it:
 
@@ -20404,7 +20404,7 @@ other, and only the difference between them says which.
 
 ### F353. 79 and 80 are two cases, and cold they are one
 
-`docs/v34handshak.md` puts both in "group G" and finding F290 records that
+`docs/history/v34/v34handshak.md` puts both in "group G" and finding F290 records that
 they cannot be told apart from a cold object. Both start the same way:
 
 ```
@@ -20719,7 +20719,7 @@ Two things the first version got wrong, both worth keeping:
 57 bytes, the last of task #59 besides `v34handshak` itself, and after a build
 `tools/closure.py indicateJaTransmission --missing` is **zero symbols and zero
 bytes** -- the only batch in this task that was empty before it started, which
-is what `docs/v90rest.md` predicted when it put this one last. Test
+is what `docs/history/pcm/v90rest.md` predicted when it put this one last. Test
 `test/unit/t_v34ja.cpp`, 6,601 checks; mutation suite `v34ja`, 13 mutations,
 12 caught and 1 recorded equivalent (finding F381). `make phase` green,
 coverage 21.2% -- 154,613 bytes, 370 symbols, 57 bytes and one symbol more
@@ -20778,7 +20778,7 @@ from `v34handshak`, which is where **both** relocations to this symbol are
 **#59 IS NOW COMPLETE, MEASURED RATHER THAN INHERITED.** The empty closure
 above does not show this -- `k56FlexPhase34` and `V34SetINFO1aBits` are not in
 this function's closure, so a missing one would look identical -- and
-`docs/v90rest.md` is a hand-over, which that file itself says not to trust for
+`docs/history/pcm/v90rest.md` is a hand-over, which that file itself says not to trust for
 a claim like this. What shows it is the built objects:
 
     $ nm build/src/pump/v34/*.o build/src/pump/v90/*.o | grep -E \
@@ -20872,7 +20872,7 @@ Without it, "changed iff `v90 > 1`" would still hold if `enterPhase3` left no
 mark in this fixture at all, and the whole group would be an assertion that
 nothing ever changes.
 
-**Findings F380-389 are the block `docs/v90rest.md` allocated to this
+**Findings F380-389 are the block `docs/history/pcm/v90rest.md` allocated to this
 worktree; 380 and 381 are used.** Verified against `origin/master` (max 246)
 and the local maximum (337) before use, as that file instructs.
 
@@ -21131,7 +21131,7 @@ in `%dx` from 0x66944 and never reloaded:
 ```
 
 Four entries, and whoever takes it starts from them rather than from the whole
-arm. `docs/v34handshak.md`'s "44 writes 23 B cold" was the fixture's fill
+arm. `docs/history/v34/v34handshak.md`'s "44 writes 23 B cold" was the fixture's fill
 sending it out through 0x6bd8d on the first bit; every exit above is now
 driven deliberately.
 
@@ -21966,7 +21966,7 @@ change breaks silently: `t46_chain_tail` is called with the value its caller
 read, exactly as 0x6adc7 uses the `%ax` 0x6adbd loaded, so if some future arm
 does leave +0x3588 at zero the reconstruction follows the object rather than
 a comment about it. What is NOT done is inventing a case for them --
-`docs/v34handshak.md`'s "every one of them halts rather than guessing" cuts
+`docs/history/v34/v34handshak.md`'s "every one of them halts rather than guessing" cuts
 both ways, and an untestable branch that is a faithful transcription is
 better than a plausible one that is not there.
 
@@ -22119,7 +22119,7 @@ to be hard. What is known, and what whoever takes them starts with:
   the same constant arm 59's neighbours use.
 
 The three that were never this batch's -- 41, 44 and 46, 13.2 KB between them
--- are still open, and `docs/v34handshak.md`'s table is still the map.
+-- are still open, and `docs/history/v34/v34handshak.md`'s table is still the map.
 
 ### F348. Two reconstructions of `v34handshak` now exist, and that is a debt not a design
 
@@ -22171,7 +22171,7 @@ copy happens to be first. Finding F373 says to keep `w4_hs_t2`'s table 2 arms,
 which is one of the three answers already. The other two are open.
 
 Until it is done, an arm added to one copy is not added to the other, and the
-`docs/v34handshak.md` per-target table has to say which copy each target lives
+`docs/history/v34/v34handshak.md` per-target table has to say which copy each target lives
 in or it will send the next agent to the wrong file.
 
 ### F349. A mutation run that dies leaves its mutant in the source, and I committed one
@@ -25393,7 +25393,7 @@ constant no run sat one past.
 
 No source or test file outside `v34hstx1.cpp`, `v34hstx1.h` and
 `t_v34hstx1.c` was touched -- the only other files in the commit are this one,
-`docs/v34handshak.md` and the line `make phase` regenerates in
+`docs/history/v34/v34handshak.md` and the line `make phase` regenerates in
 `docs/coverage.md`.  That is worth saying because 421 had to add `probe` to
 `V34hshak.c` and 422 had to change `vectpp`'s binding in `V34RX.c`: 21 needed
 no table, because the thousand bytes of it that read tables are
@@ -25898,7 +25898,7 @@ a fact, and a brief must say which it is passing on.**
 
 #### And a third `where`-column failure in the same file
 
-`docs/v34handshak.md` ended this merge saying, in two different places, that
+`docs/history/v34/v34handshak.md` ended this merge saying, in two different places, that
 66 was the last arm open and that 21 was the last arm open. Both batches wrote
 their line from their own tree, in parallel, and each was right about what it
 could see. Table 1 is complete: nineteen targets, all written, all
@@ -28257,7 +28257,7 @@ items did not survive the check, and they are different shapes.
    codegen comparator that way; it is `tools/toolchain/compare.py`, which is
    where the file was added and where it still is. This is worth more than a
    typo because **the wrong path is in the record**: finding F554 uses
-   `tools/compare.py` twice, and `docs/v90rest.md` once. Finding F554's
+   `tools/compare.py` twice, and `docs/history/pcm/v90rest.md` once. Finding F554's
    substance is right -- the whole codegen tier was absent from `v90rest`'s
    history, which is why nobody ran it there and nobody noticed the spelling --
    so there is nothing around the path that looks wrong. Finding F651 is where
@@ -28369,7 +28369,7 @@ finding F650. It is in **651**. The brief inherited that from **finding F556,
 which cites it as a bare `(650)`** -- wrong number AND a form the checker
 cannot parse, so nothing could ever have reported it.
 
-Separately, `docs/findings.md` finding F554 twice and `docs/v90rest.md` name
+Separately, `docs/findings.md` finding F554 twice and `docs/history/pcm/v90rest.md` name
 `tools/compare.py`, a path that has never existed; it is
 `tools/toolchain/compare.py`. Two batches were sent after it before anyone
 noticed, and 554's substance is right, which is why nobody did.
@@ -29056,7 +29056,7 @@ the structural blocks 0x629ed, 0x62a40, 0x62af1 and 0x62b71, and at every
 address below 0x62b96.
 
 **The barriered walk was validated before it was believed** -- it reproduces
-all sixteen of `docs/v34handshak.md`'s published table-3 exclusive byte counts
+all sixteen of `docs/history/v34/v34handshak.md`'s published table-3 exclusive byte counts
 exactly (6046, 3945, 3198, 2385, 1853, 1735, 1705, 1265, 1182, 1115, 896, 848,
 669, 422, 310, 19), and its leak check is empty. The five arms are mutually
 disjoint: the per-target reach sums to the union byte for byte.
@@ -29188,7 +29188,7 @@ distinction in a third instance.
 `v34handshak`'s FSK-gate arm at 0x6754b is 1,089 bytes over five ranges --
 0x6754b-0x6759e (83), 0x692ca-0x69611 (839), 0x6aa85-0x6aad3 (78),
 0x6ca72-0x6ca93 (33) and 0x6d2a6-0x6d2de (56).  Every earlier count in this
-tree said 1,088; the five ranges sum to 1,089 and `docs/v34handshak.md` said
+tree said 1,088; the five ranges sum to 1,089 and `docs/history/v34/v34handshak.md` said
 1,088 in two places.  Corrected there.
 
 **What the arm is, is two library functions inlined.**  The screen that says
@@ -29967,7 +29967,7 @@ the index runs miles off a table that is only 8,192 shorts long.
 0..15 and `rx_use_max` to 0 or 1 -- and says so; the handshake fixture never
 had to, because until now nothing reached `initdigital` from inside a step.
 `t_v34hsrx4.c`'s `begin` now pins all five rate fields and says why.  **A
-fault has no offset in it**, which is docs/v34handshak.md's own rule for
+fault has no offset in it**, which is docs/history/v34/v34handshak.md's own rule for
 aiming a pointer and is the same argument one level up.
 
 **AND AT SEEDS 7 AND 20 THE BLOB DISAGREES WITH ITSELF.**  With the pins in,
@@ -30382,7 +30382,7 @@ Three things worth keeping:
   by a sweep satisfies the first and says nothing about the second, and the
   fields most likely to be indices are exactly the ones a sweep fills with
   large numbers.
-- **The knobs earned their keep.** `docs/v34handshak.md` describes
+- **The knobs earned their keep.** `docs/history/v34/v34handshak.md` describes
   `V34HS_OBJSKEW` and `V34HS_PADVARY` as existing "to make the fixture's own
   claims falsifiable"; here they falsified the TEST's claim instead, and they
   are the only thing in the tree that could have. Every other layout, seed and
@@ -30398,7 +30398,7 @@ answerable by reading rather than by arithmetic.
 
 ### F747. The FSK gate arm's 1,089 bytes do not reproduce, and finding F737 is not why
 
-`docs/v34handshak.md`'s rxstate-chain table was re-measured this session
+`docs/history/v34/v34handshak.md`'s rxstate-chain table was re-measured this session
 because finding F737 fixed `cfgsplit.py`'s instruction sizing, and four of the
 five rows moved by a handful of bytes. The fifth did not behave.
 
@@ -30477,7 +30477,7 @@ puts it beside `T3M_UNWRITTEN_RXSTATE` and `T3M_UNWRITTEN_FSKGATE` in
 `v34hshak.h` as a constant nothing reaches.
 
 **And the two Modem-on-Hold sites are NOT in microstate 44**, which
-`docs/v34handshak.md` said in a table three separate sessions had read from.
+`docs/history/v34/v34handshak.md` said in a table three separate sessions had read from.
 0x6d57c is reached only from 0x65865, inside microstate **79** `MOH_TONE`; and
 0x6c8f8 only from 0x65780, inside microstate **80** `MOH_TONE_DROP`. Both
 parent arms were landed already, so these were two holes inside written arms
@@ -30521,7 +30521,7 @@ is the trial for the one thing that is not.
 
 ### F750. Four txstates share 81's entry, and the WRAP is where they stop being one behaviour
 
-`docs/v34handshak.md` said of table 1's entry at 0x63d58 that it is "shared by
+`docs/history/v34/v34handshak.md` said of table 1's entry at 0x63d58 that it is "shared by
 81, 82, 83 and 84, [and] really is one behaviour", against 0x635cc which is
 "one body under two indices [where] the wrap is two behaviours" (finding F423).
 That is exactly backwards for the part of 0x63d58 nobody had written.
@@ -32027,7 +32027,7 @@ registered for `t_v34conn.c`. Every claim above was shown to fail by hand.
   negotiated: neither knows what the other offered. Phase 2 is where V.34 uses
   that, and phase 2 is where finding F902 stops.
 - **The constructor is not tested and cannot be.** The fixture IS the blob's
-  construction, so wave 1 of `docs/vpcmv34main.md` gains a reference object to
+  construction, so wave 1 of `docs/history/pcm/vpcmv34main.md` gains a reference object to
   diff against, not a free pass.
 - **`t_v34call.c` is untouched.** Its fourteen hand-verified mutations
   (finding F788) are pinned to its literals, and swapping its fixture would
@@ -32828,7 +32828,7 @@ the first and re-discovering the second is the expensive order:
        00053830 T ref__Z7realfftPfmi
 
    `realfft` is 505 bytes and `four1` 368; both are free functions in
-   `docs/vpcmv34main.md`'s wave-1 group and belong to nobody yet. A test-local
+   `docs/history/pcm/vpcmv34main.md`'s wave-1 group and belong to nobody yet. A test-local
    weak definition of `_Z7realfftPfmi` forwarding to `ref__Z7realfftPfmi`
    would link and would be exactly gates.md's "result indistinguishable from
    success": a production symbol name defined inside a test object, silently
@@ -33645,7 +33645,7 @@ pair `realfft` / `four1` (870 bytes, and finding F876's block on
 rate-renegotiation pair, the diagnostic printers and about 2 KB of coefficient
 tables.
 
-**The consequence for the plan.** `docs/vpcmv34main.md` puts wave 1 early "for
+**The consequence for the plan.** `docs/history/pcm/vpcmv34main.md` puts wave 1 early "for
 a reason beyond dependency" -- the oracle -- and findings F800-806 delivered
 that oracle without the span. The dependency reason runs the other way: the
 construction path is the LAST thing in this span that can be written, not the
@@ -35409,7 +35409,7 @@ reads**" is wrong.  `VPcmV34InitiateRetrain` reads that pair at THREE sites --
 0x66b5/0x66c5, 0x6870/0x6877, 0x6acc/0x6acf -- and divides by 2400 to get the
 V.34 rate indices.  `MODEM_MIN_RATE` 300 and `MODEM_MAX_RATE` 56000 become
 indices 0 and 23, clamped to 0 and 14, and 14 is the 33,600 the call converges
-to.  Corrected in `docs/configuration.md`.
+to.  Corrected in `docs/maintainer/configuration.md`.
 
 ### F1021. `filtdelay` is `((IODELAY + 6) >> 2) + 34`, and `35 + iodelay/4` is one too small on half its inputs
 
@@ -35762,7 +35762,7 @@ and from two directions.
 **Derived.**  `datapumpv34`'s handshake loop is
 `while (txq.count < f2aa0 || rxq.count > 5) v34handshak(obj)`, and
 `v34handshak` runs table 1 to fill the transmit block and then ONE step of the
-microstate machine (`docs/v34handshak.md`: table 3 is reached through rxstate
+microstate machine (`docs/history/v34/v34handshak.md`: table 3 is reached through rxstate
 43 `RX_DPSK`, which runs `V34agc` and `fskdemodulate` first).  `V34agc` reads
 a burst of **four** samples (`V34RX.c`, "over four samples instead of two").
 So one microstate step consumes four received samples at the guarded 9,600 Hz.
@@ -36063,7 +36063,7 @@ conversion, which scales with rate"; it is "divide by the number of samples in
 a step", and a retarget that keeps four-sample steps keeps it verbatim while
 having to move `0x5f`.
 
-**Nothing in `src/` was touched.**  `docs/rate_assumptions.md` gets the entry;
+**Nothing in `src/` was touched.**  `docs/maintainer/sample-rates.md` gets the entry;
 the two test assertions finding F1021 left asserting `35 + iodelay/4` are still
 there and are still deliberate.
 
@@ -36098,7 +36098,7 @@ there and are still deliberate.
 ======================================================================
 ### F1060. The deviation register audited entry by entry: 33 measured, 17 unmeasurable, 8 real gaps, 7 retracted
 
-Task #87, and the answer `docs/fastpass.md` deferred at the V.34 fast pass.
+Task #87, and the answer `docs/history/project/fastpass.md` deferred at the V.34 fast pass.
 The classification with its reasoning is **Appendix A of
 `docs/deviations.md`**, appended rather than written into the 64 entries
 because that file is shared with other sessions -- finding F622's "Owed"
@@ -37000,7 +37000,7 @@ batch.
 
 Both headers are guarded, neither guards against the other, and the second is
 a `make params` gate whose layout is explicitly closed to revision
-(`docs/vpcmv34main.md`).  `V90Demodulator.h` includes the first (through
+(`docs/history/pcm/vpcmv34main.md`).  `V90Demodulator.h` includes the first (through
 `V90PreFilter.h`, because a `V90PreFilter` is embedded at +0x6c);
 `V90Resampler.h` includes the second.  So `V90Demodulator.cpp` cannot include
 `V90Resampler.h`, and `V90Equalizer.cpp` cannot include `V90Demodulator.h`.
@@ -37189,7 +37189,7 @@ Recorded as carefully as what it did.
   `include/dsplib/V90Modem.h`'s warning stands.
 - **`include/dsplib/V90ConnectionEvaluator.h` was added to
   `tools/offcheck.py`'s `SKIP_HEADERS`**, which is the single long line
-  `docs/vpcmv34main.md` warns must be merged by UNION.  It defines a class and
+  `docs/history/pcm/vpcmv34main.md` warns must be merged by UNION.  It defines a class and
   no `struct`, so the tool would have skipped it anyway; it is listed for
   consistency with the other forty-one C++ headers.
 
@@ -37264,7 +37264,7 @@ standing up before the call".  That is true and it is not a blocker, because
 **nothing has to stand it up**.  Findings F800-806 measured that the blob's own
 constructor is aliasable and that a blob-constructed object is a valid
 differential fixture; `test/unit/t_v34conn.c` already builds one and already
-carries the derived configuration (findings F820-825, `docs/configuration.md`).
+carries the derived configuration (findings F820-825, `docs/maintainer/configuration.md`).
 So:
 
 ```
@@ -39321,7 +39321,7 @@ not one.
 The over-range branch is the same shape as `vpcm_create`'s and, like it, is not
 an error path: the negative `MDMPRM_UPDATE_DELAY` asks the host to *shed* the
 excess, which `slmodemd` does by discarding input samples
-(`docs/configuration.md`, "Above 240 the pump negotiates rather than failing",
+(`docs/maintainer/configuration.md`, "Above 240 the pump negotiates rather than failing",
 finding F1024).  So, no D-number here either.  Worked values: the fork's
 hardcoded `MDMCTL_IODELAY` of 48 gives phys 96 → 80 samples at 8 kHz; stock
 `MODEM_FRAMESIZE` 192 gives phys 240, over the limit, so the delay pins at 216
@@ -39890,13 +39890,13 @@ rather than its cause.
 the recomputed queue this comes from and says how to reproduce it.*
 
 *[2026-08-16: `docs/nextsteps.md` no longer exists.  Its queue was superseded
-by the construction path landing -- `docs/remaining.md` and `docs/plan.md`
+by the construction path landing -- `docs/remaining.md` and `docs/history/project/plan.md`
 carry the current one -- and the one part of it that was NOT superseded, the
 join between Appendix C and findings F1204-1209, was folded into the end of
 `docs/deviations.md`'s Appendix C.  The original is commit `c391a9b`, tagged
 nowhere; the branch that held it was `review/nextsteps-2026-08-11`.]*
 
-**The measurement that reopened this.** `docs/vpcmv34main.md` demotes the
+**The measurement that reopened this.** `docs/history/pcm/vpcmv34main.md` demotes the
 construction path to "Wave 5 — the construction path, LAST", on finding F838's
 count of what each of its four entry points still needed.  Recomputed against
 a fully built tree (finding F271's precondition — an unbuilt `build/src` makes
@@ -42310,7 +42310,7 @@ and 0 NOT caught.
   entries would simply have gone on asserting something untrue about the
   compiler.  It is the only check in the tree that compares a recorded
   JUDGEMENT against a fresh measurement rather than comparing outputs.
-- **The per-batch re-record ban is not bookkeeping.**  `docs/vpcmv34main.md`
+- **The per-batch re-record ban is not bookkeeping.**  `docs/history/pcm/vpcmv34main.md`
   forbids it to save wall-clock.  The stronger reason is here: each of the
   five batches was individually correct and green, and the contradiction
   exists only in the merged tree.  A per-batch re-record cannot see it by
@@ -43095,7 +43095,7 @@ difference.
 
 **`reset` is NOT written here.**  It belongs to whoever takes the other
 sixteen members of the class, and writing it would mean writing a body whose
-callers are not written -- docs/v90cpp.md's rule.  The constructor carries the
+callers are not written -- docs/history/pcm/v90cpp.md's rule.  The constructor carries the
 body as a FILE-STATIC HELPER instead, which is the spelling
 `V92Phase3Modulator.cpp` already uses for the six generators that class
 inlines, and it keeps the duplication visible in the source rather than hidden
@@ -43696,7 +43696,7 @@ VPCMXF_Create -> VPcmFloModem -> {V90Modem, V92Modem, V92EchoCanceller,
 ANSamToneDetector, SineWave, GenericIIR}` is now ours end to end, with the
 blob used only as the thing it is compared against.
 
-`docs/vpcmv34main.md` called this wave 5 and said it was genuinely last.  It
+`docs/history/pcm/vpcmv34main.md` called this wave 5 and said it was genuinely last.  It
 was: finding F838 measured `dp_vpcm_init`'s closure at 394 missing symbols, and
 what made these nine writable was every batch below them landing first.
 
@@ -47452,7 +47452,7 @@ Running the machine from state 0 to state 6 costs the sum of six durations with
 the right accumulator state at each boundary -- on a real connection, thousands
 of samples.  The state word is a plain `int` at +0xa984 and the count is
 another at +0xa988, so `t_v90adid` forces both and reaches any arm in one call.
-That is docs/largefunctions.md's item 2 applied to an object's fields rather
+That is docs/history/project/largefunctions.md's item 2 applied to an object's fields rather
 than to a dispatch, and it is what makes a 5,335-byte method testable arm by
 arm.  The sweep forces each of the seven arms, each with its tail firing and
 with it held, and asserts all fourteen were observed; a directed run then walks
@@ -50050,7 +50050,7 @@ five of its six entries and gives 27307 where the object has 27306.
 
 That is **a fit, not a recovered design**: two parameters over six points, and
 a design would have to come from a rate. Coefficient derivations are deferred
-here by `docs/fastpass.md` and this one is not an exception to that. Both
+here by `docs/history/project/fastpass.md` and this one is not an exception to that. Both
 readings are asserted in `t_v22tab`, the second in the negative — a comment
 saying "the obvious formula is wrong" rots; a check that fails if it ever
 becomes right does not. Note that **neither check is differential**: both
@@ -57239,7 +57239,7 @@ Supra's 14400-31200) but the mode is identical. So this is not a fault in
 either unit, and it is not specific to the USR either: the Courier shows the
 same direction (task #132).
 
-**WHICH MAKES TAP DRIFT THE LEADING SUSPECT.** `docs/training.md` §4.5 records
+**WHICH MAKES TAP DRIFT THE LEADING SUSPECT.** `docs/history/v34/training.md` §4.5 records
 that the equaliser has **no leakage term**: 80 taps adapting on a signal with
 nothing above ~3.5 kHz is the textbook near-singular case where un-excited taps
 wander. A receiver that converges, holds, then degrades until a retrain is
@@ -57260,7 +57260,7 @@ looked like a missing measurement rather than a wrong command (1916).
 ending 6 of 8 calls. Two mechanisms were proposed for that. Both were tested
 on captures already recorded, before any code was written, and neither holds.
 
-**TAP DRIFT: NOT SUPPORTED.** `docs/training.md` §4.5 notes the equaliser has
+**TAP DRIFT: NOT SUPPORTED.** `docs/history/v34/training.md` §4.5 notes the equaliser has
 no leakage term, and predicted that `equerr` should creep upward before a
 retrain. Over **69 retrains in 24 calls**, comparing the median of the six
 blocks before each retrain against the six before those:
@@ -57688,7 +57688,7 @@ question of 1925 stands: why do calls end up in the heavy one.
 `v34recv.h` and no `flags |= 0x80` site was found, so what clears or sets it --
 and therefore what arms this timeout -- is unidentified. Until that is known,
 the timeout is a candidate and not a cause. `f124` is the symbol counter the
-step-size schedule also keys on (`docs/training.md` §4.3) and `baud_rate` is the
+step-size schedule also keys on (`docs/history/v34/training.md` §4.3) and `baud_rate` is the
 frame length.
 
 **HOW TO TEST IT WITHOUT GUESSING:** log which of the two arms fires on every
@@ -59449,7 +59449,7 @@ arms, with the control holding the batch's only 33600 and the treatment its
 only 26400.
 
 **WHAT THIS DOES AND DOES NOT OVERTURN.** Sections 3 and 4 of
-`docs/v34-rate-collapse.md` are untouched: the inverted ladder is read from the
+`docs/history/v34/v34-rate-collapse.md` are untouched: the inverted ladder is read from the
 code, and the 72%-of-handshakes and 24000-vs-12000 figures come from 470
 captures through the blob's own counter. The defect is real. **What is now
 unsupported is that THIS CHANGE fixes it.** The flag stays default-off, and it
@@ -63181,7 +63181,7 @@ spanning 17 dB over its 35 entries, and `getPowerIndexForPower` compares a
 power against it directly rather than taking a root.
 
 That is the shape and it is measured; what the amplitudes are referred TO is a
-derivation and is deferred with the rest of them (docs/fastpass.md).  The
+derivation and is deferred with the rest of them (docs/history/project/fastpass.md).  The
 reconstruction carries the 35 values verbatim and `t_v90cpower.cpp` compares
 our copy against the blob's own through the `ref_` alias, so the claim is a
 byte comparison of two distinct objects rather than a symbol against itself.
@@ -65542,7 +65542,7 @@ S11.6 renegotiation still fails to do whatever the full retrain does, and
 whatever that is has moved from the gain to the timing recovery.
 ### F3520. `tools/indirect.py` HAD NEVER RUN, AND WHAT IT SAYS NOW CONTRADICTS THE BUCKET IT WAS MEANT TO EXPLAIN
 
-The `tools/dis.py` shadow, in the place `docs/plan.md` Phase 8 was waiting on.
+The `tools/dis.py` shadow, in the place `docs/history/project/plan.md` Phase 8 was waiting on.
 `inspect` reads `dis.COMPILER_FLAG_NAMES` at import; ours has no such
 attribute; pyelftools reaches `inspect` through `pprint` -> `dataclasses`, so
 the tool died on its own second import line and named neither this directory
@@ -65584,7 +65584,7 @@ which one it read.  And the second line printed `len(exact)` while calling it
 relocations, so 125 + 1759 did not equal 1922 and no reader could tell which
 number was wrong; it now prints both measurements and says they are two.
 
-**WHAT IT FINDS, AND WHY PHASE 8 SHOULD NOT BELIEVE `docs/plan.md`'s SENTENCE
+**WHAT IT FINDS, AND WHY PHASE 8 SHOULD NOT BELIEVE `docs/history/project/plan.md`'s SENTENCE
 ABOUT IT.**  The 125 are dominated by the state-machine dispatch tables --
 `B103OriginateNextState`, `V32AnsNextState`, `V32OrgNextState`,
 `V32LocLoopNextState`, the eight `FSE_decision_*` slicers and their `FAX_`
@@ -66195,7 +66195,7 @@ REPORTED.** 3515 was the highest number anywhere when the block was claimed at
 the top of the session; by the time the work was committed `master` had taken
 3520 and 3521 for `tools/indirect.py` and `make phase`'s `prereq`, and
 3540-3542 and 3560 for `V90CP`. Re-surveying at COMMIT time rather than at
-claim time is what docs/plan.md asks for and it is why: a block reserved
+claim time is what docs/history/project/plan.md asks for and it is why: a block reserved
 against a five-hour-old survey is not reserved. Nothing outside this branch
 cites the old numbers -- the only reference was `test/unit/t_fpm_pps.c`'s
 citation of 3524, now 3574 -- but they appear in three commit messages on
@@ -66428,7 +66428,7 @@ anything traced yet". `FPM_PPS_filter`'s direct symbol source reads them:
 both 32-bit loads used as `short *` bases indexed by `ridx`, on the arm
 `cfg.mapped` clear selects. They are named `i` and `q` on that evidence.
 
-**This is why deferring naming loses evidence, in the form docs/plan.md §3
+**This is why deferring naming loses evidence, in the form docs/history/project/plan.md §3
 describes.** V.22 is the only reconstructed user of the ring and it configures
 the mapped form, so from V.22 alone those eight bytes are unreadable padding
 for ever. They became legible only from a DIFFERENT datapump's use of the same
@@ -66966,7 +66966,7 @@ one-byte store it explains is the same store that was being read as a flag.
 The retype is free at both tiers: `: signDecoder()` and `: oddDecoder()`
 value-initialise a POD and emit the same `movb $0x0` in the same place.
 
-The lesson generalises to the 189 bare `fNNNN` names docs/plan.md counts. A
+The lesson generalises to the 189 bare `fNNNN` names docs/history/project/plan.md counts. A
 one-byte field with nothing but a zeroing store is not necessarily a flag; it
 may be an EMBEDDED OBJECT whose type has no constructor to leave a symbol
 behind. The way to tell is to find the member function that takes its address,
@@ -67515,7 +67515,7 @@ side could see and padded the rest, and the two paddings are each other's
 fields.
 
 `v32data.c` does NOT unify them. Merging two struct tags is a type change, and
-`docs/plan.md` §3 rules that a batch with other work in flight must not make
+`docs/history/project/plan.md` §3 rules that a batch with other work in flight must not make
 one; phase 6 collects the punned sites into a batch of their own. D431 records
 it and the cast is the whole of the deviation.
 
@@ -67835,7 +67835,7 @@ set" would have lost silently:
 
 ### F3900. THE DISPATCH BUCKET HOLDS NO V.34/V.90/V.92 WORK, AND A NAME-BASED PASS SAID IT DID
 
-*Phase 8 of `docs/plan.md` was blocked on `tools/indirect.py`, which crashed
+*Phase 8 of `docs/history/project/plan.md` was blocked on `tools/indirect.py`, which crashed
 (3520). With it repaired the bucket can be measured, and the answer changes the
 plan: there is nothing in it for the modes currently being worked.*
 
@@ -68020,7 +68020,7 @@ implementation. Reproduced as written and recorded here.
 translation unit -- `dcr_create` 0x60, `dcr_delete` 0xc0, `dcr_reset` 0xe0,
 `dcr_process` 0x100, with only `prop_dp_init` (0x00) and `prop_dp_exit` (0x30)
 ahead of them --
-and until now nothing in this tree said what it did beyond `docs/glossary.md`'s
+and until now nothing in this tree said what it did beyond `docs/maintainer/glossary.md`'s
 one-line "DC Remover, the state holds running means". Three separate pieces of
 the object settle it, and they agree.
 
@@ -68240,7 +68240,7 @@ load-bearing one, and **this tree already predicts it analytically** without
 having run it -- finding F1040 (one microstate step is four samples at 9,600 Hz,
 which is also one 2,400-baud symbol period, and the object never distinguishes
 them), finding F1045 (8000/2400 = 3.333 is not an integer), restated as R-11 in
-`docs/rate_assumptions.md`. So what `re/` holds is **an experiment this tree could
+`docs/maintainer/sample-rates.md`. So what `re/` holds is **an experiment this tree could
 run properly, not a fact only `re/` knows**, and the experiment is worth running
 here where the harness is bit-exact.
 
@@ -68335,7 +68335,7 @@ says, so the count discriminates rather than returning 0 for everything.
 extend to `infoToBits`, which is called from fifteen sites in `.text` (0x14732,
 0x1484e, 0x16f4f, 0x17196, 0x17266, 0x17465, 0x175aa, 0x17801, 0x181ac, 0x184ee,
 0x18690, 0x18a36, 0x18abf, 0x18b2b, 0x19107) and which finding F826 already records
-as the reader of `fltTable_1`/`fltTable_2`. `docs/plan.md:74` names only
+as the reader of `fltTable_1`/`fltTable_2`. `docs/history/project/plan.md:74` names only
 `bitsToInfo` as well. So `infoToBits` is **not yet reached, with no recorded
 reason** -- an ordinary gap, not a ruling. It belongs in the Phase 3 (V.92)
 worklist, task #122.
@@ -68813,7 +68813,7 @@ still blocked on other things; the other five members have no referrer inside
 `.text` at all and unblocked nothing.
 
 So the batch's 900 bytes freed 1,067, and 878 of those 900 contributed
-nothing to the ready queue. That is `docs/plan.md` §1's "a few hundred bytes
+nothing to the ready queue. That is `docs/history/project/plan.md` §1's "a few hundred bytes
 gate tens of thousands" at small scale, and it is worth recording because the
 ratio is not visible before the work is done: `getBitVector` is the smallest
 symbol in the class and was the only one that mattered to anything else.
@@ -71552,7 +71552,7 @@ rather than resolved by inventing a name that suits one of them; finding F3120's
 rule, and the same reason `V90Demapper::word_08` is still offset-named.
 ## F5300. The 27 type-punned sites are six SHAPES, and the instruction width decides each
 
-`docs/plan.md`'s "type-punned sites -- provably mis-modelled: 27" is one row
+`docs/history/project/plan.md`'s "type-punned sites -- provably mis-modelled: 27" is one row
 and six different defects.  Measured on `master` at `52e5aced` with GCC 13 at
 `-O2` (`-Wstrict-aliasing` is on under `-Wall`, and `-fstrict-aliasing` under
 `-O2`), the 27 `dereferencing type-punned pointer will break strict-aliasing
@@ -72024,7 +72024,7 @@ carelessly built suite.
                  unsigned &nOut)
 
 Four pushes and `sub $0xcc`, so `esp+0xe0` is `this`. `nOut = n >> 1` -- a
-LOGICAL shift on an unsigned, so `docs/cleanup.md` §2 applies and it stays a
+LOGICAL shift on an unsigned, so `docs/history/project/cleanup.md` §2 applies and it stays a
 shift. The body is one loop over `j < nOut`, split at the top by `mmxMode` into
 a float arm (0x390d0) and a fixed-point arm (0x38fcc) that compute the same
 quantity two ways, joined at 0x39250, and re-split for the error accounting.
@@ -72193,7 +72193,7 @@ ordered compare, no parity test, so an unordered error takes the HIGH arm --
 and only the modern tier is blind to it, so `make period` is the only thing
 that decides.
 
-### The complete transcription is `docs/v90equprocess.md`
+### The complete transcription is `docs/history/pcm/v90equprocess.md`
 
 Every arm, every sub-case of both nested tables, the four re-convert blocks
 and the epilogue, written out as the C they came from. Two of the four
@@ -72835,7 +72835,7 @@ compare immediate in a function nobody had read, the other is a struct layout
 recovered from the equaliser's own adapt and filter loops.
 
 Written as `V34_EQ_TAPS` rather than 0x50 for exactly that reason -- the name
-carries the derivation and the number does not, which is docs/cleanup.md's
+carries the derivation and the number does not, which is docs/history/project/cleanup.md's
 test for when a constant has earned one.
 ## F5900. THE V.92 MODULATOR TAIL: ELEVEN SYMBOLS, AND THE TWO HOLES IN `V92Modulator` ARE NAMED BY THE FUNCTION THAT READS THEM
 
@@ -73161,7 +73161,7 @@ reported a wrong upstream rate.  The constant now expands to `V92MOD_PHASE_DATA`
 
 So the class has a loud half and a quiet half, and they want different
 defences.  The loud half needs per-merge gating, which the tree already does.
-The quiet half needs the rule `docs/cleanup.md` §1 was already reaching for:
+The quiet half needs the rule `docs/history/project/cleanup.md` §1 was already reaching for:
 **a value that names another module's state is that module's constant, never a
 local literal with a comment.**  Grepping for a bare integer that equals a
 named constant elsewhere is a plausible aid, and its false-positive rate on
@@ -73250,7 +73250,7 @@ than the line never reaches it.
 
 So there were two readings: the field is `int`, or the field is `unsigned` and
 the object is decrementing an `int` LOCAL that is written back. The second
-needs a cast at the test, and `docs/cleanup.md` §3a rules that a cast is
+needs a cast at the test, and `docs/history/project/cleanup.md` §3a rules that a cast is
 usually a claim that a DECLARATION is wrong and that the fix belongs at the
 declaration. The declaration is what this batch owns, so it moved.
 
@@ -73409,7 +73409,7 @@ sub-cases are the expensive end: they need `t_v90p3ddec.cpp`'s sub-peer
 wiring, because `word_30` is cleared on entry to both decision functions and
 cannot be planted.
 
-## F6202. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `docs/v90equprocess.md` IS WRONG
+## F6202. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `docs/history/pcm/v90equprocess.md` IS WRONG
 
 *Renumbered from 6002 on merge.*  The `v90-equalizer-write` branch measured
 the high-water mark at 5904 when it was cut and took 6000-6003; master's
@@ -73419,7 +73419,7 @@ reserved across a branch's lifetime**, only claimed at merge.  The equalizer
 batch is 6200-6203; 6000-6003 are the mutation-recovery findings.
 
 
-The transcription in `docs/v90equprocess.md` records the fixed-point
+The transcription in `docs/history/pcm/v90equprocess.md` records the fixed-point
 coefficient update as prose -- "two fixed-point LMS loops, each a 32-bit
 accumulator split across an aligned/unaligned short pair" -- and prose is not
 something a function can be written from. Read out at 0x392f4 and 0x39396,
@@ -73452,7 +73452,7 @@ and removes the undefined behaviour.
 
 ### RECONVERT-D does not step the input pointer by what the doc says
 
-`docs/v90equprocess.md` §5 says the inverse blocks step `in` "past `8*j`
+`docs/history/pcm/v90equprocess.md` §5 says the inverse blocks step `in` "past `8*j`
 (plus 4 more when `((short *)block_b4)[0] != 0`)". The object at 0x39e14:
 
     39e14:  8d 54 cd 00   lea    0x0(%ebp,%ecx,8),%edx    ; in + 8*j
@@ -73485,7 +73485,7 @@ reserved across a branch's lifetime**, only claimed at merge.  The equalizer
 batch is 6200-6203; 6000-6003 are the mutation-recovery findings.
 
 
-`V90Equalizer::process` was written from `docs/v90equprocess.md`, compiled by
+`V90Equalizer::process` was written from `docs/history/pcm/v90equprocess.md`, compiled by
 both compilers, and driven by `t_v90equproc`'s RESET grid at 110,894 checks.
 It failed 2,459 of them on GCC 13 and 701 on GCC 3.4.2, every one of them in
 `outFloat` and `dfeCoefs`, and the whole gap is x87 excess precision on four
@@ -74555,7 +74555,7 @@ ours, which is how the asymmetry was noticed at all: two templates, two
 spellings, one matching and one not.
 
 **MEASURED WITH THE SETS DIFFED AND NOT THE COUNTS**, which is what
-`docs/cleanup.md` asks for and what makes this reportable: one tree, two
+`docs/history/project/cleanup.md` asks for and what makes this reportable: one tree, two
 builds on the exact 3.4.2 compiler, everything else held fixed.
 
 | | identical |
@@ -74733,7 +74733,7 @@ value is only being copied, exactly as it does for a 32-bit struct member.
 So the object's `movl` is what a plain assignment emits and carries no claim
 about the source at all.
 
-**This is the useful direction of `docs/cleanup.md` §3a's rule.**  Had the
+**This is the useful direction of `docs/history/project/cleanup.md` §3a's rule.**  Had the
 probe come out `flds`/`fstps`, the object's `movl` would have been a forced
 signal that the author punned, and the correct reconstruction would have been
 a union or a `memcpy` -- a real modelling decision resting on one instruction.
@@ -74944,7 +74944,7 @@ for.  Evidence class 2 beats an inference from a free encoding, so both members
 are `short *` and the two heap blocks are 24 `short`.
 
 **`compare.py` did not move by one symbol on the retype** (1163/455/87 before,
-same after, identical SET diffed empty), which is the check `docs/cleanup.md`
+same after, identical SET diffed empty), which is the check `docs/history/project/cleanup.md`
 asks for: a type change that shifts nothing is a type change that was already
 being compiled the same way, and a `pad` becoming a named field of the right
 width cannot move code it does not reach.  What DID move is
@@ -76785,7 +76785,7 @@ embedded `ModulusDecoder`. There is no call in either -- the blob has no
 `ModulusEncoder::reset` symbol at all, though `V92ModulusEncoder::reset` exists
 -- so the stores are the author's own and not an inlined member.
 
-### F7101. `docs/v90demodprogress.md` CALLS `V90Mapper::resetNoSpectral` "FULLY DECODED" AND ITS DECODE STOPS 150 BYTES EARLY
+### F7101. `docs/history/pcm/v90demodprogress.md` CALLS `V90Mapper::resetNoSpectral` "FULLY DECODED" AND ITS DECODE STOPS 150 BYTES EARLY
 
 The batch plan's decode of `resetNoSpectral` ends at the tail-fill to index
 127. The function does not: 0x30346..0x303de is another 152 bytes, and every
@@ -76801,7 +76801,7 @@ what is `reset`'s alone is `+0x0c`, `+0x10`, `+0x14`, `+0x1c` and `+0x6f8`,
 plus `V90SpectralShaper::reset` in place of `resetSSFilter`. It also understates
 `+0x670` as one word where it is the whole 0x1c-byte embedded `ModulusEncoder`.
 
-The corrected split is now in `docs/v90demodprogress.md` and in
+The corrected split is now in `docs/history/pcm/v90demodprogress.md` and in
 `src/pump/v90/V90Mapper.cpp`'s file comment. Nothing in the document's
 arithmetic was wrong -- the mu-law and A-law conversions, the `pcm` nonzero
 test, the `128 * k + i` addressing and the unconditional tail-fill all
@@ -76843,7 +76843,7 @@ padding at all rather than with six bytes of it.
 
 ### F7103. `V90Mapper`+0x020..+0x055 IS NOT UNMODELLED SPACE: `process` TILES ALL 54 BYTES AS FOUR SIX-ENTRY ARRAYS
 
-`docs/v90demodprogress.md` records these 54 bytes as "genuinely unmodelled"
+`docs/history/pcm/v90demodprogress.md` records these 54 bytes as "genuinely unmodelled"
 once `constellation` is placed at +0x056, and asks that they be left padded
 rather than guessed at. The first half does not survive re-derivation.
 `V90Mapper::process` addresses four arrays in them, all with an index counted
@@ -77401,7 +77401,7 @@ stores to +0x10, the reload of `mapper`, and the sibling structure of the two
 96 bytes at `.text+0x2d120`, and the task that commissioned it named
 `.text+0x30310` -- which is inside `V90Mapper::reset`. `nm -S -C` is what
 settled the address and the size, and the batch table in
-`docs/v90demodprogress.md` already had the right figure.
+`docs/history/pcm/v90demodprogress.md` already had the right figure.
 
     2d12c:  85 d2        test %edx,%edx                mp
     2d130:  8b 43 38     mov  0x38(%ebx),%eax          pcmType
@@ -92888,7 +92888,7 @@ against the old spellings.
 in `src/dsp/fpm_tone_cfg.c`, outside the delegated arm's file list, and a rename
 that touches a config file every datapump reads is a gate cycle of its own.
 Recorded here rather than left in a hand-over because that is D28's precedent in
-`docs/fastpass.md`: an unrecorded observation is unrecoverable, and it will not
+`docs/history/project/fastpass.md`: an unrecorded observation is unrecoverable, and it will not
 be noticed twice. Whoever renames them should do `fpm_tone_cfg.c`, the header
 and the two uses together, and the change is a pure compile-time substitution —
 `compare.py` must not move.
@@ -93593,7 +93593,7 @@ already exist** and are V.32's own
 The deviations here are **D490–D493**, agreed with the session that assigned
 the original range. Recorded because the collision was in a written brief and
 would otherwise be handed to the next agent unchanged — the same failure the
-`#11`–`#22` task-store note in `docs/fastpass.md` exists for.
+`#11`–`#22` task-store note in `docs/history/project/fastpass.md` exists for.
 
 The instance is NOT modelled as a struct: `void *` and named offsets, which is
 `v32data.h`'s ruling and before it `v22data.h`'s. `V32_OBJ_HDX` is spelled
@@ -99420,7 +99420,7 @@ switch.
   stored twice, read from both ends.
 
 **Three closed forms are within one ULP and reproduce NOTHING exactly**, which
-is why the tables stay literal (`docs/coefficients.md`, and the fast pass's
+is why the tables stay literal (`docs/maintainer/coefficients.md`, and the fast pass's
 rule that a byte-exact copy is byte-exact):
 
     MTK_sin_table[i]  = sin(i * pi / 512)     1 of 257 entries differs
@@ -106175,7 +106175,7 @@ that made this table anything but 72 shorts of Q16 phase would not produce that
 number. The same closure holds for the resampler beside it: 9 branches,
 decimation 10, 270 taps is 8000 -> 7200 Hz at 30 taps a branch.
 
-Recorded as EVIDENCE FOR A TYPE, not as a generator. `docs/fastpass.md` defers
+Recorded as EVIDENCE FOR A TYPE, not as a generator. `docs/history/project/fastpass.md` defers
 coefficient derivations to the 8 kHz retarget and a byte-exact copy is
 byte-exact; what a byte copy cannot give is the stride, and this is where the
 stride came from. (2026-09-01)
@@ -106696,7 +106696,7 @@ could not be a coincidence -- four zeros in eighty-one places, at exactly the
 four positions where `9n` is congruent to 10 modulo 20.
 
 Recorded as EVIDENCE FOR A TYPE, not as a generator, exactly as F9141 was.
-`docs/fastpass.md` defers coefficient derivations to the 8 kHz retarget and a
+`docs/history/project/fastpass.md` defers coefficient derivations to the 8 kHz retarget and a
 byte-exact copy is byte-exact; what a byte copy cannot give is the stride, and
 this is where the stride came from -- twice, for two different rates, over five
 tables that were extracted independently of one another. (2026-09-01)
@@ -107905,7 +107905,7 @@ reproduces **all twenty entries of both banks exactly**:
 channel 2's. Four published numbers, twenty coefficients, no residual.
 
 **This is evidence for a TYPE, not a generator**, and it is the same move
-F9141 made for `V29RX_CRR_TABLE`. `docs/fastpass.md` defers coefficient
+F9141 made for `V29RX_CRR_TABLE`. `docs/history/project/fastpass.md` defers coefficient
 derivations to the 8 kHz retarget and a byte-exact copy is byte-exact; what a
 byte copy cannot give is the STRIDE, and a reading that made these anything
 but shorts in Q14 five to a section would not produce those four frequencies.
@@ -113174,7 +113174,7 @@ not re-verified by the tier CLAUDE.md says decides; the modern-compiler
 differential suite is what stands behind this entry until that tier runs.
 `python3 tools/bannercheck.py src/pump/v34` reports zero banners either side
 of this change -- the V.34 module was reconstructed under the fast pass
-(`docs/fastpass.md`) rather than the per-function banner convention, so this
+(`docs/history/project/fastpass.md`) rather than the per-function banner convention, so this
 is the tool correctly finding nothing to check rather than a clean run of a
 live one; confirmed by running it against `src/pump/v22`, which does carry
 banners and reports 47 agreeing.  (2026-09-03)
@@ -113362,7 +113362,7 @@ against the linked blob. (2026-09-04)
 ## F10133. Wave 2 field naming, fax cluster: 23 bare `fNNNN` fields in `struct fax_class1` promoted to real names, one AGC-gain misreading corrected, `modem_direction` named as a discriminant
 
 Scope: `include/dsplib/class1.h`, `include/dsplib/class1tx.h`,
-`src/fax/class1.c`, `src/fax/class1tx.c` -- `docs/fieldnaming.md`'s wave 2
+`src/fax/class1.c`, `src/fax/class1tx.c` -- `docs/history/project/fieldnaming.md`'s wave 2
 fax cluster. `include/dsplib/faxvmi.h`, `fax.h` and `v17fax.h`/`src/fax/v17.c`
 were read in full and left untouched: every `pad_NNNN`/`type_NNNN` in those
 four already carries, from the same-session fax closure, an explicit
@@ -113751,9 +113751,9 @@ shape.  (2026-09-04)
 
 Scope: `include/dsplib/dtmf_rx.h`/`src/service/Dtmf_Rx.c` (5 bare `fNNNN`) and
 `include/dsplib/cadence.h`/`src/callprog/Cadence.c` (8 bare `fNNNN`) --
-`docs/fieldnaming.md`'s wave 3, the DTMF/cadence cluster (distinct from every
+`docs/history/project/fieldnaming.md`'s wave 3, the DTMF/cadence cluster (distinct from every
 other wave-3 cluster, which is all V.90/V.34/fax/V.8). Counts re-verified by
-fresh grep before starting, matching `docs/fieldnaming.md`'s tally exactly.
+fresh grep before starting, matching `docs/history/project/fieldnaming.md`'s tally exactly.
 
 **Method, and why it ended in reclassification rather than names.** For each
 field: read the whole enclosing algorithm (both TUs are short and this
@@ -113785,7 +113785,7 @@ dtmf_rx`. `cid.h` already carries the identical situation for its own
 "cleared by reset_cid only"), so this promotion follows an established
 convention rather than inventing one: renamed to `short_000`, `int_004`,
 `short_008`, `short_354[2]`, `short_35c[2]`. This is real progress in the
-sense `docs/fieldnaming.md` already uses it (shape now stated by the name,
+sense `docs/history/project/fieldnaming.md` already uses it (shape now stated by the name,
 per CLAUDE.md's `type_NNNN` bucket) but not a semantic name -- there is no
 way to learn what these fields were FOR when the object itself never asks.
 
@@ -113859,7 +113859,7 @@ mutation in `dtmf_modem`'s hold-buffer logic, nowhere near `f000`/`f004`/
 unavailable in this sandbox -- a rename cannot move generated code, and this
 pass changed no code shape other than the `pad_2c0[16]` collapse, which
 preserves size and offset -- left for the parent's gate per
-`docs/fieldnaming.md`'s own practice for every prior wave.  (2026-09-04)
+`docs/history/project/fieldnaming.md`'s own practice for every prior wave.  (2026-09-04)
 
 ### F10139. `V90Phase3Demodulator`: five fields named, all from evidence a prior pass had already gathered but not applied or not connected
 
@@ -114049,7 +114049,7 @@ this sandbox, left for the parent's gate.  (2026-09-04)
 
 ### F10141. Wave 3 field naming: `V90Equalizer` and `V90ConstellationDesigner`, twelve type_ fields each
 
-Wave 3 of the field-naming phase (`docs/fieldnaming.md`), scoped to the two
+Wave 3 of the field-naming phase (`docs/history/project/fieldnaming.md`), scoped to the two
 V.90/V.92 phase-4 receive classes left most concentrated after wave 2:
 `V90Equalizer.{h,cpp}` (12 `type_NNNN`, 2 live `pad_NNNN`) and
 `V90ConstellationDesigner.{h,cpp}` (11 declared `type_NNNN`, 4 `pad_NNNN`).
@@ -114198,7 +114198,7 @@ full-suite invocation impractically slow): `t_v90equ`/`t_v90equproc` reproduce
 the PRE-EXISTING failure counts of unmodified `master` byte-for-byte
 (784/86026, 2/2396, 2/480, 1/1244, 1/1092, 36/4778, 731/120974 -- verified by
 `git stash`/`git stash pop` A/B against this exact tree, not assumed), which
-is `docs/v90equprocess.md`'s own documented "MOSTLY DRIVEN, NOT CLOSED"
+is `docs/history/pcm/v90equprocess.md`'s own documented "MOSTLY DRIVEN, NOT CLOSED"
 status and unrelated to this wave; `t_v90eqdata` and the four-member CD
 cluster (`t_v90cdesign`/`t_v90cdnoise`/`t_v90cdadjust`/`t_v90designers`) are
 100% green, 0 failures; the seven Demodulator-family accessor files
@@ -114217,7 +114217,7 @@ attempting a `pad_` split. Both classes are complete and differentially
 green already (F10130's own test list); this pass is naming-only too.
 
 **THE WAVE-4 PLANNING COUNT WAS WRONG, AND FIELDNAMING.MD SAYS TO TRUST THE
-GREP OVER IT.** `docs/fieldnaming.md`'s wave 4 table quotes "11 pad" for
+GREP OVER IT.** `docs/history/project/fieldnaming.md`'s wave 4 table quotes "11 pad" for
 `VPcmFloModem.h` and "9 pad" for `V92CP.h`, from a naive
 `grep -oE 'pad_[0-9a-f]+'` that does not distinguish a live struct member
 from a historical `/* was pad_X */`-style mention in prose. `VPcmFloModem.h`
@@ -114227,7 +114227,7 @@ called) and `V92CP.h` two (`pad_10c`, `pad_124`, same shape -- F1282 and
 F6601's own "was `pad_10c`"/"was `pad_124`" notes). Grepping only actual
 `unsigned char pad_NNNN[...]` member declarations gives **6** live regions
 in `VPcmFloModem.h` and **7** in `V92CP.h`, 13 total -- confirmed against
-`docs/fieldnaming.md`'s own rule, "where a count here disagrees with a
+`docs/history/project/fieldnaming.md`'s own rule, "where a count here disagrees with a
 fresh grep, the grep is right."
 
 **METHOD.** For each of the 13, two checks: (1) arithmetic -- is the pad's
@@ -114333,7 +114333,7 @@ anchor could have gone stale. (2026-09-04)
 
 ## F10143. Wave 4 field naming, the diagnostic/session-flag cluster: `fdsp_kernel::status`, `mtk_phasor::cosine`/`sine`; `TAG_DiagnosticResults.h` and `V90SessionFlag.h` re-verified exhausted
 
-Wave 4 of the field-naming phase (`docs/fieldnaming.md`), scoped to
+Wave 4 of the field-naming phase (`docs/history/project/fieldnaming.md`), scoped to
 `TAG_DiagnosticResults.h` (6 `pad_NNNN`), `fdspkrnl.h`/`src/service/Fdspkrnl.c`
 (6 `pad_NNNN`, 19 `type_NNNN`) and `V90SessionFlag.h` (5 `pad_NNNN` by a naive
 grep). Read all three fully before touching anything, per the brief's own
@@ -114465,7 +114465,7 @@ wave.  (2026-09-04)
 ## F10144. Wave 4 field naming, V.17 fax modulation: three fields promoted in `src/fax/v17.c`/`include/dsplib/v17fax.h`, one stale comment corrected, and the rest of the 23/20 `type_NNNN` count re-confirmed as already-declined ground
 
 Scope: `src/fax/v17.c` (23 `type_NNNN`) and `include/dsplib/v17fax.h` (20
-`type_NNNN`), `docs/fieldnaming.md`'s wave 4 V.17 assignment. Both counts were
+`type_NNNN`), `docs/history/project/fieldnaming.md`'s wave 4 V.17 assignment. Both counts were
 re-verified with a fresh grep before starting (matching the file's own
 figures exactly) and both files were read in full alongside `v17dec.h` and
 `faxcfg.h`, which are NOT this batch's files but define two structs
@@ -114642,7 +114642,7 @@ which cannot move generated code. (2026-09-04)
 
 ## F10145. Pad-region removal audit, fax cluster: 10 of 25 real `pad_NNNN` members deleted, all others declined with a stated reason
 
-The new safe-pad-removal workstream (`docs/fieldnaming.md`'s "New workstream:
+The new safe-pad-removal workstream (`docs/history/project/fieldnaming.md`'s "New workstream:
 safe pad-region removal" section), scoped to the fax cluster: `faxvmi.h`/
 `.c`, `class1.h`, `fax.h`, `class1tx.c`, `class1rx.c`, `v29fax.h`, `v17fax.h`,
 `v29data.h`, `faxfifo.h`. The brief's own per-file counts (7/2/7/5/4/2/3/2/2/
@@ -114789,7 +114789,7 @@ alignment math itself was wrong, not a tolerance issue -- and none of the
 
 ## F10146. `struct v34_receiver`: five of its sixteen `pad_NNNN` regions removed as pure compiler-alignment artefacts, eleven left explicit, each checked both ways
 
-The pad-region-removal workstream (`docs/fieldnaming.md`, "New workstream:
+The pad-region-removal workstream (`docs/history/project/fieldnaming.md`, "New workstream:
 safe pad-region removal") applied to `include/dsplib/v34recv.h`, per its
 decision rule: delete a `pad_NNNN` member only where deleting it and relying
 on the compiler's own default alignment reproduces the object's exact layout
@@ -115074,7 +115074,7 @@ lets the compiler re-derive the identical padding. (2026-09-04)
 
 ## F10150. Pad-removal workstream, the V.90 control/session cluster: 22 of 30 `pad_NNNN` regions removed with a compile-time `offsetof`/`sizeof` proof each, 8 left explicit and now say why
 
-The new workstream `docs/fieldnaming.md` records (its "New workstream: safe
+The new workstream `docs/history/project/fieldnaming.md` records (its "New workstream: safe
 pad-region removal" section): a `pad_NNNN[N]` member may be DELETED, relying
 on the C++ compiler's own implicit alignment padding to reproduce the exact
 same layout, only where that is provable per-instance with an
@@ -115086,7 +115086,7 @@ the V.90 control/session cluster: `VPcmFloModem.h`, `V92CP.h`, `V90CP.h`,
 `V90Phase4Modulator.h`/`.cpp`, `V92Phase4Modulator.h`/`.cpp`.
 
 **A fresh grep, not the brief's counts, decided the scope**, per
-`docs/fieldnaming.md`'s own rule. `VPcmFloModem.h` and `V92CP.h` had already
+`docs/history/project/fieldnaming.md`'s own rule. `VPcmFloModem.h` and `V92CP.h` had already
 been fully audited for this exact question in F10142 (12 of 13 alignment-
 exact, one -- `pad_6fb8` -- confirmed dead but not alignment-shaped) under the
 prior, naming-only phase of this same wave; this finding is what actually
@@ -115253,7 +115253,7 @@ above are the closest local proxy for that claim. (2026-09-04)
 ## F10151. Safe pad-region removal, long-tail sweep: every `pad_NNNN` outside the four active naming clusters, checked two ways and four removed so far
 
 New workstream, distinct from field naming: per the user's explicit decision
-(`docs/fieldnaming.md`'s "New workstream: safe pad-region removal"), a
+(`docs/history/project/fieldnaming.md`'s "New workstream: safe pad-region removal"), a
 `pad_NNNN[N]` struct member is REMOVED, not just named, where it can be
 PROVEN per-instance that (1) its offset and width exactly match what the C
 compiler's own implicit alignment would insert between the declared types on
@@ -115283,7 +115283,7 @@ comment mentioning a `pad_` name for a field that has since been named
 elsewhere (`V92Precoder.cpp`, `V90Modulator.h`, `V90Modem.h`,
 `V90MappingParams.h`, `V92EchoCanceller.h`, `V92Phase2Info.cpp`,
 `V92ModulusEncoder.cpp`, `V90MappingParamsInt.cpp`, `detector.c`,
-`Cidmtd.c`, `Beepgen.c`) -- the same over-count `docs/fieldnaming.md`'s own
+`Cidmtd.c`, `Beepgen.c`) -- the same over-count `docs/history/project/fieldnaming.md`'s own
 header already warns about and F10142 already hit once for `VPcmFloModem.h`/
 `V92CP.h`. Confirmed by grep for the exact declaration pattern
 (`^\s*(unsigned char|...) pad_[0-9a-f]+`), not assumed.
@@ -115711,12 +115711,12 @@ what decides. (2026-09-04)
 
 ## F10152. First live pad-region removal wave: twelve of fourteen `pad_NNNN` in the V.90 receive/design cluster deleted as pure alignment gaps, two left explicit as confirmed non-alignment-shaped dead space
 
-Scope was the six classes `docs/fieldnaming.md`'s new "safe pad-region
+Scope was the six classes `docs/history/project/fieldnaming.md`'s new "safe pad-region
 removal" workstream named: `V90Equalizer`, `V90ConstellationDesigner`,
 `V90Demodulator`, `V90Phase3Demodulator`, `V90Phase4Demodulator`,
 `V90ConnectionEvaluator`. This is the first wave that actually DELETES a
 `pad_NNNN` member rather than naming or splitting one, per the user's
-explicit decision recorded in `docs/fieldnaming.md`: remove only where an
+explicit decision recorded in `docs/history/project/fieldnaming.md`: remove only where an
 `offsetof`-based compile-time assertion proves the compiler's own implicit
 alignment padding reproduces the deleted member's byte range exactly.
 
@@ -115831,7 +115831,7 @@ stash pop` A/B baseline run on this exact tree. `t_v90equ` alone shows six
 FAILs (784/86026, 2/2396, 2/480, 1/1244, 1/1092, 36/4778) -- traced by A/B
 stash to be PRE-EXISTING and identical with `pad_0a` still in the header,
 matching F10141's own documented baseline for this same test
-(`docs/v90equprocess.md`'s "MOSTLY DRIVEN, NOT CLOSED" x87-precision status,
+(`docs/history/pcm/v90equprocess.md`'s "MOSTLY DRIVEN, NOT CLOSED" x87-precision status,
 unrelated to struct layout). Every other binary is 100% green, including
 `t_v90cdesign`'s documented 46,656-shape exhaustive sweep (F formerly noted
 at line ~55209) which takes on the order of 40 minutes single-threaded on
@@ -115910,7 +115910,7 @@ gate issue turns up in the same run. (2026-09-04)
 ## F10154. `struct v34_shell`'s `scramble` union member: the "which typedef" question was already settled, in the wrong file's comment
 
 Raised by the project owner as an example to settle during the code-style
-review (`docs/codestyle.md`): `include/dsplib/v34shell.h`'s `+0xe48` union
+review (`docs/history/project/codestyle.md`): `include/dsplib/v34shell.h`'s `+0xe48` union
 comment said "`getFrame` is not yet reconstructed, so which typedef
 matches the original is not settled," hedging between `v34_scramble_fn`
 (`short (*)(void *, short)`) and `v34_getbits_fn`
@@ -116008,7 +116008,7 @@ The fix is a source-level one: declare one shared non-throw placement
 equivalent project-wide header) and replace each of the 50
 `asm("_ZN...")`-labeled free functions and their call sites with genuine
 `new (self) ClassName(args...)` expressions / explicit destructor calls.
-Scoped as its own Tier-2-weight workstream (`docs/codestyle.md`) rather
+Scoped as its own Tier-2-weight workstream (`docs/history/project/codestyle.md`) rather
 than folded into the mechanical Tier-1 cleanups, since each site needs
 its own `byteident.py`/`make period` verification -- the constructors
 involved are not all as simple as the test class used to prove the
@@ -116218,7 +116218,7 @@ raw-cast call sites are left exactly as they were. (2026-09-05)
 
 ## F10159. Tier 2 item 7's ~45 `void *` candidates: all FORCED or already-documented-unresolved, zero retypes -- the negative result, with per-bucket evidence
 
-`docs/codestyle.md`'s Tier 2 item 7 asked whether the ~45 non-table `void *`
+`docs/history/project/codestyle.md`'s Tier 2 item 7 asked whether the ~45 non-table `void *`
 internal-function-parameter sites (concentrated in `src/call/pulse.c`,
 `src/core/dp_param.c`, `src/core/dp_wrapper.c`, `src/service/cid.c`, and a
 few in the fax cluster) were genuinely forced or reconstruction artifacts
@@ -116265,7 +116265,7 @@ anything to change:
 
 **Two sites are correctly not retyped for a fourth reason, already on
 record and re-confirmed rather than newly found**:
-`fax_class1_GetConstalation(void *ctx)` is one of `docs/codestyle.md`'s
+`fax_class1_GetConstalation(void *ctx)` is one of `docs/history/project/codestyle.md`'s
 "Settling open signature questions" stubs -- the object's own body is
 `xor %eax,%eax; ret`, reading none of its arguments, so no evidence bounds
 the real arity or type (`class1.h:854-859`'s doc comment already says so).
@@ -116441,7 +116441,7 @@ byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852 grade
 
 ## F10176. Field-naming wave 6, `v34recv.h`/`V34RX.c`/`v34hstx1.cpp` bare-`f` cluster -- four `struct v34_object` macros renamed on a typed-sibling match, seven `struct v34_receiver` fields re-confirmed bare against the blob itself
 
-Scope: `docs/fieldnaming.md`'s wave 6, the densest remaining bare-`fNNNN`
+Scope: `docs/history/project/fieldnaming.md`'s wave 6, the densest remaining bare-`fNNNN`
 concentration by a naive tree-wide grep. Re-deriving the count (this
 project's own standing instruction, since a prior count is only ever a
 hint) found the naive figure was the same over-count trap F10142/F10152
@@ -116794,7 +116794,7 @@ together with F10173's `V90Demodulator` half), so the numbers above are
 shared between the two findings rather than measured twice.
 ## F10175. field-naming wave 6 -- V.90 CP/ADID cluster, twelve real names in V90AutoDigitalImpDetector, V90CP/V92CP re-confirmed exhausted
 
-`docs/fieldnaming.md` wave 6, over `V90CP.{h,cpp}`, `V92CP.{h,cpp}` and
+`docs/history/project/fieldnaming.md` wave 6, over `V90CP.{h,cpp}`, `V92CP.{h,cpp}` and
 `V90AutoDigitalImpDetector.{h,cpp}`. A fresh grep for the
 `(short|int|long|ptr|flags|byte|word|dword|char|uint|ushort)_[0-9a-f]+`
 family across the six files found 70 unique names combined (the
@@ -116805,7 +116805,7 @@ but the doc's own caveat -- always re-derive -- was followed anyway).
 **`V90CP.h`/`V90CP.cpp` and `V92CP.h`/`V92CP.cpp`: re-confirmed
 exhausted, zero renames, and that is the correct outcome.** Both
 classes were already worked by wave 1 and wave 2 (their pre- and
-post-wave-2 per-file counts in `docs/fieldnaming.md` are identical --
+post-wave-2 per-file counts in `docs/history/project/fieldnaming.md` are identical --
 27/24 and 25-then-23/20 -- meaning those passes found nothing to move
 here either), and both headers already carry paragraph-length
 derivations for nearly every field, several ending in explicit
@@ -116963,7 +116963,7 @@ are compile-time-only as CLAUDE.md's own argument says they must be.
 (2026-09-05)
 ## F10169: field naming, wave 6 -- `faxcfg.h`'s own `faxvmi_cfg`/`v17rx_cfg` fields, carrying over evidence stranded in `faxvmi.h`/`v17.c`
 
-Wave 6 of the `docs/fieldnaming.md` phase, one of four parallel clusters.
+Wave 6 of the `docs/history/project/fieldnaming.md` phase, one of four parallel clusters.
 This one covered `src/fax/v17.c`, `include/dsplib/v17fax.h` and
 `include/dsplib/faxcfg.h`. Fresh count at the cluster's own three files:
 31 `type_NNNN`-family identifiers before, 27 after (the naive 4-count drop
@@ -117216,12 +117216,12 @@ check count regressed. `tools/onedef.py`, `tools/refcheck.py` and
 `tools/anchorcheck.py` all clean; `make check64` clean (64-bit clean, both
 configurations). `make period` and `make byteident-ratchet` run under
 `dsplibs-tc342` (GCC 3.4.2) against the fully merged wave-6 tree -- see the
-wave 6 summary in `docs/fieldnaming.md` for the result. (2026-09-05)
+wave 6 summary in `docs/history/project/fieldnaming.md` for the result. (2026-09-05)
 
 ## F10165: `flags_173a` split into `trainConstel`/`rrnConstel`/`byte_173c` -- applying evidence two prior findings already had
 
 Field-naming wave 6, over `VPcmFloModem.h`/`.cpp` (with the fresh grep
-against the wave's whole brief -- see `docs/fieldnaming.md`'s wave 6
+against the wave's whole brief -- see `docs/history/project/fieldnaming.md`'s wave 6
 section for why the other seven files in the brief needed no change).
 
 F7583 already read `VpcmFloModem.cpp`'s own format string --
@@ -117576,7 +117576,7 @@ documentation. Nothing to gate. (2026-09-05)
 
 Wave 7, first cluster (`v21cfg.h`/`v21fax.h`/`v27fax.h`/`v29data.h`) --
 genuinely untouched files, zero or one prior mention in
-`docs/fieldnaming.md`. This entry covers `v21fax.h`'s two control-request
+`docs/history/project/fieldnaming.md`. This entry covers `v21fax.h`'s two control-request
 structs.
 
 **`struct v21tx_ctl::int_0008` -> `scale` (rank 2, a direct callee/field
@@ -117734,7 +117734,7 @@ baseline, exit 0 throughout. (2026-09-06)
 
 Scope: `include/dsplib/V90RDetector.h`, `V90MP.h`, `V90Demapper.h`,
 `sgd.h`, `V90CPUnPck.h`, `V92CPUnPck.h` -- six files with zero or one
-prior mention in `docs/fieldnaming.md`, assigned as this wave's third
+prior mention in `docs/history/project/fieldnaming.md`, assigned as this wave's third
 cluster. A naive grep over these six suggested roughly 32 live fields;
 the real, comment-and-string-stripped count was 10 (`V90RDetector`) + 7
 (`V90MP`) + 6 (`V90Demapper`) + 5 (`sgd.h`) + 0 (`V90CPUnPck`) + 0
@@ -117889,7 +117889,7 @@ configurations (only pre-existing, unrelated `-Wswitch` warnings in
 `V90Modem`/`V92Modem`). Docker was available in this sandbox: `make
 period J=$(nproc)` and `make byteident-ratchet` both run for real
 against GCC 3.4.2 (`dsplibs-tc342`) -- results recorded in
-`docs/fieldnaming.md`'s Wave 7 section rather than repeated here, per
+`docs/history/project/fieldnaming.md`'s Wave 7 section rather than repeated here, per
 this file's own instruction to check a live count against the tool
 before quoting it a second time. (2026-09-06)
 ## F10180. Field naming, wave 7 -- `cid.h`'s `f02c` named `mark_conf_step`; `dtmf_rx.h` re-confirmed exhausted; `tagV90AdditionalCPinfo.h`'s five copied fields checked against their V.90-side twin and left neutral
@@ -118016,7 +118016,7 @@ clean (pre-existing, unrelated `-Wswitch`/`-Wsign-compare` warnings only).
 needed touching, confirmed directly rather than assumed. Docker and
 `dsplibs-tc342` were both available in this wave's sandbox; `make period
 J=3` and `make byteident-ratchet` run against the fully-changed tree, see
-the wave 7 summary in `docs/fieldnaming.md` for the result. (2026-09-06)
+the wave 7 summary in `docs/history/project/fieldnaming.md` for the result. (2026-09-06)
 
 ## F10184. `V90Modem::ptr_49b4` named `params` -- the last field the twin-class
 offset-diff technique couldn't reach
@@ -118064,7 +118064,7 @@ dangling) and `tools/anchorcheck.py` (228 suites, 9767 mutations, 0
 anchor problems) all clean. `make check64` clean (same pre-existing
 `-Wswitch` warnings on `V90ModemSide`/`V92ModemSide` noted elsewhere,
 unrelated to this change -- see the item-5 enum/`#define` note in
-`docs/fieldnaming.md`). Real `make period`: 374 passed, 0 failed, exact
+`docs/history/project/fieldnaming.md`). Real `make period`: 374 passed, 0 failed, exact
 match to the pre-change baseline. Real `make byteident-ratchet`: 736/1852
 grade-0 EXACT (39.7%), 796/1852 grade-0-or-1 (43.0%), ratchet OK -- the
 Tier Zero floor unchanged. (2026-09-06)
@@ -118262,7 +118262,7 @@ period` 374 passed, 0 failed; `make byteident-ratchet` 736/1852 EXACT
 (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK -- both per the
 pre-session state F10185 last recorded. `tools/onedef.py`,
 `tools/refcheck.py` and `tools/anchorcheck.py` not re-run since no
-mutation anchors, `docs/fieldnaming.md` cross-references or types were
+mutation anchors, `docs/history/project/fieldnaming.md` cross-references or types were
 touched by this finding. Closes item 4 of the 2026-09-06 field-naming
 exploration list (`.claude/nextsteps-fieldnaming.md`).
 (2026-09-06)
@@ -118446,7 +118446,7 @@ session): real `make period` 374 passed, 0 failed; real `make
 byteident-ratchet` 736/1852 EXACT (39.7%), 796/1852 grade-0-or-1 (43.0%),
 ratchet OK -- both matching the pre-session state F10187 last recorded.
 `tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` not
-re-run since no mutation anchors, `docs/fieldnaming.md` cross-references or
+re-run since no mutation anchors, `docs/history/project/fieldnaming.md` cross-references or
 types were touched. Closes the enum/jump-table-matching arm of item 4 of
 the 2026-09-06 field-naming exploration list
 (`.claude/nextsteps-fieldnaming.md`) with a recorded negative result;
@@ -119594,7 +119594,7 @@ reported-not-reclassified codegen-shape claims); `v92ec`'s 1 and `v90equ`'s
 2 (both declared/frozen per `tools/gccdiverge.json`, `t_v90equ`'s baseline
 already exits non-zero on the modern build so `mutate.py` refuses the
 WHOLE suite -- unchanged from F6003); `vpcmcreate`'s 1 deliberate survivor
-(D195, `docs/deviation-triage.md` already ruled "NOT A DEFECT" with an
+(D195, `docs/history/project/deviation-triage.md` already ruled "NOT A DEFECT" with an
 explicit re-run protocol that a formal `equivalent` tag would not improve);
 `vpcmrun`'s 2 (F1005, need 3,000 unchanged code-0 blocks this suite's
 connecting-call fixture doesn't produce -- noted in the JSON for the first
@@ -122544,7 +122544,7 @@ root `+0xe4c`. `modulatevector` reads that same field before advancing
 `train_symcount`. Original writes/reads are visible at `0x596e3` and
 `0x5a910..0x5a937`. The loop-swap mutation is now caught by the component
 boundary described in the
-[supervisor recovery record](maintainer-offset-access.md#loop-order-coverage).
+[supervisor recovery record](history/project/maintainer-offset-access.md#loop-order-coverage).
 The historical result below remains identifiable; it is superseded by this
 indirect dependency and the new measured witness.
 
@@ -123209,7 +123209,7 @@ previously exact small functions. The completed whole-tree comparison of
 the DCR flag pair gains 15 exact functions but loses 91 (813 to 737 exact),
 so changed-object hashes alone had not justified the earlier interpretation.
 
-`docs/cid-dcr-audit.md` records 1,699 combined source/flag cells, 33 delegated
+`docs/history/services/cid-dcr-audit.md` records 1,699 combined source/flag cells, 33 delegated
 scope/order follow-ups and the full-tree set comparison. None closes the
 CID or DCR process function. Eight ring-wrapper follow-up cells isolate a
 promising combination of inline eligibility and optimization level, without
@@ -124405,7 +124405,7 @@ conversion is emitted after that and before final RTL.  The next test is the
 RTL pass dump, not another option matrix.  Downstream `t_resampler`
 (3174/23067) and `t_v92modstate` (1957/36848) remain red; `t_lowpassfir` is
 link-excused by #82.  `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are not the
-x87 class.  `docs/issue30-modern-x87.md` carries the full census and the flag
+x87 class.  `docs/history/compiler/issue30-modern-x87.md` carries the full census and the flag
 table.
 
 (2026-09-19)
@@ -125393,7 +125393,7 @@ claims do not survive review of PR176/179/181:
   A real register migration still requires independent review of every
   assertion; no new exemption is claimed here.
 
-Local review packet: `docs/pr176-181-review-fixes.md`. Disk-backed raw logs,
+Local review packet: `docs/history/project/pr176-181-review-fixes.md`. Disk-backed raw logs,
 commands, statuses and the complete blocked register inventory are under
 `/tmp/opencode/pr181-fixes/`. The initial phase attempt was terminated at the
 tool timeout and is invalid; the subsequent complete run passed **383/383**.
@@ -126590,7 +126590,7 @@ FILE whose record sits between `fpm_vtb.c` and `voice.c`.
     immediately after it; `voice_dle_command` at 0x0abe20 is `voice.c`'s first
     function.  `fpm_tren.c` precedes `fpm_vtb.c` and owns no `.text` at all, so
     `fpm_adeq.c` is the only FILE the group can belong to.  Previously declined
-    as "adjacency alone does not justify a merge" (`docs/issue20-object-order.md`,
+    as "adjacency alone does not justify a merge" (`docs/history/compiler/issue20-object-order.md`,
     F8164); the FILE sequence supplies what the local-symbol test could not.
   * `fpm_div32.c` (new) <- `FPM_div_32` out of `fpm_div.c` and `FPM_circ_dotp2`
     out of `fpm_ecc.c`.  FILE order `fpm_div.c (238), fpm_div32.c (239),
@@ -132206,7 +132206,7 @@ recovers four helper bodies under the retained compiler flags: txrxdmainit
 (98 bytes), dpskDetectInfo1Init (152), polyValue (28) and V34scrambler (256).
 The latter two are new after PR #234's initial 850/1852 result. Full matrices,
 positive and negative controls, commands, hashes, RTL and caller audits are
-in [the small-RTL study](v34-small-rtl.md); the practical decision sequence is
+in [the small-RTL study](history/v34/v34-small-rtl.md); the practical decision sequence is
 in [the refinement playbook](method/refinement.md).
 
 **DMA and FSK establish two ordinary source mechanisms.** Expanding the DMA
@@ -132316,7 +132316,7 @@ remaining live frame/spill graph. All eight exact functions and 55 bindings
 survive those source controls. The best size gap is 11 bytes; it is not an
 exact candidate. Tools v34_dibit_state.py, v34_dibit_owner.py (including width
 and cursor studies) and v34_owner_combination.py preserve the bounded domains;
-[the study](v34-small-rtl.md) and [playbook](method/refinement.md) record why
+[the study](history/v34/v34-small-rtl.md) and [playbook](method/refinement.md) record why
 these lines stop.
 
 A separate power-input provenance study finds that settxlevel reloads mp[0]
@@ -132374,7 +132374,7 @@ of 943,398 bytes while exact section, relocation and symbol records remain
 unchanged. No aggregate-convergence gain is claimed. The study preserves the
 invalid generator and fixture-prediction attempts separately, the corrected
 controls, actual compiler/assembler commands and all changed bodies:
-[power study](v34-small-rtl.md), tools/v34_power_reload.py and
+[power study](history/v34/v34-small-rtl.md), tools/v34_power_reload.py and
 tools/v34_power_carrier.py. Eight metadata anchors are retargeted. Final make phase with all 385 non-fuzz
 fixtures selected passes 385/0 and the structural boundary; the optional probe
 passes 105 checks across 15 cases. Comparison build: 300/300 objects, zero
@@ -132416,7 +132416,7 @@ No reconstruction source, option or fixture is adopted. Production exactness
 remains 853/1852 and 82,921 bytes from F11532. This is a bounded negative result,
 not proof of a byte-exactness ceiling. The replay tools record compiler/actual
 assembler identity, mandatory bug define, full inventories, changed bodies and
-exact gains/losses. See [the study](v34-small-rtl.md) and
+exact gains/losses. See [the study](history/v34/v34-small-rtl.md) and
 [playbook](method/refinement.md). No fuzzing or mutation execution is performed.
 (2026-10-01)
 
@@ -132451,7 +132451,7 @@ Retained whole-tree exactness stays 853/1852 and 82,921 bytes. Complete
 exit 1): positioned equality 68,629 -> 68,531 / 943,398, relocation exact
 records 1,025 -> 1,021 / 18,317; other exact section/symbol dimensions unchanged.
 This is a source idiom recovery with recorded layout losses, not aggregate or
-function byte-exact convergence. [The study](v34-small-rtl.md) records declared
+function byte-exact convergence. [The study](history/v34/v34-small-rtl.md) records declared
 domains, complete commands/header hashes, RTL, all changed bodies and canonical
 controls; tools/v34_initialphase_halving.py replays both domains.
 No fuzzing or mutation execution is performed. (2026-10-01)
@@ -132473,7 +132473,7 @@ predicted reload graph; polynomial scheduling also differs. No nearest-size
 candidate is adopted. The blob's absent winner default cannot justify removing
 our defined besti=0 without proving first improvement over the input domain.
 
-[The study](v34-small-rtl.md) records the domain, source/header identity,
+[The study](history/v34/v34-small-rtl.md) records the domain, source/header identity,
 commands, full inventories/changed bodies and stopping condition;
 tools/v34_initialphase_graph.py replays it. Source and production objects stay
 unchanged, exactness 853/1852 and 82,921 bytes. No fixture, fuzzing, mutation or
@@ -132549,7 +132549,7 @@ no gains/losses. Removal eliminates the expected zero/store but retains cached
 metrics and changes setTimingStateParameters 441 -> 433 bytes. No source
 adoption: the initialization invariant does not recover the full live graph.
 
-[The study](v34-small-rtl.md) records the proof reduction, denominator,
+[The study](history/v34/v34-small-rtl.md) records the proof reduction, denominator,
 controls, declared compiler domain and stopping condition. Replay:
 tools/v34_initialphase_winner.py --proof, or --domain <declared URL>.
 Certificate/complete-TU artifacts: build/v34-initialphase-winner/.
@@ -132576,7 +132576,7 @@ recovery follows from this causal pass diagnosis.
 
 Selected recovered GCC source plus SSP patch sections support the pass
 order and protected-copy guards; they are not a complete Gentoo-source-build
-claim or evidence that SSP defaults off. [The study](v34-small-rtl.md)
+claim or evidence that SSP defaults off. [The study](history/v34/v34-small-rtl.md)
 records the compiler authority, exact transition, domain and next finite
 scalar-expansion discriminator. Replay tools/v34_metric_cse.py; complete
 artifacts build/v34-metric-cse/. No production source changed; retained
@@ -132597,7 +132597,7 @@ local source-semantic corrections, not a whole-symbol grade-1 recovery.
 Object-derived high-bit/negative-odd arithmetic examples are labelled
 synthetic; they establish no modem reachability or protocol defect and were
 not run as new differential fixtures. Existing fixed lifecycle/report inputs
-are positive. [The study](v34-small-rtl.md) records the complete domain,
+are positive. [The study](history/v34/v34-small-rtl.md) records the complete domain,
 positive controls, signed boundaries and GCC conversion/division sources.
 The initial RTL already expands setTimingStateParameters at two sites,
 independently explaining a measured helper-call mismatch, not every residual.
@@ -132622,7 +132622,7 @@ allocation alone. No claim that all remaining differences have that cause.
 All new cells preserve 63 functions/55 globals and change 57 bodies. Each
 loses four exact helpers, retains 5/29 and gains none. Combined-graph gaps
 are 2/7/10/10 across the cube: selected graph landmarks can improve while
-length worsens. No flags or source adopted. [The study](v34-small-rtl.md)
+length worsens. No flags or source adopted. [The study](history/v34/v34-small-rtl.md)
 records the closed domain, exact lost names, commands and complete-body
 checks; replay tools/v34_metric_pre.py, artifacts build/v34-metric-pre/.
 The original compiler profile remains open and these diagnostic results
@@ -132636,7 +132636,7 @@ A fresh 300-object screen outside active V34/V8/V90/V92 work and fax leaves
 and five pattern families (eight functions) tested. These are eligibility and
 investigation denominators, not a claim that all shortlisted work is done.
 Known register-only cases and prior closed emission-order experiments are
-kept separate. [The complete pass](playbook-small-patterns.md) records all
+kept separate. [The complete pass](history/project/playbook-small-patterns.md) records all
 shortlist dispositions, finite domains, predictions and raw controls.
 
 Cached owners before debug calls gain SetPulseMakeTime (88 bytes), initialized
@@ -132671,7 +132671,7 @@ controls. Signed-short countdown plus advancing output pointer reproduces
 TxNOP and RxClampV22 (44 bytes each); either change alone misses. A named
 int threshold before silence_is_more_then's comparison reproduces its
 66-byte body without changing x87 precision, truncation or comparison.
-The [reserve ledger](playbook-reserve-patterns.md) records domains, complete
+The [reserve ledger](history/project/playbook-reserve-patterns.md) records domains, complete
 commands, inventories, rejected cells and next discriminating hypotheses.
 
 All unchanged controls reproduce raw objects under Gentoo3.4.2-r2 with the
@@ -132871,7 +132871,7 @@ BYTES49/6/43/EXACT; the combination reproduces the complete339-byte target.
 All fourteen functions/globals preserved, only the target changes;
 10/14 ->11/14 exact, zero losses. Unchanged raw baseline reproduces, and
 production full TU equals the winning experimental object byte for byte.
-The [complete record](v32-sequence-count.md) carries predictions, controls,
+The [complete record](history/v32/v32-sequence-count.md) carries predictions, controls,
 commands/hashes, inventories, RTL and dispositions.
 
 Initial RTL distinguishes lowpart-of-widened-SI local from direct returned-HI
@@ -132903,7 +132903,7 @@ can have found!=0. Neither family is adopted for a closest score.
 All six valid cells preserve eight functions/globals and six/eight exact;
 only DetSequence changes, zero gains/losses. Both unchanged full-TU controls
 raw-reproduce their respective retained/previous-combined objects. The
-[complete ledger](v32-detsequence-loops.md) records the invalid/excluded
+[complete ledger](history/v32/v32-detsequence-loops.md) records the invalid/excluded
 initial URL metadata run and corrected four-cell replay, source/command/
 header hashes, full bodies/relocations and known graph controls 4/4+2/2.
 
@@ -132932,7 +132932,7 @@ short post-decrement creates old-value temporary 81 in initial RTL; local
 allocation gives it ECX, so global allocation spills nbits and keeps reg in
 EBX. Reload preserves that decision. Both trace objects raw-reproduce their
 saved full TUs, 2/2 controls and 6/6 snapshots. Memory-cost/priority alone is
-not the causal explanation. [Ledger and commands](v32-detsequence-allocation.md).
+not the causal explanation. [Ledger and commands](history/v32/v32-detsequence-allocation.md).
 Compiler/as are Gentoo image executables; read-only host debugger mounts are
 apparatus, not a compiler-profile change or claimed original source.
 (2026-10-02)
@@ -132948,7 +132948,7 @@ controls and 6/6 snapshots. Source pair results 290B/SIZE15 and 275B/BYTES112;
 8 functions/globals,6/8 exact, only target changed, zero gains/losses.
 Remaining spill-slot/scratch/scheduling differences are not adopted by score.
 The multiline generator assertion failed before compilation, was recorded,
-and was corrected without expanding the domain. [Complete record](v32-detsequence-allocation.md).
+and was corrected without expanding the domain. [Complete record](history/v32/v32-detsequence-allocation.md).
 No production/header/fixture/anchor changes, no fuzzing/mutation execution;
 retained 860/1852 unchanged. Candidate differential/partial-link adoption
 checks NOT RUN because no candidate is retained. The domain closes here.
@@ -132968,7 +132968,7 @@ a separately declared scope pair moves word before mask and recovers all eight
 slots, but stays non-exact (275B/BYTES112 ->275B/BYTES107). No adoption or
 permutation sweep. Reserved debugger attribute /optimized parameter attempts
 are preserved/excluded; accepted trace reads i386 ABI arguments at true entry.
-[Ledger/replay](v32-detsequence-allocation.md). This is a home-order constraint,
+[Ledger/replay](history/v32/v32-detsequence-allocation.md). This is a home-order constraint,
 not unique original declaration evidence. (2026-10-02)
 
 ## F11550. DetSequence is exposed to peephole2; disabling it loses exact neighbors.
@@ -132980,7 +132980,7 @@ from 275B to 288B/SIZE13, and changes GenSequence/InitGenSequence/LoadReg too.
 Exact6/8 falls to 4/8, losing InitGenSequence and LoadReg. No flag adopted.
 The established TU cursor mechanism is relevant, but these controls do not
 recover its original state or prove preceding source was the cause.
-[Ledger](v32-detsequence-allocation.md). (2026-10-02)
+[Ledger](history/v32/v32-detsequence-allocation.md). (2026-10-02)
 
 ## F11551. GenSequence has an independent countdown and index-narrowing lead.
 
@@ -132989,7 +132989,7 @@ blob. Blob preserves old index for the shift, narrows the decremented index
 before masking, and uses a short countdown. Retained source uses ascending
 index loop and narrows after masking. Four predeclared cells isolate those
 properties: 111B/SIZE7,128B/SIZE10,120B/SIZE2,118B/EXACT. Every cell preserves 8
-functions/globals; only GenSequence changes. [Domain/ledger](v32-gensequence-recovery.md).
+functions/globals; only GenSequence changes. [Domain/ledger](history/v32/v32-gensequence-recovery.md).
 No other spellings or source-order sweep. (2026-10-02)
 
 ## F11552. GenSequence's combined source candidate is byte-exact.
@@ -133006,7 +133006,7 @@ without mutation execution or snapshot refresh; no fuzzing. Same-order complete
 partial links gain 102 positioned bytes but lose 3 positional relocation records;
 both remain DIFFERENT(exit1). No source/header/fixture changes outside GenSequence
 and its corrected alias-order comment. No modern portability claim.
-[Adoption ledger](v32-gensequence-recovery.md). (2026-10-02)
+[Adoption ledger](history/v32/v32-gensequence-recovery.md). (2026-10-02)
 
 ## F11553. TxHdxTRN's input fold and cached subtraction have separate origins.
 
@@ -133020,7 +133020,7 @@ load motion changes neither object; disabling all GCSE restores memory RMW
 but leaves244B/SIZE7, changes seven bodies and loses two exact neighbors
 (TxHdxFinishFrame,V32TxHdxModem). Both domains closed; no flag adoption.
 The known-transition analyzer reports all control denominators.
-[Ledger/replay](v32-txhdxtrn-pass-boundary.md). (2026-10-02)
+[Ledger/replay](history/v32/v32-txhdxtrn-pass-boundary.md). (2026-10-02)
 
 ## F11554. FPM_rms requires both short countdown and advancing input for exactness.
 
@@ -133031,7 +133031,7 @@ reproduces, all cells preserve one strong function/global definition, and
 only the combined source is exact including the FPM_sqrt_dp relocation.
 Retain the unsigned-short countdown and sequential cursor, preserving zero
 count, scaling/multiply order and accumulation wrap. No flags or arithmetic
-changes; no fuzzing or mutation execution. [Ledger/replay](fpm-rms-countdown.md).
+changes; no fuzzing or mutation execution. [Ledger/replay](history/dsp/fpm-rms-countdown.md).
 Retained complete object raw-reproduces the winner; only its TU changes among
 300 objects. Whole-tree861/1852 ->862/1852, exact bytes83,722 ->83,784,
 only FPM_rms gained and zero losses. Fixed Gentoo phase385/0, structural checks
@@ -133049,7 +133049,7 @@ functions/globals. Guarded initialization plus unconditional return st yields
 TU exact1/3 ->2/3 with no losses. Allocation/clear/stores unchanged. Raw baseline
 reproduces. Existing fixture checks full initialized object and allocation
 accounting; failure is structurally equivalent, not forced by that fixture.
-[Domain and validation](dualtone-create-common-return.md). (2026-10-02)
+[Domain and validation](history/services/dualtone-create-common-return.md). (2026-10-02)
 
 Retained full object raw-reproduces the winner; one of300 objects changes.
 Whole-tree862/1852 ->863/1852, exact bytes83,784 ->83,848, only create gains,
@@ -133065,7 +133065,7 @@ recovers that operation tree but remains54B/SIZE2 versus blob56. One strong
 function/global preserved; raw baseline reproduces, no exact gain/loss.
 Coefficient-load/exchange order remains different. No candidate adopted or
 additional spelling sweep; investigate a pass boundary before hypothesizing
-coefficient declarations. [Ledger/replay](notch-addition-tree.md). (2026-10-02)
+coefficient declarations. [Ledger/replay](history/dsp/notch-addition-tree.md). (2026-10-02)
 
 ## F11557. PCM's pointer search requires a late-inlined bound for exactness.
 
@@ -133076,7 +133076,7 @@ yield100B/EXACT for linear2ulaw and identical complete objects; linear2alaw
 remains SIZE2. Initial RTL distinguishes fixed comparison7 from size pseudo
 initialized8. Six functions/eight strong globals and four prior exact bodies
 preserved. Retain minimal size argument; no unique original-signature claim.
-[Ledger/replay](pcm-segment-search-recovery.md). (2026-10-02)
+[Ledger/replay](history/project/pcm-segment-search-recovery.md). (2026-10-02)
 
 ## F11558. Reusing the PCM A-law input as magnitude closes the other encoder.
 
@@ -133087,7 +133087,7 @@ public signatures, table data, masks, arithmetic and saturation unchanged.
 Three staged raw controls reproduce; all7 valid cells preserve6 functions/
 8 globals. Incorrect-domain-URL magnitude run preserved/excluded, both cells
 rerun correctly. Fixed exhaustive t_pcm is the differential fixture.
-[Validation ledger](pcm-segment-search-recovery.md). (2026-10-02)
+[Validation ledger](history/project/pcm-segment-search-recovery.md). (2026-10-02)
 
 Retained full object raw-reproduces the corrected winner; one of300 TUs changes.
 Whole-tree863/1852 ->865/1852, exact bytes83,848 ->84,058; only the two encoders
@@ -133104,7 +133104,7 @@ only Float2Linear changes, TU7/23 ->8/23, no losses. Gentoo .09.loop explicitly
 reports loop reversal and converts its induction variable from+1 to-1.
 Retain both pointer advances without an explicit source countdown. Reverse
 conversion and CrossDataLinks unchanged. Arithmetic, gain guard and no-op
-nonpositive counts preserved. [Ledger/replay](float2linear-cursors.md).
+nonpositive counts preserved. [Ledger/replay](history/dsp/float2linear-cursors.md).
 (2026-10-02)
 
 Retained complete object raw-reproduces winner; one of300 TUs changes.
@@ -133122,7 +133122,7 @@ create: SIZE2, SIZE12, SIZE12 and BYTES114; no exact gains/losses. Retain the
 nested literal-zero failure return for directly observed behavioral fidelity,
 not for code-size fit. A fixed one-shot allocator rejection fixture detects
 the missing edge with period exit139 and checks20 failure/recovery outcomes.
-[Ledger and replay](toneiir-allocation-recovery.md). (2026-10-02)
+[Ledger and replay](history/dsp/toneiir-allocation-recovery.md). (2026-10-02)
 
 Retained object raw-reproduces the nested literal guard; one of300 TUs changes,
 read-only data unchanged. Exact set866/1852 and84,159 bytes unchanged. Fixed
@@ -133140,7 +133140,7 @@ move before the variance loop, unlike the blob. All23 functions/22 globals
 survive,8/23 exact unchanged. Three collateral canonical bodies differ only
 in pool addends; values/instructions verified. Both domains closed, no source
 adoption, candidate runtime/partial gates NOT RUN.
-[Ledger and reopening criteria](playbook-rms-silence-controls.md). (2026-10-02)
+[Ledger and reopening criteria](history/project/playbook-rms-silence-controls.md). (2026-10-02)
 
 ## F11562. Silence constructor's common-return family does not recover its body.
 
@@ -133148,7 +133148,7 @@ Two raw-controlled complete-TU cells preserve5 functions/globals and3/5 exact;
 only silence_create changes,80B/SIZE2 ->76B/SIZE6, zero gains/losses. The
 Dual_TONE_create success cannot be generalized to every constructor. Family
 closed with no source change and no candidate runtime/partial-link gates.
-[Ledger/replay](playbook-rms-silence-controls.md). (2026-10-02)
+[Ledger/replay](history/project/playbook-rms-silence-controls.md). (2026-10-02)
 
 ## F11563. GenerateAnsTone recovers from a pointer walk and direct elapsed-field updates.
 
@@ -133158,7 +133158,7 @@ loop reversal. Two staged elapsed-carrier cells test the cursor temporary and
 direct field updates. Direct `ans->elapsed += count` recovers all199 bytes and
 its call relocation, including both signed comparison directions. One strong
 function preserved;6 valid cells,2 raw controls,0/1 ->1/1 exact, no losses.
-[Replay/validation ledger](v32-anstone-recovery.md). (2026-10-02)
+[Replay/validation ledger](history/v32/v32-anstone-recovery.md). (2026-10-02)
 
 Retained complete object raw-reproduces the winner, only one of300 TUs changes.
 Whole-tree866/1852 ->867/1852, exact bytes84,159 ->84,358, zero losses. Fixed
@@ -133175,7 +133175,7 @@ cells give238B/SIZE3,239B/SIZE4,239B/SIZE4,240B/SIZE5; raw baseline reproduces,
 all11 functions/12 globals survive,4/11 exact unchanged, only filter changes.
 Word instructions recover but wrap still branches, unlike blob setl/neg/and.
 No source adoption, width family closed; candidate runtime/partial gates
-NOT RUN. [Record/reopening criterion](fpm-tone-width-controls.md). (2026-10-02)
+NOT RUN. [Record/reopening criterion](history/dsp/fpm-tone-width-controls.md). (2026-10-02)
 
 ## F11565. V22 IIR requires use-site narrowing and boundary accumulator reset.
 
@@ -133184,7 +133184,7 @@ but both230B/SIZE2 remain non-exact. A four-cell conversion/reset cross yields
 230B/SIZE2,230B/SIZE2,232B/BYTES14,232B/EXACT. Both changes together recover
 all232 bytes; neither alone does. All2 functions/4 globals preserved, only
 demod changes; TU1/2 ->2/2, no losses. Six valid cells,2 raw controls, four
-distinct sources/emissions. [Replay/validation ledger](v22-iir-conversion-recovery.md).
+distinct sources/emissions. [Replay/validation ledger](history/data-modes/v22-iir-conversion-recovery.md).
 (2026-10-02)
 
 ## F11566. V32 absolute encoder traversal controls leave ring/tag type differences.
@@ -133195,7 +133195,7 @@ retains ring branch/conversions and signed-word mode load versus blob mask/
 signed-byte load. All3 functions/5 globals survive,0/3 exact unchanged, only
 abs changes, raw full baseline reproduces. Traversal family closed, no source
 adoption or candidate runtime/partial-link gates. Separate helper/type audit
-is requested, not a result. [Ledger](v32-smc-abs-traversal-controls.md). (2026-10-02)
+is requested, not a result. [Ledger](history/v32/v32-smc-abs-traversal-controls.md). (2026-10-02)
 
 Retained complete object raw-reproduces the combined winner, one of300 TUs
 changes and coefficient data remains unchanged. Whole-tree867/1852 ->868/1852,
@@ -133211,7 +133211,7 @@ unchanged data. Short shifted tags recover abs/tcm signed-byte mode loads and
 dif's post-shift conversion without changing the shared mode field. Dif grows
 369 ->385B for all-short tags; abs152/154B and tcm360B remain non-exact.
 Raw production and preceding traversal controls reproduce. No source adoption
-or candidate runtime/partial gates. [Ledger](v32-smc-if-conversion.md).
+or candidate runtime/partial gates. [Ledger](history/v32/v32-smc-if-conversion.md).
 (2026-10-02)
 
 ## F11568. GCC's mask conversion requires destination identity, not merely SImode.
@@ -133222,7 +133222,7 @@ necessary predicate fails. Ordinary conditional clearing of next converts one
 block in each encoder and recovers setl/neg/and. Twelve full-TU cells raw-replay
 six tag controls; all3 functions/5 globals/data survive,0/3 exact unchanged.
 All three callers inspected; no adoption for individual matching instructions.
-[Compiler source and crossed controls](v32-smc-if-conversion.md). (2026-10-02)
+[Compiler source and crossed controls](history/v32/v32-smc-if-conversion.md). (2026-10-02)
 
 ## F11569. V32 ring carriers and comparison narrowing recover an exact loop only.
 
@@ -133236,7 +133236,7 @@ tcm364B/SIZE10 miss too. All three callers reviewed, all inventories/data
 unchanged. Four domains total24 valid compilations,16 sources/15 emissions,
 raw controls reproduce, no gains/losses and no source adoption. Local families
 closed pending a new independent discriminator; no mutation/fuzzing execution.
-[Ledger](v32-smc-if-conversion.md). (2026-10-02)
+[Ledger](history/v32/v32-smc-if-conversion.md). (2026-10-02)
 
 ## F11570. Destination-identity mask recovery transfers to the tone filter.
 
@@ -133248,7 +133248,7 @@ globals/data preserved,4/11 exact unchanged, only filter changes; raw baseline
 and all four prior width controls reproduce. Twelve sources/emissions distinct.
 No source adoption or candidate runtime/partial gates, no fuzzing/mutation
 execution. Finite transfer closed pending independent lifetime/owner/profile
-evidence. [Ledger](fpm-tone-if-conversion.md). (2026-10-02)
+evidence. [Ledger](history/dsp/fpm-tone-if-conversion.md). (2026-10-02)
 
 ## F11571. V32 CD decision input must precede aliased magnitude output.
 
@@ -133262,7 +133262,7 @@ valid complete-TU lifetime/conversion/sched2 cells preserve9 functions/9 globals
 and data,0/9 exact unchanged. Closest122B/BYTES2 has four raw byte differences
 and a moved relocation due to swapped successor/lms stores. Flow2 order is
 reversed in sched2; disabling that pass gives BYTES27 and changes all9 bodies,
-so no flag exception. [Controls and validation](fse-cd-load-recovery.md).
+so no flag exception. [Controls and validation](history/dsp/fse-cd-load-recovery.md).
 (2026-10-02)
 
 Retained complete TU raw-reproduces the closest supported candidate; only one
@@ -133280,7 +133280,7 @@ Both source orders emit the identical full object,122B/BYTES2. All9 functions/
 9 globals/data unchanged, no gain/loss. Four domains total20 valid compilations,
 11 sources/10 emissions, no flag exception or broader store permutations.
 This source-order family is closed pending independent source/profile evidence.
-[Ledger](fse-cd-load-recovery.md). (2026-10-02)
+[Ledger](history/dsp/fse-cd-load-recovery.md). (2026-10-02)
 
 
 ## F11573. Caller ID packer conversion controls recover operand boundaries without byte-exactness
@@ -133290,7 +133290,7 @@ versus int accumulator and updated-position carriers, then position narrowing
 at uses. All pack_next_bit bodies remain303B/SIZE2 against301B reference.
 Four functions/global bindings/data preserved, zero exact gains/losses; only
 packer and its inlined cid_modem caller change. No reconstruction adoption.
-[Complete controls](cid-pack-conversion-controls.md). (2026-10-02)
+[Complete controls](history/services/cid-pack-conversion-controls.md). (2026-10-02)
 
 
 ## F11574. Cosine tone generator becomes byte-exact through output lifetime, scale reload and short post-decrement
@@ -133302,7 +133302,7 @@ data preserved; only FPM_TONE_generate_demod changes, four/eleven ->five/eleven
 exact with no losses. Seventeen staged compilations cover nine distinct
 sources/emissions; winner raw-replays independently. Callee always defines
 cos before use and neither side reads sin. No register-specific spelling or
-flag change. [Complete recovery](fpm-tone-demod-recovery.md).
+flag change. [Complete recovery](history/dsp/fpm-tone-demod-recovery.md).
 Retained build300/300; whole-tree868/1852 ->869/1852 exact,84,590 ->84,715
 exact bytes, one gain/no losses. Fixed Gentoo phase385/0, new adequately
 buffered negative-count component test and static anchors clean. Complete
@@ -133323,7 +133323,7 @@ original helper/type claim or compiler flag change.
 Retained whole-tree869/1852 ->870/1852,84,715 ->84,766 exact bytes, no losses;
 fixed Gentoo phase385/0, static anchors clean. Complete same-order partial
 links remain DIFFERENT, positioned68,315 ->68,320/943,398.
-[Full experiment and retained validation](encode-carrier-recovery.md).
+[Full experiment and retained validation](history/project/encode-carrier-recovery.md).
 (2026-10-02)
 
 
@@ -133340,7 +133340,7 @@ Retained full TU raw-replays; build300/300; whole-tree870/1852 ->871/1852,
 existing negative-count group131,335 checks, static anchors clean. Complete
 partial links remain DIFFERENT, positioned68,320 ->68,343/943,398,
 matching relocation records1,018 ->1,019/18,317.
-[Complete transfer and retained validation](fpm-tone-pair-recovery.md).
+[Complete transfer and retained validation](history/dsp/fpm-tone-pair-recovery.md).
 (2026-10-02)
 
 
@@ -133362,7 +133362,7 @@ exact bytes, sole gain/no losses. Fixed Gentoo phase385/0; negative65,667 and
 reachable counter262,237 checks pass. Static tick anchors retargeted, not
 executed. Complete partial links remain DIFFERENT; positioned68,343
 ->68,419/943,398, matching relocation records1,019 ->1,018/18,317.
-[Complete recovery and retained validation](fpm-tone-sine-recovery.md).
+[Complete recovery and retained validation](history/dsp/fpm-tone-sine-recovery.md).
 (2026-10-02)
 
 
@@ -133378,7 +133378,7 @@ preserved, only clones change, six/thirteen ->eight/thirteen exact, no losses.
 No cookie, initialization, null check or allocation-operator symbol appears;
 sysdep_malloc remains allocator. Full configured CXX flags used by the shared
 replay engine, with complete raw baseline proof. No placement/permutation sweep.
-[Full controls and retained validation](psd-array-new-recovery.md).
+[Full controls and retained validation](history/dsp/psd-array-new-recovery.md).
 (2026-10-02)
 
 Retained300/300 build; whole-tree872/1852 ->874/1852 exact and85,127
@@ -133397,7 +133397,7 @@ bindings/data preserved; only constructor clones change. Nine/fourteen
 ->eleven/fourteen exact, no losses. Retain direct expression, member reloads,
 existing placement allocator and both raw float allocations. No wrapper/order
 or register sweep; static anchors retargeted, not executed.
-[Controls and retained validation](v90sv-publication-recovery.md).
+[Controls and retained validation](history/pcm/v90sv-publication-recovery.md).
 (2026-10-02)
 
 Retained300/300 build; whole-tree874/1852 ->876/1852 and85,291 ->85,615
@@ -133417,7 +133417,7 @@ forms raw-agree174B/BYTES44. Three sources/two emissions,16/25 exact/no
 gains or losses; only adopting C1/C2 bodies change,26 global bindings preserved.
 No source adoption, runtime/whole-tree/partial-link gates NOT RUN. Correct
 length and a recovered pointer boundary are insufficient for byte recovery.
-[Closed controls](resampler-history-publication-controls.md).
+[Closed controls](history/dsp/resampler-history-publication-controls.md).
 (2026-10-02)
 
 
@@ -133431,7 +133431,7 @@ descrambler defining copies reviewed, only int/int constructor changes.
 Data/symbol types/bindings/visibility/sections preserved. Prefix through
 allocator and relocation offsets match; pointer/epilogue register colours
 still differ. No header adoption, runtime/whole-tree/partial gates NOT RUN.
-[Finite shared scope](descrambler-count-controls.md).
+[Finite shared scope](history/data-modes/descrambler-count-controls.md).
 (2026-10-02)
 
 
@@ -133447,7 +133447,7 @@ allocation/copy/normalization/reset; no size-only adoption or register/order
 permutations. Existing fixed fixtures cover both clones, padded coefficients,
 allocation byte accounting and final member-index/reset state. One static
 padding anchor retargeted, not executed.
-[Complete recovery](floatarma-padding-recovery.md).
+[Complete recovery](history/dsp/floatarma-padding-recovery.md).
 (2026-10-02)
 
 Retained300/300 build changes only src_dsp_FloatARMA.cpp.o, raw-matching
@@ -133472,7 +133472,7 @@ min-store58B/BYTES26, nested-update54B/SIZE4, both56B/SIZE2. Four sources/
 four objects,2/8 exact unchanged, only target body changes. All functions/
 global types/bindings/visibility/nontext preserved. No source adoption;
 candidate runtime/whole-tree/partial gates NOT RUN.
-[Closed controls](floatfir-coefficient-control.md).
+[Closed controls](history/dsp/floatfir-coefficient-control.md).
 (2026-10-02)
 
 
@@ -133489,7 +133489,7 @@ Twelve compiles/ten sources/nine complete emissions;6 defined functions
 bindings/types/visibility/data preserved, only TONE_read changes,1/4 ->2/4
 exact/no losses. Retain short phase/reflections and bounded quadrants, no
 register-specific source. Existing fixed fixture exhausts65536 short inputs.
-[Full recovery and validation](tone-read-width-recovery.md).
+[Full recovery and validation](history/dsp/tone-read-width-recovery.md).
 (2026-10-02)
 
 Retained300/300 comparison build, only src_dsp_FP_math.c.o changes and
@@ -133513,7 +133513,7 @@ Four compiles/three sources/two emissions:60B baseline,63B countdown,
 conversion-only raw-identical60B, blob49B. Full-TU25 functions/31 globals,
 nontext and binding/type/visibility preserved,14/25 exact unchanged.
 Member already signed short; no retyping or source adoption. Candidate
-runtime/census/partial gates NOT RUN. [Closed controls](rxclamp-count-controls.md).
+runtime/census/partial gates NOT RUN. [Closed controls](history/dsp/rxclamp-count-controls.md).
 (2026-10-02)
 
 ## F11586. GetFP_Value arithmetic/lifetime families close without an exact gain
@@ -133526,7 +133526,7 @@ Four initial negative-step compiles had incorrect domain metadata, preserved
 INVALID and excluded; corrected four-cell rerun used actual predeclared URL.
 No source adoption, candidate runtime/census/partial gates NOT RUN. Reference
 zero-divisor loop vs source guard is static fidelity evidence, not runtime
-or modem reachability evidence. [Controls](getfp-divider-controls.md).
+or modem reachability evidence. [Controls](history/project/getfp-divider-controls.md).
 (2026-10-02)
 
 ## F11587. Four source boundaries recover complete FPM_MTD_create
@@ -133538,7 +133538,7 @@ nonexact. All3 functions/5 globals and data/type/binding/visibility preserved,
 1/3 ->2/3 exact/no losses. New fixed allocation-count/failure probes demonstrably
 fail unchanged source (3/32916 and2/8 checks), with successful controls; negative
 counts are component conversion evidence, not detector/modem reachability.
-[Recovery and validation](fpm-mtd-create-recovery.md).
+[Recovery and validation](history/dsp/fpm-mtd-create-recovery.md).
 (2026-10-02)
 
 Retained comparison build300/300, zero failures; only src_dsp_fpm_mtd.c.o
@@ -133564,7 +133564,7 @@ hit. Short-counter+fresh alone193B/BYTES30; size is insufficient. All3 functions
 4 globals/data/type/binding/visibility preserved, only init changes,1/3 ->2/3
 exact/no losses. Existing fixed fixture covers fresh/reuse and legal successive
 initialization reaching growth with debug transcript controls; synthetic manual
-shrink is identified separately. [Recovery](fpm-mrf-init-recovery.md).
+shrink is identified separately. [Recovery](history/dsp/fpm-mrf-init-recovery.md).
 (2026-10-02)
 
 Retained comparison build300/300, zero failures; only src_dsp_fpm_mrf.c.o
@@ -133589,7 +133589,7 @@ factoring. Short local adds one byte to each oscillator (200/143/234B vs
 blob211/161/246B);0/3 exact unchanged. Raw baseline reproduced, all5 defined
 functions/9 globals and data/type/binding/visibility preserved; only three
 oscillator bodies change, extra entry helpers unchanged. No source adoption
-or candidate runtime/whole-tree/partial gates. [Closed domain](phasor-fraction-controls.md).
+or candidate runtime/whole-tree/partial gates. [Closed domain](history/dsp/phasor-fraction-controls.md).
 (2026-10-02)
 
 
@@ -133602,7 +133602,7 @@ three emissions,0/3 exact unchanged. Oscillator sizes199/142/233 baseline,
 All5 functions/9 globals/data/type/binding/visibility preserved; only three
 oscillator bodies change, extra entry helpers unchanged. Production and prior
 staged full-object controls raw-replay. No adoption or candidate runtime/
-census/partial gates. [Closed domain](phasor-consumption-controls.md).
+census/partial gates. [Closed domain](history/dsp/phasor-consumption-controls.md).
 (2026-10-02)
 
 
@@ -133616,7 +133616,7 @@ Fixed constructor allocation probes fail unchanged source4/33192 checks;
 negative lengths are component conversion boundaries, not demodulation or
 modem reachability. Preserve short counter overflow and promoted2*iir_len
 bound as static observed behavior, without claiming unrun overflow coverage.
-[Recovery](fpm-fsd-init-recovery.md).
+[Recovery](history/dsp/fpm-fsd-init-recovery.md).
 (2026-10-02)
 
 Retained comparison build300/300, zero failures; only src_dsp_fpm_fsd.c.o
@@ -133641,7 +133641,7 @@ type/binding/visibility; only modulate changes,2/3 exact unchanged. Combined
 public short return retained; callers consume low16 bits, no unique API type
 inferred from upper EAX. Initial16-cell metadata-invalid run preserved/excluded,
 full rerun against actual predeclared URL. No adoption/candidate runtime/census/
-partial gates. [Closed controls](fsm-modulate-controls.md).
+partial gates. [Closed controls](history/project/fsm-modulate-controls.md).
 (2026-10-02)
 
 ## F11593. FSE_getdiag loop-only guard does not recover the complete body
@@ -133652,7 +133652,7 @@ Corrected two-cell full-TU control213B ->217B vsblob229B; all4 functions/
 counts; t_v32fpsub already verifies this. Two prior compiles under false
 zero-return clarification preserved INVALID/excluded, no source adoption.
 Corrected loop-only domain rerun separately. No candidate runtime/census/
-partial gates. [Controls and correction](fse-getdiag-guard-controls.md).
+partial gates. [Controls and correction](history/dsp/fse-getdiag-guard-controls.md).
 (2026-10-02)
 
 
@@ -133665,7 +133665,7 @@ raw-reproduces baseline, corrected+move agrees ratio-only. All3 functions/
 348B/SIZE16 and1/3 exact unchanged. Adopt literal29000 only; no exact gain.
 Fixed child-config comparison catches all five constructors,5/284930 baseline
 checks fail; existing coverage6 passes. Generic tone fixture could not validate
-this owner's child ratio. [Recovery and controls](bwch-constructor-controls.md).
+this owner's child ratio. [Recovery and controls](history/project/bwch-constructor-controls.md).
 (2026-10-02)
 
 Retained comparison build300/300, zero failures; only src_pump_v23_bwchdem.c.o
@@ -133690,7 +133690,7 @@ folding mechanism: only combined cell retains block table load. Create reaches
 also changes, exact1/3 unchanged. Seven named data owners preserve values,
 canonical relocation targets/types/binding/visibility; layout changes and
 combined .rodata grows124→144B. No source/flag adoption or new runtime/census/
-partial gate. [Controls](bwch-unit-visibility-controls.md).
+partial gate. [Controls](history/project/bwch-unit-visibility-controls.md).
 (2026-10-02)
 
 
@@ -133701,7 +133701,7 @@ raw-merge; both caches recover607B init exactly, each alone603B/SIZE4.
 Unchanged98B free also becomes exact via dead POP EAX→ECX; cancel unchanged.
 All3 functions/ECC_CFG/type/binding/visibility/allocated nontext preserved,
 exact0/3→2/3 with no losses. Fixed synthetic borrowed-buffer alias distinguishes
-saved fill from reread member; not modem reachability. [Recovery](ecc-init-cache-recovery.md).
+saved fill from reread member; not modem reachability. [Recovery](history/project/ecc-init-cache-recovery.md).
 (2026-10-02)
 
 Retained comparison build300/300, zero failures; only src_dsp_fpm_ecc.c.o
@@ -133724,7 +133724,7 @@ Four-cell lifetime×sequencing family, four emissions:244/211/244/227B vs228B,
 no exact gains/losses,1/3 exact unchanged. Combined58vs60 instructions after
 padding, different saved register/frame and load/store/increment order.
 All3 functions/2 globals/data/type/binding/visibility preserved; no adoption
-or candidate differential/census/partial gate. [Controls](v22-mrf-index-controls.md).
+or candidate differential/census/partial gate. [Controls](history/data-modes/v22-mrf-index-controls.md).
 (2026-10-02)
 
 
@@ -133735,7 +133735,7 @@ Four-cell early-index×sampled-RHS follow-up preserves original work[k++];
 All3 functions/2 globals/data/type/binding/visibility preserved; no source
 adoption or candidate gates. After two unsuccessful batches, park nearby
 index/sequencing variants pending a fresh discriminator; no global source
-ceiling inferred. [Controls and scope review](v22-mrf-index-controls.md).
+ceiling inferred. [Controls and scope review](history/data-modes/v22-mrf-index-controls.md).
 (2026-10-02)
 
 
@@ -133744,7 +133744,7 @@ ceiling inferred. [Controls and scope review](v22-mrf-index-controls.md).
 Four-cell independent index×array-order cross gives305/305/289/289B vs290B,
 four emissions, no exact gain/loss,1/3 unchanged; combined76vs78 instructions.
 All3 functions/2 globals/data/type/binding/visibility preserved. No source
-adoption/candidate gates; close local family. [Controls](v22-pps-init-controls.md).
+adoption/candidate gates; close local family. [Controls](history/data-modes/v22-pps-init-controls.md).
 (2026-10-02)
 
 
@@ -133755,7 +133755,7 @@ gains/losses,2/3 unchanged. Sentinel initialRTL/finalCMPWffff differs from blob
 old-value flags. Wordlocals restore some comparisons, not clamp SAR15.
 Generator assertion rejected broad match before candidatecompilation; corrected
 full rerun valid. All3 functions/3 data objects/type/binding/nontext preserved;
-no adoption/candidate gates. [Controls](mtd-detect-controls.md).
+no adoption/candidate gates. [Controls](history/dsp/mtd-detect-controls.md).
 (2026-10-02)
 
 ## F11601. MTD postdecrement explains loop flags without complete recovery
@@ -133763,7 +133763,7 @@ no adoption/candidate gates. [Controls](mtd-detect-controls.md).
 Two staged postdecrement cells plus unchanged baseline recover DEC/narrow/
 INCWoldflags;288/299/298B vs297B, three emissions, no exact gain/loss,2/3
 unchanged. Complete data/symbol/otherbody controls agree. No source adoption
-or candidate gates; close source spelling stage. [Controls](mtd-detect-controls.md).
+or candidate gates; close source spelling stage. [Controls](history/dsp/mtd-detect-controls.md).
 (2026-10-02)
 
 ## F11602. MTD shared verdict does not close the terminal decision
@@ -133773,7 +133773,7 @@ vs297B, three emissions, no exact gain/loss,2/3 unchanged. InitialRTL already
 lowers retained ternary to boolean; commonconstantresult refocus is negative.
 Data/symbol controls agree; no adoption/candidate gates. Park nearby detector
 variants; negative-count behavior discrepancy is static prediction, not a
-runtime or modem reachability result. [Scope review](mtd-detect-controls.md).
+runtime or modem reachability result. [Scope review](history/dsp/mtd-detect-controls.md).
 (2026-10-02)
 
 
@@ -133784,7 +133784,7 @@ losses. Combined scalar190Bvs191 has58vs59 instructions; block269Bvs287 has
 79vs86. Count also changes untouchedII canonical body at unchanged213B.
 All3 functions/types/binding/visibility/allocated nontext preserved; no data
 objects. No source/flag adoption/candidate gates/undefined-return fabrication.
-[Controls](iir-boundary-controls.md).
+[Controls](history/dsp/iir-boundary-controls.md).
 (2026-10-02)
 
 
@@ -133795,7 +133795,7 @@ no exact gains/losses,0/3 unchanged. Blob narrowing at index use does not
 establish F8163's inferred running word carrier. Only block_update changes;
 all3 functions/types/binding/visibility/nontext preserved, no data objects.
 No source adoption/candidate gates; close family, preserve component fixture
-qualification. [Controls](block-position-controls.md). (2026-10-02)
+qualification. [Controls](history/dsp/block-position-controls.md). (2026-10-02)
 
 
 ## F11605. Reciprocal local-output helper and word index explain boundaries without a hit
@@ -133805,7 +133805,7 @@ no exact gain/loss,0/2 unchanged. Ordinary inline helper reproduces local word
 output addresses; word index reproduces narrowing. All2 functions/types/
 binding/visibility/nontext preserved, no data objects; circ_dotp2 unchanged.
 Malformed generator helper insertion rejected; invalid run preserved/excluded,
-corrected full rerun valid. [Controls](div32-normalization-controls.md).
+corrected full rerun valid. [Controls](history/dsp/div32-normalization-controls.md).
 (2026-10-02)
 
 ## F11606. Reciprocal guarded count-store placement remains a non-exact factoring lead
@@ -133817,7 +133817,7 @@ loop/load/frame differences remain. Complete-TU controls agree; no adoption/
 candidate gates. Existing fixture's every-mantissa/shift claim is overstated:
 0x40008000 yields missing8001/shift1. Preserve fixed-vector follow-up, close
 nearby permutations without claiming a global ceiling.
-[Scope and evidence](div32-normalization-controls.md). (2026-10-02)
+[Scope and evidence](history/dsp/div32-normalization-controls.md). (2026-10-02)
 
 
 ## F11607. V34 detector word counters recover loops but not complete initialization
@@ -133826,7 +133826,7 @@ Four-cell section/tap width cross172/164/169/186B versus186B; four emissions,
 0/2 exact/no gains/losses. Both shorts raw-recover prologue/nested loops,
 leaving BYTES18 after-loop stores. Untouched tone_detect512B unchanged;
 all2 functions/types/binding/nontext preserved, no data objects. No adoption/
-candidate gates. [Controls](v34-detector-initialization-controls.md).
+candidate gates. [Controls](history/v34/v34-detector-initialization-controls.md).
 (2026-10-02)
 
 ## F11608. V34 detector armed/state and threshold store-order stage closes without a hit
@@ -133835,7 +133835,7 @@ Production plus four short-counter store cells:186B with BYTES18/11/26/19,
 five emissions,0/2 exact/no gains/losses. Complete-TU controls agree; no
 runtime/source adoption/gates. Close bounded ordering family; do not infer
 unique source order from scheduling or fit unrelated fields/registers.
-[Controls](v34-detector-initialization-controls.md). (2026-10-02)
+[Controls](history/v34/v34-detector-initialization-controls.md). (2026-10-02)
 
 ## F11609. Restore ignored MRF/FSD free arguments for byte fidelity
 
@@ -133845,7 +133845,7 @@ F8876's behavioral rationale cannot justify omission for byte reconstruction.
 Initial four-TU MRF×FSD cross and all11-TU consumer expansion recover complete
 cid_delete86B,v23FP_rx_delete89B,V21RX_delete123B,V21TX_delete104B. Ignored int
 formal is a conventional family, not unique original type/name/meaning.
-Full validation and audit are recorded in [recovery](free-argument-recovery.md).
+Full validation and audit are recorded in [recovery](history/project/free-argument-recovery.md).
 (2026-10-02)
 
 
@@ -133857,7 +133857,7 @@ Groupedreceiver×ECC×PPS eight-cell complete11-TU cross (88compilations,37funct
 V17TX_delete107,V29TX_delete135; no exact losses/bystanders. Allfourcallees rawmerge,
 data/binding/nontext agree. V27RX191vs193/V27TX107BYTES9 remain unmatched;
 int ignoredformal is conventional, originalwidth/name/meaning unknown.
-[Recovery and gates](free-argument-recovery-rest.md). (2026-10-02)
+[Recovery and gates](history/project/free-argument-recovery-rest.md). (2026-10-02)
 
 ## F11611. B103 deletion direct child-owner lifetimes recover the full body
 
@@ -133866,7 +133866,7 @@ Four-cell directdsp×directhdx cross254/257/270/272B versus272, combinedexact;
 aftercalls; retain directexpressions without forcing registers. Generator
 assertion rejected separatelyassignedhdx beforecompilation; invalidrun retained,
 correctedfourcell valid. Fixedt_b103create real lifecycle authority, no ordinary
-behavioralbug claim. [Evidence and gates](free-argument-recovery-rest.md).
+behavioralbug claim. [Evidence and gates](history/project/free-argument-recovery-rest.md).
 (2026-10-02)
 
 
@@ -133877,7 +133877,7 @@ preceding child-pointer assignments at embedded frees; two gains/no losses.
 All7 functions/type/binding/nontext controlled, no data objects. RX decision
 bystander stays298B, changes under consistent register renaming only; other
 four bodies unchanged. Original spelling is not unique, no ordinary behavior
-bug claim. [Recovery and gates](v27-delete-argument-recovery.md). (2026-10-02)
+bug claim. [Recovery and gates](history/fax/v27-delete-argument-recovery.md). (2026-10-02)
 
 
 ## F11613. Explicit AGC fourth slots recover RxHdxNoSignal
@@ -133889,7 +133889,7 @@ no losses across116 functions. Eighteen canonical bodies change, including
 noncalling QualityDetectV27's equivalent state33 store factoring; nontext/data/
 binding/import/export controls agree. Return semantics remain an independent
 hypothesis, not proved by this reconstruction's header or unread frame slots.
-[Recovery and gates](agc-fourth-argument-recovery.md). (2026-10-02)
+[Recovery and gates](history/dsp/agc-fourth-argument-recovery.md). (2026-10-02)
 
 
 ## F11614. Independent AGC return-consumption controls do not recover bytes
@@ -133902,7 +133902,7 @@ ignored-return RxDetMarkB103; data/nontext/binding controls agree. No production
 adoption, original int return is not refuted. Invalid empty-domain attempt
 preserved/excluded; replay wrappers now reject it and preflight generators.
 Correct F11613's count126→116 (unchanged108→98), census/gates unaffected.
-[Controls](agc-return-controls.md). (2026-10-02)
+[Controls](history/dsp/agc-return-controls.md). (2026-10-02)
 
 
 ## F11615. Recovered V92 C++ provenance unlocks both array deletion bodies
@@ -133913,7 +133913,7 @@ Four complete-TU cells cross constellation/filter delete[] with ordinary
 TU-local unsized host adapter: each independently closes its173B/106B body,
 both two gains/no losses. Other three bodies unchanged; five function symbols/
 no named data objects, nontext/binding/import/export controls agree.
-[Recovery and gates](v92-array-lifecycle-recovery.md). (2026-10-02)
+[Recovery and gates](history/pcm/v92-array-lifecycle-recovery.md). (2026-10-02)
 
 ## F11616. Paired V92 new[] allocations raw-merge with retained host calls
 
@@ -133924,7 +133924,7 @@ including unchanged121B/73B creators and2679B parameter fill. Adopt idiomatic
 paired lifecycle; original allocation spelling is not uniquely established.
 Real live allocator cases and synthetic unknown-pointer null-pattern probes
 remain distinguished; eleven static anchors retargeted, no execution.
-[Controls](v92-array-lifecycle-recovery.md). (2026-10-02)
+[Controls](history/pcm/v92-array-lifecycle-recovery.md). (2026-10-02)
 
 
 ## F11617. Ordinary V90 phase-four member delete recovers both destructors
@@ -133937,7 +133937,7 @@ nontext/binding/import/export agree. Previous cache controls did not test
 this language construct. Exact destructor does not close the three other
 register/scheduler residuals; do not infer that recovery is sufficient.
 Realowned/supplied lifecycle and synthetic guard probes distinguished.
-[Recovery and gates](v90p4-owned-delete-recovery.md). (2026-10-02)
+[Recovery and gates](history/pcm/v90p4-owned-delete-recovery.md). (2026-10-02)
 
 
 ## F11618. All three V90 parent member-delete lifetimes recover both clones
@@ -133950,7 +133950,7 @@ Both D1/D2 recover199B from200B,19→21exact/25functions, no losses, all23
 bystanders/nontext/binding/import/export unchanged. Prior F10160 explicit
 destructor recovery did not test this language construct. Real all-live
 constructorchain and synthetic pre-release/null guard subsets distinguished.
-[Recovery and gates](v90-owned-delete-recovery.md). (2026-10-02)
+[Recovery and gates](history/pcm/v90-owned-delete-recovery.md). (2026-10-02)
 
 ## F11619. Ordinary ARMA member delete recovers both V92 echo destructors
 
@@ -133962,7 +133962,7 @@ objects/nontext/binding/import/export controls agree. Preserve both primitive
 free-and-clear paths and conditional ARMA clear. Old claim that scalar delete
 cannot emit two calls is refuted by this actual period compiler control.
 Real constructed lifecycle and synthetic member-shape probes distinguished.
-[Recovery and gates](v92ec-owned-delete-recovery.md). (2026-10-02)
+[Recovery and gates](history/pcm/v92ec-owned-delete-recovery.md). (2026-10-02)
 
 ## F11620. Five V92 parent member-delete lifetimes recover three exact bodies
 
@@ -133974,7 +133974,7 @@ BYTES22..86. Unchanged126B enterPhase3 also becomes exact by ECX/EDX renaming,
 nontext/binding/import/export controls agree. Preserve virtual resampler,
 primitive frees, dangling members and generated Scrambler destruction.
 Actual all-live lifecycle and synthetic temporarily masked-owner subsets
-are distinguished. [Recovery and gates](v92-owned-delete-recovery.md).
+are distinguished. [Recovery and gates](history/pcm/v92-owned-delete-recovery.md).
 (2026-10-02)
 
 ## F11621. V90/V92 modem owned-member crosses recover six exact bodies
@@ -133987,7 +133987,7 @@ register renaming. Exact2→5/8 V90,1→4/7 V92, six gains/no losses, all9
 other bodies/data/nontext/binding/import/export unchanged. Preserve primitive
 and mapping frees, generated members, unsigned guards and V92 pointer clear.
 Real constructed lifecycles and synthetic guard/cleanup probes distinguished.
-[Recovery and gates](modem-owned-delete-recovery.md). (2026-10-02)
+[Recovery and gates](history/project/modem-owned-delete-recovery.md). (2026-10-02)
 
 ## F11622. V90 demodulator member-delete screen recovers shape but no exact gain
 
@@ -133998,7 +133998,7 @@ loses exact C2 and gains nothing,21→20/31functions. C2/progress canonical
 streams also change, not pure alpha renaming; all27 others unchanged.
 Zero named data, binding/import/export agree; relocated jump-table addends
 change in raw rodata. No source adopted or mixed-subset exhaustion claim.
-[Controls and fixture limits](v90dem-owned-delete-controls.md). (2026-10-02)
+[Controls and fixture limits](history/pcm/v90dem-owned-delete-controls.md). (2026-10-02)
 
 ## F11623. Typed VPCMXF deletion recovers the109B wrapper
 
@@ -134008,7 +134008,7 @@ reproduced, adapter-only rawmerge, ordinary scalar class delete EXACT109B.
 22→23/34functions, no losses, all33 other bodies unchanged; three named data/
 nontext/binding/import/export agree. F11430 C++ FILE provenance supersedes
 F7818 C-leaf restriction. Preserve declared same-TU destructor and six generated
-member releases. [Recovery and gates](vpcmx-delete-recovery.md). (2026-10-02)
+member releases. [Recovery and gates](history/pcm/vpcmx-delete-recovery.md). (2026-10-02)
 
 ## F11624. CID reset branch-local clears recover118B shape but miss complete bytes
 
@@ -134017,7 +134017,7 @@ Baseline110B/SIZE8; branch-local118B/BYTES8, exact6/10 unchanged, no gains/
 losses. Only cid_reset changes; nine bystanders/nontext/binding/import/export
 unchanged, zero named data. Eight register-coloured rows differ, but existing
 alpha rejects at a backward-entry live-range conflict; do not claim it passed.
-No source adoption or alias bug claim. [Controls](cid-reset-controls.md).
+No source adoption or alias bug claim. [Controls](history/services/cid-reset-controls.md).
 (2026-10-02)
 
 ## F11625. CID reset zero-return/control cross yields no exact gain
@@ -134027,7 +134027,7 @@ Four cells void/int×common/branch clear:110/SIZE8,118/BYTES8,112/SIZE6,
 120/SIZE2. Matching isolated prototype overlays, exact6/10 unchanged, only
 cid_reset changes. Repeated void controls raw-reproduce earlier objects.
 No source/header/test adoption or unsigned/bool/return-expression expansion.
-[Full audits and fixture limits](cid-reset-controls.md). (2026-10-02)
+[Full audits and fixture limits](history/services/cid-reset-controls.md). (2026-10-02)
 
 ## F11626. FPM_div word-output and initialization controls recover no exact body
 
@@ -134038,7 +134038,7 @@ into the helper after the zero guard:150/BYTES108. Repeated controls raw-match;
 seven compiles/five emissions, no gains/losses,0/1 common exact. Three emitted
 functions/zero named data, both apparatus bystanders/nontext/binding/imports/
 exports unchanged. No source adoption or further counter/scope/frame variants.
-[Controls and stopping rule](div16-normalization-controls.md). (2026-10-02)
+[Controls and stopping rule](history/dsp/div16-normalization-controls.md). (2026-10-02)
 
 ## F11627. Notch scheduler cross isolates x87 ordering without an exact gain
 
@@ -134049,7 +134049,7 @@ nontext/binding/import/export controls agree. RTL shows sched2 hoists loads
 49,51,50 before calculations; later stack conversion inserts four exchanges
 versus one without scheduling. Disabled pass does not reproduce the blob's
 load order. Diagnostic only, no source/profile adoption or cached-local sweep.
-[Stage evidence](notch-addition-tree.md). (2026-10-02)
+[Stage evidence](history/dsp/notch-addition-tree.md). (2026-10-02)
 
 ## F11628. Remaining C++ deletion screen leaves an unproven K56 owner boundary
 
@@ -134060,7 +134060,7 @@ factory allocation into class API use and real+0xc record accesses, but empty
 class methods/constructor supply no positive scalar lifetime boundary. Old
 C-language exclusion stale; delete-casting merely to suppress sibling free
 still unsupported. No source or compiler experiment adopted.
-[Pointer chain and denominator](k56-owner-boundary-audit.md). (2026-10-02)
+[Pointer chain and denominator](history/pcm/k56-owner-boundary-audit.md). (2026-10-02)
 
 ## F11629. Removing invented wrapper-null acceptance recovers85B destructor
 
@@ -134073,7 +134073,7 @@ reviewed, one changes and raw-matches candidate; whole-tree915→916/1852,
 94525 exact bytes. Fixed Gentoo phase385/0 and structural gates pass.
 Same-order complete partial remains DIFFERENT; positioned+1, allocated/
 section/symbol/relocation exact counts unchanged.
-[Recovery and contract](dpw-delete-guard-recovery.md). (2026-10-02)
+[Recovery and contract](history/project/dpw-delete-guard-recovery.md). (2026-10-02)
 
 ## F11630. FixedRC reset guard and external-clear cross restores boundaries but no exact gain
 
@@ -134084,7 +134084,7 @@ Only these two bodies change,1/5 common exact unchanged,8 emitted functions/
 Wrapper cells intentionally replace memset import by sysdep_memset. Combined
 matches first41 rows but alpha rejects XOR/MOV thereafter; equal size not
 recovery. No source adoption/nearby scope/register expansion.
-[Controls and next source boundary](fixedrc-reset-controls.md). (2026-10-02)
+[Controls and next source boundary](history/dsp/fixedrc-reset-controls.md). (2026-10-02)
 
 ## F11631. FPM tone unsupported allocation-return removal alone remains nonexact
 
@@ -134093,7 +134093,7 @@ Two fullTU cells669/SIZE84→663/SIZE90 versus753B;7/11 exact unchanged,
 only FPM_TONE_create changes. Two named data/all ten bystanders/nontext/
 binding/import/export controls agree; baseline raw-reproduces. No source
 adoption or invalid allocation-failure fixture, fuzzing or mutation execution.
-[Finite guard control](tone-allocation-guard-controls.md). (2026-10-02)
+[Finite guard control](history/dsp/tone-allocation-guard-controls.md). (2026-10-02)
 
 ## F11632. Complete FixedRC factory ownership candidate restores boundaries but misses bytes
 
@@ -134104,7 +134104,7 @@ sysdep_free; Reset270/BYTES41, Delete109/SIZE4,1/5 common exact unchanged.
 Eight emitted functions/22 named data, intentional80B switch table added;
 all existing data values/targets/exports/binding unchanged. Three host hook
 imports replace calloc/free/memset. No score-only adoption from this stage.
-[Factory and ownership recovery ledger](fixedrc-factory-recovery.md). (2026-10-02)
+[Factory and ownership recovery ledger](history/dsp/fixedrc-factory-recovery.md). (2026-10-02)
 
 ## F11633. FixedRC unsigned-mode discriminator removes signed tests but remains nonexact
 
@@ -134112,7 +134112,7 @@ Three fullTU cells repeat production/factory-signed and test unsigned formal
 with matching isolated prototype. Repeated objects raw reproduce; Create
 783/SIZE14→786/SIZE17 versus769B, no exact gains/losses. Original signed plus
 unsigned casts remains an alternative; API type not uniquely recovered.
-No further type/cast/declaration variants. [Controls](fixedrc-factory-recovery.md).
+No further type/cast/declaration variants. [Controls](history/dsp/fixedrc-factory-recovery.md).
 (2026-10-02)
 
 ## F11634. State-free guard extent and repeated owner operands recover FixedRC Delete
@@ -134125,7 +134125,7 @@ factory malloc/free and exact partial resets are required by F8530. New fixed
 owner witness and restored V22 bridge ledger validate the retained candidate;
 phase386/0 passes (new fixed owner binary); whole-tree916→917/1852,94638
 exact bytes. Complete same-order partial remains DIFFERENT, positioned+141/
-allocated+240; [ledger](fixedrc-factory-recovery.md) records all controls.
+allocated+240; [ledger](history/dsp/fixedrc-factory-recovery.md) records all controls.
 (2026-10-02)
 
 ## F11635. V34 receive queue recovers short counter, output walk and direct wrap
@@ -134140,7 +134140,7 @@ All300 production objects reviewed, one changes/raw-matches promoted candidate.
 Whole-tree917→918/1852,94708exact bytes/no losses; deciding fixed phase386/0,
 static anchors clean. Full partial links remain DIFFERENT, positioned-293/
 allocated+16; do not claim layout/profile recovery.
-[Complete controls and validation](v34-rxqueue-recovery.md). (2026-10-02)
+[Complete controls and validation](history/v34/v34-rxqueue-recovery.md). (2026-10-02)
 
 ## F11636. CID child capture restores owner lifetime but misses complete bytes
 
@@ -134149,7 +134149,7 @@ and allocated nontext. Branch-local typed child capture restores the blob's
 pre-loop owner load, but remains146B/SIZE1 versus145B;6/10exact unchanged.
 Production raw baseline reproduces. No source adoption or new fixture run.
 Close this capture domain without pointer/declaration/register synonyms.
-[Controls and caller/fixture boundaries](cid-string-capture-controls.md).
+[Controls and caller/fixture boundaries](history/services/cid-string-capture-controls.md).
 The issue domain initially misstated the existing fixture as180cases; direct
 initializer audit establishes150 (5frames×6modes×5values), corrected here.
 (2026-10-02)
@@ -134163,7 +134163,7 @@ object and symbol/nontext controls are preserved; only read changes.
 Production raw bytes reproduce, with 2/4 exact unchanged. Caller truncation
 and the existing fixture's short declaration do not uniquely recover the
 original ABI. No API adoption or fixture execution; the return-width family
-is closed. [Controls](fifo-read-return-controls.md). (2026-10-02)
+is closed. [Controls](history/dsp/fifo-read-return-controls.md). (2026-10-02)
 
 ## F11638. V34 transmit queue recovers sample-before-clear and direct wrap
 
@@ -134176,7 +134176,7 @@ is retained. All 300 production objects are reviewed: one changes and
 raw-matches the promoted candidate. Whole-tree 918→919/1852, 94,776 exact
 bytes, no losses; fixed phase 386/0, static anchors clean. Complete partial
 links remain DIFFERENT, positioned bytes -1, allocated size unchanged.
-[Recovery](v34-txqueue-recovery.md). (2026-10-02)
+[Recovery](history/v34/v34-txqueue-recovery.md). (2026-10-02)
 
 ## F11639. Bitreverse statement predicate matches size but fails the predicted lowering
 
@@ -134185,7 +134185,7 @@ Two complete-TU cells at fcf0427a reproduce the explicit old baseline:
 TEST/JE/MOV rather than the blob's TEST/SETNE. Exact count 0/7 is unchanged;
 only bitreverse changes, with symbol/nontext controls agreeing. Equal size
 is not recovery. No source adoption or new fixture; the statement-predicate
-family is closed. [Controls](v34-bitreverse-init-controls.md). (2026-10-02)
+family is closed. [Controls](history/v34/v34-bitreverse-init-controls.md). (2026-10-02)
 
 ## F11640. Decision cursor and best-distance width recover operations but not bytes
 
@@ -134193,7 +134193,7 @@ Four full-TU cells at361ef919 cross indexed/advancing points and int/short
 best_dist. Sizes167/164/168/165B against170B; no exact gain. Only decision
 changes across12 functions/five named data objects; complete symbol/nontext
 controls agree and raw production reproduces. Best-distance-only narrowing
-still gives a32-bit comparison. [Controls](v34-decision-controls.md).
+still gives a32-bit comparison. [Controls](history/v34/v34-decision-controls.md).
 (2026-10-02)
 
 ## F11641. Decision normalized result cross preserves an unresolved return ABI
@@ -134203,7 +134203,7 @@ with identical signed-short normalization and isolated matching headers.
 All repeated controls raw-reproduce; each short/int pair raw-merges. Returning
 sizes172/169/173/170B; even170B remains BYTES129. Zero blob/source consumers
 leave original short versusint declaration unresolved. No API/source adoption,
-1/12 exact unchanged. [Controls](v34-decision-controls.md). (2026-10-02)
+1/12 exact unchanged. [Controls](history/v34/v34-decision-controls.md). (2026-10-02)
 
 ## F11642. Both decision distances must narrow for the word compare
 
@@ -134214,7 +134214,7 @@ Combined171B still differs in spills, owner loads and entry layout, with no
 further independent source discriminator. Across three domains25 valid
 compiles/12 raw emissions, only decision changes and all metadata/nontext
 controls agree. No production change; finite domains closed without register/
-declaration forcing. [Stage evidence and full results](v34-decision-controls.md).
+declaration forcing. [Stage evidence and full results](history/v34/v34-decision-controls.md).
 (2026-10-02)
 
 ## F11643. FloatFIR postdecrement recovers the backedge but adds an entry test
@@ -134226,7 +134226,7 @@ The sentinel backedge recovers, but a second entry test survives after member
 loads. Only block process changes across eight functions/zero named data
 objects; all metadata and allocated nontext controls agree. No source adoption
 or new differential run; the finite counter family is closed.
-[Controls and coverage limits](floatfir-countdown-controls.md). (2026-10-02)
+[Controls and coverage limits](history/dsp/floatfir-countdown-controls.md). (2026-10-02)
 
 ## F11644. V34 high-pass word counter reaches size but not complete identity
 
@@ -134237,7 +134237,7 @@ register-only match. Only high-pass changes across26 functions/48 named data
 objects; all other bodies/relocations and metadata/nontext controls agree.
 Exact11/26 unchanged; no source adoption or new fixture execution.
 Close this counter family without adjacent arithmetic/register/declaration
-variants. [Controls](v34-hp-counter-controls.md). (2026-10-02)
+variants. [Controls](history/v34/v34-hp-counter-controls.md). (2026-10-02)
 
 ## F11645. Echo filter forward cursors recover size but not complete code
 
@@ -134247,7 +134247,7 @@ both 139B/BYTES82. Alpha instruction counts fail too. Shift-only also changes
 EchoAdapt; other cursor cells change only EchoFilter. All 26 function/48 data
 metadata and nontext controls agree; exact 11/26 unchanged. Preserve taps!=1
 and unsafe original zero boundary. No adoption or new fixture execution;
-finite traversal domain closed. [Controls](v34-echo-cursor-controls.md).
+finite traversal domain closed. [Controls](history/v34/v34-echo-cursor-controls.md).
 (2026-10-02)
 
 ## F11646. Echo adaptation three-cursor count loop still misses bytes
@@ -134259,7 +134259,7 @@ changes against their baselines. Exact 11/26 unchanged, all 26 function/48
 named data metadata and nontext controls agree. Preserve arithmetic and
 store order; no source adoption or new fixture execution. Close this finite
 cursor/count family without register or declaration variants.
-[Controls](v34-echo-cursor-controls.md). (2026-10-02)
+[Controls](history/v34/v34-echo-cursor-controls.md). (2026-10-02)
 
 ## F11647. Advancing the DFT energy bin recovers 74 byte-exact bytes
 
@@ -134272,7 +134272,7 @@ Whole-tree 919 to 920/1852, 94,850 exact bytes/no losses. Fixed Gentoo phase
 386/0 and structural/static anchors clean; energy fixture 8705 checks over
 272 paired calls. Complete partial positioned matches +59, allocated bytes
 -32, relocation exact records -2; whole links remain DIFFERENT.
-[Recovery, boundaries and complete controls](v8-dftenergy-recovery.md).
+[Recovery, boundaries and complete controls](history/data-modes/v8-dftenergy-recovery.md).
 (2026-10-02)
 
 ## F11648. Experiment header manifests must include source-local headers
@@ -134283,7 +134283,7 @@ invalid setup; no compiler result exists. Discover tracked local headers from
 actual source directories, retain historical V32 register, and check baseline
 header drift. The valid V8 rerun records the missing header and raw-reproduces
 production before measuring the gain. No flags/source behavior change.
-[Invalid artifact and valid controls](v8-dftenergy-recovery.md). (2026-10-02)
+[Invalid artifact and valid controls](history/data-modes/v8-dftenergy-recovery.md). (2026-10-02)
 
 ## F11649. Signed-word counters recover both V8 queue helpers
 
@@ -134295,7 +134295,7 @@ without flag/register forcing. RX also changes V8agc's inlined queue prefix;
 its705B suffix from+0x100 and all canonical relocations remain identical.
 Full13-function/four-data metadata/nontext controls agree. Existing fixed
 fixture covers155 paired calls per helper over40 initialized component
-objects. [Complete recovery and validation](v8-queue-width-recovery.md).
+objects. [Complete recovery and validation](history/data-modes/v8-queue-width-recovery.md).
 (2026-10-02)
 
 F11649 production gate: all300 objects inspected, sole changed object
@@ -134312,7 +134312,7 @@ but candidate172B remainsSIZE8 against164B reference. Alpha counts53/51
 also fail. Exact2/3 unchanged; only update changes across3 functions/1 named
 data object, all metadata/nontext/bystander controls agree. No source
 adoption or new fixture execution; finite traversal domain closed.
-[Controls and input boundary](v8-dftupdate-cursor-controls.md). (2026-10-02)
+[Controls and input boundary](history/data-modes/v8-dftupdate-cursor-controls.md). (2026-10-02)
 
 ## F11651. Advancing coefficient-copy pointers recover 45 exact bytes
 
@@ -134324,7 +134324,7 @@ objects inspected; sole changed object raw-matches candidate. Whole-tree
 922→923/1852,95083 exact bytes/no losses. Fixed Gentoo phase386/0, copy4162
 checks over66 paired calls, structural/static anchors clean. Complete same-order
 partial positioned -2, allocated bytes and exact metadata records unchanged;
-whole link DIFFERENT. [Recovery](v8-copycoeff-cursor-recovery.md). (2026-10-02)
+whole link DIFFERENT. [Recovery](history/data-modes/v8-copycoeff-cursor-recovery.md). (2026-10-02)
 
 ## F11652. Shaping-filter short counter and tap cursor recover operations only
 
@@ -134335,7 +134335,7 @@ and alpha bodies miss. Only filter changes across4 functions/zero data;
 full metadata/nontext/bystander controls agree, exact2/4 unchanged. No source
 adoption/new fixture execution; synthetic component coverage is not public
 lifecycle evidence. Close this finite family without spill/register/history
-pointer forcing. [Controls](v8-fsktx-source-controls.md). (2026-10-02)
+pointer forcing. [Controls](history/data-modes/v8-fsktx-source-controls.md). (2026-10-02)
 
 ## F11653. Typed tone owner recovers the ANSam initializer
 
@@ -134351,7 +134351,7 @@ objects inspected; sole changed object raw-matches candidate. Whole-tree
 static anchors clean. Init30241 checks/8pairedcalls plus17 ANSam component
 lifecycle checks per side. Full partial positioned -146, allocated -16,
 exact section/symbol/relocation records unchanged; whole links DIFFERENT.
-[Complete controls and boundaries](v8-ansam-owner-recovery.md). (2026-10-02)
+[Complete controls and boundaries](history/data-modes/v8-ansam-owner-recovery.md). (2026-10-02)
 
 ## F11654. Tonequeue output cursor enables reversal but still misses the body
 
@@ -134363,7 +134363,7 @@ unchanged. Inlinehandshake also changes344 canonical bytes, with same3288B/
 not pure register renaming. Seven other bodies and nameddata/metadata agree.
 Raw41jumptableaddends shift+16, canonical function-interior targets agree.
 No adoption/new fixture execution; finite family closed. Unused uppercosine
-argument bits do not establish formal width. [Controls](v8-tonequeue-cursor-controls.md).
+argument bits do not establish formal width. [Controls](history/data-modes/v8-tonequeue-cursor-controls.md).
 (2026-10-02)
 
 ## F11655. Echo history-energy cursor/countdown misses the entry lowering
@@ -134376,7 +134376,7 @@ copiedcount. Alpha17/18 also fails. Only energy changes across26 functions/
 Existing2000 paired initialized-component energycalls are coverage context;
 no candidate differential/new fixture/sourceadoption. The eight-function
 screen spans90 TU functions, not an exhaustive tree classification. Close
-this finite control. [Evidence](v34-echo-energy-controls.md). (2026-10-02)
+this finite control. [Evidence](history/v34/v34-echo-energy-controls.md). (2026-10-02)
 
 ## F11656. V22 control-byte capture lifetimes do not recover the full body
 
@@ -134388,7 +134388,7 @@ still fails; allcaptures177B alpha52/46. Existing262144 paired constructed
 calls use disjointcontrols and do not establish alias behavior. No new
 fixture/sourceadoption/behavioral failure claim. Original exported alias/type
 contract remains unproven; no bitfield/restrict inference or forced layout.
-[Bounded domain and limits](v22-control-capture-controls.md). (2026-10-02)
+[Bounded domain and limits](history/data-modes/v22-control-capture-controls.md). (2026-10-02)
 
 ## F11657. MakeTxData recovers its full body and bounded anonymous dispatch table
 
@@ -134404,7 +134404,7 @@ sole v22prc object raw-matches candidate. Strict tree 924/1852, 95168 exact
 bytes, no losses. Fixed period/structural gate 386/0,
 existing MakeTxData fixture 130 paired checks. Full same-order links remain
 DIFFERENT; positioned equal bytes +141, allocated +32, exact section/symbol/
-relocation records unchanged. [Recovery and proof limits](v22-txdata-recovery.md).
+relocation records unchanged. [Recovery and proof limits](history/data-modes/v22-txdata-recovery.md).
 (2026-10-02)
 
 ## F11658. General anonymous-table proof passes positive and adversarial ELF controls
@@ -134417,7 +134417,7 @@ far-transfer, prefix-token and CMP-interior gaps; corrected with assembled
 negative controls. Two real MakeTxData objects prove one equal table identity,
 but comparator/census remain unchanged: UNRESOLVED, strict 924/1852. No source
 or production-object changes, fuzzing or mutation execution. Narrow ABI-entry
-domain and unsupported forms are explicit. [Proof and controls](anonymous-jumptable-proof.md).
+domain and unsupported forms are explicit. [Proof and controls](history/project/anonymous-jumptable-proof.md).
 (2026-10-02)
 
 ## F11659. Proved anonymous dispatch identity completes MakeTxData byte exactness
@@ -134436,7 +134436,7 @@ recovery’s classification, not a new emitted-code change. Fixed period and
 structural gate 386/0. Older 810-symbol floor has one unchanged pre-existing
 V90Parameters C2 BYTES4 entry; baseline and final sets both omit it, and old/
 new tools reproduce the same verdict. No new ratchet loss or floor lowering.
-[Integration and proof scope](anonymous-jumptable-proof.md).
+[Integration and proof scope](history/project/anonymous-jumptable-proof.md).
 (2026-10-02)
 
 ## F11660. updateAlpha word quotient test recovers before allocation but spills persist
@@ -134452,7 +134452,7 @@ runtime claim. Existing588 numeric paired calls and42 debug calls/85checks
 are component coverage context, with trap/overflow/shift limits preserved.
 Six-function screen spans two TUs/eleven bodies, not the remainder. Close
 this local family without declaration/shift/register variants.
-[Controls and stage evidence](v34-alpha-width-controls.md). (2026-10-02)
+[Controls and stage evidence](history/v34/v34-alpha-width-controls.md). (2026-10-02)
 
 ## F11661. Five unresolved complete bodies split dispatch tables from initializer copying
 
@@ -134466,7 +134466,7 @@ Pool audit finds three start-address copy consumers per object, no named
 overlaps or observed address escape; current TU four functions/eight data.
 This still proves read values, not canonical destination identity; equal data alone
 cannot remove ordinary-section safeguards. No source/tool-grade adoption,
-strict925/1852 unchanged. [Screen and limits](anonymous-jumptable-proof.md).
+strict925/1852 unchanged. [Screen and limits](history/project/anonymous-jumptable-proof.md).
 (2026-10-02)
 
 ## F11662. Minimum-level diagnostic reload survives lowering without complete-body recovery
@@ -134481,7 +134481,7 @@ remains unexplained: no invented header/volatile/register variants. Existing
 25 paired component calls use separate config storage and do not establish
 reachable aliasing. No source adoption or candidate runtime claim. Close
 the two-cell family; production925/1852 and prior fixed gate386/0 unchanged.
-[Controls](v34-minlevel-reload-controls.md). (2026-10-02)
+[Controls](history/v34/v34-minlevel-reload-controls.md). (2026-10-02)
 
 ## F11663. Eager capability OR restores the read boundary but misses Boolean width
 
@@ -134493,7 +134493,7 @@ metadata/nontext/relocations agree; baseline raw reproduces. Existing16-codec
 component sweep supplies params and explicit capability controls, not public
 lifecycle. No source adoption/runtime claim. Operator family closed; Boolean
 width/return declaration remains a separate stage question.
-[Controls](v90-predicate-initializer-controls.md). (2026-10-02)
+[Controls](history/pcm/v90-predicate-initializer-controls.md). (2026-10-02)
 
 ## F11664. Nearest-entry first-win initialization disappears without exact recovery
 
@@ -134506,7 +134506,7 @@ Initial diagnostic-da baseline ICE excluded/preserved; no-dump rerun raw
 reproduces production with all codegen flags retained. Shared driver exposes
 DUMP_FLAGS with unchanged default. Existing64+64 seeded probes are synthetic,
 not lifecycle. No source adoption/runtime claim; initializer domain closed.
-[Controls and scope review](v90-predicate-initializer-controls.md). (2026-10-02)
+[Controls and scope review](history/pcm/v90-predicate-initializer-controls.md). (2026-10-02)
 
 ## F11665. Boolean result and operand captures separate folding gates from allocation
 
@@ -134521,7 +134521,7 @@ no classifier relaxation. Compiler comparison-tree/simple-operand gates explain
 capture differences; i686 branchcost2 is already default. EAX-testing callers
 support retaining int API. Raw baselines reproduce; no source/runtime adoption.
 Close all three domains, move to fresh owner/call evidence.925/1852 unchanged.
-[Full matrix and source mechanism](v90-predicate-initializer-controls.md).
+[Full matrix and source mechanism](history/pcm/v90-predicate-initializer-controls.md).
 (2026-10-02)
 
 ## F11666. B103 transmit reloads and result extension recover independently without exactness
@@ -134536,7 +134536,7 @@ reproduce. Existing780 created-component paired transmit calls bound1..6bits,
 not pointer-corruption/public history. No source/API/runtime adoption; domains
 closed. Separate MRF exit-width lead needs high-output-count fixture, fullhelper/
 caller review; incoming signed16load alone does not prove formal prototype.
-[Controls and next discriminator](b103-transmit-boundary-controls.md).
+[Controls and next discriminator](history/data-modes/b103-transmit-boundary-controls.md).
 (2026-10-02)
 
 
@@ -134561,7 +134561,7 @@ Only one of300 production objects changes; strict925/1852 and95363 exact bytes
 remain unchanged. A same-order300-object partial link differs only at two
 text bytes:18218 relocations/2984 symbols unchanged. Blob partial comparison
 remains DIFFERENT; no byte-exact gain or completion is claimed.
-[Controls](mrf-result-width-controls.md). (2026-10-02)
+[Controls](history/dsp/mrf-result-width-controls.md). (2026-10-02)
 
 
 ## F11668. MRF loop widths recover scalar boundaries without complete-body identity
@@ -134576,7 +134576,7 @@ passes. Init193/free16 remain exact, strict2/3 unchanged,0gains/0losses. Shared
 signed input/unsigned result remain unchanged. No source/runtime adoption.
 Close width spelling family; independent input countdown predicates and
 branchless ring wrap are next controls, not register/type permutations.
-[Measured controls](mrf-counter-width-controls.md). (2026-10-02)
+[Measured controls](history/dsp/mrf-counter-width-controls.md). (2026-10-02)
 
 
 ## F11669. MRF countdown and destination identity recover independently without exact gain
@@ -134592,7 +134592,7 @@ filterchanges; exact2/3 unchanged,0gains/0losses. Combined489B vsblob533;
 closest515B is not recovered source. XOR-before-SETL and post-AND widening
 remain distinct. No source/runtime adoption or explicit author mask claim.
 Close the bounded domain and reframe; no neighboring type/register/order fits.
-[Full cell ledger](mrf-counter-width-controls.md). (2026-10-02)
+[Full cell ledger](history/dsp/mrf-counter-width-controls.md). (2026-10-02)
 
 
 ## F11670. Power-first logical loop recovers an exact 72-byte V90 power-index body
@@ -134614,7 +134614,7 @@ phase387/0 and structural checks pass. Partial text grows32B including
 alignment; positioned equal bytes/relocations fall18/5 against blob, whose
 complete partial comparison remains DIFFERENT. This is a function gain, not
 full-object completion.
-[Controls and validation](v90-power-index-predicate-recovery.md). (2026-10-02)
+[Controls and validation](history/pcm/v90-power-index-predicate-recovery.md). (2026-10-02)
 
 ## F11671. Commutative operand order reaches the encoder XOR but is canonicalized away in the decoder
 
@@ -134648,11 +134648,11 @@ bodies in the 300-object review. Fixed phase 387/0 with structural checks.
 The historical --ratchet exit is the pre-documented stale 810-symbol floor
 requiring _ZN13V90ParametersC2EP19_tagModemParameters, already absent from
 master's 926 set before this change (same pre-existing floor failure recorded
-at F11560's integration and docs/v34-small-rtl.md; not re-blessed). Same-tree
+at F11560's integration and docs/history/v34/v34-small-rtl.md; not re-blessed). Same-tree
 partial before/after: exact sections 61 -> 62, positioned reference bytes
 68571 -> 68575, relocations 1018/18317 and symbols 394/2907 unchanged,
 verdict DIFFERENT. Function gain, not completion.
-[Domain and decoder negative](diffcoder-operand-order.md). (2026-10-03)
+[Domain and decoder negative](history/project/diffcoder-operand-order.md). (2026-10-03)
 
 ## F11672. v8_crc sign-bit spelling family closes; V92CP ctor order decoded but declined
 
@@ -134671,7 +134671,7 @@ seven exact functions exact but moves the ctor to BYTES(29) and changes
 four bodies with zero gains - the register carrier is not the definition
 order at this granularity. Both declines recorded; no census change
 (927/1852), no adoption.
-[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+[Screens](history/data-modes/v8crc-v92cp-ctor-screen.md). (2026-10-03)
 
 ## F11673. JdNotDetector's reset arm spelled first recovers an exact 75-byte detector
 
@@ -134691,7 +134691,7 @@ declared type through nop casts, so a cast cannot move it), and the raw
 0x40-displacement probe was contaminated by non-this bases; the field
 stays short per its documented inference. The V92CP definition-order and
 v8_crc msb negatives are F11672's.
-[Domain](v90-jd-arm-order.md). (2026-10-03)
+[Domain](history/pcm/v90-jd-arm-order.md). (2026-10-03)
 
 ## F11674. Scrambler ctor tap-pointer association folds; the swap inverts compute order
 
@@ -134705,7 +134705,7 @@ without adoption; the blob's schedule (compute tap1, store pInitOut,
 compute tap2, interleave reset's zeroed arg, store tap1, store tap2) is
 recorded for a future carrier. Scrambler.h's Descrambler ctor repeats the
 block and was left untouched - its C1 is a SIZE case, a different disease.
-[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+[Screens](history/data-modes/v8crc-v92cp-ctor-screen.md). (2026-10-03)
 
 Whole-tree partial-link state after both adoptions (2185e6b5+0056f610):
 exact section records 70/92, equal positioned reference bytes 68577/943398,
@@ -134731,7 +134731,7 @@ shows, no losses. Whole-word load casts were already right; an explicit
 byte-identical (F11673's rule). Five v90jd/v90jdstd anchors retargeted to
 the adopted spellings with fault cases preserved; anchorcheck clean. Census
 928/1852 -> 929/1852, exact bytes 95564 -> 95683, sole gain, zero losses.
-[Domain](v90jd-unpackword-recovery.md). (2026-10-03)
+[Domain](history/pcm/v90jd-unpackword-recovery.md). (2026-10-03)
 
 ## F11676. The Descrambler count temp recovers the scale shape but not the registers
 
@@ -134746,7 +134746,7 @@ declined per the F11672 precedent, the recovered spelling recorded for
 when the register carrier is found. The blob's tail also differs in
 callee-save spill order, consistent with the carrier being upstream of the
 function.
-[Screens](v8crc-v92cp-ctor-screen.md). (2026-10-03)
+[Screens](history/data-modes/v8crc-v92cp-ctor-screen.md). (2026-10-03)
 
 ## F11677. Two value-identical ctor spellings recover all four FloatFIR/FloatIIR ctors (delegated run)
 
@@ -134819,7 +134819,7 @@ ranking decision. Next discriminator is instrumented quantity/preferences
 and spill-selection tracing with unchanged-object controls. No source
 adoption, runtime claim or exact-count gain. Number reserved separately
 from the concurrent PR245 findings; reconcile numbering at integration.
-[Reproduction tool, controls and limits](gcc3-reload-tracing.md). (2026-10-03)
+[Reproduction tool, controls and limits](history/compiler/gcc3-reload-tracing.md). (2026-10-03)
 
 ## F11691. Read-only allocator tracing unlocks an exact 169-byte V34 updateAlpha source cross
 
@@ -134845,7 +134845,7 @@ Whole-tree926/1852→927/1852; exact bytes95435→95604, sole gain updateAlpha.
 Fixed period gate388/0, structural/anchor checks clean; existing component
 alpha588 and debug85 checks pass. No fuzzing/mutation runs, profile change,
 new reachability claim or unique-spelling claim.
-[Four-cell cross and reusable GDB observation tools](gcc3-reload-tracing.md).
+[Four-cell cross and reusable GDB observation tools](history/compiler/gcc3-reload-tracing.md).
 (2026-10-03)
 
 
@@ -134858,7 +134858,7 @@ controls. Features nominate inspection, not source recovery. Four HP cells:
 Combine changes the product's source boundary before allocation; no stack
 substitutions in either control. Full-TU 26 functions/48 data reviewed; combined
 adoption changes only HP/init. Screen, finite reproducer and canonical data
-relocation audit are reusable. [Evidence](gcc3-candidate-screen.md), issue248.
+relocation audit are reusable. [Evidence](history/compiler/gcc3-candidate-screen.md), issue248.
 (2026-10-03)
 
 ## F11693. V34 timing initialization: byte-size element bound
@@ -134874,7 +134874,7 @@ metadata/nontext/canonical-relocation audit. Probe's six jump-table addends
 move but retain function-relative targets. Whole-tree 927→929/1852, exact bytes
 95604→95782, sole gains HP/init, zero losses, 299/300 objects unchanged.
 Fixed phase 388/0 plus final component 1/0. No profile change, fuzzing, mutation,
-new reachability or unique-spelling claim. [Replay](gcc3-candidate-screen.md).
+new reachability or unique-spelling claim. [Replay](history/compiler/gcc3-candidate-screen.md).
 (2026-10-03)
 
 ## F11710. dp_runtime_create's tail store order recovers the 298-byte body
@@ -134979,7 +134979,7 @@ exactbytes95782→95823, sole gain, zero losses. F11692/F11693 heading punctuati
 corrected after inherited refs failure; final phase388/0 and structural boundary
 pass, CRC22824 fixed checks,285 suites/10038 static anchors clean. Same-order
 partial positioned bytes/relocations/symbol census unchanged, DIFFERENT both.
-[Trace/replay](v8-crc-extension-promotion.md).
+[Trace/replay](history/data-modes/v8-crc-extension-promotion.md).
 No profile/fuzz/mutation or unique-spelling claim. (2026-10-04)
 
 
@@ -134992,7 +134992,7 @@ of three groups has two nodes, producing E7/408/310. Masks do not establish
 hand-written shifts. Shared result recovers epilogue; no field/type/flag edits.
 Combined quick/SNR changes only these two bodies. All10 full-TU cells audited,
 57FUNC/1data, metadata/nontext/canonical targets unchanged;48 stage records,
-3 causal controls. [Controls](v34-accessor-boundaries.md). (2026-10-04)
+3 causal controls. [Controls](history/v34/v34-accessor-boundaries.md). (2026-10-04)
 
 ## F11701. V34 SNR: product before last-value copy preserves the multiply input
 
@@ -135007,7 +135007,7 @@ raw-reproduces combined;930→932/1852, exactbytes95823→95981, sole two gains,
 zero losses. Fixed phase388/0;285 suites/10038 anchors clean. Partial positioned
 bytes68908→68923/943398, relocations1028/18317/symbols394/2907 unchanged,
 DIFFERENT both. Original wrapped products/guards/count timing preserved;
-no fuzzing/mutation or unique-spelling claim. [Replay](v34-accessor-boundaries.md).
+no fuzzing/mutation or unique-spelling claim. [Replay](history/v34/v34-accessor-boundaries.md).
 (2026-10-04)
 
 ## F11702. V34 detector initialization crosses short counters with source store order
@@ -135031,7 +135031,7 @@ sole changed object raw-matches the candidate. Exact set932→933/1852, +186
 exact bytes, zero losses. This is a bounded source preimage, not proof of unique
 original spelling or recovered global compiler profile.
 
-[Declarations, mechanism, complete controls and replay](v34-detector-boundaries.md).
+[Declarations, mechanism, complete controls and replay](history/v34/v34-detector-boundaries.md).
 No fuzzing or mutation execution. (2026-10-04)
 
 ## F11703. V34 dftupdate is exact after recovering input scope and channel consumption order
@@ -135058,7 +135058,7 @@ without full channel consumption. No unique original source spelling claimed.
 Production299/300 objects unchanged; sole DFTC.c.o raw-matches the candidate.
 Exact set933→934/1852, +200 exact bytes, zero losses. Whole-object positional
 comparison remains separately reported and DIFFERENT. [Declared domains,
-controls, source/pass evidence and replay](v34-dft-loop-boundaries.md).
+controls, source/pass evidence and replay](history/v34/v34-dft-loop-boundaries.md).
 No fuzzing or mutation execution. (2026-10-04)
 
 ## F11704. Echo-history rollback count lifetime explains layout but does not recover an exact body
@@ -135072,7 +135072,7 @@ All cells retain 13/26 exact functions; only the investigated body changes.
 Complete-TU metadata, all 48 named data and canonical nontext relocations agree.
 No source is adopted and the source family is closed. A lower difference score
 is not permission for register/declaration synonyms or an API type guess.
-[Declared domain and reproduction](v34-rewind-boundaries.md). (2026-10-04)
+[Declared domain and reproduction](history/v34/v34-rewind-boundaries.md). (2026-10-04)
 
 ## F11705. Timing-prefilter state-base recovery makes the following cleanup exact through peephole2
 
@@ -135099,7 +135099,7 @@ records, four unchanged-stage and two firing scratch controls. Production
 299/300 objects stay raw-identical; the changed object raw-matches its declared
 candidate. Exact set 934→935/1852, +48 exact bytes, zero losses. Same-order
 partial links remain DIFFERENT, with positioned matches decreasing by one byte.
-[Controls, limits and replay](v34-prefilter-boundaries.md).
+[Controls, limits and replay](history/v34/v34-prefilter-boundaries.md).
 No fuzzing or mutation execution. (2026-10-04)
 
 Validation: make phase J=4, 388 passed / 0 failed; 37 valid cells represent
@@ -135143,7 +135143,7 @@ need a pass discriminator, not more declaration synonyms. No byte-count
 hill-climbing, mutation execution or fuzzing was performed. The batch owner
 runs the deciding phase gate on the integrated batch before committing.
 
-See `docs/batch5-v8-detector-boundaries.md` and tools
+See `docs/history/batches/batch5-v8-detector-boundaries.md` and tools
 `gcc3_batch5_v8_detector_reproduce.py`, `gcc3_batch5_v8_biquad_reproduce.py`,
 `gcc3_batch5_v8_detector_audit.py`.
 
@@ -135174,7 +135174,7 @@ functions, symbol type/binding/visibility, named data, allocated nontext bytes,
 and absence of nontext relocations. Text-body comparisons normalize relocation
 targets. Thirty-six selected constructor stage records and ten causal controls
 verify the ce2/initial-store distinctions. See
-`docs/gcc3-tone-detector-boundaries.md` and
+`docs/history/compiler/gcc3-tone-detector-boundaries.md` and
 `tools/gcc3_tone_detector_{reproduce,audit}.py` for replay and retained failures.
 
 The parent batch records the fresh production objects, whole-tree exact set and
@@ -135200,7 +135200,7 @@ source preimage, not proof of a unique original spelling.
 
 Thirteen CallingTone full-TU cells preserve both function bindings, data,
 allocated nontext bytes, canonical relocation targets and ResetCallingTone's
-exact body. [Declared controls and replay](batch5-calling-tone.md).
+exact body. [Declared controls and replay](history/batches/batch5-calling-tone.md).
 No fuzzing or mutation execution. (2026-10-04)
 
 ## F11709. Nonlinear encoder magnitude update is canonicalized, square ordering alone misses
@@ -135212,7 +135212,7 @@ recovers its119-byte reference (ours117). Nine selected initial/combine/global
 allocation records show the explicit update changes initial RTL but is folded
 away by combine. All seven bodies are reviewed; metadata/data/allocated nontext
 and canonical relocation controls pass. No source adopted, family closed.
-[Declaration and replay](batch5-v34-nlencoder.md). (2026-10-04)
+[Declaration and replay](history/batches/batch5-v34-nlencoder.md). (2026-10-04)
 
 
 Batch verification for F11706–F11709: five function gains, exact set935→940/1852,
@@ -135285,9 +135285,9 @@ Do not infer missing statements from a debug relocation count alone: the new
 census explicitly distinguishes direct calls and tail jumps and fires on this
 known0→1 restoration. Batch period gate is deferred to integration; this finding
 claims object evidence, not a new executed runtime verdict. (2026-10-04)
-[Deletion control](batch20-call-delete-boundary.md),
-[other boundaries](batch20-call-processing-boundaries.md),
-[frequency controls](batch20-psd-frequency-boundaries.md).
+[Deletion control](history/batches/batch20-call-delete-boundary.md),
+[other boundaries](history/batches/batch20-call-processing-boundaries.md),
+[frequency controls](history/batches/batch20-psd-frequency-boundaries.md).
 
 ## F11731. Two circular LMS helpers close through destination and product use boundaries
 
@@ -135317,7 +135317,7 @@ assembler executed; mandatory bug define/full retained profile, unchanged
 headers, baseline raw object reproduced. Two generator-invalid runs preserved
 and excluded. FSM bounded return-header overlays closed without adoption;
 header remains unchanged. IIR/MTD/dotp families miss and close, not adopted.
-See docs/batch20-dsp-boundaries.md and tools/gcc3_batch20_* replay/audit tools.
+See docs/history/batches/batch20-dsp-boundaries.md and tools/gcc3_batch20_* replay/audit tools.
 Batch owner gates integrated source once before commit, no fuzzing/mutation.
 
 
@@ -135339,7 +135339,7 @@ The bounded receiver/wrapper/progress controls retain negative results and
 invalid mapped-status or wrong-case diagnostic spellings explicitly. No AGC
 return-schema or unprototyped-call fit is adopted. Final full-tree denominator
 and period verdict belong to batch integration. (2026-10-04)
-[Domains and complete-TU audits](batch20-data-state-domain.md).
+[Domains and complete-TU audits](history/batches/batch20-data-state-domain.md).
 
 ## F11733. Original B103 state diagnostics recover two complete bodies
 
@@ -135354,7 +135354,7 @@ A later shared MRF width hypothesis changes these same bodies; do not assume
 independent gains compose. Its combined AnswerNextState residual must be
 resolved or reported before adopting that schema. Standalone measurements
 are not a whole-tree improvement claim. (2026-10-04)
-[Control and interaction record](batch20-data-state-domain.md).
+[Control and interaction record](history/batches/batch20-data-state-domain.md).
 
 ## F11734. Two explicit CFG boundaries recover float2Bits's original switch and loop arms
 
@@ -135385,7 +135385,7 @@ Four additional V90Parameters floating-display/store controls also give no exact
 function and are unadopted. A missing fabsf declaration attempt is preserved as
 invalid and excluded; corrected controls include math.h. Twenty valid complete
 TU controls pass metadata/data/nontext/bystander audits. Replay lives in
-`docs/batch20-v90-small-boundaries.md` and
+`docs/history/batches/batch20-v90-small-boundaries.md` and
 `tools/gcc3_batch20_v90_small_{reproduce,audit}.py`. Batch gate and whole-tree
 counts belong to the parent integration; no fuzz/mutation was run.
 
@@ -135434,7 +135434,7 @@ All allocated nontext sections and all nontext relocations are covered: canonica
 24-byte ops table, zero BSS, original strings only. One early-default generated cell was semantically
 invalid; that initial run is preserved/excluded and corrected controls rerun.
 
-Replay/artifacts: docs/batch20-v90-small-boundaries.md,
+Replay/artifacts: docs/history/batches/batch20-v90-small-boundaries.md,
 tools/gcc3_batch20_v90_small_reproduce.py --family b103 with the declared switches,
 tools/gcc3_batch20_b103_buffers_reproduce.py,
 tools/gcc3_batch20_b103_header_reproduce.py, and tools/gcc3_batch20_b103_audit.py. No fuzzing/mutation was run; header overlay is unchanged in this consumer; coordinated MRF prototype recovery is recorded separately. Parent batch owns full-tree counts and final gate.
@@ -135465,7 +135465,7 @@ controls all rerun.
 allocated nontext sizes, every nontext byte and relocation. Only realfft
 changes in adopted FFT candidate. No exact loss. Tools:
 `gcc3_batch20_fft_width_reproduce.py`, `gcc3_batch20_arma_output_reproduce.py`,
-`gcc3_batch20_cpp_boundaries_audit.py`; docs/batch20-realfft-width-controls.md,
+`gcc3_batch20_cpp_boundaries_audit.py`; docs/history/batches/batch20-realfft-width-controls.md,
 docs/batch20-arma-output-controls.md. Period differential deferred to final
 batch gate; no runtime success claimed before owner runs it.
 
@@ -135499,7 +135499,7 @@ no fuzzing or mutation run.
 
 Replay tools/gcc3_batch20_resampler_reproduce.py and
  tools/gcc3_batch20_resampler_audit.py; source domain in
- docs/batch20-v90-small-boundaries.md; build/gcc3-batch20-v90-resampler retains
+ docs/history/batches/batch20-v90-small-boundaries.md; build/gcc3-batch20-v90-resampler retains
 all positive and negative controls and full-TU/stage audits.
 
 INDEPENDENT SECOND GAIN. V90Resampler::resample baseline177B defines a next-index
@@ -135549,7 +135549,7 @@ Do not repair it with padding, a fabricated source local or counter fitting.
 
 Six further MRF caller crosses produce no gains and are closed: V32, B103 and
 V17/V21/V27/V29 receive-side counts. One V32 candidate loses an exact bystander;
-none is adopted. Documentation: docs/batch20-data-state-domain.md and
+none is adopted. Documentation: docs/history/batches/batch20-data-state-domain.md and
  docs/batch20-mrf-count-transfer-domain.md. Replay/audit tools:
  batch20_mrf_formal_reproduce.py, batch20_mrf_consumers_reproduce.py,
  batch20_v21_mrf_reproduce.py, batch20_mrf_audit.py and
@@ -135615,7 +135615,7 @@ than treating all negative bystanders as unchanged.
 
 Replay tools/gcc3_batch20_connection_reproduce.py and
  tools/gcc3_batch20_connection_audit.py; declared domain
- docs/batch20-v90-small-boundaries.md; retained artifacts
+ docs/history/batches/batch20-v90-small-boundaries.md; retained artifacts
  build/gcc3-batch20-v90-connection. No headers/templates, flags, harness,
 fuzzing or mutation execution changed. Parent period/structural gate pending.
 
@@ -135654,9 +135654,9 @@ structure equal modulo register names (alpha_why returns None). This is a bounde
 source preimage worth passing to allocation tracing, not an exact candidate to
 adopt by size. V22 headers/source remain unchanged.
 
-Audit/replay tools and explicit domains live in docs/batch20-original-order-controls.md,
-docs/batch20-verifier-native-probe-controls.md, docs/batch20-v8-interface-domain.md,
-docs/batch20-ring-factoring-domain.md, and the final V22/B103 domains. Archive
+Audit/replay tools and explicit domains live in docs/history/batches/batch20-original-order-controls.md,
+docs/history/batches/batch20-verifier-native-probe-controls.md, docs/history/batches/batch20-v8-interface-domain.md,
+docs/history/batches/batch20-ring-factoring-domain.md, and the final V22/B103 domains. Archive
 invalid preflight runs separately and exclude them from these denominators.
 No fuzzing or mutation execution, no source padding or register-name fitting.
 
@@ -135731,8 +135731,8 @@ controls; /tmp/batch20-callprog-trace-detail.log preserves seed discrimination.
 Final source restored before parent integration. Parent full batch phase is
 the final gate; no fuzz/mutation run, no tolerance or diagnostic weakening.
 
-Evidence: docs/batch20-callprog-read-boundaries.md;
-docs/batch20-callprog-callback-order-controls.md; tools/gcc3_batch20_callprog_reads.py,
+Evidence: docs/history/batches/batch20-callprog-read-boundaries.md;
+docs/history/batches/batch20-callprog-callback-order-controls.md; tools/gcc3_batch20_callprog_reads.py,
 tools/gcc3_batch20_callprog_audit.py, tools/gcc3_batch20_callprog_callback_reproduce.py,
 tools/gcc3_batch20_callprog_callback_audit.py.
 
@@ -135740,7 +135740,7 @@ tools/gcc3_batch20_callprog_callback_audit.py.
 
 On master baseline 93d7eee1, final Gentoo GCC 3.4.2-r2 production comparison
 recovers 20 exact functions with zero exact-set losses: 940→960/1852, exact
-bytes 97,508→101,930 (+4,422). docs/batch20-integration.md enumerates the gains.
+bytes 97,508→101,930 (+4,422). docs/history/batches/batch20-integration.md enumerates the gains.
 All 300 production objects are checked: 287 raw unchanged; the 13 changed
 objects raw match retained replay candidates. Configuration and MRF callee remain
 raw unchanged. The production audit fires on these known gains and reports all
@@ -135773,7 +135773,7 @@ forms miss. TU3→4/9 exact, zero losses; inline voice_modem changes as an expli
 bystander, all seven other bodies unchanged. Metadata/named data/allocated
 nontext/canonical relocations identical. Adopt only the proved if-assignment
 source; no register carrier or signature change. Domain/replay:
- docs/batch50-voice-status-boundaries.md and gcc3_batch50_voice_status_reproduce.py.
+ docs/history/batches/batch50-voice-status-boundaries.md and gcc3_batch50_voice_status_reproduce.py.
 The root complete-TU audit checks this positive together with CID and negative
 FIFO controls (25/25 cells); endbatch runtime gate remains pending.
 
@@ -135801,7 +135801,7 @@ Full Data.c0→2/3 exact, no losses. Formatted renderer changes through its inli
 hex helper and remains non-exact (SIZE117); it is not counted as a gain. All17
 complete-TU controls preserve metadata, named data, allocated nontext bytes and
 canonical relocations. Source winner adopted, endbatch deciding gate pending.
-Docs/replays: docs/batch50-cid-hex-boundaries.md and three gcc3_batch50_cid_hex*
+Docs/replays: docs/history/batches/batch50-cid-hex-boundaries.md and three gcc3_batch50_cid_hex*
 reproducers; gcc3_batch50_root_audit.py fires the two positive exact controls.
 
 ## F11752. FIFO8 count-return/index-postincrement cross closes without a gain
@@ -135814,13 +135814,13 @@ complete TUs. Raw baseline reproduced; two targets may change but no exact
 hit/loss, all named data/nontext/canonical relocations and two bystanders
 unchanged. Existing Tx caller narrows AX, insufficient to recover the wider
 contract uniquely. No header/source adoption and no arbitrary counter/carrier
-expansion. Domain: docs/batch50-fifo-count-boundaries.md; replay/audit:
+expansion. Domain: docs/history/batches/batch50-fifo-count-boundaries.md; replay/audit:
  gcc3_batch50_fifo_reproduce.py / gcc3_batch50_root_audit.py. Only this declared
 family is excluded; the remaining FIFO bodies are not declared unrecoverable.
 
 ## F11753. Completed fax source boundaries recover sixteen functions
 
-Sixteen functions (1,212 blob bytes) become exact at baseline902f47fa: eight message reporters, V17/V27 receive controls, three transmit idle states and three V29 receive states. Crossed masks/branch orientation, request and child read boundaries, saved-budget unsignedness and existing union byte flag updates establish the source changes. All83 valid full-TU cells preserve metadata/data, audit complete bystanders and lose no exact names. See `docs/batch50-fax-findings.md` and the finite domain/replay tools it names. Final integrated period gate pending; no fuzzing or mutation execution.
+Sixteen functions (1,212 blob bytes) become exact at baseline902f47fa: eight message reporters, V17/V27 receive controls, three transmit idle states and three V29 receive states. Crossed masks/branch orientation, request and child read boundaries, saved-budget unsignedness and existing union byte flag updates establish the source changes. All83 valid full-TU cells preserve metadata/data, audit complete bystanders and lose no exact names. See `docs/history/batches/batch50-fax-findings.md` and the finite domain/replay tools it names. Final integrated period gate pending; no fuzzing or mutation execution.
 
 ## F11754. V34 cursor and reporting boundaries, V8 promoted input and history loop
 
@@ -135862,7 +135862,7 @@ Full-register cosine arguments, byte narrowing at table use, and advancing TONEq
 
 ## F11761. Twelve V90/V92 leaves recover1168 bytes under retained compiler profile
 
-Two128B MappingParamsInt setters need explicit signed clamp; getNofRefLoops33B initializes count before loading loop bank. Six V90/V92 unsigned-cycle leaves use a common int result with fully covered cases and explicit narrow negation; initialized defensive default and width-only controls miss. V90 generateJd80B recovers member vector/polarity ownership, generateSymbol45B narrowing each child result at its return use, and ADID isThereAnyAltRbsPhase57B its original verdict predicate. Complete87-cell audit reviews full TUs,111 selected bodies, data/metadata/relocations and bystanders, no exact losses. Changed nonexact generator/COMDAT bodies are recorded in docs/batch50-v90-findings.md rather than hidden by score. Final integrated census/gate pending.
+Two128B MappingParamsInt setters need explicit signed clamp; getNofRefLoops33B initializes count before loading loop bank. Six V90/V92 unsigned-cycle leaves use a common int result with fully covered cases and explicit narrow negation; initialized defensive default and width-only controls miss. V90 generateJd80B recovers member vector/polarity ownership, generateSymbol45B narrowing each child result at its return use, and ADID isThereAnyAltRbsPhase57B its original verdict predicate. Complete87-cell audit reviews full TUs,111 selected bodies, data/metadata/relocations and bystanders, no exact losses. Changed nonexact generator/COMDAT bodies are recorded in docs/history/batches/batch50-v90-findings.md rather than hidden by score. Final integrated census/gate pending.
 
 Fixed-frame anonymous jump tables require bounded aligned entry allocation, distinct untouched callee-save slots, balanced CFG restoration/deallocation, and existing guard/index/table validation.28 assembled ELF controls accept3/refuse25; changed destination grades RELOC, rebased destination grades EXACT. Historical48-object controls and20alpha/59relocation tests remain green. Old/new prover on immutable300-object baseline each gives973/1852 with identical exact-name sets: zero apparatus-only gains. Two Sd gains prove the ordered six-case destinations; table addends are not masked. See docs/batch50-v90-fixed-frame-proof.md.
 
@@ -135872,11 +135872,11 @@ Four full-TU controls cross the blob's post-debug child-owner acquisition before
 
 ## F11763. Four V90 R detectors need member ownership crossed with the complete-group guard
 
-Member compound shift/bit updates restore the original store/reload boundary, but alone leave a two-byte literal-zero early-return difference. A positive complete-group guard keeps the common initialized verdict across the incomplete-group arm. Crossing both recovers detectR164B, detectRf164B, detectRNot113B, detectRfNot117B: all nine TU bodies exact, no losses. F8085's return synonyms were inert on the temporary-based source; this ownership interaction is the new explanatory observation. V90 package now121 valid full-TU controls and16 gains. Domain/reproducer docs/batch50-v90-rdetector-domain.md, tools/gcc3_batch50_v90_rdetector.py; retained pass snapshots identify when each boundary changes. Final integrated gate pending.
+Member compound shift/bit updates restore the original store/reload boundary, but alone leave a two-byte literal-zero early-return difference. A positive complete-group guard keeps the common initialized verdict across the incomplete-group arm. Crossing both recovers detectR164B, detectRf164B, detectRNot113B, detectRfNot117B: all nine TU bodies exact, no losses. F8085's return synonyms were inert on the temporary-based source; this ownership interaction is the new explanatory observation. V90 package now121 valid full-TU controls and16 gains. Domain/reproducer docs/history/batches/batch50-v90-rdetector-domain.md, tools/gcc3_batch50_v90_rdetector.py; retained pass snapshots identify when each boundary changes. Final integrated gate pending.
 
 ## F11764. Thirty further fax/FixedRC controls remain findings, with no source adoption
 
-Original constructor templates/order, medium callback ownership, HDLC guards, signed readiness and class1 allocation failure were bounded in30 complete-TU controls. No exact gain or loss. The class1 blob's allocation-error path is an authentic behavior lead; candidates do not recreate its bytes, and no reachable-input equivalence claim is made. FixedRC table-to-switch was already landed in F11632-F11634: the old lead was stale. Split kind=0 stores miss; removing the unused bank table preserves all eight raw instruction streams with relocation fields masked, removes160B/18 pointer relocations and shifts the anonymous selector addend. It is data-only evidence, not a function gain; source/header/generator stay unchanged. docs/batch50-fax-medium-findings.md and docs/batch50-fixedrc-constructor-domain.md retain denominators and full audits.
+Original constructor templates/order, medium callback ownership, HDLC guards, signed readiness and class1 allocation failure were bounded in30 complete-TU controls. No exact gain or loss. The class1 blob's allocation-error path is an authentic behavior lead; candidates do not recreate its bytes, and no reachable-input equivalence claim is made. FixedRC table-to-switch was already landed in F11632-F11634: the old lead was stale. Split kind=0 stores miss; removing the unused bank table preserves all eight raw instruction streams with relocation fields masked, removes160B/18 pointer relocations and shifts the anonymous selector addend. It is data-only evidence, not a function gain; source/header/generator stay unchanged. docs/history/batches/batch50-fax-medium-findings.md and docs/history/batches/batch50-fixedrc-constructor-domain.md retain denominators and full audits.
 
 ## F11765. V90 data-phase entry: a double half expression recovers190 bytes
 
@@ -135884,7 +135884,7 @@ Four crossed entry/progress literal-width cells isolate enterDataPhase: only cha
 
 ## F11766. FIFO constructor needs original config copy and operand signedness
 
-Eight independent/crossed controls recover FIFO_create167B only with whole config copy, unsigned-at-use capacity and direct signed index. Original capacity MOVZWL and cursor MOVSWL establish these boundaries; the previous signed-branch comment conflated capacity with index and is corrected. Header/API unchanged; all metadata/data/nontext/bystanders unchanged and both exact FIFO neighbours preserved. Ten full-TU controls include the declined GetSNRV21 abs-before-narrow77B/BYTES4 lead. No adoption of register-only neighbours. Domain docs/batch50-fax-abs-fifo-domain.md, full findings docs/batch50-fax-fifo-findings.md. Final gate pending.
+Eight independent/crossed controls recover FIFO_create167B only with whole config copy, unsigned-at-use capacity and direct signed index. Original capacity MOVZWL and cursor MOVSWL establish these boundaries; the previous signed-branch comment conflated capacity with index and is corrected. Header/API unchanged; all metadata/data/nontext/bystanders unchanged and both exact FIFO neighbours preserved. Ten full-TU controls include the declined GetSNRV21 abs-before-narrow77B/BYTES4 lead. No adoption of register-only neighbours. Domain docs/history/batches/batch50-fax-abs-fifo-domain.md, full findings docs/batch50-fax-fifo-findings.md. Final gate pending.
 
 ## F11767. Broader kernel/tone and pulse readiness controls close without source adoption
 
@@ -135896,49 +135896,49 @@ Master/base902f47fa, strict worst-copy census973→1020/1852 and103539→108349 
 
 Final make phase J=4 passes388 period tests/0 failures and all structural gates. First run's period388/0 passed but41 detached mutation anchors refused structural provenance; retargeted semantic anchors preserve all labels/counts, then full phase rerun passes. Static anchors285 suites/10038 mutations,0 detached/nonunique/mispointed; references14323 checked,0 dangling/stale; unique finding numbers. No mutation/fuzz execution. Python syntax131 new diagnostic tools and whitespace check pass. Findings-only negatives are not promoted.
 
-Same-order300-input partial links both remain DIFFERENT: positioned equality68861→69172/943398, exact relocation records1037→1031/18317, exact defined-symbol records394/2907. Those record-position changes are retained, not treated as contrary function-proof evidence. No whole-object completion claim. Root6 gains757B; integer5/560B; V90/V9217/1916B; completed fax/data19/1577B. Full finite controls, callback/high-bit caveats, valid-run denominators and replay instructions: [batch50 results](batch50-results.md). Source gains are independent of profile/flag fitting and the other session's main checkout is untouched.
+Same-order300-input partial links both remain DIFFERENT: positioned equality68861→69172/943398, exact relocation records1037→1031/18317, exact defined-symbol records394/2907. Those record-position changes are retained, not treated as contrary function-proof evidence. No whole-object completion claim. Root6 gains757B; integer5/560B; V90/V9217/1916B; completed fax/data19/1577B. Full finite controls, callback/high-bit caveats, valid-run denominators and replay instructions: [batch50 results](history/batches/batch50-results.md). Source gains are independent of profile/flag fitting and the other session's main checkout is untouched.
 
 ## F11769. Updated master baseline and first batch100 result lifetime gain
 
 PR259 landed856c1ecb after both CI jobs green. Fresh300/300 period objects/config raw-reproduce the landed source; strict baseline1020/1852,108349 exact bytes, five unresolved. Root eligibility47 TUs/179 shared functions/89 nonexact bodies≤2500B; completed data/fax pool133TUs/510shared/285nonexact; integer45TUs/186shared/107nonexact; C++879defining copies with273distinct nonexact names. These are ownership/eligibility denominators, not completed gains. Dirty main checkout remains untouched, #22 paused/read-only, no open PR at start.
 
-Three voice DLE controls recover voice_dle_command196B with common initialized switch result; equivalent if form misses7B, literal-return baseline misses50B. Every nonexact neighbour and exact name unchanged; metadata/nameddata/relocations preserved. Merge-string CAN/ETX positions exchange with same literal multiset, flags/size checked explicitly. No masked byte or profile fitting. Root complete-TU audit11cells includes negative CrossDataLinks cursor/count cube and dialer unsigned-verdict/early-syntax cube. Dialer reaches149B/BYTES2 with identical instructions except unrelocated local-call distance (-1344 versus-416): no caller adoption or silent displacement normalization. Major gate deferred; no fuzz/mutation execution. [Domain](batch100-voice-dle-domain.md); replay tools/gcc3_batch100_voice_dle.py.
+Three voice DLE controls recover voice_dle_command196B with common initialized switch result; equivalent if form misses7B, literal-return baseline misses50B. Every nonexact neighbour and exact name unchanged; metadata/nameddata/relocations preserved. Merge-string CAN/ETX positions exchange with same literal multiset, flags/size checked explicitly. No masked byte or profile fitting. Root complete-TU audit11cells includes negative CrossDataLinks cursor/count cube and dialer unsigned-verdict/early-syntax cube. Dialer reaches149B/BYTES2 with identical instructions except unrelocated local-call distance (-1344 versus-416): no caller adoption or silent displacement normalization. Major gate deferred; no fuzz/mutation execution. [Domain](history/batches/batch100-voice-dle-domain.md); replay tools/gcc3_batch100_voice_dle.py.
 
 ## F11770. Receiver gain queries need their original callback-owner read boundaries
 
-Five complete Rx translation-unit controls distinguish an entry callback snapshot, a snapshot after detector setup, direct owner reads for gain calls, and owner reads at every use. Original voice_set_rx loads the silence callback after detector_set_enable and reloads cfg.get_sreg at each gain call. Both late-snapshot plus direct gains and the simpler owner-at-every-use form reproduce305B EXACT; each axis alone misses. Adopt the latter, preserving the unsigned returned-word conversion and silence callback ABI. Winning forms change only voice_set_rx: voice_rx, all symbol metadata, named data and allocated nontext remain unchanged. A negative direct-only cell changes the nonexact voice_rx bystander through TU history and is explicitly retained as a negative. Root16 complete-TU controls audited with zero exact losses; final period gate remains pending. Domain docs/batch100-rx-query-domain.md; reproducer tools/gcc3_batch100_rx_query.py.
+Five complete Rx translation-unit controls distinguish an entry callback snapshot, a snapshot after detector setup, direct owner reads for gain calls, and owner reads at every use. Original voice_set_rx loads the silence callback after detector_set_enable and reloads cfg.get_sreg at each gain call. Both late-snapshot plus direct gains and the simpler owner-at-every-use form reproduce305B EXACT; each axis alone misses. Adopt the latter, preserving the unsigned returned-word conversion and silence callback ABI. Winning forms change only voice_set_rx: voice_rx, all symbol metadata, named data and allocated nontext remain unchanged. A negative direct-only cell changes the nonexact voice_rx bystander through TU history and is explicitly retained as a negative. Root16 complete-TU controls audited with zero exact losses; final period gate remains pending. Domain docs/history/batches/batch100-rx-query-domain.md; reproducer tools/gcc3_batch100_rx_query.py.
 
 ## F11771. Fax reversal crosses narrow-loop ownership and operation width
 
-faxvmi_byte_reverse93B closes only at the full three-axis cross: signed-short outer postdecrement, unsigned-short bit postdecrement, and accumulator narrowing after shift before OR. All seven partial controls miss. faxvmi_frame_reverse151B needs the literal byte loop, unsigned header-length stride, and signed-short outer postdecrement; seven partials also miss. Original frame has no byte-helper call and carries distinct FILE attribution: recover the literal loop without claiming impossible compiler inlining. Undefined helper binding/call disappears as expected in its TU. Both complete-TU winning audits retain named data, allocated nontext, all other function bodies and exact neighbours. Stable two-gain manifest in the data worktree records source/object hashes and74 valid aggregate controls, zero exact losses; final batch gate pending. Domains docs/batch100-fax-reverse-loops-domain.md and docs/batch100-fax-frame-reverse-domain.md.
+faxvmi_byte_reverse93B closes only at the full three-axis cross: signed-short outer postdecrement, unsigned-short bit postdecrement, and accumulator narrowing after shift before OR. All seven partial controls miss. faxvmi_frame_reverse151B needs the literal byte loop, unsigned header-length stride, and signed-short outer postdecrement; seven partials also miss. Original frame has no byte-helper call and carries distinct FILE attribution: recover the literal loop without claiming impossible compiler inlining. Undefined helper binding/call disappears as expected in its TU. Both complete-TU winning audits retain named data, allocated nontext, all other function bodies and exact neighbours. Stable two-gain manifest in the data worktree records source/object hashes and74 valid aggregate controls, zero exact losses; final batch gate pending. Domains docs/history/batches/batch100-fax-reverse-loops-domain.md and docs/batch100-fax-frame-reverse-domain.md.
 
 ## F11772. Next-state assignment before a diagnostic enables original late tail merge
 
-V90Modulator and V92Modulator initiateFPE/RRN recover four strict bodies260/308/276/260B by moving each arm's existing next-state local assignment before its diagnostic. Original disassembly establishes the live-through-call state; this refutes treating F7520/F7541's residual solely as unexpressible crossjump freedom. The two diagnostic sites survive through26.postreload; the winning graph merges at27.flow2 while baseline retains both sites. Full26-cell aggregate audit retains metadata, named data and allocated nontext; winning TUs change only the four intended bodies and lose no exact neighbours. Adopt eight local assignment moves, no flags or register padding. Reproducer tools/gcc3_batch100_v90_initiate_state.py, domain docs/batch100-v90-initiate-state-domain.md; final combined gate pending.
+V90Modulator and V92Modulator initiateFPE/RRN recover four strict bodies260/308/276/260B by moving each arm's existing next-state local assignment before its diagnostic. Original disassembly establishes the live-through-call state; this refutes treating F7520/F7541's residual solely as unexpressible crossjump freedom. The two diagnostic sites survive through26.postreload; the winning graph merges at27.flow2 while baseline retains both sites. Full26-cell aggregate audit retains metadata, named data and allocated nontext; winning TUs change only the four intended bodies and lose no exact neighbours. Adopt eight local assignment moves, no flags or register padding. Reproducer tools/gcc3_batch100_v90_initiate_state.py, domain docs/history/batches/batch100-v90-initiate-state-domain.md; final combined gate pending.
 
 ## F11773. Receive epochs and union width recover five fax state bodies
 
-RxHdxEpochDetV17/V27/V29 recover156B each through original positive carrier arms crossed with memory-owned countdown use (V17/V27), narrow EpochDetect result use (V17), and byte flag writes (V29). Sixteen complete-TU cells retain all partial negative controls. RxHdxIdleV17/V27 additionally recover132B each: write the existing byte flags member, then test the declared result union's word carrier with the corresponding shifted mask. Exact V29 sister supplies the field-width witness. The byte form caches a register value across the conditional join and introduces an extra CFG edge absent from the original. Initial RTL separates QI byte and SI word guards; both retain four jump instructions after06.cse, while the post-GCSE09.loop dump has five for the byte form and four for the word form. The difference therefore precedes register allocation. No volatile, artificial locals, header edits or new ABI guesses. All94 aggregate data controls pass full-TU metadata/named-data/nontext/relocation and bystander audits with zero exact losses; stable seven-gain manifest records976B including F11771 reversals. Production formatting-only cleanup leaves winning object hashes unchanged. Final combined period gate pending. Domains docs/batch100-fax-rx-epoch-domain.md and docs/batch100-fax-idle-union-domain.md.
+RxHdxEpochDetV17/V27/V29 recover156B each through original positive carrier arms crossed with memory-owned countdown use (V17/V27), narrow EpochDetect result use (V17), and byte flag writes (V29). Sixteen complete-TU cells retain all partial negative controls. RxHdxIdleV17/V27 additionally recover132B each: write the existing byte flags member, then test the declared result union's word carrier with the corresponding shifted mask. Exact V29 sister supplies the field-width witness. The byte form caches a register value across the conditional join and introduces an extra CFG edge absent from the original. Initial RTL separates QI byte and SI word guards; both retain four jump instructions after06.cse, while the post-GCSE09.loop dump has five for the byte form and four for the word form. The difference therefore precedes register allocation. No volatile, artificial locals, header edits or new ABI guesses. All94 aggregate data controls pass full-TU metadata/named-data/nontext/relocation and bystander audits with zero exact losses; stable seven-gain manifest records976B including F11771 reversals. Production formatting-only cleanup leaves winning object hashes unchanged. Final combined period gate pending. Domains docs/history/batches/batch100-fax-rx-epoch-domain.md and docs/batch100-fax-idle-union-domain.md.
 
 ## F11774. Bounded root width and predicate controls remain closed negatives
 
-Ten consistent caller/callee/header controls on detector_progress and voice_modem preserve the original low-word interpretation but produce no gain: formal widening or caller cast removal alone is raw-inert; crossed widening/plain callers move voice_modem BYTES2→BYTES3. The original signed callee load rules out replacing its interpretation with an unsigned-short formal. Initial overlay-prefix error is preserved invalid and excluded; production headers unchanged. Four voice_online result-timing controls and four eager-boolean-gate×timing controls also miss; no source adoption. Stability predicate controls recover original52/34B lengths with a common initialized result, but retain six/three comparison bytes; source operand reversal is inert. Six promoted int/unsigned-int local controls do not close these bytes. No comparison-opcode canonicalization or nearby syntactic search adopted. Root44 complete-TU controls pass metadata, named data, allocated nontext, relocation and all bystander audits with zero exact losses; only two retained root gains remain. Domain/replay names recorded in docs/batch100-worklog.md and corresponding docs/batch100-*-domain.md.
+Ten consistent caller/callee/header controls on detector_progress and voice_modem preserve the original low-word interpretation but produce no gain: formal widening or caller cast removal alone is raw-inert; crossed widening/plain callers move voice_modem BYTES2→BYTES3. The original signed callee load rules out replacing its interpretation with an unsigned-short formal. Initial overlay-prefix error is preserved invalid and excluded; production headers unchanged. Four voice_online result-timing controls and four eager-boolean-gate×timing controls also miss; no source adoption. Stability predicate controls recover original52/34B lengths with a common initialized result, but retain six/three comparison bytes; source operand reversal is inert. Six promoted int/unsigned-int local controls do not close these bytes. No comparison-opcode canonicalization or nearby syntactic search adopted. Root44 complete-TU controls pass metadata, named data, allocated nontext, relocation and all bystander audits with zero exact losses; only two retained root gains remain. Domain/replay names recorded in docs/history/batches/batch100-worklog.md and corresponding docs/batch100-*-domain.md.
 
 ## F11775. Scrambler access follows the enclosing owner before and after its call
 
-SetScramblerV27 recovers92B only with whole-block ownership on both sides of SDM initialization. Original reads the scrambler word at block+0x22 before forming SDM+0x1c, then reloads the whole block and stores block+0x22 afterward. Retained nested SDM pointers miss: baselineSIZE3, before-onlySIZE3, after-onlyBYTES21, full crossEXACT. Four complete-TU controls preserve field interpretation, rate/config/store ordering, real post-call owner reload, metadata, named/allocated data, relocations and all bystanders. Stable data package totals eight strict gains1068B across six TUs/140 audited controls, zero exact losses. No registered suite targets this TU, no mutation execution. Domain docs/batch100-fax-v27-scrambler-owner-domain.md; final combined gate pending.
+SetScramblerV27 recovers92B only with whole-block ownership on both sides of SDM initialization. Original reads the scrambler word at block+0x22 before forming SDM+0x1c, then reloads the whole block and stores block+0x22 afterward. Retained nested SDM pointers miss: baselineSIZE3, before-onlySIZE3, after-onlyBYTES21, full crossEXACT. Four complete-TU controls preserve field interpretation, rate/config/store ordering, real post-call owner reload, metadata, named/allocated data, relocations and all bystanders. Stable data package totals eight strict gains1068B across six TUs/140 audited controls, zero exact losses. No registered suite targets this TU, no mutation execution. Domain docs/history/batches/batch100-fax-v27-scrambler-owner-domain.md; final combined gate pending.
 
 ## F11776. Separate fax idle arms and answer-tone fallthrough recover two states
 
-_answer_tone_state94B has a positive tone-generation arm and preamble tail; restoring that original orientation recovers its complete body. _idle_state72B has separate positive variable-count and nonpositive fixed160 clearing loops. A merged normalized-count loop misses. Literal splitting recovers everything except CMP159/JLE versus original CMP160/JL; assigning the existing n=160 in the fixed arm preserves the latter, witnessed independently in _send_silence_state. Four original-CFG cells and two fixed-bound cells are audited; combined winner retains all exact neighbours, metadata, named data, allocated nontext and relocations. Unchanged-source nonexact fax_class1_create moves through TU history and is explicitly reviewed. No new locals, flags, width changes or arbitrary case ordering. Two gains166B; no registered suite targets class1.c. Domains docs/batch100-fax-class1-state-cfg-domain.md and docs/batch100-fax-idle-bound-domain.md. Final combined period gate pending.
+_answer_tone_state94B has a positive tone-generation arm and preamble tail; restoring that original orientation recovers its complete body. _idle_state72B has separate positive variable-count and nonpositive fixed160 clearing loops. A merged normalized-count loop misses. Literal splitting recovers everything except CMP159/JLE versus original CMP160/JL; assigning the existing n=160 in the fixed arm preserves the latter, witnessed independently in _send_silence_state. Four original-CFG cells and two fixed-bound cells are audited; combined winner retains all exact neighbours, metadata, named data, allocated nontext and relocations. Unchanged-source nonexact fax_class1_create moves through TU history and is explicitly reviewed. No new locals, flags, width changes or arbitrary case ordering. Two gains166B; no registered suite targets class1.c. Domains docs/history/batches/batch100-fax-class1-state-cfg-domain.md and docs/batch100-fax-idle-bound-domain.md. Final combined period gate pending.
 
 ## F11777. V29 transition byte writes reproduce a bounded five-way selector
 
-RxNextStateV29 recovers467B by writing the declared result union's flags/flags2 bytes with the corresponding named shifted masks, matching eleven original byte-write instruction sites. Case structure, state/count/handler/rate stores, diagnostics and selector remain fixed. The old comparator refused its anonymous table because of the push-save frame and direct calls; it was not evidence of different destinations. New bounded ordinary-i386-ABI proof preserves every ordered destination and stack/guard/ownership rule, with29 static frame controls (3accept/26refuse), actual-comparator EXACT/RELOC positives and26invalid-identical UNRESOLVED negatives. Existing table controls pass. Old/new complete immutable-master census JSON is identical1020/1852 and108349B, excluding apparatus-only gain. V29 winner's eight-function complete TU changes only the already-adopted epoch and transition bodies, both exact; metadata, named data, allocated nontext and relocations remain stable apart from proved ordered case addends. No source or profile fitting. ABI contract, controls and excluded fixture/staleness attempts in docs/batch100-jumptable-abi-proof.md; source domain docs/batch100-fax-v29-next-flags-domain.md. Final combined period gate pending.
+RxNextStateV29 recovers467B by writing the declared result union's flags/flags2 bytes with the corresponding named shifted masks, matching eleven original byte-write instruction sites. Case structure, state/count/handler/rate stores, diagnostics and selector remain fixed. The old comparator refused its anonymous table because of the push-save frame and direct calls; it was not evidence of different destinations. New bounded ordinary-i386-ABI proof preserves every ordered destination and stack/guard/ownership rule, with29 static frame controls (3accept/26refuse), actual-comparator EXACT/RELOC positives and26invalid-identical UNRESOLVED negatives. Existing table controls pass. Old/new complete immutable-master census JSON is identical1020/1852 and108349B, excluding apparatus-only gain. V29 winner's eight-function complete TU changes only the already-adopted epoch and transition bodies, both exact; metadata, named data, allocated nontext and relocations remain stable apart from proved ordered case addends. No source or profile fitting. ABI contract, controls and excluded fixture/staleness attempts in docs/history/batches/batch100-jumptable-abi-proof.md; source domain docs/batch100-fax-v29-next-flags-domain.md. Final combined period gate pending.
 
 ## F11778. Returning the failed allocation owner preserves the original diagnostic lifetime
 
-create_dtmf recovers228B by retaining d across its failed-allocation diagnostic and sharing the final owner return. Literal returnNULL deletes that lifetime and generates duplicate epilogues, uses caller-saved EDX for the object, and emits235B. Original EBX survives the diagnostic and is copied to EAX at the common return. Two full-TU cells cross no types, counters, store order or flags; winning TU changes only create_dtmf, all exact neighbours/data/relocations/metadata unchanged. Initialization is positively guarded, so failed allocation performs no stores and returns null as before. Constructor neighbour beepgen_create's two common-return controls remain negative202vs203/SIZE1, with three explicitly reviewed unchanged-source nonexact bystanders and no losses. Root48 complete-TU controls now audited. Domains docs/batch100-dtmf-create-return-domain.md and docs/batch100-beepgen-return-domain.md; final combined period gate pending.
+create_dtmf recovers228B by retaining d across its failed-allocation diagnostic and sharing the final owner return. Literal returnNULL deletes that lifetime and generates duplicate epilogues, uses caller-saved EDX for the object, and emits235B. Original EBX survives the diagnostic and is copied to EAX at the common return. Two full-TU cells cross no types, counters, store order or flags; winning TU changes only create_dtmf, all exact neighbours/data/relocations/metadata unchanged. Initialization is positively guarded, so failed allocation performs no stores and returns null as before. Constructor neighbour beepgen_create's two common-return controls remain negative202vs203/SIZE1, with three explicitly reviewed unchanged-source nonexact bystanders and no losses. Root48 complete-TU controls now audited. Domains docs/history/batches/batch100-dtmf-create-return-domain.md and docs/history/batches/batch100-beepgen-return-domain.md; final combined period gate pending.
 
 ## F11779. Silence half-count arithmetic starts before the state stores
 
@@ -135946,11 +135946,11 @@ _recieve_silence_state_init recovers59B by initializing its existing half=sample
 
 ## F11780. Energy accumulator lifetime is recoverable evidence but not an exact source recovery
 
-Nine complete-TU bSearchEnergy controls cross original post-memcpy sum initialization, post-quotient x87 zero and late common verdict with a named1000 window; then separately cross loop-end denominator sum/i and captured buf1+1000 window. Every input leaves i=1000, but neither denominator spelling reproduces original runtime unsigned DIV. Accumulator delay removes early x87 spilling; sizes alone mislead (baseline270vs267, named count268, late251). Follow-up window/counter cells also miss. All metadata, named/allocated data and exact neighbours retained; only target and named nonexact FindCorrelation/FDSP_DP_Run history bystanders move. No source adoption, helper invention, volatile or flags. Root57 complete-TU cells audited; retained root source gains are three(voiceDLE,voiceRx,createDTMF). Domains docs/batch100-energy-lifetime-domain.md and docs/batch100-energy-counter-mean-domain.md. Reopening requires original quotient/helper expansion evidence beyond final loop value.
+Nine complete-TU bSearchEnergy controls cross original post-memcpy sum initialization, post-quotient x87 zero and late common verdict with a named1000 window; then separately cross loop-end denominator sum/i and captured buf1+1000 window. Every input leaves i=1000, but neither denominator spelling reproduces original runtime unsigned DIV. Accumulator delay removes early x87 spilling; sizes alone mislead (baseline270vs267, named count268, late251). Follow-up window/counter cells also miss. All metadata, named/allocated data and exact neighbours retained; only target and named nonexact FindCorrelation/FDSP_DP_Run history bystanders move. No source adoption, helper invention, volatile or flags. Root57 complete-TU cells audited; retained root source gains are three(voiceDLE,voiceRx,createDTMF). Domains docs/history/batches/batch100-energy-lifetime-domain.md and docs/batch100-energy-counter-mean-domain.md. Reopening requires original quotient/helper expansion evidence beyond final loop value.
 
 ## F11781. Existing conversion helpers isolate a one-byte peephole scratch residual
 
-FDSP_DP_Run's indexed input and counted-cursor output conversions, late acquisition of output pointers and unconditional scale lifetimes are reproduced by calls to its two existing earlier conversion helpers. Four complete-TU cells produce strict BYTES108/111/17/1; both calls inline without new relocations. The combined138-byte body matches every canonical relocation and137 raw bytes; only final stack-release POP ECX/EDX differs, and instruction operands are alpha-equivalent. An additional four-cell cross with independently exact create_dtmf predecessor retains the same one-byte residual. All metadata/named/allocated data and exact neighbours preserved, only two named target bodies change. Four RTL stages locate first scratch selection at28.peephole2 from ADD ESP4 at27.flow2, with REG_UNUSED EDX; subsequent rename/final machine retain it. i386.md epilogue-deallocator match_scratch and F7812's existing round-robin cursor explain the mechanism class. No helper source adopted merely for a near hit, no altered return ABI or register carrier. Root65 full-TU controls audited. Domain and trace details in docs/batch100-fdsp-conversion-helpers-domain.md and docs/batch100-fdsp-helper-predecessor-domain.md. Next discriminator is evidenced earlier complete-TU scratch history.
+FDSP_DP_Run's indexed input and counted-cursor output conversions, late acquisition of output pointers and unconditional scale lifetimes are reproduced by calls to its two existing earlier conversion helpers. Four complete-TU cells produce strict BYTES108/111/17/1; both calls inline without new relocations. The combined138-byte body matches every canonical relocation and137 raw bytes; only final stack-release POP ECX/EDX differs, and instruction operands are alpha-equivalent. An additional four-cell cross with independently exact create_dtmf predecessor retains the same one-byte residual. All metadata/named/allocated data and exact neighbours preserved, only two named target bodies change. Four RTL stages locate first scratch selection at28.peephole2 from ADD ESP4 at27.flow2, with REG_UNUSED EDX; subsequent rename/final machine retain it. i386.md epilogue-deallocator match_scratch and F7812's existing round-robin cursor explain the mechanism class. No helper source adopted merely for a near hit, no altered return ABI or register carrier. Root65 full-TU controls audited. Domain and trace details in docs/history/batches/batch100-fdsp-conversion-helpers-domain.md and docs/batch100-fdsp-helper-predecessor-domain.md. Next discriminator is evidenced earlier complete-TU scratch history.
 
 ## F11782. A terminal constructor return crosses a retained input owner
 
@@ -135968,7 +135968,7 @@ GitHub issue #260 records215 distinct function/file pairs with raw address-plus-
 
 ## F11785. Composed batch retains21 strict gains with a green period gate
 
-At856c1ecb baseline,21source gains4379reference bytes coexist:1020→1041/1852,108349→112728exact bytes,zero exact losses.13changed production objects equal their independently audited winners raw;287/300other objects remain raw-identical.693valid complete-TU emissions (65root,166data,183C++,279integer) include25explicit diagnostics and exclude invalid/redundant artifacts. The batch targetabout100 was not reached; these negatives bound tested domains without asserting global exhaustion or source correctness. `make phase J=4` exits0,388period differential tests passed/0failed and structural checks green. Static anchors285suites/10038rows all unique, no mutations/fuzzing executed. Final combined validation supersedes pending-gate notes F11769–F11782. Durable results/replay index docs/batch100-results.md; source profile and other-session issue22 work remain untouched.
+At856c1ecb baseline,21source gains4379reference bytes coexist:1020→1041/1852,108349→112728exact bytes,zero exact losses.13changed production objects equal their independently audited winners raw;287/300other objects remain raw-identical.693valid complete-TU emissions (65root,166data,183C++,279integer) include25explicit diagnostics and exclude invalid/redundant artifacts. The batch targetabout100 was not reached; these negatives bound tested domains without asserting global exhaustion or source correctness. `make phase J=4` exits0,388period differential tests passed/0failed and structural checks green. Static anchors285suites/10038rows all unique, no mutations/fuzzing executed. Final combined validation supersedes pending-gate notes F11769–F11782. Durable results/replay index docs/history/batches/batch100-results.md; source profile and other-session issue22 work remain untouched.
 
 ## F11786. Fresh C++ and service negatives retain behavioral witnesses without claiming correctness
 
@@ -135978,7 +135978,7 @@ Cadence original interior-on duration checks and valid bank6/7 mapping, VOICE_pr
 
 ## F11787. Data replay is pinned to the historical source and its explicit predecessors
 
-The completed data/fax pool contains166 valid complete-TU cells,164 generic and2 separately audited selector cells, across28 bounded families. Twelve retained gains1760B are already counted in F11771/F11773/F11775–F11777/F11779; negative descendants do not add gains merely because they include an exact predecessor. Source-generation fixes pin seven formerly checkout-dependent drivers to856c1ecb and explicit predecessor transformations. A34-cell pure-generator audit finds25 raw-identical source files and9 differing only in comments/formatting; adopted V29 Next replay is recompiled and raw reproduces. Expected helper removal and one dead FIFO_CFG+4 data relocation are individually audited, no unexplained inventory masking. Four redundant historical FDSP replication cells and invalid generator/assembler artifacts stay excluded. Negative TX/config/ring/quality/status/V22/FDSP domains require a new independent witness before reopening. Complete driver/domain/audit and exclusion index docs/batch100-data-replay-index.md; no source work reopens completed fax reconstruction.
+The completed data/fax pool contains166 valid complete-TU cells,164 generic and2 separately audited selector cells, across28 bounded families. Twelve retained gains1760B are already counted in F11771/F11773/F11775–F11777/F11779; negative descendants do not add gains merely because they include an exact predecessor. Source-generation fixes pin seven formerly checkout-dependent drivers to856c1ecb and explicit predecessor transformations. A34-cell pure-generator audit finds25 raw-identical source files and9 differing only in comments/formatting; adopted V29 Next replay is recompiled and raw reproduces. Expected helper removal and one dead FIFO_CFG+4 data relocation are individually audited, no unexplained inventory masking. Four redundant historical FDSP replication cells and invalid generator/assembler artifacts stay excluded. Negative TX/config/ring/quality/status/V22/FDSP domains require a new independent witness before reopening. Complete driver/domain/audit and exclusion index docs/history/batches/batch100-data-replay-index.md; no source work reopens completed fax reconstruction.
 
 ## F11788. Relocations must occupy validated data fields, not proven frame or guard literals
 
@@ -135986,13 +135986,13 @@ Independent review of F11777's new push-save path finds a containment-only accep
 
 ## F11789. The remaining inventory does not establish an allocator-only wall
 
-At9f1199b5,300 immutable complete-TU objects contain1852 common symbols:1041 strict exact and811 nonexact/819 defining copies. Complete copy-aware classifier accounts for673 instruction-sequence differences,83 size/direct-typed-call differences,40 complete existing alpha proofs with established relocation identity,7 same-sequence operand/relocation differences,4 unresolved selectors,2 register-erased shape matches refused by alpha,1 unresolved anonymous data destination and1 dead-scratch POP difference. These are observed categories, not recovered causal diagnoses. All40 alpha cases have actual decoded operand changes. Initial call-site normalization and intermediate all-call operand inventories are preserved invalid/excluded. Detector controls4positive/7negative fire. No comparator relaxation. Full feature/hash/config/copy artifacts and discriminating shortlist: docs/gcc3-mechanism-classification.md, tools/gcc3_mechanism_classify.py.
+At9f1199b5,300 immutable complete-TU objects contain1852 common symbols:1041 strict exact and811 nonexact/819 defining copies. Complete copy-aware classifier accounts for673 instruction-sequence differences,83 size/direct-typed-call differences,40 complete existing alpha proofs with established relocation identity,7 same-sequence operand/relocation differences,4 unresolved selectors,2 register-erased shape matches refused by alpha,1 unresolved anonymous data destination and1 dead-scratch POP difference. These are observed categories, not recovered causal diagnoses. All40 alpha cases have actual decoded operand changes. Initial call-site normalization and intermediate all-call operand inventories are preserved invalid/excluded. Detector controls4positive/7negative fire. No comparator relaxation. Full feature/hash/config/copy artifacts and discriminating shortlist: docs/history/compiler/gcc3-mechanism-classification.md, tools/gcc3_mechanism_classify.py.
 
 ## F11790. Installed GCC scratch tracing preserves emitted objects and exposes inherited cursor history
 
 FDSP_DP_Run's existing two-helper candidate reproduces137/138 reference bytes, retaining final POP EDX instead of ECX. Observational GDB on installed Gentoo cc1 records163 scratch searches across five inputs, preserving driver/plain/observed assembly and assembled object raw in all five. Complete TU baseline and helper forms each have53 searches; target entry49 selects hard1/EDX and exits2. Helpers-only has2 searches with target entry1; helpers plus FindCorrelation has5 with entry15, both still EDX. Trace identifies FindCorrelation's transitions3→13→15→49. The separately declared full-minus-FindCorrelation control has50 searches, target entry3 and predicted/observed EBX. The latter three remove exports and remain diagnostic only. This causally confirms F7812's inherited peephole scratch cursor, not a recoverable source ordering.
 
-SImode/general-register eligibility model reproduces154/163 choices; nine other searches are outside its bounded domain and retained in denominator. Under the matching helper's captured eligibility/order, only entry2 of53 selects original ECX; this is a conditional compilation-history constraint, not recovered original profile. No cursor forcing, inferior calls/writes, dummy registers or source adoption. Invalid optimized-DWARF entry arguments are preserved/excluded; corrected tool reads cdecl entry-stack arguments and validates domain/completion. Five actual target searches fire; completion controls1accept/5refuse, model refuses unsupported mode and corrupted selection. Reproducers, installed binary hash, full commands and replay: docs/gcc3-mechanism-results.md, tools/gcc3_mechanism_scratch_observe.py and scratch_model.py.
+SImode/general-register eligibility model reproduces154/163 choices; nine other searches are outside its bounded domain and retained in denominator. Under the matching helper's captured eligibility/order, only entry2 of53 selects original ECX; this is a conditional compilation-history constraint, not recovered original profile. No cursor forcing, inferior calls/writes, dummy registers or source adoption. Invalid optimized-DWARF entry arguments are preserved/excluded; corrected tool reads cdecl entry-stack arguments and validates domain/completion. Five actual target searches fire; completion controls1accept/5refuse, model refuses unsupported mode and corrupted selection. Reproducers, installed binary hash, full commands and replay: docs/history/compiler/gcc3-mechanism-results.md, tools/gcc3_mechanism_scratch_observe.py and scratch_model.py.
 
 ## F11791. Terminal diagnostic census recovers V92 reset without changing its neighbours
 
@@ -136044,15 +136044,15 @@ AgainstmergedPR264f2cdb66a, strict1045→1046/1852 and113169→113409exact refer
 
 ## F11802. Callee alignment publication requires binding as well as emission
 
-Eleven two-function diagnostic TUs under the retained complete Gentoo profile preserve driver/plain/read-only-GDB assembly and reassembled object raw. Five definition-order pairs are raw-identical. Strong leaf publishes32bits; external-call wrapper128bits; ordinary and explicitly aligned8-byte double slots still publish32bits. Local alignment does not establish incoming call alignment. Installed default_binds_local_p_1 returns false for weak/template controls: emitted cgraph RTL info exists but published boundary0, so caller retains128bits. Actual template ELF bindingW/linkonce; no production visibility/attributes/order changes. Official toplev publication guard and varasm binding rules corroborate installed observations. Early-unwritten and external-unknown controls refuse unavailable info; known-zero distinguished from unavailable. docs/gcc3-alignment-micro.md; tools/gcc3_alignment_micro.py.
+Eleven two-function diagnostic TUs under the retained complete Gentoo profile preserve driver/plain/read-only-GDB assembly and reassembled object raw. Five definition-order pairs are raw-identical. Strong leaf publishes32bits; external-call wrapper128bits; ordinary and explicitly aligned8-byte double slots still publish32bits. Local alignment does not establish incoming call alignment. Installed default_binds_local_p_1 returns false for weak/template controls: emitted cgraph RTL info exists but published boundary0, so caller retains128bits. Actual template ELF bindingW/linkonce; no production visibility/attributes/order changes. Official toplev publication guard and varasm binding rules corroborate installed observations. Early-unwritten and external-unknown controls refuse unavailable info; known-zero distinguished from unavailable. docs/history/compiler/gcc3-alignment-micro.md; tools/gcc3_alignment_micro.py.
 
 ## F11803. Whole-object stack and bidirectional call screens bound alignment candidates
 
-At2001434c,300objects/1886 common defining copies yield1070 diagnostic normalized streams, zero strict or colour-erased stack-only residuals; actual F11796 Uref positive fires/non-stack change refuses. Four near candidates under800B/16 differing diagnostic rows include two vector callers, a constructor with other factoring and B103 extra same-size epilogues (not allocation size). Diagnostic normalization never changes byteident. Bidirectional all300 CALL/tail census:1075 exact emitted copies,84 differing call rows/11tail-only, extra-library occurrences memmove1/nanf2/sin1/cos1/fmodf1, no original-only library targets under explicit allowlist. Closed math/NAN domains retained. PreFilter four full-TU controls recover original1CALL/2tails but target179 versus180 remainsSIZE1, zero gains/losses6/16each; all15 bystanders/data/meta unchanged. RcFixed blob0/ours1memmove confirmed; source also deliberately omits kind-1 conversion (F11450), so its2640/493 size is not proven solely budget/alignment. No new RcFixed source/control without region and loop witness. docs/gcc3-alignment-results.md and gcc3-alignment-callee-inventory.md.
+At2001434c,300objects/1886 common defining copies yield1070 diagnostic normalized streams, zero strict or colour-erased stack-only residuals; actual F11796 Uref positive fires/non-stack change refuses. Four near candidates under800B/16 differing diagnostic rows include two vector callers, a constructor with other factoring and B103 extra same-size epilogues (not allocation size). Diagnostic normalization never changes byteident. Bidirectional all300 CALL/tail census:1075 exact emitted copies,84 differing call rows/11tail-only, extra-library occurrences memmove1/nanf2/sin1/cos1/fmodf1, no original-only library targets under explicit allowlist. Closed math/NAN domains retained. PreFilter four full-TU controls recover original1CALL/2tails but target179 versus180 remainsSIZE1, zero gains/losses6/16each; all15 bystanders/data/meta unchanged. RcFixed blob0/ours1memmove confirmed; source also deliberately omits kind-1 conversion (F11450), so its2640/493 size is not proven solely budget/alignment. No new RcFixed source/control without region and loop witness. docs/history/compiler/gcc3-alignment-results.md and gcc3-alignment-callee-inventory.md.
 
 ## F11804. Distinct vector ownership recovers two callers and a measured TRN bystander
 
-Original V90Phase3Modulator vectors load member-array base after modulo72 work. Direct member indexing removes an extra saved register. Separate post-call witnesses recover generateJdPhase80B via polarity update then conditional signed return, and generateV92Jd80B via zero-extended wide unsigned level/optional negation/single terminal short narrowing. Negative short carriers add post-NEG conversions; signed wide carrier misses originalMOVZWL by1byte. Independent sister cross: each isolated change loses exact JdNot; together both vectors plus unchanged-sourceTRN1d60B exact, no losses.20 full-TU cells/560 strict body verdicts account for all bodies; metadata/data/BSS/canonical relocations unchanged, final25bystanders raw unchanged. Inline V90 pump transfer has no further gain and is unadopted. Four installed caller replays preserve objects raw: known Scrambler info0/caller boundary128bits remain;16 zero-size slots/196 layouts show savedregs2→1 removes12 padding bytes, not a callee-boundary reduction. TRN RTL agrees through26.postreload;35.mach first differs. All272/272 SI scratch choices replay; four TRN searches have identical eligibility but cursor3 selectsAX versus2 selectingCX; final codeDX versus originalCX. Conditional compilation history, no cursor forcing or new source claim forTRN. docs/gcc3-alignment-results.md and vector domain; tools/gcc3_alignment_vector_audit.py and scratch_model.py.
+Original V90Phase3Modulator vectors load member-array base after modulo72 work. Direct member indexing removes an extra saved register. Separate post-call witnesses recover generateJdPhase80B via polarity update then conditional signed return, and generateV92Jd80B via zero-extended wide unsigned level/optional negation/single terminal short narrowing. Negative short carriers add post-NEG conversions; signed wide carrier misses originalMOVZWL by1byte. Independent sister cross: each isolated change loses exact JdNot; together both vectors plus unchanged-sourceTRN1d60B exact, no losses.20 full-TU cells/560 strict body verdicts account for all bodies; metadata/data/BSS/canonical relocations unchanged, final25bystanders raw unchanged. Inline V90 pump transfer has no further gain and is unadopted. Four installed caller replays preserve objects raw: known Scrambler info0/caller boundary128bits remain;16 zero-size slots/196 layouts show savedregs2→1 removes12 padding bytes, not a callee-boundary reduction. TRN RTL agrees through26.postreload;35.mach first differs. All272/272 SI scratch choices replay; four TRN searches have identical eligibility but cursor3 selectsAX versus2 selectingCX; final codeDX versus originalCX. Conditional compilation history, no cursor forcing or new source claim forTRN. docs/history/compiler/gcc3-alignment-results.md and vector domain; tools/gcc3_alignment_vector_audit.py and scratch_model.py.
 
 ## F11805. Deep alignment pass banks220 exact bytes with a green period boundary
 
@@ -136102,7 +136102,7 @@ emitted-body comparisons pass baseline, metadata/data/BSS/nontext-relocation
 controls with three distinct gains (678 bytes) and zero exact losses. No
 structure/layout changes, profile fit or unique-source-preimage claim.
 `tools/next20_count_{mask,predicate,cross,audit}.py`;
-`docs/next20-quality-mask-domain.md`. Integrated production and period gate
+`docs/history/batches/next20-quality-mask-domain.md`. Integrated production and period gate
 pass; see F11814.
 
 ## F11813. Transfer mechanisms recover without twenty complete-function gains
@@ -136123,7 +136123,7 @@ but keep different loop/slot/allocation choices. No partial wins adopted;
 F1604/F6605's empty-source-loop inference stays declined. All baselines,
 bystanders, metadata, data and relocations are accounted for. These finite
 misses close the tested domains, not source recovery generally.
-`docs/next20-byteexact-results.md`, `tools/next20_{data,dsp,v90}_*.py`.
+`docs/history/batches/next20-byteexact-results.md`, `tools/next20_{data,dsp,v90}_*.py`.
 No fuzzing or mutation execution; other-session PR #263 and issue #22 untouched.
 
 ## F11814. Quality-mask batch integrates three exact gains with no losses
@@ -136141,7 +136141,7 @@ fuzzing or mutation execution. Upstream remains `8af3af53`; other-session
 PR #263 structure work and issue #22 are untouched. Target twenty was not
 reached: the 218 bounded controls yielded these three complete functions,
 and partial instruction recoveries were left unadopted.
-`docs/next20-byteexact-results.md`; machine ledgers
+`docs/history/batches/next20-byteexact-results.md`; machine ledgers
 `build/next20-production-audit.json`, `build/next20-census-delta.json`,
 `build/next20-all-experiment-denominators.json`, `build/next20-phase.log`.
 
@@ -136159,7 +136159,7 @@ zero handling, output order, index/table sentinel, reproduce-bugs behavior
 and ABI. Normalizing nonzero ushort inputs takes at most 15 shifts; no count
 wrap. This is a matching source family, not a unique-author-spelling claim.
 `tools/gcc3_normalization_{owner,loop,reciprocal,guard}_reproduce.py`;
-`tools/gcc3_normalization_audit.py`; `docs/gcc3-loop-memory-results.md`.
+`tools/gcc3_normalization_audit.py`; `docs/history/compiler/gcc3-loop-memory-results.md`.
 
 ## F11816. Loop-memory transfer is positive without additional exact bodies
 
@@ -136181,7 +136181,7 @@ V34 candidates reserved for #263. V8 bit pushing already updates pointed
 memory: the screen is only a candidate generator. FPM_sqrt's retained bound
 check is not removed for a byte hit. No fuzzing/mutation execution; #22 and
 other-session source/header work untouched. Full finite domains and replay:
-`docs/gcc3-loop-memory-results.md`; `tools/gcc3_loop_memory_trace.py`,
+`docs/history/compiler/gcc3-loop-memory-results.md`; `tools/gcc3_loop_memory_trace.py`,
 `tools/gcc3_normalization_screen.py`, V8 replay/audit tools.
 
 
@@ -136198,7 +136198,7 @@ execution. New tracing/replay tools and bounded misses are retained, not
 partial source changes. Upstream b470429e; #22 and other-session #263 untouched.
 `tools/gcc3_normalization_production_audit.py`;
 `build/normalization-production-audit.json`, `build/normalization-phase.log`;
-`docs/gcc3-loop-memory-results.md`.
+`docs/history/compiler/gcc3-loop-memory-results.md`.
 
 
 ## F11818. Initial output homes and aligned HI selection close FPM_div_32
@@ -136219,7 +136219,7 @@ padding, forced alignment, helper-parameter permutation or physical register
 constraint. Original zero/debug behavior, D4 sentinel, output ordering and ABI
 remain unchanged; nonzero uint normalization count0..31 cannot wrap ushort.
 Official point-release source explains the pattern; installed Gentoo dumps
-establish the result. `docs/gcc3-output-storage-results.md`;
+establish the result. `docs/history/compiler/gcc3-output-storage-results.md`;
 `tools/gcc3_output_storage_reproduce.py`, trace and audit tools.
 
 ## F11819. Output-storage transfers recover live sqrt while log owner folds away
@@ -136238,8 +136238,8 @@ Trace detector five controls: aligned/unaligned HI positives and SI/address/
 UID refusals; actual output homes and HI machine loads cross-checked against
 final dump UIDs. No allocator simulation, unique-author spelling or global
 profile claim. No #22 writes, fuzzing/mutation execution; #263 scope observed
-at97e8a10c and untouched. `docs/gcc3-output-storage-domain.md`;
-`docs/gcc3-output-storage-results.md`; all three replay tools and full-TU audit.
+at97e8a10c and untouched. `docs/history/compiler/gcc3-output-storage-domain.md`;
+`docs/history/compiler/gcc3-output-storage-results.md`; all three replay tools and full-TU audit.
 
 
 ## F11820. Second reciprocal gain integrates with zero losses and period green
@@ -136253,7 +136253,7 @@ Static anchors:285suites/10038unique,0detached/non-unique; no retargeting,
 fuzzing or mutation execution. Other session #263 at97e8a10c and #22 untouched.
 `tools/gcc3_output_storage_production_audit.py`;
 `build/output-storage-production-audit.json`, `build/output-storage-phase.log`;
-`docs/gcc3-output-storage-results.md`.
+`docs/history/compiler/gcc3-output-storage-results.md`.
 
 
 ## F11821. V8 publication and captured decisions survive the register explanation
@@ -136281,7 +136281,7 @@ but do not establish reachable modem histories. No runtime/fuzzing/mutation
 execution, #22 writes or PR263 overlap. Next discriminator is independent
 typed-extent/caller evidence for the receive parameter owner at0xc2c versus
 combined parameter base0xc20; no fabricated alias/subobject is justified.
-`docs/v8-remainder-owner-results.md`; four declared domains/replay generators;
+`docs/history/data-modes/v8-remainder-owner-results.md`; four declared domains/replay generators;
 `tools/v8_remainder_owner_audit.py`. Strict tree census unchanged1057/1852,
 114842 exact original bytes.
 
@@ -136306,7 +136306,7 @@ does not establish an independent receive pointer or typed subobject extent;
 structure splitting is deferred. Next discriminator is the convolution sample
 versus coefficient capture order, requiring compiler-stage tracing before
 another declared domain. No #22/PR263 overlap, runtime/fuzz/mutation execution
-or reachability claim. `docs/v8-index-cursor-domain.md`;
+or reachability claim. `docs/history/data-modes/v8-index-cursor-domain.md`;
 `tools/v8_index_cursor_reproduce.py` and `tools/v8_index_cursor_audit.py`.
 
 
@@ -136332,7 +136332,7 @@ extents. This is a scheduling pass boundary, not original-RTL/allocator/profile
 recovery. Next discriminator is verbose scheduler measurement with mandatory
 raw equality, then GCC3 dependency/ready-queue implementation. No artificial
 source dependencies, #22/PR263 overlap or runtime/fuzz/mutation execution.
-`docs/v8-product-capture-domain.md`; `tools/v8_product_capture_reproduce.py`;
+`docs/history/data-modes/v8-product-capture-domain.md`; `tools/v8_product_capture_reproduce.py`;
 `tools/v8_product_capture_audit.py`. Census unchanged1057/1852.
 
 
@@ -136350,7 +136350,7 @@ register/dependency constraints. Release source provenance/URLs/hashes retained;
 not a full Gentoo patch recovery. Original hard-register pointer reuse can
 impose a different anti-dependency; no original RTL is claimed. FSE two-cell
 copy-after-mode publication control is complete-object raw-inert,0gains/losses.
-`docs/batch-scheduler-trace-domain.md`; `tools/batch_scheduler_trace_audit.py`.
+`docs/history/batches/batch-scheduler-trace-domain.md`; `tools/batch_scheduler_trace_audit.py`.
 
 ## F11825. CID final reset publication closes the complete body
 
@@ -136362,7 +136362,7 @@ claim. cid_create also changes by inlining and remains BYTES70; no exact loss.
 Mode/context and FSK owners in constructor/lifecycle are separately allocated;
 no fabricated alias fixture. Combined services28cells/125bodies include negative
 V23/FDSP/DTMF domains, metadata/data/BSS/relocations stable and repeat controls.
-`docs/services-exact-results.md`; `tools/services_exact_audit.py`.
+`docs/history/services/services-exact-results.md`; `tools/services_exact_audit.py`.
 
 ## F11826. Guarded common result store closes V90BitsToSymbol reset
 
@@ -136374,7 +136374,7 @@ unchanged, no loss. InitialRTL member refs2→1, division count remains1. C++
 16cells/207body comparisons additionally close three graph-control families
 without adoption; metadata/data/BSS/nontext relocations stable. Five static
 mutation anchors retargeted to the same operations, not executed or snapshots
-refreshed. `docs/batch-cpp-results.md`; `tools/batch_cpp_audit.py`.
+refreshed. `docs/history/batches/batch-cpp-results.md`; `tools/batch_cpp_audit.py`.
 
 ## F11827. Eight fax adapter returns recover the consumed modem-status contract
 
@@ -136389,7 +136389,7 @@ binding/data/table-relocation shape preserved. Comments updated; no layouts
 or callback slots change. Fax37validcells/248bodies include two closed negative
 domains; invalid shifted-byte control preserved/excluded and corrected baseline
 repeated. Pinned-header overlays support post-adoption historical replay.
-`docs/fax-adapter-result-results.md`; `tools/fax_adapter_boundary_audit.py`.
+`docs/history/fax/fax-adapter-result-results.md`; `tools/fax_adapter_boundary_audit.py`.
 
 ## F11828. Ten-function batch integrates with zero whole-tree losses
 
@@ -136401,7 +136401,7 @@ constructor); all symbol/binding/data/BSS/nontext-relocation audits pass.
 partial patterns. Initial period passes388/0 but combined structural gate
 rejects five stale reset anchors; static retarget repairs the sameoperations,
 with no mutation/fuzz execution. Final corrected gate is recorded in
-`docs/byteexact-scheduling-batch-results.md`. PR263 at ef22230e and #22 untouched.
+`docs/history/project/byteexact-scheduling-batch-results.md`. PR263 at ef22230e and #22 untouched.
 `tools/byteexact_scheduling_batch_audit.py`; strict census and raw object audit.
 
 Final corrected makephase exits0:388period differential passes/0failures and
@@ -136419,7 +136419,7 @@ No inference that normal callbacks replace the framer is needed. Fax26valid
 cells/174bodies include closed accumulator/cleanup/next-state/unframe controls;
 partial reload hits unadopted. Six source-unchanged inline callers and precisely
 two reordered merge strings are separately audited in negative cells.
-`docs/fax-publication-batch-results.md`; tools/fax_publication_batch_audit.py.
+`docs/history/fax/fax-publication-batch-results.md`; tools/fax_publication_batch_audit.py.
 
 ## F11830. A heterogeneous addition operand graph closes voice_modem
 
@@ -136431,7 +136431,7 @@ bound promoted sum to131070; final narrowing identical. Services38valid
 TUs/402bodies,5raw baselines,30changed-body controls, one gain/zero losses.
 Read-only33TU/26small-nonexact screen fires on this known graph and finds no
 other candidate within its six-instruction window. F11774 formal-width
-negatives remain closed. `docs/services-voice-count-sum-results.md`.
+negatives remain closed. `docs/history/services/services-voice-count-sum-results.md`.
 
 ## F11831. Original unsigned operations and reloads do not close dp_wrapper_run
 
@@ -136441,8 +136441,8 @@ entry guard retained; no invalid negative-fragment equivalence assertion.
 JBE/JB/DIV operations reproduce individually, whole body remains nonexact;
 exact1/3 unchanged, no gain/loss. Unsigned header overlay unadopted. Raw
 baselines and metadata/data/BSS/nontext relocations audited. Stop this domain,
-not a score-selected type or local permutation. `docs/contract-wrapper-unsigned-domain.md`,
-`docs/contract-wrapper-fragment-domain.md`; tools/contract_wrapper_audit.py.
+not a score-selected type or local permutation. `docs/history/project/contract-wrapper-unsigned-domain.md`,
+`docs/history/project/contract-wrapper-fragment-domain.md`; tools/contract_wrapper_audit.py.
 
 ## F11832. FSE copy and reversal energy recover operations but not full bodies
 
@@ -136455,7 +136455,7 @@ boundary but candidate SIZE36 misses, exact7/11 unchanged. Thirteen root
 cells/59live shared bodies total include wrapper controls; metadata/data/BSS/
 nontext relocations fixed, eight known changed-body controls fire. No source
 adoption. New pass/dependency evidence required before further permutations.
-`docs/fse-config-copy-domain.md`; `docs/tone-reversal-energy-domain.md`.
+`docs/history/dsp/fse-config-copy-domain.md`; `docs/history/dsp/tone-reversal-energy-domain.md`.
 
 ## F11833. Member publication and inline visibility bound another C++ domain
 
@@ -136466,8 +136466,8 @@ Sine common-entry2cells68bodies also misses. Total15valid cells302emitted/
 224shared grades,2raw baselines,3/3positive detectors, zero gains/losses.
 IIR zero compare-pool changes explicitly tracked; no hidden named data/BSS/
 nontext relocation drift. Proposed wider Sine type matrix rejected before
-execution, excluded and not bypassed. No production changes. `docs/batch-cpp-iir-results.md`;
-`docs/batch-cpp-sine-entry-results.md`.
+execution, excluded and not bypassed. No production changes. `docs/history/batches/batch-cpp-iir-results.md`;
+`docs/history/batches/batch-cpp-sine-entry-results.md`.
 
 ## F11834. Two-function integration improves strict identity without collateral
 
@@ -136478,7 +136478,7 @@ production objects reviewed:298raw unchanged, two raw-repeat independent
 winners; only two target bodies change. Complete profile, metadata, bindings,
 allocated data/BSS and symbolic nontext relocation identities retained.
 No negative near-size source adopted, no fuzz/mutation execution, PR263 and
-issue22 untouched. `docs/byteexact-contract-batch-results.md`;
+issue22 untouched. `docs/history/project/byteexact-contract-batch-results.md`;
 tools/byteexact_contract_batch_audit.py. Final deciding gate recorded below.
 
 
@@ -136509,7 +136509,7 @@ memory-type mechanism, not merely allocation colours. Official five-source
 hash-pinned implementation explains pending anti/output checks and alias
 component/zero-set rules; full Gentoo patch recovery not claimed. Original
 memory tags unknown, both458B sourcecells nonexact, no typing/flag/alias trick
-adopted. `docs/fse-scheduler-dependencies-results.md`;
+adopted. `docs/history/dsp/fse-scheduler-dependencies-results.md`;
 tools/fse_scheduler_dependencies_audit.py, fse_scheduler_source_fetch.py.
 
 ## F11836. Diagnostic result and cap families recover only partial FSE graphs
@@ -136521,7 +136521,7 @@ baselines/2cross-domain raw repeats/11known changed controls. Original negative
 selected returns and clear/copy asymmetry preserved. Allbody metadata/data/
 BSS/nontext relocations fixed, only target changes, no gains/losses. Equal229B
 controls have70 or71instructions against72original, not pure reg-renaming.
-Domains closed without further synonyms/slots/types. `docs/fse-getdiag-domains-results.md`;
+Domains closed without further synonyms/slots/types. `docs/history/dsp/fse-getdiag-domains-results.md`;
 tools/fse_getdiag_domains_audit.py.
 
 ## F11837. Literal mixed-radix expansion recovers calcModulusParameters622B
@@ -136534,7 +136534,7 @@ but remainsBYTES10 (two double homes swapped); no slot/declaration fitting.
 Six caller jump-table destinations decode to ordered original offsets; seven
 other bodies and records/allocated payload/BSS fixed. Fivecells45bodies,
 full rawbaseline and table audit. Four static anchors retain same exponent/
-five-multiplier faults; no mutation execution/snapshots. `docs/batch-cpp-constellation-expand-results.md`.
+five-multiplier faults; no mutation execution/snapshots. `docs/history/batches/batch-cpp-constellation-expand-results.md`.
 This is a recovered source family, not unique proof against unknown unrolling
 options. V92 CRC transfer4cells84bodies restores promotion/call shapes but
 adds no complete function; losing direct/rolled control's2losses recorded,
@@ -136548,7 +136548,7 @@ global allocation/flow2, then collapses by sched2. RTT mode-local clamp/
 publication and shared signed extension/report controls also miss.96validated
 field-stage observations;12duplicate GCSE streams explicitly unparsed. Six
 same-string ordering changes measured, not called raw data identity. No source
-adoption or universal profile-wall claim. `docs/data-state-reversal-results.md`;
+adoption or universal profile-wall claim. `docs/history/data-modes/data-state-reversal-results.md`;
 tools/data_state_reversal_trace_audit.py.
 
 ## F11839. V29 epoch graph controls migrate a spill without recovering it
@@ -136561,7 +136561,7 @@ also misses. Seven validTUs35live bodies49RTL observations conserve8multiplies/
 positive fires; final labelled GCSE stream parsed with duplicateUID checks.
 Neither missing CFG/callback nor an inline-budget-only conclusion follows.
 Original owner/type/storage and fully inlined/TU interactions remain open
-outside these closed families. `docs/fax-v29-epoch-body-trace.md`.
+outside these closed families. `docs/history/fax/fax-v29-epoch-body-trace.md`.
 
 ## F11840. Bounded repeated-helper transfer screen is empty and nonvacuous
 
@@ -136572,7 +136572,7 @@ bodies include5paired graph reviews without missing literal expansion witness.
 No source experiment follows; larger/indirect/fullyinlined cases excluded and
 source correctness/unrecoverability not inferred. tools/data_literal_expansion_screen.py
 accepts baseline JSON/object args for portable replay.
-`docs/data-literal-expansion-screen.md`.
+`docs/history/data-modes/data-literal-expansion-screen.md`.
 
 ## F11841. Dependency research batch retains one complete gain without losses
 
@@ -136584,7 +136584,7 @@ one newlyexact. Complete profile/metadata/data/BSS retained;6caller switch-case
 relocation destinations explicitly decoded/bounded/ordered to original. PR263
 bcb9f83e and issue22 untouched. No partial source/profile score adoption,
 fuzz/mutation execution or modern portability claim. Requested5–20gains not
-reached; closed domains require independent new witness. `docs/byteexact-dependencies-batch-results.md`;
+reached; closed domains require independent new witness. `docs/history/project/byteexact-dependencies-batch-results.md`;
 tools/byteexact_dependencies_batch_audit.py. Final gate recorded below.
 
 
@@ -136605,7 +136605,7 @@ Historical raw ConstellationPower positive fires5/1modulo6/2division.
 Only V90/V92Phase3Modulator reset nominate; complete original graphs show
 mutually exclusive arms, not literal fixed-entry expansion. No source edit
 from call counts alone. tools/expansion_wide_screen.py;
-`docs/expansion-wide-results.md`.
+`docs/history/compiler/expansion-wide-results.md`.
 
 ## F11843. V92 reset exposes merge then re-duplication of the same diagnostic
 
@@ -136614,7 +136614,7 @@ Four fullTU length-arm/countdown controls88live grades,0gains/losses;
 flow2 leaves117, bbro adds332/330. Final two sites do not recover source
 statement count. Raw baseline, all bystanders/bindings/data/BSS/nontext
 relocations audited; only reset changes. No adoption/near-score sweep.
-tools/v92_reset_branch_audit.py; `docs/v92-reset-branch-domain.md`.
+tools/v92_reset_branch_audit.py; `docs/history/pcm/v92-reset-branch-domain.md`.
 
 ## F11844. V90 reset source duplication collapses after reload without changing a byte
 
@@ -136625,7 +136625,7 @@ relocations and text positions equal,18/28exact in both,0gains/losses.
 Original warmup shared2c46a reloads sessionFlag2c47f each iteration; fixed-mode
 warmup refuted. Domain closed without source adoption; unique profile/source
 and blanket regalloc diagnosis not established.
-`docs/batch-cpp-p3-reset-results.md`.
+`docs/history/batches/batch-cpp-p3-reset-results.md`.
 
 ## F11845. Fully inlined fixed-loop screen requires loop-local graph review
 
@@ -136634,7 +136634,7 @@ and blanket regalloc diagnosis not established.
 10nominations. Closed V92Precoder positive fires; existing domains not retried.
 Whole-body counts miss V92 phase unpack11/11 despite missing inner CRC
 promotion. VTB/index/Detector candidates retain the relevant fixed loops.
-tools/fixed_index_screen.py; `docs/fixed-index-results.md`.
+tools/fixed_index_screen.py; `docs/history/compiler/fixed-index-results.md`.
 
 ## F11846. Receive CRC scalar shifts recover promotion in three untouched consumers
 
@@ -136645,7 +136645,7 @@ V90 retains232vs238instructions, not reg-renaming-only. Raw baselines/hash/
 bystanders/bindings/data/BSS pass; changed ordered switch entries retain
 offset/type/owner and decoded destinations, explicitly recorded rather than
 claimed byte-identical. Prior pack-helper domain untouched. No adoption;
-`docs/jd-unpack-fixed-shift-domain.md`; tools/jd_unpack_fixed_shift_audit.py.
+`docs/history/pcm/jd-unpack-fixed-shift-domain.md`; tools/jd_unpack_fixed_shift_audit.py.
 
 ## F11847. EIA6 straight-line copy and single predicate do not close the x87 graph
 
@@ -136656,7 +136656,7 @@ loaded-scale fmulp/fldz-fcompp versus candidate duplicate/fistpl,
 memory fmuls/fcomps; homes/copy scheduling also differ. SIZE2 is two bytes
 of length difference, not a two-byte residual. Domain closed without source
 adoption; new original use/lifetime witness needed.
-`docs/batch-cpp-prefilter-expand-results.md`.
+`docs/history/batches/batch-cpp-prefilter-expand-results.md`.
 
 ## F11848. GCC3 creates a physical death at live XF integer conversion
 
@@ -136665,7 +136665,7 @@ Hash-pinned reg-stack/i386 source rule corroborated4actual Gentoo controls/
 adds death, emitterFISTPL. Original EIA6 liveFISTL atoccupancy1 bounds producer
 againstXF with sparecapacity, leavesSF/DF. DI andfullstack exceptions matter.
 Zero folds atcombine;scale atlreg, independently ofstackconversion.
-`docs/gcc-x87-eia6-mechanism.md`; tools/gcc_x87_eia6_mechanism.py.
+`docs/history/compiler/gcc-x87-eia6-mechanism.md`; tools/gcc_x87_eia6_mechanism.py.
 
 ## F11849. Source mode and usual math recover EIA6 forms without exactness
 
@@ -136676,7 +136676,7 @@ Scale/magnitude/fraction ordering,operands/homes/copies still differ. Only
 anonymous zero-pool deltas;allbystanders/bindings/BSS/nontext unchanged.
 GCC3 rejects-fdump-tree-all; invalidrun preserved/excluded. SupportedTUtree
 identifiesdecl butomits targetbody in15cells; noSSA/body proof claimed.
-`docs/eia6-x87-results.md`; tools/eia6_x87_audit.py.
+`docs/history/compiler/eia6-x87-results.md`; tools/eia6_x87_audit.py.
 
 ## F11850. Live-conversion mode screen finds two independent small beta transfers
 
@@ -136684,7 +136684,7 @@ identifiesdecl butomits targetbody in15cells; noSSA/body proof claimed.
 14nonexact<=800B,4SI nonpopmismatches. Known EIA6positivefires; closedVpcm
 excluded. Two350B beta setters have liveFISTL atoccupancy2,0priorcalls.
 Priorwhole/shift lifetime controls heldtypes, so newXFmodewitness is independent;
-laterF11353MMXcasts remainfixed. `docs/gcc-x87-transfer-shortlist.md`;
+laterF11353MMXcasts remainfixed. `docs/history/compiler/gcc-x87-transfer-shortlist.md`;
 tools/gcc_x87_transfer_screen.py.
 
 ## F11851. Beta diagnostic SF and DF modes recover FISTL but remain nonexact
@@ -136693,7 +136693,7 @@ Three completeTUs105live grades,0gains/losses; both350B originalsetters
 359→351 withSF/DF debugproducers.33bystanders/allbinding/data/BSS/nontext
 unchanged; exactlaterMMXsourcetails audited. Definedshiftmask/pub/order/homes
 remain separate; do not removeAND31 or callSIZE1 a one-byte residual.
-No sourceadoption orprofile/type/slotfitting. `docs/beta-x87-mode-domain.md`;
+No sourceadoption orprofile/type/slotfitting. `docs/history/pcm/beta-x87-mode-domain.md`;
 tools/beta_x87_mode_audit.py.
 
 ## F11852. EIA6 fraction argument use and early magnitude lifetime recover its prefix
@@ -136705,7 +136705,7 @@ recover fraction-before-magnitude conversion and magnitude outgoing+8, but
 remain SIZE8. Original early FABS/live result independently motivates a third
 lifetime control:790B BYTES132, first109 canonical instructions exactly equal
 including relocations/branch targets. Partial prefix is evidence, not adoption.
-`docs/eia6-scheduler-results.md`; tools/eia6_scheduler_audit.py.
+`docs/history/compiler/eia6-scheduler-results.md`; tools/eia6_scheduler_audit.py.
 
 ## F11853. Conditional parameter reload releases this and closes EIA6 byte-exactly
 
@@ -136717,8 +136717,8 @@ independently recovered precision/use/lifetime/copy graph, complete EIA6 is
 strict EXACT790B, TU6/16→7/16,0losses;15bystanders and all data/binding/BSS/
 nontext relocations unchanged.12 full-TU cells/192 live grades/108 RTL streams/
 8 raw repeats. No fixed registers, slots or profile changes. Source adopted;
-not a uniquely recovered C spelling. `docs/eia6-tail-reload-domain.md`;
-`docs/eia6-scheduler-results.md`; tools/eia6_tail_reload_reproduce.py.
+not a uniquely recovered C spelling. `docs/history/compiler/eia6-tail-reload-domain.md`;
+`docs/history/compiler/eia6-scheduler-results.md`; tools/eia6_tail_reload_reproduce.py.
 
 ## F11854. Beta mask publication is expansion plus destructive regmove, not scheduling
 
@@ -136731,7 +136731,7 @@ variable AND31/SHL absorption pattern found. A proved low-five-bit input or
 constant could make mask redundant, but original guards do not bound converted
 logarithmic counts. No new source variant or mask removal justified. Require
 original lifecycle/domain or independent defined redundant-mask evidence.
-`docs/beta-shift-publication-trace.md`; tools/beta_shift_publication_trace.py.
+`docs/history/pcm/beta-shift-publication-trace.md`; tools/beta_shift_publication_trace.py.
 
 ## F11855. Constructor ratchet was valid; correct float recovery caused a collateral loss
 
@@ -136741,7 +136741,7 @@ and current BYTES4 under stock/Gentoo and both CXX profiles. Actual commit
 with all8bystanders—including writer—data/bindings/BSS/nontext/textpositions
 identical. This localizes the legitimate historical loss, not its internal
 GCC pass yet. Preserve correct typing and membership floor; do not re-bless
-or blame compiler choice. `docs/v90-parameters-constructor-ratchet-history.md`;
+or blame compiler choice. `docs/history/pcm/v90-parameters-constructor-ratchet-history.md`;
 tools/v90_parameters_ratchet_audit.py.
 
 ## F11856. Scale capture/publication and fresh flag ages close two transmit controls
@@ -136755,7 +136755,7 @@ plus flag-byte reread after conditional member assignment. Four crossed cells
 close only combined graph; original exact V27TX_status preserved. Complete
 production objects repeat controls, allbystanders/data/metadata fixed. No
 assumed disjoint owners or prototype/profile changes.
-`docs/callback-value-age-batch-results.md`; tools/callback_value_age_batch_audit.py.
+`docs/history/services/callback-value-age-batch-results.md`; tools/callback_value_age_batch_audit.py.
 
 ## F11857. Grouped switch plus common callback result closes fax_class1_status
 
@@ -136764,8 +136764,8 @@ callback/epilogue. Result-only if control misses; four crossed dispatch/result
 controls close only switch/shared result. Default0/eligible1 and initializer
 unchanged;16bystanders and all data/metadata fixed. Repeated-return screen
 335small nonexactC bodies finds5extra-epilogue candidates, a nomination not
-proof. `docs/fax-status-dispatch-domain.md`;
-`docs/callback-value-age-batch-results.md`.
+proof. `docs/history/fax/fax-status-dispatch-domain.md`;
+`docs/history/services/callback-value-age-batch-results.md`.
 
 ## F11858. Callback graph transfer domains remain bounded after negative controls
 
@@ -136775,7 +136775,7 @@ pool reorder audited by extent/fullstringmultiset, no otherdata/metadata change.
 V29control8cells, V17/V29status12cells miss; actual flag-byte ages and original
 register-mask forms remain evidence, no closest-size/bitfield/alias/slotfit
 adopted. Root audit50cells/302livegrades/10rawbaselines,3strictgains/0losses.
-`docs/callback-value-age-batch-results.md`.
+`docs/history/services/callback-value-age-batch-results.md`.
 
 ## F11859. V27 EQ-conditioning read ages are source leads, not a regalloc dismissal
 
@@ -136785,7 +136785,7 @@ per-outputrate reads and pointer/postdecrement graph crossed; then original
 pre-call cursor/count lifetimes. FirstCSE removes extra countdown read,
 branchrate reads survive. High-bit budget and output/rate alias histories can
 matter; no original-reaching domain claim or partialbody adoption.
-`docs/fax-eqcond-reload-results.md`; tools/fax_eqcond_reload_audit.py.
+`docs/history/fax/fax-eqcond-reload-results.md`; tools/fax_eqcond_reload_audit.py.
 
 ## F11860. Energy callback sequencing is real; its ABI and inline blocker are separate
 
@@ -136795,8 +136795,8 @@ Original/current helper effectiveABI is EAXbuf/EDXn/fourstackargs, bothlocal;
 external/ordinary-convention sourcecomment is stale. Original FDSPInitObjcall1
 versusallcandidatecalls0/inlined remains; no prototype/flags/sourcecoercion.
 Separate RXreview8functions/4TUs,3alreadyexact, no freshcommon-return witness;
-closed flag/snapshot families not repeated. `docs/energy-callback-result-results.md`;
-`docs/rx-callback-sibling-review.md`; tools/energy_callback_result_audit.py.
+closed flag/snapshot families not repeated. `docs/history/dsp/energy-callback-result-results.md`;
+`docs/history/project/rx-callback-sibling-review.md`; tools/energy_callback_result_audit.py.
 
 ## F11861. Constructor first diverges at peephole2 after an identical-byte writer
 
@@ -136807,7 +136807,7 @@ finalprezeroEDX/14ECX versuspostzeroECX/14EDX. Priorwriter+434SIimmediate
 scratchsplit pre versusSFregisterstore post differs despitefinalbodyidentity.
 Pinnedstockrecog persistentsearch_ofs explainsconsistentknownscratchcursor;
 fullactual dynamiccursor events notmeasured. Correctfloat/floorpreserved;
-no source/literal/profilefit. `docs/v90-parameters-constructor-stage-proof.md`;
+no source/literal/profilefit. `docs/history/pcm/v90-parameters-constructor-stage-proof.md`;
 tools/v90_parameters_constructor_stage_trace.py.
 
 ## F11862. Wider binary value/tail screen nominates clues without equating layout with execution
@@ -136820,7 +136820,7 @@ Two historical positive/two current exact negative controls pass. Offsets are
 not field identities and linear call epochs are not executed-path history.
 Closed Boolean/ring families stay closed; FSE_decision_trn's omitted empty
 loop belongs to F1604, not a fresh common-return fix. No source adoption.
-`docs/value-timing-stage-screen-results.md`; tools/value_timing_tail_screen.py.
+`docs/history/compiler/value-timing-stage-screen-results.md`; tools/value_timing_tail_screen.py.
 
 ## F11863. Earliest-stage diagnostic preserves colors and exposes transient peephole divergence
 
@@ -136832,7 +136832,7 @@ positive first differs at28peephole2 for both clones, but clone1 converges at
 registers/modes/immediates, normalizes only explicit tree pointers, refuses
 ambiguous/missing/unequal streams. Notes/prose are outside comparison; dynamic
 scratch searches/cursor values not measured. No source/profile fitting.
-`docs/gcc3-stage-divergence-diagnostic.md`; tools/gcc3_stage_divergence.py;
+`docs/history/compiler/gcc3-stage-divergence-diagnostic.md`; tools/gcc3_stage_divergence.py;
 tools/gcc3_stage_divergence_validate.py.
 
 ## F11864. V8 bit-reader value/count graph fires without a complete preimage
@@ -136846,7 +136846,7 @@ canonical nontext relocations fixed. Generictrace29stages/58streams first01rtl.
 No source adoption/runtime claim; negative-wordbits semantics require valid
 caller/boundary proof. Close this four-cell domain absent fresh original
 use/CRC/caller evidence, not more cast/declaration/register variants.
-`docs/value-timing-stage-screen-results.md`; tools/v8_getbit_value_age_reproduce.py;
+`docs/history/compiler/value-timing-stage-screen-results.md`; tools/v8_getbit_value_age_reproduce.py;
 tools/v8_getbit_value_age_audit.py.
 
 ## F11865. Fax cursor reread survives allocation but is forwarded by postreload
@@ -136860,7 +136860,7 @@ at06cse and firststore by20combine. Originalstillzeroextendssecondwordread.
 V17eqtrn reaches251B butBYTES199 andsharedtail, noadoptionbysize. Staticpinned
 GCCpostreload/cselib supports known-value forwarding, exactvalidationbranch
 unmeasured; nextdiscriminator installedUID56 lookup/mode/address/locations/
-invalidations, notvolatile/reg/ordercoercion. `docs/fax-tail-timing-results.md`;
+invalidations, notvolatile/reg/ordercoercion. `docs/history/fax/fax-tail-timing-results.md`;
 tools/fax_binary_timing_screen.py; tools/fax_tail_timing_audit.py.
 
 ## F11866. Installed postreload follows stored HI value across cursor copy and advance
@@ -136876,7 +136876,7 @@ actualsimplify_set/cselib returns1. CompoundUID57 same. Laterfallback sees
 selfcopy; it did not performfirstmemoryforwarding. WideUID38 beforestore
 lookupNULL is notprooflatewidewouldmiss. No inferiorcalls/source/RTLwrites,
 compilerfileunmodified; hostruntime distinctionexplicit/fulloutputcontrolled.
-No sourcepreimage/adoption; `docs/sdm-postreload-dynamic-trace.md`;
+No sourcepreimage/adoption; `docs/history/fax/sdm-postreload-dynamic-trace.md`;
 tools/gentoo_cc1_sdm_trace_reproduce.py; tools/gentoo_cc1_sdm_trace_audit.py.
 
 ## F11867. Prior compound-postincrement family already covered the identical FPM sibling
@@ -136888,7 +136888,7 @@ compound replay168B/SIZE1 stillloseslateUID57 atpostreload; extraearlyHIread
 UID118 introducedbyreload survives. Anear-sizecounterexample canhideonewrong
 readreplacinganother; compareoccurrence/lifetime, notloadcount/size. Known
 sourcefamiliesremainclosed; current3cells arecausal replay, notnewspellings.
-`docs/fax-tail-timing-results.md`; tools/sdm_postreload_audit.py.
+`docs/history/fax/fax-tail-timing-results.md`; tools/sdm_postreload_audit.py.
 
 ## F11868. MOVZWL can be a tuned HI move, refuting the SDM width premise
 
@@ -136903,7 +136903,7 @@ StockbackendHIloadIMOVX stallavoidancerule corroborated byactualGentoo; no
 inferiorcalls/RTL/sourcewrites. CorrectF11865/F11866 linkedwidth interpretation:
 originalmachineMOVZWL doesnotestablishexplicitZERO_EXTEND:SI orsourcepromotion.
 Postreloadforwardingproofremainsvalid. No casts/types/widthfamilyexpansion,
-no sourceadoption, strict1074/1852 unchanged. `docs/sdm-movhi-emitter-width-refutation.md`;
+no sourceadoption, strict1074/1852 unchanged. `docs/history/fax/sdm-movhi-emitter-width-refutation.md`;
 tools/sdm_movhi_emission_audit.py; tools/gentoo_cc1_sdm_movhi_reproduce.py.
 
 ## F11869. Small value-use witnesses survive bounded controls without strict gains
@@ -136918,7 +136918,7 @@ narrowing absent from the original, changes three inlined callers and removes
 only the pooled SF one; operand reversal is raw identical. Complete data,
 metadata and nontext relocation audits explain all changes. No production edit
 or nearest-size adoption; these families close pending independent evidence.
-`docs/small-counter-use-results.md`; tools/small_counter_use_audit.py.
+`docs/history/compiler/small-counter-use-results.md`; tools/small_counter_use_audit.py.
 
 ## F11870. Fax quality controls expose another peephole2 scratch bystander
 
@@ -136932,7 +136932,7 @@ then 30rnreg changes owner/scratch colors. Initial RTL, CSE/combine and
 allocation patterns agree. This stage-localized compiler-state effect does
 not justify rewriting the bystander. Early AGC narrowing raw-merges with its
 controls; close the tested families without fitting near-size candidates.
-`docs/fax-quality-use-results.md`; tools/fax_quality_use_audit.py.
+`docs/history/fax/fax-quality-use-results.md`; tools/fax_quality_use_audit.py.
 
 ## F11871. V90 value-age and diagnostic-mode controls miss; false FABS nomination corrected
 
@@ -136947,7 +136947,7 @@ three hardware FABS; the earlier FCOMP computes sign. Preserve those whole-axis
 cells as unsupported controls, excluded from recovery/closure inference.
 Thirteen bystanders, named data, BSS and bindings stay fixed; constant-pool
 changes are audited. No source adoption or broader type matrix.
-`docs/v90-sample-slot-domain.md`; `docs/v90-timing-diagnostic-math-domain.md`;
+`docs/history/pcm/v90-sample-slot-domain.md`; `docs/history/pcm/v90-timing-diagnostic-math-domain.md`;
 tools/v90_sample_slot_audit.py; tools/v90_timing_diagnostic_math_audit.py.
 
 ## F11872. Fax argument and dispatch/result graphs are witnesses, not exact preimages
@@ -136963,7 +136963,7 @@ dispatch still miss and change unchanged siblings. No partial source adoption.
 The 375B merge-string pool multiset and six-versus-five command table slots
 are audited; code relocation owners/boundaries are recorded, and all BSS,
 bindings and named data stay fixed. Close these finite families without fresh
-use, alias or CFG evidence. `docs/fax-service-values-results.md`;
+use, alias or CFG evidence. `docs/history/fax/fax-service-values-results.md`;
 tools/fax_service_values_audit.py.
 
 ## F11873. Installed scratch-search histories explain two unchanged-target divergences
@@ -136979,7 +136979,7 @@ explicit zero fill predicts. All observed enclosing matches return replacements;
 the rejected-match explanation was not observed. No failed scratch search or
 other mode/class claim. Invalid caller/layout probes are excluded, and the
 host-debugger/image-assembler runtime distinction is explicit.
-`docs/gentoo-peep2-search-proof.md`;
+`docs/history/compiler/gentoo-peep2-search-proof.md`;
 tools/gentoo_peep2_search_reproduce.py; tools/gentoo_peep2_search_audit.py.
 
 ## F11874. Fax default extra argument is recovered independently of whole-body identity
@@ -136995,7 +136995,7 @@ argument, not adoption of a near-size dispatch or converter-result hypothesis.
 The production raw object equals the audited control; three original argument
 shape controls pass. `make phase`:388 passed/0 failed, structural checks green;
 `make tc`:300 sources/300 objects/0 failed. Strict1074/1852 is unchanged.
-`docs/fax-extra-argument-recovery.md`;
+`docs/history/fax/fax-extra-argument-recovery.md`;
 tools/fax_extra_argument_audit.py.
 
 ## F11875. Current register-only targets split between direct scratch selection and earlier allocation
@@ -137014,7 +137014,7 @@ RTL body; other C++ clone declarations are not mapped to emitted clone symbols.
 No original cursor/source preimage or strict gain is claimed. Manifest replay
 extends the read-only observer without modifying compiler state. Existing1410
 searches/two positive pairs/two repeats/four refusal controls still pass.
-`docs/gentoo-scratch-target-results.md`;
+`docs/history/compiler/gentoo-scratch-target-results.md`;
 tools/gentoo_scratch_targets_audit.py.
 
 ## F11876. FloatFIR consumes the entry count before owner loads and again at the tail
@@ -137031,7 +137031,7 @@ agree. Baseline is a negative sentinel control. Processor remains287B,
 BYTES244 becomesBYTES222, no strict gains/losses; this is original countdown
 recovery, not register fitting or an exact processor claim. Period gate and
 production raw equality are recorded in the linked results after adoption.
-`docs/floatfir-consumed-count-results.md`;
+`docs/history/dsp/floatfir-consumed-count-results.md`;
 tools/floatfir_consumed_count_audit.py.
 
 F11876 validation: production FloatFIR object raw-identical to the audited
@@ -137056,7 +137056,7 @@ changes, token permutations, flags or syntax-uniqueness claim. A register-only
 residual can still encode an earlier source-sharing choice; final tail sharing
 does not imply the allocation input was shared. Next application requires the
 same independently observed common result/store and allocation witness.
-`docs/sdmv27-common-value-results.md`;
+`docs/history/fax/sdmv27-common-value-results.md`;
 tools/sdmv27_common_value_audit.py.
 
 F11877 validation: complete production V27_SDM object raw-identical to the
@@ -137079,7 +137079,7 @@ existing exact identity in an unadopted control. Cold-arm tracing corrects the
 initial receiver nomination: their immediate wrap stores are separate and jump
 AFTER normal stores. Preserve the original domain prediction and its explicit
 correction. No width/flag/forced-register or token-order search follows.
-`docs/shared-value-followup-results.md`; tools/shared_value_batch_audit.py.
+`docs/history/compiler/shared-value-followup-results.md`; tools/shared_value_batch_audit.py.
 
 ## F11879. Direct field increment recovers three receiver counter components
 
@@ -137091,7 +137091,7 @@ modulo-65536 output including wrap. Seven TU bystanders are raw-identical.
 No strict function gain is claimed. V29 decision remains unchanged because the
 validated store-path observer refuses its base-changing control. Period gate
 and production comparison are recorded in the results after validation.
-`docs/shared-value-followup-results.md`; tools/receiver_counter_boundary_audit.py.
+`docs/history/compiler/shared-value-followup-results.md`; tools/receiver_counter_boundary_audit.py.
 
 ## F11880. Store-site tracing prevents false common-result nominations
 
@@ -137102,7 +137102,7 @@ in receiver_counter_boundary_audit. Calls, nested conditions, cycles, unknown
 writes and changed base registers are barriers; no arbitrary alias inference.
 The initial four-counter audit is explicitly excluded after its correct refusal
 on V29 decision, rather than broadening the observer just to accept a candidate.
-`docs/shared-value-followup-results.md`; tools/branch_store_paths.py.
+`docs/history/compiler/shared-value-followup-results.md`; tools/branch_store_paths.py.
 
 F11878-F11880 validation: 388/0 period phase, structural gates green;
 300/300 production objects, zero failed; both receiver objects raw-identical
@@ -137131,7 +137131,7 @@ observable immediate-store splits. Two raw/traced/saved triples validate249 sear
 target23→24 searches include the epilogue, both entering cursor50. No original
 scratch history, source syntax uniqueness or regalloc-only explanation is claimed. Keep the finite domain
 closed, gate the component recovery, and do not fabricate a subobject from
-VPcm's separate obj+4 base clue. `docs/v34-timing-reset-results.md`;
+VPcm's separate obj+4 base clue. `docs/history/v34/v34-timing-reset-results.md`;
 tools/v34_timing_reset_audit.py.
 
 F11881 validation:388/0 period phase, structural gates green;300/300 production
@@ -137150,7 +137150,7 @@ tagV34Object*. This does not prove no subobject existed, only that a new map
 would be premature. Correct the SetMaxBlockLength comment that called this a
 free addressing artifact and asserted no second object. Earlier Ja evidence
 already separates source anchor lifetime from a layout/type claim. No new
-partial map/offset view/register forcing. `docs/v34-rate-lifetime-results.md`.
+partial map/offset view/register forcing. `docs/history/v34/v34-rate-lifetime-results.md`.
 
 ## F11883. Eager session pointers plus a shared result recover the RX-rate accessor
 
@@ -137164,7 +137164,7 @@ before guard;02.sibling retains one sibling-call marker in early-return cells
 and none in common-result cells. All initially contain call_placeholder, so
 initial RTL alone cannot identify the eventual sibling choice.29 stage pairs/
 58 streams compared. No syntax uniqueness or original profile claim.
-`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+`docs/history/v34/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
 
 ## F11884. The same TX result/owner cross fails, preserving the RX positive
 
@@ -137176,7 +137176,7 @@ RX/TX controls total13 full-TU compiles/741 verdicts, all raw baselines,
 metadata/data/bindings pass, three independent full-object repeats agree.
 Only RX/TX target bodies ever change; no exact losses. No pointer/return/literal
 synonym sweep follows this finite closed domain.
-`docs/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
+`docs/history/v34/v34-rate-lifetime-results.md`; tools/v34_rate_lifetime_audit.py.
 
 F11883 static apparatus: initial anchors correctly flag9 detached locators;
 retarget the same9 operations and scope all10 RX records explicitly. All3
@@ -137200,7 +137200,7 @@ E8/E9 targets/addends; no indirect-call, source, alias or layout inference.
 Historical RX74B fires; current exact90B clears. Three allocator wrappers are
 closed prototype/ABI leads, not new source bugs; retain their signatures and
 existing guards. Two new crossed domains are declared before compilation.
-`docs/small-call-result-results.md`; tools/small_call_result_screen.py.
+`docs/history/compiler/small-call-result-results.md`; tools/small_call_result_screen.py.
 
 ## F11886. Direct side dispatch crossed with asymmetric switch recovers V90 session flag
 
@@ -137519,7 +137519,7 @@ versus four rolled statements. These are indirect, outside canonical direct-call
 counting; the fixed-loop/backedge screen nominated it. Copy counts are not the
 production-symbol denominator, and included-header/macro loops remain outside
 the screen. No source adoption, gain, ceiling or original-profile claim.
-[Screen and graph review](helper-caller-screen-results.md).
+[Screen and graph review](history/compiler/helper-caller-screen-results.md).
 
 ## F11911. putFrame expansion recovers sixteen group callbacks; crossed widths/owners still miss
 
@@ -137535,7 +137535,7 @@ getFrame/modulatevector.18 full-TU cells/216 common verdicts,3/12 exact preserve
 all symbol metadata, named data and relocation-cleared allocated nontext unchanged.
 No source adopted. Bounded domain closed; further controls require an independent
 remaining witness rather than nearer-size initialization permutations.
-[Domain](v34-putframe-expansion-domain.md), [results/replay](helper-caller-screen-results.md).
+[Domain](history/v34/v34-putframe-expansion-domain.md), [results/replay](history/compiler/helper-caller-screen-results.md).
 
 ## F11912. V34 snapshot short-counter witnesses do not close the full TU
 
@@ -137548,7 +137548,7 @@ v34tx1_trnseg4a, a TU-history observation rather than a reason to permute that
 arm.4 cells/116 common verdicts, metadata/data controls clean, no source adoption.
 Combined helper/caller audit:22 cells/332 common body verdicts, zero gains/losses.
 Production remains1079/1852; no additional runtime gate or fuzzing/mutation run.
-[Width domain](v34-snapshot-width-domain.md), [audit/replay](helper-caller-screen-results.md).
+[Width domain](history/v34/v34-snapshot-width-domain.md), [audit/replay](history/compiler/helper-caller-screen-results.md).
 
 ## F11913. Period preprocessing widens callback/loop triage without claiming a source ceiling
 
@@ -137562,7 +137562,7 @@ assertion were preserved invalid and corrected. Eleven nominations; getFrame's
 supply new graph/read-age controls. Prior putFrame/CRC/Demapper domains not
 reopened from counts; ADID grouping/fax unframing remain screened, uncompiled.
 No source/profile adoption or completeness/ceiling claim.
-[Domain](callback-preprocessed-loop-domain.md), [inventory/replay](callback-preprocessed-loop-results.md).
+[Domain](history/services/callback-preprocessed-loop-domain.md), [inventory/replay](history/services/callback-preprocessed-loop-results.md).
 
 ## F11914. getFrame's captured callback and four fixed groups still miss full identity
 
@@ -137574,7 +137574,7 @@ six/three sites and one captured-owner read versus a read at each call. Eleven
 bystanders and complete metadata/data unchanged,3/12 exact preserved;8 cells/
 96 verdicts. No production edit or callback-rebinding runtime claim. Finite
 family closed; recovered operations are not complete byte identity.
-[Domain](getframe-callback-expansion-domain.md), [results](callback-preprocessed-loop-results.md).
+[Domain](history/pcm/getframe-callback-expansion-domain.md), [results](history/services/callback-preprocessed-loop-results.md).
 
 ## F11915. DFT searched-index exit forms narrow the gap; byte/direct count forms are raw-inert
 
@@ -137585,7 +137585,7 @@ exact. Both already publish integer energy before double energy, so the proposed
 store-order lead is refuted. Nine exit/count crosses preserve&31 and are raw-inert
 within each exit column.3+9 full-TU cells/9+27 common verdicts; both bystanders,
 metadata/data unchanged,2/3 exact retained. No source adoption or bare-mask retry.
-[Finite domain](dftenergy-loop-exit-domain.md), [results](callback-preprocessed-loop-results.md).
+[Finite domain](history/project/dftenergy-loop-exit-domain.md), [results](history/services/callback-preprocessed-loop-results.md).
 
 ## F11916. Combining the FSK phase/transfer loop requires coefficient read before history store
 
@@ -137599,7 +137599,7 @@ four negative/four corrected read-age checks fire. Only fskdetect changes;
 fskdemodulate and metadata/data unchanged.13 cells/26 verdicts, no source edit,
 no production bug or runtime alias/reachability claim. Combined widened-control
 audit33 cells/158 verdicts, zero exact gains/losses; production1079/1852 unchanged.
-[Domain/correction](fskdetect-phase-delay-domain.md), [audit/replay](callback-preprocessed-loop-results.md).
+[Domain/correction](history/project/fskdetect-phase-delay-domain.md), [audit/replay](history/services/callback-preprocessed-loop-results.md).
 
 ## F11917. ADID grouping's excess backedges reflect guard joins, not missing expansion
 
@@ -137609,7 +137609,7 @@ with positive outer grouping/pooling guards. Both guards recover601B/BYTES147;
 late definitions narrow toBYTES61. No exact gain or loss,33 bystanders unchanged.
 The9/11 backedge screen is a nomination, not an expansion preimage. Threshold
 before distance, ordered-not-below skip and D283/D284 preserved. No source adopted.
-[Domain](adid-phase-grouping-domain.md), [results/replay](adid-phase-grouping-results.md).
+[Domain](history/pcm/adid-phase-grouping-domain.md), [results/replay](history/pcm/adid-phase-grouping-results.md).
 
 ## F11918. ADID rounded-value consumer and half mode recover operations but not spill homes
 
@@ -137620,7 +137620,7 @@ toBYTES36 with float half orBYTES10 with double half. The direct/double form
 recovers the original rounded reload and x87 operation sequence. Guarded source
 conversion timing is not a general floating-exception equivalence claim; emitted
 conversion precedes the publication loop. No adoption from equal sizes/counts.
-[Complete-TU results](adid-phase-grouping-results.md).
+[Complete-TU results](history/pcm/adid-phase-grouping-results.md).
 
 ## F11919. ADID first-definition controls close at eight exchanged stack operands
 
@@ -137634,7 +137634,7 @@ Combined22 cells/748 verdicts,16/34 exact in every full TU,33 bystanders and all
 symbol metadata/named data/allocated nontext unchanged. Zero exact gains/losses,
 production1079/1852 unchanged, no src edit or new runtime/fuzzing/mutation runs.
 Next witness: observe spill-home assignment stage and a supported lifetime/owner
-difference, with an exact same-TU control. [Replay/audit](adid-phase-grouping-results.md).
+difference, with an exact same-TU control. [Replay/audit](history/pcm/adid-phase-grouping-results.md).
 
 ## F11920. ADID grouping-state phase boundary closes the eight spill bytes
 
@@ -137648,7 +137648,7 @@ short consumer, floating pool zeros first and grouping-state declaration scope.
 Original source is not unique. D283/D284 and all original instructions preserved.
 Integrated source and complete production object equal the winner raw; final
 period/structural and whole-tree validation recorded in the linked results.
-[Domain](adid-spill-context-domain.md), [audit/results](adid-spill-context-results.md).
+[Domain](history/pcm/adid-spill-context-domain.md), [audit/results](history/pcm/adid-spill-context-results.md).
 
 ## F11921. ADID homes are reload spills; preceding exact helper control leaves them unchanged
 
@@ -137665,7 +137665,7 @@ not original definition-order evidence. Nine source cells/306 common verdicts;
 four+five target observations and five exact updateUref positive observations
 require saved/plain/observed assembly and complete-object equality. No inferior
 writes, forced registers, global profile changes or fuzzing/mutation execution.
-[Trace/replay/results](adid-spill-context-results.md).
+[Trace/replay/results](history/pcm/adid-spill-context-results.md).
 
 F11920–F11921 final integration:1080/1852 EXACT,119108 original exact bytes,
 +1 function/+601 bytes, zero losses against1079 baseline. make tc300/300/0;
@@ -137681,7 +137681,7 @@ esp displacements nominates only SDM_init/FPM_SDM_init, whose callee-save access
 do not form a consistent slot bijection. Actual ADID eight-slot control fires;
 exact identity, nonstack change and inconsistent mapping refuse. No new reload
 candidate/source adoption. SIZE/other graphs excluded, no exhaustion claim.
-[Screen/replay](adid-first-study-results.md).
+[Screen/replay](history/pcm/adid-first-study-results.md).
 
 ## F11923. First-study double-half recovers the original24-instruction mean/variance block
 
@@ -137692,7 +137692,7 @@ frame0x5c, but whole body779B/BYTES445→795B/SIZE16 still misses. Adopt smalles
 supported literal change after deciding validation, no helper-factoring claim
 or nearest-size fit. Metadata/named data unchanged; anonymous cst4 -4/cst8 +8.
 Only first-study changes canonically; eight other raw bodies differ by relocation
-addends. Final integrated gate in [results/replay](adid-first-study-results.md).
+addends. Final integrated gate in [results/replay](history/pcm/adid-first-study-results.md).
 
 ## F11924. Equal first-study SIZE16 scores hide independent diagnostic and clamp recoveries
 
@@ -137704,7 +137704,7 @@ SF/DF products distinguishes consumers; full object hashes refute the initial
 erasure assertion. Two combined cells reproduce first66 original instruction/
 operand rows. All still795B/SIZE16; equal scores are not equal bodies. Retain
 supported evaluation/guard forms after deciding validation, no unique spelling.
-[Domain](adid-first-study-domain.md), [audit/results](adid-first-study-results.md).
+[Domain](history/pcm/adid-first-study-domain.md), [audit/results](history/pcm/adid-first-study-results.md).
 
 ## F11925. First-study n begins inside the admitted scan; publication remains merged
 
@@ -137716,7 +137716,7 @@ adoption or register forcing. Combined22 cells/748 verdicts,17/34 exact perTU,
 zero gains/losses,33 canonical bystanders/metadata/named data unchanged. Anonymous
 constant section changes documented. Production retains supported mean/diagnostic
 modes, upper guard and n first-use declaration; whole-function identity unclaimed.
-[Remaining boundaries and validation](adid-first-study-results.md).
+[Remaining boundaries and validation](history/pcm/adid-first-study-results.md).
 
 F11923–F11925 integration: production ADID raw-identical to combined-count-inside
 control; make tc300/300/0. Final make phase388/0, all structural checks green,
@@ -137734,7 +137734,7 @@ one common tail instruction crossjumped. Original bl/cl stores cannot share
 that tail. Middle clearing independently retains count/sum through block reorder,
 then sched2 reverses it. No source adoption/flag change, no unique source-arm
 inference. Full-da ICE preserved invalid, excluded; successful selected replay
-and raw-equal observation decide. [Stage proof](adid-first-study-stage-results.md).
+and raw-equal observation decide. [Stage proof](history/pcm/adid-first-study-stage-results.md).
 
 ## F11927. First-study incoming scratch cursor cannot explain the byte-store colors alone
 
@@ -137746,7 +137746,7 @@ first search only admits bp and erases incoming-state differences. This bounds
 helper-placement-only experiments; not a claim about all source contexts or
 profiles. Seek changed lifetime/site/traversal evidence or sched2 dependencies
 before new source controls. Production1080/1852 unchanged, zero gains/losses;
-no source/test change or mutation/fuzzing execution. [Replay](adid-first-study-stage-results.md).
+no source/test change or mutation/fuzzing execution. [Replay](history/pcm/adid-first-study-stage-results.md).
 
 ## F11928. Target PPRO packet reorder overrides first-study's sorted xor priority
 
@@ -137755,7 +137755,7 @@ priority6, count978 priority5, float stores497/508 priority1, reload912 priority
 Sorted ready508,497,977 becomes508,977,497 before issue: target packets497,977
 and emits sum before xor/count. Scratch dx creates xor/count→reload edges;
 stores have no mutual dependence. Official scheduler/backend rules explain the
-actual Gentoo ready/packet trace, not original RTL. [Proof](adid-first-study-scheduling-results.md).
+actual Gentoo ready/packet trace, not original RTL. [Proof](history/pcm/adid-first-study-scheduling-results.md).
 
 ## F11929. First-study early reference capture loses its maintained middle index
 
@@ -137765,7 +137765,7 @@ SIZE24. Extra index load/lea and second high reload miss original block despite
 count-first stores. Decline all three, close bounded domain;33 bystanders/data/
 metadata unchanged, no exact gains/losses. No runtime/fuzz/mutation execution
 for declined cells. Seek original index lifetime plus packet graph, not more
-counter names. [Domain/results](adid-first-study-scheduling-results.md).
+counter names. [Domain/results](history/pcm/adid-first-study-scheduling-results.md).
 
 ## F11930. Retain two original unsigned constellation clearing predicates as partial recovery
 
@@ -137776,7 +137776,7 @@ inline copies. Helper BYTES38→37 and40→39, no whole-function gain. Eight
 canonical bystanders/all data/metadata unchanged. Counter range0..8 preserves
 all eight writes and termination; signed which/index untouched. Retain unsigned
 counter source after deciding integration gate. Exactness domain remains closed;
-no index/spelling/control permutations reopened. [Retention](constellation-counter-retention-results.md).
+no index/spelling/control permutations reopened. [Retention](history/project/constellation-counter-retention-results.md).
 
 F11930 integrated: combined source/object raw-equal to independent cell,1/300
 objects changed/299 unchanged, full compiler configuration unchanged. make
@@ -137794,7 +137794,7 @@ fallthrough at boundary160. Both47B/SIZE6, owner reload still absent; no forced
 read or alias control. Count/input types, stores and return unchanged; five
 canonical bystanders/data/metadata unchanged,2/6 exact unchanged. Retain original
 path after deciding gate under current partial scope, not a full identity claim.
-[Domain and replay](partial-path-retention-results.md).
+[Domain and replay](history/compiler/partial-path-retention-results.md).
 
 ## F11932. V8 per-sample ring cursor recovers the original one-publication wrap join
 
@@ -137805,7 +137805,7 @@ Seven RTL streams verify2→1, exact five-row output/acquire/advance block and
 original unsigned wrap/join operations recover. Capture after tx_avail decrement,
 publish before handshake, no local across calls/iterations; filter/symbol/home
 residuals remain. Retain supported source join after deciding gate; no dynamic
-store-loss or race claim. [Results](partial-path-retention-results.md).
+store-loss or race claim. [Results](history/compiler/partial-path-retention-results.md).
 
 ## F11933. V8 pole-before-input capture is reversed by sched2, not erased
 
@@ -137814,7 +137814,7 @@ Nine streams inspected: combined snapshot precedes input through31.bbro,
 reversed at33.sched2 and35.mach. It fails original load placement;
 decline snapshot and close its bounded cross. All other bodies/data/metadata
 unchanged. Combined revalidation8cells/54verdicts, no exact gains/losses. No
-fuzz/mutation/runtime testing of declined pole controls. [Trace](partial-path-retention-results.md).
+fuzz/mutation/runtime testing of declined pole controls. [Trace](history/compiler/partial-path-retention-results.md).
 
 Initial integration period388/0 but phase exits2: two V32 anchors detached by
 branch inversion. Retarget row1 to reject exactly boundary160 (<=→<), correcting
@@ -137846,7 +137846,7 @@ real count/i exchange, Psd::process a real frames/pos/frame cycle. V32 ring
 response's swap is outgoing arguments, not locals; definitions preserve argument
 meanings. Fax nomination deferred. Next step is read-only allocation ownership
 for the two real SIZE leads, whose independent CFG differences stay open.
-[getPower and screen evidence](getpower-stack-results.md).
+[getPower and screen evidence](history/pcm/getpower-stack-results.md).
 
 ## F11935. Fraction-first reload allocation makes getPower byte exact
 
@@ -137859,7 +137859,7 @@ alter_reg spills and final frame homes. Eight bystanders, exact622B helper,
 data and metadata stay unchanged. Production source/object equals winner raw.
 Original arithmetic, power initialization before helper call and all original
 bugs stay fixed; no register constraint, profile or arithmetic adjustment.
-[Domain](getpower-stack-domain.md), [replay/results](getpower-stack-results.md).
+[Domain](history/pcm/getpower-stack-domain.md), [replay/results](history/pcm/getpower-stack-results.md).
 
 ## F11936. Bounded induction CFG proves table identity without assuming a guard
 
@@ -137879,7 +137879,7 @@ Saved/return-slot overwrites, wrong restores, invalid targets and unknown
 indexes/calls/flags are refused too. Existing47 synthetic/two real table controls
 and59 relocation self-tests pass. Proof-only unchanged census1080/1852; exact
 getPower comes from source recovery, not changed grading. CI runs new controls
-and keys caches on the new proof module. [Limits and proof](getpower-stack-results.md).
+and keys caches on the new proof module. [Limits and proof](history/pcm/getpower-stack-results.md).
 
 ## F11937. V34 fixed groups recover successive extraction and callback-refreshed buffer ages
 
@@ -137897,8 +137897,8 @@ candidate raw-equals production; both targets equal independent controls;
 known decodeDepth ten-row allocation/scheduling collateral stays SIZE239,
 nine other bodies and data/metadata unchanged. Period388/0 covers existing
 component/roundtrip/initialized modulatevector fixtures. No universal malformed
-width/callback claim. [Domain](v34-frame-sequence-domain.md),
-[results](v34-frame-retention-results.md).
+width/callback claim. [Domain](history/v34/v34-frame-sequence-domain.md),
+[results](history/v34/v34-frame-retention-results.md).
 
 ## F11938. V32 getter's missing owner read is an alias-option interaction
 
@@ -137913,7 +137913,7 @@ owner-load SETs through07.addressof;09.loop has baseline1/control2. Duplicate
 Original field/access typing versus compiler alias profile remains unresolved.
 Do not force reload via volatile/cast/invented union or adopt diagnostic flag
 from one exact getter. No candidate-runtime or alias-reachability result claimed.
-[Domain](v32-cleaned-alias-domain.md), [results](v32-cleaned-alias-results.md).
+[Domain](history/v32/v32-cleaned-alias-domain.md), [results](history/v32/v32-cleaned-alias-results.md).
 
 ## F11939. getPower/V34 integration gains574 exact bytes and passes the full gate
 
@@ -137947,7 +137947,7 @@ No gains/losses: Mapping4/11 and PSD8/13 exact; targets SIZE4/SIZE9 remain.
 Adopt only the two witnessed declaration boundaries, with executable
 initialization/arithmetic preserved. Independent search/output-option graphs
 remain; close the declaration domain and investigate those graphs separately.
-[Reproduction and limits](size-spill-results.md).
+[Reproduction and limits](history/compiler/size-spill-results.md).
 
 ## F11941. PSD switch recovers ordered dispatch, independently of its integer homes
 
@@ -137959,7 +137959,7 @@ relocations unchanged, all eight exact bodies retained. Process618B/SIZE17
 versus original635B, compared with if-chain626B/SIZE9. Retain the witnessed
 graph despite the larger size gap; no exact-function gain. Lower/linear paths,
 peak/x87 scheduling and zero-bin normalization boundaries remain independent.
-[Domain, audit and limits](psd-dispatch-domain.md).
+[Domain, audit and limits](history/dsp/psd-dispatch-domain.md).
 
 ## F11942. Local-home and PSD dispatch integration passes period and structural gates
 
@@ -137988,7 +137988,7 @@ comparison cells/44 verdicts: size-operand reversal raw-inert, length>n restores
 cmp0/JBE guard and CMP/JA backedge. Retain that orientation with both boundaries.
 Target280B/SIZE6 and inlined caller SIZE22 remain; nine bystanders/data unchanged,
 zero exact gains/losses. No outer expansion or unsupported loop/type changes.
-[Domains/results](search-psd-results.md).
+[Domains/results](history/dsp/search-psd-results.md).
 
 ## F11944. PSD normalization belongs to guarded loop preheaders
 
@@ -137999,7 +137999,7 @@ direct fcom when combined. Baseline SIZE17; division-only SIZE2, peak-only SIZE1
 both635B/BYTES56. No extra narrowing in emitted candidate. Twelve bystanders/data
 unchanged, no exact gains/losses. Float peak receives only float bins/exact zero;
 type is a tested supported hypothesis, not uniquely recovered original tokens.
-[Domain](search-psd-boundaries-domain.md), [results](search-psd-results.md).
+[Domain](history/dsp/search-psd-boundaries-domain.md), [results](history/dsp/search-psd-results.md).
 
 ## F11945. Ordinary scalar modes and source operand order recover PSD's entire x87 stream
 
@@ -138011,7 +138011,7 @@ candidate matches all60 original x87 instruction/operand rows and27 branch rows.
 Float logarithm narrowing/constants unchanged. Twelve bystanders/data unchanged,
 no exact gains/losses. Scalar run with wrong archived baseline refused raw check,
 preserved invalid and excluded; valid baseline reproduces previous combined cell.
-[Domain](psd-scalar-operands-domain.md), [results](search-psd-results.md).
+[Domain](history/dsp/psd-scalar-operands-domain.md), [results](history/dsp/search-psd-results.md).
 
 ## F11946. PSD initial read order leaves only six integer register substitutions
 
@@ -138023,7 +138023,7 @@ rows are two unsigned-to-float conversion sequences' XOR/MOV/PUSH registers;
 no new grading rule or claim about original compiler state. Twelve bystanders/
 data unchanged, no exact gains/losses. Close source-order family and trace
 conversion/scratch history before further source changes.
-[Domain](psd-initial-read-domain.md), [results](search-psd-results.md).
+[Domain](history/dsp/psd-initial-read-domain.md), [results](history/dsp/search-psd-results.md).
 
 ## F11947. PSD reaches grade1 and the boundary batch passes period validation
 
@@ -138040,7 +138040,7 @@ Faithful300-input partial text702028→702012, both strict comparisons DIFFERENT
 exit1. Previous cached partial predates d13949ad and is excluded; before-link
 rebuilt from archived actual baseline objects in recovered order. Invalid scalar
 baseline attempt preserved/excluded. No fuzzing/mutation execution, profile/
-tolerance change or modern portability claim. [Results/replay](search-psd-results.md).
+tolerance change or modern portability claim. [Results/replay](history/dsp/search-psd-results.md).
 
 ## F11948. PSD conversion register choices are local rename decisions, not scratch pushes
 
@@ -138052,7 +138052,7 @@ DX at flow2; peephole2 changes SET to XOR without selecting a scratch. Read-only
 installed cc1plus observation records44 rename decisions and four conversion
 chains: AX→SI/DX→DX and AX→BX/DX→AX. Per-function ticks explain retained choices,
 not unavailable original compiler state. process635B/BYTES6 and all60 x87/27 branch
-rows unchanged. No compiler writes/profile changes. [Trace](psd-conversion-results.md).
+rows unchanged. No compiler writes/profile changes. [Trace](history/dsp/psd-conversion-results.md).
 
 ## F11949. Natural scalar mode and comparison ownership make the PSD getter exact
 
@@ -138062,8 +138062,8 @@ recovers original guard/backedge ownership. Five raw-equal getter observations/
 eight stack requests show scalar cells remove SF4 expansion temporary via
  gen_truncxfsf2, leaving zero locals. Only getter changes; twelve bystanders,
 symbol metadata, named/allocated data unchanged. Existing static getter locators
-retargeted preserving defect intent, none executed. [Domain](psd-frequency-scalar-domain.md),
-[results/audit](psd-conversion-results.md).
+retargeted preserving defect intent, none executed. [Domain](history/dsp/psd-frequency-scalar-domain.md),
+[results/audit](history/dsp/psd-conversion-results.md).
 
 ## F11950. PSD getter gain passes the period gate without bystander loss
 
@@ -138074,7 +138074,7 @@ make phase J=8 exits0:388 passed/0 failed;285 suites/10038 static anchors clean,
 none executed. Faithful partial .text702012 unchanged; positioned text equal
 33833→33832/728304 and both strict comparisons DIFFERENT/exit1. Local function
 identity is not final-object identity. PSD process remains635B/BYTES6, bounded
-by measured rename chains. [Integration and next lead](psd-conversion-results.md).
+by measured rename chains. [Integration and next lead](history/dsp/psd-conversion-results.md).
 
 ## F11951. Expansion-temporary screen bounds ninety small floating residual names
 
@@ -138083,7 +138083,7 @@ Baseline3986addf:778 residual copies/770 names,92 floating copies/90 names up to
 reservation, not a causal classification from frame size. Historical PSD getter
 SIZE1/extraSF4 and current EXACT77B clear positive/negative frame controls.
 Three raw-equal complete-TU preparations retain73 shared-body verdicts. Existing
-spectral native/capture domains remain closed. [Domain](expansion-temporary-transfer-domain.md).
+spectral native/capture domains remain closed. [Domain](history/compiler/expansion-temporary-transfer-domain.md).
 
 ## F11952. Scalar SineWave mode removes expansion storage and recovers the original read boundary
 
@@ -138099,7 +138099,7 @@ and non-executable allocated data unchanged. Production adopts scalar/read
 boundary subject to period gate; this is supported partial recovery, not exact.
 Seven raw-equal SineWave observations/31 stack requests; FloatFIR control9
 requests across two overloads shows its SF4 is also reserved by original scalar
-method, so no return rewrite. [Domain](expansion-temporary-transfer-domain.md).
+method, so no return rewrite. [Domain](history/compiler/expansion-temporary-transfer-domain.md).
 
 ## F11953. AGC scalar controls retain the temporary and introduce unsupported narrowing
 
@@ -138110,7 +138110,7 @@ body verdicts retain the SF4 request; five raw-equal observations/15 requests.
 Both changes reduce SIZE23→15 but add fstps/flds at the fsqrt result absent in
 original. No adoption or candidate-runtime claim. Producer edits also change
 reset/progress callers and constant pool; full-TU audit includes them. Preserve
-validated double sqrt boundary and reject score-only transfer. [Domain](expansion-temporary-transfer-domain.md).
+validated double sqrt boundary and reject score-only transfer. [Domain](history/compiler/expansion-temporary-transfer-domain.md).
 
 ## F11954. SineWave partial recovery passes the period gate and improves positioned bytes
 
@@ -138122,7 +138122,7 @@ SIZE671→670/BYTES63→64,REGALLOC31/UNRESOLVED5 unchanged;no exact losses,ratc
 make phase J=8 exits0:388 passed/0 failed,structural/static285-suite10038-anchor
 checks green. No mutations/fuzzing executed. Faithful .text702012 unchanged;
 generate127→134B,positioned equal10→75/134,allocated equal69312→69377/943398.
-Both strict partial comparisons DIFFERENT/exit1. [Results/replay](expansion-temporary-transfer-results.md).
+Both strict partial comparisons DIFFERENT/exit1. [Results/replay](history/compiler/expansion-temporary-transfer-results.md).
 
 ## F11955. SineWave cold placement follows prediction and STC before x87 repair
 
@@ -138134,7 +138134,7 @@ has wrong first-phase read boundary; not a new candidate. Three traces total8
 prediction sites/8 traces/19 ordered blocks/29 x87 edges. Generic reader records
 explicit copy4→8 and refuses malformed99→8. Installed dumps decide behavior;
 stock release sources explain it without claiming original RTL/profile.
-[Results/replay](sine-cold-layout-results.md).
+[Results/replay](history/project/sine-cold-layout-results.md).
 
 ## F11956. First-iteration ownership worsens SineWave and adds compiler NaN repair
 
@@ -138147,7 +138147,7 @@ convert_regs_entry. Not an author constant or proof of reachable uninitialized
 use. Candidate unvalidated/declined; no production source change.92 small
 floating copies yield1 matching nonbranch multiset (SineWave); bound does not
 classify all residuals. Close this two-cell domain pending distinct witness.
-[Results/replay](sine-cold-layout-results.md).
+[Results/replay](history/project/sine-cold-layout-results.md).
 
 ## F11957. Cold-layout diagnosis preserves production and faithful partial object
 
@@ -138158,7 +138158,7 @@ candidate. All300 faithful objects raw-equal canonical; rebuilt partial raw-equa
 retained pre-pass partial, .text702012, allocated candidate917705, positioned
 69377/943398. Strict original comparisons both DIFFERENT/exit1. Refcheck since
 2180f9d0:14429 checked,0 point elsewhere. No mutation/fuzz execution, modern
-portability claim, source adoption or new exact function. [Replay](sine-cold-layout-results.md).
+portability claim, source adoption or new exact function. [Replay](history/project/sine-cold-layout-results.md).
 
 ## F11958. V23 glue drops two original diagnostic sites and valid lifecycle exposes them
 
@@ -138172,7 +138172,7 @@ and scheduling, not adopted. No exact gain or loss. Existing direct lifecycle ex
 per-boundary complete transcript comparison at levels1/2/3 for both ends.
 Unchanged production negative: period0/1; level1 passes, levels2/3 fail4/51016
 terminal and13/68016 host checks each. No planted state or mutation execution.
-[Domain](missing-debug-boundary-domain.md).
+[Domain](history/compiler/missing-debug-boundary-domain.md).
 
 ## F11959. Preserved raw status exposes V23's original complete-EAX return contract
 
@@ -138185,7 +138185,7 @@ are sign-extended short status or literal2, so its full-TU object is raw-inert.
 Four crossed cells over8 affected TUs/92 shared-body verdicts preserve existing
 metadata/data/bystanders; diagnostics restore two undefined host imports; modem-main SIZE122→94, glue remains nonexact. Caller/callee
 boundary, not arbitrary width spelling, supports recovery. Runtime/integration
-results follow after gates. [Domain](missing-debug-boundary-domain.md).
+results follow after gates. [Domain](history/compiler/missing-debug-boundary-domain.md).
 
 ## F11960. Valid V23 transcripts expose seven additional omitted component diagnostics
 
@@ -138202,7 +138202,7 @@ Fixture rejects1300 frames as too short for60000ms acquire;3100 crosses it.
 Host post-carrier24s silence produces no original error, preserved as retention
 control rather than altering source. Missing fixture brace was apparatus failure,
 excluded/repaired. All value/state/transcript comparisons remain exact; no
-mutation/fuzz execution. [Replay/limits](missing-debug-boundary-results.md).
+mutation/fuzz execution. [Replay/limits](history/compiler/missing-debug-boundary-results.md).
 
 ## F11961. V23 diagnostic recovery validates five improved bodies with no exact losses
 
@@ -138216,7 +138216,7 @@ checks pass, including real acquisition/loss/retention transcripts at1/2/3.
 Partial .text702012→702380, allocated positioned equal69377→69537/943398,
 original diagnostic strings/imports recovered. Both strict comparisons remain
 DIFFERENT/exit1. No new exact-function, all-site reachability, mutation/fuzz,
-modern portability or whole-object identity claim. [Results](missing-debug-boundary-results.md).
+modern portability or whole-object identity claim. [Results](history/compiler/missing-debug-boundary-results.md).
 
 ## F11962. AGC explicit return restores V23 register-value ownership after diagnostic recovery
 
@@ -138231,7 +138231,7 @@ normal-value behavior defect is claimed. Four changed bodies: callee, two V23
 receivers, ignored-result RxDetMarkB103 collateral; all audited. Shared prototype
 and definition agree; fourth slots unchanged. New component checks compare the
 explicit result against blob and each published signal, with true/false trial
-coverage. Period/structural/integration results follow. [Domain](v23-agc-return-domain.md).
+coverage. Period/structural/integration results follow. [Domain](history/data-modes/v23-agc-return-domain.md).
 
 ## F11963. AGC word counter and gate operands are independent source witnesses
 
@@ -138244,7 +138244,7 @@ restores the quiet-loop category but leaves gain-loop differences. A distinct
 word-zero-test witness motivates eight more gain-local cells; complete gain graph
 still differs, none adopted. Seventy-six total full-TU cells/644 shared verdicts
 with prior caller cross; all metadata/data/bystanders audited. Do not read SIZE3
-as near-exact, or reopen closed spelling palettes. [Results](v23-agc-return-results.md).
+as near-exact, or reopen closed spelling palettes. [Results](history/data-modes/v23-agc-return-results.md).
 
 ## F11964. AGC return/counter integration passes period and preserves the exact set
 
@@ -138258,7 +138258,7 @@ raw-equal canonical. Census1082/1852 EXACT/119759 bytes unchanged;669 SIZE,
 allocated918388→918404, positioned equal69537→69557/943398. Both strict partial
 comparisons remain DIFFERENT/exit1. Initial missing-relative-blob comparison is
 invalid/excluded and correctly rerun. No fuzz/mutation execution, new exact,
-modern portability or whole-object identity claim. [Results](v23-agc-return-results.md).
+modern portability or whole-object identity claim. [Results](history/data-modes/v23-agc-return-results.md).
 
 ## F11965. AGC pointer countdown and explicit arms interact before STC tail duplication
 
@@ -138272,7 +138272,7 @@ and winner match production; metadata/data/calls/three bystanders unchanged over
 SIZE3→22; original178 versus selected184 instructions, register/spill/arithmetic/
 shift/entry differences remain. No exact gain/loss or unique spelling claim.
 Detectors fire on original/combined and refuse three negative controls.
-[Replay/limits](agc-arm-ownership-results.md).
+[Replay/limits](history/dsp/agc-arm-ownership-results.md).
 
 ## F11966. AGC arm recovery passes period with no exact gains/losses and measured layout cost
 
@@ -138286,7 +138286,7 @@ ratchet green. Partial .text702396→702412, allocated918404→918420, positione
 equal69557→69524/943398; both strict DIFFERENT/exit1. Adopted original graph/
 operand categories have a measured size/layout cost; no byte-count improvement,
 new exact, full gain-graph identity, mutation/fuzz or modern-portability claim.
-[Results](agc-arm-ownership-results.md).
+[Results](history/dsp/agc-arm-ownership-results.md).
 
 ## F11967. AGC initialized unity-pair shift bound is conditional, not relocation reachability
 
@@ -138300,7 +138300,7 @@ element1 wording and D85's live-broken-B103/V23 claim cannot jointly establish a
 whole-program range. This pass does not prove broken-pair modem reachability.
 Raw shift outside0..31 is not defined C; compiled period CL masking is separately
 measured,65536 signed-word count identities with wrong-mask control32768 hits.
-No invalid C shift execution or new reachability claim. [Results](agc-shift-results.md).
+No invalid C shift execution or new reachability claim. [Results](history/dsp/agc-shift-results.md).
 
 ## F11968. AGC raw int count becomes byte reload, then MOVZBL through x86 output selection
 
@@ -138313,7 +138313,7 @@ zero extension is required in source/RTL. Adopt raw count on operand/use evidenc
 not minimum size, retaining unsigned value arithmetic and original period
 invalid-count behavior. Valid initialized unity-pair range0..14; no universal
 C-semantics/portability claim. Metadata/data/calls/three exact bystanders unchanged;
-raw baseline/selected production match. [Trace and source](agc-shift-results.md).
+raw baseline/selected production match. [Trace and source](history/dsp/agc-shift-results.md).
 
 ## F11969. AGC raw-count recovery validates and improves measured partial layout
 
@@ -138327,7 +138327,7 @@ EXACT/119759 bytes unchanged;669 SIZE/65 BYTES/31 REGALLOC/5 UNRESOLVED, ratchet
 green. Partial .text702412→702396,allocated918420→918404, positioned equal
 69524→69567/943398; both strict DIFFERENT/exit1. No new exact, near-exact,
 all-input C proof, broken-pair reachability, fuzz/mutation or modern-portability
-claim. [Results](agc-shift-results.md).
+claim. [Results](history/dsp/agc-shift-results.md).
 
 ## F11970. AGC cached gain and eager narrow level predicate are separate boundaries
 
@@ -138339,7 +138339,7 @@ cells restore original graph only with eager boolean & and narrow level use;
 logical/narrow SIZE3 is rejected, not adopted for score. Keep int level carrier
 and full-width alpha arithmetic. Thirteen full-TU cells/52 shared verdicts,
 zero exact gains/losses; raw controls/data/exports/bystanders preserved.
-[Domain](agc-predicate-domain.md); [results](agc-predicate-results.md).
+[Domain](history/dsp/agc-predicate-domain.md); [results](history/dsp/agc-predicate-results.md).
 
 ## F11971. AGC partition fallthrough and chosen length expose different source uses
 
@@ -138350,7 +138350,7 @@ len restores two original cached MOV loads but exposes an extra RMS argument
 extension, SIZE18. Do not accept/reject by size/frame or infer a unique type
 from width alone. Original smoother intermediate homes/LEA remain unresolved;
 saved reload trace reports substitutions, not recovered original allocator state.
-[Results](agc-predicate-results.md).
+[Results](history/dsp/agc-predicate-results.md).
 
 ## F11972. RMS full argument and word countdown reproduce the same callee and original AGC boundary
 
@@ -138363,7 +138363,7 @@ raw-equals canonical, other8 caller/callee objects unchanged. Do not retag its
 signed field globally. Source declaration/definition agree and callee explicitly
 consumes low16 bits. No uniquely recovered formal width or old-prototype bug
 claim. Selected source recovers original value/operand boundaries with no exact
-gains/losses. [Replay and limits](agc-predicate-results.md).
+gains/losses. [Replay and limits](history/dsp/agc-predicate-results.md).
 
 ## F11973. AGC predicate/RMS recovery passes period with exact set unchanged
 
@@ -138380,7 +138380,7 @@ green. AGC567 versus original566 bytes,179 versus175 nonpadding instructions,
 frame0x4c versus0x3c: not near-exact or register-only. Partial .text702396 and
 allocated918404 unchanged; positioned equal69567→69558/943398, both strict
 DIFFERENT/exit1. Original guard/length/argument/partition categories improve,
-not the exact count or positioned byte total. [Results](agc-predicate-results.md).
+not the exact count or positioned byte total. [Results](history/dsp/agc-predicate-results.md).
 
 ## F11974. Whole-tree extension windows nominate boundaries, not prototypes
 
@@ -138392,7 +138392,7 @@ positive fixture aborted, excluded; no report used. Four manual reviews:
 MTD conversion is outside window; TONE and settxlevel conversions belong to
 other values; FSE supplies a paired-error lifetime. Other35 bodies unclassified.
 Not the1852-symbol strict denominator, not ABI recovery.
-[Method, controls and replay](lms-paired-error-results.md).
+[Method, controls and replay](history/project/lms-paired-error-results.md).
 
 ## F11975. Paired LMS errors must survive the first opaque update call
 
@@ -138405,7 +138405,7 @@ matching original ownership. SIZE35→26, zero exact gains/losses. Raw baseline,
 metadata/named/allocated data/call targets/all bystanders pass; only receive
 changes. Helper ABI and exact helper body unchanged. This is a pre-allocation
 lifetime recovery, not a unique original spelling or complete-function match.
-[Declared domain](lms-paired-error-domain.md), [results](lms-paired-error-results.md).
+[Declared domain](history/project/lms-paired-error-domain.md), [results](history/project/lms-paired-error-results.md).
 
 ## F11976. Paired LMS recovery production validation
 
@@ -138417,7 +138417,7 @@ changes in300 objects,299 raw-identical and300 faithful inputs raw-match
 canonical. Selected cell raw reproduced. Partial .text702396→702380,
 allocated918404→918388, positioned equal69558→69540/943398; strict
 DIFFERENT/exit1. No exact-count or positioned-byte gain. No fuzzing, mutation
-execution or modern-portability claim. [Results](lms-paired-error-results.md).
+execution or modern-portability claim. [Results](history/project/lms-paired-error-results.md).
 
 ## F11977. Output-return and scalar tap order jointly recover two descramblers
 
@@ -138430,7 +138430,7 @@ store order changes before allocation. Both complete original bodies EXACT;
 no unique template spelling or normal-value bug claim. All27 transitive
 consumer controls preserve data/metadata/calls and account for both nonexact
 Decision callers (V90 SIZE20→25 despite corrected consumption).
-[Domain](descrambler-output-domain.md), [results](scalar-boundary-results.md).
+[Domain](history/data-modes/descrambler-output-domain.md), [results](history/compiler/scalar-boundary-results.md).
 
 ## F11978. Vendored modem count contract corrects V23 full-width handoffs
 
@@ -138440,7 +138440,7 @@ with caller cast removal. Each axis alone raw-inert; both restore original
 V23 full n_tx/n_rx arguments, SIZE10→7. B103 independently normalizes words;
 its cast removal SIZE11→13 is rejected, int declarations alone adopted raw-
 inert. V32 comment corrected, raw-inert. No huge-count reachability claim.
-[Domain](modem-bit-count-domain.md), [results](scalar-boundary-results.md).
+[Domain](history/project/modem-bit-count-domain.md), [results](history/compiler/scalar-boundary-results.md).
 
 ## F11979. Scalar scrambler transfer preserves exact HH and recovers HI
 
@@ -138452,7 +138452,7 @@ and complete-TU controls discriminate scheduling. No bulk/XOR/type/declaration
 permutations. Combined27-consumer proof plus all domains:242 full-TU cells/
 4820 shared verdicts, all raw baselines/metadata/named/allocated data/calls/
 bystanders audited; three distinct exact names346B, zero exact losses.
-[Transfer domain](scrambler-scalar-order-domain.md), [results](scalar-boundary-results.md).
+[Transfer domain](history/data-modes/scrambler-scalar-order-domain.md), [results](history/compiler/scalar-boundary-results.md).
 
 ## F11980. Scalar-boundary batch permitted validation checkpoint
 
@@ -138468,7 +138468,7 @@ by automatic approval review
 because t_fuzz is excluded by user. Initial387/1 was an old member-pointer
 overload compile error, not runtime divergence; fixture selector alone now
 uses int, inputs/checks unchanged. No final full-phase claim.
-[Results and exact validation boundary](scalar-boundary-results.md).
+[Results and exact validation boundary](history/compiler/scalar-boundary-results.md).
 
 ## F11981. Jump-table alignment needs the standard dis module
 
@@ -138479,7 +138479,7 @@ Decision comparison now runs, differing control fires on four groups, and the
 exact 43-row control stays clean. Its 76 mnemonic groups and frame difference
 do not identify a new source boundary; no Decision source experiment adopted.
 reset_cid's original CWTL disproves its loop-width nomination.
-[Evidence and limits](v34-vmi-boundary-results.md).
+[Evidence and limits](history/v34/v34-vmi-boundary-results.md).
 
 ## F11982. INFO1a caches a word result and both destinations before storing
 
@@ -138490,7 +138490,7 @@ int-narrow pairs emit identical objects; short plus captures restores both
 native/initial-RTL boundaries. Only target changes, all six bystanders and
 metadata/data/calls preserved. SIZE16 remains; no unique type spelling, new
 exact gain or reachable alias-history claim.
-[Domain](v34-info1a-capture-domain.md), [results](v34-vmi-boundary-results.md).
+[Domain](history/v34/v34-info1a-capture-domain.md), [results](history/v34/v34-vmi-boundary-results.md).
 
 ## F11983. Ring requirement narrowing caused a constructor mismatch
 
@@ -138504,7 +138504,7 @@ word ring. Only target changes; SIZE103 remains, all five bystanders/data/
 metadata/calls preserved. Static arithmetic separately checks196608 wrap-edge
 pairs: old formula196602 disagreements, repaired0. Combined with INFO1a,
 10 full-TU cells/66 shared verdicts, raw baselines reproduced, no exact losses.
-[Domain](vmi-ring-capacity-domain.md), [results](v34-vmi-boundary-results.md).
+[Domain](history/project/vmi-ring-capacity-domain.md), [results](history/v34/v34-vmi-boundary-results.md).
 
 ## F11984. INFO1a and ring-capacity validation checkpoint
 
@@ -138518,7 +138518,7 @@ unchanged; positioned equal69392→69398/943398, strict DIFFERENT/exit1.
 All structural checks pass: 285 suites/10038 static anchors, 14445 references,
 zero unresolved or repointed citations. No full-phase, fuzz/mutation or
 portability claim.
-[Results and validation scope](v34-vmi-boundary-results.md).
+[Results and validation scope](history/v34/v34-vmi-boundary-results.md).
 
 ## F11985. The remaining call-window queue has bounded dispositions
 
@@ -138534,7 +138534,7 @@ fires; identity and intervening-EAX-write controls stay clear. Unequal call
 sequences, branches, masks and conversions beyond the window remain outside
 its certification. This closes the supported queue, not the global source
 search or a byte-exactness ceiling.
-[Ledger, exclusions and replay](call-boundary-lead-ledger.md).
+[Ledger, exclusions and replay](history/services/call-boundary-lead-ledger.md).
 
 ## F11986. Spectral sign width is not a unique helper-return witness
 
@@ -138551,7 +138551,7 @@ Only target changes; ten bystanders, metadata/named data/call sequence agree;
 only two expected constant pools change in DF cells. No source adoption,
 including the misleading SIZE1 candidate. Closed finite domain; new evidence
 must identify scale capture/storage or a helper/TU boundary.
-[Domain](spectral-sign-carrier-domain.md), [results](spectral-sign-carrier-results.md).
+[Domain](history/pcm/spectral-sign-carrier-domain.md), [results](history/pcm/spectral-sign-carrier-results.md).
 
 ## F11987. Three earlier exact misses support partial source recovery
 
@@ -138568,7 +138568,7 @@ without changing any literal. Metadata/data/nontext relocations pass throughout.
 No new reachable-alias-history or unique source/type claim; no near-size fitting.
 The earlier finite negative measurements stand; their no-adoption decision is
 superseded for these explicitly reviewed boundaries only.
-[Domain](partial-boundary-recoveries-domain.md), [results](partial-boundary-recoveries-results.md).
+[Domain](history/compiler/partial-boundary-recoveries-domain.md), [results](history/compiler/partial-boundary-recoveries-results.md).
 
 ## F11988. Partial-boundary aggregate validation
 
@@ -138582,7 +138582,7 @@ Both strict comparisons DIFFERENT/exit1. Initial nonexistent comparison-tool
 path stopped before measurement; invalid log retained and proper path rerun.
 Static anchors285 suites/10038 locations pass without retargeting. No fuzzing,
 mutation execution, new input history, full-phase or portability claim.
-[Full results and collateral](partial-boundary-recoveries-results.md).
+[Full results and collateral](history/compiler/partial-boundary-recoveries-results.md).
 
 ## F11989. AGC result capture must precede destination evaluation
 
@@ -138596,7 +138596,7 @@ bystanders unchanged. The capture distinction precedes allocation and does not
 require a forced register, frame or declaration order. A fresh-EAX proof must
 stop at intervening writes; the initial failed apparatus assertion is retained
 as invalid, then corrected. Seven nested and18 indexed source nominations yield
-no further supported destination-age mismatch. [Results](boundary-transfer-results.md).
+no further supported destination-age mismatch. [Results](history/compiler/boundary-transfer-results.md).
 
 ## F11990. Remaining helper handoffs support partial recovery
 
@@ -138609,7 +138609,7 @@ three bystanders; recorded, withheld, no register/source fitting. D490/D1030/
 D1031/D1036/D1091/D1094 retire unsupported void/three-argument inference rather
 than asserting original prototype UB or a uniquely recovered type. B103 size
 worsens70→86, CID remains54; original outgoing value is the adoption criterion.
-[Controls, table and collateral](boundary-transfer-results.md).
+[Controls, table and collateral](history/compiler/boundary-transfer-results.md).
 
 ## F11991. TX owner reads and V27 training boundaries are distinct from size
 
@@ -138620,7 +138620,7 @@ signed fill index, unsigned postdecrement output cursor and per-output rate
 reread, SIZE15→11; decline the incomplete SIZE1 single-axis spelling. Countbit15
 original wrap/nontermination remains outside safe executed inputs; preserve
 original next-word access and existing fixed component coverage. No new input
-history, reachable alias or exact-body claim. [Evidence](boundary-transfer-results.md).
+history, reachable alias or exact-body claim. [Evidence](history/compiler/boundary-transfer-results.md).
 
 ## F11992. Accumulator publication controls recover original operations
 
@@ -138631,7 +138631,7 @@ two; initial RTL publications also increase. SIZE99→85;17 emitted bystanders
 unchanged, including six without original counterparts. Only numeric-zero
 comparison pool changes. IIR targeted period passes, followed by permitted
 whole-suite validation. Two Tone static locators retarget the same mutation
-meanings; no mutation execution/snapshot changes. [Results](boundary-transfer-results.md).
+meanings; no mutation execution/snapshot changes. [Results](history/compiler/boundary-transfer-results.md).
 
 ## F11993. Unknown requested period tests must not produce a clean partial gate
 
@@ -138642,7 +138642,7 @@ partial run. Two host self-tests cover unknown-only and mixed valid/unknown
 lists; fake Docker proves no Docker invocation. Both pass and become the
 period-selection-selftest structural tier. Final387-name selection is the
 positive control:387 requested/0 unknown and387 passed/0 failed. No test input,
-tolerance or failure criterion is weakened. [Reproduction](boundary-transfer-results.md).
+tolerance or failure criterion is weakened. [Reproduction](history/compiler/boundary-transfer-results.md).
 
 ## F11994. Boundary transfer aggregate checkpoint
 
@@ -138656,7 +138656,7 @@ inputs match canonical; profile unchanged. Partial .text702524→702476,
 allocated918526→918484, positioned equal69544→69472/943398, strict DIFFERENT/exit1.
 Two host selection self-tests pass;285 suites/10038 static anchors retain two
 Tone locator retargets only. No mutation/fuzz execution, snapshot update,
-full-phase or portability claim. [Complete results and stopping scope](boundary-transfer-results.md).
+full-phase or portability claim. [Complete results and stopping scope](history/compiler/boundary-transfer-results.md).
 
 ## F11995. Fourteen transmitter min comparisons used the wrong budget signedness
 
@@ -138668,8 +138668,8 @@ other carrier. Fixed constructor/START/installed no-carrier component fixtures
 fail16/138,14/159,16/174 checks before correction and pass all471 afterward.
 Outputs bound the old wrong counts too; no planted internal state or public
 high-budget reachability claim. Several size gaps worsen; semantic fidelity,
-not size, decides retention. [Domain](transmitter-budget-fidelity-domain.md),
-[controls and evidence](transmitter-budget-fidelity-results.md).
+not size, decides retention. [Domain](history/pcm/transmitter-budget-fidelity-domain.md),
+[controls and evidence](history/pcm/transmitter-budget-fidelity-results.md).
 
 ## F11996. V29 receiver request bytes survive child stores as snapshots
 
@@ -138678,7 +138678,7 @@ stores. Baseline reads each twice. Adopt the previously measured joint local
 snapshots after current full-TU replay; BYTES74→24, status bystander unchanged,
 metadata/data/calls unchanged, zero exact gain/loss. Existing t_v29fax period
 fixture passes; no arbitrary overlapping-request lifecycle is asserted.
-[Results](transmitter-budget-fidelity-results.md).
+[Results](history/pcm/transmitter-budget-fidelity-results.md).
 
 ## F11997. V34 FSK third-phase multiply and history transfer share one loop
 
@@ -138688,7 +138688,7 @@ fskdemodulate bystander unchanged, metadata/data/calls unchanged. Wrong earlier
 store-before-coefficient controls remain rejected. Existing fixed FSK fixtures
 pass; no new mutable-coefficient alias history or exact-body claim. The source
 comment no longer describes the history shift as deliberately separate.
-[Controls and stopping boundary](transmitter-budget-fidelity-results.md).
+[Controls and stopping boundary](history/pcm/transmitter-budget-fidelity-results.md).
 
 ## F11998. V27 Quiet remains structurally nonexact after the budget correction
 
@@ -138699,7 +138699,7 @@ SIZE1,SIZE20,BYTES76, four distinct objects, zero exact gains/losses. Joint form
 still reuses the old member value and moves sign extension before the initial
 gate; no further adoption or source/register permutation follows. Across this
 review14 full-TU cells/110 shared-body verdicts preserve all bystanders and
-metadata/data/nontext/call inventories. [Replay](transmitter-budget-fidelity-results.md).
+metadata/data/nontext/call inventories. [Replay](history/pcm/transmitter-budget-fidelity-results.md).
 
 ## F11999. Unsupported unequal wrapper rates must fail the first converter check
 
@@ -138710,8 +138710,8 @@ fail6/12 checks before correction. Restore literal immediate converter creation,
 sequential checks and shared cleanup in original emission order. SIZE282→2,
 not exact; delete remainsEXACT85 and run unchanged. Only invented72B lookup
 object removed, all other metadata/data/calls/bystanders unchanged. The near
-size does not justify prologue/register fitting. [Domain](service-constructor-fidelity-domain.md),
-[evidence](service-constructor-fidelity-results.md).
+size does not justify prologue/register fitting. [Domain](history/services/service-constructor-fidelity-domain.md),
+[evidence](history/services/service-constructor-fidelity-results.md).
 
 ## F12000. Cadence bank mapping and interior on durations were reconstructed incorrectly
 
@@ -138727,7 +138727,7 @@ BUSY constructor and sample stream with equal first/last500ms tones and1000ms
 middle produces a source-only match at28159,12/40454 pre-fix checks fail; equal
 positive control passes35429. Restore the missing comparison. No period/filter
 state is planted or tolerance widened. First corrected targeted gate2/0;
-delete/reset exact and all unselected bodies unchanged. [Controls](service-constructor-fidelity-results.md).
+delete/reset exact and all unselected bodies unchanged. [Controls](history/services/service-constructor-fidelity-results.md).
 
 ## F12001. Cadence TYPE and returned name have different original ownership
 
@@ -138739,7 +138739,7 @@ DIAL assertions pass. Restore working type diagnostic plus complete late
 extra/int_2a4/name bundle. Four full-TU cells give SIZE249/239/239/255; adopt
 original read/publication age, not the smaller gap. Sibling RTL confirms late
 loads across the final report; all bystanders/data/calls preserved apart from
-expected internal switch destination offsets. [Replay](service-constructor-fidelity-results.md).
+expected internal switch destination offsets. [Replay](history/services/service-constructor-fidelity-results.md).
 
 ## F12002. Medium read recovery exposes a source-unchanged peephole bystander
 
@@ -138757,7 +138757,7 @@ initial RTL through flow2 equal under checked alias bijection; first differences
 at28.peephole2,10 UIDs, then four at rnreg/sched2. This is retained compiler
 history, not an original preimage
 or a reason to fit unframe declarations. Metadata/data/nontext/calls preserved;
-merge-string contents/counts unchanged. [Trace, controls and limits](service-constructor-fidelity-results.md).
+merge-string contents/counts unchanged. [Trace, controls and limits](history/services/service-constructor-fidelity-results.md).
 
 ## F12003. Explicit tree constant annotations caused false early-stage divergence
 
@@ -138770,5 +138770,5 @@ retain symbol identities, flags, registers, stack offsets and large immediates;
 historical positive/equal traces still pass,19/19 controls total. The corrected
 bystander trace is equal through flow2 and first differs at peephole2. This fixes
 an observer, without changing native byte grading or inferring original state.
-[Diagnostic](gcc3-stage-divergence-diagnostic.md),
-[corrected trace](service-constructor-fidelity-results.md).
+[Diagnostic](history/compiler/gcc3-stage-divergence-diagnostic.md),
+[corrected trace](history/services/service-constructor-fidelity-results.md).

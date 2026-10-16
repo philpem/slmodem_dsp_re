@@ -16,16 +16,20 @@ output — and filter coefficients are traced back to their original design
 intent so they can be *regenerated* at a different sample rate rather than
 merely resampled.
 
-Abbreviations are decoded in **[docs/glossary.md](docs/glossary.md)** — worth
+Abbreviations are decoded in **[docs/maintainer/glossary.md](docs/maintainer/glossary.md)** — worth
 reading first, since several are misleading (`MRF` is *multi-rate filter*, not
 "matched root filter"; `FP_Pow` computes `exp()`).
 
 Datapump configuration — what each config field means and how to ask for an
 originating or answering station — is in
-**[docs/configuration.md](docs/configuration.md)**.
+**[docs/maintainer/configuration.md](docs/maintainer/configuration.md)**.
 
 Start with **[docs/findings.md](docs/findings.md)**: what the blob is, how it
 is structured, and the commands that prove each claim.
+
+Documentation is organised in the [documentation index](docs/README.md): the
+Maintainer Manual covers current operation and algorithms, while the history
+archive preserves dated reconstruction investigations.
 
 ## Status
 

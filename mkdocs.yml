@@ -28,6 +28,16 @@ nav:
   - Architecture and ownership: architecture.md
   - From dialling to data: lifecycle.md
   - Signal processing and modem families: signal-processing.md
+  - Module catalogue: modules.md
+  - V.34 training algorithms: training-algorithms.md
+  - Configuration and reference:
+      - Datapump configuration: configuration.md
+      - Modem parameters: parameters.md
+      - Call-progress tables: call-progress.md
+      - Terminology: glossary.md
+      - Coefficient derivations: coefficients.md
+      - Sample-rate dependencies: sample-rates.md
+      - Resampler banks: resampler-banks.md
   - Maintaining the reconstruction: maintenance.md
   - Reconstruction debt: reconstruction-debt.md
   - Standards and references: references.md

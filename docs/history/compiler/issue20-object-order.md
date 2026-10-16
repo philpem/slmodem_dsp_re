@@ -1,0 +1,317 @@
+# Object input and definition order: September 2026 pass
+
+This pass continues [issue #6](https://github.com/philpem/slmodem_dsp_re/issues/6)
+under the open [issue #20](https://github.com/philpem/slmodem_dsp_re/issues/20).
+The priority is original object input order, correct ownership, and then
+function/data definition order. Compiler-profile refinement is not this pass.
+
+## Tool control
+
+The initial checkout was PR #92 at `b82cc2e7`, with uncommitted attribution
+fixes. Those fixes were copied into an isolated worktree; the original
+checkout was preserved. Shared tool commit `a1a7462b` is based on master
+`f1dd519e` and contains no reconstruction-source changes.
+
+The attribution report now preserves duplicate symbol and FILE occurrences,
+keeps ambiguous candidates unresolved, and distinguishes naming inference
+from ownership evidence. Partial linking generates its attribution JSON from
+the current tools and blob, rather than silently using the tracked report.
+The partial-link CI cache includes those dependencies.
+
+Validation: 11/11 ELF fixture tests, 8/8 partial-comparator controls, and
+`make phase`: 375 passed, 0 failed, structural checks passed. A dry-run
+dependency control with `make -n -W tools/tuattrib.py
+build/partial/attribution.json` schedules regeneration.
+
+On the real blob, verification covers 23/47 local function occurrences out of
+1,773 sized functions; 22/23 agree. The remaining mismatch is explicitly
+`name-only`: `V34demodulate` belongs to `V34RX.c`, not the inferred `V34.c`.
+This evidence class is not used to select an ordering candidate.
+
+## Reproducible baselines
+
+Compiler image: `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`, image ID
+`sha256:fe868cc44a48c36d1130862965729d0b384bc9e0a1908d37891aa5ae07352f16`.
+The executed compiler reports Gentoo GCC 3.4.2-r2; its selected assembler and
+linker both report 2.15.92.0.2, dated 20040927.
+
+Complete source profile from `.build-config`:
+
+```text
+-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args
+-Iinclude -D__SIZEOF_POINTER__=4
+-include tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS
+C++: -fno-exceptions -fno-rtti -fno-math-errno -ffast-math
+DCR retained exception: -O2 -fno-rerun-cse-after-loop
+```
+
+The corrected-order arms relink the *same compiled objects* as their original
+arms. They isolate an ordering-policy change from a source/codegen change.
+
+| Source / ordering tool | Positioned bytes / 943398 | Relocations / 18317 | Symbols / 2907 | Candidate NOBITS / 2836 |
+| --- | ---: | ---: | ---: | ---: |
+| master `f1dd519e`, original | 59872 | 918 | 232 | 2760 |
+| master `f1dd519e`, corrected | 59949 | 902 | 232 | 2760 |
+| PR #92 `b82cc2e7`, original | 55450 | 943 | 243 | 2804 |
+| PR #92 `b82cc2e7`, corrected | 55123 | 954 | 243 | 2804 |
+| DSP ownership batch, corrected | 55313 | 954 | 244 | 2804 |
+| DSP definition order, corrected | 55321 | 954 | 244 | 2804 |
+| V32 ownership/order, corrected | 55341 | 954 | 247 | 2804 |
+| getbit physical closure, corrected | 55398 | 952 | 247 | 2804 |
+
+All rows have 67/92 exact section descriptors. The two baseline source
+revisions have the same 828/1852 strict exact functions, covering
+79916/720125 reference code bytes. The reproduction define is enabled here;
+the PR's published default-profile count of 824 is a different build profile.
+Four unresolved relocation cases remain separate from the 828 exact matches.
+
+Every strict partial-link verdict remains `DIFFERENT`. Positioned byte counts
+are influenced by layout shifts; they do not establish ownership or justify
+adding padding to the source.
+
+## PR #92 audit and remaining inventory
+
+The reference has 281 real FILE occurrences; PR #92 supplies 264 inputs.
+Under corrected attribution, 178 inputs have ordering candidates and 86 retain
+source-list order. Six inputs have conflicting symbol candidates: `faxadapt.c`,
+`v17.c`, `v21.c`, `v27.c`, `v29.c`, and `V90SessionFlag.cpp`. These are an
+ownership worklist, not proof of a particular split.
+
+F11360's empty-unit conclusion is superseded by F11362: a FILE without locals
+can contain globals. The `fax.c` and `NoK56Flex.cpp` corrections in PR #92
+are retained. FILE sequence, global code sequence and symbol families support
+them, but a shared address bracket alone does not prove global ownership.
+
+F11361's claim that equality of complete local-name sets is a safe unique
+mapping is too strong. The synthetic fixtures demonstrate identical sets in
+different FILE occurrences. Even adding raw data bytes does not make every
+case unique: the V17/V27/V29 receiver configuration objects share identical
+local data signatures. Their mode-specific globals supply additional evidence;
+the local set alone cannot distinguish those three renames.
+
+The data-signature inventory matched 24/264 compiled inputs. It compares
+local-object names, sections, sizes and raw bytes as a discriminator, not as a
+substitute for relocation-aware comparison. The three selected DSP cases have
+unique matching reference occurrences:
+
+| Reconstructed input | Reference FILE sequence | Local evidence |
+| --- | --- | --- |
+| `fpm_mtd_cfg.c` | 247, `fpm_mtd.c` | `DEF_COEFS`, `.data`, 20 bytes at 0x81bc |
+| `fpm_tone_cfg.c` | 256, `fpm_tone.c` | `ToneLPF`, `.rodata`, 106 bytes at 0xd040 |
+| `vtb.c` | 258, `fpm_vtb.c` | `VTB_DIFF_TBL`, `.rodata`, 32 bytes at 0xed60 |
+
+The first two are merged into their existing owning units; the third is
+renamed. The tone configuration mutation suite follows its source. The
+ownership-only cell preserves all 4916 `.text` bytes and all 32 `.rel.text`
+records across the three affected units. All 259 other unchanged-path
+objects remain byte-identical to the clean PR #92 build. It removes two
+invented FILE records and keeps the 828 exact-function set unchanged.
+
+## Definition-order result
+
+The ownership-only cell exposes an MTD `.data` ordering mismatch:
+reference `FPM_MTD_CFG`, `DEF_COEFS`, `COEF_DC`; candidate `COEF_DC`,
+`FPM_MTD_CFG`, `DEF_COEFS`. The bounded control changes declaration placement
+only and checks actual period emission rather than assuming source order is
+emission order.
+
+The reference tone function order is create, delete, generate, generate2,
+generate_demod, set_freq, set_scale, detect, find_rev, filter, kill. The
+candidate previously emitted setters and generators before create. The second
+cell reorders complete definitions without changing their bodies. All eleven
+now emit in reference order.
+
+Moving the MTD configuration declarations after the `COEF_DC` declaration
+produces the reference data order under the period compiler. All 42 bytes
+from `FPM_MTD_CFG` through `COEF_DC` agree with the reference after rebasing
+the single pointer to the start of that region: offsets 0, 12 and 32,
+respectively. The three MTD function bodies and code relocations are unchanged.
+
+Nine tone function bodies and their relative relocations are unchanged.
+`FPM_TONE_create` and `FPM_TONE_detect` retain sizes 669 and 512, with 169 and
+159 non-padding instructions respectively, but their instruction streams
+change. Review identifies scheduling, register and stack-slot allocation
+changes. They do not qualify as pure register renaming under `alpha_equal`.
+The parent independently checked canonical relocation target sequences with
+`byteident.body`; both sequences are unchanged. The `.rel.rodata` target is
+also unchanged. Neither function is claimed exact against the reference.
+
+Both ownership and definition-order cells pass `make phase`: 375 passed,
+0 failed, structural checks passed. The final strict exact set is identical
+to the baseline: 828/1852 functions, 79916/720125 code bytes, zero gains and
+zero losses. The exact-set ratchet passes. The mutation-snapshot report marks
+263 historical suites stale; this pass does not claim new mutation coverage.
+
+The final partial link contains 262 inputs, with 179 ordering candidates and
+83 unresolved inputs retained by source-list order. Binding remains
+2440/2441 shared names correct, with `getbit` the remaining mismatch; there
+are also 77 reference-only and 132 candidate-only names. The strict completion
+command exits 1, `DIFFERENT`, as expected for this unfinished object.
+
+The ownership-only cell is commit `c1a960aa`. The source revisions and full
+build logs preserve the definition-order control separately. Two failed
+editing-script attempts left source unchanged and are not experimental cells.
+
+## V32 ownership and emission-order result
+
+The former `v32fpdisp.c` combined three original ownership groups. Its
+contents are now physically partitioned, not relabelled with `#line`:
+
+- `V32.c` contains `V32FP_recreate` and `V32FP_create`. Its local
+  `V32DiconnectThreshTable` matches reference FILE occurrence 116, with
+  16 bytes at `.rodata + 0x6dd0`.
+- `V32mod.c` contains `V32FP_modem`, `v32_data`, `v32_handshake`, and
+  `v32_null_protocol`, emitted in that reference order. The three local
+  handlers and the two local scratch buffers identify FILE occurrence 124.
+  `V32_PROTOCOL` retains global binding.
+- `V32stc.c` contains `V32FP_control` and `V32FP_status`. Their local
+  `SnrToRetrainTable`, `RATEv32`, and `PROTOCOL` identify FILE occurrence
+  129. Status directly references these tables and prints the original
+  `V32STC` diagnostic prefix. The tables emit at relative offsets 0, 12,
+  and 24, preserving their original order and local binding.
+
+The old constructor input `v32fprecr.c` is replaced by `V32.c`; the combined
+dispatch input is replaced by the other two units. The shared local header
+contains includes and unchanged accessor/constant macros, not definitions of
+functions or types. These are partial reconstructions of the original units,
+not a claim that all their original contents have now been recovered.
+
+A source-preservation audit covers all eight moved function bodies and 99
+baseline macros, with no body or macro changes. All 261 registered V32
+mutation anchors still occur once in their registered files; this is an
+anchor check, not a fresh mutation run.
+
+Seven functions retain identical bytes and relative relocations against the
+pre-split build. `V32FP_control` changes from 780 to 769 bytes and from 194
+to 193 non-padding instructions. Full disassembly review identifies removal
+of the redundant `mov %eax,%ebp` in the ratio/table update: the quotient now
+stays in `%eax`. The other nine bytes are padding; remaining changes are
+register allocation and layout. All 15 relocation targets remain in the same
+sequence. Neither control implementation is claimed exact against the blob.
+
+The complete exact-function set remains 828/1852, covering 79916/720125
+reference bytes, with zero gains or losses; the ratchet passes. `make phase`
+passes with 375 differential tests passed, zero failed, and structural checks
+OK. Positioned matching bytes rise 55321 -> 55341 / 943398 and exact symbol
+records rise 244 -> 247 / 2907; relocations remain 954 / 18317. Shared-name
+binding remains 2440/2441, with `getbit` still different. The strict object
+comparison remains `DIFFERENT`.
+
+The first extraction attempt contained duplicate definitions and an
+incomplete header function; its repair also left comment/declaration syntax
+artifacts. These were rejected and corrected before measurement or commit.
+The failed build is preserved as an invalid artifact, not a comparison cell.
+Detailed controls, JSON metrics, the disassembly review, and the gate log are
+under `/tmp/issue20-v32-evidence/`.
+
+## getbit binding milestone
+
+The reference's last measured shared-name binding disagreement is resolved:
+`getbit` is now LOCAL in `V34hshak.c`. Its three nonrecursive call sites
+belong to two reconstructed transmit arms, `v34tx1_xmitmp` and
+`v34tx1_tx_dpsk`. Those two definitions and their eleven private helper
+dependencies now physically reside in the C translation unit. Unrelated
+C++ arms remain in `v34hstx1.cpp`; the compiler profile is unchanged.
+
+The four utilities shared with remaining arms stay static in both units.
+There is no production visibility wrapper and no included `.cpp` or `#line`
+substitute for source placement. The temporary private helper header was
+removed: the private definitions live directly beside their moved callers.
+The public `getbit` prototype is removed; its direct unit test declares the
+test-only globalized copy supplied by the existing `testvisible.py` mechanism.
+
+The preservation audit checked 126 original C function bodies, 41 unmoved
+C++ bodies, both moved arm bodies (2069 and 2780 source bytes), and 15 copied
+helper bodies, with no body differences. Source presence alone was not
+accepted as mutation coverage: 157 entries initially still targeted dead C++
+helper copies. Removing those private copies and rerouting their entries
+preserves the original 776-entry mutation inventory against live definitions.
+
+The complete object review contains 62 function occurrences before and after,
+with no added helper occurrence. Of 61 shared names, 51 have identical bodies
+and relative relocations. Four initially unresolved comparisons have identical
+normalized disassembly; `v34handshak` differs only in 18 string-relocation
+immediates selecting identical strings after section rebasing. The remaining
+out-of-line MOH helper changes from `_Z12tx1_moh_holdP10v34_object` to
+`tx1_moh_hold`, preserving its instructions and relocation targets.
+
+Genuine code-generation collateral is retained and reviewed, not called
+neutral: `ApplyBulkDelay` has 22 changed bytes, `getbit` shrinks 452 -> 447,
+`v34handshak_unwritten_reset` has four register-encoding byte changes,
+`v34tx1_xmitmp` retains size 1060 with 344 differing bytes, and
+`v34tx1_tx_dpsk` shrinks 858 -> 838. The moved arms are not claimed exact.
+The full exact-function set remains 828/1852, with zero gains or losses,
+covering 79916/720125 reference code bytes; the ratchet passes.
+
+Shared-name binding improves 2440 -> 2441 / 2441. Positioned matching bytes
+rise 55341 -> 55398 / 943398, but exact relocation records fall
+954 -> 952 / 18317. Exact symbol records remain 247/2907. Candidate `.text`
+shrinks 685400 -> 685368 versus reference 728304, so the size deficit grows
+by 32 bytes. This is an evidence-supported ownership/binding improvement,
+not monotonic progress on every metric. Strict partial-link comparison still
+reports `DIFFERENT`; 77 reference-only and 132 candidate-only names remain.
+
+Both affected mutation suites were fully rerun and genuinely recorded:
+
+| Suite | Entries | Caught by tests | Equivalent | Uncaught | Unusable |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `v34hstx1` | 535 | 513 | 22 | 0 | 0 |
+| `v34hstx1_moved` | 241 | 240 | 1 | 0 | 0 |
+| Total | 776 | 753 | 23 | 0 | 0 |
+
+No miscounted equivalents or string-only catches occurred. Final `make phase`
+passes: 375 period differential tests passed, zero failed, structural checks
+OK. Its mutation snapshot reports two current, 262 stale, and zero never
+recorded suites out of 264; no fresh coverage is claimed for the other suites.
+
+Rejected intermediate apparatus states are preserved as invalid artifacts:
+the initial 84-entry routing omitted the 157 private-helper entries; sandboxed
+32-bit test execution failed with a bad-system-call error; and a duplicated
+macro block tripped the string-provenance gate before mutation scoring.
+After correcting these, the full rerun above passed. Removing the duplicate
+macro block rebuilt to a byte-identical handshake object and partial-link
+object, preserving the measured candidate. Detailed reports, controls, JSON,
+mutation output, and the final gate log are under
+`/tmp/issue20-getbit-evidence/`.
+
+## Deferred ownership questions
+
+The follow-up audit rejects two attractive but unproven moves. The LMS
+source banner's claim that adjacency proves a complete TU is corrected:
+there is no reference `fpm_lmsupd.c`, but neither nearby `fpm_adeq.c` nor
+`voice.c` has a local-symbol link selecting it. Current/reference sizes of
+the three bodies are 128/150, 169/182, and 217/244; these differences do not
+identify their owner. No LMS code or placement changes are retained.
+
+Likewise, the five helpers in `V92ParamsInfo.c` fit the code interval between
+`V92Jd.cpp` and `V92Modem.cpp`, with `V92MappingParamsInt.cpp` between those
+FILE records. That is a candidate, not ownership proof. Cross-TU calls from
+the modem establish global visibility, not the defining FILE. A gain in
+positioned matching bytes would not, by itself, strengthen that attribution.
+
+The comment-only LMS correction passes `make phase`: 375 period tests
+passed, zero failed, structural checks OK. It claims no binary-match gain.
+The detailed audits are `/tmp/issue20-lms-ownership.txt` and
+`/tmp/issue20-getbit-plan.txt`; the checkpoint is also on PR #94.
+
+- Restoring `getbit` binding does not complete the original `v34handshak`
+  reconstruction: its factored helper surface and remaining ownership/layout
+  differences are separate work. The correction above does not reinterpret
+  test-globalized objects as faithful production objects.
+- The V32 split above resolves the measured dispatcher conflict, not every
+  V32 ownership question. In particular, the constructor's recorded
+  `VTBv32_init` inlining/factoring difference remains outside this batch.
+- There is no reference `fpm_lmsupd.c`. The contiguous LMS group follows
+  `VTB_decoder`, but the intervening FILE sequence includes `fpm_adeq.c`.
+  At least `fpm_vtb.c`, `fpm_adeq.c`, and `voice.c` must be considered;
+  adjacency alone does not justify a merge.
+- `FPM_MTD_CFG_data` remains the already-recorded invented duplicate D1101.
+  Removing it changes the NULL-configuration behavior and needs its own
+  differential case; moving its containing data does not resolve that defect.
+
+Local detailed artifacts are under `/tmp/issue20-object-order-evidence/` and
+`/tmp/slmodem-issue20-baseline-{f1dd519e,b82cc2e7}/`. They include full logs,
+comparator JSON, exact sets and build configuration. The initial accidental
+byteident invocation without `TC_OUT=build/tc_repro` was invalid and is not
+used; the reproduction-profile rerun supplies the measurements above.

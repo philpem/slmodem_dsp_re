@@ -24,7 +24,7 @@ their raw failures visible; an impossible fixture is not grounds to weaken
 any gate. Add valid lifecycle coverage rather than treating a planted state
 as a primary portability requirement.
 
-The [P4D audit](../p4d-period-fixture-audit.md) corrects the reachability reading
+The [P4D audit](../history/project/p4d-period-fixture-audit.md) corrects the reachability reading
 of the historical negative-energy sentinel: initialized short-square energies
 are nonnegative, but a real zero/zero measurement boundary still generates an
 unordered arithmetic path. A keep-rate flag is not a runtime NaN witness.
@@ -496,7 +496,7 @@ GCC 14 for the x87 reasons of #30 -- a control rebuilt the failing TUs without
 `HOSTPORTFLAGS` and reproduced the failures exactly -- which is not this tier.
 
 **The modern x87 census and the register reconciliation are in
-`docs/issue30-modern-x87.md` (finding F11363).**  After it: 347 of 376
+`docs/history/compiler/issue30-modern-x87.md` (finding F11363).**  After it: 347 of 376
 fixtures green, 29 uncovered modern-only divergences (all green on the period
 compiler), `tools/gccdiverge.json` at 6 entries / 14 checks with 0 stale and 0
 uncovered, and the `sinc<float>` return-narrowing domain bounded -- no tested

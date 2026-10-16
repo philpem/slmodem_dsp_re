@@ -20,7 +20,7 @@ layout. Skip or compare pointer fields appropriately when the two objects
 necessarily contain different allocation addresses.
 
 The
-[fixture audit](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/p4d-period-fixture-audit.md)
+[fixture audit](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/project/p4d-period-fixture-audit.md)
 illustrates why an impossible planted history must not drive source changes.
 For a new analysis tool, show it detecting a known discrepancy before trusting
 a clean report. Report its denominator and failures even when it finds none.
@@ -100,7 +100,7 @@ python3 tools/mutsnap.py --check
 `--update` runs the mutations before recording their verdicts and dependency
 key. Finish source, fixture and mutation edits first; never refresh keys by
 hand. A current result for this suite does not refresh other suites. The
-[coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md#loop-order-coverage)
+[coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/project/maintainer-offset-access.md#loop-order-coverage)
 keeps the measured denominators and the distinction between component,
 synthetic and public-call evidence.
 
