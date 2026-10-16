@@ -1195,5 +1195,9 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 		if ((i % 12) < 10)
 			fp->r2c[i] = 0;
 
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("B103FP version: %s %s\n",
+				     "Sep 22 2005", "15:48:11");
+
 	return fp;
 }

@@ -21,6 +21,10 @@
 
 #include "harness.h"
 #include "dsplib/b103fp.h"
+#include "dsplib/debug.h"
+#include "dsplib/sysdep.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern struct b103fp *ref_B103FP_create(struct b103fp *state, const void *cfg);
 extern void ref_B103FP_delete(struct b103fp *state);
@@ -333,6 +337,42 @@ main(void)
 		diff_eq_int("%ld: nothing leaked", harness_alloc.live, 0,
 			    (long)k);
 		(void)rb;
+	}
+	rc |= diff_end();
+
+	/* Public constructor paths, with no fabricated internal state. The
+	 * successful default create announces the fixed original build strings. */
+	diff_begin("B103FP_create version transcript");
+	{
+		static const unsigned levels[] = { 0, 1, 2, 0xffffffffu };
+		unsigned level, supplied, defaults;
+		for (level = 0; level < 4; level++)
+		for (supplied = 0; supplied < 2; supplied++)
+		for (defaults = 0; defaults < 2; defaults++) {
+			struct b103fp *sa = supplied ? sysdep_malloc(sizeof(*sa)) : 0;
+			struct b103fp *sb = supplied ? sysdep_malloc(sizeof(*sb)) : 0;
+			struct b103fp *a, *b;
+			struct b103_cfg cfg = B103_CFG;
+			const struct b103_cfg *config = defaults ? 0 : &cfg;
+			const char *expected = levels[level] > 1 ?
+				"B103FP version: Sep 22 2005 15:48:11\n" : "";
+			long cell = level * 4 + supplied * 2 + defaults;
+			if (supplied) { memset(sa, 0, sizeof(*sa)); memset(sb, 0, sizeof(*sb)); }
+			dsplibs_debug_level = ref_dsplibs_debug_level = levels[level];
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			b = ref_B103FP_create(sb, config);
+			a = B103FP_create(sa, config);
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("constructor succeeded %ld", a != 0 && b != 0, 1, cell);
+			diff_eq_int("reference version bytes %ld", (levels[level] > 1 ? strstr(dsplib_debug_capture_text(1), expected) != 0 : strcmp(dsplib_debug_capture_text(1), "") == 0), 1, cell);
+			diff_eq_int("constructor transcript %ld", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, cell);
+			diff_eq_int("constructor line count %ld", dsplib_debug_capture_lines(0), dsplib_debug_capture_lines(1), cell);
+			diff_eq_int("capture complete %ld", dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1), 1, cell);
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			B103FP_delete(a);
+			ref_B103FP_delete(b);
+		}
 	}
 	rc |= diff_end();
 
