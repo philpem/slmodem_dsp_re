@@ -211,8 +211,9 @@ int GenericToneDetector::process(float sample)
 	float out = acc_10 + y * y;
 
 	if (++sampleCount != blockLen) {
-		acc_0c = in;
+		/* Preserve the original output-before-input publication. */
 		acc_10 = out;
+		acc_0c = in;
 		return (int)detected;
 	}
 
@@ -306,8 +307,8 @@ int GenericToneDetector::process(float *samples, unsigned int n)
 		float out = acc_10 + y * y;
 
 		if (++sampleCount != blockLen) {
-			acc_0c = in;
 			acc_10 = out;
+			acc_0c = in;
 			continue;
 		}
 
