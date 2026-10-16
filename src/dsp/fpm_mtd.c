@@ -157,11 +157,10 @@ FPM_MTD_delete(struct fpm_mtd *state)
 short
 FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 {
-	int wideband = state->wideband;
-	int tone;
-	int out_of_band;
+	short wideband = state->wideband;
+	short tone;
+	short out_of_band;
 	int threshold;
-	int i;
 
 	/*
 	 * Only two energies are stored, so the third is recovered: the state
@@ -169,14 +168,14 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 	 */
 	tone = (short)(wideband - state->out_of_band);
 
-	for (i = 0; i < count; i++) {
+	while (count--) {
 		int wide_sample;
 		int tone_sample;
 		int e_wide;
 		int e_tone;
 
 		/* >> 5 of headroom before the filters, to keep the squares in range. */
-		wide_sample = FPM_iir_filt((short)(samples[i] >> 5), COEF_DC,
+		wide_sample = FPM_iir_filt((short)(*samples++ >> 5), COEF_DC,
 					   state->dc_state, 1);
 		tone_sample = FPM_iir_filt((short)wide_sample, state->cfg.coeff,
 					   state->acc, state->cfg.tones);
