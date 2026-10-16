@@ -1,5 +1,10 @@
 # Tone IIR section expansion and tap counter width
 
+**Later partial adoption:** this search domain remains closed. Its fixed
+expanded-stage/short-counter candidate was revalidated with current interval
+storage and shift ownership, then retained as a non-exact partial recovery.
+See [current evidence and limits](recovery-call-partials.md).
+
 Four complete93d7eee1 TUs cross two original observable boundaries in both
 progress functions. Blob has four expanded sections (recorded as hand-unrolled
 since initial reconstruction), whereas source loops s=0..3. Each blob tap loop

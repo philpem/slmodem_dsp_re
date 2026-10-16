@@ -1,5 +1,10 @@
 # CID terminal-cursor wrap ownership
 
+**Later partial adoption:** the complete-body search below remains closed.
+With explicit partial-reconstruction authorisation, the both-terminal source
+was revalidated against `eccf0f2a` and retained. See
+[the current controls and limits](recovery-call-partials.md).
+
 The four-cell terminal-cursor domain is closed with no exact hit and no
 reconstruction source adoption. The both-terminal cell reproduces the
 reference's wrap-owner LEAs, and six focused period differential binaries

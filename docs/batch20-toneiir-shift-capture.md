@@ -1,5 +1,10 @@
 # Independent Tone IIR shift array capture
 
+**Later partial adoption:** this fixed capture was revalidated against the
+current complete TU and retained under explicit partial-reconstruction
+authorisation. Its whole body remains non-exact and this search domain stays
+closed. See [current evidence](recovery-call-partials.md).
+
 Two complete TU cells on original93d7eee1: unchanged and the prior declared
 short tap/four-expanded-section seed plus one explicit shift-array capture
 in _iir_filter_progress. Prior section/width domain closed without an exacthit.

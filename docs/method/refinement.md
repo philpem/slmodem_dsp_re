@@ -4857,3 +4857,72 @@ form, including a closing bracket attached to the address token. Retain negative
 controls for symbol names, flags, real constants, register colours and stack
 offsets. Preserve and retract an invalid early-stage report before attributing
 a source-unchanged bystander to allocation. [Controls](../gcc3-stage-divergence-diagnostic.md).
+
+### Separate field storage from narrowing at a use
+
+A narrow argument load does not establish a narrow field. Tone IIR's interval
+was represented as a short plus two padding bytes because its constructor
+passes it to `GetFP_Value(short, short)`. The independent cadence producer
+stores 32 bits and the progress consumer compares 32 bits. Modelling one int
+preserves the configuration's offsets and bytes while correcting an early
+verdict: a constructor-created interval of 66,036 must not become 500.
+Retain the short conversion at the helper boundary. Use a full-width
+component case with a valid nonzero low-word divisor, and show the old object
+failing before relying on a new fixture's green result.
+[Recovery and negative control](../recovery-toneiir-interval.md).
+
+For each suspected member, record the original writer's store width, the
+reader's width and extension, and the base object's identity. Trace a
+cross-class pointer before attributing its displacement to a field. Offset
+and size assertions establish a representation's layout, not its correctness
+or signedness. A zero-extension feeding a truncated operation need not imply
+unsigned storage; a sign-extended argument need not imply a signed member.
+
+Matching independent accesses should close a nomination. V.92 mapper fields
+and the V.90 phase-3 `+0x400` member have matching narrow writers and readers.
+The phase-3 `+0x414` store establishes a narrow write, but its argument alone
+does not settle the stored member's signedness. Preserve that uncertainty
+instead of searching adjacent types or absorbing padding by preference.
+[Bounded five-field audit](../recovery-fields-v90.md).
+
+Full-width unsigned arithmetic can justify a clearer member representation
+without changing machine code. V.22's RMS accumulator has a dword writer,
+unsigned division and unsigned threshold comparison, with no signed consumer
+or escaping field address in the audited source. An unsigned member removes
+compensating casts while all fourteen affected objects remain byte-identical.
+Signed storage plus those casts remains a possible original declaration;
+this is a supported representation, not a new exact-function gain. Audit every
+header consumer and preserve the complete objects as controls.
+[Writer/use census and rejected V.34 leads](../recovery-data-fields.md).
+
+### Adopt a validated partial without reopening its search domain
+
+When partial reconstruction is authorised, an earlier non-exact control can
+supply a retained refactor. Reproduce the current complete TU first, then
+verify the independently witnessed operands, all collateral and the deciding
+period result. Keep the old search domain closed: changed acceptance criteria
+do not justify additional declaration, pointer or compiler-option palettes.
+
+CID's correlation and low-pass wraps derive from the first loop's terminal
+cursor. A valid one-past/predecrement representation restores that dependency
+without forming a before-array C pointer. Tone IIR restores four physical
+stages, sixteen-bit tap induction and a captured shift-array owner. All three
+bodies remain non-exact. Their remaining length gaps do not count differing
+bytes, and the expanded instructions do not prove that the author explicitly
+expanded the source rather than relying on compiler unrolling. Record the
+graph recovered, current validation and remaining uncertainty together.
+[Current controls and partial adoption](../recovery-call-partials.md).
+
+### Distinguish completed identity proofs from newly recovered code
+
+An UNRESOLVED function can already have matching instruction bytes while its
+anonymous target identity remains unproved. RxNextStateV17 required a decoded
+register-only SETcc rule; ConstellationPower required one flag/selector-
+preserving argument load in the guard and a balanced push-only leaf frame.
+Prove the newly admitted encoding and state effects, retain guard-entry and
+ordered-target checks, and test unsafe destinations and changed tables through
+the shared comparator. Memory forms or wider control-flow classes remain
+unsupported until separately proved. Count these gains as identity proofs for
+existing code, with unchanged object hashes, separately from source gains.
+[SETcc](../recovery-setcc-proof.md),
+[guard and frame](../recovery-corridor-proof.md).

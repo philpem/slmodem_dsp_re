@@ -1,5 +1,10 @@
 # Tone IIR interval storage and arithmetic recovery
 
+**Later partial adoption:** the expanded-stage/short-counter candidate was
+revalidated with this interval correction and the separately witnessed shift
+capture, then retained under explicit partial-reconstruction authorisation.
+It remains non-exact; see [the current controls](recovery-call-partials.md).
+
 The declared eight-cell domain crosses current versus expanded-four-section/
 short-tap-counter source, short versus int interval storage, and signed division
 versus arithmetic shift. The expansion is exactly the previously closed seed;
