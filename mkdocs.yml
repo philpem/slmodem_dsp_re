@@ -1,0 +1,33 @@
+site_name: dsplibs maintainer guide
+site_description: Modem operation, source structure and reconstruction maintenance
+repo_url: https://github.com/philpem/slmodem_dsp_re
+repo_name: philpem/slmodem_dsp_re
+edit_uri: edit/master/docs/maintainer/
+docs_dir: docs/maintainer
+site_dir: build/docs-site
+strict: true
+theme:
+  name: material
+  language: en
+  font: false
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+nav:
+  - Start here: index.md
+  - Architecture and ownership: architecture.md
+  - From dialling to data: lifecycle.md
+  - Signal processing and modem families: signal-processing.md
+  - Maintaining the reconstruction: maintenance.md
+  - Reconstruction debt: reconstruction-debt.md
+  - Standards and references: references.md
