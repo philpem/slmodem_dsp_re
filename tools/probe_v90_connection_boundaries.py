@@ -25,11 +25,15 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def main():
+def main(fixture='test/explore/t_v90_connection_boundaries.cpp',
+         source='src/pump/v90/V90ConnectionEvaluator.cpp',
+         related='test/unit/t_v90conneval.cpp',
+         boundary='constructor + public updater calls + external finite/quiet-NaN floats; no modem reachability claim',
+         out_name='v90-connection-boundaries-probe'):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--period-dir', type=Path, required=True)
     parser.add_argument('--reference', type=Path, default=ROOT / 'build/dsplibs_ref.o')
-    parser.add_argument('--out-dir', type=Path, default=ROOT / 'build/v90-connection-boundaries-probe')
+    parser.add_argument('--out-dir', type=Path, default=ROOT / 'build' / out_name)
     parser.add_argument('--image', default='ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest')
     args = parser.parse_args()
     period, out = args.period_dir.resolve(), args.out_dir.resolve()
@@ -60,7 +64,7 @@ def main():
         subprocess.run(identity_command, stdout=log, stderr=subprocess.STDOUT, check=True)
     print((out / 'cxx-identity.log').read_text(), end='')
     shell = tc.compile_shell(tc.GENTOO_COMPILER_PATH, flags, '/work/probe.o',
-                             '/src/test/explore/t_v90_connection_boundaries.cpp')
+                             '/src/' + fixture)
     shell = shell.replace('exec gcc -c ', 'exec g++ -c ', 1)
     compile_command = prefix + ['/bin/sh', '-c', shell]
     objects = ['/out/' + str(path.relative_to(period)) for path in selected]
@@ -69,15 +73,15 @@ def main():
                   + ' /work/dsplibs_ref.o -lm')
     link_command = prefix + ['/bin/sh', '-c', link_shell]
     run_command = prefix + ['/work/probe']
-    report = {'component_boundary': 'constructor + public updater calls + external finite/quiet-NaN floats; no modem reachability claim',
+    report = {'component_boundary': boundary,
               'compile_command': compile_command, 'link_command': link_command,
               'run_command': run_command, 'cxx_identity_command': identity_command,
               'fixture_flags': tc.add_reproduce_bugs(flags),
               'period_objects': {str(path): digest(path) for path in selected},
               'reference_sha256': digest(args.reference),
-              'probe_sha256': digest(ROOT / 'test/explore/t_v90_connection_boundaries.cpp'),
-              'related_default_fixture_sha256': digest(ROOT / 'test/unit/t_v90conneval.cpp'),
-              'reconstruction_source_sha256': digest(ROOT / 'src/pump/v90/V90ConnectionEvaluator.cpp'),
+              'probe_sha256': digest(ROOT / fixture),
+              'related_default_fixture_sha256': digest(ROOT / related),
+              'reconstruction_source_sha256': digest(ROOT / source),
               'period_inner_sha256': digest(ROOT / 'tools/toolchain/period_inner.sh'),
               'image': args.image}
     for label, command in [('compile', compile_command), ('link', link_command), ('run', run_command)]:
