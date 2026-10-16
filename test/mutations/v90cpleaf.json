@@ -117,13 +117,13 @@
  },
  {
   "label": "calcCRC drops the feedback into 15",
-  "find": "\t\tcrc[15] = a;\n\t}\n}",
+  "find": "\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}",
   "replace": "\t\tcrc[15] = 0;\n\t}\n}"
  },
  {
   "label": "calcCRC drops the shift into 14",
-  "find": "\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n}",
-  "replace": "\t\tcrc[15] = a;\n\t}\n}"
+  "find": "\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}",
+  "replace": "\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}"
  },
  {
   "label": "the diagnostic is not gated",
