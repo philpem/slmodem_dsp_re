@@ -319,7 +319,7 @@ int CarrierDetectB103(struct b103fp *fp);
  * @return The number of bits written to @p bits_out -- at most a
  *         handful per call.
  */
-short DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
+int DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 		    unsigned short count);
 
 /*

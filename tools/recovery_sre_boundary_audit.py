@@ -58,6 +58,8 @@ def first_return_use(rows, call_address, budget=256, direct_edges=()):
             kind = 'signed-word-extension'
         elif mnemonic in ('movswl', 'movzwl') and operands.split(',')[0] == '%ax':
             kind = 'signed-word-extension' if mnemonic == 'movswl' else 'unsigned-word-extension'
+        elif mnemonic in ('movsbl', 'movzbl') and operands.split(',')[0] == '%al':
+            kind = 'signed-byte-extension' if mnemonic == 'movsbl' else 'unsigned-byte-extension'
         elif re.search(r'%(eax|ax|al|ah)\b', operands):
             refusals.append('other carrier use/write requires independent analysis')
             continue
