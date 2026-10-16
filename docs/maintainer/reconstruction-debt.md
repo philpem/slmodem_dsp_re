@@ -77,26 +77,30 @@ claim this entire entry closed because a raw-offset count decreases.
 
 ## MG-04: Wrapper preconditions need an explicit boundary
 
-**Confirmed contract mismatch; behavioural significance needs measurement.**
-[`dp_wrapper.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/dp_wrapper.h)
-describes failure when a needed conversion cannot be built.
+**Resolved: source fix already landed; contract clarified.** The initial audit
+described `47174bf3`. At the follow-up baseline `ac7f28e6`,
 [`dp_wrapper.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/core/dp_wrapper.c)
-creates converters only when its rate lookup returns a non-negative mode.
-For unsupported unequal rate pairs, both modes can be `-1` and the allocation
-failure test is skipped. Creation can then return a wrapper without either
-converter. The guards reject zero arguments but do not establish positive
-rates or a positive, bounded *scaled host fragment* for arbitrary inputs.
+already uses literal converter creation and sequential null checks. An
+unsupported unequal pair returns NULL before reverse-converter dispatch.
+The repair landed in `67e75151` through PR #284, before the guide was merged.
+The stale finding must not prompt another source change.
 
-This is evidence that the wrapper is a historically constrained interface.
-It does not prove that the shipped host requests such values, or that adding
-modern validation would match the blob. The guide documents the supported
-conversion pairs rather than promising an arbitrary-rate service.
+[`t_dp_wrapper.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/test/unit/t_dp_wrapper.c)
+contains six positive unequal-rate refusal cases: 7200/8000, 8000/7200,
+16000/9600, 9600/16000, 44100/48000 and 48000/44100. Each checks both reference
+agreement and the reference's explicit refusal. Supported-rate streaming,
+ragged input and equal-rate cases provide positive controls. The original
+failure and its correction are recorded in
+[the constructor fidelity results](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/service-constructor-fidelity-results.md).
 
-**Next step:** audit valid constructor callers and existing `t_dp_wrapper`
-fixtures; compare disputed inputs against the blob with appropriately sized
-buffers. State which inputs are public-host reachable and which are synthetic.
-Close when header and guide contracts match measured behaviour and caller
-preconditions. Any behaviour change requires separate compatibility evidence.
+The header now distinguishes the constructor's recovered rejection checks
+from streaming preconditions: positive rates and fragment, representable
+fragment scaling, an integral host fragment and sufficient ring capacity.
+It also describes the callback's two private-state hops correctly. Negative
+values and oversized scaled fragments are not newly accepted streaming
+fixtures, and no additional validation has been inserted into reconstruction
+source. The contract and current behaviour now agree; arbitrary-input
+hardening would be a separately scoped compatibility change.
 
 ## MG-05: Historical comments overstate current missing work
 

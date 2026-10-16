@@ -62,8 +62,8 @@ ahead. This initial silence is part of observable latency.
 For the classic families the native datapump interface is 8000 samples/s.
 The wrapper explicitly offers conversions between 8000, 9600 and 48000
 samples/s through `RcFixed`. Equal rates bypass conversion. Do not treat this
-as a general arbitrary-rate API: the conversion lookup is a fixed list, and
-unsupported unequal rates need a separate fixture audit (see
+as a general arbitrary-rate API: the conversion list is fixed, and
+unsupported unequal rates are refused before reverse-converter dispatch (see
 [debt MG-04](reconstruction-debt.md#mg-04-wrapper-preconditions-need-an-explicit-boundary)).
 
 There are two private-state hops: `dp->dp_data` points to the wrapper and
