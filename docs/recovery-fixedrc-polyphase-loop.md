@@ -29,7 +29,8 @@ run the deciding period fixture before a source commit.
 
 ## First result and final counter/induction control
 
-Four cells raw-reproduce the unchanged TU, with no exact gains/losses.
+All four cells compile; the unchanged control raw-reproduces its baseline.
+There are no exact gains/losses.
 Pointer-only keeps the same SIZE263 grade but changes the body; unsigned countdown-only
 is SIZE235, combined SIZE280. The combined form has the intended two forward
 address producers but its postfix condition decrements before the body and
@@ -109,6 +110,8 @@ Replay the three runners with `--domain
 docs/recovery-fixedrc-polyphase-loop.md --baseline-dir ARCHIVED_A5F306A3_OBJECTS`.
 The complete commands, profiles, dumps, object hashes and body verdicts are
 under `build/recovery-fixedrc-{polyphase-loop,counter-epoch,index-width}/`.
+The verified `a5f306a3` replay inputs are also frozen at
+`build/recovery-packers-next/baseline-a5f306a3/`.
 Close these width, direction and carried-index domains; remaining original
 private homes and scheduling need a new source/caller/compiler witness.
 

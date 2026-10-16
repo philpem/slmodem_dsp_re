@@ -29,8 +29,8 @@ exact name, and period differential validation before a source commit.
 
 ## First result and terminal-pointer boundary
 
-All three cells compile and reproduce the unchanged full TU raw. Array and
-struct produce the same complete object, 2,456 Resample bytes versus 2,640
+All three cells compile; the unchanged control reproduces the full TU raw.
+Array and struct produce the same complete object, 2,456 Resample bytes versus 2,640
 original (SIZE184), with no complete exact gain or loss. Both recover the
 original low/high mask-and-OR carrier and SAR16 extraction; initial RTL gives
 the pair one SI aggregate carrier. The production source is still untouched.
