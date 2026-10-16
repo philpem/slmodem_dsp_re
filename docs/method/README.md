@@ -25,6 +25,7 @@ identifies the evidence and tools that need adapting for another target.
 
 | file | what it is |
 |---|---|
+| [Recovery timeline](timeline.md) | Dated milestones, scoped progress figures and identifiable agent/tool provenance. |
 | [Recovery workflow](recovering-source.md) | Ordered procedure, project history and checkpoints for a new reconstruction. |
 | [Object-reading techniques](reading-object-code.md) | Relocations, ABI, types, control flow, fixed point, x87 and data recovery. |
 | [Build recovery](recovering-build.md) | GCC provenance, option experiments, compiler stages and identity checks. |

@@ -21,6 +21,9 @@ complete linked-object identity as separate objectives.
 
 ## How this project developed the method
 
+The [recovery timeline](timeline.md) links dated milestones and identifies
+the agent clients and development tools where the records support attribution.
+
 The initial survey found surviving filenames, symbols, template names and a
 narrow host interface. Those made it possible to recover modules and compare
 replacement functions with the original in one executable. The early findings
