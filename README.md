@@ -31,6 +31,10 @@ Documentation is organised in the [documentation index](docs/README.md): the
 Maintainer Manual covers current operation and algorithms. Dated
 investigations are retained in Hindsight and Git history.
 
+To repeat the work on another project, follow the
+[source recovery workflow](docs/method/recovering-source.md), with companion
+guides to object-reading techniques and GCC build recovery.
+
 ## Status
 
 The live phase ledger, current measured coverage, remaining objectives and
