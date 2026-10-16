@@ -512,7 +512,7 @@ rc_circular_output(const short *coeff, const short *history,
 
 	for (i = position; i >= 0; i--)
 		acc += (int)*--cursor * (int)*coeff++;
-	cursor = history + count;
+	cursor += count;
 	for (i = count - 1; i > position; i--)
 		acc += (int)*--cursor * (int)*coeff++;
 	return (short)(acc >> 15);
@@ -573,7 +573,9 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 			const short *short_coeff = s->b2;
 
 			while (remaining != 0) {
-				short sample, low, high, value;
+				short sample, value;
+				/* Original carries both Q15 results in one word. */
+				short pair[2];
 
 				rc_circular_advance(&s->pos6, 2);
 				droop_history[s->pos6] = *in++;
@@ -581,15 +583,15 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 						    s->pos6, 3);
 				rc_circular_advance(&s->pos174, 86);
 				long_history[s->pos174] = sample;
-				low = (short)(rc_circular_output(long_coeff,
+				pair[0] = (short)(rc_circular_output(long_coeff,
 					long_history, s->pos174, 87) * 2);
 				rc_circular_advance(&s->pos174, 86);
 				long_history[s->pos174] = 0;
-				high = (short)(rc_circular_output(long_coeff,
+				pair[1] = (short)(rc_circular_output(long_coeff,
 					long_history, s->pos174, 87) * 2);
 
 				rc_circular_advance(&s->pos30, 14);
-				short_history[s->pos30] = low;
+				short_history[s->pos30] = pair[0];
 				value = rc_circular_output(short_coeff, short_history,
 							   s->pos30, 15);
 				*out++ = (short)(((int)value * 31957) >> 13);
@@ -599,7 +601,7 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 							   s->pos30, 15);
 				*out++ = (short)(((int)value * 31957) >> 13);
 				rc_circular_advance(&s->pos30, 14);
-				short_history[s->pos30] = high;
+				short_history[s->pos30] = pair[1];
 				value = rc_circular_output(short_coeff, short_history,
 							   s->pos30, 15);
 				*out++ = (short)(((int)value * 31957) >> 13);
