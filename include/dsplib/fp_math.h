@@ -13,10 +13,7 @@
  *
  * @param a  Dividend.
  * @param b  Divisor. Must not be 0: the original divides by repeated
- *           subtraction and a zero divisor hangs it forever; this
- *           reconstruction computes the result directly but preserves that
- *           same precondition rather than defining a behavior the object
- *           never had.
+ *           subtraction and a zero divisor hangs it forever.
  * @return The Q14 quotient, sign-adjusted.
  */
 short GetFP_Value(short a, short b);

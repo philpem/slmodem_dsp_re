@@ -8,6 +8,8 @@
  * Used by the V32FP_* diagnostics path.
  */
 
+#include <stdlib.h>
+
 #include "dsplib/fp_math.h"
 #include "dsplib/dualtone.h"
 
@@ -78,21 +80,23 @@ FP_Pow_coefficient_generate(int i)
 short
 GetFP_Value(short a, short b)
 {
-	int va = a < 0 ? -a : a;
-	int vb = b < 0 ? -b : b;
+	int va = abs((int)a);
 	int remaining = va << 14;
-	int count = 0;
+	short count = 0;
 
-	/*
-	 * The original divides by repeated subtraction, counting iterations in
-	 * a 16-bit register that is allowed to wrap.  Computed directly here;
-	 * the ceiling form matches because the loop stops only once the
-	 * remainder has gone non-positive.
-	 */
-	if (remaining > 0 && vb != 0)
-		count = (short)((remaining + vb - 1) / vb);
+	/* The original counts subtraction steps in a wrapping short. */
+	if (remaining > 0) {
+		int step = -abs((int)b);
 
-	return (short)(((int)a * (int)b) > 0 ? (short)count : (short)(-count));
+		do {
+			remaining += step;
+			count++;
+		} while (remaining > 0);
+	}
+
+	if ((int)a * (int)b > 0)
+		return count;
+	return -count;
 }
 
 int

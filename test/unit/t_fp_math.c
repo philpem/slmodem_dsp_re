@@ -96,5 +96,21 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* State-free Q14 boundary: both short extrema, signs and wrapped counts.
+	 * Every divisor is nonzero; each reference loop runs at most 131072 steps.
+	 */
+	diff_begin("GetFP_Value full short edges and counter wrap");
+	{
+		static const short numerators[] = { -32768, -32767, -16384, -1, 0, 1, 16384, 32767 };
+		static const short divisors[] = { -32768, -32767, -16384, -8192, -4096, 4096, 8191, 16384, 32767 };
+		int j;
+
+		for (i = 0; i < (int)(sizeof(numerators) / sizeof(numerators[0])); i++)
+			for (j = 0; j < (int)(sizeof(divisors) / sizeof(divisors[0])); j++)
+				diff_eq_int("full short pair %ld", GetFP_Value(numerators[i], divisors[j]),
+					    ref_GetFP_Value(numerators[i], divisors[j]), i * 9 + j);
+	}
+	rc |= diff_end();
+
 	return rc;
 }
