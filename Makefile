@@ -1364,7 +1364,7 @@ offsetcensus-selftest:
 
 # Link with binutils 2.15 in the period image.  DIFFERENT is the expected
 # report until convergence, so partial-compare is a census rather than a phase
-# gate.  partialcmp.py --require-exact supplies the strict final-object gate.
+# gate.  partial-compare-exact requires semantic and literal raw identity.
 $(BUILD)/partial/attribution.json: tools/tuattrib.py tools/tumap.py tools/elfinfo.py $(BLOB)
 	@mkdir -p '$(BUILD)/partial'
 	@$(PYTHON) tools/tuattrib.py $(BLOB) --verify --json $@
