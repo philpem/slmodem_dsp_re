@@ -72,6 +72,14 @@
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
 
+/* The parameter block contains no pointers: these hold on both ABIs. */
+typedef char snr_drops_offset[
+    __builtin_offsetof(struct v32fp_params, snr_drops) == 0x20 ? 1 : -1];
+typedef char snr_preserved_half_offset[
+    __builtin_offsetof(struct v32fp_params, short_22) == 0x22 ? 1 : -1];
+typedef char snr_settle_offset[
+    __builtin_offsetof(struct v32fp_params, snr_settle_blocks) == 0x2c ? 1 : -1];
+
 /* The blob's copies.  An undeclared `ref_` name is a hard error, not an int. */
 extern const struct v32fp_params ref_V32_CFG;
 extern const struct v32fp_ctl ref_V32_CTL;
@@ -154,12 +162,15 @@ test_params(void)
 	diff_eq_int("r1a (%ld)", V32_CFG.r1a, ref_V32_CFG.r1a, 0x1a);
 	diff_eq_int("trellis (%ld)", V32_CFG.trellis, ref_V32_CFG.trellis,
 		    0x1c);
-	diff_eq_int("r20 (%ld)", V32_CFG.r20, ref_V32_CFG.r20, 0x20);
+	diff_eq_int("snr_drops (%ld)", V32_CFG.snr_drops,
+		    ref_V32_CFG.snr_drops, 0x20);
+	diff_eq_int("short_22 (%ld)", V32_CFG.short_22,
+		    ref_V32_CFG.short_22, 0x22);
 	diff_eq_int("r24 (%ld)", V32_CFG.r24, ref_V32_CFG.r24, 0x24);
 	diff_eq_int("disconnect_thresh (%ld)", V32_CFG.disconnect_thresh,
 		    ref_V32_CFG.disconnect_thresh, 0x28);
 	diff_eq_int("energy_drop_time (%ld)", V32_CFG.energy_drop_time, ref_V32_CFG.energy_drop_time, 0x2a);
-	diff_eq_int("r2c (%ld)", V32_CFG.r2c, ref_V32_CFG.r2c, 0x2c);
+	diff_eq_int("snr_settle_blocks (%ld)", V32_CFG.snr_settle_blocks, ref_V32_CFG.snr_settle_blocks, 0x2c);
 	diff_eq_int("r2e (%ld)", V32_CFG.r2e, ref_V32_CFG.r2e, 0x2e);
 
 	/*

@@ -155,7 +155,16 @@ struct v32fp_params {
 	 * 7200", and `V32FP_control` copies ctl + 0x10 into it.
 	 */
 	int trellis;		/* +0x1c template 0                          */
-	int r20;		/* +0x20 template 0                          */
+	/*
+	 * V32FP_status reads +0x20 with movzwl, compares AX against 8 using
+	 * signed jle (84b29..84b31), then increments/stores only AX.  Its
+	 * own diagnostic calls these "coseq SNR drops".  The adjacent +0x22
+	 * word is copied by the twelve-dword parameter assignments but has
+	 * no individual access witnessed here; preserve it as modelled,
+	 * unnamed storage rather than part of an int counter.
+	 */
+	short snr_drops;	/* +0x20 signed SNR-drop counter             */
+	short short_22;		/* +0x22 copied, no individual access seen   */
 	int r24;		/* +0x24 template 0; read at 7e8bc           */
 	/*
 	 * +0x28 is overwritten from V32DiconnectThreshTable[3] -- 150 -- by
@@ -171,7 +180,12 @@ struct v32fp_params {
 	 * `V32FP_create` patches it from the low half of cfg + 0x0c.
 	 */
 	short energy_drop_time;	/* +0x2a template 0                          */
-	short r2c;		/* +0x2c template 0; zeroed at 7e8b6         */
+	/*
+	 * V32FP_status's signed cmpw/jg at 84954..8495c and low-word
+	 * increment gate SNR reporting for the first 200 calls.  The role
+	 * follows from that use; it is not an original diagnostic name.
+	 */
+	short snr_settle_blocks;		/* +0x2c template 0; zeroed at 7e8b6         */
 	short r2e;		/* +0x2e template 0                          */
 };
 

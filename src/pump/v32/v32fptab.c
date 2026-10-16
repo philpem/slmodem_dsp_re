@@ -6,7 +6,7 @@
  *   V32_CFG                  .rodata 0x006da0   48   GLOBAL
  *   V32_CTL                  .rodata 0x007f20   32   GLOBAL
  *   SMCv32_CFG               .bss    0x000188    4   GLOBAL
- *   Control_Flag             .bss    0x0001a0    4   GLOBAL
+ *   Control_Flag now lives with its sole referrer in V32mod.c.
  *
  * The three file-local tables this file used to hold -- `V32DiconnectThreshTable`
  * (`.rodata`), `SnrToRetrainTable` and `RATEv32` (`.data`) -- have moved to
@@ -150,7 +150,7 @@ const struct v32fp_ctl V32_CTL = {
 };
 
 /* --------------------------------------------------------------------- */
-/* .bss.  Both are zero, and both are zero because the object says so.    */
+/* .bss.  The coder template is zero in the original object.             */
 
 /*
  * `V32FP_recreate` loads all four bytes at once (7e9db, `mov 0x0,%ecx`),
@@ -161,5 +161,3 @@ const struct v32fp_ctl V32_CTL = {
  */
 /* Explicit initialization preserves the object's .bss, not COMMON. */
 struct v32_smc_cfg SMCv32_CFG = { 0 };
-
-int Control_Flag = 0;
