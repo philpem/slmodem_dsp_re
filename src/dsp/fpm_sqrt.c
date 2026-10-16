@@ -20,39 +20,52 @@
  * declared in `dsplib/fpm.h`; this file keeps only the accessors over it.
  */
 
+/* The original keeps caller-owned HI outputs for both normalization steps.
+ * Updating the pointed count lets the loop pass promote its recurrence and
+ * publish it after the backedge. The caller declaration order reproduces
+ * count at stack +0 and mantissa at +2; neither output is a wider local.
+ */
+static inline void
+sqrt_normalize16(unsigned short x, unsigned short *mantissa, unsigned short *count)
+{
+	*count = 0;
+	while (x <= 0x3fff) {
+		x += x;
+		(*count)++;
+	}
+	*mantissa = x;
+}
+
+static inline void
+sqrt_normalize32(unsigned int x, unsigned short *mantissa, unsigned short *count)
+{
+	*count = 0;
+	while (x <= 0x1fffffffU) {
+		x += x;
+		(*count)++;
+	}
+	*mantissa = (unsigned short)(x >> 15);
+}
+
 unsigned short
 FPM_sqrt(unsigned short x)
 {
-	unsigned exponent = 0;
-	unsigned mantissa;
-	int index;
+	unsigned short mantissa;
+	unsigned short exponent;
+	unsigned short index;
+	unsigned half;
 
 	if (x == 0)
 		return 0;
 
-	/*
-	 * Left-normalise so the mantissa's top bit lands in bit 14 or 15.
-	 * Inputs already at or above 0x4000 need no shifting.
-	 */
-	mantissa = x;
-	while (mantissa <= 0x3fff) {
-		mantissa = (mantissa << 1) & 0xffff;
-		exponent++;
-	}
-
-	/*
-	 * Halving an odd exponent would leave a stray factor of sqrt(2).
-	 * Shift the mantissa down instead and let the table cover the wider
-	 * input range -- which is why the table spans a factor of four in its
-	 * argument but only two in its result.
-	 */
-	if (exponent & 1)
+	sqrt_normalize16(x, &mantissa, &exponent);
+	half = exponent / 2;
+	/* An odd exponent needs one mantissa shift before the table lookup. */
+	if (exponent != half * 2)
 		mantissa >>= 1;
 
-	index = (int)((mantissa + 64) >> 7) - 64;
-
-
-	return (unsigned short)(FPM_sqrt_table[index] >> (exponent >> 1));
+	index = ((mantissa + 64) >> 7) - 64;
+	return (unsigned short)(FPM_sqrt_table[index] >> half);
 }
 
 /*
@@ -82,29 +95,24 @@ FPM_sqrt(unsigned short x)
 unsigned short
 FPM_sqrt_dp(unsigned int x)
 {
-	unsigned exponent = 0;
-	unsigned mantissa;
-	int index;
+	unsigned short mantissa;
+	unsigned short exponent;
+	unsigned short index;
+	unsigned half;
 
 	if (x == 0)
 		return 0;
 
-	while (x <= 0x1fffffffu) {
-		x += x;
-		exponent++;
-	}
-
-	/* Truncated to 16 bits, which is where large inputs lose their top bit. */
-	mantissa = (unsigned short)(x >> 15);
-
-	if (exponent & 1)
+	sqrt_normalize32(x, &mantissa, &exponent);
+	half = exponent / 2;
+	/* An odd exponent needs one mantissa shift before the table lookup. */
+	if (exponent != half * 2)
 		mantissa >>= 1;
 
-	index = (int)((mantissa + 64) >> 7) - 64;
-	if ((unsigned short)index > 0xbf)
+	index = ((mantissa + 64) >> 7) - 64;
+	if (index > 0xbf)
 		index = 0xbf;
-
-	return (unsigned short)(FPM_sqrt_table[index] >> (exponent >> 1));
+	return (unsigned short)(FPM_sqrt_table[index] >> half);
 }
 
 /*
