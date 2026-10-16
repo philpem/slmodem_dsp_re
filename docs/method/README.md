@@ -3,7 +3,7 @@
 This directory records reconstruction technique, evidence rules and compiler
 policy. For this modem's modules and algorithms, use the
 [Maintainer Manual](../maintainer/index.md). Completed project scheduling plans,
-including the [V.34 fast pass](../history/project/fastpass.md), are historical.
+including the [V.34 fast pass](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/fastpass.md), are historical.
 
 | file | what it is |
 |---|---|

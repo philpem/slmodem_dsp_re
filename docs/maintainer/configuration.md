@@ -6,7 +6,7 @@ records live beside the engines listed in the [module catalogue](modules.md).
 Use the owning header for field widths and the caller for supported combinations.
 
 The original configuration sweeps and transport studies are preserved in the
-[historical record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/reference/configuration.md).
+[historical record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/configuration.md).
 Measurements below retain their stated fixture scope. They are not general
 latency recommendations for a real transport.
 

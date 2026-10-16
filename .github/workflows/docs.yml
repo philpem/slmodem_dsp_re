@@ -28,8 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # The migration audit compares preserved records with their baseline.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -39,7 +37,7 @@ jobs:
         run: python -m pip install -r tools/ci/docs-requirements.txt
       - name: Build guide and check internal links
         run: python -m mkdocs build --strict
-      - name: Audit repository links, module coverage and preserved evidence
+      - name: Audit repository links and module coverage
         run: python tools/ci/docs_audit.py
       - uses: actions/upload-artifact@v4
         with:

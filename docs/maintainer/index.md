@@ -57,18 +57,18 @@ The build writes `build/docs-site/`; the preview normally listens at
 The documentation workflow checks the build and uploads the generated site
 as a PR workflow artifact. Hosting is a separate repository decision.
 
-The audit checks current repository targets, module coverage, preserved
-investigation text and generated HTML links. It includes missing-link and
-missing-module negative controls. Its migration comparison requires the
-baseline commit `4169cb3b` in local Git history; the CI checkout fetches history
-for this purpose. External URLs and pinned historical revisions are outside
-the current-path check. Twelve links to untracked historical build artifacts
-are reported separately rather than claimed as verified targets.
+The audit checks current repository targets, module coverage and generated
+HTML links. It includes missing-link and missing-module negative controls.
+External URLs and pinned historical revisions are outside the current-path
+check. Twelve links to untracked historical build artifacts are reported
+separately rather than claimed as verified targets.
 
 The manual lives in `docs/maintainer/`. The
 [documentation index](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/README.md)
-separates operating guidance, reconstruction method, live registers and
-investigation history. Historical studies are organised under `docs/history/`
-and were also saved to Hindsight with their original paths and baseline.
-Short pointers preserve paths referenced by source comments and tools.
-Repository links follow `master`; use Git history when reading an older revision.
+separates operating guidance, reconstruction method and live registers.
+Dated studies and completed plans were saved to Hindsight and removed from
+the working tree after useful explanations entered the manual. Git retains
+the original text; historical evidence links select fixed revisions. Seven
+short links preserve source-comment references to the technical reference
+pages now in the manual. Other repository links follow `master`; use Git
+history when reading an older revision.

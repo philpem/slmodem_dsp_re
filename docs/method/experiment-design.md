@@ -2,7 +2,7 @@
 
 Agent workflow distilled from [GitHub #22](https://github.com/philpem/slmodem_dsp_re/issues/22).
 Use with [refinement.md](refinement.md), which describes the individual levers.
-Measured examples and commands live in [cid-dcr-audit.md](../history/services/cid-dcr-audit.md);
+Measured examples and commands live in [cid-dcr-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/cid-dcr-audit.md);
 outstanding work lives in issues.
 
 ## The target is an object, not the minimum of a score

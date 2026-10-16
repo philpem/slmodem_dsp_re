@@ -130,4 +130,4 @@ These tables are file-local mutable state. `CALLPROG_Create` builds them
 and `CALLPROG_Progress` consumes them. Differential fixtures observe their
 effects through processing, messages and transitions; they need not export
 the tables as public API. The original extraction and reconstruction plan
-are preserved in the [historical record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/reference/callprog_states.md).
+are preserved in the [historical record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/callprog_states.md).

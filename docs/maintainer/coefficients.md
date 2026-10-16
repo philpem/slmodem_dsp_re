@@ -9,7 +9,7 @@ checks. Measurements below were recorded during reconstruction and have not
 been rerun by the documentation consolidation.
 
 See [sample-rate dependencies](sample-rates.md) before regenerating a bank.
-The [original study](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/reference/coefficients.md)
+The [original study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/coefficients.md)
 retains the investigation chronology and earlier status claims.
 
 ## Recovered

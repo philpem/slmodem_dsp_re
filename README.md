@@ -28,8 +28,8 @@ Start with **[docs/findings.md](docs/findings.md)**: what the blob is, how it
 is structured, and the commands that prove each claim.
 
 Documentation is organised in the [documentation index](docs/README.md): the
-Maintainer Manual covers current operation and algorithms, while the history
-archive preserves dated reconstruction investigations.
+Maintainer Manual covers current operation and algorithms. Dated
+investigations are retained in Hindsight and Git history.
 
 ## Status
 

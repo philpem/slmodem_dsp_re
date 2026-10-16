@@ -79,7 +79,7 @@ The half-duplex training states prepare that full-duplex operation; “Hdx”
 in a training filename does not mean the final data service is half duplex.
 Trace `V32FP_modem`, the transmit/receive training states, then the data
 modulator and demodulator. The
-[V.32 structure record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/v32/v32-structure-reconstruction.md)
+[V.32 structure record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/v32-structure-reconstruction.md)
 explains recovered object ownership. Keep V.32 work together across original
 span labels: those labels can split a single protocol subsystem.
 
@@ -164,7 +164,7 @@ observed call boundaries.
 
 For the original-operand audit, signedness correction and remaining code
 generation differences, see the
-[supervisor recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/project/maintainer-offset-access.md).
+[supervisor recovery record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/maintainer-offset-access.md).
 
 ## V.90 and V.92
 

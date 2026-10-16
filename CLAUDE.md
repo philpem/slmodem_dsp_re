@@ -1,7 +1,7 @@
 # Working in this tree
 
 A source reconstruction of `slmodemd/dsplibs.o`. Read `README.md` for what the
-project is and `docs/fastpass.md` for the method. This file is the part that
+project is and `docs/method/README.md` for the method. This file is the part that
 is about *how to work here* rather than what the work is.
 
 ## Out of scope, absolutely
@@ -123,7 +123,7 @@ synthetic exploratory fidelity probes, not reachability evidence. Preserve
 their measured results and add lifecycle coverage; do not weaken a gate or
 change reconstruction source to accommodate an impossible fixture. Modern
 functional correctness is secondary portability work, not a green-dashboard
-target. See `docs/p4d-period-fixture-audit.md` for the energy/count example.
+target. See [p4d-period-fixture-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/p4d-period-fixture-audit.md) for the energy/count example.
 
 **IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
 measurement apparatus -- it places calls, records both ends, and analyses what
@@ -517,7 +517,7 @@ make period
 The blob's own compiler banner is stronger provenance than a tree-wide
 aggregate. DCR's earlier "stack-only" interpretation was retracted:
 the first rejection from `byteident.py --why` does not establish that it is
-the only difference (see `docs/cid-dcr-audit.md`). `-O3` (2155) and
+the only difference (see [cid-dcr-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/cid-dcr-audit.md)). `-O3` (2155) and
 `-mno-ieee-fp` (1990) were re-measured on the real compiler and both survive
 symbol for symbol. Findings F2320, F2500, F2501 and F10269.
 
@@ -544,7 +544,7 @@ is green at both, and there is no divergence to declare. Finding F2155.
 individual options can reproduce matches under more than one optimization
 level. Compare complete translation units, including non-exact bodies and
 symbol binding; an exact-set gain alone does not establish the original
-profile. See `docs/cid-dcr-audit.md` and GitHub #22 for measured controls.
+profile. See [cid-dcr-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/cid-dcr-audit.md) and GitHub #22 for measured controls.
 
 **Before source/flag refinement, read `docs/method/experiment-design.md`.**
 It is #22's anti-loop workflow: baseline controls, crossed source/option
@@ -831,7 +831,7 @@ wrong finding, so if you ever renumber, say in the finding what it used to be
 called (212 and 213 are the worked example).
 
 Task numbers are not safe across sessions either: two task stores exist whose
-`#11`–`#22` are different work. `docs/fastpass.md` holds the mapping.
+`#11`–`#22` are different work. [fastpass.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/fastpass.md) holds the mapping.
 
 ## Traps
 

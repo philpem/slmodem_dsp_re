@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit documentation targets, module coverage and the 2026-10-16 migration.
+"""Audit current documentation targets, module coverage and generated links.
 
 Run from the repository root after `python -m mkdocs build --strict`.
 External URLs and pinned historical revisions are outside the current-path
@@ -7,22 +7,14 @@ check. Pre-existing untracked build-artifact links are reported separately.
 """
 
 from collections import Counter
-import csv
-import hashlib
 from html.parser import HTMLParser
 from pathlib import Path
 import re
-import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
-BASELINE = "4169cb3b3108a840a51bca9ebfa086102c4c69c6"
 REPO = "https://github.com/philpem/slmodem_dsp_re/"
 LINK = re.compile(r"\[[^\]\n]+\]\(([^\s)]+)\)")
-
-
-def baseline_bytes(path):
-    return subprocess.check_output(["git", "show", BASELINE + ":" + path])
 
 
 def prose(text):
@@ -44,11 +36,6 @@ def catalogue_gaps(sources, links):
     return sources - counts.keys(), {p for p, n in counts.items() if n > 1}, counts.keys() - sources
 
 
-def normalise_record(text):
-    text = LINK.sub(lambda m: m[0][:m[0].rfind("](") + 2] + "LINK)", text)
-    return re.sub(r"docs/[\w./-]+", "DOC_PATH", text)
-
-
 class Page(HTMLParser):
     def __init__(self, text):
         super().__init__()
@@ -67,11 +54,22 @@ class Page(HTMLParser):
 def main():
     root = Path.cwd()
     errors = []
+    # Historical scratch artifacts were never tracked (baseline 4169cb3b).
     old_artifacts = {
-        m[1] for m in LINK.finditer(prose(baseline_bytes("docs/findings.md").decode()))
-        if m[1].startswith("build/")
+        'build/playbook-ctor-tu-position/results.json',
+        'build/playbook-demod-tdx/results.json',
+        'build/playbook-fdsp-dprt-r2/results.json',
+        'build/playbook-fdsp-dprt/results.json',
+        'build/playbook-floatfir-ctor/results.json',
+        'build/playbook-fse-zeros-v92scr/results.json',
+        'build/playbook-masks-v22fp-w2/results.json',
+        'build/playbook-queue-segptr/results.json',
+        'build/playbook-rcfixed-p4m/results.json',
+        'build/playbook-v34-residual/results.json',
+        'build/playbook-v90jd-pos/results.json',
+        'build/playbook-v92cp-cross/results.json',
     }
-    files = sorted(Path("docs").rglob("*.md")) + [Path("README.md")]
+    files = sorted(Path("docs").rglob("*.md")) + [Path("README.md"), Path("CLAUDE.md")]
     checked = 0
     skipped = 0
     for page in files:
@@ -106,34 +104,6 @@ def main():
     print(f"Negative controls: {controls}/2 detected (missing module and missing target).")
     if controls != 2:
         errors.append("documentation negative control failed")
-
-    with Path("docs/history/migration.tsv").open() as ledger:
-        rows = list(csv.DictReader(ledger, delimiter="\t"))
-    history_count = 0
-    changed = []
-    bad_hashes = []
-    for row in rows:
-        original = baseline_bytes(row["original_path"])
-        if hashlib.sha256(original).hexdigest() != row["original_sha256"]:
-            bad_hashes.append(row["original_path"])
-        if "/history/" in row["current_path"]:
-            history_count += 1
-            current = Path(row["current_path"]).read_text()
-            if normalise_record(original.decode()) != normalise_record(current):
-                changed.append(row["current_path"])
-    print(f"Migration ledger: {len(rows)} original hashes checked; {len(bad_hashes)} mismatches.")
-    print(f"Archive preservation: {history_count} records compared ignoring only documentation "
-          f"paths and Markdown destinations; {len(changed)} substantive changes.")
-    errors.extend(changed + bad_hashes)
-    if len(rows) != 722 or history_count != 715:
-        errors.append("migration ledger denominator changed")
-    originals = list(Path("docs/history/reference").glob("*.md"))
-    mismatches = [str(p) for p in originals if p.read_bytes() != baseline_bytes("docs/" + p.name)]
-    print(f"Original technical references: {len(originals)} checked byte for byte; "
-          f"{len(mismatches)} mismatches.")
-    errors.extend(mismatches)
-    if len(originals) != 7:
-        errors.append("original technical reference denominator changed")
 
     site = Path("build/docs-site")
     if not (site / "index.html").is_file():

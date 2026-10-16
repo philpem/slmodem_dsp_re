@@ -30,7 +30,7 @@ insufficient evidence. `dsplib_v34_blob_preemp` defaults to one when
 mode and this runtime flag when comparing results. A compile-time
 `DSPLIB_V34_TEST_PREEMP_INDEX` override is a separate experimental actuator.
 
-The [historical training study](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/history/v34/training.md)
+The [historical training study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/training.md)
 describes an earlier Theil–Sen fitter named `probe_preemp_fit`. That is not
 the current function name or selection algorithm. Its bench measurements and
 proposals retain their original scope; they do not establish the performance
@@ -104,6 +104,6 @@ payload bits. Distinguish these units when diagnosing a repeated retrain.
 The formulas and control tests above are readings of current reconstruction
 source. They describe the implemented computation; they do not constitute a
 new differential run or a modem conformance claim. Historical channel studies
-remain in the investigation archive and Hindsight. A proposed improvement
+are retained in Hindsight and Git history. A proposed improvement
 needs a stated channel, constructor/lifecycle boundary, compatibility mode
 and measured observables before it can become maintenance advice.
