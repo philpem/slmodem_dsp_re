@@ -1922,6 +1922,43 @@ run_scalar_threshold_boundary(void)
 	return diff_end();
 }
 
+/* Constructor-created block boundary.  Below-half, exact-half, between,
+ * equal and above-threshold finite controls distinguish the two flag modes.
+ * The flag-set NaN control alone masks the old wrong strong-arm route:
+ * both that route and the original weak arm hit.  Flag clear distinguishes
+ * them.  The final sample is an external quiet NaN, not a planted internal
+ * state or evidence of a nonfinite modem input history. */
+static int
+run_block_threshold_boundary(void)
+{
+	static const unsigned samples[] = {
+		0x3f000000u, 0x3f000000u, 0x3f400000u,
+		0x3f800000u, 0x40000000u, 0x7fc00000u
+	};
+	int flag, trial;
+
+	diff_begin("GenericToneDetector block threshold component boundary");
+	for (flag = 0; flag <= 1; flag++) {
+		for (trial = 0; trial < 6; trial++) {
+			struct arms a;
+			float threshold = trial == 1 ? 0.5f : 1.0f;
+			int expected = flag ? trial >= 1 : trial == 3 || trial == 4;
+
+			memset(&a, 0, sizeof a);
+			seed(0);
+			den[0] = 1.0;
+			num[0] = 1.0;
+			stream[0] = as_float(samples[trial]);
+			drive_array(1u, 1u, 0u, 1u, 1u, threshold,
+				    (unsigned int)flag, 0.5f, 1u, 1, 1,
+				    410 + flag * 6 + trial, &a);
+			diff_eq_int("the blob block threshold outcome (trial %ld)",
+				    a.hit, expected, flag * 6 + trial);
+		}
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1934,6 +1971,7 @@ main(void)
 	rc |= run_process1();
 	rc |= run_scalar_threshold_boundary();
 	rc |= run_processn();
+	rc |= run_block_threshold_boundary();
 
 	return rc;
 }

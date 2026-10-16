@@ -16,9 +16,9 @@ FOLD_SHA256 = 'a9ebc6ac7de8b53e8489c26ba6cea520fe261bb58ead338b86a8164c7d76277d'
 FOLD_URL = 'https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-3.4.2/gcc/fold-const.c'
 
 
-def tree_predicate(path):
+def tree_predicate(path, target=TARGET):
     sections = re.split(r'^;; Function ', path.read_text(), flags=re.M)[1:]
-    text, = [section for section in sections if '(' + TARGET + ')' in section.splitlines()[0]]
+    text, = [section for section in sections if '(' + target + ')' in section.splitlines()[0]]
     nodes = {key: (code, body) for key, code, body in re.findall(
         r'^@(\d+)\s+(\w+)(.*?)(?=^@|\Z)', text, re.M | re.S)}
 

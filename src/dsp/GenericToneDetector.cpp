@@ -324,7 +324,9 @@ int GenericToneDetector::process(float *samples, unsigned int n)
 			acc_14 = 0.7f * acc_14 + 0.3f * meanIn;
 			acc_18 = 0.7f * acc_18 + 0.3f * meanOut;
 
-			if (meanOut >= threshold) {
+			/* Preserve the original mean-output-first comparison, as in
+			 * the scalar overload.  CSE shares the product above. */
+			if (out * inv >= threshold) {
 				if (flag == 0 || acc_18 > ratio * acc_14) {
 					count_2c++;
 					count_30 = 0;
