@@ -28,19 +28,11 @@
  * object is at .text 0x0a921a, inside `FPM_MTD_detect`.  It cannot be in
  * fpm_iir.c, which is #619 and would place it BELOW DEF_COEFS.
  *
- * IT ALSO USED TO BE LOAD-BEARING FOR fpm_phasor.c AND IS NOT ANY MORE.  In
- * the OBJECT, `FPM_sin_sign` is the next `.data` object in the link and is
- * read four entries BEFORE its base for any phase of 0x8000 or more, so
- * COEF_DC's last three words and the two bytes of boundary padding after them
- * ARE the sine's sign table over a quarter of the phasor's range.  We used to
- * reproduce that by arranging for the same thing to happen in OUR link, which
- * made the phasor's correctness a property of the linker; `fpm_phasor.c` now
- * carries those four words as values, so nothing about where this array lands
- * can reach the phasor, and `t_fpm_phasor` compares both outputs over all
- * 65536 phases.  Only the DEPENDENCE was removed -- the attribution above
- * rests on the address, the single reference and the binding, and stands
- * without it.  Not `const`: the object's symbol is `D`.  Findings F3620, F3621,
- * F3623, F3624 and F3700-3703, deviation D392.
+ * Its tail also supplies the negative-quadrant sine signs: the next .data
+ * object is FPM_sin_sign, aligned after this ten-byte coefficient array.
+ * fpm_phasor.c preserves the original direct signed-index loads, so the
+ * period phasor fixture checks this linked neighbourhood and live writes to
+ * these coefficients. Not const: the original symbol is D.
  */
 short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {
 	-12971, 12917, 28620, -25834, 12917,
@@ -157,11 +149,10 @@ FPM_MTD_delete(struct fpm_mtd *state)
 short
 FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 {
-	int wideband = state->wideband;
-	int tone;
-	int out_of_band;
+	short wideband = state->wideband;
+	short tone;
+	short out_of_band;
 	int threshold;
-	int i;
 
 	/*
 	 * Only two energies are stored, so the third is recovered: the state
@@ -169,14 +160,14 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 	 */
 	tone = (short)(wideband - state->out_of_band);
 
-	for (i = 0; i < count; i++) {
+	while (count--) {
 		int wide_sample;
 		int tone_sample;
 		int e_wide;
 		int e_tone;
 
 		/* >> 5 of headroom before the filters, to keep the squares in range. */
-		wide_sample = FPM_iir_filt((short)(samples[i] >> 5), COEF_DC,
+		wide_sample = FPM_iir_filt((short)(*samples++ >> 5), COEF_DC,
 					   state->dc_state, 1);
 		tone_sample = FPM_iir_filt((short)wide_sample, state->cfg.coeff,
 					   state->acc, state->cfg.tones);
@@ -195,8 +186,8 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 
 	/* Never negative: a tone estimate above the total would be nonsense. */
 	out_of_band = (short)(wideband - tone);
-	if (out_of_band < 0)
-		out_of_band = 0;
+	/* The original clears negative shorts with NOT, SAR 15, then AND. */
+	out_of_band &= ~out_of_band >> 15;
 	state->out_of_band = (short)out_of_band;
 
 	if (wideband < state->cfg.min_level)
