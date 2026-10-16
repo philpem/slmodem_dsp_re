@@ -50,22 +50,26 @@ short
 FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 short *out, unsigned short nbits)
 {
-	int total = 0;
-	unsigned i;
+	/* Keep the entry configuration across the tone calls, as in the object. */
+	const short *scaled = state->scaled;
+	short scale = state->cfg.scale;
+	unsigned short samples_per_sym = state->cfg.samples_per_sym;
+	unsigned short total = 0;
 
-	for (i = 0; i < nbits; i++) {
-		int bit = bits[i] & 1;
-		int k;
+	while (nbits--) {
+		int bit = *bits++ & 1;
+		unsigned short k;
 
 		/*
 		 * Retune per bit.  The frequency is the pre-scaled one, so
 		 * FPM_TONE's 8 kHz assumption lands on the right phase
 		 * increment for a 7200 Hz stream.
 		 */
-		FPM_TONE_set_freq(state->tone, state->scaled[bit]);
-		FPM_TONE_set_scale(state->tone, state->cfg.scale);
+		FPM_TONE_set_freq(state->tone, scaled[bit]);
+		FPM_TONE_set_scale(state->tone, scale);
 
-		total += state->cfg.samples_per_sym;
+		k = samples_per_sym;
+		total += k;
 
 		/*
 		 * One sample per call, not one block call.  That matters: the
@@ -75,7 +79,7 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 * correct for data, where a 180 degree hop mid-symbol would
 		 * corrupt the bit.
 		 */
-		for (k = 0; k < state->cfg.samples_per_sym; k++)
+		while (k--)
 			FPM_TONE_generate(state->tone, out++, 1);
 	}
 
