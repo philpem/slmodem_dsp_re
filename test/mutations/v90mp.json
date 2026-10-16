@@ -222,8 +222,9 @@
  },
  {
   "label": "the rate mask goes out from the top",
-  "find": "\t\tbits[i] = (unsigned char)(((rateMask >> (i - 0x24)) & 1) != 0);",
-  "replace": "\t\tbits[i] = (unsigned char)(((rateMask >> (0x31 - i)) & 1) != 0);"
+  "find": "\t\tif ((rateMask >> (i - 0x24)) & 1)\n",
+  "replace": "\t\tif ((rateMask >> (0x31 - i)) & 1)\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "the long sequence is 0xba bits, not 0xbb",
@@ -237,14 +238,15 @@
  },
  {
   "label": "infoToBits rounds the sequence length up unconditionally",
-  "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc.",
-  "find": "\n\t\tif (q * groupSize == want)\n\t\t\tseqLength = (unsigned char)want;",
-  "replace": "\n\t\tif (0)\n\t\t\tseqLength = (unsigned char)want;"
+  "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc. MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer.",
+  "find": "\t */\n\tcalcSequenceLength();\n",
+  "replace": "\t */\n\t{\n\tunsigned char b = bodyLength;\n\tunsigned int w = (unsigned int)b + 1;\n\tunsigned int q = w / groupSize;\n\n\tif (1)\n\t\tseqLength = (unsigned char)((q + 1) * groupSize);\n\telse\n\t\tseqLength = (unsigned char)(b + 1);\n}\n"
  },
  {
   "label": "infoToBits rounds the length down",
-  "find": "\n\t\t\tseqLength = (unsigned char)((q + 1) * groupSize);",
-  "replace": "\n\t\t\tseqLength = (unsigned char)(q * groupSize);"
+  "find": "\t */\n\tcalcSequenceLength();\n",
+  "replace": "\t */\n\t{\n\tunsigned char b = bodyLength;\n\tunsigned int w = (unsigned int)b + 1;\n\tunsigned int q = w / groupSize;\n\n\tif (q * groupSize != w)\n\t\tseqLength = (unsigned char)(q * groupSize);\n\telse\n\t\tseqLength = (unsigned char)(b + 1);\n}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "h1Imag is packed into frame 3 with h1Real",
@@ -364,8 +366,9 @@
  },
  {
   "label": "state 2 does not advance the bit index",
-  "find": "\t\tbits[bitIndex] = (unsigned char)bit;\n\t\tbitIndex++;",
-  "replace": "\t\tbits[bitIndex] = (unsigned char)bit;"
+  "find": "\t\ttype = (char)bit;\n\t\tbitIndex++;\n",
+  "replace": "\t\ttype = (char)bit;\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "state 2 leaves the receiver in state 3 only after the length",
@@ -497,19 +500,21 @@
  },
  {
   "label": "the rate mask is printed sixteen bits wide",
-  "why": "The mask the object passes is 0x2000 (0x2035d), which is fourteen characters -- the width of the field at +0x06.",
-  "find": "\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t*p++ =",
-  "replace": "\t\t\t\tfor (mask = 0x8000; mask != 0; mask >>= 1)\n\t\t\t\t\t*p++ ="
+  "why": "The mask the object passes is 0x2000 (0x2035d), which is fourteen characters -- the width of the field at +0x06. MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer.",
+  "find": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 16);\n"
  },
  {
   "label": "the rate mask is printed low bit first in the MPnot arm",
-  "find": "\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t*q++ =",
-  "replace": "\t\t\t\tfor (mask = 1; mask <= 0x2000; mask <<= 1)\n\t\t\t\t\t*q++ ="
+  "find": "\t\t\t\t\t    \"ected. Type%d,Rate%d,Trellis%d,No\" \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ected. Type%d,Rate%d,Trellis%d,No\" \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\t{\n\t\t\t\t\tchar *q = str;\n\t\t\t\t\tunsigned int mask;\n\t\t\t\t\tfor (mask = 1; mask <= 0x2000; mask <<= 1)\n\t\t\t\t\t\t*q++ = (rateMask & mask) ? '1' : '0';\n\t\t\t\t\t*q = 0;\n\t\t\t\t}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "a set bit prints as '0'",
-  "find": "\t\t\t\t\t*p++ = (rateMask & mask) ? '1' : '0';",
-  "replace": "\t\t\t\t\t*p++ = (rateMask & mask) ? '0' : '1';"
+  "find": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\t{\n\t\t\t\t\tchar *p = str;\n\t\t\t\t\tunsigned int mask;\n\t\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t\t*p++ = (rateMask & mask) ? '0' : '1';\n\t\t\t\t\t*p = 0;\n\t\t\t\t}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "Type is printed unsigned",
