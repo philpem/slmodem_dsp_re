@@ -5335,6 +5335,15 @@ need a separate behavioural review: the extra FPM entries and PreFilter loop
 row deliberately reproduce observed reads beyond the original symbols.
 Recover their physical neighbours before shortening those declarations.
 
+The inventory also identifies storage qualifiers that instruction comparison
+cannot see. Four local AGC coefficient arrays in the V.22 and B.103 table TUs
+were declared `const` despite occupying writable `.data` in the original.
+Removing those qualifiers restores their storage class. Four full-TU controls
+preserve eighteen named objects' contents and sizes and 34 pointer targets;
+the old read-only placement fails the original-permission witness. These
+TUs contain no functions, so the recovery cannot increase the exact-function
+count. No runtime write to these arrays is established by this evidence.
+
 ### Establish a carrier discrepancy before changing its type
 
 The V8 lifetime trace follows the output argument from initial RTL through
