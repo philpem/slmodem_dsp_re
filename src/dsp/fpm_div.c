@@ -44,24 +44,15 @@
  * So for those denominators the original returns a reciprocal of zero, and any
  * division built on it collapses to zero.
  *
- * The reconstruction reproduces that, because the project's rule is to guard
- * only where the contract makes an input impossible, and nothing rules these
- * denominators out.  The 129th entry below is 0 for exactly that reason -- it
- * is not a real coefficient, it is the neighbouring table's first word.
+ * The bug build preserves that direct neighbour read with the original
+ * 128-word table. The fixed build retains its generated 129th entry (16384).
+ * Period object and executable layouts are checked against the original.
  */
 
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 
-/*
- * 129 entries: the object's 128 real ones plus a 129th that carries the value
- * the D4 over-read finds.  In the bug-reproducing build it is 0 -- what the
- * object's neighbouring `FPM_xor_table[0]` holds -- so the differential sees
- * the object's own behaviour; the fixed build puts the generated 16384 there
- * so the read is corrected.  The entry cannot simply be dropped in the bug
- * build: our `.rodata` does not reproduce the object's FPM_xor_table
- * adjacency, and 255 denominators then read a nonzero word instead of 0.
- */
+/* Declared reciprocal coefficients, excluding the neighbouring XOR word. */
 #define FPM_DIV_TABLE_REAL 128
 
 

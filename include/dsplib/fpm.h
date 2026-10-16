@@ -11,7 +11,7 @@
 /**
  * @brief Q15 square root.
  * @param x  Unsigned Q15 fraction, 0x0000..0x7fff. The original reads past
- *           its lookup table for larger inputs; this version clamps.
+ *           its lookup table for larger inputs; the original neighbour reads are retained.
  *           See src/dsp/fpm_sqrt.c.
  * @return sqrt(x) as an unsigned Q15 fraction.
  */
@@ -68,24 +68,11 @@ unsigned short FPM_div_table_entry(int i);
 /** @brief Recompute one entry of FPM_div()'s reciprocal table from its ideal formula. */
 unsigned short FPM_div_table_generate(int i);
 
-/*
- * `FPM_div_table` is GLOBAL (`R`) in the object, so it is not file-static;
- * the declaration is completed by the definition in `fpm_tables.c`.  The
- * definition is 129 entries -- the object's 128 plus the D4 over-read's
- * value, which is 0 in the bug build and the generated 16384 in the fixed
- * one.  Dropping the 129th in the bug build is not equivalent: our `.rodata`
- * does not reproduce the object's FPM_xor_table adjacency.
- */
+/* Public reciprocal table: 128 original words in the bug build, followed by
+ * FPM_xor_table; the fixed build retains its generated 129th endpoint. */
 extern const unsigned short FPM_div_table[];
 
-/*
- * `FPM_sqrt_table` is a GLOBAL object in the object's `.rodata`
- * (`readelf -sW`), and it is defined in `fpm_tables.c` with the other seven
- * (F11402).  It was once a file-`r` static behind the accessors below; the
- * accessors are retained but now read the global.  The size is the object's
- * 192 plus this tree's documented over-read entry, so it is declared unsized
- * here.
- */
+/* Public original 192-word sqrt table, followed by FPM_div_table. */
 extern const unsigned short FPM_sqrt_table[];
 
 /**
