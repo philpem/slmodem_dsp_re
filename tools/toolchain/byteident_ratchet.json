@@ -2,8 +2,8 @@
   "bytes": 65,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1093,
-  "exact_bytes": 123672,
+  "exact": 1096,
+  "exact_bytes": 125253,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -225,6 +225,7 @@
     "V29TX_modem",
     "V32FP_GetDiagnostics",
     "V32FP_delete",
+    "V32LocLoopNextState",
     "V32RxHdxModem",
     "V32StateName",
     "V32TxHdxModem",
@@ -372,6 +373,7 @@
     "_ZN12V90RDetectorC2EP13V90Parameters",
     "_ZN12V90RDetectorD1Ev",
     "_ZN12V90RDetectorD2Ev",
+    "_ZN12V90Resampler11setBllStateE11V90BllStatej",
     "_ZN12V90Resampler19getTimingHistoryStdEv",
     "_ZN12V90Resampler20getTimingHistoryMeanEv",
     "_ZN12V90Resampler5resetEv",
@@ -714,6 +716,7 @@
     "_ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams",
     "_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams",
     "_ZN24V90ConstellationDesigner4pow6Es",
+    "_ZN24V90ConstellationDesigner5calcKEjPf",
     "_ZN24V90ConstellationDesigner5realKEP16V90MappingParams",
     "_ZN24V90ConstellationDesigner5resetEv",
     "_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower",
@@ -1103,6 +1106,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 662,
-  "unresolved": 3
+  "size": 661,
+  "unresolved": 1
 }

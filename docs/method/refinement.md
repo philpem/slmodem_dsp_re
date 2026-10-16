@@ -4895,6 +4895,21 @@ this is a supported representation, not a new exact-function gain. Audit every
 header consumer and preserve the complete objects as controls.
 [Writer/use census and rejected V.34 leads](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-data-fields.md).
 
+A full-width declaration can also hide two independent narrow regions.
+V.32's SNR-drop counter was represented as an int accessed through low-word
+casts. The original compares and updates only the signed word at `+0x20`;
+whole-parameter copies also preserve `+0x22`. Splitting out the counter must
+therefore preserve that adjacent word, without claiming it is padding or
+assigning it a meaning. Check template bytes, field offsets and every header
+consumer. The signed comparison establishes the counter's interpretation;
+a preceding zero-extension alone would not.
+
+For owned buffers, allocation size establishes capacity, not element type.
+V.90's equaliser buffers at `+0xb4` and `+0xb8` acquire their `short *` types
+from independent signed-word writers and readers. Retyping them can remove
+casts while preserving the entire object. Keep allocation/free behaviour
+unchanged unless the original supplies separate evidence for changing it.
+
 ### Adopt a validated partial without reopening its search domain
 
 When partial reconstruction is authorised, an earlier non-exact control can
@@ -4944,3 +4959,44 @@ counts cannot identify either site. Equal target sequences still align only
 physical call ordinals, not control-flow paths or arguments. Repeated calls
 need independent correspondence before a difference can justify a source
 change. Saving a refusal does not resolve it or increase analysis coverage.
+
+
+### Prove fixed-frame calls and taken dispatch guards separately
+
+A fixed stack frame may contain both callee-save slots and outgoing argument
+words. Prove their disjoint extents, reject stack-pointer escape, validate
+each direct call relocation, and require restoration along every reachable
+return path. State the ABI assumption: callees return normally with balanced
+stack depth and preserved callee-save registers. This extends identity
+coverage for `V32LocLoopNextState`; it does not reconstruct new source.
+
+A taken unsigned `JBE` can guard a table dispatch beyond the default return
+arm. Require a unique taken edge into the dispatch and no fallthrough from
+the preceding block. Independently reject named, direct, relocated and table
+entries into the comparison corridor or dispatch. `V90Resampler::setBllState`
+needs one flag-preserving register-to-object store between comparison and
+branch; decode that exact operand form rather than admitting arbitrary MOVs.
+
+Exercise both proofs with rebased tables that must match, altered table
+targets that must differ, and unsafe identical pairs that must remain
+UNRESOLVED. The fixed-ABI and taken-guard control tools retain these cases.
+A proof extension changes resolved relocation identity, not the source
+compiler's emitted bytes or literal whole-object completion.
+
+
+### Recover an expression's evaluation and narrowing together
+
+Named floating temporaries can change both evaluation order and x87 spill
+placement. In `V90ConstellationDesigner::calcK`, assigning the denominator's
+logarithm first reverses the original call order. Merely moving a numerator
+temporary first restores that order but narrows it before the original loads
+the constant two. Keeping both logarithms in the return expression restores
+the entire 94-byte body under the retained period compiler.
+
+Review inline copies as well as the recovered function. The same change
+restores the numerator-first graph in `determineDminForRrn`, which remains
+nonexact. Retain the period narrowing and rounding checks, complete-TU data
+and export audit, and caller diagnostics. An exact standalone result does
+not establish that every inline copy is exact or that the expression is the
+unique original spelling. The six-cell `recovery_v90_calck_expression.py`
+replay preserves the separate-order and separate-capture controls.
