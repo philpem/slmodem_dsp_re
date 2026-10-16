@@ -51,7 +51,7 @@ graphs and complete TU collateral before judging sizes. A miss closes the
 owner domain; no nearby cursor alternatives follow automatically.
 
 The four cells have no exact gain or loss. The carried wrap start restores
-the original terminal-pointer LEAs, independently of the aggregate carrier;
+the original terminal-owner dependency, independently of the aggregate carrier;
 the combined source remains SIZE263. These address and carrier observations
 change the assumptions of the prior helper-origin control: that control
 recovered private argument homes and the original 0x9c frame while lacking
@@ -100,3 +100,12 @@ Next evidence would need to distinguish the remaining original cursor
 schedule and private argument origins beyond these closed families.
 Declaration/register/slot permutations and another local cursor spelling
 are not justified by the surviving size gap.
+
+The selected predecrement loop terminates at `history`, whereas the original
+machine post-load cursor terminates one element before it. The following
+wrap cursor has that same one-element bias until the candidate predecrements
+for its load. Both read exactly the same in-array elements for valid positions;
+the owner relationship is restored, not the exact pointer value/schedule.
+A machine decrement after the final load does not prove the author formed
+an invalid C pointer. The previous domain's before-array prohibition bounded
+that experiment; it does not rule out an original postdecrement spelling.

@@ -17,11 +17,12 @@
  *
  * THE CONSTRUCTOR AND `reset` ARE THE SAME FORTY BYTES, instruction for
  * instruction: the two symbols at 0x1f410 and 0x1f3e0 disassemble alike down
- * to the register allocation.  Both are ordinary GLOBAL symbols in `.text`
- * rather than in a linkonce section, so `reset` is not an in-class inline the
- * compiler folded into the constructor (GCC 3.4 at -O2 does not inline an
- * ordinary global function).  The original repeated the assignments, which is
- * why they are repeated here rather than written as `reset()`.  Finding F1237.
+ * to the register allocation. Both are ordinary GLOBAL symbols in `.text`.
+ * That binding does not settle the original source factoring: the retained
+ * O3 profile auto-inlines exported methods too, as the controls in
+ * docs/recovery-mp-next-results.md demonstrate. The repeated assignments
+ * already reproduce these exact bodies and remain here. Finding F1237 is
+ * the historical measurement, not proof that the author duplicated source.
  *
  * The calling convention is plain cdecl -- `mov 0x4(%esp),%eax` -- not
  * thiscall (finding F215).
@@ -153,11 +154,10 @@ V90MP::resetDetector()
  * listing** -- in the blob `V90MP()`, `V90MP()` (the C2 clone) and `reset` are
  * byte-identical to each other, 0 of 40, and so are ours.  So the store order
  * decoded above the constructor is this function's too, and the one edit
- * closed three symbols.  Finding F1237 is why the assignments are
- * repeated here rather than written as a call to `resetDetector` plus two
- * counters -- `resetDetector` is a separate GLOBAL symbol at 0x1f3c0 and GCC
- * 3.4 at -O2 does not inline one of those, so an original that called it
- * would have left a call behind.
+ * closed three symbols. The assignments are retained as that measured
+ * exact source. `resetDetector` is a separate GLOBAL symbol at 0x1f3c0;
+ * it can still be automatically inlined under the retained O3 profile,
+ * so its binding alone does not identify the original caller's spelling.
  */
 void
 V90MP::reset()

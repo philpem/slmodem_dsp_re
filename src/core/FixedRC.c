@@ -446,10 +446,10 @@ rc_output(struct rc_state *s)
 	const short *coeff = s->coeff + (int)s->phase * s->taps;
 	const short *hist = s->history + (s->pos - s->taps);
 	int acc = 0;
-	int k;
+	unsigned int k;
 
 	for (k = 0; k < s->taps; k++)
-		acc += (int)coeff[k] * (int)hist[k];
+		acc += (int)*coeff++ * (int)*hist++;
 
 	return (short)(acc >> 14);
 }

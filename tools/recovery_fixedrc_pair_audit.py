@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Audit complete FixedRC cells and prove the packed-carrier detector fires."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -16,11 +17,17 @@ def carrier(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--polyphase", action="store_true", help="also audit the three generic-loop/carried-index domains")
+    args = parser.parse_args()
     original = carrier(d.b.BLOB)
     assert original["low_merge"] == original["high_merge"] == 1
     report = {"original_carrier": original, "runs": {}}
     cells = bodies = 0
-    for run in ("recovery-fixedrc-pair", "recovery-fixedrc-wrap-owner", "recovery-fixedrc-pair-origins"):
+    roots = ["recovery-fixedrc-pair", "recovery-fixedrc-wrap-owner", "recovery-fixedrc-pair-origins"]
+    if args.polyphase:
+        roots += ["recovery-fixedrc-polyphase-loop", "recovery-fixedrc-counter-epoch", "recovery-fixedrc-index-width"]
+    for run in roots:
         root = d.ROOT / "build" / run
         record = json.loads((root / "results.json").read_text())["families"]["FixedRC"]
         baseline = root / "FixedRC/baseline/candidate.o"
@@ -37,7 +44,7 @@ def main():
             assert not entry.get("losses", [])
             assert set(entry.get("changed_bodies", [])) <= {"RcFixed_Resample"}
             observed = carrier(path)
-            pair = (run == "recovery-fixedrc-pair" and label != "baseline") or label.startswith("pair-1-") or label.startswith("helper0-")
+            pair = run in ("recovery-fixedrc-polyphase-loop", "recovery-fixedrc-counter-epoch", "recovery-fixedrc-index-width") or (run == "recovery-fixedrc-pair" and label != "baseline") or label.startswith("pair-1-") or label.startswith("helper0-")
             assert observed["low_merge"] == observed["high_merge"] == int(pair), (run, label, observed)
             if pair:
                 assert observed["high_extract"] >= 1
@@ -48,10 +55,10 @@ def main():
             bodies += len(grades)
         report["runs"][run] = rows
     report["denominator"] = {"compiled_cells": cells, "shared_body_verdicts": bodies}
-    assert (cells, bodies) == (12, 60)
-    target = d.ROOT / "build/recovery-packers-next/fixedrc-audit.json"
+    assert (cells, bodies) == ((24, 120) if args.polyphase else (12, 60))
+    target = d.ROOT / ("build/recovery-packers-next/fixedrc-all-audit.json" if args.polyphase else "build/recovery-packers-next/fixedrc-audit.json")
     target.write_text(json.dumps(report, indent=2) + "\n")
-    print("12 complete-TU cells / 60 body verdicts: metadata, data, relocations and exact membership pass")
+    print("%d complete-TU cells / %d body verdicts: metadata, data, relocations and exact membership pass" % (cells, bodies))
     print("Packed carrier: original positive, scalar controls negative, aggregate controls positive")
 
 
