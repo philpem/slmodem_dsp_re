@@ -266,14 +266,23 @@ original raw feedback sum at 0x5346e precedes tap uses and the final mask at
 is an actual inherited operand change, not a claimed register-only bystander.
 The other eleven emitted bodies are raw-identical, including all nine exact
 CP methods. All fifteen defined/shared names remain present with the same
-bindings, visibility and imports/exports. Allocated nontext bytes and named
-data are identical; every nontext relocation entry/target/addend is unchanged.
+bindings, visibility and imports/exports. Named data and allocated nontext
+metadata are identical. Fourteen anonymous .rodata jump-table addends move
+forward by 32 with bitsToInfo: their relocation entries/types/targets, owning
+function and function-relative destinations remain unchanged. All remaining
+nontext bytes are identical after accounting for exactly those fourteen
+addends. The complete opening-to-retained comparison is preserved in
+`build/recovery-cp-next/whole-tu-audit.json`; this also records the literal
+.rodata difference rather than generalising the final domain's unchanged
+relative addends to the whole chained experiment.
 Complete .text grows 8,500 to 8,532 bytes. Symbol changes are calcCRC's size,
 infoToBits's size and the following bitsToInfo offset (6,112 to 6,144).
 
 The five finite domains total **20 valid full-TU cells / 300 shared-body
 verdicts**, representing sixteen distinct source byte strings and ten distinct
-complete objects. There are **zero exact gains and zero exact losses**. Each
+complete objects. The aggregate hashes and counts are preserved in
+`build/recovery-cp-next/experiment-ledger.json`. There are **zero exact gains
+and zero exact losses**. Each
 chained unchanged full-TU control raw-reproduces its independent predecessor.
 The source/object hashes and complete commands are in each domain's
 `results.json`; `tools/recovery_bitpacker_audit.py --run RUN_NAME` regrades
