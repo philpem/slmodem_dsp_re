@@ -36,24 +36,39 @@ recorded. The existing header points to F7584 for earlier consolidation costs.
 
 ## MG-02: Overlapping V.34 root and receiver views
 
-**Confirmed incomplete representation; high priority.**
-[`v34recv.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34recv.h)
-begins its receiver view with `pad_000[0x120]`. The receiver base is root
-`+0x264`, where
-[`v34fsk.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34fsk.h)
-models `rxq`, its ring tail, an unmapped span and `short_382`. Root `+0x382`
-is receiver-relative `+0x11e`, inside that apparent pad.
+**Closed: the guide described a superseded representation.** Rechecked at
+`ac7f28e6` on 16 October 2026. The source already has one owner for this
+region: [`v34fsk.h`](https://github.com/philpem/slmodem_dsp_re/blob/ac7f28e6/include/dsplib/v34fsk.h)
+embeds `struct v34_receiver receiver` at root `+0x264`, and
+[`v34recv.h`](https://github.com/philpem/slmodem_dsp_re/blob/ac7f28e6/include/dsplib/v34recv.h)
+defines its complete `0x79c`-byte extent. Issue #260's wave 8 moved the
+root's fields into that owner; wave 9 modelled the shared burst storage.
+The former opening `pad_000[0x120]` is absent.
 
-Those bytes are live storage represented differently by two views. Removing
-the pad as “unused” would destroy the map; inventing a second independent
-receiver member would conceal the overlap.
+Use the following translations when tracing callers:
 
-**Next step:** inventory reads/writes with both bases stated, and establish
-which shared subobject or explicit view represents the original ownership.
-Retain neutral names until meaning is supported. Close when shared live bytes
-have a consistent representation with offset assertions, lifecycle differential
-coverage and measured full-TU effects. This is a layout recovery task, not
-permission to repack the object.
+| Member | Receiver offset | Root offset |
+|---|---|---|
+| `rxq` | `+0x000` | `+0x264` |
+| `rxq_ring_tail` | `+0x010` | `+0x274` |
+| `burst` | `+0x10c` | `+0x370` |
+| `short_380` | `+0x11c` | `+0x380` |
+| `short_382` | `+0x11e` | `+0x382` |
+| `timing` | `+0x2a8` | `+0x50c` |
+| `equalizer` | `+0x3cc` | `+0x630` |
+
+The root header asserts the embedded receiver's offset and size, plus nested
+member offsets including `rxq`, `burst`, `short_382`, `timing` and `equalizer`.
+The receiver header asserts its own member offsets and extent. For example,
+`V34RX.c` passes `&obj->receiver.timing` to `V34TimingFiltersInit` and uses
+`obj->receiver.burst` as the sample window; `V34hshak.c` reads
+`obj->receiver.rxq.count` and writes `obj->receiver.short_382`.
+These are accesses through the same embedded object.
+
+No reconstruction change is required for this finding. The remaining
+`unmapped_0114` span and neutral field names record narrower evidence limits;
+they do not establish conflicting root and receiver definitions. Future field
+recovery must preserve both offset bases and the existing differential checks.
 
 ## MG-03: Offset access remains part of the handshake model
 

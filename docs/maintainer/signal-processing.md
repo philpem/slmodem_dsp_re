@@ -93,9 +93,13 @@ machines determine when work actually happens.
 
 The receive map in
 [`v34recv.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34recv.h)
-is a view into the larger `v34_object` beginning at `+0x264`. Some bytes
-named in the root view remain unmodelled in the receive view. Treat the base
-pointer as part of an offset's meaning, especially when comparing raw objects.
+defines the `0x79c`-byte `receiver` member embedded in `v34_object` at
+`+0x264`. The receive queue, burst window, timing filters and equalizer all
+belong to that member. Root and receiver-relative offsets therefore identify
+the same fields with a `0x264` displacement between their bases; for example,
+`receiver.short_382` is at root `+0x382` and receiver `+0x11e`. Both headers
+assert the layout. See [MG-02](reconstruction-debt.md#mg-02-overlapping-v34-root-and-receiver-views)
+for the ownership map and the correction to the guide's earlier overlap claim.
 
 ## V.90 and V.92
 
