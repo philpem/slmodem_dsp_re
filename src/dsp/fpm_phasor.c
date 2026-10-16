@@ -40,97 +40,13 @@
 
 
 
-/*
- * Quadrant signs, in Q15.  These are +-0.5, not +-1.0, so a full-scale table
- * entry yields 16384 rather than 32768 -- the generator's own scale factor
- * makes up the difference (FPM_TONE_generate multiplies by state->scale >> 14,
- * and a scale of 32767 restores full amplitude).
- *
- * GLOBAL and in `.data`, because the object's are: `FPM_sin_sign` at .data
- * 0x081dc and `FPM_cos_sign` at 0x081e4, both `D` and not `R`.  These two
- * carry the object's symbols and the object's four words each.  NOTHING in
- * `src/` indexes them -- see the extended pair below for why -- and they are
- * kept because the reconstruction's symbol table is part of the deliverable
- * and because `t_fpm_phasor` compares them against `dsplibs_ref.o`'s own,
- * which is what stops the two copies of the four signs drifting apart.
- */
+/* Original writable .data owners, in source order. Period GCC emits sine
+ * before cosine. fpm_mtd.c's preceding data ends in COEF_DC plus two alignment
+ * bytes, so negative signed quadrants retain the original neighbour reads.
+ * This intentionally preserves original out-of-symbol indexing; link layout
+ * is part of that behavior and is checked by the period fixture. */
 short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };
 short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
-
-/*
- * THE ARRAYS THE PHASOR INDEXES, AND WHY THEY ARE NOT THE TWO ABOVE.
- *
- * `FPM_phasor` does not mask the quadrant (see below), so it runs -4 .. 3 and
- * the object reads four entries BEFORE each of its two symbols.  We reproduce
- * that behaviour, and we used to reproduce it BY ARRANGING MEMORY -- the two
- * tables were declared in a particular order so that both compilers' reverse
- * `.data` emission put them adjacent, and `COEF_DC` was moved into fpm_mtd.c
- * so its tail landed before `FPM_sin_sign`.  That made the reconstruction's
- * correctness a property of the linker and of two compilers' emission order,
- * and reading before an array is undefined behaviour whatever the link does.
- * It is gone.
- *
- * WHAT REPLACES IT IS D4'S FIX, BACKWARDS.  `FPM_div` indexes a 128-entry
- * table with 0 .. 128, and `src/dsp/fpm_div.c` reproduces the overrun by
- * giving OUR table a 129th entry holding the neighbour's value: the adjacency
- * became a VALUE and the layout dependence vanished.  The same thing here, at
- * the other end.  The object's eight out-of-range words are CONSTANTS --
- *
- *     FPM_cos_sign[-4 .. -1] = { 16384, 16384, -16384, -16384 }
- *                              `FPM_sin_sign` itself, 8 bytes below it
- *     FPM_sin_sign[-4 .. -1] = { 28620, -25834, 12917, 0 }
- *                              COEF_DC[2 .. 4] (fpm_mtd.c, .data 0x081d4)
- *                              and the two bytes of padding the .data
- *                              translation-unit boundary costs at 0x081da
- *
- * -- measured from the blob, so they are carried here as the LEADING entries
- * of one array each and the phasor indexes `ext[FPM_PHASOR_SIGN_BELOW + quad]`.
- * Every index the function can form is then 0 .. 7 inside a single array
- * object: defined C, no layout assumption, and the same value for every one of
- * the 65536 phases.
- *
- * WHAT IT UNLOCKS is the whole of D392.  Both halves of the out-of-domain
- * window are now values in `src/`, so `t_fpm_phasor` compares them against
- * `dsplibs_ref.o`'s own `.data` -- the blob's bytes, which our `--coverage`
- * build cannot displace because we do not compile the blob -- and sweeps BOTH
- * sine and cosine over all 65536 phases.  Finding F3624's objection was that
- * `--coverage` appends `__gcov_.FPM_MTD_*` to fpm_mtd.c's `.data` at exactly
- * those offsets; with no adjacency left to assert, it no longer applies.
- *
- * FOR WHOEVER WRITES `FPM_phasor_dp` (0x0a93e0, not reconstructed): it is the
- * third user of these two tables and reads them the same unmasked way --
- * `readelf -rW` puts its relocations at 0x0a944b against `FPM_cos_sign` and
- * 0x0a9472 against `FPM_sin_sign`.  Index `FPM_cos_sign_ext` and
- * `FPM_sin_sign_ext` with the same `FPM_PHASOR_SIGN_BELOW` bias.  The
- * four-entry `FPM_cos_sign`/`FPM_sin_sign` above are the symbol table and are
- * NOT what the phasor reads; indexing those with a negative quadrant is the
- * undefined behaviour this arrangement exists to remove.
- *
- * `COEF_DC` STAYS IN fpm_mtd.c.  Its attribution rests on evidence that is
- * independent of any of this -- its one reference in 1.2 MB is inside
- * `FPM_MTD_detect`, `nm` marks it `D` and not `R`, and the two-byte pad at
- * 0x081da is itself proof of a translation-unit boundary.  Only the
- * DEPENDENCE on where it lands has been removed, not the attribution.
- * Findings F3588, F3620-3624 and 3700-3703, deviation D392.
- */
-short FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + 4] = {
-	/* [-4 .. -1]: what the object reads below FPM_cos_sign, which is
-	 * FPM_sin_sign -- the same translation unit's next .data object. */
-	 16384,  16384, -16384, -16384,
-	/* [ 0 ..  3]: FPM_cos_sign itself. */
-	 16384, -16384, -16384,  16384,
-};
-
-short FPM_sin_sign_ext[FPM_PHASOR_SIGN_BELOW + 4] = {
-	/* [-4 .. -1]: what the object reads below FPM_sin_sign -- COEF_DC's
-	 * last three words and the boundary pad, .data 0x081d4 .. 0x081db.
-	 * The trailing 0 is the PAD and is not a coefficient; see the note in
-	 * t_fpm_phasor.c about not mistaking a zero that agrees for a zero
-	 * that was checked. */
-	 28620, -25834,  12917,      0,
-	/* [ 0 ..  3]: FPM_sin_sign itself. */
-	 16384,  16384, -16384, -16384,
-};
 
 unsigned short
 FPM_phasor_cos_entry(int i)
@@ -175,27 +91,15 @@ phasor_split(int phase, int *idx_out, int *frac_out, int *quad_out)
 	*quad_out = quad;
 }
 
-/*
- * One table lookup with the quadrant sign applied.
- *
- * The interpolated value is truncated to 16 bits before the sign -- entry 0
- * is 32768, so this is not a no-op at the extremes.
- *
- * THE QUADRANT IS NOT MASKED and that is the object's, at 0x0a9367 and
- * 0x0a9392: `movswl 0x0(%esi,%esi,1)` with `%esi` the sign-extended quadrant.
- * `phase` is read as a signed short, so `quad` runs -4 .. 3 and the object
- * reads below its table for every phase of 0x8000 or more.  `sign` is the
- * EXTENDED array and the bias puts every one of those reads inside it; see
- * the definitions above.  The bound is exact rather than defensive:
- * phase in -32768 .. 32767, idx = phase >> 5 in -1024 .. 1023,
- * quad = idx >> 8 in -4 .. 3, so the index is 0 .. 7 and cannot be otherwise.
- */
+/* The original uses an unmasked signed quadrant (-4..3). Preserve its
+ * direct public-table load, including negative reads into adjacent storage.
+ * Interpolation narrows to unsigned short before applying the sign. */
 static short
 phasor_value(const unsigned short *table, const short *sign,
 	     int idx, int frac, int quad)
 {
 	return (short)(((unsigned short)interpolate(table, idx, frac)
-			* sign[FPM_PHASOR_SIGN_BELOW + quad]) >> 15);
+			* sign[quad]) >> 15);
 }
 
 /* Advance by one increment, wrapping at one cycle. */
@@ -215,8 +119,8 @@ FPM_phasor(struct fpm_phasor *p)
 	int idx, frac, quad;
 
 	phasor_split(phase, &idx, &frac, &quad);
-	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);
-	p->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);
+	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign, idx, frac, quad);
+	p->sin = phasor_value(FPM_sin_table, FPM_sin_sign, idx, frac, quad);
 	p->phase = phasor_advance(phase, (short)p->inc);
 }
 
@@ -236,8 +140,8 @@ FPM_phasor(struct fpm_phasor *p)
  * sign, same `>> 15` -- so `phasor_split`, `interpolate` and `phasor_value` are
  * reused verbatim rather than copied.  It is the third user of the UNMASKED
  * quadrant, with relocations at 0x0a944b against `FPM_cos_sign` and 0x0a9472
- * against `FPM_sin_sign`, so it indexes the extended arrays with the same
- * `FPM_PHASOR_SIGN_BELOW` bias and D392 covers it too.
+ * against `FPM_sin_sign`, so it uses the same direct public-table loads, including the negative
+ * quadrant neighbourhood.
  *
  * ONLY THE ADVANCE DIFFERS.  A 30-bit accumulator is assembled from the two
  * halves, advanced, wrapped at one cycle and split back:
@@ -273,8 +177,8 @@ FPM_phasor_dp(struct fpm_phasor_dp *p)
 	int acc, whole;
 
 	phasor_split(phase, &idx, &frac, &quad);
-	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);
-	p->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);
+	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign, idx, frac, quad);
+	p->sin = phasor_value(FPM_sin_table, FPM_sin_sign, idx, frac, quad);
 
 	acc = ((phase + (short)p->inc) << 15)
 	    + ((p->frac_phase + p->frac_inc) >> 1);
@@ -305,6 +209,6 @@ FPM_phasor_demod(struct fpm_phasor *p)
 	int idx, frac, quad;
 
 	phasor_split(phase, &idx, &frac, &quad);
-	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);
+	p->cos = phasor_value(FPM_cos_table, FPM_cos_sign, idx, frac, quad);
 	p->phase = phasor_advance(phase, (short)p->inc);
 }
