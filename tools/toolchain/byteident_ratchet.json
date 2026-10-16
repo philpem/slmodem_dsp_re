@@ -2,8 +2,8 @@
   "bytes": 65,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1091,
-  "exact_bytes": 122715,
+  "exact": 1093,
+  "exact_bytes": 123672,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -150,6 +150,7 @@
     "RxHdxStartV27",
     "RxHdxStartV29",
     "RxHdxToneData",
+    "RxNextStateV17",
     "RxNextStateV29",
     "SDMv27_init",
     "SGD_create",
@@ -682,6 +683,7 @@
     "_ZN21ResamplerTimingOffsetD1Ev",
     "_ZN21ResamplerTimingOffsetD2Ev",
     "_ZN21V90ConstellationPower17isLegalPowerIndexEj",
+    "_ZN21V90ConstellationPower20getConstellationInfoEP16V90MappingParams26V90TxPowerMeasurementPointj",
     "_ZN21V90ConstellationPower21calcModulusParametersEP16V90MappingParams",
     "_ZN21V90ConstellationPower21getPowerIndexForPowerEf",
     "_ZN21V90ConstellationPower8getPowerEP16V90MappingParams26V90TxPowerMeasurementPoint7PcmType",
@@ -1102,5 +1104,5 @@
   "regalloc": 29,
   "reloc": 0,
   "size": 662,
-  "unresolved": 5
+  "unresolved": 3
 }
