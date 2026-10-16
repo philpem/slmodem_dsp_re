@@ -96,23 +96,23 @@
  },
  {
   "label": "separator between V.92 info frames is one",
-  "find": "\tbits[infoAt + 17] = 0;",
-  "replace": "\tbits[infoAt + 17] = 1;"
+  "find": "\t\tinfo[16] = 0;",
+  "replace": "\t\tinfo[16] = 1;"
  },
  {
   "label": "V.92 info ones frame is not copied",
-  "find": "\t\tbits[infoAt + 1 + i] = v92Info[i];",
-  "replace": "\t\tbits[infoAt + 1 + i] = 0;"
+  "find": "\t\t\tinfo[i] = v92Info[i];",
+  "replace": "\t\t\tinfo[i] = 0;"
  },
  {
   "label": "V.92 info zero frame is filled with ones",
-  "find": "\t\tbits[infoAt + 1 + i] = 0;",
-  "replace": "\t\tbits[infoAt + 1 + i] = 1;"
+  "find": "\t\t\tinfo[i] = 0;",
+  "replace": "\t\t\tinfo[i] = 1;"
  },
  {
   "label": "V.92 info zero fill loses its last position",
-  "find": "\tfor (i = 20; i < 33; i++)\n\t\tbits[infoAt + 1 + i] = 0;",
-  "replace": "\tfor (i = 20; i < 32; i++)\n\t\tbits[infoAt + 1 + i] = 0;"
+  "find": "\t\tfor (i = 20; i < 33; i++)\n\t\t\tinfo[i] = 0;",
+  "replace": "\t\tfor (i = 20; i < 32; i++)\n\t\t\tinfo[i] = 0;"
  },
  {
   "label": "CRC frame starts one position late",
@@ -161,17 +161,17 @@
  },
  {
   "label": "always take the one-trailing-zero tail",
-  "find": "\tbits[crcAt + 17] = 0;\n\tif (crcAt & 1) {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t} else {\n\t\t*nbits = crcAt + 18;\n\t}",
+  "find": "\tbits[crcAt + 17] = 0;\n\tif (!(crcAt & 1)) {\n\t\t*nbits = crcAt + 18;\n\t} else {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t}",
   "replace": "\tbits[crcAt + 17] = 0;\n\t*nbits = crcAt + 18;"
  },
  {
   "label": "always take the two-trailing-zero tail",
-  "find": "\tbits[crcAt + 17] = 0;\n\tif (crcAt & 1) {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t} else {\n\t\t*nbits = crcAt + 18;\n\t}",
+  "find": "\tbits[crcAt + 17] = 0;\n\tif (!(crcAt & 1)) {\n\t\t*nbits = crcAt + 18;\n\t} else {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t}",
   "replace": "\tbits[crcAt + 17] = 0;\n\tbits[crcAt + 18] = 0;\n\t*nbits = crcAt + 19;"
  },
  {
   "label": "V.92 tail is correctly extended to a multiple of twelve",
-  "find": "\tbits[crcAt + 17] = 0;\n\tif (crcAt & 1) {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t} else {\n\t\t*nbits = crcAt + 18;\n\t}",
+  "find": "\tbits[crcAt + 17] = 0;\n\tif (!(crcAt & 1)) {\n\t\t*nbits = crcAt + 18;\n\t} else {\n\t\t*nbits = crcAt + 19;\n\t\tbits[crcAt + 18] = 0;\n\t}",
   "replace": "\ti = crcAt + 17;\n\tdo {\n\t\tbits[i++] = 0;\n\t} while (i % 12);\n\t*nbits = i;"
  }
 ]

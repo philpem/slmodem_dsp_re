@@ -133,8 +133,10 @@ dilPackSeven(unsigned char *bits, int at, int value)
 {
 	int i;
 
+	unsigned char *out = bits + at;
+
 	for (i = 0; i < 7; i++, value >>= 1)
-		bits[at + i] = (unsigned char)(value & 1);
+		*out++ = (unsigned char)(value & 1);
 	bits[at + 7] = 0;
 }
 
@@ -327,13 +329,18 @@ V92DILdescriptorPacker(tagV90DILdescriptor *desc, unsigned char *bits,
 	 * and thirteen 0s to fill that frame out.  All three of the array's
 	 * tail values are 0, so the second frame is sixteen 0s.
 	 */
-	for (i = 0; i < 16; i++)
-		bits[infoAt + 1 + i] = v92Info[i];
-	bits[infoAt + 17] = 0;
-	for (i = 16; i < 19; i++)
-		bits[infoAt + 2 + i] = v92Info[i];
-	for (i = 20; i < 33; i++)
-		bits[infoAt + 1 + i] = 0;
+	{
+		unsigned char *info = bits + infoAt + 1;
+
+		for (i = 0; i < 16; i++)
+			info[i] = v92Info[i];
+		info[16] = 0;
+		unsigned char *tail = info + 17;
+		for (i = 16; i < 19; i++)
+			*tail++ = v92Info[i];
+		for (i = 20; i < 33; i++)
+			info[i] = 0;
+	}
 
 	/*
 	 * The CRC frame, two frames on.  The object computes its position
@@ -370,10 +377,10 @@ V92DILdescriptorPacker(tagV90DILdescriptor *desc, unsigned char *bits,
 	 * always even.
 	 */
 	bits[crcAt + 17] = 0;
-	if (crcAt & 1) {
+	if (!(crcAt & 1)) {
+		*nbits = crcAt + 18;
+	} else {
 		*nbits = crcAt + 19;
 		bits[crcAt + 18] = 0;
-	} else {
-		*nbits = crcAt + 18;
 	}
 }
