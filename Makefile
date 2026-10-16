@@ -1320,7 +1320,7 @@ period: $(REF)
 # read by something that did not come through make.
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
-	partial-compare partial-compare-selftest castscan castscan-selftest \
+	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
 tc:
@@ -1382,6 +1382,10 @@ partial-link: tc-repro $(BUILD)/partial/attribution.json
 partial-compare: partial-link
 	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
 		$(BUILD)/partial/dsplibs.o
+
+partial-compare-exact: partial-link
+	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
+		$(BUILD)/partial/dsplibs.o --require-exact --require-raw-exact
 
 partial-compare-selftest:
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
