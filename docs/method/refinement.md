@@ -5361,3 +5361,69 @@ flat layout only establishes a progress integer there. Investigate independent
 callee and layout evidence for an aggregate boundary before introducing a
 nested owner to influence spills. The unchanged full-TU replay and a rejected
 wrong-producer control preserve this negative result.
+
+### Recheck physical adjacency before retaining an emulation row
+
+The PreFilter type-2 loop table has 33 records in the original. An added zero
+record reproduced the counting loop's read beyond that symbol, but the period
+compiler's actual layout makes it unnecessary: the following type-1 table is
+naturally aligned to 32 bytes. Restoring the original extent leaves exactly
+28 zero bytes between the tables, matching the original terminator location.
+Two full-TU controls compare all seven objects and sixteen pointer targets;
+the original-size control passes the table and PreFilter period fixtures.
+No explicit padding or synthetic terminator is needed. Check the emitted
+adjacency as well as the counted length, because a correct traversal alone
+cannot distinguish the original extent from an extra emulation row.
+
+This evidence does not justify truncating every extended table. Each observed
+overread needs its own neighbour and alignment proof under the actual link
+order. Preserve the original boundary fixtures while recovering that storage.
+
+### A repeated shifted address does not establish a nested type
+
+An independent `V34GiveProbeResults` recovery already reproduces its shifted
+owner address with either an integer-pointer increment or a byte offset.
+INFO1a's repeated owner +4 address therefore adds addressing and liveness
+evidence, without establishing an embedded aggregate. The current member at
+that offset is an integer. Require a typed callee, constructor, or independently
+bounded member layout before changing ownership to influence allocation.
+The retained original-operand audit rejects both a wrong spill width and a
+wrong Precoder source field; its selected boundary checks are not complete
+behavioural proofs of the audited methods.
+
+### Use references to local data to refine a global function's TU
+
+A local function's first address need not begin its translation unit. Original
+LOCAL `tx_in_internal` and `rx_out_internal` symbols belong to `V32mod.c`, and
+`V32FP_modem` has four direct references to those buffers. Together these
+witnesses place the global function with those locals, before the deferred
+static handlers. The earlier split at `v32_data` omitted this evidence.
+Moving the function and buffers together preserves all 34 functions' instruction
+streams and canonical relocations across the four-TU control domain.
+
+`Control_Flag` has a local referrer in that same TU; placing it there restores
+its original offset before the buffers. The partial BSS extent moves from
+24 bytes below the original to four bytes above it. A further cell placing
+`SMCv32_CFG` with its sole consumer matches the extent, but that global's
+consumer alone does not establish original TU ownership. Retain that cell
+as diagnostic evidence. A perfect section-size score does not replace the
+missing ownership witness.
+
+### Preserve writable identity when modelling out-of-symbol reads
+
+A copied extension of a sign table can reproduce its initial values while
+losing the original storage dependency. The phasor's exported sine and cosine
+tables are writable; original instructions read those symbols directly.
+Reading private extended copies hides later writes. A component fixture that
+writes the public tables distinguishes this defect without claiming that a
+modem path performs such writes.
+
+Prefer the witnessed direct indexing when the original physical neighbourhood
+can be recovered and measured. The direct phasor control removes the two
+invented arrays and restores the original COEF_DC, sine and cosine positions
+at relative offsets 0, 12 and 20 in the linked period image. Existing exhaustive
+sweeps cover the negative-index window, and the added writable-table checks
+cover the lost dependency. A branch-based owner-routing control explains the
+bug but is unnecessary once direct reads and adjacency pass. Trace the symbol
+references in initial RTL: a wrong owner there cannot be repaired by later
+register allocation or instruction scheduling.

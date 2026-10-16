@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Replay original 33-row PreFilter extent and natural successor alignment."""
+"""Replay original 33-row PreFilter extent and natural successor alignment.
+
+After the header recovery, pass --historical-headers and --baseline-dir pointing
+at the saved 2feb98d8 objects/config. The source and header controls stay pinned.
+"""
 import subprocess
 import playbook_small_patterns as d
 
