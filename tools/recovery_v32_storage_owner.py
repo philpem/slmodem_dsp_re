@@ -67,7 +67,7 @@ def main():
             shell = driver.tc.compile_shell(driver.tc.GENTOO_COMPILER_PATH, flags,
                                              '/work/' + label + '/' + obj.name,
                                              '/work/' + label + '/' + name)
-            command = driver.tc.docker_prefix(image, driver.ROOT, out, True) + ['/bin/sh', '-c', shell]
+            command = driver.tc.docker_prefix(image, driver.ROOT, out, True) + ['/bin/sh', '-c', 'cd /work/' + label + ' && ' + shell]
             with (folder / (name + '.log')).open('w') as log:
                 subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
             if label == 'baseline':
