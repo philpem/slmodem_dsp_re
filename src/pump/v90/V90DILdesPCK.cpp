@@ -90,9 +90,9 @@
  * one of the 256 values through both.
  */
 static int
-dilCeiling(int n, float reciprocal)
+dilCeiling(unsigned char n, float reciprocal)
 {
-	float scaled = (float)n * reciprocal;
+	float scaled = (float)(short)n * reciprocal;
 
 	if (scaled > 0.0f)
 		return (int)(scaled + 0.99999999);
@@ -132,10 +132,23 @@ dilCrcBit(int *crc, int bit)
 	int stage3 = (crc[4] + feedback) & 1;
 	int stage10 = (crc[11] + feedback) & 1;
 	int stage15 = feedback & 1;
-	int i;
 
-	for (i = 0; i < 15; i++)
-		crc[i] = crc[i + 1];
+	/* The original has fifteen fixed stage moves, with no shift loop. */
+	crc[0] = crc[1];
+	crc[1] = crc[2];
+	crc[2] = crc[3];
+	crc[3] = crc[4];
+	crc[4] = crc[5];
+	crc[5] = crc[6];
+	crc[6] = crc[7];
+	crc[7] = crc[8];
+	crc[8] = crc[9];
+	crc[9] = crc[10];
+	crc[10] = crc[11];
+	crc[11] = crc[12];
+	crc[12] = crc[13];
+	crc[13] = crc[14];
+	crc[14] = crc[15];
 	crc[3] = stage3;
 	crc[10] = stage10;
 	crc[15] = stage15;
@@ -145,7 +158,7 @@ extern "C" void
 DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits, short *nbits)
 {
 	int crc[16];
-	int seq1Bits, seq2Bits, dilFrames, segmentAt, crcAt, frames;
+	int seq1Bits, seq2Bits, segmentAt, crcAt, frames;
 	int i, j, n;
 
 	/* Frame 0, the one pattern framing cannot produce. */
@@ -165,8 +178,14 @@ DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits, short *nbits)
 	 * seven bits.  The 0 at 51 is frame 3's framing position, written
 	 * here because the sequence field begins after it.
 	 */
-	dilPackSeven(bits, 35, desc->seq1Length - 1);
-	dilPackSeven(bits, 43, desc->seq2Length - 1);
+	n = desc->seq1Length - 1;
+	for (i = 35; i <= 41; i++, n >>= 1)
+		bits[i] = (short)(n & 1);
+	bits[42] = 0;
+	n = desc->seq2Length - 1;
+	for (i = 43; i <= 49; i++, n >>= 1)
+		bits[i] = (short)(n & 1);
+	bits[50] = 0;
 	bits[51] = 0;
 
 	/*
@@ -182,8 +201,8 @@ DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits, short *nbits)
 			bits[DIL_SEQ1_AT + n++] = 0;
 		bits[DIL_SEQ1_AT + n++] = desc->seq1[i];
 	}
-	while (n < seq1Bits)
-		bits[DIL_SEQ1_AT + n++] = 0;
+	for (i = n; i < seq1Bits; i++)
+		bits[DIL_SEQ1_AT + i] = 0;
 
 	seq2Bits = DIL_FRAME * dilCeiling(desc->seq2Length, 0.0625f);
 	n = 0;
@@ -192,26 +211,42 @@ DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits, short *nbits)
 			bits[DIL_SEQ1_AT + seq1Bits + n++] = 0;
 		bits[DIL_SEQ1_AT + seq1Bits + n++] = desc->seq2[i];
 	}
-	while (n < seq2Bits)
-		bits[DIL_SEQ1_AT + seq1Bits + n++] = 0;
+	for (i = DIL_SEQ1_AT + seq1Bits + n;
+	     i < DIL_SEQ1_AT + seq1Bits + seq2Bits; i++)
+		bits[i] = 0;
 
 	/*
 	 * The sixteen segment fields, two to a frame: seven bits, a 0, seven
 	 * bits, a 0, and then the next frame's framing 0.
 	 */
 	segmentAt = DIL_SEQ1_AT + seq1Bits + seq2Bits;
-	for (j = 0; j < 16; j++) {
-		int at = segmentAt + 8 * j + j / 2;
-
-		dilPackSeven(bits, at, j < 8 ? desc->segmentSize[j]
-					     : desc->segmentCode[j - 8]);
-		if (j & 1)
-			bits[at + 8] = 0;
-	}
+	dilPackSeven(bits, segmentAt + 0, desc->segmentSize[0]);
+	dilPackSeven(bits, segmentAt + 8, desc->segmentSize[1]);
+	bits[segmentAt + 16] = 0;
+	dilPackSeven(bits, segmentAt + 17, desc->segmentSize[2]);
+	dilPackSeven(bits, segmentAt + 25, desc->segmentSize[3]);
+	bits[segmentAt + 33] = 0;
+	dilPackSeven(bits, segmentAt + 34, desc->segmentSize[4]);
+	dilPackSeven(bits, segmentAt + 42, desc->segmentSize[5]);
+	bits[segmentAt + 50] = 0;
+	dilPackSeven(bits, segmentAt + 51, desc->segmentSize[6]);
+	dilPackSeven(bits, segmentAt + 59, desc->segmentSize[7]);
+	bits[segmentAt + 67] = 0;
+	dilPackSeven(bits, segmentAt + 68, desc->segmentCode[0]);
+	dilPackSeven(bits, segmentAt + 76, desc->segmentCode[1]);
+	bits[segmentAt + 84] = 0;
+	dilPackSeven(bits, segmentAt + 85, desc->segmentCode[2]);
+	dilPackSeven(bits, segmentAt + 93, desc->segmentCode[3]);
+	bits[segmentAt + 101] = 0;
+	dilPackSeven(bits, segmentAt + 102, desc->segmentCode[4]);
+	dilPackSeven(bits, segmentAt + 110, desc->segmentCode[5]);
+	bits[segmentAt + 118] = 0;
+	dilPackSeven(bits, segmentAt + 119, desc->segmentCode[6]);
+	dilPackSeven(bits, segmentAt + 127, desc->segmentCode[7]);
+	bits[segmentAt + 135] = 0;
 
 	/* The DIL codes, in the same shape, two to a frame. */
-	dilFrames = dilCeiling(desc->dilCount, 0.5f);
-	for (i = 0; i < dilFrames; i++) {
+	for (i = 0; i < dilCeiling(desc->dilCount, 0.5f); i++) {
 		int at = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * i;
 
 		dilPackSeven(bits, at, desc->dilCode[2 * i]);
@@ -225,7 +260,7 @@ DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits, short *nbits)
 	 * 0 is not covered.  The register starts all 1s, and if there is
 	 * nothing to cover it stays that way.
 	 */
-	crcAt = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilFrames - 1;
+	crcAt = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilCeiling(desc->dilCount, 0.5f) - 1;
 	bits[crcAt] = 0;
 
 	for (i = 0; i < 16; i++)

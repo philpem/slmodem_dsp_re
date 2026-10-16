@@ -210,12 +210,10 @@ typedef char b103_cfg_size[(sizeof(struct b103_cfg) == 28) ? 1 : -1];
  *      >= 15   demodulating; the state parks at 16 and the detector is never
  *              consulted again.
  */
-short
+int
 DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 	      unsigned short count)
 {
-	struct b103_dsp *dsp = fp->dsp;
-	short original_count = (short)count;
 	/*
 	 * The local oscillator's samples.  The original's frame leaves room
 	 * for 160 shorts here and bounds `count` against it nowhere; 160 is
@@ -223,51 +221,51 @@ DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 	 */
 	short lo[160];
 	int nbits = 0;
-	int i;
+	short i;
 
-	if (dsp->rx_state <= 14) {
+	if (fp->dsp->rx_state <= 14) {
 		/*
 		 * The detector gets its own copy, because the mixer below
 		 * overwrites `in`.
 		 */
-		for (i = 0; i < (short)count; i++)
-			dsp->rx_scratch[i] = in[i];
+		for (i = 0; i < count; i++)
+			fp->dsp->rx_scratch[i] = in[i];
 
-		FPM_AGC_agc(&dsp->det_agc, dsp->rx_scratch, count, 1);
+		FPM_AGC_agc(&fp->dsp->det_agc, fp->dsp->rx_scratch, count, 1);
 
-		dsp->rx_tone = 0;
-		if (FPM_TONE_detect(fp->hdx->tone_detect, dsp->rx_scratch,
-				    (short)count) != FPM_TONE_PRESENT) {
-			dsp->rx_state = 0;
+		fp->dsp->rx_tone = 0;
+		if (FPM_TONE_detect(fp->hdx->tone_detect, fp->dsp->rx_scratch,
+				    (short)count) == FPM_TONE_PRESENT) {
+			fp->dsp->rx_tone = 1;
+			fp->dsp->rx_state = (short)(fp->dsp->rx_state + 5);
 		} else {
-			dsp->rx_tone = 1;
-			dsp->rx_state = (short)(dsp->rx_state + 5);
+			fp->dsp->rx_state = 0;
 		}
 	}
 
 	/* Mix to baseband, in place. */
 	FPM_TONE_generate_demod(fp->hdx->tone_lo, lo, (short)count);
-	for (i = 0; i < (short)count; i++)
+	for (i = 0; i < count; i++)
 		in[i] = (short)((in[i] * lo[i]) >> 14);
 
-	count = (unsigned short)FPM_MRF_filter(&dsp->rx_mrf, in, dsp->scratch,
+	count = (unsigned short)FPM_MRF_filter(&fp->dsp->rx_mrf, in, fp->dsp->scratch,
 					       count);
 
-	dsp->agc.f18 = dsp->r00;
-	FPM_AGC_agc(&dsp->agc, dsp->scratch, count, original_count);
-	dsp->rx_energy = dsp->agc.signal;
+	fp->dsp->agc.f18 = fp->dsp->r00;
+	FPM_AGC_agc(&fp->dsp->agc, fp->dsp->scratch, count, 1);
+	fp->dsp->rx_energy = fp->dsp->agc.signal;
 
-	if (dsp->rx_state == 15)
-		FPM_AGC_Freeze(&dsp->agc);
+	if (fp->dsp->rx_state == 15)
+		FPM_AGC_Freeze(&fp->dsp->agc);
 
-	if (dsp->rx_state > 14) {
-		dsp->rx_tone = 1;
-		dsp->rx_state = 16;
-		nbits = FPM_FSD_demodulate(&dsp->fsd, dsp->scratch, bits_out,
+	if (fp->dsp->rx_state > 14) {
+		fp->dsp->rx_tone = 1;
+		fp->dsp->rx_state = 16;
+		nbits = (unsigned short)FPM_FSD_demodulate(&fp->dsp->fsd, fp->dsp->scratch, bits_out,
 					   count);
 	}
 
-	return (short)nbits;
+	return nbits;
 }
 
 /*

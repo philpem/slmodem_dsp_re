@@ -40,7 +40,7 @@ extern short ref_ModDataB103(void *fp, const unsigned short *bits, short *out,
 extern short ref_TxNoCarrierB103(void *fp, const unsigned short *bits,
 				 short *out, unsigned short nbits);
 extern int ref_CarrierDetectB103(void *fp);
-extern short ref_DemodDataB103(void *fp, short *in, unsigned short *bits,
+extern int ref_DemodDataB103(void *fp, short *in, unsigned short *bits,
 			       unsigned short count);
 extern void *ref_FPM_TONE_create(void *state, void *cfg);
 extern short ref_FPM_TONE_CFG[];
@@ -206,7 +206,7 @@ rx_call(const char *what, struct b103fp *a, struct b103fp *b,
 	static short ia[512], ib[512];
 	static unsigned short ba[64], bb[64];
 	char buf[96];
-	short na, nb;
+	int na, nb;
 	int i;
 
 	memcpy(ia, in, (unsigned)n * sizeof(short));

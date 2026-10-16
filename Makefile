@@ -1320,7 +1320,7 @@ period: $(REF)
 # read by something that did not come through make.
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
-	partial-compare partial-compare-selftest castscan castscan-selftest \
+	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
 tc:
@@ -1364,7 +1364,7 @@ offsetcensus-selftest:
 
 # Link with binutils 2.15 in the period image.  DIFFERENT is the expected
 # report until convergence, so partial-compare is a census rather than a phase
-# gate.  partialcmp.py --require-exact supplies the strict final-object gate.
+# gate.  partial-compare-exact requires semantic and literal raw identity.
 $(BUILD)/partial/attribution.json: tools/tuattrib.py tools/tumap.py tools/elfinfo.py $(BLOB)
 	@mkdir -p '$(BUILD)/partial'
 	@$(PYTHON) tools/tuattrib.py $(BLOB) --verify --json $@
@@ -1382,6 +1382,10 @@ partial-link: tc-repro $(BUILD)/partial/attribution.json
 partial-compare: partial-link
 	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
 		$(BUILD)/partial/dsplibs.o
+
+partial-compare-exact: partial-link
+	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
+		$(BUILD)/partial/dsplibs.o --require-exact --require-raw-exact
 
 partial-compare-selftest:
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test

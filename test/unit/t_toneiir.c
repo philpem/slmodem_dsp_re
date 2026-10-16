@@ -455,7 +455,6 @@ run_toneiir_config(void)
 	diff_eq_int("n_a", b.n_a, a.n_a, 0);
 	diff_eq_int("n_b", b.n_b, a.n_b, 0);
 	diff_eq_int("interval", b.interval, a.interval, 0);
-	diff_eq_int("pad12", b.pad12, a.pad12, 0);
 	diff_eq_int("stability", b.stability, a.stability, 0);
 	diff_eq_int("status", b.status, a.status, 0);
 	diff_eq_int("threshold", b.threshold, a.threshold, 0);
@@ -596,6 +595,40 @@ run_toneiir_allocation_failure(void)
 		diff_eq_int("recovery allocations (%ld)", harness_alloc.allocs, 2, i);
 	}
 	harness_alloc_reset();
+	return diff_end();
+}
+
+/* Component configuration boundary, not a public modem-call claim.  The
+ * constructor narrows only the GetFP_Value argument: 66036 has low word 500.
+ * Use constructor state and ordinary zero samples; no internal state planting.
+ */
+static int
+run_toneiir_wide_interval(void)
+{
+	struct toneiir_cfg ca, cb;
+	struct toneiir a, b;
+	int i, va = 0, vb = 0, decided = 0;
+
+	diff_begin("toneiir: constructor-created wide interval");
+	make_cfg(&ca, 1, 300, 2200);
+	make_cfg(&cb, 0, 300, 2200);
+	ca.interval = cb.interval = 65536 + 500;
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	ref_toneiir_create(&a, &ca);
+	toneiir_create(&b, &cb);
+	compare_toneiir(&b, &a, 0);
+	diff_eq_int("full interval copied", a.cfg.interval, 66036, 0);
+	diff_eq_int("short constructor argument gives 35", a.need, 35, 0);
+	for (i = 0; i < ca.interval; i++) {
+		va = ref_toneiir_progress(&a, 0);
+		vb = toneiir_progress(&b, 0);
+		diff_eq_int("wide interval sample %ld", vb, va, i);
+		if (va) decided++;
+	}
+	diff_eq_int("exactly one verdict", decided, 1, 0);
+	diff_eq_int("verdict at full interval", va, TONEIIR_ABSENT, 0);
+	compare_toneiir(&b, &a, i);
 	return diff_end();
 }
 
@@ -878,6 +911,7 @@ main(void)
 	rc |= run_toneiir_create();
 	rc |= run_toneiir_allocation_failure();
 	rc |= run_toneiir_reset();
+	rc |= run_toneiir_wide_interval();
 	rc |= run_toneiir_progress("toneiir_progress: 550 Hz in band",
 				  550.0, 9000, 40000, 300, TONEIIR_PRESENT);
 	rc |= run_toneiir_progress("toneiir_progress: 1500 Hz out of band",

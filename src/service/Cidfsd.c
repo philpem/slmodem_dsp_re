@@ -84,8 +84,9 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 	 */
 	while (count-- != 0) {
 		const short *coef;
+		const short *h;
 		int acc;
-		int j, k;
+		int j;
 		int d, baud, half;
 		short rate, idx, lidx;
 		short corr, y, last, bit;
@@ -99,20 +100,32 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 		idx = cid->ac_idx;
 		cid->ac_hist[idx] = *samples++;
 
-		coef = rate == CID_RATE_9600 ? AUTOCOR_COEF_9600
-					     : AUTOCOR_COEF_7200;
-
 		/*
 		 * Circular correlation, newest sample against coef[0]: down
 		 * from the write index to the bottom of the buffer, then
 		 * round from the top back to it.
 		 */
-		acc = 0;
-		k = 0;
-		for (j = idx; j >= 0; j--)
-			acc += cid->ac_hist[j] * coef[k++];
-		for (j = 4; j > idx; j--)
-			acc += cid->ac_hist[j] * coef[k++];
+		if (rate == CID_RATE_9600) {
+			coef = AUTOCOR_COEF_9600;
+			acc = 0;
+			h = cid->ac_hist + idx + 1;
+			for (j = idx; j >= 0; j--)
+				acc += *--h * *coef++;
+			/* Wrap from the first loop's terminal history cursor. */
+			h += 5;
+			for (j = 4; j > idx; j--)
+				acc += *--h * *coef++;
+		} else {
+			coef = AUTOCOR_COEF_7200;
+			acc = 0;
+			h = cid->ac_hist + idx + 1;
+			for (j = idx; j >= 0; j--)
+				acc += *--h * *coef++;
+			/* Wrap from the first loop's terminal history cursor. */
+			h += 5;
+			for (j = 4; j > idx; j--)
+				acc += *--h * *coef++;
+		}
 		corr = (short)(acc >> 15);
 
 		/*
@@ -132,11 +145,14 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 		cid->lpf_hist[lidx] = (short)((cid->ac_hist[j] * corr) >> 15);
 
 		acc = 0;
-		k = 0;
+		coef = fix_LPF;
+		h = cid->lpf_hist + lidx + 1;
 		for (j = lidx; j >= 0; j--)
-			acc += cid->lpf_hist[j] * fix_LPF[k++];
+			acc += *--h * *coef++;
+		/* The low-pass loop has the same terminal-derived wrap. */
+		h += 17;
 		for (j = 16; j > lidx; j--)
-			acc += cid->lpf_hist[j] * fix_LPF[k++];
+			acc += *--h * *coef++;
 		y = (short)(acc >> 15);
 
 		/* ---- 3. the slicing level ------------------------------ */

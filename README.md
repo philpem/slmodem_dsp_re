@@ -144,12 +144,15 @@ the reconstructed partial link is the original object. Completion requires a
 strict partial-link comparison against the blob:
 
 ```sh
-make partial-link
+make partial-compare-exact
+# Or compare an already-built candidate:
 python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
-    build/partial/dsplibs.o --require-exact
+    build/partial/dsplibs.o --require-exact --require-raw-exact
 ```
 
-The command fails unless every compared section, allocated byte, NOBITS size,
-relocation record and defined-symbol record/order matches. `make
+The command requires literal file identity as well as the link-relevant
+comparison: allocated contents and metadata, NOBITS sizes, relocation targets,
+defined and undefined symbols, and their order. The raw gate also covers
+headers, non-allocated sections and file packing. `make
 partial-compare` is the non-failing diagnostic census to use while convergence
 is still in progress; it must not be mistaken for the completion gate.

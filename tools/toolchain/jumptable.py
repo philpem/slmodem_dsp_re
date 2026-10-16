@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Conservative ELF32 absolute jump-table proof, separate from byteident grades.
 
-Only adjacent CMP/JA/JMP dispatches with an unmodified 32-bit index are
-supported. Refusal is evidence of an unsupported proof, not unequal code.
+Only bounded CMP/JA/JMP dispatches with an unmodified 32-bit index are
+supported (one decoded argument load may intervene before JA). Refusal is
+evidence of an unsupported proof, not unequal code.
 """
 import argparse
 import io
@@ -209,11 +210,16 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
     require(pushed and prefix < len(rows), 'missing ABI saves/frame')
     allocation = rows[prefix]
     match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', allocation[3])
-    require(allocation[2] == 'sub' and match is not None,
-            'missing ABI outgoing frame')
-    frame = int(match[1], 16); total = frame + 4 * len(pushed)
-    require(0 < frame <= 256 and frame % 4 == 0 and allocation[0] < dispatch,
-            'ABI outgoing frame extent')
+    if allocation[2] == 'sub' and match is not None:
+        frame = int(match[1], 16)
+        require(0 < frame <= 256 and frame % 4 == 0 and allocation[0] < dispatch,
+                'ABI outgoing frame extent')
+    else:
+        # Push-only leaf: incoming arguments are above saved registers and
+        # the return word. There is no private/outgoing area or call proof.
+        frame = 0
+        require(not calls, 'push-only ABI calls unsupported')
+    total = frame + 4 * len(pushed)
     basic = frozenset(('mov','movswl','movzwl','movsbl','movzbl','lea','inc',
                        'dec','add','sub','neg','not','and','or','xor','shl',
                        'shr','sar','mul','imul','cmp','test','sbb','adc',
@@ -233,7 +239,18 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
     operations = {}
     for i,(address,raw,mnemonic,operands) in enumerate(rows):
         op = base(mnemonic)
-        require(op in basic or mnemonic.startswith('j'), 'unsupported ABI-frame instruction')
+        # SETcc has no implicit register or flag writes. Admit only its exact
+        # unprefixed i386 register-byte encoding; memory forms need a separate
+        # alias/stack-extent proof. ModRM /0 excludes unsupported encodings.
+        setcc = mnemonic.startswith('set')
+        if setcc:
+            byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
+            require(len(raw) == 3 and raw[0] == 0x0f and
+                    0x90 <= raw[1] <= 0x9f and raw[2] & 0xf8 == 0xc0 and
+                    operands == '%' + byte_registers[raw[2] & 7],
+                    'unsupported ABI SETcc destination/encoding')
+        require(op in basic or mnemonic.startswith('j') or setcc,
+                'unsupported ABI-frame instruction')
         require(re.search(r'%sp\b',operands) is None, 'partial ABI stack pointer')
         if op == 'push':
             require(i < prefix, 'nonentry ABI push')
@@ -292,7 +309,7 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
                         'wrong/unbalanced ABI restore')
                 saves.pop(); depth-=4; restored.add(operation[1])
             else:
-                require(allocated and depth==total and saves==pushed,
+                require((allocated or frame==0) and depth==total and saves==pushed,
                         'ABI call/argument access outside frame')
                 if kind=='argument':restored.discard(operation[1])
         else:
@@ -368,10 +385,26 @@ def prove(path, name):
     index = indirect[0]
     require(index >= 2, 'missing adjacent guard')
     cmp_row, guard, jump = rows[index - 2:index + 1]
+    corridor = None
+    if cmp_row[2] != 'cmp':
+        require(pushed_abi and index >= 3, 'missing adjacent guard')
+        corridor = cmp_row
+        cmp_row = rows[index - 3]
     match = re.fullmatch(r'\$0x([0-9a-f]+),%(e(?:ax|bx|cx|dx|si|di|bp|sp))', cmp_row[3])
     require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
     count = int(match[1], 16) + 1
     register = match[2]
+    if corridor is not None:
+        # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
+        # frame proof below separately owns the incoming-argument offset.
+        # Reject selector/ESP destinations, prefixes, SIB alternatives and
+        # relocated fields; no other instruction corridor is admitted.
+        raw = corridor[1]
+        operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+        require(corridor[2] == 'mov' and operand is not None and
+                operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
+                raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
+                'unsupported guard corridor')
     require(1 <= count <= 256, 'table entry bound')
     require(guard[2] == 'ja', 'unsigned JA guard')
     match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + register + r',4\)', jump[3])

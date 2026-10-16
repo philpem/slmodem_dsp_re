@@ -17,17 +17,19 @@
  *
  * THE CONSTRUCTOR AND `reset` ARE THE SAME FORTY BYTES, instruction for
  * instruction: the two symbols at 0x1f410 and 0x1f3e0 disassemble alike down
- * to the register allocation.  Both are ordinary GLOBAL symbols in `.text`
- * rather than in a linkonce section, so `reset` is not an in-class inline the
- * compiler folded into the constructor (GCC 3.4 at -O2 does not inline an
- * ordinary global function).  The original repeated the assignments, which is
- * why they are repeated here rather than written as `reset()`.  Finding F1237.
+ * to the register allocation. Both are ordinary GLOBAL symbols in `.text`.
+ * That binding does not settle the original source factoring: the retained
+ * O3 profile auto-inlines exported methods too, as the controls in
+ * docs/recovery-mp-next-results.md demonstrate. The repeated assignments
+ * already reproduce these exact bodies and remain here. Finding F1237 is
+ * the historical measurement, not proof that the author duplicated source.
  *
  * The calling convention is plain cdecl -- `mov 0x4(%esp),%eax` -- not
  * thiscall (finding F215).
  */
 
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/V90MP.h"
@@ -152,11 +154,10 @@ V90MP::resetDetector()
  * listing** -- in the blob `V90MP()`, `V90MP()` (the C2 clone) and `reset` are
  * byte-identical to each other, 0 of 40, and so are ours.  So the store order
  * decoded above the constructor is this function's too, and the one edit
- * closed three symbols.  Finding F1237 is why the assignments are
- * repeated here rather than written as a call to `resetDetector` plus two
- * counters -- `resetDetector` is a separate GLOBAL symbol at 0x1f3c0 and GCC
- * 3.4 at -O2 does not inline one of those, so an original that called it
- * would have left a call behind.
+ * closed three symbols. The assignments are retained as that measured
+ * exact source. `resetDetector` is a separate GLOBAL symbol at 0x1f3c0;
+ * it can still be automatically inlined under the retained O3 profile,
+ * so its binding alone does not identify the original caller's spelling.
  */
 void
 V90MP::reset()
@@ -370,17 +371,10 @@ V90MP::calcSequenceLength()
  * framing bit and sixteen data bits; eleven frames when `Type` is non-zero and
  * five when it is zero.  V90MP.h has the map.
  *
- * THE CRC IS WRITTEN OUT HERE RATHER THAN CALLED.  `resetCRC` (0x1f150) and
- * `calcCRC` (0x1f170) are plain GLOBAL symbols in `.text`, and GCC 3.4 at -O2
- * does not inline one of those, so an original that had called them would have
- * left two calls behind and there are none.  It is finding F1237's argument
- * again -- the same argument that says `reset` repeats the constructor -- and
- * it applies three times over, since `bitsToInfo` carries two more copies.
- *
- * `calcCRC` and `evaluateCRC` are now written, further down this file, and
- * the four copies of the register are the ORIGINAL'S OWN repetition.  Do not
- * turn any of them into a call to the others: that would remove instructions
- * the object has.
+ * The CRC copies remain explicit. Calls to the existing producers auto-inline
+ * under the retained O3 profile, but the measured controls change feedback
+ * promotion and the decoder's cached extent. They do not recover the original
+ * graphs. See docs/recovery-mp-next-results.md for the complete controls.
  *
  * TWO DEFECTS OF THE ORIGINAL ARE REPRODUCED HERE ON PURPOSE.  Finding F1386.
  *
@@ -427,17 +421,22 @@ V90MP::calcCRC()
 	}
 }
 
+/* Fixed field/CRC regions and read boundaries follow the original graph.
+ * The finite controls and remaining differences are in
+ * docs/recovery-bitpacker-results.md. */
+
 void
 V90MP::infoToBits()
 {
-	unsigned int i;
+	unsigned int i, end, len;
 	int k;
 	int v;
-	unsigned char t = (unsigned char)Type;
-	unsigned char x, n, end, len;
+	unsigned char t;
+	unsigned char x, n;
 
 	for (i = 0; i <= 0x10; i++)
 		bits[i] = 1;
+	t = (unsigned char)Type;
 	bits[0x11] = 0;
 	bits[0x12] = t;
 	for (i = 0x13; i <= 0x17; i++)
@@ -481,8 +480,12 @@ V90MP::infoToBits()
 	bits[0x21] = (unsigned char)CPack;
 	bits[0x22] = 0;
 	bits[0x23] = 0;
-	for (i = 0x24; i <= 0x31; i++)
-		bits[i] = (unsigned char)(((rateMask >> (i - 0x24)) & 1) != 0);
+	for (i = 0x24; i <= 0x31; i++) {
+		if ((rateMask >> (i - 0x24)) & 1)
+			bits[i] = 1;
+		else
+			bits[i] = 0;
+	}
 	bits[0x32] = 0;
 	bits[0x33] = 0;
 
@@ -491,20 +494,12 @@ V90MP::infoToBits()
 	bodyLength = n;
 
 	/*
-	 * calcSequenceLength's body, repeated for the reason above: round
+	 * calcSequenceLength preserves the original saved-byte cold arm: round
 	 * +0x119 + 1 up to a multiple of the group size.  The divide is
 	 * `div`, unsigned, and it faults on a group size of zero exactly as
 	 * the object does.
 	 */
-	{
-		unsigned int want = (unsigned int)n + 1;
-		unsigned int q = want / groupSize;
-
-		if (q * groupSize == want)
-			seqLength = (unsigned char)want;
-		else
-			seqLength = (unsigned char)((q + 1) * groupSize);
-	}
+	calcSequenceLength();
 
 	if (t != 0) {
 		v = h1Real;
@@ -546,43 +541,89 @@ V90MP::infoToBits()
 		for (i = 0x9a; i <= 0xa9; i++)
 			bits[i] = 0;
 		bits[0xaa] = 0;
-	} else {
-		for (i = 0x34; i <= 0x43; i++)
-			bits[i] = 0;
-		bits[0x44] = 0;
-	}
 
-	/*
-	 * The CRC covers the message but not its framing bits, and it stops at
-	 * the last frame before the CRC's own -- 0xaa for the long message,
-	 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
-	 * object, taken from the type flag and not from +0x119.
-	 */
-	end = t ? 0xaa : 0x44;
 
-	for (k = 0; k <= 15; k++)
-		crc[k] = 1;
+		/*
+		 * The CRC covers the message but not its framing bits, and it stops at
+		 * the last frame before the CRC's own -- 0xaa for the long message,
+		 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
+		 * object, taken from the type flag and not from +0x119.
+		 */
+		end = t ? 0xaa : 0x44;
 
-	for (i = 0x12; i < end; i++) {
-		if (i % 17 == 0)
-			i++;
-		x = (unsigned char)(crc[0] + bits[i]);
-		for (k = 0; k < 15; k++)
-			crc[k] = crc[k + 1];
-		crc[3] = (unsigned char)((crc[3] + x) & 1);
-		crc[10] = (unsigned char)((crc[10] + x) & 1);
-		crc[15] = (unsigned char)(x & 1);
-	}
+		for (k = 0; k <= 15; k++)
+			crc[k] = 1;
 
-	for (k = 0; k <= 15; k++)
-		bits[end + 1 + k] = crc[k];
+		for (i = 0x12; i < end; i++) {
+			if (i % 17 == 0)
+				i++;
+			x = (unsigned char)(crc[0] + bits[i]);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[15] = (unsigned char)(x & 1);
+		}
 
-	len = seqLength;
-	if (t != 0) {
+		for (i = 0xab; i <= 0xba; i++)
+			bits[i] = crc[i - 0xab];
+		len = seqLength;
 		bits[0xbb] = 0;
 		for (i = 0xbc; i < len; i++)
 			bits[i] = 0;
 	} else {
+		for (i = 0x34; i <= 0x43; i++)
+			bits[i] = 0;
+		bits[0x44] = 0;
+
+
+		/*
+		 * The CRC covers the message but not its framing bits, and it stops at
+		 * the last frame before the CRC's own -- 0xaa for the long message,
+		 * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the
+		 * object, taken from the type flag and not from +0x119.
+		 */
+		end = t ? 0xaa : 0x44;
+
+		for (k = 0; k <= 15; k++)
+			crc[k] = 1;
+
+		for (i = 0x12; i < end; i++) {
+			if (i % 17 == 0)
+				i++;
+			x = (unsigned char)(crc[0] + bits[i]);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[15] = (unsigned char)(x & 1);
+		}
+
+		for (i = 0x45; i <= 0x54; i++)
+			bits[i] = crc[i - 0x45];
+		len = seqLength;
 		bits[0x45] = 0;
 		for (i = 0x45; i < len; i++)
 			bits[i] = 0;
@@ -798,8 +839,10 @@ V90MP::evaluateCRC()
  * (`cmpl $0x2`) and the MPnot arm's need only level 2 (`cmpl $0x1`).  That is
  * finding F150's trap exactly, and it is why the test sweeps 0..3.
  *
- * `PrintBase2` (0x20130) is a plain global symbol, so as with the CRC the two
- * copies of its body here are the original's own repetition, not an inlining.
+ * PrintBase2 auto-inlines under the retained O3 profile and preserves its
+ * strong exported body. Calling the complete producer restores the original
+ * separate character stores and shared pointer advance; the specialised
+ * ternary and explicit-store controls both became branchless arithmetic.
  */
 
 /*
@@ -839,10 +882,10 @@ V90MP::PrintBase2(char *out, unsigned long value, unsigned short nofBits)
 int
 V90MP::bitsToInfo(int bit)
 {
-	unsigned int i;
+	unsigned int i, end;
 	int k;
 	int rc = 0;
-	unsigned char x, sum, n, next, end;
+	unsigned char x, sum, n, next;
 	char str[76];
 
 	if (bit != 0) {
@@ -884,20 +927,13 @@ V90MP::bitsToInfo(int bit)
 		 * `bit` of 0x100 counts as a one for the run counters above
 		 * and as a type of zero here.
 		 */
+		i = bitIndex;
 		type = (char)bit;
-		bits[bitIndex] = (unsigned char)bit;
 		bitIndex++;
+		bits[i] = (unsigned char)bit;
 		n = type ? 0xbb : 0x55;
 		bodyLength = n;
-		{
-			unsigned int want = (unsigned int)n + 1;
-			unsigned int q = want / groupSize;
-
-			if (q * groupSize == want)
-				seqLength = (unsigned char)want;
-			else
-				seqLength = (unsigned char)((q + 1) * groupSize);
-		}
+		calcSequenceLength();
 		rxState = 3;
 		break;
 
@@ -910,26 +946,37 @@ V90MP::bitsToInfo(int bit)
 			break;
 		}
 
-		end = type ? 0xaa : 0x44;
-
 		for (k = 0; k <= 15; k++)
 			crc[k] = 1;
+
+		end = type ? 0xaa : 0x44;
 		for (i = 0x12; i < end; i++) {
 			if (i % 17 == 0)
 				i++;
 			x = (unsigned char)(crc[0] + bits[i]);
-			for (k = 0; k < 15; k++)
-				crc[k] = crc[k + 1];
-			crc[3] = (unsigned char)((crc[3] + x) & 1);
-			crc[10] = (unsigned char)((crc[10] + x) & 1);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[15] = (unsigned char)(x & 1);
 		}
 
 		sum = 0;
-		for (k = 0; k <= 15; k++) {
-			int d = (int)crc[k] - (int)bits[n - 0x10 + k];
+		for (i = 0; i <= 15; i++) {
+			int d = (int)crc[i] - (int)bits[n - 0x10 + i];
 
-			sum += (unsigned char)(d < 0 ? -d : d);
+			sum += (unsigned char)abs(d);
 		}
 
 		if (sum == 0) {
@@ -948,18 +995,29 @@ V90MP::bitsToInfo(int bit)
 			if (i % 17 == 0)
 				i++;
 			x = (unsigned char)(crc[0] + bits[i]);
-			for (k = 0; k < 15; k++)
-				crc[k] = crc[k + 1];
-			crc[3] = (unsigned char)((crc[3] + x) & 1);
-			crc[10] = (unsigned char)((crc[10] + x) & 1);
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = (unsigned char)((crc[4] + x) & 1);
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = (unsigned char)((crc[11] + x) & 1);
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[15] = (unsigned char)(x & 1);
 		}
 
 		sum = 0;
-		for (k = 0; k <= 15; k++) {
-			int d = (int)crc[k] - (int)bits[n - 0x10 + k];
+		for (i = 0; i <= 15; i++) {
+			int d = (int)crc[i] - (int)bits[n - 0x10 + i];
 
-			sum += (unsigned char)(d < 0 ? -d : d);
+			sum += (unsigned char)abs(d);
 		}
 
 		if (sum == 0) {
@@ -994,8 +1052,6 @@ V90MP::bitsToInfo(int bit)
 			nofRecievedMp++;
 			rc = 1;
 			if (nofRecievedMp <= 2) {
-				char *p = str;
-				unsigned int mask;
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90MP: MP detect"
@@ -1003,9 +1059,7 @@ V90MP::bitsToInfo(int bit)
 					    Type, Rate * 2400, Trellis, NonLin,
 					    Shaping, CPack);
 
-				for (mask = 0x2000; mask != 0; mask >>= 1)
-					*p++ = (rateMask & mask) ? '1' : '0';
-				*p = 0;
+				PrintBase2(str, (unsigned long)rateMask, 14);
 
 				if (DSPLIB_DEBUG_VERBOSE())
 					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);
@@ -1023,8 +1077,6 @@ V90MP::bitsToInfo(int bit)
 			nofRecievedMpNot++;
 			rc = 2;
 			if (nofRecievedMpNot <= 2) {
-				char *q = str;
-				unsigned int mask;
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90MP: MPnot det"
@@ -1032,9 +1084,7 @@ V90MP::bitsToInfo(int bit)
 					    Type, Rate * 2400, Trellis, NonLin,
 					    Shaping, CPack);
 
-				for (mask = 0x2000; mask != 0; mask >>= 1)
-					*q++ = (rateMask & mask) ? '1' : '0';
-				*q = 0;
+				PrintBase2(str, (unsigned long)rateMask, 14);
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);

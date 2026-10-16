@@ -179,6 +179,15 @@ makes the input impossible; otherwise reproduce.
 
 ## D3 — `FixedRC` modes 0 and 1 not implemented ⚠
 
+**Reconstruction closed, 16 October 2026.** Constructor-created modes 0 and 1
+now reproduce the multistage conversion, grouped output limits, per-call
+decimation phases and partial history initialisation. The new lifecycle
+fixture compares 2,560 calls and 40,432 outputs against the blob. The full
+phase gate passes 388/0. Resample remains SIZE203, so this closes the omitted
+behaviour, not code-generation recovery or public modem reachability.
+See [recovery results](recovery-fixedrc-results.md). The following paragraphs
+retain the original deferral and are historical, not the current source state.
+
 **Module** `src/core/FixedRC.c` · original `FixedRC.c`, `.text 0x0b0fd0`
 
 `RcFixed_Create(0)` and `RcFixed_Create(1)` build a converter in the original,
@@ -1866,13 +1875,23 @@ object, `iEncodeOffset`, is at .bss+0xb10 — so bytes 0xb0e and 0xb0f are
 alignment padding and the stray NUL lands in them.  The original overruns and
 gets away with it.
 
-**What we do:** size the array 271.  The guard is reproduced exactly, so
+**Initial workaround:** size the array 271.  The guard is reproduced exactly, so
 every accepted length is accepted and every refused one refused, and every
 character of every string is at the same index; the only difference is that
 the terminator has somewhere legal to go.  Writing one byte past a C array
 is undefined however harmless it is in the object's own layout, and the
 alternative — shrinking the guard by one — would change which messages get
 encoded and which are replaced by "too long print string".
+
+**Faithful extent recovered, 16 October 2026.** With
+`DSPLIB_REPRODUCE_BUGS`, the array is now the original 270 bytes; the fixed
+build retains 271. A two-cell complete-TU control reproduces the unchanged
+object raw and establishes that this change affects the local symbol's
+extent while leaving both canonical function bodies and other allocated
+data unchanged. Existing Gentoo `t_encode` boundary checks pass. This
+corrects data fidelity without adding an exact function or shrinking the
+accepted message domain. The 131-character terminator overrun is reproduced
+in the faithful build.
 
 **Reachability: measured.**  It needs a formatted message of exactly 131
 characters, which `vsnprintf`'s 0x100 cap admits.  `t_encode` drives

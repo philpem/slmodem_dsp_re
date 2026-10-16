@@ -2636,6 +2636,13 @@ on.
 
 > **Deviation D153** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
+**2026-10-16 correction:** the historical table below misidentified `+0x10`
+as short storage. The original cadence producer stores a full 32-bit interval,
+and `toneiir_progress` compares all 32 bits. The constructor's short read is
+the argument boundary to `GetFP_Value(short, short)`. The field now has one
+`int` representation; the former `+0x12` padding was part of that value.
+See [the interval recovery and lifecycle control](recovery-toneiir-interval.md).
+
 `toneiir_create(state, cfg)` copies 44 bytes of configuration into the head of
 its 168-byte object and hangs the coefficients off pointers rather than
 copying them, which is what distinguishes it from `_iir_filter_create` in the

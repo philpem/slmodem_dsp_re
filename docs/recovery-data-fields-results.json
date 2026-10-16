@@ -1,0 +1,2056 @@
+{
+  "revision": "eccf0f2ae817cec09e93886ed7635604600a75dd",
+  "domain": "Unsigned V22 RMS accumulator versus retained signed field",
+  "config": "image ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest\nflags -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS\ncxx   -fno-exceptions -fno-rtti -fno-math-errno -ffast-math\ndcr   -O2 -fno-rerun-cse-after-loop\n",
+  "headers": {
+    "include/dsplib/ANSamToneDetector.h": "8f95bbbf641ce2ab6d58073245720881da9c95ad858b2eb922ca582c090c10fa",
+    "include/dsplib/Agc.h": "b07d9f01ddf14efd2c6f4736fd444f3b7d332d9233a9254afb1a520bbd7f9410",
+    "include/dsplib/DILdescriptorPacker.h": "a2517fdb31225898a0196a262871cc8d82fd0457c3ab8f20fc82be7a409e389f",
+    "include/dsplib/DiffCoder.h": "7d52993bc1b54030c70ee5eb72db600d70182e11587b50644622b6cbb7c11628",
+    "include/dsplib/DspMath.h": "940dfc93ff0d6c34d0a1b24c842ac7b70a4ac3ab92441365f0b85619a1dd04fd",
+    "include/dsplib/FloatARMA.h": "bfc68e5b3ec6a9d10e6fa26987cce1fee2bc4585564b726fc2fa6c25b6d5b685",
+    "include/dsplib/FloatFIR.h": "bc93072a007b17abd81b91e7cf42317bee9d525d7df41af6c76cf136a10b85ef",
+    "include/dsplib/FloatIIR.h": "017655b29e8c5ba47f4f4e0122bbc78d7c0ec29e0be18bd9344626507d3b2b49",
+    "include/dsplib/GenericIIR.h": "9e464ee1d1545ca5ed7e39b6bbedb2810cd15443185db590a58c57d8d34968ec",
+    "include/dsplib/GenericToneDetector.h": "268271b41e836ea7e4aef1045a828bca9e31c06ce89c6070fcf0a8a4855be5ac",
+    "include/dsplib/K56FlexFloModem.h": "65d25284bcc92f9e02209b1061963aeeb234a939e53b4fe107e52293e3959c59",
+    "include/dsplib/LowPassFIR.h": "526fdd02ea0df55ce5758095c14553ccf0137afebe5cd2a5bd3bff8927b02a8e",
+    "include/dsplib/ModulusCoder.h": "378fe485e7b9fc9b5cb26955a9cb5136a5b45a924a4756c74c59a72510a14f6f",
+    "include/dsplib/Psd.h": "fbe185a2606432cd11893c8e94b65f0248715ee45460ad737f369a393d7598b6",
+    "include/dsplib/Queue.h": "6080dc76bcd66cfb8bf7251f0c3bc0dd81f09e7a6b9c8bc9fe6743d09324f992",
+    "include/dsplib/Resampler.h": "64eb723a167e123489ca4e9983632c618540bba16b995cb3c6d23b9d76ab356f",
+    "include/dsplib/ResamplerTiming.h": "f53abda5e47014225fc02718b39e198af75650af738c93053bb566a0a482f0e8",
+    "include/dsplib/ResamplerTimingOffset.h": "9e5415f01d9db87f509676e8c70fd5adbe728a7614cf0e6f77c6775143a41e7d",
+    "include/dsplib/Scrambler.h": "ec1e94cea7e8790bd1eea07e8199a587c0d9e1f9b0f4e49238c4b2e5d62f37da",
+    "include/dsplib/SineWave.h": "0a45385318e012a93eb6561586d2e7ee20fa425de62afd8fa1587a581590b073",
+    "include/dsplib/TAG_DiagnosticResults.h": "cef7ce8bc8819876277dc805d6efb01e82645ad204f46d2a4b3b048c7596f831",
+    "include/dsplib/V90AutoDigitalImpDetector.h": "c3e8f8c11fdb3e6d5e5dd374dc51031e32254270b059e7cdf9d06ee09aafff42",
+    "include/dsplib/V90BitsToSymbol.h": "69a3ae66ba05bc68944af5246052098bad6a3c8e789e2497d65514987ffb8f61",
+    "include/dsplib/V90CP.h": "e1c0b5bbd4e31777a6c3d6291ebb482ce01019f259a331c4e9b86e8b98f797b8",
+    "include/dsplib/V90CPUnPck.h": "5b0862ff0da3c76466de22c28049c2f27af93d5e9ec8d717f99650bce8e4a154",
+    "include/dsplib/V90CPpck.h": "ec3ae80e73e196f1bc0f283ff2ca6f6efbc8e09c2cd40719990b140ec0ae7149",
+    "include/dsplib/V90CodecType.h": "b1d1f8983823e2602867caf79c2ba60b3d000cb6b64dec60e8877e49a1419e28",
+    "include/dsplib/V90ConnectionEvaluator.h": "3712b03302ce09b4de8b0bb7f46dcbf6eb4acb1fc6093d39986fe5cf51ce0a33",
+    "include/dsplib/V90ConstellationDesigner.h": "d21f35ba0efaf981562e67db48f004058a5211e5643a1e4b125ca7b05a287c32",
+    "include/dsplib/V90ConstellationPower.h": "ebd0d895a5095f1427273957aef1052fb5b62f5800c14ca9fe6f30a7836504ae",
+    "include/dsplib/V90Demapper.h": "014f536d559c0564b33c905ef0dd846447a37d9a8985d87bdd28664dca226507",
+    "include/dsplib/V90Demodulator.h": "948cae97618050dbd90366a04002ab4baf1285612c661b4150b6ea48a5dff997",
+    "include/dsplib/V90DilDescriptorSettings.h": "4e9f5774c027350982c2e1f546b3eca2c7252b1ccb4210dc1f21a3a20b876384",
+    "include/dsplib/V90Equalizer.h": "58cc42f4f2dd411e3dd3dec383e044e1fbe2dcaffe8205a7fe5399213536aacc",
+    "include/dsplib/V90Jd.h": "a932e4ca6940bfabf0134e0e87d8f686fed3bf1a87e96416d495ff92e53ea276",
+    "include/dsplib/V90MP.h": "e4f3b48b6ff841861babfde81895b61820644474acc8e1c148902ed69858606c",
+    "include/dsplib/V90Mapper.h": "01a58e8e1a868f91b67ebbefa4057c370d13ec9e4e72ae8df745b0f4719a1429",
+    "include/dsplib/V90MappingParams.h": "e62020471778759eaa9c2098b938141b065feae323dd192c0707c42bf62654d3",
+    "include/dsplib/V90Modem.h": "66c268c1ff247deb07f5018310ea700d6f13631c8a32f7eb852cc720ff6e58e7",
+    "include/dsplib/V90Modulator.h": "76b9dbf4449594319bf6f784ddc893989bfbbac21ee452d06fc521d306bedcd1",
+    "include/dsplib/V90Parameters.h": "c7c2a30fceaff800e4866f870e8a3c4682c33c22b79530c205d4462796082ae5",
+    "include/dsplib/V90Phase2Info.h": "1aa2e5d642b440ee4de48ef931bbd0c51fb6f0df3a3a8d7a096369bfea08c950",
+    "include/dsplib/V90Phase3Demodulator.h": "bbde7304cccbac86d8c1cecdff8860583bd0f7cac46b72e7d2bb0cd06b6afb68",
+    "include/dsplib/V90Phase3Modulator.h": "764c0ea9fc8186354d34b953e9b14cb0e073c963fe4e82989d66e75d8d80530b",
+    "include/dsplib/V90Phase4Demodulator.h": "459644cb8aa4fd401934d209a897c5bbca136aef6d224e134f68161ceb8bb878",
+    "include/dsplib/V90Phase4Modulator.h": "4d6c472dec4c7348847d7c6615f9dc78d86eea66228e1698201cb041f1978085",
+    "include/dsplib/V90PreFilter.h": "ae77370398be035849ea781d3ff69b30ad867bcd41cefa2ae813aeb02222f704",
+    "include/dsplib/V90RDetector.h": "6b7601bdcfcf746d1b2bba56e111536f91a2010cf5db70356eaae20a2491c663",
+    "include/dsplib/V90Resampler.h": "984fe777b944e3028e60f702cb664888adcdf2caafbb8e37524d5d6ac32f61a5",
+    "include/dsplib/V90SdDetector.h": "0997b2bcc3b217832988fd4964a22e42f8f5267651af48d32c9c7e9426661a5e",
+    "include/dsplib/V90SessionFlag.h": "6bbfe90f5eea0f504b719100a4c580606e0131ea3b555acfa473374c3135c703",
+    "include/dsplib/V90SignBitsExtractor.h": "43b45ef11600629ca107d7de36314542eb7f000ff648cfbf9faed039987fc992",
+    "include/dsplib/V90SpectralConditions.h": "e0e3db35bbc71b5aad498446430b9f7d6a8c89024e5a93caf1f548d625426579",
+    "include/dsplib/V90SpectralShaper.h": "cc31b37dd94acbbcf8769998f0ce228d25ff8b39c5e362ebf0213067c9ae1070",
+    "include/dsplib/V90SpectralShapingFilter.h": "d8824d17cd38181105ff2fc73cebb4d15d9c8dad4afe5148dc0e5503823ff31f",
+    "include/dsplib/V90SpectralVerifier.h": "6ae2bd13f3bebdafd5db5a7b654bc67eba5d2a9bf3cafa99f5bfac7a73fc6a1c",
+    "include/dsplib/V90TRN2Designer.h": "60d9a950ba1ea7f2f881e930c6e3915870e520793a70bf149c29bedce6ccb34c",
+    "include/dsplib/V92BitsToSymbol.h": "c7c343656ce0c4611eb193903043becde814721486e0fbc7cba35cfa73ea246d",
+    "include/dsplib/V92CP.h": "76853b819172043b4ad2b1196450d67c18d5d0417bd006f205fc94d2ad85fb58",
+    "include/dsplib/V92CPUnPck.h": "ed931c2009ed6445ddce16114725940d668a5368e4b6546292bf4ec953c87a83",
+    "include/dsplib/V92ConvolutionEncoder.h": "5435ea1b46fbf15affac01df74de4efb7a4628cbe9ecd21cb0db61a3dd6cde4e",
+    "include/dsplib/V92DILdescriptorPacker.h": "ffd314b4f0d4eadf58297020d80eb2dcd871993190bf961dfc8c7bc6bbe8a431",
+    "include/dsplib/V92EchoCanceller.h": "c0e807b48c4b06bd25127084ffdbbdd95cd1e06c0989834e6e5b9c652f2630f4",
+    "include/dsplib/V92Ja.h": "9558282c04f7291babf43ede0b031b08bd1eb4d811c11e59bd1697947afe2220",
+    "include/dsplib/V92Jd.h": "7e360f768d7d742d3096f79a97679a009778adc6a894f3f61252a694e427e9cd",
+    "include/dsplib/V92Mapper.h": "0d3ac36f941288b1fef3b7be707fd1bc91151adf0c15a8e3293e484802b5fb9d",
+    "include/dsplib/V92Modem.h": "d596f6341b768079356c4e2a06c881ccb023e798e71a58b38bbac17cbeb57333",
+    "include/dsplib/V92Modulator.h": "86d33eaf2eb33be4416ae6dd2f422014c1a6fefab3c2abbe75ff865202743f2e",
+    "include/dsplib/V92ModulusEncoder.h": "eaeed8a8da646f4f1324a5c6788dccce2234e13b71b373ee0d9698c67bf7f86b",
+    "include/dsplib/V92Parameters.h": "4e597c6edc6124b44350075986f180c3b334253e3c136987286868ff20a862bc",
+    "include/dsplib/V92ParamsInfo.h": "4f3a72c825232ba5bc3d524fe52bce12c39a48f55c93e31db285a7fb48ff2e1e",
+    "include/dsplib/V92Phase2Info.h": "3f238013e5cfbd8ccf7bbd653fc7dca7c5347e81330923a4a34741ef8229f3c6",
+    "include/dsplib/V92Phase3Modulator.h": "084b288cf097c187d6dbdb0aa11e5611c7d5c8942f11245254ebdf6553f14db1",
+    "include/dsplib/V92Phase4Modulator.h": "72cecf180e965c313bcb3f7c9b110872bc6b69c4630018b1bbdab23a43051f4e",
+    "include/dsplib/V92PreFilter.h": "36d9f551d3deaefa2e4d964bf8484271810be2a74352987a01ad27a649e6c36a",
+    "include/dsplib/V92Precoder.h": "cbf6ad1ce38a1a2c05197eb783107c7597399e4f7f890c50e41f16a77cc55982",
+    "include/dsplib/V92Transmitter.h": "8115ecc899c40cf504165092b6d6f3d2ed1f99d62f8109826baed8f55c03805c",
+    "include/dsplib/VPcmFloModem.h": "aef9b01f8e63a6b0cc7f5f4f80f744809b36bd3dd09e8bffe3c857c302a83c81",
+    "include/dsplib/Vparser.h": "a04b60256666c791906a38edfc2d4c4dabe1e3edb450ce79da9a7eae4ac232c6",
+    "include/dsplib/b103.h": "ec227db8be429d6d819571b0738d4ef4a06857ed786e623bd1f52d141b8658a3",
+    "include/dsplib/b103fp.h": "c3d991c615cf9f8ece3003735b02b8f8ea218ec8197d4642173bbdf744c4ecb0",
+    "include/dsplib/beepgen.h": "850029fac11aea03357aee89e49da3be6d09fd20a1d49f4f7ed52afb6b0588ad",
+    "include/dsplib/cadence.h": "9b71f53951fb73dd1364abc4e51e60f68ba842903dea2e4c38db2916bed94798",
+    "include/dsplib/call.h": "05fc288652f0804029defc125734b61680e82b26b1dbd1de69dbf8630fa87d68",
+    "include/dsplib/callingtone.h": "e89d9338e6f8e31ca084a5b12bcd6ea9d057db1f521a334721b7d6fa975632a0",
+    "include/dsplib/callprog.h": "6c7dfba857e05d31946f108156d985148d6c2876d4f74f268b26afc0c447873f",
+    "include/dsplib/callprog_cfg.h": "4375f45bbcf669dfc994838a49c104c3d3e2bc63ba0d12119d3a5eba931640ee",
+    "include/dsplib/callprog_state.h": "1a66d090c3a2a6a0fb90267eb61938032818ed5a64b246167dc0d701cf24570c",
+    "include/dsplib/cid.h": "35461594563d2f47edc9a06f3253f6639a6201908d37d527cbef7d7d3ca1ac65",
+    "include/dsplib/cid_modem.h": "b8386e2b362b69208a5bb62945e930e2ee348e39e8a67cd39619824ad6feb8a1",
+    "include/dsplib/class1.h": "f89a62a7f6b9191a30710a76a2c70276ba69cbb1168c1b8eb4d24059826a0905",
+    "include/dsplib/class1rx.h": "8f9f1d0fbe308b00211e3bcbbd47132ec5dc7eab4c0e113d2fc56f97cc75e62e",
+    "include/dsplib/class1tx.h": "1e2bfd8d65f1fa470e64c02b481b0fefd11f13e236b92366b660b35e4ef470b1",
+    "include/dsplib/cpfiltrs.h": "9d2c831d66cd12e8225611bc45de81733666efd6f3fb154654922b157dc11178",
+    "include/dsplib/dcr.h": "c5ec4377391026069d4ea41c8ab08a4dc8bbd955c8be07eb05a0b49874f1ab57",
+    "include/dsplib/debug.h": "b02ffd5f0cea840d5695677176ca6e293a42c79e72f25ac98ad6d490ec98e06d",
+    "include/dsplib/detector.h": "e208f73928042351e43a6facc11e43551463acfe1fccb982e47d7087dd82f53f",
+    "include/dsplib/dialer.h": "5d58fe7c0e50c70604cbae3cadfd0cb05d488f89a985c827724a33a1ea89ab15",
+    "include/dsplib/dialercfg.h": "c70fe25628394bb38b751edf2f1347b5cc063364e63f07a5cbc38cd6fd223e11",
+    "include/dsplib/dp.h": "acc23b284d435a88ee363376e3746248d16cacb720accb25a3ce5256239dc2e5",
+    "include/dsplib/dp_param.h": "93731bd211b4fa33a0e7ca3a9d1ac152f2b640c96cab9120fac671d42f761e5d",
+    "include/dsplib/dp_wrapper.h": "70ef1f28602090ff66425d26bc33d3d4db3a088428960f7c235111b07c20d1f9",
+    "include/dsplib/dtmf.h": "ce5a82c0246c7632b671344434474a4a71cc82a611e0ffd6c984bd95fa1d69cc",
+    "include/dsplib/dtmf_rx.h": "ba8d9d04c8c5c9ad40b5198e288ad77f7683d360accb21fa4308b4bbbe344c5e",
+    "include/dsplib/dualtone.h": "827aabfe6906c7944f4990f26604a277ca4b1b323f94e126da69c5c84e62d18c",
+    "include/dsplib/elliptic.h": "3a690c68587e272d70deb76ed67fcdfdcfb43fec2c8cdf1a477cd846c4b6f65b",
+    "include/dsplib/encode.h": "daec671debd0576555cbc3036c256b8ddffc2d176ea4ba78f9abb95565617806",
+    "include/dsplib/fax.h": "64def24aa7e8e4a574295cf0aa2854859f5c5ec41a38844b55777c31478082ed",
+    "include/dsplib/faxadapt.h": "997df253db0923fc89b2deb57fe1bc5f67473c74443e92b8e5192561c6e3dae7",
+    "include/dsplib/faxcfg.h": "775dd031164fcbcd7b2b54d0583faf9d17a189beb6a91c588371af57fbce9e4e",
+    "include/dsplib/faxfifo.h": "0fc17dbcec21000774e65ab7ea50360f0d7dd9211e1d6bd8601d42fea27c30e6",
+    "include/dsplib/faxvmi.h": "ad10b39a0f8ca43c59484adf9899002ffbd6572d1339ab67aed5a81a2ce2d1fb",
+    "include/dsplib/fdspkrnl.h": "29725dfb74556ac00d51bdebd9c22cfaeef33cb68154b794a134bfa51b38ffee",
+    "include/dsplib/fft.h": "175184aaf1112944640f1e7964127444ae74e5e942fca74dab2ac6ede428b90a",
+    "include/dsplib/fifo8.h": "1089ae62ad280ca41444657bd05b02bb62c022dfe9a8148de8218dafab67e614",
+    "include/dsplib/fixedrc.h": "6e32a93778fc9814ed25465685954136fffc80818bc74857e6b19cb1501b74d0",
+    "include/dsplib/fp_math.h": "ac94ecc5a6082ffa8809714921ae4feb2851ec4f711bdf3104584fccef0e7496",
+    "include/dsplib/fpm.h": "07d6b762194b9ad2c827b0d114b7c18a4af881284f72105c968d3e6a7e1d4952",
+    "include/dsplib/fpm_agc.h": "eb5913708610d8845e3621ebb02097c3eff559449ac1b741d2e97006e8346e60",
+    "include/dsplib/fpm_ecc.h": "7b951a3335898a8c42f4a8f28de62ac6a4a3e612188dca1b18d8b4712b8df078",
+    "include/dsplib/fpm_fsd.h": "7e78db25edd1542ff9a0070f3d3df366241163d328731e05dedafcaba75678e8",
+    "include/dsplib/fpm_fse.h": "ff7da0b30d58b3aad85655b36faedfec95a53c8d0491857d1655d62a001ad38b",
+    "include/dsplib/fpm_fsm.h": "a1269cbf725fc84bdfb2f027846645f225f9668b6a8372c3527d35ad57214029",
+    "include/dsplib/fpm_iir.h": "68f53246ebb41ba61a2570b7a3b447783cb83ccc2e8377a0648f07599102326c",
+    "include/dsplib/fpm_mrf.h": "25386f8ab624b2155871d322df3002940cba2861815700e6e39b57aa6407200a",
+    "include/dsplib/fpm_mtd.h": "a4d62b7d9b09ac7238a6edd65517ac504a12f81c9f0f6fd7907516924f47d861",
+    "include/dsplib/fpm_phasor.h": "10a991238f9d817a8fcfeb5915f9f4fac050830b8f5be90482cf9b654904df4b",
+    "include/dsplib/fpm_pps.h": "849241ef7c12dc70de01401717724a43170d9211532f02a7073ea475467256fd",
+    "include/dsplib/fpm_sdm.h": "c8abe0447c5f2ba4f0611a893b92a7fdf81e0c578c7de63a97523dd0f94c23d8",
+    "include/dsplib/fpm_smc.h": "7717bcf507071812fc6c7ad12a91a95cc64cdce9363e7f2a8f61733f79022806",
+    "include/dsplib/fpm_sre.h": "d20c3e60936933d5d0146ba05cc155a9b61ac3d34c12d570b3debe6c347101a2",
+    "include/dsplib/fpm_tone.h": "d19300cb2794acd7e87cf089b4485a04a1147852f3c28bf3d7181316c618d2a6",
+    "include/dsplib/int_complex.h": "538b9165d85693d5d56d465285db2ddcc20e63cd024e75267ea86b38d4d5e396",
+    "include/dsplib/modem_params.h": "02963b3ef091627f13fc904966c1bb6c72b771c24610c723d67ebc572d5c2138",
+    "include/dsplib/mohdet.h": "dd2df186b259d95efbcd116dd5e2cf3a341cf4ad1f692666f2160edc8a407fcd",
+    "include/dsplib/mtk.h": "1d2086cefc8095e810d427b3782a905255ed70c262e444cbd80ab14c5ffeef9b",
+    "include/dsplib/notch.h": "50078f34c50db50ea38620528ac580abcbbf562b9ebf26b600c235b53f6c59f7",
+    "include/dsplib/nulldp.h": "c86c98deb4d2e36f5efb4bb04dbcb8c43f465a9d04ad4b7f42341048ddc9014a",
+    "include/dsplib/pcm.h": "c3593fd0c417429f663e2c9be635a23bc3e89d74c7aa615d0a8ac0a90cfc8087",
+    "include/dsplib/period_byte_layout.h": "580497cb9cece61ff3ededd5add551419b6be58a12958a968213f0801ada7d48",
+    "include/dsplib/pulse.h": "dfc37f8d0dd0b0bab2792124a91c17e56f1a87072a9365983c655715e45adef5",
+    "include/dsplib/ringdet.h": "2ba89953311f05c8f3358a9595c95ca2049b9963c737e04e6995eb8d168a78c8",
+    "include/dsplib/sdm.h": "da676c9c48df10e0fa130e3b81d8ed2d43bd0041a8de363e24b08908ec2cf0c2",
+    "include/dsplib/sdmv27.h": "14890b1d76ef9a1ac5cdcd6d5abd17f8f343f537eee13f8e18d841ecfaaa62a2",
+    "include/dsplib/sgd.h": "2f16289c81428e434624f064b24d64d67a1da80ecb79eab8b1b5a93cffde477d",
+    "include/dsplib/silence.h": "09f360072c1d43204c50cd615d50ae93f69d11bdf87aaf949f82c94131013da1",
+    "include/dsplib/smc.h": "39be65ba950c2f57dd060fbab217426b1ab582818b2d13cfab0a790e0eebb975",
+    "include/dsplib/sysdep.h": "1fc7a1bca190caf7eb03e375a93168da829c18cc7b4d1a67fd48108c79547076",
+    "include/dsplib/t30frame.h": "3b73d4b45fe8f84864e7bec426431af1bec83bcbe780084438798dee3f9bc450",
+    "include/dsplib/tagV90AdditionalCPinfo.h": "99dd9e8090a93c632e136b9a169542c40b7b4baf4f8888d20b9e777cb089dcfb",
+    "include/dsplib/toneiir.h": "176e5031296a26816b77a0eabc1006cf243f0763f76e61971f4bed09f23071a1",
+    "include/dsplib/v17cfg.h": "4da317ae8717d8a7572ce8f4a883e13cf29baecdd7388240bf7d9e8562e7f68f",
+    "include/dsplib/v17data.h": "b2f58164d0b056b649067d43d14808b9920067d7a7e379a5a8a7749e596c6bce",
+    "include/dsplib/v17dec.h": "35d036b815cb1167e5bc2e10fe41417733cf1037cd9cbf1c9c104239541e48d0",
+    "include/dsplib/v17fax.h": "ab7f628ac8c2d07b7e323c764dfb2e6da03d816caace2a8e19478890f2f4f269",
+    "include/dsplib/v21cfg.h": "232b3602b5191f2f536e92f0e96ef7c7dd67193a6f0acd70baad16ebcbbcb7f9",
+    "include/dsplib/v21fax.h": "9c802c6ade10013be0845ee41c3686fc925272e8e69a1da83a12fc1b0991171a",
+    "include/dsplib/v22.h": "0d86e6de995c59415666e51b285c988c398d84e6917b09ab1c3f96ffdf793323",
+    "include/dsplib/v22_fse.h": "aa1b2e2e9f6a196df876eec88bbb8519bc0ce932096ba3c6484aade6fd11e32b",
+    "include/dsplib/v22_iir.h": "df09b5f900bfd6085b9d436b5d3779fcc82e832c6ae3c9590b5a7a270afb21d0",
+    "include/dsplib/v22_mrf.h": "f609700140dcf531d42a717f73ee59e1eb72c5351044ca23e4fe61afc2f714ab",
+    "include/dsplib/v22_pps.h": "2c97f8d0402eb0eafd8455a0922cd3f85c025dbb401c8fa4b3260b97ad46b2d1",
+    "include/dsplib/v22_sre.h": "807f16926119ce3079de335a84d2add42b88cb43679a052d130a04751a4e4706",
+    "include/dsplib/v22ans.h": "6eeb17ddf0d42e64bb546507f9d76ea2fc177bb8a73699db6ee986453f267ad9",
+    "include/dsplib/v22conn.h": "6207cf80b87a957624b9b4a1b6c72e5ad0c060f8ab6d198f5151d1d54a4d05cf",
+    "include/dsplib/v22ctl.h": "d68399bdcda33c88ac2168d5aca9aab25ac5f5ee634c7c7887cdce670fb0b0ba",
+    "include/dsplib/v22data.h": "cc27bb73e1e739de318219dd6df9a77592196da1125cbd54765f3b0dacc9081f",
+    "include/dsplib/v22dec.h": "1f30a3db341c3a50b37c37f996e95b3f640f40e98b19b5df3551f6a9e6588dc3",
+    "include/dsplib/v22det.h": "7743a17c8da3f2a9beea10e3ac04b0c2f2df7e5fa390fa17237af91d51889af3",
+    "include/dsplib/v22fp.h": "7140f900838f92374facedef5fb3af17f1be03a3d977d70d2d0f3fbbfcf81f7b",
+    "include/dsplib/v22hdx.h": "cc70f4a8c379499b5d73f022b98b7eb86034d565f3062efe2b9eba07d36f6385",
+    "include/dsplib/v22loop.h": "690823e016401fa339e1aaa9e4939bc652f53faefbd232b176e045cf359b5404",
+    "include/dsplib/v22org.h": "8533d0ad091d142d8644fe2ef273d46b4a4877c137a6372599f6521b952565f3",
+    "include/dsplib/v22prc.h": "3737ee00653e60a447036f265e4c303428c8acb86c23bbe988c0968832f482ea",
+    "include/dsplib/v22rate.h": "7cff8269579eebe28f095fc849756cf36f70b84f0a440f0bf4ba271a6974d43e",
+    "include/dsplib/v22status.h": "962c71e448cad8c08c46a596037618aab8b0ebb2b3dce2b1abf1075c62dc293a",
+    "include/dsplib/v22tab.h": "a310b8e7cb7c5ad662e6f92c05b43f014b2481de3885c90b19d9515aac204fff",
+    "include/dsplib/v22txtab.h": "ad939f87ce11817ba433e5f055f4063f4ed6205b9254c4617441423e84927a48",
+    "include/dsplib/v23.h": "5356d96ce8d56bba533c603f0375582686fa2ed7f9ec5174b1d7317ecb9044e7",
+    "include/dsplib/v23fp.h": "8a8345bbd56a62b4299e44af8a011648c6266d6ac02ea1cfaeaa853442708de9",
+    "include/dsplib/v27cfg.h": "5ec6ea3861ad4bef4777a17af1166595dcd5567d71ef73db190c370aba2e1fe0",
+    "include/dsplib/v27fax.h": "62e8342fc513731b85f5bf4528ebc72545819d90154314c82ccaaec416926b7c",
+    "include/dsplib/v29cfg.h": "130301e33780d0e1d8f36489fa5440e886dabec223220066a4eb650c1398131b",
+    "include/dsplib/v29data.h": "3a52e3dcb2c6e064b2f2ff38a43cf2457f8d4c2d24a4efd1aa149e05299c2f47",
+    "include/dsplib/v29fax.h": "a86ab2a87df55311b62c33e9144219a3ebb6f76357eaf7a4a10bc5dd49d368be",
+    "include/dsplib/v32.h": "1cf357863961f31e8aed1ec60efb6387b4835a8aa9a6cf5ec1ee97fd137b35e4",
+    "include/dsplib/v32anstone.h": "2d4f1e4e0eaddfe38757f659a45e91ad83746d6342004156757026ec21cf3dcf",
+    "include/dsplib/v32cfg.h": "ee6ae37f3c4ee8f92501fb220221fb064d8e884a47ee25c3d04f97362bee6eea",
+    "include/dsplib/v32data.h": "4a9c1ac0783304ff8f6d53aea7327e96121859f98c09c8572c617af0c8e837f2",
+    "include/dsplib/v32dec.h": "165bb8d9ba4c302f88fb6a5694b668780eec8b93b15bc81e77ceca3a8e2d0087",
+    "include/dsplib/v32demod.h": "620f9430a893ef2c3d65118c3eb4a39fb7d50666983c006e7b24f07cee430831",
+    "include/dsplib/v32fp.h": "9b93484c6718fb4a10d0c5c11a7ac9cac682438e360a2f2130e9876b4983fd5b",
+    "include/dsplib/v32fpctl.h": "b65be580c3f8f910656ec1abccbdd3f6ee24c5afdfc7af4e1bcecc77016b9bce",
+    "include/dsplib/v32fpstat.h": "c4c7bd8b39edb4d08a176a9e28c5705164b04c3d0cc5e3c8805824b238fc8b6e",
+    "include/dsplib/v32fse.h": "4dfbd5b22f1ac1a4c79780771efbbbbe7b00b9cd43a4481c2f75d405b213da79",
+    "include/dsplib/v32hdx.h": "64139baa1340ca21acd881eb43e2c6ff1a1baeffadaf61fd542863b2487dcaed",
+    "include/dsplib/v32hdxst.h": "c1ed5133e4eb552b8367ec526cbbbfa5e639364be629940d180cd1d8126f2cfb",
+    "include/dsplib/v32scram.h": "796ff04926c181fdf186be08171eac5d2c1d2246f8271ad8653077a2094d32ab",
+    "include/dsplib/v32seq.h": "205290620e820311ec42312f607cf63239f9f639328ba7fb6e9395242c608340",
+    "include/dsplib/v32smc.h": "44ccddb6f0bb34729f6d5125c2d150423c8e9da553591249625f11384da3358b",
+    "include/dsplib/v32state.h": "36ccc110c6266609e99637f4d5be266eb1d42de6c622c2a9463829fd799d61b2",
+    "include/dsplib/v32struct.h": "45581d02c8b9181130fa405d1fad088a00c402d3ccf01ad6cd9338010aba9be5",
+    "include/dsplib/v34det.h": "b0cebd7674efc156a80dd278e9953b9e01508b849fdaf275423832c2228e6719",
+    "include/dsplib/v34digital.h": "beecb9876220508b577268b692ba2fb95f059af0824e8655e8acfaed5e9cef4a",
+    "include/dsplib/v34filt.h": "7ba91a41b706061384dcb92d0975c7c834f989f0b3dee370ebe20b410db24f63",
+    "include/dsplib/v34fsk.h": "e6683da6a67593e5ccc03464ae1c1368fad278d0f6de92c01ee696aa380f0e78",
+    "include/dsplib/v34hshak.h": "ea263be911048cb74cdb6d3af3b5b69cda4017fd93882508a439ee4c9529aec6",
+    "include/dsplib/v34hstx1.h": "a2dd45e834044c73d052385af7796a670ce4cdecd6d0420f12798bd8c7a2de96",
+    "include/dsplib/v34hstx1_arms.h": "d9374193b273bce704c02532d7db3ce9be6e191e94f6525ca94a098979598a58",
+    "include/dsplib/v34info.h": "51debdd13bdb1380c9b2dc1bd82f61a7a097366078d9db4adf98447b5a4a14ed",
+    "include/dsplib/v34pcm_tables.h": "eb73491a933e2f5bb9f81657412e71a58eeee3445aa86075a47bb2bc5646c47e",
+    "include/dsplib/v34pcmif.h": "d815df8a5e4fa6c4c9a9c41a761efc7252270b354634f447d37f4dfe4fa4f8f5",
+    "include/dsplib/v34recv.h": "e2abec07d42d67fd85a36165e91072f7b91f59a85483ff31d92a5fd0ddd30b54",
+    "include/dsplib/v34rx.h": "b06d6f5fe2ab3cf03920ea55602c2dfc850cbf1cd8dc1878aa8c49dd3059d9b5",
+    "include/dsplib/v34scram.h": "0e0aa7e3630b7c8710321bab77d26dd147f8b269ec960333895ff191fe83011d",
+    "include/dsplib/v34shell.h": "ee25c1cea0d3653b42956ba16d4e3f4659fbcb756348c0fef46a78d58f983c6d",
+    "include/dsplib/v8.h": "a0bcd3f0a26001a1356fcabdddc0bd1a44027a79892c3f674b8b82b8e9adcd27",
+    "include/dsplib/v8dp.h": "e352e93d2c4da6de1fa2826f4f13fe856aa8813d59fd737293e71d02ab836a4c",
+    "include/dsplib/vce.h": "856721d1f27532725ee360c845ea914b43448e69f5f36bd70972e10fc4d2d2e9",
+    "include/dsplib/voice.h": "5462b68403650cf519a5bcf7dc1fcdd6ef1560b43b9f68f7313e5829edad8dd8",
+    "include/dsplib/voicecmd.h": "aef1d9213d02c6213aa414fe843a72c9a33518465812e8b9b93a34beb7f48cff",
+    "include/dsplib/vpcm.h": "a2eb0586356e91b99763c292d8481bca37d0e7ccd2724842d65c194334495a19",
+    "include/dsplib/vpcm_tables.h": "728b61a59a050bfed55ed56f6c585cf14442f873273841ac35853ef8a9408140",
+    "include/dsplib/vtb.h": "531e504b59d842ee66cb2cbed3510b5c9bb2a0bd1d7bcdc8d053534274847e2c",
+    "tools/toolchain/period_compat.h": "49e1dbd4585703dc5f59990800133df247d0ceba439f61bfa53596040c08440a",
+    "src/pump/v32/v32fpdisp-common.h": "bbb14f482da31859c9df0a905768c3155232d9146d87239cb929d6e43c406db6"
+  },
+  "header_input_mode": "explicit-git-snapshot",
+  "families": {
+    "V22": {
+      "source_path": "src/pump/v22/V22.c",
+      "retained_hash": "8ae6047c71572a2e61c7ef9a95be30bd8895d5b750745ea1bb2fd530d3151632",
+      "cells": {
+        "baseline": {
+          "source_hash": "8529517deb3791a53a6d361bdd6bdbbe6241b2b8e4fdcf7f2790a3d703f59c2f",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22/baseline/candidate.o /work/V22/baseline/V22.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "8ae6047c71572a2e61c7ef9a95be30bd8895d5b750745ea1bb2fd530d3151632",
+          "globals": {
+            "V22FP_GetDiagnostics": "T",
+            "V22FP_create": "T",
+            "V22FP_delete": "T"
+          },
+          "functions": [
+            "V22FP_GetDiagnostics",
+            "V22FP_create",
+            "V22FP_delete"
+          ],
+          "verdicts": {
+            "V22FP_GetDiagnostics": [
+              "EXACT",
+              0
+            ],
+            "V22FP_create": [
+              "SIZE",
+              40
+            ],
+            "V22FP_delete": [
+              "SIZE",
+              36
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "8529517deb3791a53a6d361bdd6bdbbe6241b2b8e4fdcf7f2790a3d703f59c2f",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/V22/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22/unsigned-accumulator/candidate.o /work/V22/unsigned-accumulator/V22.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "8ae6047c71572a2e61c7ef9a95be30bd8895d5b750745ea1bb2fd530d3151632",
+          "globals": {
+            "V22FP_GetDiagnostics": "T",
+            "V22FP_create": "T",
+            "V22FP_delete": "T"
+          },
+          "functions": [
+            "V22FP_GetDiagnostics",
+            "V22FP_create",
+            "V22FP_delete"
+          ],
+          "verdicts": {
+            "V22FP_GetDiagnostics": [
+              "EXACT",
+              0
+            ],
+            "V22FP_create": [
+              "SIZE",
+              40
+            ],
+            "V22FP_delete": [
+              "SIZE",
+              36
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "V22Dec": {
+      "source_path": "src/pump/v22/V22Dec.c",
+      "retained_hash": "e10b6d00e17933a843528d468fab7309a828e73582a82ff32459f1ae6208c0ea",
+      "cells": {
+        "baseline": {
+          "source_hash": "9a4d605dd88f3c9ed334e49bbd798d172c479882d87df77ec58f0385cdead9af",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22Dec/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22Dec/baseline/candidate.o /work/V22Dec/baseline/V22Dec.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "e10b6d00e17933a843528d468fab7309a828e73582a82ff32459f1ae6208c0ea",
+          "globals": {
+            "DECv22_ANGL12": "R",
+            "DECv22_ANGL24": "R",
+            "DECv22_IMAP12": "R",
+            "DECv22_IMAP24": "R",
+            "DECv22_MAG24": "R",
+            "DECv22_QMAP12": "R",
+            "DECv22_QMAP24": "R",
+            "FSEv22_decision12": "T",
+            "FSEv22_decision24": "T"
+          },
+          "functions": [
+            "FSEv22_decision12",
+            "FSEv22_decision24"
+          ],
+          "verdicts": {
+            "FSEv22_decision12": [
+              "SIZE",
+              20
+            ],
+            "FSEv22_decision24": [
+              "SIZE",
+              36
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "9a4d605dd88f3c9ed334e49bbd798d172c479882d87df77ec58f0385cdead9af",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22Dec/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/V22Dec/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22Dec/unsigned-accumulator/candidate.o /work/V22Dec/unsigned-accumulator/V22Dec.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "e10b6d00e17933a843528d468fab7309a828e73582a82ff32459f1ae6208c0ea",
+          "globals": {
+            "DECv22_ANGL12": "R",
+            "DECv22_ANGL24": "R",
+            "DECv22_IMAP12": "R",
+            "DECv22_IMAP24": "R",
+            "DECv22_MAG24": "R",
+            "DECv22_QMAP12": "R",
+            "DECv22_QMAP24": "R",
+            "FSEv22_decision12": "T",
+            "FSEv22_decision24": "T"
+          },
+          "functions": [
+            "FSEv22_decision12",
+            "FSEv22_decision24"
+          ],
+          "verdicts": {
+            "FSEv22_decision12": [
+              "SIZE",
+              20
+            ],
+            "FSEv22_decision24": [
+              "SIZE",
+              36
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "V22int": {
+      "source_path": "src/pump/v22/V22int.c",
+      "retained_hash": "ad0b972c15f96b5f6942d9cdb142c43e3ca175ccb76fdde5dbf8e4abb138556d",
+      "cells": {
+        "baseline": {
+          "source_hash": "2ce5add79b408311de3c5d1c5218ef473db9d1c290ed5b83f193e313b9e1fc90",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22int/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22int/baseline/candidate.o /work/V22int/baseline/V22int.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "ad0b972c15f96b5f6942d9cdb142c43e3ca175ccb76fdde5dbf8e4abb138556d",
+          "globals": {
+            "CarrierDetect": "T",
+            "DemodDataV22": "T",
+            "DescrambleDataV22": "T",
+            "DescramblerOn": "T",
+            "GetSignalQuality": "T",
+            "ModDataV22": "T",
+            "ResetRx": "T",
+            "ScrambleDataV22": "T",
+            "ScramblerOn": "T",
+            "SetAdaptEqV22": "T",
+            "SetRxRate": "T",
+            "SetTxRate": "T",
+            "SignalDetect": "T",
+            "TxClockSync": "T"
+          },
+          "functions": [
+            "CarrierDetect",
+            "DemodDataV22",
+            "DescrambleDataV22",
+            "DescramblerOn",
+            "GetSignalQuality",
+            "ModDataV22",
+            "ResetRx",
+            "ScrambleDataV22",
+            "ScramblerOn",
+            "SetAdaptEqV22",
+            "SetRxRate",
+            "SetTxRate",
+            "SignalDetect",
+            "TxClockSync"
+          ],
+          "verdicts": {
+            "CarrierDetect": [
+              "EXACT",
+              0
+            ],
+            "DemodDataV22": [
+              "BYTES",
+              231
+            ],
+            "DescrambleDataV22": [
+              "EXACT",
+              0
+            ],
+            "DescramblerOn": [
+              "EXACT",
+              0
+            ],
+            "GetSignalQuality": [
+              "EXACT",
+              0
+            ],
+            "ModDataV22": [
+              "BYTES",
+              59
+            ],
+            "ResetRx": [
+              "EXACT",
+              0
+            ],
+            "ScrambleDataV22": [
+              "EXACT",
+              0
+            ],
+            "ScramblerOn": [
+              "EXACT",
+              0
+            ],
+            "SetAdaptEqV22": [
+              "EXACT",
+              0
+            ],
+            "SetRxRate": [
+              "EXACT",
+              0
+            ],
+            "SetTxRate": [
+              "EXACT",
+              0
+            ],
+            "SignalDetect": [
+              "EXACT",
+              0
+            ],
+            "TxClockSync": [
+              "EXACT",
+              0
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "2ce5add79b408311de3c5d1c5218ef473db9d1c290ed5b83f193e313b9e1fc90",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/V22int/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/V22int/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/V22int/unsigned-accumulator/candidate.o /work/V22int/unsigned-accumulator/V22int.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "ad0b972c15f96b5f6942d9cdb142c43e3ca175ccb76fdde5dbf8e4abb138556d",
+          "globals": {
+            "CarrierDetect": "T",
+            "DemodDataV22": "T",
+            "DescrambleDataV22": "T",
+            "DescramblerOn": "T",
+            "GetSignalQuality": "T",
+            "ModDataV22": "T",
+            "ResetRx": "T",
+            "ScrambleDataV22": "T",
+            "ScramblerOn": "T",
+            "SetAdaptEqV22": "T",
+            "SetRxRate": "T",
+            "SetTxRate": "T",
+            "SignalDetect": "T",
+            "TxClockSync": "T"
+          },
+          "functions": [
+            "CarrierDetect",
+            "DemodDataV22",
+            "DescrambleDataV22",
+            "DescramblerOn",
+            "GetSignalQuality",
+            "ModDataV22",
+            "ResetRx",
+            "ScrambleDataV22",
+            "ScramblerOn",
+            "SetAdaptEqV22",
+            "SetRxRate",
+            "SetTxRate",
+            "SignalDetect",
+            "TxClockSync"
+          ],
+          "verdicts": {
+            "CarrierDetect": [
+              "EXACT",
+              0
+            ],
+            "DemodDataV22": [
+              "BYTES",
+              231
+            ],
+            "DescrambleDataV22": [
+              "EXACT",
+              0
+            ],
+            "DescramblerOn": [
+              "EXACT",
+              0
+            ],
+            "GetSignalQuality": [
+              "EXACT",
+              0
+            ],
+            "ModDataV22": [
+              "BYTES",
+              59
+            ],
+            "ResetRx": [
+              "EXACT",
+              0
+            ],
+            "ScrambleDataV22": [
+              "EXACT",
+              0
+            ],
+            "ScramblerOn": [
+              "EXACT",
+              0
+            ],
+            "SetAdaptEqV22": [
+              "EXACT",
+              0
+            ],
+            "SetRxRate": [
+              "EXACT",
+              0
+            ],
+            "SetTxRate": [
+              "EXACT",
+              0
+            ],
+            "SignalDetect": [
+              "EXACT",
+              0
+            ],
+            "TxClockSync": [
+              "EXACT",
+              0
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22": {
+      "source_path": "src/pump/v22/v22.c",
+      "retained_hash": "f3d297186e4132c496a59f2b7c34dcfb894b2eaf05a80d5744e593e2ff219cd4",
+      "cells": {
+        "baseline": {
+          "source_hash": "a2272a6bfe9b2ae0d9210a6a71bff307e5c9ec700625cec519b1d9d5acd0dd05",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22/baseline/candidate.o /work/v22/baseline/v22.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "f3d297186e4132c496a59f2b7c34dcfb894b2eaf05a80d5744e593e2ff219cd4",
+          "globals": {
+            "dp_v22_exit": "T",
+            "dp_v22_init": "T"
+          },
+          "functions": [
+            "dp_v22_exit",
+            "dp_v22_init",
+            "v22_create",
+            "v22_delete",
+            "v22_process"
+          ],
+          "verdicts": {
+            "dp_v22_exit": [
+              "EXACT",
+              0
+            ],
+            "dp_v22_init": [
+              "BYTES",
+              6
+            ],
+            "v22_create": [
+              "EXACT",
+              0
+            ],
+            "v22_delete": [
+              "EXACT",
+              0
+            ],
+            "v22_process": [
+              "SIZE",
+              77
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "a2272a6bfe9b2ae0d9210a6a71bff307e5c9ec700625cec519b1d9d5acd0dd05",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22/unsigned-accumulator/candidate.o /work/v22/unsigned-accumulator/v22.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "f3d297186e4132c496a59f2b7c34dcfb894b2eaf05a80d5744e593e2ff219cd4",
+          "globals": {
+            "dp_v22_exit": "T",
+            "dp_v22_init": "T"
+          },
+          "functions": [
+            "dp_v22_exit",
+            "dp_v22_init",
+            "v22_create",
+            "v22_delete",
+            "v22_process"
+          ],
+          "verdicts": {
+            "dp_v22_exit": [
+              "EXACT",
+              0
+            ],
+            "dp_v22_init": [
+              "BYTES",
+              6
+            ],
+            "v22_create": [
+              "EXACT",
+              0
+            ],
+            "v22_delete": [
+              "EXACT",
+              0
+            ],
+            "v22_process": [
+              "SIZE",
+              77
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22_fse": {
+      "source_path": "src/pump/v22/v22_fse.c",
+      "retained_hash": "45f2d87441f7b4f2b091fa0bfdd2cf73255a2e98b905fad6dcfa612330af24e7",
+      "cells": {
+        "baseline": {
+          "source_hash": "9674fefae02d6bcd0ebc3e81524fee8f4a618753e087dad3c7fd022d937db8f5",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_fse/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_fse/baseline/candidate.o /work/v22_fse/baseline/v22_fse.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "45f2d87441f7b4f2b091fa0bfdd2cf73255a2e98b905fad6dcfa612330af24e7",
+          "globals": {
+            "FSEv22_CFG": "R",
+            "FSEv22_COFFS": "R",
+            "V22_FSE_free": "T",
+            "V22_FSE_getdiag": "T",
+            "V22_FSE_init": "T",
+            "V22_FSE_receive": "T"
+          },
+          "functions": [
+            "V22_FSE_free",
+            "V22_FSE_getdiag",
+            "V22_FSE_init",
+            "V22_FSE_receive"
+          ],
+          "verdicts": {
+            "V22_FSE_free": [
+              "EXACT",
+              0
+            ],
+            "V22_FSE_getdiag": [
+              "EXACT",
+              0
+            ],
+            "V22_FSE_init": [
+              "SIZE",
+              7
+            ],
+            "V22_FSE_receive": [
+              "SIZE",
+              163
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "9674fefae02d6bcd0ebc3e81524fee8f4a618753e087dad3c7fd022d937db8f5",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_fse/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22_fse/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_fse/unsigned-accumulator/candidate.o /work/v22_fse/unsigned-accumulator/v22_fse.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "45f2d87441f7b4f2b091fa0bfdd2cf73255a2e98b905fad6dcfa612330af24e7",
+          "globals": {
+            "FSEv22_CFG": "R",
+            "FSEv22_COFFS": "R",
+            "V22_FSE_free": "T",
+            "V22_FSE_getdiag": "T",
+            "V22_FSE_init": "T",
+            "V22_FSE_receive": "T"
+          },
+          "functions": [
+            "V22_FSE_free",
+            "V22_FSE_getdiag",
+            "V22_FSE_init",
+            "V22_FSE_receive"
+          ],
+          "verdicts": {
+            "V22_FSE_free": [
+              "EXACT",
+              0
+            ],
+            "V22_FSE_getdiag": [
+              "EXACT",
+              0
+            ],
+            "V22_FSE_init": [
+              "SIZE",
+              7
+            ],
+            "V22_FSE_receive": [
+              "SIZE",
+              163
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22_iir": {
+      "source_path": "src/pump/v22/v22_iir.c",
+      "retained_hash": "007842ad901985f11bf68c6cc8df85d5c90cdfd70e127f2d69eadd5f387d55d0",
+      "cells": {
+        "baseline": {
+          "source_hash": "edddad9fb9be1277a55abb06bf2d026a48cf41f8ab73ce7ac42ea868347059b1",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_iir/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_iir/baseline/candidate.o /work/v22_iir/baseline/v22_iir.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "007842ad901985f11bf68c6cc8df85d5c90cdfd70e127f2d69eadd5f387d55d0",
+          "globals": {
+            "IIR_a_coeff": "D",
+            "IIR_b_coeff": "D",
+            "V22IIRFilterInit": "T",
+            "V22_iir_filt_demod": "T"
+          },
+          "functions": [
+            "V22IIRFilterInit",
+            "V22_iir_filt_demod"
+          ],
+          "verdicts": {
+            "V22IIRFilterInit": [
+              "EXACT",
+              0
+            ],
+            "V22_iir_filt_demod": [
+              "EXACT",
+              0
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "edddad9fb9be1277a55abb06bf2d026a48cf41f8ab73ce7ac42ea868347059b1",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_iir/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22_iir/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_iir/unsigned-accumulator/candidate.o /work/v22_iir/unsigned-accumulator/v22_iir.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "007842ad901985f11bf68c6cc8df85d5c90cdfd70e127f2d69eadd5f387d55d0",
+          "globals": {
+            "IIR_a_coeff": "D",
+            "IIR_b_coeff": "D",
+            "V22IIRFilterInit": "T",
+            "V22_iir_filt_demod": "T"
+          },
+          "functions": [
+            "V22IIRFilterInit",
+            "V22_iir_filt_demod"
+          ],
+          "verdicts": {
+            "V22IIRFilterInit": [
+              "EXACT",
+              0
+            ],
+            "V22_iir_filt_demod": [
+              "EXACT",
+              0
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22_mrf": {
+      "source_path": "src/pump/v22/v22_mrf.c",
+      "retained_hash": "367b158043e22864582fd35505f106e0c5a8c2ba0b3b238f38101e2752017439",
+      "cells": {
+        "baseline": {
+          "source_hash": "ffcf4a46c833777267228e4177d1c9f5b609c71a78d04da5104eaf55b502a7eb",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_mrf/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_mrf/baseline/candidate.o /work/v22_mrf/baseline/v22_mrf.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "367b158043e22864582fd35505f106e0c5a8c2ba0b3b238f38101e2752017439",
+          "globals": {
+            "MRFv22_COFFS": "R",
+            "V22_MRF_CFG": "B",
+            "V22_MRF_filter": "T",
+            "V22_MRF_free": "T",
+            "V22_MRF_init": "T"
+          },
+          "functions": [
+            "V22_MRF_filter",
+            "V22_MRF_free",
+            "V22_MRF_init"
+          ],
+          "verdicts": {
+            "V22_MRF_filter": [
+              "SIZE",
+              29
+            ],
+            "V22_MRF_free": [
+              "EXACT",
+              0
+            ],
+            "V22_MRF_init": [
+              "SIZE",
+              16
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "ffcf4a46c833777267228e4177d1c9f5b609c71a78d04da5104eaf55b502a7eb",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_mrf/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22_mrf/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_mrf/unsigned-accumulator/candidate.o /work/v22_mrf/unsigned-accumulator/v22_mrf.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "367b158043e22864582fd35505f106e0c5a8c2ba0b3b238f38101e2752017439",
+          "globals": {
+            "MRFv22_COFFS": "R",
+            "V22_MRF_CFG": "B",
+            "V22_MRF_filter": "T",
+            "V22_MRF_free": "T",
+            "V22_MRF_init": "T"
+          },
+          "functions": [
+            "V22_MRF_filter",
+            "V22_MRF_free",
+            "V22_MRF_init"
+          ],
+          "verdicts": {
+            "V22_MRF_filter": [
+              "SIZE",
+              29
+            ],
+            "V22_MRF_free": [
+              "EXACT",
+              0
+            ],
+            "V22_MRF_init": [
+              "SIZE",
+              16
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22_pps": {
+      "source_path": "src/pump/v22/v22_pps.c",
+      "retained_hash": "e21c0e4ea08758c76f6341383791890837395aa795f1cf8ff8e78115346c64ad",
+      "cells": {
+        "baseline": {
+          "source_hash": "7f11ef887791c1d317bc23ee187284e57e98dfea3a65bc8a7d3550c310b707a3",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_pps/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_pps/baseline/candidate.o /work/v22_pps/baseline/v22_pps.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "e21c0e4ea08758c76f6341383791890837395aa795f1cf8ff8e78115346c64ad",
+          "globals": {
+            "PPSv22_CFG": "R",
+            "PPSv22_COFFS": "R",
+            "V22_PPS_filter": "T",
+            "V22_PPS_free": "T",
+            "V22_PPS_init": "T"
+          },
+          "functions": [
+            "V22_PPS_filter",
+            "V22_PPS_free",
+            "V22_PPS_init"
+          ],
+          "verdicts": {
+            "V22_PPS_filter": [
+              "SIZE",
+              46
+            ],
+            "V22_PPS_free": [
+              "EXACT",
+              0
+            ],
+            "V22_PPS_init": [
+              "SIZE",
+              15
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "7f11ef887791c1d317bc23ee187284e57e98dfea3a65bc8a7d3550c310b707a3",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_pps/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22_pps/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_pps/unsigned-accumulator/candidate.o /work/v22_pps/unsigned-accumulator/v22_pps.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "e21c0e4ea08758c76f6341383791890837395aa795f1cf8ff8e78115346c64ad",
+          "globals": {
+            "PPSv22_CFG": "R",
+            "PPSv22_COFFS": "R",
+            "V22_PPS_filter": "T",
+            "V22_PPS_free": "T",
+            "V22_PPS_init": "T"
+          },
+          "functions": [
+            "V22_PPS_filter",
+            "V22_PPS_free",
+            "V22_PPS_init"
+          ],
+          "verdicts": {
+            "V22_PPS_filter": [
+              "SIZE",
+              46
+            ],
+            "V22_PPS_free": [
+              "EXACT",
+              0
+            ],
+            "V22_PPS_init": [
+              "SIZE",
+              15
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22_sre": {
+      "source_path": "src/pump/v22/v22_sre.c",
+      "retained_hash": "a016c029519137c820ebd16322b8683aaa3760a5e1baea58b5c457f5929b2b6a",
+      "cells": {
+        "baseline": {
+          "source_hash": "af4bafef1dba06cf04c9873634a0429b342bdcab9d5b3aabe4ebaaee31012c7c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_sre/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_sre/baseline/candidate.o /work/v22_sre/baseline/v22_sre.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "a016c029519137c820ebd16322b8683aaa3760a5e1baea58b5c457f5929b2b6a",
+          "globals": {
+            "SRE_ALPHA_AVG": "R",
+            "SRE_BETA_AVG": "R",
+            "SREv22_COFFS": "R",
+            "SREv22_PLL_K1": "R",
+            "SREv22_PLL_K2": "R",
+            "SREv22_xCLOCK": "R",
+            "SREv22_yCLOCK": "R",
+            "V22_SRE_free": "T",
+            "V22_SRE_init": "T",
+            "V22_SRE_recover": "T"
+          },
+          "functions": [
+            "V22_SRE_free",
+            "V22_SRE_init",
+            "V22_SRE_recover"
+          ],
+          "verdicts": {
+            "V22_SRE_free": [
+              "EXACT",
+              0
+            ],
+            "V22_SRE_init": [
+              "SIZE",
+              22
+            ],
+            "V22_SRE_recover": [
+              "SIZE",
+              191
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "af4bafef1dba06cf04c9873634a0429b342bdcab9d5b3aabe4ebaaee31012c7c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22_sre/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22_sre/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22_sre/unsigned-accumulator/candidate.o /work/v22_sre/unsigned-accumulator/v22_sre.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "a016c029519137c820ebd16322b8683aaa3760a5e1baea58b5c457f5929b2b6a",
+          "globals": {
+            "SRE_ALPHA_AVG": "R",
+            "SRE_BETA_AVG": "R",
+            "SREv22_COFFS": "R",
+            "SREv22_PLL_K1": "R",
+            "SREv22_PLL_K2": "R",
+            "SREv22_xCLOCK": "R",
+            "SREv22_yCLOCK": "R",
+            "V22_SRE_free": "T",
+            "V22_SRE_init": "T",
+            "V22_SRE_recover": "T"
+          },
+          "functions": [
+            "V22_SRE_free",
+            "V22_SRE_init",
+            "V22_SRE_recover"
+          ],
+          "verdicts": {
+            "V22_SRE_free": [
+              "EXACT",
+              0
+            ],
+            "V22_SRE_init": [
+              "SIZE",
+              22
+            ],
+            "V22_SRE_recover": [
+              "SIZE",
+              191
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22mod": {
+      "source_path": "src/pump/v22/v22mod.c",
+      "retained_hash": "56d6848e145d8aee70cd6dd5dfaacb4ddec6ad662fe9b7c7cdd088dd0b97c7e0",
+      "cells": {
+        "baseline": {
+          "source_hash": "ff04a78e1a24a13a6dd260985ce501b707b5b961f2ddd272dc9d65a01e4b24e9",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22mod/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22mod/baseline/candidate.o /work/v22mod/baseline/v22mod.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "56d6848e145d8aee70cd6dd5dfaacb4ddec6ad662fe9b7c7cdd088dd0b97c7e0",
+          "globals": {
+            "V22FP_modem": "T",
+            "connect_1200": "T",
+            "connect_2400": "T",
+            "v22_ans_rmloop2": "T",
+            "v22_answer": "T",
+            "v22_data": "T",
+            "v22_local_loop": "T",
+            "v22_org_rmloop2": "T",
+            "v22_originate": "T",
+            "v22_retrain": "T"
+          },
+          "functions": [
+            "V22FP_modem",
+            "connect_1200",
+            "connect_2400",
+            "v22_ans_rmloop2",
+            "v22_answer",
+            "v22_data",
+            "v22_local_loop",
+            "v22_org_rmloop2",
+            "v22_originate",
+            "v22_retrain"
+          ],
+          "verdicts": {
+            "V22FP_modem": [
+              "BYTES",
+              5
+            ],
+            "connect_1200": [
+              "BYTES",
+              34
+            ],
+            "connect_2400": [
+              "SIZE",
+              14
+            ],
+            "v22_ans_rmloop2": [
+              "BYTES",
+              7
+            ],
+            "v22_answer": [
+              "SIZE",
+              1
+            ],
+            "v22_data": [
+              "SIZE",
+              10
+            ],
+            "v22_local_loop": [
+              "BYTES",
+              116
+            ],
+            "v22_org_rmloop2": [
+              "BYTES",
+              90
+            ],
+            "v22_originate": [
+              "SIZE",
+              136
+            ],
+            "v22_retrain": [
+              "SIZE",
+              23
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "00134db6d1bd8fca23d32b2e64f0b46511dd1fa09922dfd79ffe179977e2b815",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22mod/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22mod/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22mod/unsigned-accumulator/candidate.o /work/v22mod/unsigned-accumulator/v22mod.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "56d6848e145d8aee70cd6dd5dfaacb4ddec6ad662fe9b7c7cdd088dd0b97c7e0",
+          "globals": {
+            "V22FP_modem": "T",
+            "connect_1200": "T",
+            "connect_2400": "T",
+            "v22_ans_rmloop2": "T",
+            "v22_answer": "T",
+            "v22_data": "T",
+            "v22_local_loop": "T",
+            "v22_org_rmloop2": "T",
+            "v22_originate": "T",
+            "v22_retrain": "T"
+          },
+          "functions": [
+            "V22FP_modem",
+            "connect_1200",
+            "connect_2400",
+            "v22_ans_rmloop2",
+            "v22_answer",
+            "v22_data",
+            "v22_local_loop",
+            "v22_org_rmloop2",
+            "v22_originate",
+            "v22_retrain"
+          ],
+          "verdicts": {
+            "V22FP_modem": [
+              "BYTES",
+              5
+            ],
+            "connect_1200": [
+              "BYTES",
+              34
+            ],
+            "connect_2400": [
+              "SIZE",
+              14
+            ],
+            "v22_ans_rmloop2": [
+              "BYTES",
+              7
+            ],
+            "v22_answer": [
+              "SIZE",
+              1
+            ],
+            "v22_data": [
+              "SIZE",
+              10
+            ],
+            "v22_local_loop": [
+              "BYTES",
+              116
+            ],
+            "v22_org_rmloop2": [
+              "BYTES",
+              90
+            ],
+            "v22_originate": [
+              "SIZE",
+              136
+            ],
+            "v22_retrain": [
+              "SIZE",
+              23
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22prc": {
+      "source_path": "src/pump/v22/v22prc.c",
+      "retained_hash": "10111987eaddd26db73f0336bae2a8138138ed11e0859f475218bfa7b82406cc",
+      "cells": {
+        "baseline": {
+          "source_hash": "a3bd1fed0ef855df3ce843ce906edad58bde6c5798101b34d739fb71bae02d51",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22prc/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22prc/baseline/candidate.o /work/v22prc/baseline/v22prc.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "10111987eaddd26db73f0336bae2a8138138ed11e0859f475218bfa7b82406cc",
+          "globals": {
+            "Detect_1s": "T",
+            "Detect_Retrain": "T",
+            "Detect_Rmloop2_ACK": "T",
+            "Detect_v22": "T",
+            "MakeTxData": "T",
+            "ReadGTimer": "T",
+            "RxClampV22": "T",
+            "RxTrained1200": "T",
+            "RxTrained2400": "T",
+            "TxNOP": "T"
+          },
+          "functions": [
+            "Detect_1s",
+            "Detect_Retrain",
+            "Detect_Rmloop2_ACK",
+            "Detect_v22",
+            "MakeTxData",
+            "ReadGTimer",
+            "RxClampV22",
+            "RxTrained1200",
+            "RxTrained2400",
+            "TxNOP"
+          ],
+          "verdicts": {
+            "Detect_1s": [
+              "SIZE",
+              14
+            ],
+            "Detect_Retrain": [
+              "SIZE",
+              25
+            ],
+            "Detect_Rmloop2_ACK": [
+              "BYTES",
+              187
+            ],
+            "Detect_v22": [
+              "SIZE",
+              29
+            ],
+            "MakeTxData": [
+              "EXACT",
+              0
+            ],
+            "ReadGTimer": [
+              "EXACT",
+              0
+            ],
+            "RxClampV22": [
+              "EXACT",
+              0
+            ],
+            "RxTrained1200": [
+              "SIZE",
+              16
+            ],
+            "RxTrained2400": [
+              "SIZE",
+              59
+            ],
+            "TxNOP": [
+              "EXACT",
+              0
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "a3bd1fed0ef855df3ce843ce906edad58bde6c5798101b34d739fb71bae02d51",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22prc/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22prc/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22prc/unsigned-accumulator/candidate.o /work/v22prc/unsigned-accumulator/v22prc.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "10111987eaddd26db73f0336bae2a8138138ed11e0859f475218bfa7b82406cc",
+          "globals": {
+            "Detect_1s": "T",
+            "Detect_Retrain": "T",
+            "Detect_Rmloop2_ACK": "T",
+            "Detect_v22": "T",
+            "MakeTxData": "T",
+            "ReadGTimer": "T",
+            "RxClampV22": "T",
+            "RxTrained1200": "T",
+            "RxTrained2400": "T",
+            "TxNOP": "T"
+          },
+          "functions": [
+            "Detect_1s",
+            "Detect_Retrain",
+            "Detect_Rmloop2_ACK",
+            "Detect_v22",
+            "MakeTxData",
+            "ReadGTimer",
+            "RxClampV22",
+            "RxTrained1200",
+            "RxTrained2400",
+            "TxNOP"
+          ],
+          "verdicts": {
+            "Detect_1s": [
+              "SIZE",
+              14
+            ],
+            "Detect_Retrain": [
+              "SIZE",
+              25
+            ],
+            "Detect_Rmloop2_ACK": [
+              "BYTES",
+              187
+            ],
+            "Detect_v22": [
+              "SIZE",
+              29
+            ],
+            "MakeTxData": [
+              "EXACT",
+              0
+            ],
+            "ReadGTimer": [
+              "EXACT",
+              0
+            ],
+            "RxClampV22": [
+              "EXACT",
+              0
+            ],
+            "RxTrained1200": [
+              "SIZE",
+              16
+            ],
+            "RxTrained2400": [
+              "SIZE",
+              59
+            ],
+            "TxNOP": [
+              "EXACT",
+              0
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22rxtab": {
+      "source_path": "src/pump/v22/v22rxtab.c",
+      "retained_hash": "611ba8c72e232c89f5031940e635d96ccfc1ec8cf6a61ba82fb2c04a2bf620a0",
+      "cells": {
+        "baseline": {
+          "source_hash": "040c9a3ce558c0fd5c77f4ae52d623614f81a8d91b4a9cdc56a2f68688dbfd9f",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22rxtab/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22rxtab/baseline/candidate.o /work/v22rxtab/baseline/v22rxtab.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "611ba8c72e232c89f5031940e635d96ccfc1ec8cf6a61ba82fb2c04a2bf620a0",
+          "globals": {
+            "AGCv22_CFG": "R",
+            "AGCv22_CFG2": "R",
+            "CRRv22_CLK": "R",
+            "CRRv22_PLL_K1": "R",
+            "CRRv22_PLL_K2": "R",
+            "MTDs1_CFG": "R",
+            "MTDv22_CFG": "R",
+            "MTDv22_CFG2": "R",
+            "MTDv22_COEF": "R",
+            "MTDv22_COEF2": "R",
+            "V22_CFG": "R",
+            "V22_MESG": "R",
+            "V22_S1_HC_COEF": "R"
+          },
+          "functions": [],
+          "verdicts": {},
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "040c9a3ce558c0fd5c77f4ae52d623614f81a8d91b4a9cdc56a2f68688dbfd9f",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22rxtab/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22rxtab/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22rxtab/unsigned-accumulator/candidate.o /work/v22rxtab/unsigned-accumulator/v22rxtab.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "611ba8c72e232c89f5031940e635d96ccfc1ec8cf6a61ba82fb2c04a2bf620a0",
+          "globals": {
+            "AGCv22_CFG": "R",
+            "AGCv22_CFG2": "R",
+            "CRRv22_CLK": "R",
+            "CRRv22_PLL_K1": "R",
+            "CRRv22_PLL_K2": "R",
+            "MTDs1_CFG": "R",
+            "MTDv22_CFG": "R",
+            "MTDv22_CFG2": "R",
+            "MTDv22_COEF": "R",
+            "MTDv22_COEF2": "R",
+            "V22_CFG": "R",
+            "V22_MESG": "R",
+            "V22_S1_HC_COEF": "R"
+          },
+          "functions": [],
+          "verdicts": {},
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22stc": {
+      "source_path": "src/pump/v22/v22stc.c",
+      "retained_hash": "0827a95c9bd6c5b18c83c801d847fb6202840b9fd46a5d1723538a92748d6364",
+      "cells": {
+        "baseline": {
+          "source_hash": "f6259f0244a13ad0e8ad4618d4ba8885599474f76fe4b6ebc0e44729c9ac201c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22stc/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22stc/baseline/candidate.o /work/v22stc/baseline/v22stc.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "0827a95c9bd6c5b18c83c801d847fb6202840b9fd46a5d1723538a92748d6364",
+          "globals": {
+            "V22FP_control": "T",
+            "V22_status": "T"
+          },
+          "functions": [
+            "V22FP_control",
+            "V22_status"
+          ],
+          "verdicts": {
+            "V22FP_control": [
+              "SIZE",
+              6
+            ],
+            "V22_status": [
+              "SIZE",
+              5
+            ]
+          },
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "f6259f0244a13ad0e8ad4618d4ba8885599474f76fe4b6ebc0e44729c9ac201c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22stc/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22stc/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22stc/unsigned-accumulator/candidate.o /work/v22stc/unsigned-accumulator/v22stc.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "0827a95c9bd6c5b18c83c801d847fb6202840b9fd46a5d1723538a92748d6364",
+          "globals": {
+            "V22FP_control": "T",
+            "V22_status": "T"
+          },
+          "functions": [
+            "V22FP_control",
+            "V22_status"
+          ],
+          "verdicts": {
+            "V22FP_control": [
+              "SIZE",
+              6
+            ],
+            "V22_status": [
+              "SIZE",
+              5
+            ]
+          },
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    },
+    "v22txtab": {
+      "source_path": "src/pump/v22/v22txtab.c",
+      "retained_hash": "8266a61e88cfc110e21429cb6c8dc8bd13f7faa420737ed765c6b8e5331e7fcc",
+      "cells": {
+        "baseline": {
+          "source_hash": "aa4ed40c1baf101da6a308d778bd72fe8e02a5a2e4cd3499cc9f7ea6fdc0ca1c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22txtab/baseline && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22txtab/baseline/candidate.o /work/v22txtab/baseline/v22txtab.c"
+          ],
+          "overlay_header_hashes": {},
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "8266a61e88cfc110e21429cb6c8dc8bd13f7faa420737ed765c6b8e5331e7fcc",
+          "globals": {
+            "SDMv22_CFG": "R",
+            "SMCv22_CFG": "R",
+            "SMCv22_IMAP_1200BPS": "R",
+            "SMCv22_IMAP_2400BPS": "R",
+            "SMCv22_PMAP": "R",
+            "SMCv22_QMAP_1200BPS": "R",
+            "SMCv22_QMAP_2400BPS": "R"
+          },
+          "functions": [],
+          "verdicts": {},
+          "baseline_reproduced": true
+        },
+        "unsigned-accumulator": {
+          "source_hash": "aa4ed40c1baf101da6a308d778bd72fe8e02a5a2e4cd3499cc9f7ea6fdc0ca1c",
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--platform",
+            "linux/386",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data:/src",
+            "-v",
+            "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/recovery-fields-data/build/recovery-data-fields:/work",
+            "-w",
+            "/src",
+            "ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest",
+            "/bin/sh",
+            "-c",
+            "cd /work/v22txtab/unsigned-accumulator && export PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:$PATH; exec gcc -c -I/work/v22txtab/unsigned-accumulator/include -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -I/work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/include -D__SIZEOF_POINTER__=4 -include /work/historical-headers-eccf0f2ae817cec09e93886ed7635604600a75dd/tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS -o /work/v22txtab/unsigned-accumulator/candidate.o /work/v22txtab/unsigned-accumulator/v22txtab.c"
+          ],
+          "overlay_header_hashes": {
+            "dsplib/v22fp.h": "1ce936d46e90b43b994bc5f6801070261a67ba3e2fbcfafd414a29ad11377243"
+          },
+          "diagnostic_flags": [],
+          "compile_exit": 0,
+          "object_hash": "8266a61e88cfc110e21429cb6c8dc8bd13f7faa420737ed765c6b8e5331e7fcc",
+          "globals": {
+            "SDMv22_CFG": "R",
+            "SMCv22_CFG": "R",
+            "SMCv22_IMAP_1200BPS": "R",
+            "SMCv22_IMAP_2400BPS": "R",
+            "SMCv22_PMAP": "R",
+            "SMCv22_QMAP_1200BPS": "R",
+            "SMCv22_QMAP_2400BPS": "R"
+          },
+          "functions": [],
+          "verdicts": {},
+          "changed_bodies": [],
+          "gains": [],
+          "losses": []
+        }
+      }
+    }
+  },
+  "outcome": "28 successful compilations; all 14 unchanged controls raw-reproduce retained objects; all 14 unsigned candidates raw-identical to controls",
+  "focused_period": {
+    "selection": [
+      "t_v22fpcreate",
+      "t_v22org"
+    ],
+    "passed": 2,
+    "failed": 0
+  },
+  "toolchain_identity_log": "toolchain identity: image ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest; PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4\ngcc executable:\n/usr/i386-pc-linux-gnu/gcc-bin/3.4/gcc\ngcc (GCC) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)\nCopyright (C) 2004 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\ngcc machine: i386-pc-linux-gnu\ngcc version: 3.4.2\ngcc assembler: /usr/lib/gcc/i386-pc-linux-gnu/3.4.2/../../../../i386-pc-linux-gnu/bin/as\nGNU assembler 2.15.92.0.2 20040927\nCopyright 2002 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License.  This program has absolutely no warranty.\nThis assembler was configured for a target of `i386-pc-linux-gnu'.\n"
+}

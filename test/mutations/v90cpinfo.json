@@ -31,13 +31,13 @@
  },
  {
   "label": "the CRC covers the framing bits too",
-  "find": "\tfor (i = 0x12; i < start; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
-  "replace": "\tfor (i = 0x12; i < start; ) {"
+  "find": "\tunsigned int end = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
+  "replace": "\tunsigned int end = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {"
  },
  {
   "label": "the CRC's second tap is one place out",
-  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)bitIndex;",
-  "replace": "\t\tcrc[10] = crc[11];\n\t\tcrc[11] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)bitIndex;"
+  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n\n\tpos = (unsigned int)bitIndex;",
+  "replace": "\t\tcrc[10] = crc[11];\n\t\tcrc[11] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n\n\tpos = (unsigned int)bitIndex;"
  },
  {
   "label": "the length is rounded down, not up",

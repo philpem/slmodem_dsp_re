@@ -752,7 +752,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	cfg.b = c->sel_b;
 	cfg.n_a = c->sel_n_a;
 	cfg.n_b = c->sel_n_b;
-	cfg.interval = (short)c->buflen;
+	cfg.interval = c->buflen;
 	cfg.threshold = (cfg.threshold & ~0xffff) | (unsigned short)c->threshold;
 	/*
 	 * AFTER the report above, which is how the transcript places it: the
