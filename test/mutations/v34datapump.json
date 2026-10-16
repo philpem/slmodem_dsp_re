@@ -56,20 +56,20 @@
   },
   {
     "label": "the handshake loop needs both conditions rather than either",
-    "find": "\t\twhile (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count > 5)",
-    "replace": "\t\twhile (obj->txq.count < obj->tx_fill_target && obj->receiver.rxq.count > 5)",
+    "find": "\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)",
+    "replace": "\t\twhile (tx->count < obj->tx_fill_target && rx->rxq.count > 5)",
     "fn": "datapumpv34"
   },
   {
     "label": "the handshake loop runs while the cursor is at the limit",
-    "find": "\t\twhile (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count > 5)",
-    "replace": "\t\twhile (obj->txq.count <= obj->tx_fill_target || obj->receiver.rxq.count > 5)",
+    "find": "\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)",
+    "replace": "\t\twhile (tx->count <= obj->tx_fill_target || rx->rxq.count > 5)",
     "fn": "datapumpv34"
   },
   {
     "label": "the handshake loop runs while the queue is at five",
-    "find": "\t\twhile (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count > 5)",
-    "replace": "\t\twhile (obj->txq.count < obj->tx_fill_target || obj->receiver.rxq.count >= 5)",
+    "find": "\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)",
+    "replace": "\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count >= 5)",
     "fn": "datapumpv34"
   },
   {
@@ -80,44 +80,50 @@
   },
   {
     "label": "the modulator loop runs one call too many",
-    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
-    "replace": "\twhile (obj->txq.count <= obj->tx_fill_target)\n\t\tmodulatevector(obj);",
+    "find": "\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
+    "replace": "\twhile (tx->count <= obj->tx_fill_target)\n\t\tmodulatevector(obj);",
     "fn": "datapumpv34"
   },
   {
     "label": "the modulator loop is a do-while, so it always runs once",
-    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
-    "replace": "\tdo\n\t\tmodulatevector(obj);\n\twhile (obj->txq.count < obj->tx_fill_target);",
+    "find": "\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
+    "replace": "\tdo\n\t\tmodulatevector(obj);\n\twhile (tx->count < obj->tx_fill_target);",
     "fn": "datapumpv34"
   },
   {
     "label": "the modulator loop compares the cursor against the receive count",
-    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
-    "replace": "\twhile (obj->receiver.rxq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
+    "find": "\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
+    "replace": "\twhile (rx->rxq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);",
     "fn": "datapumpv34"
   },
   {
     "label": "the receiver loop runs before the modulator loop",
-    "find": "\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
-    "replace": "\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
+    "find": "\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n\n",
+    "replace": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n\n\n\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n",
     "fn": "datapumpv34"
   },
   {
     "label": "the receiver loop drains to four rather than five",
-    "find": "\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;",
-    "replace": "\twhile (obj->receiver.rxq.count > 4) {\n\t\tunsigned span;",
+    "find": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;",
+    "replace": "\twhile (rx->rxq.count > 4) {\n\t\tunsigned span;",
     "fn": "datapumpv34"
   },
   {
     "label": "the receiver loop tests the transmit cursor rather than the queue",
-    "find": "\twhile (obj->receiver.rxq.count > 5) {\n\t\tunsigned span;",
-    "replace": "\twhile (obj->txq.count > 5) {\n\t\tunsigned span;",
+    "find": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;",
+    "replace": "\twhile (tx->count > 5) {\n\t\tunsigned span;",
+    "fn": "datapumpv34"
+  },
+  {
+    "label": "the +0x124 cap comparison is unsigned despite the signed 16-bit branch",
+    "find": "\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)",
+    "replace": "\t\tif ((unsigned short)rx->rx_blocks <= DP_RX_BLOCK_CAP)",
     "fn": "datapumpv34"
   },
   {
     "label": "+0x124 stops bumping one short of the cap",
-    "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)",
-    "replace": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) < DP_RX_BLOCK_CAP)",
+    "find": "\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)",
+    "replace": "\t\tif (rx->rx_blocks < DP_RX_BLOCK_CAP)",
     "fn": "datapumpv34"
   },
   {
@@ -127,45 +133,51 @@
   },
   {
     "label": "+0x124 is bumped after `receiver` rather than before it",
-    "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);",
-    "replace": "\t\treceiver(obj);\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));",
+    "find": "\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);",
+    "replace": "\t\treceiver(obj);\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);",
     "fn": "datapumpv34"
   },
   {
     "label": "+0x124 is bumped unconditionally",
-    "find": "\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,",
-    "replace": "\t\tif (1)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,",
+    "find": "\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks =",
+    "replace": "\t\tif (1)\n\t\t\trx->rx_blocks =",
     "fn": "datapumpv34"
   },
   {
     "label": "the error measure is read before `receiver` rather than after it",
-    "find": "\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);",
-    "replace": "\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\treceiver(obj);",
+    "find": "\t\treceiver(obj);\n\n\t\terr = rx->equerr;",
+    "replace": "\t\terr = rx->equerr;\n\t\treceiver(obj);",
     "fn": "datapumpv34"
   },
   {
     "label": "the plain run counts an error equal to its threshold as a failure",
-    "find": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));",
-    "replace": "\t\tdp_run(obj, DP_RX_BAD, err >= dp_rxget(obj, DP_RX_THR_A));",
+    "find": "\t\tif (err > rx->bad_thresh)",
+    "replace": "\t\tif (err >= rx->bad_thresh)",
+    "fn": "datapumpv34"
+  },
+  {
+    "label": "the cached error is compared unsigned after its zero-extending load",
+    "find": "\t\tif (err > rx->bad_thresh)",
+    "replace": "\t\tif ((unsigned short)err > rx->bad_thresh)",
     "fn": "datapumpv34"
   },
   {
     "label": "the plain run reads +0x254 rather than +0x252",
-    "find": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));",
-    "replace": "\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_B));",
+    "find": "\t\tif (err > rx->bad_thresh)",
+    "replace": "\t\tif (err > rx->bad_long_thresh)",
     "fn": "datapumpv34"
   },
   {
     "label": "the run counter counts up when the measure PASSES",
-    "find": "\tdp_rxput(obj, counter,\n\t\t failed ? (short)(dp_rxget(obj, counter) + 1) : 0);",
-    "replace": "\tdp_rxput(obj, counter,\n\t\t failed ? 0 : (short)(dp_rxget(obj, counter) + 1));",
-    "fn": "dp_run"
+    "find": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n",
+    "replace": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err <= rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err <= rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err >= rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n",
+    "fn": "datapumpv34"
   },
   {
     "label": "the run counter is left alone rather than cleared when the measure passes",
-    "find": "\tdp_rxput(obj, counter,\n\t\t failed ? (short)(dp_rxget(obj, counter) + 1) : 0);",
-    "replace": "\tif (failed)\n\t\tdp_rxput(obj, counter, (short)(dp_rxget(obj, counter) + 1));",
-    "fn": "dp_run"
+    "find": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n",
+    "replace": "\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t}\n\t}\n",
+    "fn": "datapumpv34"
   },
   {
     "label": "the middle span is 143999 rather than 144000",
@@ -174,8 +186,8 @@
   },
   {
     "label": "the middle span compares >= rather than >",
-    "find": "\t\tif (span > DP_TIMER_MID)",
-    "replace": "\t\tif (span >= DP_TIMER_MID)",
+    "find": "\t\tif (span > DP_TIMER_MID) {",
+    "replace": "\t\tif (span >= DP_TIMER_MID) {",
     "fn": "datapumpv34"
   },
   {
@@ -185,14 +197,14 @@
   },
   {
     "label": "the long span compares >= rather than >",
-    "find": "\t\tif (span > DP_TIMER_LONG)",
-    "replace": "\t\tif (span >= DP_TIMER_LONG)",
+    "find": "\t\tif (span > DP_TIMER_LONG) {",
+    "replace": "\t\tif (span >= DP_TIMER_LONG) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the good-block run counts errors ABOVE its threshold",
-    "find": "\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));",
-    "replace": "\t\t\t       err > dp_rxget(obj, DP_RX_THR_C));",
+    "find": "\t\t\tif (err < rx->good_thresh)",
+    "replace": "\t\t\tif (err > rx->good_thresh)",
     "fn": "datapumpv34"
   },
   {
@@ -203,46 +215,46 @@
   },
   {
     "label": "the retrain tests bit 5 rather than bit 6",
-    "find": "\tif ((obj->receiver.flags & V34_RX_FLAG_RETRAIN)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
-    "replace": "\tif ((obj->receiver.flags & V34_RX_FLAG_RENEG)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "find": "\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "replace": "\tif ((rx->flags & V34_RX_FLAG_RENEG)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the retrain wants the flag AND the run rather than either",
-    "find": "\tif ((obj->receiver.flags & V34_RX_FLAG_RETRAIN)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
-    "replace": "\tif ((obj->receiver.flags & V34_RX_FLAG_RETRAIN)\n\t    && dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "find": "\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "replace": "\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    && rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the retrain fires on a run EQUAL to half the block rate",
-    "find": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
-    "replace": "\t    || dp_rxget(obj, DP_RX_BAD) >= (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "find": "\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "replace": "\t    || rx->bad_run >= (short)(obj->ratecfg.rx_baud >> 1)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the halving is a division, so a negative block rate rounds the other way",
-    "find": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud >> 1)) {",
-    "replace": "\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->ratecfg.rx_baud / 2)) {",
+    "find": "\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {",
+    "replace": "\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud / 2)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the retrain reports 2 where the object reports 3",
-    "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
-    "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 2 : 3;",
+    "find": "\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
+    "replace": "\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 2 : 3;",
     "fn": "datapumpv34"
   },
   {
     "label": "the retrain's report compares < rather than <=",
-    "find": "\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
-    "replace": "\t\t\t dp_rxget(obj, DP_RX_BAD) < (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
+    "find": "\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
+    "replace": "\t\t\t rx->bad_run < (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
     "fn": "datapumpv34"
   },
   {
     "label": "the retrain's report is decided BEFORE v34handshakinit runs",
     "equivalent": true,
     "why": "`v34handshakinit` writes neither +0x258 nor +0xaa96 on any mode -- `setupreceiver`, which its retrain path reaches, assigns +0x122, +0x124 and +0x25e and not the run counters -- so the two orders read the same two fields.  The source keeps the object's order because the object has one, not because it is observable.",
-    "find": "\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t dp_rxget(obj, DP_RX_BAD) <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
-    "replace": "\t\t{\n\t\t\tint m = dp_rxget(obj, DP_RX_BAD)\n\t\t\t\t<= (short)(obj->ratecfg.rx_baud >> 1) ? 3 : 2;\n\t\t\tv34handshakinit(obj, 1);\n\t\t\tobj->hs_mode = m;\n\t\t}",
+    "find": "\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;",
+    "replace": "\t\t{\n\t\t\tint m = rx->bad_run\n\t\t\t\t<= (short)(obj->ratecfg.rx_baud >> 1) ? 3 : 2;\n\t\t\tv34handshakinit(obj, 1);\n\t\t\tobj->hs_mode = m;\n\t\t}",
     "fn": "datapumpv34"
   },
   {
@@ -253,8 +265,8 @@
   },
   {
     "label": "the retrain leaves the long-run counter alone",
-    "find": "\t\tdp_rxput(obj, DP_RX_BAD, 0);\n\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
-    "replace": "\t\tdp_rxput(obj, DP_RX_BAD, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+    "find": "\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
+    "replace": "\t\trx->bad_run = 0;\n\t\trx->good_run = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");",
     "fn": "datapumpv34"
   },
   {
@@ -271,20 +283,20 @@
   },
   {
     "label": "the remote block tests bit 6 rather than bit 5",
-    "find": "\tif (obj->receiver.flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);",
-    "replace": "\tif (obj->receiver.flags & V34_RX_FLAG_RETRAIN) {\n\t\tv34handshakinit(obj, 3);",
+    "find": "\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);",
+    "replace": "\tif (rx->flags & V34_RX_FLAG_RETRAIN) {\n\t\tv34handshakinit(obj, 3);",
     "fn": "datapumpv34"
   },
   {
     "label": "the remote block reads the flags cached from before the retrain",
-    "find": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (obj->receiver.flags & V34_RX_FLAG_RENEG) {",
+    "find": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (rx->flags & V34_RX_FLAG_RENEG) {",
     "replace": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (0) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the remote block calls v34handshakinit mode 1 rather than mode 3",
-    "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);",
-    "replace": "\t\tv34handshakinit(obj, 1);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);",
+    "find": "\t\tv34handshakinit(obj, 3);\n\t\trx->good_run = 0;",
+    "replace": "\t\tv34handshakinit(obj, 1);\n\t\trx->good_run = 0;",
     "fn": "datapumpv34"
   },
   {
@@ -295,13 +307,13 @@
   },
   {
     "label": "the remote block records why 2 rather than why 1",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+    "find": "\t\trx->rrn_local_dir = 1;",
+    "replace": "\t\trx->rrn_local_dir = 2;",
     "fn": "datapumpv34"
   },
   {
     "label": "the remote block leaves the good-block run alone, so the step up can follow",
-    "find": "\t\tv34handshakinit(obj, 3);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 4;",
+    "find": "\t\tv34handshakinit(obj, 3);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 4;",
     "replace": "\t\tv34handshakinit(obj, 3);\n\t\tobj->hs_mode = 4;",
     "fn": "datapumpv34"
   },
@@ -319,32 +331,32 @@
   },
   {
     "label": "the remote block records +0xaa96 rather than +0xaa98 as the rate",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rx_baud);",
+    "find": "\t\trx->rrn_local_dir = 1;\n\t\trx->baud_copy = obj->ratecfg.rxbits;",
+    "replace": "\t\trx->rrn_local_dir = 1;\n\t\trx->baud_copy = obj->ratecfg.rx_baud;",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down fires on a long run EQUAL to twice the block rate",
-    "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) >= 2 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->bad_long_run >= 2 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down's threshold is the block rate rather than twice it",
-    "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->bad_long_run > (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down's threshold is computed in sixteen bits",
-    "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > (short)(2 * obj->ratecfg.rx_baud)) {",
+    "find": "\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->bad_long_run > (short)(2 * obj->ratecfg.rx_baud)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down reads the plain run rather than the long one",
-    "find": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 2 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_BAD) > 2 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->bad_run > 2 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
@@ -363,20 +375,20 @@
   },
   {
     "label": "the step down records why 3 rather than why 2",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 3);",
+    "find": "\t\trx->rrn_local_dir = 2;",
+    "replace": "\t\trx->rrn_local_dir = 3;",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down leaves the good-block run alone, so the step up follows it",
-    "find": "\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tdp_rxput(obj, DP_RX_WHY, 2);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_BAD_LONG, 0);\n\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+    "find": "\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\trx->rrn_local_dir = 2;",
+    "replace": "\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 2;",
     "fn": "datapumpv34"
   },
   {
     "label": "the step down counts a REMOTE renegotiation",
-    "find": " \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
-    "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
+    "find": " \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (rx->good_run",
+    "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\tif (rx->good_run",
     "fn": "datapumpv34"
   },
   {
@@ -387,26 +399,26 @@
   },
   {
     "label": "the step up fires on a good run EQUAL to eight times the block rate",
-    "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) >= 8 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->good_run >= 8 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up's threshold is four times the block rate rather than eight",
-    "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) > 4 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->good_run > 4 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up's threshold is computed in sixteen bits",
-    "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_GOOD) > (short)(8 * obj->ratecfg.rx_baud)) {",
+    "find": "\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->good_run > (short)(8 * obj->ratecfg.rx_baud)) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up reads the long run rather than the good one",
-    "find": "\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\tif (dp_rxget(obj, DP_RX_BAD_LONG) > 8 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\tif (rx->bad_long_run > 8 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
@@ -417,26 +429,26 @@
   },
   {
     "label": "the step up is an else of the step down",
-    "find": "\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
-    "replace": "\t} else if (dp_rxget(obj, DP_RX_GOOD) > 8 * (int)obj->ratecfg.rx_baud) {",
+    "find": "\t}\n\n\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
+    "replace": "\t} else if (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up records why 2 rather than why 3",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 2);",
+    "find": "\t\trx->rrn_local_dir = 3;",
+    "replace": "\t\trx->rrn_local_dir = 2;",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up reports 4 rather than 5",
-    "find": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 5;",
-    "replace": "\t\tdp_rxput(obj, DP_RX_GOOD, 0);\n\t\tobj->hs_mode = 4;",
+    "find": "\t\trx->good_run = 0;\n\t\tobj->hs_mode = 5;",
+    "replace": "\t\trx->good_run = 0;\n\t\tobj->hs_mode = 4;",
     "fn": "datapumpv34"
   },
   {
     "label": "the step up records +0xaa96 rather than +0xaa98 as the rate",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);",
-    "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rx_baud);",
+    "find": "\t\trx->rrn_local_dir = 3;\n\t\trx->baud_copy = obj->ratecfg.rxbits;",
+    "replace": "\t\trx->rrn_local_dir = 3;\n\t\trx->baud_copy = obj->ratecfg.rx_baud;",
     "fn": "datapumpv34"
   },
   {
@@ -459,14 +471,16 @@
   },
   {
     "label": "the receiver base is +0x260 rather than +0x264",
-    "find": "\treturn *(const short *)((const char *)&obj->receiver + off);",
-    "replace": "\treturn *(const short *)((const char *)&obj->receiver - 4 + off);",
-    "fn": "dp_rxget"
+    "find": "datapumpv34(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tstruct v34_receiver *rx = &obj->receiver;\n\tstruct v34_queue *tx = &obj->txq;\n\n\tif ((unsigned)obj->sample_count\n\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)\n\t\tobj->progress = 5;\n\n\t/*\n\t * The handshake, and the only path that calls `v34handshak`.  Its own\n\t * prologue reads the same two guards, so an iteration whose arm moves\n\t * neither the cursor nor the queue count repeats forever; that is the\n\t * object's shape. A fixture must establish progress in the selected\n\t * handshake arm, or enter with the loop already satisfied.\n\t */\n\tif ((unsigned)obj->hs_mode > 1u) {\n\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)\n\t\t\tv34handshak(obj);\n\t\treturn;\n\t}\n\n\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n\n\t/*\n\t * Retrain: either the receiver asked with bit 6 of +0x122, or the\n\t * plain bad-block run has passed half the block rate at +0xaa96.\n\t * The mode it leaves behind distinguishes the two AFTER the fact --\n\t * the same test again, so a `v34handshakinit` that cleared the run\n\t * would report 3 where the entry condition was the flag.\n\t */\n\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {\n\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");\n\t}\n\n\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 4;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 1;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"V34RNEG, rate renegotiation detected \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit: the counter is\n\t * sign-extended and the block rate multiplied as an int, so a large\n\t * +0xaa96 does not wrap the threshold into range.\n\t */\n\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\trx->rrn_local_dir = 2;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 3;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to small \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+    "replace": "datapumpv34(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tstruct v34_receiver *rx = &obj->receiver;\n\tstruct v34_queue *tx = &obj->txq;\n\n\tif ((unsigned)obj->sample_count\n\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)\n\t\tobj->progress = 5;\n\n\t/*\n\t * The handshake, and the only path that calls `v34handshak`.  Its own\n\t * prologue reads the same two guards, so an iteration whose arm moves\n\t * neither the cursor nor the queue count repeats forever; that is the\n\t * object's shape. A fixture must establish progress in the selected\n\t * handshake arm, or enter with the loop already satisfied.\n\t */\n\tif ((unsigned)obj->hs_mode > 1u) {\n\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)\n\t\t\tv34handshak(obj);\n\t\treturn;\n\t}\n\n\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (*(const short *)((const char *)rx + 0x120) <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(*(const short *)((const char *)rx + 0x120) + 1);\n\n\t\treceiver(obj);\n\n\t\terr = *(const short *)((const char *)rx + 0x216);\n\t\tif (err > *(const short *)((const char *)rx + 0x24e))\n\t\t\trx->bad_run = (short)(*(const short *)((const char *)rx + 0x254) + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > *(const short *)((const char *)rx + 0x250))\n\t\t\t\trx->bad_long_run = (short)(*(const short *)((const char *)rx + 0x256) + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < *(const short *)((const char *)rx + 0x252))\n\t\t\t\trx->good_run = (short)(*(const short *)((const char *)rx + 0x258) + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n\n\t/*\n\t * Retrain: either the receiver asked with bit 6 of +0x122, or the\n\t * plain bad-block run has passed half the block rate at +0xaa96.\n\t * The mode it leaves behind distinguishes the two AFTER the fact --\n\t * the same test again, so a `v34handshakinit` that cleared the run\n\t * would report 3 where the entry condition was the flag.\n\t */\n\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || *(const short *)((const char *)rx + 0x254) > (short)(obj->ratecfg.rx_baud >> 1)) {\n\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t *(const short *)((const char *)rx + 0x254) <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");\n\t}\n\n\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 4;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 1;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"V34RNEG, rate renegotiation detected \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit: the counter is\n\t * sign-extended and the block rate multiplied as an int, so a large\n\t * +0xaa96 does not wrap the threshold into range.\n\t */\n\tif (*(const short *)((const char *)rx + 0x256) > 2 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\trx->rrn_local_dir = 2;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (*(const short *)((const char *)rx + 0x258) > 8 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 3;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to small \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+    "fn": "datapumpv34",
+    "note": "The removed helper affected all of these reads. The broad anchor preserves that mutation domain after direct member access; raw casts occur only in this negative control."
   },
   {
     "label": "the run counters are written four bytes low",
-    "find": "\t*(short *)((char *)&obj->receiver + off) = v;",
-    "replace": "\t*(short *)((char *)&obj->receiver - 4 + off) = v;",
-    "fn": "dp_rxput"
+    "find": "datapumpv34(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tstruct v34_receiver *rx = &obj->receiver;\n\tstruct v34_queue *tx = &obj->txq;\n\n\tif ((unsigned)obj->sample_count\n\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)\n\t\tobj->progress = 5;\n\n\t/*\n\t * The handshake, and the only path that calls `v34handshak`.  Its own\n\t * prologue reads the same two guards, so an iteration whose arm moves\n\t * neither the cursor nor the queue count repeats forever; that is the\n\t * object's shape. A fixture must establish progress in the selected\n\t * handshake arm, or enter with the loop already satisfied.\n\t */\n\tif ((unsigned)obj->hs_mode > 1u) {\n\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)\n\t\t\tv34handshak(obj);\n\t\treturn;\n\t}\n\n\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\trx->bad_run = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\trx->bad_run = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\trx->bad_long_run = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\trx->bad_long_run = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\trx->good_run = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\trx->good_run = 0;\n\t\t}\n\t}\n\n\t/*\n\t * Retrain: either the receiver asked with bit 6 of +0x122, or the\n\t * plain bad-block run has passed half the block rate at +0xaa96.\n\t * The mode it leaves behind distinguishes the two AFTER the fact --\n\t * the same test again, so a `v34handshakinit` that cleared the run\n\t * would report 3 where the entry condition was the flag.\n\t */\n\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {\n\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");\n\t}\n\n\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 4;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 1;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"V34RNEG, rate renegotiation detected \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit: the counter is\n\t * sign-extended and the block rate multiplied as an int, so a large\n\t * +0xaa96 does not wrap the threshold into range.\n\t */\n\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->good_run = 0;\n\t\trx->rrn_local_dir = 2;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\trx->good_run = 0;\n\t\tobj->hs_mode = 5;\n\t\trx->bad_run = 0;\n\t\trx->bad_long_run = 0;\n\t\trx->rrn_local_dir = 3;\n\t\trx->baud_copy = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to small \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+    "replace": "datapumpv34(void *objp)\n{\n\tstruct v34_object *obj = (struct v34_object *)objp;\n\tstruct v34_receiver *rx = &obj->receiver;\n\tstruct v34_queue *tx = &obj->txq;\n\n\tif ((unsigned)obj->sample_count\n\t    - (unsigned)obj->int_0248 > DP_TIMER_STALE)\n\t\tobj->progress = 5;\n\n\t/*\n\t * The handshake, and the only path that calls `v34handshak`.  Its own\n\t * prologue reads the same two guards, so an iteration whose arm moves\n\t * neither the cursor nor the queue count repeats forever; that is the\n\t * object's shape. A fixture must establish progress in the selected\n\t * handshake arm, or enter with the loop already satisfied.\n\t */\n\tif ((unsigned)obj->hs_mode > 1u) {\n\t\twhile (tx->count < obj->tx_fill_target || rx->rxq.count > 5)\n\t\t\tv34handshak(obj);\n\t\treturn;\n\t}\n\n\twhile (tx->count < obj->tx_fill_target)\n\t\tmodulatevector(obj);\n\n\twhile (rx->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (rx->rx_blocks <= DP_RX_BLOCK_CAP)\n\t\t\t*(short *)((char *)rx + 0x120) = (short)(rx->rx_blocks + 1);\n\n\t\treceiver(obj);\n\n\t\terr = rx->equerr;\n\t\tif (err > rx->bad_thresh)\n\t\t\t*(short *)((char *)rx + 0x254) = (short)(rx->bad_run + 1);\n\t\telse\n\t\t\t*(short *)((char *)rx + 0x254) = 0;\n\n\t\tspan = (unsigned)obj->sample_count\n\t\t     - (unsigned)obj->int_0248;\n\n\t\tif (span > DP_TIMER_MID) {\n\t\t\tif (err > rx->bad_long_thresh)\n\t\t\t\t*(short *)((char *)rx + 0x256) = (short)(rx->bad_long_run + 1);\n\t\t\telse\n\t\t\t\t*(short *)((char *)rx + 0x256) = 0;\n\t\t}\n\t\tif (span > DP_TIMER_LONG) {\n\t\t\tif (err < rx->good_thresh)\n\t\t\t\t*(short *)((char *)rx + 0x258) = (short)(rx->good_run + 1);\n\t\t\telse\n\t\t\t\t*(short *)((char *)rx + 0x258) = 0;\n\t\t}\n\t}\n\n\t/*\n\t * Retrain: either the receiver asked with bit 6 of +0x122, or the\n\t * plain bad-block run has passed half the block rate at +0xaa96.\n\t * The mode it leaves behind distinguishes the two AFTER the fact --\n\t * the same test again, so a `v34handshakinit` that cleared the run\n\t * would report 3 where the entry condition was the flag.\n\t */\n\tif ((rx->flags & V34_RX_FLAG_RETRAIN)\n\t    || rx->bad_run > (short)(obj->ratecfg.rx_baud >> 1)) {\n\t\tv34handshakinit(obj, 1);\n\t\tobj->hs_mode =\n\t\t\t rx->bad_run <= (short)(obj->ratecfg.rx_baud >> 1)\n\t\t\t ? 3 : 2;\n\t\t*(short *)((char *)rx + 0x254) = 0;\n\t\t*(short *)((char *)rx + 0x256) = 0;\n\t\t*(short *)((char *)rx + 0x258) = 0;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34TIMING,Retrain started\\n\");\n\t}\n\n\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);\n\t\t*(short *)((char *)rx + 0x258) = 0;\n\t\tobj->hs_mode = 4;\n\t\t*(short *)((char *)rx + 0x254) = 0;\n\t\t*(short *)((char *)rx + 0x256) = 0;\n\t\t*(short *)((char *)rx + 0x25a) = 1;\n\t\t*(short *)((char *)rx + 0x25c) = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"V34RNEG, rate renegotiation detected \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\t/*\n\t * Down, then up, and both compares are 32-bit: the counter is\n\t * sign-extended and the block rate multiplied as an int, so a large\n\t * +0xaa96 does not wrap the threshold into range.\n\t */\n\tif (rx->bad_long_run > 2 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\tobj->hs_mode = 5;\n\t\t*(short *)((char *)rx + 0x254) = 0;\n\t\t*(short *)((char *)rx + 0x256) = 0;\n\t\t*(short *)((char *)rx + 0x258) = 0;\n\t\t*(short *)((char *)rx + 0x25a) = 2;\n\t\t*(short *)((char *)rx + 0x25c) = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"DOWN initiated due to large \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (rx->good_run > 8 * (int)obj->ratecfg.rx_baud) {\n\t\tv34handshakinit(obj, 2);\n\t\t*(short *)((char *)rx + 0x258) = 0;\n\t\tobj->hs_mode = 5;\n\t\t*(short *)((char *)rx + 0x254) = 0;\n\t\t*(short *)((char *)rx + 0x256) = 0;\n\t\t*(short *)((char *)rx + 0x25a) = 3;\n\t\t*(short *)((char *)rx + 0x25c) = obj->ratecfg.rxbits;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34RNEG, rate renegotiation \"\n\t\t\t\t\t     \"UP initiated due to small \" \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+    "fn": "datapumpv34",
+    "note": "The removed helper affected every receiver store in this function. The broad anchor preserves that domain; raw casts occur only in this negative control."
   }
 ]

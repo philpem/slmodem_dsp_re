@@ -471,11 +471,11 @@ struct v34_receiver {
 	 * it -- matching the two arms' own debug strings, "returning from
 	 * local rrn down" / "... up".
 	 *
-	 * Named from the read side alone: nothing written so far in this
-	 * tree ever sets it to a nonzero value (`V34hshak.c` only clears it),
-	 * so which exact nonzero values besides 2 occur is not established --
-	 * only that "not 2" means "up", per the else arm.  Usage inference,
-	 * strongly supported by the two branches' own debug text (F10132).
+	 * `datapumpv34` writes 1 for a remote request, 2 for a local step
+	 * down and 3 for a local step up (0x71c70, 0x71cf1, 0x71b7b).
+	 * The name is usage inference, supported by these writes and the
+	 * rate-step branches' own debug text (F10132). The previous comment
+	 * claiming that V34hshak.c only clears this field was stale.
 	 */
 	short           rrn_local_dir;       /* +0x25e (was short_25e) */
 	short           baud_copy;            /* +0x260 */

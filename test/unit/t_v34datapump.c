@@ -645,6 +645,39 @@ static const struct poke pk_rx_cap_over[] = {
 };
 
 /*
+ * Synthetic fidelity probe: a negative acquisition count has no demonstrated
+ * lifecycle history. The blob loads it with movzwl at 0x71a2a, but compares
+ * AX with a signed branch at 0x71a31..0x71a35. An unsigned comparison would
+ * skip the increment; -1 must instead become zero before receiver runs.
+ */
+static const struct poke pk_rx_cap_negative[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_BLOCKS,	2, -1 },
+	PK_END
+};
+
+/*
+ * Synthetic fidelity probes, with no demonstrated lifecycle history for the
+ * planted error/run values. The same receiver boundary leaves equerr intact
+ * (checked below), so these isolate the supervisor's signed compare and its
+ * low-16-bit counter increment. Neither claims a reachable public call state.
+ */
+static const struct poke pk_rx_negative_err[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_ERR,	2, -1 },
+	{ O_THR_A,	2, 0 },
+	{ O_BAD,	2, 11 },
+	PK_END
+};
+
+static const struct poke pk_rx_bad_wrap[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_THR_A,	2, 0 },
+	{ O_BAD,	2, 0x7fff },
+	PK_END
+};
+
+/*
  * The two timed counters inside the loop.  Below 144,000 elapsed neither
  * +0x25a nor +0x25c moves whatever the error does; above 1,152,000 both do.
  */
@@ -991,7 +1024,13 @@ static const struct trial trials[] = {
   { "+0x124 is bumped before receiver at the PP boundary", pk_rx_prebump,
     { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 612 },
   { "the supervisor reads the error published by receiver", pk_rx_fresh_err,
-    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 613 }
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 613 },
+  { "synthetic: negative +0x124 uses the signed cap comparison",
+    pk_rx_cap_negative, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 614 },
+  { "synthetic: a negative error passes a zero threshold",
+    pk_rx_negative_err, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 615 },
+  { "synthetic: bad_run wraps from 32767 to -32768",
+    pk_rx_bad_wrap, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 616 }
 };
 
 #define NTRIALS	((int)(sizeof(trials) / sizeof(trials[0])))
@@ -1071,12 +1110,11 @@ main(void)
 	}
 
 	/*
-	 * Second: how many trials wrote NOTHING AT ALL.  Eleven of the
-	 * thirty-nine are "this arm must not run" cases, and for those the
+	 * Second: how many trials wrote NOTHING AT ALL. Eleven trials are
+	 * "this arm must not run" cases, and for those the
 	 * differential comparison alone is a comparison of two silences; the
 	 * count is what stops a change that quietly turned an armed case
-	 * inert from still passing.  The other twenty-eight must all have
-	 * moved the object.
+	 * inert from still passing. Every other trial must move the object.
 	 */
 	{
 		int inert = 0;
@@ -1151,6 +1189,16 @@ main(void)
 		    seen[0][index_of(613)].bad, 8, 613);
 	diff_eq_int("the receiver publishes the accumulated error before supervision",
 		    seen[0][index_of(613)].err, 160, 613);
+
+	diff_eq_int("the synthetic negative rx_blocks increments to zero",
+		    seen[0][index_of(614)].blocks, 0, 614);
+
+	diff_eq_int("the synthetic negative error survives receiver",
+		    seen[0][index_of(615)].err, -1, 615);
+	diff_eq_int("the synthetic negative error clears the bad run",
+		    seen[0][index_of(615)].bad, 0, 615);
+	diff_eq_int("the synthetic bad run wraps in sixteen bits",
+		    seen[0][index_of(616)].bad, -32768, 616);
 
 	/* The absolute oracle that separates OR from AND in the handshake loop. */
 	diff_eq_int("the transmit-only handshake condition completes the block",

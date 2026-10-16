@@ -3,7 +3,7 @@
 The initial bounded reading audit used `47174bf3` on 16 October 2026.
 The follow-up fixes start from current master `ac7f28e6`; that revision already
 contains repairs absent from the initial snapshot. The statuses below distinguish
-new fixes, corrections to superseded findings and the evidence-limited residual.
+new fixes, corrections to superseded findings and the subsequent supervisor recovery.
 This is not an exhaustive static-analysis or defect census, and none of the
 initial observations established a newly failing public modem call.
 
@@ -11,7 +11,7 @@ initial observations established a newly failing public modem call.
 |---|---|
 | MG-01 | Resolved: single complete phase 4 demodulator definition |
 | MG-02 | Closed: receiver ownership was already reconciled |
-| MG-03 | Partial: final raw state reader removed; supervisor helpers tracked in #286 |
+| MG-03 | Resolved: typed supervisor fields and explicit counter branches (#286) |
 | MG-04 | Resolved: existing refusal behaviour verified and contract clarified |
 | MG-05 | Resolved: stale introductions corrected |
 | MG-06 | Resolved: remainder paths exercised in chunked connecting calls |
@@ -77,26 +77,23 @@ recovery must preserve both offset bases and the existing differential checks.
 
 ## MG-03: Offset access remains part of the handshake model
 
-**Partially resolved: obsolete claims corrected and the remaining raw state
-reader removed.** At `ac7f28e6`, issue #260 has already replaced receiver
-`pad_000` and `pad_2a8` with recovered fields/subobjects, and `hs_put` is
-already gone. The three remaining `hs_get` calls read the known signed-short
-`ratecfg.rxbits` field. They now use that member directly; the unused
-accessor and `DP_FAA98` macro are removed.
+**Resolved: obsolete claims corrected and supervisor ownership recovered.**
+At `ac7f28e6`, issue #260 had already modelled the receiver subobjects and
+removed `hs_put`. The final three `hs_get` reads now use `ratecfg.rxbits`.
+The follow-up for [issue #286](https://github.com/philpem/slmodem_dsp_re/issues/286)
+also replaces `dp_rxget`/`dp_rxput`/`dp_run` with existing typed receiver
+members and explicit conditional counter updates.
 
-The minimal substitution leaves the complete period-compiled `V34hshak.c`
-object unchanged across all 54 emitted functions. It adds no guessed field,
-name or type and does not change comparison promotion or counter wrap.
-
-A bounded broader typed rewrite was also measured, then withheld: only the
-non-exact `datapumpv34` changed, from 988 to 919 bytes against the original's
-1028, without an independent recovery of the changed counter/helper lowering.
-The existing `dp_rxget`/`dp_rxput`/`dp_run` group therefore remains open in
-[issue #286](https://github.com/philpem/slmodem_dsp_re/issues/286) under
-the F8044/F8045 evidence limits. Unmapped storage with unsupported meaning
-also remains neutral. This entry is not closed by a reduced offset count.
-See [the two-cell record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md)
-for the source boundary, full flags and the next evidence needed.
+An original-operand audit supports the owner pointers, signed-short tests,
+16-bit counter wrap, unsigned timer gates and four independent supervisor
+blocks. It corrects F8044/F8045's erroneous unsigned-block-count inference.
+Post-call reads remain at their original boundaries. No field is invented
+or retyped. The initial three-read substitution preserves the complete
+object; the broader supervisor recovery changes only the non-exact
+`datapumpv34` body. Its exact code generation remains unfinished.
+See [the recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md)
+for operand evidence, full-TU controls and validation. Unmapped storage
+without supported meaning remains neutral.
 
 ## MG-04: Wrapper preconditions need an explicit boundary
 

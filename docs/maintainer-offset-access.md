@@ -1,4 +1,4 @@
-# Maintainer MG-03: bounded typed-access recovery
+# Maintainer MG-03: typed supervisor recovery
 
 At baseline `ac7f28e6`, issue #260 has already modelled the V.34 receiver
 and its timing/equalizer subobjects. The guide's references to `pad_000`,
@@ -6,7 +6,7 @@ and its timing/equalizer subobjects. The guide's references to `pad_000`,
 three callers, all in `datapumpv34`, reading root `+0xaa98` before storing
 the receiver's `baud_copy`.
 
-## Retained change
+## Initial byte-preserving change
 
 Replace those three reads with `obj->ratecfg.rxbits`, whose declared type
 is the same signed `short` returned by `hs_get`. Remove the now-unused
@@ -43,17 +43,64 @@ The earlier F8044/F8045 investigation similarly distinguishes the original's
 16-bit comparisons from superficially closer but wrong rewrites. Neither
 cell changes those comparison types or seeks a new compiler profile.
 
-The remaining `dp_rxget`, `dp_rxput` and `dp_run` group is explicitly open in
-[issue #286](https://github.com/philpem/slmodem_dsp_re/issues/286).
-Revisit it when original control-flow/operand or compiler-stage evidence
-distinguishes a typed formulation while preserving the measured behaviour.
-No further spelling matrix is justified by this audit. Unmapped storage
-without supported readers/writers remains neutrally represented; it is not
-safe to manufacture fields or semantic names for it.
+## Issue #286: receiver ownership and counter control flow
+
+The follow-up removes all ten `DP_RX_*` field-offset macros and the
+`dp_rxget`, `dp_rxput` and `dp_run` helpers. `datapumpv34` holds typed
+receiver and transmit-queue pointers and accesses the already recovered
+members directly. Each counter update now has an explicit conditional
+increment or zero store. No field, type, compiler option or tolerance changes.
+
+This formulation follows independently audited original operands and branches,
+rather than the size of cell B:
+
+| Original evidence | Preserved source contract |
+|---|---|
+| `lea +0x264` and `lea +0x221c` | Receiver and transmit-queue owners |
+| `0x71a31`: `66 3d 2f 75`, then signed `jg` | Signed **16-bit** block-cap comparison |
+| Error comparisons at receiver `+0x252`, `+0x254`, `+0x256` | Cached signed-short error and signed-short thresholds |
+| Increment/word-store and separate zero-store arms | Consecutive counts wrap to 16 bits or clear |
+| Unsigned elapsed-time tests | Delayed counters remain untouched until their gates open |
+| Four fall-through supervisor blocks | Four independent `if`s, with reads retained after init/indication calls |
+| Sign-extended counters and 32-bit rate products | Down/up thresholds do not narrow to short |
+
+**Correction to F8044/F8045:** a zero-extending load does not establish an
+unsigned comparison. F8044 incorrectly described the block-cap comparison as
+32-bit and inferred a forced unsigned field; F8045 repeated that conclusion.
+The instruction's `0x66` prefix and signed branch establish the opposite.
+Keep the declared signed `short`. The new negative-block-count fixture is
+explicitly a synthetic component fidelity probe, not evidence that this state
+is reachable through a public modem call. The existing chunked V.34 connecting
+fixture supplies separate lifecycle coverage.
+
+The unchanged-TU control reproduces the baseline ELF byte for byte. The
+retained explicit-branch formulation emits 1035 bytes for `datapumpv34`,
+against 988 before and 1028 in the original. All 53 other emitted function
+bodies and canonical relocations remain unchanged; no function is added or
+removed. The function remains non-exact: register allocation, cached-error
+extension and scheduling still differ. This is supported structural recovery,
+not a claim to have recovered the exact original source spelling or profile.
+The initial helper-pointer cell B remains a withheld historical experiment.
+
+The whole-TU audit also checks all 85 defined symbol records: names, bindings,
+visibility and sizes are unchanged except for the supervisor's size; later
+text symbols move by 48 bytes. All non-text data are unchanged apart from
+27 relocated `.rodata` jump-table words, each increased by 48 to follow its
+text target. There are still 2357 TU relocations and 300 source objects;
+299 complete ELF source objects are unchanged.
+
+The 300-input partial link grows by 48 text bytes, with section order,
+NOBITS sizes, symbol/relocation counts and bindings preserved. Against the
+original, its positioned-byte census changes from 69,422 to 69,291 of
+943,398 bytes, and exact relocation records from 1032 to 1031 of 18,317.
+These are positional consequences, not an improvement claim: downstream
+text addresses, relocations and jump-table addends move. The replacement
+object remains different from the original before and after this change.
+
 
 ## Toolchain and reproduction
 
-Both cells use the recovered
+The initial cells and the issue #286 control/candidate use the recovered
 `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest` image, GCC 3.4.2-r2 and
 the assembler actually selected by that compiler (GNU assembler 2.15.92.0.2).
 The complete C option vector from `build/tc_repro/.build-config` is:
@@ -70,24 +117,37 @@ which appends a final identical reproduction define. The extra repeated
 define changes no macro value. The compiler command and executed compiler/
 assembler identities are retained with the local cell artifacts under
 `build/mg03/`; complete baseline objects are in `build/maintainer-baseline/`.
-The C++ and DCR-specific flags are unmodified; neither cell compiles them.
+Issue #286 records its unchanged control, typed candidate, actual command,
+and full-TU/partial-link reports under `build/issue286/`. The unchanged
+control reproduces the saved object exactly. An initial invalid candidate
+compile accidentally included edits outside the target function; it failed
+and was corrected before any results were interpreted. The C++ and
+DCR-specific flags are unmodified; the experiment does not compile them.
 
 For the retained tree, rebuild with `make tc-repro`, compare the complete
 object against the saved baseline, and run `make phase`. The artifacts are
 diagnostics, not replacements for the deciding period gate.
 
-## Retained validation
+## Validation
 
-The integrated fix tree preserves all 300 complete period source objects
-byte for byte against `ac7f28e6`. `make phase` passes 388 differential
-binaries with zero failures and all structural checks. The anchor gate checks
-10,038 mutations in 285 suites with zero detached anchors; two existing
-rate-copy anchors were updated to the new field expression without changing
-their labels or replacement semantics.
+The focused modern `t_v34datapump` passes 17,949 checks. Three new probes
+cover negative acquisition count, cached negative error and signed 16-bit
+run-counter wrap; each is labelled synthetic and has a reference/reference
+control and an absolute oracle. Existing lifecycle coverage remains separate.
 
-The focused modern `t_v34datapump` also passes 16,850 checks. A complete rerun
-of its 78 active mutations reports 75 caught, one uncaught, two equivalent,
-zero unusable and zero miscounted. This matches the recorded verdict pattern;
-the uncaught claim is still “the receiver loop runs before the modulator loop”.
-It remains a coverage limitation, not an equivalent mutation or a passing
-mutation gate. No snapshot is relabelled current and no tolerance is changed.
+All 78 existing mutation labels are retained and two signedness controls are
+added. The complete owning run reports 80 mutations: 77 caught, one uncaught,
+two equivalent, zero unusable and zero miscounted. Both new controls fire.
+The existing uncaught receiver-before-modulator loop-order claim stays open;
+the suite exits 1 and is not a green mutation gate. Rehomed helper-wide
+mutations retain their original read/write domains through broader anchors.
+The run predates only a prose correction outside the supervisor body;
+no mutation snapshot is changed or claimed fresh.
+
+Static validation checks 10,040 anchors in 285 suites with zero detached
+anchors. The byte-identity census remains 1086/1852 exact, with neither
+lost nor gained exact members against the saved baseline; the instruction
+ratchet also passes. Strict MkDocs builds successfully. `make phase J=12` passes all 388
+period differential binaries with zero failures, plus the structural and
+provenance checks. The datapump binary runs the new probes within that
+unchanged binary denominator. No full portability run is claimed.
