@@ -307,10 +307,17 @@ against the response rather than coefficient distance. Tracked as a task.
 
 ### Current `FixedRC` boundary
 
-`src/core/FixedRC.c` and its coefficient arrays are reconstructed. The old
-create/reset/delete/resample task list is complete as source coverage; it must
-not be reopened from this study. Exact recovery of an original coefficient
-generation recipe remains distinct from retaining the extracted arrays.
+Modes 2–19 use the reconstructed polyphase path in `src/core/FixedRC.c`.
+Modes 0/1 construct, reset and delete a separate state, but their kind-1
+resampling remains unimplemented: `RcFixed_Resample` returns without output.
+The existing `t_rcresample.c` fixture explicitly checks that the reference
+converts while the reconstruction declines this component boundary (D3).
+The rate-pair lookup starts at mode 2, so reaching modes 0/1 requires explicit
+construction. A symbol-coverage count does not establish equivalence there.
+
+This existing conversion gap is separate from recovering the exact recipe
+that generated the polyphase coefficients. Retaining those arrays preserves
+their bytes even where the design fit is approximate.
 
 ## V.34 `costbl`
 

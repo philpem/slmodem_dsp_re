@@ -19,7 +19,9 @@ LINK = re.compile(r"\[[^\]\n]+\]\(([^\s)]+)\)")
 
 def prose(text):
     text = re.sub(r"(?ms)^```.*?^```\s*", "", text)
-    return re.sub(r"`+[^`\n]+`+", "", text)
+    # Keep a non-empty label in [`identifier`](target), while suppressing
+    # Markdown-shaped examples inside a code span such as `[label](target)`.
+    return re.sub(r"`+[^`\n]+`+", "CODE", text)
 
 
 def target_path(root, page, target):
@@ -130,6 +132,8 @@ def main():
                 bad_html.append(f"{page}: {href}")
     print(f"Generated HTML: {html_checked} local targets/fragments checked across "
           f"{len(pages)} pages; {len(bad_html)} failures.")
+    if not html_checked:
+        errors.append("generated site contains no local links to check")
     errors.extend(bad_html)
     for error in errors:
         print(error, file=sys.stderr)

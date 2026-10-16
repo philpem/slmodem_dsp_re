@@ -34,7 +34,7 @@ Sources: [dp_wrapper.c](https://github.com/philpem/slmodem_dsp_re/blob/master/sr
 
 Convert between supported sample rates.
 
-Modes 2–19 select a rational polyphase FIR bank: a phase accumulator chooses a branch, the dot product uses Q14 coefficients, and the history is compacted between blocks. Modes 0/1 have separate state and processing paths.
+Modes 2–19 select a rational polyphase FIR bank: a phase accumulator chooses a branch, the dot product uses Q14 coefficients, and the history is compacted between blocks. Modes 0/1 have a separate lifecycle, but resampling currently declines their kind-1 state; see the [coefficient reference](coefficients.md#current-fixedrc-boundary) for this existing component limitation.
 
 Sources: [FixedRC.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/core/FixedRC.c).
 

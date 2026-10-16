@@ -114,8 +114,8 @@ Nothing in the object says so; it falls out of the conversion
     intervals = (GetFP_Value(1, buflen) * time * 80) >> 14
 ```
 
-`GetFP_Value(1, b)` is `ceil(16384 / b)`, so the expression is
-`time * 80 / buflen`, where `buflen` is the number of samples between
+`GetFP_Value(1, b)` is `ceil(16384 / b)`, so the expression approximates
+`time * 80 / buflen` with fixed-point rounding. Here `buflen` is the number of samples between
 `toneiir` verdicts -- the unit `cadence_progress` counts in.
 
 `buflen` is **per tone**, and only the dial-tone detector takes it from the

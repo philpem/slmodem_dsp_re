@@ -24,8 +24,8 @@ v23FP_rx_create / v23FP_tx_create
 ```
 
 and `FP_math.c` holds `GetFP_Value` (a Q14 divide) and `FP_Pow` (a Q14
-exponential). Their interfaces expose fixed-point values; FP_Pow is an exponential, not
-a two-argument power function.
+exponential). Their interfaces expose fixed-point values; `FP_Pow` takes
+one argument and approximates `exp()`.
 
 ### ✅ `FPM` — Fixed Point Modem
 
@@ -48,7 +48,7 @@ Contrast the float side, which uses no prefix at all: `FloatFIR`, `FloatIIR`,
 | ✅ `FSD` | **Frequency Shift Demodulator** | the counterpart; delay-line discriminator plus lowpass (finding F27). |
 | ✅ `MTD` | **Multi-Tone Detector** | a bank of resonators, one per tone, with an energy-ratio verdict (finding F28). |
 | ✅ `ECC` | **Echo CanCeller** | the entry point is `FPM_ECC_cancel`. Not "error correcting code" — this is the DSP layer. |
-| ✅ `SDM` | **Scrambler/Descrambler** | exports exactly `FPM_SDM_scrambler` and `FPM_SDM_descrambler`. |
+| ✅ `SDM` | **Scrambler/Descrambler** | `FPM_SDM_scrambler` and `FPM_SDM_descrambler` process the stream; `FPM_SDM_init` initialises their state. |
 | ✅ `VTB` | **Viterbi** | `VTB_decoder`, `VTB_DIFF_TBL`, `TrellisTransitionTable`, `VTB_BOUND_7200/9600/12000/14400` — the trellis decoder for V.32bis/V.17 rates. |
 | ✅ `AGC` | Automatic Gain Control | standard; `FPM_AGC_Freeze`/`_Release` behave as expected. |
 | 🟢 `FSE` | **Fractionally Spaced Equalizer** | standard term, and its position in the V.22 chain fits (below). |
@@ -56,7 +56,7 @@ Contrast the float side, which uses no prefix at all: `FloatFIR`, `FloatIIR`,
 | 🟢 `SRE` | **Symbol Recovery** (timing) | `FPM_SRE_recover` is the processing entry point and it uses `FPM_atan` and `FPM_rms` — a phase-error estimate, i.e. timing recovery. |
 | ✅ `ADEQ` | Adaptive equalisation | `fpm_adeq.c` defines `FPM_lmsupd`, `FPM_lmsupd2` and `FPM_block_update`. |
 | 🟡 `SMC` | Symbol Mapping / Coder | `FPM_SMC_encoder` and its constellation tables map bits to complex points; the original expansion of the abbreviation remains uncertain. |
-| 🟡 `DFTC` | Discrete Fourier Transform, Coarse? | `DFTC.c` sits with the V.8 tone detection. |
+| 🟡 `DFTC` | Discrete Fourier Transform; suffix uncertain | `src/pump/v34/DFTC.c` measures V.34 probe-bin energy. V.8 has a separate `V8Dftc.c`; neither filename establishes the meaning of the suffix. |
 
 **The V.22 receive chain reads as a textbook passband receiver**, which is what
 pins `PPS`, `FSE` and `SRE`:
@@ -98,19 +98,14 @@ Two concrete costs already paid for guessing an expansion:
 The rule that follows: treat an abbreviation as a hypothesis until the code
 confirms it, and record which it is.
 
-**pre-emphasis, and how it is spelled here.** The object spells it **`preemp`**,
-one 'h' short of the English word, and so does this tree: `preemp_index`,
-`preemp0`, `m->preemp`, `preempindex` (the object's own name for the selector),
-`tx_preemp`. Our own additions were briefly spelled `preemph` and have been
-renamed to match; nothing in `src/`, `include/` or `tools/` uses the long form
-any more.
+**Pre-emphasis field names.** The object uses the stem `preemp`, reflected
+in names such as `preemp_index`, `preemp0`, `preempindex` and `tx_preemp`.
+Use that stem when searching field accesses.
 
-**Search implementation fields with `preemp`; diagnostic strings can use `preemph`.** Searching the long form finds nothing
-and invites the conclusion that the subsystem is absent -- which is exactly what
-happened in finding F1959, where four searches missed the entire transmit-side
-implementation and a "we never comply with the far end's request" finding was
-one step from being written. Findings numbered 1956-1959 still contain the old
-spelling because the record is append-only and is not rewritten.
+Search implementation fields with `preemp`; diagnostic strings can use the
+longer spelling. Finding F1959 records how searches for the long form missed
+the transmit-side implementation. Findings 1956–1959 preserve the earlier
+field spelling as historical evidence.
 
 Two related names that are NOT this: `ec_prem_coef_*` is the echo canceller's
 pre-filter, and `V34PREEMPHASIS` is the object's debug string prefix, which
