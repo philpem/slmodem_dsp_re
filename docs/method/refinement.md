@@ -5242,7 +5242,7 @@ original operations.
 The IIR scalar helper exposes a short countdown, coefficient and history
 cursor updates, and a feedforward narrowing before the saturation decision.
 Recovering those boundaries improves both the helper and its inlined block
-caller. Their remaining size gaps are one and eighteen bytes respectively.
+caller. Their remaining size gaps are two and eighteen bytes respectively.
 Valid component tests include coefficient/history aliases within one declared
 short array; these do not establish an overlapping modem call.
 
@@ -5254,3 +5254,59 @@ than attributing it to an invented field error or spill. The retained controls
 preserve data and bindings and lose no exact functions. The audit compares
 fourteen paired stages for this neighbour and six stages for the scalar
 feedforward conversion.
+
+
+### A more faithful return can increase a size gap
+
+The IIR section accumulator was an `int` even though each new value was
+narrowed to `short`. Returning it as `short` introduced another sign extension;
+the original returns a copy of its already extended result. A bounded control
+using a short accumulator changes the return to a copy in initial RTL.
+Combine removes the intermediate return conversion, and the copy survives
+allocation and scheduling. The scalar size gap moves from one to two bytes,
+while the inlined block caller also changes and the other IIR function stays
+byte-identical. The original return operation supports this partial recovery;
+no claim of whole-function identity follows from it. Do not invent an
+uninitialised output to match the undefined zero-section path.
+
+### Recover conversion boundaries at the use that establishes them
+
+`V8GetMessage` loads a received word with zero-extension before shifting and
+passing its low byte to `charFlip`. The reconstruction sign-extended that word.
+An unsigned-short conversion at this use restores the original opcode; the
+full-TU control changes exactly one byte and leaves six bystanders, data and
+bindings unchanged. The final low-byte selection masks the difference in
+result, so this is instruction recovery without a demonstrated behavioural
+bug. It does not establish that every use of the shared word field is unsigned.
+
+### Inspect the actual compiler's duplication rule before changing loops
+
+The tone block's countdown remains single through `27.flow2` and is copied
+while `31.bbro` connects traces. The retained dump records the seven-byte
+shared block being refused during one copy decision, then duplicated when
+connecting the slower trace. The installed Gentoo compiler retains DWARF
+and function symbols: read-only inspection of `copy_bb_p` and
+`connect_traces` confirms the hot-code size multiplier and entry-frequency
+threshold used by those decisions. Record the compiler hash with this
+inspection; a matching upstream source line alone is weaker evidence.
+
+A full-TU `-fno-reorder-blocks` control removes the copy, but increases the
+block's size gap from three to 27 bytes and loses five exact bystanders.
+The streams agree before reordering apart from declaration addresses and
+label numbers. This isolates the pass without recovering original source.
+Keep the retained flags. Reopen loop-source work only with an independent
+original branch or loop-boundary witness; the compiler's willingness to copy
+a block does not by itself supply one.
+
+Source syntax alone is also a poor nomination test. Two constellation-mask
+helpers are written with an `if`, but their retained compiled bodies already
+contain the original signed SETL/NEG/AND graph. An explicit mask expression
+folds back into a branch and worsens both bodies. Check the current emitted
+operations before calling a source construct missing. The losing full-TU
+control closes that nomination; it is not evidence for a signedness defect.
+
+The separate `tools/probe_v90_sd_boundaries.py` component probe crosses three
+finite/quiet-NaN constructor thresholds, four limits and two public input
+sequences, including reset. All 7,680 return/state/history checks pass across
+64 cases. It remains outside default test discovery and does not establish
+nonfinite modem-path reachability or complete SD-detector coverage.
