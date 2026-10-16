@@ -510,7 +510,8 @@ DialerAbort(struct dialer *d)
 	 * The one path that is an error, and the only one that does not reach
 	 * the message below.
 	 */
-	if (d->progress_state > 10) {
+	/* The original range check is unsigned (JA at 0x7bdef). */
+	if ((unsigned int)d->progress_state > 10u) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Dialer was aborted - error. \n");
 
