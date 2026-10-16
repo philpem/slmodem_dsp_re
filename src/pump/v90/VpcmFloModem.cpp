@@ -1,5 +1,5 @@
 /*
- * VpcmFloModem.cpp -- six of the twenty-six members of the PCM modem class.
+ * VpcmFloModem.cpp -- PCM session lifecycle, negotiation and processing.
  *
  * `include/dsplib/VPcmFloModem.h` carries the object map, the argument for
  * why the object really is 32 KB, and the three measurements that put a
@@ -7,7 +7,7 @@
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
- * WHAT THE FIVE ARE, in the order they were written:
+ * Early helper recoveries, in historical implementation order:
  *
  *   getV90JaBits       two bits out of `bitVector` into one short, wrapping
  *                      the pointer at `nofBits`; no calls at all
@@ -94,12 +94,11 @@
  * `make check64` lays them out differently -- the layout the blob has is a
  * 32-bit layout.
  *
- * OFFSETS, AND ONE BORROWED SIZE.  No size is asserted for VPcmFloModem: the
- * five members here reach +0x7f27 and that is a floor.  `sizeof(V90Modem)`
- * IS asserted, and it is not a claim about the blob -- it is the hook that
- * makes every offset past +0x6118 fail loudly if a later batch gives
- * V90Modem more modelled prefix.  V90SessionFlag.h deliberately asserts no
- * size of its own, so this file has to.
+ * The offsets and the embedded V90Modem's 0x49c0-byte size are checked
+ * below. The enclosing VPcmFloModem's 0x7f68-byte extent is checked by
+ * t_vpcmctor.cpp alongside constructor/destructor reference comparisons.
+ * The earlier +0x7f28 displacement floor was a partial-view bound, not
+ * the current extent of the recovered object.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define VPCM_OFF(field, off, tag) \

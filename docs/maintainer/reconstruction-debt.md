@@ -1,15 +1,24 @@
 # Reconstruction debt
 
-This is a bounded reading audit of the host adapters, V.34 layouts and PCM
-session interfaces used by this guide, checked at base revision `47174bf3`
-on 16 October 2026. It is not an exhaustive static-analysis report or a new
-defect census. Six observations are recorded below; none is evidence of a
-newly discovered failing public modem call.
+The initial bounded reading audit used `47174bf3` on 16 October 2026.
+The follow-up fixes start from current master `ac7f28e6`; that revision already
+contains repairs absent from the initial snapshot. The statuses below distinguish
+new fixes, corrections to superseded findings and the evidence-limited residual.
+This is not an exhaustive static-analysis or defect census, and none of the
+initial observations established a newly failing public modem call.
 
-“Confirmed” means the stated source representation or documentation conflict
-was observed. “Needs measurement” means behaviour or reachability remains to
-be established. These entries propose follow-up work; this documentation change
-does not repair reconstruction source or relax a gate.
+| Finding | Follow-up status |
+|---|---|
+| MG-01 | Resolved: single complete phase 4 demodulator definition |
+| MG-02 | Closed: receiver ownership was already reconciled |
+| MG-03 | Partial: final raw state reader removed; supervisor helpers tracked in #286 |
+| MG-04 | Resolved: existing refusal behaviour verified and contract clarified |
+| MG-05 | Resolved: stale introductions corrected |
+| MG-06 | Resolved: remainder paths exercised in chunked connecting calls |
+
+“Resolved” describes the bounded finding, not project-wide reconstruction
+completion. Original-binary behaviour remains the compatibility authority;
+the changes do not relax a differential, structural or code-generation gate.
 
 ## MG-01: Duplicate phase 4 demodulator model
 
@@ -118,29 +127,25 @@ hardening would be a separately scoped compatibility change.
 
 ## MG-05: Historical comments overstate current missing work
 
-**Confirmed documentation debt; medium priority.**
-The opening comment in
-[`V34hshak.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v34/V34hshak.c)
-describes `v34handshak` as unwritten in its account of earlier harness limits;
-the same file now contains its implementation and `datapumpv34`.
-[`V90SessionFlag.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/V90SessionFlag.h)
-still says several allocations have not been found, while
-[`V90Phase4Demodulator.cpp`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v90/V90Phase4Demodulator.cpp)
-records the phase 4 allocation and asserts the fuller size `0x351c`.
-[`VPcmFloModem.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/VPcmFloModem.h)
-also contains an early partial-reading account that must be reconciled with
-the subsequently added members and constructor.
+**Resolved: current contracts separated from historical recovery notes.**
+The introductions to `V34hshak.c`, `VPcmFloModem.h` and `VpcmFloModem.cpp`
+now describe their implemented handshake, session and lifecycle work. The
+earlier fourteen-support-function scope and displacement-only object floor
+are explicitly historical. The PCM class's complete `0x7f68` extent is tied
+to its lifecycle fixture; the embedded `V90Modem` extent and offset assertions
+remain documented with their owning files.
 
-These comments preserve useful history, but a maintainer can read their
-present-tense claims as live reconstruction gaps. The README likewise calls
-the reconstruction “unfinished” in a paragraph about linking the blob, despite
-its status section recording completed symbol reconstruction.
+MG-01's consolidation also replaced `V90SessionFlag.h`'s obsolete partial-class
+introduction and the duplicate-specific inclusion warning in its consumer.
+The README now distinguishes completed source-symbol reconstruction from
+validation and final-object byte identity, limits blob patching guidance to
+deployments that use it, and names `make phase` as the reconstruction gate.
 
-**Next step:** annotate or rewrite each introduction around its current
-contract, preserving finding references and explicitly labelling historical
-constraints. Check measurement claims against tools rather than copying old
-counts. This PR adds a current reading path; it leaves that wider comment
-audit as follow-up work.
+Finding references and useful historical evidence are retained. These are
+comment/prose changes; no field declaration or executable statement changes.
+The complete period source-object comparison verifies that they introduce no
+code-generation changes. Future counts and completeness claims should continue
+to come from the relevant tool and stated revision.
 
 ## MG-06: Queue-path coverage claim needs reconciliation
 

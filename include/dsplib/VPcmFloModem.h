@@ -2,55 +2,32 @@
  * @file VPcmFloModem.h
  * @brief The V.90/V.92 modem's face to the V.34 handshake.
  *
- * The class has twenty-six members in the blob. This tree writes six out of
- * line (`getUinfoValue`, `setPhaseIIinfo`, `getV90CpBits`, `getV90JaBits`,
- * `setPcmSessionType`, `enterPhase3`), plus `externalReset`, the two
- * `setV34BaudFor*`, the three visual diagnostics, and both entry points
- * (`runPcmModem`, `v90RunDemodulator`). Seven more are reconstructed as
- * `inline` bodies that the two entry points inline exactly as the object
- * does (see the block that lists them below). Everything else is left
- * undeclared rather than declared-and-undefined, because nothing here calls
- * it and a declaration nobody needs is a claim nobody checked.
+ * The class connects the V.34 handshake to the embedded V.90/V.92
+ * modems. Its lifecycle, parameter exchange, phase transitions and block
+ * processing entry points are implemented in VpcmFloModem.cpp; small
+ * forwarding helpers also have inline bodies in this header.
  *
  * Not polymorphic: `tools/cppstruct.py` lists the destructor with `D1`/`D2`
  * and no `D0`, and GCC emits a deleting destructor only for a virtual one,
  * so +0x00 is a real member and there is no vptr (finding F228 lists the
  * four classes where that is not true).
  *
- * @par The object really is thirty-two kilobytes
- * `docs/v90cpp.md` used to read this class's +32,612 reach as finding
- * F268's warning sign -- that a displacement this large usually means
- * indexing *through* `this` into an enclosing session object rather than
- * the class really being that big. Tracing the base register of the five
- * largest displacements (in `getV90JaBits`, `getV90CpBits`,
- * `setPcmSessionType`, `setPhaseIIinfo`, `getUinfoValue`) back to the
- * prologue finds no intervening load in any of them: all five come
- * straight off the `this` stack slot. So the floor really is
- * 0x7f28 = 32,552 bytes (where the last of the four float arrays ends),
- * with the object's full 32,612-byte reach 60 bytes further on. A floor is
- * still not a size, so none is asserted here or in the .cpp: twenty-one of
- * the twenty-six members are unread, and the four arrays at +0x7dd8 are
- * only known to be `VPCM_L2` entries because that's how many
- * `getUinfoValue` clears. The .cpp asserts offsets; the test allocates a
- * slot larger than the floor and compares the whole slot, catching a store
- * past the last modelled field as well as one inside it.
+ * @par Object extent and embedded owners
+ * The complete 32-bit model is 0x7f68 bytes. VPCMXF_Create allocates the
+ * enclosing object and constructs it in place; t_vpcmctor.cpp asserts
+ * this extent and compares constructor/destructor behaviour against the
+ * reference. The earlier displacement-only floor, 0x7f28, described a
+ * partial recovery and is superseded by the lifecycle evidence. F268's
+ * base-register warning remains useful when interpreting large offsets:
+ * trace the register to this before treating an access as a member.
  *
- * @par A V90Modem is embedded at +0x1758
- * Measured three independent ways: `setPcmSessionType` reaches it with an
- * add-then-jump into `V90Modem::setSessionFlag` (the same forwarding
- * signature finding F268 used for the two demodulators); `getV90CpBits`
- * reads +0x175c as `V90Modem::demodulator` (its own +0x04); and
- * `setPhaseIIinfo` reads +0x1760 as `V90Phase2Info*`, landing exactly at
- * `V90Modem`'s declared prefix end (0x1758 + 0x49c0 = 0x6118), immediately
- * before the next field anything here touches, +0x611c. The third leg is
- * the weak one -- `V90Modem` asserts no size of its own -- so what holds
- * the map together is the .cpp's `sizeof(V90Modem) == 0x49c0` assertion
- * alongside the offsets: a later batch that gives `V90Modem` more prefix
- * breaks the build here rather than silently shifting every offset past
- * +0x6118. Two fields inside that embedded `V90Modem` were carved out of
- * its `pad_08` for this batch: `phase2Info` at +0x08 (this + 0x1760) and
- * `params` at +0x49b4 (this + 0x610c) -- see
- * `include/dsplib/V90SessionFlag.h`.
+ * V90Modem is embedded at +0x1758. setPcmSessionType's add-and-tail-call,
+ * getV90CpBits' demodulator pointer at +0x175c, and setPhaseIIinfo's
+ * phase2Info pointer at +0x1760 agree on that owner boundary. Its
+ * 0x49c0-byte definition lives in V90Modem.h and is asserted in
+ * VpcmFloModem.cpp, fixing the embedded end at +0x6118. The following
+ * fields retain their own offset assertions. V90SessionFlag.h is now a
+ * compatibility include group rather than a second class-definition home.
  *
  * @par Names
  * The mangling never carries a data member's name (finding F226); where

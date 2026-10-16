@@ -1,61 +1,24 @@
 /*
- * V34hshak.c -- ITU-T V.34: the handshake's support functions.
+ * V34hshak.c -- V.34 handshake, training support and datapump supervision.
  *
- * `V34hshak.c` is the object's largest C translation unit, 0x5dd10 to
- * 0x71960, and almost all of it is `v34handshak` -- 61,541 bytes across the
- * eighty-seven states of `include/dsplib/v34hshak.h`.  This file is the rest:
- * the routines that state machine calls to bring a receiver or a transmitter
- * up once the negotiation has settled something.
+ * This file implements v34handshak, its state-name table and training
+ * helpers, and datapumpv34, which invokes the handshake or supervises the
+ * trained receive/transmit paths. v34hshak.h names the three cooperating
+ * state machines; v34fsk.h and v34recv.h own their recovered object maps.
  *
- * The TU boundary is not inferred.  `ApplyBulkDelay` and `getbit` are the two
- * local .text symbols that follow V34hshak.c's `STT_FILE` entry, so the
- * anchor is exact at the bottom; `v34handshak` ends at 0x71955 and
- * `datapumpv34` starts at 0x71960, which fixes the top.
+ * The reference's local ApplyBulkDelay/getbit symbols and STT_FILE record
+ * anchor the original V34hshak.c region (F117). v34handshak ends at
+ * 0x71955 and datapumpv34 starts at 0x71960. These addresses describe the
+ * reference object, not this build's current function placement.
  *
- * WHAT IS HERE, AND WHAT IS NOT.  Fourteen functions and one table, chosen by
- * testability rather than by theme -- see docs/fastpass.md, whose one
- * unrelaxed rule is that nothing commits without a differential test:
- *
- *     dpskDetectInfo1Init   setfinalrate   setupreceiver   v34modeminit
- *     dpskinit              preempindex    v34handshakinit
- *     dftfreqinit           dftnlinitSignalBins    dftnlinitNoiseBins
- *     dftRetrainDetInit     detectRetrainReq
- *     getbit                ApplyBulkDelay
- *     StateName
- *
- * WHAT CHANGED ABOUT THE LAST TWO.  This note used to say that `getbit` and
- * `ApplyBulkDelay` could not be here at all: both are file-local, so
- * `objcopy --redefine-syms` could not give them a `ref_` alias, and the
- * project's answer for a local was to drive it through a reconstructed
- * caller -- which for these two means `v34handshak`, 61 KB that is still
- * unwritten.  0x6484c, 0x684bb and 0x706a9 call `getbit`; 0x6639f and
- * 0x66af5 call `ApplyBulkDelay`; there is not one relocation against either
- * name, because a call to a local in the same section needs none.  All of
- * that is still true and none of it blocks them any more.
- *
- * The claim that failed was the one about `objcopy`.  A local can be
- * PROMOTED first -- `--globalize-symbols` in one pass, `--redefine-syms` in a
- * second -- and then it renames like any other global, so `ref_getbit` and
- * `ref_ApplyBulkDelay` link and both are tested directly rather than through
- * a caller.  Finding F221 is the general result and finding F227 is these two.
- * Finding F117, which drew the original conclusion, stands as the reading of
- * the call graph and is superseded only in what it says can be tested.
- *
- * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  Nothing reaches
- * `dpskDetectInfo1Init`, `dpskinit`, `setupreceiver`, `preempindex` or any
- * of the five DFT routines -- no relocation, no `call`, no `jmp`, and no
- * little-endian copy of their addresses in `.text`, `.data` or `.rodata`.
- * Only `setfinalrate` has a caller, in `v34handshak`.  The `jmp` and the
- * data scans are not belt and braces: this object tail-calls constantly, and
- * a section-symbol relocation with an addend does not answer to a grep for a
- * name.  Finding F212 gives the controls each scan was checked against.
- *
- * They are global, so they are testable regardless, but it means their
- * arguments and their bank sizes have to be read out of the code rather than
- * off a call site.  Finding F89 recorded the same shape twice already.
- *
- * `v34handshakinit` is the exception and has six callers, which is where its
- * mode numbers come from; see the declaration in `v34hshak.h`.
+ * Historical fast-pass scope: the first version of this file implemented
+ * fourteen support functions and StateName while the handshake was still
+ * pending. That restriction is retired; the functions below are now
+ * reconstructed. F221 established that file-local reference functions can
+ * be globalised and renamed for direct tests, and F227 applies that method
+ * to getbit and ApplyBulkDelay. F212 records the no-internal-caller audit
+ * of several exported training helpers; F89 explains why those helpers
+ * still need independently established component input boundaries.
  */
 
 #include "dsplib/debug.h"
