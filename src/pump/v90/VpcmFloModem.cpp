@@ -69,13 +69,9 @@
  * constellation codes, and the decoded MP message it copies out for the V.34
  * interface.
  *
- * THE FOURTH IT NEEDS IS `V90Phase4Demodulator` AND IT MUST NOT BE INCLUDED
- * HERE.  That class is `tools/onedef.py`'s one carried duplicate, and the
- * definition this translation unit already has is V90SessionFlag.h's partial
- * model, arriving through VPcmFloModem.h.  Including the fuller header
- * alongside it is a redefinition the compiler rejects outright, so the two
- * fields the MPnot arm reads were carved out of that model's own pad instead;
- * V90SessionFlag.h says so at the site.
+ * `V90Phase4Demodulator` reaches this translation unit through
+ * VPcmFloModem.h and V90SessionFlag.h. Its complete definition now shares
+ * the same layout authority as the demodulator's own implementation.
  */
 #include "dsplib/V90CPpck.h"
 #include "dsplib/V90Jd.h"

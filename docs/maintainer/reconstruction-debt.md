@@ -13,26 +13,22 @@ does not repair reconstruction source or relax a gate.
 
 ## MG-01: Duplicate phase 4 demodulator model
 
-**Confirmed structural debt; high priority.**
+**Resolved: one complete definition.**
 [`V90SessionFlag.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/V90SessionFlag.h)
-and
+now includes the full
 [`V90Phase4Demodulator.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/V90Phase4Demodulator.h)
-both define `V90Phase4Demodulator`. The former models a prefix through an
-embedded modulator; the latter describes the fuller object.
-`python3 tools/onedef.py` reports **337 types in 171 files, one known
-duplicate**, and names this exception in its `KNOWN` register.
+instead of defining a second prefix model. The session-flag fixture reserves
+the complete object plus slack, and `tools/onedef.py` carries no exceptions.
+Its current check reports 335 types in 168 files and zero duplicates.
 
-Different translation units can therefore compile against different complete
-class definitions. The prefix model is explicitly a lower bound, so its
-`sizeof` must not be used as an allocation authority. Matching the prefix's
-accesses does not establish consistency of the full type.
-
-**Next step:** trace all inclusion and use sites, then test consolidation on
-an isolated branch. Preserve the existing field offsets, emitted functions
-and reference comparisons across the affected translation units. Close this
-entry when one complete definition remains, `onedef.py` no longer needs the
-exception, the period gate passes, and full-TU code-generation effects are
-recorded. The existing header points to F7584 for earlier consolidation costs.
+The consolidation preserves all 300 complete period-compiled source objects
+byte for byte, as well as their complete partial-link object. The period gate
+passes 388 test binaries with zero failures; the byte-identity and instruction
+ratchets pass without losing exact symbols. See
+[the consolidation evidence](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/phase4-type-consolidation.md)
+for the include graph, compiler configuration, assembler identity and checks.
+This removes the type inconsistency without claiming that the replacement
+object is already identical to the original blob.
 
 ## MG-02: Overlapping V.34 root and receiver views
 

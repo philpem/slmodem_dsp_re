@@ -15,20 +15,11 @@
  * agree about it: whether it still points where setup() put it.  Same idiom
  * as snap_parm/snap_ph2 in t_v90prefilter.cpp.
  *
- * NO SIZE IS ASSERTED anywhere here, and for three of the five none is
- * settled -- see the header.  Each slot is bigger than the object or, where
- * there is no object size, than the modelled prefix, and the whole slot is
- * compared, which catches a store past the last modelled field as well as one
- * inside it.
- *
- * TWO OF THE FIVE DO HAVE A SETTLED SIZE NOW.  `V90Phase3Demodulator` is
- * 0x42c and `V90Demodulator` 0x298, from the allocation that precedes each
- * constructor (finding F291), and both assert it in their own .cpp.  Their
- * slots below are those sizes plus the slack, which they were not when this
- * file was written: the old P3D_SLOT was 0x34 + 0x398 and the old DEM_SLOT
- * 0x1e4, and both were SMALLER than the object they cast to.  Nothing
- * overran them, because `setSessionFlag` reaches only +0x08, +0x30 and +0x34
- * -- but the sentence above was false for as long as they stood.
+ * The slots include the complete modelled objects and additional slack.
+ * Comparing the whole slot detects a store beyond the fields this chain
+ * intentionally changes. Phase 4 used to reserve only its partial model;
+ * its slot now follows the complete definition so the test also observes
+ * the detector and decision-state tail introduced by the shared header.
  */
 
 #include <string.h>
@@ -66,7 +57,7 @@ void ref_mdm_setSessionFlag(void *self, unsigned int flag)
 #define P3M_SLOT (0x398 + SLACK)
 #define P4M_SLOT (0x2fac + SLACK)
 #define P3D_SLOT (0x42c + SLACK)
-#define P4D_SLOT (0x50 + 0x2fac + SLACK)
+#define P4D_SLOT (sizeof(V90Phase4Demodulator) + SLACK)
 #define MOD_SLOT (0x70 + SLACK)	/* 0x40 while the map was partial */
 #define DEM_SLOT (0x298 + SLACK)
 #define MDM_SLOT (0x49c0 + SLACK)
