@@ -222,8 +222,9 @@
  },
  {
   "label": "the rate mask goes out from the top",
-  "find": "\t\tbits[i] = (unsigned char)(((rateMask >> (i - 0x24)) & 1) != 0);",
-  "replace": "\t\tbits[i] = (unsigned char)(((rateMask >> (0x31 - i)) & 1) != 0);"
+  "find": "\t\tif ((rateMask >> (i - 0x24)) & 1)\n",
+  "replace": "\t\tif ((rateMask >> (0x31 - i)) & 1)\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "the long sequence is 0xba bits, not 0xbb",
@@ -237,14 +238,15 @@
  },
  {
   "label": "infoToBits rounds the sequence length up unconditionally",
-  "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc.",
-  "find": "\n\t\tif (q * groupSize == want)\n\t\t\tseqLength = (unsigned char)want;",
-  "replace": "\n\t\tif (0)\n\t\t\tseqLength = (unsigned char)want;"
+  "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc. MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer.",
+  "find": "\t */\n\tcalcSequenceLength();\n",
+  "replace": "\t */\n\t{\n\tunsigned char b = bodyLength;\n\tunsigned int w = (unsigned int)b + 1;\n\tunsigned int q = w / groupSize;\n\n\tif (1)\n\t\tseqLength = (unsigned char)((q + 1) * groupSize);\n\telse\n\t\tseqLength = (unsigned char)(b + 1);\n}\n"
  },
  {
   "label": "infoToBits rounds the length down",
-  "find": "\n\t\t\tseqLength = (unsigned char)((q + 1) * groupSize);",
-  "replace": "\n\t\t\tseqLength = (unsigned char)(q * groupSize);"
+  "find": "\t */\n\tcalcSequenceLength();\n",
+  "replace": "\t */\n\t{\n\tunsigned char b = bodyLength;\n\tunsigned int w = (unsigned int)b + 1;\n\tunsigned int q = w / groupSize;\n\n\tif (q * groupSize != w)\n\t\tseqLength = (unsigned char)(q * groupSize);\n\telse\n\t\tseqLength = (unsigned char)(b + 1);\n}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "h1Imag is packed into frame 3 with h1Real",
@@ -263,39 +265,45 @@
  },
  {
   "label": "the CRC covers one frame more",
-  "find": "\tend = t ? 0xaa : 0x44;",
-  "replace": "\tend = t ? 0xbb : 0x55;"
+  "find": "\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n",
+  "replace": "\t\tend = t ? 0xbb : 0x55;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xbb : 0x55;\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "the CRC of a short message covers as much as a long one's",
-  "find": "\tend = t ? 0xaa : 0x44;\n",
-  "replace": "\tend = 0xaa;\n"
+  "find": "\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n",
+  "replace": "\t\tend = 0xaa;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = 0xaa;\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "infoToBits does not skip the framing bits",
-  "why": "The anchor used to be the bare `if (i % 17 == 0)` two tabs in.  `calcCRC` and `evaluateCRC` landed with the same two lines at the same indentation -- the original's own repetition, four copies of the register in one file -- and it began matching three times, which mutate.py reports UNUSABLE and which does not fail a run.  It now carries infoToBits's `for` line, whose `; i++)` the two standalone members do not have.  Finding F1264's rule again.",
-  "find": "\n\tfor (i = 0x12; i < end; i++) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
-  "replace": "\n\tfor (i = 0x12; i < end; i++) {\n\t\tif (0)\n\t\t\ti++;"
+  "why": "The anchor used to be the bare `if (i % 17 == 0)` two tabs in.  `calcCRC` and `evaluateCRC` landed with the same two lines at the same indentation -- the original's own repetition, four copies of the register in one file -- and it began matching three times, which mutate.py reports UNUSABLE and which does not fail a run.  It now carries infoToBits's `for` line, whose `; i++)` the two standalone members do not have.  Finding F1264's rule again. CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms.",
+  "find": "\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n",
+  "replace": "\t\t\tif (0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (0)\n"
  },
  {
   "label": "infoToBits taps the CRC at 4 and 11 rather than at 3 and 10",
-  "find": "\t\tcrc[3] = (unsigned char)((crc[3] + x) & 1);\n\t\tcrc[10] = (unsigned char)((crc[10] + x) & 1);",
-  "replace": "\t\tcrc[4] = (unsigned char)((crc[4] + x) & 1);\n\t\tcrc[11] = (unsigned char)((crc[11] + x) & 1);"
+  "find": "\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n",
+  "replace": "\t\t\tcrc[3] = crc[4];\n\t\t\tcrc[4] = (unsigned char)((crc[5] + x) & 1);\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = crc[11];\n\t\t\tcrc[11] = (unsigned char)((crc[12] + x) & 1);\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = crc[4];\n\t\t\tcrc[4] = (unsigned char)((crc[5] + x) & 1);\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = crc[11];\n\t\t\tcrc[11] = (unsigned char)((crc[12] + x) & 1);\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "infoToBits feeds the CRC the bit alone, not the bit plus crc[0]",
-  "find": "\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\tfor (k = 0; k < 15; k++)",
-  "replace": "\t\tx = (unsigned char)bits[i];\n\t\tfor (k = 0; k < 15; k++)"
+  "find": "\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n",
+  "replace": "\t\t\tx = (unsigned char)bits[i];\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)bits[i];\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "the CRC register starts at zero, not at one",
-  "find": "\tfor (k = 0; k <= 15; k++)\n\t\tcrc[k] = 1;",
-  "replace": "\tfor (k = 0; k <= 15; k++)\n\t\tcrc[k] = 0;"
+  "find": "\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n",
+  "replace": "\t\t\tcrc[k] = 0;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0xab; i <= 0xba; i++)\n\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 0;\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "the CRC lands one bit early",
-  "find": "\t\tbits[end + 1 + k] = crc[k];",
-  "replace": "\t\tbits[end + k] = crc[k];"
+  "find": "\t\t\tbits[i] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0x45; i <= 0x54; i++)\n\t\t\tbits[i] = crc[i - 0x45];\n",
+  "replace": "\t\t\tbits[i - 1] = crc[i - 0xab];\n\t\tlen = seqLength;\n\t\tbits[0xbb] = 0;\n\t\tfor (i = 0xbc; i < len; i++)\n\t\t\tbits[i] = 0;\n\t} else {\n\t\tfor (i = 0x34; i <= 0x43; i++)\n\t\t\tbits[i] = 0;\n\t\tbits[0x44] = 0;\n\n\n\t\t/*\n\t\t * The CRC covers the message but not its framing bits, and it stops at\n\t\t * the last frame before the CRC's own -- 0xaa for the long message,\n\t\t * 0x44 for the short one.  Both are `type ? 0xaa : 0x44` in the\n\t\t * object, taken from the type flag and not from +0x119.\n\t\t */\n\t\tend = t ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tfor (i = 0x45; i <= 0x54; i++)\n\t\t\tbits[i - 1] = crc[i - 0x45];\n",
+  "why": "CP/MP recovery: the locator preserves the prior shared encoder effect in both recovered Type arms."
  },
  {
   "label": "the padding re-reads +0x118 instead of the register it was loaded into",
@@ -358,8 +366,9 @@
  },
  {
   "label": "state 2 does not advance the bit index",
-  "find": "\t\tbits[bitIndex] = (unsigned char)bit;\n\t\tbitIndex++;",
-  "replace": "\t\tbits[bitIndex] = (unsigned char)bit;"
+  "find": "\t\ttype = (char)bit;\n\t\tbitIndex++;\n",
+  "replace": "\t\ttype = (char)bit;\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "state 2 leaves the receiver in state 3 only after the length",
@@ -379,29 +388,33 @@
  },
  {
   "label": "the first CRC pass does not skip the framing bits",
-  "find": "\t\tend = type ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)",
-  "replace": "\t\tend = type ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (0)"
+  "find": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n",
+  "replace": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (0)\n",
+  "why": "CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery."
  },
  {
   "label": "the first CRC pass starts at bit 0, not bit 18",
-  "find": "\t\tend = type ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {",
-  "replace": "\t\tend = type ? 0xaa : 0x44;\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0; i < end; i++) {"
+  "find": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0x12; i < end; i++) {\n",
+  "replace": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0; i < end; i++) {\n",
+  "why": "CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery."
  },
  {
   "label": "the second CRC pass taps 4 and 11",
-  "find": "\t\t\tbits[0x70] = (unsigned char)(bits[0x70] == 0);\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tfor (k = 0; k < 15; k++)\n\t\t\t\tcrc[k] = crc[k + 1];\n\t\t\tcrc[3] =",
-  "replace": "\t\t\tbits[0x70] = (unsigned char)(bits[0x70] == 0);\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tfor (k = 0; k < 15; k++)\n\t\t\t\tcrc[k] = crc[k + 1];\n\t\t\tcrc[4] ="
+  "find": "\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n",
+  "replace": "\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = crc[4];\n\t\t\tcrc[4] = (unsigned char)((crc[4] + x) & 1);\n",
+  "why": "CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery."
  },
  {
   "label": "the CRC is compared against the sixteen bits before the end",
-  "find": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x10 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbitIndex = next;\n\t\t\trxState = 4;\n\t\t\tbreak;",
-  "replace": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x11 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbitIndex = next;\n\t\t\trxState = 4;\n\t\t\tbreak;"
+  "find": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tsum = 0;\n\t\tfor (i = 0; i <= 15; i++) {\n\t\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];\n",
+  "replace": "\t\tend = type ? 0xaa : 0x44;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tcrc[0] = crc[1];\n\t\t\tcrc[1] = crc[2];\n\t\t\tcrc[2] = crc[3];\n\t\t\tcrc[3] = (unsigned char)((crc[4] + x) & 1);\n\t\t\tcrc[4] = crc[5];\n\t\t\tcrc[5] = crc[6];\n\t\t\tcrc[6] = crc[7];\n\t\t\tcrc[7] = crc[8];\n\t\t\tcrc[8] = crc[9];\n\t\t\tcrc[9] = crc[10];\n\t\t\tcrc[10] = (unsigned char)((crc[11] + x) & 1);\n\t\t\tcrc[11] = crc[12];\n\t\t\tcrc[12] = crc[13];\n\t\t\tcrc[13] = crc[14];\n\t\t\tcrc[14] = crc[15];\n\t\t\tcrc[15] = (unsigned char)(x & 1);\n\t\t}\n\n\t\tsum = 0;\n\t\tfor (i = 0; i <= 15; i++) {\n\t\t\tint d = (int)crc[i] - (int)bits[n - 0x11 + i];\n",
+  "why": "CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery."
  },
  {
   "label": "the CRC comparison sums into an int, not into a byte",
-  "why": "`add %al,0x4e(%esp)` and `cmpb $0x0` -- sixteen absolute differences accumulated in ONE BYTE, so sixteen differences of 16 sum to 256 and read as a match.  t_v90mp.cpp builds exactly that case out of the CRC the blob itself computed.  NOTE THE SOURCE SHAPE this depends on: the accumulation is `sum += (unsigned char)|d|` and the truncation is the DECLARATION's.  Written `sum = (unsigned char)(sum + |d|)` the cast does the truncating, the declared width stops mattering, and this mutation survives while looking exactly like a test that is missing -- which is how it was found.",
-  "find": "\tunsigned char x, sum, n, next, end;",
-  "replace": "\tunsigned char x, n, next, end;\n\tunsigned int sum;"
+  "why": "`add %al,0x4e(%esp)` and `cmpb $0x0` -- sixteen absolute differences accumulated in ONE BYTE, so sixteen differences of 16 sum to 256 and read as a match.  t_v90mp.cpp builds exactly that case out of the CRC the blob itself computed.  NOTE THE SOURCE SHAPE this depends on: the accumulation is `sum += (unsigned char)|d|` and the truncation is the DECLARATION's.  Written `sum = (unsigned char)(sum + |d|)` the cast does the truncating, the declared width stops mattering, and this mutation survives while looking exactly like a test that is missing -- which is how it was found. CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery.",
+  "find": "\tunsigned char x, sum, n, next;\n",
+  "replace": "\tunsigned char x, n, next;\n\tunsigned int sum;\n"
  },
  {
   "label": "the repair is tried on the short message too",
@@ -487,19 +500,21 @@
  },
  {
   "label": "the rate mask is printed sixteen bits wide",
-  "why": "The mask the object passes is 0x2000 (0x2035d), which is fourteen characters -- the width of the field at +0x06.",
-  "find": "\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t*p++ =",
-  "replace": "\t\t\t\tfor (mask = 0x8000; mask != 0; mask >>= 1)\n\t\t\t\t\t*p++ ="
+  "why": "The mask the object passes is 0x2000 (0x2035d), which is fourteen characters -- the width of the field at +0x06. MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer.",
+  "find": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 16);\n"
  },
  {
   "label": "the rate mask is printed low bit first in the MPnot arm",
-  "find": "\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t*q++ =",
-  "replace": "\t\t\t\tfor (mask = 1; mask <= 0x2000; mask <<= 1)\n\t\t\t\t\t*q++ ="
+  "find": "\t\t\t\t\t    \"ected. Type%d,Rate%d,Trellis%d,No\" \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ected. Type%d,Rate%d,Trellis%d,No\" \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\t{\n\t\t\t\t\tchar *q = str;\n\t\t\t\t\tunsigned int mask;\n\t\t\t\t\tfor (mask = 1; mask <= 0x2000; mask <<= 1)\n\t\t\t\t\t\t*q++ = (rateMask & mask) ? '1' : '0';\n\t\t\t\t\t*q = 0;\n\t\t\t\t}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "a set bit prints as '0'",
-  "find": "\t\t\t\t\t*p++ = (rateMask & mask) ? '1' : '0';",
-  "replace": "\t\t\t\t\t*p++ = (rateMask & mask) ? '0' : '1';"
+  "find": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\tPrintBase2(str, (unsigned long)rateMask, 14);\n",
+  "replace": "\t\t\t\t\t    \"ed. Type%d,Rate%d,Trellis%d,NonLi\" \"n%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);\n\n\t\t\t\t{\n\t\t\t\t\tchar *p = str;\n\t\t\t\t\tunsigned int mask;\n\t\t\t\t\tfor (mask = 0x2000; mask != 0; mask >>= 1)\n\t\t\t\t\t\t*p++ = (rateMask & mask) ? '0' : '1';\n\t\t\t\t\t*p = 0;\n\t\t\t\t}\n",
+  "why": "MP producer recovery: preserve the original mutation in its named consumer; helper-body substitutions in this mutant do not change the shared producer or the other consumer."
  },
  {
   "label": "Type is printed unsigned",
@@ -550,8 +565,9 @@
  },
  {
   "label": "evaluateCRC finds the peer's CRC from the type flag, not from +0x119",
-  "find": "\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];",
-  "replace": "\t\tint d = (int)crc[i] - (int)bits[end + 1 + i];"
+  "find": "\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];\n",
+  "replace": "\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[end + 1 + i];\n",
+  "why": "CP/MP recovery: the locator preserves the prior member and pass effect after fixed CRC-stage recovery."
  },
  {
   "label": "evaluateCRC seeds the register with zeros, not the ones of clause 1",

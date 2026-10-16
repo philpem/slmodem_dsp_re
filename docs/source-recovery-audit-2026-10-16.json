@@ -1,0 +1,1362 @@
+{
+  "date": "2026-10-16",
+  "provenance": {
+    "root_head": "47174bf3157a98e54d5bb5d9a62b6e77bb8bc19d",
+    "upstream_head": "4169cb3b3108a840a51bca9ebfa086102c4c69c6",
+    "measured_worktree_head": "d0ae2e96c47a255b8172a55db917caca6211f5dc",
+    "source_difference_to_upstream": [],
+    "sha256": {
+      "/tmp/slmodem-maintainer-fixes/tools/toolchain/byteident.py": "be81668f942fcf436c64925877faf7a0b075fe297419028e4fc3053f2490fdae",
+      "/tmp/slmodem-maintainer-fixes/tools/toolchain/partialcmp.py": "3857898f63266634219e4ae71c20bac18a019f1817d3d9e5439b51cd6c7f59f1",
+      "/tmp/slmodem-maintainer-fixes/build/tc_repro/.build-config": "929f2f43cc2149a5f005aadca62b684c9b74c661e32ba26c6d5c1f6c79d223c7",
+      "/tmp/slmodem-maintainer-fixes/build/tc_repro/tc_manifest.txt": "d9b70bfc74c15169d8b416ac032b7cd6e2124e2b2ba6c9f57b38a605a2ec8bf4",
+      "/tmp/slmodem-maintainer-fixes/build/tc_repro/tc_link_manifest.txt": "6077b9c3ef375c988bb2329dc86636b3b541d749da6b84d12ec0d0d0ded5c19c",
+      "/tmp/slmodem-maintainer-fixes/build/partial/dsplibs.o": "3383c050ecca3392289e22ca49a61b7cab3d4c898819b35c7935a7f6668deb3a"
+    },
+    "limitations": [
+      "Existing complete build artifacts rescored; no fresh compilation, period gate, full phase, mutation, fuzz or portability execution.",
+      "Latest source/header identity and mtimes checked; source content hash provenance of original compilation not fully recovered.",
+      "Unique-name binding census collapses duplicate local names and does not replace full ordered-symbol comparison."
+    ]
+  },
+  "measurement_scope": "Fresh read-only regrading of existing complete objects; no fresh rebuild or phase gate. Existing Gentoo t_rcresample executed separately.",
+  "function_census": {
+    "bytes": 65,
+    "compared": 1852,
+    "compared_bytes": 720125,
+    "exact": 1086,
+    "exact_bytes": 120322,
+    "nodata": 0,
+    "reference_functions": 1852,
+    "regalloc": 29,
+    "reloc": 0,
+    "size": 667,
+    "unresolved": 5
+  },
+  "partial_link": {
+    "candidate": {
+      "path": "/tmp/slmodem-maintainer-fixes/build/partial/dsplibs.o",
+      "raw_size": 1214232,
+      "sha256": "3383c050ecca3392289e22ca49a61b7cab3d4c898819b35c7935a7f6668deb3a"
+    },
+    "contents": {
+      "by_section": {
+        ".data": {
+          "candidate": 38404,
+          "equal": 17640,
+          "reference": 38292
+        },
+        ".gnu.linkonce.r._ZTV12V90Resampler": {
+          "candidate": 28,
+          "equal": 28,
+          "reference": 28
+        },
+        ".gnu.linkonce.r._ZTV15ResamplerTiming": {
+          "candidate": 28,
+          "equal": 28,
+          "reference": 28
+        },
+        ".gnu.linkonce.r._ZTV21ResamplerTimingOffset": {
+          "candidate": 24,
+          "equal": 24,
+          "reference": 24
+        },
+        ".gnu.linkonce.r._ZTV9Resampler": {
+          "candidate": 24,
+          "equal": 24,
+          "reference": 24
+        },
+        ".gnu.linkonce.t._Z12designWindowIfEv10WindowTypePT_j": {
+          "candidate": 99,
+          "equal": 24,
+          "reference": 116
+        },
+        ".gnu.linkonce.t._Z3StdIfET_PS0_j": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._Z3VarIfET_PS0_j": {
+          "candidate": 69,
+          "equal": 69,
+          "reference": 69
+        },
+        ".gnu.linkonce.t._Z3sumIfET_PS0_j": {
+          "candidate": 28,
+          "equal": 28,
+          "reference": 28
+        },
+        ".gnu.linkonce.t._Z4meanIfET_PS0_j": {
+          "candidate": 38,
+          "equal": 38,
+          "reference": 38
+        },
+        ".gnu.linkonce.t._Z4sincIfET_S0_": {
+          "candidate": 46,
+          "equal": 44,
+          "reference": 46
+        },
+        ".gnu.linkonce.t._Z6boxcarIfEvPT_j": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._Z6sqrSumIfET_PS0_j": {
+          "candidate": 46,
+          "equal": 46,
+          "reference": 46
+        },
+        ".gnu.linkonce.t._Z7hammingIfEvPT_j": {
+          "candidate": 104,
+          "equal": 101,
+          "reference": 104
+        },
+        ".gnu.linkonce.t._Z7hanningIfEvPT_j": {
+          "candidate": 105,
+          "equal": 20,
+          "reference": 108
+        },
+        ".gnu.linkonce.t._Z8blackmanIfEvPT_j": {
+          "candidate": 148,
+          "equal": 40,
+          "reference": 152
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdE10compactOutEv": {
+          "candidate": 106,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdE5resetEv": {
+          "candidate": 122,
+          "equal": 122,
+          "reference": 122
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdE7processEPKfPfj": {
+          "candidate": 96,
+          "equal": 8,
+          "reference": 584
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdE7processEf": {
+          "candidate": 313,
+          "equal": 54,
+          "reference": 398
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdE9compactInEv": {
+          "candidate": 106,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdEC1EjjPdS1_j": {
+          "candidate": 107,
+          "equal": 107,
+          "reference": 107
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdEC2EjjPdS1_j": {
+          "candidate": 107,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdED1Ev": {
+          "candidate": 58,
+          "equal": 58,
+          "reference": 58
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdED2Ev": {
+          "candidate": 58,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdEdlEPv": {
+          "candidate": 5,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10GenericIIRIfdEnwEj": {
+          "candidate": 5,
+          "equal": 0,
+          "reference": 0
+        },
+        ".gnu.linkonce.t._ZN10LowPassFIRIfE6designEjf10WindowTypef": {
+          "candidate": 106,
+          "equal": 106,
+          "reference": 106
+        },
+        ".gnu.linkonce.t._ZN10LowPassFIRIfE6designEjffPKfi": {
+          "candidate": 436,
+          "equal": 10,
+          "reference": 373
+        },
+        ".gnu.linkonce.t._ZN10LowPassFIRIfEC1Ejf10WindowTypef": {
+          "candidate": 15,
+          "equal": 15,
+          "reference": 15
+        },
+        ".gnu.linkonce.t._ZN10LowPassFIRIfED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiE15copyHistoryTailEv": {
+          "candidate": 31,
+          "equal": 31,
+          "reference": 31
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiE19resetHistoryIndexesEv": {
+          "candidate": 23,
+          "equal": 23,
+          "reference": 23
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiE5resetEh": {
+          "candidate": 44,
+          "equal": 44,
+          "reference": 44
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiE7processEPKhPij": {
+          "candidate": 120,
+          "equal": 120,
+          "reference": 120
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiE7processEh": {
+          "candidate": 118,
+          "equal": 118,
+          "reference": 118
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiEC1Ejjj": {
+          "candidate": 102,
+          "equal": 102,
+          "reference": 102
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIhiED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiE15copyHistoryTailEv": {
+          "candidate": 36,
+          "equal": 36,
+          "reference": 36
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiE19resetHistoryIndexesEv": {
+          "candidate": 23,
+          "equal": 23,
+          "reference": 23
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiE5resetEi": {
+          "candidate": 48,
+          "equal": 48,
+          "reference": 48
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiE7processEi": {
+          "candidate": 110,
+          "equal": 110,
+          "reference": 110
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiEC1Ejjj": {
+          "candidate": 110,
+          "equal": 34,
+          "reference": 107
+        },
+        ".gnu.linkonce.t._ZN11DescramblerIiiED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN25SerialDifferentialDecoderIhE7processEh": {
+          "candidate": 18,
+          "equal": 18,
+          "reference": 18
+        },
+        ".gnu.linkonce.t._ZN25SerialDifferentialDecoderIiE7processEi": {
+          "candidate": 15,
+          "equal": 15,
+          "reference": 15
+        },
+        ".gnu.linkonce.t._ZN25SerialDifferentialEncoderIhE7processEh": {
+          "candidate": 17,
+          "equal": 17,
+          "reference": 17
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialDecoderIhE5resetEjh": {
+          "candidate": 60,
+          "equal": 59,
+          "reference": 60
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialDecoderIhE7processEPhS1_": {
+          "candidate": 57,
+          "equal": 57,
+          "reference": 57
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialDecoderIhEC1Ej": {
+          "candidate": 63,
+          "equal": 63,
+          "reference": 63
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialDecoderIhED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialEncoderIhE5resetEjh": {
+          "candidate": 60,
+          "equal": 60,
+          "reference": 60
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialEncoderIhE7processEPhS1_": {
+          "candidate": 54,
+          "equal": 54,
+          "reference": 54
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialEncoderIhEC1Ej": {
+          "candidate": 63,
+          "equal": 63,
+          "reference": 63
+        },
+        ".gnu.linkonce.t._ZN27ParallelDifferentialEncoderIhED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN3AgcIfE5resetEv": {
+          "candidate": 35,
+          "equal": 35,
+          "reference": 35
+        },
+        ".gnu.linkonce.t._ZN3AgcIfE6freezeEv": {
+          "candidate": 17,
+          "equal": 17,
+          "reference": 17
+        },
+        ".gnu.linkonce.t._ZN3AgcIfE7processEPKfPfj": {
+          "candidate": 229,
+          "equal": 6,
+          "reference": 206
+        },
+        ".gnu.linkonce.t._ZN3AgcIfEC1Ev": {
+          "candidate": 24,
+          "equal": 24,
+          "reference": 24
+        },
+        ".gnu.linkonce.t._ZN5QueueIfE4readEPfj": {
+          "candidate": 215,
+          "equal": 6,
+          "reference": 197
+        },
+        ".gnu.linkonce.t._ZN5QueueIfE5resetEv": {
+          "candidate": 13,
+          "equal": 13,
+          "reference": 13
+        },
+        ".gnu.linkonce.t._ZN5QueueIfE5writeEPfj": {
+          "candidate": 213,
+          "equal": 39,
+          "reference": 211
+        },
+        ".gnu.linkonce.t._ZN5QueueIfE5writeEf": {
+          "candidate": 71,
+          "equal": 3,
+          "reference": 85
+        },
+        ".gnu.linkonce.t._ZN5QueueIfEC1Ej": {
+          "candidate": 52,
+          "equal": 52,
+          "reference": 52
+        },
+        ".gnu.linkonce.t._ZN5QueueIfED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN8SineWaveIffE8generateEPfm": {
+          "candidate": 134,
+          "equal": 75,
+          "reference": 134
+        },
+        ".gnu.linkonce.t._ZN8SineWaveIffEC1Effff": {
+          "candidate": 32,
+          "equal": 32,
+          "reference": 32
+        },
+        ".gnu.linkonce.t._ZN8SineWaveIffED1Ev": {
+          "candidate": 1,
+          "equal": 1,
+          "reference": 1
+        },
+        ".gnu.linkonce.t._ZN9Resampler16timingCorrectionEf": {
+          "candidate": 1,
+          "equal": 1,
+          "reference": 1
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE14processAllOnesEPhj": {
+          "candidate": 120,
+          "equal": 120,
+          "reference": 120
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE15copyHistoryTailEv": {
+          "candidate": 31,
+          "equal": 31,
+          "reference": 31
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE15processAllZerosEPhj": {
+          "candidate": 120,
+          "equal": 120,
+          "reference": 120
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE19resetHistoryIndexesEv": {
+          "candidate": 23,
+          "equal": 23,
+          "reference": 23
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE5resetEh": {
+          "candidate": 44,
+          "equal": 44,
+          "reference": 44
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE7processEPKhPhj": {
+          "candidate": 120,
+          "equal": 112,
+          "reference": 120
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhE7processEh": {
+          "candidate": 107,
+          "equal": 107,
+          "reference": 107
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhEC1Ejjj": {
+          "candidate": 102,
+          "equal": 102,
+          "reference": 102
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhhED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiE15copyHistoryTailEv": {
+          "candidate": 31,
+          "equal": 31,
+          "reference": 31
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiE19resetHistoryIndexesEv": {
+          "candidate": 23,
+          "equal": 23,
+          "reference": 23
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiE5resetEh": {
+          "candidate": 44,
+          "equal": 44,
+          "reference": 44
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiE7processEh": {
+          "candidate": 118,
+          "equal": 118,
+          "reference": 118
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiEC1Ejjj": {
+          "candidate": 102,
+          "equal": 80,
+          "reference": 102
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIhiED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihE15copyHistoryTailEv": {
+          "candidate": 36,
+          "equal": 36,
+          "reference": 36
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihE19resetHistoryIndexesEv": {
+          "candidate": 23,
+          "equal": 23,
+          "reference": 23
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihE5resetEi": {
+          "candidate": 48,
+          "equal": 48,
+          "reference": 48
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihE7processEPKiPhj": {
+          "candidate": 136,
+          "equal": 136,
+          "reference": 136
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihEC1Ejjj": {
+          "candidate": 107,
+          "equal": 107,
+          "reference": 107
+        },
+        ".gnu.linkonce.t._ZN9ScramblerIihED1Ev": {
+          "candidate": 29,
+          "equal": 29,
+          "reference": 29
+        },
+        ".note.GNU-stack": {
+          "candidate": 0,
+          "equal": 0,
+          "reference": 0
+        },
+        ".rodata": {
+          "candidate": 70088,
+          "equal": 7786,
+          "reference": 69476
+        },
+        ".rodata.cst16": {
+          "candidate": 160,
+          "equal": 0,
+          "reference": 0
+        },
+        ".rodata.cst4": {
+          "candidate": 1464,
+          "equal": 538,
+          "reference": 1416
+        },
+        ".rodata.cst8": {
+          "candidate": 536,
+          "equal": 111,
+          "reference": 528
+        },
+        ".rodata.str1.1": {
+          "candidate": 21089,
+          "equal": 1417,
+          "reference": 21180
+        },
+        ".rodata.str1.4": {
+          "candidate": 77689,
+          "equal": 4151,
+          "reference": 77797
+        },
+        ".text": {
+          "candidate": 703340,
+          "equal": 33631,
+          "reference": 728304
+        }
+      },
+      "candidate_bytes": 919060,
+      "candidate_nobits_bytes": 2812,
+      "candidate_size_delta": -24338,
+      "different_or_missing_reference_bytes": 874107,
+      "equal_positioned_bytes": 69291,
+      "reference_bytes": 943398,
+      "reference_nobits_bytes": 2836
+    },
+    "exact": false,
+    "raw_exact": false,
+    "reference": {
+      "path": "ref/slmodemd/dsplibs.o",
+      "raw_size": 1233728,
+      "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379"
+    },
+    "relocations": {
+      "candidate": 18308,
+      "exact_records": 1031,
+      "first_difference": [
+        16,
+        [
+          ".rel.text",
+          696,
+          "R_386_32",
+          "dsplibs_debug_level"
+        ],
+        [
+          ".rel.text",
+          708,
+          "R_386_32",
+          "dsplibs_debug_level"
+        ]
+      ],
+      "ordered_matches": 1021,
+      "reference": 18317
+    },
+    "sections": {
+      "candidate": 99,
+      "common_names": 92,
+      "exact_contents": 67,
+      "exact_records": 73,
+      "first_difference": [
+        0,
+        [
+          ".text",
+          "PROGBITS",
+          "AX",
+          0,
+          728304,
+          16
+        ],
+        [
+          ".text",
+          "PROGBITS",
+          "AX",
+          0,
+          703340,
+          16
+        ]
+      ],
+      "ordered_matches": 66,
+      "reference": 92
+    },
+    "symbols": {
+      "candidate": 2973,
+      "exact_records": 397,
+      "first_difference": [
+        4,
+        [
+          "FUNC",
+          "LOCAL",
+          "DEFAULT",
+          ".text",
+          1536,
+          40,
+          "vce_hook_on"
+        ],
+        [
+          "FUNC",
+          "LOCAL",
+          "DEFAULT",
+          ".text",
+          1504,
+          40,
+          "vce_hook_on"
+        ]
+      ],
+      "ordered_matches": 396,
+      "reference": 2907
+    }
+  },
+  "unresolved": [
+    {
+      "symbol": "RxNextStateV17",
+      "object": "/tmp/slmodem-maintainer-fixes/build/tc_repro/src_fax_V17r_prc.c.o",
+      "verdict": "UNRESOLVED",
+      "count": 1,
+      "ref_bytes": 730
+    },
+    {
+      "symbol": "V32LocLoopNextState",
+      "object": "/tmp/slmodem-maintainer-fixes/build/tc_repro/src_pump_v32_V32loop.c.o",
+      "verdict": "UNRESOLVED",
+      "count": 1,
+      "ref_bytes": 794
+    },
+    {
+      "symbol": "_Z17getSegmentPointer7PcmTypei",
+      "object": "/tmp/slmodem-maintainer-fixes/build/tc_repro/src_pump_v90_V90DilDescriptorSettings.cpp.o",
+      "verdict": "UNRESOLVED",
+      "count": 1,
+      "ref_bytes": 115
+    },
+    {
+      "symbol": "_ZN12V90Resampler11setBllStateE11V90BllStatej",
+      "object": "/tmp/slmodem-maintainer-fixes/build/tc_repro/src_pump_v90_V90Resampler.cpp.o",
+      "verdict": "UNRESOLVED",
+      "count": 1,
+      "ref_bytes": 693
+    },
+    {
+      "symbol": "_ZN21V90ConstellationPower20getConstellationInfoEP16V90MappingParams26V90TxPowerMeasurementPointj",
+      "object": "/tmp/slmodem-maintainer-fixes/build/tc_repro/src_pump_v90_V90ConstellationPower.cpp.o",
+      "verdict": "UNRESOLVED",
+      "count": 1,
+      "ref_bytes": 227
+    }
+  ],
+  "unique_name_bindings": {
+    "shared_names": 2592,
+    "ref_only": 9,
+    "cand_only": 55,
+    "shared_kind_binding_visibility_equal": 2592,
+    "binding_type_visibility_different": [],
+    "reference_only_names": [
+      "inf_zero",
+      "infinity",
+      "limit",
+      "minf_mzero",
+      "minfinity",
+      "mzero",
+      "one",
+      "pow",
+      "zero"
+    ],
+    "candidate_only_names": [
+      "CID_MTD_coeff",
+      "FPM_cos_sign_ext",
+      "FPM_div_table_entry",
+      "FPM_div_table_generate",
+      "FPM_log10_table_derived",
+      "FPM_log10_table_entry",
+      "FPM_log10_table_generate",
+      "FPM_log10_table_size",
+      "FPM_phasor_cos_entry",
+      "FPM_phasor_sin_entry",
+      "FPM_sin_sign_ext",
+      "FPM_sqrt_table_entry",
+      "FPM_sqrt_table_generate",
+      "FPM_sqrt_table_size",
+      "FP_Pow_coefficient",
+      "FP_Pow_coefficient_generate",
+      "RcFixed_DownFactor",
+      "RcFixed_State",
+      "RcFixed_UpFactor",
+      "_ZN10GenericIIRIfdE10compactOutEv",
+      "_ZN10GenericIIRIfdE9compactInEv",
+      "_ZN10GenericIIRIfdEC2EjjPdS1_j",
+      "_ZN10GenericIIRIfdED2Ev",
+      "_ZN10GenericIIRIfdEdlEPv",
+      "_ZN10GenericIIRIfdEnwEj",
+      "alpha.0",
+      "bg.1",
+      "dsplib_encode_plain",
+      "dsplib_v34_blob_preemp",
+      "probe_preemp_shape",
+      "rc_banks",
+      "t3c_micro_moh_tone",
+      "t3c_micro_moh_tone_drop",
+      "t3m_micro51",
+      "t3m_micro55",
+      "t3m_micro58",
+      "t3m_micro59",
+      "t3m_txblock",
+      "t41_marks_late",
+      "t41_micro_det_sync",
+      "t44_micro_det_info",
+      "t46_chain_full",
+      "t46_micro_tx_phase1_ans",
+      "t4_mp_sequence_end",
+      "t4_receive_body",
+      "t53_rx_det_ab",
+      "t72_measure",
+      "t72_rx_l1",
+      "tx1_moh_hold",
+      "v34handshak_txblock",
+      "v34tx1_jtxmit",
+      "v34tx1_trnseg4",
+      "v34tx1_trnseg4a",
+      "v34tx1_tx_dpsk",
+      "v34tx1_xmitmp"
+    ]
+  },
+  "comparator_probe_results": {
+    "base": {
+      "exact": true,
+      "raw_exact": true
+    },
+    "entrysize": {
+      "exact": true,
+      "raw_exact": false
+    },
+    "comment": {
+      "exact": true,
+      "raw_exact": false
+    },
+    "undef": {
+      "exact": true,
+      "raw_exact": false
+    },
+    "allocated_nonprogbits": {
+      "exact": true,
+      "raw_exact": false
+    },
+    "changed_data": {
+      "exact": false,
+      "raw_exact": false
+    }
+  },
+  "comparator_probe_cli": {
+    "base": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/base.o",
+        "--require-exact"
+      ],
+      "returncode": 0,
+      "last_line": "  verdict       EXACT (raw file EXACT)"
+    },
+    "entrysize": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/entrysize.o",
+        "--require-exact"
+      ],
+      "returncode": 0,
+      "last_line": "  verdict       EXACT (raw file different)"
+    },
+    "comment": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/comment.o",
+        "--require-exact"
+      ],
+      "returncode": 0,
+      "last_line": "  verdict       EXACT (raw file different)"
+    },
+    "undef": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/undef.o",
+        "--require-exact"
+      ],
+      "returncode": 0,
+      "last_line": "  verdict       EXACT (raw file different)"
+    },
+    "allocated_nonprogbits": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/allocated_nonprogbits.o",
+        "--require-exact"
+      ],
+      "returncode": 0,
+      "last_line": "  verdict       EXACT (raw file different)"
+    },
+    "changed_data": {
+      "command": [
+        "python3",
+        "tools/toolchain/partialcmp.py",
+        "/tmp/recovery-baseline-audit/base.o",
+        "/tmp/recovery-baseline-audit/changed_data.o",
+        "--require-exact"
+      ],
+      "returncode": 1,
+      "last_line": "  verdict       DIFFERENT (raw file different)"
+    }
+  },
+  "comparator_probe_sources": {
+    "allocated_nonprogbits.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,4\n.long 1,2\n.section .comment\n.string \"original compiler\"\n\n.section .init_array,\"aw\",@init_array\n.long 0\n",
+    "base.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,4\n.long 1,2\n.section .comment\n.string \"original compiler\"\n",
+    "changed_data.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,4\n.long 9,2\n.section .comment\n.string \"original compiler\"\n",
+    "comment.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,4\n.long 1,2\n.section .comment\n.string \"changed compiler\"\n",
+    "entrysize.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,8\n.long 1,2\n.section .comment\n.string \"original compiler\"\n",
+    "undef.s": ".file \"fixture.s\"\n.text\n.globl entry\n.type entry,@function\nentry: ret\n.size entry,.-entry\n.section .mergevals,\"aM\",@progbits,4\n.long 1,2\n.section .comment\n.string \"original compiler\"\n\n.globl unused_external\n"
+  },
+  "screen_coverage": {
+    "head": "d0ae2e96c47a255b8172a55db917caca6211f5dc",
+    "census": {
+      "compared": 1852,
+      "exact": 1086,
+      "size": 667,
+      "bytes": 65,
+      "regalloc": 29,
+      "unresolved": 5
+    },
+    "counts": {
+      "all_shared_retained_call_sites": 7459,
+      "named_retained_call_sites": 7314,
+      "indirect": 95,
+      "direct_without_relocation_name": 50
+    },
+    "reference_calls": {
+      "named": 7576,
+      "indirect": 95,
+      "direct_without_relocation_name": 27
+    },
+    "unique_common_symbols": 1852,
+    "shared_symbols_with_unobserved_call_sites": 75,
+    "legacy_value_timing_unique_scope": 386,
+    "legacy_value_timing_excluded_scope": 263,
+    "legacy_value_timing_above_850_outside_excluded_scope": 116,
+    "legacy_scope_original_bytes": 132549,
+    "outside_scope_original_bytes": 467254,
+    "unobserved_call_examples": [
+      {
+        "source": "src/callprog/Callprog.c",
+        "symbol": "CALLPROG_Dial",
+        "instruction": {
+          "address": "11bc",
+          "mnemonic": "call",
+          "operands": "*0x20(%ebx)"
+        }
+      },
+      {
+        "source": "src/core/dp_wrapper.c",
+        "symbol": "dp_wrapper_run",
+        "instruction": {
+          "address": "38c",
+          "mnemonic": "call",
+          "operands": "*0x4(%esi)"
+        }
+      },
+      {
+        "source": "src/dialer/Dialer.c",
+        "symbol": "IsDialStringInvalid",
+        "instruction": {
+          "address": "1d6",
+          "mnemonic": "call",
+          "operands": "0 <AnalyseDialString>"
+        }
+      },
+      {
+        "source": "src/dialer/Dialer.c",
+        "symbol": "DialerCreate",
+        "instruction": {
+          "address": "2c7",
+          "mnemonic": "call",
+          "operands": "0 <AnalyseDialString>"
+        }
+      },
+      {
+        "source": "src/dialer/Dialer.c",
+        "symbol": "DialerProgress",
+        "instruction": {
+          "address": "762",
+          "mnemonic": "call",
+          "operands": "340 <GetNextDigitAndReturnNextState>"
+        }
+      },
+      {
+        "source": "src/dialer/Dialer.c",
+        "symbol": "DialerProgress",
+        "instruction": {
+          "address": "a86",
+          "mnemonic": "call",
+          "operands": "340 <GetNextDigitAndReturnNextState>"
+        }
+      },
+      {
+        "source": "src/dsp/fpm_fse.c",
+        "symbol": "FPM_FSE_receive",
+        "instruction": {
+          "address": "4cc",
+          "mnemonic": "call",
+          "operands": "*0x30(%ebp)"
+        }
+      },
+      {
+        "source": "src/fax/V17r_prc.c",
+        "symbol": "V17RX_modem",
+        "instruction": {
+          "address": "41",
+          "mnemonic": "call",
+          "operands": "*0x14(%eax)"
+        }
+      },
+      {
+        "source": "src/fax/V17t_int.c",
+        "symbol": "ModDataV17",
+        "instruction": {
+          "address": "3a1",
+          "mnemonic": "call",
+          "operands": "*0x80(%edx,%ecx,4)"
+        }
+      },
+      {
+        "source": "src/fax/V17t_prc.c",
+        "symbol": "V17TX_modem",
+        "instruction": {
+          "address": "4d",
+          "mnemonic": "call",
+          "operands": "*0x14(%edx)"
+        }
+      },
+      {
+        "source": "src/fax/V21r_prc.c",
+        "symbol": "V21RX_modem",
+        "instruction": {
+          "address": "49",
+          "mnemonic": "call",
+          "operands": "*0x4(%eax)"
+        }
+      },
+      {
+        "source": "src/fax/V21t_prc.c",
+        "symbol": "V21TX_modem",
+        "instruction": {
+          "address": "56",
+          "mnemonic": "call",
+          "operands": "*0x8(%eax)"
+        }
+      },
+      {
+        "source": "src/fax/V27r_prc.c",
+        "symbol": "V27RX_modem",
+        "instruction": {
+          "address": "49",
+          "mnemonic": "call",
+          "operands": "*0xc(%eax)"
+        }
+      },
+      {
+        "source": "src/fax/V27t_prc.c",
+        "symbol": "V27TX_modem",
+        "instruction": {
+          "address": "59",
+          "mnemonic": "call",
+          "operands": "*0x10(%edx)"
+        }
+      },
+      {
+        "source": "src/fax/V29r_prc.c",
+        "symbol": "V29RX_modem",
+        "instruction": {
+          "address": "49",
+          "mnemonic": "call",
+          "operands": "*0x10(%eax)"
+        }
+      }
+    ],
+    "limits": "Fresh read-only structural coverage computation, not byte regrading or full screen rerun. Census read from maintainer-baseline.json; latest final audit reports all 300 baseline/current objects unchanged."
+  },
+  "screen_coverage_program": "import sys, json, hashlib, subprocess\nfrom pathlib import Path\nroot=Path('/tmp/slmodem-maintainer-fixes'); sys.path.insert(0,str(root/'tools'))\nimport playbook_small_patterns as d\nfrom narrow_call_boundary_screen import bodies\nfrom collections import Counter\nobjects=root/'build/tc_repro'; census=json.loads((root/'build/maintainer-baseline.json').read_text()); exact=set(census['exact_symbols'])\nref=Path('/mnt/zfs/dev/slmodem/claude_re/ref/slmodemd/dsplibs.o'); sizes=d.b.sizes(str(ref)); reference=bodies(ref)\ncounts=Counter(); examples=[]; omitted_unique=set(); seen=set(); scoped_unique=set(); above=set(); excluded=set()\nfor line in (objects/'tc_manifest.txt').read_text().splitlines():\n obj,source=line.split(); parsed=bodies(objects/obj)\n for sym,rows in parsed.items():\n  if sym not in sizes:continue\n  seen.add(sym)\n  for r in rows:\n   if r['mnemonic']!='call':continue\n   counts['all_shared_retained_call_sites']+=1\n   if 'target' not in r:\n    kind='indirect' if r['operands'].startswith('*') else 'direct_without_relocation_name'\n    counts[kind]+=1;omitted_unique.add(sym)\n    if len(examples)<15:examples.append({'source':source,'symbol':sym,'instruction':r})\n   else:counts['named_retained_call_sites']+=1\n  if sym in exact:continue\n  rel=Path(source)\n  oldexcluded='v34' in rel.parts or 'fax' in rel.parts or rel.name.startswith(('V34','vpcm'))\n  if oldexcluded: excluded.add(sym)\n  elif sizes[sym]>850: above.add(sym)\n  elif sizes[sym]>16:scoped_unique.add(sym)\noriginal_calls=Counter('named' if 'target' in r else ('indirect' if r['operands'].startswith('*') else 'direct_without_relocation_name') for sym,rows in reference.items() if sym in seen for r in rows if r['mnemonic']=='call')\nresult={'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'census':{k:census[k] for k in ['compared','exact','size','bytes','regalloc','unresolved']},'counts':dict(counts),'reference_calls':dict(original_calls),'unique_common_symbols':len(seen),'shared_symbols_with_unobserved_call_sites':len(omitted_unique),'legacy_value_timing_unique_scope':len(scoped_unique),'legacy_value_timing_excluded_scope':len(excluded),'legacy_value_timing_above_850_outside_excluded_scope':len(above),'legacy_scope_original_bytes':sum(sizes[s] for s in scoped_unique),'outside_scope_original_bytes':sum(sizes[s] for s in (seen-exact)-scoped_unique),'unobserved_call_examples':examples,'limits':'Fresh read-only structural coverage computation, not byte regrading or full screen rerun. Census read from maintainer-baseline.json; latest final audit reports all 300 baseline/current objects unchanged.'}\nPath('/tmp/recovery-screen-audit/coverage.json').write_text(json.dumps(result,indent=2)+'\\n')\nprint(json.dumps({k:v for k,v in result.items() if k!='unobserved_call_examples'},indent=2))\n",
+  "screen_run_artifact": "/tmp/recovery-screen-audit/call-result-current.json",
+  "rc_fixture_command": "docker run --rm --platform linux/386 -v /tmp/slmodem-maintainer-fixes:/src:ro -w /src ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest /src/build/period/t_rcresample",
+  "rc_fixture_log": "PASS rc mode 2 bulk           4810 checks\nPASS rc mode 3 bulk           3344 checks\nPASS rc mode 4 bulk           24010 checks\nPASS rc mode 5 bulk           677 checks\nPASS rc mode 6 bulk           20010 checks\nPASS rc mode 7 bulk           810 checks\nPASS rc mode 8 bulk           16010 checks\nPASS rc mode 9 bulk           1010 checks\nPASS rc mode 10 bulk          19210 checks\nPASS rc mode 11 bulk          844 checks\nPASS rc mode 12 bulk          5010 checks\nPASS rc mode 13 bulk          3210 checks\nPASS rc mode 14 bulk          6010 checks\nPASS rc mode 15 bulk          2677 checks\nPASS rc mode 16 bulk          13344 checks\nPASS rc mode 17 bulk          1210 checks\nPASS rc mode 18 bulk          4455 checks\nPASS rc mode 19 bulk          3610 checks\nPASS rc 9600->8000 ragged     3454 checks\nPASS rc 8000->9600 ragged     4920 checks\nPASS rc 9600->8000 one-at-a-time 7335 checks\nPASS rc 8000->9600 one-at-a-time 8801 checks\nPASS rc limit 1               189 checks\nPASS rc limit 7               567 checks\nPASS rc limit 192             3460 checks\nPASS rc limit exact frag      4926 checks\nPASS rc limit huge            3460 checks\nPASS RcFixed_Reset            3264 checks\nPASS rc modes 0/1 (D3: create recovered, kind-1 resample declined) 8 checks\n",
+  "rc_fixture_interpretation": "29 PASS groups, including eight checks that separately assert blob modes0/1 produce output and reconstruction declines kind1. This is a documented discrepancy, not equality for those modes.",
+  "worktree_audit_before_cleanup": [
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re",
+      "HEAD": "47174bf3157a98e54d5bb5d9a62b6e77bb8bc19d",
+      "branch": "refs/heads/master",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 5,
+      "tracked_dirty": " M Makefile\n M test/mutations/snapshot.json\n M test/unit/t_v90demprog.cpp\n M tools/debugcov.py\n M tools/linkdiverge.py\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/batch-cpp-274",
+      "HEAD": "240481e6b77a0463a562e273d7035a5260c582b3",
+      "branch": "refs/heads/investigate/batch-cpp-274",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 1,
+      "tracked_dirty": " M src/pump/v90/V90bitsToSymbol.cpp\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/batch-cpp-275",
+      "HEAD": "e0052eeca9d22e4ca201f27c613e2209f994642f",
+      "branch": "refs/heads/investigate/batch-cpp-275",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/batch-cpp-276",
+      "HEAD": "6b4509bdb1766079752a30143c3e6b9b9bb09539",
+      "branch": "refs/heads/investigate/batch-cpp-276",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 3,
+      "tracked_dirty": " M src/pump/v90/V90ConstellationPower.cpp\n M test/mutations/v90cpmembers.json\n M test/mutations/v90cpowerstd.json\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/batch-cpp-277-p3reset",
+      "HEAD": "276d30b5349e9247d44b95a2802e38f528cb9468",
+      "branch": "refs/heads/investigate/batch-cpp-277-p3reset",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/batch-cpp-278-prefilter",
+      "HEAD": "548b5edd7de2664c2b2c744ed3dd1019d0234afb",
+      "branch": "refs/heads/investigate/batch-cpp-278-prefilter",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/byteexact-batch100-data",
+      "HEAD": "856c1ecb97a686577973f965b1f3a963de813a29",
+      "branch": "refs/heads/investigate/byteexact-batch100-data",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 7,
+      "tracked_dirty": " M src/fax/V17r_prc.c\n M src/fax/V27r_prc.c\n M src/fax/V27t_int.c\n M src/fax/V29r_prc.c\n M src/fax/class1.c\n M src/fax/faxvmi_utls.c\n M src/fax/faxvmififo.c\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/byteexact-batch100-integer",
+      "HEAD": "856c1ecb97a686577973f965b1f3a963de813a29",
+      "branch": "refs/heads/investigate/byteexact-batch100-integer",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/byteexact-batch100-v90",
+      "HEAD": "856c1ecb97a686577973f965b1f3a963de813a29",
+      "branch": "refs/heads/investigate/byteexact-batch100-v90",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 5,
+      "tracked_dirty": " M src/pump/v90/V90Modulator.cpp\n M src/pump/v90/V92Modem.cpp\n M src/pump/v90/V92Modulator.cpp\n M test/mutations/v92modem.json\n M test/mutations/v92modstate.json\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/byteexact-x87-scheduling",
+      "HEAD": "67e751515ea18e0a261f33d53798cd89869a353a",
+      "branch": "refs/heads/investigate/residual-stage-families",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/data-state-graph",
+      "HEAD": "6b4509bdb1766079752a30143c3e6b9b9bb09539",
+      "branch": "refs/heads/investigate/data-state-graph",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-body-trace",
+      "HEAD": "6b4509bdb1766079752a30143c3e6b9b9bb09539",
+      "branch": "refs/heads/investigate/fax-body-trace",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-eqcond-reloads",
+      "HEAD": "9025b8d8e717a15c66299e3f90f4b5d0aa1e870f",
+      "branch": "refs/heads/investigate/fax-eqcond-reloads",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-gains-pass",
+      "HEAD": "240481e6b77a0463a562e273d7035a5260c582b3",
+      "branch": "refs/heads/investigate/fax-gains-pass",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 7,
+      "tracked_dirty": " M include/dsplib/faxadapt.h\n M include/dsplib/faxvmi.h\n M src/fax/Vmi_v17.c\n M src/fax/Vmi_v21.c\n M src/fax/Vmi_v27.c\n M src/fax/Vmi_v29.c\n M src/fax/faxvmi.c\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-predicate-uses",
+      "HEAD": "a95a6c659fe84ce99377adfe48abe8d5029d7d42",
+      "branch": "refs/heads/investigate/fax-predicate-uses",
+      "exists": true,
+      "merged": false,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-status-next",
+      "HEAD": "e0052eeca9d22e4ca201f27c613e2209f994642f",
+      "branch": "refs/heads/investigate/fax-status-next",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 1,
+      "tracked_dirty": " M src/fax/faxvmi.c\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/fax-tail-timing",
+      "HEAD": "fa941457f28db3b10e56739e5868a1d11cf59636",
+      "branch": "refs/heads/investigate/fax-tail-timing",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/gcc3-stage-scratch-diagnostic",
+      "HEAD": "fa941457f28db3b10e56739e5868a1d11cf59636",
+      "branch": "refs/heads/investigate/gcc3-stage-scratch-diagnostic",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/services-exact-batch",
+      "HEAD": "240481e6b77a0463a562e273d7035a5260c582b3",
+      "branch": "refs/heads/investigate/services-exact-batch",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 1,
+      "tracked_dirty": " M src/service/cidcore/cid.c\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/services-return-batch",
+      "HEAD": "e0052eeca9d22e4ca201f27c613e2209f994642f",
+      "branch": "refs/heads/investigate/services-return-batch",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 1,
+      "tracked_dirty": " M src/voice/voice.c\n",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re/build/worktrees/v90-operand-tail-pass",
+      "HEAD": "a95a6c659fe84ce99377adfe48abe8d5029d7d42",
+      "branch": "refs/heads/investigate/v90-operand-tail-pass",
+      "exists": true,
+      "merged": false,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/mnt/zfs/dev/slmodem/claude_re_worktrees/byteexact-f2",
+      "HEAD": "9aa455b38d15adbe54ac5ebd020620bc9138e294",
+      "branch": "refs/heads/investigate/byteexact-wave2",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch20-data-states",
+      "HEAD": "93d7eee12da8ce404e288c3a114a169f2cb7a9fc",
+      "branch": "refs/heads/investigate/batch20-data-states",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch20-dsp-small",
+      "HEAD": "93d7eee12da8ce404e288c3a114a169f2cb7a9fc",
+      "branch": "refs/heads/investigate/batch20-dsp-small",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch20-ring",
+      "HEAD": "93d7eee12da8ce404e288c3a114a169f2cb7a9fc",
+      "detached": "",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch20-v90-small",
+      "HEAD": "93d7eee12da8ce404e288c3a114a169f2cb7a9fc",
+      "branch": "refs/heads/investigate/batch20-v90-small",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch5-tone-detector",
+      "HEAD": "80c5dea35607f0ff9283018351a36f223e51f0f2",
+      "branch": "refs/heads/investigate/batch5-tone-detector",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch5-v8-detector",
+      "HEAD": "80c5dea35607f0ff9283018351a36f223e51f0f2",
+      "branch": "refs/heads/investigate/batch5-v8-detector",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch50-fax-leaves",
+      "HEAD": "902f47fabb737058ac504efa99ba27caadd587ca",
+      "branch": "refs/heads/investigate/batch50-fax-leaves",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch50-integer",
+      "HEAD": "902f47fabb737058ac504efa99ba27caadd587ca",
+      "branch": "refs/heads/investigate/batch50-integer",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-batch50-v90",
+      "HEAD": "902f47fabb737058ac504efa99ba27caadd587ca",
+      "branch": "refs/heads/investigate/batch50-v90",
+      "prunable": "gitdir file points to non-existent location",
+      "exists": false,
+      "merged": true
+    },
+    {
+      "worktree": "/tmp/slmodem-maintainer-fixes",
+      "HEAD": "d0ae2e96c47a255b8172a55db917caca6211f5dc",
+      "branch": "refs/heads/fix/maintainer-reconstruction-debt",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/tmp/slmodem-maintainer-guide",
+      "HEAD": "6b1a1615f116dbaa6f61369f135194926d4591de",
+      "branch": "refs/heads/docs/maintainer-guide",
+      "exists": true,
+      "merged": true,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/tmp/slmodem-mg02",
+      "HEAD": "4596ed6e4a29eff548b835a224c4f5919104cddc",
+      "branch": "refs/heads/fix/maintainer-mg02-v34",
+      "exists": true,
+      "merged": false,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/tmp/slmodem-mg06",
+      "HEAD": "8b4ec308a2212013d7bbf40c4dd6490a4a7c9c2f",
+      "branch": "refs/heads/fix/mg06-vpcm-queue",
+      "exists": true,
+      "merged": false,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    },
+    {
+      "worktree": "/tmp/slmodem-phase4-type",
+      "HEAD": "99c05de8321be3cabe0e90fa67273a9e96b48e6e",
+      "branch": "refs/heads/fix/maintainer-phase4-type",
+      "exists": true,
+      "merged": false,
+      "tracked_dirty_count": 0,
+      "tracked_dirty": "",
+      "has_build": true
+    }
+  ],
+  "cleanup": "Pruned nine registrations for already absent /tmp worktree directories. No existing worktree or artifact deleted. Upstream commits verified by ancestry or patch/file equivalence; main checkout preserved.",
+  "additional_artifact_paths": [
+    "/tmp/recovery-minima-audit/dil-current.dis",
+    "/tmp/recovery-minima-audit/dil-original.dis",
+    "/tmp/recovery-minima-audit/rc-create-original.dis"
+  ]
+}

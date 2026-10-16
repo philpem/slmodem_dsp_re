@@ -186,8 +186,10 @@ full-TU and strict partial-link before/after, including new losses.
 Differential equivalence alone does not establish codegen.
 
 Project completion is the original partially linked object under
-`partialcmp.py --require-exact`. A failing gate remains DIFFERENT; intermediate
-improvement is not completion. Do not alter the measurement model unless an
+`partialcmp.py --require-exact --require-raw-exact`, or
+`make partial-compare-exact`. `--require-exact` checks semantic ELF equality;
+`--require-raw-exact` additionally requires literal file bytes. A failing gate
+remains DIFFERENT; intermediate improvement is not completion. Do not alter the measurement model unless an
 independently demonstrated apparatus defect needs a separately tested fix.
 
 ## Handoff and delegated-batch template

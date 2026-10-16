@@ -308,16 +308,33 @@ against the response rather than coefficient distance. Tracked as a task.
 ### Current `FixedRC` boundary
 
 Modes 2–19 use the reconstructed polyphase path in `src/core/FixedRC.c`.
-Modes 0/1 construct, reset and delete a separate state, but their kind-1
-resampling remains unimplemented: `RcFixed_Resample` returns without output.
-The existing `t_rcresample.c` fixture explicitly checks that the reference
-converts while the reconstruction declines this component boundary (D3).
-The rate-pair lookup starts at mode 2, so reaching modes 0/1 requires explicit
-construction. A symbol-coverage count does not establish equivalence there.
+Modes 0/1 now implement their separate kind-1 multistage conversion. Mode 0
+interpolates by four: a three-tap droop filter feeds two 87-tap FIR operations
+with zero insertion, followed by four 15-tap FIR operations with further zero
+insertion. FIR results narrow in Q15; the long-filter results double with
+16-bit narrowing, and final outputs multiply by 31957 then shift by 13.
+Mode 1 decimates by four: it halves each input before the 15-tap stage, runs
+the 87-tap stage every second input and the droop stage every fourth input,
+then multiplies by 32440 and shifts by 13. Its two decimation phases restart
+at each call.
 
-This existing conversion gap is separate from recovering the exact recipe
-that generated the polyphase coefficients. Retaining those arrays preserves
-their bytes even where the design fit is approximate.
+Output limits are checked after production. Mode 0 emits groups of four;
+mode 1 checks after each output. A zero limit still permits the first group
+or output, whereas the polyphase arm's zero limit means unlimited output.
+Zero input produces no output. Reset clears only the first four bytes of
+each separately allocated history; it does not initialise the complete arrays.
+
+The constructor-created lifecycle fixture in `t_rcresample.c` compares 2,560
+calls and 40,432 outputs, including reset and reused histories. This closes
+the omitted component behaviour recorded as D3. Complete function-byte
+identity remains open; the result does not establish public modem reachability.
+The rate-pair lookup starts at mode 2, so reaching modes 0/1 requires explicit
+construction. See the [recovery evidence](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-fixedrc-results.md)
+for fixture controls and remaining code-generation differences.
+
+Recovering the exact recipe that generated the polyphase coefficients remains
+a separate task. Retaining those arrays preserves their bytes even where the
+design fit is approximate.
 
 ## V.34 `costbl`
 

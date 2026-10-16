@@ -74,17 +74,16 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 			return 0;
 	}
 
-	rx = ((struct v27_rx *)modem)->rx;
-	n = (unsigned short)FPM_MRF_filter((&rx->mrf), in,
-					   (short *)rx->buf_a,
-					   count);
+	n = (unsigned short)FPM_MRF_filter(
+			&((struct v27_rx *)modem)->rx->mrf, in,
+			(short *)((struct v27_rx *)modem)->rx->buf_a, count);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	(&rx->sre)->adapt = signal & rx->en_sre_adapt;
 	m = FPM_SRE_recover((&rx->sre),
 			    (const short *)rx->buf_a,
 			    (short *)rx->buf_b,
-			    (short)n);
+			    n);
 
 	if (m > V27RX_SRE_MAX && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", m);

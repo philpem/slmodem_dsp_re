@@ -100,7 +100,6 @@ static const struct toneiir_cfg toneiir_configuration_default = {
 	.n_a		= 12,
 	.n_b		= 12,
 	.interval	= 500,
-	.pad12		= 0,
 	.stability	= 11467,		/* 0.7 in Q14 */
 	.status		= 2,
 	.threshold	= 80,
@@ -220,15 +219,15 @@ toneiir_progress(struct toneiir *st, short sample)
 	int v = sample >> st->cfg.scales[0];
 	int present;
 	int result;
-	int s;
+	/* Match the four expanded sections and 16-bit tap counters in the blob. */
 
-	for (s = 0; s < IIR_FILTER_SECTIONS; s++) {
-		short *x = &st->x[3 * s];
-		short *y = &st->y[2 * s];
-		const short *a = &st->cfg.a[3 * s];
-		const short *b = &st->cfg.b[3 * s];
+	{
+		short *x = &st->x[3 * 0];
+		short *y = &st->y[2 * 0];
+		const short *a = &st->cfg.a[3 * 0];
+		const short *b = &st->cfg.b[3 * 0];
 		int acc = 0;
-		int k;
+		short k;
 
 		x[0] = (short)v;
 
@@ -244,8 +243,83 @@ toneiir_progress(struct toneiir *st, short sample)
 		y[1] = y[0];
 		y[0] = (short)v;
 
-		if (s < IIR_FILTER_SECTIONS - 1 || st->cfg.scales[s + 1] > 0)
-			v >>= st->cfg.scales[s + 1];
+		if (0 < IIR_FILTER_SECTIONS - 1 || st->cfg.scales[0 + 1] > 0)
+			v >>= st->cfg.scales[0 + 1];
+	}
+	{
+		short *x = &st->x[3 * 1];
+		short *y = &st->y[2 * 1];
+		const short *a = &st->cfg.a[3 * 1];
+		const short *b = &st->cfg.b[3 * 1];
+		int acc = 0;
+		short k;
+
+		x[0] = (short)v;
+
+		for (k = 0; k <= 2; k++)
+			acc = (int)((unsigned)acc + (unsigned)(x[k] * b[k]));
+		for (k = 1; k <= 2; k++)
+			acc = (int)((unsigned)acc - (unsigned)(y[k - 1] * a[k]));
+
+		v = (short)(acc >> IIR_FILTER_SHIFT);
+
+		x[2] = x[1];
+		x[1] = x[0];
+		y[1] = y[0];
+		y[0] = (short)v;
+
+		if (1 < IIR_FILTER_SECTIONS - 1 || st->cfg.scales[1 + 1] > 0)
+			v >>= st->cfg.scales[1 + 1];
+	}
+	{
+		short *x = &st->x[3 * 2];
+		short *y = &st->y[2 * 2];
+		const short *a = &st->cfg.a[3 * 2];
+		const short *b = &st->cfg.b[3 * 2];
+		int acc = 0;
+		short k;
+
+		x[0] = (short)v;
+
+		for (k = 0; k <= 2; k++)
+			acc = (int)((unsigned)acc + (unsigned)(x[k] * b[k]));
+		for (k = 1; k <= 2; k++)
+			acc = (int)((unsigned)acc - (unsigned)(y[k - 1] * a[k]));
+
+		v = (short)(acc >> IIR_FILTER_SHIFT);
+
+		x[2] = x[1];
+		x[1] = x[0];
+		y[1] = y[0];
+		y[0] = (short)v;
+
+		if (2 < IIR_FILTER_SECTIONS - 1 || st->cfg.scales[2 + 1] > 0)
+			v >>= st->cfg.scales[2 + 1];
+	}
+	{
+		short *x = &st->x[3 * 3];
+		short *y = &st->y[2 * 3];
+		const short *a = &st->cfg.a[3 * 3];
+		const short *b = &st->cfg.b[3 * 3];
+		int acc = 0;
+		short k;
+
+		x[0] = (short)v;
+
+		for (k = 0; k <= 2; k++)
+			acc = (int)((unsigned)acc + (unsigned)(x[k] * b[k]));
+		for (k = 1; k <= 2; k++)
+			acc = (int)((unsigned)acc - (unsigned)(y[k - 1] * a[k]));
+
+		v = (short)(acc >> IIR_FILTER_SHIFT);
+
+		x[2] = x[1];
+		x[1] = x[0];
+		y[1] = y[0];
+		y[0] = (short)v;
+
+		if (3 < IIR_FILTER_SECTIONS - 1 || st->cfg.scales[3 + 1] > 0)
+			v >>= st->cfg.scales[3 + 1];
 	}
 
 	st->env_band = envelope(st->env_band, (short)v);
@@ -263,7 +337,7 @@ toneiir_progress(struct toneiir *st, short sample)
 	 * reason: nothing here has a side effect, but the intent is the
 	 * original's.
 	 */
-	present = (st->env_band >= st->env_in / 4)
+	present = (st->env_band >= (st->env_in >> 2))
 		& (st->env_band >= (int)((st->env_prev * st->cfg.stability)
 					 >> 14))
 		& (st->env_prev >= (int)((st->env_band * st->cfg.stability)
@@ -357,19 +431,20 @@ _iir_filter_delete(struct iir_filter *f)
 void
 _iir_filter_progress(struct iir_filter *f, int count, short *samples)
 {
+	short *shift = f->shift;
 	int i;
 
 	for (i = 0; i < count; i++) {
-		int v = samples[i] >> f->shift[0];
-		int s;
+		int v = samples[i] >> shift[0];
+		/* Match the four expanded sections and 16-bit tap counters in the blob. */
 
-		for (s = 0; s < IIR_FILTER_SECTIONS; s++) {
-			short *x = &f->x[3 * s];
-			short *y = &f->y[2 * s];
-			const short *a = &f->a[3 * s];
-			const short *b = &f->b[3 * s];
+		{
+			short *x = &f->x[3 * 0];
+			short *y = &f->y[2 * 0];
+			const short *a = &f->a[3 * 0];
+			const short *b = &f->b[3 * 0];
 			int acc = 0;
-			int k;
+			short k;
 
 			x[0] = (short)v;
 
@@ -403,8 +478,89 @@ _iir_filter_progress(struct iir_filter *f, int count, short *samples)
 			 * x86 would mask the count to five bits and shift
 			 * right by a large amount rather than left.
 			 */
-			if (s < IIR_FILTER_SECTIONS - 1 || f->shift[s + 1] > 0)
-				v >>= f->shift[s + 1];
+			if (0 < IIR_FILTER_SECTIONS - 1 || shift[0 + 1] > 0)
+				v >>= shift[0 + 1];
+		}
+		{
+			short *x = &f->x[3 * 1];
+			short *y = &f->y[2 * 1];
+			const short *a = &f->a[3 * 1];
+			const short *b = &f->b[3 * 1];
+			int acc = 0;
+			short k;
+
+			x[0] = (short)v;
+
+			for (k = 0; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    + (unsigned)(x[k] * b[k]));
+			for (k = 1; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    - (unsigned)(y[k - 1] * a[k]));
+
+			v = (short)(acc >> IIR_FILTER_SHIFT);
+
+			x[2] = x[1];
+			x[1] = x[0];
+			y[1] = y[0];
+			y[0] = (short)v;
+
+			if (1 < IIR_FILTER_SECTIONS - 1 || shift[1 + 1] > 0)
+				v >>= shift[1 + 1];
+		}
+		{
+			short *x = &f->x[3 * 2];
+			short *y = &f->y[2 * 2];
+			const short *a = &f->a[3 * 2];
+			const short *b = &f->b[3 * 2];
+			int acc = 0;
+			short k;
+
+			x[0] = (short)v;
+
+			for (k = 0; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    + (unsigned)(x[k] * b[k]));
+			for (k = 1; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    - (unsigned)(y[k - 1] * a[k]));
+
+			v = (short)(acc >> IIR_FILTER_SHIFT);
+
+			x[2] = x[1];
+			x[1] = x[0];
+			y[1] = y[0];
+			y[0] = (short)v;
+
+			if (2 < IIR_FILTER_SECTIONS - 1 || shift[2 + 1] > 0)
+				v >>= shift[2 + 1];
+		}
+		{
+			short *x = &f->x[3 * 3];
+			short *y = &f->y[2 * 3];
+			const short *a = &f->a[3 * 3];
+			const short *b = &f->b[3 * 3];
+			int acc = 0;
+			short k;
+
+			x[0] = (short)v;
+
+			for (k = 0; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    + (unsigned)(x[k] * b[k]));
+			for (k = 1; k <= 2; k++)
+				acc = (int)((unsigned)acc
+					    - (unsigned)(y[k - 1] * a[k]));
+
+			v = (short)(acc >> IIR_FILTER_SHIFT);
+
+			x[2] = x[1];
+			x[1] = x[0];
+			y[1] = y[0];
+			y[0] = (short)v;
+
+			if (3 < IIR_FILTER_SECTIONS - 1 || shift[3 + 1] > 0)
+				v >>= shift[3 + 1];
 		}
 
 		samples[i] = (short)v;

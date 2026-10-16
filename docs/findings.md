@@ -2636,6 +2636,13 @@ on.
 
 > **Deviation D153** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
+**2026-10-16 correction:** the historical table below misidentified `+0x10`
+as short storage. The original cadence producer stores a full 32-bit interval,
+and `toneiir_progress` compares all 32 bits. The constructor's short read is
+the argument boundary to `GetFP_Value(short, short)`. The field now has one
+`int` representation; the former `+0x12` padding was part of that value.
+See [the interval recovery and lifecycle control](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-toneiir-interval.md).
+
 `toneiir_create(state, cfg)` copies 44 bytes of configuration into the head of
 its 168-byte object and hangs the coefficients off pointers rather than
 copying them, which is what distinguishes it from `_iir_filter_create` in the
@@ -73409,7 +73416,7 @@ sub-cases are the expensive end: they need `t_v90p3ddec.cpp`'s sub-peer
 wiring, because `word_30` is cleared on entry to both decision functions and
 cannot be planted.
 
-## F6202. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/v90equprocess.md` IS WRONG
+## F6202. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `docs/v90equprocess.md` IS WRONG
 
 *Renumbered from 6002 on merge.*  The `v90-equalizer-write` branch measured
 the high-water mark at 5904 when it was cut and took 6000-6003; master's

@@ -43,7 +43,6 @@ const struct toneiir_cfg toneiir_configuration_allpass = {
 	.n_a		= 0,
 	.n_b		= 1,
 	.interval	= 500,
-	.pad12		= 0,
 	.stability	= 11467,
 	.status		= 2,
 	.threshold	= 80,

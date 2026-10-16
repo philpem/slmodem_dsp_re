@@ -1720,9 +1720,8 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 * divide, and by `rms_blocks` -- which is zero until the first
 			 * block with symbols in it.  See v22org.h.
 			 */
-			fp->hdx->rms_accum = (int)((unsigned int)fp->hdx->rms_accum
-					     / (unsigned short)fp->hdx->rms_blocks);
-			if ((unsigned int)fp->hdx->rms_accum
+			fp->hdx->rms_accum /= (unsigned short)fp->hdx->rms_blocks;
+			if (fp->hdx->rms_accum
 			    > (unsigned short)fp->hdx->rms_threshold)
 				fp->hdx->rx_shift = 1;
 		}

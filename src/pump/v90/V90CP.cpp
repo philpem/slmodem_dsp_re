@@ -308,7 +308,7 @@ V90CP::calcCRC()
 	for (i = 0x12; i < end; ) {
 		if (i % 17 == 0)
 			i++;
-		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		a = (unsigned char)(crc[0] + bits[i]);
 		i++;
 
 		crc[0] = crc[1];
@@ -326,7 +326,7 @@ V90CP::calcCRC()
 		crc[12] = crc[13];
 		crc[13] = crc[14];
 		crc[14] = crc[15];
-		crc[15] = a;
+		crc[15] = (unsigned char)(a & 1);
 	}
 }
 
@@ -598,7 +598,7 @@ V90CP::evaluateCRC()
 	for (i = 0x12; i < end; ) {
 		if (i % 17 == 0)
 			i++;
-		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		a = (unsigned char)(crc[0] + bits[i]);
 		i++;
 
 		crc[0] = crc[1];
@@ -616,7 +616,7 @@ V90CP::evaluateCRC()
 		crc[12] = crc[13];
 		crc[13] = crc[14];
 		crc[14] = crc[15];
-		crc[15] = a;
+		crc[15] = (unsigned char)(a & 1);
 	}
 
 	diff = 0;
@@ -630,6 +630,10 @@ V90CP::evaluateCRC()
 
 	return diff == 0;
 }
+
+/* Fixed field/CRC regions and read boundaries follow the original graph.
+ * The finite controls and remaining differences are in
+ * docs/recovery-bitpacker-results.md and docs/recovery-cp-next-results.md. */
 
 void
 V90CP::infoToBits()
@@ -666,7 +670,7 @@ V90CP::infoToBits()
 			v >>= 1;
 		}
 
-		switch (byte_11) {
+		switch ((signed char)byte_11) {
 		case 0:
 			bits[0x1b] = 0;
 			bits[0x1c] = 0;
@@ -702,17 +706,19 @@ V90CP::infoToBits()
 
 		if (word_04 != 0) {
 			for (k = 0; k <= 5; k++) {
-				int lo = (short)word_18[2 * k];
-				int hi = (short)word_18[2 * k + 1];
+				int lo;
+				int hi;
 
 				pos = bitIndex;
 				bits[pos] = 0;
 				pos++;
+				lo = (short)word_18[2 * k];
 				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(lo & 1);
 					lo >>= 1;
 				}
+				hi = (short)word_18[2 * k + 1];
 				pos += 8;
 				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
@@ -725,12 +731,12 @@ V90CP::infoToBits()
 
 		if (word_08 != 0) {
 			unsigned int t[4];
-			unsigned int n[4];
+			unsigned int n0, n1, n2, n3;
 
-			for (k = 0; k <= 3; k++) {
-				t[k] = nof_58[k];
-				n[k] = nof_58[k];
-			}
+			t[0] = n0 = nof_58[0];
+			t[1] = n1 = nof_58[1];
+			t[2] = n2 = nof_58[2];
+			t[3] = n3 = nof_58[3];
 
 			for (k = 0; k <= 3; k++) {
 				pos = bitIndex;
@@ -747,9 +753,57 @@ V90CP::infoToBits()
 				bitIndex = pos + 16;
 			}
 
-			for (k = 0; k <= 3; k++) {
-				for (j = 0; j < n[k]; j++) {
-					int w = short_58[k][j];
+			{
+				for (j = 0; j < n0; j++) {
+					int w = short_58[0][j];
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+			}
+			{
+				for (j = 0; j < n1; j++) {
+					int w = short_58[1][j];
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+			}
+			{
+				for (j = 0; j < n2; j++) {
+					int w = short_58[2][j];
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+			}
+			{
+				for (j = 0; j < n3; j++) {
+					int w = short_58[3][j];
 
 					pos = bitIndex;
 					bits[pos] = 0;
@@ -800,17 +854,19 @@ V90CP::infoToBits()
 			bitIndex = pos + 8;
 
 			for (k = 0; k <= 2; k++) {
-				int lo = (short)nof_buf[2 * k];
-				int hi = (short)nof_buf[2 * k + 1];
+				int lo;
+				int hi;
 
 				pos = bitIndex;
 				bits[pos] = 0;
 				pos++;
+				lo = (short)nof_buf[2 * k];
 				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(lo & 1);
 					lo >>= 1;
 				}
+				hi = (short)nof_buf[2 * k + 1];
 				pos += 8;
 				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
@@ -820,26 +876,142 @@ V90CP::infoToBits()
 				bitIndex = pos + 8;
 			}
 
-			for (k = 0; k <= 5; k++) {
-				unsigned int n = nof_buf[k];
+			{
+				unsigned int n = nof_buf[0];
 				const int *src;
 
-				if (n == 0)
-					continue;
-				src = buf[k];
+				if (n != 0) {
+				src = buf[0];
 				for (j = 0; j < n; j++) {
-					int w = (short)src[j];
+					int w;
 
 					pos = bitIndex;
 					bits[pos] = 0;
 					pos++;
 					bitIndex = pos;
+					w = (short)src[j];
 					for (i = 0; i <= 0xf; i++) {
 						bits[pos + i] =
 						    (unsigned char)(w & 1);
 						w >>= 1;
 					}
 					bitIndex = pos + 16;
+				}
+				}
+			}
+			{
+				unsigned int n = nof_buf[1];
+				const int *src;
+
+				if (n != 0) {
+				src = buf[1];
+				for (j = 0; j < n; j++) {
+					int w;
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					w = (short)src[j];
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+				}
+			}
+			{
+				unsigned int n = nof_buf[2];
+				const int *src;
+
+				if (n != 0) {
+				src = buf[2];
+				for (j = 0; j < n; j++) {
+					int w;
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					w = (short)src[j];
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+				}
+			}
+			{
+				unsigned int n = nof_buf[3];
+				const int *src;
+
+				if (n != 0) {
+				src = buf[3];
+				for (j = 0; j < n; j++) {
+					int w;
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					w = (short)src[j];
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+				}
+			}
+			{
+				unsigned int n = nof_buf[4];
+				const int *src;
+
+				if (n != 0) {
+				src = buf[4];
+				for (j = 0; j < n; j++) {
+					int w;
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					w = (short)src[j];
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
+				}
+			}
+			{
+				unsigned int n = nof_buf[5];
+				const int *src;
+
+				if (n != 0) {
+				src = buf[5];
+				for (j = 0; j < n; j++) {
+					int w;
+
+					pos = bitIndex;
+					bits[pos] = 0;
+					pos++;
+					bitIndex = pos;
+					w = (short)src[j];
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					bitIndex = pos + 16;
+				}
 				}
 			}
 		}
@@ -857,10 +1029,11 @@ V90CP::infoToBits()
 	for (c = 0; c <= 0xf; c++)
 		crc[c] = 1;
 
-	for (i = 0x12; i < start; ) {
+	unsigned int end = bodyLength - 0x11;
+	for (i = 0x12; i < end; ) {
 		if (i % 17 == 0)
 			i++;
-		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		a = (unsigned char)(crc[0] + bits[i]);
 		i++;
 
 		crc[0] = crc[1];
@@ -878,7 +1051,7 @@ V90CP::infoToBits()
 		crc[12] = crc[13];
 		crc[13] = crc[14];
 		crc[14] = crc[15];
-		crc[15] = a;
+		crc[15] = (unsigned char)(a & 1);
 	}
 
 	pos = (unsigned int)bitIndex;

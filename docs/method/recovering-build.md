@@ -135,7 +135,8 @@ Use progressively stronger comparisons and preserve what each excludes:
 | Mnemonic sequence | Finds broad structural similarity | Ignores significant operand differences |
 | Function bytes with relocation-aware comparison | Establishes the comparator's defined function-body identity | Does not settle whole-object layout or all anonymous data |
 | Register-renaming equivalence | Classifies some non-identical bodies | Requires validated rules and remains weaker than byte identity |
-| Strict final partial-link comparison | Checks sections, data, relocations and symbol records together | Does not identify unique original source text |
+| Semantic partial-link comparison | Checks the link-relevant ELF model, including sections, relocations and defined/undefined symbol records | Permits some non-allocated metadata and file-packing differences |
+| Literal final-object comparison | Requires every file byte to agree | Does not identify unique original source text |
 
 In this repository, build fresh period objects before reading identity reports:
 
@@ -143,12 +144,16 @@ In this repository, build fresh period objects before reading identity reports:
 make tc
 python3 tools/toolchain/byteident.py --why FPM_div
 python3 tools/toolchain/byteident.py --list-exact
-make partial-link
+make partial-compare-exact
+# Or compare an already-built candidate:
 python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
-    build/partial/dsplibs.o --require-exact
+    build/partial/dsplibs.o --require-exact --require-raw-exact
 ```
 
-The final command is a completion gate and may fail during reconstruction;
+The target and final command require semantic and literal identity and may
+fail during reconstruction. `--require-exact` alone checks semantic equality;
+`--require-raw-exact` requires literal equality. A `.comment`-only change can
+pass the former and fail the latter. Both retain input-validation refusals.
 `make partial-compare` produces a diagnostic census. Capture a baseline exact
 set before editing and compare it with the rebuilt candidate set. Check
 relocation types, target identity and addends: masking encoded addresses

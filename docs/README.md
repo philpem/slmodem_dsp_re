@@ -53,6 +53,15 @@ as `Documentation consolidation migration ledger (26fcbde7)` and
 revision. The working tree retains seven short compatibility links for
 technical references that now live in the manual.
 
+After PR #289 merged, its 31 new investigation notes and two updated historical
+reports were saved in ten bundles titled
+`PR 289 documentation migration (5bd9d857), bundle N of 10`. Their exact
+texts remain available at Git revision `5bd9d857`; current FixedRC behaviour,
+field-recovery techniques and completion gates are incorporated into the
+manual and method guides. The four new JSON reports retain their tool-facing
+paths. To replay an experiment that needs a removed domain file, recover it
+into a build directory and pass that path to the tool's domain option.
+
 The manual's `modules.md` is a runtime catalogue; the root `modules.md` is the
 original object input-file map. After building the manual, run
 `python3 tools/ci/docs_audit.py` to check current repository links, module

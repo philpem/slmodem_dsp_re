@@ -68,6 +68,15 @@ distinguish comparisons that ordinary positive test values cannot separate.
 In this project a signedness error remained invisible to differential tests
 over the valid small values but was exposed by code generation (finding F613).
 
+Check storage independently from narrowing at a call boundary. Tone IIR's
+constructor passes a short argument to a fixed-point helper, but the cadence
+producer stores a full 32-bit interval and the progress consumer compares
+that full value. A constructor-created interval of 66,036 exposed the old
+short-storage model, which incorrectly produced a verdict after 500 samples.
+The corrected int member preserves layout while recovering the complete
+interval. Audit writers, readers, extensions and owner identity together;
+an offset assertion alone cannot validate a member's type.
+
 For fixed-point arithmetic, transcribe a chain of widths and conversions:
 input width, multiplication width, accumulator width, shift, narrowing and
 store. An arithmetic right shift, division and a cast can differ for negative

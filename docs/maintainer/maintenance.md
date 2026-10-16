@@ -117,15 +117,20 @@ synthetic and public-call evidence.
 The final-object completion command is:
 
 ```sh
-make partial-link
+make partial-compare-exact
+# Or compare an already-built candidate:
 python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
-    build/partial/dsplibs.o --require-exact
+    build/partial/dsplibs.o --require-exact --require-raw-exact
 ```
 
 `make partial-compare` is a diagnostic census while convergence is incomplete.
 A non-failing diagnostic report is not the strict completion gate. Preserve
-sections, data, relocation targets/addends, symbol records and ordering as well
-as function bodies.
+sections, data, relocation targets/addends, defined and undefined symbol
+records and ordering as well as function bodies. `--require-exact` checks the
+link-relevant ELF model; `--require-raw-exact` additionally requires literal
+file-byte identity, including headers, non-allocated sections and packing.
+The convenience target requires both. A `.comment`-only change may pass the
+semantic check while failing the raw check.
 
 ## Record an investigation so it can be resumed
 

@@ -8,13 +8,10 @@
  * at 9600.  RcFixed_Resample() is called from exactly four places in the
  * original: dp_wrapper_run(), call_run(), FAX_process() and VOICE_process().
  *
- * Modes 0 and 1 (plain x4 and /4) have their own 40-byte state layout, three
- * coefficient tables and a separate conversion, and RcFixed_Create() now
- * reconstructs their CREATE/RESET/DELETE path faithfully, which is what makes
- * CI_b1/CI_b2/CI_bDroop emittable.  The kind-1 RESAMPLE conversion itself is
- * NOT reconstructed: it is unreachable through the module's API, because
- * RcFixed_Check_Combination() starts its scan at mode 2 and every call site
- * passes a literal 2..7.  See RcFixed_Resample.
+ * Modes 0 and 1 (plain x4 and /4) use a 40-byte state and three circular
+ * FIR histories. The other eighteen modes share a polyphase window. Modes
+ * 0/1 can be constructed explicitly; the modem call sites pass modes 2..7
+ * and Check_Combination starts its search at mode 2.
  */
 
 #include <stdlib.h>
@@ -177,25 +174,9 @@ static const short CI_b2[15] = {
  * RcFixed_Delete; the three `.N` counters are the delay-line write positions
  * that RcFixed_Resample wraps at 2, 86 and 14.
  *
- * The kind-1 RESAMPLE conversion is NOT reconstructed (see the note on
- * RcFixed_Resample); it is unreachable through the module's API, because
- * RcFixed_Check_Combination() starts its scan at mode 2 and every call site
- * passes a literal 2..7.  What this recovers is the CREATE path, which is
- * what references the three tables and so what makes them emittable.
+ * Its conversion uses the same record and histories below. The definition
+ * lives in fixedrc.h so component fixtures inspect the same declared layout.
  */
-struct rc_kind1 {
-	short mode;          /* +0x00  the mode number, 0 or 1  */
-	short *w6;           /* +0x04  6-byte scratch          */
-	const short *droop;  /* +0x08  CI_bDroop               */
-	short pos6;          /* +0x0c  wraps at 2              */
-	short *w174;         /* +0x10  174-byte scratch        */
-	const short *b1;     /* +0x14  CI_b1                   */
-	short pos174;        /* +0x18  wraps at 86             */
-	short *w30;          /* +0x1c  30-byte scratch         */
-	const short *b2;     /* +0x20  CI_b2                   */
-	short pos30;         /* +0x24  wraps at 14             */
-};
-
 struct rc {
 	int kind;               /* +0x00 0 = polyphase, 1 = modes 0/1 */
 	struct rc_state *state; /* +0x04 */
@@ -427,8 +408,8 @@ RcFixed_Check_Combination(int in_rate, int out_rate)
  *
  * The original does not use a circular buffer.  It writes forward through a
  * flat 200-entry array and, on reaching the end, copies the most recent `taps`
- * samples back to the start and resumes from there.  Compaction costs a short
- * memmove once every (200 - taps) samples, and in exchange the convolution
+ * samples back to the start and resumes from there. Compaction copies the
+ * tail forward once every (200 - taps) samples, and the convolution
  * inner loop is a straight walk with no index wrapping -- worth it on a 2003
  * CPU, and reproduced here because it also determines exactly which samples
  * survive across the boundary.
@@ -439,9 +420,14 @@ rc_push(struct rc_state *s, short sample)
 	s->history[s->pos++] = sample;
 
 	if (s->pos == RCFIXED_HISTORY) {
-		memmove(s->history, s->history + RCFIXED_HISTORY - s->taps,
-			(size_t)s->taps * sizeof(s->history[0]));
-		s->pos = s->taps;
+		int taps = s->taps;
+		short *dst = s->history;
+		const short *src = s->history + RCFIXED_HISTORY - taps;
+		int count = taps;
+
+		while (count-- != 0)
+			*dst++ = *src++;
+		s->pos = taps;
 	}
 }
 
@@ -460,10 +446,10 @@ rc_output(struct rc_state *s)
 	const short *coeff = s->coeff + (int)s->phase * s->taps;
 	const short *hist = s->history + (s->pos - s->taps);
 	int acc = 0;
-	int k;
+	unsigned int k;
 
 	for (k = 0; k < s->taps; k++)
-		acc += (int)coeff[k] * (int)hist[k];
+		acc += (int)*coeff++ * (int)*hist++;
 
 	return (short)(acc >> 14);
 }
@@ -513,78 +499,164 @@ rc_advance(struct rc_state *s)
 	}
 }
 
+/* Circular FIR, in coefficient order, split at the history wrap. The
+ * original inlines this pair of loops with literal lengths 3, 87 and 15.
+ * Accumulation is 32-bit and every stage narrows after its Q15 shift. */
+static short
+rc_circular_output(const short *coeff, const short *history,
+		   int position, int count)
+{
+	int acc = 0;
+	int i;
+	const short *cursor = history + position + 1;
+
+	for (i = position; i >= 0; i--)
+		acc += (int)*--cursor * (int)*coeff++;
+	cursor += count;
+	for (i = count - 1; i > position; i--)
+		acc += (int)*--cursor * (int)*coeff++;
+	return (short)(acc >> 15);
+}
+
+static void
+rc_circular_advance(short *position, int last)
+{
+	*position = (short)(*position + 1);
+	if (*position > last)
+		*position = 0;
+}
+
 void
 RcFixed_Resample(struct rc *h, const short *in, int in_count,
 		 short *out, int *out_count)
 {
-	struct rc_state *s;
-	int produced = 0;
-	int limit;
+	switch (h->kind) {
+	case 0: {
+		struct rc_state *s = h->state;
+		unsigned remaining = (unsigned)in_count;
+		unsigned limit = (unsigned)*out_count;
 
-	/*
-	 * The incoming value of *out_count is an output limit, read before it
-	 * is zeroed.  Conversion stops when either the input runs out or that
-	 * many samples have been produced.
-	 *
-	 * Passing 0 therefore means "no limit", not "produce nothing": the
-	 * original compares for inequality, so once the first sample is
-	 * emitted the count can never equal 0 again and the loop runs until
-	 * the input is exhausted.  dp_wrapper relies on the limit; callers
-	 * that pass 0 rely on the other reading.  Both are reproduced.
-	 */
-	limit = (out_count != NULL) ? *out_count : 0;
-
-	if (out_count != NULL)
 		*out_count = 0;
+		while (remaining != 0) {
+			unsigned need = (unsigned)s->input_needed;
+			unsigned take = need < remaining ? need : remaining;
 
-	/*
-	 * kind 1 is the mode 0/1 x4 / /4 converter.  Its Create/Reset/Delete
-	 * path is reconstructed (so the state and its tables exist and are
-	 * emittable; F11449), but the kind-1 RESAMPLE conversion is not: it is
-	 * the multi-stage delay-line machine at RcFixed_Resample+0x215 and it
-	 * is unreachable, since RcFixed_Check_Combination() begins its scan at
-	 * mode 2 and every caller passes a literal 2..7.  Declining it here
-	 * leaves *out_count at the zero already stored above.
-	 */
-	if (h == NULL || h->kind != 0 || h->state == NULL)
-		return;
+			while (take-- != 0)
+				rc_push(s, *in++);
+			if (need > remaining) {
+				s->input_needed = need - remaining;
+				break;
+			}
+			remaining -= need;
+			*out++ = rc_output(s);
+			(*out_count)++;
+			rc_advance(s);
+			if ((unsigned)*out_count == limit)
+				break;
+		}
+		break;
+	}
+	case 1: {
+		struct rc_kind1 *s = (struct rc_kind1 *)h->state;
+		unsigned remaining = (unsigned)in_count;
+		unsigned limit = (unsigned)*out_count;
+		short first = 0, second = 0;
 
-	s = h->state;
+		*out_count = 0;
+		switch (s->mode) {
+		case 0: {
+			short *droop_history = s->w6;
+			const short *droop = s->droop;
+			short *long_history = s->w174;
+			const short *long_coeff = s->b1;
+			short *short_history = s->w30;
+			const short *short_coeff = s->b2;
 
-	while (in_count > 0) {
-		int need = s->input_needed;
-		int take = (need < in_count) ? need : in_count;
-		int i;
+			while (remaining != 0) {
+				short sample, value;
+				/* Original carries both Q15 results in one word. */
+				short pair[2];
 
-		for (i = 0; i < take; i++)
-			rc_push(s, *in++);
+				rc_circular_advance(&s->pos6, 2);
+				droop_history[s->pos6] = *in++;
+				sample = rc_circular_output(droop, droop_history,
+						    s->pos6, 3);
+				rc_circular_advance(&s->pos174, 86);
+				long_history[s->pos174] = sample;
+				pair[0] = (short)(rc_circular_output(long_coeff,
+					long_history, s->pos174, 87) * 2);
+				rc_circular_advance(&s->pos174, 86);
+				long_history[s->pos174] = 0;
+				pair[1] = (short)(rc_circular_output(long_coeff,
+					long_history, s->pos174, 87) * 2);
 
-		/*
-		 * Ran out part-way through the samples this output needs.  The
-		 * consumed ones stay in the history and `input_needed` carries
-		 * the shortfall into the next call.
-		 */
-		if (need > in_count) {
-			s->input_needed = need - take;
+				rc_circular_advance(&s->pos30, 14);
+				short_history[s->pos30] = pair[0];
+				value = rc_circular_output(short_coeff, short_history,
+							   s->pos30, 15);
+				*out++ = (short)(((int)value * 31957) >> 13);
+				rc_circular_advance(&s->pos30, 14);
+				short_history[s->pos30] = 0;
+				value = rc_circular_output(short_coeff, short_history,
+							   s->pos30, 15);
+				*out++ = (short)(((int)value * 31957) >> 13);
+				rc_circular_advance(&s->pos30, 14);
+				short_history[s->pos30] = pair[1];
+				value = rc_circular_output(short_coeff, short_history,
+							   s->pos30, 15);
+				*out++ = (short)(((int)value * 31957) >> 13);
+				rc_circular_advance(&s->pos30, 14);
+				short_history[s->pos30] = 0;
+				value = rc_circular_output(short_coeff, short_history,
+							   s->pos30, 15);
+				*out++ = (short)(((int)value * 31957) >> 13);
+				remaining--;
+				*out_count += 4;
+				if ((unsigned)*out_count >= limit)
+					break;
+			}
 			break;
 		}
+		case 1: {
+			short *short_history = s->w30;
+			const short *short_coeff = s->b2;
 
-		in_count -= need;
+			while (remaining != 0) {
+				short sample;
 
-		out[produced++] = rc_output(s);
-		rc_advance(s);
-
-		/*
-		 * Limit test at the bottom, matching the original: one output
-		 * is always produced before it applies.  That is what makes a
-		 * limit of 0 behave as "no limit" -- see the note above.
-		 */
-		if (produced == limit)
+				rc_circular_advance(&s->pos30, 14);
+				short_history[s->pos30] = (short)(*in++ >> 1);
+				sample = rc_circular_output(short_coeff, short_history,
+							    s->pos30, 15);
+				if (++first == 2) {
+					first = 0;
+					rc_circular_advance(&s->pos174, 86);
+					s->w174[s->pos174] = sample;
+					sample = rc_circular_output(s->b1, s->w174,
+								    s->pos174, 87);
+					if (++second == 2) {
+						second = 0;
+						rc_circular_advance(&s->pos6, 2);
+						s->w6[s->pos6] = sample;
+						sample = rc_circular_output(s->droop,
+							s->w6, s->pos6, 3);
+						*out++ = (short)(((int)sample * 32440) >> 13);
+						(*out_count)++;
+						if ((unsigned)*out_count >= limit)
+							break;
+					}
+				}
+				remaining--;
+			}
+		}
 			break;
+		}
+		break;
 	}
-
-	if (out_count != NULL)
-		*out_count = produced;
+	default:
+		*out_count = 0;
+		break;
+	}
 }
 
 

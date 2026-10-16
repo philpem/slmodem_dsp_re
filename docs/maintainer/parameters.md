@@ -104,6 +104,11 @@ American modem should.
 
 ## Cadence times are in 10 ms units
 
+The Tone IIR configuration stores the observation interval as a full 32-bit
+integer. Cadence construction writes that complete value and progress compares
+it at full width. The constructor's call to `GetFP_Value(short, short)` narrows
+at the helper boundary; this does not make the stored interval a short.
+
 **Every `*CadenceOnTime` and `*CadenceOffTime` in the country table is a count
 of 10 ms units, not milliseconds and not samples.** A 500 ms busy tone is 50.
 

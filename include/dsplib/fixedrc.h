@@ -13,6 +13,8 @@
 #ifndef DSPLIB_FIXEDRC_H
 #define DSPLIB_FIXEDRC_H
 
+#include <stddef.h>
+
 /*
  * Number of entries in the factor tables, excluding the {0,0} terminator.
  * RcFixed_Check_Combination() returns RCFIXED_NMODES for an unsupported
@@ -106,6 +108,33 @@ struct rc_state {
 	int input_needed;                   /* +0x1a0 samples before next out */
 };
 
+/* Modes 0 and 1 use three circular histories instead of the polyphase
+ * window above. The original allocates 40 bytes for this record on i386.
+ * Reset clears only the first four bytes of each separately owned history. */
+struct rc_kind1 {
+	short mode;
+	short *w6;
+	const short *droop;
+	short pos6;
+	short *w174;
+	const short *b1;
+	short pos174;
+	short *w30;
+	const short *b2;
+	short pos30;
+};
+
+#if __SIZEOF_POINTER__ == 4
+typedef char rc_kind1_layout_check[
+	(sizeof(struct rc_kind1) == 40 &&
+	 offsetof(struct rc_kind1, w6) == 4 &&
+	 offsetof(struct rc_kind1, pos6) == 12 &&
+	 offsetof(struct rc_kind1, w174) == 16 &&
+	 offsetof(struct rc_kind1, pos174) == 24 &&
+	 offsetof(struct rc_kind1, w30) == 28 &&
+	 offsetof(struct rc_kind1, pos30) == 36) ? 1 : -1];
+#endif
+
 /* Opaque handle. */
 struct rc;
 
@@ -116,7 +145,7 @@ struct rc;
  *         modes above 999. Modes 20..999 reach an invalid-state reset in
  *         the original: reject unsupported lookup results before calling.
  *         Allocation failure is not checked by the original. Modes 0 and 1
- *         have their own state; kind-1 resampling remains unimplemented.
+ *         use their own multistage state and conversion.
  */
 struct rc *RcFixed_Create(int mode);
 
@@ -132,16 +161,23 @@ void RcFixed_Reset(struct rc *h);
 /**
  * @brief Convert a run of samples.
  *
- * Consumes all of @p in unless it runs out mid-way through the samples
- * needed for one more output, in which case the remainder is held in the
- * history for the next call.
+ * Modes 2..19 retain input owed across calls and stop at the incoming
+ * output count; zero means unlimited. Modes 0/1 check that limit after
+ * emitting a group of four/one outputs, so zero still allows one group.
+ * Mode 0 rounds positive output limits up to a multiple of four. Mode 1
+ * restarts its two decimation phases on each call; callers requiring the
+ * full /4 stream must preserve groups of four input samples.
+ *
+ * The caller supplies a live constructed converter, input/output storage
+ * for the selected mode, and a non-null count pointer. Output capacity must
+ * accommodate a full group even if the incoming limit is smaller. A call
+ * may stop before all input is consumed when its output limit is reached.
  *
  * @param h          The converter.
  * @param in         Input samples.
  * @param in_count   Number of input samples.
  * @param out        Output buffer.
- * @param out_count  Set to the number of output samples written -- at
- *                    most as many as the ratio allows.
+ * @param out_count  Incoming output limit; replaced by the output count.
  */
 void RcFixed_Resample(struct rc *h, const short *in, int in_count,
 		      short *out, int *out_count);
@@ -150,7 +186,8 @@ void RcFixed_Resample(struct rc *h, const short *in, int in_count,
  * @brief Test accessor: the converter's live state, for field-by-field
  * comparison.
  * @param h  The converter.
- * @return Pointer to its internal `struct rc_state`.
+ * @return Internal state, `struct rc_state` for modes 2..19; cast to
+ *         `struct rc_kind1` for modes 0/1.
  */
 struct rc_state *RcFixed_State(struct rc *h);
 

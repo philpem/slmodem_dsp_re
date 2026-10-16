@@ -273,10 +273,12 @@ struct v22fp_hdx {
 	/*
 	 * +0x2c accumulates `rx_rms` over the blocks NODE_3 counted, then
 	 * holds the UNSIGNED MEAN once `v22_originate` divides it by
-	 * `rms_blocks` (v22org.c:110,127).  Declared `int`, but the divide
-	 * and every read are unsigned.
+	 * `rms_blocks` (v22org.c:110,127).  The original uses a full-width
+	 * unsigned DIV and unsigned threshold comparison (0x8b724..0x8b748).
+	 * Signed storage with explicit unsigned casts is also a possible source
+	 * declaration; this type directly models all observed arithmetic.
 	 */
-	int rms_accum;		/* +0x2c init 0                             */
+	unsigned int rms_accum;		/* +0x2c init 0                             */
 	/*
 	 * +0x30 is the RMS-MEAN THRESHOLD `v22_originate`'s NODE_3 compares
 	 * the mean against to set `rx_shift`: `V22FP_create` writes 0x2454

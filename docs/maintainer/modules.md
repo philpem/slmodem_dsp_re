@@ -34,7 +34,7 @@ Sources: [dp_wrapper.c](https://github.com/philpem/slmodem_dsp_re/blob/master/sr
 
 Convert between supported sample rates.
 
-Modes 2–19 select a rational polyphase FIR bank: a phase accumulator chooses a branch, the dot product uses Q14 coefficients, and the history is compacted between blocks. Modes 0/1 have a separate lifecycle, but resampling currently declines their kind-1 state; see the [coefficient reference](coefficients.md#current-fixedrc-boundary) for this existing component limitation.
+Modes 2–19 select a rational polyphase FIR bank: a phase accumulator chooses a branch, the dot product uses Q14 coefficients, and the history is compacted between blocks. Explicit modes 0/1 use separate circular histories and cascaded droop, 87-tap and 15-tap FIR operations to interpolate or decimate by four. Their conversion is reconstructed; the [coefficient reference](coefficients.md#current-fixedrc-boundary) explains per-call phases, narrowing, output limits and validation scope.
 
 Sources: [FixedRC.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/core/FixedRC.c).
 
@@ -43,6 +43,11 @@ Sources: [FixedRC.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/c
 Encode diagnostic messages and expose the shipped parameter-parser entry points.
 
 Character substitution encodes the diagnostic channel. Vparser retains the small shipped entry-point behaviour; do not infer a general file parser from its name.
+
+The compatibility build retains the original 270-byte diagnostic scratch
+array and its boundary overrun; the fixed build reserves 271 bytes. This
+recovers the original data extent without changing the accepted message
+length or claiming a new exact function. The deviation register records D39.
 
 Sources: [encode.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/core/encode.c), [Vparser.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/core/Vparser.c).
 
@@ -84,7 +89,7 @@ Sources: [Callprog.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/
 
 Select and run frequency-selective call-progress filters.
 
-Coefficient banks and recursive IIR sections isolate bands before cadence decisions. Filter energy and timing are separate observations.
+Coefficient banks and four direct-form-I IIR sections isolate bands before cadence decisions. The engine uses Q13 coefficients, per-section rescaling and 16-bit tap counters. Tone detection retains a 32-bit observation interval, which narrows to 16 bits at the constructor's fixed-point helper boundary. Its envelope threshold uses an arithmetic right shift. Filter energy and timing are separate observations.
 
 Sources: [CPfiltrs.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/CPfiltrs.c), [Elliptic1.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/Elliptic1.c), [Elliptic2.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/Elliptic2.c), [Elliptic3.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/Elliptic3.c), [toneiir.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/toneiir.c).
 
@@ -233,6 +238,11 @@ Sources: [B103.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump
 Run a frequency-division duplex QAM modem.
 
 v22.c adapts the host; V22/V22int/v22prc/v22stc sequence training and control. v22mod and V22Dec encode/decode symbols. MRF converts rate, receive PPS splits phase, FSE equalises, SRE recovers timing, and IIR filters select bands. Transmit PPS uses a 40-phase, three-tap bank; rx/tx table units supply constants.
+
+The half-duplex RMS accumulator is represented as an unsigned 32-bit member,
+matching its wrapping addition, unsigned division and unsigned threshold
+comparison. This expresses the observed arithmetic without claiming a unique
+original declaration; signed storage with explicit casts could emit the same code.
 
 Sources: [V22.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/V22.c), [V22Dec.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/V22Dec.c), [V22int.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/V22int.c), [v22.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22.c), [v22_fse.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22_fse.c), [v22_iir.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22_iir.c), [v22_mrf.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22_mrf.c), [v22_pps.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22_pps.c), [v22_sre.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22_sre.c), [v22mod.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22mod.c), [v22prc.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22prc.c), [v22rxtab.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22rxtab.c), [v22stc.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22stc.c), [v22txtab.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/pump/v22/v22txtab.c).
 
@@ -427,6 +437,12 @@ Sources: [V8Detector.c](https://github.com/philpem/slmodem_dsp_re/blob/master/sr
 Receive and interpret Caller ID messages.
 
 The host service wraps the core state machine. Cidfsd/Cidmtd demodulate FSK and detect tones; Rxcid assembles asynchronous bits into bytes, and Data renders decoded records. National variants require separate evidence.
+
+The correlation and low-pass ring wraps derive from each first loop's terminal
+cursor. The reconstructed one-past/predecrement traversal preserves that
+dependency while keeping pointers within their arrays. CID demodulation and
+the two Tone IIR progress bodies retain validated partial instruction graphs;
+their complete function-byte identity remains open.
 
 Sources: [cid.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/cid.c), [cid.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/cidcore/cid.c), [Cidfsd.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/Cidfsd.c), [Cidmtd.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/Cidmtd.c), [Rxcid.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/Rxcid.c), [Data.c](https://github.com/philpem/slmodem_dsp_re/blob/master/src/service/Data.c).
 
