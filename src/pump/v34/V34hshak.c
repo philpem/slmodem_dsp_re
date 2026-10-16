@@ -9552,11 +9552,6 @@ micro_txblock:
  * count reads as an enormous span rather than a negative one.
  */
 
-#define DP_FAA98	((int)__builtin_offsetof(struct v34_object, \
-					    ratecfg.rxbits))
-	/* short: copied into the receiver's +0x260; the member's own
-	   offset (issue #260 wave 11)  */
-
 /*
  * The receiver's own fields.  THESE ARE ALL MEMBERS OF `struct v34_receiver`
  * ALREADY -- `rx_blocks`, `equerr`, `bad_thresh`, `bad_long_thresh`, `good_thresh`, `bad_run`, `bad_long_run`, `good_run`,
@@ -9710,7 +9705,7 @@ datapumpv34(void *objp)
 		dp_rxput(obj, DP_RX_BAD, 0);
 		dp_rxput(obj, DP_RX_BAD_LONG, 0);
 		dp_rxput(obj, DP_RX_WHY, 1);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		dp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"V34RNEG, rate renegotiation detected \n");
@@ -9729,7 +9724,7 @@ datapumpv34(void *objp)
 		dp_rxput(obj, DP_RX_BAD_LONG, 0);
 		dp_rxput(obj, DP_RX_GOOD, 0);
 		dp_rxput(obj, DP_RX_WHY, 2);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		dp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
 					     "DOWN initiated due to large " "error \n");
@@ -9743,7 +9738,7 @@ datapumpv34(void *objp)
 		dp_rxput(obj, DP_RX_BAD, 0);
 		dp_rxput(obj, DP_RX_BAD_LONG, 0);
 		dp_rxput(obj, DP_RX_WHY, 3);
-		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
+		dp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
 					     "UP initiated due to small " "error \n");

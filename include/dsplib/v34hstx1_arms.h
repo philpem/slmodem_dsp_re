@@ -152,18 +152,13 @@ static const char *StateName[V34HS_STATE_COUNT] = {
 #define HS_TRACE_2	((int)__builtin_offsetof(struct v34_object, \
 							short_aa78))
 
-static inline short
-hs_get(const struct v34_object *obj, unsigned off)
-{
-	return *(const short *)((const char *)obj + off);
-}
-
 /*
- * `hs_put` is GONE (issue #260 wave 11): wave 6 typed the writes through the
- * three setters below, and every bare `hs_put` call site since became a
- * member store, so no real caller was left.  `hs_get` survives -- its three
- * remaining callers are `datapumpv34`'s, where the whole accessor rewrite
- * was measured and DECLINED (findings F8044/F8045).
+ * Both raw state accessors are retired. Issue #260 wave 11 removed hs_put;
+ * MG-03 replaces hs_get's last three reads with obj->ratecfg.rxbits, the
+ * same signed-short field. That bounded substitution leaves the complete
+ * period object unchanged. The separate dp_rxget/dp_rxput supervisor
+ * rewrite remains subject to the F8044/F8045 evidence limits; see
+ * docs/maintainer-offset-access.md.
  */
 
 /*
@@ -199,8 +194,8 @@ hs_get(const struct v34_object *obj, unsigned off)
  * extend it only where the index is needed.  The signed field and the
  * signed debug index remain unchanged (see docs/v34-small-rtl.md).
  *
- * `static inline`, as are `hs_get` and `hs_put` below: the object inlines
- * the whole closure into `v34handshak` and defines no `hs_*` symbol at all
+ * `static inline`: the object inlines the whole closure into
+ * `v34handshak` and defines no `hs_*` symbol at all
  * (finding F11506/F11507).
  */
 static inline void

@@ -319,7 +319,7 @@
   },
   {
     "label": "the remote block records +0xaa96 rather than +0xaa98 as the rate",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));",
+    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);",
     "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 1);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rx_baud);",
     "fn": "datapumpv34"
   },
@@ -435,7 +435,7 @@
   },
   {
     "label": "the step up records +0xaa96 rather than +0xaa98 as the rate",
-    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));",
+    "find": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rxbits);",
     "replace": "\t\tdp_rxput(obj, DP_RX_WHY, 3);\n\t\tdp_rxput(obj, DP_RX_RATE, obj->ratecfg.rx_baud);",
     "fn": "datapumpv34"
   },

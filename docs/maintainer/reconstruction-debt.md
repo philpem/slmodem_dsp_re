@@ -68,23 +68,26 @@ recovery must preserve both offset bases and the existing differential checks.
 
 ## MG-03: Offset access remains part of the handshake model
 
-**Confirmed representation debt; medium priority.**
-[`v34fsk.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34fsk.h)
-retains `unmapped_*` spans and
-[`v34hstx1_arms.h`](https://github.com/philpem/slmodem_dsp_re/blob/master/include/dsplib/v34hstx1_arms.h)
-uses offset-based accessors such as `hs_get` and `hs_put`. Some offsets identify
-known fields; other comments bound only a width or a particular reader/writer.
-The receiver also retains a large `pad_2a8` region.
+**Partially resolved: obsolete claims corrected and the remaining raw state
+reader removed.** At `ac7f28e6`, issue #260 has already replaced receiver
+`pad_000` and `pad_2a8` with recovered fields/subobjects, and `hs_put` is
+already gone. The three remaining `hs_get` calls read the known signed-short
+`ratecfg.rxbits` field. They now use that member directly; the unused
+accessor and `DP_FAA98` macro are removed.
 
-Generic state accessors intentionally serve several state words, so their
-existence alone is not a defect. The maintenance hazard is losing the base,
-width or evidence behind a particular offset, or assuming a pad is alignment.
+The minimal substitution leaves the complete period-compiled `V34hshak.c`
+object unchanged across all 54 emitted functions. It adds no guessed field,
+name or type and does not change comparison promotion or counter wrap.
 
-**Next step:** select a bounded region with concrete readers and writers,
-recover its field shape and owner, then name only what the binary supports.
-Close each regional follow-up with live assertions, updated uses and mutation
-anchors, period differential results and code-generation measurements. Do not
-claim this entire entry closed because a raw-offset count decreases.
+A bounded broader typed rewrite was also measured, then withheld: only the
+non-exact `datapumpv34` changed, from 988 to 919 bytes against the original's
+1028, without an independent recovery of the changed counter/helper lowering.
+The existing `dp_rxget`/`dp_rxput`/`dp_run` group therefore remains open in
+[issue #286](https://github.com/philpem/slmodem_dsp_re/issues/286) under
+the F8044/F8045 evidence limits. Unmapped storage with unsupported meaning
+also remains neutral. This entry is not closed by a reduced offset count.
+See [the two-cell record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md)
+for the source boundary, full flags and the next evidence needed.
 
 ## MG-04: Wrapper preconditions need an explicit boundary
 
