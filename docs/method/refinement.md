@@ -5427,3 +5427,102 @@ cover the lost dependency. A branch-based owner-routing control explains the
 bug but is unnecessary once direct reads and adjacency pass. Trace the symbol
 references in initial RTL: a wrong owner there cannot be repaired by later
 register allocation or instruction scheduling.
+
+### Distinguish table extents from the final test link's section grouping
+
+The remaining extended FPM tables have identifiable original neighbours:
+`sqrt` reaches the first reciprocal-table word, `div` reaches the XOR table,
+and `log10` reaches the first word of `FPM_PPS_CFG`. An original-size aggregate
+control restores those relative positions without explicit padding. Validate
+the final test executable as well: linking individual TUs can interleave their
+string sections with ordinary read-only data. The period log10 fixture then
+reads a diagnostic string instead of the configuration word, even though the
+relocatable aggregate has the correct adjacency.
+
+Keep that source cell diagnostic until the deciding fixture measures the
+intended aggregate boundary. A future fixture-link change must preserve
+cross-TU wrapping, test-visible local symbols, link order and cache invalidation.
+Do not move a string or add a source section attribute merely to accommodate
+the harness's different grouping.
+
+### Follow loop motion before expanding a coefficient-type experiment
+
+`V90SpectralShapingFilter::getMetric` reloads coefficients per block in the
+original and uses two single-precision stack slots. Moving the reconstruction's
+coefficient definitions into that loop does not recover those operations:
+initial RTL retains the inner placement, GCSE hoists the loads, and loop
+optimisation hoists their extended-precision conversions. A crossed float-local
+control still promotes the coefficients for the extended-precision recurrence
+and retains four extended-precision spills.
+
+The four cells produce two complete TU emissions, preserve the same six
+function verdicts and leave all non-text sections unchanged. The diagnostic
+float cell passes the period fixture, but does not restore the witnessed
+operations. Close this declaration/type domain. Reopen it only with independent
+evidence for a source-use or ownership boundary that explains the original
+single-precision consumers.
+
+### Test the declared scalar boundary when a reconstruction adds a clamp
+
+The original `FPM_sqrt` reads beyond its 192-word table into the adjacent
+reciprocal and XOR tables. The reconstruction added both an endpoint and a
+clamp, and its differential fixture stopped at Q15. Restoring the original
+sqrt/div extents exposes the original contiguous read window; removing the
+unwitnessed clamp then changes 32,704 failures over all 65,536 unsigned-word
+inputs to zero. This is component-boundary fidelity, without evidence that a
+modem caller supplies values above Q15.
+
+Keep the controls separate: restoring table extents alone leaves all 32,704
+failures. The bug-reproduction build restores the reciprocal table's original
+128 words, while the fixed build retains its generated endpoint. The scalar
+sqrt size gap increases despite the corrected behaviour. Record both facts;
+matching behaviour and witnessed reads outrank minimising a length difference.
+
+### Keep local-data ownership evidence separate from naming heuristics
+
+A GLOBAL function's relocation into a unique LOCAL object's actual interval
+can identify an original FILE occurrence. Preserve symbol-table indices,
+section, extent and FILE occurrence, including duplicate names. Reject global
+targets, gaps, one-past addresses, overlapping objects and conflicting owners;
+the nearest FILE record is not evidence for a GLOBAL object's definition.
+Mergeable and linkonce storage also require separate treatment.
+
+The original-object screen finds 104 uniquely witnessed functions among
+1,805 GLOBAL/WEAK functions. All 104 current source basenames agree; this
+method yields no further source-move candidates in that set. It supplements
+existing attribution without replacing its 1,764 name-derived records.
+`SMCv32_CFG` remains unresolved because it is a GLOBAL target. The controls
+must reject that tempting nearest-FILE inference as well as detect a deliberately
+wrong source assignment.
+
+### Re-run diagnostic-anchor triage and then prove each missing boundary
+
+A fresh census over 300 objects found ten count mismatches among 1,842 eligible
+object-symbol entries. A deliberately renamed debug relocation makes the known
+`call_delete` detector fire, validating the census before interpreting its
+output. Counts alone remain nominations: `RingDetector_Create` differs because
+the original inlines the reset helper that contains the print.
+
+The call supervisor has a different explanation. Its create-entry and
+rate-conversion announcements, and its old/new progress-message report, were
+absent from source. Recover the guard, arguments and publication timing together:
+the progress report observes the old stored message and the new result after
+output resampling, before publishing the changed message. A public-registration
+fixture crosses sample rates and debug levels and repeats blocks to check that
+unchanged messages stay silent. State/output agreement alone would miss these
+transcript defects.
+
+The B.103 constructor also lacked its original version banner. Recover the
+binary's date and time literals, not the reconstruction build timestamp. A
+public-constructor fixture crossing debug levels and constructor parameters
+exposes the missing output without planting internal state. Keep other
+count differences pending until their call and inlining boundaries are checked.
+
+### Preserve an owner's reload after an intervening call
+
+In `V90Phase3Demodulator::twoLevelDemod`, the original reloads the detector
+owner after `isAltRbs` before reading two tables. Reusing the pre-call local
+loses those loads. Expressing the two post-call accesses through the owning
+member restores them and reaches the original body length, while the other
+25 TU bodies remain unchanged. This is instruction-graph evidence, not proof
+of a functional defect: the observed callee does not change the owner.
