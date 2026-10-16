@@ -119,13 +119,13 @@
  },
  {
   "label": "the first flag pair goes out low bit first",
-  "find": "\t\tif (obj->short_abce & 1)\n\t\t\tr = 0x80;\n\t\tif (obj->short_abce & 2)\n\t\t\tr |= 0x40;",
-  "replace": "\t\tif (obj->short_abce & 2)\n\t\t\tr = 0x80;\n\t\tif (obj->short_abce & 1)\n\t\t\tr |= 0x40;"
+  "find": "\t\tif (obj->short_abce & 1)\n\t\t\tr = 0x80;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abce & 2)\n\t\t\tr |= 0x40;",
+  "replace": "\t\tif (obj->short_abce & 2)\n\t\t\tr = 0x80;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abce & 1)\n\t\t\tr |= 0x40;"
  },
  {
   "label": "the second and third flag fields change places",
-  "find": "\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 4;",
-  "replace": "\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 4;"
+  "find": "\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 0x20;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 0x10;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 8;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 4;",
+  "replace": "\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 0x20;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 0x10;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 8;\n\t\tbits[0] = (short)r;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 4;"
  },
  {
   "label": "the flag fields are read from bit 8 rather than bit 0",

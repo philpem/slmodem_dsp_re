@@ -5149,8 +5149,8 @@ inline all expressions into their consumers.
 
 The constructor-based boundary regression from
 [issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292) now runs in
-the normal tone-detector fixture: its 64 checks raise the fixture total from
-82,372 to 82,436. The standalone `tools/probe_generic_tone_unordered.py`
+the normal tone-detector fixture. Its 64 scalar checks were followed by
+192 block-overload checks; the fixture now reports 82,628 checks. The standalone `tools/probe_generic_tone_unordered.py`
 reuses that same test definition and preserves its exit status. Keep the
 historical failing run as evidence of the coverage gap; the new passing
 regression closes the demonstrated component failure, without claiming a
@@ -5196,3 +5196,61 @@ V92 RT receive, phase-3 reset and V90 AT report boundaries matched the
 reconstruction; their 19 witnesses establish those reviewed boundaries, not
 complete coverage of all three functions. Preserve negative audits so the
 same comments and branches are not repeatedly treated as new defects.
+
+
+### Cross decision outcomes, not just exceptional input values
+
+The block tone-detector overload had the same threshold operand reversal as
+its scalar sibling, but a separate scoring graph. With a quiet NaN and the
+flag set, the incorrectly selected strong arm and the original weak arm both
+report a hit. Clearing the flag distinguishes them: the original misses,
+while the old reconstruction hits. A constructor-created probe crosses both
+flag values with below-half, half-threshold, intermediate, full-threshold,
+above-threshold and quiet-NaN samples. It compares the state and counters as
+well as the return value. The old body fails two of 192 checks; the restored
+producer expression passes all of them, with no special NaN branch.
+
+The size gap stays at three bytes despite this behavioural correction.
+Follow that residual independently: the controlled compiler dumps have one
+countdown decrement through `27.flow2`; `31.bbro` duplicates it, and both
+copies survive scheduling. This identifies a late block-layout question.
+It does not establish which source loop produced the original shared decrement.
+
+### Retain witnessed operations even when an aggregate score stays flat
+
+`DialerAbort` tests its progress state with an unsigned range comparison in
+the original. The retained source used a signed comparison. Restoring the
+unsigned conversion preserves the original decision boundary without changing
+the two-byte size gap. Initial RTL distinguishes `LE` from `LEU`; five other
+functions in the TU and its data and bindings stay unchanged. Existing valid
+state and diagnostic-transcript tests pass. Negative internal states have no
+established modem history here, so this is a recovered guard, not evidence
+of a reachable modem failure. A previous failure to reach whole-function
+identity does not invalidate an independently witnessed partial recovery.
+
+The PCM-upstream arm of `V34SetINFO1aBits` similarly collapsed seven output
+publications into one. Restoring the initial zero and six flag updates
+recovers the original low-byte reads interleaved with word stores, reducing
+the size gap from 77 to 48 bytes. Its three known callers use disjoint output
+storage; no aliasing modem failure is claimed. Keep the old collapsed body
+as a negative control for the seven-store detector. Runtime unobservability
+at known callers does not establish byte identity or justify suppressing
+original operations.
+
+### Trace unchanged neighbours through peephole selection
+
+The IIR scalar helper exposes a short countdown, coefficient and history
+cursor updates, and a feedforward narrowing before the saturation decision.
+Recovering those boundaries improves both the helper and its inlined block
+caller. Their remaining size gaps are one and eighteen bytes respectively.
+Valid component tests include coefficient/history aliases within one declared
+short array; these do not establish an overlapping modem call.
+
+The untouched `FPM_iir_filt_II` also changes. Its compared instruction streams
+agree from initial RTL through `27.flow2`. The first differences are two
+scratch-register choices at `28.peephole2`; register renaming changes two more
+instructions later. Record that collateral and audit the complete TU rather
+than attributing it to an invented field error or spill. The retained controls
+preserve data and bindings and lose no exact functions. The audit compares
+fourteen paired stages for this neighbour and six stages for the scalar
+feedforward conversion.
