@@ -19,7 +19,7 @@ then follow
 [`Dialer.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/dialer/Dialer.c)
 and [`Cadence.c`](https://github.com/philpem/slmodem_dsp_re/blob/master/src/callprog/Cadence.c).
 The country table's cadence durations are in 10 ms units. The
-[configuration reference](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/configuration.md)
+[configuration reference](configuration.md)
 explains their conversion into detector intervals; confusing these units with
 milliseconds changes every timeout. Call progress operates on an 8000
 samples/s path, with conversion where required by the host rate.
@@ -80,7 +80,7 @@ construction requests a host delay adjustment; it does not merely reject
 the call.
 
 Use the formulas, clamp behaviour and fixture limits in the
-[configuration reference](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/configuration.md).
+[configuration reference](configuration.md).
 A value that permits a clean simulated connection is not a measurement of a
 real echo path. Keep transport buffering, sample-rate conversion and the
 channel model consistent when diagnosing repeated handshake states.

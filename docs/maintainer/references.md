@@ -44,7 +44,7 @@ provides background on sampling, convolution, Fourier analysis and digital
 filters. It is explanatory reading, not evidence of the Smart Link algorithms
 or coefficient provenance. For the recovered filter designs, use the
 repository's
-[coefficient derivations](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/coefficients.md).
+[coefficient derivations](coefficients.md).
 
 ## Repository evidence
 
@@ -53,7 +53,7 @@ repository's
 | [Reference inputs](https://github.com/philpem/slmodem_dsp_re/tree/master/ref/slmodemd) | Original object and surviving host headers |
 | [Findings](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/findings.md) | Dated observations and reproduction commands |
 | [Translation-unit map](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/modules.md) and [attribution](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/attribution.md) | Original layout evidence and confidence boundaries |
-| [Configuration](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/configuration.md) and [parameters](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/parameters.md) | Constructor effects, host parameters and units; check historical passages against current code |
+| [Configuration](configuration.md) and [parameters](parameters.md) | Constructor effects, host parameters and units; check historical passages against current code |
 | [Deviation register](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/deviations.md) | Suspected and measured departures in the original, including reachability limits |
 | [Compiler method](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/compilers.md) | Period authority, modern portability and floating-point differences |
 | [Third-party boundary](https://github.com/philpem/slmodem_dsp_re/blob/master/third_party/README.md) | Independent interoperability peers and licensing separation |

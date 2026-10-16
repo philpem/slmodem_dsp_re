@@ -34,7 +34,7 @@ The consolidation preserves all 300 complete period-compiled source objects
 byte for byte, as well as their complete partial-link object. The period gate
 passes 388 test binaries with zero failures; the byte-identity and instruction
 ratchets pass without losing exact symbols. See
-[the consolidation evidence](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/phase4-type-consolidation.md)
+[the consolidation evidence](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/phase4-type-consolidation.md)
 for the include graph, compiler configuration, assembler identity and checks.
 This removes the type inconsistency without claiming that the replacement
 object is already identical to the original blob.
@@ -91,7 +91,7 @@ Post-call reads remain at their original boundaries. No field is invented
 or retyped. The initial three-read substitution preserves the complete
 object; the broader supervisor recovery changes only the non-exact
 `datapumpv34` body. Its exact code generation remains unfinished.
-See [the recovery record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md)
+See [the recovery record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/maintainer-offset-access.md)
 for operand evidence, full-TU controls and validation. Unmapped storage
 without supported meaning remains neutral.
 
@@ -111,7 +111,7 @@ contains six positive unequal-rate refusal cases: 7200/8000, 8000/7200,
 agreement and the reference's explicit refusal. Supported-rate streaming,
 ragged input and equal-rate cases provide positive controls. The original
 failure and its correction are recorded in
-[the constructor fidelity results](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/service-constructor-fidelity-results.md).
+[the constructor fidelity results](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/service-constructor-fidelity-results.md).
 
 The header now distinguishes the constructor's recovered rejection checks
 from streaming preconditions: positive rates and fragment, representable
@@ -166,7 +166,7 @@ retained gate. This establishes observation of the remainder path, rather than
 merely a clean test result. The source's obsolete unexercised-path comment has
 been replaced with a pointer to the coverage evidence.
 
-See [the queue-coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/vpcm-queue-coverage.md)
+See [the queue-coverage record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/vpcm-queue-coverage.md)
 for fixtures, exact denominators and controls. The result establishes reachable
 datapump-component processing; the stock host still calls with 48 samples, and
 this is not evidence of digital-side V.90/V.92 connectivity.

@@ -1,14 +1,40 @@
 # The method, separated from the project
 
-`docs/fastpass.md` is *this* pass's task scheduling — how the V.34 states were
-split, the two task stores, the renumbering. This directory is the other tier:
-**what someone reconstructing a different blob of this size should build on day
-one.** Nothing here is about modems.
+This directory records reconstruction technique, evidence rules and compiler
+policy. For this modem's modules and algorithms, use the
+[Maintainer Manual](../maintainer/index.md). Completed project scheduling plans,
+including the [V.34 fast pass](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/fastpass.md), are historical.
+
+## Repeat the reconstruction on another project
+
+Start with [Recovering source from a compiled object](recovering-source.md).
+It explains the sequence taken here, the lessons brought forward from later
+work, and the checkpoints to establish in a new project. The examples assume
+GCC 3 and a relocatable x86 ELF object with surviving symbols; each guide
+identifies the evidence and tools that need adapting for another target.
+
+1. Follow [the recovery workflow](recovering-source.md) from the reference
+   inventory through a differential oracle to tested source and integration.
+2. Use [Reading object code into source](reading-object-code.md) while
+   recovering call contracts, layouts, arithmetic, control flow and tables.
+3. Use [Recovering a GCC build environment](recovering-build.md) alongside
+   that work to identify the toolchain, test option hypotheses and diagnose
+   generated-code differences.
+
+## Detailed method references
 
 | file | what it is |
 |---|---|
-| `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Start here. |
-| `tiers.md` | the four oracles and what each is structurally blind to |
+| [Recovery workflow](recovering-source.md) | Ordered procedure, project history and checkpoints for a new reconstruction. |
+| [Object-reading techniques](reading-object-code.md) | Relocations, ABI, types, control flow, fixed point, x87 and data recovery. |
+| [Build recovery](recovering-build.md) | GCC provenance, option experiments, compiler stages and identity checks. |
+| [Compiler policy](compilers.md) | Period compiler authority, portability and floating-point boundaries. |
+| [Experiment design](experiment-design.md) | Baseline controls, crossed experiments and stopping conditions. |
+| [Evidence](evidence.md) | What each form of evidence establishes. |
+| [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
+| [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |
+| `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Adapt after establishing your project's boundary. |
+| `tiers.md` | the five oracles and what each is structurally blind to |
 | `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
 | `gates.md` | the pattern behind every tooling defect this tree has found |
 | `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
@@ -30,7 +56,7 @@ is what makes them worth trusting.
 Numbers cite `docs/findings.md` **in this tree**. `CLAUDE.md.template` is the
 one file meant to be copied *out*, so its citations will not resolve in a new
 project — they are the provenance of each rule, not links, and they should be
-kept for that reason. The other six stay here and their references are checked
+kept for that reason. The method documents stay here and their references are checked
 by `tools/refcheck.py` like everything else — which only works because they are
 tracked files: the checker walks the index, so a new document that has not been
 `git add`ed is invisible to it (finding F670). `recording.md` is where the rest

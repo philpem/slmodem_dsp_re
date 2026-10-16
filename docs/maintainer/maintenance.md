@@ -20,7 +20,7 @@ layout. Skip or compare pointer fields appropriately when the two objects
 necessarily contain different allocation addresses.
 
 The
-[fixture audit](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/p4d-period-fixture-audit.md)
+[fixture audit](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/p4d-period-fixture-audit.md)
 illustrates why an impossible planted history must not drive source changes.
 For a new analysis tool, show it detecting a known discrepancy before trusting
 a clean report. Report its denominator and failures even when it finds none.
@@ -100,7 +100,7 @@ python3 tools/mutsnap.py --check
 `--update` runs the mutations before recording their verdicts and dependency
 key. Finish source, fixture and mutation edits first; never refresh keys by
 hand. A current result for this suite does not refresh other suites. The
-[coverage record](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/maintainer-offset-access.md#loop-order-coverage)
+[coverage record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/maintainer-offset-access.md#loop-order-coverage)
 keeps the measured denominators and the distinction between component,
 synthetic and public-call evidence.
 
@@ -117,15 +117,20 @@ synthetic and public-call evidence.
 The final-object completion command is:
 
 ```sh
-make partial-link
+make partial-compare-exact
+# Or compare an already-built candidate:
 python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
-    build/partial/dsplibs.o --require-exact
+    build/partial/dsplibs.o --require-exact --require-raw-exact
 ```
 
 `make partial-compare` is a diagnostic census while convergence is incomplete.
 A non-failing diagnostic report is not the strict completion gate. Preserve
-sections, data, relocation targets/addends, symbol records and ordering as well
-as function bodies.
+sections, data, relocation targets/addends, defined and undefined symbol
+records and ordering as well as function bodies. `--require-exact` checks the
+link-relevant ELF model; `--require-raw-exact` additionally requires literal
+file-byte identity, including headers, non-allocated sections and packing.
+The convenience target requires both. A `.comment`-only change may pass the
+semantic check while failing the raw check.
 
 ## Record an investigation so it can be resumed
 

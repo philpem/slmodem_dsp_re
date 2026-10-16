@@ -2,7 +2,7 @@
 
 Agent workflow distilled from [GitHub #22](https://github.com/philpem/slmodem_dsp_re/issues/22).
 Use with [refinement.md](refinement.md), which describes the individual levers.
-Measured examples and commands live in [cid-dcr-audit.md](../cid-dcr-audit.md);
+Measured examples and commands live in [cid-dcr-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/cid-dcr-audit.md);
 outstanding work lives in issues.
 
 ## The target is an object, not the minimum of a score
@@ -186,8 +186,10 @@ full-TU and strict partial-link before/after, including new losses.
 Differential equivalence alone does not establish codegen.
 
 Project completion is the original partially linked object under
-`partialcmp.py --require-exact`. A failing gate remains DIFFERENT; intermediate
-improvement is not completion. Do not alter the measurement model unless an
+`partialcmp.py --require-exact --require-raw-exact`, or
+`make partial-compare-exact`. `--require-exact` checks semantic ELF equality;
+`--require-raw-exact` additionally requires literal file bytes. A failing gate
+remains DIFFERENT; intermediate improvement is not completion. Do not alter the measurement model unless an
 independently demonstrated apparatus defect needs a separately tested fix.
 
 ## Handoff and delegated-batch template

@@ -185,7 +185,7 @@ decimation phases and partial history initialisation. The new lifecycle
 fixture compares 2,560 calls and 40,432 outputs against the blob. The full
 phase gate passes 388/0. Resample remains SIZE203, so this closes the omitted
 behaviour, not code-generation recovery or public modem reachability.
-See [recovery results](recovery-fixedrc-results.md). The following paragraphs
+See [recovery results](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-fixedrc-results.md). The following paragraphs
 retain the original deferral and are historical, not the current source state.
 
 **Module** `src/core/FixedRC.c` · original `FixedRC.c`, `.text 0x0b0fd0`
@@ -407,7 +407,7 @@ be called done.
 
 The mode-to-table map, the storage rule (`bytes = taps * up * 2`), Q14 scaling
 and now the **coefficient ordering** are all established — see
-`docs/coefficients.md`. The ordering was settled by reading
+`docs/maintainer/coefficients.md`. The ordering was settled by reading
 `RcFixed_Resample`'s address arithmetic: phase-major, reverse-tap, confirmed
 independently by the frequency response.
 
@@ -460,7 +460,7 @@ broken B103/V23 pairs; D85's contrary live-trigger claim remains unproven. Do no
 use either entry to infer a universal AGC shift range. Initialized nonnegative
 unity pairs give shift0..14; arbitrary config/state and retained frozen counts
 require separate evidence. Original invalid-count behavior is the period x86
-mask, not defined C semantics. See [shift audit](agc-shift-results.md).
+mask, not defined C semantics. See [shift audit](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/agc-shift-results.md).
 
 **Dormant: nothing selects the affected element.** Recorded because it is one
 config field away from being live, and because it is the only thing that could
@@ -876,7 +876,7 @@ disables the generator, so the amplitude is computed whether or not it is used.
 **Where the level comes from.** S-register 221, fetched through a callback
 that `call_create` fills in with `call_GetSRegister`, a fourteen-byte tail-call
 to `modem_get_sreg`. That namespace was unidentified when this entry was first
-written and is now settled (docs/parameters.md); the index is valid and in
+written and is now settled (docs/maintainer/parameters.md); the index is valid and in
 range, so there is no additional fault here. `CALLPROG_Dial` narrows the
 result with `movsbl`, so an S221 of 128 or more arrives negative -- which,
 given the 1.4 dB span, moves the amplitude by well under a decibel.
@@ -2021,7 +2021,7 @@ constants through the same `obj + 4` base, which is what says they are one
 group.
 
 **Which sample rate to test them against is not a guess.**
-`docs/rate_assumptions.md` R-1 records that V.34/V.90/V.92 run at the HOST
+`docs/maintainer/sample-rates.md` R-1 records that V.34/V.90/V.92 run at the HOST
 rate directly, and the host rate is 9600; the 8 kHz retarget is the other
 rate this tree will care about. Bell 103's 7200 (R-8) is that pump's FSK
 core and has nothing to do with V.34. So the list is 9600 and 8000, and the
@@ -2763,7 +2763,7 @@ this file is shared with other sessions and an append does not conflict where
 regenerates with `tools/debugcov.py --deviations --no-build`; the judgement
 below is not mechanical and does not.*
 
-Every entry above is a CLAIM about behaviour. `docs/fastpass.md` deferred the
+Every entry above is a CLAIM about behaviour. `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/fastpass.md` deferred the
 follow-up — is the claim measured, or has nobody driven it — and this is it.
 
 ## What the two instruments can and cannot say
@@ -3034,7 +3034,7 @@ does not carry over: the V.34 datapump shares neither the structure nor the
 
 ## D73 🐛 `DP_V32BIS` (132) never connects
 
-**MISFILED, per `docs/deviation-triage.md` family 10 — the object cannot
+**MISFILED, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 10 — the object cannot
 distinguish 32 from 132.** `dp_v32_init` (0x4bb3-0x4bd8) registers id 0x20 and
 id 0x84 against the SAME `struct dp_operations` at `.data+0x48`; `v32_create`
 (0x4560) stores the `dp_id` argument at `dp+0` (0x45cc) and never reads it
@@ -3066,7 +3066,7 @@ the disassembly with no calls.
 ## D74 🐛 `MDMCTL_IODELAY` was a hard-coded constant
 
 **ITS "FIXED" STATUS IS NOT TRUE OF EITHER HOST TREE**, per
-`docs/deviation-triage.md` family 10. `grep -rn SLMODEMD_IODELAY` over the
+`https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 10. `grep -rn SLMODEMD_IODELAY` over the
 parent repository returns NOTHING; `d-modem/slmodemd/modem_main.c:941-953`
 returns a hard-coded 48 in a file dated six days AFTER this entry was written,
 and `slmodemd/modem_main.c:682` still returns 0. The default of 120 appears
@@ -3191,7 +3191,7 @@ defect — do not file them separately.**
 
 ## D78 🐛 `MDMPRM_MIN_RATE` and `MDMPRM_MAX_RATE` reach nothing
 
-**MECHANISM REFUTED, per `docs/deviation-triage.md` family 10.** The
+**MECHANISM REFUTED, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 10.** The
 `+0x30`/`+0x34` pair is NOT write-only: `VPcmV34InitiateRetrain` divides both
 by 2400 at 0x66b5/0x66c5 into `+0x21c`/`+0x220` and clamps the max to 14
 (0x66fb-0x6709), and 0x6870/0x6877 and 0x6acc/0x6acf pass the pair to
@@ -3222,7 +3222,7 @@ knob that does nothing.
 
 ## D79 🐛 `GetDialToneFilterSubindex` is hardcoded to zero, and 21 filter banks are dead
 
-**MISFILED, per `docs/deviation-triage.md` family 10 -- this is a HOST
+**MISFILED, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 10 -- this is a HOST
 integration gap.** `modem_homolog.h:94` carries `//u8
 DialToneFilterSubindex;` commented out and `modem_param.c:172-173` is a literal
 `return 0;`. The object does the right thing with the answer it is given, and
@@ -3542,7 +3542,7 @@ reachable caller today.
 *Task #98 sweep, from fix list §6.5. **Reachability: REACHABLE FROM A CONFORMANT PEER -- upgraded 2026-08-24 from "needs a caller or configuration nothing validates".** Status: CONFIRMED. Fix class: a bound, host-side; NOT YET WRITTEN.*
 
 **THE UPGRADE, FROM THE RECOMMENDATION RATHER THAN FROM A GUESS.**
-`docs/deviation-triage.md` establishes that no clause caps what this collector
+`https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` establishes that no clause caps what this collector
 must accept: V.8 §5.2 permits "any number of extension octets" and §6.6 permits
 multiple concatenated NS blocks, so a 255-octet NS block alone expands to about
 408 octets against a fifteen-word array. The peer does not have to be hostile
@@ -4162,7 +4162,7 @@ reconstruction writes it as the two byte tests it plainly is.
 
 *Task #98 sweep, from fix list §7.25. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**REFUTED BY `docs/deviation-triage.md`, family 7.** Both halves fail against
+**REFUTED BY `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md`, family 7.** Both halves fail against
 the object. The two loads are `movzwl` — `0x2aea5` and `0x2b022` — not
 `movswl`, so the search exits at index 7 on **every** top-segment level
 (a valid A-law level is a positive `alaw2linear` result, 0..32256, and any
@@ -4596,7 +4596,7 @@ displacement. Three hit, and only three — the two constructor copies, both
 is refuted below; the number is kept and the old wording recorded here so
 citations still resolve to something that makes sense.*
 
-**REFUTED BY `docs/deviation-triage.md`, family 3, from the object.** The
+**REFUTED BY `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md`, family 3, from the object.** The
 `dec %ebx` at `.text+0x44dd9` converts a COUNT into a MAXIMUM INDEX and the
 compare that consumes it is `jle`, not `jl`. `dataBase` is 612 bytes at
 `.data 0x6760` with a 0x24 stride — seventeen entries, sixteen named, index 16
@@ -5335,7 +5335,7 @@ enough of them walks off the end of the 43,440-byte object.*
 *Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES, and it is MEASURED** -- at 9600 Hz eleven of the sixteen DTMF pairs come back with the wrong high-group tone, and every one of the eleven is 1477 Hz being chosen when absent or missed when present. At 8000 Hz all sixteen decode. Finding F1416. Status: **FIXED behind `DSPLIB_REPRODUCE_BUGS`, 2026-08-24**. Fix class: a corrected constant.*
 
 **THE FIX, AND WHY THIS ENTRY EARNED ONE WHERE THE OTHER THIRTEEN OF ITS FAMILY
-DID NOT.** `docs/deviation-triage.md`'s discriminator for the *defect,
+DID NOT.** `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md`'s discriminator for the *defect,
 reachable, no fix warranted* class is whether the CORRECT value can be derived
 independently of the wrong one. Here it can, four ways over: the bank's own
 design rule `b1 = -round(2 cos(w0) * 2^14)` gives -18613 at 9600 Hz for 1477
@@ -6553,7 +6553,7 @@ read both unconditionally. Finding F2160.
 
 ## D331 🐛 `determineDminForRrn` divides one by a constellation count that nothing stops being zero
 
-**THE HANG CLAIM IS REFUTED, per `docs/deviation-triage.md` family 8, and
+**THE HANG CLAIM IS REFUTED, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 8, and
 should be struck.** Both truncations are 64-bit `fistpll` (0x47e13, 0x47e4e)
 whose readers take the LOW dword, which for the x87 integer indefinite is
 ZERO -- and both doubling loops are guarded by `test %eax,%eax; je` at
@@ -6962,7 +6962,7 @@ would not have to.  Finding F3218.
 
 ## D372 🐛 `FSE_decision_128pt`'s region tree puts the same rq boundary in two different places
 
-**NOT A DEFECT, per `docs/deviation-triage.md` family 9.** The
+**NOT A DEFECT, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 9.** The
 inconsistency between the arms is real and the defect is not: **0x16a0 = 5792
 is EXACTLY the midpoint of the Q rows 4344 and 7240, and 0x2d41 = 11585 is
 EXACTLY the midpoint of 10137 and 13033**, so a symbol on the line is
@@ -7074,7 +7074,7 @@ truncated to a short again before the comparison.  Finding F3501.
 
 ## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
 
-**NOT A DEFECT, per `docs/deviation-triage.md` family 9.** `FPM_AGC_agc`
+**NOT A DEFECT, per `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/deviation-triage.md` family 9.** `FPM_AGC_agc`
 (0xa6750) has exactly one return, `0xa6894: c3 ret` -- **a bare `ret`, not
 `ret $imm`** -- so the call is cdecl and the caller cleans up. The extra push
 is popped by the caller's own stack adjustment and the callee never reads the
@@ -7202,7 +7202,7 @@ mutation in `test/mutations/v90specialcond.json` is what holds this reading.
 three live branches had each taken independently while the work was in
 progress; the block below four hundred was exhausted by `master` and by the
 sibling agent writing `FPM_FSE_receive`. Re-surveying at COMMIT time rather
-than at claim time is what docs/plan.md asks for, and this is why. The old
+than at claim time is what https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/plan.md asks for, and this is why. The old
 number appears in one commit message on `fpm-shared-dsp`, which cannot be
 rewritten.*
 
@@ -7585,7 +7585,7 @@ the reconstruction to it.
 `struct v32_symout *` and to `FPM_PPS_filter` as `struct fpm_smc_ring *`. The
 two are the same layout under two tags -- finding F3646 has the field-by-field
 table -- so `src/pump/v32/v32data.c` carries a cast at each of the three sites.
-Not repaired here: unifying them is a TYPE change, `docs/plan.md` §3 forbids
+Not repaired here: unifying them is a TYPE change, `https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/plan.md` §3 forbids
 one from inside a batch with other work in flight, and phase 6 collects the 27
 punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the

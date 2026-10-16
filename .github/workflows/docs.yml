@@ -3,14 +3,28 @@ name: Maintainer guide
 on:
   pull_request:
     paths:
-      - 'docs/maintainer/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'docs/**'
+      - 'src/**'
+      - 'include/**'
+      - 'test/**'
+      - 'tools/ci/docs_audit.py'
+      - 'tools/ci/test_docs_audit.py'
       - 'mkdocs.yml'
       - 'tools/ci/docs-requirements.txt'
       - '.github/workflows/docs.yml'
   push:
     branches: [master]
     paths:
-      - 'docs/maintainer/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'docs/**'
+      - 'src/**'
+      - 'include/**'
+      - 'test/**'
+      - 'tools/ci/docs_audit.py'
+      - 'tools/ci/test_docs_audit.py'
       - 'mkdocs.yml'
       - 'tools/ci/docs-requirements.txt'
       - '.github/workflows/docs.yml'
@@ -33,6 +47,10 @@ jobs:
         run: python -m pip install -r tools/ci/docs-requirements.txt
       - name: Build guide and check internal links
         run: python -m mkdocs build --strict
+      - name: Audit repository links and module coverage
+        run: |
+          python tools/ci/test_docs_audit.py
+          python tools/ci/docs_audit.py
       - uses: actions/upload-artifact@v4
         with:
           name: maintainer-guide
