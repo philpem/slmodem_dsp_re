@@ -81,8 +81,8 @@
  * { acquisition, tracking }.  Element 0 is what every config selects; see the
  * note above for element 1.
  */
-static const short AGC_DEF_ALPHA[2] = { 16384, 32604 };
-static const short AGC_DEF_BETA[2] = { 16384, 164 };
+static short AGC_DEF_ALPHA[2] = { 16384, 32604 };
+static short AGC_DEF_BETA[2] = { 16384, 164 };
 
 /*
  * The two AGC configurations.  The relocations at +0x0c and +0x10 are what

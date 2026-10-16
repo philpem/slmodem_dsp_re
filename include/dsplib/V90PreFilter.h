@@ -301,7 +301,7 @@ public:
 	static float preFilterCoefType3[31][40];
 	static V90CodecEntry dataBase[17];
 	static V90RefLoop refLoopsType1[23];
-	static V90RefLoop refLoopsType2[34];
+	static V90RefLoop refLoopsType2[33];
 	static V90RefLoop refLoopsType4[36];
 	static V90RefLoop refLoopsType5[36];
 	static V90RefLoop refLoopsType6[34];

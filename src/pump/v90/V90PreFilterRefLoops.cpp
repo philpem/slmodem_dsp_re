@@ -95,7 +95,12 @@ V90RefLoop V90PreFilter::refLoopsType1[23] = {
 	  0, 0, 0 },
 };
 
-V90RefLoop V90PreFilter::refLoopsType2[34] = {
+/* The original's 33 records have no in-symbol terminator. With the recovered
+ * period profile, the following table is naturally aligned to 32 bytes,
+ * leaving 28 zero bytes after this array. The counting loop reads the first
+ * of those bytes, as in the original. recovery_prefilter_extent_audit.py
+ * checks the emitted adjacency; do not add a synthetic terminator row. */
+V90RefLoop V90PreFilter::refLoopsType2[33] = {
 	{ "NULL",
 	  { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f },
 	  2, 0, 1 },
@@ -195,15 +200,7 @@ V90RefLoop V90PreFilter::refLoopsType2[34] = {
 	{ "UsrEIA7Codec2",
 	  { 1.80509996f, 3.90849996f, 6.93540001f, 16.2922993f, 29.2229996f, 42.7123985f },
 	  3, 35, 0 },
-	/*
-	 * NOT IN THE BLOB'S SYMBOL.  refLoopsType2 is 2244 bytes, exactly 33
-	 * records, and none of them has a zero first byte -- so the terminator
-	 * the counting loops look for is the .data alignment padding that
-	 * happens to follow the symbol.  A 34th, all-zero record is added here
-	 * because our copy has no such padding to rely on; the counted length
-	 * is 33 either way, which is what the differential test asserts.
-	 */
-	{ "", { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f }, 0, 0, 0 },
+
 };
 
 V90RefLoop V90PreFilter::refLoopsType4[36] = {
