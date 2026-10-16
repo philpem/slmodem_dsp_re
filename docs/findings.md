@@ -122537,6 +122537,18 @@ coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
 
 ## F10247. Three legal datapump boundaries close three ordering gaps; the two complete data loops still commute
 
+**Correction (2026-10-16):** the final paragraph's read/write-set audit
+missed an indirect write. `receiver` calls `decoderv34`, which calls
+`demapFrame`; the latter can set the receive shell's `latched` field at
+root `+0xe4c`. `modulatevector` reads that same field before advancing
+`train_symcount`. Original writes/reads are visible at `0x596e3` and
+`0x5a910..0x5a937`. The loop-swap mutation is now caught by the component
+boundary described in the
+[supervisor recovery record](maintainer-offset-access.md#loop-order-coverage).
+The historical result below remains identifiable; it is superseded by this
+indirect dependency and the new measured witness.
+
+
 The four surviving `v34datapump` mutations were all statement-order claims,
 but the fixture's explanation for two of them had gone stale as neighbouring
 reconstruction work advanced.  Three now have legal, independently observable

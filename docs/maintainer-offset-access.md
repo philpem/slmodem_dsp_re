@@ -130,19 +130,57 @@ diagnostics, not replacements for the deciding period gate.
 
 ## Validation
 
-The focused modern `t_v34datapump` passes 17,949 checks. Three new probes
+At `ff5399cc`, the focused modern `t_v34datapump` passed 17,949 checks. Three probes
 cover negative acquisition count, cached negative error and signed 16-bit
 run-counter wrap; each is labelled synthetic and has a reference/reference
 control and an absolute oracle. Existing lifecycle coverage remains separate.
 
-All 78 existing mutation labels are retained and two signedness controls are
-added. The complete owning run reports 80 mutations: 77 caught, one uncaught,
-two equivalent, zero unusable and zero miscounted. Both new controls fire.
-The existing uncaught receiver-before-modulator loop-order claim stays open;
-the suite exits 1 and is not a green mutation gate. Rehomed helper-wide
-mutations retain their original read/write domains through broader anchors.
-The run predates only a prose correction outside the supervisor body;
-no mutation snapshot is changed or claimed fresh.
+At `ff5399cc`, the complete owning run reported 80 mutations: 77 caught,
+one uncaught, two equivalent, zero unusable and zero miscounted. That
+historical run caught both new signedness controls but retained the
+receiver-before-modulator gap. The coverage follow-up below closes that gap
+without changing the mutation or production source.
+
+### Loop-order coverage
+
+The old F10247 read/write-set audit missed the indirect path
+`receiver -> decoderv34 -> demapFrame`. At a frame boundary, `demapFrame`
+sets the receive shell's `latched` member (root `+0xe4c`, original store at
+`0x596e3`). A fresh transmit vector reads that latch at `0x5a910`, then can
+advance `train_symcount` at `0x5a937`. Thus reversing the loops can make
+transmit processing consume a latch established in the same block.
+Echo cancellation is not the shared dependency at this boundary.
+
+The new `loop_order_cases` fixture in `t_v34datapump.c` initialises both
+shells with `preinitdigital` and `initV34`, drives 166 or 167 real decoder
+calls, then eight real mapper calls. It does not plant a latch or training
+count. One pending receive symbol then crosses the warm-up/frame boundary
+in the 167-call case; the neighbouring 166-call case remains unlatched.
+The correct ordering leaves `train_symcount` at zero in both cases. The
+reversed ordering advances it to one only in the crossing case.
+
+Both cases compare complete object/arena state before and after the step,
+with reconstruction/blob and blob/blob controls and absolute latch,
+subframe and training-counter oracles. The final receiver flags,
+acquisition count and queued samples are explicitly synthetic. The history
+establishes the decoder component boundary; the combined fixture does not
+establish public-call reachability. The separately negotiated `t_vpcmrun`
+lifecycle coverage retains its own scope.
+
+Both the period and focused modern binaries pass **18,749 checks** (800
+added). Applying the existing
+loop-swap mutation produces **seven failures in 18,750 checks**; the extra
+check comes from the mismatch reporting path. The single-mutation run is a
+positive control, not a complete-suite result.
+
+The complete fresh run reports **80 mutations: 78 caught by tests, zero
+uncaught, zero unusable, two equivalent and zero miscounted**. The two
+equivalent cases retain their existing explanations: retrain reporting before
+initialisation, and mode 3 versus mode 2 in the shared initialisation body.
+Every previously caught verdict is preserved. `tools/mutsnap.py --update`
+records the measured verdicts and current dependency key for `v34datapump`;
+other suites retain their historical records. The production source and all
+80 mutation descriptors are unchanged by this coverage follow-up.
 
 Static validation checks 10,040 anchors in 285 suites with zero detached
 anchors. The byte-identity census remains 1086/1852 exact, with neither

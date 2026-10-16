@@ -64,8 +64,15 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
+#include "dsplib/v34shell.h"
+#include "dsplib/v34rx.h"
 
 extern void ref_datapumpv34(void *obj);
+extern void ref_preinitdigital(void *obj);
+extern int ref_initV34(void *fields, short baud, short bitrate, short use_max,
+		       short depth, const short *coeff, short divisor);
+extern void ref_decoderv34(void *obj);
+extern void ref_modulatevector(void *obj);
 extern void ref_VPcmV34IndicateLocalRRN(void *obj);
 extern void ref_VPcmV34IndicateRemoteRRN(void *obj);
 
@@ -1068,6 +1075,114 @@ differ(const char *what, long a, long b)
 			 || seen[0][i].changed != seen[0][j].changed), 1, a);
 }
 
+/*
+ * The loops share the receive shell's training latch. demapFrame sets it
+ * after its frame warm-up; modulatevector reads it before advancing the
+ * transmit training counter. Echo cancellation is not the dependency here:
+ * modem_serrint already handled that before queuing the receive samples.
+ *
+ * Build the shell history with real initialisers and decoder calls, and
+ * prime eight transmit symbols through the real mapper. No latch or training
+ * count is planted. The final receiver flags, acquisition count and queued
+ * sample boundary are synthetic: this isolates a component contract and
+ * does not establish that a public modem call reaches this combination.
+ * The neighbour stops one decoder symbol earlier and must not latch.
+ */
+static void
+loop_order_cases(void)
+{
+	static const short coeff[12] = { 0 };
+	int control_run, crossing, side;
+
+	for (control_run = 0; control_run <= 1; control_run++)
+	for (crossing = 0; crossing <= 1; crossing++) {
+		int last = 0;
+		long tag = 700 + crossing + control_run * 100;
+
+		v34hs_debug(0);
+		v34hs_refinit(control_run);
+		v34hs_setup(0);
+		apply(base);
+		for (side = 0; side < 2; side++) {
+			struct v34_object *o = v34hs_object(side);
+			struct v34_shell *rs = (struct v34_shell *)o;
+			struct v34_shell *ts = (struct v34_shell *)
+				((char *)o + V34_SHELL_TX);
+			int ref = side || control_run;
+			int n;
+
+			if (ref) {
+				ref_preinitdigital(o);
+				ref_initV34((char *)rs + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+				ref_initV34((char *)ts + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+			} else {
+				preinitdigital(o);
+				initV34((char *)rs + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+				initV34((char *)ts + V34_SHELL_FIELDS,
+					2400, 14400, 1, 0, coeff, 128);
+			}
+			o->receiver.flags = V34_RX_FLAG_DATA | 0x98;
+			o->receiver.subframe_idx = 0;
+			o->rx_n = o->tx_n = o->tx_rd = 0;
+			last = ((0x40 + rs->span * 8) | 7) - !crossing;
+			for (n = 0; n < last; n++) {
+				o->receiver.target_re = 0;
+				o->receiver.target_im = 0;
+				if (ref)
+					ref_decoderv34(o);
+				else
+					decoderv34(o);
+			}
+			diff_eq_int("decoder warm-up has not latched",
+				    rs->latched, 0, tag + side * 1000);
+			diff_eq_int("decoder calls built the subframe history",
+				    o->receiver.subframe_idx, last,
+				    tag + side * 1000);
+
+			/* First mapper entry is its documented fresh-vector boundary;
+			 * eight genuine calls return it there for the tested step. */
+			o->vect_idx = 8;
+			o->tx_flags = 0;
+			for (n = 0; n < 8; n++) {
+				if (ref)
+					ref_modulatevector(o);
+				else
+					modulatevector(o);
+			}
+			diff_eq_int("mapper history ends at a vector boundary",
+				    o->vect_idx, 8, tag + side * 1000);
+			diff_eq_int("unlatched receive history delays tx training",
+				    o->train_symcount, 0, tag + side * 1000);
+			o->tx_fill_target = (short)(o->txq.count + 4);
+			o->receiver.rxq.count = 8;
+			o->receiver.rx_blocks = 0x333;
+			o->receiver.rtncount = 0;
+		}
+		v34hs_compare("loop-order component history before step", tag);
+		v34hs_entry(control_run ? ref_datapumpv34 : datapumpv34,
+			       ref_datapumpv34, control_run);
+		v34hs_step();
+		v34hs_compare("loop-order component boundary after step", tag);
+		for (side = 0; side < 2; side++) {
+			struct v34_object *o = v34hs_object(side);
+			struct v34_shell *rs = (struct v34_shell *)o;
+
+			diff_eq_int("pending decoder symbol crosses latch only at boundary",
+				    rs->latched, crossing, tag + side * 1000);
+			diff_eq_int("transmit loop observes the pre-receive latch",
+				    o->train_symcount, 0, tag + side * 1000);
+			diff_eq_int("receiver processed the pending decoder symbol",
+				    o->receiver.subframe_idx, last + 1,
+				    tag + side * 1000);
+		}
+	}
+	v34hs_refinit(0);
+	v34hs_entry(NULL, NULL, 0);
+}
+
 int
 main(void)
 {
@@ -1077,6 +1192,7 @@ main(void)
 	diff_begin("datapumpv34 and the two rate-renegotiation counters");
 
 	rrn_cases();
+	loop_order_cases();
 
 	for (debug_on = 0; debug_on <= 1; debug_on++) {
 		v34hs_debug(debug_on);

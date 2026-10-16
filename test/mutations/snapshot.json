@@ -1974,14 +1974,16 @@
    }
   },
   "v34datapump": {
-   "key": "8029621d71b5adca97e94d5a20851cbc5ec98894a0fdd9a5152372ce7a318cac",
-   "summary": "78 mutations: 75 caught (75 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "99404cea23d116f75f3271f1689ebe29e5b0a4c25fd6ed6054e02a1d4f512dc6",
+   "summary": "80 mutations: 78 caught (78 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x124 is bumped after `receiver` rather than before it": "caught",
     "+0x124 is bumped unconditionally": "caught",
     "+0x124 stops bumping one short of the cap": "caught",
+    "the +0x124 cap comparison is unsigned despite the signed 16-bit branch": "caught",
     "the +0x124 cap is 0x7530 rather than 0x752f": "caught",
     "the +0x2218 guard is signed, so -1 takes the data path": "caught",
+    "the cached error is compared unsigned after its zero-extending load": "caught",
     "the error measure is read before `receiver` rather than after it": "caught",
     "the good-block run counts errors ABOVE its threshold": "caught",
     "the halving is a division, so a negative block rate rounds the other way": "caught",
@@ -2002,7 +2004,7 @@
     "the plain run reads +0x254 rather than +0x252": "caught",
     "the receiver base is +0x260 rather than +0x264": "caught",
     "the receiver loop drains to four rather than five": "caught",
-    "the receiver loop runs before the modulator loop": "uncaught",
+    "the receiver loop runs before the modulator loop": "caught",
     "the receiver loop tests the transmit cursor rather than the queue": "caught",
     "the remote block calls v34handshakinit mode 1 rather than mode 3": "caught",
     "the remote block counts a LOCAL renegotiation": "caught",
