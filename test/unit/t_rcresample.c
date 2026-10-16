@@ -43,6 +43,10 @@ extern void ref_RcFixed_Delete(void *h);
 extern void ref_RcFixed_Reset(void *h);
 extern void ref_RcFixed_Resample(void *h, const short *in, int in_count,
 				 short *out, int *out_count);
+/* The harness globalizes these uniquely named original LOCAL tables for
+ * target-identity checks; production keeps the source tables static. */
+extern const short CI_bDroop[3], CI_b1[87], CI_b2[15];
+extern const short ref_CI_bDroop[3], ref_CI_b1[87], ref_CI_b2[15];
 
 #define NSAMP 4000
 
@@ -86,22 +90,8 @@ run_mode(int mode, const char *label, const int *chunks, int nchunks)
 
 	diff_begin(label);
 	if (ref == NULL || ours == NULL) {
-		/*
-		 * Modes 0 and 1 are deviation D3: the original builds a
-		 * converter with a different state layout, we decline.  Nothing
-		 * can request them -- every call site passes a literal 2, 3, 4,
-		 * 5 or 7, and Check_Combination starts its scan at 2 -- so the
-		 * divergence is unreachable.  Assert exactly that shape rather
-		 * than equality, so an accidental change on either side fails.
-		 */
-		if (mode < 2) {
-			diff_eq_int("mode %ld: we decline", ours == NULL, 1, mode);
-			diff_eq_int("mode %ld: original still builds one",
-				    ref != NULL, 1, mode);
-		} else {
-			diff_eq_int("mode %ld creatable", ours != NULL,
-				    ref != NULL, mode);
-		}
+		diff_eq_int("mode %ld creatable", ours != NULL,
+			    ref != NULL, mode);
 		if (ref)
 			ref_RcFixed_Delete(ref);
 		if (ours)
@@ -178,6 +168,152 @@ run_limited(const char *label, int mode, int limit)
 	rc = diff_end();
 	ref_RcFixed_Delete(ref);
 	RcFixed_Delete(ours);
+	return rc;
+}
+
+/* RcFixed_State reads the common handle's state pointer on either side.
+ * The history allocations and static coefficient tables have different
+ * addresses. Compare each payload first, then normalize only those six
+ * pointers in a copied record so padding and all scalar state still count. */
+static void
+compare_kind1(void *ref, struct rc *ours, long step)
+{
+	struct rc_kind1 *a = (struct rc_kind1 *)RcFixed_State(ref);
+	struct rc_kind1 *b = (struct rc_kind1 *)RcFixed_State(ours);
+	struct rc_kind1 normalized = *b;
+
+	diff_eq_int("kind1 record extent %ld", harness_alloc_reqsize(a), 40, step);
+	diff_eq_int("kind1 source extent %ld", harness_alloc_reqsize(b), 40, step);
+	diff_eq_int("kind1 ref droop history extent %ld", harness_alloc_reqsize(a->w6), 6, step);
+	diff_eq_int("kind1 ref long history extent %ld", harness_alloc_reqsize(a->w174), 174, step);
+	diff_eq_int("kind1 ref short history extent %ld", harness_alloc_reqsize(a->w30), 30, step);
+	diff_eq_int("kind1 source droop history extent %ld", harness_alloc_reqsize(b->w6), 6, step);
+	diff_eq_int("kind1 source long history extent %ld", harness_alloc_reqsize(b->w174), 174, step);
+	diff_eq_int("kind1 source short history extent %ld", harness_alloc_reqsize(b->w30), 30, step);
+	diff_eq_int("kind1 ref droop target %ld", a->droop == ref_CI_bDroop, 1, step);
+	diff_eq_int("kind1 ref long target %ld", a->b1 == ref_CI_b1, 1, step);
+	diff_eq_int("kind1 ref short target %ld", a->b2 == ref_CI_b2, 1, step);
+	diff_eq_int("kind1 source droop target %ld", b->droop == CI_bDroop, 1, step);
+	diff_eq_int("kind1 source long target %ld", b->b1 == CI_b1, 1, step);
+	diff_eq_int("kind1 source short target %ld", b->b2 == CI_b2, 1, step);
+	diff_eq_obj("kind1 droop coefficients", short[3], b->droop, a->droop, step);
+	diff_eq_obj("kind1 long coefficients", short[87], b->b1, a->b1, step);
+	diff_eq_obj("kind1 short coefficients", short[15], b->b2, a->b2, step);
+	diff_eq_obj("kind1 droop history", short[3], b->w6, a->w6, step);
+	diff_eq_obj("kind1 long history", short[87], b->w174, a->w174, step);
+	diff_eq_obj("kind1 short history", short[15], b->w30, a->w30, step);
+	normalized.w6 = a->w6;
+	normalized.w174 = a->w174;
+	normalized.w30 = a->w30;
+	normalized.droop = a->droop;
+	normalized.b1 = a->b1;
+	normalized.b2 = a->b2;
+	diff_eq_obj("kind1 scalar state and padding", struct rc_kind1,
+		    &normalized, a, step);
+}
+
+/* Modes 0/1 are explicit constructor-created components, not modem-path
+ * reachability witnesses. Only four bytes of each history are initialized
+ * by Create/Reset. The remaining bytes below are the apparatus's documented
+ * malloc fill, not a promise that the library initializes its whole history.
+ * The original reads them on its first convolution, so preserve both the
+ * partial initialization and the subsequent history on reset/reuse. */
+static int
+run_kind1(void)
+{
+	static const int sizes[] = { 0, 1, 2, 3, 4, 7, 15, 31, 87, 101 };
+	static const int limits[] = { 0, 1, 2, 4, 5, 12, 512, 100000 };
+	short samples[101];
+	short oa[516], ob[516];
+	int mode, signal, phase, round, i, j, rc = 0;
+	long calls = 0, compared_samples = 0;
+	char label[80];
+
+	for (mode = 0; mode <= 1; mode++) {
+		for (signal = 0; signal < 4; signal++) {
+			void *r = ref_RcFixed_Create(mode);
+			struct rc *o = RcFixed_Create(mode);
+			struct rc_kind1 *a, *b;
+			unsigned char expected[174];
+
+			sprintf(label, "rc kind1 mode %d signal %d lifecycle", mode, signal);
+			diff_begin(label);
+			diff_eq_int("reference constructed %ld", r != NULL, 1, mode);
+			diff_eq_int("source constructed %ld", o != NULL, 1, mode);
+			if (!r || !o) {
+				rc |= diff_end();
+				if (r) ref_RcFixed_Delete(r);
+				if (o) RcFixed_Delete(o);
+				continue;
+			}
+			a = (struct rc_kind1 *)RcFixed_State(r);
+			b = (struct rc_kind1 *)RcFixed_State(o);
+			compare_kind1(r, o, calls);
+			memset(expected, HARNESS_MALLOC_FILL, sizeof(expected));
+			memset(expected, 0, 4);
+			diff_eq_obj("constructor droop initialization", short[3], a->w6, expected, mode);
+			diff_eq_obj("constructor long initialization", short[87], a->w174, expected, mode);
+			diff_eq_obj("constructor short initialization", short[15], a->w30, expected, mode);
+			for (i = 0; i < 101; i++) {
+				if (signal == 0) samples[i] = i == 0 ? 16000 : 0;
+				else if (signal == 1) samples[i] = 12000;
+				else if (signal == 2) samples[i] = i & 1 ? -32768 : 32767;
+				else samples[i] = input[i];
+			}
+			for (phase = 0; phase < 2; phase++) {
+				if (phase != 0) {
+					/* Reset is deliberately partial. Preserve the previous
+					 * reference history except for its first four bytes. */
+					memcpy(expected, a->w174, 174);
+					memset(expected, 0, 4);
+					ref_RcFixed_Reset(r);
+					RcFixed_Reset(o);
+					diff_eq_obj("reset preserves long history remainder", short[87], a->w174, expected, mode);
+					compare_kind1(r, o, calls);
+				}
+				/* Repeated short calls cross all three ring wraps.
+				 * Decimation's /2 phases restart on each call: this is
+				 * cross-implementation agreement for one call sequence,
+				 * not an assertion of arbitrary partition invariance. */
+				for (round = 0; round < 2; round++) {
+					for (i = 0; i < 10; i++) {
+						for (j = 0; j < 8; j++) {
+							int ca = limits[j], cb = limits[j];
+							int cap = ca == 0 ? 1 : ca;
+							int count, k;
+
+							if (mode == 0) {
+								count = (cap + 3) / 4;
+								if (count > sizes[i]) count = sizes[i];
+								count *= 4;
+							} else {
+								count = sizes[i] / 4;
+								if (count > cap) count = cap;
+							}
+							for (k = 0; k < 516; k++) oa[k] = ob[k] = (short)0x5a6b;
+							ref_RcFixed_Resample(r, samples, sizes[i], oa + 2, &ca);
+							RcFixed_Resample(o, samples, sizes[i], ob + 2, &cb);
+							diff_eq_int("kind1 output count %ld", cb, ca, calls);
+							diff_eq_int("kind1 original count boundary %ld", ca, count, calls);
+							diff_eq_obj("kind1 output and unwritten suffix", short[516], ob, oa, calls);
+							diff_eq_int("kind1 reference prefix guard %ld", oa[1], 0x5a6b, calls);
+							diff_eq_int("kind1 source prefix guard %ld", ob[1], 0x5a6b, calls);
+							diff_eq_int("kind1 reference suffix guard %ld", oa[count + 2], 0x5a6b, calls);
+							diff_eq_int("kind1 source suffix guard %ld", ob[count + 2], 0x5a6b, calls);
+							compare_kind1(r, o, calls);
+							compared_samples += ca;
+							calls++;
+						}
+					}
+				}
+			}
+			rc |= diff_end();
+			ref_RcFixed_Delete(r);
+			RcFixed_Delete(o);
+		}
+	}
+	printf("kind1 lifecycle denominator: %ld calls, %ld reference outputs, 8 constructed pairs\n",
+	       calls, compared_samples);
 	return rc;
 }
 
@@ -293,43 +429,8 @@ main(void)
 	}
 	rc |= diff_end();
 
-	/*
-	 * Deviation D3, narrowed.  Modes 0 and 1 CREATE faithfully now: the
-	 * object's mode 0/1 arm installs CI_b1/CI_b2/CI_bDroop into a 40-byte
-	 * state, and reconstructing it is what makes those three file-scope
-	 * statics emittable (F11449).  Their kind-1 RESAMPLE conversion is
-	 * still not reconstructed.  Both modes are unreachable --
-	 * Check_Combination() starts its scan at mode 2 and every call site
-	 * passes a literal >= 2 -- so assert the recovered create and the
-	 * recorded resample gap rather than driving the two to disagree.
-	 */
-	diff_begin("rc modes 0/1 (D3: create recovered, kind-1 resample declined)");
-	{
-		int mode;
-
-		for (mode = 0; mode <= 1; mode++) {
-			void *r = ref_RcFixed_Create(mode);
-			struct rc *o = RcFixed_Create(mode);
-
-			diff_eq_int("mode %ld: ref builds", r != NULL, 1, mode);
-			diff_eq_int("mode %ld: ours builds", o != NULL, 1, mode);
-			if (r && o) {
-				static short discard[256];
-				int na = 0, nb = 0;
-
-				ref_RcFixed_Resample(r, input, 64, discard, &na);
-				RcFixed_Resample(o, input, 64, discard, &nb);
-				diff_eq_int("mode %ld: ref converts", na > 0, 1, mode);
-				diff_eq_int("mode %ld: ours declines kind-1", nb, 0,
-					    mode);
-			}
-			if (r)
-				ref_RcFixed_Delete(r);
-			if (o)
-				RcFixed_Delete(o);
-		}
-	}
-	rc |= diff_end();
+	/* Explicit component modes, including their different cap/phase rules. */
+	rc |= run_kind1();
 
 	return rc;
 }
