@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Audit complete-TU collateral and phase modes in the four saved controls."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -12,7 +13,10 @@ HEADER = 'float V92Jd::getJdPhase()'
 
 
 def main():
-    root = driver.ROOT / 'build/recovery-v92jd-phase-conversion'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run-dir', type=Path,
+                        default=driver.ROOT / 'build/recovery-v92jd-phase-conversion')
+    root = parser.parse_args().run_dir
     ledger = json.loads((root / 'results.json').read_text())
     family = ledger['families']['V92Jd']
     base = root / 'V92Jd/baseline/candidate.o'

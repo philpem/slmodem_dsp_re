@@ -1,17 +1,28 @@
 #!/usr/bin/env python3
 """Audit complete DSP candidate TUs and retain initial/final stage witnesses."""
-import json,re
+import argparse, hashlib, json, re
+from pathlib import Path
 import playbook_small_patterns as d
 from elftools.elf.elffile import ELFFile
 from elftools.elf.relocation import RelocationSection
 b=d.b
 s=(d.ROOT/'tools/playbook_bwch_unit_audit.py').read_text();exec(s[s.index('def inspect'):s.index('reports=')])
 s=(d.ROOT/'tools/gcc3_batch20_v90_small_audit.py').read_text();exec(s[s.index('def nontext'):s.index('\nreports=')])
-out=d.ROOT/'build/stage-c-dsp';r=json.loads((out/'results.json').read_text());rows=[];stages=[]
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--run-dir', type=Path, default=d.ROOT/'build/stage-c-dsp')
+out=parser.parse_args().run_dir
+r=json.loads((out/'results.json').read_text());rows=[];stages=[]
 for family,f in r['families'].items():
  base=out/family/'baseline/candidate.o';metadata=inspect(base);data=nontext(base)
  for label,c in f['cells'].items():
   obj=out/family/label/'candidate.o'
+  assert hashlib.sha256(obj.read_bytes()).hexdigest()==c['object_hash'],(family,label,'object hash')
+  names=sorted(b.sizes(str(obj)))
+  assert names==sorted(c['functions']),(family,label,'function inventory')
+  changed=[name for name in names if b.body(str(base),name)!=b.body(str(obj),name)]
+  assert changed==c.get('changed_bodies',[]),(family,label,'body changes')
+  actual={name:list(b.verdict(*b.body(b.BLOB,name),*b.body(str(obj),name))) for name in c['verdicts']}
+  assert actual==c['verdicts'],(family,label,'body verdicts')
   assert inspect(obj)==metadata,(family,label,'metadata')
   assert nontext(obj)==data,(family,label,'nontext')
   assert not c.get('losses'),(family,label,'exact losses')
