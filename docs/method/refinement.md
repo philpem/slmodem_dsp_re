@@ -5022,16 +5022,42 @@ conversion boundary. Preserve the other three cells as explanatory controls.
 ### Read the spill mode before blaming allocation
 
 Trace an unwanted spill backwards from reload to initial expansion. The
-constellation designer's product is declared `double`, yet its logarithm
-input expands into an XF lifetime and `25.greg` spills it as XF. Later
-peephole, register-renaming, scheduling and x87 passes preserve that mode.
-The original's final DF spill remains unexplained; changing the logarithm
-overload introduces per-iteration DF rounding that the original does not
-perform. A narrower spill is not sufficient if its lifetime is wrong.
+constellation designer's original reconstruction declared the product
+`double`, yet its logarithm input expanded into an XF lifetime and `25.greg`
+spilled it as XF. Later peephole, register-renaming, scheduling and x87
+passes preserved that mode. Changing the logarithm overload introduced
+per-iteration DF rounding that the original does not perform. A narrower
+spill is not sufficient if its lifetime is wrong.
+
+Separate the accumulator lifetime from the final conversion. A scoped
+extended-precision product followed by assignment to a double recovers the
+original unrounded recurrence and post-loop DF boundary. That intermediate
+candidate still has an extra XF spill carrying the already-rounded value.
+This establishes the required value boundary, not the author's declaration:
+an original DF store does not prove that every preceding operation used a
+double variable. A double-producer split has the same size gap as the
+extended-producer split while omitting the boundary and changing another
+nonexact body. Equal scores do not establish equivalent recoveries.
+
+Trace the cause of a spill beyond the pass that allocates its slot. Initial
+RTL has separate DF-to-XF conversions for the two logarithms; CSE preserves
+them, but GCSE merges them into one XF value live across the intervening
+calls. Allocation then spills that value. With the unrounded product now
+separate, ordinary double logarithm inputs preserve the final DF boundary
+without narrowing each loop iteration. The two logarithms reload the rounded
+double and the extra XF spill disappears. The earlier double-log control is
+still negative for its original accumulator: the producer change is the new
+discriminator, not permission to repeat the same spelling search.
+
+Keep the flag control diagnostic. Disabling GCSE changes other bodies and
+loses exact functions; it does not justify changing the retained profile.
+Record definition/use UIDs and the first pass that shares the lifetime, then
+check the resulting source control under the normal flags. A smaller frame
+or size gap alone cannot establish that the original values survived.
 
 A separate original lifetime can still justify progress. Capturing the RRN
 target before the logarithms restores its witnessed conversion and arithmetic
-order while leaving the product spill unresolved. If that change reorders a
+order independently of the product's final narrowing. If that change reorders a
 constant pool, compare each relocation's resolved value in its owning
 function and operation, not just the pool's multiset. A same-sized reordered
 pool can still send a consumer to the wrong constant.
@@ -5047,7 +5073,52 @@ then verify period rounding and the whole TU.
 
 Conversely, independently recovering `FPM_MTD_detect`'s short countdown,
 advancing sample pointer and final word comparisons does not settle its clamp
-or return allocation. Its remaining arithmetic shift differs despite a
-one-byte length gap. Describe each restored operation and remaining
-mismatch; neither the gap nor the stage that exposes it proves a unique
-source declaration.
+or return allocation. The original clamp explicitly uses NOT, arithmetic
+shift by 15 and AND on a sign-extended short; a conditional clamp generated
+the shift by 31 instead. The explicit mask recovers that operand graph, and
+all 65,536 short inputs establish equivalence to the conditional clamp.
+It still leaves different narrowing and return carriers. The length gap
+increases from one to six bytes, so describe the restored operations and
+remaining mismatches separately. Neither the gap nor the stage that exposes
+it proves a unique source declaration.
+
+Trace a residual extension through optimisation before changing its carrier.
+MTD's short mask assignment creates an early sign extension in initial RTL;
+its original defers that extension until the non-silent threshold arm. An
+integer post-mask carrier with an explicit short cast initially puts the
+conversion in that arm, but `combine` proves it redundant and deletes it.
+The resulting one-byte size gap does not recover the original conversion.
+This is an optimisation of known sign bits, not a late register-allocation
+failure. Reopen the carrier question only with evidence for an original use
+or width that makes the delayed conversion necessary.
+
+### Trace accumulator publication separately from predicate evaluation
+
+`GenericToneDetector::process` publishes the output accumulator before the
+input accumulator in both original fast paths. Swapping those stores
+restores the scalar prefix and the block overload's publication order,
+while preserving each method's object accesses and call targets. Audit both
+overloads: the block still schedules its countdown differently, and matching
+the scalar prefix does not close either complete method.
+
+A captured predicate is a separate source control. Evaluating a boolean
+earlier can introduce a byte result and a later test already in initial RTL,
+where the original branches directly on floating comparison flags. Trace
+that definition and use before blaming x87 stack allocation. Keep the
+publication recovery even when the independent predicate control fails.
+
+Comparison orientation can expose a value failure as well as a codegen
+residual. Under the period flags, the scalar tone detector's reconstructed
+threshold-first comparison accepts unordered input, whereas the original
+mean-output-first comparison rejects it. A constructor-created detector with
+finite positive controls and one external quiet-NaN sample demonstrates the
+difference without planting internal state. This establishes a component
+boundary failure, not a reachable nonfinite modem input history.
+
+The orientation already differs in initial RTL. Trace the jump inversion
+and final x87 split to confirm that later passes preserve it; do not infer a
+late operand swap from final disassembly alone. Source synonyms, captured
+predicates and split smoother publications can remain negative despite a
+proved failure. Preserve the hard-failing probe separately from the existing
+suite, label that suite's coverage limit, and require both the value failure
+and the original operand/publication graph to close a follow-up.

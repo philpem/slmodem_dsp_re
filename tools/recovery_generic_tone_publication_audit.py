@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Check saved full-TU controls and the tone detector publication boundary."""
 from collections import Counter
+import argparse
+from pathlib import Path
 import hashlib
 import json
 import re
@@ -14,7 +16,10 @@ TARGETS = {'_ZN19GenericToneDetector7processEf': 'int GenericToneDetector::proce
 
 
 def main():
-    root = driver.ROOT / 'build/recovery-generic-tone-publication'
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run-dir', type=Path,
+                        default=driver.ROOT / 'build/recovery-generic-tone-publication')
+    root = parser.parse_args().run_dir
     ledger = json.loads((root / 'results.json').read_text())
     cells = ledger['families']['GenericToneDetector']['cells']
     base = root / 'GenericToneDetector/baseline/candidate.o'
@@ -25,6 +30,15 @@ def main():
         obj = folder / 'candidate.o'
         assert hashlib.sha256(obj.read_bytes()).hexdigest() == cell['object_hash']
         current = inspect(obj)
+        names = sorted(driver.b.sizes(str(obj)))
+        assert names == sorted(cell['functions']), (label, 'function inventory')
+        changed = [name for name in names
+                   if driver.b.body(str(base), name) != driver.b.body(str(obj), name)]
+        assert changed == cell.get('changed_bodies', []), (label, 'body changes')
+        actual = {name: list(driver.b.verdict(*driver.b.body(driver.b.BLOB, name),
+                                            *driver.b.body(str(obj), name)))
+                  for name in cell['verdicts']}
+        assert actual == cell['verdicts'], (label, 'body verdicts')
         for key in ('records', 'allocated', 'nobits', 'relocations'):
             assert current[key] == metadata[key], (label, key)
         assert not cell.get('gains') and not cell.get('losses')
