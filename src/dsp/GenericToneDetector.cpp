@@ -225,7 +225,11 @@ int GenericToneDetector::process(float sample)
 		acc_14 = 0.7f * acc_14 + 0.3f * meanIn;
 		acc_18 = 0.7f * acc_18 + 0.3f * meanOut;
 
-		if (meanOut >= threshold) {
+		/* Keep the product at this use.  GCC 3 folds a named local versus
+		 * a member into the reversed comparison; with the period flags
+		 * that changes the unordered outcome.  CSE shares this product
+		 * with meanOut without an extra rounding or multiplication. */
+		if (out * inv >= threshold) {
 			if (flag == 0 || acc_18 > ratio * acc_14) {
 				count_2c++;
 				count_30 = 0;

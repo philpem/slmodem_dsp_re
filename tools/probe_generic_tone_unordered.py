@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Run a known failing, constructor-created tone threshold component probe.
+"""Replay the constructor-created scalar tone threshold regression.
 
 First run make period T=t_gtonedet.  Then:
   python3 tools/probe_generic_tone_unordered.py --period-dir build/period
 
 The four inputs are 0.5, 1, 2 and an external quiet NaN.  No internal state is
-planted and modem-path reachability is not claimed.  Current source fails
-2/64 checks.  The tool retains that nonzero exit: this is not an allowed
-failure or a replacement reconstruction gate.
+planted and modem-path reachability is not claimed.  Before recovery this
+failed 2/64 checks; the same 64 checks now run in the default unit fixture.
+The tool preserves any nonzero exit and does not replace the reconstruction gate.
 """
 import argparse
 import hashlib

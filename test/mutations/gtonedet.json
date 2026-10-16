@@ -112,12 +112,12 @@
  },
  {
   "label": "the threshold test is strict",
-  "find": "\n\t\tif (meanOut >= threshold) {",
-  "replace": "\n\t\tif (meanOut > threshold) {"
+  "find": "\n\t\tif (out * inv >= threshold) {",
+  "replace": "\n\t\tif (out * inv > threshold) {"
  },
  {
   "label": "the threshold is compared against the input mean",
-  "find": "\n\t\tif (meanOut >= threshold) {",
+  "find": "\n\t\tif (out * inv >= threshold) {",
   "replace": "\n\t\tif (meanIn >= threshold) {"
  },
  {
