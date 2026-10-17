@@ -2,17 +2,17 @@
  * t_v34hstbl2.c -- `v34handshak`'s once-per-block transmit dispatch, table 2,
  * against the blob.
  *
- * This is the first tier-1 differential test of any part of `v34handshak`.
- * Side A runs `v34handshak_txblock` from src/pump/v34/V34hshak.c and side
- * B runs `ref_v34handshak`, the whole 61,541-byte blob function, on an
+ * Both sides run the complete `v34handshak` entry, reconstruction against
+ * the 61,541-byte blob function, on an
  * object the fixture has steered into this dispatch and no other.  Over that
  * domain the two are the same function: the guards read three halfwords and
  * branch, and nothing else in the blob's function runs.  See
- * docs/v34handshak.md for the fixture and include/dsplib/v34hshak.h for
- * what the reconstruction claims.
+ * docs/v34handshak.md for the fixture. These planted component states test
+ * dispatch fidelity; they do not establish modem lifecycle reachability.
  *
- * SIDE A USED TO BE A SECOND RECONSTRUCTION and is now the same dispatch
- * every microstate arm calls.  `src/pump/v34/v34hstxblock.c` held a third
+ * SIDE A USED TO CALL A FIXTURE-ONLY EXPORT. The complete reconstruction now
+ * follows the same guards as the blob, so that production probe is redundant.
+ * Earlier, `src/pump/v34/v34hstxblock.c` held a third
  * reading of table 2 with all seven arms and a tail missing the reload at
  * 0x62b5f; finding F591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
  * the reading whose signature can hold both readings of the tail's `%cx`.
@@ -49,12 +49,6 @@
 
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
-
-static void
-call_ours(void *obj)
-{
-	v34handshak_txblock((struct v34_object *)obj);
-}
 
 /* The fields these cases steer, by offset, so the test reads as the object. */
 #define O_F0004		0x0004
@@ -307,7 +301,7 @@ main(void)
 	 * dispatch traces; that is the point of the assertion at the end.
 	 */
 	v34hs_debug(1);
-	v34hs_side_a(call_ours);
+	v34hs_side_a(v34handshak);
 
 	/* --- the seven targets, no companion field touched ---------------- */
 

@@ -204,23 +204,6 @@ void v34handshakinit(void *obj, int mode);
 void v34handshak(void *obj);
 
 /**
- * @brief `v34handshak`'s once-per-block transmit dispatch, callable on its
- * own.
- *
- * This is the same static dispatch every transmit-microstate arm of
- * `v34handshak` calls -- not a second reconstruction of it -- selected by
- * the txstate word (#V34HS_TXSTATE_OFF) exactly as the object's own three
- * routes into it do (finding F591). `test/unit/t_v34hstbl2.c` drives it
- * directly, against an object the test has steered into this dispatch and
- * no other; over that domain it and the full `v34handshak` are the same
- * function (finding F361). Nothing in `src/` calls it.
- *
- * @param obj  The V.34 modem object.
- */
-struct v34_object;
-void v34handshak_txblock(struct v34_object *obj);
-
-/**
  * @brief The datapump's per-block entry point, and the last function of
  * `V34hshak.c`.
  *

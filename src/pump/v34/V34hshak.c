@@ -4789,35 +4789,6 @@ t3c_txblock(struct v34_object *obj)
 	t3m_txblock(&f, obj->txstate);
 }
 
-/*
- * The dispatch on its own, for `t_v34hstbl2.c`.
- *
- * The harness in test/harness/v34hsstep.h can steer the object into this one
- * dispatch and no other, and over that domain the dispatch IS the whole of
- * `v34handshak` -- the guards read three halfwords and branch, and nothing
- * else in the 61,541 bytes runs (finding F361).  That is what makes table 2
- * comparable against the blob without the other three dispatches existing,
- * and it is the only reason this name is external.
- *
- * IT IS `t3c_txblock` AND NOT A SECOND SPELLING OF IT.  Every route in reads
- * +0x3596 on the instruction BEFORE the entry -- 0x62aea is `movzwl
- * 0x3596(%edi),%ecx` and 0x62af1 is already the dispatch, `movswl %cx,%eax;
- * sub $0x5,%eax; cmp $0x45,%eax; ja 62a40` -- so `%cx` arrives holding the
- * object's own txstate whichever route was taken, and a test entry that took
- * a txstate would be testing a call the object never makes.  The read belongs
- * to the routes in and not to the dispatch, and one route proves it: the exit
- * at 0x6c991 jumps to 0x62af1 with NO re-read at all, because `%cx` already
- * holds MOH_CLEARDOWN -- 0x54 -- either from the read at 0x6c90c or from the
- * literal at 0x6c939 that follows the transition storing it at 0x6c932.  What that costs is recorded rather
- * than hidden: the reload at 0x62b5f cannot be reached with a `tx` that
- * differs from +0x3596 through this entry, so the one thing `t3m_tail` models
- * that its predecessors did not is not tested from here.  Finding F591.
- */
-void
-v34handshak_txblock(struct v34_object *obj)
-{
-	t3c_txblock(obj);
-}
 
 /*
  * Microstate 62 `RX_PHASE3_CALL`, 0x65c7a.
