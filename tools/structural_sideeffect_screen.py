@@ -38,12 +38,15 @@ def signature(row):
         loops.append({'start': start, 'end': end, 'branch': mn,
                       'bounds': sorted(bounds.items()), 'scales': sorted(scales.items())})
     stores = Counter()
+    # With -fomit-frame-pointer, EBP is often an ordinary owner pointer.
+    # Treat it as stack-based only when this body establishes a frame.
+    frame_pointer = any(mn == 'mov' and ops == '%esp,%ebp' for mn, ops in stream)
     for mn, ops in stream:
         if not mn.startswith(('mov', 'fst', 'fist', 'stos')):
             continue
         # AT&T final operand, with parentheses protected from comma splitting.
         dest = re.split(r',(?=[^()]*$)', ops)[-1]
-        if ('(' in dest or '@(' in dest) and '%esp' not in dest and '%ebp' not in dest:
+        if ('(' in dest or '@(' in dest) and '%esp' not in dest and not (frame_pointer and '%ebp' in dest):
             stores[mn] += 1
     return {'loops': loops, 'stores': sorted(stores.items()), 'calls': len(row['calls'])}
 
@@ -71,6 +74,8 @@ def controls():
                 'stride': base.replace('%eax,2', '%eax,4'),
                 'store': base.replace('movw $1,(%edx,%eax,2)', 'nop'),
                 'branch': base.replace('jl 1b', 'jg 1b'),
+                'ebp_owner': base.replace('%edx,%eax,2', '%ebp,%eax,2'),
+                'ebp_frame': base.replace('xor %eax,%eax', 'push %ebp\nmov %esp,%ebp\nxor %eax,%eax').replace('%edx,%eax,2', '%ebp,%eax,2'),
                 'call': base.replace('call external', 'nop')}
     with tempfile.TemporaryDirectory() as directory:
         rows = {}
@@ -85,8 +90,10 @@ def controls():
         assert differences(rows['base'], rows['store'])['store_deficit'] == 1
         assert differences(rows['base'], rows['call'])['call_deficit'] == 1
         assert differences(rows['base'], rows['branch'])['branches_changed']
+        assert differences(rows['base'], rows['ebp_owner'])['store_deficit'] == 0
+        assert differences(rows['base'], rows['ebp_frame'])['store_deficit'] == 1
     return {'identical_negative': True, 'changed_bound': True, 'changed_stride': True,
-            'removed_store': True, 'removed_call': True, 'changed_condition': True,
+            'removed_store': True, 'removed_call': True, 'changed_condition': True, 'ebp_owner_store': True, 'established_ebp_frame_excluded': True,
             'boundary': 'assembled synthetic i386 detector controls; not reconstructed modem inputs'}
 
 
@@ -107,7 +114,7 @@ def main():
               'objects_directory': str(args.objects.resolve()),
               'controls': controls(), 'counts': Counter(), 'objects': {}, 'rows': [],
               'max_original_bytes': args.max_bytes, 'config': (args.objects / '.build-config').read_text(),
-              'limits': 'Supplied frozen objects are read without recompilation; revision describes this checkout, not independently inferred object provenance. Per-emitted-copy screen. Physical conditional backedges only; no switch/irreducible-loop analysis. Bounds/scales are multisets, not SSA induction proofs. Store heuristic excludes esp/ebp and read-modify-write instructions. Deficits are not missing-behavior claims. Identical normalized instruction streams excluded; no claim of semantic equivalence or global CFG coverage.'}
+              'limits': 'Supplied frozen objects are read without recompilation; revision describes this checkout, not independently inferred object provenance. Per-emitted-copy screen. Physical conditional backedges only; no switch/irreducible-loop analysis. Bounds/scales are multisets, not SSA induction proofs. Store heuristic excludes esp and established ebp frames and read-modify-write instructions. Deficits are not missing-behavior claims. Identical normalized instruction streams excluded; no claim of semantic equivalence or global CFG coverage.'}
     assert '-DDSPLIB_REPRODUCE_BUGS' in report['config']
     original = inventory(Path(d.b.BLOB))
     for line in (args.objects / 'tc_manifest.txt').read_text().splitlines():
@@ -138,7 +145,7 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + '\n')
     print(dict(report['counts']))
-    print('6 assembled detector controls pass;', len(report['rows']), 'nominations; manual review required')
+    print('8 assembled detector controls pass;', len(report['rows']), 'nominations; manual review required')
 
 
 if __name__ == '__main__':
