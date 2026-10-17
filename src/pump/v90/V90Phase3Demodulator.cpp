@@ -1673,7 +1673,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			if (samplesInState % 6 == 0) {
 				if ((short)adid->isThereAnyAltRbsPhase() != 0)
 					P3D_COPY_440_TO_438();
-				edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", samplesInState);
+				edprintf("V90Phase3Demodulator: enter Wait For V92Jd state @ %d\r\n", samplesInState);
 				state = (Phase3DemodulatorState)7;
 				samplesInState = 0;
 				eventCode = 5;
@@ -2506,11 +2506,13 @@ V90Phase3Demodulator::twoLevelDemod(float sample, int &bit)
 	V90AutoDigitalImpDetector *ad = autoDigitalImpDetector;
 	int level;
 
+	/* Both table arms reload the owner after isAltRbs (0x2165d/0x21675).
+	 * Keep that member use rather than carrying the pre-call pointer. */
 	if (ad->altRbsInUse != 0 &&
 	    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)
-		level = P3D_LINMAPPALT(ad, ucode);
+		level = P3D_LINMAPPALT(autoDigitalImpDetector, ucode);
 	else
-		level = P3D_LINMAPP(ad, ucode);
+		level = P3D_LINMAPP(autoDigitalImpDetector, ucode);
 
 	if (sample > 0.0f) {
 		bit = 1;
