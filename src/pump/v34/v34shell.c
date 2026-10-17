@@ -1729,6 +1729,7 @@ preinitdigital(void *objp)
 		struct v34_descrambler *r = &obj->descrambler;
 
 		s->w[0] = 0;
+		rx->state_idx = 0;
 		s->nbits = 0x20;
 		s->w[3] = 0;
 		s->w[2] = 0;
@@ -1740,7 +1741,6 @@ preinitdigital(void *objp)
 		r->w[1] = 0;
 	}
 
-	rx->state_idx = 0;
 	obj->data_enable = 0;
 	obj->train_symcount = 0;
 
