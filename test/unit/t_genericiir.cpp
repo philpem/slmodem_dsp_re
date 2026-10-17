@@ -111,7 +111,56 @@ run_block(const char *label, unsigned nden, unsigned nnum, double *den,
 		for (unsigned k = 0; k < n; k++)
 			diff_eq_int("block sample %ld", bits(ob[pos + k]),
 				    bits(oa[pos + k]), pos + k);
+		/* The four borrowed/owned pointers differ only for the histories.
+		 * Compare their pointees and the complete non-pointer state. */
+		const unsigned fields = 4 * sizeof(void *);
+		diff_eq_obj_(__FILE__, __LINE__, "block non-pointer state",
+			     "GenericIIR<float,double> non-pointer state",
+			     (const char *)&ours + fields, ro.raw + fields,
+			     36, pos);
+		double *ah[2], *bh[2];
+		memcpy(ah, ro.raw + 2 * sizeof(void *), sizeof ah);
+		memcpy(bh, (const char *)&ours + 2 * sizeof(void *), sizeof bh);
+		diff_eq_obj_(__FILE__, __LINE__, "block input history",
+			     "double[]", bh[0], ah[0],
+			     (nnum + blockSize) * sizeof(double), pos);
+		diff_eq_obj_(__FILE__, __LINE__, "block output history",
+			     "double[]", bh[1], ah[1],
+			     (nden + blockSize) * sizeof(double), pos);
 	}
+	int rc = diff_end();
+	ref_dtor(&ro);
+	return rc;
+}
+
+static int
+normalization_boundary(void)
+{
+	/* Fixed finite coefficients put reciprocal/multiply and direct divide
+	 * on opposite sides of a double rounding boundary. No state is planted:
+	 * both filters are constructed, then process the same unit sample. */
+	double den[] = { 1.4142135623730951 };
+	double num[] = { 1.0000000000014524 };
+	float in = 1.0f, a, b;
+	union ref_obj ro;
+	GenericIIR<float, double> ours(1, 1, den, num, 4);
+	memset(&ro, 0, sizeof ro);
+	ref_ctor(&ro, 1, 1, den, num, 4);
+	diff_begin("iir block reciprocal boundary");
+	ref_process_block(&ro, &in, &a, 1);
+	ours.process(&in, &b, 1);
+	diff_eq_int("unit sample", bits(b), bits(a), 0);
+	diff_eq_obj_(__FILE__, __LINE__, "normalization non-pointer state",
+		     "GenericIIR<float,double> non-pointer state",
+		     (const char *)&ours + 4 * sizeof(void *),
+		     ro.raw + 4 * sizeof(void *), 36, 0);
+	double *ah[2], *bh[2];
+	memcpy(ah, ro.raw + 2 * sizeof(void *), sizeof ah);
+	memcpy(bh, (const char *)&ours + 2 * sizeof(void *), sizeof bh);
+	diff_eq_obj_(__FILE__, __LINE__, "normalization input history",
+		     "double[]", bh[0], ah[0], 5 * sizeof(double), 0);
+	diff_eq_obj_(__FILE__, __LINE__, "normalization output history",
+		     "double[]", bh[1], ah[1], 5 * sizeof(double), 0);
 	int rc = diff_end();
 	ref_dtor(&ro);
 	return rc;
@@ -155,6 +204,9 @@ main(void)
 	rc |= run_block("iir block x64", 3, 3, bq_den, bq_num, 64, 64);
 	rc |= run_block("iir block ragged", 5, 5, h_den, h_num, 64, 17);
 	rc |= run_block("iir block x1", 3, 3, bq_den, bq_num, 64, 1);
+	rc |= run_block("iir block den[0]==0", 3, 3, nodiv_den, bq_num, 64, 17);
+	rc |= run_block("iir block den[0]==2.5", 3, 3, scaled_den, bq_num, 64, 17);
+	rc |= normalization_boundary();
 
 	return rc;
 }

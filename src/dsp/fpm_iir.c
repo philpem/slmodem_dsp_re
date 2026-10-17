@@ -24,24 +24,24 @@
 short
 FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 {
-	int acc_in = x;
-	int i;
+	short acc_in = x;
 
-	for (i = 0; i < sections; i++) {
+	while (sections--) {
 		int w1 = state[0];
 		int w2;
 		int acc;
 		int ff;
 		int w;
 
-		acc = acc_in + ((coeff[0] * w1 + 0x2000) >> 14);
-		ff = (coeff[1] * w1) >> 14;
+		acc = acc_in + ((*coeff++ * w1 + 0x2000) >> 14);
+		ff = (*coeff++ * w1) >> 14;
 
 		w2 = state[1];
-		state[0] = (short)w2;		/* shift the delay line */
+		*state++ = (short)w2;		/* shift the delay line */
 
-		acc += (coeff[2] * w2 + 0x2000) >> 14;
-		ff += (coeff[3] * w2) >> 14;
+		acc += (*coeff++ * w2 + 0x2000) >> 14;
+		ff += (*coeff++ * w2) >> 14;
+		ff = (short)ff;
 
 		/* Saturate only here, and asymmetrically -- see the note above. */
 		if (acc > 0x7fff)
@@ -51,13 +51,11 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 		else
 			w = (short)acc;
 
-		state[1] = (short)w;
+		*state++ = (short)w;
 
 		/* The section output becomes the next section's input. */
-		acc_in = (short)((short)ff + ((coeff[4] * w) >> 14));
+		acc_in = (short)((short)ff + ((*coeff++ * w) >> 14));
 
-		coeff += FPM_IIR_COEFF_PER_SECTION;
-		state += FPM_IIR_STATE_PER_SECTION;
 	}
 
 	return (short)acc_in;
@@ -75,13 +73,11 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
  * and FPM_iir_filt keeps its own symbol regardless (compare finding F7940) --
  * and our build inlines it too, which was checked rather than assumed.
  *
- * THE CODEGEN IS NOT CLOSED: 72 instructions against the object's 86, 29 bytes
- * short, rejected at grade 1 as a missing statement rather than a renaming.
- * The differential tier is green over the whole driven domain and this is the
- * same class and size of residual `FPM_iir_filt` and `FPM_iir_filt_II` above
- * and below it already carry (10 and 19 bytes), so it is a refinement target
- * and not a defect.  Finding F8166 has the table; do not read the one-line
- * body below as "reproduces the object" without re-running `byteident.py`.
+ * Code generation remains non-exact. The scalar helper's short countdown,
+ * coefficient/history cursor boundaries and feedforward narrowing are retained
+ * from the original graph. This block inlines those changes too; use
+ * byteident.py on the complete translation unit for the current comparison.
+ * Finding F8166 records the earlier reconstruction's residual.
  *
  * `sections - 1` is hoisted out of the outer loop by the compiler, and the
  * inner counter is decremented as a 16-bit value and tested against -1, the
