@@ -125,7 +125,8 @@ dtmf_test(const float *e, float total, short mode)
 	short i;
 	int ok;
 
-	threshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.002f;
+	/* Original US cutoff is 0x3b03126e, one float below 0.002f. */
+	threshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.0019999999f;
 
 	/*
 	 * `lo` and `hi` start at zero and are only moved by the search, so a

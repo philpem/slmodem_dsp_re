@@ -376,6 +376,50 @@ seeded_pass(short mode)
 	seen_state_varied += varied;
 }
 
+/* Direct decision-component inputs, not planted detector history or a
+ * waveform-reachability claim. All energies are finite, nonnegative and no
+ * greater than total. Two nulls at 0.4*total satisfy every ratio test with
+ * margin, isolating the level cutoff; flat/excess-twist vectors are rejection controls.
+ */
+static int
+level_cutoff_boundary(void)
+{
+    static const unsigned bits[] = {
+        0x3b03126du,0x3b03126eu,0x3b03126fu,0x3b031270u,
+        0x3b102ddfu,0x3b102de0u,0x3b102de1u
+    };
+    static const short modes[] = {0,1,2,-1};
+    unsigned m,k;
+    int i;
+    diff_begin("dtmf: adjacent-float level cutoffs");
+    for (m=0;m<sizeof(modes)/sizeof(modes[0]);m++) {
+        for (k=0;k<sizeof(bits)/sizeof(bits[0]);k++) {
+            float total,e[8],before[8];
+            int ours,theirs,expected;
+            long tag=m*100+k;
+            memcpy(&total,&bits[k],sizeof(total));
+            for (i=0;i<8;i++) e[i]=total;
+            e[0]=e[4]=total*0.4f;
+            memcpy(before,e,sizeof(e));
+            ours=dtmf_test(e,total,modes[m]);
+            theirs=ref_dtmf_test(e,total,modes[m]);
+            expected=bits[k]>=(modes[m]==DTMF_MODE_EUR ? 0x3b102de0u : 0x3b03126eu) ? 0 : DTMF_NO_DIGIT;
+            diff_eq_int("cutoff decision %ld",ours,theirs,tag);
+            diff_eq_int("reference cutoff %ld",theirs,expected,tag);
+            diff_eq_obj_( __FILE__,__LINE__,"decision input unchanged","float[8]",e,before,sizeof(e),tag);
+        }
+        for (k=0;k<2;k++) {
+            float e[8];
+            for (i=0;i<8;i++) e[i]=0.0023f;
+            if (k) { e[0]=0.0023f*0.1f;e[4]=0.0023f*0.9f; }
+            diff_eq_int("ratio rejection %ld",dtmf_test(e,0.0023f,modes[m]),
+                        ref_dtmf_test(e,0.0023f,modes[m]),m*10+k);
+            diff_eq_int("reference ratio rejection %ld",ref_dtmf_test(e,0.0023f,modes[m]),DTMF_NO_DIGIT,m*10+k);
+        }
+    }
+    return diff_end();
+}
+
 int
 main(void)
 {
@@ -795,6 +839,8 @@ main(void)
 	diff_eq_int("the reference held a digit (%ld)", seen_hold > 0, 1, 0);
 	diff_eq_int("the reference reported digits (%ld)", seen_report > 0, 1, 0);
 	rc |= diff_end();
+
+	rc |= level_cutoff_boundary();
 
 	return rc;
 }
