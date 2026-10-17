@@ -115,8 +115,10 @@ static float silence_level_table[4] = {
 	0.000022632519176113419234752655029296875f
 };
 
-/* Samples per analysis block: 800, which is 100 ms at 8 kHz. */
-#define SILENCE_BLOCK		800.0f
+/* Samples per analysis block: 800, which is 100 ms at 8 kHz.
+ * The comparison is double precision: the original loads the exact 800
+ * before converting nsamp and uses fcompp, rather than an SF memory compare. */
+#define SILENCE_BLOCK		800.0
 
 /* 1/800, and the object holds it as a DOUBLE (`fmull`). */
 #define SILENCE_BLOCK_RECIP	0.00125
@@ -143,6 +145,13 @@ static float silence_level_table[4] = {
  * read once per call and disables the detector outright when it is 0 or
  * above 3; the second is read again on EVERY silent block, so an owner that
  * changes it mid-buffer is obeyed immediately.
+ *
+ * Keep energy in its owner rather than a separate local: the original
+ * reloads s->energy after the diagnostic call before testing the threshold.
+ * Its debug-disabled path keeps the same published float in x87 instead.
+ * Both paths read the same indexed threshold row. This also lets the period
+ * compiler retain the extended running sum until each publication. It does
+ * not assert that the ordinary logging host modifies the detector.
  */
 void
 silence_progress(struct silence *s, float *buf, short n,
@@ -150,33 +159,29 @@ silence_progress(struct silence *s, float *buf, short n,
 {
 	unsigned short lvl;
 	unsigned short i;
-	float acc;
 
 	lvl = (unsigned short)s->query(s->obj, SILENCE_PARAM_LEVEL);
 	if (lvl > 3 || lvl == 0)
 		return;
 
-	acc = s->energy;
 	for (i = 0; i < n; i++) {
 		int level;
 
 		s->nsamp++;
-		acc = acc + buf[i] * buf[i];
-		if ((float)s->nsamp < SILENCE_BLOCK) {
-			s->energy = acc;
+		s->energy = s->energy + buf[i] * buf[i];
+		if (s->nsamp < SILENCE_BLOCK) {
 			continue;
 		}
 
-		acc = (float)(acc * SILENCE_BLOCK_RECIP);
-		s->energy = acc;
+		s->energy = (float)(s->energy * SILENCE_BLOCK_RECIP);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "energy = %d, threshold = %d\n",
-			    (int)(acc * SILENCE_FULLSCALE2),
+			    (int)(s->energy * SILENCE_FULLSCALE2),
 			    (int)(silence_level_table[lvl]
 				  * SILENCE_FULLSCALE2));
 
-		if (acc > silence_level_table[lvl]) {
+		if (s->energy > silence_level_table[lvl]) {
 			s->count = 0;
 			s->saw_signal = 1;
 		} else {
@@ -203,7 +208,6 @@ silence_progress(struct silence *s, float *buf, short n,
 			}
 		}
 		s->nsamp = 0;
-		acc = 0.0f;
-		s->energy = acc;
+		s->energy = 0.0f;
 	}
 }

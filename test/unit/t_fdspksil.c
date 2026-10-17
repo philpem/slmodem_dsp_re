@@ -101,6 +101,84 @@ lcg(void)
 #define NSAMP 1700
 static float bufa[NSAMP], bufb[NSAMP];
 
+/* Valid constructor/sample histories on either side of each live threshold.
+ * These are the adjacent float amplitudes below/above the rounded square
+ * root, not planted energy/count state. Whole and 799+1 calls distinguish
+ * the running x87 sum from its published float across a call boundary. The
+ * host remains an ordinary transcript recorder; no debug mutation is used.
+ */
+static int
+threshold_histories(void)
+{
+	static const unsigned int roots[] = { 0x3acfda39u, 0x3b2d35dbu,
+					     0x3b9be3abu };
+	static struct owner o;
+	unsigned int row, above, debug, split, i;
+	int histories = 0;
+
+	diff_begin("silence reachable threshold histories");
+	for (row = 0; row < 3; row++)
+	for (above = 0; above < 2; above++)
+	for (debug = 0; debug < 4; debug++)
+	for (split = 0; split < 2; split++) {
+		struct silence a, b;
+		unsigned char oa[8], ob[8];
+		unsigned short la = 0, lb = 0;
+		unsigned int bits = above ? roots[row] + 1 : roots[row] - 1;
+		float amplitude;
+		int first = split ? 799 : 800, part;
+		/* Publishing 799 samples narrows the running sum. At row 1's
+		 * upper amplitude this makes the completed mean equal to its
+		 * threshold, so the strict greater-than decision stays quiet.
+		 * Both original and reconstruction exhibit this call boundary.
+		 */
+		int loud = above && !(split && row == 0);
+		long tag = histories++;
+
+		o.level = row + 1;
+		o.time = 7;
+		o.bad = 0;
+		memcpy(&amplitude, &bits, sizeof(amplitude));
+		for (i = 0; i < 800; i++)
+			bufa[i] = bufb[i] = amplitude;
+		memset(&a, 0x77, sizeof(a));
+		memcpy(&b, &a, sizeof(a));
+		ref_silence_create(&a, &o, owner_query);
+		silence_create(&b, &o, owner_query);
+		memset(oa, 0xcd, sizeof(oa));
+		memcpy(ob, oa, sizeof(oa));
+		set_level(debug);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		for (part = 0; part <= (int)split; part++) {
+			int n = part ? 1 : first;
+			int offset = part ? first : 0;
+			ref_silence_progress(&a, bufa + offset, n, oa, &la);
+			silence_progress(&b, bufb + offset, n, ob, &lb);
+			diff_eq_obj("threshold history state", struct silence,
+				    &b, &a, tag * 2 + part);
+		}
+		dsplib_debug_capture_on = 0;
+		diff_eq_int("threshold history len", lb, la, tag);
+		for (i = 0; i < sizeof(oa); i++)
+			diff_eq_int("threshold history output", ob[i], oa[i],
+				    tag * 8 + i);
+		diff_eq_int("threshold history text",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)), 0, tag);
+		diff_eq_int("threshold history lines",
+			    dsplib_debug_capture_lines(0),
+			    debug > 1 ? (loud ? 1 : 2) : 0, tag);
+		diff_eq_int("threshold history side", b.saw_signal, loud, tag);
+		diff_eq_int("threshold history silent count", b.count, !loud, tag);
+		diff_eq_int("threshold history completed block", b.nsamp, 0, tag);
+		diff_eq_float("threshold history reset energy", b.energy, 0.0f, tag);
+	}
+	diff_eq_int("threshold histories exercised", histories, 48, 0);
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -451,5 +529,6 @@ main(void)
 	}
 	failed |= diff_end();
 
+	failed |= threshold_histories();
 	return failed;
 }

@@ -85,6 +85,7 @@
  */
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -105,6 +106,45 @@
 #include "dsplib/V92Phase3Modulator.h"
 #include "dsplib/V92Phase4Modulator.h"
 #include "dsplib/VPcmFloModem.h"
+
+/* Preserve call boundaries: a preceding message's newline must not hide a
+ * missing first byte in either echo diagnostic. Forward all formatted text
+ * into the ordinary harness transcript as well. */
+static int echo_messages[2][2];
+static int debug_format_overflow;
+extern "C" int __real_dsplibs_debug_printf(const char *, ...);
+extern "C" int __real_ref_dsplibs_debug_printf(const char *, ...);
+static int capture_debug_call(int side, const char *fmt, va_list ap)
+{
+	char text[8192];
+	int n = vsnprintf(text, sizeof text, fmt, ap);
+	if (n < 0 || n >= (int)sizeof text)
+		debug_format_overflow = 1;
+	if (dsplib_debug_capture_on) {
+		if (strcmp(text, "\n *** Echo Silence ON *** \n") == 0)
+			echo_messages[side][0]++;
+		if (strcmp(text, "\n *** Echo Silence Off *** \n") == 0)
+			echo_messages[side][1]++;
+	}
+	return side ? __real_ref_dsplibs_debug_printf("%s", text)
+		    : __real_dsplibs_debug_printf("%s", text);
+}
+extern "C" int __wrap_dsplibs_debug_printf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int result = capture_debug_call(0, fmt, ap);
+	va_end(ap);
+	return result;
+}
+extern "C" int __wrap_ref_dsplibs_debug_printf(const char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int result = capture_debug_call(1, fmt, ap);
+	va_end(ap);
+	return result;
+}
 
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
@@ -684,17 +724,9 @@ struct trial {
 	 */
 	unsigned char	rxSeedOn;
 	float		rxSeedVal;
-	/*
-	 * Compare the debug transcript for this trial.  NOT the default: the
-	 * pre-existing "level 2" trials print `V90Modem::progress`'s "Illegal
-	 * modemSide" diagnostic (side is deliberately 2, see the file header),
-	 * and the blob's copy of it carries one more blank line than ours --
-	 * a real, pre-existing formatting difference this suite never had a
-	 * way to see before and which is not one of the seven mutations this
-	 * batch is closing.  Comparing transcripts everywhere would fail
-	 * `make one` on that unrelated gap instead of the two claims this
-	 * field exists for.
-	 */
+	/* Nonzero compares the complete transcript. Mode 2 also checks each
+	 * echo diagnostic at its call boundary, so an earlier message cannot
+	 * supply a missing leading newline. */
 	unsigned char	cmpTranscript;
 };
 
@@ -710,9 +742,11 @@ struct trial {
 /* TAIL with block_6c0c's rx[0] pre-loaded, for the non-ramp clear. */
 #define TAILRX(val) \
 	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 1, (val), 0
-/* TAIL with the debug transcript compared, for the two print-only claims. */
+/* TAIL with the complete debug transcript compared. */
 #define TAILCMP \
 	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 0, 0.0f, 1
+#define TAILECHO \
+	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 0, 0.0f, 2
 #define D(w3c)	{ "word_3c", 0, 1, (w3c), 0, 3, 1, 0, 0, 4, 1, 1, 0, 0 TAIL }
 
 static const struct trial trial_v[] = {
@@ -818,15 +852,22 @@ static const struct trial trial_v[] = {
 
 	/*
 	 * The five gated diagnostics, driven at level 2 so the print sites
-	 * execute.  What comes out is not compared -- the transcript tier is
-	 * not this file's -- but a gate nobody enters is a gate nobody has
-	 * measured (docs/method/gates.md).
+	 * execute. All five complete transcripts are compared below; the echo
+	 * messages additionally retain their individual call boundaries.
 	 */
-	{ "level 2, 0x01", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, 0x06", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, 0x07", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, w34 2", 0, 1, 0, 2, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, w34 3", 0, 1, 0, 3, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
+	/* Constructor-backed component dispatch probes: the demodulator event
+	 * is selected explicitly, not claimed as an end-to-end modem history.
+	 * Compare only these two diagnostics: the deliberately invalid modem
+	 * side also prints an unrelated message in the captured transcript. */
+	{ "echo on, level 0", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0 TAILECHO },
+	{ "echo on, level 1", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 1 TAILECHO },
+	{ "echo off, level 0", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0 TAILECHO },
+	{ "echo off, level 1", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 1 TAILECHO },
+	{ "level 2, 0x01", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILECHO },
+	{ "level 2, 0x06", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILECHO },
+	{ "level 2, 0x07", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
+	{ "level 2, w34 2", 0, 1, 0, 2, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
+	{ "level 2, w34 3", 0, 1, 0, 3, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
 	/*
 	 * "level 2, fallback" IS THE FALLBACK ROW ABOVE ("w34 3 + 0x20"),
 	 * PRINT-COMPARED.  `TAILCMP` is what turns the transcript check on
@@ -1272,6 +1313,8 @@ run(void)
 		ref_dsplibs_debug_level = t->level;
 		dsplib_debug_capture_on = 1;
 		dsplib_debug_capture_reset();
+		memset(echo_messages, 0, sizeof echo_messages);
+		debug_format_overflow = 0;
 
 		ra = ((VPcmFloModem *)base[0])->runPcmModem(sig_in[0],
 		    sig_out[0], NSAMP, rxbits[0], &nrx[0], txbits[0],
@@ -1284,28 +1327,25 @@ run(void)
 		dsplib_debug_capture_on = 0;
 
 		diff_eq_int("return value (%ld)", ra, rb, trial);
-		/*
-		 * THE TRANSCRIPT, WHICH THE REGION WALK CANNOT SEE, AND ONLY
-		 * FOR THE TWO TRIALS THAT SET `cmpTranscript`.  "the FPE arm
-		 * starts FPE whatever phase it is in" and "the fallback test
-		 * is against 0x21 rather than 0x20" are both real only in
-		 * `edprintf`/`dsplibs_debug_printf` output that changes
-		 * nothing in memory, per this suite's own note at the top of
-		 * test/mutations/vpcmrunpcm.json.  NOT compared everywhere:
-		 * the pre-existing "level 2" trials drive `V90Modem::progress`
-		 * with its deliberately-illegal side (the file header's own
-		 * design) and its "Illegal modemSide" print carries one more
-		 * blank line on the blob's side than ours -- a real,
-		 * pre-existing formatting gap this suite had no way to see
-		 * before and which is not one of the seven claims this batch
-		 * is closing.  Comparing transcripts on those trials too would
-		 * fail `make one` on that unrelated gap instead.
-		 */
-		if (t->cmpTranscript)
+		/* Compare whole messages as well as their memory effects. The
+		 * diagnostic rows include explicit component dispatch events;
+		 * they do not establish end-to-end modem reachability. */
+		if (t->cmpTranscript != 0)
 			diff_eq_int("debug transcript (%ld)",
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, trial);
+		if (t->cmpTranscript == 2) {
+			for (int msg = 0; msg < 2; msg++) {
+				diff_eq_int("echo diagnostic count (%ld)",
+					echo_messages[0][msg], echo_messages[1][msg],
+					trial * 2 + msg);
+				diff_eq_int("reference echo diagnostic guard (%ld)",
+					echo_messages[1][msg], t->level > 1 &&
+					(t->w3c == (msg == 0 ? 1 : 6)), trial * 2 + msg);
+			}
+		}
+		diff_eq_int("debug forwarding fits (%ld)", debug_format_overflow, 0, trial);
 		diff_eq_int("nothing was allocated (%ld)",
 			    harness_alloc.allocs - allocs, 0, trial);
 
