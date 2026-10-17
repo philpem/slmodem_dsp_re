@@ -35,12 +35,14 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     prior = json.loads((source/'results.json').read_text())
     cells = prior['families'][args.family]['cells']
+    assert cells['baseline']['baseline_reproduced'], 'no raw full-TU baseline control'
     labels = args.labels or list(cells)
     assert labels and set(labels) <= set(cells), 'unknown or empty cell set'
     image = prior['config'].splitlines()[0].split(' ', 1)[1]
     report = {'revision': prior['revision'], 'config': prior['config'],
               'target': args.target, 'requested_cells': labels, 'cells': {}}
     for label in labels:
+        assert tc.REPRODUCE_BUGS in shlex.split(cells[label]['command'][-1]), 'missing reproduction define'
         inputs, folder = source/args.family/label, out/label
         folder.mkdir(exist_ok=True)
         lines = (inputs/'compile.log').read_text().splitlines()
@@ -78,6 +80,13 @@ def main():
         trace = json.loads((folder/'prologue-observe.json').read_text())
         assert trace['exits'] == [0] and not trace['errors'] and not trace['pending']
         assert trace['frames'] and trace['costs'], 'empty target observation'
+        for cost in trace['costs']:
+            weighted = 0
+            for sample in cost['samples']:
+                weighted += sample['frequency']
+                assert sample['weighted_count'] == weighted, 'cost sample arithmetic drift'
+                assert sample['threshold_weighted'] == cost['threshold']*cost['entry_frequency']
+                assert sample['uid'] >= 0 and sample['rtx_code'] in ('INSN', 'JUMP_INSN', 'CALL_INSN')
         report['cells'][label] = {'compiler_sha256': expected, 'commands': [debugger, assemble],
                                   'raw_object_unchanged': True, 'trace': trace}
         (out/'results.json').write_text(json.dumps(report, indent=2)+'\n')

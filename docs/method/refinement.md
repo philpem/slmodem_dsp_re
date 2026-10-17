@@ -6557,6 +6557,8 @@ The installed compiler observation closes the old unmeasured cost claim:
 Each case has fifteen frame-layout observations but only one cost call. The
 first call happens during reload's elimination-offset calculation; its choice
 is cached for all subsequent layouts, including prologue and epilogue emission.
+That cache is keyed by saved-register count; Queue below demonstrates a second
+decision when reload changes that count.
 The combined case exits as soon as its count exceeds the threshold, so 206629
 is not its whole-function cost. Local space and outgoing space remain 16 and
 12 bytes. No padding or invented local is needed to recover the move saves.
@@ -6608,9 +6610,80 @@ from them. Thirteen stage invariants and a deleted-dependency negative control
 validate the diagnosis. All four target COMDAT symbols have one definition
 across 300 canonical objects. No additional IIR source change is retained.
 
-Next prioritise witnessed guard/prologue discrepancies, including
-`Queue<float>::write(float)` (71 retained versus 85 original bytes), while
-keeping its previously closed source forms closed. Then inspect Echo's actual
-x87 reload alternatives and frame-layout arithmetic. Reopen IIR source
-experiments only after allocator/liveness evidence distinguishes an original
-source boundary; forcing spills or register homes is not a reconstruction.
+### Count compiler nodes before inferring a Queue source discrepancy
+
+The next installed-compiler observation explains the retained
+`Queue<float>::write(float)` prologue without identifying a source correction.
+The original is 85 bytes, the retained body 71; both decode to 31 instructions.
+The processing instructions agree, while register saves and restores differ.
+
+Nineteen frame layouts include two cost decisions. Reload increases the saved
+register count from one to two, invalidating the first cached choice:
+
+| Decision | Saved registers | Cost parameter | Entry frequency | Weighted threshold | Count at exit |
+|---|---:|---:|---:|---:|---:|
+| First | 1 | 0 | 10000 | 0 | 10000 |
+| Recomputed | 2 | 20 | 10000 | 200000 | 201683 |
+
+Both decisions select push/pop. The second counts 22 active RTL nodes.
+The result move, UID85, leaves the count at 191683. UID88, a non-emitted
+`(use (reg/i:SI 0 ax [<result>]))`, adds 10000 and crosses the threshold.
+The actual `active_insn_p` filters USE/CLOBBER only after reload completes;
+both observed decisions occur with `reload_completed == 0`. Counting final
+machine instructions therefore cannot reproduce this cost decision.
+
+The [observer](../../tools/gcc3_prologue_cost_observe.py) now records the
+current node's UID and checks every frequency sum. Additional instruction-byte
+guards establish that the sampled node is passed to `active_insn_p` before
+counting and advanced only after the sample. This is not an off-by-one
+association with the next RTL node. The observed complete TU raw-matches the
+canonical object, with 25 of 30 compared bodies exact.
+
+All three original out-of-line callers discard the return value: V92Modulator
+reset at `.text:0x150ed`, C1 at `0x153bf` and C2 at `0x1569f`. None supplies a
+return-width witness. Ordinary C++ mangling omits this return type; the callee's
+zero/minus-one result does not distinguish candidate signed widths. Do not
+change the return type to remove the counted node. The `isfull`, `ifelse`,
+`opencoded`, `spacelocal` and `wlocal` source domains remain closed.
+
+Reopen Queue only with a new original guard/operand boundary or independent
+compiler-profile evidence. A historical exact helper-query control, if its
+complete preprocessed input is available, could discriminate node/frequency
+provenance; it must retain the known constructor collateral review. A target
+cost crossing alone does not justify adopting that control.
+
+### Distinguish an x87 reload tie from a missing compiler operation
+
+Echo's remaining adaptation multiply, UID187, uses constraints `=f`, `%0`,
+`fm`: its output is tied to the first input and the multiply is commutative.
+Installed `find_reloads` examines both orientations. Each needs one reload
+with rejection cost two, giving `6 * 1 + 2 = 8`. The selection accepts only a
+strict improvement, so the 8:8 tie retains the first orientation and loads
+history rather than copying the existing product.
+
+All three observations of UID187 agree: two counting passes and one replacement
+pass. Across nine recorded choices and fourteen orientation observations,
+UID56 and UID189 provide controls that actually switch from cost fourteen to
+zero. This is a measured tie, not evidence that GCC cannot copy an x87 value.
+The previously raw-identical consumer-operand spelling domain stays closed.
+
+Frame observations identify two four-byte SI spill slots, for quiet pseudo69
+and index pseudo76, plus two zero-size BLK alignment requests. All nineteen
+layouts use a 32-bit preferred boundary, no outgoing space and zero padding.
+The final stack offset is 4 return bytes + 16 saved-register bytes + 8 local
+bytes. One cached prologue decision selects push saves, agreeing with the
+original's save form. It does not explain the original's twelve-byte local
+allocation. Four unreferenced original bytes establish neither a third source
+local nor a particular original alignment setting.
+
+The [reload observer](../../tools/gcc3_echo_reload_observe.py) and
+[stack observer](../../tools/gcc3_uref_stack_observe.py) preserve raw complete
+objects. Changed-cost and changed-padding controls are rejected; absent targets
+compile successfully but fail observation. The baseline and every compiler
+dump use the recovered Gentoo compiler with `DSPLIB_REPRODUCE_BUGS`.
+No reconstruction source changes or additional exact gains follow from this
+batch. See the [campaign commands](ghidra-assisted.md#queue-and-echo-observation-validation).
+
+Move next to an independently witnessed source-fidelity discrepancy rather
+than forcing Queue's prologue or Echo/IIR spills. Reopen allocation experiments
+only when a new lifetime, operand or profile witness distinguishes them.
