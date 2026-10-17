@@ -1,0 +1,1 @@
+-Wl,--wrap=modem_get_param -Wl,--wrap=ref_modem_get_param -Wl,--wrap=modem_set_param -Wl,--wrap=ref_modem_set_param
