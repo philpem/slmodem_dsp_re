@@ -1,9 +1,9 @@
 {
-  "bytes": 66,
+  "bytes": 67,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1099,
-  "exact_bytes": 125707,
+  "exact": 1101,
+  "exact_bytes": 125983,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -84,6 +84,8 @@
     "FPM_lmsupd",
     "FPM_lmsupd2",
     "FPM_rms",
+    "FPM_sqrt",
+    "FPM_sqrt_dp",
     "GenSequence",
     "GenerateAnsTone",
     "GenerateCallingTone",
@@ -1109,6 +1111,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 657,
+  "size": 654,
   "unresolved": 1
 }
