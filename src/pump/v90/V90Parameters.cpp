@@ -447,6 +447,49 @@ V90Parameters::setToDefault()
 	V92_JD_PHASE = 0.85f;
 	ANALOG_RATE_MASK = 0;
 	/* +0x048 ANALOG_RATE_MASK -- computed, see below */
+	/*
+	 * The upstream rate window, and the mask it turns into.
+	 *
+	 * `SENSITIVE_ISP_DETECTED` and `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP`
+	 * are read here and written nowhere in this function -- the
+	 * constructor sets them and `initSession` resets them.  The clamp is
+	 * unsigned throughout, which is what the object's `ja`/`jae`/`jbe`
+	 * say and not an assumption about the values.
+	 */
+	if (SENSITIVE_ISP_DETECTED != 0
+	    && maxIndex > (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP)
+		maxIndex = (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP;
+
+	if (minIndex < V90_MIN_RATE_INDEX)
+		minIndex = V90_MIN_RATE_INDEX;
+	else if (minIndex > V90_MAX_RATE_INDEX)
+		minIndex = V90_MAX_RATE_INDEX;
+
+	if (maxIndex < V90_MIN_RATE_INDEX)
+		maxIndex = V90_MIN_RATE_INDEX;
+	else if (maxIndex > V90_MAX_RATE_INDEX)
+		maxIndex = V90_MAX_RATE_INDEX;
+
+	if (minIndex > maxIndex) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Parameters: bad upstream "
+					     "rate, using default values\n");
+		minIndex = V90_MIN_RATE_INDEX;
+		maxIndex = V90_MAX_RATE_INDEX;
+	}
+
+	for (i = (int)V90_MAX_RATE_INDEX; i >= (int)V90_MIN_RATE_INDEX; i--)
+		ANALOG_RATE_MASK = ANALOG_RATE_MASK * 2
+		    | (((unsigned int)i <= maxIndex
+			&& (unsigned int)i >= minIndex) ? 1 : 0);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Parameters: upStream min rate : %d "
+				     "upStream max rate : %d  Rate mask :%x\n",
+				     minIndex * V90_RATE_STEP,
+				     maxIndex * V90_RATE_STEP,
+				     ANALOG_RATE_MASK);
+
 	PRE_FILTER_GAIN = -1;
 	PRE_FILTER_COEF_TYPE = -1;
 	GERMAN_ISDN_NT1_BOX_FILTER_GAIN = 12;
@@ -768,49 +811,6 @@ V90Parameters::setToDefault()
 	TEMP_FLOAT_PARAMETER2 = 0.0f;
 	TEMP_FLOAT_PARAMETER3 = 0.0f;
 	TEMP_FLOAT_PARAMETER4 = 0.0f;
-
-	/*
-	 * The upstream rate window, and the mask it turns into.
-	 *
-	 * `SENSITIVE_ISP_DETECTED` and `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP`
-	 * are read here and written nowhere in this function -- the
-	 * constructor sets them and `initSession` resets them.  The clamp is
-	 * unsigned throughout, which is what the object's `ja`/`jae`/`jbe`
-	 * say and not an assumption about the values.
-	 */
-	if (SENSITIVE_ISP_DETECTED != 0
-	    && maxIndex > (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP)
-		maxIndex = (unsigned int)MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP;
-
-	if (minIndex < V90_MIN_RATE_INDEX)
-		minIndex = V90_MIN_RATE_INDEX;
-	else if (minIndex > V90_MAX_RATE_INDEX)
-		minIndex = V90_MAX_RATE_INDEX;
-
-	if (maxIndex < V90_MIN_RATE_INDEX)
-		maxIndex = V90_MIN_RATE_INDEX;
-	else if (maxIndex > V90_MAX_RATE_INDEX)
-		maxIndex = V90_MAX_RATE_INDEX;
-
-	if (minIndex > maxIndex) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Parameters: bad upstream "
-					     "rate, using default values\n");
-		minIndex = V90_MIN_RATE_INDEX;
-		maxIndex = V90_MAX_RATE_INDEX;
-	}
-
-	for (i = (int)V90_MAX_RATE_INDEX; i >= (int)V90_MIN_RATE_INDEX; i--)
-		ANALOG_RATE_MASK = ANALOG_RATE_MASK * 2
-		    | (((unsigned int)i <= maxIndex
-			&& (unsigned int)i >= minIndex) ? 1 : 0);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Parameters: upStream min rate : %d "
-				     "upStream max rate : %d  Rate mask :%x\n",
-				     minIndex * V90_RATE_STEP,
-				     maxIndex * V90_RATE_STEP,
-				     ANALOG_RATE_MASK);
 
 	/*
 	 * Bit 0 of the modem block's first byte picks between one second and
