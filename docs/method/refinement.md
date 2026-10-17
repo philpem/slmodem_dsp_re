@@ -5911,10 +5911,10 @@ expected length. Captured-argument byte mutations fail in both fixtures and
 restoration passes. These tests strengthen component coverage; they do not
 establish every modem history or justify forcing duplicate static print sites.
 
-The next numeric discriminator is the original multiplication scales versus
-reconstructed reciprocal scales in `V90Equalizer::convertEqualizerToMmx`.
-Inspect the paired multiply/divide operations and destination fields before
-changing a value. Other inventory gaps already have immediate producers:
+The inventory nominated the original multiplication scales versus reconstructed
+reciprocal scales in `V90Equalizer::convertEqualizerToMmx`; the quantisation
+audit below closes that pool-only lead. Inspect the paired operations and
+destination fields before changing a value. Other inventory gaps already have immediate producers:
 `MTK_phasor`'s float 2*pi and `voice_rx`'s reciprocal input scale. Their absence
 from a constant pool is not evidence of an absent value.
 
@@ -5949,8 +5949,9 @@ Three reviewed paths retain the original order: CID recomputes its string
 length and owner after host calls; V.8 publishes handoff/expiry fields around
 its host calls; voice reloads state after receive and publishes its host count
 after send. Only CID has new real-signal callback observations in this pass.
-A V.8 negotiated-link history remains the next useful host-boundary fixture;
-planted negotiation states and voice handler scripts are not that evidence.
+Planted V.8 negotiation states and voice handler scripts do not establish an
+ordinary signal history. The negotiated-link fixtures below supply that
+evidence for V.8 handoff and expiry.
 
 Resolved call/tail annotation also explains four new structural nominations:
 DialerAbort's diagnostic tail, V23ModemMain's demodulator tail, shared voice
@@ -5973,8 +5974,8 @@ levels. All 812 checks pass across the object, aligned arrays and complete
 transcripts. A compiled-object wrong-scale canary fails 81 checks and exits 1.
 The unchanged full-TU control reproduces all 35 bodies raw and preserves 20
 exact names. No source expression or compiler option changes follow from this
-result. A field-positioned map of V90 default stores, including immediate
-producers, is a better next numeric audit than another pool-value substitution.
+result. The subsequent field-positioned map of V90 default stores includes
+immediate producers, which another pool-value substitution would miss.
 
 ### Keep parallel mutation subsets non-recordable
 
@@ -5991,3 +5992,120 @@ failures and test filtering, worker failure, subset reporting and snapshot
 refusal. They need no copied build trees or mutation cycles. Actual four-label
 ADID sentinel checks pass serially and in parallel. Neither is a full
 482-mutation measurement or a snapshot refresh.
+
+### Reopen a numeric boundary when a production history distinguishes it
+
+`TONE_generate`'s original elapsed sum passes through `fstps`/`flds` before
+the duration comparison. The reconstruction's float-only expression keeps
+excess x87 precision there. A constructor-created tone with a finite positive
+duration of 2097152.5 ms exposes the difference: 512 blocks of 32767 samples,
+then 514 samples, produce an elapsed value of 2097152.25 ms. One more sample
+rounds the reference clock to the duration and expires it; the reconstruction
+compares the unrounded sum and expires one sample later. The fixture advances
+all state through positive, representable generation counts. It establishes
+the tone component history, not a negotiated modem call.
+
+Three complete-TU controls compare the current expression, an explicit float
+cast alone, and the unsuffixed double literal `n * 0.125 + t->elapsed` assigned
+to the existing float local. The cast-only object is raw-identical to the
+baseline. The double expression introduces `float_truncate:SF` at initial
+RTL expansion and recovers the reference's narrowing before the comparison.
+This is an expression-type boundary, not a reload-allocation workaround.
+
+The baseline fails three of 1032 checks; the correction passes all 1032,
+including the following sample's output and clock. Three focused period
+fixtures pass. Across 18 emitted bodies, five canonical bystanders, bindings,
+data and relocation consumers stay equal. The one exact name is preserved;
+the target's size gap remains 13 bytes. Earlier return-width, guard and phase
+controls remain closed: this new valid-history failure justifies the numeric
+correction, without claiming the original return type or complete body.
+
+### Negotiate the host boundary before interpreting a planted status
+
+The V.8 fixture now runs independent original and reconstructed caller/answerer
+calls through registered wrapper operations at 9600 Hz. The peer's preceding
+audio block drives each receiver; no status or protocol state is planted.
+Both wrappers negotiate V.34 at frame 125. Public `V8Create` peers whose
+menus offer V.32 without V.34 then exercise actual V.32 selection in both
+wrapper roles. Each history continues through the natural idle expiry.
+
+The three histories pass 53332 checks, including complete normalised handshake
+and wrapper state, audio, menus, host publication and 12 callback observations.
+Read-only observers forward get/set calls unchanged. The host result block
+starts with an earlier result, so replacing it before the handoff callback is
+an observed write. A fixed observer canary corrupts only the recorded snapshot
+and fails four checks while leaving protocol state unchanged. Three focused
+period fixtures pass. No source divergence is demonstrated by these histories.
+They establish component negotiation and expiry; public modem replacement
+scheduling and quick-connect remain separate. A normally configured peer
+offering neither V.34 nor V.32 is the next discriminator for the unsupported
+handoff path.
+
+### Classify extra imports by their callers and definitions
+
+An undefined-symbol difference alone did not identify six added modem calls.
+The 300-object census finds seven selected-math relocations against two in the
+reference. `pow` has the same two `GetGain` callers on both sides; the reference
+also defines its linked library implementation, which the reconstructed empty
+`pow.S` deliberately leaves out. `sin`/`cos` in `beepgen_sample` and `fmodf` in
+`MTK_phasor` replace reference x87 operations at existing profile/header
+boundaries. Neither observation justifies replacing a call by handwritten
+machine operations or changing a global profile.
+
+`log10` belongs to an added offline table generator. `sqrt` is a compiler
+fallback after `fsqrt` in another added generator. Four reconstruction-only
+generators, including division-table and power-coefficient generation, are
+used only by their respective differential fixtures. Their calculations now
+live as static helpers in those fixtures; they no longer add exports or
+library imports to the production object. The coefficient derivations and
+their existing sweeps remain available.
+
+Twelve complete-TU cells reproduce unchanged, removal and final-source
+controls. All 15 surviving bodies and their relocation consumers remain equal
+to baseline; five original-exact names are preserved. Four focused period
+fixtures pass 1373296 checks. The change removes four function exports,
+336 bytes of text including alignment, 20 bytes of generator-only constants,
+seven relocations and two imports. Remaining extra imports are `cos`, `fmodf`,
+`pow` and `sin`. This removes apparatus from the replacement; it does not
+recover a new original function or the omitted linked library implementation.
+
+### Map defaults to stores, then compare their publication boundaries
+
+The V90 default-store audit resolves immediate/register bit patterns,
+numeric-pool loads and x87 zero/one producers to destination fields. All 340
+static object-store sites have named fields and matching widths; all 338
+constant values agree. The mask recurrence and answer-PCM length are two
+explicitly unresolved input-dependent values in this static analysis. Ten
+checks across nine assembled fixtures demonstrate offset, width, value and
+store-order failures, equal/conflicting CFG joins and unsupported operations.
+
+Original pool values that appeared absent in the reconstruction already have
+immediate-store witnesses. No wrong offset, type or constant default is
+demonstrated. The map does expose a separate source-order discrepancy:
+the reference computes the upstream mask and issues its diagnostics before
+the later defaults, whereas the reconstruction placed that block after them.
+Moving that one contiguous 43-line block recovers all 319 call-relative store
+boundaries without changing literals, types or scalar-store spellings.
+
+Two full-TU controls preserve eight canonical bystanders, bindings, BSS and
+nontext relocation targets. Six of nine original names remain exact. The
+target changes from 3594 to 3584 bytes against 3589 in the reference; both
+length gaps are five bytes. The numeric pool grows from 24 to 28 bytes through
+compiler rematerialisation, while the neighbouring consumer retains its exact
+values and canonical body. The focused period fixture passes 4005 checks.
+This is publication-boundary recovery, without a demonstrated ordinary runtime
+failure. Static CFG pair-order differences fall from 1835 to 1433 of 57630;
+they remain conservative ordering evidence, not dynamic execution counts or
+authority for further store permutations.
+
+The integrated continuation passes `make phase partial-link J=4`: 392 period
+fixtures, zero failures, with all structural checks passing. The exact-name
+set remains 1101 of 1852, covering 125983 of 720125 original function bytes;
+all 724 matched initialised objects agree. Six of 300 production objects
+change and each raw-matches its independently audited control. Strict partial
+comparison remains DIFFERENT. The next bounded leads are omitted narrowing
+before floating decisions, a shared lower-mode V.8 negotiation, and remaining
+reconstruction-only production helpers. A lower-mode fixture must observe
+`V8_OK` and an actual negotiated lower-mode intersection before claiming the
+wrapper's unsupported-handoff arm is reachable; a timeout is a different
+result.
