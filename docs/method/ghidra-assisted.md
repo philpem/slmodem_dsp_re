@@ -165,24 +165,27 @@ function counts with original bytes affected. Similarity is a navigation aid.
 
 ## Next bounded investigations
 
-The first batch recovered EchoCanceler's guarded product and GenericIIR's
-compaction/publication boundaries, and added mixed-call persistent-state
-coverage. The [Playbook](refinement.md#ghidra-assisted-boundary-recovery-17-october-2026)
-records the closed source domains and measured improvements.
+The first two batches recover EchoCanceler's guarded product and dot-product
+memory operand, GenericIIR's compaction/publication boundaries and byte-exact
+`silence_progress`. The
+[Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
+records the measured compiler decisions and closed domains.
 
-1. GenericIIR scalar: trace the first feedforward register/base/index choices
-   and input-compaction LEA schedule through initial RTL, allocation and
-   scheduling before proposing another source variant. Its length now agrees,
-   but 63 bytes still differ.
-2. GenericIIR block: account for live values and spills behind the original
-   `0x34` and retained `0x2c` frames, alongside the twelve-byte length gap.
-   Matching the frame alone would not establish the missing source boundary.
-3. EchoCanceler: trace the remaining dot-product load/operand schedule and
-   adaptation consumer ownership through combine/reload. The original
-   guarded producer is recovered; consumer operand reversal was raw-identical.
-4. Silence: measure actual Gentoo prologue cost/cache decisions and frontend
-   range folding. Ghidra can map the resulting graph but cannot recover the
-   unavailable original GCC RTL. Keep surviving threshold mutations visible.
+1. Screen remaining prologue differences for independently witnessed guard
+   boundaries. `Queue<float>::write(float)` remains 71 versus 85 original
+   bytes; its old body-spelling domain stays closed without a new witness.
+   Use actual frequency/caching observations before proposing source changes.
+2. EchoCanceler: inspect the x87 reload alternatives that materialise history
+   rather than copy the live product. The choice starts in `25.greg`, not
+   stack conversion. Measure the frame arithmetic separately; final operands
+   leave the reference's extra four local bytes unused.
+3. GenericIIR: observe allocator/liveness provenance for the scalar scratch
+   and renaming choices and block destination spill. The original block's
+   second extra slot receives an input-length store that is never read.
+   The prior source domains are closed until a new discriminator appears.
+4. Keep silence's two previously surviving opposite-direction threshold
+   mutations visible as fixture limits. Byte-exact recovery does not create
+   new lifecycle evidence for those inputs.
 
 The Resampler static-comparison-count domain remains closed without a new
 contradictory operand or path. Its extra comparison was reproduced at GCC's
@@ -223,3 +226,48 @@ suites resolve uniquely; this is structural validation, not a full mutation
 execution. Strict documentation build/audit passes, with 508 Markdown
 link targets, 300 module links and 972 generated HTML targets/fragments;
 both audit negative controls fire. No modern-portability result is claimed.
+
+## Compiler-stage follow-up validation
+
+The second retained batch passes `make phase J=4`: 392 period fixtures, zero
+failures and all structural checks. `silence_progress` adds one exact name
+and 623 original bytes, taking the census to 1102/1852 and 126606/720125
+original function bytes, with no exact losses. EchoCanceler remains 359 bytes
+with 31 differing bytes. GenericIIR is unchanged from the first retained batch.
+Only two of 300 canonical objects change; all 300 runtime objects raw-match
+the canonical set. Strict partial-link/raw-file comparison remains DIFFERENT.
+
+Three repaired mutation anchors are exercised as period-compiled subsets:
+the zero-level and full-word probes fail 140 and 906 silence checks, and the
+reversed-history probe fails 4560 Echo checks. These are runtime failures,
+not compilation/link failures. All 10042 anchors across 285 suites resolve
+uniquely. No full mutation execution or snapshot refresh is claimed.
+
+The [silence controls](../../tools/recovery_silence_guards.py) use six unique
+source variants; the [cost observer](../../tools/gcc3_prologue_cost_observe.py)
+passes baseline and exact-source controls with raw-object identity. Its
+empty-target negative is rejected after a successful compiler run. Full
+commands, compiler hashes and traces are retained under
+`build/silence-cost-293/`; global measurements are under
+`build/continuation293/`. The IIR stage audit is retained in the isolated
+`build/worktrees/iir-stages-293/build/iir-stages-293/` artifact directory.
+
+A reproduction needs the archived `5bfa2f09c` period silence object and its
+`.build-config` as `--baseline-dir`; later-source objects are not substitutes.
+For the six-cell cross and the read-only observation:
+
+```sh
+python3 tools/recovery_silence_guards.py --domain guard-width-and-return-boundary \
+  --baseline-dir /path/to/archived/5bfa2f09c/tc_repro
+python3 tools/recovery_silence_guards.py --audit
+python3 tools/gcc3_prologue_cost_observe.py \
+  --reproduction-dir build/silence-guards-293 --family silence \
+  --target silence_progress --output-dir build/silence-cost-observation \
+  --labels baseline short-split
+```
+
+The observer extracts the compiler from the recorded image. It verifies the
+hook's instruction bytes and rejects empty or ambiguous observations. Use
+an assembler/mangled name for overloaded C++ targets. The original capture
+of `use_fast_prologue_epilogue` is made before register-save code emission;
+counting final disassembly instructions would not reproduce this decision.
