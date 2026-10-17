@@ -20,6 +20,8 @@ DUMP_FLAGS=('-da',)
 HEADER_OVERLAYS = lambda path, label: {}
 # Diagnostic option controls are explicit per cell and never alter production.
 CELL_FLAGS = lambda path, label: ()
+# Explicitly audited deletion of reconstructed-only exports, default none.
+ALLOWED_GLOBAL_REMOVALS = lambda path, label: set()
 
 def function(source,name):
     start=source.index('\n'+name+'(')+1
@@ -151,7 +153,10 @@ def main():
             if label=='baseline':assert Path(obj).read_bytes()==saved.read_bytes(),'raw baseline mismatch';entry['baseline_reproduced']=True
             else:
                 base=fr['cells']['baseline'];baseobj=str(fo/'baseline/candidate.o')
-                assert entry['globals']==base['globals'] and entry['functions']==base['functions']
+                removed = set(ALLOWED_GLOBAL_REMOVALS(path, label))
+                assert removed <= set(base['globals'])
+                assert entry['globals']=={k:v for k,v in base['globals'].items() if k not in removed} and entry['functions']==base['functions']
+                entry['removed_globals'] = sorted(removed)
                 entry['changed_bodies']=[n for n in entry['functions'] if b.body(obj,n)!=b.body(baseobj,n)]
                 entry['gains']=[n for n,v in entry['verdicts'].items() if v[0]=='EXACT' and base['verdicts'][n][0]!='EXACT']
                 entry['losses']=[n for n,v in base['verdicts'].items() if v[0]=='EXACT' and entry['verdicts'][n][0]!='EXACT']
