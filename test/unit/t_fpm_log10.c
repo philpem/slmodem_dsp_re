@@ -5,25 +5,64 @@
  *
  *   1. every one of the 128 table entries is reproduced by the generator, so
  *      the derivation in the source is checked and not merely asserted;
- *   2. the function itself, against the blob, over the whole Q15 mantissa
+ *   2. the function itself, against the blob, over the whole unsigned-word mantissa
  *      domain crossed with a range of exponents -- including the 64 mantissas
  *      that read one element past the end of the table, which are the point;
  *   3. the zero case, at all three debug levels, with the transcript
  *      compared.
  *
- * The sweep is exhaustive over mantissas rather than sampled: 32,768 values
+ * The sweep is exhaustive over mantissas rather than sampled: 65,536 values
  * is nothing, and a normalisation loop is exactly the shape where the
  * interesting inputs are the ones a sample misses.
  */
 
 #include <string.h>
 
+#include <math.h>
+
 #include "harness.h"
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
+#include "dsplib/fpm_pps.h"
+
+extern const short FPM_log10_table[128];
+extern const short ref_FPM_log10_table[];
+extern const struct fpm_pps_cfg ref_FPM_PPS_CFG;
 
 extern short ref_FPM_log10(unsigned short mantissa, short exponent);
 extern unsigned int ref_dsplibs_debug_level;
+
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static short
+FPM_log10_table_generate(int index)
+{
+	/* Compute the ideal table formula in double precision. */
+	double frac = (index * 128 + 16384) / 32768.0;
+
+	return (short)(int)(32768.0 * log10(frac));
+}
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+
+static int
+FPM_log10_table_derived(void)
+{
+	return 128;
+}
+
+static short
+FPM_log10_table_entry(int index)
+{
+	return FPM_log10_table[index];
+}
+
+static int
+FPM_log10_table_size(void)
+{
+	return (int)(sizeof(FPM_log10_table) / sizeof(FPM_log10_table[0]));
+}
+
 
 int
 main(void)
@@ -40,25 +79,29 @@ main(void)
 		    128, 0);
 	/*
 	 * And one that is not derived.  Entry 128 is the neighbouring
-	 * object's first short, transcribed so that the original's overrun is
-	 * reproduced deliberately rather than by whatever our linker happens
-	 * to place after the array.  D65.
+	 * object's first short. The aggregate fixture preserves that original
+	 * physical neighbour rather than copying it into the table. D65.
 	 */
-	diff_eq_int("129 entries in all (%ld)", FPM_log10_table_size(), 129,
+	diff_eq_int("128 original entries (%ld)", FPM_log10_table_size(), 128,
 		    0);
 	diff_eq_int("entry 128 is the neighbour's 10, not log10(1) = 0 (%ld)",
 		    FPM_log10_table_entry(128), 10, 128);
 	diff_eq_int("and the generator would have said 0 (%ld)",
 		    FPM_log10_table_generate(128), 0, 128);
+	/* The test measures the same relocatable-library boundary as the blob. */
+	diff_eq_int("source table/PPS adjacency %ld",
+		    (unsigned long)&FPM_PPS_CFG - (unsigned long)FPM_log10_table, 256, 0);
+	diff_eq_int("reference table/PPS adjacency %ld",
+		    (unsigned long)&ref_FPM_PPS_CFG - (unsigned long)ref_FPM_log10_table, 256, 0);
 	if (diff_end())
 		return 1;
 
 	/*
-	 * The whole Q15 domain at exponent 0.  Mantissa 0 is covered
+	 * The complete unsigned-word component boundary at exponent 0.  Mantissa 0 is covered
 	 * separately below, since it is the announcing path.
 	 */
-	diff_begin("FPM_log10: every Q15 mantissa, exponent 0");
-	for (m = 1; m <= 0x7fff; m++)
+	diff_begin("FPM_log10: every unsigned-word mantissa, exponent 0");
+	for (m = 1; m <= 0xffff; m++)
 		diff_eq_int("log10(%ld, 0)",
 			    FPM_log10((unsigned short)m, 0),
 			    ref_FPM_log10((unsigned short)m, 0), m);
@@ -110,17 +153,8 @@ main(void)
 	if (diff_end())
 		return 1;
 
-	/*
-	 * MANTISSAS ABOVE 0x7fff ARE DELIBERATELY NOT COMPARED, and this
-	 * comment is the finding.  Such a mantissa needs no normalising and
-	 * indexes up to 384, so the original reads up to 512 bytes past its
-	 * own table -- through FPM_PPS_CFG and on into whatever follows.  Two
-	 * builds disagreeing about memory neither of them owns is not a
-	 * defect in either, and an earlier version of this file asserted they
-	 * agreed and failed exactly there.  Reproducing it would mean
-	 * transcribing a quarter of .rodata, and nothing in the object says a
-	 * caller ever passes one.  See D65.
-	 */
+	/* Above-Q15 inputs in the full-word sweep exercise original neighbouring
+	 * objects. This does not establish modem reachability for those inputs. */
 
 	diff_begin("FPM_log10: log10 of zero announces itself at level 2");
 	{
