@@ -1,0 +1,1 @@
+-Wl,--wrap=modem_send_to_tty -Wl,--wrap=ref_modem_send_to_tty

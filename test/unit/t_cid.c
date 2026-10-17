@@ -6,11 +6,9 @@
  *   CID_delete    0x410    84 bytes
  *   CID_process   0x470   386 bytes
  *
- * The receiver underneath (`cid_create`, `cid_progress`, `cid_get_strings`,
- * `cid_delete`, `cid_freq_sampl`) is UNWRITTEN and both sides share the
- * blob's single copy of it, so what this test decides is the wrapper: the
- * rate gate, the allocation dance, the 192-sample chunking, the verdict
- * mapping, and the four-string TTY delivery with its CRLFs.
+ * The wrapper and receiver are reconstructed; both sides run their own
+ * complete CID chain. This fixture covers the rate gate, allocation,
+ * 192-sample chunking, verdict mapping and four-string TTY delivery.
  *
  * To reach the success path the test synthesises a Bell 202 caller ID burst
  * -- channel seizure, mark, then an SDMF message with a valid checksum --
@@ -25,10 +23,13 @@
  * bytes over a different call count.
  */
 
+#include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "harness.h"
 #include "dsplib/cid.h"
+#include "dsplib/cid_modem.h"
 #include "dsplib/debug.h"
 
 extern void *ref_CID_create(void *m, unsigned rate, unsigned cid_val);
@@ -153,6 +154,67 @@ count_substr(const char *hay, const char *needle)
 
 static int dummy_modem_ours, dummy_modem_ref;
 
+/* Read-only host observations during the real Bell-202 delivery. CID's
+ * private wrapper is two pointers (modem, receiver); memcpy accesses its
+ * receiver slot without defining a second copy of that type. */
+#define HOST_OBSERVATIONS 32
+struct cid_host_observation {
+	int modem_matches;
+	int length;
+	int string_offset;
+	int crlf;
+	int mode, cid_val, samples_fill;
+	char rendered[0x258];
+	unsigned char payload[0x258];
+};
+static struct cid_host_observation host_observations[2][HOST_OBSERVATIONS];
+static void *active_cid[2];
+static int host_calls[2], host_overflow;
+static long observed_host_calls;
+static int observation_negative;
+
+extern int __real_modem_send_to_tty(void *, const void *, int);
+extern int __real_ref_modem_send_to_tty(void *, const void *, int);
+
+static void observe_host(int side, void *modem, const void *buf, int n)
+{
+	struct cid_modem *ctx;
+	struct cid_host_observation *o;
+	uintptr_t address, first;
+	if (!active_cid[side])
+		return;
+	if (host_calls[side] >= HOST_OBSERVATIONS || n < 0 || n > 0x258) {
+		host_overflow = 1;
+		return;
+	}
+	memcpy(&ctx, (const char *)active_cid[side] + sizeof(void *), sizeof ctx);
+	o = &host_observations[side][host_calls[side]++];
+	o->modem_matches = modem == (side ? (void *)&dummy_modem_ref
+					 : (void *)&dummy_modem_ours);
+	o->length = n;
+	address = (uintptr_t)buf;
+	first = (uintptr_t)ctx->strings;
+	o->string_offset = address >= first && address < first + sizeof ctx->strings
+		? (int)(address - first) : -1;
+	o->crlf = n == 2 && memcmp(buf, "\r\n", 2) == 0;
+	o->mode = ctx->mode;
+	o->cid_val = ctx->cid_val;
+	o->samples_fill = ctx->samples_fill;
+	memcpy(o->rendered, ctx->strings, sizeof o->rendered);
+	memcpy(o->payload, buf, (unsigned)n);
+}
+
+int __wrap_modem_send_to_tty(void *m, const void *buf, int n)
+{
+	observe_host(0, m, buf, n);
+	return __real_modem_send_to_tty(m, buf, n);
+}
+int __wrap_ref_modem_send_to_tty(void *m, const void *buf, int n)
+{
+	observe_host(1, m, buf, n);
+	return __real_ref_modem_send_to_tty(m, buf, n);
+}
+
 /*
  * Feed one buffer to both sides in `chunk`-sample slices, stopping when a
  * side settles, and compare every verdict.  Returns the settled verdict
@@ -161,7 +223,12 @@ static int dummy_modem_ours, dummy_modem_ref;
 static int
 feed(void *ours, void *ref, short *samples, int count, int chunk, long tag)
 {
-	int off = 0, r1 = 0, r2 = 0;
+	int off = 0, r1 = 0, r2 = 0, i;
+
+	memset(host_observations, 0, sizeof host_observations);
+	host_calls[0] = host_calls[1] = host_overflow = 0;
+	active_cid[0] = ours;
+	active_cid[1] = ref;
 
 	while (off < count) {
 		int n = chunk < count - off ? chunk : count - off;
@@ -173,6 +240,29 @@ feed(void *ours, void *ref, short *samples, int count, int chunk, long tag)
 		if (r1 != 0 || r2 != 0)
 			break;
 		off += n;
+	}
+	active_cid[0] = active_cid[1] = 0;
+	diff_eq_int("host callback observations fit (%ld)", host_overflow, 0, tag);
+	diff_eq_int("host callback observation counts (%ld)", host_calls[0], host_calls[1], tag);
+	for (i = 0; i < host_calls[0] && i < host_calls[1]; i++) {
+		struct cid_host_observation *a = &host_observations[0][i];
+		struct cid_host_observation *b = &host_observations[1][i];
+		diff_eq_obj("state and arguments visible at TTY callback",
+			struct cid_host_observation, a, b, tag * 100 + i);
+		diff_eq_int("TTY callback retains modem identity (%ld)", a->modem_matches, 1, tag * 100 + i);
+		diff_eq_int("TTY callback payload provenance (%ld)",
+			a->crlf ? a->string_offset == -1 : a->string_offset >= 0,
+			1, tag * 100 + i);
+		observed_host_calls++;
+		if (!observation_negative) {
+			/* A changed callback-visible field must change the record
+			 * even when the forwarded TTY bytes are identical. */
+			struct cid_host_observation wrong = *a;
+			wrong.samples_fill++;
+			diff_eq_int("state-only callback negative rejected",
+				memcmp(&wrong, b, sizeof wrong) != 0, 1, tag);
+			observation_negative = 1;
+		}
 	}
 	return r1 == r2 ? r1 : -99;
 }
@@ -341,5 +431,9 @@ main(void)
 		    count_substr(dsplib_debug_capture_text(0),
 				 "cid: CID Success") > 0, 1, 4);
 
+	diff_eq_int("read-only host observations executed (%ld)", observed_host_calls > 0, 1, observed_host_calls);
+	diff_eq_int("callback state negative executed", observation_negative, 1, 0);
+	printf("CID host boundary observations: %ld paired calls; state-only negative %d\n",
+	       observed_host_calls, observation_negative);
 	return diff_end();
 }
