@@ -276,18 +276,6 @@ extern short fix_LPF[17];
 extern short AUTOCOR_COEF_7200[5];
 extern short AUTOCOR_COEF_9600[5];
 
-/**
- * @brief Test accessor for CID_MTD_detect()'s four file-static coefficient
- * tables.
- *
- * The same accessor arrangement `fpm_div.c` uses for `FPM_div_table`.
- *
- * @param which  1 or 2, selecting which of the two coefficient pairs.
- * @param rate   8000 or 9600.
- * @return The matching table, or NULL for any other @p which/@p rate.
- */
-const short *CID_MTD_coeff(int which, int rate);
-
 /*
  * The TOP of the stack: slmodemd's own three entry points, defined in
  * src/service/cid.c and declared by the host verbatim
