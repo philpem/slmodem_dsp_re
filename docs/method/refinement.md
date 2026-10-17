@@ -7291,3 +7291,58 @@ Close source spelling retries at this boundary. Reopen only with independent
 lifetime/death-note or common-profile evidence explaining the selective
 original spill. An allocated slot is insufficient evidence for a source
 local, and adding artificial stores would bypass the measured question.
+
+## Preserve equivalent switch arms when their call boundaries differ
+
+`designWindow<float>` explicitly distinguishes BOXCAR (zero) from `default`
+in the reference. Zero tail-jumps to `boxcar`; default calls it and returns.
+The reconstruction collapsed both into default and its comment dismissed the
+extra original path as a layout artefact. That preserves window values but
+does not recover the original selector structure.
+
+Restoring the separate BOXCAR arm makes both emitted copies EXACT: 99 to
+116 ELF bytes, including two symbol-owned padding bytes. This is one unique
+original function and 116 newly exact original bytes. The bounded two-cell
+header cross covers all five quoted-include consumers and 103 function copies;
+only the two selector copies change. The other three complete objects are
+raw-identical. Data, bindings and all other relocation consumers are preserved;
+the selector gains its second boxcar reference. Only its symbol/COMDAT sizes,
+relocation-section size and later physical file offsets change.
+
+The focused Gentoo gate passes three binaries, 25 groups and 612113 checks.
+Existing selector sweeps cover zero and unnamed values, so no new fixture or
+semantic failure is claimed. Canonical recompilation independently reproduces
+the selected objects; the other 298 source objects remain raw-identical.
+
+```sh
+python3 tools/recovery_window_boxcar.py --domain explicit-boxcar-two-cells \
+  --baseline-dir build/native293-baseline
+python3 tools/recovery_window_boxcar.py --audit
+python3 tools/recovery_window_boxcar.py --production-control
+```
+
+The [tail-transfer audit](../../tools/recovery_tail_transfer_audit.py) joins
+direct calls and unconditional external jumps, including uniquely resolved
+same-section function starts. Historical call/tail inventories already cover
+named PC32 edges; the residual call ledger by itself omits tails. Reconcile
+this audit to the canonical manifest and census rather than treating a bare
+call-count difference as missing behavior.
+
+At frozen `6fe0b1e42`, all 300 objects contain 1886 shared defining copies of
+1852 names. Two hundred copies have a named tail; original/candidate tail-site
+counts are 234/232. Six target-multiplicity nominations include both selector
+copies; after recovery there are four and the tail counts are 234/234.
+Transfer-kind nominations fall from sixteen to fourteen. The remaining target
+differences are B103's previously reviewed shared diagnostic suffix and three
+helper-inlining witnesses, not newly established missing behavior.
+
+Four controls check the original separate boxcar call/tail, a changed transfer
+opcode, refusal of an interior-target addend, and exclusion of the actual
+boxcar loop. Indirect transfers, ambiguous/interior destinations and conditional
+exits remain unproved. Equal target bags do not establish arguments, order,
+path coverage or behavior. This read-only audit performs no compilation.
+
+```sh
+python3 tools/recovery_tail_transfer_audit.py --objects build/tc_repro \
+  --census build/native293-census.json --out build/native293-tail-after.json
+```
