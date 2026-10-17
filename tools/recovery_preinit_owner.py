@@ -16,8 +16,8 @@ from recovery_generator_separation import named_data
 
 
 def sources(late=False):
-    digital=subprocess.check_output(['git','show','2a06efefd:src/pump/v34/v34digital.c'],cwd=d.ROOT,text=True)
-    shell=subprocess.check_output(['git','show','2a06efefd:src/pump/v34/v34shell.c'],cwd=d.ROOT,text=True)
+    digital=subprocess.check_output(['git','show','06ba1f713:src/pump/v34/v34digital.c'],cwd=d.ROOT,text=True)
+    shell=subprocess.check_output(['git','show','06ba1f713:src/pump/v34/v34shell.c'],cwd=d.ROOT,text=True)
     a,z,fn=d.function(digital,'preinitdigital')
     start=digital.rfind('\nvoid\n',0,a)+1
     assert start>0
@@ -53,7 +53,7 @@ def main():
     if args.baseline_dir:
         saved_argv=sys.argv[:]
         sys.argv=[sys.argv[0],'--domain',str(Path(__file__).resolve()),'--baseline-dir',str(args.baseline_dir)]
-        d.REV='2a06efefd';d.OUT_NAME='preinit-owner'
+        d.REV='06ba1f713';d.OUT_NAME='preinit-owner'
         d.SOURCE_PATHS=('src/pump/v34/v34digital.c','src/pump/v34/v34shell.c')
         d.DUMP_FLAGS=('-da','-v','-save-temps');d.variants=lambda path,source:{'baseline':source}
         try:d.main()
