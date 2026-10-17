@@ -171,15 +171,16 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Discriminate the V92 encoder's table-definition/emission ownership against
-   common-profile evidence under #22. No-unit restores reference relative
-   table order while preserving all eight bodies, but still inlines the helper.
-   Preserve the nonexact builder and process call boundary in that comparison.
-   Residue-array cost tuning, definition-order and case-form domains are closed.
-2. Trace `preinitdigital`'s descrambler owner pseudo 83 allocation and memset
-   argument owners. The native state publication is restored, with BYTES106
-   remaining. Further count/store permutations are closed: the residual role
-   comparison is constrained by a measured EDX/flags dependency at sched2.
+1. Apply ordered native call/result tracing to `CID_process`'s status and
+   string-iteration boundary ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)).
+   Its fresh sizes remain 368 versus 386 bytes. Audit the existing fixture's
+   component/lifecycle boundary first; preserve both exact companions and keep
+   the recorded 1433 source/option cells closed. A trace must supply a new
+   discriminator before another source variant.
+2. Resolve V92 helper visibility/common-profile evidence under #22 across
+   independent call-boundary witnesses. Native table layout and case ownership
+   are now retained. The raw-equivalent table-order/profile pairs do not select
+   an original option; no residue, case or table-order palette is reopened.
 3. CenterAdapt's allocated history home and reload deletion are now measured.
    Reopen only with independent death-note/lifetime or common-profile evidence
    explaining the reference's selective two surviving stores. The eleven-byte
@@ -195,6 +196,14 @@ records the measured compiler decisions and closed domains.
 6. Keep silence's two previously surviving opposite-direction threshold
    mutations visible as fixture limits. Byte-exact recovery does not create
    new lifecycle evidence for those inputs.
+
+Initializer owner allocation is now measured: `local_alloc` selects EDX as
+the first eligible equal-cost home, while `25.greg` first displays it.
+Peephole scratch selection and reverse register renaming explain the final
+memset arguments. BYTES106 remains. Reopen source only with an independently
+supported competing lifetime or allocation constraint. CenterAdapt and the
+V92 builder likewise need a new operand/lifetime/profile witness; completed
+ordered-store checks are a reason to pivot, not to repeat source spellings.
 
 The Resampler static-comparison-count domain remains closed without a new
 contradictory operand or path. Its extra comparison was reproduced at GCC's
@@ -530,3 +539,69 @@ partial refinement, not complete-object closure. Strict documentation build
 and audit pass, including 536 Markdown targets, all 300 module links, 972 HTML
 targets/fragments and both detector controls. No modern portability or full
 mutation snapshot refresh is claimed.
+
+## Encoder boundaries and initializer allocation
+
+From `8e216110a`, retained compiler options stay unchanged while two encoder
+source refinements restore reference structure:
+
+| Boundary | Before | Retained | Reference |
+| --- | --- | --- | --- |
+| Encoder table block | subset then coset | coset then subset, 320 exact bytes | coset then subset |
+| Encoder process | 503 bytes, SIZE263 | 458 bytes, SIZE218 | 240 bytes |
+
+The definition-order/unit cross produces two raw-identical compensation pairs.
+The selected definition swap restores the exact contiguous original data block,
+without uniquely recovering declaration order or a compiler option. The old
+declaration-order source/mutation note is corrected. A second four-cell cross
+combines that layout with the previously tested case-result/common-tail form.
+Original and selected unnamed-mode paths perform no trellis reads; baseline
+paths perform two. Six original and twenty-four candidate selector paths plus
+an altered native branch control validate that bounded detector. No junk-value
+runtime comparison or public reachability claim is made.
+
+The combined process still inlines `inverseMap` and differs in valid-case
+publication bytes. The duplicate state assignment is idempotent on valid
+reset-built histories with distinct nonvolatile arrays. These compiler gaps
+do not justify retaining the independently wrong default table loads. All
+seven neighbours, six exact names, imports and exports survive. The parent
+production control raw-matches the combined selected object. Both reanchored
+process mutants fail under Gentoo; the equivalent index full object remains
+raw-identical. All forty suite mutation anchors and 10042 global anchors remain.
+
+The new ordered-store observer pins builder bodies and symbol-derived linked
+addresses in an existing static Gentoo fixture. Fourteen calls and 5376 store
+events match original order, indices and values, including four unnamed
+selectors with no writes. Three corrupted traces fail. The 1456-versus-1558
+builder remains inexact, but no source discrepancy was established. Fixture
+comments now report 64/256/1024 written entries per array, separately from
+their 244/504/1024 extents.
+
+The initializer observer corrects a previous inference from dump position:
+local allocation, not the global pass, chooses owner 83's EDX home. It
+overlaps EAX owner 82, has equal register costs and takes the first eligible
+home. Memset size/zero stay memory constants until peephole2, then reverse
+renaming selects their final registers. Nine local choices, twenty-six rename
+decisions, 100 TU scratch searches and twenty-three target searches are
+audited. Actual absent-target and wrong-owner controls fire; complete objects
+stay raw-identical. No source change is inferred from that compiler trace.
+
+The integrated source passes `make phase J=4`: 392 period fixtures, zero
+failures and all structural checks. The focused fixture passes again after
+its comment correction. The complete census remains 1101/1852 EXACT and
+126467/720125 exact original function bytes, with no exact name gained or
+lost. Only the encoder object changes among 300 canonical objects; all 300
+runtime objects raw-match canonical builds. The ratchet floor and reviewed
+PreFilter body are unchanged. Current controls use archived
+`build/allocation293-baseline`; older production-format controls apply to
+their frozen sources. The [Playbook](refinement.md#retain-native-table-layout-and-a-witnessed-case-boundary)
+records the adoption boundary and closed domains.
+
+Final strict partial/raw comparison still reports DIFFERENT (exit 1), including
+92 reference versus 99 candidate sections and 2836 versus 2840 NOBITS bytes.
+No whole-object completion, modern-portability or mutation-snapshot refresh
+is claimed. Strict documentation build/audit passes: 541 Markdown targets,
+300 module links, 972 HTML targets/fragments and both detector controls;
+eleven doc-audit unit tests and all 13067 finding references pass. The parent
+independently replays both source crosses, combined production/mutation
+controls, builder store observation and initializer allocation observation.
