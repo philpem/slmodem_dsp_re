@@ -6424,3 +6424,7 @@ The next bounded priorities are:
 4. Keep the Resampler comparison-count domain closed without a contradictory
    operand/path. Apply its stack-conversion lesson to other unaligned floating
    comparisons before labelling them missing predicates.
+
+The next campaign follows the
+[Ghidra-assisted fidelity investigation](ghidra-assisted.md), including input
+provenance, calibration controls and a complete discrepancy ledger.
