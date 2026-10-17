@@ -1724,16 +1724,21 @@ preinitdigital(void *objp)
 	sysdep_memset(rx->trellis, 0, sizeof(rx->trellis));
 	sysdep_memset(rx->state, 0, sizeof(rx->state));
 
-	obj->scrambler.w[0] = 0;
-	obj->scrambler.w[1] = 0;
-	obj->scrambler.w[2] = 0;
-	obj->scrambler.w[3] = 0;
-	obj->scrambler.nbits = 0x20;
+	{
+		struct v34_scrambler *s = &obj->scrambler;
+		struct v34_descrambler *r = &obj->descrambler;
 
-	obj->descrambler.w[0] = 0;
-	obj->descrambler.w[1] = 0;
-	obj->descrambler.w[2] = 0;
-	obj->descrambler.count = 0;
+		s->w[0] = 0;
+		s->nbits = 0x20;
+		s->w[3] = 0;
+		s->w[2] = 0;
+		s->w[1] = 0;
+
+		r->count = 0;
+		r->w[0] = 0;
+		r->w[2] = 0;
+		r->w[1] = 0;
+	}
 
 	rx->state_idx = 0;
 	obj->data_enable = 0;
@@ -1747,13 +1752,14 @@ preinitdigital(void *objp)
 	 * the second use that makes the first one legible.  Finding F177.
 	 */
 	{
-		struct v34_shell *tx = (struct v34_shell *)((char *)obj + V34_SHELL_TX);
+		v34_scramble_fn *tx_scramble =
+			&((struct v34_shell *)((char *)obj + V34_SHELL_TX))->scramble;
 
 		if (obj->role == 0x65) {
-			tx->scramble = scrambleGPC;
+			*tx_scramble = scrambleGPC;
 			rx->scramble = (v34_scramble_fn)descrambleGPA;
 		} else {
-			tx->scramble = scrambleGPA;
+			*tx_scramble = scrambleGPA;
 			rx->scramble = (v34_scramble_fn)descrambleGPC;
 		}
 	}
