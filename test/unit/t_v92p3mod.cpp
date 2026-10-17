@@ -59,10 +59,12 @@
 #include <string.h>
 
 #include "harness.h"
+#include "transcript_evidence.h"
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase3Modulator.h"
 
 extern "C" {
+void ref_edprintf(const char *fmt, ...);
 
 /*
  * The return type is not mangled and the header derives it as `int` from the
@@ -659,7 +661,7 @@ static const int par_pairs[][2] = {
 	{    -13,       0 },	/* 0 signed (floored), huge unsigned   */
 	{   8148,       0 },	/* exactly 8160, not floored           */
 	{   8136,       0 },	/* 8148, floored                       */
-	{   8149,       0 },	/* 8172, kept                          */
+	{   8149,       0 },	/* 8160, same quotient                          */
 	{     -6,      -6 },	/* 0, floored; both readings agree     */
 	{      1,       2 },	/* 12, floored                         */
 	{ -20000,    1000 },	/* negative again, larger magnitude    */
@@ -1398,6 +1400,88 @@ run_leaves(void)
 	return diff_end();
 }
 
+/* Public constructor/reset component histories with positive durations. The
+ * sums straddle both the 8160 floor and the next 12-symbol quotient quantum.
+ * Capture only reset: constructor diagnostics are outside this observation. */
+static int
+run_reset_transcript_paths(void)
+{
+	static const int slow[] = { 4147, 4148, 4159, 4160 };
+	static const unsigned expected[] = { 8160, 8160, 8160, 8172 };
+	int trial = 0, negative_seen = 0;
+
+	diff_begin("V92 reset constructor-backed floor/quotient transcripts");
+	for (int level = 0; level <= 2; level++) {
+		for (int pi = 0; pi < 4; pi++) {
+			set_level(0);
+			seed(trial, 0);
+			par.o.V92_ECHO_FAST_UPDATE_DURATION = 4000;
+			par.o.V92_ECHO_SLOW_UPDATE_DURATION = slow[pi];
+			our_ctor(&ours.o, &par.o);
+			ref_ctor(&theirs.o, &par.o);
+			for (int repeat = 0; repeat < 2; repeat++, trial++) {
+				char message[256];
+				set_level(level);
+				/* Obtain the encoded wire form from the real reference
+				 * encoder, with the independently expected length. Both
+				 * wire channels are gated even though reset calls edprintf
+				 * unconditionally. */
+				dsplib_debug_capture_reset();
+				dsplib_debug_capture_on = 1;
+				ref_edprintf("V92Phase3Modulator: TRN1u state length set to %u\r\n",
+					expected[pi]);
+				dsplib_debug_capture_on = 0;
+				snprintf(message, sizeof message, "%s", dsplib_debug_capture_text(1));
+				dsplib_debug_capture_reset();
+				dsplib_debug_capture_on = 1;
+				ours.o.reset(4000, V92P3M_STATE_RU, 0u,
+					(V92Ja *)0, (const tagV90DILdescriptor *)0, 17u);
+				ref_reset(&theirs.o, 4000, 0, 0u,
+					(void *)0, (const void *)0, 17u);
+				dsplib_debug_capture_on = 0;
+				diff_eq_int("reset full transcript (%ld)",
+					transcript_exact("V92 reset floor/quantum", trial), 1, trial);
+				for (int side = 0; side < 2; side++) {
+					diff_eq_int("one reset wire message above gate (%ld)",
+						dsplib_debug_capture_lines(side), level > 1, trial * 2 + side);
+					diff_eq_int("reset diagnostic exact argument (%ld)",
+						strcmp(dsplib_debug_capture_text(side), message)==0,
+						1, trial * 2 + side);
+				}
+				diff_eq_int("reset published expected length (%ld)",
+					ours.o.trn1uLength, expected[pi], trial);
+				ctor_compare(trial);
+				if (!negative_seen && level > 1) {
+					char *text=(char *)dsplib_debug_capture_text(0);
+					unsigned n=dsplib_debug_capture_size(0);
+					diff_eq_int("reset negative has encoded argument",n>11,1,0);
+					if (n>11) {
+						/* The final encoded digit precedes encoded CR/LF
+						 * (four bytes), the ???? suffix, and its newline. */
+						char saved=text[n-11];
+						text[n-11]^=1;
+						diff_eq_int("changed reset argument byte rejected",
+							transcript_exact("negative: reset argument",trial),0,0);
+						text[n-11]=saved;
+						diff_eq_int("restored reset argument agrees",
+							transcript_exact("restored: reset argument",trial),1,0);
+						negative_seen=1;
+					}
+				}
+				/* A real symbol-generation call provides history before
+				 * the next reset, rather than planting private state. */
+				diff_eq_int("symbol before reset agrees (%ld)",
+					ours.o.generateSymbol(),ref_generateSymbol(&theirs.o),trial);
+			}
+			set_level(0);
+			our_dtor(&ours.o);
+			ref_dtor(&theirs.o);
+		}
+	}
+	diff_eq_int("reset argument negative control executed",negative_seen,1,0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1408,6 +1492,7 @@ main(void)
 	rc |= run_reset();
 	rc |= run_diagnostics();
 	rc |= run_ctor_dtor();
+	rc |= run_reset_transcript_paths();
 	rc |= run_exits();
 	rc |= run_leaves();
 
