@@ -261,20 +261,25 @@ commits (finding 543). So:
 Task numbers are not safe across sessions either: two task stores existed here
 whose `#11`–`#22` were different work. Say which store you mean.
 
-## Decompilation is scaffolding, never evidence
+## Decompilation and binary analysis
 
-A decompiler gives you control flow and constants to read. Measured against a
-function already verified by hand, it recovered branch structure, every
-constant and structure offset, and the calling convention — and **destroyed
-arrays**, which were most of this object.
+Use decompilation, control-flow graphs, cross-references, raw/high P-code,
+function comparison and scripted analyses to navigate the binary, form
+hypotheses and prioritise experiments. Tentative names, layouts and types may
+be applied in a separate analysis project and recorded in investigation notes
+with their provenance and validation status.
 
-- Every line goes through the disassembler before it goes into `src/`.
-- **No name, comment or finding is ever written from decompiler output.** The
-  record is the deliverable, and a decompiler guess recorded as a derivation
-  corrupts it.
-- The differential test remains the only thing that decides — which is also
-  why "the decompilation might not match the assembly" is not a risk: it never
-  ships and is never trusted, so a mismatch is just a failing test.
+Verify input hashes, section/relocation mappings, calling conventions and
+function boundaries. Keep original metadata separate from inferred annotations.
+Raw binary observations can support findings after independent verification;
+decompiler-inferred expressions and types require corroboration in instructions
+and valid differential histories before becoming reconstruction facts.
+
+Calibrate automated analyses against known positives and negatives, report
+coverage and unsupported cases, and check floating-point lifting explicitly.
+Similarity and equal decompiled output do not prove equivalence. Adopted source
+changes still require disassembly evidence, full-TU review and the deciding
+compiler's differential gate. Byte comparison remains the identity authority.
 
 ## Traps that cost this project real time
 
