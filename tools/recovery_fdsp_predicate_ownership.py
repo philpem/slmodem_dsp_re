@@ -6,6 +6,7 @@ function. This domain asks the narrower question: which original operations
 can be recovered without changing other bodies or inventing a runtime defect?
 """
 import json
+import subprocess
 from pathlib import Path
 import playbook_small_patterns as driver
 from recovery_fax_debug_audit import Object
@@ -33,7 +34,10 @@ def variants(path, source):
     fn = fn.replace('\n\t\tpeak = peak * 0.5f;', '\n\t\t}\n\t\tpeak = peak * 0.5f;')
     result['captured-quiet-history-owner'] = source[:start] + fn + source[end:]
     assert len(set(result.values())) == 3
-    result['working-source'] = (driver.ROOT/path).read_text()
+    # Freeze the accepted first-stage source; later nested-guard recovery has
+    # its own replay and must not silently change this historical control.
+    result['working-source'] = subprocess.check_output(
+        ['git', 'show', '5d720ce7f:'+path], cwd=driver.ROOT, text=True)
     return result
 
 

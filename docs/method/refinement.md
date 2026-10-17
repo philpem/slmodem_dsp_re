@@ -6245,3 +6245,182 @@ The next bounded reviews, in order, are:
    V34's surviving bodies, diagnostics and data. The weak helpers, runtime
    selectors, DIL finite-domain negatives and explained phase-4 comparison
    remain closed unless new contradictory evidence appears.
+
+### Recover predicate ownership before fitting residual instructions
+
+The fourteenth continuation resolves the preceding silence, resampler,
+EchoCanceler and V34 probe priorities on the same PR branch.
+
+`silence_progress` now accumulates through its energy member and reads that
+member after the diagnostic call, matching the original's reload. The path
+without diagnostics retains the published float in x87. Both original indexed
+threshold comparisons use the same writable table row; no missing threshold
+or mistyped field was found. The sample-count comparison uses the native
+integer against a double literal, restoring the original early constant load
+and `fcompp`. Ten complete-TU controls retain all four neighbouring bodies,
+data, bindings and imports; all 16 threshold bytes match the reference. The
+target grows from 556 to 588 bytes toward the original 623, reducing its size
+gap from 67 to 35. It remains non-exact; the TU retains three exact names of
+five.
+
+Forty-eight constructor-created silence histories cover adjacent finite
+amplitudes around all three active thresholds, four debug levels, and whole
+versus 799+1 sample calls. They compare state, output and transcripts. One
+upper amplitude is loud in a whole call but quiet across the split: publishing
+the running sum narrows it, and the completed mean equals the threshold. An
+initial fixture expectation ignored this boundary and was corrected from the
+publication arithmetic; reconstruction source was not changed to satisfy it.
+The three focused period fixtures pass 982173 checks. No ordinary logging
+callback mutation is claimed.
+
+The remaining silence differences have distinct compiler causes. Its combined
+level-range guard is already present in `.01.rtl`, before RTL combine. The
+four push/pop saves first appear in `.27.flow2`, whereas the original uses
+stack-offset moves. A read of the locally archived upstream GCC 3.4.2 source
+finds the fast-prologue choice uses an estimated instruction-frequency cost,
+not emitted byte size: four saved registers give a threshold of 60. Frame
+layout can cache this choice during reload. This source inspection has not
+replayed Gentoo patches or measured the actual cached cost; the discriminating
+next test is an instrumented Gentoo `cc1` trace of frame layout and
+`expensive_function_p`, rather than padding source to cross a guessed size
+threshold.
+
+The first integrated phase run passes all 392 differential fixtures but rejects
+six stale silence mutation anchors. Updating the anchors preserves their
+mutations; the `<=` sample-count mutation is correctly labelled one sample
+late. A period-compiler replay catches all 36 registered mutations after
+adding the newly covered first-threshold downward ULP. The new split history
+catches that mutation through detector state, not a diagnostic message. The
+other two previously omitted opposite-direction ULP mutations still survive
+this fixture. Earlier claims that the downward threshold had no reachable
+preimage are superseded by the measured 799+1 history.
+
+EchoCanceler now owns the history-scan pointer once, computes the quiet-sample
+predicate once and reuses it for adaptation, and counts quiet samples with an
+unsigned counter. These operations are visible in the original. Four complete
+TU cells, including the final working source, preserve the five other bodies,
+allocated data, bindings and resolved relocation consumers. The first candidate reaches
+the original 359-byte size from 363, with 131 bytes still differing after
+relocation handling. Two of six original functions remain exact. The focused
+period fixture passes 11 groups and 45905 checks; its runtime object is raw-identical to the accepted
+control. This is supported partial graph recovery, without a demonstrated
+runtime defect.
+
+The original's explicit `TEST`/`SETNE` truth conversion was still absent from
+that first EchoCanceler candidate. The source emits it in initial RTL. `06.cse` first reuses the count-normalised
+value in the adaptation condition; `19.life` marks the original predicate
+dead at its truth conversion, and `20.combine` folds that conversion back to
+the comparison result. Other remaining
+differences include the eight-byte versus twelve-byte local stack allocation,
+operand scheduling and adaptation predicate lowering. A same-size result does
+not establish that only register allocation remains. Earlier controls declined
+this source boundary because it did not yield another exact function; the
+current acceptance rests on independently witnessed operations and unchanged
+neighbours, not size alone.
+
+A subsequent single control expresses the original sequential `mu` and `low`
+guards as nested conditionals. Initial RTL now has separate branches instead
+of an integer AND, the predicate remains live after counting, and the original
+truth conversion survives combine. Only EchoCanceler changes in the full-TU
+control; the focused period fixture again passes 45905 checks and its runtime
+object raw-matches the accepted candidate. Differing bytes fall from 131 to
+55 at the original 359-byte size, with no exact-name gain or loss. The next
+specific discrepancy is the invariant `e * mu` product: the original computes
+it after the empty-tap guard, while the retained code computes it before.
+Trace that boundary before proposing another source change.
+
+### Identify comparison cloning in the compiler dumps
+
+Resampler's original comparison at `+942` belongs to the cold path with no
+new input credit; `+734` consumes the extended subtract-loop residual after
+its double publication. The retained shared comparison also consumes the
+extended value. Four complete-TU controls cross countdown and phase-loop
+boundaries, preserving 16 of 25 exact names, all 24 neighbouring bodies,
+data, bindings and positioned relocation consumers.
+
+Each control has three comparisons through `33.sched2`. Three variants gain
+a fourth at `34.stack`, where GCC converts the x87 stack representation; the
+baseline keeps three. Final disassembly agrees. This demonstrates how an
+extra static comparison can arise without another source predicate or a
+narrowing difference. No source variant is adopted from this domain. The
+focused fixture passes 16 groups and 69521 checks. GCC 3.4.2 accepts `-da`
+here but rejects `-fdump-tree-all`; rejected runs are archived as invalid,
+not interpreted as compiler evidence.
+
+### Remove the final identified production fixture probe
+
+`t_v34hstbl2` now calls complete `v34handshak` on both sides. Its existing
+controlled dispatch state already selected the desired TX block; a production
+wrapper was unnecessary once the reconstruction was complete.
+
+Three whole-owner controls remove `v34handshak_txblock` and preserve all 53
+surviving emitted bodies, positioned calls, diagnostics, data and jump tables.
+Ten raw bodies change only because 54 local call-displacement fields rebase.
+The removal saves 64 text bytes, including one alignment byte, and 100 raw ELF
+bytes. Five audit controls exercise changed data, jump targets, local calls,
+diagnostics and the unchanged case. Fifteen focused period fixtures pass
+158111 checks. The production census drops to eight extra external definitions:
+six weak GenericIIR helpers and two runtime selectors. Neither category is
+authorised for deletion merely because its names are absent from the blob.
+
+### Compare persistent double state when float outputs agree
+
+GenericIIR's old block fixtures used a leading denominator of one and checked
+only float outputs. The retained block delegated every sample to the scalar
+method, whereas the original block normalises with reciprocal then multiply.
+An ordinary constructor-created history with denominator
+`1.4142135623730951`, numerator `1.0000000000014524` (exactly
+`1 + 6541 * 2^-52`), one numerator and denominator coefficient, block size
+four and unit input exposes a one-ULP difference in the stored double
+accumulator and output history. Float output agrees. The fixed regression
+fails two of four checks before recovery; no internal state is planted.
+The earlier suspicion about the final member loop index was disproved by the
+original's final overwrite and is not a reason for a source change.
+
+Writing reciprocal then multiply alone is insufficient: the period compiler's
+`20.combine` contracts it back to division. A normalisation factor initialised
+to one, conditionally set to the reciprocal, and then multiplied preserves
+the original operation. The block now carries its own witnessed processing
+loop. Inline compaction also recovers the absence of helper calls in both
+original scalar and block bodies. Thirteen complete-TU controls cover 234
+emitted-body verdicts, preserving all 16 other bodies and nine exact original
+names of twelve, together with data, bindings and positioned relocations.
+The scalar size moves from 483 to 450 toward the original 398; the block moves
+from 96 to 548 against the original 584. These are partial graph recoveries
+plus a demonstrated numerical-state fix, not exact functions.
+
+The regression's original stored value is `0x3fe6a09e667f5fef`, compared with
+`0x3fe6a09e667f5fee` before recovery. The accepted source reproduces the former.
+The three focused fixtures pass 19 groups and 337374 checks, including
+normalised object state and both histories. This is why output-only tests
+cannot establish recurrence fidelity when double state feeds later samples.
+
+
+The final canonical comparison retains exactly the same 1101 exact names of
+1852, covering 125983 of 720125 original function bytes. Four of 300 objects
+change from `239b234c0`; each raw-matches its independently audited control,
+and the other 296 remain identical. All 300 runtime source objects raw-match
+the canonical comparison objects. All 724 matched initialised objects agree;
+all 763 reference storage records match, with four additional candidate
+records. BSS remains 2840 versus 2836 bytes. Strict partial-object comparison
+remains DIFFERENT.
+
+The final `make phase J=4` passes 392 period fixtures with zero failures and
+all structural checks, including 10042 mutation anchors across 285 suites.
+The strict documentation build and audit pass. No modern-portability result
+is claimed.
+
+The next bounded priorities are:
+
+1. Trace EchoCanceler's invariant product across the empty-tap guard. Preserve
+   the recovered separate predicates and inspect the first divergent compiler
+   stage before changing source.
+2. Extend GenericIIR state/history checks across mixed scalar/block calls and
+   compaction boundaries with non-unit denominators. Then compare the remaining
+   loop/publication boundaries; matching float output alone is insufficient.
+3. Measure the actual Gentoo silence prologue cost/cache decision and frontend
+   range folding. Keep the two surviving threshold mutations visible as
+   coverage limits rather than claiming they have no reachable histories.
+4. Keep the Resampler comparison-count domain closed without a contradictory
+   operand/path. Apply its stack-conversion lesson to other unaligned floating
+   comparisons before labelling them missing predicates.
