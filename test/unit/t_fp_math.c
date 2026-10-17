@@ -17,6 +17,40 @@
 extern int ref_FP_Pow(int x);
 extern short ref_GetFP_Value(short a, short b);
 
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static short
+FP_Pow_coefficient_generate(int i)
+{
+	double fact = 1.0;
+	int k;
+
+	for (k = 2; k <= i + 1; k++)
+		fact *= k;
+
+	/* Ideal value; the stored coefficients can differ by one. */
+	return (short)(16384.0 / fact);
+}
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+extern const short Fact_FP[6];
+#define FP_POW_TERMS 7
+#define FP_POW_TABLE 6
+#define FP_POW_LAST_COEF 3
+
+static short
+fp_pow_coef(int i)
+{
+	return (i < FP_POW_TABLE) ? Fact_FP[i] : (short)FP_POW_LAST_COEF;
+}
+
+static short
+FP_Pow_coefficient(int i)
+{
+	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef(i) : 0);
+}
+
+
 int
 main(void)
 {
@@ -93,6 +127,22 @@ main(void)
 			    ref_GetFP_Value(1, (short)b), b);
 		diff_eq_int("GetFP_Value(-1, %ld)", GetFP_Value(-1, (short)b),
 			    ref_GetFP_Value(-1, (short)b), b);
+	}
+	rc |= diff_end();
+
+	/* State-free Q14 boundary: both short extrema, signs and wrapped counts.
+	 * Every divisor is nonzero; each reference loop runs at most 131072 steps.
+	 */
+	diff_begin("GetFP_Value full short edges and counter wrap");
+	{
+		static const short numerators[] = { -32768, -32767, -16384, -1, 0, 1, 16384, 32767 };
+		static const short divisors[] = { -32768, -32767, -16384, -8192, -4096, 4096, 8191, 16384, 32767 };
+		int j;
+
+		for (i = 0; i < (int)(sizeof(numerators) / sizeof(numerators[0])); i++)
+			for (j = 0; j < (int)(sizeof(divisors) / sizeof(divisors[0])); j++)
+				diff_eq_int("full short pair %ld", GetFP_Value(numerators[i], divisors[j]),
+					    ref_GetFP_Value(numerators[i], divisors[j]), i * 9 + j);
 	}
 	rc |= diff_end();
 

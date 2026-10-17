@@ -40,34 +40,12 @@
  */
 int RcFixed_Check_Combination(int in_rate, int out_rate);
 
-/**
- * @brief The upsampling factor for a mode, for tests and rate planning.
- * @param mode  A mode from RcFixed_Check_Combination().
- * @return The up factor.
- */
-int RcFixed_UpFactor(int mode);
-
-/**
- * @brief The downsampling factor for a mode, for tests and rate planning.
- * @param mode  A mode from RcFixed_Check_Combination().
- * @return The down factor.
- */
-int RcFixed_DownFactor(int mode);
-
 /*
  * History depth.  The original allocates a flat 200-sample int16 window and
  * compacts it when the write position reaches the end, rather than using a
  * circular buffer -- see rc_resample() in src/core/FixedRC.c.
  */
 #define RCFIXED_HISTORY 200
-
-/* One polyphase coefficient bank: `up` branches of `taps` int16 Q14. */
-struct rc_bank {
-	const short *coeff;
-	int taps;
-};
-
-extern const struct rc_bank rc_banks[RCFIXED_NMODES];
 
 /*
  * Converter state, 420 bytes -- the size the original hands to malloc,
@@ -181,14 +159,5 @@ void RcFixed_Reset(struct rc *h);
  */
 void RcFixed_Resample(struct rc *h, const short *in, int in_count,
 		      short *out, int *out_count);
-
-/**
- * @brief Test accessor: the converter's live state, for field-by-field
- * comparison.
- * @param h  The converter.
- * @return Internal state, `struct rc_state` for modes 2..19; cast to
- *         `struct rc_kind1` for modes 0/1.
- */
-struct rc_state *RcFixed_State(struct rc *h);
 
 #endif /* DSPLIB_FIXEDRC_H */

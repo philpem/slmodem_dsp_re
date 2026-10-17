@@ -603,12 +603,7 @@ V90Equalizer::~V90Equalizer()
 	delete[] dfeWindow;
 	delete[] meanErrorEnergy;
 
-	/*
-	 * `block_b8` and `block_b4` are `void *` -- a delete-expression on
-	 * `void *` is ill-formed, so those two keep the explicit free below.
-	 * Neither is the last free, so neither is a site the object says
-	 * anything about.
-	 */
+	/* Both fixed-point buffers retain their measured allocation/free path. */
 	if (mmxArraysPresent != 0) {
 		if (block_b8 != 0)
 			sysdep_free(block_b8);
@@ -1822,7 +1817,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 	 * the mode test, so it is live from the first symbol.
 	 */
 	stateCount = 0;
-	cur = (short *)block_b4 + 1;
+	cur = block_b4 + 1;
 
 	if (mmxMode) {
 		const float *s = in;
@@ -1841,13 +1836,13 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			i--;
 		}
 		if (holdoverPending) {
-			((short *)block_b4)[0] = (short)holdoverSample;
+			block_b4[0] = (short)holdoverSample;
 			holdoverPending = 0;
-			cur = (short *)block_b4;
+			cur = block_b4;
 			n++;
 		} else {
-			((short *)block_b4)[0] = 0;
-			cur = (short *)block_b4 + 1;
+			block_b4[0] = 0;
+			cur = block_b4 + 1;
 		}
 	} else if (holdoverPending) {
 		/* `cmp $1,%ebx; sbbl $-1,n` -- the borrow idiom for `n++`. */
@@ -1961,17 +1956,17 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					 */
 					unsigned int i;
 					unsigned int left = n - 2 * j;
-					short *b8 = (short *)block_b8;
+					short *b8 = block_b8;
 
 					leSum = (short)y;
 					softInt = (short)soft;
 					dfeSum = (int)d;
-					cur = (short *)block_b4;
+					cur = block_b4;
 					while (left != 0) {
 						*cur++ = (short)*in++;
 						left--;
 					}
-					cur = (short *)block_b4;
+					cur = block_b4;
 					for (i = 0; i < j; i++)
 						b8[i] = (short)outFloat[i];
 				}
@@ -2010,17 +2005,17 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 						 */
 						unsigned int i;
 						unsigned int left = n - 2 * j;
-						short *b8 = (short *)block_b8;
+						short *b8 = block_b8;
 
 						leSum = (short)y;
 						softInt = (short)soft;
 						dfeSum = (int)d;
-						cur = (short *)block_b4;
+						cur = block_b4;
 						while (left != 0) {
 							*cur++ = (short)*in++;
 							left--;
 						}
-						cur = (short *)block_b4;
+						cur = block_b4;
 						for (i = 0; i < j; i++)
 							b8[i] = (short)outFloat[i];
 					}
@@ -2088,13 +2083,12 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					 * arm consumed without moving it.
 					 */
 					unsigned int i;
-					const short *b8 = (const short *)
-					    block_b8;
+					const short *b8 = block_b8;
 
 					y = (float)leSum;
 					soft = (float)(short)softInt;
 					d = (float)dfeSum;
-					if (((short *)block_b4)[0] != 0)
+					if (block_b4[0] != 0)
 						in = in + 2 * j + 1;
 					else
 						in = in + 2 * j + 2;
@@ -2110,13 +2104,12 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				if (enterFPE()) {
 					/* RECONVERT-E, 0x39eda. */
 					unsigned int i;
-					const short *b8 = (const short *)
-					    block_b8;
+					const short *b8 = block_b8;
 
 					y = (float)leSum;
 					soft = (float)(short)softInt;
 					d = (float)dfeSum;
-					if (((short *)block_b4)[0] != 0)
+					if (block_b4[0] != 0)
 						in = in + 2 * j + 1;
 					else
 						in = in + 2 * j + 2;
@@ -2183,17 +2176,17 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 						 */
 						unsigned int i;
 						unsigned int left = n - 2 * j;
-						short *b8 = (short *)block_b8;
+						short *b8 = block_b8;
 
 						leSum = (short)y;
 						softInt = (short)soft;
 						dfeSum = (short)d;
-						cur = (short *)block_b4;
+						cur = block_b4;
 						while (left != 0) {
 							*cur++ = (short)*in++;
 							left--;
 						}
-						cur = (short *)block_b4;
+						cur = block_b4;
 						for (i = 0; i < j; i++)
 							b8[i] = (short)outFloat[i];
 					}
@@ -2528,7 +2521,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * something the object does not do.
 			 */
 			blockErrorEnergySum += (unsigned int)(e * e);
-			((short *)block_b8)[j] = (short)softInt;
+			block_b8[j] = (short)softInt;
 		} else {
 			/* --------------------------- 0x394e1, floating */
 			float fdec;
@@ -2645,7 +2638,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 	/* ------------------------------------------- 0x38ea7, the epilogue */
 	if (mmxMode)
 		for (j = 0; j < nOut; j++)
-			outFloat[j] = (float)((short *)block_b8)[j];
+			outFloat[j] = (float)block_b8[j];
 
 	blockSampleCount += nOut;
 	if (blockSampleCount >= (unsigned int)errorEnergyMeanBlockLen) {
@@ -2961,8 +2954,8 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 	}
 
 	if (mmxArraysPresent != 0) {
-		block_b8 = sysdep_malloc(0x200);
-		block_b4 = sysdep_malloc(0x400);
+		block_b8 = (short *)sysdep_malloc(0x200);
+		block_b4 = (short *)sysdep_malloc(0x400);
 
 		linearEquMmxCoefs = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));

@@ -52,6 +52,7 @@
 #include "dsplib/detector.h"
 #include "dsplib/fdspkrnl.h"
 #include "dsplib/fixedrc.h"
+#include "fixedrc_observe.h"
 #include "dsplib/fifo8.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/silence.h"

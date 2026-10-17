@@ -114,7 +114,7 @@ The Gentoo compiler image remains separate from these host tools.
 |---|---|
 | `tools/tumap.py` | recover the 281-TU map from `STT_FILE` symbols |
 | `tools/rcfilter.py` | characterise the 18 resampler filter banks |
-| `tools/gen_rc_coeffs.py` | emit `src/core/rc_coeffs.c` from the blob |
+| `tools/gen_rc_coeffs.py` | emit a self-contained offline `build/rc_coeffs.c` from the blob |
 | `tools/tuattrib.py` | attribute `.text` functions to their translation unit |
 | `tools/symmap.py` | emit the `objcopy --redefine-syms` list for the harness |
 | `tools/tabdump.py` | extract a named coefficient table from the blob as C |

@@ -89,17 +89,7 @@ static int fixedRc_DownFact[RCFIXED_NMODES + 1] = {
 	0,
 };
 
-int
-RcFixed_UpFactor(int mode)
-{
-	return (mode >= 0 && mode <= RCFIXED_NMODES) ? fixedRc_UpFact[mode] : 0;
-}
 
-int
-RcFixed_DownFactor(int mode)
-{
-	return (mode >= 0 && mode <= RCFIXED_NMODES) ? fixedRc_DownFact[mode] : 0;
-}
 
 /*
  * Greatest common divisor, by Euclid.
@@ -182,11 +172,6 @@ struct rc {
 	struct rc_state *state; /* +0x04 */
 };
 
-struct rc_state *
-RcFixed_State(struct rc *h)
-{
-	return h ? h->state : NULL;
-}
 
 /*
  * Set the running state to its initial condition.
@@ -1131,29 +1116,4 @@ static const short rc80to72filter[288] = {
 	16, -36, 61, -82, 82, -40, -62, 237, -487, 807,
 	-1214, 1950, 6950, 311, -629, 622, -501, 341, -188, 69,
 	5, -39, 44, -34, 20, -10, 3, 0,
-};
-
-/* mode -> bank.  Modes 0 and 1 use a different state layout and are
- * not part of this table; RcFixed_Create rejects them here. */
-const struct rc_bank rc_banks[RCFIXED_NMODES] = {
-	{ 0, 0 },	/* mode 0 - separate state layout */
-	{ 0, 0 },	/* mode 1 - separate state layout */
-	{ rc80to96filter, 36 },	/* mode 2 */
-	{ rc96to80filter, 32 },	/* mode 3 */
-	{ rc80to96filter, 36 },	/* mode 4 */
-	{ rc480to80filter, 68 },	/* mode 5 */
-	{ rc96to80filter, 32 },	/* mode 6 */
-	{ rc480to96filter, 68 },	/* mode 7 */
-	{ rc96to384filter, 46 },	/* mode 8 */
-	{ rc384to96filter, 68 },	/* mode 9 */
-	{ rc80to384filter, 40 },	/* mode 10 */
-	{ rc384to80filter, 68 },	/* mode 11 */
-	{ rc96to120filter, 28 },	/* mode 12 */
-	{ rc120to96filter, 58 },	/* mode 13 */
-	{ rc80to120filter, 42 },	/* mode 14 */
-	{ rc120to80filter, 48 },	/* mode 15 */
-	{ rc96to320filter, 38 },	/* mode 16 */
-	{ rc320to96filter, 68 },	/* mode 17 */
-	{ rc72to80filter, 38 },	/* mode 18 */
-	{ rc80to72filter, 32 },	/* mode 19 */
 };

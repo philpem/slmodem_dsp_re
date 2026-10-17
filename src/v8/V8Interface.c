@@ -674,7 +674,7 @@ V8GetMessage(struct v8 *v, unsigned char *out, int *count)
 	}
 
 	for (i = 0; i < n; i++)
-		out[i] = charFlip((unsigned char)(seq->word[i] >> 1));
+		out[i] = charFlip((unsigned char)((unsigned short)seq->word[i] >> 1));
 
 	*count = n;
 	return rc;

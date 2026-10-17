@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "transcript_evidence.h"
 #include "dsplib/debug.h"
 #include "dsplib/dialer.h"
 #include "dsplib/pulse.h"
@@ -106,6 +107,19 @@ static unsigned opt_level;
 
 /* Printed lines the reference produced over the whole level-2+ sweep. */
 static long transcript_lines;
+static int path_tones = -1, path_pause_samples;
+static int path_negative_control;
+
+static int occurrences(const char *text, const char *needle)
+{
+	int count = 0;
+	while ((text = strstr(text, needle)) != 0) {
+		count++;
+		text += strlen(needle);
+	}
+	return count;
+}
+
 
 static void
 params(int pattern, int tone, int abcd, int pause, int cap)
@@ -177,6 +191,10 @@ drive(struct side *s, int ref, const char *dialstr, int pattern, int tone,
 
 		if (code == DIALER_DONE || code == DIALER_BAD_STATE)
 			break;
+		/* The bounded path histories stop at the semicolon's public
+		 * return-to-command-mode event; continuing requires host action. */
+		if (path_tones >= 0 && code == DIALER_COMMAND)
+			break;
 		/*
 		 * The event codes need the caller to do something before the
 		 * dialler can continue; here nothing does, so the run stops.
@@ -207,8 +225,7 @@ run(const char *label, const char *dialstr, int pattern, int tone, int abcd,
 
 	if (opt_level) {
 		diff_eq_int("transcript matches",
-			    strcmp(dsplib_debug_capture_text(0),
-				   dsplib_debug_capture_text(1)) == 0, 1,
+			    transcript_exact(label, (long)opt_level), 1,
 			    (long)opt_level);
 		if (getenv("DBGDIFF")
 		    && strcmp(dsplib_debug_capture_text(0),
@@ -237,6 +254,40 @@ run(const char *label, const char *dialstr, int pattern, int tone, int abcd,
 			diff_eq_int("reference silent below the threshold",
 				    (int)dsplib_debug_capture_lines(1), 0,
 				    (long)opt_level);
+	}
+
+	if (path_tones >= 0) {
+		char pause_text[128];
+		int side;
+		snprintf(pause_text, sizeof pause_text,
+			 "Consequitive-Commas Dialing; Number of samples is %d.\n",
+			 path_pause_samples);
+		for (side = 0; side < 2; side++) {
+			const char *text = dsplib_debug_capture_text(side);
+			diff_eq_int("path DTMF setup count (%ld)",
+				occurrences(text, "Samples left = 560\n"),
+				opt_level > 1 ? path_tones : 0, side);
+			diff_eq_int("path comma setup count (%ld)",
+				occurrences(text, pause_text),
+				opt_level > 1 && path_pause_samples != 0, side);
+		}
+		if (!path_negative_control && opt_level > 1) {
+			/* Actual captured-byte substitution, restored immediately.
+			 * This checks the detector without weakening a source verdict. */
+			char *text = (char *)dsplib_debug_capture_text(0);
+			char *digit = strstr(text, "Samples left = 560");
+			diff_eq_int("negative control has a DTMF argument", digit != 0, 1, 0);
+			if (digit) {
+				digit += strlen("Samples left = ");
+				digit[0] = '6';
+				diff_eq_int("changed diagnostic argument is rejected",
+					transcript_exact("negative: DTMF argument", 0), 0, 0);
+				digit[0] = '5';
+				diff_eq_int("restored diagnostic argument agrees",
+					transcript_exact("restored: DTMF argument", 0), 1, 0);
+				path_negative_control = 1;
+			}
+		}
 	}
 
 	diff_eq_int("same number of calls", side_b.calls, side_a.calls, 0);
@@ -516,6 +567,26 @@ main(void)
 			  3, 0, 0, 2, 10);
 		rc |= run("dbg: pulse with a pause", "P5,5", 1, 0, 0, 2, 10);
 	}
+	/* Real DialerCreate -> progress histories cover setup at entry, after
+	 * an interdigit gap, and immediately after the final digit. Both sides
+	 * use the same country parameters: 70 ms DTMF, one second per comma. */
+	for (opt_level = 1; opt_level <= 3; opt_level++) {
+		path_pause_samples = 0;
+		path_tones = 1;
+		rc |= run("paths: initial tone", "T5", 1, 1, 0, 1, 2);
+		path_tones = 2;
+		rc |= run("paths: tone after gap", "T55", 1, 1, 0, 1, 2);
+		path_tones = 1;
+		path_pause_samples = 16000;
+		rc |= run("paths: initial comma capped", "T,,,5", 1, 1, 0, 1, 2);
+		path_tones = 2;
+		rc |= run("paths: comma after gap capped", "T5,,,5", 1, 1, 0, 1, 2);
+		path_tones = 1;
+		rc |= run("paths: comma after final digit capped", "T5,,,;", 1, 1, 0, 1, 2);
+		path_pause_samples = 24000;
+		rc |= run("paths: initial comma uncapped", "T,,,5", 1, 1, 0, 1, 5);
+	}
+	path_tones = -1;
 	opt_level = 0;
 
 	/*

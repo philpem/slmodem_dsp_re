@@ -738,14 +738,21 @@ public:
 	int mmxMode;			/* +0xb0 */
 
 	/*
-	 * +0xb4, +0xb8  Two fixed-size blocks the constructor takes only when
-	 * `mmxArraysPresent` came out set, 0x400 and 0x200 bytes, allocated in
-	 * that order (+0xb8 first).  The destructor frees both under the same
-	 * flag.  Neither has a size that depends on any length in the object,
-	 * and nothing this batch writes reads either of them.
+	 * +0xb4, +0xb8  Owned fixed-point input and soft-output buffers,
+	 * allocated only when mmxArraysPresent is set, +0xb8 first.
+	 * The constructor requests 0x400 and 0x200 bytes respectively;
+	 * the destructor frees both under the same flag.
+	 *
+	 * process establishes the element types independently of allocation:
+	 * +0xb4 feeds the signed-short input cursor (0x38db1), populated by
+	 * fistps stores at 0x38e20 and 0x38e6f. Element zero carries a held
+	 * input sample; current inputs start at element one. +0xb8 receives
+	 * signed-short soft outputs (0x39487), then feeds the filds loads
+	 * at 0x38ee0 and the reconversion arms (0x39e64, 0x39f45).
+	 * Keep offset names: these are inferred roles, not recovered names.
 	 */
-	void *block_b4;			/* +0xb4  0x400 bytes */
-	void *block_b8;			/* +0xb8  0x200 bytes */
+	short *block_b4;			/* +0xb4  512 samples */
+	short *block_b8;			/* +0xb8  256 samples */
 
 	/*
 	 * The four slots the linear equaliser's fixed-point step size is built

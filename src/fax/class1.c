@@ -537,8 +537,10 @@ static const short FAX_HP_COEFF[10] = {
  * even though the two agree for every value `FAX_create` (voice.c) actually
  * passes.
  *
- * ALWAYS RETURNS `ctx` -- never NULL, even down a path this batch could not
- * trace an allocation-failure check for.
+ * The published VMI configuration pointers are checked after construction.
+ * A null field takes the shared diagnostic/NULL-return arm with no cleanup
+ * (0x933f9..0x93417). Ordinary malloc failure faults at earlier unchecked
+ * writes, so this defensive arm is not a safe allocation-failure path.
  */
 struct fax_class1 *
 fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
@@ -577,8 +579,9 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		vc->frame_size = 0;
 		vc->slot = VMI_SLOT_V21TX;
 		vc->modem_cfg = tx_cfg;
-		if (ctx->vmi_c_cfg != NULL)
-			ctx->vmi_c = FAXVMI_create(NULL, ctx->vmi_c_cfg);
+		if (ctx->vmi_c_cfg == NULL)
+			goto memory_error;
+		ctx->vmi_c = FAXVMI_create(NULL, ctx->vmi_c_cfg);
 
 		vc = sysdep_malloc(sizeof(struct faxvmi_cfg));
 		ctx->vmi_a_cfg = vc;
@@ -592,8 +595,9 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		vc->frame_size = 0x60;
 		vc->slot = VMI_SLOT_V21RX;
 		vc->modem_cfg = rx_cfg;
-		if (ctx->vmi_a_cfg != NULL)
-			ctx->vmi_a = FAXVMI_create(NULL, ctx->vmi_a_cfg);
+		if (ctx->vmi_a_cfg == NULL)
+			goto memory_error;
+		ctx->vmi_a = FAXVMI_create(NULL, ctx->vmi_a_cfg);
 
 		ctx->superframe_read_idx = 0;
 		ctx->superframe_len = 0;
@@ -690,6 +694,11 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 	ctx->ans_org = CLASS1_ANS_ORG_NORMAL;
 
 	return ctx;
+
+memory_error:
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("Internal memory allocation error!\n\n");
+	return NULL;
 }
 
 /*

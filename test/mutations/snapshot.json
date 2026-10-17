@@ -285,10 +285,11 @@
    }
   },
   "dtmf": {
-   "key": "64119ef9bcd60e5b1025483d17677b4aa451479e8ad05d599c7ee8aace7cf16d",
-   "summary": "38 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "fd8d3bb6035656ed612e72885bee89c5c19f57104dcbf24c59cc70056c644693",
+   "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Europe's block is the same length as the US's": "caught",
+    "US level cutoff rounded up by one float": "caught",
     "dtmf_progress keeps the first real digit rather than the last": "caught",
     "dtmf_progress lets the -1 blocks through": "caught",
     "dtmf_progress starts from -2 instead of -1": "caught",

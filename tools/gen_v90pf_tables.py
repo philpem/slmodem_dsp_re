@@ -143,7 +143,7 @@ def main():
     open("src/pump/v90/V90PreFilter_loops.cpp", "w").write(LOOP_TMPL % {
         "loops": "\n\n".join(
             "V90RefLoop V90PreFilter::%s[%d] = {\n%s%s\n};"
-            % (n, loops[n][0] + (1 if n == "refLoopsType2" else 0),
+            % (n, loops[n][0],
                loops[n][1],
                TYPE2_TERM if n == "refLoopsType2" else "")
             for n, _, _ in LOOPS),
@@ -151,15 +151,11 @@ def main():
 
 
 TYPE2_TERM = """
-\t/*
-\t * NOT IN THE BLOB'S SYMBOL.  refLoopsType2 is 2244 bytes, exactly 33
-\t * records, and none of them has a zero first byte -- so the terminator
-\t * the counting loops look for is the .data alignment padding that
-\t * happens to follow the symbol.  A 34th, all-zero record is added here
-\t * because our copy has no such padding to rely on; the counted length
-\t * is 33 either way, which is what the differential test asserts.
-\t */
-\t{ "", { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f }, 0, 0, 0 },"""
+\t/* The original 33 records end at natural alignment padding. The period
+\t * compiler emits 28 zero bytes before refLoopsType1; the counting loop
+\t * reads the first byte. recovery_prefilter_extent_audit.py checks this
+\t * adjacency. No synthetic terminator row is part of the symbol. */"""
+
 
 COEF_TMPL = """\
 /*

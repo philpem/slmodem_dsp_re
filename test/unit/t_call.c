@@ -29,8 +29,10 @@
 #include "dsplib/callprog.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/pulse.h"
+#include "dsplib/debug.h"
 
 extern void ref_dp_call_init(void);
+extern unsigned int ref_dsplibs_debug_level;
 
 #define MAXCALLS	120
 #define MAXSAMP		200
@@ -43,7 +45,8 @@ static long total_nonzero;
  * CALLPROG_Create's `w0` it decides which states listen to which detector.
  * 0, 1 and 3 mean one thing; everything else means the other.
  */
-static int sreg56;
+static long sreg56;
+static long sreg16 = 1;
 
 struct side {
 	struct dp_operations	*op;
@@ -138,7 +141,7 @@ params(const char *dialstr)
 	harness_param_set(GetDialToneValidationTime, 10);
 	harness_param_set(GetDialToneWaitTime, 100);
 
-	harness_sreg_set(16, 1);	/* tone dialling when no prefix */
+	harness_sreg_set(16, sreg16);	/* tone dialling when no prefix */
 	harness_sreg_set(56, sreg56);
 }
 
@@ -267,6 +270,82 @@ run(const char *label, const char *dialstr, int signal, int srate, int samples,
 	return diff_end();
 }
 
+static int
+line_occurrences(const char *text, const char *needle)
+{
+	int count = 0;
+	while ((text = strstr(text, needle)) != 0) {
+		count++;
+		text += strlen(needle);
+	}
+	return count;
+}
+
+static int
+run_sregister_boundaries(void)
+{
+	static const int prefix[] = {0, 1, 255};
+	static const int mode[] = {0, 2, 3, 255};
+	int p, m, rc = 0;
+	for (p = 0; p < 3; p++)
+	for (m = 0; m < 4; m++) {
+		char label[80];
+		sreg16 = prefix[p];
+		sreg56 = mode[m];
+		sprintf(label, "call constructor S16=%d S56=%d", prefix[p], mode[m]);
+		rc |= run(label, "5", SIG_SILENCE, 8000, 48, 3);
+	}
+	sreg16 = 1;
+	sreg56 = 0;
+	return rc;
+}
+
+/* Public registration/create/process paths, with constructor-created state.
+ * Native, converted and unsupported rates cross the unsigned debug gate.
+ * Three blocks check the first message transition and unchanged suppression. */
+static int
+run_diagnostic_boundaries(void)
+{
+	static const int rates[] = {8000, 9600, 48000, 11025};
+	static const unsigned levels[] = {0, 1, 2, ~0u};
+	int rate, level, rc = 0;
+
+	for (rate = 0; rate < 4; rate++)
+	for (level = 0; level < 4; level++) {
+		char label[80], first[80], converter[80];
+		const char *ours, *reference;
+		int transitions = 0, previous = CALLPROG_MAX_MESSAGES, n;
+		int enabled = levels[level] > 1u;
+		sreg56 = 0;
+		sprintf(label, "call diagnostic boundary rate=%d level=%u", rates[rate], levels[level]);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = ref_dsplibs_debug_level = levels[level];
+		rc |= run(label, "", SIG_SILENCE, rates[rate], 48, 3);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		ours = dsplib_debug_capture_text(0);
+		reference = dsplib_debug_capture_text(1);
+		for (n = 0; n < side_a.calls; n++) {
+			if (previous != side_a.message[n]) transitions++;
+			previous = side_a.message[n];
+		}
+		sprintf(first, "call: process: msg %d --> %d\n", CALLPROG_MAX_MESSAGES, side_a.message[0]);
+		sprintf(converter, "call: create RC: %d <-> 8000...\n", rates[rate]);
+		diff_begin("call create/run diagnostic transcripts");
+		diff_eq_int("complete captures (%ld)", dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1), 1, rate * 4 + level);
+		diff_eq_int("full transcript (%ld)", strcmp(ours, reference) == 0, 1, rate * 4 + level);
+		diff_eq_int("original create entry (%ld)", line_occurrences(reference, "call: create...\n"), enabled, rate * 4 + level);
+		diff_eq_int("original converter announcement (%ld)", line_occurrences(reference, converter), enabled && rates[rate] != 8000, rate * 4 + level);
+		diff_eq_int("original first old/new message (%ld)", line_occurrences(reference, first), enabled, rate * 4 + level);
+		diff_eq_int("original changed-only announcements (%ld)", line_occurrences(reference, "call: process: msg "), enabled ? transitions : 0, rate * 4 + level);
+		diff_eq_int("source changed-only announcements (%ld)", line_occurrences(ours, "call: process: msg "), enabled ? transitions : 0, rate * 4 + level);
+		diff_eq_int("unchanged block control (%ld)", transitions < side_a.calls, 1, rate * 4 + level);
+		rc |= diff_end();
+	}
+	return rc;
+}
+
 int
 main(void)
 {
@@ -357,5 +436,7 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= run_diagnostic_boundaries();
+	rc |= run_sregister_boundaries();
 	return rc;
 }

@@ -227,11 +227,45 @@ run_ii(const char *label, const short *coeff, int sections, int amplitude,
 	return rc;
 }
 
+
+/* These aliases stay inside one declared short array.  They exercise the
+ * public scalar component's ordinary C pointer contract, not a modem path.
+ */
+struct fpm_iir_alias_storage { short data[32]; };
+
+static int
+run_scalar_aliases(void)
+{
+	static const short inputs[] = { -32768, -1, 0, 32767 };
+	static const int offsets[] = { 0, 1, 2, 5, 9 };
+	int sections, off, sample, i, trial = 0;
+
+	diff_begin("iir scalar bounded coefficient/history aliases");
+	for (sections = 1; sections <= 3; sections++)
+		for (off = 0; off < 5; off++)
+			for (sample = 0; sample < 4; sample++) {
+				struct fpm_iir_alias_storage a, b;
+				short va, vb;
+
+				for (i = 0; i < 32; i++)
+					a.data[i] = (short)((i % 5 == 4) ? 16384 : (i * 1301 - 16000));
+				b = a;
+				va = ref_FPM_iir_filt(inputs[sample], a.data, a.data + offsets[off], (short)sections);
+				vb = FPM_iir_filt(inputs[sample], b.data, b.data + offsets[off], (short)sections);
+				diff_eq_int("alias trial %ld output", vb, va, trial);
+				diff_eq_obj("alias trial storage", struct fpm_iir_alias_storage, &b, &a, trial);
+				trial++;
+			}
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 	int i;
+
+	rc |= run_scalar_aliases();
 
 	/* The real filters, at ordinary signal levels. */
 	rc |= run("iir COEF_DC", ref_COEF_DC, 1, 8000);

@@ -18,7 +18,9 @@ It scored 33% against ground truth.  The reason is instructive and worth
 recording: the data sections have only 38/33/13 anchored TUs, so resolving a
 data address yields the enclosing *bracket*, not the TU.  `ld -r` genuinely
 discarded the per-input section boundaries - that information is gone, and no
-amount of relocation chasing brings it back.
+amount of bracket voting brings it back. This does not exclude an exact
+relocation into a uniquely identified LOCAL OBJECT: its actual FILE occurrence
+is independent evidence, rather than an enclosing data-section bracket guess.
 
 What does work
 --------------
@@ -48,6 +50,7 @@ use occurrence keys with symtab index/type/section/size metadata in JSON.
 
 Usage:
     tuattrib.py <dsplibs.o> [--verify] [--json out.json] [--md out.md]
+    tuattrib.py <dsplibs.o> --local-data-witnesses --json out.json
     tuattrib.py --self-test
 """
 
@@ -83,7 +86,7 @@ def cpp_class(demangled):
     return m.group(1) if m else None
 
 
-def build(obj):
+def build(obj, local_data=False):
     sections = elfinfo.read_sections(obj)
     syms = elfinfo.read_symbols(obj)
     text_size = next(s.size for s in sections.values() if s.name == ".text")
@@ -185,8 +188,29 @@ def build(obj):
               and s.num in key_by_num):
             truth[key_by_num[s.num]] = cur
 
-    return {"funcs": funcs, "attrib": attrib, "truth": truth,
-            "text_size": text_size, "filled": filled, "symbols": records}
+    result = {"funcs": funcs, "attrib": attrib, "truth": truth,
+              "text_size": text_size, "filled": filled, "symbols": records}
+    if local_data:
+        import local_data_ownership
+        evidence = local_data_ownership.build(obj)
+        result['local_data_ownership'] = evidence
+        result['local_data_vs_name'] = {
+            key_by_num[number]: {'name_attribution': attrib.get(key_by_num[number]),
+                                 'local_data_owner': record['owner']}
+            for number, record in evidence['records'].items()
+            if number in key_by_num and record['status'] == 'unique-LOCAL-data-owner'
+            and record['function']['bind'] in ('GLOBAL', 'WEAK')}
+        for row in result['local_data_vs_name'].values():
+            owner = row['local_data_owner']
+            occurrences = sorted((t for t in tumeta.values() if t['file'] == owner['file']), key=lambda t: t['seq'])
+            witnessed = occurrences[owner['file_occurrence']]['key']
+            row['witnessed_tu'] = witnessed
+            named = row['name_attribution']
+            row['relationship'] = ('no-name-attribution' if not named else
+                                   'agrees' if named[0] == witnessed else
+                                   'narrows-ambiguous-inference' if witnessed in named[0].split('|') else
+                                   'different-inferred-owner')
+    return result
 
 
 def main():
@@ -194,6 +218,8 @@ def main():
     ap.add_argument("obj", nargs="?")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument('--local-data-witnesses', action='store_true',
+                    help='report separate LOCAL-object relocation evidence; does not override name attribution')
     ap.add_argument("--json")
     ap.add_argument("--md")
     args = ap.parse_args()
@@ -205,7 +231,7 @@ def main():
     if not args.obj:
         ap.error("obj is required unless --self-test is given")
 
-    b = build(args.obj)
+    b = build(args.obj, local_data=args.local_data_witnesses)
     funcs, attrib, truth = b["funcs"], b["attrib"], b["truth"]
 
     conf = collections.Counter(c for _tu, c in attrib.values())
@@ -254,15 +280,22 @@ def main():
 
     tus = collections.Counter(tu for tu, c in resolved.values())
     print("distinct TUs identified: %d" % len(tus))
+    if args.local_data_witnesses:
+        evidence = b['local_data_ownership']
+        print('separate GLOBAL/WEAK LOCAL-data witnesses:', evidence['global_status_counts'])
+        print('LOCAL-data vs name inference:', dict(collections.Counter(row['relationship'] for row in b['local_data_vs_name'].values())))
+        print('name-derived attribution remains unchanged; inspect local_data_vs_name in JSON')
 
     if args.json:
         with open(args.json, "w") as f:
-            json.dump({"attrib": {k: {"tu": v[0], "how": v[1]}
+            payload = {"attrib": {k: {"tu": v[0], "how": v[1]}
                                   for k, v in attrib.items()},
                        "symbols": b["symbols"],
                        "functions": len(funcs), "local_truth": len(truth),
-                       "verified": len(checked), "agree": agree},
-                      f, indent=1, sort_keys=True)
+                       "verified": len(checked), "agree": agree}
+            if args.local_data_witnesses:
+                payload.update({key: b[key] for key in ('local_data_ownership', 'local_data_vs_name')})
+            json.dump(payload, f, indent=1, sort_keys=True)
         print("wrote %s" % args.json)
 
     if args.md:

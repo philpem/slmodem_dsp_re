@@ -19,7 +19,7 @@
  * actually uses and one of them is not what the symbol size says: the blob's
  * refLoopsType2 is exactly 33 records with no zero-named terminator inside
  * it, and the loop that counts them stops on the .data alignment padding that
- * follows.  Our copy has a 34th, all-zero record instead.  Both count 33.
+ * follows.  The period reconstruction has the same 28-byte zero padding.
  */
 
 #include <string.h>

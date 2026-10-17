@@ -371,6 +371,10 @@ int dsplib_debug_capture_on;
 static char dbgcap[2][DBGCAP_SIZE];
 static unsigned dbgcap_len[2];
 static int dbgcap_error[2];
+#define DBGCAP_CALLS 16384
+static unsigned dbgcap_call_start[2][DBGCAP_CALLS];
+static unsigned dbgcap_call_end[2][DBGCAP_CALLS];
+static unsigned dbgcap_calls[2];
 
 /*
  * Counted separately from the text, and ONLY by the two printf entry points:
@@ -384,6 +388,7 @@ void
 dsplib_debug_capture_reset(void)
 {
 	dbgcap_len[0] = dbgcap_len[1] = 0;
+	dbgcap_calls[0] = dbgcap_calls[1] = 0;
 	dbgcap_error[0] = dbgcap_error[1] = 0;
 	dbgcap_lines[0] = dbgcap_lines[1] = 0;
 	dbgcap[0][0] = dbgcap[1][0] = '\0';
@@ -409,6 +414,32 @@ unsigned dsplib_debug_capture_size(int side)
 int dsplib_debug_capture_complete(int side)
 {
 	return !dbgcap_error[side & 1];
+}
+
+/* Compare exact per-call positions, not hashes. Equal concatenated text can
+ * otherwise borrow a missing newline from its neighbouring message. */
+int dsplib_debug_capture_boundaries_equal(void)
+{
+    unsigned n = dbgcap_calls[0];
+    return dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1)
+        && n == dbgcap_calls[1]
+        && memcmp(dbgcap_call_start[0], dbgcap_call_start[1], n * sizeof(unsigned)) == 0
+        && memcmp(dbgcap_call_end[0], dbgcap_call_end[1], n * sizeof(unsigned)) == 0;
+}
+
+static void dbgcap_call(int side, unsigned start)
+{
+    unsigned n;
+    if (!dsplib_debug_capture_on)
+        return;
+    n = dbgcap_calls[side];
+    if (n == DBGCAP_CALLS) {
+        dbgcap_error[side] = 1;
+        return;
+    }
+    dbgcap_call_start[side][n] = start;
+    dbgcap_call_end[side][n] = dbgcap_len[side];
+    dbgcap_calls[side]++;
 }
 
 static void
@@ -463,11 +494,13 @@ int
 dsplibs_debug_printf(const char *fmt, ...)
 {
 	va_list ap;
+	unsigned start = dbgcap_len[0];
 
 	dbgcap_lines[0]++;
 	va_start(ap, fmt);
 	dbgcap_add(0, fmt, ap);
 	va_end(ap);
+	dbgcap_call(0, start);
 	return 0;			/* logging only, as on the ref side */
 }
 
@@ -497,11 +530,13 @@ int
 ref_dsplibs_debug_printf(const char *fmt, ...)
 {
 	va_list ap;
+	unsigned start = dbgcap_len[1];
 
 	dbgcap_lines[1]++;
 	va_start(ap, fmt);
 	dbgcap_add(1, fmt, ap);
 	va_end(ap);
+	dbgcap_call(1, start);
 	return 0;			/* harmless: logging only */
 }
 

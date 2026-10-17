@@ -1308,13 +1308,13 @@
  },
  {
   "label": "start the second-nearest distance at zero rather than at a NaN",
-  "find": "\tfloat second = nanf(\"\");",
+  "find": "\tfloat second = NAN;",
   "replace": "\tfloat second = 0.0f;"
  },
  {
   "label": "reinitialise the second-nearest distance per code and phase",
   "find": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;",
-  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = nanf(\"\");"
+  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = NAN;"
  },
  {
   "label": "take the second-nearest with an ordered compare",

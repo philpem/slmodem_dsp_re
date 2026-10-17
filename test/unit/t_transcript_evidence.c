@@ -48,12 +48,28 @@ int main(void)
 	ref_dsplibs_debug_printf("a");
 	ref_dsplibs_debug_printf("b");
 	diff_eq_int("callback count", transcript_exact("control.count", 11), 0, 11);
+	dsplib_debug_capture_reset();
+	dsplibs_debug_printf("first\n");
+	dsplibs_debug_printf("second");
+	ref_dsplibs_debug_printf("first");
+	ref_dsplibs_debug_printf("\nsecond");
+	diff_eq_int("same concatenation and count control",
+		strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, 14);
+	diff_eq_int("borrowed newline rejected",
+		transcript_exact("control.boundary", 14), 0, 14);
 	memset(huge, 'x', sizeof(huge) - 1);
 	huge[sizeof(huge) - 1] = 0;
 	pair(huge, huge);
 	diff_eq_int("equal truncation rejected", transcript_exact("control.cap", 12), 0, 12);
 	diff_eq_int("overflow marked side 0", dsplib_debug_capture_complete(0), 0, 12);
 	diff_eq_int("overflow marked side 1", dsplib_debug_capture_complete(1), 0, 12);
+	dsplib_debug_capture_reset();
+	for (i = 0; i < 16385; ++i) {
+		dsplibs_debug_printf("");
+		ref_dsplibs_debug_printf("");
+	}
+	diff_eq_int("empty calls leave text empty", dsplib_debug_capture_size(0), 0, 15);
+	diff_eq_int("event overflow rejected", transcript_exact("control.events", 15), 0, 15);
 	pair("reset", "reset");
 	diff_eq_int("reset clears overflow", transcript_exact("control.reset", 13), 1, 13);
 	dsplib_debug_capture_on = 0;

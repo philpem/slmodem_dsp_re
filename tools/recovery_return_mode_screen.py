@@ -106,6 +106,7 @@ def main():
             real_controls.append({'symbol': name, 'cell': cell, 'positive': positive,
                                   'object_sha256': sha(path), 'nominations': len(matches)})
     counts, refusals, nominations = Counter(), Counter(), []
+    call_pairs, unequal_sequences = [], []
     seen = set()
     for line in (args.objects/'tc_manifest.txt').read_text().splitlines():
         object_name, source = line.split()
@@ -124,10 +125,17 @@ def main():
             counts['unresolved_callee_sites'] += sum('target' not in s for s in sites[name])
             if not measured['sequence_equal']:
                 counts['unequal_known_call_sequences'] += 1
+                unequal_sequences.append({
+                    'symbol': name, 'object': object_name, 'source': source,
+                    'original_calls': reference_calls.get(name, []),
+                    'retained_calls': sites[name],
+                    'refusal': 'known-call target sequences differ; no ordinal pairing'})
                 continue
             counts['equal_known_call_sequences'] += 1
             for pair in measured['pairs']:
                 counts['aligned_known_calls'] += 1
+                call_pairs.append({'symbol': name, 'object': object_name,
+                                   'source': source, **pair})
                 rejected = pair['original_use']['refusals'] + pair['retained_use']['refusals']
                 if rejected:
                     counts['refused_call_pairs'] += 1
@@ -148,12 +156,16 @@ def main():
               'reference_function_count': len(sizes), 'missing_reference_names': sorted(set(sizes)-seen),
               'refusal_reasons': dict(refusals), 'real_controls': real_controls,
               'nominations': nominations,
+              'call_pairs': call_pairs,
+              'unequal_sequences': unequal_sequences,
               'limits': ['Known-call sequence equality aligns ordinals, not CFG paths or argument values.',
                          'No production branch edge is granted without an independent ownership proof.',
                          'Only first AL/AX extensions are classified; other uses/aliases/calls refuse.',
                          'Missing and indirect targets remain unproved; no source/profile causes inferred.',
                          'Screen includes exact, large, fax and V34 functions and every defining copy.',
                          'Pinned object hashes establish artifact identity, not original compilation provenance.']}
+    assert len(call_pairs) == counts['aligned_known_calls']
+    assert len(unequal_sequences) == counts['unequal_known_call_sequences']
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2)+'\n')
     print('return-mode screen:', dict(counts), '; unique shared', len(seen), '/', len(sizes),

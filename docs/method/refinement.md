@@ -4895,6 +4895,21 @@ this is a supported representation, not a new exact-function gain. Audit every
 header consumer and preserve the complete objects as controls.
 [Writer/use census and rejected V.34 leads](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-data-fields.md).
 
+A full-width declaration can also hide two independent narrow regions.
+V.32's SNR-drop counter was represented as an int accessed through low-word
+casts. The original compares and updates only the signed word at `+0x20`;
+whole-parameter copies also preserve `+0x22`. Splitting out the counter must
+therefore preserve that adjacent word, without claiming it is padding or
+assigning it a meaning. Check template bytes, field offsets and every header
+consumer. The signed comparison establishes the counter's interpretation;
+a preceding zero-extension alone would not.
+
+For owned buffers, allocation size establishes capacity, not element type.
+V.90's equaliser buffers at `+0xb4` and `+0xb8` acquire their `short *` types
+from independent signed-word writers and readers. Retyping them can remove
+casts while preserving the entire object. Keep allocation/free behaviour
+unchanged unless the original supplies separate evidence for changing it.
+
 ### Adopt a validated partial without reopening its search domain
 
 When partial reconstruction is authorised, an earlier non-exact control can
@@ -4927,3 +4942,1485 @@ existing code, with unchanged object hashes, separately from source gains.
 [SETcc](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-setcc-proof.md),
 [guard and frame](https://github.com/philpem/slmodem_dsp_re/blob/5bd9d8572359c47f111cbeb0889bbd051444c237/docs/recovery-corridor-proof.md).
 
+
+
+### Keep refused call pairs as evidence
+
+A return-use screen must retain the comparisons it refuses, not only count
+refusal reasons. Record the defining object, symbol, call ordinal, both call
+sites and both first-use traces. Retain unequal target sequences separately,
+without inventing a correspondence. The return-mode screen writes these as
+`call_pairs` and `unequal_sequences`, with their counts checked against the
+summary denominators.
+
+This ledger makes a next experiment specific: an unproved branch edge needs
+an ownership proof; an aliasing store needs a storage argument. Aggregate
+counts cannot identify either site. Equal target sequences still align only
+physical call ordinals, not control-flow paths or arguments. Repeated calls
+need independent correspondence before a difference can justify a source
+change. Saving a refusal does not resolve it or increase analysis coverage.
+
+
+### Prove fixed-frame calls and taken dispatch guards separately
+
+A fixed stack frame may contain both callee-save slots and outgoing argument
+words. Prove their disjoint extents, reject stack-pointer escape, validate
+each direct call relocation, and require restoration along every reachable
+return path. State the ABI assumption: callees return normally with balanced
+stack depth and preserved callee-save registers. This extends identity
+coverage for `V32LocLoopNextState`; it does not reconstruct new source.
+
+A taken unsigned `JBE` can guard a table dispatch beyond the default return
+arm. Require a unique taken edge into the dispatch and no fallthrough from
+the preceding block. Independently reject named, direct, relocated and table
+entries into the comparison corridor or dispatch. `V90Resampler::setBllState`
+needs one flag-preserving register-to-object store between comparison and
+branch; decode that exact operand form rather than admitting arbitrary MOVs.
+
+Exercise both proofs with rebased tables that must match, altered table
+targets that must differ, and unsafe identical pairs that must remain
+UNRESOLVED. The fixed-ABI and taken-guard control tools retain these cases.
+A proof extension changes resolved relocation identity, not the source
+compiler's emitted bytes or literal whole-object completion.
+
+
+### Recover an expression's evaluation and narrowing together
+
+Named floating temporaries can change both evaluation order and x87 spill
+placement. In `V90ConstellationDesigner::calcK`, assigning the denominator's
+logarithm first reverses the original call order. Merely moving a numerator
+temporary first restores that order but narrows it before the original loads
+the constant two. Keeping both logarithms in the return expression restores
+the entire 94-byte body under the retained period compiler.
+
+Review inline copies as well as the recovered function. The same change
+restores the numerator-first graph in `determineDminForRrn`, which remains
+nonexact. Retain the period narrowing and rounding checks, complete-TU data
+and export audit, and caller diagnostics. An exact standalone result does
+not establish that every inline copy is exact or that the expression is the
+unique original spelling. The six-cell `recovery_v90_calck_expression.py`
+replay preserves the separate-order and separate-capture controls.
+
+### Test the conversion boundary, not only the constant type
+
+A double constant does not guarantee double arithmetic after simplification.
+In `V92Jd::getJdPhase`, retaining the early `(float)phase` conversion let GCC
+fold the expression back to SF even with a double denominator. The useful
+cross tests both the integer-to-floating conversion and the scale type.
+Only the direct integer producer with the default-double denominator
+reproduces the original final float store/reload. Initial RTL exposes the
+winning DF conversion, DF multiply and SF truncation; the earlier controls
+have SF conversion and multiplication without that final truncation.
+
+The original `FILDLL`, `FMULS`, `FSTPS`, `FLDS` sequence provides the independent
+witness. The memory operand's single-precision constant does not establish
+an SF source expression: a double expression can use an exactly representable
+SF constant in the instruction. Audit the complete TU and test the returned
+values. A scale-only negative result excludes that control, not the combined
+conversion boundary. Preserve the other three cells as explanatory controls.
+
+### Read the spill mode before blaming allocation
+
+Trace an unwanted spill backwards from reload to initial expansion. The
+constellation designer's original reconstruction declared the product
+`double`, yet its logarithm input expanded into an XF lifetime and `25.greg`
+spilled it as XF. Later peephole, register-renaming, scheduling and x87
+passes preserved that mode. Changing the logarithm overload introduced
+per-iteration DF rounding that the original does not perform. A narrower
+spill is not sufficient if its lifetime is wrong.
+
+Separate the accumulator lifetime from the final conversion. A scoped
+extended-precision product followed by assignment to a double recovers the
+original unrounded recurrence and post-loop DF boundary. That intermediate
+candidate still has an extra XF spill carrying the already-rounded value.
+This establishes the required value boundary, not the author's declaration:
+an original DF store does not prove that every preceding operation used a
+double variable. A double-producer split has the same size gap as the
+extended-producer split while omitting the boundary and changing another
+nonexact body. Equal scores do not establish equivalent recoveries.
+
+Trace the cause of a spill beyond the pass that allocates its slot. Initial
+RTL has separate DF-to-XF conversions for the two logarithms; CSE preserves
+them, but GCSE merges them into one XF value live across the intervening
+calls. Allocation then spills that value. With the unrounded product now
+separate, ordinary double logarithm inputs preserve the final DF boundary
+without narrowing each loop iteration. The two logarithms reload the rounded
+double and the extra XF spill disappears. The earlier double-log control is
+still negative for its original accumulator: the producer change is the new
+discriminator, not permission to repeat the same spelling search.
+
+Keep the flag control diagnostic. Disabling GCSE changes other bodies and
+loses exact functions; it does not justify changing the retained profile.
+Record definition/use UIDs and the first pass that shares the lifetime, then
+check the resulting source control under the normal flags. A smaller frame
+or size gap alone cannot establish that the original values survived.
+
+A separate original lifetime can still justify progress. Capturing the RRN
+target before the logarithms restores its witnessed conversion and arithmetic
+order independently of the product's final narrowing. If that change reorders a
+constant pool, compare each relocation's resolved value in its owning
+function and operation, not just the pool's multiset. A same-sized reordered
+pool can still send a consumer to the wrong constant.
+
+### Check source grouping before investigating late x87 passes
+
+In `notch`, the original adds the feedforward product to the second state
+value before adding the feedback product. Parenthesising that addition
+restores the complete function. The changed dependency is already visible
+in initial RTL and survives x87 stack conversion; no register or scheduling
+control is needed. Use the original operand graph to choose the grouping,
+then verify period rounding and the whole TU.
+
+Conversely, independently recovering `FPM_MTD_detect`'s short countdown,
+advancing sample pointer and final word comparisons does not settle its clamp
+or return allocation. The original clamp explicitly uses NOT, arithmetic
+shift by 15 and AND on a sign-extended short; a conditional clamp generated
+the shift by 31 instead. The explicit mask recovers that operand graph, and
+all 65,536 short inputs establish equivalence to the conditional clamp.
+It still leaves different narrowing and return carriers. The length gap
+increases from one to six bytes, so describe the restored operations and
+remaining mismatches separately. Neither the gap nor the stage that exposes
+it proves a unique source declaration.
+
+Trace a residual extension through optimisation before changing its carrier.
+MTD's short mask assignment creates an early sign extension in initial RTL;
+its original defers that extension until the non-silent threshold arm. An
+integer post-mask carrier with an explicit short cast initially puts the
+conversion in that arm, but `combine` proves it redundant and deletes it.
+The resulting one-byte size gap does not recover the original conversion.
+This is an optimisation of known sign bits, not a late register-allocation
+failure. Reopen the carrier question only with evidence for an original use
+or width that makes the delayed conversion necessary.
+
+### Trace accumulator publication separately from predicate evaluation
+
+`GenericToneDetector::process` publishes the output accumulator before the
+input accumulator in both original fast paths. Swapping those stores
+restores the scalar prefix and the block overload's publication order,
+while preserving each method's object accesses and call targets. Audit both
+overloads: the block still schedules its countdown differently, and matching
+the scalar prefix does not close either complete method.
+
+A captured predicate is a separate source control. Evaluating a boolean
+earlier can introduce a byte result and a later test already in initial RTL,
+where the original branches directly on floating comparison flags. Trace
+that definition and use before blaming x87 stack allocation. Keep the
+publication recovery even when the independent predicate control fails.
+
+Comparison orientation can expose a value failure as well as a codegen
+residual. Under the period flags, the scalar tone detector's earlier
+threshold-first comparison accepted unordered input, whereas the original
+mean-output-first comparison rejects it. A constructor-created detector with
+finite positive controls and one external quiet-NaN sample demonstrates the
+difference without planting internal state. This establishes a component
+boundary failure, not a reachable nonfinite modem input history.
+
+The orientation already differs in initial RTL. Trace the jump inversion
+and final x87 split to confirm that later passes preserve it; do not infer a
+late operand swap from final disassembly alone. Source synonyms, captured
+predicates and split smoother publications can remain negative despite a
+proved failure. Preserve the hard-failing probe separately from the existing
+suite, label that suite's coverage limit, and require both the value failure
+and the original operand/publication graph to close a follow-up.
+
+### Inspect expression folding before initial RTL
+
+An operand order already wrong in initial RTL needs an earlier explanation.
+GCC 3.4.2's `tree_swap_operands_p` in `fold-const.c` prefers a non-declaration
+on the left when the other operand is a declaration. A named `meanOut` local
+compared with the `threshold` member therefore becomes a threshold-first
+comparison before RTL expansion. Reversing or complementing the comparison
+spelling does not remove this source-tree distinction.
+
+Use the original producer and consumer graph to choose a new control. The
+tone detector's original shares the output-mean product between smoothing
+and a direct comparison with the threshold in memory. Writing `out * inv`
+at the comparison preserves that orientation during tree folding. CSE then
+shares the product with the existing mean, and combine folds the threshold
+load into the comparison. The final scalar method becomes byte-exact;
+no NaN-specific branch or compiler-profile change is needed.
+
+Retain the stage evidence: the original-tree dump distinguishes declaration,
+member and arithmetic expressions; initial RTL shows the comparison order;
+CSE confirms shared computation. Do not infer duplicated runtime arithmetic
+from repeated source expressions, or assume a named temporary is codegen-neutral.
+This mechanism is a candidate discriminator elsewhere, not a blanket rule to
+inline all expressions into their consumers.
+
+The constructor-based boundary regression from
+[issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292) now runs in
+the normal tone-detector fixture. Its 64 scalar checks were followed by
+192 block-overload checks; the fixture now reports 82,628 checks. The standalone `tools/probe_generic_tone_unordered.py`
+reuses that same test definition and preserves its exit status. Keep the
+historical failing run as evidence of the coverage gap; the new passing
+regression closes the demonstrated component failure, without claiming a
+nonfinite input is reachable through the modem lifecycle.
+
+### Recover original recurrences and entry snapshots before tuning registers
+
+A mathematically equivalent shortcut can hide the original source graph.
+`GetFP_Value` used direct ceiling division in the reconstruction, while the
+object accumulates subtraction steps in a wrapping short. Restoring the
+negative-step recurrence, integer absolute values and original guard removes
+the division and recovers the original function length. It remains nonexact.
+Bounded short-extreme and counter-wrap tests support the terminating input
+domain; zero-divisor nontermination is documented, not executed as a test.
+No finite-input value defect was established for the old arithmetic shortcut.
+
+Inspect operand constraints when a mnemonic still differs. The recovered
+absolute-value shift exists in initial RTL, but allocation puts its source
+in EAX and destination in EDX, allowing the machine pattern to emit CDQ.
+The original uses SAR. That difference does not establish a missing source
+operation or justify spelling the absolute value as fabricated bit operations.
+
+FSM modulation captures its scale, sample count and genuine frequency-array
+base at entry, before calling the tone helpers. Recover those lifetimes with
+the observed unsigned-short countdowns and wrapped total. A candidate without
+the array-base capture had a smaller size gap, but omitted the original
+address lifetime. Preserve the complete owner and reload the child pointer
+where the original does; do not invent a field alias to improve allocation.
+
+### Recheck old fixture exclusions against the deciding compiler
+
+An exclusion written for a combined modern/period gate can outlive that gate.
+It is not evidence that the period reconstruction fails or that the input
+cannot be supplied at a component boundary. The connection evaluator's
+constructor/public-update probes pass finite and quiet-NaN controls for
+phase-4 ratio and enabled rate-up decisions: eight trials, 24 checks, including
+whole-object comparisons. `tools/probe_v90_connection_boundaries.py` retains
+those explicit period probes outside default discovery. It makes no modern
+portability or modem-path reachability claim and changes no tolerance.
+
+Audit original call slots and owner reloads alongside tests. The checked
+V92 RT receive, phase-3 reset and V90 AT report boundaries matched the
+reconstruction; their 19 witnesses establish those reviewed boundaries, not
+complete coverage of all three functions. Preserve negative audits so the
+same comments and branches are not repeatedly treated as new defects.
+
+
+### Cross decision outcomes, not just exceptional input values
+
+The block tone-detector overload had the same threshold operand reversal as
+its scalar sibling, but a separate scoring graph. With a quiet NaN and the
+flag set, the incorrectly selected strong arm and the original weak arm both
+report a hit. Clearing the flag distinguishes them: the original misses,
+while the old reconstruction hits. A constructor-created probe crosses both
+flag values with below-half, half-threshold, intermediate, full-threshold,
+above-threshold and quiet-NaN samples. It compares the state and counters as
+well as the return value. The old body fails two of 192 checks; the restored
+producer expression passes all of them, with no special NaN branch.
+
+The size gap stays at three bytes despite this behavioural correction.
+Follow that residual independently: the controlled compiler dumps have one
+countdown decrement through `27.flow2`; `31.bbro` duplicates it, and both
+copies survive scheduling. This identifies a late block-layout question.
+It does not establish which source loop produced the original shared decrement.
+
+### Retain witnessed operations even when an aggregate score stays flat
+
+`DialerAbort` tests its progress state with an unsigned range comparison in
+the original. The retained source used a signed comparison. Restoring the
+unsigned conversion preserves the original decision boundary without changing
+the two-byte size gap. Initial RTL distinguishes `LE` from `LEU`; five other
+functions in the TU and its data and bindings stay unchanged. Existing valid
+state and diagnostic-transcript tests pass. Negative internal states have no
+established modem history here, so this is a recovered guard, not evidence
+of a reachable modem failure. A previous failure to reach whole-function
+identity does not invalidate an independently witnessed partial recovery.
+
+The PCM-upstream arm of `V34SetINFO1aBits` similarly collapsed seven output
+publications into one. Restoring the initial zero and six flag updates
+recovers the original low-byte reads interleaved with word stores, reducing
+the size gap from 77 to 48 bytes. Its three known callers use disjoint output
+storage; no aliasing modem failure is claimed. Keep the old collapsed body
+as a negative control for the seven-store detector. Runtime unobservability
+at known callers does not establish byte identity or justify suppressing
+original operations.
+
+### Trace unchanged neighbours through peephole selection
+
+The IIR scalar helper exposes a short countdown, coefficient and history
+cursor updates, and a feedforward narrowing before the saturation decision.
+Recovering those boundaries improves both the helper and its inlined block
+caller. Their remaining size gaps are two and eighteen bytes respectively.
+Valid component tests include coefficient/history aliases within one declared
+short array; these do not establish an overlapping modem call.
+
+The untouched `FPM_iir_filt_II` also changes. Its compared instruction streams
+agree from initial RTL through `27.flow2`. The first differences are two
+scratch-register choices at `28.peephole2`; register renaming changes two more
+instructions later. Record that collateral and audit the complete TU rather
+than attributing it to an invented field error or spill. The retained controls
+preserve data and bindings and lose no exact functions. The audit compares
+fourteen paired stages for this neighbour and six stages for the scalar
+feedforward conversion.
+
+
+### A more faithful return can increase a size gap
+
+The IIR section accumulator was an `int` even though each new value was
+narrowed to `short`. Returning it as `short` introduced another sign extension;
+the original returns a copy of its already extended result. A bounded control
+using a short accumulator changes the return to a copy in initial RTL.
+Combine removes the intermediate return conversion, and the copy survives
+allocation and scheduling. The scalar size gap moves from one to two bytes,
+while the inlined block caller also changes and the other IIR function stays
+byte-identical. The original return operation supports this partial recovery;
+no claim of whole-function identity follows from it. Do not invent an
+uninitialised output to match the undefined zero-section path.
+
+### Recover conversion boundaries at the use that establishes them
+
+`V8GetMessage` loads a received word with zero-extension before shifting and
+passing its low byte to `charFlip`. The reconstruction sign-extended that word.
+An unsigned-short conversion at this use restores the original opcode; the
+full-TU control changes exactly one byte and leaves six bystanders, data and
+bindings unchanged. The final low-byte selection masks the difference in
+result, so this is instruction recovery without a demonstrated behavioural
+bug. It does not establish that every use of the shared word field is unsigned.
+
+### Inspect the actual compiler's duplication rule before changing loops
+
+The tone block's countdown remains single through `27.flow2` and is copied
+while `31.bbro` connects traces. The retained dump records the seven-byte
+shared block being refused during one copy decision, then duplicated when
+connecting the slower trace. The installed Gentoo compiler retains DWARF
+and function symbols: read-only inspection of `copy_bb_p` and
+`connect_traces` confirms the hot-code size multiplier and entry-frequency
+threshold used by those decisions. Record the compiler hash with this
+inspection; a matching upstream source line alone is weaker evidence.
+
+A full-TU `-fno-reorder-blocks` control removes the copy, but increases the
+block's size gap from three to 27 bytes and loses five exact bystanders.
+The streams agree before reordering apart from declaration addresses and
+label numbers. This isolates the pass without recovering original source.
+Keep the retained flags. Reopen loop-source work only with an independent
+original branch or loop-boundary witness; the compiler's willingness to copy
+a block does not by itself supply one.
+
+Source syntax alone is also a poor nomination test. Two constellation-mask
+helpers are written with an `if`, but their retained compiled bodies already
+contain the original signed SETL/NEG/AND graph. An explicit mask expression
+folds back into a branch and worsens both bodies. Check the current emitted
+operations before calling a source construct missing. The losing full-TU
+control closes that nomination; it is not evidence for a signedness defect.
+
+The separate `tools/probe_v90_sd_boundaries.py` component probe crosses three
+finite/quiet-NaN constructor thresholds, four limits and two public input
+sequences, including reset. All 7,680 return/state/history checks pass across
+64 cases. It remains outside default test discovery and does not establish
+nonfinite modem-path reachability or complete SD-detector coverage.
+
+### Separate missing storage from alignment and declaration order
+
+A smaller BSS section does not establish a missing field or variable. Inventory
+named objects, including duplicate local names, before interpreting its extent.
+The whole-object audit finds equal sizes for all 38 named BSS objects, covering
+2,506 bytes on each side. The 24-byte section deficit lies entirely outside
+those named extents. COMMON symbol values encode alignment requirements;
+positioned symbols expose their section alignment, not their original source
+alignment. Do not assign global ownership from the nearest FILE record.
+
+Callprog provides a bounded source recovery within that inventory. Reordering
+its declarations restores all eleven local BSS offsets relative to the first
+object. Six functions retain their instructions and canonical relocation
+targets; three raw bodies change only relocation addends. The three exact
+bystanders remain exact. This improves storage fidelity without adding an
+exact function or closing the whole-object BSS deficit.
+
+Use `tools/storage_layout_audit.py` to distinguish named-size differences,
+alignment gaps, COMMON alignment and nonallocated records. Its five controls
+exercise these distinctions before reporting the comparison. Table extents
+need a separate behavioural review: the extra FPM entries and PreFilter loop
+row deliberately reproduce observed reads beyond the original symbols.
+Recover their physical neighbours before shortening those declarations.
+
+The inventory also identifies storage qualifiers that instruction comparison
+cannot see. Four local AGC coefficient arrays in the V.22 and B.103 table TUs
+were declared `const` despite occupying writable `.data` in the original.
+Removing those qualifiers restores their storage class. Four full-TU controls
+preserve eighteen named objects' contents and sizes and 34 pointer targets;
+the old read-only placement fails the original-permission witness. These
+TUs contain no functions, so the recovery cannot increase the exact-function
+count. No runtime write to these arrays is established by this evidence.
+
+### Establish a carrier discrepancy before changing its type
+
+The V8 lifetime trace follows the output argument from initial RTL through
+global allocation into EBP. The original reloads that by-value argument from
+its stack home; the byte-only `charFlip` call cannot modify the argument.
+That reload alone supplies no mutable-owner or stale-pointer defect. Reopen
+this source domain only with independent evidence about a carrier or callee
+visibility that affects allocation.
+
+Likewise, INFO1a's original Uinfo producer sign-extends AX and stores a full
+dword. Its later low-word load does not establish a short local. The retained
+source already produces that signed dword and later zero-extends its low word.
+The original also keeps an independent pointer at owner +4 live; the current
+flat layout only establishes a progress integer there. Investigate independent
+callee and layout evidence for an aggregate boundary before introducing a
+nested owner to influence spills. The unchanged full-TU replay and a rejected
+wrong-producer control preserve this negative result.
+
+### Recheck physical adjacency before retaining an emulation row
+
+The PreFilter type-2 loop table has 33 records in the original. An added zero
+record reproduced the counting loop's read beyond that symbol, but the period
+compiler's actual layout makes it unnecessary: the following type-1 table is
+naturally aligned to 32 bytes. Restoring the original extent leaves exactly
+28 zero bytes between the tables, matching the original terminator location.
+Two full-TU controls compare all seven objects and sixteen pointer targets;
+the original-size control passes the table and PreFilter period fixtures.
+No explicit padding or synthetic terminator is needed. Check the emitted
+adjacency as well as the counted length, because a correct traversal alone
+cannot distinguish the original extent from an extra emulation row.
+
+This evidence does not justify truncating every extended table. Each observed
+overread needs its own neighbour and alignment proof under the actual link
+order. Preserve the original boundary fixtures while recovering that storage.
+
+### A repeated shifted address does not establish a nested type
+
+An independent `V34GiveProbeResults` recovery already reproduces its shifted
+owner address with either an integer-pointer increment or a byte offset.
+INFO1a's repeated owner +4 address therefore adds addressing and liveness
+evidence, without establishing an embedded aggregate. The current member at
+that offset is an integer. Require a typed callee, constructor, or independently
+bounded member layout before changing ownership to influence allocation.
+The retained original-operand audit rejects both a wrong spill width and a
+wrong Precoder source field; its selected boundary checks are not complete
+behavioural proofs of the audited methods.
+
+### Use references to local data to refine a global function's TU
+
+A local function's first address need not begin its translation unit. Original
+LOCAL `tx_in_internal` and `rx_out_internal` symbols belong to `V32mod.c`, and
+`V32FP_modem` has four direct references to those buffers. Together these
+witnesses place the global function with those locals, before the deferred
+static handlers. The earlier split at `v32_data` omitted this evidence.
+Moving the function and buffers together preserves all 34 functions' instruction
+streams and canonical relocations across the four-TU control domain.
+
+`Control_Flag` has a local referrer in that same TU; placing it there restores
+its original offset before the buffers. The partial BSS extent moves from
+24 bytes below the original to four bytes above it. A further cell placing
+`SMCv32_CFG` with its sole consumer matches the extent, but that global's
+consumer alone does not establish original TU ownership. Retain that cell
+as diagnostic evidence. A perfect section-size score does not replace the
+missing ownership witness.
+
+### Preserve writable identity when modelling out-of-symbol reads
+
+A copied extension of a sign table can reproduce its initial values while
+losing the original storage dependency. The phasor's exported sine and cosine
+tables are writable; original instructions read those symbols directly.
+Reading private extended copies hides later writes. A component fixture that
+writes the public tables distinguishes this defect without claiming that a
+modem path performs such writes.
+
+Prefer the witnessed direct indexing when the original physical neighbourhood
+can be recovered and measured. The direct phasor control removes the two
+invented arrays and restores the original COEF_DC, sine and cosine positions
+at relative offsets 0, 12 and 20 in the linked period image. Existing exhaustive
+sweeps cover the negative-index window, and the added writable-table checks
+cover the lost dependency. A branch-based owner-routing control explains the
+bug but is unnecessary once direct reads and adjacency pass. Trace the symbol
+references in initial RTL: a wrong owner there cannot be repaired by later
+register allocation or instruction scheduling.
+
+### Distinguish table extents from the final test link's section grouping
+
+The remaining extended FPM tables have identifiable original neighbours:
+`sqrt` reaches the first reciprocal-table word, `div` reaches the XOR table,
+and `log10` reaches the first word of `FPM_PPS_CFG`. An original-size aggregate
+control restores those relative positions without explicit padding. Validate
+the final test executable as well: linking individual TUs can interleave their
+string sections with ordinary read-only data. The period log10 fixture then
+reads a diagnostic string instead of the configuration word, even though the
+relocatable aggregate has the correct adjacency.
+
+Keep that source cell diagnostic until the deciding fixture measures the
+intended aggregate boundary. A future fixture-link change must preserve
+cross-TU wrapping, test-visible local symbols, link order and cache invalidation.
+Do not move a string or add a source section attribute merely to accommodate
+the harness's different grouping.
+
+### Follow loop motion before expanding a coefficient-type experiment
+
+`V90SpectralShapingFilter::getMetric` reloads coefficients per block in the
+original and uses two single-precision stack slots. Moving the reconstruction's
+coefficient definitions into that loop does not recover those operations:
+initial RTL retains the inner placement, GCSE hoists the loads, and loop
+optimisation hoists their extended-precision conversions. A crossed float-local
+control still promotes the coefficients for the extended-precision recurrence
+and retains four extended-precision spills.
+
+The four cells produce two complete TU emissions, preserve the same six
+function verdicts and leave all non-text sections unchanged. The diagnostic
+float cell passes the period fixture, but does not restore the witnessed
+operations. Close this declaration/type domain. Reopen it only with independent
+evidence for a source-use or ownership boundary that explains the original
+single-precision consumers.
+
+### Test the declared scalar boundary when a reconstruction adds a clamp
+
+The original `FPM_sqrt` reads beyond its 192-word table into the adjacent
+reciprocal and XOR tables. The reconstruction added both an endpoint and a
+clamp, and its differential fixture stopped at Q15. Restoring the original
+sqrt/div extents exposes the original contiguous read window; removing the
+unwitnessed clamp then changes 32,704 failures over all 65,536 unsigned-word
+inputs to zero. This is component-boundary fidelity, without evidence that a
+modem caller supplies values above Q15.
+
+Keep the controls separate: restoring table extents alone leaves all 32,704
+failures. The bug-reproduction build restores the reciprocal table's original
+128 words, while the fixed build retains its generated endpoint. The scalar
+sqrt size gap increases despite the corrected behaviour. Record both facts;
+matching behaviour and witnessed reads outrank minimising a length difference.
+
+### Keep local-data ownership evidence separate from naming heuristics
+
+A GLOBAL function's relocation into a unique LOCAL object's actual interval
+can identify an original FILE occurrence. Preserve symbol-table indices,
+section, extent and FILE occurrence, including duplicate names. Reject global
+targets, gaps, one-past addresses, overlapping objects and conflicting owners;
+the nearest FILE record is not evidence for a GLOBAL object's definition.
+Mergeable and linkonce storage also require separate treatment.
+
+The original-object screen finds 104 uniquely witnessed functions among
+1,805 GLOBAL/WEAK functions. All 104 current source basenames agree; this
+method yields no further source-move candidates in that set. It supplements
+existing attribution without replacing its 1,764 name-derived records.
+`SMCv32_CFG` remains unresolved because it is a GLOBAL target. The controls
+must reject that tempting nearest-FILE inference as well as detect a deliberately
+wrong source assignment.
+
+### Re-run diagnostic-anchor triage and then prove each missing boundary
+
+A fresh census over 300 objects found ten count mismatches among 1,842 eligible
+object-symbol entries. A deliberately renamed debug relocation makes the known
+`call_delete` detector fire, validating the census before interpreting its
+output. Counts alone remain nominations: `RingDetector_Create` differs because
+the original inlines the reset helper that contains the print.
+
+The call supervisor has a different explanation. Its create-entry and
+rate-conversion announcements, and its old/new progress-message report, were
+absent from source. Recover the guard, arguments and publication timing together:
+the progress report observes the old stored message and the new result after
+output resampling, before publishing the changed message. A public-registration
+fixture crosses sample rates and debug levels and repeats blocks to check that
+unchanged messages stay silent. State/output agreement alone would miss these
+transcript defects.
+
+The B.103 constructor also lacked its original version banner. Recover the
+binary's date and time literals, not the reconstruction build timestamp. A
+public-constructor fixture crossing debug levels and constructor parameters
+exposes the missing output without planting internal state. Keep other
+count differences pending until their call and inlining boundaries are checked.
+
+### Preserve an owner's reload after an intervening call
+
+In `V90Phase3Demodulator::twoLevelDemod`, the original reloads the detector
+owner after `isAltRbs` before reading two tables. Reusing the pre-call local
+loses those loads. Expressing the two post-call accesses through the owning
+member restores them and reaches the original body length, while the other
+25 TU bodies remain unchanged. This is instruction-graph evidence, not proof
+of a functional defect: the observed callee does not change the owner.
+
+### Cross normalization homes with the operation that consumes them
+
+Both FPM sqrt bodies use caller-owned 16-bit normalization outputs in the
+original. The count recurrence is promoted inside the loop and published after
+its backedge. The subsequent parity test compares the count with twice its
+halved value; replacing that graph with a bit test changes the emitted code.
+
+A bounded cross separates pointed outputs from local values and quotient-based
+parity from a bit test. Pointed outputs with quotient-based parity recover the
+operations but leave both bodies two bytes short because the stack homes are
+reversed. Crossing the caller declarations against the observed homes—count at
+stack offset 0, mantissa at offset 2—makes both bodies byte-exact. The three
+other emitted functions, data and bindings remain unchanged. The scalar's
+explicit narrowed index also replaces the old subtraction folded into the
+table relocation; audit that destination with the instruction graph.
+
+Use the existing full unsigned-word scalar sweep and wide-input double-word
+fixture to validate this recovery. The prior clamp correction made those
+component boundaries trustworthy before pursuing the code-generation match.
+
+### Check signedness before treating a residual as allocation noise
+
+In the call supervisor, the original S-register comparisons use unsigned
+conditions. Its queue offsets and active-byte count also use unsigned minimum,
+modulo and halving operations, while the available-byte count remains signed.
+The reconstruction's signed operations already appear in initial RTL. Trace
+that divergence before changing declarations merely to influence allocation.
+
+Keep independently witnessed boundaries separate. Recover unsigned consumers
+without claiming an unsigned host API return type when no original declaration
+establishes it. Read the stored modem owner where the original reloads it.
+Cross the S-register and queue changes to identify their separate effects, and
+check every TU body and switch-table destination. A larger size gap can expose
+remaining address and lifetime differences after the wrong arithmetic is gone.
+
+Ordinary public-constructor and block histories validate the retained source.
+High-bit host-return probes are separately labelled synthetic: they expose the
+S56 decision difference but do not prove the modem host supplies those values.
+Do not infer a second value defect from S16's unsigned instructions when the
+measured probe does not fail there.
+
+A smaller owner-reload candidate can still move the wrong reads. Rewriting
+`call_block` to obtain its state through `dp->self` recovers the inner owner
+reload, but also moves the input/output buffer-offset reads to that owner.
+The original computes those buffers from the outer state before reloading the
+inner processing owner. Reject that whole-helper candidate even if its size gap
+shrinks and the lifecycle tests pass. A later experiment must preserve the
+outer buffer producers separately from the inner processing owner.
+
+### Separate missing diagnostics from shared blocks and defensive arms
+
+Resolve formats and call boundaries before interpreting a debug-site count.
+The B.103 answer-state mismatch comes from split sibling tails; CID creation
+inlines its reset diagnostic; V.8 DATA and V.80 indications share a print block
+in the original; fax unframing shares CRC-success prints. Those count
+mismatches justify no source correction. Retain format-negative controls so
+an audit can distinguish an omitted format from these explained differences.
+
+Two other fax sites contained actual omissions. Receive-buffer recovery lacked
+its timestamped report and original index reloads around output handling. A
+valid-record queue probe detects the transcript difference, but its supplied
+state and countdown remain synthetic component coverage. Finding a modem
+lifecycle producer is separate work, not a property conferred by a passing test.
+
+The constructor's published configuration-pointer checks also lacked their
+shared diagnostic and NULL-return arm. The original performs unchecked writes
+before those checks, so ordinary allocation failure is not a safe way to reach
+them. Restore the independently witnessed defensive graph and its lack of
+cleanup without claiming allocation-failure safety. Review return and cleanup
+behavior whenever a missing print reveals an omitted branch.
+
+### Give an aggregate-boundary fixture an aggregate input
+
+The original log10 table has 128 words and its endpoint read reaches
+`FPM_PPS_CFG`. Linking the reconstruction TUs individually into a test executable
+interleaves string storage at that boundary. An opt-in fixture mode first links
+the ordered, test-visible source objects into a relocatable aggregate, then links
+the fixture, harness and reference. This restores the measured neighbour without
+source padding, a fabricated endpoint, or section attributes.
+
+Preserve interposition at the partial-link boundary: apply fixture `--wrap`
+options there as well as at the final link. A final-only wrapper is too late
+once an aggregate has bound the source call. Likewise, aggregate the test-visible
+copies so fixtures can still name selected original-local symbols. Negative
+controls must demonstrate both failures before trusting the positive run.
+
+Cache aggregate inputs by ordered content, reference and apparatus identities,
+wrapper options and the actual linker identity. Cache final links by mode and
+link options as well as their inputs. Test stable reuse, mode switches and
+content changes with restored timestamps. A correct endpoint in the relocatable
+object alone does not establish the endpoint in the executed fixture.
+
+### Preserve buffer producers separately from a reloaded processing owner
+
+The call supervisor computes input/output buffer addresses from its outer
+state, then reloads `dp->self` for block processing. Passing the already-built
+buffers into a helper that reloads the processing owner preserves both ages.
+Reloading the owner before building the buffers changes the graph even when
+ordinary lifecycle tests cannot distinguish the two owners.
+
+Address units matter too. The original adds active byte offsets directly;
+forming a short pointer with `active / 2` introduces an extra `AND -2` during
+combine. Recover byte-address addition before casting the result to a short
+pointer. The supported owner and address changes preserve the other TU bodies,
+data, bindings and switch destinations; a smaller size gap alone would not
+justify them.
+
+### Expand sibling tails before declaring a missing format
+
+A root function's debug-call count can differ because one compiler inlined a
+helper and another retained its call. Expand both direct calls and sibling
+jumps within the declared TU boundary. A call-only walk of V.34 finds 107 of
+110 original format strings; including sibling tails finds the remaining three
+in the MOH hold helper. Preserve the call-only walk as a negative control.
+
+Likewise, V.8 can share two formats at one call, and V.90 progress can inherit
+four formats from inlined helpers. Compare resolved format contents as well as
+counts, and prove the detector rejects a changed format whose count stays the
+same. A complete unique-format inventory is not a proof of guards, argument
+ages or dynamic multiplicity. Once the count discrepancy is explained, require
+independent evidence before changing source or trying more CFG spellings.
+
+### Replace planted control state with production history incrementally
+
+The buffered fax receive fixture now starts with constructor-created sessions,
+supplies valid buffered records, and drives the public command and progress
+methods. Those methods select the emulation state, arm and expire the countdown,
+advance the read index, and reset an exhausted queue. The fixture exercises
+three records at four debug levels and detects six transcript failures when the
+recovered diagnostic is deliberately omitted.
+
+This strengthens the boundary without establishing the upstream producer:
+the queue records are still supplied by the fixture. Keep that limitation in
+its label, retain the older synthetic handler probes, and seek a separate
+VMI/HDLC producer history before claiming modem-path reachability.
+
+### Stop at the compiler stage that explains a near-exact tail
+
+Log10's original normalizer uses pointed 16-bit outputs and writes the adjusted
+exponent back into the count home. Crossing those boundaries recovers the
+54-byte normalization segment exactly and reduces the complete body's size gap
+from 83 bytes to two. A scalar-only writeback control emits the baseline; an
+unsigned-short index control emits the same improved TU. Neither justifies
+another nearby type or return-form search.
+
+The remaining trace is specific: regmove coalesces the subtraction with the
+table-value pseudo, global allocation assigns that value to EDX and the
+coefficient to EAX, and the final sign extension therefore needs a three-byte
+move instead of the original one-byte EAX extension. Later peephole and register
+renaming passes preserve that binding. Do not force a register to hide it.
+A new experiment needs independent evidence for a value owner or definition
+boundary that would explain the original tail allocation.
+
+The call supervisor supplies a related arithmetic discriminator. Its original
+sample-count update uses a direct signed 32-bit right shift. Reconstructing it
+as division by two introduces the sign correction needed for truncation towards
+zero; initial RTL already contains that bias, which combine retains. Recover
+the witnessed arithmetic shift and check the full TU even if alignment makes
+the size gap grow. Valid host-loop lengths are nonnegative, so this recovers an
+instruction operation without demonstrating a new reachable behavior defect.
+
+For `call_create`, the next bounded investigation is local stack allocation:
+the original places the configuration at stack +0x10 and the dial buffer at
++0x20; the reconstruction places them at +0x50 and +0x10. The difference is
+already present in initial RTL. Trace expansion and inlined-helper allocation
+timing before trying a source control. A declaration-order palette would not
+explain the cause. Likewise, `call_run`'s cached queue bases differ before
+allocation, but the available trace does not establish an extra-spill cause.
+
+### Compare literal contents even when call counts agree
+
+A call-site census cannot detect a substituted message or missing whitespace.
+`tools/recovery_literal_census.py` checks literal consumers across the canonical
+objects, including functions whose call counts agree. On the ninth PR291 pass,
+300 objects supplied 1,886 shared body entries (including duplicate emissions),
+492 with original string literals and 2,444 unique body/literal pairs. Same-TU
+call and sibling-tail expansion explained two direct-body mismatches. The two
+remaining bodies contained three actual text discrepancies:
+
+- `getV92Decision` printed `JdNot detected` at the completed-reference-study
+  transition. The original prints `enter Wait For V92Jd state`, with the sample
+  count before publishing state 7 and clearing the counter.
+- `runPcmModem`'s echo-silence ON and Off messages each lacked a leading newline.
+
+The V.92 fixture's earlier 213,241 checks passed without reaching that terminal
+study diagnostic. A targeted synthetic boundary supplies ADID terminal state 6
+and exercises caller counts just before and at the modulo-six transition, at
+four debug levels. Two of its 216 checks fail before the text correction; all
+pass afterwards. This proves the component discrepancy, not a complete study
+history or modem-path reachability.
+
+The census's real ELF negative control changes a literal without changing file
+length or relocation sites. It inventories only `.rodata.str*` address
+relocations; it does not prove guards, arguments, multiplicity, indirect-call
+coverage or the contents of other data sections. A clean inventory therefore
+closes these nominations, not the behavioral audit. Canonical relocation
+consumers must still be checked: adding a string can move a bystander's raw
+relocation addends without changing its instructions or consumed values.
+
+Treat fixture comments as hypotheses too. The PCM fixture blamed an extra blank
+line on `V90Modem::progress`'s `Illegal modemSide` message. Both objects consume
+exactly the same literal there. Once the caller's echo messages were corrected,
+all existing diagnostic rows passed complete transcript comparisons; the
+misattributed exception was removed.
+
+### Trace stack allocation before changing declaration order
+
+For `call_create`, tracing the actual Gentoo compiler's `expand_decl` and
+`assign_stack_local_1` established that the configuration's 16-byte allocation
+preceded the dial buffer's 64-byte allocation. Inlined-helper expansion came
+later and allocated no additional stack object. The original stack positions
+require the reverse allocation order. One buffer-first declaration control
+restores configuration +0x10 and dial buffer +0x20, preserving all ten bystander
+bodies, seven exact names, data and bindings. The function remains SIZE2.
+
+This is evidence for one allocation-order control, not a reason to enumerate
+declaration permutations. Use the executing compiler's entry ABI and measured
+frame offsets when optimized debug information aliases parameters incorrectly;
+upstream compiler source is supporting context, not proof of the installed
+Gentoo binary's behavior.
+
+For leading or trailing whitespace, compare individual debug calls as well as
+concatenated transcripts. An initial echo-message substring probe falsely
+passed because the preceding message supplied the missing leading newline.
+The retained fixture wraps both debug imports, checks each formatted message
+at its call boundary, and forwards it into the ordinary capture. Its known-old
+source fails two checks; the corrected source passes. The selected component
+events are explicit fixture inputs, not evidence of an end-to-end modem path.
+
+The remaining `call_create` pointer copies illustrate why pass names need
+verification. On this compiler, `flag_if_conversion` controls post-combine
+`21.ce2`; `flag_if_conversion2` controls the later `29.ce3`. Disabling the latter
+emits the unchanged object. Disabling the former keeps the pointer copies
+branch-local and removes the measured overlap, but the copies survive and
+`call_create` grows to SIZE17. That control explains interference without
+recovering the original source. It also changes `call_run` and
+`IsPulseDialerReady`, so it supports no production flag change.
+
+### Extend the producer boundary without overstating reachability
+
+The fax replay fixture now constructs TX/RX framing objects, writes payloads
+through the HDLC frame writer, and passes six-bit chunks through the actual
+packer/unpacker. Three decoded records, including stuffing-heavy payloads,
+feed the existing buffered command/progress replay. The new 2,833 checks bring
+the fixture to 3,762; corrupting a source-side payload makes 302 new checks
+fail while the older 929 still pass.
+
+This establishes digital framing provenance. The fixture still publishes the
+queue itself, so V.21 PCM acquisition and the state-6 queue-append path remain
+outside its demonstrated history. The next source discriminator is that append
+path's value timing: the original prints the pre-append length/index, then
+reloads both before checking capacity and publishing the record. The current
+source calculates length and total before the print. Trace that difference
+without assuming a mutating diagnostic callback is a valid modem operation.
+
+### Run inexpensive fidelity inventories before compiler tuning
+
+Start with the whole compiled data and literal inventories, then review their
+consumers. Align named objects and resolve relocation targets before comparing
+contents. For anonymous strings and constants, retain section, offset and
+consumer evidence; a nearby printable word is not automatically a diagnostic.
+Sliding matches can locate inserted or missing bytes, but padding and string
+pooling are not source defects by themselves.
+
+The lexical `debugaudit.py --absent` check also needs header and macro literals.
+Its old default falsely reported 40 missing consumers because it scanned only
+C/C++ files and discarded `#define` lines. Including headers and concatenated
+macro literals reduces that report to zero absent messages, with 15 unresolved
+call sites still explicit. Six controls cover the old omission, macro joining,
+ordinary literals, include-path exclusion, changed text and escaped-newline
+splicing with preserved source line numbers. This presence test
+still cannot detect a valid literal attached to the wrong function; the compiled
+consumer audit found the V.92 substitution precisely because it keeps ownership.
+
+Instruction-loop differences are nominations until reviewed. Record actual
+bounds, stride, signedness, calls and stores, and separate equivalent sentinel
+or promoted-width encodings from missing behavior. A detector must fire on a
+known changed bound, stride, store and call before a clean result is useful.
+Do not return to register-allocation work while an independently supported data
+or behavior discrepancy is waiting for a differential regression.
+
+`transcript_exact` now compares exact per-call start/end positions as well as
+complete text, byte length and call count. Its negative control produces equal
+concatenated text with two calls on each side, but moves a newline between the
+calls. The former comparison accepts that arrangement; the boundary comparison
+rejects it. Both text and event capacities fail closed on overflow. Use this
+shared helper when extending transcript fixtures rather than relying on a
+substring match or equal line counts.
+
+The initialized-storage content census found two defects that the size/layout
+inventory could not: two `p2400` coefficients were -7786 instead of -7790, and
+`MTDb103Org_CFG` represented its first pointer as zero raw words. The original
+relocation targets `MTDb103_COEF`. Comparing 724 matched initialized objects
+found 722 equal and these two different; seven assembled ELF controls exercise
+content and relocation changes, shifted layouts and ambiguity handling. The
+new component fixture fails three of 58 checks before correction and passes
+afterwards, using `V34SetupModulator` and the actual `FPM_MTD_create` constructor.
+All function bodies and exact-name sets remain unchanged by these data fixes.
+
+Anonymous numeric consumers remain a separate queue: 26 of 153 shared-function
+inventories differ. Width changes, constant folding and inline boundaries can
+explain such differences, so they are not 26 demonstrated bugs. `dtmf_test`'s
+one-ULP constant difference is a concrete next operand to trace and test at its
+decision boundary before changing a literal.
+
+The broader literal audit retains ordinary `.rodata` and `.data` address
+consumers, but labels printable numeric/indexed loads as ambiguous. It compares
+112 named-storage windows per side without finding a difference. Its real ELF
+controls change a format and slide a relocation by one byte; the old V.92 and
+echo defects also fire. Remaining static-count nominations need distinct-path
+transcript coverage, particularly `DialerProgress` and the V.92 TRN1u reset
+lower-bound report. Do not force duplicated calls to equalise static counts.
+
+### Decode constant operands before comparing their storage formats
+
+`numeric_consumer_audit.py` decodes each x87 memory operand and compares exact
+numeric values across float, double and extended storage. On the next bulk
+pass, the 26 raw numeric-pool nominations split into 16 same-value inventories
+with different consumer counts and ten different value sets. This removes
+storage-format noise without proving equal operations or paths. Constants
+materialised as immediates, implicit x87 constants, inlined callees and
+reciprocal multiplication still need separate evidence.
+
+Twelve controls establish float/double/extended equality, integer-load
+conversion, changed values, signed-zero distinction, extreme extended values,
+correct accounting for interior and out-of-bounds pool loads, and rejection
+of unsupported ELF inputs.
+NaN payloads and noncanonical extended encodings retain their representation.
+Duplicate function names remain unclassified instead of silently merging
+consumers. Use this queue to find value discrepancies; do not force identical
+constant pools or static reference counts.
+
+The DTMF US level cutoff was a real value discrepancy: the binary consumes
+float bits `0x3b03126e`, while `0.002f` emits the next float, `0x3b03126f`.
+A direct decision-component fixture crosses adjacent representable totals with
+finite, nonnegative notch energies. It checks US, EUR and other-mode dispatch,
+and includes ratio-rejection controls. Three of 100 new checks fail before the
+correction; all pass with the original value. This establishes a component
+threshold difference, without claiming those exact energies came from a modem
+waveform. Only one constant byte changes; all four function instruction bodies
+and the other positioned relocation consumers stay equal.
+
+### Keep object registers in the side-effect census
+
+A store through EBP is not necessarily a stack store under
+`-fomit-frame-pointer`. The structural screen had discarded all such writes,
+creating an apparent missing-store deficit in `V22_SRE_init`. Recognising an
+actual `mov %esp,%ebp` frame setup before excluding EBP stores reduces the
+screen from 239 to 224 nominations. Two added assembled controls distinguish
+an EBP object owner from an established frame pointer.
+
+Expand direct same-TU calls and sibling tails before comparing side-effect
+presence. Six ELF controls prove expansion, preserve external boundaries and
+detect omitted calls, tails and callee stores. Four reviewed nominations retain
+their behavior: V.22 initialization stores, inlined convolution mapping, shared
+V.92 reset logging, and an unrolled CRC store sequence. Physical instruction
+counts alone do not establish dynamic store counts, argument equivalence or
+missing behavior.
+
+Decode the load width before extracting pool bytes. A four-byte load at +12 in
+one 16-byte entry is valid; treating its entry width as its load width drops
+that consumer. The numeric audit now extracts relocations independently and
+requires every pool relocation to become either a classified consumer or an
+explicit unclassified record. A cross-boundary load remains unclassified.
+Record input hashes and fail an empty shared-consumer comparison.
+
+### Exercise distinct diagnostic paths with public component histories
+
+Static print counts nominated `DialerProgress` and V.92 phase-3 reset, but their
+reviewed branches share or duplicate the same runtime message. The dialer
+fixture now covers 18 public create/progress histories: initial and later
+tones, commas before and after digits, capped and uncapped pauses, and the
+70 ms DTMF duration's 560-sample argument. Semicolon histories stop at the
+public command event. Complete transcript checks include individual call
+boundaries and preserve callback markers.
+
+V.92 reset coverage uses constructor-created objects through reset, symbol
+generation and reset again. Twenty-four observations cross the 8160 lower
+bound and six-sample quantisation boundary, at three debug levels. The
+reference encoder supplies the expected wire representation of the independently
+expected length. Captured-argument byte mutations fail in both fixtures and
+restoration passes. These tests strengthen component coverage; they do not
+establish every modem history or justify forcing duplicate static print sites.
+
+The inventory nominated the original multiplication scales versus reconstructed
+reciprocal scales in `V90Equalizer::convertEqualizerToMmx`; the quantisation
+audit below closes that pool-only lead. Inspect the paired operations and
+destination fields before changing a value. Other inventory gaps already have immediate producers:
+`MTK_phasor`'s float 2*pi and `voice_rx`'s reciprocal input scale. Their absence
+from a constant pool is not evidence of an absent value.
+
+### Retain original operands even when the exact-function count is unchanged
+
+Two earlier NaN controls were left out after producing no exact-function gain.
+The bulk fidelity pass revisits their source choice against the current TUs:
+`porcessSecondStudy` and `setConstellationToNoise` load constant quiet NaNs in
+the binary, whereas the reconstruction called `nanf("")`. Replacing those
+initializers with `NAN` removes one unmatched library call and its empty-string
+argument from each TU. This is a call/operand recovery; the normal runtime
+values were already equal and no new functional failure is claimed.
+
+Four full-TU cells compare 116 emitted bodies. All 56 canonical bystanders,
+bindings, named data and nontext relocation destinations remain equal; 31 exact
+names are preserved. The intended differences are two quiet-NaN consumers,
+two removed imports and empty arguments, and the target bodies. Five focused
+period fixtures pass. ADID's size gap stays 64; the designer's gap grows from
+18 to 43. Keep that result explicit instead of describing fewer bytes as a
+recovery criterion. Earlier no-gain measurements remain valid.
+
+### Observe state at host callbacks, as well as the delivered bytes
+
+A correct final state and transcript can hide publication at the wrong time.
+The CID fixture now observes its owner during 18 paired TTY callbacks from real
+Bell-202 valid/corrupt receive histories. It records the rendered buffer,
+payload and owner-relative offset, modem identity, mode, option and sample-fill
+state, while forwarding the callback unchanged. A state-only corruption is
+rejected even though the delivered TTY bytes stay identical.
+
+Three reviewed paths retain the original order: CID recomputes its string
+length and owner after host calls; V.8 publishes handoff/expiry fields around
+its host calls; voice reloads state after receive and publishes its host count
+after send. Only CID has new real-signal callback observations in this pass.
+Planted V.8 negotiation states and voice handler scripts do not establish an
+ordinary signal history. The negotiated-link fixtures below supply that
+evidence for V.8 handoff and expiry.
+
+Resolved call/tail annotation also explains four new structural nominations:
+DialerAbort's diagnostic tail, V23ModemMain's demodulator tail, shared voice
+resampler creation, and merged FSE history-publication suffixes. FSE's normal
+`FPM_FSE_receive` producer uses disjoint local angle/magnitude buffers, so a
+captured-history load-age difference alone does not establish an ordinary
+producer defect.
+
+### Test quantisation boundaries before replacing reciprocal constants
+
+The equalizer source already spells the original `1 / (beta * 2**k)` grouping;
+the retained compiler reassociates it into `2**-k / beta`. These pool values do
+not establish a source error. The new constructor-based fixture uses actual
+parameter, phase-4 and equalizer constructors, coefficient/beta setters and
+`enterDataPhase` to derive maxima and conversion fields. It plants neither
+maxima nor MMX history.
+
+Fifty-four trials cover 18 adjacent exponent-boundary groups at two debug
+levels. All 812 checks pass across the object, aligned arrays and complete
+transcripts. A compiled-object wrong-scale canary fails 81 checks and exits 1.
+The unchanged full-TU control reproduces all 35 bodies raw and preserves 20
+exact names. No source expression or compiler option changes follow from this
+result. The subsequent field-positioned map of V90 default stores includes
+immediate producers, which another pool-value substitution would miss.
+
+### Keep parallel mutation subsets non-recordable
+
+`mutate.py --only ... --jobs 2` used to discard the filter when spawning
+workers. A requested four-mutation check therefore started all 482 ADID
+mutations and printed a full-suite summary. The corrected runner forwards the
+filter and verbosity, budgets workers from the selected domain, and prints a
+non-recordable subset summary even when an empty filter selects every label.
+The unsupported `--all --only` combination fails before dispatch.
+
+The snapshot parser also rejects subset output and summaryless partial
+verdicts, preserving the old entry. Fourteen mocked controls reproduce the old
+failures and test filtering, worker failure, subset reporting and snapshot
+refusal. They need no copied build trees or mutation cycles. Actual four-label
+ADID sentinel checks pass serially and in parallel. Neither is a full
+482-mutation measurement or a snapshot refresh.
+
+### Reopen a numeric boundary when a production history distinguishes it
+
+`TONE_generate`'s original elapsed sum passes through `fstps`/`flds` before
+the duration comparison. The reconstruction's float-only expression keeps
+excess x87 precision there. A constructor-created tone with a finite positive
+duration of 2097152.5 ms exposes the difference: 512 blocks of 32767 samples,
+then 514 samples, produce an elapsed value of 2097152.25 ms. One more sample
+rounds the reference clock to the duration and expires it; the reconstruction
+compares the unrounded sum and expires one sample later. The fixture advances
+all state through positive, representable generation counts. It establishes
+the tone component history, not a negotiated modem call.
+
+Three complete-TU controls compare the current expression, an explicit float
+cast alone, and the unsuffixed double literal `n * 0.125 + t->elapsed` assigned
+to the existing float local. The cast-only object is raw-identical to the
+baseline. The double expression introduces `float_truncate:SF` at initial
+RTL expansion and recovers the reference's narrowing before the comparison.
+This is an expression-type boundary, not a reload-allocation workaround.
+
+The baseline fails three of 1032 checks; the correction passes all 1032,
+including the following sample's output and clock. Three focused period
+fixtures pass. Across 18 emitted bodies, five canonical bystanders, bindings,
+data and relocation consumers stay equal. The one exact name is preserved;
+the target's size gap remains 13 bytes. Earlier return-width, guard and phase
+controls remain closed: this new valid-history failure justifies the numeric
+correction, without claiming the original return type or complete body.
+
+### Negotiate the host boundary before interpreting a planted status
+
+The V.8 fixture now runs independent original and reconstructed caller/answerer
+calls through registered wrapper operations at 9600 Hz. The peer's preceding
+audio block drives each receiver; no status or protocol state is planted.
+Both wrappers negotiate V.34 at frame 125. Public `V8Create` peers whose
+menus offer V.32 without V.34 then exercise actual V.32 selection in both
+wrapper roles. Each history continues through the natural idle expiry.
+
+The three histories pass 53332 checks, including complete normalised handshake
+and wrapper state, audio, menus, host publication and 12 callback observations.
+Read-only observers forward get/set calls unchanged. The host result block
+starts with an earlier result, so replacing it before the handoff callback is
+an observed write. A fixed observer canary corrupts only the recorded snapshot
+and fails four checks while leaving protocol state unchanged. Three focused
+period fixtures pass. No source divergence is demonstrated by these histories.
+They establish component negotiation and expiry; public modem replacement
+scheduling and quick-connect remain separate. A normally configured peer
+offering neither V.34 nor V.32 is the next discriminator for the unsupported
+handoff path.
+
+### Classify extra imports by their callers and definitions
+
+An undefined-symbol difference alone did not identify six added modem calls.
+The 300-object census finds seven selected-math relocations against two in the
+reference. `pow` has the same two `GetGain` callers on both sides; the reference
+also defines its linked library implementation, which the reconstructed empty
+`pow.S` deliberately leaves out. `sin`/`cos` in `beepgen_sample` and `fmodf` in
+`MTK_phasor` replace reference x87 operations at existing profile/header
+boundaries. Neither observation justifies replacing a call by handwritten
+machine operations or changing a global profile.
+
+`log10` belongs to an added offline table generator. `sqrt` is a compiler
+fallback after `fsqrt` in another added generator. Four reconstruction-only
+generators, including division-table and power-coefficient generation, are
+used only by their respective differential fixtures. Their calculations now
+live as static helpers in those fixtures; they no longer add exports or
+library imports to the production object. The coefficient derivations and
+their existing sweeps remain available.
+
+Twelve complete-TU cells reproduce unchanged, removal and final-source
+controls. All 15 surviving bodies and their relocation consumers remain equal
+to baseline; five original-exact names are preserved. Four focused period
+fixtures pass 1373296 checks. The change removes four function exports,
+336 bytes of text including alignment, 20 bytes of generator-only constants,
+seven relocations and two imports. Remaining extra imports are `cos`, `fmodf`,
+`pow` and `sin`. This removes apparatus from the replacement; it does not
+recover a new original function or the omitted linked library implementation.
+
+### Map defaults to stores, then compare their publication boundaries
+
+The V90 default-store audit resolves immediate/register bit patterns,
+numeric-pool loads and x87 zero/one producers to destination fields. All 340
+static object-store sites have named fields and matching widths; all 338
+constant values agree. The mask recurrence and answer-PCM length are two
+explicitly unresolved input-dependent values in this static analysis. Ten
+checks across nine assembled fixtures demonstrate offset, width, value and
+store-order failures, equal/conflicting CFG joins and unsupported operations.
+
+Original pool values that appeared absent in the reconstruction already have
+immediate-store witnesses. No wrong offset, type or constant default is
+demonstrated. The map does expose a separate source-order discrepancy:
+the reference computes the upstream mask and issues its diagnostics before
+the later defaults, whereas the reconstruction placed that block after them.
+Moving that one contiguous 43-line block recovers all 319 call-relative store
+boundaries without changing literals, types or scalar-store spellings.
+
+Two full-TU controls preserve eight canonical bystanders, bindings, BSS and
+nontext relocation targets. Six of nine original names remain exact. The
+target changes from 3594 to 3584 bytes against 3589 in the reference; both
+length gaps are five bytes. The numeric pool grows from 24 to 28 bytes through
+compiler rematerialisation, while the neighbouring consumer retains its exact
+values and canonical body. The focused period fixture passes 4005 checks.
+This is publication-boundary recovery, without a demonstrated ordinary runtime
+failure. Static CFG pair-order differences fall from 1835 to 1433 of 57630;
+they remain conservative ordering evidence, not dynamic execution counts or
+authority for further store permutations.
+
+The preceding continuation passes `make phase partial-link J=4`: 392 period
+fixtures, zero failures, with all structural checks passing. The exact-name
+set remains 1101 of 1852, covering 125983 of 720125 original function bytes;
+all 724 matched initialised objects agree. Six of 300 production objects
+change and each raw-matches its independently audited control. Strict partial
+comparison remains DIFFERENT. The next bounded leads are omitted narrowing
+before floating decisions, a shared lower-mode V.8 negotiation, and remaining
+reconstruction-only production helpers. A lower-mode fixture must observe
+`V8_OK` and an actual negotiated lower-mode intersection before claiming the
+wrapper's unsupported-handoff arm is reachable; a timeout is a different
+result.
+
+### Resolve section identity before interpreting disassembly
+
+An ELF function is identified by section and offset together. A COMDAT
+function can start at zero while unrelated sections also contain code at
+zero. `tools/dis.py` formerly selected a numeric range without selecting its
+section, mixing instructions, relocation annotations and Intel-form operands
+from unrelated bodies. The invalid AGC read is archived; it supplies no source
+evidence. The byte comparator uses separate section-aware code, and the
+independent exact-name census is unchanged.
+
+The reader now resolves the symbol's section, selects it in both disassembler
+passes and attaches relocations only within the decoded instruction extent.
+Numeric ranges default to `.text`; `--section` selects another section.
+Ambiguous local names require disambiguation. Output reports decoded,
+displayed and relocation counts, including empty ranges. Nine assembled ELF
+controls exercise COMDAT overlap, duplicate locals, padding lookalikes,
+multiple relocations and empty ranges. The old reader fails six of the first
+seven controls; `make phase` now runs the corrected reader's controls.
+
+### Screen local rounding decisions with explicit unsupported paths
+
+`recovery_float_decision_screen.py` examines all 300 frozen objects: 1930
+emitted copies include 758 non-exact original-name copies, of which 82 have
+original floating comparisons. The remaining 676 have none. The supported
+local grammar follows arithmetic through stack stores/reloads to comparisons
+and branches, including flags-preserving scheduling between `fnstsw`, `sahf`
+and the branch. Unknown operations, aliases, calls and block-entry provenance
+remain explicit limits.
+
+Thirty-nine assembled controls pass: 19 value-flow cases and 20 status-word
+scheduling cases. Historical bad TONE and explicit-float-cast controls fire;
+the repaired double-literal control does not. Of 215 original and 220 retained
+recognised decisions, four narrowed decisions on each side correspond to the
+TONE elapsed/phase pair and V92 DIL ceiling pair. Eight apparent Equalizer
+deficits are directly loaded float coefficients followed by `fabs`: exact
+finite-value copies rather than arithmetic narrowing opportunities. No new
+source discrepancy is established in this domain.
+
+Seven bodies remain unaligned: GenericIIR block processing, Resampler,
+ConnectionEvaluator phase 4, DIL descriptor packing, DTMF, EchoCanceler and
+silence progress. Counts alone do not establish missing branches. For example,
+the extra retained phase-4 PDSNR comparison is cloned into mutually exclusive
+fallback-counter arms. Trace operands and path ownership before changing
+source. Extend cross-block provenance only with controls that distinguish
+equal/conflicting joins and reused status flags.
+
+### Finish the bounded lower-mode V.8 history
+
+Public V.8 peers now offer shared V.23/V.21 bits without V.34/V.32, with quick
+connect disabled. Both wrapper roles naturally reach `V8_OK` at frame 125 of
+700, selecting menu bytes `01/70/00`. Each then reports 343 unsupported
+handoff error frames without callbacks, host publication or timer changes.
+No status or protocol state is planted.
+
+The five histories pass 92436 checks, with 12 callback comparisons and 686
+read-only lower-mode observations. Observer-only canaries fail two lower-mode
+checks and four host-snapshot checks while leaving protocol state untouched.
+Three focused period fixtures pass. This closes the proposed component
+unsupported-handoff history without finding a source defect. Public modem
+replacement scheduling, quick connect and actual lower-data sessions remain
+separate boundaries.
+
+### Remove measurement exports only after preserving their owners
+
+The production census first found 23 extra external definitions across 300
+objects. Ten table accessors and three FixedRC accessors are fixture-only;
+their observations now live in the fixtures and read the actual original data
+owners through existing test-only symbol exposure. The FixedRC state observer
+copies the live pointer without defining a second `struct rc`. Its offline
+bank catalog also leaves production. `gen_rc_coeffs.py` now emits the
+self-contained `build/rc_coeffs.c`; the generated Gentoo object remains raw
+identical, including 16 banks and 7820 coefficient bytes.
+
+Twenty-one full-TU cells preserve all 17 surviving emitted bodies and seven
+original-exact names, with no original-name gains or losses. Named data,
+positioned relocation consumers, bindings, imports and NOBITS remain checked;
+only the added catalog is removed from data. The two focused groups pass
+seven fixtures/10200720 checks and three fixtures/260200 checks. Together the
+removals save 384 text bytes including alignment, 160 catalog bytes and 30
+relocations. These changes reduce whole-object differences without recovering
+another original function.
+
+The resulting census has 2684 emitted definitions and nine extra external
+definitions: six weak GenericIIR helpers, two runtime selectors and the
+`v34handshak_txblock` fixture probe. The 26 extra local names remain explicitly
+unclassified. Absence from the reference does not authorise removal of weak
+compiler emissions or runtime selectors. The remaining probe needs a
+complete-owner control before separation.
+
+### Compare the actual source dialect in both deciding builds
+
+The [dialect audit](../period-dialect-audit-results.md) reproduces three
+runtime-test objects by adding only `-std=gnu99` to the frozen canonical
+profile. Six full-TU cells cover 82 emitted bodies; 12 change, while all 57
+shared original names retain the same 24 exact names. Six preprocessing
+controls are identical. Static V34 diagnostic-site reductions therefore need
+compiler/path analysis before being called missing messages. The original
+dialect and precise lowering mechanism remain unproved.
+
+Runtime source C now uses the retained comparison profile's default dialect;
+fixtures and harness retain GNU99. The compiler script prints both flag lists
+and invalidates compiled objects after script edits. Ten shell-dispatch/cache
+controls pass; the old script fails four. Six affected period fixtures pass
+14527339 checks, and all 300 runtime source objects raw-match canonical or
+independently accepted helper-removal controls. No reconstruction source was
+changed for this alignment.
+
+The integrated `make phase partial-link J=4` passes 392 period fixtures with
+zero failures and all structural checks. All 300 runtime source objects
+raw-match their canonical comparison objects. Seven canonical objects change
+from `13f477a9`; every one raw-matches its independently audited helper-removal
+control, and the other 293 remain identical. The exact-name set stays 1101 of
+1852, covering 125983 of 720125 original function bytes. All 724 matched
+initialised objects agree. Storage matching finds all 763 reference records
+and 767 candidate records; BSS remains 2840 versus 2836 bytes. Strict partial
+comparison remains DIFFERENT. The strict documentation build and audit pass;
+no modern-portability or newly exact original-function result is claimed.
+
+The next bounded reviews, in order, are:
+
+1. `silence_progress`: resolve the original indexed threshold operands at
+   function-relative `+179` and `+340` against the retained stack operand at
+   `+157`. Establish their predecessor states, exact values and read timing
+   before treating the two-to-one site change as a missing decision.
+2. `Resampler::resample`: follow both x87 operands at original `+942` and
+   `+734` against retained `+730`, including the double published at
+   `this+0x0c`. Test whether the extra original site is a cloned cold path.
+3. EchoCanceler's combined predicates/shared status tails, then GenericIIR's
+   original inlined block normalisation versus its retained scalar callee.
+   Compare values and side effects across those boundaries before expanding
+   the detector or fitting compiler output.
+4. Separate `v34handshak_txblock` only after a whole-owner control preserves
+   V34's surviving bodies, diagnostics and data. The weak helpers, runtime
+   selectors, DIL finite-domain negatives and explained phase-4 comparison
+   remain closed unless new contradictory evidence appears.
+
+### Recover predicate ownership before fitting residual instructions
+
+The fourteenth continuation resolves the preceding silence, resampler,
+EchoCanceler and V34 probe priorities on the same PR branch.
+
+`silence_progress` now accumulates through its energy member and reads that
+member after the diagnostic call, matching the original's reload. The path
+without diagnostics retains the published float in x87. Both original indexed
+threshold comparisons use the same writable table row; no missing threshold
+or mistyped field was found. The sample-count comparison uses the native
+integer against a double literal, restoring the original early constant load
+and `fcompp`. Ten complete-TU controls retain all four neighbouring bodies,
+data, bindings and imports; all 16 threshold bytes match the reference. The
+target grows from 556 to 588 bytes toward the original 623, reducing its size
+gap from 67 to 35. It remains non-exact; the TU retains three exact names of
+five.
+
+Forty-eight constructor-created silence histories cover adjacent finite
+amplitudes around all three active thresholds, four debug levels, and whole
+versus 799+1 sample calls. They compare state, output and transcripts. One
+upper amplitude is loud in a whole call but quiet across the split: publishing
+the running sum narrows it, and the completed mean equals the threshold. An
+initial fixture expectation ignored this boundary and was corrected from the
+publication arithmetic; reconstruction source was not changed to satisfy it.
+The three focused period fixtures pass 982173 checks. No ordinary logging
+callback mutation is claimed.
+
+The remaining silence differences have distinct compiler causes. Its combined
+level-range guard is already present in `.01.rtl`, before RTL combine. The
+four push/pop saves first appear in `.27.flow2`, whereas the original uses
+stack-offset moves. A read of the locally archived upstream GCC 3.4.2 source
+finds the fast-prologue choice uses an estimated instruction-frequency cost,
+not emitted byte size: four saved registers give a threshold of 60. Frame
+layout can cache this choice during reload. This source inspection has not
+replayed Gentoo patches or measured the actual cached cost; the discriminating
+next test is an instrumented Gentoo `cc1` trace of frame layout and
+`expensive_function_p`, rather than padding source to cross a guessed size
+threshold.
+
+The first integrated phase run passes all 392 differential fixtures but rejects
+six stale silence mutation anchors. Updating the anchors preserves their
+mutations; the `<=` sample-count mutation is correctly labelled one sample
+late. A period-compiler replay catches all 36 registered mutations after
+adding the newly covered first-threshold downward ULP. The new split history
+catches that mutation through detector state, not a diagnostic message. The
+other two previously omitted opposite-direction ULP mutations still survive
+this fixture. Earlier claims that the downward threshold had no reachable
+preimage are superseded by the measured 799+1 history.
+
+EchoCanceler now owns the history-scan pointer once, computes the quiet-sample
+predicate once and reuses it for adaptation, and counts quiet samples with an
+unsigned counter. These operations are visible in the original. Four complete
+TU cells, including the final working source, preserve the five other bodies,
+allocated data, bindings and resolved relocation consumers. The first candidate reaches
+the original 359-byte size from 363, with 131 bytes still differing after
+relocation handling. Two of six original functions remain exact. The focused
+period fixture passes 11 groups and 45905 checks; its runtime object is raw-identical to the accepted
+control. This is supported partial graph recovery, without a demonstrated
+runtime defect.
+
+The original's explicit `TEST`/`SETNE` truth conversion was still absent from
+that first EchoCanceler candidate. The source emits it in initial RTL. `06.cse` first reuses the count-normalised
+value in the adaptation condition; `19.life` marks the original predicate
+dead at its truth conversion, and `20.combine` folds that conversion back to
+the comparison result. Other remaining
+differences include the eight-byte versus twelve-byte local stack allocation,
+operand scheduling and adaptation predicate lowering. A same-size result does
+not establish that only register allocation remains. Earlier controls declined
+this source boundary because it did not yield another exact function; the
+current acceptance rests on independently witnessed operations and unchanged
+neighbours, not size alone.
+
+A subsequent single control expresses the original sequential `mu` and `low`
+guards as nested conditionals. Initial RTL now has separate branches instead
+of an integer AND, the predicate remains live after counting, and the original
+truth conversion survives combine. Only EchoCanceler changes in the full-TU
+control; the focused period fixture again passes 45905 checks and its runtime
+object raw-matches the accepted candidate. Differing bytes fall from 131 to
+55 at the original 359-byte size, with no exact-name gain or loss. The next
+specific discrepancy is the invariant `e * mu` product: the original computes
+it after the empty-tap guard, while the retained code computes it before.
+Trace that boundary before proposing another source change.
+
+### Identify comparison cloning in the compiler dumps
+
+Resampler's original comparison at `+942` belongs to the cold path with no
+new input credit; `+734` consumes the extended subtract-loop residual after
+its double publication. The retained shared comparison also consumes the
+extended value. Four complete-TU controls cross countdown and phase-loop
+boundaries, preserving 16 of 25 exact names, all 24 neighbouring bodies,
+data, bindings and positioned relocation consumers.
+
+Each control has three comparisons through `33.sched2`. Three variants gain
+a fourth at `34.stack`, where GCC converts the x87 stack representation; the
+baseline keeps three. Final disassembly agrees. This demonstrates how an
+extra static comparison can arise without another source predicate or a
+narrowing difference. No source variant is adopted from this domain. The
+focused fixture passes 16 groups and 69521 checks. GCC 3.4.2 accepts `-da`
+here but rejects `-fdump-tree-all`; rejected runs are archived as invalid,
+not interpreted as compiler evidence.
+
+### Remove the final identified production fixture probe
+
+`t_v34hstbl2` now calls complete `v34handshak` on both sides. Its existing
+controlled dispatch state already selected the desired TX block; a production
+wrapper was unnecessary once the reconstruction was complete.
+
+Three whole-owner controls remove `v34handshak_txblock` and preserve all 53
+surviving emitted bodies, positioned calls, diagnostics, data and jump tables.
+Ten raw bodies change only because 54 local call-displacement fields rebase.
+The removal saves 64 text bytes, including one alignment byte, and 100 raw ELF
+bytes. Five audit controls exercise changed data, jump targets, local calls,
+diagnostics and the unchanged case. Fifteen focused period fixtures pass
+158111 checks. The production census drops to eight extra external definitions:
+six weak GenericIIR helpers and two runtime selectors. Neither category is
+authorised for deletion merely because its names are absent from the blob.
+
+### Compare persistent double state when float outputs agree
+
+GenericIIR's old block fixtures used a leading denominator of one and checked
+only float outputs. The retained block delegated every sample to the scalar
+method, whereas the original block normalises with reciprocal then multiply.
+An ordinary constructor-created history with denominator
+`1.4142135623730951`, numerator `1.0000000000014524` (exactly
+`1 + 6541 * 2^-52`), one numerator and denominator coefficient, block size
+four and unit input exposes a one-ULP difference in the stored double
+accumulator and output history. Float output agrees. The fixed regression
+fails two of four checks before recovery; no internal state is planted.
+The earlier suspicion about the final member loop index was disproved by the
+original's final overwrite and is not a reason for a source change.
+
+Writing reciprocal then multiply alone is insufficient: the period compiler's
+`20.combine` contracts it back to division. A normalisation factor initialised
+to one, conditionally set to the reciprocal, and then multiplied preserves
+the original operation. The block now carries its own witnessed processing
+loop. Inline compaction also recovers the absence of helper calls in both
+original scalar and block bodies. Thirteen complete-TU controls cover 234
+emitted-body verdicts, preserving all 16 other bodies and nine exact original
+names of twelve, together with data, bindings and positioned relocations.
+The scalar size moves from 483 to 450 toward the original 398; the block moves
+from 96 to 548 against the original 584. These are partial graph recoveries
+plus a demonstrated numerical-state fix, not exact functions.
+
+The regression's original stored value is `0x3fe6a09e667f5fef`, compared with
+`0x3fe6a09e667f5fee` before recovery. The accepted source reproduces the former.
+The three focused fixtures pass 19 groups and 337374 checks, including
+normalised object state and both histories. This is why output-only tests
+cannot establish recurrence fidelity when double state feeds later samples.
+
+
+The final canonical comparison retains exactly the same 1101 exact names of
+1852, covering 125983 of 720125 original function bytes. Four of 300 objects
+change from `239b234c0`; each raw-matches its independently audited control,
+and the other 296 remain identical. All 300 runtime source objects raw-match
+the canonical comparison objects. All 724 matched initialised objects agree;
+all 763 reference storage records match, with four additional candidate
+records. BSS remains 2840 versus 2836 bytes. Strict partial-object comparison
+remains DIFFERENT.
+
+The final `make phase J=4` passes 392 period fixtures with zero failures and
+all structural checks, including 10042 mutation anchors across 285 suites.
+The strict documentation build and audit pass. No modern-portability result
+is claimed.
+
+The next bounded priorities are:
+
+1. Trace EchoCanceler's invariant product across the empty-tap guard. Preserve
+   the recovered separate predicates and inspect the first divergent compiler
+   stage before changing source.
+2. Extend GenericIIR state/history checks across mixed scalar/block calls and
+   compaction boundaries with non-unit denominators. Then compare the remaining
+   loop/publication boundaries; matching float output alone is insufficient.
+3. Measure the actual Gentoo silence prologue cost/cache decision and frontend
+   range folding. Keep the two surviving threshold mutations visible as
+   coverage limits rather than claiming they have no reachable histories.
+4. Keep the Resampler comparison-count domain closed without a contradictory
+   operand/path. Apply its stack-conversion lesson to other unaligned floating
+   comparisons before labelling them missing predicates.

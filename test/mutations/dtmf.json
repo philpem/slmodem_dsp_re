@@ -116,8 +116,8 @@
  },
  {
   "label": "the two energy thresholds are swapped",
-  "find": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.002f;",
-  "replace": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.002f : 0.0022f;"
+  "find": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.0019999999f;",
+  "replace": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0019999999f : 0.0022f;"
  },
  {
   "label": "the level gate is inverted",
@@ -188,5 +188,10 @@
   "label": "dtmf_set_easy clears the flag instead of setting it",
   "find": "\td->easy = 1;",
   "replace": "\td->easy = 0;"
+ },
+ {
+  "label": "US level cutoff rounded up by one float",
+  "find": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.0019999999f;",
+  "replace": "\tthreshold = (mode == DTMF_MODE_EUR) ? 0.0022f : 0.002f;"
  }
 ]

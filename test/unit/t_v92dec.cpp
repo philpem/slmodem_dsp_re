@@ -1218,6 +1218,53 @@ run_transcripts(void)
 	return diff_end();
 }
 
+/* Synthetic component boundary: the reference study is already terminal.
+ * This isolates the caller's modulo-six transition and diagnostic. It does
+ * not establish a modem history reaching ADID studyState 6.
+ */
+static int
+run_study_completion_boundary(void)
+{
+    int lvl, before;
+    diff_begin("getV92Decision -- synthetic completed-study boundary");
+    for (lvl = 0; lvl <= 3; lvl++) {
+        for (before = 4; before <= 5; before++) {
+            struct trial_args t;
+            long tag = lvl * 10 + before;
+            short mine, theirs;
+            memset(&t, 0, sizeof(t));
+            t.state = 5;
+            t.samplesInState = before;
+            t.withJd92 = 1;
+            t.ucodeLevel = 4095;
+            setup(24000, &t);
+            adid[0].studyState = adid[1].studyState = 6;
+            set_level(lvl);
+            dsplib_debug_capture_reset();
+            dsplib_debug_capture_on = 1;
+            mine = slot[0].o.getV92Decision(0.0f);
+            theirs = ref_getV92Decision(&slot[1].o, 0.0f);
+            dsplib_debug_capture_on = 0;
+            diff_eq_int("decision %ld", mine, theirs, tag);
+            compare_all("completed study", tag);
+            diff_eq_int("reference transition %ld", slot[1].o.state,
+                        before == 5 ? 7 : 5, tag);
+            diff_eq_int("transcript complete %ld",
+                        dsplib_debug_capture_complete(0) &&
+                        dsplib_debug_capture_complete(1), 1, tag);
+            diff_eq_int("completion transcript %ld",
+                        strcmp(dsplib_debug_capture_text(0),
+                               dsplib_debug_capture_text(1)), 0, tag);
+            diff_eq_int("reference transition report %ld",
+                        dsplib_debug_capture_lines(1) > 0,
+                        before == 5 && lvl > 1, tag);
+            set_level(0);
+            teardown();
+        }
+    }
+    return diff_end();
+}
+
 int
 main(void)
 {
@@ -1225,6 +1272,7 @@ main(void)
 
 	bad |= run_states();
 	bad |= run_transcripts();
+	bad |= run_study_completion_boundary();
 
 	return bad;
 }

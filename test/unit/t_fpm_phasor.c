@@ -1,68 +1,26 @@
-/*
- * t_fpm_phasor.c -- differential test of the sine/cosine phase accumulator.
- *
- * FPM_phasor is a pure function of (phase, inc), and phase is a 16-bit field
- * with only 65536 possible values, so the sweep is exhaustive rather than
- * sampled: every phase against every increment of interest, checking sine,
- * cosine and the advanced phase.
- *
- * THE SWEEP RUNS TO 0x10000, NOT 0x8000, and that is the whole point of it.
- * A cycle is 0x8000 units, so 0x8000 and above are out of the DESIGNED domain
- * -- but the object reads `phase` as a SIGNED short and indexes its quadrant
- * sign tables with the result UNMASKED, so those values reach four entries
- * BEFORE each table and return something perfectly definite.
- *
- * BOTH HALVES ARE COMPARED OVER THE WHOLE RANGE, and they are only able to be
- * because the eight out-of-range words are now VALUES in `src/` rather than
- * an arrangement of memory.  They used to be a property of OUR link -- two
- * `.data` globals in a chosen declaration order, with `COEF_DC` positioned to
- * land before one of them -- which is undefined behaviour we could not
- * guarantee, and which `--coverage` displaced, so the sine could not be
- * compared at all above 0x7fff.  `FPM_cos_sign_ext` and `FPM_sin_sign_ext`
- * carry those words as leading entries and the phasor indexes
- * `ext[FPM_PHASOR_SIGN_BELOW + quad]`.  The neighbourhood block below compares
- * all sixteen of them against `dsplibs_ref.o`'s own `.data`, which is the
- * BLOB's bytes and nothing we compile, so no instrumentation of ours can move
- * it.  D392, findings F3588, F3620-3624 and 3700-3703.
- *
- * Also checks the recovered table derivation against all 257 extracted
- * entries, so a future regeneration at another scale cannot silently drift.
- */
+/* Differential phasor test: all 65536 phases, selected signed increments,
+ * original linked sign-table neighbourhood and public writable storage.
+ * Negative quadrants deliberately retain the original out-of-symbol reads.
+ * This fixture checks their actual period link placement before the sweeps. */
 
 #include <math.h>
 #include <stdio.h>
 
 #include "harness.h"
 #include "dsplib/fpm_phasor.h"
+#include "dsplib/fpm_iir.h"
+
+extern short ref_COEF_DC[FPM_IIR_COEFF_PER_SECTION];
+extern void ref_FPM_phasor_dp(struct fpm_phasor_dp *p);
 
 extern void ref_FPM_phasor(struct fpm_phasor *p);
 extern void ref_FPM_phasor_demod(struct fpm_phasor *p);
 
-/*
- * The object's own sign tables, so the neighbourhood block can compare the
- * window we carry as VALUES against what actually lies before the object's.
- * Nothing lies before ours any more -- that is the point of the batch -- so
- * this is the only side of the comparison that reads out of range.
- * `dsplibs_ref.o` is one link contribution, so the relative placement of
- * ref_COEF_DC, ref_FPM_sin_sign and ref_FPM_cos_sign is the object's, byte for
- * byte, and no build of OURS can perturb it.
- */
 extern short ref_FPM_cos_sign[4];
 extern short ref_FPM_sin_sign[4];
 
-/*
- * Read four entries BEFORE a table.  Through a volatile pointer, so the
- * compiler cannot fold the out-of-bounds index against the array's declared
- * size -- this is the whole point of the check and not an accident to warn
- * about.
- *
- * USED ON THE REFERENCE SIDE ONLY.  `ref_FPM_sin_sign` and `ref_FPM_cos_sign`
- * are the blob's symbols and the bytes below them are the blob's `.data`, so
- * reading before them is how the object's own window is recovered.  Our side
- * does not do this any more and no longer may: `src/dsp/fpm_phasor.c` carries
- * the same sixteen bytes as leading entries of `FPM_cos_sign_ext` and
- * `FPM_sin_sign_ext` and every index it forms is inside one array object.
- */
+/* Measurement apparatus: volatile base prevents folding away the linked
+ * negative-index neighbourhood check on either side. */
 static short
 below(const short *table, int i)
 {
@@ -94,6 +52,71 @@ static const int increments[] = {
 	0x8000, 0xc000, 0xffff,		/* read signed: -32768, -16384, -1 */
 };
 
+
+/* Exported writable tables are a component boundary, not a modem-write claim.
+ * Each assignment stays inside its declared array. Negative phase checks also
+ * exercise the original cosine->sine and sine->COEF_DC neighbourhood aliases. */
+static int
+writable_signs(void)
+{
+	short cos_saved[4], sin_saved[4], dc_saved[5];
+	int i, phase, mode;
+	int rc;
+
+	for (i = 0; i < 4; i++) {
+		cos_saved[i] = FPM_cos_sign[i];
+		sin_saved[i] = FPM_sin_sign[i];
+		FPM_cos_sign[i] = ref_FPM_cos_sign[i] = (short)(1000 + 2000*i);
+		FPM_sin_sign[i] = ref_FPM_sin_sign[i] = (short)(-2000 - 3000*i);
+	}
+	for (i = 0; i < 5; i++) {
+		dc_saved[i] = COEF_DC[i];
+		COEF_DC[i] = ref_COEF_DC[i] = (short)(3000 + 1000*i);
+	}
+	diff_begin("phasor writable sign storage: component table writes");
+	for (phase = 0; phase < 65536; phase += 4096) {
+		for (mode = 0; mode < 2; mode++) {
+			struct fpm_phasor a = {0}, b = {0};
+			a.phase = b.phase = (unsigned short)phase;
+			a.inc = b.inc = 17;
+			a.sin = b.sin = 123;
+			if (mode) { ref_FPM_phasor_demod(&a); FPM_phasor_demod(&b); }
+			else { ref_FPM_phasor(&a); FPM_phasor(&b); }
+			diff_eq_obj("writable sign result", struct fpm_phasor, &b, &a, phase + mode);
+		}
+		{
+			struct fpm_phasor_dp a = {0}, b = {0};
+			a.phase = b.phase = (unsigned short)phase;
+			a.inc = b.inc = 17;
+			ref_FPM_phasor_dp(&a); FPM_phasor_dp(&b);
+			diff_eq_obj("writable sign dp result", struct fpm_phasor_dp, &b, &a, phase);
+		}
+	}
+	rc = diff_end();
+	for (i = 0; i < 4; i++) {
+		FPM_cos_sign[i] = ref_FPM_cos_sign[i] = cos_saved[i];
+		FPM_sin_sign[i] = ref_FPM_sin_sign[i] = sin_saved[i];
+	}
+	for (i = 0; i < 5; i++) COEF_DC[i] = ref_COEF_DC[i] = dc_saved[i];
+	return rc;
+}
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+
+static unsigned short
+FPM_phasor_cos_entry(int i)
+{
+	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_cos_table[i] : 0;
+}
+
+static unsigned short
+FPM_phasor_sin_entry(int i)
+{
+	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_sin_table[i] : 0;
+}
+
+
 int
 main(void)
 {
@@ -115,43 +138,15 @@ main(void)
 	}
 	rc |= diff_end();
 
-	/*
-	 * THE OUT-OF-RANGE WINDOW, AS SIXTEEN VALUES RATHER THAN A LAYOUT.
-	 *
-	 * `FPM_phasor` does not mask the quadrant, so a phase of 0x8000 or
-	 * more indexes the sign tables at -4 .. -1.  On the OBJECT's side
-	 * those sixteen bytes are decided by its link, and `dsplibs_ref.o` is
-	 * one contribution, so `ref_FPM_sin_sign[-4 .. -1]` and
-	 * `ref_FPM_cos_sign[-4 .. -1]` are the blob's own bytes -- read here
-	 * through `below()`, which is the only side that still needs it.
-	 *
-	 * On OUR side they are the leading entries of `FPM_cos_sign_ext` and
-	 * `FPM_sin_sign_ext`: ordinary array elements, read with a defined
-	 * index.  So this block is a plain differential comparison of sixteen
-	 * words, it does not depend on where anything is linked, and NOTHING
-	 * `--coverage` appends to any translation unit's `.data` can perturb
-	 * it.  That is what lets both sweeps below run the whole 16-bit range.
-	 *
-	 * It also ties the two copies of the four real signs together: the
-	 * exported `FPM_cos_sign`/`FPM_sin_sign` carry the object's symbols
-	 * and the extended arrays' upper halves carry the same four words, and
-	 * both are compared against the same reference, so neither can drift.
-	 */
+	/* Compare the actual period-linked owners and negative neighbourhood. */
 	diff_begin("sign table neighbourhood");
 	for (i = 0; i < 4; i++) {
 		/* the four the object reads BELOW each table */
-		diff_eq_int("cos_sign_ext[%ld] = cos_sign[-4 + i]",
-			    FPM_cos_sign_ext[i], below(ref_FPM_cos_sign, i), i);
-		diff_eq_int("sin_sign_ext[%ld] = sin_sign[-4 + i]",
-			    FPM_sin_sign_ext[i], below(ref_FPM_sin_sign, i), i);
-		/* the four real signs, in the extended arrays ... */
-		diff_eq_int("cos_sign_ext[4 + %ld]",
-			    FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + i],
-			    ref_FPM_cos_sign[i], i);
-		diff_eq_int("sin_sign_ext[4 + %ld]",
-			    FPM_sin_sign_ext[FPM_PHASOR_SIGN_BELOW + i],
-			    ref_FPM_sin_sign[i], i);
-		/* ... and at the object's own two symbols */
+		diff_eq_int("cos_sign[-4 + %ld]",
+			    below(FPM_cos_sign, i), below(ref_FPM_cos_sign, i), i);
+		diff_eq_int("sin_sign[-4 + %ld]",
+			    below(FPM_sin_sign, i), below(ref_FPM_sin_sign, i), i);
+		/* The public table values. */
 		diff_eq_int("cos_sign[%ld]",
 			    FPM_cos_sign[i], ref_FPM_cos_sign[i], i);
 		diff_eq_int("sin_sign[%ld]",
@@ -174,13 +169,6 @@ main(void)
 			ref_FPM_phasor(&a);
 			FPM_phasor(&b);
 
-			/*
-			 * BOTH OUTPUTS, OVER THE WHOLE RANGE.  The sine used
-			 * to stop at 0x8000 because its out-of-domain sign was
-			 * a neighbouring translation unit's tail that our own
-			 * instrumented build displaced; it is a value in
-			 * `FPM_sin_sign_ext` now and the asymmetry is gone.
-			 */
 			diff_eq_int("phase 0x%04lx: cos", b.cos, a.cos, i);
 			diff_eq_int("phase 0x%04lx: sin", b.sin, a.sin, i);
 			diff_eq_int("phase 0x%04lx: next", b.phase, a.phase, i);
@@ -320,5 +308,6 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= writable_signs();
 	return rc;
 }

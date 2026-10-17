@@ -1032,8 +1032,12 @@ run_ce_meanerr4(void)
  *   (`flds 0x438(%ecx); fcomp %st(1); jae`), and `jae` is false when the
  *   compare is unordered, so the blob RUNS the arm for a NaN where C says it
  *   must not.  That is GCC 3.4.2's choice of complement, which GCC 13 does not
- *   repeat, so a NaN argument would disagree between `make period` and `make
- *   phase` for a reason that is not in our source.  NaN IS fed as the average:
+ *   repeat. This is a modern-tier portability boundary, not a period failure:
+ *   `make phase` now uses the period compiler. The explicit constructor/public-
+ *   update probe in test/explore/t_v90_connection_boundaries.cpp passes the
+ *   argument and enabled rate-up cases, including finite controls, under the
+ *   period compiler. It is outside default unit-test discovery. NaN IS fed as
+ *   the average in this fixture:
  *   every +0x70 comparison is `flds; fcoms; ja/jbe`, which is unordered-correct
  *   on both compilers, and it exercises the else arms.
  */

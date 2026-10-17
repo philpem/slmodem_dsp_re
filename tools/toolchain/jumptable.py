@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Conservative ELF32 absolute jump-table proof, separate from byteident grades.
 
-Only bounded CMP/JA/JMP dispatches with an unmodified 32-bit index are
-supported (one decoded argument load may intervene before JA). Refusal is
-evidence of an unsupported proof, not unequal code.
+Supported dispatches use CMP/JA fallthrough or a uniquely guarded taken JBE
+edge, with an unmodified 32-bit index. One narrowly decoded flag-preserving
+MOV may intervene. Refusal is an unsupported proof, not unequal code.
 """
 import argparse
 import io
@@ -68,13 +68,16 @@ def section_direct_edges(path, section):
     return edges
 
 
-def prove_fixed_stack_frame(rows, dispatch, destinations):
+def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     """Track one entry-allocated frame and untouched callee-save slots in CFG.
 
     This accepts ordinary register saves, not arbitrary stack writes. All
     paths start at the sized ABI entry, keep the same frame depth at joins,
     restore each saved register from its own unchanged slot, and deallocate
-    the frame before RET. Argument loads cannot alias a saved slot.
+    the frame before RET. Incoming loads cannot alias a saved slot. Outgoing
+    words are disjoint from all saves; direct relocated calls obey the i386
+    callee-save/stack-return ABI, as in the pushed-frame proof. No frame address
+    may escape. CWTL modifies only EAX.
     """
     first = rows[0]
     frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
@@ -86,17 +89,27 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
     supported = frozenset(('mov', 'movswl', 'movzwl', 'movsbl', 'movzbl',
                            'lea', 'inc', 'dec', 'add', 'sub', 'neg', 'not',
                            'and', 'or', 'xor', 'shl', 'shr', 'sar', 'mul',
-                           'imul', 'cmp', 'test', 'ret', 'nop'))
+                           'imul', 'cmp', 'test', 'ret', 'nop', 'call', 'cwtl'))
     aliases = {'ebx':'ebx', 'bx':'ebx', 'bl':'ebx', 'bh':'ebx',
                'esi':'esi', 'si':'esi', 'edi':'edi', 'di':'edi',
                'ebp':'ebp', 'bp':'ebp'}
     def written_callee(mnemonic, operands):
+        if mnemonic == 'lea' and re.fullmatch(r'0x0\(%(esi|edi|ebp)(?:,%eiz,1)?\),%\1', operands):
+            return None  # GNU as alignment no-op, no register value changes.
         if mnemonic in ('cmp', 'test', 'ret', 'nop') or mnemonic.startswith('j'):
             return None
         target = re.search(r'(?:^|,)%(\w+)$', operands)
         return aliases.get(target[1]) if target else None
-    stack_ops = {}; slots = {}; saved = set(); written = set()
+    def base(mnemonic):
+        return mnemonic[:-1] if mnemonic[-1:] in ('b','w','l') and mnemonic[:-1] in supported else mnemonic
+    stack_ops = {}; slots = {}; saved = set(); written = set(); outgoing = set()
     for address, raw, mnemonic, operands in rows:
+        original_mnemonic = mnemonic
+        mnemonic = base(mnemonic)
+        if mnemonic == 'call':
+            require(address in calls, 'unproved fixed-frame ABI call')
+            stack_ops[address] = ('call',)
+            continue
         require(mnemonic in supported or mnemonic.startswith('j'),
                 'unsupported fixed-frame instruction')
         require(re.search(r'%sp\b', operands) is None, 'partial stack-pointer access')
@@ -113,7 +126,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
             stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
             continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
-        if store:
+        if store and address < dispatch:
             offset = int(store[2] or '0', 16); register = store[1]
             require(mnemonic == 'mov' and offset % 4 == 0 and offset + 4 <= frame,
                     'saved slot extent/form')
@@ -122,6 +135,14 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
             require(register not in written, 'saved register modified before save')
             slots[offset] = register; saved.add(register)
             stack_ops[address] = ('save', offset, register)
+            continue
+        outgoing_store = re.fullmatch(r'(?:\$0x[0-9a-f]+|%(?:eax|ebx|ecx|edx|esi|edi|ebp)),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
+        if outgoing_store:
+            offset = int(outgoing_store[1] or '0', 16)
+            require(original_mnemonic in ('mov','movl') and offset % 4 == 0 and offset + 4 <= frame,
+                    'fixed-frame outgoing extent/form')
+            outgoing.add(offset)
+            stack_ops[address] = ('outgoing',)
             continue
         load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
         require(load is not None and mnemonic == 'mov', 'unsupported fixed-frame stack access')
@@ -135,6 +156,8 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
             stack_ops[address] = ('argument', register)
             if register in callee: written.add(register)
     require(saved, 'fixed frame without supported saved registers')
+    require(not outgoing.intersection(slots), 'fixed-frame outgoing/save overlap')
+    require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
     pending = [(first[0], (False, frozenset(), frozenset()))]; seen = {}
     returns = 0
@@ -188,7 +211,8 @@ def prove_fixed_stack_frame(rows, dispatch, destinations):
             pending.append((successor, next_state))
     require(returns > 0, 'fixed frame without reachable return')
     return {'bytes': frame, 'saved_slots': sorted(slots.items()),
-            'reachable_instructions': len(seen), 'returns': returns}
+            'reachable_instructions': len(seen), 'returns': returns,
+            'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing)}
 
 
 def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
@@ -386,7 +410,26 @@ def prove(path, name):
     require(index >= 2, 'missing adjacent guard')
     cmp_row, guard, jump = rows[index - 2:index + 1]
     corridor = None
-    if cmp_row[2] != 'cmp':
+    taken_guard = False
+    # A JBE taken edge may dispatch across a default/return block. The unique
+    # direct edge into the dispatch must be this guard; nothing may enter the
+    # comparison/guard interior. This establishes dominance without treating
+    # the intervening default block as part of the protected corridor.
+    if guard[2] != 'ja':
+        candidates = [(i, row) for i, row in enumerate(rows[:index])
+                      if row[2] == 'jbe' and
+                      re.match(r'^([0-9a-f]+)\s', row[3]) and
+                      int(row[3].split()[0], 16) == jump[0]]
+        require(len(candidates) == 1, 'missing unique taken-edge guard')
+        guard_index, guard = candidates[0]
+        require(guard_index >= 2, 'missing taken-edge comparison')
+        cmp_row, corridor = rows[guard_index - 2:guard_index]
+        require(rows[0][2] == 'sub' and stack_writes, 'taken-edge fixed frame required')
+        require(rows[index - 1][2] in ('ret','jmp') and
+                not rows[index - 1][3].startswith('*'),
+                'taken-edge dispatch has fallthrough predecessor')
+        taken_guard = True
+    elif cmp_row[2] != 'cmp':
         require(pushed_abi and index >= 3, 'missing adjacent guard')
         corridor = cmp_row
         cmp_row = rows[index - 3]
@@ -395,26 +438,39 @@ def prove(path, name):
     count = int(match[1], 16) + 1
     register = match[2]
     if corridor is not None:
-        # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
-        # frame proof below separately owns the incoming-argument offset.
-        # Reject selector/ESP destinations, prefixes, SIB alternatives and
-        # relocated fields; no other instruction corridor is admitted.
         raw = corridor[1]
-        operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
-        require(corridor[2] == 'mov' and operand is not None and
-                operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
-                raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
-                'unsupported guard corridor')
+        if taken_guard:
+            # One unprefixed MOV r32,disp32(r32), with no ESP base, modifies
+            # neither EFLAGS nor the selector. Decode the field exactly; a
+            # relocation in this displacement is not admitted below.
+            operand = re.fullmatch(r'%(e(?:ax|bx|cx|dx|si|di|bp)),0x[0-9a-f]+\(%(e(?:ax|bx|cx|dx|si|di|bp))\)', corridor[3])
+            require(corridor[2] == 'mov' and operand is not None and
+                    len(raw) == 6 and raw[0] == 0x89 and
+                    raw[1] & 0xc0 == 0x80 and raw[1] & 7 != 4,
+                    'unsupported taken-edge guard corridor')
+        else:
+            # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
+            # frame proof below separately owns the incoming-argument offset.
+            operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+            require(corridor[2] == 'mov' and operand is not None and
+                    operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
+                    raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
+                    'unsupported guard corridor')
     require(1 <= count <= 256, 'table entry bound')
-    require(guard[2] == 'ja', 'unsigned JA guard')
+    require(guard[2] == ('jbe' if taken_guard else 'ja'), 'unsigned dispatch guard')
     match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + register + r',4\)', jump[3])
     require(jump[2] == 'jmp' and match is not None, 'absolute index/scale dispatch')
-    protected = set(range(cmp_row[0] + 1, jump[0] + len(jump[1])))
+    if taken_guard:
+        protected = (set(range(cmp_row[0] + 1, guard[0] + len(guard[1]))) |
+                     set(range(jump[0], jump[0] + len(jump[1]))))
+    else:
+        protected = set(range(cmp_row[0] + 1, jump[0] + len(jump[1])))
     require(not any(s['st_shndx'] == section_id and s['st_value'] in protected
                     and s['st_info']['type'] != 'STT_SECTION' for s in symbols),
             'named guard bypass entry')
-    require(not any(target in protected for _, target in
-                    section_direct_edges(str(path), section.name)),
+    require(not any(target in protected and not
+                    (taken_guard and source == guard[0] and target == jump[0])
+                    for source, target in section_direct_edges(str(path), section.name)),
             'section direct guard bypass')
     relocations = []
     for relsec in sections:
@@ -442,7 +498,8 @@ def prove(path, name):
     owner_relocs = [(r,s) for sec,r,s in relocations
                     if sec==section_id and start<=r['r_offset']<end]
     calls = set()
-    if pushed_abi:
+    fixed_abi = stack_writes and rows[0][2] == 'sub'
+    if pushed_abi or fixed_abi:
         occupied = set()
         for r,symbol in owner_relocs:
             field = r['r_offset']
@@ -472,8 +529,11 @@ def prove(path, name):
                 absolute_compare=(row[2] in ('cmp','cmpl') and
                                   len(raw)==7 and raw[:2]==b'\x83\x3d' and
                                   offset==2 and row[0]!=cmp_row[0])
+                indexed_word_load=(row[2] in ('movswl','movzwl') and len(raw)==8 and
+                                   raw[:2] in (b'\x0f\xbf',b'\x0f\xb7') and raw[2]&0xc7==0x84 and
+                                   raw[3]&7!=4 and raw[3]>>3&7!=4 and offset==4)
                 require(r['r_info_type']==1 and
-                        (immediate_store or absolute_compare),
+                        (immediate_store or absolute_compare or indexed_word_load),
                         'unsupported ABI data relocation field')
         require(all(row[0] in calls for row in rows if row[2]=='call'),
                 'unrelocated ABI call')
@@ -486,7 +546,9 @@ def prove(path, name):
             require(target is not None, 'undecoded direct branch')
             destination = int(target[1], 16)
             require(destination in boundaries, 'external/interior direct branch')
-            require(destination not in protected, 'direct guard bypass')
+            require(destination not in protected or
+                    (taken_guard and address == guard[0] and destination == jump[0]),
+                    'direct guard bypass')
     relocation, table_symbol = code_relocs[0]
     require(relocation['r_info_type'] == 1 and
             relocation['r_offset'] == jump[0] + len(jump[1]) - 4 and
@@ -524,7 +586,7 @@ def prove(path, name):
         stack_proof = prove_pushed_abi_frame(rows, jump[0], [start+d for d in destinations], calls)
     else:
         stack_proof = prove_fixed_stack_frame(rows, jump[0],
-                                              [start+d for d in destinations]) if stack_writes else None
+                                              [start+d for d in destinations], calls) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]

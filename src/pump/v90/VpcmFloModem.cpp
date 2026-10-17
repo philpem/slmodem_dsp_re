@@ -1556,7 +1556,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	 */
 	case 1:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" *** Echo Silence ON *** \n");
+			dsplibs_debug_printf("\n *** Echo Silence ON *** \n");
 		ecMode = VPCM_EC_RAMP_MODE;
 		ecRampCounter = VPCM_EC_RAMP_START;
 		progressState = 1;
@@ -1567,7 +1567,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	/* 0xe995.  The other end of it, and it logs the timing offset. */
 	case 6:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" *** Echo Silence Off *** \n");
+			dsplibs_debug_printf("\n *** Echo Silence Off *** \n");
 		ecMode = 1;
 		ecRampCounter = VPCM_EC_RAMP_START;
 		v92modem.modulator->exitSilence();

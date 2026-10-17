@@ -422,19 +422,23 @@ V90ConstellationDesigner::maxK(V90MappingParams *p)
  * place.  What shows it is the pair `fld1; fld %st(0)` at the top: the
  * compiler loaded the constant 1 once and duplicated it because the source
  * uses 1.0f twice, once to seed the accumulator and once as this numerator.
+ * Keep both logarithms in the return expression: the original evaluates
+ * log10(k) first (0x47b15..0x47b19), loads 2.0f before narrowing that result
+ * (0x47b1b..0x47b26), then evaluates and narrows log10(2.0f). A separate
+ * l2 assignment reverses the logarithms; a separate logK assignment puts
+ * its narrowing before the constant load. Both change the x87 graph.
  */
 float
 V90ConstellationDesigner::calcK(unsigned int m, float *f)
 {
 	float k = 1.0f;
-	float l2;
 	short i;
 
 	for (i = 0; i < 6; i++)
 		k *= m * f[i];
 
-	l2 = (float)log10l((long double)2.0f);
-	return (float)log10l((long double)k) * (1.0f / l2);
+	return (float)log10l((long double)k) *
+	    (1.0f / (float)log10l((long double)2.0f));
 }
 
 
@@ -566,10 +570,15 @@ V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
  * F2150's shape), and factoring the two into one helper would be wrong in a
  * way no test could catch.  So they stay apart.
  *
- * THE PRODUCT OF THE SIX SCALED SIZES IS A `double`.  0x47d9b spills it with
- * `fstpl` and 0x47da5 and 0x482b6 reload it with `fldl` -- 64 bits, so the
- * variable is a `double` and not a `float`, and the rounding at that spill is
- * observable: it feeds a truncation two steps later.
+ * THE PRODUCT IS NARROWED TO DOUBLE AFTER THE LOOP.  0x47d9b stores it with
+ * `fstpl`; 0x47da5 and 0x482b6 reload it with `fldl`. These establish a
+ * 64-bit boundary before both logarithms, not the accumulator's declaration.
+ * The loop itself has no product spill, so its register keeps x87 precision.
+ * A double accumulator alone does not preserve that final boundary: GCC can
+ * extend it before spilling, keeping the unrounded value in an XF slot.
+ * Keep both logarithm inputs double as well. Promoting them to long double
+ * lets GCSE share one extension across the intervening diagnostics, requiring
+ * a twelve-byte spill; the original reloads the eight-byte product instead.
  *
  * THE UNINITIALISED READ IS THE OBJECT'S.  When the rrn-down loop does not
  * run once, `prevNofUcodes` and `prevDmin` are read at 0x4815b and 0x48280
@@ -621,20 +630,26 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	 * zero and the reciprocal is an infinity.  The object divides anyway;
 	 * D331.
 	 */
-	m = 1.0;
-	for (k = 0; k <= 5; k++) {
-		mm[k] = mappingParams->constellationSize[k] * (1.0f / maxSize);
-		m *= mm[k];
+	{
+		long double product = 1.0;
+		for (k = 0; k <= 5; k++) {
+			mm[k] = mappingParams->constellationSize[k] * (1.0f / maxSize);
+			product *= mm[k];
+		}
+		m = product;
 	}
 
 	/*
 	 * The rate-down target.  See the header comment for why this one
-	 * multiplies by the reciprocal and its twin below divides.
+	 * multiplies by the reciprocal and its twin below divides. The original
+	 * converts rrn and subtracts the target offset before either logarithm
+	 * (0x47d88..0x47da5); keep that live value across the logarithms.
 	 */
 	{
-		float lm = (float)log10l((long double)m);
+		float downTarget = rrn - 0.75f;
+		float lm = (float)log10(m);
 		float l2 = (float)log10l((long double)2.0f);
-		long double x = ((long double)(rrn - 0.75f)
+		long double x = ((long double)(downTarget)
 				 - lm * (1.0f / l2)) * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
 		unsigned int frac = (unsigned int)((x - n) * 100.0f);
@@ -721,11 +736,13 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 		    "V90ConstellationDesigner:: rrnDownDmin = %d\r\n",
 		    rrnDownDmin);
 
-	/* And the rate-up target, which divides where its twin multiplied. */
+	/* The rate-up target is likewise evaluated first (0x4829d..0x482b6).
+	 * It divides where its twin multiplied. */
 	{
-		float lm = (float)log10l((long double)m);
+		float upTarget = rrn + 1.05f;
+		float lm = (float)log10(m);
 		float l2 = (float)log10l((long double)2.0f);
-		long double x = ((long double)(rrn + 1.05f) - lm / l2)
+		long double x = ((long double)(upTarget) - lm / l2)
 			      * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
 		unsigned int frac = (unsigned int)((x - n) * 100.0f);
@@ -870,8 +887,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 						  unsigned char *lastUcode,
 						  unsigned char (*allow)[128])
 {
-	float dMinHighRates = nanf("");
-	float dMinLowRates = nanf("");
+	float dMinHighRates = NAN;
+	float dMinLowRates = NAN;
 	float retrainFactor;
 	short keptDmin = dMin;
 	unsigned char picked[128];

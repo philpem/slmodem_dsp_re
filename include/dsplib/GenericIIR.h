@@ -147,8 +147,9 @@ public:
 	Sample process(Sample x);
 
 	/**
-	 * @brief Filter @p count samples; equivalent to that many calls to
-	 *        the single-sample process().
+	 * @brief Filter @p count samples with reciprocal-and-multiply
+	 *        normalisation. The recurrence matches the scalar method, but
+	 *        stored double history may round differently from its division.
 	 * @param in     Input samples, @p count of them.
 	 * @param out    Output buffer, @p count entries.
 	 * @param count  Number of samples to filter.

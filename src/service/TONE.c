@@ -220,7 +220,10 @@ TONE_generate(struct fdsp_tone *t, float *buf, short n)
 		MTK_phasor(&ph);
 		*buf++ = ph.sine * t->amp;
 	}
-	tm = (float)n * 0.125f + t->elapsed;
+	/* The double sum narrows to float before the duration comparison,
+	 * matching the object's fstps/flds. A float literal keeps excess x87
+	 * precision here and delays expiry at a half-ULP clock boundary. */
+	tm = n * 0.125 + t->elapsed;
 	if (t->duration > tm || 0.0f >= t->duration) {
 		t->elapsed = tm;
 		t->phase = ph.phase;

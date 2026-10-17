@@ -37,6 +37,7 @@
 
 #include "harness.h"
 #include "dsplib/fixedrc.h"
+#include "fixedrc_observe.h"
 
 extern void *ref_RcFixed_Create(int mode);
 extern void ref_RcFixed_Delete(void *h);

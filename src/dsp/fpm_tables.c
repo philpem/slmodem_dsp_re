@@ -28,11 +28,15 @@
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_phasor.h"
 
-/* The object's FPM_sqrt_table is 192 entries; the 193rd is this tree's D1 fix
- * (see fpm_sqrt.c) and is retained.  FPM_DIV_TABLE_ALL is 1 + the object's
- * 128 real entries, carrying the D4 over-read value (see fpm_div.c). */
-#define FPM_SQRT_TABLE_SIZE 193
-#define FPM_DIV_TABLE_ALL (128 + 1)
+/* Original symbol extents. In the bug build div[128] reads the following
+ * XOR table; the fixed build keeps the generated endpoint. Likewise sqrt[192]
+ * reads the following reciprocal table. Natural alignment is audited. */
+#define FPM_SQRT_TABLE_SIZE 192
+#ifdef DSPLIB_REPRODUCE_BUGS
+#define FPM_DIV_TABLE_ALL 128
+#else
+#define FPM_DIV_TABLE_ALL 129
+#endif
 
 /* --- cos --- */
 const unsigned short FPM_cos_table[FPM_PHASOR_TABLE] = {
@@ -184,20 +188,8 @@ const unsigned short FPM_div_table[FPM_DIV_TABLE_ALL] = {
 	17476, 17403, 17331, 17260, 17189, 17119, 17050, 16980,
 	16912, 16844, 16777, 16710, 16644, 16578, 16513, 16448,
 
-	/*
-	 * Index 128 -- one past the original's 128 entries.  See D4.
-	 *
-	 * In the BUG build this is 0, because the original reads
-	 * `FPM_xor_table[0]` here, which is 0: every denominator that
-	 * normalises to a mantissa of 0xff80 or above gets a reciprocal of
-	 * ZERO, which silences an AGC block and drops a Bell 103 connection
-	 * (finding F40).  In the FIXED build it is 16384, the value the
-	 * table's own generator produces:
-	 *     trunc(2^30 / ((128 + 0x80) * 0x100)) = 2^30 / 65536 = 16384
-	 */
-#ifdef DSPLIB_REPRODUCE_BUGS
-	0
-#else
+	/* Only the fixed build adds the mathematically correct endpoint. */
+#ifndef DSPLIB_REPRODUCE_BUGS
 	16384
 #endif
 };
@@ -228,7 +220,6 @@ const unsigned short FPM_sqrt_table[FPM_SQRT_TABLE_SIZE] = {
 	31194, 31261, 31328, 31395, 31461, 31528, 31595, 31661,
 	31727, 31793, 31859, 31925, 31990, 32056, 32121, 32186,
 	32251, 32316, 32381, 32446, 32510, 32575, 32639, 32703,
-	32768,	/* index 192: absent from the original's table - see above */
 };
 
 /* --- SRE_CFG --- */

@@ -11,7 +11,7 @@
 /**
  * @brief Q15 square root.
  * @param x  Unsigned Q15 fraction, 0x0000..0x7fff. The original reads past
- *           its lookup table for larger inputs; this version clamps.
+ *           its lookup table for larger inputs; the original neighbour reads are retained.
  *           See src/dsp/fpm_sqrt.c.
  * @return sqrt(x) as an unsigned Q15 fraction.
  */
@@ -63,29 +63,11 @@ int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
 int FPM_div_32(unsigned int denom, unsigned short *recip,
 	       unsigned short *shift);
 
-/** @brief Read one entry of FPM_div()'s reciprocal table, for the generator self-check. */
-unsigned short FPM_div_table_entry(int i);
-/** @brief Recompute one entry of FPM_div()'s reciprocal table from its ideal formula. */
-unsigned short FPM_div_table_generate(int i);
-
-/*
- * `FPM_div_table` is GLOBAL (`R`) in the object, so it is not file-static;
- * the declaration is completed by the definition in `fpm_tables.c`.  The
- * definition is 129 entries -- the object's 128 plus the D4 over-read's
- * value, which is 0 in the bug build and the generated 16384 in the fixed
- * one.  Dropping the 129th in the bug build is not equivalent: our `.rodata`
- * does not reproduce the object's FPM_xor_table adjacency.
- */
+/* Public reciprocal table: 128 original words in the bug build, followed by
+ * FPM_xor_table; the fixed build retains its generated 129th endpoint. */
 extern const unsigned short FPM_div_table[];
 
-/*
- * `FPM_sqrt_table` is a GLOBAL object in the object's `.rodata`
- * (`readelf -sW`), and it is defined in `fpm_tables.c` with the other seven
- * (F11402).  It was once a file-`r` static behind the accessors below; the
- * accessors are retained but now read the global.  The size is the object's
- * 192 plus this tree's documented over-read entry, so it is declared unsized
- * here.
- */
+/* Public original 192-word sqrt table, followed by FPM_div_table. */
 extern const unsigned short FPM_sqrt_table[];
 
 /**
@@ -130,23 +112,6 @@ extern const short FPM_xor_table[256];
  *         (which also announces itself at debug level 2).
  */
 short FPM_log10(unsigned short mantissa, short exponent);
-
-/** @brief Recompute one entry of FPM_log10()'s table from its ideal formula. */
-short FPM_log10_table_generate(int index);
-/** @brief Number of table entries the generator actually derives (vs. copies verbatim). */
-int FPM_log10_table_derived(void);
-/** @brief Read one entry of FPM_log10()'s table, for the generator self-check. */
-short FPM_log10_table_entry(int index);
-/** @brief Size of FPM_log10()'s table. */
-int FPM_log10_table_size(void);
-
-/* Table introspection, for the generator self-check in the unit tests. */
-/** @brief Recompute one entry of FPM_sqrt()'s table from its ideal formula. */
-unsigned short FPM_sqrt_table_generate(int index);
-/** @brief Read one entry of FPM_sqrt()'s table, for the generator self-check. */
-unsigned short FPM_sqrt_table_entry(int index);
-/** @brief Size of FPM_sqrt()'s table. */
-int FPM_sqrt_table_size(void);
 
 /**
  * @brief One LMS coefficient update.

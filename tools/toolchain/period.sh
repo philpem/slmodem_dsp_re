@@ -177,7 +177,7 @@ run_stage() {
             -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
             -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "ASRC=$ASRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
             -e "KEEP=${KEEP:-}" -e "OUT_UID=$(id -u)" -e "OUT_GID=$(id -g)" \
-            -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
+            -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" -e "PERIOD_LINK_MODE=${PERIOD_LINK_MODE:-fixture}" \
             "$IMG" sh -c '
                 sh /src/tools/toolchain/period_inner.sh
                 status=$?
@@ -188,7 +188,7 @@ run_stage() {
         docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
             --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
             -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "ASRC=$ASRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
-            -e "KEEP=${KEEP:-}" -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
+            -e "KEEP=${KEEP:-}" -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" -e "PERIOD_LINK_MODE=${PERIOD_LINK_MODE:-fixture}" \
             "$IMG" sh /src/tools/toolchain/period_inner.sh
     fi
 }
@@ -231,4 +231,7 @@ if [ -s "$OUT/srcobjs.list" ]; then
     done < "$OUT/srcobjs.list"
 fi
 
+PERIOD_BLOB=$(MAKEFLAGS= make -s --no-print-directory print-BLOB | sed 's/^BLOB = //')
+python3 tools/toolchain/period_aggregate.py --out "$OUT" --blob "$PERIOD_BLOB" \
+    --tests "$TESTS" --mode "${PERIOD_LINK_MODE:-fixture}"
 run_stage link

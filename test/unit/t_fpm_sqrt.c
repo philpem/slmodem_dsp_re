@@ -1,25 +1,41 @@
-/*
- * t_fpm_sqrt.c -- Q15 square root: differential test plus table self-check.
- *
- * Two independent things are verified here:
- *
- *   1. The generator reproduces the original coefficient table exactly.  This
- *      is what makes the table maintainable rather than a magic blob -- if the
- *      derivation were wrong, regenerating at another scale would silently
- *      produce a subtly different filter.
- *
- *   2. FPM_sqrt agrees with the original across its entire defined domain,
- *      0x0000..0x7fff, exhaustively.
- *
- * Inputs above 0x7fff are deliberately excluded: the original indexes past the
- * end of its table there, and that is documented rather than reproduced.
- */
+/* Differential sqrt: generator over 192 original entries, DP boundaries,
+ * Q15 values, and all 65536 unsigned-word inputs. The latter is a component
+ * API probe; it does not establish modem reachability above Q15. */
+
+#include <math.h>
 
 #include "harness.h"
 #include "dsplib/fpm.h"
 
 extern unsigned short ref_FPM_sqrt(unsigned short x);
 extern unsigned short ref_FPM_sqrt_dp(unsigned int x);
+
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static unsigned short
+FPM_sqrt_table_generate(int index)
+{
+	/* Compute the ideal table formula in double precision. */
+	double frac = (index + 64) / 256.0;
+	return (unsigned short)(32768.0 * sqrt(frac));
+}
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+#define FPM_SQRT_TABLE_SIZE 192
+
+static unsigned short
+FPM_sqrt_table_entry(int index)
+{
+	return (index >= 0 && index < FPM_SQRT_TABLE_SIZE)
+		? FPM_sqrt_table[index] : 0;
+}
+
+static int
+FPM_sqrt_table_size(void)
+{
+	return FPM_SQRT_TABLE_SIZE;
+}
+
 
 int
 main(void)
@@ -77,6 +93,14 @@ main(void)
 	diff_begin("FPM_sqrt/Q15");
 	for (i = 0; i <= 0x7fff; i++)
 		diff_eq_int("FPM_sqrt(0x%04lx)", FPM_sqrt((unsigned short)i),
+			    ref_FPM_sqrt((unsigned short)i), i);
+	rc |= diff_end();
+
+	/* Full unsigned-short component boundary; no modem caller claim.
+	 * Above Q15 the original reads its following div/xor table words. */
+	diff_begin("FPM_sqrt/full unsigned-word original fidelity");
+	for (i = 0; i <= 0xffff; i++)
+		diff_eq_int("sqrt full word %ld", FPM_sqrt((unsigned short)i),
 			    ref_FPM_sqrt((unsigned short)i), i);
 	rc |= diff_end();
 

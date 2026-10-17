@@ -229,8 +229,8 @@ single-bit uses and 235 multi-bit ones, so check which you have before naming.
 
 1. **A format string that prints the thing.** `.rodata` labels are the original
    author's own words. `tools/relocscan.py --at .rodata.str1.1:0xNNNN` finds
-   who references one (finding F604). This is not the Ghidra prohibition — that
-   rule forbids names from DECOMPILER OUTPUT, not from the binary's own text.
+   who references one (finding F604). Binary text is direct naming evidence. Decompiler-inferred names
+   remain hypotheses under the Ghidra policy below.
 2. **A callee or caller that types it.** A mangled C++ name carries argument
    types; a field passed to `Scrambler<h,h>::process` has that element type
    because the mangling says so, not because it looked right.
@@ -781,27 +781,64 @@ STALE (a source newer than every object). The probe order is licensed by
 measurement, not assumption: both object trees define the same 1457
 `(name, kind)` pairs. Findings F3055, F3110 and F3111.
 
-## Ghidra is scaffolding, never evidence
+## Ghidra and GhidraMCP: analysis, hypotheses and verified evidence
 
-`tools/decompile.sh v34handshak` gives a decompilation to read control flow
-and constants out of. Measured against a function this tree had already
-verified by hand, it recovers branch structure, every constant and structure
-offset, and the calling convention — and **destroys arrays**, which are most
-of this object (`unsigned char allow[6]` comes back as three unrelated locals
-written through `._2_1_` casts).
+The project owner expanded the permitted uses on 17 October 2026. Ghidra is
+an analysis workbench alongside `dis.py`, the ELF readers and compiler dumps.
+Use GhidraMCP to automate bounded queries and inventories where it reduces
+manual work. The following uses are explicitly allowed:
 
-Three rules, and they are not negotiable:
+- Navigate disassembly, control-flow graphs, callers, callees, cross-references,
+  strings, constants, jump tables and data owners.
+- Compare reference and reconstructed functions, basic blocks and data;
+  nominate missing calls, guards, loops, stores or diagnostics for investigation.
+- Trace producers and consumers using raw P-code or high P-code, keeping the
+  two representations distinct and checking decisive operations in assembly.
+- Apply tentative structure layouts, argument types, calling conventions and
+  names in the analysis project to test hypotheses. Label inferred annotations
+  and keep their provenance separate from names supplied by the binary.
+- Record decompiler-derived hypotheses and tool observations in investigation
+  notes, including addresses, tool/version, assumptions and validation status.
+  They may guide source experiments and fixture design; they are not established
+  source facts merely because the decompiler presents them convincingly.
+- Write repeatable Ghidra scripts/MCP analyses, export address-backed discrepancy
+  ledgers, and use function matching or similarity to prioritise review.
+- Run bounded emulation or symbolic/dataflow experiments as exploratory probes,
+  with explicit instruction support, initial-state assumptions and controls.
+  These do not replace native period differential execution.
 
-- Every line goes through `tools/dis.py` before it goes into `src/`.
-- **No name, comment or finding is ever written from decompiler output.** The
-  record is the deliverable, and a Ghidra guess recorded as a derivation
-  corrupts it.
-- The differential test remains the only thing that decides. That is also why
-  "the decompilation might not match the assembly" is not a risk here: it
-  never ships and is never trusted, so a mismatch is just a failing test.
+**Evidence is classified by provenance, not by the application's name.** Raw
+bytes, symbols, relocation records and decoded instructions read through Ghidra
+can support a finding after checking the import mapping and independently
+verifying the decisive facts against the original ELF and `tools/dis.py`.
+Decompiler-inferred types, names, control structures and simplified expressions
+remain hypotheses until independently corroborated. The old blanket prohibition
+on recording anything derived from decompiler output is superseded by this
+explicit distinction; tentative notes are allowed, unsupported factual claims
+in reconstruction source and findings are not.
 
-Treat floating-point output as suspect — the object is `-mfpmath=387` and
-Ghidra's x87 modelling is weak. Nobody has measured it here.
+Before analysis, identify the project and program explicitly, record input
+hashes and Ghidra version, and verify section mappings, relocations, function
+boundaries and calling conventions. Pass the program explicitly when multiple
+programs are open. Keep reference evidence separate from reconstructed-header
+annotations so that an assumed layout cannot validate itself. Do not overwrite
+existing analyst annotations without reviewing them. The `re/` exclusion applies
+inside Ghidra too: do not import or inspect excluded inputs or their analyses.
+
+Calibrate automated detectors with known positives and negatives; report
+examined, unsupported and ambiguous denominators. Similarity, matching P-code,
+matching decompiled C and a clean analysis report do not establish equivalence.
+The historical Ghidra 11.4.2 experiment in `docs/method/equivalence.md` lost an
+x87 subtraction and parameter in high P-code while raw P-code retained them.
+This was measured, contrary to the old “nobody has measured it” statement;
+rerun the controls on the installed version before generalising the result.
+
+Every adopted source change still requires original-instruction evidence,
+complete-TU collateral review and the period differential gate. `make phase`
+remains the reconstruction gate; `byteident.py` and strict partial-object
+comparison decide their respective byte-identity claims. Ghidra does not reveal
+the unavailable original GCC RTL or replace GCC dumps when tracing allocation,
+spills, scheduling and x87 stack conversion.
 
 ## Findings and numbering
 

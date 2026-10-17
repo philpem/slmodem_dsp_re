@@ -41,8 +41,8 @@
 #include "dsplib/fpm_agc.h"
 
 /* { acquisition, tracking } -- only [0] is ever selected.  See above. */
-static const short AGC_DEF_ALPHA[2] = { 16384, 32604 };
-static const short AGC_DEF_BETA[2] = { 16384, 1638 };
+static short AGC_DEF_ALPHA[2] = { 16384, 32604 };
+static short AGC_DEF_BETA[2] = { 16384, 1638 };
 
 struct fpm_agc_cfg AGCb103_CFG = {
 	.ref_level = 16384,	/* output settles at half this: 8192 */
