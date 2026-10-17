@@ -126,7 +126,11 @@ if [ "$STAGE" = "compile" ]; then
 	# The reconstructed objects only -- the harness is not ours to globalize,
 	# and a harness name must not make a reconstruction name look ambiguous.
 	: > "$OUT/srcobjs.list"
-	for f in $SRC $CXXSRC $ASRC; do echo "$(obj "$f")" >> "$OUT/srcobjs.list"; done
+	: > "$OUT/srcmanifest.list"
+	for f in $SRC $CXXSRC $ASRC; do
+		echo "$(obj "$f")" >> "$OUT/srcobjs.list"
+		echo "$(basename "$(obj "$f")") $f" >> "$OUT/srcmanifest.list"
+	done
 	exit 0
 fi
 
@@ -149,12 +153,38 @@ if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -d "$OUT/testhost" ]; then
 	OBJS="$GLOB"
 fi
 
-# The newest input any test binary has, so a relink can be skipped when
-# nothing it depends on moved.  The LINK is the expensive half here -- 155
-# static binaries against a 1.2 MB object -- and skipping it is sound because
-# the inputs are identical.  The RUN is never skipped: a cached pass is not a
-# pass, and running the binaries is the cheap part.
-NEWEST_IN=$(ls -t $OBJS "$REF" 2>/dev/null | head -1)
+# Only reconstructed source is aggregated: fixture and harness references stay
+# unresolved until the final link. Wrapping must happen while the source TUs
+# are still separate inputs; a final-only --wrap cannot intercept bound calls.
+aggregate_for() {
+	wrap_flags=$1
+	mkdir -p "$OUT/aggregate"
+	ld_program=$(gcc -print-prog-name=ld)
+	{
+		cat "$OUT/aggregate-inputs.key"
+		cksum tools/toolchain/period_inner.sh
+		printf '%s\n' "$wrap_flags" "$ld_program"
+		"$ld_program" --version
+	} > "$OUT/aggregate/request.key"
+	key=$(cksum "$OUT/aggregate/request.key" | cut -d ' ' -f 1)
+	aggregate="$OUT/aggregate/$key.o"
+	if [ ! -s "$aggregate" ] || ! cmp -s "$OUT/aggregate/request.key" "$aggregate.key"; then
+		set -- $(cat "$OUT/aggregate-order.list")
+		if ! (set -x; gcc -nostdlib -r -o "$aggregate.tmp" "$@" $wrap_flags) > "$aggregate.log" 2>&1; then
+			cat "$aggregate.log" >&2; return 1
+		fi
+		mv "$aggregate.tmp" "$aggregate"
+		cp "$OUT/aggregate/request.key" "$aggregate.key"
+	fi
+	echo "$aggregate"
+}
+
+HARNESS_OBJS=""
+for f in $HARNESS; do HARNESS_OBJS="$HARNESS_OBJS $(obj "$f")"; done
+
+# Each executable's cache records its resolved mode, ordered object inputs,
+# final flags and this apparatus revision. Runs are never cached. Aggregate
+# object caching additionally uses source content and selected linker identity.
 
 # --- link and run ----------------------------------------------------------
 #
@@ -189,15 +219,47 @@ for t in $TESTS; do
 	EXTRA_LD=""
 	[ -f "test/unit/$t.ldflags" ] && EXTRA_LD=$(cat "test/unit/$t.ldflags")
 
-	if [ -n "$KEEP" ] && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
-	   && { [ -z "$NEWEST_IN" ] || [ "$OUT/$t" -nt "$NEWEST_IN" ]; }; then
+	# Fixtures opt in with .ldmode. The environment override is diagnostic:
+	# PERIOD_LINK_MODE=aggregate validates every fixture; individual is the
+	# negative control for an aggregate-boundary fixture.
+	LINK_MODE=${PERIOD_LINK_MODE:-fixture}
+	if [ "$LINK_MODE" = fixture ]; then
+		LINK_MODE=individual
+		[ ! -f "test/unit/$t.ldmode" ] || LINK_MODE=$(cat "test/unit/$t.ldmode")
+	fi
+	LINK_OBJS=$OBJS
+	case "$LINK_MODE" in
+	individual) ;;
+	aggregate)
+		WRAP_LD=""
+		for flag in $EXTRA_LD; do
+			case "$flag" in
+			-Wl,--wrap=*) WRAP_LD="$WRAP_LD $flag" ;;
+			*--wrap*) echo "unsupported aggregate wrap syntax: $flag" >&2; exit 1 ;;
+			esac
+		done
+		AGGREGATE=$(aggregate_for "$WRAP_LD")
+		LINK_OBJS="$AGGREGATE $HARNESS_OBJS"
+		;;
+	*) echo "invalid period link mode: $LINK_MODE" >&2; exit 1 ;;
+	esac
+	LINK_NEWEST=$(ls -t $LINK_OBJS "$REF" 2>/dev/null | head -1)
+	{
+		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$REF" "$EXTRA_LD"
+		cksum tools/toolchain/period_inner.sh
+	} > "$OUT/$t.link-config.tmp"
+
+	if [ -n "$KEEP" ] && cmp -s "$OUT/$t.link-config.tmp" "$OUT/$t.link-config" && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
+	   && { [ -z "$LINK_NEWEST" ] || [ "$OUT/$t" -nt "$LINK_NEWEST" ]; }; then
 		:					# inputs unmoved; keep the binary
-	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $OBJS "$REF" \
+	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $LINK_OBJS "$REF" \
 	     $EXTRA_LD -lm \
 	     > "$OUT/$t.link.log" 2>&1; then
 		echo "  LINK-FAIL    $t"; sed -n '1,3p' "$OUT/$t.link.log"
 		fail=$((fail + 1)); failed="$failed $t"; continue
 	fi
+
+	mv "$OUT/$t.link-config.tmp" "$OUT/$t.link-config"
 
 	if "$OUT/$t" > "$OUT/$t.run.log" 2>&1; then
 		pass=$((pass + 1))

@@ -53,8 +53,7 @@
  *
  * The one-past-the-end read
  * -------------------------
- * For a Q15 caller -- mantissa 0x0000..0x7fff, which is what `FPM_sqrt`'s
- * domain analysis established for this layer -- the normalised value lands in
+ * For a Q15 mantissa (0x0000..0x7fff), the normalised value lands in
  * [0x4000, 0x7fff] and the index runs 0..128.  The table has 128 entries,
  * 0..127.  So mantissas of 0x7fc0..0x7fff, 64 of the 32768 Q15 values, read
  * one element past the end.
@@ -67,28 +66,13 @@
  * is one count high over that range rather than catastrophically wrong --
  * which is presumably why it was never noticed.
  *
- * SO THE TABLE HERE HAS 129 ENTRIES AND THE LAST ONE IS 10.  That is not a
- * derived value and the generator does not produce it: it is the neighbouring
- * object's first short, written down so that our copy reproduces the original
- * DELIBERATELY rather than by luck.  Without it our overrun reads whatever
- * our own linker put after the array -- which, when this file was first
- * written, happened to be a value in 8..15 and so happened to agree after the
- * `>> 3`.  A test that passes for that reason is a test that fails the next
- * time anything is added to this translation unit.  `FPM_sqrt` sets the
- * precedent by adding a 193rd entry; the difference is that its extra entry
- * is the mathematically correct one and this one is a transcription of the
- * defect.
- *
- * Recorded as D65 in docs/deviations.md; the test drives all 64 of those
- * mantissas explicitly.
- *
- * ABOVE Q15 THERE IS NO REPRODUCTION AND NONE IS CLAIMED.  A mantissa of
- * 0x8000..0xffff needs no normalising and indexes up to 384, so the original
- * reads up to 512 bytes past its table -- through `FPM_PPS_CFG` and whatever
- * follows it.  Reproducing that would mean transcribing a quarter of
- * .rodata, and nothing establishes that any caller does it.  The unit test
- * deliberately does NOT compare that range: two builds disagreeing about
- * memory neither of them owns is not a defect either of them has.
+ * Preserve the original 128-word symbol and its neighbour read. The period
+ * fixture links reconstructed source as a canonical relocatable aggregate,
+ * as the reference already is, so the following FPM_PPS_CFG supplies 10.
+ * Direct individual-TU executable linking interleaves the diagnostic string
+ * section here; that is a different fixture boundary, not a source table.
+ * The complete unsigned-word fixture checks the original following window;
+ * this is component/API fidelity, not a claim about modem caller ranges.
  */
 
 #include <math.h>
@@ -101,7 +85,7 @@
  * File-local in the blob -- the reference to it is section-relative with the
  * offset as an addend, not a named symbol -- so it is static here.
  */
-static const short FPM_log10_table[129] = {
+static const short FPM_log10_table[128] = {
 	-9864, -9753, -9643, -9534, -9426, -9318, -9212, -9106,
 	-9001, -8897, -8793, -8690, -8588, -8487, -8387, -8287,
 	-8187, -8089, -7991, -7894, -7798, -7702, -7607, -7512,
@@ -118,13 +102,7 @@ static const short FPM_log10_table[129] = {
 	-1400, -1339, -1278, -1218, -1157, -1097, -1037, -977,
 	-918, -859, -800, -741, -683, -625, -567, -509,
 	-451, -394, -337, -280, -224, -167, -111, -55,
-	/*
-	 * Entry 128 is NOT log10 of anything.  The original's table stops at
-	 * 127 and its index reaches 128 for mantissas 0x7fc0..0x7fff; what it
-	 * reads there is the first short of `FPM_PPS_CFG` at .rodata:0xc4a0.
-	 * Transcribed so the overrun is reproduced deterministically.  D65.
-	 */
-	10
+
 };
 
 short
