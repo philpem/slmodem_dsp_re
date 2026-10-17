@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Eight-cell full-TU control of witnessed V92 encoder case ownership.
 
-All source alternatives and the no-auto-inline profile remain diagnostic.
+This is the historical source/profile cross. The no-auto-inline profile stays
+diagnostic; current case-boundary adoption is audited separately by
+recovery_v92_boundary_adoption.py, without reopening this spelling domain.
 Use an archived canonical Gentoo object tree with its .build-config:
 
   mkdir -p build/conv-owner-next293

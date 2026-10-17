@@ -54,11 +54,20 @@ typedef char v92ce_size[(sizeof(V92ConvolutionEncoder) == 0x2008) ? 1 : -1];
 #endif
 
 /*
- * The two static tables, read out of .data at 0x6ac0 and 0x6bc0 and defined
- * here in that order because initialised data comes out in declaration order.
+ * The two static tables are read out of .data at 0x6ac0 and 0x6bc0.
+ * Retained unit-at-a-time compilation emits them in reverse definition
+ * order. Defining subsetLabelTable first therefore restores the original
+ * contiguous cosetMapping4D/subsetLabelTable layout under this profile.
+ * The opposite definition order with no-unit produces the same object;
+ * neither the original source order nor that option is uniquely recovered.
  * `nm` calls both `D`, so neither is const; `inverseMap` indexes both with a
  * scale of four, so both are `int`.
  */
+int V92ConvolutionEncoder::subsetLabelTable[16] = {
+	0, 7, 4, 3, 5, 2, 1, 6,
+	4, 3, 0, 7, 1, 6, 5, 2
+};
+
 int V92ConvolutionEncoder::cosetMapping4D[64] = {
 	 0,  0,  1,  1,  8,  8,  9,  9,
 	 3,  2,  2,  3, 11, 10, 10, 11,
@@ -68,11 +77,6 @@ int V92ConvolutionEncoder::cosetMapping4D[64] = {
 	11, 10, 10, 11,  3,  2,  2,  3,
 	13, 13, 12, 12,  5,  5,  4,  4,
 	14, 15, 15, 14,  6,  7,  7,  6
-};
-
-int V92ConvolutionEncoder::subsetLabelTable[16] = {
-	0, 7, 4, 3, 5, 2, 1, 6,
-	4, 3, 0, 7, 1, 6, 5, 2
 };
 
 V92ConvolutionEncoder::V92ConvolutionEncoder()
@@ -230,16 +234,19 @@ V92ConvolutionEncoder::inverseMap(int *in)
  *     54f75:  89 7b 04    mov %edi,0x4(%ebx)
  *     54f78:  89 f0       mov %esi,%eax
  *
- * There is no nextState/output load on that original arm. The retained
- * common table lookup below is still a reconstruction gap for unnamed modes:
- * Gentoo GCC 3.4.2-r2 emits both loads through uninitialised `i`, under retained
- * O3 and with automatic inlining disabled. The old claim that GCC dropped
- * those loads was incorrect. Initialising the value would invent behaviour.
+ * There is no nextState/output load on that original arm. Keep the table
+ * calculations inside the named cases, leaving ns/result indeterminate on
+ * the unnamed arm rather than inventing values or unconditional table reads.
+ * State is also published inside each valid arm, before the output read.
+ * The repeated common state assignment preserves the original default tail;
+ * it writes the same value again on a valid reset-built history.
  *
- * tools/recovery_v92_case_owners.py isolates case-owned table calculations.
- * Its common-result/tail control reproduces the whole original process body
- * with automatic inlining disabled, but that diagnostic profile is not the
- * retained build. No functional correction is claimed here.
+ * This previously measured common-tail form reproduces the original process
+ * with automatic inlining disabled. Retained O3 still inlines inverseMap and
+ * eliminates/moves the duplicate state stores after the output read. Those
+ * byte gaps remain open; no per-file option or attribute is introduced.
+ * tools/recovery_v92_boundary_adoption.py checks the native no-table-read
+ * default boundary, full-TU collateral and the separate static-table layout.
  *
  * The test never drives an unnamed mode through here, on purpose: the two
  * sides would be comparing two different pieces of stack, which is a
@@ -252,22 +259,31 @@ V92ConvolutionEncoder::process(int *in)
 {
 	int r = inverseMap(in);
 	int ns;
+	int result;
 	int i;
 
 	switch (mode) {
 	case 0:
 		i = r % 4;
+		ns = nextState[(state << 4) + i];
+		state = ns;
+		result = output[(ns << 4) + i];
 		break;
 	case 1:
 		i = (r & 3) | ((r & 8) >> 1);
+		ns = nextState[(state << 4) + i];
+		state = ns;
+		result = output[(ns << 4) + i];
 		break;
 	case 2:
 		i = r % 16;
+		ns = nextState[(state << 4) + i];
+		state = ns;
+		result = output[(ns << 4) + i];
 		break;
 	}
 
-	ns = nextState[(state << 4) + i];
 	state = ns;
-	return output[(ns << 4) + i];
+	return result;
 }
 #pragma GCC diagnostic pop
