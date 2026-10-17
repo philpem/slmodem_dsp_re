@@ -3670,6 +3670,26 @@ t3m_micro48(struct t3m_frame *f)
  * with the counter at 1.  That is why the reset cannot be tested by the
  * counter alone.
  */
+#ifndef DSPLIB_REPRODUCE_BUGS
+/*
+ * D77: The INFO0 slicer keeps clocking in silence. It can turn near-zero
+ * input into a run of ones during the caller's required phase-2 quiet period
+ * (V.34, 11.2.1.1.3). Require 64 counts RMS at the AGC output before treating
+ * four ones as a repeat. This is well below the normalised handshake tone.
+ * Divide each square before summing so full-scale shorts cannot overflow.
+ */
+static int
+t3m_info0_carrier(const short *in)
+{
+	unsigned energy = 0;
+	int i;
+
+	for (i = 0; i < V34_FSK_BLOCK; i++)
+		energy += (unsigned)((int)in[i] * in[i]) / V34_FSK_BLOCK;
+	return energy >= 64u * 64u;
+}
+#endif
+
 static void
 t3m_micro47(struct t3m_frame *f)
 {
@@ -3681,7 +3701,11 @@ t3m_micro47(struct t3m_frame *f)
 	 * below -- which is what "repeated info0" means here.  The second
 	 * test is what stops it running on every block: +0x3588 becomes 4.
 	 */
-	if ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {
+	if ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0
+#ifndef DSPLIB_REPRODUCE_BUGS
+	    && t3m_info0_carrier(f->rx->burst)
+#endif
+	   ) {
 		t3m_errrec_reset(f);
 
 		if (DSPLIB_DEBUG_ON())

@@ -564,12 +564,22 @@ $(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(TESTCXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
-# Safety checks exercise deliberately fixed paths without linking the blob or
-# defining DSPLIB_REPRODUCE_BUGS.  Their expected values are source contracts,
+# Safety checks exercise deliberately fixed paths without defining
+# DSPLIB_REPRODUCE_BUGS. Their expected values are source contracts,
 # not differential claims.
 $(BUILD)/safety/t_alloc_sizes: test/safety/t_alloc_sizes.c $(OBJ) $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
+
+# Same component cases as the differential test, with the repaired source.
+# The reference remains linked to establish the original's quiet-input bug.
+$(BUILD)/safety/t_v34info0carrier: test/unit/t_v34info0carrier.c $(OBJ) $(HARNESS_OBJ) $(REF)
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -DINFO0_REPAIRED -Iinclude -Itest/harness -o $@ $^ -lm
+
+.PHONY: check-info0-carrier
+check-info0-carrier: $(BUILD)/safety/t_v34info0carrier
+	@./$(BUILD)/safety/t_v34info0carrier
 
 # The negative control for the modern float tolerance: a detector that cannot
 # fail is a dead detector (F134/F2401).  It links only the comparison support,
@@ -629,11 +639,13 @@ $(BUILD)/safety/t_numeric_storage_exact64: test/safety/t_numeric_storage.c $(BUI
 	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -Itest/harness -o $@ $^ -lm
 
 safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
+        $(BUILD)/safety/t_v34info0carrier \
         $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed \
         $(BUILD)/safety/t_region_float $(BUILD)/safety/t_region_float_exact \
         $(BUILD)/safety/t_numeric_storage $(BUILD)/safety/t_numeric_storage_exact \
         $(BUILD)/safety/t_numeric_storage64 $(BUILD)/safety/t_numeric_storage_exact64
 	@./$(BUILD)/safety/t_alloc_sizes
+	@./$(BUILD)/safety/t_v34info0carrier
 	@./$(BUILD)/safety/t_float_tol
 	@./$(BUILD)/safety/t_field_typed
 	@./$(BUILD)/safety/t_region_float
