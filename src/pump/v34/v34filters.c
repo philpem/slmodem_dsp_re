@@ -1597,6 +1597,7 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 	int j;
 	short *re = q->re + V34_EQ_CENTRE_FIRST;
 	short *im = q->im + V34_EQ_CENTRE_FIRST;
+	short *dly_im = q->dly_im;
 
 	/*
 	 * The same gradient as V34EqualizerAdapt over the 8 centre taps, and
@@ -1625,12 +1626,12 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 
 		tap = (int)((unsigned)((unsigned)*re << 16)
 			    - (unsigned)(q->dly_re[j] * err_re)
-			    - (unsigned)(q->dly_im[j] * err_im) + 0x8000u);
+			    - (unsigned)(dly_im[j] * err_im) + 0x8000u);
 		*re++ = (short)(tap >> 16);
 
 		tap = (int)((unsigned)((unsigned)*im << 16)
 			    - (unsigned)(q->dly_re[j] * err_im)
-			    + (unsigned)(q->dly_im[j] * err_re) + 0x8000u);
+			    + (unsigned)(dly_im[j] * err_re) + 0x8000u);
 		*im++ = (short)(tap >> 16);
 	}
 	for (j = 0; j < wrapped; j++) {
@@ -1638,12 +1639,12 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 
 		tap = (int)((unsigned)((unsigned)*re << 16)
 			    - (unsigned)(q->dly_re[j] * err_re)
-			    - (unsigned)(q->dly_im[j] * err_im) + 0x8000u);
+			    - (unsigned)(dly_im[j] * err_im) + 0x8000u);
 		*re++ = (short)(tap >> 16);
 
 		tap = (int)((unsigned)((unsigned)*im << 16)
 			    - (unsigned)(q->dly_re[j] * err_im)
-			    + (unsigned)(q->dly_im[j] * err_re) + 0x8000u);
+			    + (unsigned)(dly_im[j] * err_re) + 0x8000u);
 		*im++ = (short)(tap >> 16);
 	}
 }
