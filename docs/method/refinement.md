@@ -5618,3 +5618,80 @@ wrapper options and the actual linker identity. Cache final links by mode and
 link options as well as their inputs. Test stable reuse, mode switches and
 content changes with restored timestamps. A correct endpoint in the relocatable
 object alone does not establish the endpoint in the executed fixture.
+
+### Preserve buffer producers separately from a reloaded processing owner
+
+The call supervisor computes input/output buffer addresses from its outer
+state, then reloads `dp->self` for block processing. Passing the already-built
+buffers into a helper that reloads the processing owner preserves both ages.
+Reloading the owner before building the buffers changes the graph even when
+ordinary lifecycle tests cannot distinguish the two owners.
+
+Address units matter too. The original adds active byte offsets directly;
+forming a short pointer with `active / 2` introduces an extra `AND -2` during
+combine. Recover byte-address addition before casting the result to a short
+pointer. The supported owner and address changes preserve the other TU bodies,
+data, bindings and switch destinations; a smaller size gap alone would not
+justify them.
+
+### Expand sibling tails before declaring a missing format
+
+A root function's debug-call count can differ because one compiler inlined a
+helper and another retained its call. Expand both direct calls and sibling
+jumps within the declared TU boundary. A call-only walk of V.34 finds 107 of
+110 original format strings; including sibling tails finds the remaining three
+in the MOH hold helper. Preserve the call-only walk as a negative control.
+
+Likewise, V.8 can share two formats at one call, and V.90 progress can inherit
+four formats from inlined helpers. Compare resolved format contents as well as
+counts, and prove the detector rejects a changed format whose count stays the
+same. A complete unique-format inventory is not a proof of guards, argument
+ages or dynamic multiplicity. Once the count discrepancy is explained, require
+independent evidence before changing source or trying more CFG spellings.
+
+### Replace planted control state with production history incrementally
+
+The buffered fax receive fixture now starts with constructor-created sessions,
+supplies valid buffered records, and drives the public command and progress
+methods. Those methods select the emulation state, arm and expire the countdown,
+advance the read index, and reset an exhausted queue. The fixture exercises
+three records at four debug levels and detects six transcript failures when the
+recovered diagnostic is deliberately omitted.
+
+This strengthens the boundary without establishing the upstream producer:
+the queue records are still supplied by the fixture. Keep that limitation in
+its label, retain the older synthetic handler probes, and seek a separate
+VMI/HDLC producer history before claiming modem-path reachability.
+
+### Stop at the compiler stage that explains a near-exact tail
+
+Log10's original normalizer uses pointed 16-bit outputs and writes the adjusted
+exponent back into the count home. Crossing those boundaries recovers the
+54-byte normalization segment exactly and reduces the complete body's size gap
+from 83 bytes to two. A scalar-only writeback control emits the baseline; an
+unsigned-short index control emits the same improved TU. Neither justifies
+another nearby type or return-form search.
+
+The remaining trace is specific: regmove coalesces the subtraction with the
+table-value pseudo, global allocation assigns that value to EDX and the
+coefficient to EAX, and the final sign extension therefore needs a three-byte
+move instead of the original one-byte EAX extension. Later peephole and register
+renaming passes preserve that binding. Do not force a register to hide it.
+A new experiment needs independent evidence for a value owner or definition
+boundary that would explain the original tail allocation.
+
+The call supervisor supplies a related arithmetic discriminator. Its original
+sample-count update uses a direct signed 32-bit right shift. Reconstructing it
+as division by two introduces the sign correction needed for truncation towards
+zero; initial RTL already contains that bias, which combine retains. Recover
+the witnessed arithmetic shift and check the full TU even if alignment makes
+the size gap grow. Valid host-loop lengths are nonnegative, so this recovers an
+instruction operation without demonstrating a new reachable behavior defect.
+
+For `call_create`, the next bounded investigation is local stack allocation:
+the original places the configuration at stack +0x10 and the dial buffer at
++0x20; the reconstruction places them at +0x50 and +0x10. The difference is
+already present in initial RTL. Trace expansion and inlined-helper allocation
+timing before trying a source control. A declaration-order palette would not
+explain the cause. Likewise, `call_run`'s cached queue bases differ before
+allocation, but the available trace does not establish an extra-spill cause.
