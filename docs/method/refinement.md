@@ -6861,3 +6861,49 @@ would not establish reachable input history. No functional source alternative
 is retained, and no new period runtime pass is claimed. Reopen the source/profile
 interaction with common-profile or additional original ownership evidence,
 rather than another spelling of the standalone exact helper.
+
+## Preserve initializer record owners and publication order
+
+The next `preinitdigital` refinement recovers the original scrambler and
+descrambler record views at `obj+0x2a54` and `obj+0xe74`. Within those views,
+the original clears scrambler w0, sets nbits, then clears w3/w2/w1; it clears
+descrambler count/w0 before w2/w1. A callback-field owner also restores direct
+TX publication at `obj+0x2a28`, removing the intermediate shell-base LEA.
+No field type, offset or compiler option changes.
+
+The [eight-cell cross](../../tools/recovery_preinit_publication.py) separates
+record ownership, group-store order and callback-field ownership. Every cell
+produces a distinct object. The selected native-order/owner control is 533
+bytes with 131 decoded instructions, both matching the original, but remains
+BYTES147. The ascending-order owner control also has 533 bytes and 131
+instructions while preserving the wrong store sequence. Size and instruction
+count alone therefore cannot select the recovered source.
+
+Across thirteen pair functions, all twelve neighbours, sixteen named data
+records, twenty-nine definitions, ten imports and relocation consumers remain
+unchanged. The three previously exact names survive; no exact name is gained.
+The graph detector fires on both original and selected code, rejects the
+ascending-order and missing-owner controls, and rejects a corrupted owner
+address. Parent replay independently checks every candidate's bystanders and
+exact set, rather than trusting the recorded score.
+
+The three focused period fixtures pass 27 groups and 6186579 checks. Both
+callback-pair mutants are caught with Gentoo objects, each failing two of 424
+clause-7 checks. The complete source passes `make phase J=4`, 392 fixtures,
+zero failures, with structural checks. Final production formatting raw-matches
+the selected complete object; the mutation anchors follow the callback-field
+expression. No standard mutation snapshot refresh is claimed.
+
+Reproduce against the archived `c11823619` canonical objects/config:
+
+```sh
+python3 tools/recovery_preinit_publication.py --domain state-owner-publication \
+  --baseline-dir build/next293-baseline
+python3 tools/recovery_preinit_publication.py --production-control
+```
+
+Close this eight-cell owner/order domain. Next discriminate the original
+interleaving of receive state-index and descrambler-count stores with the
+remaining group clears. Keep that publication question separate from memset
+argument setup and register scheduling, which have not been attributed to a
+source discrepancy.
