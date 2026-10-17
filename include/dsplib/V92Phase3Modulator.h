@@ -135,7 +135,7 @@ public:
 	 *                  `jaBitCount` unchecked).
 	 * @param dilArg    Unused except to trigger a debug complaint if
 	 *                  non-NULL while `jaArg` is NULL; never dereferenced.
-	 * @param lastArg   Stored verbatim into `word_00`.
+	 * @param roundTripDelay  Phase-2 delay, stored verbatim as `rtd`.
 	 */
 	void reset(short, V92Phase3ModulatorState, unsigned int, V92Ja *,
 		   const tagV90DILdescriptor *, unsigned int);
@@ -226,13 +226,15 @@ public:
 	/* --- data members; see the file comment on the naming --- */
 
 	/*
-	 * `reset`'s LAST argument, stored by `mov %ecx,(%esi)` at
-	 * .text+0x16bd5 and read by nothing in this class.  `enterPhase3`
-	 * sources it from `*(int *)(this->+0x10 + 4)`, an object this batch
-	 * did not read, so the field has no established purpose and takes an
-	 * offset-derived name.
+	 * Phase-2 round-trip delay, retained by reset but never read here.
+	 * The original enterPhase3 loads V90Phase2Info+0x04 at 0x1448a,
+	 * passes it as reset's final unsigned argument at 0x1448d, and
+	 * reset stores it here at 0x16bd5. The owner's printInfo identifies
+	 * +0x04 as "rtd" (0x2ab18..0x2ab26). The constructor supplies zero.
+	 * This provenance does not make it a session flag: the V.90 sibling
+	 * stores a different caller value at its own offset zero.
 	 */
-	unsigned int word_00;		/* +0x000                          */
+	unsigned int rtd;		/* +0x000                          */
 
 	/*
 	 * The Ru / Ja / TRN1u amplitude.  Set to the literal 4000 by `reset`

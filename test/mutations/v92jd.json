@@ -79,8 +79,8 @@
  },
  {
   "label": "getJdPhase's scale is one bit out",
-  "find": "\treturn (float)phase / 65536.0f;",
-  "replace": "\treturn (float)phase / 32768.0f;"
+  "find": "\treturn phase / 65536.0;",
+  "replace": "\treturn phase / 32768.0;"
  },
  {
   "label": "getJdPhase reads fifteen bits, not sixteen",

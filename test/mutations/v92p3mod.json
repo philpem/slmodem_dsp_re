@@ -224,8 +224,8 @@
  },
  {
   "label": "reset drops its last argument",
-  "find": "\tword_00 = lastArg;",
-  "replace": "\tword_00 = 0;"
+  "find": "\trtd = roundTripDelay;",
+  "replace": "\trtd = 0;"
  },
  {
   "label": "reset does not clear eventCode",

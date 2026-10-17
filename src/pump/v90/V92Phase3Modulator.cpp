@@ -69,7 +69,7 @@ extern "C" {
 	    ((int)__builtin_offsetof(V92Phase3Modulator, field) == (off)) \
 	    ? 1 : -1]
 
-V92P3M_OFF(word_00,	0x00, word00);
+V92P3M_OFF(rtd,		0x00, rtd);
 V92P3M_OFF(codeLevel,	0x04, codelevel);
 V92P3M_OFF(suLevel,	0x06, sulevel);
 V92P3M_OFF(state,	0x08, state);
@@ -479,7 +479,7 @@ void
 V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
 			  unsigned int nSymbols, V92Ja *jaArg,
 			  const tagV90DILdescriptor *dilArg,
-			  unsigned int lastArg)
+			  unsigned int roundTripDelay)
 {
 	unsigned int length;
 	unsigned int i;
@@ -493,7 +493,7 @@ V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
 
 	scrambler.reset(0);
 	symbolCount = 0;
-	word_00 = lastArg;
+	rtd = roundTripDelay;
 	state = stateArg;
 
 	length = (unsigned int)(12 *
