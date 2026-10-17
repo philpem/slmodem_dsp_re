@@ -171,18 +171,19 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Trace CenterAdapt's real-history pseudo lifetime and spill allocation with
-   the period compiler. Its two arithmetic loop regions now match after
-   deleting the original's two write-only stores; do not force those stores
-   into source. The earlier spelling domains remain closed.
-2. Discriminate `preinitdigital`'s remaining state-index/count interleaving
-   with group clears. Its length now matches, but BYTES147 remains. Keep
-   publication ownership separate from memset argument setup and scheduling.
-3. Resolve the V92 encoder source/profile interaction using #22 and common
-   profile evidence. The case-result/common-tail control is EXACT240 only with
-   automatic inlining disabled. Retained O3 still differs; no per-file flag or
-   functional alternative is adopted. Definition-order and case-form domains
-   are closed under their measured controls.
+1. Discriminate the V92 encoder's table-definition/emission ownership against
+   common-profile evidence under #22. No-unit restores reference relative
+   table order while preserving all eight bodies, but still inlines the helper.
+   Preserve the nonexact builder and process call boundary in that comparison.
+   Residue-array cost tuning, definition-order and case-form domains are closed.
+2. Trace `preinitdigital`'s descrambler owner pseudo 83 allocation and memset
+   argument owners. The native state publication is restored, with BYTES106
+   remaining. Further count/store permutations are closed: the residual role
+   comparison is constrained by a measured EDX/flags dependency at sched2.
+3. CenterAdapt's allocated history home and reload deletion are now measured.
+   Reopen only with independent death-note/lifetime or common-profile evidence
+   explaining the reference's selective two surviving stores. The eleven-byte
+   gap does not justify adding stores or reviving closed scalar spellings.
 4. Reopen EchoCanceler only with a new operand/lifetime or original-profile
    witness. Both reload orientations cost eight, and the first wins the tie.
    The retained frame has two spill words and zero padding; the original's
@@ -476,3 +477,56 @@ The new replay drivers require the archived `c11823619` objects/config under
 historical source snapshots; use the current publication control for the
 new initializer source rather than interpreting intentional later refinement
 as a historical-control failure.
+
+## Publication and compiler-provenance continuation
+
+From frozen `4a6519cba`, one original state publication move improves
+`preinitdigital` from BYTES147 to **BYTES106**, retaining **533 bytes and 131
+decoded instructions**. A four-cell state/count cross produces two complete
+object emissions: count-only is inert, and both-native reproduces state-only.
+The minimal state move is retained. All twelve neighbours, named data,
+bindings, imports and relocation consumers survive; the three pair exact
+names are unchanged. The [Playbook stage trace](refinement.md#separate-witnessed-state-publication-from-scheduled-count-publication)
+explains the remaining role comparison through global allocation, peephole
+zero materialisation and sched2 flag dependencies.
+
+The [CenterAdapt observer](../../tools/gcc3_center_spill_observe.py) explains
+the unused frame word without another source hypothesis: four history pseudos
+share one allocated spill home; regmove makes their multiplies destructive;
+reload emits and deletes eight output copies before `25.greg`. The reference
+retains two write-only history stores, whose selective survival remains open.
+Both observed complete objects are raw-identical to the baseline. Four
+negative controls fire, including a successful compilation with an absent
+target that the observer rejects. No source or exact-floor change is made.
+
+The [V92 provenance cross](../../tools/recovery_v92_inline_provenance.py)
+measures the installed auto-inline default of 100 and scalar/array helper
+costs of 98/106. The array stops automatic inlining but also loses the exact
+440-byte helper, introducing a 28-byte frame and sixteen more code bytes.
+It is not retained. A no-unit control leaves all eight function bodies and
+positions unchanged while placing the two named tables in the reference's
+relative order; contents, bindings and raw relocation addends survive. This
+is data-layout evidence, not unique proof of a compiler option. Six cells,
+forty-eight body verdicts, five callgraph dumps and two detector controls are
+audited. No source/profile alternative is adopted.
+
+The parent independently replays all three investigations and production
+initializer compilation. The integrated `make phase J=4` exits zero with
+**392 period fixtures passed, zero failed**, plus structural checks including
+285 mutation suites and 10042 unique anchors. No fixture or mutation anchor
+changes. The initializer's existing focused coverage remains three binaries,
+twenty-seven groups and 6186579 checks; both callback sensitivity mutants fail
+as expected. The current replay baseline is archived under
+`build/continuation293-baseline`; prior drivers retain their historical inputs.
+
+The final census remains **1101/1852 EXACT**, covering **126467/720125
+original function bytes**, with no gained or lost exact name in this batch.
+Only the shell object changes among 300 canonical objects; all 300 runtime
+objects raw-match canonical builds. The exact-membership ratchet passes
+without a floor update, and the existing reviewed PreFilter body is unchanged.
+Strict partial/raw comparison still reports DIFFERENT: 92 reference versus
+99 candidate sections and 2836 versus 2840 NOBITS bytes. This is function-level
+partial refinement, not complete-object closure. Strict documentation build
+and audit pass, including 536 Markdown targets, all 300 module links, 972 HTML
+targets/fragments and both detector controls. No modern portability or full
+mutation snapshot refresh is claimed.
