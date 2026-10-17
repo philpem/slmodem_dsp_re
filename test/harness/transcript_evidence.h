@@ -13,7 +13,7 @@ static int transcript_exact(const char *site, long input)
 	unsigned b = dsplib_debug_capture_size(1);
 	int complete = dsplib_debug_capture_complete(0)
 		&& dsplib_debug_capture_complete(1);
-	int equal = complete && a == b
+	int equal = complete && dsplib_debug_capture_boundaries_equal() && a == b
 		&& dsplib_debug_capture_lines(0) == dsplib_debug_capture_lines(1)
 		&& memcmp(dsplib_debug_capture_text(0),
 			  dsplib_debug_capture_text(1), a) == 0;

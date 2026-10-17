@@ -593,6 +593,7 @@ void dsplib_debug_capture_reset(void);
 const char *dsplib_debug_capture_text(int side);
 unsigned dsplib_debug_capture_size(int side);
 int dsplib_debug_capture_complete(int side);
+int dsplib_debug_capture_boundaries_equal(void);
 /*
  * How many lines that side PRINTED, not counting the callback markers the
  * harness itself writes.  Anti-vacuity checks want this, not the text: a

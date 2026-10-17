@@ -18,4 +18,7 @@ with tempfile.TemporaryDirectory() as folder:
     p.write_text(p.read_text().replace('second', 'WRONG'))
     wrong = {x[2] for x in debugaudit.our_strings([str(p)], include_defines=True)}
     assert 'first second\r\n' not in wrong
-print('5 literal-scope controls passed: old omission, macro concatenation, ordinary literal, include exclusion, changed text')
+    p.write_text('#define LOG "first\\\nsecond"\nvoid g() { report("after"); }\n')
+    spliced = debugaudit.our_strings([str(p)], include_defines=True)
+    assert [(line, value) for _, line, value in spliced] == [(1, 'firstsecond'), (3, 'after')]
+print('6 literal-scope controls passed: old omission, macro concatenation, ordinary literal, include exclusion, changed text, token splice with line mapping')

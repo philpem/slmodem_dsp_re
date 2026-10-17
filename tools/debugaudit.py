@@ -325,10 +325,14 @@ def our_strings(paths, include_defines=False):
         # it is on. Header include paths are not emitted diagnostics; macro
         # definitions are separately retained for the presence-only scan.
         #
+        line_origins = None
         if include_defines:
-            # Keep macro literals and join their physical continuation lines.
-            # The newline remains so source line numbers stay useful.
-            src = src.replace("\\\n", "\n")
+            # C translation phase 2 removes escaped newlines, including
+            # inside literal tokens. Preserve logical-to-physical line IDs.
+            physical = src.split("\n")
+            line_origins = [i + 1 for i in range(len(physical))
+                            if i == 0 or not physical[i - 1].endswith("\\")]
+            src = src.replace("\\\n", "")
         src = "\n".join("" if l.lstrip().startswith("#") and not
                         (include_defines and re.match(r"\s*#\s*define\b", l)) else l
                         for l in src.split("\n"))
@@ -348,7 +352,10 @@ def our_strings(paths, include_defines=False):
         for m in RUN.finditer(src):
             s = unescape("".join(LIT.findall(m.group(0))))
             if s:
-                out.append((p, src.count("\n", 0, m.start()) + 1, s))
+                line = src.count("\n", 0, m.start()) + 1
+                if line_origins is not None:
+                    line = line_origins[line - 1]
+                out.append((p, line, s))
     return out
 
 
