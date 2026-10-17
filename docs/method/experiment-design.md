@@ -13,7 +13,9 @@ choices can compensate for one another. Do not freeze them merely because
 changing one loses matches, or conclude that those losses prove wrong source.
 
 Exploration need not improve monotonically. Keep informative losing controls
-and test justified combinations. Do not merge them as production improvements.
+and test justified combinations. Do not merge diagnostic controls merely to
+continue an experiment. A source recovery may retain an explained byte
+regression when original-source fidelity improves; apply the review below.
 A higher exact-function count or fewer differing bytes does not establish
 recovery: behavior, instructions/operands, call boundaries, data, exports and
 partial-link layout must all agree. Do not claim a global optimum from a finite
@@ -177,6 +179,19 @@ Label outcomes: invalid experiment, negative result, mechanism control, source
 candidate, or validated retained change. Attributes, duplication or barriers
 used only to isolate a mechanism are diagnostics, not recovered source. A
 successful diagnostic needs independent source evidence before retention.
+
+An exact-membership ratchet failure triggers review; it is not an automatic
+veto on independently witnessed structural recovery. Identify every lost/gained
+name and original byte count, inspect complete-TU collateral, and establish
+the source improvement and cause of the regression. Keep period differential
+failures hard. After that review, an explained byte regression may be accepted
+with an explicit current-floor rebase, the historical floor preserved in Git,
+and a recorded recovery plan. Never hide a loss behind a net gain or reset a
+floor just to obtain a green gate. The
+[V.34 example](refinement.md#review-exact-losses-against-source-fidelity)
+demonstrates why an unchanged neighbour can lose register bytes as preceding
+source becomes more faithful. Finish the structural recovery, then remeasure
+and recover that neighbour against the settled compiler state.
 
 Retained reconstruction changes must pass Gentoo `make period`, with its test
 denominator and the actual candidate source/profile, not a stale default build.
