@@ -6781,3 +6781,83 @@ The nine-cell source domain is closed to further spelling retries. Remaining
 questions concern the original imaginary-history base and arithmetic operand
 ownership. Future losses still fail the ratchet and need their own review;
 this case is not an automatic exception for register differences.
+
+## V92 encoder case ownership and the inline boundary
+
+An initial six-cell visibility cross moved `inverseMap` below `process` under
+retained O3, O3 without automatic inlining and O2. Definition order was
+raw-inert at every profile. Disabling automatic inlining restored the helper
+call but left a 215-byte process against 240 original bytes. O2 also changed
+the nonexact table builder without recovering it. Those controls motivate the
+case-ownership cross below; they do not justify a per-file compiler exception.
+
+`V92ConvolutionEncoder::process` has a separate source-ownership discrepancy
+from its retained automatic-inline boundary. Original instructions at
+`.text:0x54f75` store EDI to `state` and return ESI for an unnamed mode,
+without reading either trellis table. Each valid case loads `nextState`,
+publishes `state`, then loads `output`. The retained reconstruction instead
+leaves only `i` uninitialised and performs the table accesses after its switch.
+Gentoo GCC 3.4.2-r2 retains those accesses. The source comment claiming that
+GCC dropped them was incorrect and is now corrected; the unnamed-mode
+reconstruction gap remains open.
+
+The [eight-cell replay](../../tools/recovery_v92_case_owners.py) freezes source
+and headers at `c118236196b1e6a6bd4f7aeafd6458cea1ad544c`. It crosses the retained
+source and three case-owned source forms with retained O3 and the diagnostic
+`-fno-inline-functions` control. The first six cells test a common-result/tail
+form and direct case returns. Their differing publication orders motivate the
+last two cells: case-owned results with a default-only state store and a common
+return. All alternatives preserve state-before-output order in their C++
+statements. No attributes, helper changes or per-file flags are retained.
+
+| Source form | Retained O3 process bytes | No automatic inlining |
+| --- | ---: | ---: |
+| Retained common table lookup | 503 | 215 |
+| Case results, common state/result tail | 458 | **240, EXACT** |
+| Direct return from each valid case | 433 | 172 |
+| Default-only state store, common result return | 442 | 172 |
+
+The original process is 240 bytes. The common-tail control reproduces its
+complete bytes and relocation identity under the diagnostic profile, including
+the unnamed-mode path and original publication order. It raises that cell from
+six to seven exact bodies out of eight. This supports the case-owned
+calculation and shared-result boundary; it does not establish the original
+compiler profile or justify changing one TU's flags.
+
+Under retained O3, `inverseMap` still inlines. Its estimated cost remains 98
+instructions; the common-tail caller grows from 77 to 165 after inlining.
+O3 also removes its early duplicate state stores and publishes state after
+loading output. The default-only-store control preserves the original valid
+publication order under O3, but its no-inline unnamed-mode path coalesces the
+two uninitialised values into one register, unlike the original. A closer SIZE
+or one diagnostic exact body does not select either alternative for production.
+
+The unchanged source reproduces the archived complete Gentoo object byte for
+byte. Across 64 body verdicts, each non-baseline cell changes only `process`;
+all seven neighbouring bodies, static data, noncode relocations, strong exports
+and bindings remain unchanged. All six baseline exact names survive in every
+cell. The no-inline controls restore the original `inverseMap` call; retained
+O3 cells keep its three static-table relocation consumers instead. The 440-byte
+standalone helper remains exact throughout. A changed static-data byte is
+detected by the audit's negative control.
+
+Reproduce with an archived canonical object tree and its `.build-config`:
+
+```sh
+mkdir -p build/conv-owner-next293
+python3 tools/recovery_v92_case_owners.py --domain case-owned-tables \
+    --baseline-dir build/archived-conv-baseline
+python3 tools/recovery_v92_case_owners.py --audit
+python3 tools/recovery_v92_case_owners.py --comment-control
+```
+
+The run records full compiler commands, header/source hashes, identities,
+compiler dumps and body/relocation verdicts under
+`build/conv-owner-next293/reproduction`. The comment-only retained edit produces
+a raw-identical complete object. Existing `t_v92convmapper` coverage drives
+reset-built objects through modes 0, 1 and 2 and compares state after each
+call. No unnamed-mode runtime fixture is added: comparing indeterminate values
+would not establish reachable input history. No functional source alternative
+is retained, and no new period runtime pass is claimed. Reopen the source/profile
+interaction with common-profile or additional original ownership evidence,
+rather than another spelling of the standalone exact helper.

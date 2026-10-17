@@ -224,22 +224,22 @@ V92ConvolutionEncoder::inverseMap(int *in)
  * the switch narrows it to as many bits as the mode's input alphabet has, and
  * the two tables then carry the state forward and produce the output.
  *
- * THE DEFAULT ARM IS THE DEVIATION, D262.  The store to `state` and the
- * `return` are after the switch and are reached by a `mode` the switch does
- * not name, at which point `i` was never written -- and the object agrees, in
- * the most literal way available:
+ * THE DEFAULT ARM IS THE DEVIATION, D262.  For an unnamed mode, the original
+ * stores and returns two callee-saved registers that this path never assigned:
  *
  *     54f75:  89 7b 04    mov %edi,0x4(%ebx)
  *     54f78:  89 f0       mov %esi,%eax
  *
- * two callee-saved registers that nothing on that path assigned, stored into
- * the object and returned.  There is no load from either table on that arm,
- * because with `i` undefined the loads are undefined too and GCC dropped
- * them.  Reproducing it means leaving `i` uninitialised, so the warning is
- * silenced here and recorded rather than repaired: initialising it, or adding
- * a `default:`, would be a different function.  The pragma is GCC 4 syntax
- * and this tree's gcc-3.4.3 ignores it with a warning of its own, which
- * `make similarity` tolerates -- the same trade as V92Precoder::process.
+ * There is no nextState/output load on that original arm. The retained
+ * common table lookup below is still a reconstruction gap for unnamed modes:
+ * Gentoo GCC 3.4.2-r2 emits both loads through uninitialised `i`, under retained
+ * O3 and with automatic inlining disabled. The old claim that GCC dropped
+ * those loads was incorrect. Initialising the value would invent behaviour.
+ *
+ * tools/recovery_v92_case_owners.py isolates case-owned table calculations.
+ * Its common-result/tail control reproduces the whole original process body
+ * with automatic inlining disabled, but that diagnostic profile is not the
+ * retained build. No functional correction is claimed here.
  *
  * The test never drives an unnamed mode through here, on purpose: the two
  * sides would be comparing two different pieces of stack, which is a
