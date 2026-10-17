@@ -89,7 +89,7 @@ EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 			unsigned short j;
 
 			for (j = 0; j < ntaps; j++)
-				acc += coef[j] * hist[pos + j];
+				acc += hist[pos + j] * coef[j];
 		}
 		x = in[i];
 		e = x - acc;
