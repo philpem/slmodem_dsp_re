@@ -6862,6 +6862,81 @@ is retained, and no new period runtime pass is claimed. Reopen the source/profil
 interaction with common-profile or additional original ownership evidence,
 rather than another spelling of the standalone exact helper.
 
+### Separate frontend cost from native helper and table ownership
+
+The [six-cell provenance replay](../../tools/recovery_v92_inline_provenance.py)
+freezes the complete encoder TU at `4a6519cba`. It crosses four scalar residue
+locals with one four-element array under retained O3 and diagnostic
+no-auto-inline. Both representations make four explicit assignments; no loop
+is introduced. Two additional scalar controls use no-unit-at-a-time and
+issue #22's O2/automatic-inline/web profile. The array is a hypothesis, not
+an independently recovered declaration.
+
+The installed Gentoo `cc1plus` contains a readonly `lang_independent_params`
+symbol at `0x0838ef00`: thirty-five twelve-byte name/value/help records and
+a null sentinel. The replay decodes the pointers and proves defaults of 100
+for `max-inline-insns-auto` and 500 for `max-inline-insns-single`. Its compiler
+hash is `b778f44bd1a5e8184ca34b11c9701d0a8d67d15406282c1a204237d03c82082d`.
+These are measured installed defaults, not thresholds inferred from scores.
+The actual commands contain no override of these parameters.
+
+| Control | Helper estimated instructions | Helper bytes | Process bytes | Exact losses |
+| --- | ---: | ---: | ---: | --- |
+| Scalar, retained O3 | 98 | 440 EXACT | 503 | none |
+| Scalar, no automatic inline | 98 | 440 EXACT | 215 | none |
+| Array, retained O3 | 106 | 456 | 215 | `inverseMap` |
+| Array, no automatic inline | 106 | 456 | 215 | `inverseMap` |
+| Scalar, no unit-at-a-time | no unit callgraph dump | 440 EXACT | 503 | none |
+| Scalar, O2 + automatic inline + web | 98 | 440 EXACT | 647 | none |
+
+The array crosses the inline threshold and restores the call, but it also
+introduces a 28-byte local stack allocation where the exact scalar helper has
+none. Three residues acquire stack stores at ESP+0/+4/+8; the fourth remains
+in a register. The helper's code grows sixteen bytes, a separate quantity from
+its frame growth. This is a source/cost interaction with native consequences,
+not an invisible frontend-only spelling change. The O2/inline/web control
+keeps the helper inlined and changes the nonexact builder's instructions even
+though its length remains 1456 bytes against 1558 original bytes. No cell
+gains an exact name; both array cells lose the helper.
+
+The no-unit control preserves all eight function bodies and positions but
+changes table layout:
+
+| Global `.data` object | Bytes | Original offset | Retained TU offset | No-unit TU offset |
+| --- | ---: | ---: | ---: | ---: |
+| `cosetMapping4D` | 256 | `0x6ac0` | `0x40` | `0x0` |
+| `subsetLabelTable` | 64 | `0x6bc0` | `0x0` | `0x100` |
+
+All named contents, sizes and strong global bindings match the reference.
+No-unit restores the original relative order, with every raw code relocation
+offset, type, target and inline addend unchanged. Table consumers use named
+symbols with zero addends. This is independent data-layout evidence, but does
+not uniquely identify an option: source definition order can compensate for
+compiler emission order.
+
+The original `V92ConvEncoder.cpp` FILE record has no local text anchors.
+Strong global helper binding does not associate its body with that FILE or
+establish an inline/noinline declaration. Neither a TU split nor an attribute
+is licensed by the present evidence. Keep the native layout witness separate
+from that ownership uncertainty.
+
+The audit covers six cells, forty-eight body verdicts, five unit callgraph
+dumps, named data, bindings and relocation consumers. It rejects missing cost
+evidence and a changed default parameter. No production source/profile change
+or new runtime coverage is claimed.
+
+```sh
+python3 tools/recovery_v92_inline_provenance.py --domain scalar-array-cost \
+  --baseline-dir build/continuation293-baseline
+python3 tools/recovery_v92_inline_provenance.py --parameter-proof
+python3 tools/recovery_v92_inline_provenance.py --audit
+```
+
+Close nearby residue/cost spellings. The next discriminator needs independent
+table-definition or TU ownership evidence crossed with common-profile
+controls, including the builder and process call boundary. Relative table
+order alone cannot select a source or flag change.
+
 ## Preserve initializer record owners and publication order
 
 The next `preinitdigital` refinement recovers the original scrambler and
@@ -7019,3 +7094,56 @@ compatible spill could arise before another scalar-owner source experiment.
 Keep the separate history rereads after the real coefficient store. Recover
 the unchanged neighbour against the final structural state, rather than
 steering the compiler cursor around an intermediate reconstruction.
+
+### Follow an allocated spill through regmove and reload cleanup
+
+The unused candidate word is an allocated history spill home. The installed
+Gentoo compiler allocates four SI words for pseudos 59 (`err_re`), 65
+(`limit`), 66 (`wrapped`) and 75 (first real-history value), at offsets -4,
+-8, -12 and -16. The fourth allocation occurs in `finish_spills`. Pseudos
+75/89/104/118 share that last home, which becomes `(%esp)`. Two zero-size
+BLK requests add no storage. The final frame has sixteen local bytes and
+zero padding/outgoing space. Frame size alone would not reveal this owner.
+
+The [installed-compiler observer](../../tools/gcc3_center_spill_observe.py)
+follows each history value through initial RTL, regmove and reload. Before
+`22.regmove`, the multiplications have separate destinations 77/91/106/120
+and `REG_DEAD` notes for their history inputs. Regmove retargets each result
+to that dying input. Reload then emits and deletes two output copies per
+history pseudo before writing `25.greg`:
+
+| Span / coefficient lane | History definition | History pseudo | Multiply / subtract | Output copies |
+| --- | ---: | ---: | --- | --- |
+| First / real | 64 | 75 | 65 / 66 | 262, 263 |
+| First / imaginary | 83 | 89 | 84 / 85 | 265, 266 |
+| Second / real | 124 | 104 | 125 / 126 | 268, 269 |
+| Second / imaginary | 143 | 118 | 144 / 145 | 271, 272 |
+
+These are observed candidate instruction UIDs. For each pair, the first copy
+is emitted while processing the history definition and deleted at its
+multiply; the second is emitted at the multiply and deleted at the accumulator
+subtraction. All copies target pseudos with the same stack equivalence;
+no access to that home survives in the first post-reload dump.
+
+The reference has two surviving write-only stores at `.text:0x72bbc` and
+`0x72c28`. They correspond in role to history-output copies 265/271, rather
+than all eight candidate copies. The trace explains the candidate's unused
+word; it does not reconstruct original compiler UIDs, establish why those
+two original stores survived or identify an original local declaration.
+
+The observer freezes `4a6519cba`, verifies the installed compiler hash and
+preserves the complete candidate object in both target and absent-target
+runs. The absent target compiles successfully but fails observation with no
+target events. Missing-output, changed-padding and wrong-UID-origin controls
+also fail. No reconstruction source, fixture, tolerance or exact floor changes.
+
+```sh
+python3 tools/gcc3_center_spill_observe.py \
+  --baseline-dir build/continuation293-baseline \
+  --out build/center-spill-parent
+```
+
+Close source spelling retries at this boundary. Reopen only with independent
+lifetime/death-note or common-profile evidence explaining the selective
+original spill. An allocated slot is insufficient evidence for a source
+local, and adding artificial stores would bypass the measured question.
