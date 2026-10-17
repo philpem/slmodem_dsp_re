@@ -11,13 +11,8 @@
 #include "dsplib/fpm.h"
 
 /*
- * Original192-word symbol extent; neighbour reads do not enlarge it.
- */
-#define FPM_SQRT_TABLE_SIZE 192
-
-/*
  * The table itself is GLOBAL in the object and now lives in `fpm_tables.c`,
- * declared in `dsplib/fpm.h`; this file keeps only the accessors over it.
+ * declared in `dsplib/fpm.h`.
  */
 
 /* The original keeps caller-owned HI outputs for both normalization steps.
@@ -113,21 +108,4 @@ FPM_sqrt_dp(unsigned int x)
 	if (index > 0xbf)
 		index = 0xbf;
 	return (unsigned short)(FPM_sqrt_table[index] >> half);
-}
-
-/*
- * Table accessors for the offline generator in test/unit/t_fpm_sqrt.c,
- * which compares all 192 derived entries against the extracted originals.
- */
-unsigned short
-FPM_sqrt_table_entry(int index)
-{
-	return (index >= 0 && index < FPM_SQRT_TABLE_SIZE)
-		? FPM_sqrt_table[index] : 0;
-}
-
-int
-FPM_sqrt_table_size(void)
-{
-	return FPM_SQRT_TABLE_SIZE;
 }

@@ -75,22 +75,6 @@ static short MTD_COEF_1_8000[5] = { -14786, 15564, 18296, -18296, 15564 };
 static short MTD_COEF_2_9600[5] = { -13271, 16384, 19445, -21605, 16384 };
 static short MTD_COEF_1_9600[5] = { -13271, 16384, 20853, -23170, 16384 };
 
-/*
- * Reach a table by name from outside the translation unit, which nothing in
- * the original does and the differential test cannot do without: a static has
- * no `ref_` alias to compare against.  Same arrangement as FPM_div_table's.
- */
-const short *
-CID_MTD_coeff(int which, int rate)
-{
-	if (rate == CID_RATE_9600)
-		return which == 1 ? MTD_COEF_1_9600 :
-		       which == 2 ? MTD_COEF_2_9600 : 0;
-	if (rate == CID_RATE_8000)
-		return which == 1 ? MTD_COEF_1_8000 :
-		       which == 2 ? MTD_COEF_2_8000 : 0;
-	return 0;
-}
 
 short
 CID_MTD_detect(const short *samples, short count, struct cid *cid)

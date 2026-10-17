@@ -101,6 +101,22 @@ writable_signs(void)
 	return rc;
 }
 
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+
+static unsigned short
+FPM_phasor_cos_entry(int i)
+{
+	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_cos_table[i] : 0;
+}
+
+static unsigned short
+FPM_phasor_sin_entry(int i)
+{
+	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_sin_table[i] : 0;
+}
+
+
 int
 main(void)
 {

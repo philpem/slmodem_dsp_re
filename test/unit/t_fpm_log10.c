@@ -25,7 +25,7 @@
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_pps.h"
 
-extern const short FPM_log10_table[];
+extern const short FPM_log10_table[128];
 extern const short ref_FPM_log10_table[];
 extern const struct fpm_pps_cfg ref_FPM_PPS_CFG;
 
@@ -41,6 +41,28 @@ FPM_log10_table_generate(int index)
 
 	return (short)(int)(32768.0 * log10(frac));
 }
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+
+static int
+FPM_log10_table_derived(void)
+{
+	return 128;
+}
+
+static short
+FPM_log10_table_entry(int index)
+{
+	return FPM_log10_table[index];
+}
+
+static int
+FPM_log10_table_size(void)
+{
+	return (int)(sizeof(FPM_log10_table) / sizeof(FPM_log10_table[0]));
+}
+
 
 int
 main(void)

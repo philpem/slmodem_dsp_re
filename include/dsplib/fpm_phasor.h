@@ -93,20 +93,6 @@ void FPM_phasor_dp(struct fpm_phasor_dp *p);
  */
 void FPM_phasor_demod(struct fpm_phasor *p);
 
-/**
- * @brief Look up one entry of the internal cosine table.
- * @param i Table index. Used by the unit tests' generator self-check.
- * @return The raw Q15 table entry.
- */
-unsigned short FPM_phasor_cos_entry(int i);
-
-/**
- * @brief Look up one entry of the internal sine table.
- * @param i Table index. Used by the unit tests' generator self-check.
- * @return The raw Q15 table entry.
- */
-unsigned short FPM_phasor_sin_entry(int i);
-
 /* Original writable quadrant signs, consumed directly by all three phasors.
  * The original signed quadrant also indexes before these symbols; the period
  * link places the sine table before cosine and COEF_DC before sine. */
