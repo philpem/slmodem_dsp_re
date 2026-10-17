@@ -171,19 +171,18 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Review `preinitdigital`'s remaining eight-byte gap after the ownership
-   recovery below. Compare the original publication/operand graph before
-   proposing another source form. Screen other nonexact functions for
-   original/source guard, call, width, owner and diagnostic discrepancies.
-2. Follow the retained `V34EqualizerCenterAdapt` split-span recovery through
-   original history-base and arithmetic operand ownership. The nine-cell
-   spelling domain stays closed. Its one exact-neighbour loss is explicitly
-   reviewed and dynamically explained below.
-3. Investigate V92ConvolutionEncoder's missing `inverseMap` call with full-TU
-   inline/profile controls. The standalone helper is already exact at 440
-   bytes; `process` is 503 versus 240 original bytes. This is not evidence of
-   a wrong helper body. Check original source ownership and #22 before changing
-   visibility or flags.
+1. Trace CenterAdapt's real-history pseudo lifetime and spill allocation with
+   the period compiler. Its two arithmetic loop regions now match after
+   deleting the original's two write-only stores; do not force those stores
+   into source. The earlier spelling domains remain closed.
+2. Discriminate `preinitdigital`'s remaining state-index/count interleaving
+   with group clears. Its length now matches, but BYTES147 remains. Keep
+   publication ownership separate from memset argument setup and scheduling.
+3. Resolve the V92 encoder source/profile interaction using #22 and common
+   profile evidence. The case-result/common-tail control is EXACT240 only with
+   automatic inlining disabled. Retained O3 still differs; no per-file flag or
+   functional alternative is adopted. Definition-order and case-form domains
+   are closed under their measured controls.
 4. Reopen EchoCanceler only with a new operand/lifetime or original-profile
    witness. Both reload orientations cost eight, and the first wins the tie.
    The retained frame has two spill words and zero padding; the original's
@@ -414,3 +413,66 @@ independently selected experiment controls. The reviewed current-floor check
 passes, and all three membership-ratchet self-test cases pass, including the
 masked-loss rejection. Strict documentation build/audit passes. No modern
 portability, whole-file identity or full mutation execution is claimed.
+
+## Record-owner continuation and CI review
+
+The continuation from `c11823619` retains two further original ownership
+boundaries, with no exact-name gains or losses:
+
+| Function | Before | Retained | Original |
+|---|---:|---:|---:|
+| `preinitdigital` | 541 bytes, SIZE8 | 533 bytes, BYTES147 | 533 bytes |
+| `V34EqualizerCenterAdapt` | 317 bytes, SIZE30 | 336 bytes, SIZE11 | 347 bytes |
+
+Initializer record owners and native group-store order recover 131 decoded
+instructions, matching the original count. The independent ascending-order
+control has the same size/count but the wrong graph. All twelve neighbours,
+data and exports survive; both callback-pair mutants are caught. Remaining
+publication interleaving is recorded in the
+[Playbook](refinement.md#preserve-initializer-record-owners-and-publication-order).
+
+CenterAdapt's two original 93-byte arithmetic regions each equal a candidate
+90-byte region after removing one original three-byte spill. Those six bytes
+and five original alignment bytes account for the length gap. Twenty-two
+neighbours and all data/bindings survive; three neighbours change through the
+measured persistent scratch state. PreFilter now differs in forty-three bytes
+and is no longer grade 1. This reviewed collateral does not lose another exact
+name. The [owner/spill proof](refinement.md#recover-the-centeradapt-history-owner-before-fitting-its-spill)
+bounds the next compiler investigation.
+
+The V92 encoder investigation preserves eight source/profile controls and
+corrects a false source comment about the unnamed-mode path. Its diagnostic
+240-byte exact result is not a retained exact gain. The comment-only complete
+object is raw-identical; the production profile and executable tokens stay
+unchanged. See the [case-ownership cross](refinement.md#v92-encoder-case-ownership-and-the-inline-boundary).
+
+The final integrated source passes `make phase J=4`: **392 fixtures passed,
+zero failed**, with all structural checks. Only two of 300 canonical objects
+change; both match independent controls, and all 300 runtime objects raw-match
+canonical. The census is **1101 EXACT, 29 REGALLOC, 71 BYTES, 650 SIZE and one
+UNRESOLVED**, covering 1852 functions and 126467/720125 exact original bytes.
+Exact membership is unchanged. Strict partial/raw-file identity remains
+DIFFERENT. No modern portability or full mutation snapshot refresh is claimed.
+
+The prior remote smoke/codegen job passed its smoke tests but failed its
+base-versus-head metric check on the explicitly reviewed PreFilter loss. The
+local floor rebase alone could not authorize that comparison. The
+[CI review mechanism](../../tools/ci/README.md) now requires the exact base SHA,
+symbol and current function-body/relocation digest, plus source and evidence
+revisions. Its report still lists every lost and gained name and preserves red
+numerical regression rows. Additional losses, stale bases, changed bodies and
+missing/ambiguous definitions remain failures; period differential gates are
+untouched.
+
+Seventeen review tests and eighteen existing metric checks pass. Actual Gentoo
+object integration accepts the reviewed body and rejects both the same loss
+without a review and a corrupted actual body. The current pin follows the
+newly reviewed history-owner source; the earlier four-byte body's pin cannot
+authorize this changed body. The current exact-floor update refreshes only
+informational category counts, with identical exact names and exact bytes.
+
+The new replay drivers require the archived `c11823619` objects/config under
+`build/next293-baseline`. Older production-format controls apply to their named
+historical source snapshots; use the current publication control for the
+new initializer source rather than interpreting intentional later refinement
+as a historical-control failure.

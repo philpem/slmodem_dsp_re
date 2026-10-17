@@ -34,7 +34,9 @@ jobs:
         run: python3 -m pip install -r tools/ci/requirements.txt
 
       - name: Self-test metric status logic
-        run: python3 tools/ci/period_metrics.py --self-test
+        run: |
+          python3 tools/ci/period_metrics.py --self-test
+          python3 tools/ci/test_period_metrics.py
 
       - name: Self-test bounded induction jump-table proof
         run: python3 tools/toolchain/induction_jumptable_controls.py
@@ -117,7 +119,10 @@ jobs:
           set +e
           python3 tools/ci/period_metrics.py \
             --base "$RUNNER_TEMP/base-metrics.json" \
-            --head "$RUNNER_TEMP/head-metrics.json" --check > "$RUNNER_TEMP/metrics.md"
+            --head "$RUNNER_TEMP/head-metrics.json" \
+            --base-sha "$BASE_SHA" --head-objects build/tc_out \
+            --reviewed-losses tools/ci/period_reviewed_losses.json \
+            --check > "$RUNNER_TEMP/metrics.md"
           status=$?
           cat "$RUNNER_TEMP/metrics.md" >> "$GITHUB_STEP_SUMMARY"
           {

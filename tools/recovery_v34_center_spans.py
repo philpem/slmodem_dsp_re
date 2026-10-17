@@ -3,8 +3,9 @@
 
 The original has two circular history spans, continuously incremented
 coefficient pointers, per-lane history reads and a cached imaginary-history
-base. These controls isolate those boundaries. The 317-byte control is retained
-after tracing its reviewed V34EchoPreFilter exact loss; other controls remain
+base. These controls isolate those boundaries. The 317-byte control was the
+first retained source; the witnessed imaginary-history-owner control is now
+retained after reviewing its downstream scratch changes. Other controls remain
 diagnostic. Use the archived pre-recovery Gentoo baseline:
 
   python3 tools/recovery_v34_center_spans.py --domain center-span-ownership \
@@ -122,7 +123,7 @@ def audit():
            'noncode_metadata_relocations_equal': True,
            'negative_controls': {'changed_data_detected': True},
            'production_source_retained': True,
-           'retained_cell': 'split-spans-lane-rereads-coeff-pointers',
+           'retained_cell': 'imaginary-history-owner',
            'reviewed_exact_loss': [prefilter]}
  (root / 'audit.json').write_text(json.dumps(report, indent=2) + '\n')
  print('9 cells / 234 body verdicts: declared losses confirmed; noncode, metadata and relocations equal; 1/1 changed-data control detected')
