@@ -5839,3 +5839,81 @@ controls change a format and slide a relocation by one byte; the old V.92 and
 echo defects also fire. Remaining static-count nominations need distinct-path
 transcript coverage, particularly `DialerProgress` and the V.92 TRN1u reset
 lower-bound report. Do not force duplicated calls to equalise static counts.
+
+### Decode constant operands before comparing their storage formats
+
+`numeric_consumer_audit.py` decodes each x87 memory operand and compares exact
+numeric values across float, double and extended storage. On the next bulk
+pass, the 26 raw numeric-pool nominations split into 16 same-value inventories
+with different consumer counts and ten different value sets. This removes
+storage-format noise without proving equal operations or paths. Constants
+materialised as immediates, implicit x87 constants, inlined callees and
+reciprocal multiplication still need separate evidence.
+
+Twelve controls establish float/double/extended equality, integer-load
+conversion, changed values, signed-zero distinction, extreme extended values
+correct accounting for interior and out-of-bounds pool loads, and rejection
+of unsupported ELF inputs.
+NaN payloads and noncanonical extended encodings retain their representation.
+Duplicate function names remain unclassified instead of silently merging
+consumers. Use this queue to find value discrepancies; do not force identical
+constant pools or static reference counts.
+
+The DTMF US level cutoff was a real value discrepancy: the binary consumes
+float bits `0x3b03126e`, while `0.002f` emits the next float, `0x3b03126f`.
+A direct decision-component fixture crosses adjacent representable totals with
+finite, nonnegative notch energies. It checks US, EUR and other-mode dispatch,
+and includes ratio-rejection controls. Three of 100 new checks fail before the
+correction; all pass with the original value. This establishes a component
+threshold difference, without claiming those exact energies came from a modem
+waveform. Only one constant byte changes; all four function instruction bodies
+and the other positioned relocation consumers stay equal.
+
+### Keep object registers in the side-effect census
+
+A store through EBP is not necessarily a stack store under
+`-fomit-frame-pointer`. The structural screen had discarded all such writes,
+creating an apparent missing-store deficit in `V22_SRE_init`. Recognising an
+actual `mov %esp,%ebp` frame setup before excluding EBP stores reduces the
+screen from 239 to 224 nominations. Two added assembled controls distinguish
+an EBP object owner from an established frame pointer.
+
+Expand direct same-TU calls and sibling tails before comparing side-effect
+presence. Six ELF controls prove expansion, preserve external boundaries and
+detect omitted calls, tails and callee stores. Four reviewed nominations retain
+their behavior: V.22 initialization stores, inlined convolution mapping, shared
+V.92 reset logging, and an unrolled CRC store sequence. Physical instruction
+counts alone do not establish dynamic store counts, argument equivalence or
+missing behavior.
+
+Decode the load width before extracting pool bytes. A four-byte load at +12 in
+one 16-byte entry is valid; treating its entry width as its load width drops
+that consumer. The numeric audit now extracts relocations independently and
+requires every pool relocation to become either a classified consumer or an
+explicit unclassified record. A cross-boundary load remains unclassified.
+Record input hashes and fail an empty shared-consumer comparison.
+
+### Exercise distinct diagnostic paths with public component histories
+
+Static print counts nominated `DialerProgress` and V.92 phase-3 reset, but their
+reviewed branches share or duplicate the same runtime message. The dialer
+fixture now covers 18 public create/progress histories: initial and later
+tones, commas before and after digits, capped and uncapped pauses, and the
+70 ms DTMF duration's 560-sample argument. Semicolon histories stop at the
+public command event. Complete transcript checks include individual call
+boundaries and preserve callback markers.
+
+V.92 reset coverage uses constructor-created objects through reset, symbol
+generation and reset again. Twenty-four observations cross the 8160 lower
+bound and six-sample quantisation boundary, at three debug levels. The
+reference encoder supplies the expected wire representation of the independently
+expected length. Captured-argument byte mutations fail in both fixtures and
+restoration passes. These tests strengthen component coverage; they do not
+establish every modem history or justify forcing duplicate static print sites.
+
+The next numeric discriminator is the original multiplication scales versus
+reconstructed reciprocal scales in `V90Equalizer::convertEqualizerToMmx`.
+Inspect the paired multiply/divide operations and destination fields before
+changing a value. Other inventory gaps already have immediate producers:
+`MTK_phasor`'s float 2*pi and `voice_rx`'s reciprocal input scale. Their absence
+from a constant pool is not evidence of an absent value.
