@@ -99,6 +99,8 @@ class Count(gdb.Breakpoint):
             return False
         try:
             costs[-1]['samples'].append({
+                'uid': number('((struct rtx_def*)$ebx)->u.fld[0].rtint'),
+                'rtx_code': str(gdb.parse_and_eval('((struct rtx_def*)$ebx)->code')),
                 'weighted_count': number('$edi'),
                 'threshold_weighted': number('*(unsigned int*)($ebp-16)'),
                 'block': number('((struct basic_block_def*)$esi)->index'),
@@ -113,6 +115,13 @@ start = number('(unsigned long)expensive_function_p')
 # In this compiler, +91 follows ADD bb->frequency,EDI and precedes CMP limit,EDI.
 # Reject another instruction sequence instead of guessing its register contract.
 assert bytes(gdb.selected_inferior().read_memory(start+88, 6)).hex() == '037e503b7df0', 'unsupported cost hook'
+# EBX is the current node: it is passed to active_insn_p before counting,
+# and advanced to NEXT_INSN only after the hook. Pin that additional contract
+# before attaching a UID to a weighted sample.
+assert bytes(gdb.selected_inferior().read_memory(start+75, 1)).hex() == '53'
+call = bytes(gdb.selected_inferior().read_memory(start+76, 5))
+assert call[0] == 0xe8 and start+81+int.from_bytes(call[1:], 'little', signed=True) == number('(unsigned long)active_insn_p'), 'unsupported active-node call'
+assert bytes(gdb.selected_inferior().read_memory(start+101, 3)).hex() == '8b5b0c', 'unsupported next-node hook'
 Frame('*ix86_compute_frame_layout', internal=True)
 Cost('*expensive_function_p', internal=True)
 Count('*expensive_function_p+91', internal=True)
