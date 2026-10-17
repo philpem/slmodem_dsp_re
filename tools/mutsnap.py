@@ -160,7 +160,8 @@ def suite_key(name, entry):
 
 def load(path, default):
     try:
-        return json.load(open(path))
+        with open(path) as stream:
+            return json.load(stream)
     except (OSError, ValueError):
         return default
 
@@ -252,6 +253,10 @@ def run_suite(name, jobs):
     if jobs:
         cmd += ["--jobs", str(jobs)]
     r = subprocess.run(cmd, capture_output=True, text=True)
+    # Subsets can carry real per-mutation verdict lines, but they are never
+    # a complete suite measurement. Discard them before update can record them.
+    if re.search(r"^\s*SUBSET:", r.stdout, re.MULTILINE):
+        return {}, "FAILED (SUBSET cannot be recorded)", r.stdout
     verdicts = {}
     for line in r.stdout.split("\n"):
         for rx, v in VERDICT:
@@ -267,7 +272,11 @@ def run_suite(name, jobs):
                     verdicts[m.group(1)] = v
                 break
     summary = [l for l in r.stdout.split("\n") if "mutations:" in l]
-    return verdicts, (summary[-1].strip() if summary else "FAILED"), r.stdout
+    if not summary:
+        # A failed shard may already have printed valid partial verdicts.
+        # Without the complete summary none of those are recordable either.
+        return {}, "FAILED", r.stdout
+    return verdicts, summary[-1].strip(), r.stdout
 
 
 def cmd_update(args):
@@ -321,7 +330,8 @@ def cmd_update(args):
             "verdicts": verdicts,
         }
         print("  %-16s %s" % (name, summary))
-    json.dump(snap, open(SNAP, "w"), indent=1, sort_keys=True)
+    with open(SNAP, "w") as stream:
+        json.dump(snap, stream, indent=1, sort_keys=True)
     print("\n  wrote %s (%d suite(s) recorded)" % (SNAP, len(snap["suites"])))
     if failed:
         print("  %d suite(s) COULD NOT RUN and are still stale: %s"

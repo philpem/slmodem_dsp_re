@@ -634,6 +634,29 @@ def report(total, uncaught, broken, equivalent, surprises, by):
     return 1 if uncaught or surprises else 0
 
 
+def select_mutations(entries, only):
+    """Select before budgeting workers, then shard this same ordered domain."""
+    mutations = [m for m in entries if "find" in m]
+    total = len(mutations)
+    if only is not None:
+        mutations = [m for m in mutations if only in m.get("label", "")]
+        if not mutations:
+            sys.exit("no mutation label contains %r" % only)
+    return mutations, total
+
+
+def report_subset(total, suite_total, only, uncaught, broken, equivalent, surprises):
+    """Iteration output deliberately has no recordable `mutations:` summary."""
+    print("\n  SUBSET: %d of %d mutations (--only %r) -- %d caught, "
+          "%d NOT caught, %d unusable, %d equivalent.\n"
+          "  This is an iteration aid.  It is NOT a suite result and "
+          "cannot be a baseline."
+          % (total, suite_total, only,
+             total - len(uncaught) - len(broken) - len(equivalent),
+             len(uncaught), len(broken), len(equivalent)))
+    return 1 if uncaught or surprises else 0
+
+
 def shard_of(muts, spec):
     """CONTIGUOUS chunks, not round-robin, so merged output keeps its order."""
     i, n = (int(x) for x in spec.split("/"))
@@ -676,7 +699,7 @@ def shard_of(muts, spec):
 MIN_PER_WORKER = 2
 
 
-def run_parallel(args, jobs):
+def run_parallel(args, jobs, suite_total):
     """Fan the suite out over `jobs` shards and merge the verdicts.
 
     Each shard is an ordinary run with `--shard i/N`; it makes its own copy
@@ -690,6 +713,10 @@ def run_parallel(args, jobs):
     cmd = [sys.executable, os.path.abspath(__file__)]
     cmd += (["--suite", args.suite] if args.suite
             else [args.source, args.test, args.mutations])
+    if args.only is not None:
+        cmd += ["--only", args.only]
+    if args.verbose:
+        cmd += ["--verbose"]
     procs = [subprocess.Popen(cmd + ["--shard", "%d/%d" % (i, jobs)],
                               stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True)
@@ -724,6 +751,9 @@ def run_parallel(args, jobs):
         print("\n  %d of %d shards died; this run is not a result."
               % (len(failed), jobs))
         return 2
+    if args.only is not None:
+        return report_subset(total, suite_total, args.only, uncaught,
+                             broken, equivalent, surprises)
     return report(total, uncaught, broken, equivalent, surprises, by)
 
 
@@ -958,6 +988,8 @@ def main():
     ap.add_argument("--shard", metavar="I/N",
                     help=argparse.SUPPRESS)   # set by --jobs on its workers
     args = ap.parse_args()
+    if args.all and args.only is not None:
+        ap.error("--only requires a single suite or mutation file, not --all")
     preflight()
 
     if args.all:
@@ -975,10 +1007,11 @@ def main():
         sys.exit("give --suite NAME, --all, or source, test and mutations")
 
     if args.jobs and args.jobs > 1 and not args.shard:
-        n = len([m for m in json.load(open(args.mutations)) if "find" in m])
-        want = max(1, min(args.jobs, n // MIN_PER_WORKER))
+        with open(args.mutations) as stream:
+            selected, suite_total = select_mutations(json.load(stream), args.only)
+        want = max(1, min(args.jobs, len(selected) // MIN_PER_WORKER))
         if want > 1:
-            return run_parallel(args, want)
+            return run_parallel(args, want, suite_total)
 
     #
     # THE LEAF COPIES, AND ONLY THE LEAF.  `--all` and `--jobs` do not mutate
@@ -993,8 +1026,9 @@ def main():
     enter_workdir()
     take_lock()
 
-    entries = json.load(open(args.mutations))
-    muts = [m for m in entries if "find" in m]
+    with open(args.mutations) as stream:
+        entries = json.load(stream)
+    muts, suite_total = select_mutations(entries, args.only)
     #
     # ITERATION IS THE COMMON CASE AND IT WAS PAYING FOR THE WHOLE SUITE.
     #
@@ -1009,12 +1043,7 @@ def main():
     # the string `mutations:` at all, which is what `mutsnap.py` looks for.
     # A subset can never be recorded as a baseline by accident.
     #
-    subset = None
-    if args.only:
-        subset = len(muts)
-        muts = [m for m in muts if args.only in m.get("label", "")]
-        if not muts:
-            sys.exit("no mutation label contains %r" % args.only)
+    subset = suite_total if args.only is not None else None
     if args.shard:
         muts = shard_of(muts, args.shard)
     else:
@@ -1123,14 +1152,8 @@ def main():
         return 0
 
     if subset is not None:
-        print("\n  SUBSET: %d of %d mutations (--only %r) -- %d caught, "
-              "%d NOT caught, %d unusable, %d equivalent.\n"
-              "  This is an iteration aid.  It is NOT a suite result and "
-              "cannot be a baseline."
-              % (len(muts), subset, args.only,
-                 len(muts) - len(uncaught) - len(broken) - len(equivalent),
-                 len(uncaught), len(broken), len(equivalent)))
-        return 1 if uncaught or surprises else 0
+        return report_subset(len(muts), subset, args.only, uncaught,
+                             broken, equivalent, surprises)
 
     return report(len(muts), uncaught, broken, equivalent, surprises, by)
 
