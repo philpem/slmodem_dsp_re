@@ -7346,3 +7346,135 @@ path coverage or behavior. This read-only audit performs no compilation.
 python3 tools/recovery_tail_transfer_audit.py --objects build/tc_repro \
   --census build/native293-census.json --out build/native293-tail-after.json
 ```
+
+## Check native delivery boundaries before reopening CID source variants
+
+The [CID observer](../../tools/cid_process_trace.py) follows real public
+create/feed/delete histories through two independent receiver chains. It
+records only calls made directly by `CID_process`, their results, input
+offsets/counts, owner identities, string guards and TTY/debug arguments in
+execution order. Receiver internals remain behind `cid_progress`. All sixteen
+relocations per wrapper and all other linked body bytes are checked against
+the input objects; normalized body hashes pin the reviewed instruction sites.
+
+The fixture includes debug-enabled bad-checksum Bell 202 audio and four
+real MDMF histories: date/number/NAME, with and without an extra tag, at debug
+levels zero and two. It now passes 476 checks, up from 193. These are valid
+CID component histories, not modem end-to-end reachability evidence.
+
+The MDMF investigation first failed in both independent receivers before
+`get_strings`. Decoded received bytes exposed matching packet corruption.
+The fixture's old sine lookup was malformed: its quadrature samples were
+0, 7688, -929 and -7331, rather than 0, 8000, 0 and -8000. Replacing it with
+rounded `8000*sin(2*pi*i/64)` restores the intended carrier without changing
+frequency, amplitude or production source. The observer independently checks
+the actual period-linked table against the continuous formula and half-cycle
+symmetry. The old table fails that calibration. The original failed executable
+was not frozen; retained packet observations do not substitute for that missing
+artifact. Do not describe this fixture correction as a receiver bug fix.
+
+The expanded trace has 214 paired wrapper calls and 830 matching ordered
+events. Four successful histories per side visit four nonempty fields; two
+also leave a rendered fifth field undelivered. NAME reaches TTY, while the
+extra MESG does not. Debug failure still prints after failed progress and
+performs no string or TTY operation. Whole-buffer success stops before its
+remaining input is offered.
+
+At wrapper entry the observer decodes the actual fixture `bits`/`nbits`,
+checking the seizure/mark prefix, async start/stop framing and trailing mark.
+Every settled received packet must equal those transmitted bytes; successful
+packets must also have a valid checksum. Eleven detector controls fail,
+including changed carrier samples, fourth-guard and fifth-delivery mutations,
+zero observations and equal received-byte corruption with a recomputed valid
+checksum. Equality between implementations and a valid checksum alone cannot
+certify a transmitted message.
+
+The complete CID source object remains raw-identical and both exact companions
+survive. `CID_process` remains 368 versus 386 bytes. No new source discrepancy
+or codegen gain is established; keep the 1433 recorded source/option cells
+closed. Raw output and 9600-Hz processing remain separate fixture limits.
+Do not plant a null string return: the actual callee returns its owned buffer.
+
+```sh
+python3 tools/cid_process_trace.py build/period/t_cid \
+  --require-four-field-cap --out build/order293-cid-trace
+```
+
+## Separate helper-reference evidence from original TU ownership
+
+The [V92 reference audit](../../tools/v92_reference_ownership.py) verifies a
+frozen 300-object build, all relocations and exact per-function decoding.
+Its reference/current denominators are 1852/1916 functions, 18317/18329
+relocations and 185305/183556 decoded instructions. No function decode is
+incomplete and no function extents overlap ambiguously. Five copied-ELF
+controls detect an extra caller, equivalent section-relative target, non-call
+address use, incomplete opcode stream and overlapping symbol extent.
+
+Only encoder `process` references `inverseMap`; only transmitter `process`
+references encoder `process`. The current transmitter boundary remains
+EXACT355, while the helper's standalone body remains EXACT440. Function/table
+binding, visibility and section kinds agree, as does the 320-byte table block.
+The mangling confirms non-const `int*` inputs and non-const methods, without
+encoding return type, access control or original inline annotations.
+
+GLOBAL DEFAULT definitions and a FILE record without LOCAL anchors do not
+settle source-object membership. No independent caller, address reference,
+field/type discrepancy or defining-owner witness licenses splitting this TU.
+Indirect destinations without relocated addresses, anonymous gaps and callers
+outside the object remain outside the observation. Require independent source
+visibility evidence before another ownership or inline-cost spelling palette.
+
+```sh
+python3 tools/v92_reference_ownership.py --baseline-dir build/native293-baseline \
+  --output build/native293-v92-ownership/audit.json
+```
+
+### Cross definition visibility across independent callers
+
+The [visibility cross](../../tools/recovery_visibility_cross.py) compiles
+unchanged encoder, V92 echo canceller and V90 phase-4 modulator TUs at retained
+O3 with automatic inlining and unit-at-a-time independently on/off. All three
+baseline objects reproduce raw. Twelve complete-TU cells account for 304
+original-function verdicts and 312 emitted copies, including eight additional
+local-helper copies. Complete commands, source/header/object hashes, actual
+compiler/assembler banners, data layouts, bindings, imports and relocation
+consumers accompany the body scores.
+
+| Profile | Encoder helper / V90 wrapper | Echo constructor reset / delay setup |
+| --- | --- | --- |
+| Retained | Both inline | Both inline |
+| Automatic inline off | Original CALL / tail JMP restored | Reset tail restored; delay becomes explicit calls |
+| Unit-at-a-time off | Both still inline | Reset tail restored; delay becomes explicit calls |
+| Both off | Original CALL / tail JMP restored | Reset tail restored; delay becomes explicit calls |
+
+Automatic inline off makes encoder process EXACT240 and the short V90 wrapper
+EXACT5, plus five other V90 wrappers. It also emits four extra LOCAL echo
+helpers and loses the original constructor's inlined delay setup: each
+constructor gains two static delay-call sites. Unit-off changes encoder table
+order and diagnostic-string layout, loses exact standalone `setEchoDelay` and
+V90 `resetRRNSecondSection`, and gains a Scrambler constructor copy. Preserve
+all these observations; no cell recovers the original constructor's mixture
+of inlined delay and called reset, and no production option is adopted.
+
+The original strong GLOBAL `setEchoDelay` body precedes the constructors.
+Its constructor expansions load parameter `+0x70`, read old object `+0x38`,
+publish the new delay there and adjust `+0x2c` before printing. Current source
+defines this ordinary method after the constructors, as it also does reset.
+Physical emission order alone does not prove declaration order under
+unit-at-a-time, and ordinary header-inline factoring can change the strong
+export to weak or omit it. Do not add an inline annotation to force a score.
+
+The next bounded diagnostic is a four-cell cross: move only the unchanged
+delay definition before the constructors, versus current order, under retained
+and unit-off profiles. Predict that unit-off then inlines delay while keeping
+the later reset tail; reject that explanation if either boundary fails to
+recover. Score all bodies/data/exports, not just the constructors. This tests
+source visibility while retaining a strong definition; even a hit would not
+uniquely recover the original global profile. This four-cell source experiment
+has not been run.
+
+```sh
+python3 tools/recovery_visibility_cross.py --domain visibility-profile-twelve \
+  --baseline-dir build/native293-baseline
+python3 tools/recovery_visibility_cross.py --audit
+```
