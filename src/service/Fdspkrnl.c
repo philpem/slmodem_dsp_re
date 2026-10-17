@@ -76,12 +76,13 @@ EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 	     float mu, int update)
 {
 	unsigned int i;
-	int quiet = 0;
+	unsigned int quiet = 0;
 	int pos = offset + 159;
 
 	for (i = 0; i <= 159; i++, pos--) {
 		float acc = 0.0f;
 		float x, e, peak;
+		int low;
 		unsigned int k;
 
 		if (mu != 0.0f) {
@@ -95,17 +96,20 @@ EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 		out2[i] = e;
 		out[i] = e;
 
-		peak = FDSP_FABS(hist[pos]);
-		for (k = 1; k < ntaps; k++) {
-			if (FDSP_FABS(hist[pos + k]) > peak)
-				peak = FDSP_FABS(hist[pos + k]);
+		{
+			const float *h = hist + pos;
+			peak = FDSP_FABS(h[0]);
+			for (k = 1; k < ntaps; k++) {
+				if (FDSP_FABS(h[k]) > peak)
+					peak = FDSP_FABS(h[k]);
+			}
 		}
 		peak = peak * 0.5f;
-		if (fabs(x) < peak)
-			quiet++;
+		low = fabs(x) < peak;
+		quiet += low != 0;
 
 		if (update) {
-			if (mu != 0.0f && fabs(x) < peak) {
+			if (mu != 0.0f && low) {
 				float g = e * mu;
 				unsigned int m;
 
