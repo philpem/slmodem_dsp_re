@@ -3,12 +3,12 @@
 
 The original has two circular history spans, continuously incremented
 coefficient pointers, per-lane history reads and a cached imaginary-history
-base. These controls isolate those boundaries; none is production source.
-The 317-byte and 336-byte partial recoveries lose V34EchoPreFilter's exact
-membership and are deliberately not adopted. Use a frozen Gentoo baseline:
+base. These controls isolate those boundaries. The 317-byte control is retained
+after tracing its reviewed V34EchoPreFilter exact loss; other controls remain
+diagnostic. Use the archived pre-recovery Gentoo baseline:
 
   python3 tools/recovery_v34_center_spans.py --domain center-span-ownership \
-      --baseline-dir build/tc_repro
+      --baseline-dir build/center-span-baseline
   python3 tools/recovery_v34_center_spans.py --audit
 
 The shared driver checks the complete baseline object, mandatory bug
@@ -121,7 +121,9 @@ def audit():
  report = {'cells': rows, 'body_verdicts': 234,
            'noncode_metadata_relocations_equal': True,
            'negative_controls': {'changed_data_detected': True},
-           'production_source_retained': False}
+           'production_source_retained': True,
+           'retained_cell': 'split-spans-lane-rereads-coeff-pointers',
+           'reviewed_exact_loss': [prefilter]}
  (root / 'audit.json').write_text(json.dumps(report, indent=2) + '\n')
  print('9 cells / 234 body verdicts: declared losses confirmed; noncode, metadata and relocations equal; 1/1 changed-data control detected')
 
