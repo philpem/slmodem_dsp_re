@@ -90,6 +90,59 @@ def blocks(rows):
     return result, edges, unknown
 
 
+def decision_branch(piece, index):
+    """Follow a bounded status/flags snapshot through safe scheduling only.
+
+    FCOM itself does not set integer flags. FNSTSW AX captures its status;
+    protect AH until SAHF publishes CF/PF/ZF. The explicit scheduling list
+    preserves integer flags. x87 stack changes after capture cannot relabel
+    the already compared values. Unknown instructions and another comparison
+    remain barriers even where a wider analysis might prove them harmless.
+    """
+    if piece[index].mnemonic in ('fcomi', 'fcomip', 'fucomi', 'fucomip'):
+        return None  # Direct-EFLAGS x87 comparisons are outside this grammar.
+    captured, published = False, False
+    safe = {'mov', 'lea', 'nop', 'wait', 'fnop', 'fld', 'fild', 'fldz', 'fld1',
+            'fldpi', 'fldl2e', 'fldl2t', 'fldlg2', 'fldln2', 'fxch', 'fst',
+            'fstp', 'fist', 'fistp', 'fldcw', 'fnstcw', 'fabs', 'fchs',
+            'fadd', 'faddp', 'fsub', 'fsubp', 'fsubr', 'fsubrp',
+            'fmul', 'fmulp', 'fdiv', 'fdivp', 'fdivr', 'fdivrp', 'frndint'}
+    branches = {'ja', 'jae', 'jb', 'jbe', 'je', 'jne', 'jp', 'jnp'}
+    for inst in piece[index+1:index+17]:
+        name = inst.mnemonic
+        if name in branches:
+            return inst.address if published else None
+        if name.startswith(('fcom', 'fucom')) or name == 'ftst':
+            return None
+        if name in ('fnstsw', 'fstsw'):
+            if captured or len(inst.operands) != 1:
+                return None
+            op = inst.operands[0]
+            if op.type != X86_OP_REG or inst.reg_name(op.reg) != 'ax':
+                return None
+            captured = True
+            continue
+        if name == 'sahf':
+            if not captured or published:
+                return None
+            published = True
+            continue
+        # Before capture, even an ordinary x87 operation can disturb status.
+        if not captured:
+            if name not in ('wait', 'nop'):
+                return None
+            continue
+        if name not in safe:
+            return None
+        _, written = inst.regs_access()
+        writes = {inst.reg_name(r) for r in written}
+        if 'eflags' in writes:
+            return None
+        if not published and writes & {'ah', 'ax', 'eax'}:
+            return None
+    return None
+
+
 def trace(rows):
     base = rows[0].address
     pieces, edges, unknown_edges = blocks(rows)
@@ -177,21 +230,12 @@ def trace(rows):
                 elif ops and slot(inst, ops[0]) in memory:
                     token = memory[slot(inst, ops[0])]
                     values.append(token[:3]+(at,) if token else None)
-                branch = None
-                for following in piece[index+1:index+8]:
-                    if following.mnemonic.startswith('j') and following.mnemonic != 'jmp':
-                        branch = following.address-base
-                        break
-                    allowed = following.mnemonic in ('fnstsw', 'fstsw', 'sahf', 'wait', 'nop')
-                    allowed |= following.mnemonic == 'fstp' and following.operands[0].type == X86_OP_REG
-                    allowed |= following.mnemonic in ('test', 'and') and any(
-                        o.type == X86_OP_REG and following.reg_name(o.reg) in ('ah', 'ax', 'eax')
-                        for o in following.operands)
-                    if not allowed:
-                        break
+                # Snapshot operands at FCOM, before following scheduling can
+                # change stack positions, stores or arithmetic provenance.
+                branch = decision_branch(piece, index)
                 if branch is not None:
                     values = [v for v in values if v is not None]
-                    decisions.append({'compare': at, 'branch': branch,
+                    decisions.append({'compare': at, 'branch': branch-base,
                                       'instruction': name+' '+inst.op_str,
                                       'arithmetic_values': [dict(producer=v[0], store=v[1],
                                           width=v[2], reload=v[3]) for v in values],
@@ -284,7 +328,52 @@ def controls(tone, reference):
     original = trace(load(reference)['TONE_generate'])
     assert [d['narrowed'] for d in original['decisions']] == [True, False, True]
     results['original_tone'] = original
+    results['scheduling'] = scheduling_controls()
     return results
+
+
+def scheduling_controls():
+    start = 'flds 4(%esp)\nfadds 8(%esp)\nfstps 16(%esp)\nflds 16(%esp)\nfcomps 12(%esp)\n'
+    finish = 'ja 1f\n1: ret\n'
+    forms = {
+        'mov-before-sahf': ('fnstsw %ax\nmovl %ecx,%edx\nsahf\n', True),
+        'mov-after-sahf': ('fnstsw %ax\nsahf\nmovl %eax,%edx\n', True),
+        'fld-before-sahf': ('fnstsw %ax\nflds 20(%esp)\nsahf\n', True),
+        'fxch-before-sahf': ('fnstsw %ax\nfxch %st(1)\nsahf\n', True),
+        'fst-before-sahf': ('fnstsw %ax\nfsts 20(%esp)\nsahf\n', True),
+        'fst-after-sahf': ('fnstsw %ax\nsahf\nfstps 20(%esp)\n', True),
+        'al-preserves-ah': ('fnstsw %ax\nmovb $0,%al\nsahf\n', True),
+        'eax-after-sahf': ('fnstsw %ax\nsahf\nmovl $0,%eax\n', True),
+        'snapshot': ('fnstsw %ax\nflds 20(%esp)\nfadds 24(%esp)\nfxch %st(1)\nfstps 28(%esp)\nsahf\n', True),
+        'fist-scheduling': ('fnstsw %ax\nfxch %st(1)\nsahf\nfldcw 20(%esp)\nfistpl 24(%esp)\nfldcw 26(%esp)\nmovl 24(%esp),%edx\n', True),
+        'flags-clobbered': ('fnstsw %ax\nsahf\naddl $1,%ecx\n', False),
+        'flags-before-sahf': ('fnstsw %ax\naddl $1,%ecx\nsahf\n', False),
+        'second-compare': ('fnstsw %ax\nfcom %st(1)\nsahf\n', False),
+        'ah-overwritten': ('fnstsw %ax\nmovb $0,%ah\nsahf\n', False),
+        'ax-overwritten': ('fnstsw %ax\nmovw $0,%ax\nsahf\n', False),
+        'eax-overwritten': ('fnstsw %ax\nmovl $0,%eax\nsahf\n', False),
+        'second-status': ('fnstsw %ax\nfnstsw %ax\nsahf\n', False),
+        'uncaptured-x87': ('flds 20(%esp)\nfnstsw %ax\nsahf\n', False),
+        'memory-status': ('fnstsw 20(%esp)\nsahf\n', False),
+        'unknown-opcode': ('fnstsw %ax\nxchgl %edx,%ecx\nsahf\n', False),
+    }
+    result = {}
+    with tempfile.TemporaryDirectory(prefix='float-status-scheduling-') as temp:
+        root = Path(temp)
+        for label, (body, accepted) in forms.items():
+            source, obj = root/(label+'.s'), root/(label+'.o')
+            source.write_text('.text\n.type probe,@function\nprobe:\n'+start+body+finish+'.size probe,.-probe\n')
+            subprocess.run(['as', '--32', '-o', str(obj), str(source)], check=True)
+            rows = load(obj)['probe']
+            observed = trace(rows)['decisions']
+            assert len(observed) == int(accepted), (label, observed)
+            if accepted:
+                assert observed[0]['narrowed']
+                value = observed[0]['arithmetic_values'][0]
+                assert value == {'producer': rows[1].address, 'store': rows[2].address,
+                                 'width': 4, 'reload': rows[3].address}, (label, value)
+            result[label] = {'accepted': accepted, 'decisions': observed}
+    return result
 
 
 def main():
@@ -355,7 +444,8 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2)+'\n')
     print(json.dumps(dict(counts), sort_keys=True))
-    print('Controls: 19 assembled cases; original bug and cast-only positive, repaired tone negative')
+    print('Controls: 19 original + 20 status-scheduling assembled cases; '
+          'original bug and cast-only positive, repaired tone negative')
     for row in result['nominations']:
         print(row['object'], row['symbol'], [d['compare'] for d in row['original']['decisions'] if d['narrowed']])
 
