@@ -328,7 +328,7 @@ call_run(struct dp *dp, void *in, void *out, int count)
 		host_out += n;
 		st->out_q.count -= n;
 		st->out_q.tail = (st->out_q.tail + n) % CALL_RING_BYTES;
-		count -= n / 2;
+		count -= n >> 1;
 	}
 
 	return rc;
