@@ -171,25 +171,38 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Screen remaining nonexact functions for original/source guard, call, width,
-   owner and diagnostic discrepancies. Check closed domains before compiling
-   variants. Queue's cost/cache trace now explains the retained push prologue;
-   no new source boundary or return-width witness has emerged.
-2. Reopen EchoCanceler only with a new operand/lifetime or original-profile
+1. Review `preinitdigital`'s remaining eight-byte gap after the ownership
+   recovery below. Compare the original publication/operand graph before
+   proposing another source form. Screen other nonexact functions for
+   original/source guard, call, width, owner and diagnostic discrepancies.
+2. Follow the retained `V34EqualizerCenterAdapt` split-span recovery through
+   original history-base and arithmetic operand ownership. The nine-cell
+   spelling domain stays closed. Its one exact-neighbour loss is explicitly
+   reviewed and dynamically explained below.
+3. Investigate V92ConvolutionEncoder's missing `inverseMap` call with full-TU
+   inline/profile controls. The standalone helper is already exact at 440
+   bytes; `process` is 503 versus 240 original bytes. This is not evidence of
+   a wrong helper body. Check original source ownership and #22 before changing
+   visibility or flags.
+4. Reopen EchoCanceler only with a new operand/lifetime or original-profile
    witness. Both reload orientations cost eight, and the first wins the tie.
    The retained frame has two spill words and zero padding; the original's
    extra four bytes do not establish another local or an alignment option.
-3. GenericIIR: require allocator/liveness provenance for the scalar scratch
+5. GenericIIR: require allocator/liveness provenance for the scalar scratch
    and renaming choices and block destination spill. The original block's
    second extra slot receives an input-length store that is never read.
    The prior source domains are closed until a new discriminator appears.
-4. Keep silence's two previously surviving opposite-direction threshold
+6. Keep silence's two previously surviving opposite-direction threshold
    mutations visible as fixture limits. Byte-exact recovery does not create
    new lifecycle evidence for those inputs.
 
 The Resampler static-comparison-count domain remains closed without a new
 contradictory operand or path. Its extra comparison was reproduced at GCC's
 x87 stack-conversion stage.
+
+Queue's measured cost/cache trace explains the retained push prologue. Its
+old spelling domain remains closed without a new source boundary or
+return-width witness.
 
 ## Acceptance and reporting
 
@@ -325,3 +338,79 @@ TU raw-identical. Disabling sched2 changes all nine bodies and supplies no exact
 gain. This redundant experiment is stopped; it does not reopen that family.
 `V22FP_modem`'s current five-byte mismatch is another argument-setup scheduling
 swap, with no new source-fidelity witness, and is not promoted on size alone.
+
+## Initializer and split-span recovery
+
+Two further source recoveries use the same Gentoo compiler and flags:
+
+| Function | Before this batch | Retained | Original |
+|---|---:|---:|---:|
+| `preinitdigital` | 300 bytes, SIZE233 | 541 bytes, SIZE8 | 533 bytes |
+| `V34EqualizerCenterAdapt` | 183 bytes, SIZE164 | 317 bytes, SIZE30 | 347 bytes |
+
+These are length gaps, not counts of differing bytes. Initializer visibility
+restores two embedded bodies and removes two extra helper calls. The split-span
+source restores the two circular loops and continuous coefficient owners.
+Neither function becomes exact in this batch.
+
+The initializer pair retains its other twelve bodies, data, 29 global
+definitions and ten external imports. Its three focused period fixtures pass
+27 groups and 6186579 checks; both moved callback-pair mutants are caught with
+Gentoo-compiled objects. Mutation anchors follow the moved definition; no
+standard mutation snapshot refresh is claimed.
+
+The selected split-span candidate retains twenty-four neighbouring bodies,
+data, bindings and relocations, but changes four bytes in
+`V34EchoPreFilter`. Installed-compiler observation explains this loss: the
+same scratch request and eligibility enter with persistent search cursor two
+versus one and select CX versus DX. The two whole-TU traces contain 78 versus
+81 searches, of which two versus five occur in CenterAdapt. The zeroing
+difference starts at peephole2; later register renaming adds the shift-carrier
+changes. Both traced complete objects remain raw-identical to their controls.
+
+This is a deliberate, reviewed source-fidelity tradeoff. Current exact
+membership becomes **1101/1852**, covering **126467/720125 original function
+bytes**: this batch loses only `V34EchoPreFilter` (139 original bytes), gains
+no exact names and preserves every other previously exact name. The former
+1102-name floor is preserved in Git history. The current ratchet is rebased
+explicitly; future unexplained losses still fail it. Since the start of PR293,
+`silence_progress` is gained and `V34EchoPreFilter` is lost: net zero names
+and 484 additional original bytes exact. The strict partial/raw-file result
+remains DIFFERENT.
+
+The nine-cell loop experiment covers 234 body verdicts. A corrupted-data
+control is detected; an incorrect wrap bound fails 2372 existing lifecycle
+checks. The source candidate independently passes 392 period fixtures before
+integration. The [Playbook](refinement.md#review-exact-losses-against-source-fidelity)
+records the retention decision and inference limits.
+
+Archive the pre-recovery `06ba1f713` period objects and `.build-config` before
+rebuilding, or rebuild that revision separately. Current changed objects are
+not substitutes for the frozen baseline:
+
+```sh
+python3 tools/recovery_preinit_owner.py --baseline-dir build/preinit-owner-baseline
+python3 tools/recovery_preinit_owner.py --late-role-owner
+python3 tools/recovery_preinit_owner.py --formatted-production
+python3 tools/recovery_v34_center_spans.py --domain center-span-ownership \
+  --baseline-dir build/center-span-baseline
+python3 tools/recovery_v34_center_spans.py --audit
+python3 tools/gcc3_mechanism_scratch_observe.py \
+  --reproduction-dir build/recovery-v34-center-spans \
+  --target V34EchoPreFilter --out build/center-scratch-observed
+python3 tools/gcc3_mechanism_scratch_observe.py --self-test
+```
+
+The scratch command observes all recorded cells. Parent review used a
+two-cell manifest view containing the baseline and
+`split-spans-lane-rereads-coeff-pointers` controls. It independently reproduced
+their identical target search inputs and differing cursors; validator controls
+accept one valid trace and refuse five invalid traces.
+
+The final integrated `make phase J=4` passes **392 period fixtures, zero
+failures**, plus the structural gates. All 300 runtime source objects
+raw-match canonical objects; the three changed TUs also raw-match their
+independently selected experiment controls. The reviewed current-floor check
+passes, and all three membership-ratchet self-test cases pass, including the
+masked-loss rejection. Strict documentation build/audit passes. No modern
+portability, whole-file identity or full mutation execution is claimed.
