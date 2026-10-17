@@ -34,6 +34,11 @@ USAGE
     dis.py <obj> <symbol>              whole function
     dis.py <obj> 0x7df75 0x7dfab       an address range
     dis.py <obj> <symbol> --plain      no noise suppression
+    dis.py <obj> 0x0 0x40 --section .gnu.linkonce.t.name
+
+Symbols select their defining ELF section. Numeric ranges default to .text;
+use --section for another section. Ambiguous local names need a distinguishing
+--section or a numeric range.
 
 By default it drops padding (`nop`, `lea 0x0(%esi),%esi` and friends), because
 those never carry relocations.  Nothing else is ever hidden.
@@ -53,23 +58,39 @@ import sys
 REVERSIBLE = {"fdivp", "fdivrp", "fsubp", "fsubrp",
               "fdiv", "fdivr", "fsub", "fsubr"}
 
-# Alignment padding gcc emits between blocks.  These cannot carry relocations,
-# which is the only reason it is safe to drop them.
+# Alignment padding gcc emits between blocks. A matching shape is suppressed
+# only after checking that it carries no relocation.
 PADDING = re.compile(
     r'\t(nop|xchg\s+%ax,%ax|lea\s+0x0\((%e[a-z]{2})(,%eiz,1)?\),\2)\s*$')
 
 RELOC = re.compile(r'^\s+([0-9a-f]+):\s+(R_386_\S+)\s+(\S+)(?:([+-]0x[0-9a-f]+))?')
 INSN = re.compile(r'^\s*([0-9a-f]+):\t')
+SECTION = re.compile(r'^\s*\[\s*(\d+)\]\s+(\S+)')
+BYTES = re.compile(r'^\s*[0-9a-f]+:\s+((?:[0-9a-f]{2}\s)+)')
 
 
-def symbol_range(obj, name):
-    out = subprocess.run(['nm', '-S', obj], capture_output=True, text=True).stdout
+def sections(obj):
+    out = subprocess.check_output(['readelf', '--sections', '--wide', obj], text=True)
+    return {int(m[1]): m[2] for line in out.splitlines()
+            if (m := SECTION.match(line))}
+
+
+def symbol_range(obj, name, requested_section=None):
+    names = sections(obj)
+    out = subprocess.check_output(['readelf', '--syms', '--wide', obj], text=True)
+    matches = set()
     for line in out.splitlines():
         f = line.split()
-        if len(f) == 4 and f[3] == name:
-            lo = int(f[0], 16)
-            return lo, lo + int(f[1], 16)
-    sys.exit("no such symbol with a size: %s" % name)
+        if len(f) == 8 and f[7] == name and f[6].isdigit() and int(f[2]):
+            section = names[int(f[6])]
+            if requested_section is None or section == requested_section:
+                lo = int(f[1], 16)
+                matches.add((section, lo, lo + int(f[2])))
+    if not matches:
+        raise ValueError("no such symbol with a size: %s" % name)
+    if len(matches) != 1:
+        raise ValueError("ambiguous symbol %s; select --section or an address range" % name)
+    return matches.pop()
 
 
 def main():
@@ -81,18 +102,30 @@ def main():
     ap.add_argument("stop", nargs="?", help="stop address")
     ap.add_argument("--plain", action="store_true",
                     help="keep padding instructions")
+    ap.add_argument("--section", help="ELF section (numeric ranges default to .text)")
     args = ap.parse_args()
 
-    if args.stop is None and not args.start.startswith("0x"):
-        lo, hi = symbol_range(args.obj, args.start)
-    else:
-        lo = int(args.start, 0)
-        hi = int(args.stop, 0) if args.stop else lo + 0x100
+    try:
+        if args.stop is None and not args.start.startswith("0x"):
+            section, lo, hi = symbol_range(args.obj, args.start, args.section)
+        else:
+            section = args.section or '.text'
+            if section not in sections(args.obj).values():
+                raise ValueError("no such section: %s" % section)
+            lo = int(args.start, 0)
+            hi = int(args.stop, 0) if args.stop else lo + 0x100
+        if hi <= lo:
+            raise ValueError("stop address must follow start address")
+    except (ValueError, subprocess.CalledProcessError) as error:
+        ap.error(str(error))
 
-    raw = subprocess.run(
-        ['objdump', '-d', '-r', '--start-address=0x%x' % lo,
-         '--stop-address=0x%x' % hi, args.obj],
-        capture_output=True, text=True).stdout
+    scope = ['-j', section, '--start-address=0x%x' % lo,
+             '--stop-address=0x%x' % hi, args.obj]
+
+    # -w moves relocations onto instruction lines on recent binutils. Keep
+    # separate relocation records while preventing long instruction wrapping.
+    raw = subprocess.check_output(['objdump', '-d', '-r', '--insn-width=16'] + scope,
+                                   text=True)
 
     #
     # THE REVERSIBLE x87 FAMILY IS ANNOTATED WITH ITS INTEL MNEMONIC, because
@@ -106,10 +139,8 @@ def main():
     # does fix it is `-M intel`, which renders the same bytes the way the
     # Intel manual names them.  So we ask objdump twice and print both.
     #
-    intel = subprocess.run(
-        ['objdump', '-d', '-M', 'intel', '--start-address=0x%x' % lo,
-         '--stop-address=0x%x' % hi, args.obj],
-        capture_output=True, text=True).stdout
+    intel = subprocess.check_output(['objdump', '-d', '--insn-width=16', '-M', 'intel'] + scope,
+                                    text=True)
     intel_at = {}
     for line in intel.splitlines():
         m = re.match(r"\s*([0-9a-f]+):\s+(?:[0-9a-f]{2} )+\s*(\S+)", line)
@@ -124,8 +155,9 @@ def main():
         m = RELOC.match(line)
         if m:
             addend = m.group(4) or ""
-            relocs[int(m.group(1), 16)] = "%s %s%s" % (m.group(2), m.group(3),
-                                                       addend)
+            at = int(m.group(1), 16)
+            if lo <= at < hi:
+                relocs[at] = "%s %s%s" % (m.group(2), m.group(3), addend)
 
     out = []
     starts = []
@@ -134,11 +166,16 @@ def main():
         if m:
             starts.append((int(m.group(1), 16), line))
 
-    for i, (addr, line) in enumerate(starts):
-        end = starts[i + 1][0] if i + 1 < len(starts) else addr + 16
-        if not args.plain and PADDING.search(line):
-            continue
+    shown = set()
+    for addr, line in starts:
+        encoded = BYTES.match(line)
+        if not encoded:
+            raise ValueError("instruction has no decoded bytes: %s" % line)
+        end = addr + len(encoded[1].split())
         tags = [relocs[a] for a in sorted(relocs) if addr <= a < end]
+        shown.update(a for a in relocs if addr <= a < end)
+        if not args.plain and not tags and PADDING.search(line):
+            continue
 
         # The AT&T spelling of a popping divide or subtract is its own
         # opposite.  Where the Intel rendering of the SAME BYTES disagrees,
@@ -159,9 +196,12 @@ def main():
         out.append(text)
 
     print("\n".join(out))
-    if relocs:
-        print("\n[%d relocation(s) in this range, all shown inline]"
-              % len(relocs), file=sys.stderr)
+    print("\n[%d relocation(s) in %s range, %d shown inline; "
+          "%d instruction(s) decoded, %d displayed]"
+          % (len(relocs), section, len(shown), len(starts), len(out)), file=sys.stderr)
+    if shown != set(relocs):
+        raise ValueError("relocations outside decoded instruction bytes: %s" %
+                         sorted(set(relocs) - shown))
 
 
 if __name__ == "__main__":

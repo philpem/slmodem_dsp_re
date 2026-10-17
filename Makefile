@@ -1082,7 +1082,8 @@ COVCOUNTS  := build-cov/measured.txt
 # Modern GCC, 64-bit cleanliness, SpanDSP interop and coverage remain valuable,
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
-               banners partial-compare-selftest tumap-selftest period-selection-selftest
+               banners partial-compare-selftest tumap-selftest period-selection-selftest \
+               dis-selftest
 
 PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov \
                      mutation-snapshot
@@ -1091,6 +1092,10 @@ phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
 	@echo
 	@echo "phase boundary: period differential and structural checks all OK"
+
+.PHONY: dis-selftest
+dis-selftest:
+	@$(PYTHON) test/safety/test_dis_sections.py
 
 portability: prereq
 	@$(MAKE) --no-print-directory $(PORTABILITY_TIERS)
