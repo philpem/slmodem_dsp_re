@@ -5526,3 +5526,95 @@ loses those loads. Expressing the two post-call accesses through the owning
 member restores them and reaches the original body length, while the other
 25 TU bodies remain unchanged. This is instruction-graph evidence, not proof
 of a functional defect: the observed callee does not change the owner.
+
+### Cross normalization homes with the operation that consumes them
+
+Both FPM sqrt bodies use caller-owned 16-bit normalization outputs in the
+original. The count recurrence is promoted inside the loop and published after
+its backedge. The subsequent parity test compares the count with twice its
+halved value; replacing that graph with a bit test changes the emitted code.
+
+A bounded cross separates pointed outputs from local values and quotient-based
+parity from a bit test. Pointed outputs with quotient-based parity recover the
+operations but leave both bodies two bytes short because the stack homes are
+reversed. Crossing the caller declarations against the observed homes—count at
+stack offset 0, mantissa at offset 2—makes both bodies byte-exact. The three
+other emitted functions, data and bindings remain unchanged. The scalar's
+explicit narrowed index also replaces the old subtraction folded into the
+table relocation; audit that destination with the instruction graph.
+
+Use the existing full unsigned-word scalar sweep and wide-input double-word
+fixture to validate this recovery. The prior clamp correction made those
+component boundaries trustworthy before pursuing the code-generation match.
+
+### Check signedness before treating a residual as allocation noise
+
+In the call supervisor, the original S-register comparisons use unsigned
+conditions. Its queue offsets and active-byte count also use unsigned minimum,
+modulo and halving operations, while the available-byte count remains signed.
+The reconstruction's signed operations already appear in initial RTL. Trace
+that divergence before changing declarations merely to influence allocation.
+
+Keep independently witnessed boundaries separate. Recover unsigned consumers
+without claiming an unsigned host API return type when no original declaration
+establishes it. Read the stored modem owner where the original reloads it.
+Cross the S-register and queue changes to identify their separate effects, and
+check every TU body and switch-table destination. A larger size gap can expose
+remaining address and lifetime differences after the wrong arithmetic is gone.
+
+Ordinary public-constructor and block histories validate the retained source.
+High-bit host-return probes are separately labelled synthetic: they expose the
+S56 decision difference but do not prove the modem host supplies those values.
+Do not infer a second value defect from S16's unsigned instructions when the
+measured probe does not fail there.
+
+A smaller owner-reload candidate can still move the wrong reads. Rewriting
+`call_block` to obtain its state through `dp->self` recovers the inner owner
+reload, but also moves the input/output buffer-offset reads to that owner.
+The original computes those buffers from the outer state before reloading the
+inner processing owner. Reject that whole-helper candidate even if its size gap
+shrinks and the lifecycle tests pass. A later experiment must preserve the
+outer buffer producers separately from the inner processing owner.
+
+### Separate missing diagnostics from shared blocks and defensive arms
+
+Resolve formats and call boundaries before interpreting a debug-site count.
+The B.103 answer-state mismatch comes from split sibling tails; CID creation
+inlines its reset diagnostic; V.8 DATA and V.80 indications share a print block
+in the original; fax unframing shares CRC-success prints. Those count
+mismatches justify no source correction. Retain format-negative controls so
+an audit can distinguish an omitted format from these explained differences.
+
+Two other fax sites contained actual omissions. Receive-buffer recovery lacked
+its timestamped report and original index reloads around output handling. A
+valid-record queue probe detects the transcript difference, but its supplied
+state and countdown remain synthetic component coverage. Finding a modem
+lifecycle producer is separate work, not a property conferred by a passing test.
+
+The constructor's published configuration-pointer checks also lacked their
+shared diagnostic and NULL-return arm. The original performs unchecked writes
+before those checks, so ordinary allocation failure is not a safe way to reach
+them. Restore the independently witnessed defensive graph and its lack of
+cleanup without claiming allocation-failure safety. Review return and cleanup
+behavior whenever a missing print reveals an omitted branch.
+
+### Give an aggregate-boundary fixture an aggregate input
+
+The original log10 table has 128 words and its endpoint read reaches
+`FPM_PPS_CFG`. Linking the reconstruction TUs individually into a test executable
+interleaves string storage at that boundary. An opt-in fixture mode first links
+the ordered, test-visible source objects into a relocatable aggregate, then links
+the fixture, harness and reference. This restores the measured neighbour without
+source padding, a fabricated endpoint, or section attributes.
+
+Preserve interposition at the partial-link boundary: apply fixture `--wrap`
+options there as well as at the final link. A final-only wrapper is too late
+once an aggregate has bound the source call. Likewise, aggregate the test-visible
+copies so fixtures can still name selected original-local symbols. Negative
+controls must demonstrate both failures before trusting the positive run.
+
+Cache aggregate inputs by ordered content, reference and apparatus identities,
+wrapper options and the actual linker identity. Cache final links by mode and
+link options as well as their inputs. Test stable reuse, mode switches and
+content changes with restored timestamps. A correct endpoint in the relocatable
+object alone does not establish the endpoint in the executed fixture.
