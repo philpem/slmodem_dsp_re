@@ -80,7 +80,7 @@ call_dial_string(struct call_dp *st, char *buf, size_t buflen)
 	if (sysdep_strlen(want) > 62)
 		return want;
 
-	buf[0] = modem_get_sreg(st->modem, 16) < 1 ? 'p' : 't';
+	buf[0] = (unsigned int)modem_get_sreg(st->modem, 16) < 1 ? 'p' : 't';
 	sysdep_strcpy(buf + 1, want);
 	return buf;
 }
@@ -89,13 +89,16 @@ static struct dp *
 call_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
-	struct callprog_cfg cfg;
 	char dialstr[64];
+	struct callprog_cfg cfg;
 	struct call_dp *st;
-	int mode;
+	unsigned int mode;
 
 	(void)caller;
 	(void)max_frag;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: create...\n");
 
 	st = sysdep_malloc(sizeof(struct call_dp));
 	if (st == 0)
@@ -112,7 +115,7 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	 * business; all that matters here is that 0, 1 and 3 mean one thing
 	 * and everything else means the other.
 	 */
-	mode = modem_get_sreg(modem, 56);
+	mode = modem_get_sreg(st->modem, 56);
 	cfg.w0 = (mode <= 1 || mode == 3) ? 1 : 0;
 	cfg.get_sreg = call_GetSRegister;
 	cfg.modem = st->modem;
@@ -139,6 +142,10 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	 * null and the block path treats that as 8 kHz.
 	 */
 	if (srate != CALL_NATIVE_RATE) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("call: create RC: %d <-> %d...\n",
+					    srate, CALL_NATIVE_RATE);
+
 		st->rc_in = srate == 9600 ? RcFixed_Create(RC_9600_IN)
 			  : srate == 48000 ? RcFixed_Create(RC_48000_IN) : 0;
 		st->rc_out = srate == 9600 ? RcFixed_Create(RC_9600_OUT)
@@ -220,14 +227,14 @@ call_status(struct call_dp *st, int message)
 
 /* One block: 48 samples in, 48 out, through however many stages there are. */
 static int
-call_block(struct call_dp *st)
+call_block(struct dp *dp, short *from_line, short *to_line)
 {
-	short *from_line = st->in_q.data + st->in_q.active / 2;
-	short *to_line = st->out_q.data + st->out_q.active / 2;
+	struct call_dp *st = ((struct call_dp *)dp)->self;
 	const short *in;
 	short *out;
 	int count;
 	int rc;
+	int message;
 
 	if (st->answered != 0) {
 		/* The call is over; keep the outgoing side quiet. */
@@ -247,7 +254,7 @@ call_block(struct call_dp *st)
 		out = to_line;
 	}
 
-	st->message = CALLPROG_Progress(&st->callprog, in, out, count);
+	message = CALLPROG_Progress(&st->callprog, in, out, count);
 
 	if (st->rc_out != 0) {
 		int produced = CALL_SCRATCH_SAMPLES;
@@ -256,7 +263,14 @@ call_block(struct call_dp *st)
 				 &produced);
 	}
 
-	rc = call_status(st, st->message);
+	if (message != st->message) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("call: process: msg %d --> %d\n",
+					    st->message, message);
+		st->message = message;
+	}
+
+	rc = call_status(st, message);
 	return rc;
 }
 
@@ -289,7 +303,9 @@ call_run(struct dp *dp, void *in, void *out, int count)
 		host_in += n;
 
 		if (st->in_q.count > CALL_BLOCK_BYTES - 1) {
-			int block = call_block(st);
+			int block = call_block(dp,
+				(short *)((char *)st->in_q.data + st->in_q.active),
+				(short *)((char *)st->out_q.data + st->out_q.active));
 
 			if (block != DPSTAT_OK)
 				rc = block;
@@ -312,7 +328,7 @@ call_run(struct dp *dp, void *in, void *out, int count)
 		host_out += n;
 		st->out_q.count -= n;
 		st->out_q.tail = (st->out_q.tail + n) % CALL_RING_BYTES;
-		count -= n / 2;
+		count -= n >> 1;
 	}
 
 	return rc;
