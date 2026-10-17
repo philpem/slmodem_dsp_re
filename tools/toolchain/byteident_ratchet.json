@@ -1,9 +1,9 @@
 {
-  "bytes": 67,
+  "bytes": 71,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1101,
-  "exact_bytes": 125983,
+  "exact": 1102,
+  "exact_bytes": 126583,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -233,7 +233,6 @@
     "V32TxHdxModem",
     "V34EchoCleanUp",
     "V34EchoEstimateDelayLineEnergy",
-    "V34EchoPreFilter",
     "V34EchoPreFilterCopy",
     "V34EchoReportCoeff",
     "V34EchoUpdateDelayLine",
@@ -285,6 +284,7 @@
     "Vparser_read_float",
     "Vparser_read_int",
     "_Z10float2BitsfPsi",
+    "_Z12designWindowIfEv10WindowTypePT_j",
     "_Z16setDilDescriptorP19tagV90DILdescriptor7DilType",
     "_Z20resetRetrainDetectorP17tag_retrainReqDets",
     "_Z25SetUpstreamModulationInfoP12tagV34Object",
@@ -1011,6 +1011,7 @@
     "setScramble",
     "silence_delete",
     "silence_is_more_then",
+    "silence_progress",
     "toneiir_delete",
     "toneiir_get_default_configuration",
     "toneiir_reset",
@@ -1111,6 +1112,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 654,
+  "size": 649,
   "unresolved": 1
 }

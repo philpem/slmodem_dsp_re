@@ -6424,3 +6424,1047 @@ The next bounded priorities are:
 4. Keep the Resampler comparison-count domain closed without a contradictory
    operand/path. Apply its stack-conversion lesson to other unaligned floating
    comparisons before labelling them missing predicates.
+
+The next campaign follows the
+[Ghidra-assisted fidelity investigation](ghidra-assisted.md), including input
+provenance, calibration controls and a complete discrepancy ledger.
+
+## Ghidra-assisted boundary recovery: 17 October 2026
+
+PR #293 starts from the merged #291 tree. The first connected investigation
+compares explicitly selected reference and canonical programs in Ghidra 12.2
+DEV. The [campaign record](ghidra-assisted.md#first-connected-investigation-17-october-2026)
+records inputs, calibration and limits. Ghidra nominated boundaries;
+independent instructions and complete-TU controls decide which source to retain.
+
+### Calibrate signatures and the claimed P-code level
+
+Four synthetic x87 controls demonstrate both a useful correction and a hard
+limit. Inferred signatures omit a final add/subtract/divide and the third
+argument after a float spill/reload. Explicit three-float `__cdecl` signatures
+restore the arithmetic. However, narrowed and unrounded subtraction still
+have identical high-level expressions and float-width P-code despite native
+results `c0920eaa` and `c0920eab`. Do not infer precision identity from either
+representation, even after typing the arguments correctly.
+
+The MCP endpoint's `basic` mode is labelled raw but returns HighFunction
+operations (`MULTIEQUAL`, `PTRADD`, `CAST`). Record the actual representation;
+calling it raw would confer a precision guarantee the observation does not
+have. Empty disassembly responses also failed the four known nonempty
+controls. Fall back to the independent disassembler and keep the invalid
+outputs visible. The committed [calibration fixture](../../test/experiment/ghidra/README.md)
+passes 5/5 native checks and can be rerun on a different version.
+
+### Let source loop ownership produce a guarded invariant
+
+EchoCanceler's adaptation product belongs after the nonempty-tap guard in
+the reference. The previous reconstruction computed it before the loop.
+Initial RTL already contains that order: blaming a later compiler pass would
+have sent the investigation in the wrong direction. Declaring the product
+inside the adaptation loop lets `08.gcse` hoist it into a guarded preheader,
+matching the original boundary without a barrier or extra source guard.
+
+A second discriminator is the original x87 producer copy: `fld` duplicates
+still-live `mu`, then `fmulp` consumes `e`. `mu * e` recovers this ownership;
+`e * mu` chooses a different destructive operand despite equal arithmetic.
+The six-cell domain includes the explicit-empty-guard cross and a final
+consumer operand reversal. The latter produces raw-identical objects, so
+that consumer spelling domain is closed.
+
+The retained body remains 359 bytes, matching the original size; differing
+bytes fall from 55 to 44. All five neighbouring bodies, data, bindings and
+resolved relocation consumers are unchanged. The final focused period run
+passes one fixture, eleven groups and 45,905 checks. This is a partial graph
+recovery, with no new functional defect claimed. Next inspect the first
+dot-product load/operand schedule through combine/reload; account separately
+for the original twelve-byte versus retained eight-byte stack allocation.
+
+### Recover compaction and publication before register allocation
+
+The GenericIIR reference has signed predecrement history guards, descending
+compaction pointers with a `n-2` to `-1` counter, input-history publication
+before zeroing the accumulator, pointer/countdown block iteration, and block
+output publication before input compaction. These are instruction-backed
+source boundaries. In particular, moving the input-history store before
+zeroing the accumulator eliminates the old alias-forced accumulator reload;
+a matching filter equation had hidden the publication difference.
+
+| Original entry | Previous bytes | Retained bytes | Reference bytes | Remaining grade |
+|---|---:|---:|---:|---|
+| Scalar `process(float)` | 450 | 398 | 398 | BYTES, 63 differing bytes |
+| Block `process(const float *, float *, unsigned)` | 548 | 572 | 584 | SIZE, 12-byte length gap |
+
+The twelve complete-TU controls cover 216 emitted-body verdicts. Only the
+two processing bodies and two compaction helpers change; the other fourteen
+bodies, all nine exact original names of twelve, data, bindings and noncode
+relocations remain unchanged. The compaction helpers retain their weak
+exports. Matching scalar length and instruction count does not make the
+scalar function byte-exact.
+
+Six added constructor-created history groups cover non-unit denominators,
+unequal taps, mixed scalar/block calls, in-place blocks, reset, zero-length
+calls and tight compaction headroom. They compare non-pointer state and both
+complete double histories. All three focused fixtures pass: 32 groups and
+422,747 checks. Restoring block division instead of reciprocal multiplication
+fails 30 new checks across five groups; the scalar-only group is a negative
+control. No internal state is planted and no public-call reachability or new
+original-code bug is claimed.
+
+Stop these source domains here. The next scalar discriminator is the first
+feedforward register/base/index choice and input-compaction LEA schedule in
+initial RTL, allocation and scheduling dumps. The block needs a live-value
+and spill account of the original `0x34` versus retained `0x2c` frame. A frame
+size difference alone does not identify its cause.
+
+## Compiler-stage follow-up: exact silence guards and echo operands
+
+This PR #293 continuation uses Gentoo GCC 3.4.2-r2 for every reconstruction
+compile, instruction comparison, tree dump and RTL dump. The debugger runs
+`cc1` extracted from that image; the selected period assembler must reproduce
+the complete original experiment object byte for byte. Period differential
+execution is an additional check after those code-generation measurements.
+
+### Preserve guard boundaries before explaining the prologue
+
+`silence_progress` is now byte-exact, 623 original bytes. Its two early-return
+checks were previously written as one `lvl > 3 || lvl == 0` expression.
+The original compares the low word with three and separately tests the widened
+value against zero, with two branches to the epilogue. Two `if` statements
+recover that graph; no field/local type or compiler flags change.
+
+A width cross initially suggested a wider local might preserve the two
+comparison widths. That combined-expression control instead materialised
+boolean results and remained nonexact. Crossing statement boundaries then
+showed both the wide-local and original-short-local split forms are EXACT
+and produce identical complete objects. Retain the simpler short local;
+this is evidence for the guard boundary, not a uniquely recovered declaration.
+The six distinct variants cover 30 complete-body verdicts. Only the target
+changes; four neighbouring bodies, all data, bindings and relocation consumers
+are unchanged. A corrupted threshold byte is rejected by the noncode audit.
+
+The installed compiler observation closes the old unmeasured cost claim:
+
+| Observation | Combined guard | Separate returns |
+|---|---:|---:|
+| Saved registers | 4 | 4 |
+| Cost parameter | 60 | 60 |
+| Estimated entry frequency | 3438 | 6875 |
+| Weighted decision threshold | 206280 | 412500 |
+| Observed weighted count | 206629 at early exit | 367492, full traversal |
+| `expensive_function_p` | true | false |
+| Save registers with moves | false | true |
+
+Each case has fifteen frame-layout observations but only one cost call. The
+first call happens during reload's elimination-offset calculation; its choice
+is cached for all subsequent layouts, including prologue and epilogue emission.
+That cache is keyed by saved-register count; Queue below demonstrates a second
+decision when reload changes that count.
+The combined case exits as soon as its count exceeds the threshold, so 206629
+is not its whole-function cost. Local space and outgoing space remain 16 and
+12 bytes. No padding or invented local is needed to recover the move saves.
+
+[Guard controls](../../tools/recovery_silence_guards.py) preserve the source
+cross. The reusable [observer](../../tools/gcc3_prologue_cost_observe.py) records
+actual compiler hashes and commands, checks the cost-hook instruction bytes,
+and requires raw complete-object equality. Baseline and exact controls retain
+that equality; a successfully compiled absent target is rejected as empty.
+Early invalid permission/symbol observations remain excluded in the artifacts.
+Allocator-address differences in `-dP` comments are not emitted-code changes;
+the period-assembled object is the identity control.
+
+This transfers as a triage method: inspect original/source guard boundaries
+before trying to steer a prologue by function size. A guard split changes
+predicted frequencies and can affect register saves far from the expression.
+It does not authorise splitting unrelated guards solely to obtain a score.
+
+### Follow combine's chosen memory operand
+
+EchoCanceler's dot product now uses `hist[pos+j] * coef[j]`. The original
+loads the coefficient, calculates the history address and multiplies from
+history memory. `20.combine` had folded coefficient memory for the previous
+operand order. The reversed source operands restore the original instruction
+ownership, reducing differing bytes from 44 to 31 at the same 359-byte size.
+Explicit coefficient-capture controls are raw-identical to the old source;
+that source family is closed. All five neighbours, data and bindings survive.
+
+The remaining adaptation history load first appears in `25.greg`, which
+materialises history in a fresh x87 register rather than copying the live
+product. The last stack-conversion pass only maps that choice onto the x87
+stack. Both original and candidate have nine local accesses, all at offsets
+zero and four; the original's extra four frame bytes are unreferenced by final
+local operands. That is not evidence for adding another source local.
+
+### Stop IIR source retries at the measured allocation boundary
+
+The unchanged complete IIR TU raw-reproduces the retained object. Scalar
+numerator-count pseudo170 spills during `25.greg`; UID392 chooses BX as the
+reload scratch. UIDs41/45 change DX to DI and AX to BP in `30.rnreg`, a
+different mechanism. The input-compaction source LEA clobbers the history-base
+BX, so `33.sched2` records its anti-dependency on destination LEA UID285.
+Reordering source declarations is not justified by the final LEA order.
+
+The original block's two extra stack words are also distinct: a live
+destination-pointer spill, and an input-length store at `+0x1f6` that is never
+read. Do not describe both as live values or infer original local declarations
+from them. Thirteen stage invariants and a deleted-dependency negative control
+validate the diagnosis. All four target COMDAT symbols have one definition
+across 300 canonical objects. No additional IIR source change is retained.
+
+### Count compiler nodes before inferring a Queue source discrepancy
+
+The next installed-compiler observation explains the retained
+`Queue<float>::write(float)` prologue without identifying a source correction.
+The original is 85 bytes, the retained body 71; both decode to 31 instructions.
+The processing instructions agree, while register saves and restores differ.
+
+Nineteen frame layouts include two cost decisions. Reload increases the saved
+register count from one to two, invalidating the first cached choice:
+
+| Decision | Saved registers | Cost parameter | Entry frequency | Weighted threshold | Count at exit |
+|---|---:|---:|---:|---:|---:|
+| First | 1 | 0 | 10000 | 0 | 10000 |
+| Recomputed | 2 | 20 | 10000 | 200000 | 201683 |
+
+Both decisions select push/pop. The second counts 22 active RTL nodes.
+The result move, UID85, leaves the count at 191683. UID88, a non-emitted
+`(use (reg/i:SI 0 ax [<result>]))`, adds 10000 and crosses the threshold.
+The actual `active_insn_p` filters USE/CLOBBER only after reload completes;
+both observed decisions occur with `reload_completed == 0`. Counting final
+machine instructions therefore cannot reproduce this cost decision.
+
+The [observer](../../tools/gcc3_prologue_cost_observe.py) now records the
+current node's UID and checks every frequency sum. Additional instruction-byte
+guards establish that the sampled node is passed to `active_insn_p` before
+counting and advanced only after the sample. This is not an off-by-one
+association with the next RTL node. The observed complete TU raw-matches the
+canonical object, with 25 of 30 compared bodies exact.
+
+All three original out-of-line callers discard the return value: V92Modulator
+reset at `.text:0x150ed`, C1 at `0x153bf` and C2 at `0x1569f`. None supplies a
+return-width witness. Ordinary C++ mangling omits this return type; the callee's
+zero/minus-one result does not distinguish candidate signed widths. Do not
+change the return type to remove the counted node. The `isfull`, `ifelse`,
+`opencoded`, `spacelocal` and `wlocal` source domains remain closed.
+
+Reopen Queue only with a new original guard/operand boundary or independent
+compiler-profile evidence. A historical exact helper-query control, if its
+complete preprocessed input is available, could discriminate node/frequency
+provenance; it must retain the known constructor collateral review. A target
+cost crossing alone does not justify adopting that control.
+
+### Distinguish an x87 reload tie from a missing compiler operation
+
+Echo's remaining adaptation multiply, UID187, uses constraints `=f`, `%0`,
+`fm`: its output is tied to the first input and the multiply is commutative.
+Installed `find_reloads` examines both orientations. Each needs one reload
+with rejection cost two, giving `6 * 1 + 2 = 8`. The selection accepts only a
+strict improvement, so the 8:8 tie retains the first orientation and loads
+history rather than copying the existing product.
+
+All three observations of UID187 agree: two counting passes and one replacement
+pass. Across nine recorded choices and fourteen orientation observations,
+UID56 and UID189 provide controls that actually switch from cost fourteen to
+zero. This is a measured tie, not evidence that GCC cannot copy an x87 value.
+The previously raw-identical consumer-operand spelling domain stays closed.
+
+Frame observations identify two four-byte SI spill slots, for quiet pseudo69
+and index pseudo76, plus two zero-size BLK alignment requests. All nineteen
+layouts use a 32-bit preferred boundary, no outgoing space and zero padding.
+The final stack offset is 4 return bytes + 16 saved-register bytes + 8 local
+bytes. One cached prologue decision selects push saves, agreeing with the
+original's save form. It does not explain the original's twelve-byte local
+allocation. Four unreferenced original bytes establish neither a third source
+local nor a particular original alignment setting.
+
+The [reload observer](../../tools/gcc3_echo_reload_observe.py) and
+[stack observer](../../tools/gcc3_uref_stack_observe.py) preserve raw complete
+objects. Changed-cost and changed-padding controls are rejected; absent targets
+compile successfully but fail observation. The baseline and every compiler
+dump use the recovered Gentoo compiler with `DSPLIB_REPRODUCE_BUGS`.
+No reconstruction source changes or additional exact gains follow from this
+batch. See the [campaign commands](ghidra-assisted.md#queue-and-echo-observation-validation).
+
+Move next to an independently witnessed source-fidelity discrepancy rather
+than forcing Queue's prologue or Echo/IIR spills. Reopen allocation experiments
+only when a new lifetime, operand or profile witness distinguishes them.
+
+## Recover initializer visibility before changing inline policy
+
+`preinitdigital` originally embeds two `preinitV34` bodies followed by three
+memset calls. The reconstruction instead made two external helper calls.
+Historical deduplication in `7fe8c8b24` (F188) introduced that boundary while
+reconciling duplicate implementations. It preserved behavior but was not
+evidence for the original source's inline visibility.
+
+Move `preinitdigital` beside the existing helper in `v34shell.c`; leave one
+canonical helper and preserve both strong exports. Ordinary retained O3 then
+embeds both initializers without an attribute or compiler-option change.
+This restores the original call graph and reduces the length gap from 233
+bytes (300 versus 533 original) to twenty bytes (553). Acquiring the TX role
+view only after the clears removes a saved ESI and reduces it to eight bytes
+(541). This is a SIZE gap, not eight differing bytes: the candidate has 137
+decoded instructions versus 131 original.
+
+Across the complete shell/digital pair, only `preinitdigital` changes. Twelve
+neighbouring bodies, all three existing exact names, data, 29 global
+definitions and ten external imports survive. `v34digital.c` remains a normal
+build input containing layout assertions. Original TU extent remains an
+inference because the span has no anchoring local symbol; recovered visibility
+does not uniquely establish the author's file layout.
+
+The [three-cell replay](../../tools/recovery_preinit_owner.py) checks baseline,
+same-owner and late-role-owner sources, plus a raw-identical final formatting
+control. Its frozen revision is reachable on the PR branch, rather than an
+unpublished delegated commit. Focused period coverage passes three fixtures,
+27 groups and 6186579 checks; full `make phase` passes 392 fixtures. Both moved
+callback-pair mutation anchors are exercised with Gentoo-compiled objects and
+fail as intended. The mutation suite follows the definition into its new file.
+
+Next inspect the original group-owner acquisitions: LEAs for scrambler
+`obj+0x2a54` and descrambler `obj+0xe74`, followed by clears through those
+views. Current direct field stores produce extra zero materializations and
+different store order. The TX role view also still materializes `obj+0x1be0`
+where the original publishes directly to `obj+0x2a28`. Those are independently
+witnessed ownership/publication questions, not a reason to tune registers.
+
+## Review exact losses against source fidelity
+
+`V34EqualizerCenterAdapt` exposes a different tradeoff. The original has two
+circular-history spans, with backedges `.text:0x72be5 -> 0x72b84` and
+`0x72c51 -> 0x72bf0`. The retained reconstruction has one eight-tap loop with
+a wrap test at every tap. Ghidra's reference graph corroborates both backedges,
+but its basic-mode output remains HighFunction P-code; native instructions
+are the operand authority.
+
+The [nine-cell replay](../../tools/recovery_v34_center_spans.py) crosses split
+spans, continuous coefficient pointers and per-lane history rereads, then tests
+one original imaginary-history-base acquisition. Its 234 complete-body verdicts
+include no exact target. A 317-byte candidate, against 347 original and 183
+retained bytes, restores the two loops and coefficient ownership while changing
+only one neighbour. A 336-byte control narrows the length gap further but has
+broader nonexact collateral. Size alone does not select the source candidate.
+
+The 317-byte candidate passes all 392 period fixtures. Existing lifecycle
+coverage visits all eighty cursors and checks untouched fractional halves;
+a wrong-wrap control fails 2372 checks. Twenty-four neighbouring bodies,
+data, bindings and relocation consumers remain unchanged. However,
+`V34EchoPreFilter` loses its 139-byte exact match through four register bytes.
+Its patterns agree through `27.flow2` and first differ at `28.peephole2`;
+the bodies remain equivalent under the register-renaming comparison.
+
+Installed-compiler observation then establishes the cause. Total scratch
+searches increase from 78 to 81; CenterAdapt consumes two versus five.
+PreFilter's sole search, UID13, has identical range, mode, constraints,
+allocation order and register eligibility. Its incoming persistent search
+cursor changes from two to one, selecting CX versus DX. Both complete observed
+objects raw-match their controls. Peephole2 changes zeroing UIDs187/188;
+`30.rnreg` subsequently changes shift-carrier UIDs138/161. This accounts for
+all four bytes without a source or algorithm change in the neighbour.
+
+The exact-membership check correctly reports 1102 -> 1101 and identifies the
+lost symbol. That result is a regression alarm, not proof that the recovered
+loop structure is worse. Treating it as an automatic veto can freeze
+compensating source choices and reproduce the local-minimum problem described
+in [experiment design](experiment-design.md). Keep differential failures hard;
+review explained byte regressions alongside source fidelity, full-TU changes
+and independent compiler evidence. Do not silently reset the historical floor
+or hide the lost name behind a net count.
+
+After that review, retain the 317-byte source recovery and deliberately rebase
+the current exact-membership floor to 1101/1852, 126467 original bytes. The
+previous 1102-name floor remains in Git history; the one lost name is
+`V34EchoPreFilter`, with no gained exact names. This is an explained byte
+regression accepted for stronger original loop/operand fidelity, not an exact
+gain or a claim that the original source has been uniquely recovered.
+
+The nine-cell source domain is closed to further spelling retries. Remaining
+questions concern the original imaginary-history base and arithmetic operand
+ownership. Future losses still fail the ratchet and need their own review;
+this case is not an automatic exception for register differences.
+
+## V92 encoder case ownership and the inline boundary
+
+An initial six-cell visibility cross moved `inverseMap` below `process` under
+retained O3, O3 without automatic inlining and O2. Definition order was
+raw-inert at every profile. Disabling automatic inlining restored the helper
+call but left a 215-byte process against 240 original bytes. O2 also changed
+the nonexact table builder without recovering it. Those controls motivate the
+case-ownership cross below; they do not justify a per-file compiler exception.
+
+`V92ConvolutionEncoder::process` has a separate source-ownership discrepancy
+from its retained automatic-inline boundary. Original instructions at
+`.text:0x54f75` store EDI to `state` and return ESI for an unnamed mode,
+without reading either trellis table. Each valid case loads `nextState`,
+publishes `state`, then loads `output`. The retained reconstruction instead
+leaves only `i` uninitialised and performs the table accesses after its switch.
+Gentoo GCC 3.4.2-r2 retains those accesses. The source comment claiming that
+GCC dropped them was incorrect and is now corrected; the unnamed-mode
+reconstruction gap remains open.
+
+The [eight-cell replay](../../tools/recovery_v92_case_owners.py) freezes source
+and headers at `c118236196b1e6a6bd4f7aeafd6458cea1ad544c`. It crosses the retained
+source and three case-owned source forms with retained O3 and the diagnostic
+`-fno-inline-functions` control. The first six cells test a common-result/tail
+form and direct case returns. Their differing publication orders motivate the
+last two cells: case-owned results with a default-only state store and a common
+return. All alternatives preserve state-before-output order in their C++
+statements. No attributes, helper changes or per-file flags are retained.
+
+| Source form | Retained O3 process bytes | No automatic inlining |
+| --- | ---: | ---: |
+| Retained common table lookup | 503 | 215 |
+| Case results, common state/result tail | 458 | **240, EXACT** |
+| Direct return from each valid case | 433 | 172 |
+| Default-only state store, common result return | 442 | 172 |
+
+The original process is 240 bytes. The common-tail control reproduces its
+complete bytes and relocation identity under the diagnostic profile, including
+the unnamed-mode path and original publication order. It raises that cell from
+six to seven exact bodies out of eight. This supports the case-owned
+calculation and shared-result boundary; it does not establish the original
+compiler profile or justify changing one TU's flags.
+
+Under retained O3, `inverseMap` still inlines. Its estimated cost remains 98
+instructions; the common-tail caller grows from 77 to 165 after inlining.
+O3 also removes its early duplicate state stores and publishes state after
+loading output. The default-only-store control preserves the original valid
+publication order under O3, but its no-inline unnamed-mode path coalesces the
+two uninitialised values into one register, unlike the original. A closer SIZE
+or one diagnostic exact body does not select either alternative for production.
+
+The unchanged source reproduces the archived complete Gentoo object byte for
+byte. Across 64 body verdicts, each non-baseline cell changes only `process`;
+all seven neighbouring bodies, static data, noncode relocations, strong exports
+and bindings remain unchanged. All six baseline exact names survive in every
+cell. The no-inline controls restore the original `inverseMap` call; retained
+O3 cells keep its three static-table relocation consumers instead. The 440-byte
+standalone helper remains exact throughout. A changed static-data byte is
+detected by the audit's negative control.
+
+Reproduce with an archived canonical object tree and its `.build-config`:
+
+```sh
+mkdir -p build/conv-owner-next293
+python3 tools/recovery_v92_case_owners.py --domain case-owned-tables \
+    --baseline-dir build/archived-conv-baseline
+python3 tools/recovery_v92_case_owners.py --audit
+python3 tools/recovery_v92_case_owners.py --comment-control
+```
+
+The run records full compiler commands, header/source hashes, identities,
+compiler dumps and body/relocation verdicts under
+`build/conv-owner-next293/reproduction`. The comment-only retained edit produces
+a raw-identical complete object. Existing `t_v92convmapper` coverage drives
+reset-built objects through modes 0, 1 and 2 and compares state after each
+call. No unnamed-mode runtime fixture is added: comparing indeterminate values
+would not establish reachable input history. No functional source alternative
+is retained, and no new period runtime pass is claimed. Reopen the source/profile
+interaction with common-profile or additional original ownership evidence,
+rather than another spelling of the standalone exact helper.
+
+### Separate frontend cost from native helper and table ownership
+
+The [six-cell provenance replay](../../tools/recovery_v92_inline_provenance.py)
+freezes the complete encoder TU at `4a6519cba`. It crosses four scalar residue
+locals with one four-element array under retained O3 and diagnostic
+no-auto-inline. Both representations make four explicit assignments; no loop
+is introduced. Two additional scalar controls use no-unit-at-a-time and
+issue #22's O2/automatic-inline/web profile. The array is a hypothesis, not
+an independently recovered declaration.
+
+The installed Gentoo `cc1plus` contains a readonly `lang_independent_params`
+symbol at `0x0838ef00`: thirty-five twelve-byte name/value/help records and
+a null sentinel. The replay decodes the pointers and proves defaults of 100
+for `max-inline-insns-auto` and 500 for `max-inline-insns-single`. Its compiler
+hash is `b778f44bd1a5e8184ca34b11c9701d0a8d67d15406282c1a204237d03c82082d`.
+These are measured installed defaults, not thresholds inferred from scores.
+The actual commands contain no override of these parameters.
+
+| Control | Helper estimated instructions | Helper bytes | Process bytes | Exact losses |
+| --- | ---: | ---: | ---: | --- |
+| Scalar, retained O3 | 98 | 440 EXACT | 503 | none |
+| Scalar, no automatic inline | 98 | 440 EXACT | 215 | none |
+| Array, retained O3 | 106 | 456 | 215 | `inverseMap` |
+| Array, no automatic inline | 106 | 456 | 215 | `inverseMap` |
+| Scalar, no unit-at-a-time | no unit callgraph dump | 440 EXACT | 503 | none |
+| Scalar, O2 + automatic inline + web | 98 | 440 EXACT | 647 | none |
+
+The array crosses the inline threshold and restores the call, but it also
+introduces a 28-byte local stack allocation where the exact scalar helper has
+none. Three residues acquire stack stores at ESP+0/+4/+8; the fourth remains
+in a register. The helper's code grows sixteen bytes, a separate quantity from
+its frame growth. This is a source/cost interaction with native consequences,
+not an invisible frontend-only spelling change. The O2/inline/web control
+keeps the helper inlined and changes the nonexact builder's instructions even
+though its length remains 1456 bytes against 1558 original bytes. No cell
+gains an exact name; both array cells lose the helper.
+
+The no-unit control preserves all eight function bodies and positions but
+changes table layout:
+
+| Global `.data` object | Bytes | Original offset | Retained TU offset | No-unit TU offset |
+| --- | ---: | ---: | ---: | ---: |
+| `cosetMapping4D` | 256 | `0x6ac0` | `0x40` | `0x0` |
+| `subsetLabelTable` | 64 | `0x6bc0` | `0x0` | `0x100` |
+
+All named contents, sizes and strong global bindings match the reference.
+No-unit restores the original relative order, with every raw code relocation
+offset, type, target and inline addend unchanged. Table consumers use named
+symbols with zero addends. This is independent data-layout evidence, but does
+not uniquely identify an option: source definition order can compensate for
+compiler emission order.
+
+The original `V92ConvEncoder.cpp` FILE record has no local text anchors.
+Strong global helper binding does not associate its body with that FILE or
+establish an inline/noinline declaration. Neither a TU split nor an attribute
+is licensed by the present evidence. Keep the native layout witness separate
+from that ownership uncertainty.
+
+The audit covers six cells, forty-eight body verdicts, five unit callgraph
+dumps, named data, bindings and relocation consumers. It rejects missing cost
+evidence and a changed default parameter. No production source/profile change
+or new runtime coverage is claimed.
+
+```sh
+python3 tools/recovery_v92_inline_provenance.py --domain scalar-array-cost \
+  --baseline-dir build/continuation293-baseline
+python3 tools/recovery_v92_inline_provenance.py --parameter-proof
+python3 tools/recovery_v92_inline_provenance.py --audit
+```
+
+Close nearby residue/cost spellings. The next discriminator needs independent
+table-definition or TU ownership evidence crossed with common-profile
+controls, including the builder and process call boundary. Relative table
+order alone cannot select a source or flag change.
+
+### Retain native table layout and a witnessed case boundary
+
+The [four-cell table cross](../../tools/recovery_v92_table_ownership.py)
+freezes `8e216110a` and crosses the two definition orders with retained
+unit-at-a-time and diagnostic no-unit. Both compensation pairs are complete
+raw-identical objects. Coset-first/no-unit equals subset-first/unit; the
+opposite pair reproduces the baseline. All eight bodies and positions,
+six exact names, bindings and raw relocation records survive. This closes
+the order/profile domain without uniquely recovering either original choice.
+
+Retain subset-first definitions under unchanged flags because the resulting
+320-byte data block exactly matches reference `.data:0x6ac0..0x6c00`: the
+256-byte coset table immediately followed by the 64-byte subset table. The
+old declaration-order comment was false under the deciding compiler. Named
+contents and widths stay unchanged. The LOCAL-data ownership detector finds
+no owner for any of the eight functions; the three helper table references
+target GLOBAL records, which cannot establish their defining FILE. This is
+not evidence of separate TUs or an inline attribute.
+
+The [adoption cross](../../tools/recovery_v92_boundary_adoption.py) then
+combines that data refinement with the already-tested case-result/common-tail
+source. It adds no new case spelling or compiler option. The reference's
+unnamed-mode arm stores an indeterminate state and returns an indeterminate
+result without reading either trellis table. The prior common lookup after
+the switch incorrectly read both tables on that arm. Keep calculations within
+named cases and leave their result/state values uninitialised on the unnamed
+path. The duplicate common state assignment writes the same value on valid
+reset-built histories; state and both table arrays are distinct nonvolatile
+regions, and all input reads finish inside `inverseMap` first.
+
+This boundary is worth retaining before the inline profile is solved. Under
+retained O3, process improves from 503 to 458 bytes, against 240 original
+bytes (SIZE263 to SIZE218). Only its body changes; seven neighbours, all six
+exact names, data values, imports and exports survive. The known no-auto
+control reproduces EXACT240, but no such option is adopted. Retained O3 still
+inlines the helper and removes/moves valid-case state stores after output
+reads. Those native publication bytes remain a measured gap; the source
+spelling and original option pair are not uniquely established.
+
+Four combined cells cover thirty-two body verdicts. A bounded native selector
+walk examines six representative unnamed modes in the reference and each
+cell: six original and twenty-four candidate paths. Original and selected
+paths have zero trellis reads and one state store; baseline paths have two
+trellis reads. Changing the selected native JE to JNE makes the detector fire.
+The walker refuses ambiguous selectors, unknown branch flags and external
+edges. It checks these emitted MOV/address shapes, not arbitrary x86 programs,
+indeterminate values, all 32-bit modes or public-modem reachability.
+
+The three existing process mutation anchors now span the whole function:
+removing state carry removes all four state assignments, and redirecting
+output reads changes all three cases. Both negative controls are caught by
+the period fixture. Replacing the `ns` index with the equal published-state
+index remains full-object raw-identical under the deciding compiler. No new
+mutants, default-junk runtime comparison or tolerance is introduced.
+
+```sh
+python3 tools/recovery_v92_table_ownership.py --domain definition-order \
+  --baseline-dir build/allocation293-baseline
+python3 tools/recovery_v92_table_ownership.py --audit
+python3 tools/recovery_v92_boundary_adoption.py \
+  --domain known-case-owner-native-data-2x2 \
+  --baseline-dir build/allocation293-baseline
+python3 tools/recovery_v92_boundary_adoption.py --audit
+python3 tools/recovery_v92_boundary_adoption.py --production-control
+python3 tools/recovery_v92_boundary_adoption.py --sensitivity
+```
+
+The combined production control raw-matches the selected full TU. The
+table-only production-format control applies to its historical source;
+current production includes case ownership too. The integrated source passes
+392 period fixtures with zero failures and all structural checks, including
+10042 unique mutation anchors. Keep the common-profile/TU ownership question
+open; do not compensate for it with another residue, case or table-order
+palette.
+
+The separate [builder store observer](../../tools/v92_builder_store_observe.py)
+runs the existing period fixture without compiling source variants. It pins
+both native builder bodies, derives linked addresses from symbols, checks
+static 32-bit Gentoo provenance and preserves fixture/object hashes. Fourteen
+component calls produce 5376 ordered stores: both implementations agree on
+every index, value and visit order over modes 0/1/2, and write nothing for four
+unnamed selectors already present in the fixture. Changed-value, missing-store
+and swapped-order controls all fail. This reconciles the reconstructed loops
+and arithmetic, not the remaining 1456-versus-1558-byte code-generation gap.
+The fixture comments now distinguish 64/256/1024 written entries per array
+from their 244/504/1024 index extents. No new fixture or reachability claim is
+introduced. Close builder source retries without a new operand/lifetime clue.
+
+```sh
+python3 tools/v92_builder_store_observe.py build/period/t_v92convmapper \
+  --out build/v92-builder-parent
+```
+
+## Preserve initializer record owners and publication order
+
+The next `preinitdigital` refinement recovers the original scrambler and
+descrambler record views at `obj+0x2a54` and `obj+0xe74`. Within those views,
+the original clears scrambler w0, sets nbits, then clears w3/w2/w1; it clears
+descrambler count/w0 before w2/w1. A callback-field owner also restores direct
+TX publication at `obj+0x2a28`, removing the intermediate shell-base LEA.
+No field type, offset or compiler option changes.
+
+The [eight-cell cross](../../tools/recovery_preinit_publication.py) separates
+record ownership, group-store order and callback-field ownership. Every cell
+produces a distinct object. The selected native-order/owner control is 533
+bytes with 131 decoded instructions, both matching the original, but remains
+BYTES147. The ascending-order owner control also has 533 bytes and 131
+instructions while preserving the wrong store sequence. Size and instruction
+count alone therefore cannot select the recovered source.
+
+Across thirteen pair functions, all twelve neighbours, sixteen named data
+records, twenty-nine definitions, ten imports and relocation consumers remain
+unchanged. The three previously exact names survive; no exact name is gained.
+The graph detector fires on both original and selected code, rejects the
+ascending-order and missing-owner controls, and rejects a corrupted owner
+address. Parent replay independently checks every candidate's bystanders and
+exact set, rather than trusting the recorded score.
+
+The three focused period fixtures pass 27 groups and 6186579 checks. Both
+callback-pair mutants are caught with Gentoo objects, each failing two of 424
+clause-7 checks. The complete source passes `make phase J=4`, 392 fixtures,
+zero failures, with structural checks. Final production formatting raw-matches
+the selected complete object; the mutation anchors follow the callback-field
+expression. No standard mutation snapshot refresh is claimed.
+
+Reproduce against the archived `c11823619` canonical objects/config:
+
+```sh
+python3 tools/recovery_preinit_publication.py --domain state-owner-publication \
+  --baseline-dir build/next293-baseline
+python3 tools/recovery_preinit_publication.py --production-control
+```
+
+Close this eight-cell owner/order domain. Next discriminate the original
+interleaving of receive state-index and descrambler-count stores with the
+remaining group clears. Keep that publication question separate from memset
+argument setup and register scheduling, which have not been attributed to a
+source discrepancy.
+
+### Separate witnessed state publication from scheduled count publication
+
+The next initializer refinement moves `rx->state_idx = 0` between scrambler
+w0 and nbits, matching original instructions at `0x598da`, `0x598e6` and
+`0x598ef`. The [four-cell replay](../../tools/recovery_preinit_interleave.py)
+crosses that state position with the descrambler count position. All five
+complete-TU compilations use the recovered Gentoo compiler, original flags
+and bug-reproduction define; both baseline objects reproduce raw.
+
+Four distinct shell source cells produce two distinct complete objects.
+Moving state alone changes BYTES147 to BYTES106, with the same 533-byte
+length and 131 instructions. It also restores the original count interleaving.
+Moving count alone is raw-inert; moving both reproduces the state-only object.
+Retain the minimal state move. The count's source position is not uniquely
+recovered from its scheduled instruction position.
+
+Only `preinitdigital` changes across thirteen pair bodies. All twelve
+neighbours, sixteen named data records, twenty-nine definitions, ten imports,
+nontext sections and resolved relocation consumers survive. All three exact
+names survive, with no gains. The audit checks the expected graphs, verdicts
+and raw equivalence classes, and rejects corrupted state and count addresses.
+
+The remaining role-compare ordering has a measured allocation dependency.
+In initial RTL, descrambler clears 239/241 precede role load 253 and compare
+254. Combine folds 253 into 254. `25.greg` first displays owner pseudo 83
+as EDX; the subsequent observer below establishes that local allocation made
+that choice earlier. Peephole2 introduces XOR 413 to materialise zero in EDX;
+its anti-dependencies on both owner uses and flags clobber constrain compare
+254. Only sched2 moves the compare ahead of data/train publications, while
+keeping it after the descrambler clears. The reference's ECX owner avoids
+this EDX chain. This does not independently justify moving the source role
+test earlier. Count 235 also acquires its native interleaving only at sched2.
+
+The focused period fixtures pass three binaries, twenty-seven groups and
+6186579 checks. Both existing callback sensitivity mutants are caught, each
+failing two of 424 clause-7 checks. The complete delegate gate passes 392
+fixtures, zero failures and all structural checks; no fixtures, mutation
+anchors, flags or field layouts change. Production recompilation and the
+runtime shell object raw-match the selected complete object.
+
+```sh
+python3 tools/recovery_preinit_interleave.py \
+  --domain native-state-count-position-2x2 \
+  --baseline-dir build/continuation293-baseline
+python3 tools/recovery_preinit_interleave.py --audit
+python3 tools/recovery_preinit_interleave.py --production-control
+```
+
+The frozen baseline is `4a6519cba`; earlier initializer controls remain
+historical. Close further count/store permutations. Next trace owner 83's
+allocation and zero-materialisation costs, separately from the first three
+memset calls' argument owners. Their remaining register differences do not
+establish another source statement-order defect.
+
+### Observe the allocator decision before interpreting the first changed dump
+
+The [initializer observer](../../tools/gcc3_preinit_alloc_observe.py) corrects
+the stage inference above. `local_alloc` chooses the owners' hard homes;
+`25.greg` first shows their substituted operands. Seeing a change in a dump
+does not establish that the named pass decided it.
+
+| Pseudo / role | Quantity | Lifetime | Selected home |
+| --- | ---: | --- | --- |
+| 79 / first memset destination | 0 | 20..22 | EAX |
+| 80 / second destination | 1 | 30..32 | EAX |
+| 81 / third destination | 2 | 40..42 | EAX |
+| 82 / scrambler owner | 3 | 46..60 | EAX |
+| 83 / descrambler owner | 4 | 48..68 | EDX |
+
+These quantities use GENERAL_REGS, cross no calls, have no register suggestions
+and equal EAX/EDX/ECX costs. Owner 83 overlaps 82, excluding EAX; both EDX and
+ECX are free. Allocation order tries EAX, EDX, ECX, selecting EDX as the first
+eligible home. Global allocation preserves the choices. This is not a measured
+cost preference for EDX. The later rename chain cannot move owner 83 because
+the other homes are unavailable over its four uses.
+
+Memset size/zero constants are a separate mechanism. They remain direct
+memory constants through `27.flow2`; no local pseudo allocation chose their
+final registers. Peephole2 materialises all six in EAX. Actual scratch
+observation covers 100 TU searches, twenty-three in this function. At
+`30.rnreg`, reverse renaming produces destination EDX, zero EAX and size ECX
+for all three calls. On the third call, destination 392 chooses EDX with
+EAX/EDX/ECX ticks 11/9/13; zero 423 chooses EAX at 11/14/13; size 425 chooses
+ECX at 15/14/13. These least-recent eligible choices explain the current final
+arguments, not a source argument-evaluation order.
+
+The reference uses owner ECX and destination/zero/size EAX/ECX/EDX. An original
+competing lifetime or different compiler state remains possible; neither is
+established by the present trace. Do not add a synthetic local to occupy EDX.
+Close local store/argument spellings until an independent source constraint
+changes the allocator's eligibility set or the rename chain.
+
+The frozen `8e216110a` replay validates nine local choices, twenty-six rename
+decisions and the scratch census. Positive, actual absent-target and scratch
+observations all preserve the complete object. The absent target compiles
+successfully but observation fails; a wrong-owner-choice trace also fails.
+This is apparatus-only work, with no source or exact-set gain.
+
+```sh
+python3 tools/gcc3_preinit_alloc_observe.py \
+  --baseline-dir build/allocation293-baseline
+python3 tools/gcc3_preinit_alloc_observe.py --audit
+```
+
+## Recover the CenterAdapt history owner before fitting its spill
+
+The original acquires the imaginary-history base `q+0xa0` once and indexes
+through it in both spans. Capturing that view restores the coefficient-before-
+history operand order and original sixteen-byte frame. CenterAdapt moves from
+317 to 336 bytes against 347 original bytes, reducing its SIZE gap from thirty
+to eleven. A four-cell cross shows that explicit coefficient-accumulator
+statements are raw-inert with either history-owner choice; those statements
+are not retained. This reviews an already witnessed owner acquisition rather
+than reopening the earlier nine-cell spelling domain.
+
+The [replay audit](../../tools/recovery_v34_center_owners.py) compares two
+93-byte original arithmetic loop regions with their 90-byte candidate regions.
+Each pair is literally byte-identical after deleting the original's single
+three-byte `mov %eax,(%esp)` history spill. The two write-only stores and five
+original alignment bytes account for the eleven-byte length gap. Corrupting
+either candidate loop is detected. This proof does not establish an original
+local declaration or justify adding a dead store, `volatile` or padding.
+
+The twenty-six-function TU retains all fifteen exact names, with twenty-two
+neighbouring bodies unchanged. Data, bindings, exports, imports and nontext
+relocations agree. Changed neighbours are `V34EchoPreFilter`,
+`V34ModulatorProcess` and `V34SetupModulator`. Their initial RTL differs only
+in printed alias-set numbering; first executable-pattern differences appear
+at peephole2. Do not mistake those numeric metadata changes for an earlier
+algorithm discrepancy.
+
+Installed Gentoo observation independently preserves the complete objects.
+The extra CenterAdapt scratch search moves the incoming PreFilter cursor from
+one to three, selecting BX rather than DX. Whole-TU searches increase from
+81 to 82, CenterAdapt searches from five to six, and downstream choices shift
+too. PreFilter's differing bytes increase from four to forty-three; it no
+longer meets the grade-1 register-renaming comparison. This collateral is
+explicitly reviewed for the stronger original ownership/operand recovery.
+No exact name is gained or lost, and the exact floor remains unchanged.
+
+The four-cell audit covers 104 body verdicts, both literal loop proofs and
+two corrupted-loop controls. Source passes `make phase J=4`: 392 period
+fixtures, zero failures and all structural checks, including 10042 unique
+mutation anchors. The eq/ec/handshake lifecycle fixtures contribute 6/21/43
+groups and 1606267/13789992/14368945 checks respectively. Parent independently
+replays the source controls and scratch observations.
+
+```sh
+python3 tools/recovery_v34_center_owners.py --domain center-owners-four-cells \
+  --baseline-dir build/next293-baseline
+python3 tools/recovery_v34_center_owners.py --audit
+python3 tools/gcc3_mechanism_scratch_observe.py \
+  --reproduction-dir build/center-owners-293-cross \
+  --target V34EchoPreFilter --out build/center-owners-scratch-parent
+```
+
+Next trace the actual period compiler's real-history pseudo lifetime, spill
+allocation and the unused candidate frame word. Establish where an original-
+compatible spill could arise before another scalar-owner source experiment.
+Keep the separate history rereads after the real coefficient store. Recover
+the unchanged neighbour against the final structural state, rather than
+steering the compiler cursor around an intermediate reconstruction.
+
+### Follow an allocated spill through regmove and reload cleanup
+
+The unused candidate word is an allocated history spill home. The installed
+Gentoo compiler allocates four SI words for pseudos 59 (`err_re`), 65
+(`limit`), 66 (`wrapped`) and 75 (first real-history value), at offsets -4,
+-8, -12 and -16. The fourth allocation occurs in `finish_spills`. Pseudos
+75/89/104/118 share that last home, which becomes `(%esp)`. Two zero-size
+BLK requests add no storage. The final frame has sixteen local bytes and
+zero padding/outgoing space. Frame size alone would not reveal this owner.
+
+The [installed-compiler observer](../../tools/gcc3_center_spill_observe.py)
+follows each history value through initial RTL, regmove and reload. Before
+`22.regmove`, the multiplications have separate destinations 77/91/106/120
+and `REG_DEAD` notes for their history inputs. Regmove retargets each result
+to that dying input. Reload then emits and deletes two output copies per
+history pseudo before writing `25.greg`:
+
+| Span / coefficient lane | History definition | History pseudo | Multiply / subtract | Output copies |
+| --- | ---: | ---: | --- | --- |
+| First / real | 64 | 75 | 65 / 66 | 262, 263 |
+| First / imaginary | 83 | 89 | 84 / 85 | 265, 266 |
+| Second / real | 124 | 104 | 125 / 126 | 268, 269 |
+| Second / imaginary | 143 | 118 | 144 / 145 | 271, 272 |
+
+These are observed candidate instruction UIDs. For each pair, the first copy
+is emitted while processing the history definition and deleted at its
+multiply; the second is emitted at the multiply and deleted at the accumulator
+subtraction. All copies target pseudos with the same stack equivalence;
+no access to that home survives in the first post-reload dump.
+
+The reference has two surviving write-only stores at `.text:0x72bbc` and
+`0x72c28`. They correspond in role to history-output copies 265/271, rather
+than all eight candidate copies. The trace explains the candidate's unused
+word; it does not reconstruct original compiler UIDs, establish why those
+two original stores survived or identify an original local declaration.
+
+The observer freezes `4a6519cba`, verifies the installed compiler hash and
+preserves the complete candidate object in both target and absent-target
+runs. The absent target compiles successfully but fails observation with no
+target events. Missing-output, changed-padding and wrong-UID-origin controls
+also fail. No reconstruction source, fixture, tolerance or exact floor changes.
+
+```sh
+python3 tools/gcc3_center_spill_observe.py \
+  --baseline-dir build/continuation293-baseline \
+  --out build/center-spill-parent
+```
+
+Close source spelling retries at this boundary. Reopen only with independent
+lifetime/death-note or common-profile evidence explaining the selective
+original spill. An allocated slot is insufficient evidence for a source
+local, and adding artificial stores would bypass the measured question.
+
+## Preserve equivalent switch arms when their call boundaries differ
+
+`designWindow<float>` explicitly distinguishes BOXCAR (zero) from `default`
+in the reference. Zero tail-jumps to `boxcar`; default calls it and returns.
+The reconstruction collapsed both into default and its comment dismissed the
+extra original path as a layout artefact. That preserves window values but
+does not recover the original selector structure.
+
+Restoring the separate BOXCAR arm makes both emitted copies EXACT: 99 to
+116 ELF bytes, including two symbol-owned padding bytes. This is one unique
+original function and 116 newly exact original bytes. The bounded two-cell
+header cross covers all five quoted-include consumers and 103 function copies;
+only the two selector copies change. The other three complete objects are
+raw-identical. Data, bindings and all other relocation consumers are preserved;
+the selector gains its second boxcar reference. Only its symbol/COMDAT sizes,
+relocation-section size and later physical file offsets change.
+
+The focused Gentoo gate passes three binaries, 25 groups and 612113 checks.
+Existing selector sweeps cover zero and unnamed values, so no new fixture or
+semantic failure is claimed. Canonical recompilation independently reproduces
+the selected objects; the other 298 source objects remain raw-identical.
+
+```sh
+python3 tools/recovery_window_boxcar.py --domain explicit-boxcar-two-cells \
+  --baseline-dir build/native293-baseline
+python3 tools/recovery_window_boxcar.py --audit
+python3 tools/recovery_window_boxcar.py --production-control
+```
+
+The [tail-transfer audit](../../tools/recovery_tail_transfer_audit.py) joins
+direct calls and unconditional external jumps, including uniquely resolved
+same-section function starts. Historical call/tail inventories already cover
+named PC32 edges; the residual call ledger by itself omits tails. Reconcile
+this audit to the canonical manifest and census rather than treating a bare
+call-count difference as missing behavior.
+
+At frozen `6fe0b1e42`, all 300 objects contain 1886 shared defining copies of
+1852 names. Two hundred copies have a named tail; original/candidate tail-site
+counts are 234/232. Six target-multiplicity nominations include both selector
+copies; after recovery there are four and the tail counts are 234/234.
+Transfer-kind nominations fall from sixteen to fourteen. The remaining target
+differences are B103's previously reviewed shared diagnostic suffix and three
+helper-inlining witnesses, not newly established missing behavior.
+
+Four controls check the original separate boxcar call/tail, a changed transfer
+opcode, refusal of an interior-target addend, and exclusion of the actual
+boxcar loop. Indirect transfers, ambiguous/interior destinations and conditional
+exits remain unproved. Equal target bags do not establish arguments, order,
+path coverage or behavior. This read-only audit performs no compilation.
+
+```sh
+python3 tools/recovery_tail_transfer_audit.py --objects build/tc_repro \
+  --census build/native293-census.json --out build/native293-tail-after.json
+```
+
+## Check native delivery boundaries before reopening CID source variants
+
+The [CID observer](../../tools/cid_process_trace.py) follows real public
+create/feed/delete histories through two independent receiver chains. It
+records only calls made directly by `CID_process`, their results, input
+offsets/counts, owner identities, string guards and TTY/debug arguments in
+execution order. Receiver internals remain behind `cid_progress`. All sixteen
+relocations per wrapper and all other linked body bytes are checked against
+the input objects; normalized body hashes pin the reviewed instruction sites.
+
+The fixture now includes debug-enabled bad-checksum Bell 202 audio. It fails
+normally, emits no TTY bytes and releases its objects; this adds 31 checks,
+bringing the fixture to 193. The old comment claiming a shared blob receiver
+is retired. These are valid CID component histories, not modem end-to-end
+reachability evidence.
+
+Ninety paired wrapper calls produce 394 matching ordered events. Each side
+makes 141 progress calls (136 pending, three successes, two failures), three
+string acquisitions, eighteen length calls, eighteen TTY calls and five direct
+debug calls. Three successes visit DATE/TIME/NMBR and then the empty fourth
+guard. Debug failure prints after the failed progress call and performs no
+string or TTY operation. The whole-buffer success stops before its remaining
+input is offered. Seven changed-trace controls fail, including equal corruptions
+on both sides and zero observations; equality alone cannot certify a trace.
+
+The complete CID source object is raw-identical to baseline and both exact
+companions survive. `CID_process` remains 368 versus 386 bytes. No new source
+discrepancy or codegen gain is established; keep the 1433 recorded source/option
+cells closed.
+
+```sh
+python3 tools/cid_process_trace.py build/period/t_cid \
+  --out build/native293-cid-trace
+```
+
+The next cheap discriminator is a real MDMF audio lifecycle carrying NAME,
+so all four string slots are nonempty. Existing `t_cidsvc.c` has checksum-frame
+payloads for date/number/name and an extra tag, but its packet-routing tests do
+not demodulate those frames. Transmit those bytes through the existing Bell 202
+generator before testing the four-field cap. Raw output and 9600-Hz processing
+remain separate fixture limits. Do not plant a null string return: the actual
+callee always returns its owned buffer.
+
+## Separate helper-reference evidence from original TU ownership
+
+The [V92 reference audit](../../tools/v92_reference_ownership.py) verifies a
+frozen 300-object build, all relocations and exact per-function decoding.
+Its reference/current denominators are 1852/1916 functions, 18317/18329
+relocations and 185305/183556 decoded instructions. No function decode is
+incomplete and no function extents overlap ambiguously. Five copied-ELF
+controls detect an extra caller, equivalent section-relative target, non-call
+address use, incomplete opcode stream and overlapping symbol extent.
+
+Only encoder `process` references `inverseMap`; only transmitter `process`
+references encoder `process`. The current transmitter boundary remains
+EXACT355, while the helper's standalone body remains EXACT440. Function/table
+binding, visibility and section kinds agree, as does the 320-byte table block.
+The mangling confirms non-const `int*` inputs and non-const methods, without
+encoding return type, access control or original inline annotations.
+
+GLOBAL DEFAULT definitions and a FILE record without LOCAL anchors do not
+settle source-object membership. No independent caller, address reference,
+field/type discrepancy or defining-owner witness licenses splitting this TU.
+Indirect destinations without relocated addresses, anonymous gaps and callers
+outside the object remain outside the observation. Require independent source
+visibility evidence before another ownership or inline-cost spelling palette.
+
+```sh
+python3 tools/v92_reference_ownership.py --baseline-dir build/native293-baseline \
+  --output build/native293-v92-ownership/audit.json
+```
+
+### Cross definition visibility across independent callers
+
+The [visibility cross](../../tools/recovery_visibility_cross.py) compiles
+unchanged encoder, V92 echo canceller and V90 phase-4 modulator TUs at retained
+O3 with automatic inlining and unit-at-a-time independently on/off. All three
+baseline objects reproduce raw. Twelve complete-TU cells account for 304
+original-function verdicts and 312 emitted copies, including eight additional
+local-helper copies. Complete commands, source/header/object hashes, actual
+compiler/assembler banners, data layouts, bindings, imports and relocation
+consumers accompany the body scores.
+
+| Profile | Encoder helper / V90 wrapper | Echo constructor reset / delay setup |
+| --- | --- | --- |
+| Retained | Both inline | Both inline |
+| Automatic inline off | Original CALL / tail JMP restored | Reset tail restored; delay becomes explicit calls |
+| Unit-at-a-time off | Both still inline | Reset tail restored; delay becomes explicit calls |
+| Both off | Original CALL / tail JMP restored | Reset tail restored; delay becomes explicit calls |
+
+Automatic inline off makes encoder process EXACT240 and the short V90 wrapper
+EXACT5, plus five other V90 wrappers. It also emits four extra LOCAL echo
+helpers and loses the original constructor's inlined delay setup: each
+constructor gains two static delay-call sites. Unit-off changes encoder table
+order and diagnostic-string layout, loses exact standalone `setEchoDelay` and
+V90 `resetRRNSecondSection`, and gains a Scrambler constructor copy. Preserve
+all these observations; no cell recovers the original constructor's mixture
+of inlined delay and called reset, and no production option is adopted.
+
+The original strong GLOBAL `setEchoDelay` body precedes the constructors.
+Its constructor expansions load parameter `+0x70`, read old object `+0x38`,
+publish the new delay there and adjust `+0x2c` before printing. Current source
+defines this ordinary method after the constructors, as it also does reset.
+Physical emission order alone does not prove declaration order under
+unit-at-a-time, and ordinary header-inline factoring can change the strong
+export to weak or omit it. Do not add an inline annotation to force a score.
+
+The next bounded diagnostic is a four-cell cross: move only the unchanged
+delay definition before the constructors, versus current order, under retained
+and unit-off profiles. Predict that unit-off then inlines delay while keeping
+the later reset tail; reject that explanation if either boundary fails to
+recover. Score all bodies/data/exports, not just the constructors. This tests
+source visibility while retaining a strong definition; even a hit would not
+uniquely recover the original global profile. This four-cell source experiment
+has not been run.
+
+```sh
+python3 tools/recovery_visibility_cross.py --domain visibility-profile-twelve \
+  --baseline-dir build/native293-baseline
+python3 tools/recovery_visibility_cross.py --audit
+```

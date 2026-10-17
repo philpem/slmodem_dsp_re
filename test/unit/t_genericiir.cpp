@@ -166,6 +166,80 @@ normalization_boundary(void)
 	return rc;
 }
 
+static void
+compare_state(GenericIIR<float, double> &ours, const union ref_obj &ro,
+	      unsigned nden, unsigned nnum, unsigned blockSize, unsigned step)
+{
+	const unsigned fields = 4 * sizeof(void *);
+	diff_eq_obj_(__FILE__, __LINE__, "mixed non-pointer state",
+		     "GenericIIR<float,double> non-pointer state",
+		     (const char *)&ours + fields, ro.raw + fields, 36, step);
+	double *ah[2], *bh[2];
+	memcpy(ah, ro.raw + 2 * sizeof(void *), sizeof ah);
+	memcpy(bh, (const char *)&ours + 2 * sizeof(void *), sizeof bh);
+	diff_eq_obj_(__FILE__, __LINE__, "mixed input history", "double[]",
+		     bh[0], ah[0], (nnum + blockSize) * sizeof(double), step);
+	diff_eq_obj_(__FILE__, __LINE__, "mixed output history", "double[]",
+		     bh[1], ah[1], (nden + blockSize) * sizeof(double), step);
+}
+
+static int
+run_mixed(const char *label, unsigned nden, unsigned nnum, unsigned blockSize)
+{
+	/* All states come from construction, scalar/block processing and reset.
+	 * Tight slack and unequal tap counts exercise overlapping compaction
+	 * copies independently on each history. The leading coefficient and
+	 * numerator retain the double-rounding discriminator even for 1/1 taps. */
+	double den[] = { 1.4142135623730951, -0.25, 0.125, -0.0625, 0.03125 };
+	double num[] = { 1.0000000000014524, 0.125, -0.0625, 0.03125,
+			 -0.015625, 0.0078125, -0.00390625, 0.001953125 };
+	union ref_obj ro;
+	GenericIIR<float, double> ours(nden, nnum, den, num, blockSize);
+	memset(&ro, 0, sizeof ro);
+	ref_ctor(&ro, nden, nnum, den, num, blockSize);
+
+	diff_begin(label);
+	for (unsigned step = 0; step < 96; step++) {
+		/* A zero-length call must also preserve the previous scratch state.
+		 * Every positive block count stays within constructor headroom. */
+		if (step % 7 == 0) {
+			ref_process_block(&ro, 0, 0, 0);
+			ours.process(0, 0, 0);
+			/* Constructor deliberately leaves m_acc uninitialised. */
+			if (step != 0)
+				compare_state(ours, ro, nden, nnum, blockSize, step);
+		}
+		if (step == 31 || step == 63) {
+			ref_reset(&ro);
+			ours.reset();
+			compare_state(ours, ro, nden, nnum, blockSize, step);
+		}
+		if (blockSize == 0 || step % 3 == 1) {
+			float x = step == 0 ? 1.0f : input[step];
+			float a = ref_process(&ro, x);
+			float b = ours.process(x);
+			diff_eq_int("mixed scalar %ld", bits(b), bits(a), step);
+		} else {
+			float a[8], b[8];
+			unsigned count = 1 + step % blockSize;
+			for (unsigned k = 0; k < count; k++)
+				a[k] = b[k] = step == 0 ? 1.0f : input[8 * step + k];
+			/* Alternate disjoint and in-place blocks. */
+			const float *ai = step % 2 ? input + 8 * step : a;
+			const float *bi = step % 2 ? input + 8 * step : b;
+			ref_process_block(&ro, ai, a, count);
+			ours.process(bi, b, count);
+			for (unsigned k = 0; k < count; k++)
+				diff_eq_int("mixed block %ld", bits(b[k]), bits(a[k]),
+					    step * 8 + k);
+		}
+		compare_state(ours, ro, nden, nnum, blockSize, step);
+	}
+	int rc = diff_end();
+	ref_dtor(&ro);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -207,6 +281,12 @@ main(void)
 	rc |= run_block("iir block den[0]==0", 3, 3, nodiv_den, bq_num, 64, 17);
 	rc |= run_block("iir block den[0]==2.5", 3, 3, scaled_den, bq_num, 64, 17);
 	rc |= normalization_boundary();
+	rc |= run_mixed("iir mixed round boundary", 1, 1, 4);
+	rc |= run_mixed("iir mixed tight biquad", 3, 3, 1);
+	rc |= run_mixed("iir mixed longer numerator", 3, 8, 2);
+	rc |= run_mixed("iir mixed longer denominator", 5, 2, 2);
+	rc |= run_mixed("iir mixed ragged", 5, 8, 7);
+	rc |= run_mixed("iir zero slack compaction", 5, 8, 0);
 
 	return rc;
 }

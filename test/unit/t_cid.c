@@ -398,17 +398,29 @@ main(void)
 	diff_eq_int("debug run delivers too (%ld)", verdict, 1, 4);
 	CID_delete(ours);
 	ref_CID_delete(ref);
+
+	/* The failure diagnostic needs its own real checksum-failure history. */
+	harness_tty_reset();
+	ours = CID_create(&dummy_modem_ours, 8000, 1);
+	ref = ref_CID_create(&dummy_modem_ref, 8000, 1);
+	build_burst(1);
+	verdict = feed(ours, ref, burst, nsamp, 192, 6);
+	diff_eq_int("debug wrecked burst fails (%ld)", verdict, -1, 6);
+	diff_eq_int("debug failure delivers no TTY bytes (%ld)",
+		    harness_tty_ours.len + harness_tty_ref.len, 0, 6);
+	CID_delete(ours);
+	ref_CID_delete(ref);
+	diff_eq_int("debug lifecycles released (%ld live)",
+		    harness_alloc.live, live0, 6);
 	dsplib_debug_capture_on = 0;
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
 	/*
-	 * The transcripts CANNOT be strcmp'd whole: the bridged receiver is
-	 * blob code whichever side calls it, so ITS lines all land on side 1
-	 * (test/harness/unwritten.c explains).  What is comparable is the
-	 * WRAPPER's own five strings, counted per side -- our wrapper prints
-	 * into side 0 and the reference wrapper into side 1, and the
-	 * receiver's lines contain none of these exact texts (checked by the
-	 * anti-vacuity line: side 0 carries wrapper lines and nothing else).
+	 * Both receivers now run independently. Keep this wrapper fixture's
+	 * assertions scoped to its own five diagnostic prefixes; receiver
+	 * diagnostics are outside this boundary. The native callsite observer
+	 * additionally checks the wrapper's exact diagnostic arguments and
+	 * their order relative to progress, strings and TTY callbacks.
 	 */
 	{
 		static const char *own[] = {
@@ -430,6 +442,9 @@ main(void)
 	diff_eq_int("the success line is among them (%ld)",
 		    count_substr(dsplib_debug_capture_text(0),
 				 "cid: CID Success") > 0, 1, 4);
+	diff_eq_int("the failure line is among them (%ld)",
+		    count_substr(dsplib_debug_capture_text(0),
+				 "cid: CID Failure") > 0, 1, 6);
 
 	diff_eq_int("read-only host observations executed (%ld)", observed_host_calls > 0, 1, observed_host_calls);
 	diff_eq_int("callback state negative executed", observation_negative, 1, 0);

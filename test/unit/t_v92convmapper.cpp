@@ -7,7 +7,7 @@
  * THREE THINGS THE SECOND HALF OF THIS FILE IS ORGANISED AROUND.
  *
  * The builder's arms are compared as WHOLE 0x2008 OBJECTS, per mode, which is
- * the strongest assertion available: 244, 504 and 1,024 written entries of
+ * it checks 64, 256 and 1,024 written entries of
  * each array for modes 0, 1 and 2, plus the untouched remainder, which is a
  * real check that nothing was cleared and a deliberate no-op otherwise.
  *
@@ -575,7 +575,7 @@ run_conv_tables(void)
  * WHAT THAT DOES AND DOES NOT COVER.  Nothing in the object clears either
  * array, and modes 0 and 1 write only the first four and eight columns of
  * each sixteen-wide row, so the compare is a real check over the written
- * subset -- 244, 504 and 1,024 entries of each array for modes 0, 1 and 2 --
+ * subset -- 64, 256 and 1,024 entries of each array for modes 0, 1 and 2 --
  * and a vacuous one over the rest, where both sides still hold the identical
  * seed.  It is stated that way rather than as "8 KB of coverage".  The seed
  * is what makes even the vacuous part worth having: a reconstruction that
