@@ -5695,3 +5695,147 @@ already present in initial RTL. Trace expansion and inlined-helper allocation
 timing before trying a source control. A declaration-order palette would not
 explain the cause. Likewise, `call_run`'s cached queue bases differ before
 allocation, but the available trace does not establish an extra-spill cause.
+
+### Compare literal contents even when call counts agree
+
+A call-site census cannot detect a substituted message or missing whitespace.
+`tools/recovery_literal_census.py` checks literal consumers across the canonical
+objects, including functions whose call counts agree. On the ninth PR291 pass,
+300 objects supplied 1,886 shared body entries (including duplicate emissions),
+492 with original string literals and 2,444 unique body/literal pairs. Same-TU
+call and sibling-tail expansion explained two direct-body mismatches. The two
+remaining bodies contained three actual text discrepancies:
+
+- `getV92Decision` printed `JdNot detected` at the completed-reference-study
+  transition. The original prints `enter Wait For V92Jd state`, with the sample
+  count before publishing state 7 and clearing the counter.
+- `runPcmModem`'s echo-silence ON and Off messages each lacked a leading newline.
+
+The V.92 fixture's earlier 213,241 checks passed without reaching that terminal
+study diagnostic. A targeted synthetic boundary supplies ADID terminal state 6
+and exercises caller counts just before and at the modulo-six transition, at
+four debug levels. Two of its 216 checks fail before the text correction; all
+pass afterwards. This proves the component discrepancy, not a complete study
+history or modem-path reachability.
+
+The census's real ELF negative control changes a literal without changing file
+length or relocation sites. It inventories only `.rodata.str*` address
+relocations; it does not prove guards, arguments, multiplicity, indirect-call
+coverage or the contents of other data sections. A clean inventory therefore
+closes these nominations, not the behavioral audit. Canonical relocation
+consumers must still be checked: adding a string can move a bystander's raw
+relocation addends without changing its instructions or consumed values.
+
+Treat fixture comments as hypotheses too. The PCM fixture blamed an extra blank
+line on `V90Modem::progress`'s `Illegal modemSide` message. Both objects consume
+exactly the same literal there. Once the caller's echo messages were corrected,
+all existing diagnostic rows passed complete transcript comparisons; the
+misattributed exception was removed.
+
+### Trace stack allocation before changing declaration order
+
+For `call_create`, tracing the actual Gentoo compiler's `expand_decl` and
+`assign_stack_local_1` established that the configuration's 16-byte allocation
+preceded the dial buffer's 64-byte allocation. Inlined-helper expansion came
+later and allocated no additional stack object. The original stack positions
+require the reverse allocation order. One buffer-first declaration control
+restores configuration +0x10 and dial buffer +0x20, preserving all ten bystander
+bodies, seven exact names, data and bindings. The function remains SIZE2.
+
+This is evidence for one allocation-order control, not a reason to enumerate
+declaration permutations. Use the executing compiler's entry ABI and measured
+frame offsets when optimized debug information aliases parameters incorrectly;
+upstream compiler source is supporting context, not proof of the installed
+Gentoo binary's behavior.
+
+For leading or trailing whitespace, compare individual debug calls as well as
+concatenated transcripts. An initial echo-message substring probe falsely
+passed because the preceding message supplied the missing leading newline.
+The retained fixture wraps both debug imports, checks each formatted message
+at its call boundary, and forwards it into the ordinary capture. Its known-old
+source fails two checks; the corrected source passes. The selected component
+events are explicit fixture inputs, not evidence of an end-to-end modem path.
+
+The remaining `call_create` pointer copies illustrate why pass names need
+verification. On this compiler, `flag_if_conversion` controls post-combine
+`21.ce2`; `flag_if_conversion2` controls the later `29.ce3`. Disabling the latter
+emits the unchanged object. Disabling the former keeps the pointer copies
+branch-local and removes the measured overlap, but the copies survive and
+`call_create` grows to SIZE17. That control explains interference without
+recovering the original source. It also changes `call_run` and
+`IsPulseDialerReady`, so it supports no production flag change.
+
+### Extend the producer boundary without overstating reachability
+
+The fax replay fixture now constructs TX/RX framing objects, writes payloads
+through the HDLC frame writer, and passes six-bit chunks through the actual
+packer/unpacker. Three decoded records, including stuffing-heavy payloads,
+feed the existing buffered command/progress replay. The new 2,833 checks bring
+the fixture to 3,762; corrupting a source-side payload makes 302 new checks
+fail while the older 929 still pass.
+
+This establishes digital framing provenance. The fixture still publishes the
+queue itself, so V.21 PCM acquisition and the state-6 queue-append path remain
+outside its demonstrated history. The next source discriminator is that append
+path's value timing: the original prints the pre-append length/index, then
+reloads both before checking capacity and publishing the record. The current
+source calculates length and total before the print. Trace that difference
+without assuming a mutating diagnostic callback is a valid modem operation.
+
+### Run inexpensive fidelity inventories before compiler tuning
+
+Start with the whole compiled data and literal inventories, then review their
+consumers. Align named objects and resolve relocation targets before comparing
+contents. For anonymous strings and constants, retain section, offset and
+consumer evidence; a nearby printable word is not automatically a diagnostic.
+Sliding matches can locate inserted or missing bytes, but padding and string
+pooling are not source defects by themselves.
+
+The lexical `debugaudit.py --absent` check also needs header and macro literals.
+Its old default falsely reported 40 missing consumers because it scanned only
+C/C++ files and discarded `#define` lines. Including headers and concatenated
+macro literals reduces that report to zero absent messages, with 15 unresolved
+call sites still explicit. Six controls cover the old omission, macro joining,
+ordinary literals, include-path exclusion, changed text and escaped-newline
+splicing with preserved source line numbers. This presence test
+still cannot detect a valid literal attached to the wrong function; the compiled
+consumer audit found the V.92 substitution precisely because it keeps ownership.
+
+Instruction-loop differences are nominations until reviewed. Record actual
+bounds, stride, signedness, calls and stores, and separate equivalent sentinel
+or promoted-width encodings from missing behavior. A detector must fire on a
+known changed bound, stride, store and call before a clean result is useful.
+Do not return to register-allocation work while an independently supported data
+or behavior discrepancy is waiting for a differential regression.
+
+`transcript_exact` now compares exact per-call start/end positions as well as
+complete text, byte length and call count. Its negative control produces equal
+concatenated text with two calls on each side, but moves a newline between the
+calls. The former comparison accepts that arrangement; the boundary comparison
+rejects it. Both text and event capacities fail closed on overflow. Use this
+shared helper when extending transcript fixtures rather than relying on a
+substring match or equal line counts.
+
+The initialized-storage content census found two defects that the size/layout
+inventory could not: two `p2400` coefficients were -7786 instead of -7790, and
+`MTDb103Org_CFG` represented its first pointer as zero raw words. The original
+relocation targets `MTDb103_COEF`. Comparing 724 matched initialized objects
+found 722 equal and these two different; seven assembled ELF controls exercise
+content and relocation changes, shifted layouts and ambiguity handling. The
+new component fixture fails three of 58 checks before correction and passes
+afterwards, using `V34SetupModulator` and the actual `FPM_MTD_create` constructor.
+All function bodies and exact-name sets remain unchanged by these data fixes.
+
+Anonymous numeric consumers remain a separate queue: 26 of 153 shared-function
+inventories differ. Width changes, constant folding and inline boundaries can
+explain such differences, so they are not 26 demonstrated bugs. `dtmf_test`'s
+one-ULP constant difference is a concrete next operand to trace and test at its
+decision boundary before changing a literal.
+
+The broader literal audit retains ordinary `.rodata` and `.data` address
+consumers, but labels printable numeric/indexed loads as ambiguous. It compares
+112 named-storage windows per side without finding a difference. Its real ELF
+controls change a format and slide a relocation by one byte; the old V.92 and
+echo defects also fire. Remaining static-count nominations need distinct-path
+transcript coverage, particularly `DialerProgress` and the V.92 TRN1u reset
+lower-bound report. Do not force duplicated calls to equalise static counts.
