@@ -2,8 +2,8 @@
   "bytes": 69,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1102,
-  "exact_bytes": 126606,
+  "exact": 1101,
+  "exact_bytes": 126467,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -233,7 +233,6 @@
     "V32TxHdxModem",
     "V34EchoCleanUp",
     "V34EchoEstimateDelayLineEnergy",
-    "V34EchoPreFilter",
     "V34EchoPreFilterCopy",
     "V34EchoReportCoeff",
     "V34EchoUpdateDelayLine",
@@ -1110,7 +1109,7 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 29,
+  "regalloc": 30,
   "reloc": 0,
   "size": 651,
   "unresolved": 1

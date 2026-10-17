@@ -577,6 +577,36 @@ require monotonic improvement during exploration or adopt a candidate merely
 for a net score gain. Record the next discriminating test in the issue before
 repeating a stalled line of inquiry.
 
+**A ratchet is a regression detector, not the reconstruction authority.** Do
+not reject or abandon an independently witnessed structural/source recovery
+solely because an exact count falls or a previously exact neighbour changes.
+Exact matches can depend on compensating source choices or compiler state
+carried from preceding functions. A hard monotonic rule can lock in those
+choices and stop progress toward the original source and complete object.
+
+Review a proposed tradeoff against original instructions and the complete TU:
+identify the restored structure, every lost/gained exact name, original bytes
+affected, changed operands, data, bindings and call edges. Trace collateral to
+its first compiler divergence using the Gentoo period compiler; distinguish a
+measured cause from an inference. Period differential failures remain hard
+failures, and retained source must pass `make phase`. A smaller SIZE gap or a
+net score gain alone is insufficient evidence.
+
+An explained byte regression may be retained for stronger original-source
+fidelity. Record the decision and recovery plan in the Playbook/PR, preserve
+the previous exact set in Git history, and rebase the current ratchet explicitly
+after reviewing the complete lost/gained sets. Do not silently lower the floor,
+mask losses with gains, widen tolerances, or add a period allow-list. Unexpected
+future losses must still fail the ratchet and trigger investigation.
+
+Finish structural refinement before compensating for a neighbour's register
+choices. For example, a preceding function can change the persistent peephole
+scratch-search cursor while the neighbour's source and algorithm stay intact;
+later structural recovery may restore its bytes naturally. Re-measure it after
+the structure settles rather than adding artificial scratch consumers or
+padding. See the measured V.34 case in
+`docs/method/refinement.md#review-exact-losses-against-source-fidelity`.
+
 **Every reconstruction experiment must enable `DSPLIB_REPRODUCE_BUGS`.**
 Use the shared experiment-toolchain helpers to append the define after
 configurable flags. Record and review the actual complete compiler command

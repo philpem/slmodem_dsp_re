@@ -6687,3 +6687,97 @@ batch. See the [campaign commands](ghidra-assisted.md#queue-and-echo-observation
 Move next to an independently witnessed source-fidelity discrepancy rather
 than forcing Queue's prologue or Echo/IIR spills. Reopen allocation experiments
 only when a new lifetime, operand or profile witness distinguishes them.
+
+## Recover initializer visibility before changing inline policy
+
+`preinitdigital` originally embeds two `preinitV34` bodies followed by three
+memset calls. The reconstruction instead made two external helper calls.
+Historical deduplication in `7fe8c8b24` (F188) introduced that boundary while
+reconciling duplicate implementations. It preserved behavior but was not
+evidence for the original source's inline visibility.
+
+Move `preinitdigital` beside the existing helper in `v34shell.c`; leave one
+canonical helper and preserve both strong exports. Ordinary retained O3 then
+embeds both initializers without an attribute or compiler-option change.
+This restores the original call graph and reduces the length gap from 233
+bytes (300 versus 533 original) to twenty bytes (553). Acquiring the TX role
+view only after the clears removes a saved ESI and reduces it to eight bytes
+(541). This is a SIZE gap, not eight differing bytes: the candidate has 137
+decoded instructions versus 131 original.
+
+Across the complete shell/digital pair, only `preinitdigital` changes. Twelve
+neighbouring bodies, all three existing exact names, data, 29 global
+definitions and ten external imports survive. `v34digital.c` remains a normal
+build input containing layout assertions. Original TU extent remains an
+inference because the span has no anchoring local symbol; recovered visibility
+does not uniquely establish the author's file layout.
+
+The [three-cell replay](../../tools/recovery_preinit_owner.py) checks baseline,
+same-owner and late-role-owner sources, plus a raw-identical final formatting
+control. Its frozen revision is reachable on the PR branch, rather than an
+unpublished delegated commit. Focused period coverage passes three fixtures,
+27 groups and 6186579 checks; full `make phase` passes 392 fixtures. Both moved
+callback-pair mutation anchors are exercised with Gentoo-compiled objects and
+fail as intended. The mutation suite follows the definition into its new file.
+
+Next inspect the original group-owner acquisitions: LEAs for scrambler
+`obj+0x2a54` and descrambler `obj+0xe74`, followed by clears through those
+views. Current direct field stores produce extra zero materializations and
+different store order. The TX role view also still materializes `obj+0x1be0`
+where the original publishes directly to `obj+0x2a28`. Those are independently
+witnessed ownership/publication questions, not a reason to tune registers.
+
+## Review exact losses against source fidelity
+
+`V34EqualizerCenterAdapt` exposes a different tradeoff. The original has two
+circular-history spans, with backedges `.text:0x72be5 -> 0x72b84` and
+`0x72c51 -> 0x72bf0`. The retained reconstruction has one eight-tap loop with
+a wrap test at every tap. Ghidra's reference graph corroborates both backedges,
+but its basic-mode output remains HighFunction P-code; native instructions
+are the operand authority.
+
+The [nine-cell replay](../../tools/recovery_v34_center_spans.py) crosses split
+spans, continuous coefficient pointers and per-lane history rereads, then tests
+one original imaginary-history-base acquisition. Its 234 complete-body verdicts
+include no exact target. A 317-byte candidate, against 347 original and 183
+retained bytes, restores the two loops and coefficient ownership while changing
+only one neighbour. A 336-byte control narrows the length gap further but has
+broader nonexact collateral. Size alone does not select the source candidate.
+
+The 317-byte candidate passes all 392 period fixtures. Existing lifecycle
+coverage visits all eighty cursors and checks untouched fractional halves;
+a wrong-wrap control fails 2372 checks. Twenty-four neighbouring bodies,
+data, bindings and relocation consumers remain unchanged. However,
+`V34EchoPreFilter` loses its 139-byte exact match through four register bytes.
+Its patterns agree through `27.flow2` and first differ at `28.peephole2`;
+the bodies remain equivalent under the register-renaming comparison.
+
+Installed-compiler observation then establishes the cause. Total scratch
+searches increase from 78 to 81; CenterAdapt consumes two versus five.
+PreFilter's sole search, UID13, has identical range, mode, constraints,
+allocation order and register eligibility. Its incoming persistent search
+cursor changes from two to one, selecting CX versus DX. Both complete observed
+objects raw-match their controls. Peephole2 changes zeroing UIDs187/188;
+`30.rnreg` subsequently changes shift-carrier UIDs138/161. This accounts for
+all four bytes without a source or algorithm change in the neighbour.
+
+The exact-membership check correctly reports 1102 -> 1101 and identifies the
+lost symbol. That result is a regression alarm, not proof that the recovered
+loop structure is worse. Treating it as an automatic veto can freeze
+compensating source choices and reproduce the local-minimum problem described
+in [experiment design](experiment-design.md). Keep differential failures hard;
+review explained byte regressions alongside source fidelity, full-TU changes
+and independent compiler evidence. Do not silently reset the historical floor
+or hide the lost name behind a net count.
+
+After that review, retain the 317-byte source recovery and deliberately rebase
+the current exact-membership floor to 1101/1852, 126467 original bytes. The
+previous 1102-name floor remains in Git history; the one lost name is
+`V34EchoPreFilter`, with no gained exact names. This is an explained byte
+regression accepted for stronger original loop/operand fidelity, not an exact
+gain or a claim that the original source has been uniquely recovered.
+
+The nine-cell source domain is closed to further spelling retries. Remaining
+questions concern the original imaginary-history base and arithmetic operand
+ownership. Future losses still fail the ratchet and need their own review;
+this case is not an automatic exception for register differences.
