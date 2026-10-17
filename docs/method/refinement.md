@@ -5851,7 +5851,7 @@ materialised as immediates, implicit x87 constants, inlined callees and
 reciprocal multiplication still need separate evidence.
 
 Twelve controls establish float/double/extended equality, integer-load
-conversion, changed values, signed-zero distinction, extreme extended values
+conversion, changed values, signed-zero distinction, extreme extended values,
 correct accounting for interior and out-of-bounds pool loads, and rejection
 of unsupported ELF inputs.
 NaN payloads and noncanonical extended encodings retain their representation.
@@ -5917,3 +5917,77 @@ Inspect the paired multiply/divide operations and destination fields before
 changing a value. Other inventory gaps already have immediate producers:
 `MTK_phasor`'s float 2*pi and `voice_rx`'s reciprocal input scale. Their absence
 from a constant pool is not evidence of an absent value.
+
+### Retain original operands even when the exact-function count is unchanged
+
+Two earlier NaN controls were left out after producing no exact-function gain.
+The bulk fidelity pass revisits their source choice against the current TUs:
+`porcessSecondStudy` and `setConstellationToNoise` load constant quiet NaNs in
+the binary, whereas the reconstruction called `nanf("")`. Replacing those
+initializers with `NAN` removes one unmatched library call and its empty-string
+argument from each TU. This is a call/operand recovery; the normal runtime
+values were already equal and no new functional failure is claimed.
+
+Four full-TU cells compare 116 emitted bodies. All 56 canonical bystanders,
+bindings, named data and nontext relocation destinations remain equal; 31 exact
+names are preserved. The intended differences are two quiet-NaN consumers,
+two removed imports and empty arguments, and the target bodies. Five focused
+period fixtures pass. ADID's size gap stays 64; the designer's gap grows from
+18 to 43. Keep that result explicit instead of describing fewer bytes as a
+recovery criterion. Earlier no-gain measurements remain valid.
+
+### Observe state at host callbacks, as well as the delivered bytes
+
+A correct final state and transcript can hide publication at the wrong time.
+The CID fixture now observes its owner during 18 paired TTY callbacks from real
+Bell-202 valid/corrupt receive histories. It records the rendered buffer,
+payload and owner-relative offset, modem identity, mode, option and sample-fill
+state, while forwarding the callback unchanged. A state-only corruption is
+rejected even though the delivered TTY bytes stay identical.
+
+Three reviewed paths retain the original order: CID recomputes its string
+length and owner after host calls; V.8 publishes handoff/expiry fields around
+its host calls; voice reloads state after receive and publishes its host count
+after send. Only CID has new real-signal callback observations in this pass.
+A V.8 negotiated-link history remains the next useful host-boundary fixture;
+planted negotiation states and voice handler scripts are not that evidence.
+
+Resolved call/tail annotation also explains four new structural nominations:
+DialerAbort's diagnostic tail, V23ModemMain's demodulator tail, shared voice
+resampler creation, and merged FSE history-publication suffixes. FSE's normal
+`FPM_FSE_receive` producer uses disjoint local angle/magnitude buffers, so a
+captured-history load-age difference alone does not establish an ordinary
+producer defect.
+
+### Test quantisation boundaries before replacing reciprocal constants
+
+The equalizer source already spells the original `1 / (beta * 2**k)` grouping;
+the retained compiler reassociates it into `2**-k / beta`. These pool values do
+not establish a source error. The new constructor-based fixture uses actual
+parameter, phase-4 and equalizer constructors, coefficient/beta setters and
+`enterDataPhase` to derive maxima and conversion fields. It plants neither
+maxima nor MMX history.
+
+Fifty-four trials cover 18 adjacent exponent-boundary groups at two debug
+levels. All 812 checks pass across the object, aligned arrays and complete
+transcripts. A compiled-object wrong-scale canary fails 81 checks and exits 1.
+The unchanged full-TU control reproduces all 35 bodies raw and preserves 20
+exact names. No source expression or compiler option changes follow from this
+result. A field-positioned map of V90 default stores, including immediate
+producers, is a better next numeric audit than another pool-value substitution.
+
+### Keep parallel mutation subsets non-recordable
+
+`mutate.py --only ... --jobs 2` used to discard the filter when spawning
+workers. A requested four-mutation check therefore started all 482 ADID
+mutations and printed a full-suite summary. The corrected runner forwards the
+filter and verbosity, budgets workers from the selected domain, and prints a
+non-recordable subset summary even when an empty filter selects every label.
+The unsupported `--all --only` combination fails before dispatch.
+
+The snapshot parser also rejects subset output and summaryless partial
+verdicts, preserving the old entry. Fourteen mocked controls reproduce the old
+failures and test filtering, worker failure, subset reporting and snapshot
+refusal. They need no copied build trees or mutation cycles. Actual four-label
+ADID sentinel checks pass serially and in parallel. Neither is a full
+482-mutation measurement or a snapshot refresh.
