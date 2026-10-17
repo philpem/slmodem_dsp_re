@@ -357,7 +357,7 @@
   "build/test/t_v34rx"
  ],
  "v34scrampair": [
-  "src/pump/v34/v34digital.c",
+  "src/pump/v34/v34shell.c",
   "build/test/t_v34scram"
  ],
  "v34scramstd": [

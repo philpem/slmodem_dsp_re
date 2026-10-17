@@ -1,28 +1,14 @@
 /*
- * v34digital.c -- ITU-T V.34/V.90: bringing the digital half up.
+ * v34digital.c -- layout checks for V.34/V.90 digital initialisation.
  *
- * `preinitdigital` clears and arms both shell contexts and both halves of
- * the scrambler pair.  It is what `v34modeminit` and `v34handshakinit` are
- * waiting on, and it took four scramblers and a table to become writable at
- * all -- `callgraph --ready` had it available from the start because it
- * models calls, and every one of those five is installed by ADDRESS.  See
- * finding F177.
+ * preinitdigital is defined beside preinitV34 in v34shell.c so the period
+ * compiler can see both initialiser bodies. The reference embeds those
+ * bodies at 0x59760; its exact translation-unit extent remains unsettled
+ * because no local symbol anchors this span (findings F177 and F188).
  *
- * WHICH TRANSLATION UNIT, NOT SETTLED.  It sits at 0x59760 between `initV34`
- * (0x583f0) and the V.34 handshake's own file, and no local symbol anchors
- * anything in that span, so the extent cannot be recovered the way
- * `V34hshak.c`'s was.  Grouped here by what it does.
- *
- * THE TWO HALVES ARE ONE STRUCT TWICE.  Everything it touches below 0xe50 is
- * a `struct v34_shell` field, once at the receive context's base and once
- * 0x1be0 further on -- which is `V34_SHELL_TX`, already established by
- * finding F137 from `getFrame`'s offsets.  Two functions arriving at the same
- * spacing from opposite directions is the strongest evidence either has.
- *
- * AND IT NAMES THE SHELL'S BIT CALLBACKS.  The pointer at +0xe48 that
- * `getFrame` pulls bits through and `putFrame` pushes them into is filled
- * here with a SCRAMBLER in the transmit context and a DESCRAMBLER in the
- * receive one.  Finding F178.
+ * The receive and transmit shell views are V34_SHELL_TX apart. Their
+ * callback fields hold the role-dependent scrambler/descrambler pair
+ * (findings F137 and F178). These assertions retain the measured layout.
  */
 
 #include "dsplib/sysdep.h"
@@ -30,65 +16,6 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34scram.h"
 #include "dsplib/v34shell.h"
-
-/*
- * Bring the digital half up.
- *
- * Everything here is a clear except the last four stores, and those are the
- * only thing in the function that depends on anything: `role` picks which
- * polynomial goes which way.
- */
-void
-preinitdigital(void *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_shell *rx = (struct v34_shell *)obj;
-	struct v34_shell *tx = (struct v34_shell *)((char *)obj
-						    + V34_SHELL_TX);
-
-	/*
-	 * `preinitV34` is the object's own, exported and reconstructed in
-	 * v34shell.c.  It takes the shell's FIELDS pointer -- 0xa00 into the
-	 * context -- which is how every call site in the object spells it.
-	 */
-	preinitV34((char *)tx + V34_SHELL_FIELDS);
-	preinitV34((char *)rx + V34_SHELL_FIELDS);
-
-	/* The receive context's trellis machinery, cleared wholesale. */
-	sysdep_memset(rx->cost, 0, sizeof(rx->cost));
-	sysdep_memset(rx->trellis, 0, sizeof(rx->trellis));
-	sysdep_memset(rx->state, 0, sizeof(rx->state));
-
-	obj->scrambler.w[0] = 0;
-	obj->scrambler.w[1] = 0;
-	obj->scrambler.w[2] = 0;
-	obj->scrambler.w[3] = 0;
-	obj->scrambler.nbits = 0x20;
-
-	obj->descrambler.w[0] = 0;
-	obj->descrambler.w[1] = 0;
-	obj->descrambler.w[2] = 0;
-	obj->descrambler.count = 0;
-
-	rx->state_idx = 0;
-	obj->data_enable = 0;
-	obj->train_symcount = 0;
-
-	/*
-	 * THE ONE DECISION IN THE FUNCTION.  The two ends of a V.34 call
-	 * must scramble with opposite polynomials, so this is the
-	 * originate/answer flag -- and `setTimingStateParameters` already
-	 * reads the same field to pick between two timing ramps, which is
-	 * the second use that makes the first one legible.  Finding F177.
-	 */
-	if (obj->role == 0x65) {
-		tx->scramble = scrambleGPC;
-		rx->scramble = (v34_scramble_fn)descrambleGPA;
-	} else {
-		tx->scramble = scrambleGPA;
-		rx->scramble = (v34_scramble_fn)descrambleGPC;
-	}
-}
 
 /*
  * ---------------------------------------------------------------------------
