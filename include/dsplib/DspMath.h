@@ -426,14 +426,17 @@ DSPMATH_STEP void blackman(T *w, unsigned n)
  * assumed: case 1 is `hanning` and case 2 is `hamming`, which is the opposite
  * way round from the alphabetical guess.
  *
- * The object reaches `boxcar` two ways -- case 0 tail-jumps to it and the
- * default CALLs it and returns -- which is a layout artefact of the compiler's
- * switch and not a behavioural difference.  One `default` covers both.
+ * The object has separate case 0 and default paths to `boxcar`: case 0
+ * tail-jumps, while default calls and returns. Keep the explicit BOXCAR arm
+ * even though both paths compute the same window.
  */
 template <typename T>
 void designWindow(WindowType type, T *w, unsigned n)
 {
 	switch (type) {
+	case WINDOW_BOXCAR:
+		boxcar(w, n);
+		break;
 	case WINDOW_HANNING:
 		hanning(w, n);
 		break;
