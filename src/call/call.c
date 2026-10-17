@@ -227,10 +227,9 @@ call_status(struct call_dp *st, int message)
 
 /* One block: 48 samples in, 48 out, through however many stages there are. */
 static int
-call_block(struct call_dp *st)
+call_block(struct dp *dp, short *from_line, short *to_line)
 {
-	short *from_line = st->in_q.data + st->in_q.active / 2;
-	short *to_line = st->out_q.data + st->out_q.active / 2;
+	struct call_dp *st = ((struct call_dp *)dp)->self;
 	const short *in;
 	short *out;
 	int count;
@@ -304,7 +303,9 @@ call_run(struct dp *dp, void *in, void *out, int count)
 		host_in += n;
 
 		if (st->in_q.count > CALL_BLOCK_BYTES - 1) {
-			int block = call_block(st);
+			int block = call_block(dp,
+				(short *)((char *)st->in_q.data + st->in_q.active),
+				(short *)((char *)st->out_q.data + st->out_q.active));
 
 			if (block != DPSTAT_OK)
 				rc = block;
