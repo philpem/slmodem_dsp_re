@@ -255,11 +255,94 @@ run_diagnostic(void)
 	return diff_end();
 }
 
+extern struct fax_class1 *ref_fax_class1_create(struct fax_class1 *, const struct fax_class1_cfg *);
+extern int ref_fax_class1_command(struct fax_class1 *, int, int, int);
+extern int ref_fax_class1_progress(struct fax_class1 *, short *, short *, int, int,
+                                 int *, int *, int *, int *);
+extern int ref_fax_class1_delete(struct fax_class1 *);
+
+/* Constructor/command/progress history from a buffered-frame boundary. Only
+ * the queue payload and its length are supplied; state, read index, countdown
+ * and clocks come from production methods. The queue's demodulator/HDLC
+ * producer is still outside this fixture: this is not modem-path evidence. */
+static int
+run_command_history(void)
+{
+    struct fax_class1_cfg cfg = { CLASS1_ANS_ORG_NORMAL, 60, 0, 0, 0, 1 };
+    unsigned level;
+    int round, tick;
+    unsigned emitted = 0;
+
+    diff_begin("buffered HDLC command/progress history (queue supplied)");
+    for (level = 0; level < 4; level++) {
+        struct fax_class1 *a = ref_fax_class1_create(NULL, &cfg);
+        struct fax_class1 *b = fax_class1_create(NULL, &cfg);
+        int i;
+        diff_eq_int("constructors succeeded %ld", a != NULL && b != NULL, 1, level);
+        if (a == NULL || b == NULL) return diff_end() | 1;
+        for (i = 0; i < 3; i++) {
+            a->superframe[3*i] = b->superframe[3*i] = 2;
+            a->superframe[3*i+1] = b->superframe[3*i+1] = 0x10;
+            a->superframe[3*i+2] = b->superframe[3*i+2] = 0x30+i;
+        }
+        a->superframe_len = b->superframe_len = 9;
+        for (round = 0; round < 3; round++) {
+            int ra = ref_fax_class1_command(a, FAX_CLASS1_RH_COMMAND, 3, 0);
+            int rb = fax_class1_command(b, FAX_CLASS1_RH_COMMAND, 3, 0);
+            long tag = level*100 + round*10;
+            diff_eq_int("command return %ld", rb, ra, tag);
+            diff_eq_int("reference selected emulate %ld", a->state, CLASS1_HDLC_EMULATE_RECEIVE_STATE, tag);
+            diff_eq_int("source selected emulate %ld", b->state, a->state, tag);
+            diff_eq_int("command armed countdown %ld", b->superframe_countdown, 2, tag);
+            for (tick = 0; tick < 3; tick++) {
+                short arx[CLASS1_BLOCK_SAMPLES], brx[CLASS1_BLOCK_SAMPLES];
+                memset(arx, 0, sizeof(arx)); memset(brx, 0, sizeof(brx));
+                memset(tx_a, 0x5a, sizeof(tx_a)); memset(tx_b, 0x5a, sizeof(tx_b));
+                memset(dst_a, 0xa5, sizeof(dst_a)); memset(dst_b, 0xa5, sizeof(dst_b));
+                rxc_a = rxc_b = CLASS1_BLOCK_SAMPLES;
+                txc_a = txc_b = CLASS1_BLOCK_SAMPLES;
+                w7_a = w7_b = w8_a = w8_b = 0;
+                dsplib_debug_capture_reset();
+                dsplibs_debug_level = ref_dsplibs_debug_level = level;
+                dsplib_debug_capture_on = 1;
+                ra = ref_fax_class1_progress(a, arx, tx_a, (int)(long)dst_a, 0,
+                    &rxc_a, &txc_a, &w7_a, &w8_a);
+                rb = fax_class1_progress(b, brx, tx_b, (int)(long)dst_b, 0,
+                    &rxc_b, &txc_b, &w7_b, &w8_b);
+                dsplib_debug_capture_on = 0;
+                dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+                diff_eq_int("progress return %ld", rb, ra, tag+tick);
+                diff_eq_int("transcript complete %ld", dsplib_debug_capture_complete(0) && dsplib_debug_capture_complete(1), 1, tag+tick);
+                diff_eq_int("history transcript %ld", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, tag+tick);
+                diff_eq_int("reference report at expiry %ld", strstr(dsplib_debug_capture_text(1), "Receive buffer OK in _hdlc_emulate_receive_state") != NULL, level > 1 && tick == 2, tag+tick);
+                diff_eq_int("reference emitted at expiry %ld", w7_a > 0, tick == 2, tag+tick);
+                emitted += w7_a > 0;
+                diff_eq_int("output count %ld", w7_b, w7_a, tag+tick);
+                diff_eq_obj("history output", unsigned char[DST_MAX + GUARD], dst_a, dst_b, tag+tick);
+                diff_eq_obj("history tx", short[TX_MAX + GUARD], tx_a, tx_b, tag+tick);
+#define HISTORY_FIELD(field) diff_eq_int("history " #field " %ld", b->field, a->field, tag+tick)
+                HISTORY_FIELD(state); HISTORY_FIELD(prev_state); HISTORY_FIELD(status);
+                HISTORY_FIELD(superframe_countdown); HISTORY_FIELD(superframe_read_idx);
+                HISTORY_FIELD(superframe_len); HISTORY_FIELD(delayed_status);
+                HISTORY_FIELD(delayed_status_countdown); HISTORY_FIELD(clock_sec);
+                HISTORY_FIELD(clock_frac);
+#undef HISTORY_FIELD
+            }
+        }
+        diff_eq_int("queue exhausted %ld", b->superframe_len, 0, level);
+        diff_eq_int("read index reset %ld", b->superframe_read_idx, 0, level);
+        ref_fax_class1_delete(a); fax_class1_delete(b);
+    }
+    diff_eq_int("twelve buffered records emitted", emitted, 12, 0);
+    return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = run();
 
 	rc |= run_diagnostic();
+	rc |= run_command_history();
 	return rc;
 }
