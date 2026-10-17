@@ -3,10 +3,12 @@
 At source revision `13f477a9`, adding only `-std=gnu99` to the canonical
 Gentoo C profile reproduces all three previously different period objects
 byte for byte. All three unchanged canonical controls first reproduce the
-frozen canonical objects byte for byte. No source or build-profile change is
-adopted by this characterisation.
+frozen canonical objects byte for byte. The characterisation itself adopts no
+source or build-profile change; the subsequent apparatus alignment is
+recorded below.
 
-`tools/toolchain/period_inner.sh` sets `CFLAGS="$FLAGS -std=gnu99"` and uses
+At that revision, `tools/toolchain/period_inner.sh` sets
+`CFLAGS="$FLAGS -std=gnu99"` and uses
 those flags for source C files as well as C fixtures. Its general flag banner
 prints `FLAGS`, which omits that dialect option. The actual source C commands
 therefore differ from the banner and from `tools/toolchain/period.mk`, whose
@@ -95,10 +97,28 @@ failure and an initial packaged-tool import failure are retained as invalid
 audit attempts; the final tool replay validates the recorded conclusions.
 No failing compiler cell was interpreted as an accepted result.
 
-The V.8 fixture commit passed the current source-C period profile's focused
+The V.8 fixture commit passed the preceding source-C period profile's focused
 three-binary differential gate before this separate characterisation. This
-audit does not run or replace that gate. The next recommended experiment is
-bounded source/test dialect alignment, with distinct profile caches and
-configuration stamps, followed by the complete period differential suite
-before considering adoption. That experiment must preserve the source
-profile's authority and record any compiler-dependent fixture results.
+audit does not run or replace that gate.
+
+## Align runtime source with the retained comparison profile
+
+The follow-up separates `SOURCE_CFLAGS="$FLAGS"` from fixture/harness
+`CFLAGS="$FLAGS -std=gnu99"`. DCR retains its local options; source C++,
+fixture C++ and assembly dispatch remain unchanged. The banner now prints
+the actual C source, C fixture and DCR flag lists. This aligns the two deciding
+builds' retained source profile without asserting the original C dialect.
+
+`KEEP` now also requires an object to be newer than the executing compiler
+script. Editing its flags or dispatch therefore invalidates old objects.
+Ten shell-dispatch controls record compiler arguments and exercise script,
+source and header invalidation, unchanged reuse and forced rebuilding.
+The old script fails four of ten; the corrected script passes all ten.
+`make phase` runs these controls through `period-compile-selftest`.
+
+Six affected Gentoo fixtures pass 14527339 checks: V17 fax/creation, Class 1
+commands/progress and V34 handshake/step. All 300 rebuilt runtime source
+objects raw-match the frozen canonical baseline or the seven independently
+audited helper-removal controls. Artifacts are archived under
+`build/fidelity-thirteenth/delegated/dialect-alignment`. The complete integrated
+gate is recorded in the [refinement Playbook](method/refinement.md).

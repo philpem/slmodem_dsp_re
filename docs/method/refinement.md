@@ -6098,7 +6098,7 @@ failure. Static CFG pair-order differences fall from 1835 to 1433 of 57630;
 they remain conservative ordering evidence, not dynamic execution counts or
 authority for further store permutations.
 
-The integrated continuation passes `make phase partial-link J=4`: 392 period
+The preceding continuation passes `make phase partial-link J=4`: 392 period
 fixtures, zero failures, with all structural checks passing. The exact-name
 set remains 1101 of 1852, covering 125983 of 720125 original function bytes;
 all 724 matched initialised objects agree. Six of 300 production objects
@@ -6109,3 +6109,139 @@ reconstruction-only production helpers. A lower-mode fixture must observe
 `V8_OK` and an actual negotiated lower-mode intersection before claiming the
 wrapper's unsupported-handoff arm is reachable; a timeout is a different
 result.
+
+### Resolve section identity before interpreting disassembly
+
+An ELF function is identified by section and offset together. A COMDAT
+function can start at zero while unrelated sections also contain code at
+zero. `tools/dis.py` formerly selected a numeric range without selecting its
+section, mixing instructions, relocation annotations and Intel-form operands
+from unrelated bodies. The invalid AGC read is archived; it supplies no source
+evidence. The byte comparator uses separate section-aware code, and the
+independent exact-name census is unchanged.
+
+The reader now resolves the symbol's section, selects it in both disassembler
+passes and attaches relocations only within the decoded instruction extent.
+Numeric ranges default to `.text`; `--section` selects another section.
+Ambiguous local names require disambiguation. Output reports decoded,
+displayed and relocation counts, including empty ranges. Nine assembled ELF
+controls exercise COMDAT overlap, duplicate locals, padding lookalikes,
+multiple relocations and empty ranges. The old reader fails six of the first
+seven controls; `make phase` now runs the corrected reader's controls.
+
+### Screen local rounding decisions with explicit unsupported paths
+
+`recovery_float_decision_screen.py` examines all 300 frozen objects: 1930
+emitted copies include 758 non-exact original-name copies, of which 82 have
+original floating comparisons. The remaining 676 have none. The supported
+local grammar follows arithmetic through stack stores/reloads to comparisons
+and branches, including flags-preserving scheduling between `fnstsw`, `sahf`
+and the branch. Unknown operations, aliases, calls and block-entry provenance
+remain explicit limits.
+
+Thirty-nine assembled controls pass: 19 value-flow cases and 20 status-word
+scheduling cases. Historical bad TONE and explicit-float-cast controls fire;
+the repaired double-literal control does not. Of 215 original and 220 retained
+recognised decisions, four narrowed decisions on each side correspond to the
+TONE elapsed/phase pair and V92 DIL ceiling pair. Eight apparent Equalizer
+deficits are directly loaded float coefficients followed by `fabs`: exact
+finite-value copies rather than arithmetic narrowing opportunities. No new
+source discrepancy is established in this domain.
+
+Seven bodies remain unaligned: GenericIIR block processing, Resampler,
+ConnectionEvaluator phase 4, DIL descriptor packing, DTMF, EchoCanceler and
+silence progress. Counts alone do not establish missing branches. For example,
+the extra retained phase-4 PDSNR comparison is cloned into mutually exclusive
+fallback-counter arms. Trace operands and path ownership before changing
+source. Extend cross-block provenance only with controls that distinguish
+equal/conflicting joins and reused status flags.
+
+### Finish the bounded lower-mode V.8 history
+
+Public V.8 peers now offer shared V.23/V.21 bits without V.34/V.32, with quick
+connect disabled. Both wrapper roles naturally reach `V8_OK` at frame 125 of
+700, selecting menu bytes `01/70/00`. Each then reports 343 unsupported
+handoff error frames without callbacks, host publication or timer changes.
+No status or protocol state is planted.
+
+The five histories pass 92436 checks, with 12 callback comparisons and 686
+read-only lower-mode observations. Observer-only canaries fail two lower-mode
+checks and four host-snapshot checks while leaving protocol state untouched.
+Three focused period fixtures pass. This closes the proposed component
+unsupported-handoff history without finding a source defect. Public modem
+replacement scheduling, quick connect and actual lower-data sessions remain
+separate boundaries.
+
+### Remove measurement exports only after preserving their owners
+
+The production census first found 23 extra external definitions across 300
+objects. Ten table accessors and three FixedRC accessors are fixture-only;
+their observations now live in the fixtures and read the actual original data
+owners through existing test-only symbol exposure. The FixedRC state observer
+copies the live pointer without defining a second `struct rc`. Its offline
+bank catalog also leaves production. `gen_rc_coeffs.py` now emits the
+self-contained `build/rc_coeffs.c`; the generated Gentoo object remains raw
+identical, including 16 banks and 7820 coefficient bytes.
+
+Twenty-one full-TU cells preserve all 17 surviving emitted bodies and seven
+original-exact names, with no original-name gains or losses. Named data,
+positioned relocation consumers, bindings, imports and NOBITS remain checked;
+only the added catalog is removed from data. The two focused groups pass
+seven fixtures/10200720 checks and three fixtures/260200 checks. Together the
+removals save 384 text bytes including alignment, 160 catalog bytes and 30
+relocations. These changes reduce whole-object differences without recovering
+another original function.
+
+The resulting census has 2684 emitted definitions and nine extra external
+definitions: six weak GenericIIR helpers, two runtime selectors and the
+`v34handshak_txblock` fixture probe. The 26 extra local names remain explicitly
+unclassified. Absence from the reference does not authorise removal of weak
+compiler emissions or runtime selectors. The remaining probe needs a
+complete-owner control before separation.
+
+### Compare the actual source dialect in both deciding builds
+
+The [dialect audit](../period-dialect-audit-results.md) reproduces three
+runtime-test objects by adding only `-std=gnu99` to the frozen canonical
+profile. Six full-TU cells cover 82 emitted bodies; 12 change, while all 57
+shared original names retain the same 24 exact names. Six preprocessing
+controls are identical. Static V34 diagnostic-site reductions therefore need
+compiler/path analysis before being called missing messages. The original
+dialect and precise lowering mechanism remain unproved.
+
+Runtime source C now uses the retained comparison profile's default dialect;
+fixtures and harness retain GNU99. The compiler script prints both flag lists
+and invalidates compiled objects after script edits. Ten shell-dispatch/cache
+controls pass; the old script fails four. Six affected period fixtures pass
+14527339 checks, and all 300 runtime source objects raw-match canonical or
+independently accepted helper-removal controls. No reconstruction source was
+changed for this alignment.
+
+The integrated `make phase partial-link J=4` passes 392 period fixtures with
+zero failures and all structural checks. All 300 runtime source objects
+raw-match their canonical comparison objects. Seven canonical objects change
+from `13f477a9`; every one raw-matches its independently audited helper-removal
+control, and the other 293 remain identical. The exact-name set stays 1101 of
+1852, covering 125983 of 720125 original function bytes. All 724 matched
+initialised objects agree. Storage matching finds all 763 reference records
+and 767 candidate records; BSS remains 2840 versus 2836 bytes. Strict partial
+comparison remains DIFFERENT. The strict documentation build and audit pass;
+no modern-portability or newly exact original-function result is claimed.
+
+The next bounded reviews, in order, are:
+
+1. `silence_progress`: resolve the original indexed threshold operands at
+   function-relative `+179` and `+340` against the retained stack operand at
+   `+157`. Establish their predecessor states, exact values and read timing
+   before treating the two-to-one site change as a missing decision.
+2. `Resampler::resample`: follow both x87 operands at original `+942` and
+   `+734` against retained `+730`, including the double published at
+   `this+0x0c`. Test whether the extra original site is a cloned cold path.
+3. EchoCanceler's combined predicates/shared status tails, then GenericIIR's
+   original inlined block normalisation versus its retained scalar callee.
+   Compare values and side effects across those boundaries before expanding
+   the detector or fitting compiler output.
+4. Separate `v34handshak_txblock` only after a whole-owner control preserves
+   V34's surviving bodies, diagnostics and data. The weak helpers, runtime
+   selectors, DIL finite-domain negatives and explained phase-4 comparison
+   remain closed unless new contradictory evidence appears.

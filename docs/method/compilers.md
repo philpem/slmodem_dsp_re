@@ -211,7 +211,14 @@ fails OPEN. Prefer one that fails loudly.*
 ### V4 — GCC 3.4 defaults to `gnu89` · 1 file · PLUMBING
 
 `test/harness/harness.c` declares a variable in a `for` initialiser. Nothing
-in `src/` needed a newer dialect; `-std=gnu99` covers it.
+in `src/` needed a newer dialect; `-std=gnu99` covers the fixture/harness
+syntax. The [dialect audit](../period-dialect-audit-results.md) later found
+that the runtime script also applied it to source C, unlike the canonical
+comparison build. That changed 12 emitted bodies across three files despite
+identical preprocessed source. The runtime script now separates source C's
+default dialect from fixture GNU99, prints both flag lists and invalidates
+cached objects after script edits. This aligns retained source profiles;
+it does not establish the original dialect or the exact lowering mechanism.
 
 ### V5 — linkonce comdat naming · `tools/refrename.py` · APPARATUS BUG FOUND
 
