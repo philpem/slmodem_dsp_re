@@ -105,12 +105,25 @@ static const short FPM_log10_table[128] = {
 
 };
 
+/* Caller-owned HI outputs reproduce the original normalization homes:
+ * count at stack+0xc and mantissa at+0xe. The loop pass promotes the pointed
+ * recurrence and publishes count once after the backedge (0xa8d90). */
+static inline void
+log_normalize16(unsigned short value, unsigned short *mantissa, unsigned short *count)
+{
+	*count = 0;
+	while (value <= 0x3fff) {
+		value += value;
+		(*count)++;
+	}
+	*mantissa = value;
+}
+
 short
 FPM_log10(unsigned short mantissa, short exponent)
 {
 	unsigned short norm;
 	unsigned short shifts;
-	unsigned short e;
 	int idx;
 
 	if (mantissa == 0) {
@@ -128,25 +141,19 @@ FPM_log10(unsigned short mantissa, short exponent)
 	 * `<= 0x3fff` on the 16-bit value, so the loop is skipped entirely
 	 * for a mantissa that already has its top two bits clear of it.
 	 */
-	norm = mantissa;
-	shifts = 0;
-	if (norm <= 0x3fff) {
-		do {
-			norm = (unsigned short)(norm << 1);
-			shifts++;
-		} while (norm <= 0x3fff);
-	}
+	log_normalize16(mantissa, &norm, &shifts);
 
 	/*
 	 * The sum is kept to 16 bits -- the object computes it in a register
 	 * and reads back only `%si` -- so an exponent large enough to wrap
 	 * wraps here too.
 	 */
-	e = (unsigned short)(exponent + (short)shifts);
+	/* The original writes the adjusted count back to that same HI home. */
+	shifts = (unsigned short)(exponent + (short)shifts);
 
 	idx = (int)(unsigned short)((((int)norm + 0x40) >> 7) - 128);
 
-	return (short)((FPM_log10_table[idx] >> 3) - (int)e * 1228);
+	return (short)((FPM_log10_table[idx] >> 3) - (int)shifts * 1228);
 }
 
 /*
