@@ -364,6 +364,15 @@ different things look the same. That is the opposite of what grade 2 needs.
 
 ## F4. Is a lifter-as-oracle even allowed here?
 
+**Policy update, 17 October 2026:** the project owner expanded Ghidra use to
+include graph/dataflow analysis, tentative annotations, recorded hypotheses,
+scripted comparisons and controlled exploratory execution. The current
+`CLAUDE.md` policy supersedes the blanket wording quoted below. The historical
+argument about treating a lifter's equality result as an equivalence oracle
+remains relevant: hypotheses are permitted, but acceptance still requires
+independent binary evidence and the appropriate validation gates.
+
+
 `CLAUDE.md` says **"Ghidra is scaffolding, never evidence"**, and the rule as
 written forbids something specific: *"No name, comment or finding is ever
 written from decompiler output"*, because "a Ghidra guess recorded as a
