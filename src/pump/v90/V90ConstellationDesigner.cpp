@@ -887,8 +887,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 						  unsigned char *lastUcode,
 						  unsigned char (*allow)[128])
 {
-	float dMinHighRates = nanf("");
-	float dMinLowRates = nanf("");
+	float dMinHighRates = NAN;
+	float dMinLowRates = NAN;
 	float retrainFactor;
 	short keptDmin = dMin;
 	unsigned char picked[128];
