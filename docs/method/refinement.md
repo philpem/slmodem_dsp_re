@@ -6908,6 +6908,59 @@ remaining group clears. Keep that publication question separate from memset
 argument setup and register scheduling, which have not been attributed to a
 source discrepancy.
 
+### Separate witnessed state publication from scheduled count publication
+
+The next initializer refinement moves `rx->state_idx = 0` between scrambler
+w0 and nbits, matching original instructions at `0x598da`, `0x598e6` and
+`0x598ef`. The [four-cell replay](../../tools/recovery_preinit_interleave.py)
+crosses that state position with the descrambler count position. All five
+complete-TU compilations use the recovered Gentoo compiler, original flags
+and bug-reproduction define; both baseline objects reproduce raw.
+
+Four distinct shell source cells produce two distinct complete objects.
+Moving state alone changes BYTES147 to BYTES106, with the same 533-byte
+length and 131 instructions. It also restores the original count interleaving.
+Moving count alone is raw-inert; moving both reproduces the state-only object.
+Retain the minimal state move. The count's source position is not uniquely
+recovered from its scheduled instruction position.
+
+Only `preinitdigital` changes across thirteen pair bodies. All twelve
+neighbours, sixteen named data records, twenty-nine definitions, ten imports,
+nontext sections and resolved relocation consumers survive. All three exact
+names survive, with no gains. The audit checks the expected graphs, verdicts
+and raw equivalence classes, and rejects corrupted state and count addresses.
+
+The remaining role-compare ordering has a measured allocation dependency.
+In initial RTL, descrambler clears 239/241 precede role load 253 and compare
+254. Combine folds 253 into 254. Global allocation (`25.greg`) assigns owner
+pseudo 83 to EDX. Peephole2 introduces XOR 413 to materialise zero in EDX;
+its anti-dependencies on both owner uses and flags clobber constrain compare
+254. Only sched2 moves the compare ahead of data/train publications, while
+keeping it after the descrambler clears. The reference's ECX owner avoids
+this EDX chain. This does not independently justify moving the source role
+test earlier. Count 235 also acquires its native interleaving only at sched2.
+
+The focused period fixtures pass three binaries, twenty-seven groups and
+6186579 checks. Both existing callback sensitivity mutants are caught, each
+failing two of 424 clause-7 checks. The complete delegate gate passes 392
+fixtures, zero failures and all structural checks; no fixtures, mutation
+anchors, flags or field layouts change. Production recompilation and the
+runtime shell object raw-match the selected complete object.
+
+```sh
+python3 tools/recovery_preinit_interleave.py \
+  --domain native-state-count-position-2x2 \
+  --baseline-dir build/continuation293-baseline
+python3 tools/recovery_preinit_interleave.py --audit
+python3 tools/recovery_preinit_interleave.py --production-control
+```
+
+The frozen baseline is `4a6519cba`; earlier initializer controls remain
+historical. Close further count/store permutations. Next trace owner 83's
+allocation and zero-materialisation costs, separately from the first three
+memset calls' argument owners. Their remaining register differences do not
+establish another source statement-order defect.
+
 ## Recover the CenterAdapt history owner before fitting its spill
 
 The original acquires the imaginary-history base `q+0xa0` once and indexes
