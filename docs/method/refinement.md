@@ -6907,3 +6907,62 @@ interleaving of receive state-index and descrambler-count stores with the
 remaining group clears. Keep that publication question separate from memset
 argument setup and register scheduling, which have not been attributed to a
 source discrepancy.
+
+## Recover the CenterAdapt history owner before fitting its spill
+
+The original acquires the imaginary-history base `q+0xa0` once and indexes
+through it in both spans. Capturing that view restores the coefficient-before-
+history operand order and original sixteen-byte frame. CenterAdapt moves from
+317 to 336 bytes against 347 original bytes, reducing its SIZE gap from thirty
+to eleven. A four-cell cross shows that explicit coefficient-accumulator
+statements are raw-inert with either history-owner choice; those statements
+are not retained. This reviews an already witnessed owner acquisition rather
+than reopening the earlier nine-cell spelling domain.
+
+The [replay audit](../../tools/recovery_v34_center_owners.py) compares two
+93-byte original arithmetic loop regions with their 90-byte candidate regions.
+Each pair is literally byte-identical after deleting the original's single
+three-byte `mov %eax,(%esp)` history spill. The two write-only stores and five
+original alignment bytes account for the eleven-byte length gap. Corrupting
+either candidate loop is detected. This proof does not establish an original
+local declaration or justify adding a dead store, `volatile` or padding.
+
+The twenty-six-function TU retains all fifteen exact names, with twenty-two
+neighbouring bodies unchanged. Data, bindings, exports, imports and nontext
+relocations agree. Changed neighbours are `V34EchoPreFilter`,
+`V34ModulatorProcess` and `V34SetupModulator`. Their initial RTL differs only
+in printed alias-set numbering; first executable-pattern differences appear
+at peephole2. Do not mistake those numeric metadata changes for an earlier
+algorithm discrepancy.
+
+Installed Gentoo observation independently preserves the complete objects.
+The extra CenterAdapt scratch search moves the incoming PreFilter cursor from
+one to three, selecting BX rather than DX. Whole-TU searches increase from
+81 to 82, CenterAdapt searches from five to six, and downstream choices shift
+too. PreFilter's differing bytes increase from four to forty-three; it no
+longer meets the grade-1 register-renaming comparison. This collateral is
+explicitly reviewed for the stronger original ownership/operand recovery.
+No exact name is gained or lost, and the exact floor remains unchanged.
+
+The four-cell audit covers 104 body verdicts, both literal loop proofs and
+two corrupted-loop controls. Source passes `make phase J=4`: 392 period
+fixtures, zero failures and all structural checks, including 10042 unique
+mutation anchors. The eq/ec/handshake lifecycle fixtures contribute 6/21/43
+groups and 1606267/13789992/14368945 checks respectively. Parent independently
+replays the source controls and scratch observations.
+
+```sh
+python3 tools/recovery_v34_center_owners.py --domain center-owners-four-cells \
+  --baseline-dir build/next293-baseline
+python3 tools/recovery_v34_center_owners.py --audit
+python3 tools/gcc3_mechanism_scratch_observe.py \
+  --reproduction-dir build/center-owners-293-cross \
+  --target V34EchoPreFilter --out build/center-owners-scratch-parent
+```
+
+Next trace the actual period compiler's real-history pseudo lifetime, spill
+allocation and the unused candidate frame word. Establish where an original-
+compatible spill could arise before another scalar-owner source experiment.
+Keep the separate history rereads after the real coefficient store. Recover
+the unchanged neighbour against the final structural state, rather than
+steering the compiler cursor around an intermediate reconstruction.
