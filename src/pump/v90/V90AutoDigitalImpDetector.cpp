@@ -1679,7 +1679,7 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 	 * leave the nearest at its sentinel -- and it is a deterministic zero
 	 * rather than an uninitialised read.
 	 */
-	float second = nanf("");
+	float second = NAN;
 	short bestAt = 0;
 	unsigned char at;
 

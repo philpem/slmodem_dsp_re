@@ -1227,10 +1227,19 @@ run_accumulate(void)
  * that every entry then multiplies by -- the object divides once outside the
  * loop, so that is the behaviour and not a division by zero per entry.
  *
- * `adjustUinfoToPhaseOffset`'s offset is swept over 0..6 rather than over the
- * whole `short`: the wrap is `phase + 1 == 6 ? 0` and not a modulus (D258),
- * so an offset of 6 walks phases 6..11 -- still inside the object, and the
- * arm worth exercising -- while a negative one addresses in front of it.
+ * SYNTHETIC EXPLORATORY CASES: this sweep includes offset 6, which walks
+ * phases 6..11 because the wrap is `phase + 1 == 6 ? 0` (D258). It also
+ * plants reference codes up to 255 in a table whose rows have 128 entries.
+ * Remaining inside the complete object does not make those array accesses
+ * valid. Preserve their measured comparisons without treating them as valid
+ * component inputs or modem-path coverage.
+ *
+ * Valid rotation inputs are offsets 0..5 and codes below 128. `run_signal`
+ * below starts with public reset(code 0x2a), builds mappings through sample
+ * methods, and rotates by block % 6. That component sequence still controls
+ * internal flags; it does not establish a complete constructor-to-modem
+ * lifecycle. The two actual Phase3 callers pass only nonzero frame positions
+ * 1..5 after the equality-6 wrap.
  */
 static int
 run_maptransforms(void)
