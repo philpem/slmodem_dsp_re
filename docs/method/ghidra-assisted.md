@@ -171,16 +171,18 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Apply ordered native call/result tracing to `CID_process`'s status and
-   string-iteration boundary ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)).
-   Its fresh sizes remain 368 versus 386 bytes. Audit the existing fixture's
-   component/lifecycle boundary first; preserve both exact companions and keep
-   the recorded 1433 source/option cells closed. A trace must supply a new
-   discriminator before another source variant.
-2. Resolve V92 helper visibility/common-profile evidence under #22 across
-   independent call-boundary witnesses. Native table layout and case ownership
-   are now retained. The raw-equivalent table-order/profile pairs do not select
-   an original option; no residue, case or table-order palette is reopened.
+1. Test V92EchoCanceller's ordinary `setEchoDelay` definition before its
+   constructors, crossed with retained/unit-off profiles under #22. Its
+   native body precedes the constructors and is inlined there, while reset
+   remains a tail call. The completed twelve-cell cross cannot reproduce both
+   boundaries from current source. Preserve strong exports and review every
+   TU body/data/relocation; no per-file flag or inline attribute is licensed.
+2. Extend CID's real audio lifecycle to MDMF NAME/four nonempty fields, then
+   its extra-tag four-field cap ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)).
+   The native call/result trace is equal on 90 paired calls and 394 events;
+   the debug failure path is now covered. Sizes remain 368 versus 386 bytes.
+   Preserve both exact companions and keep the 1433 source/option cells closed
+   unless new path/operand evidence supplies a discriminator.
 3. CenterAdapt's allocated history home and reload deletion are now measured.
    Reopen only with independent death-note/lifetime or common-profile evidence
    explaining the reference's selective two surviving stores. The eleven-byte
@@ -605,3 +607,39 @@ is claimed. Strict documentation build/audit passes: 541 Markdown targets,
 eleven doc-audit unit tests and all 13067 finding references pass. The parent
 independently replays both source crosses, combined production/mutation
 controls, builder store observation and initializer allocation observation.
+
+## Selector recovery and native boundary follow-up
+
+The next continuation restores `designWindow<float>`'s explicit BOXCAR arm.
+Its zero selector tail-jumps to boxcar while default calls and returns; the
+previous source collapsed those equivalent paths. Both defining copies are
+now EXACT116, one unique original name gained and no exact losses. Five
+complete header consumers contribute 103 function copies; only the two selector
+copies change. Canonical and runtime builds agree on all 300 source objects,
+with only two changed from `6fe0b1e42`.
+
+Current census: **1102/1852 EXACT**, **126583/720125 original function bytes
+exact**, 29 REGALLOC, 71 BYTES, 649 SIZE and one UNRESOLVED. The exact-set floor
+adds only the selector. `make phase J=4` passes 392 period fixtures and all
+structural checks, including 285 suites/10042 unique mutation anchors.
+Partial/raw comparison remains DIFFERENT: exact sections rise from 67 to 68,
+positioned matching bytes from 72069 to 72161, and exact symbols from 456 to
+457. These are separate partial-link metrics, not function-body denominators.
+
+CID adds a debug-enabled checksum-failure lifecycle, raising its fixture from
+162 to 193 checks. Native ordered calls, results, strings, guards, diagnostics
+and TTY delivery agree; seven changed-trace controls fail. The CID source object
+and both exact companions remain unchanged. The V92 ownership audit verifies
+all relocations and complete per-function decoding of 1852 original/1916
+current functions, with five copied-ELF controls. It finds no independent
+helper caller, visibility/type mismatch or LOCAL defining-owner witness.
+
+The cross-family compiler experiment is diagnostic: automatic inline off
+recovers encoder process and several V90 wrappers, but loses the original
+inlined echo-delay setup and emits extra local helpers. Unit-off restores the
+echo reset tail but also leaves explicit echo-delay calls and changes data
+layout/exact neighbours. No production profile changes. The
+[Playbook selector recovery](refinement.md#preserve-equivalent-switch-arms-when-their-call-boundaries-differ),
+[CID trace](refinement.md#check-native-delivery-boundaries-before-reopening-cid-source-variants)
+and [ownership audit](refinement.md#separate-helper-reference-evidence-from-original-tu-ownership)
+record controls, replay commands, bounded conclusions and the next discriminators.
