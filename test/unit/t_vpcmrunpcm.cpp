@@ -724,18 +724,9 @@ struct trial {
 	 */
 	unsigned char	rxSeedOn;
 	float		rxSeedVal;
-	/*
-	 * Mode 1 compares the complete transcript; mode 2 compares the two
-	 * echo messages at individual call boundaries. Neither is the default: the
-	 * pre-existing "level 2" trials print `V90Modem::progress`'s "Illegal
-	 * modemSide" diagnostic (side is deliberately 2, see the file header),
-	 * and the blob's copy of it carries one more blank line than ours --
-	 * a real, pre-existing formatting difference this suite never had a
-	 * way to see before and which is not one of the seven mutations this
-	 * batch is closing.  Comparing transcripts everywhere would fail
-	 * `make one` on that unrelated gap instead of the two claims this
-	 * field exists for.
-	 */
+	/* Nonzero compares the complete transcript. Mode 2 also checks each
+	 * echo diagnostic at its call boundary, so an earlier message cannot
+	 * supply a missing leading newline. */
 	unsigned char	cmpTranscript;
 };
 
@@ -861,8 +852,8 @@ static const struct trial trial_v[] = {
 
 	/*
 	 * The five gated diagnostics, driven at level 2 so the print sites
-	 * execute. The echo messages are compared below at call boundaries;
-	 * the remaining three retain their existing state comparisons.
+	 * execute. All five complete transcripts are compared below; the echo
+	 * messages additionally retain their individual call boundaries.
 	 */
 	/* Constructor-backed component dispatch probes: the demodulator event
 	 * is selected explicitly, not claimed as an end-to-end modem history.
@@ -874,9 +865,9 @@ static const struct trial trial_v[] = {
 	{ "echo off, level 1", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 1 TAILECHO },
 	{ "level 2, 0x01", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILECHO },
 	{ "level 2, 0x06", 0, 1, 0x06, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILECHO },
-	{ "level 2, 0x07", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, w34 2", 0, 1, 0, 2, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, w34 3", 0, 1, 0, 3, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
+	{ "level 2, 0x07", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
+	{ "level 2, w34 2", 0, 1, 0, 2, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
+	{ "level 2, w34 3", 0, 1, 0, 3, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAILCMP },
 	/*
 	 * "level 2, fallback" IS THE FALLBACK ROW ABOVE ("w34 3 + 0x20"),
 	 * PRINT-COMPARED.  `TAILCMP` is what turns the transcript check on
@@ -1336,24 +1327,10 @@ run(void)
 		dsplib_debug_capture_on = 0;
 
 		diff_eq_int("return value (%ld)", ra, rb, trial);
-		/*
-		 * THE TRANSCRIPT, WHICH THE REGION WALK CANNOT SEE, AND ONLY
-		 * FOR THE TWO TRIALS THAT SET `cmpTranscript`.  "the FPE arm
-		 * starts FPE whatever phase it is in" and "the fallback test
-		 * is against 0x21 rather than 0x20" are both real only in
-		 * `edprintf`/`dsplibs_debug_printf` output that changes
-		 * nothing in memory, per this suite's own note at the top of
-		 * test/mutations/vpcmrunpcm.json.  NOT compared everywhere:
-		 * the pre-existing "level 2" trials drive `V90Modem::progress`
-		 * with its deliberately-illegal side (the file header's own
-		 * design) and its "Illegal modemSide" print carries one more
-		 * blank line on the blob's side than ours -- a real,
-		 * pre-existing formatting gap this suite had no way to see
-		 * before and which is not one of the seven claims this batch
-		 * is closing.  Comparing transcripts on those trials too would
-		 * fail `make one` on that unrelated gap instead.
-		 */
-		if (t->cmpTranscript == 1)
+		/* Compare whole messages as well as their memory effects. The
+		 * diagnostic rows include explicit component dispatch events;
+		 * they do not establish end-to-end modem reachability. */
+		if (t->cmpTranscript != 0)
 			diff_eq_int("debug transcript (%ld)",
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
