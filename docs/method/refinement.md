@@ -6515,3 +6515,102 @@ feedforward register/base/index choice and input-compaction LEA schedule in
 initial RTL, allocation and scheduling dumps. The block needs a live-value
 and spill account of the original `0x34` versus retained `0x2c` frame. A frame
 size difference alone does not identify its cause.
+
+## Compiler-stage follow-up: exact silence guards and echo operands
+
+This PR #293 continuation uses Gentoo GCC 3.4.2-r2 for every reconstruction
+compile, instruction comparison, tree dump and RTL dump. The debugger runs
+`cc1` extracted from that image; the selected period assembler must reproduce
+the complete original experiment object byte for byte. Period differential
+execution is an additional check after those code-generation measurements.
+
+### Preserve guard boundaries before explaining the prologue
+
+`silence_progress` is now byte-exact, 623 original bytes. Its two early-return
+checks were previously written as one `lvl > 3 || lvl == 0` expression.
+The original compares the low word with three and separately tests the widened
+value against zero, with two branches to the epilogue. Two `if` statements
+recover that graph; no field/local type or compiler flags change.
+
+A width cross initially suggested a wider local might preserve the two
+comparison widths. That combined-expression control instead materialised
+boolean results and remained nonexact. Crossing statement boundaries then
+showed both the wide-local and original-short-local split forms are EXACT
+and produce identical complete objects. Retain the simpler short local;
+this is evidence for the guard boundary, not a uniquely recovered declaration.
+The six distinct variants cover 30 complete-body verdicts. Only the target
+changes; four neighbouring bodies, all data, bindings and relocation consumers
+are unchanged. A corrupted threshold byte is rejected by the noncode audit.
+
+The installed compiler observation closes the old unmeasured cost claim:
+
+| Observation | Combined guard | Separate returns |
+|---|---:|---:|
+| Saved registers | 4 | 4 |
+| Cost parameter | 60 | 60 |
+| Estimated entry frequency | 3438 | 6875 |
+| Weighted decision threshold | 206280 | 412500 |
+| Observed weighted count | 206629 at early exit | 367492, full traversal |
+| `expensive_function_p` | true | false |
+| Save registers with moves | false | true |
+
+Each case has fifteen frame-layout observations but only one cost call. The
+first call happens during reload's elimination-offset calculation; its choice
+is cached for all subsequent layouts, including prologue and epilogue emission.
+The combined case exits as soon as its count exceeds the threshold, so 206629
+is not its whole-function cost. Local space and outgoing space remain 16 and
+12 bytes. No padding or invented local is needed to recover the move saves.
+
+[Guard controls](../../tools/recovery_silence_guards.py) preserve the source
+cross. The reusable [observer](../../tools/gcc3_prologue_cost_observe.py) records
+actual compiler hashes and commands, checks the cost-hook instruction bytes,
+and requires raw complete-object equality. Baseline and exact controls retain
+that equality; a successfully compiled absent target is rejected as empty.
+Early invalid permission/symbol observations remain excluded in the artifacts.
+Allocator-address differences in `-dP` comments are not emitted-code changes;
+the period-assembled object is the identity control.
+
+This transfers as a triage method: inspect original/source guard boundaries
+before trying to steer a prologue by function size. A guard split changes
+predicted frequencies and can affect register saves far from the expression.
+It does not authorise splitting unrelated guards solely to obtain a score.
+
+### Follow combine's chosen memory operand
+
+EchoCanceler's dot product now uses `hist[pos+j] * coef[j]`. The original
+loads the coefficient, calculates the history address and multiplies from
+history memory. `20.combine` had folded coefficient memory for the previous
+operand order. The reversed source operands restore the original instruction
+ownership, reducing differing bytes from 44 to 31 at the same 359-byte size.
+Explicit coefficient-capture controls are raw-identical to the old source;
+that source family is closed. All five neighbours, data and bindings survive.
+
+The remaining adaptation history load first appears in `25.greg`, which
+materialises history in a fresh x87 register rather than copying the live
+product. The last stack-conversion pass only maps that choice onto the x87
+stack. Both original and candidate have nine local accesses, all at offsets
+zero and four; the original's extra four frame bytes are unreferenced by final
+local operands. That is not evidence for adding another source local.
+
+### Stop IIR source retries at the measured allocation boundary
+
+The unchanged complete IIR TU raw-reproduces the retained object. Scalar
+numerator-count pseudo170 spills during `25.greg`; UID392 chooses BX as the
+reload scratch. UIDs41/45 change DX to DI and AX to BP in `30.rnreg`, a
+different mechanism. The input-compaction source LEA clobbers the history-base
+BX, so `33.sched2` records its anti-dependency on destination LEA UID285.
+Reordering source declarations is not justified by the final LEA order.
+
+The original block's two extra stack words are also distinct: a live
+destination-pointer spill, and an input-length store at `+0x1f6` that is never
+read. Do not describe both as live values or infer original local declarations
+from them. Thirteen stage invariants and a deleted-dependency negative control
+validate the diagnosis. All four target COMDAT symbols have one definition
+across 300 canonical objects. No additional IIR source change is retained.
+
+Next prioritise witnessed guard/prologue discrepancies, including
+`Queue<float>::write(float)` (71 retained versus 85 original bytes), while
+keeping its previously closed source forms closed. Then inspect Echo's actual
+x87 reload alternatives and frame-layout arithmetic. Reopen IIR source
+experiments only after allocator/liveness evidence distinguishes an original
+source boundary; forcing spills or register homes is not a reconstruction.
