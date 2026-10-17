@@ -171,15 +171,15 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Screen remaining prologue differences for independently witnessed guard
-   boundaries. `Queue<float>::write(float)` remains 71 versus 85 original
-   bytes; its old body-spelling domain stays closed without a new witness.
-   Use actual frequency/caching observations before proposing source changes.
-2. EchoCanceler: inspect the x87 reload alternatives that materialise history
-   rather than copy the live product. The choice starts in `25.greg`, not
-   stack conversion. Measure the frame arithmetic separately; final operands
-   leave the reference's extra four local bytes unused.
-3. GenericIIR: observe allocator/liveness provenance for the scalar scratch
+1. Screen remaining nonexact functions for original/source guard, call, width,
+   owner and diagnostic discrepancies. Check closed domains before compiling
+   variants. Queue's cost/cache trace now explains the retained push prologue;
+   no new source boundary or return-width witness has emerged.
+2. Reopen EchoCanceler only with a new operand/lifetime or original-profile
+   witness. Both reload orientations cost eight, and the first wins the tie.
+   The retained frame has two spill words and zero padding; the original's
+   extra four bytes do not establish another local or an alignment option.
+3. GenericIIR: require allocator/liveness provenance for the scalar scratch
    and renaming choices and block destination spill. The original block's
    second extra slot receives an input-length store that is never read.
    The prior source domains are closed until a new discriminator appears.
@@ -271,3 +271,57 @@ hook's instruction bytes and rejects empty or ambiguous observations. Use
 an assembler/mangled name for overloaded C++ targets. The original capture
 of `use_fast_prologue_epilogue` is made before register-save code emission;
 counting final disassembly instructions would not reproduce this decision.
+
+## Queue and Echo observation validation
+
+This apparatus-only batch retains the source and canonical objects from
+`06ba1f713`: 1102/1852 exact functions, covering 126606/720125 original function
+bytes. No additional exact gain is claimed. The prior 392/0 period differential
+result still applies to that unchanged source; the runtime suite was not rerun
+for these observer changes.
+
+The new [baseline driver](../../tools/gcc3_reload_baseline_reproduce.py)
+reproduces both complete TUs from that revision using the canonical
+`.build-config`. The Queue and Echo prologue observations, Echo stack trace
+and Echo reload trace independently reproduce the same complete objects.
+Queue has nineteen layouts and two cost decisions; Echo has nineteen layouts,
+one cost decision, four stack requests, nine reload choices and fourteen
+orientation observations. Cost/padding mutations fail the audit. Both absent
+target controls reach compiler exit zero and then reject the empty observation.
+
+```sh
+python3 tools/gcc3_reload_baseline_reproduce.py \
+  --domain queue-echo-baseline --baseline-dir build/tc_repro
+python3 tools/gcc3_prologue_cost_observe.py \
+  --reproduction-dir build/gcc3-reload-baseline --family V92Modulator \
+  --target _ZN5QueueIfE5writeEf --output-dir build/queue-cost-observation
+python3 tools/gcc3_prologue_cost_observe.py \
+  --reproduction-dir build/gcc3-reload-baseline --family Fdspkrnl \
+  --target EchoCanceler --output-dir build/echo-prologue-observation
+python3 tools/gcc3_uref_stack_observe.py --compiler-kind cc1 \
+  --reproduction-dir build/gcc3-reload-baseline --family Fdspkrnl \
+  --target EchoCanceler --generic-trace --output-dir build/echo-stack-observation
+python3 tools/gcc3_echo_reload_observe.py \
+  --reproduction-dir build/gcc3-reload-baseline \
+  --output-dir build/echo-reload-observation \
+  --stack-observation build/echo-stack-observation \
+  --prologue-observation build/echo-prologue-observation
+```
+
+For each absent-target control, repeat the corresponding prologue/reload
+command with `--target no_such_target_293` and a separate output directory.
+Require nonzero wrapper status, a recorded compiler exit of zero and no target
+observations; a compiler failure is not the intended negative control.
+
+The Queue original-callsite and RTL-node annotations are retained in
+`build/worktrees/queue-cost-293/build/queue-cost-293/handoff.json`.
+The parent independently repeats all four observer commands above. The
+[Playbook](refinement.md#count-compiler-nodes-before-inferring-a-queue-source-discrepancy)
+records the inference limits and closed domains.
+
+A four-cell `FSE_decision_CD` source/scheduler diagnostic repeated F11572's
+closed store-order domain: reversing the two source stores leaves the complete
+TU raw-identical. Disabling sched2 changes all nine bodies and supplies no exact
+gain. This redundant experiment is stopped; it does not reopen that family.
+`V22FP_modem`'s current five-byte mismatch is another argument-setup scheduling
+swap, with no new source-fidelity witness, and is not promoted on size alone.
