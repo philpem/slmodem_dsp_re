@@ -1673,7 +1673,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			if (samplesInState % 6 == 0) {
 				if ((short)adid->isThereAnyAltRbsPhase() != 0)
 					P3D_COPY_440_TO_438();
-				edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", samplesInState);
+				edprintf("V90Phase3Demodulator: enter Wait For V92Jd state @ %d\r\n", samplesInState);
 				state = (Phase3DemodulatorState)7;
 				samplesInState = 0;
 				eventCode = 5;
