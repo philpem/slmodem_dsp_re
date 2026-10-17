@@ -297,7 +297,7 @@ def strip_asm(src):
         i = j
 
 
-def our_strings(paths):
+def our_strings(paths, include_defines=False):
     """(path, line, string) for EVERY string literal this tree carries.
 
     Not just the ones at a `dsplibs_debug_printf` call site.  A format reached
@@ -306,11 +306,11 @@ def our_strings(paths):
     it, and those are exactly the sites a reader would assume were covered.
     Scanning every literal also picks up name tables like `StateName`.
 
-    Comments are stripped and preprocessor lines skipped; the latter is the
-    only source of legitimate literals that are not the blob's, since every
-    one of them is an `#include` path.  Adjacent literals are glued the way
-    the compiler does, so a message split across source lines is checked as
-    the one string it becomes.
+    Comments and preprocessor lines are normally skipped. The presence scan
+    enables include_defines to retain diagnostic macro literals, including
+    continued lines, while still excluding include paths. Adjacent literals
+    are glued as the compiler does. This is lexical presence, not proof that
+    an active preprocessor branch emits the string.
     """
     out = []
     for p in sorted(paths):
@@ -322,10 +322,15 @@ def our_strings(paths):
         #
         # Preprocessor lines are emptied rather than skipped, because the
         # scan below runs over the WHOLE file and cannot be told which line
-        # it is on.  Their content is the only source of literals that are
-        # legitimately not the blob's -- every one is an `#include` path.
+        # it is on. Header include paths are not emitted diagnostics; macro
+        # definitions are separately retained for the presence-only scan.
         #
-        src = "\n".join("" if l.lstrip().startswith("#") else l
+        if include_defines:
+            # Keep macro literals and join their physical continuation lines.
+            # The newline remains so source line numbers stay useful.
+            src = src.replace("\\\n", "\n")
+        src = "\n".join("" if l.lstrip().startswith("#") and not
+                        (include_defines and re.match(r"\s*#\s*define\b", l)) else l
                         for l in src.split("\n"))
         #
         # And the asm statements, for the reason above the helper.
@@ -370,6 +375,7 @@ def main():
                     help="the object's format strings that appear NOWHERE in "
                          "this tree, optionally for one function")
     args = ap.parse_args()
+    default_sources = args.src is None
 
     tabs = rodata_strings(args.obj)
     sites = blob_sites(args.obj, tabs)
@@ -496,7 +502,12 @@ def main():
         # message was lost" and not at "no call site was lost".
         #
         which = args.absent
-        have = set(t for _, _, t in our_strings(args.src))
+        literal_paths = args.src
+        if default_sources:
+            literal_paths = args.src + glob.glob("src/**/*.h", recursive=True) + glob.glob("include/**/*.h", recursive=True)
+        have = set(t for _, _, t in our_strings(literal_paths, include_defines=True))
+        print("Literal presence scope: %d files, %d distinct literals; includes header/macro literals with default paths." %
+              (len(literal_paths), len(have)))
         print("Format strings the object has and this tree does not carry "
               "ANYWHERE.\nString presence is necessary, not sufficient: it "
               "says a site was not\ndropped, never that it is in the right "

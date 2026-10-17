@@ -99,7 +99,10 @@ def main():
                     wrong = Path(temp)/'wrong.o'
                     wrong.write_bytes(raw)
                     mutated, _ = inventory(wrong)
-                assert candidate[name] != mutated[name]
+                    negative_edges = calls.graph(wrong, True)
+                    negative_closure = calls.closure(negative_edges, name)
+                    expanded = set().union(*(mutated.get(n, set()) for n in negative_closure))
+                assert candidate[name] - expanded, 'changed literal escaped nomination'
                 assert len(raw) == path.stat().st_size
                 controls += 1
     assert controls == 1, 'negative control did not execute'
