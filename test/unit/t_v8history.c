@@ -29,7 +29,7 @@ struct observation {
 };
 static struct v8_dp *active[2];
 static struct observation observations[2][EVENTS];
-static int events[2], overflow, negative;
+static int events[2], overflow, negative, lower_negative;
 static int modem_handle[2];
 static long observed;
 static struct v8 handshake_copy[2];
@@ -95,29 +95,34 @@ static void normalise_handshake(struct v8 *copy, const struct v8 *v)
 	copy->cm = 0;
 }
 
-/* The wrapper always advertises both V.34 and V.32. A V.32-only offer
- * therefore comes from a normally configured public-interface peer, never
- * from editing a wrapper's handshake/menu after construction. -1 uses two
- * wrappers; 0/1 chooses the wrapper role and the other role is the peer. */
-static int run_history(int wrapper_endpoint)
+/* The wrapper always advertises V.34 and V.32. A restricted offer therefore
+ * comes from a normally configured public V8Create peer, never an edit after
+ * construction. V8Create's own modulation diagnostic identifies b1 bits 4/5
+ * as V.23/V.21; lower_peer offers these and the data function, with no V.34 or
+ * V.32. -1 uses two wrappers; 0/1 selects the wrapper's caller/answerer role. */
+static int run_history(int wrapper_endpoint, int lower_peer)
 {
 	struct dp *dp[2][2] = {{0}};
 	struct dp_operations *ops[2] = {0};
 	struct v8 *handshake[2][2] = {{0}};
 	int peer_updated[2][2] = {{0}};
-	int expected_mode = wrapper_endpoint == -1 ? DP_V34 : DP_V32;
+	int expected_mode = lower_peer ? 0 : wrapper_endpoint == -1 ? DP_V34 : DP_V32;
 	struct v8_cm cm[2][2];
 	struct dsp_info info[2][2];
 	static short air[2][2][FRAME], out[2][2][FRAME];
 	int side, endpoint, frame, rc = 0;
 	int linked[2] = {0}, expired[2] = {0}, first[2] = {-1,-1};
 	long statuses[2][V8_LAST_ENUM + 1] = {{0}};
+	long rejected[2] = {0}, lower_observed = 0;
+	int first_ok[2] = {-1, -1};
 	observed = 0;
 	overflow = 0;
 	memset(air, 0, sizeof air);
 	memset(out, 0, sizeof out);
 	memset(cm, 0, sizeof cm); memset(info, 0, sizeof info);
-	diff_begin(wrapper_endpoint == -1 ? "V8: real V34 wrapper pair"
+	diff_begin(lower_peer ? (wrapper_endpoint == 0
+		? "V8: lower-mode answerer/public peer" : "V8: lower-mode caller/public peer")
+		: wrapper_endpoint == -1 ? "V8: real V34 wrapper pair"
 		: wrapper_endpoint == 0 ? "V8: V32-only answerer/public peer"
 		: "V8: V32-only caller/public peer");
 	harness_reg_reset();
@@ -150,7 +155,8 @@ static int run_history(int wrapper_endpoint)
 		} else {
 			struct v8_cfg cfg;
 			memset(&cfg, 0, sizeof cfg);
-			cm[side][endpoint].b0 = 0x80; /* Offer V.32, omit V.34. */
+			/* Public configuration only: lower mode bits remain in b1. */
+			cm[side][endpoint].b0 = lower_peer ? 0 : 0x80;
 			cfg.side = endpoint;
 			cfg.timeout_a = 12;
 			cfg.timeout_b = 7;
@@ -210,7 +216,7 @@ static int run_history(int wrapper_endpoint)
 				struct observation *o = &observations[1][i];
 				diff_eq_obj("read-only host callback", struct observation, &observations[0][i], o, frame*2+endpoint);
 				diff_eq_int("callback modem (%ld)", o->modem_matches, 1, frame*2+endpoint);
-				if (o->write && o->parameter == 9 && o->value == expected_mode) {
+				if (expected_mode && o->write && o->parameter == 9 && o->value == expected_mode) {
 					linked[endpoint]++; first[endpoint] = frame;
 					diff_eq_int("link callback is first (%ld)", i, 0, endpoint);
 					diff_eq_int("negotiated modulation (%ld)", o->menu.b0 & 0xa0,
@@ -236,6 +242,28 @@ static int run_history(int wrapper_endpoint)
 				}
 				observed++;
 			}
+			/* Read-only evidence at the naturally reached V8_OK boundary.
+			 * No callback occurs for a lower-mode menu the wrapper cannot hand off. */
+			if (lower_peer && handshake[1][endpoint]->prev_status == V8_OK && first_ok[endpoint] < 0)
+				first_ok[endpoint] = frame;
+			if (lower_peer && dp[1][endpoint] && handshake[1][endpoint]->prev_status == V8_OK) {
+				struct v8_cm observed_menu[2];
+				for (side = 0; side < 2; side++) observed_menu[side] = cm[side][endpoint];
+				/* Canary changes only the observer's first private copy. */
+				if (lower_negative && rejected[endpoint] == 0) observed_menu[0].b0 ^= 0x20;
+				diff_eq_obj("lower-mode negotiated observation", struct v8_cm,
+					&observed_menu[0], &observed_menu[1], frame*2+endpoint);
+				diff_eq_int("lower-mode wrapper result (%ld)", result[1], DPSTAT_ERROR, frame*2+endpoint);
+				diff_eq_int("lower-mode withdrew supported handoffs (%ld)", cm[1][endpoint].b0 & 0xa8, 0, frame*2+endpoint);
+				diff_eq_int("lower-mode intersection survives (%ld)", cm[1][endpoint].b1 & 0x30, 0x30, frame*2+endpoint);
+				diff_eq_int("lower-mode data function survives (%ld)", cm[1][endpoint].b1 & 0x40, 0x40, frame*2+endpoint);
+				diff_eq_int("lower-mode quick connect disabled (%ld)", cm[1][endpoint].b2 & 0x10, 0, frame*2+endpoint);
+				diff_eq_int("lower-mode performs no host callback (%ld)", events[1], 0, frame*2+endpoint);
+				diff_eq_int("lower-mode leaves idle timer stopped (%ld)", ((struct v8_dp *)dp[1][endpoint])->idle_timer, 0, frame*2+endpoint);
+				diff_eq_int("lower-mode preserves prior host LAPM (%ld)", info[1][endpoint].qc_lapm, 1, frame*2+endpoint);
+				diff_eq_int("lower-mode preserves prior host index (%ld)", info[1][endpoint].qc_index, 17, frame*2+endpoint);
+				rejected[endpoint]++; lower_observed++;
+			}
 			if (handshake[1][endpoint]->prev_status >= 0 && handshake[1][endpoint]->prev_status <= V8_LAST_ENUM)
 				statuses[endpoint][handshake[1][endpoint]->prev_status]++;
 		}
@@ -247,7 +275,20 @@ static int run_history(int wrapper_endpoint)
 		printf("  endpoint %d: statuses", endpoint);
 		for (s = 0; s <= V8_LAST_ENUM; s++) if (statuses[endpoint][s]) printf(" %d:%ld", s, statuses[endpoint][s]);
 		printf("; link requests %d, expiries %d, first link frame %d/%d, LAPM %d, menu %d\n", linked[endpoint], expired[endpoint], first[endpoint], FRAMES, info[1][endpoint].qc_lapm, info[1][endpoint].qc_index);
-		if (dp[1][endpoint]) {
+		if (lower_peer) {
+			printf("  lower-mode endpoint %d: V8_OK %ld/%d, unsupported returns %ld, first OK frame %d, menu %02x/%02x/%02x\n",
+				endpoint, statuses[endpoint][V8_OK], FRAMES, rejected[endpoint], first_ok[endpoint],
+				cm[1][endpoint].b0, cm[1][endpoint].b1, cm[1][endpoint].b2);
+			diff_eq_int("lower-mode naturally negotiated (%ld)", statuses[endpoint][V8_OK] > 0, 1, endpoint);
+			diff_eq_int("lower-mode no handoff requested (%ld)", linked[endpoint], 0, endpoint);
+			diff_eq_int("lower-mode no idle expiry (%ld)", expired[endpoint], 0, endpoint);
+			diff_eq_int("lower-mode supported handoff bits absent (%ld)", cm[1][endpoint].b0 & 0xa8, 0, endpoint);
+			diff_eq_int("lower-mode common capabilities retained (%ld)", cm[1][endpoint].b1 & 0x30, 0x30, endpoint);
+			if (dp[1][endpoint])
+				diff_eq_int("lower-mode rejection observations executed (%ld)", rejected[endpoint] > 0, 1, endpoint);
+			else
+				diff_eq_int("lower-mode public peer consumed menu (%ld)", peer_updated[1][endpoint], 1, endpoint);
+		} else if (dp[1][endpoint]) {
 			diff_eq_int("one naturally negotiated link (%ld)", linked[endpoint], 1, endpoint);
 			diff_eq_int("one lifecycle idle expiry (%ld)", expired[endpoint], 1, endpoint);
 		} else {
@@ -257,7 +298,8 @@ static int run_history(int wrapper_endpoint)
 	}
 	diff_eq_int("observer overflow (%ld)", overflow, 0, 0);
 	printf("  read-only callbacks compared: %ld\n", observed);
-	diff_eq_int("expected host observations executed (%ld)", observed, wrapper_endpoint == -1 ? 6 : 3, wrapper_endpoint);
+	diff_eq_int("expected host observations executed (%ld)", observed, lower_peer ? 0 : wrapper_endpoint == -1 ? 6 : 3, wrapper_endpoint);
+	if (lower_peer) printf("  read-only lower-mode observations compared: %ld/%d frames\n", lower_observed, FRAMES);
 	done:
 	for (side = 0; side < 2; side++) for (endpoint = 0; endpoint < 2; endpoint++)
 		if (dp[side][endpoint]) ops[side]->destroy(dp[side][endpoint]);
@@ -274,8 +316,11 @@ int main(void)
 {
 	int rc;
 	negative = getenv("V8_HISTORY_NEGATIVE") != 0;
-	rc = run_history(-1);
-	rc |= run_history(0);
-	rc |= run_history(1);
+	lower_negative = getenv("V8_HISTORY_LOWER_NEGATIVE") != 0;
+	rc = run_history(-1, 0);
+	rc |= run_history(0, 0);
+	rc |= run_history(1, 0);
+	rc |= run_history(0, 1);
+	rc |= run_history(1, 1);
 	return rc;
 }
