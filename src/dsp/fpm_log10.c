@@ -155,30 +155,3 @@ FPM_log10(unsigned short mantissa, short exponent)
 
 	return (short)((FPM_log10_table[idx] >> 3) - (int)shifts * 1228);
 }
-
-/*
- * The offline generator lives in test/unit/t_fpm_log10.c. These accessors
- * let that fixture compare every derived entry with the stored table.
- */
-/*
- * Entry 128 is excluded by construction: it is the neighbour's byte, not a
- * logarithm, so there is nothing for a generator to produce.  The unit test
- * checks 0..127 against this and asserts 128 separately.
- */
-int
-FPM_log10_table_derived(void)
-{
-	return 128;
-}
-
-short
-FPM_log10_table_entry(int index)
-{
-	return FPM_log10_table[index];
-}
-
-int
-FPM_log10_table_size(void)
-{
-	return (int)(sizeof(FPM_log10_table) / sizeof(FPM_log10_table[0]));
-}

@@ -52,15 +52,8 @@
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 
-/* Declared reciprocal coefficients, excluding the neighbouring XOR word. */
-#define FPM_DIV_TABLE_REAL 128
 
 
-unsigned short
-FPM_div_table_entry(int i)
-{
-	return (i >= 0 && i <= FPM_DIV_TABLE_REAL) ? FPM_div_table[i] : 0;
-}
 
 /*
  * A pointed count word reproduces the original normalizer's loop.  GCC3's

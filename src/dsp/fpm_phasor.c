@@ -48,17 +48,7 @@
 short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };
 short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
 
-unsigned short
-FPM_phasor_cos_entry(int i)
-{
-	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_cos_table[i] : 0;
-}
 
-unsigned short
-FPM_phasor_sin_entry(int i)
-{
-	return (i >= 0 && i < FPM_PHASOR_TABLE) ? FPM_sin_table[i] : 0;
-}
 
 /* One table lookup with linear interpolation between adjacent entries. */
 static int

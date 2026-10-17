@@ -58,11 +58,6 @@ fp_pow_coef(int i)
 	return (i < FP_POW_TABLE) ? Fact_FP[i] : (short)FP_POW_LAST_COEF;
 }
 
-short
-FP_Pow_coefficient(int i)
-{
-	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef(i) : 0);
-}
 
 short
 GetFP_Value(short a, short b)

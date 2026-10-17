@@ -18,11 +18,7 @@ extern int ref_FPM_div(unsigned short denom, unsigned short *recip,
 extern int ref_FPM_div_32(unsigned int denom, unsigned short *recip,
 			  unsigned short *shift);
 
-/*
- * The blob's own table, under the name the blob exports.  Ours is `static`,
- * so the comparison goes through the accessor -- but the reference copy is a
- * plain global and can be named directly.
- */
+/* Original public reciprocal table on the reference side. */
 extern const unsigned short ref_FPM_div_table[];
 
 /* Offline derivation belongs to the fixture, not the reconstructed object. */
@@ -31,6 +27,17 @@ FPM_div_table_generate(int i)
 {
 	return (unsigned short)(0x40000000 / ((unsigned)(i + 0x80) * 0x100));
 }
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+#define FPM_DIV_TABLE_REAL 128
+
+static unsigned short
+FPM_div_table_entry(int i)
+{
+	return (i >= 0 && i <= FPM_DIV_TABLE_REAL) ? FPM_div_table[i] : 0;
+}
+
 
 int
 main(void)

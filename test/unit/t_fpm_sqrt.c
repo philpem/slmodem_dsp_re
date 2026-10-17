@@ -19,6 +19,24 @@ FPM_sqrt_table_generate(int index)
 	return (unsigned short)(32768.0 * sqrt(frac));
 }
 
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+#define FPM_SQRT_TABLE_SIZE 192
+
+static unsigned short
+FPM_sqrt_table_entry(int index)
+{
+	return (index >= 0 && index < FPM_SQRT_TABLE_SIZE)
+		? FPM_sqrt_table[index] : 0;
+}
+
+static int
+FPM_sqrt_table_size(void)
+{
+	return FPM_SQRT_TABLE_SIZE;
+}
+
+
 int
 main(void)
 {

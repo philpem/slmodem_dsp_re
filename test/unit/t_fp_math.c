@@ -31,6 +31,26 @@ FP_Pow_coefficient_generate(int i)
 	return (short)(16384.0 / fact);
 }
 
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+extern const short Fact_FP[6];
+#define FP_POW_TERMS 7
+#define FP_POW_TABLE 6
+#define FP_POW_LAST_COEF 3
+
+static short
+fp_pow_coef(int i)
+{
+	return (i < FP_POW_TABLE) ? Fact_FP[i] : (short)FP_POW_LAST_COEF;
+}
+
+static short
+FP_Pow_coefficient(int i)
+{
+	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef(i) : 0);
+}
+
+
 int
 main(void)
 {

@@ -6,7 +6,7 @@
  *
  *   - the four coefficient tables are the object's, byte for byte.  They are
  *     file-static there and here, so the comparison goes through
- *     CID_MTD_coeff rather than by name.
+ *     fixture-local CID_MTD_coeff through test-globalized copies.
  *   - the two biquad states carry across calls, so the detector is driven a
  *     block at a time AND a sample at a time from a seeded object.
  *   - IT SAYS NO.  A detector exercised only on the signal it detects passes
@@ -250,6 +250,24 @@ run_rate(short rate, double fs)
 	rc = diff_end();
 	return rc;
 }
+
+/* Fixture-only accessors name the actual production data. File-local owners
+ * are exposed only in the globalized test object by tools/testvisible.py. */
+extern short MTD_COEF_1_8000[5], MTD_COEF_2_8000[5];
+extern short MTD_COEF_1_9600[5], MTD_COEF_2_9600[5];
+
+static const short *
+CID_MTD_coeff(int which, int rate)
+{
+	if (rate == CID_RATE_9600)
+		return which == 1 ? MTD_COEF_1_9600 :
+		       which == 2 ? MTD_COEF_2_9600 : 0;
+	if (rate == CID_RATE_8000)
+		return which == 1 ? MTD_COEF_1_8000 :
+		       which == 2 ? MTD_COEF_2_8000 : 0;
+	return 0;
+}
+
 
 int
 main(void)

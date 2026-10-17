@@ -32,12 +32,4 @@ short GetFP_Value(short a, short b);
  */
 int FP_Pow(int x);
 
-/**
- * @brief Read one of FP_Pow()'s effective Maclaurin coefficients.
- * @param i  Term index, 0..6. Out of range returns 0.
- * @return The stored Q14 coefficient (16384 / (i+1)!, rounded); index 6 is
- *         the object's recovered out-of-bounds seventh term.
- */
-short FP_Pow_coefficient(int i);
-
 #endif /* DSPLIB_FP_MATH_H */
