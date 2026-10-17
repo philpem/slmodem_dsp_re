@@ -1083,7 +1083,7 @@ COVCOUNTS  := build-cov/measured.txt
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
-               dis-selftest
+               dis-selftest period-compile-selftest
 
 PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov \
                      mutation-snapshot
@@ -1402,6 +1402,10 @@ tumap-selftest:
 .PHONY: period-selection-selftest
 period-selection-selftest:
 	@$(PYTHON) tools/toolchain/period_selection_selftest.py
+
+.PHONY: period-compile-selftest
+period-compile-selftest:
+	@$(PYTHON) tools/toolchain/period_compile_selftest.py
 
 # The anchor aligner's firing proof.  NOT a phase tier: it needs `tc`'s
 # build/tc_out, which `make phase` does not build, and it is apparatus rather

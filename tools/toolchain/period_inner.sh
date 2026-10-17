@@ -26,8 +26,9 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
        -Iinclude -Itest/harness -DDSPLIB_REPRODUCE_BUGS
        -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
-# GCC 3.4 defaults to gnu89, where a declaration in a `for` initialiser is an
-# error.  Nothing else in the C half needs a newer dialect.
+# Source C keeps the same default GNU89 dialect as period.mk. Fixture and
+# harness C need GNU99 for declarations in `for` initialisers.
+SOURCE_CFLAGS="$FLAGS"
 CFLAGS="$FLAGS -std=gnu99"
 CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti -fno-math-errno -Wno-invalid-offsetof"
 SOURCE_CXXFLAGS="$CXXFLAGS -ffast-math"
@@ -77,7 +78,8 @@ STAGE=${STAGE:-all}
 : > "$OUT/failed"
 compile_one() {
 	f=$1; o=$(obj "$f")
-	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] \
+	# Flag/dispatch changes in this script invalidate every compiled object.
+	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] && [ "$o" -nt "$0" ] \
 		&& { [ -z "$NEWEST_HDR" ] || [ "$o" -nt "$NEWEST_HDR" ]; } \
 		&& return 0
 	case $f in
@@ -86,7 +88,11 @@ compile_one() {
 		g++ -c $CXXFLAGS $extra -o "$o" "$f" 2>"$o.log" ;;
 	src/*.S) (cd "$(dirname "$f")" && gcc -c $ASFLAGS \
 		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
-	*)	case $f in src/service/dcr.c) cflags="$CFLAGS $DCR_FLAGS" ;; *) cflags="$CFLAGS" ;; esac
+	*)	case $f in
+		src/service/dcr.c) cflags="$SOURCE_CFLAGS $DCR_FLAGS" ;;
+		src/*) cflags="$SOURCE_CFLAGS" ;;
+		*) cflags="$CFLAGS" ;;
+		esac
 		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
 	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
 }
@@ -94,6 +100,9 @@ compile_one() {
 if [ "$STAGE" != "link" ]; then
 echo "period: compiling $(echo $SRC $CXXSRC $ASRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
 echo "period: flags $(echo $FLAGS)"
+echo "period: C source flags $(echo $SOURCE_CFLAGS)"
+echo "period: C fixture flags $(echo $CFLAGS)"
+echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 for f in $SRC $CXXSRC $ASRC $HARNESS; do
