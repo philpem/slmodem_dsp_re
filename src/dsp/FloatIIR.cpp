@@ -154,7 +154,7 @@ GenericIIR<Sample, Coeff>::reset()
  * slack is smaller than the history.
  */
 template <typename Sample, typename Coeff>
-void
+inline void
 GenericIIR<Sample, Coeff>::compactIn()
 {
 	unsigned k;
@@ -165,7 +165,7 @@ GenericIIR<Sample, Coeff>::compactIn()
 }
 
 template <typename Sample, typename Coeff>
-void
+inline void
 GenericIIR<Sample, Coeff>::compactOut()
 {
 	unsigned k;
@@ -220,8 +220,49 @@ void
 GenericIIR<Sample, Coeff>::process(const Sample *in, Sample *out,
 				   unsigned count)
 {
-	for (unsigned k = 0; k < count; k++)
-		out[k] = process(in[k]);
+	/* The block entry point multiplies by a reciprocal. Direct division,
+	 * as used by the scalar entry point, can round differently. A unit
+	 * normalizer preserves the original zero-denominator convention. */
+	for (unsigned k = 0; k < count; k++) {
+		Sample x = in[k];
+
+		/*
+		 * Publish the accumulator at the original update boundaries (F11992).
+		 * The period compiler retains the live x87 value while emitting the
+		 * observed non-popping double stores; see the precision note above.
+		 */
+		m_acc = 0;
+
+		m_inHist[m_inPos] = x;
+
+		/* Feedforward: the numerator over the input history. */
+		for (m_i = 0; m_i < m_nnum; m_i++)
+			m_acc = m_acc + m_num[m_i] * m_inHist[m_inPos + m_i];
+
+		/* Feedback: the denominator over the output history, from index 1. */
+		for (m_i = 1; m_i < m_nden; m_i++)
+			m_acc = m_acc - m_den[m_i] * m_outHist[m_outPos + m_i];
+
+		/* See the header: a zero den[0] means "already normalised". */
+		Coeff normalizer = 1;
+		if (m_den[0] != 0)
+			normalizer = 1.0 / m_den[0];
+		m_acc = m_acc * normalizer;
+
+		m_outHist[m_outPos] = m_acc;
+
+		if (m_outPos == 0)
+			compactOut();
+		else
+			m_outPos--;
+
+		if (m_inPos == 0)
+			compactIn();
+		else
+			m_inPos--;
+
+		out[k] = (Sample)m_acc;
+	}
 }
 
 /*
