@@ -2,7 +2,10 @@
 """Render and check a base-versus-head Gentoo period metric comparison."""
 
 import argparse
+import hashlib
 import json
+from pathlib import Path
+import re
 import sys
 
 
@@ -10,6 +13,87 @@ METRICS = ("exact", "regalloc", "unresolved", "reloc", "bytes", "size",
            "nodata", "compared", "reference_functions", "exact_bytes",
            "compared_bytes")
 MARKER = "<!-- gentoo-period-metrics -->"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def body_digest(raw, relocs):
+    """Pin actual body bytes and canonical relocation kinds/destinations."""
+    if not raw or relocs is None:
+        raise ValueError("function has no measured body")
+    # repr retains bytes/tuple type distinctions in canonical relocation keys.
+    payload = ["period-body-v1", raw.hex(),
+               [[offset, kind, repr(target)]
+                for offset, (kind, target) in sorted(relocs.items())]]
+    encoded = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("ascii")).hexdigest()
+
+
+def function_digest(objects, symbol):
+    """Refuse absent or ambiguous definitions; never select a lucky copy."""
+    sys.path.insert(0, str(ROOT / "tools/toolchain"))
+    import byteident
+    matches = [path for path in sorted(Path(objects).glob("*.o"))
+               if symbol in byteident.sizes(str(path))]
+    if len(matches) != 1:
+        raise ValueError("%s has %d defining objects; exactly one is required" %
+                         (symbol, len(matches)))
+    raw, relocs = byteident.body(str(matches[0]), symbol)
+    return body_digest(raw, relocs)
+
+
+def load_reviews(path):
+    try:
+        with open(path) as source:
+            data = json.load(source)
+    except (OSError, ValueError) as exc:
+        raise ValueError("cannot read review record: %s" % exc)
+    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("reviews"), list):
+        raise ValueError("review record requires version 1 and a reviews list")
+    seen = set()
+    for review in data["reviews"]:
+        if not isinstance(review, dict):
+            raise ValueError("each reviewed loss must be an object")
+        for name, width in (("base_sha", 40), ("accepted_commit", 40),
+                            ("evidence_commit", 40),
+                            ("head_body_sha256", 64)):
+            if not re.fullmatch("[0-9a-f]{%d}" % width, str(review.get(name, ""))):
+                raise ValueError("review requires full %s" % name)
+        if not isinstance(review.get("symbol"), str) or not review["symbol"]:
+            raise ValueError("review requires a symbol")
+        evidence = review.get("evidence")
+        if not isinstance(evidence, str) or not evidence:
+            raise ValueError("review requires an evidence path")
+        evidence_path = ROOT / evidence.split("#", 1)[0]
+        if (not evidence_path.resolve().is_relative_to(ROOT) or
+                not evidence_path.is_file()):
+            raise ValueError("review evidence must exist inside the repository")
+        key = (review["base_sha"], review["symbol"])
+        if key in seen:
+            raise ValueError("duplicate reviewed loss for %s" % review["symbol"])
+        seen.add(key)
+    return data["reviews"]
+
+
+def review_losses(lost, reviews, base_sha, digest):
+    """Return matched reviews and rejection reasons, scoped to actual losses."""
+    accepted, rejected = {}, {}
+    for symbol in lost:
+        candidates = [item for item in reviews if item["symbol"] == symbol]
+        matched = [item for item in candidates if item["base_sha"] == base_sha]
+        if not matched:
+            rejected[symbol] = "stale base review" if candidates else "no review"
+            continue
+        review = matched[0]
+        try:
+            actual = digest(symbol)
+        except ValueError as exc:
+            rejected[symbol] = str(exc)
+            continue
+        if actual != review["head_body_sha256"]:
+            rejected[symbol] = "changed function bytes or relocation identity"
+            continue
+        accepted[symbol] = review
+    return accepted, rejected
 
 
 def load(path):
@@ -77,12 +161,11 @@ def byte_coverage(metrics):
                                   metrics["compared_bytes"])
 
 
-def render(base, head):
+def render(base, head, reviewed=None, rejected=None):
     """Render the base-versus-head markdown table and return (lines, lost).
 
-    `lost` is the byte-identical symbols present in base but not head, which is
-    the ratchet's failure condition; the caller exits non-zero on it when
-    `--check` is set.
+    `lost` always includes every loss, including explicitly reviewed losses.
+    The caller rejects any loss without matching base/body review evidence.
     """
     exact_delta = head["exact"] - base["exact"]
     lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
@@ -124,10 +207,26 @@ def render(base, head):
     if lost:
         lines.append("**Lost byte-identical functions:** " +
                      ", ".join("`%s`" % symbol for symbol in lost))
-    elif gained:
+    if gained:
         lines.append("**New byte-identical functions:** " +
                      ", ".join("`%s`" % symbol for symbol in gained))
-    lines.append("Byte-identical functions are the gate. \"Same code\" permits "
+    if reviewed is not None:
+        lines.append("**Loss review:** %d reviewed, %d unreviewed / %d lost functions." %
+                     (len(reviewed), len(lost) - len(reviewed), len(lost)))
+        for symbol, review in sorted(reviewed.items()):
+            lines.append("- Reviewed loss `%s`: base `%s`, body SHA256 `%s`; "
+                         "[evidence](%s), accepted source `%s`." %
+                         (symbol, review["base_sha"], review["head_body_sha256"],
+                          "https://github.com/philpem/slmodem_dsp_re/blob/" +
+                          review["evidence_commit"] + "/" + review["evidence"],
+                          review["accepted_commit"]))
+        for symbol, reason in sorted((rejected or {}).items()):
+            lines.append("- Unreviewed loss `%s`: %s." % (symbol, reason))
+    lines.append("Unreviewed byte-identical function losses fail this codegen "
+                 "regression check. Explicitly reviewed losses retain their "
+                 "numerical regression above; matching base SHA and current "
+                 "body/relocation evidence is required. Period differential "
+                 "failures remain hard failures. \"Same code\" permits "
                  "only consistent register renaming; constants, memory "
                  "operands, call/data targets, branches and operand order must "
                  "still match. Other rows are informational, with their status "
@@ -213,25 +312,46 @@ def main():
     ap.add_argument("--base", help="base metrics JSON")
     ap.add_argument("--head", help="head metrics JSON")
     ap.add_argument("--check", action="store_true",
-                    help="fail when any byte-identical function regresses")
+                    help="fail on any unreviewed byte-identical function loss")
+    ap.add_argument("--reviewed-losses", help="explicit base/body-pinned review JSON")
+    ap.add_argument("--base-sha", help="full measured PR base revision")
+    ap.add_argument("--head-objects", help="measured head's period object directory")
+    ap.add_argument("--fingerprint", metavar="SYMBOL",
+                    help="print a current body/relocation SHA256, then exit")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the status logic accepts and rejects, then exit")
     args = ap.parse_args()
 
     if args.self_test:
         return self_test()
+    if args.fingerprint:
+        if not args.head_objects:
+            ap.error("--fingerprint requires --head-objects")
+        try:
+            print(function_digest(args.head_objects, args.fingerprint))
+        except ValueError as exc:
+            ap.error(str(exc))
+        return 0
     if not args.base or not args.head:
         ap.error("--base and --head are required unless --self-test is given")
 
     try:
         base = load(args.base)
         head = load(args.head)
+        reviews = load_reviews(args.reviewed_losses) if args.reviewed_losses else []
+        if args.reviewed_losses and (not args.head_objects or
+                not re.fullmatch(r"[0-9a-f]{40}", args.base_sha or "")):
+            raise ValueError("--reviewed-losses requires --head-objects and full --base-sha")
     except ValueError as exc:
         ap.error(str(exc))
 
-    lines, lost = render(base, head)
+    lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
+    accepted, rejected = review_losses(
+        lost, reviews, args.base_sha,
+        lambda symbol: function_digest(args.head_objects, symbol))
+    lines, lost = render(base, head, accepted, rejected)
     print("\n".join(lines))
-    return 1 if args.check and lost else 0
+    return 1 if args.check and rejected else 0
 
 
 if __name__ == "__main__":
