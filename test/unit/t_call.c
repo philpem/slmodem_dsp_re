@@ -45,7 +45,8 @@ static long total_nonzero;
  * CALLPROG_Create's `w0` it decides which states listen to which detector.
  * 0, 1 and 3 mean one thing; everything else means the other.
  */
-static int sreg56;
+static long sreg56;
+static long sreg16 = 1;
 
 struct side {
 	struct dp_operations	*op;
@@ -140,7 +141,7 @@ params(const char *dialstr)
 	harness_param_set(GetDialToneValidationTime, 10);
 	harness_param_set(GetDialToneWaitTime, 100);
 
-	harness_sreg_set(16, 1);	/* tone dialling when no prefix */
+	harness_sreg_set(16, sreg16);	/* tone dialling when no prefix */
 	harness_sreg_set(56, sreg56);
 }
 
@@ -280,6 +281,25 @@ line_occurrences(const char *text, const char *needle)
 	return count;
 }
 
+static int
+run_sregister_boundaries(void)
+{
+	static const int prefix[] = {0, 1, 255};
+	static const int mode[] = {0, 2, 3, 255};
+	int p, m, rc = 0;
+	for (p = 0; p < 3; p++)
+	for (m = 0; m < 4; m++) {
+		char label[80];
+		sreg16 = prefix[p];
+		sreg56 = mode[m];
+		sprintf(label, "call constructor S16=%d S56=%d", prefix[p], mode[m]);
+		rc |= run(label, "5", SIG_SILENCE, 8000, 48, 3);
+	}
+	sreg16 = 1;
+	sreg56 = 0;
+	return rc;
+}
+
 /* Public registration/create/process paths, with constructor-created state.
  * Native, converted and unsupported rates cross the unsigned debug gate.
  * Three blocks check the first message transition and unchanged suppression. */
@@ -417,5 +437,6 @@ main(void)
 	rc |= diff_end();
 
 	rc |= run_diagnostic_boundaries();
+	rc |= run_sregister_boundaries();
 	return rc;
 }

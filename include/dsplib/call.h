@@ -40,9 +40,9 @@
 
 struct call_queue {
 	int	count;			/* +0x00  bytes held        */
-	int	head;			/* +0x04  write offset      */
-	int	tail;			/* +0x08  read offset       */
-	int	active;			/* +0x0c  0 or 96           */
+	unsigned int	head;			/* +0x04  write offset      */
+	unsigned int	tail;			/* +0x08  read offset       */
+	unsigned int	active;			/* +0x0c  0 or 96           */
 	short	data[CALL_RING_BYTES / 2];	/* +0x10 */
 };
 

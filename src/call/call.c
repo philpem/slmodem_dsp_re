@@ -80,7 +80,7 @@ call_dial_string(struct call_dp *st, char *buf, size_t buflen)
 	if (sysdep_strlen(want) > 62)
 		return want;
 
-	buf[0] = modem_get_sreg(st->modem, 16) < 1 ? 'p' : 't';
+	buf[0] = (unsigned int)modem_get_sreg(st->modem, 16) < 1 ? 'p' : 't';
 	sysdep_strcpy(buf + 1, want);
 	return buf;
 }
@@ -92,7 +92,7 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	struct callprog_cfg cfg;
 	char dialstr[64];
 	struct call_dp *st;
-	int mode;
+	unsigned int mode;
 
 	(void)caller;
 	(void)max_frag;
@@ -115,7 +115,7 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	 * business; all that matters here is that 0, 1 and 3 mean one thing
 	 * and everything else means the other.
 	 */
-	mode = modem_get_sreg(modem, 56);
+	mode = modem_get_sreg(st->modem, 56);
 	cfg.w0 = (mode <= 1 || mode == 3) ? 1 : 0;
 	cfg.get_sreg = call_GetSRegister;
 	cfg.modem = st->modem;
