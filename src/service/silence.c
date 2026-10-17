@@ -161,7 +161,9 @@ silence_progress(struct silence *s, float *buf, short n,
 	unsigned short i;
 
 	lvl = (unsigned short)s->query(s->obj, SILENCE_PARAM_LEVEL);
-	if (lvl > 3 || lvl == 0)
+	if (lvl > 3)
+		return;
+	if (lvl == 0)
 		return;
 
 	for (i = 0; i < n; i++) {
