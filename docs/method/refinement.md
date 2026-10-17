@@ -7100,8 +7100,9 @@ and raw equivalence classes, and rejects corrupted state and count addresses.
 
 The remaining role-compare ordering has a measured allocation dependency.
 In initial RTL, descrambler clears 239/241 precede role load 253 and compare
-254. Combine folds 253 into 254. Global allocation (`25.greg`) assigns owner
-pseudo 83 to EDX. Peephole2 introduces XOR 413 to materialise zero in EDX;
+254. Combine folds 253 into 254. `25.greg` first displays owner pseudo 83
+as EDX; the subsequent observer below establishes that local allocation made
+that choice earlier. Peephole2 introduces XOR 413 to materialise zero in EDX;
 its anti-dependencies on both owner uses and flags clobber constrain compare
 254. Only sched2 moves the compare ahead of data/train publications, while
 keeping it after the descrambler clears. The reference's ECX owner avoids
@@ -7128,6 +7129,56 @@ historical. Close further count/store permutations. Next trace owner 83's
 allocation and zero-materialisation costs, separately from the first three
 memset calls' argument owners. Their remaining register differences do not
 establish another source statement-order defect.
+
+### Observe the allocator decision before interpreting the first changed dump
+
+The [initializer observer](../../tools/gcc3_preinit_alloc_observe.py) corrects
+the stage inference above. `local_alloc` chooses the owners' hard homes;
+`25.greg` first shows their substituted operands. Seeing a change in a dump
+does not establish that the named pass decided it.
+
+| Pseudo / role | Quantity | Lifetime | Selected home |
+| --- | ---: | --- | --- |
+| 79 / first memset destination | 0 | 20..22 | EAX |
+| 80 / second destination | 1 | 30..32 | EAX |
+| 81 / third destination | 2 | 40..42 | EAX |
+| 82 / scrambler owner | 3 | 46..60 | EAX |
+| 83 / descrambler owner | 4 | 48..68 | EDX |
+
+These quantities use GENERAL_REGS, cross no calls, have no register suggestions
+and equal EAX/EDX/ECX costs. Owner 83 overlaps 82, excluding EAX; both EDX and
+ECX are free. Allocation order tries EAX, EDX, ECX, selecting EDX as the first
+eligible home. Global allocation preserves the choices. This is not a measured
+cost preference for EDX. The later rename chain cannot move owner 83 because
+the other homes are unavailable over its four uses.
+
+Memset size/zero constants are a separate mechanism. They remain direct
+memory constants through `27.flow2`; no local pseudo allocation chose their
+final registers. Peephole2 materialises all six in EAX. Actual scratch
+observation covers 100 TU searches, twenty-three in this function. At
+`30.rnreg`, reverse renaming produces destination EDX, zero EAX and size ECX
+for all three calls. On the third call, destination 392 chooses EDX with
+EAX/EDX/ECX ticks 11/9/13; zero 423 chooses EAX at 11/14/13; size 425 chooses
+ECX at 15/14/13. These least-recent eligible choices explain the current final
+arguments, not a source argument-evaluation order.
+
+The reference uses owner ECX and destination/zero/size EAX/ECX/EDX. An original
+competing lifetime or different compiler state remains possible; neither is
+established by the present trace. Do not add a synthetic local to occupy EDX.
+Close local store/argument spellings until an independent source constraint
+changes the allocator's eligibility set or the rename chain.
+
+The frozen `8e216110a` replay validates nine local choices, twenty-six rename
+decisions and the scratch census. Positive, actual absent-target and scratch
+observations all preserve the complete object. The absent target compiles
+successfully but observation fails; a wrong-owner-choice trace also fails.
+This is apparatus-only work, with no source or exact-set gain.
+
+```sh
+python3 tools/gcc3_preinit_alloc_observe.py \
+  --baseline-dir build/allocation293-baseline
+python3 tools/gcc3_preinit_alloc_observe.py --audit
+```
 
 ## Recover the CenterAdapt history owner before fitting its spill
 
