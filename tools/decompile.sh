@@ -43,6 +43,8 @@
 # while raw P-code retained both. Re-run the controls on the actual version;
 # neither assume the old defect persists nor infer correctness from its fix.
 # See docs/method/ghidra-assisted.md for calibration and program provenance.
+# Its 12.2 controls restore missing arithmetic with explicit signatures,
+# but high P-code still conflates narrowed and unrounded x87 expressions.
 #
 # WHICH GHIDRA.  This wrapper retains its historical 11.4.2 default.
 # An earlier comparison found `ghidra_12.2_DEV` produced byte-identical output

@@ -6428,3 +6428,90 @@ The next bounded priorities are:
 The next campaign follows the
 [Ghidra-assisted fidelity investigation](ghidra-assisted.md), including input
 provenance, calibration controls and a complete discrepancy ledger.
+
+## Ghidra-assisted boundary recovery: 17 October 2026
+
+PR #293 starts from the merged #291 tree. The first connected investigation
+compares explicitly selected reference and canonical programs in Ghidra 12.2
+DEV. The [campaign record](ghidra-assisted.md#first-connected-investigation-17-october-2026)
+records inputs, calibration and limits. Ghidra nominated boundaries;
+independent instructions and complete-TU controls decide which source to retain.
+
+### Calibrate signatures and the claimed P-code level
+
+Four synthetic x87 controls demonstrate both a useful correction and a hard
+limit. Inferred signatures omit a final add/subtract/divide and the third
+argument after a float spill/reload. Explicit three-float `__cdecl` signatures
+restore the arithmetic. However, narrowed and unrounded subtraction still
+have identical high-level expressions and float-width P-code despite native
+results `c0920eaa` and `c0920eab`. Do not infer precision identity from either
+representation, even after typing the arguments correctly.
+
+The MCP endpoint's `basic` mode is labelled raw but returns HighFunction
+operations (`MULTIEQUAL`, `PTRADD`, `CAST`). Record the actual representation;
+calling it raw would confer a precision guarantee the observation does not
+have. Empty disassembly responses also failed the four known nonempty
+controls. Fall back to the independent disassembler and keep the invalid
+outputs visible. The committed [calibration fixture](../../test/experiment/ghidra/README.md)
+passes 5/5 native checks and can be rerun on a different version.
+
+### Let source loop ownership produce a guarded invariant
+
+EchoCanceler's adaptation product belongs after the nonempty-tap guard in
+the reference. The previous reconstruction computed it before the loop.
+Initial RTL already contains that order: blaming a later compiler pass would
+have sent the investigation in the wrong direction. Declaring the product
+inside the adaptation loop lets `08.gcse` hoist it into a guarded preheader,
+matching the original boundary without a barrier or extra source guard.
+
+A second discriminator is the original x87 producer copy: `fld` duplicates
+still-live `mu`, then `fmulp` consumes `e`. `mu * e` recovers this ownership;
+`e * mu` chooses a different destructive operand despite equal arithmetic.
+The six-cell domain includes the explicit-empty-guard cross and a final
+consumer operand reversal. The latter produces raw-identical objects, so
+that consumer spelling domain is closed.
+
+The retained body remains 359 bytes, matching the original size; differing
+bytes fall from 55 to 44. All five neighbouring bodies, data, bindings and
+resolved relocation consumers are unchanged. The final focused period run
+passes one fixture, eleven groups and 45,905 checks. This is a partial graph
+recovery, with no new functional defect claimed. Next inspect the first
+dot-product load/operand schedule through combine/reload; account separately
+for the original twelve-byte versus retained eight-byte stack allocation.
+
+### Recover compaction and publication before register allocation
+
+The GenericIIR reference has signed predecrement history guards, descending
+compaction pointers with a `n-2` to `-1` counter, input-history publication
+before zeroing the accumulator, pointer/countdown block iteration, and block
+output publication before input compaction. These are instruction-backed
+source boundaries. In particular, moving the input-history store before
+zeroing the accumulator eliminates the old alias-forced accumulator reload;
+a matching filter equation had hidden the publication difference.
+
+| Original entry | Previous bytes | Retained bytes | Reference bytes | Remaining grade |
+|---|---:|---:|---:|---|
+| Scalar `process(float)` | 450 | 398 | 398 | BYTES, 63 differing bytes |
+| Block `process(const float *, float *, unsigned)` | 548 | 572 | 584 | SIZE, 12-byte length gap |
+
+The twelve complete-TU controls cover 216 emitted-body verdicts. Only the
+two processing bodies and two compaction helpers change; the other fourteen
+bodies, all nine exact original names of twelve, data, bindings and noncode
+relocations remain unchanged. The compaction helpers retain their weak
+exports. Matching scalar length and instruction count does not make the
+scalar function byte-exact.
+
+Six added constructor-created history groups cover non-unit denominators,
+unequal taps, mixed scalar/block calls, in-place blocks, reset, zero-length
+calls and tight compaction headroom. They compare non-pointer state and both
+complete double histories. All three focused fixtures pass: 32 groups and
+422,747 checks. Restoring block division instead of reciprocal multiplication
+fails 30 new checks across five groups; the scalar-only group is a negative
+control. No internal state is planted and no public-call reachability or new
+original-code bug is claimed.
+
+Stop these source domains here. The next scalar discriminator is the first
+feedforward register/base/index choice and input-compaction LEA schedule in
+initial RTL, allocation and scheduling dumps. The block needs a live-value
+and spill account of the original `0x34` versus retained `0x2c` frame. A frame
+size difference alone does not identify its cause.
