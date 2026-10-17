@@ -89,8 +89,8 @@ static struct dp *
 call_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
-	struct callprog_cfg cfg;
 	char dialstr[64];
+	struct callprog_cfg cfg;
 	struct call_dp *st;
 	unsigned int mode;
 
