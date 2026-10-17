@@ -2,11 +2,22 @@
  * Q15 values, and all 65536 unsigned-word inputs. The latter is a component
  * API probe; it does not establish modem reachability above Q15. */
 
+#include <math.h>
+
 #include "harness.h"
 #include "dsplib/fpm.h"
 
 extern unsigned short ref_FPM_sqrt(unsigned short x);
 extern unsigned short ref_FPM_sqrt_dp(unsigned int x);
+
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static unsigned short
+FPM_sqrt_table_generate(int index)
+{
+	/* Compute the ideal table formula in double precision. */
+	double frac = (index + 64) / 256.0;
+	return (unsigned short)(32768.0 * sqrt(frac));
+}
 
 int
 main(void)

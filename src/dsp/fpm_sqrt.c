@@ -116,18 +116,9 @@ FPM_sqrt_dp(unsigned int x)
 }
 
 /*
- * Regenerate one table entry from the design parameters.  Kept alongside the
- * table so the derivation stays checkable: the unit test regenerates all 192
- * entries and compares against the extracted originals.
+ * Table accessors for the offline generator in test/unit/t_fpm_sqrt.c,
+ * which compares all 192 derived entries against the extracted originals.
  */
-unsigned short
-FPM_sqrt_table_generate(int index)
-{
-	/* Deliberately double precision: the original was generated offline. */
-	double frac = (index + 64) / 256.0;
-	return (unsigned short)(32768.0 * sqrt(frac));
-}
-
 unsigned short
 FPM_sqrt_table_entry(int index)
 {

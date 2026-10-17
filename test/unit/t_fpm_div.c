@@ -25,6 +25,13 @@ extern int ref_FPM_div_32(unsigned int denom, unsigned short *recip,
  */
 extern const unsigned short ref_FPM_div_table[];
 
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static unsigned short
+FPM_div_table_generate(int i)
+{
+	return (unsigned short)(0x40000000 / ((unsigned)(i + 0x80) * 0x100));
+}
+
 int
 main(void)
 {

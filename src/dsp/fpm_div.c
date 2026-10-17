@@ -62,12 +62,6 @@ FPM_div_table_entry(int i)
 	return (i >= 0 && i <= FPM_DIV_TABLE_REAL) ? FPM_div_table[i] : 0;
 }
 
-unsigned short
-FPM_div_table_generate(int i)
-{
-	return (unsigned short)(0x40000000 / ((unsigned)(i + 0x80) * 0x100));
-}
-
 /*
  * A pointed count word reproduces the original normalizer's loop.  GCC3's
  * loop pass promotes that word and publishes it once after the backedge,

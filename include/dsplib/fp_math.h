@@ -40,18 +40,4 @@ int FP_Pow(int x);
  */
 short FP_Pow_coefficient(int i);
 
-/**
- * @brief Recompute a Maclaurin coefficient from its ideal value, for the
- * generator self-check.
- *
- * Compared against FP_Pow_coefficient() within a tolerance of 1, not for
- * exact equality -- the object's own rounding of the six stored constants
- * is not fully consistent (see FP_math.c), so this recovers the design
- * without claiming to reproduce the exact rounding.
- *
- * @param i  Term index, 0..5.
- * @return floor(16384.0 / (i+1)!) as a double-precision computation cast to short.
- */
-short FP_Pow_coefficient_generate(int i);
-
 #endif /* DSPLIB_FP_MATH_H */

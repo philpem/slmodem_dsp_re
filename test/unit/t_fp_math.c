@@ -17,6 +17,20 @@
 extern int ref_FP_Pow(int x);
 extern short ref_GetFP_Value(short a, short b);
 
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static short
+FP_Pow_coefficient_generate(int i)
+{
+	double fact = 1.0;
+	int k;
+
+	for (k = 2; k <= i + 1; k++)
+		fact *= k;
+
+	/* Ideal value; the stored coefficients can differ by one. */
+	return (short)(16384.0 / fact);
+}
+
 int
 main(void)
 {

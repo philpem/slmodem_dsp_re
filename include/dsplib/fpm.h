@@ -65,8 +65,6 @@ int FPM_div_32(unsigned int denom, unsigned short *recip,
 
 /** @brief Read one entry of FPM_div()'s reciprocal table, for the generator self-check. */
 unsigned short FPM_div_table_entry(int i);
-/** @brief Recompute one entry of FPM_div()'s reciprocal table from its ideal formula. */
-unsigned short FPM_div_table_generate(int i);
 
 /* Public reciprocal table: 128 original words in the bug build, followed by
  * FPM_xor_table; the fixed build retains its generated 129th endpoint. */
@@ -118,8 +116,6 @@ extern const short FPM_xor_table[256];
  */
 short FPM_log10(unsigned short mantissa, short exponent);
 
-/** @brief Recompute one entry of FPM_log10()'s table from its ideal formula. */
-short FPM_log10_table_generate(int index);
 /** @brief Number of table entries the generator actually derives (vs. copies verbatim). */
 int FPM_log10_table_derived(void);
 /** @brief Read one entry of FPM_log10()'s table, for the generator self-check. */
@@ -128,8 +124,6 @@ short FPM_log10_table_entry(int index);
 int FPM_log10_table_size(void);
 
 /* Table introspection, for the generator self-check in the unit tests. */
-/** @brief Recompute one entry of FPM_sqrt()'s table from its ideal formula. */
-unsigned short FPM_sqrt_table_generate(int index);
 /** @brief Read one entry of FPM_sqrt()'s table, for the generator self-check. */
 unsigned short FPM_sqrt_table_entry(int index);
 /** @brief Size of FPM_sqrt()'s table. */

@@ -65,19 +65,6 @@ FP_Pow_coefficient(int i)
 }
 
 short
-FP_Pow_coefficient_generate(int i)
-{
-	double fact = 1.0;
-	int k;
-
-	for (k = 2; k <= i + 1; k++)
-		fact *= k;
-
-	/* Ideal value; see the note above on why this is a tolerance, not a match. */
-	return (short)(16384.0 / fact);
-}
-
-short
 GetFP_Value(short a, short b)
 {
 	int va = abs((int)a);

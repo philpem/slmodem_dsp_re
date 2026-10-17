@@ -18,6 +18,8 @@
 
 #include <string.h>
 
+#include <math.h>
+
 #include "harness.h"
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
@@ -29,6 +31,16 @@ extern const struct fpm_pps_cfg ref_FPM_PPS_CFG;
 
 extern short ref_FPM_log10(unsigned short mantissa, short exponent);
 extern unsigned int ref_dsplibs_debug_level;
+
+/* Offline derivation belongs to the fixture, not the reconstructed object. */
+static short
+FPM_log10_table_generate(int index)
+{
+	/* Compute the ideal table formula in double precision. */
+	double frac = (index * 128 + 16384) / 32768.0;
+
+	return (short)(int)(32768.0 * log10(frac));
+}
 
 int
 main(void)

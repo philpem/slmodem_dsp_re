@@ -157,9 +157,8 @@ FPM_log10(unsigned short mantissa, short exponent)
 }
 
 /*
- * Regenerate one table entry from the design parameters.  Kept alongside the
- * table so the derivation stays checkable: the unit test regenerates all 128
- * and compares.
+ * The offline generator lives in test/unit/t_fpm_log10.c. These accessors
+ * let that fixture compare every derived entry with the stored table.
  */
 /*
  * Entry 128 is excluded by construction: it is the neighbour's byte, not a
@@ -170,15 +169,6 @@ int
 FPM_log10_table_derived(void)
 {
 	return 128;
-}
-
-short
-FPM_log10_table_generate(int index)
-{
-	/* Deliberately double precision: the original was generated offline. */
-	double frac = (index * 128 + 16384) / 32768.0;
-
-	return (short)(int)(32768.0 * log10(frac));
 }
 
 short
