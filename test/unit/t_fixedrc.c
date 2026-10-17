@@ -13,6 +13,22 @@
 
 extern int ref_RcFixed_Check_Combination(int in_rate, int out_rate);
 
+/* Actual file-local factor tables, exposed in test-only object copies. */
+extern int fixedRc_UpFact[RCFIXED_NMODES + 1];
+extern int fixedRc_DownFact[RCFIXED_NMODES + 1];
+
+static int
+RcFixed_UpFactor(int mode)
+{
+	return (mode >= 0 && mode <= RCFIXED_NMODES) ? fixedRc_UpFact[mode] : 0;
+}
+
+static int
+RcFixed_DownFactor(int mode)
+{
+	return (mode >= 0 && mode <= RCFIXED_NMODES) ? fixedRc_DownFact[mode] : 0;
+}
+
 /* Rates that appear anywhere in the modem: host, pump, codec and fax. */
 static const int rates[] = {
 	7200, 8000, 9600, 12000, 16000, 19200, 24000, 32000, 38400, 48000,
