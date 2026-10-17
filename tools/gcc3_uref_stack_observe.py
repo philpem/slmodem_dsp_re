@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run installed cc1plus observations and require unchanged emitted objects."""
+"""Run selected period frontend observations and require unchanged emitted objects."""
 import hashlib
 import argparse
 import json
@@ -21,6 +21,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--reproduction-dir', type=Path, default=ROOT/'build/gcc3-uref-stack-reproduction')
     ap.add_argument('--target', default='updateUref')
+    ap.add_argument('--compiler-kind', choices=('cc1', 'cc1plus'), default='cc1plus',
+                    help='selected period frontend; cc1 uses preprocessed C input')
     ap.add_argument('--family', default='V90AutoDigitalImpDetector',
                     help='complete-TU family name in the reproduction manifest')
     ap.add_argument('--output-dir', type=Path, default=ROOT/'build/gcc3-uref-stack-observation')
@@ -32,10 +34,10 @@ def main():
     image = prior['config'].splitlines()[0].split(' ', 1)[1]
     out = args.output_dir.resolve()
     out.mkdir(exist_ok=True)
-    compiler = out/'cc1plus'
+    compiler = out/args.compiler_kind
     with compiler.open('wb') as stream:
         subprocess.run(['docker', 'run', '--rm', '--platform', 'linux/386', image, 'cat',
-                        '/usr/libexec/gcc/i386-pc-linux-gnu/3.4.2/cc1plus'], stdout=stream, check=True)
+                        '/usr/libexec/gcc/i386-pc-linux-gnu/3.4.2/'+args.compiler_kind], stdout=stream, check=True)
     compiler.chmod(0o755)
     family = args.family
     assert family in prior['families'], 'unknown reproduction family'
@@ -45,9 +47,10 @@ def main():
         inputs = source/family/label
         folder = out/label
         folder.mkdir(exist_ok=True)
-        shutil.copy2(inputs/(family+'.ii'), folder/(family+'.ii'))
+        preprocessed = family+('.i' if args.compiler_kind == 'cc1' else '.ii')
+        shutil.copy2(inputs/preprocessed, folder/preprocessed)
         log = (inputs/'compile.log').read_text().splitlines()
-        command = shlex.split(next(line for line in log if '/cc1plus -fpreprocessed' in line))
+        command = shlex.split(next(line for line in log if '/'+args.compiler_kind+' -fpreprocessed' in line))
         assembler = shlex.split(next(line for line in log if '/bin/as ' in line))
         command[0] = str(compiler)
         plain = list(command)
