@@ -649,6 +649,14 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 			int start = 0, i;
 			int n;
 
+			if (dsplibs_debug_level > 1) {
+				dsplibs_debug_printf(
+				    "%2d.%02d[sec] Receive buffer OK in "
+				    "_hdlc_emulate_receive_state\n",
+				    ctx->clock_sec, ctx->clock_frac);
+				next = ctx->superframe_read_idx;
+			}
+
 			for (i = 0; i < next; i++)
 				start += lens[i] + 1;
 
@@ -659,7 +667,7 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 			*(int *)(long)word7 = n;
 			ctx->delayed_status = 1;
 			ctx->delayed_status_countdown = 2;
-			next++;
+			next = ctx->superframe_read_idx + 1;
 			ctx->superframe_read_idx = next;
 			ctx->state = CLASS1_IDLE_STATE;
 		}

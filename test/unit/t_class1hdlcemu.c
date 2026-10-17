@@ -23,6 +23,9 @@
 #include "harness.h"
 #include "dsplib/class1.h"
 #include "dsplib/class1tx.h"
+#include "dsplib/debug.h"
+
+extern unsigned int ref_dsplibs_debug_level;
 
 extern int ref__hdlc_emulate_receive_state(void *ctx, const short *rx,
 					   short *tx, int word3, int word4,
@@ -213,8 +216,50 @@ run(void)
 	return diff_end();
 }
 
+/* Synthetic component queue probe: valid length-prefixed records and clocks,
+ * with state/countdown supplied explicitly. This observes the handler's
+ * transcript boundary; it does not establish a modem receive lifecycle. */
+static int
+run_diagnostic(void)
+{
+	unsigned int level;
+	int emit;
+
+	diff_begin("HDLC emulate receive diagnostic boundary");
+	for (level = 0; level < 4; level++)
+	    for (emit = 0; emit < 2; emit++) {
+		long tag = 2 * level + emit;
+		int ra, rb;
+
+		plant(1, 0, emit ? 0 : 1, CLASS1_HDLC_EMULATE_RECEIVE_STATE);
+		ctx_a.clock_sec = ctx_b.clock_sec = 3;
+		ctx_a.clock_frac = ctx_b.clock_frac = 7;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = ref_dsplibs_debug_level = level;
+		dsplib_debug_capture_on = 1;
+		ra = ref__hdlc_emulate_receive_state(&ctx_a, rx_dummy, tx_a,
+		    (int)(long)dst_a, 0, &rxc_a, &txc_a, (int)(long)&w7_a, &w8_a);
+		rb = _hdlc_emulate_receive_state(&ctx_b, rx_dummy, tx_b,
+		    (int)(long)dst_b, 0, &rxc_b, &txc_b, (int)(long)&w7_b, &w8_b);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		diff_eq_int("diagnostic transcript (%ld)",
+		    strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, tag);
+		diff_eq_int("reference emission diagnostic (%ld)",
+		    strstr(dsplib_debug_capture_text(1),
+		        " 3.07[sec] Receive buffer OK in _hdlc_emulate_receive_state\n") != NULL,
+		    level > 1 && emit, tag);
+		diff_eq_int("diagnostic return (%ld)", rb, ra, tag);
+		compare(tag);
+	    }
+	return diff_end();
+}
+
 int
 main(void)
 {
-	return run();
+	int rc = run();
+
+	rc |= run_diagnostic();
+	return rc;
 }
