@@ -2,7 +2,8 @@
 """Expand selected structural nominations through direct same-TU calls/tails.
 
 Presence/side-effect inventory only: no path multiplicity, indirect dispatch,
-argument equivalence or proof of functional equivalence. Reuses the existing
+argument equivalence or proof of functional equivalence. Named PC32 CALL/JMP
+forms distinguish sibling transfers from omitted callees. Reuses the existing
 relocation-aware instruction inventory and call/tail graph parser.
 """
 import argparse
@@ -16,6 +17,7 @@ import tempfile
 from gcc3_alignment_stack_screen import inventory
 from recovery_large_debug_audit import graph
 from structural_sideeffect_screen import signature
+from small_call_result_screen import forms, compare as call_to_tail
 import playbook_small_patterns as d
 
 
@@ -50,14 +52,17 @@ def controls():
     source = '.text\n.globl root\n.type root,@function\nroot: call helper_a\njmp helper_b\n.size root,.-root\n.type helper_a,@function\nhelper_a: movw $1,(%edx)\nret\n.size helper_a,.-helper_a\n.type helper_b,@function\nhelper_b: movw $2,2(%edx)\ncall external\nret\n.size helper_b,.-helper_b\n'
     with tempfile.TemporaryDirectory() as directory:
         results = {}
+        transfer_forms = {}
         for name, text in {'base': source,
                            'missing_call': source.replace('call helper_a', 'nop'),
                            'missing_tail': source.replace('jmp helper_b', 'ret'),
-                           'missing_store': source.replace('movw $1,(%edx)', 'nop')}.items():
+                           'missing_store': source.replace('movw $1,(%edx)', 'nop'),
+                           'external_tail': source.replace('call external', 'jmp external')}.items():
             path = Path(directory) / (name + '.s'); obj = path.with_suffix('.o')
             path.write_text(text)
             subprocess.run(['as', '--32', '-o', str(obj), str(path)], check=True)
             rows = inventory(obj)
+            transfer_forms[name] = forms(obj, 'helper_b')
             results[name] = describe(rows, graph(obj, True), 'root', set(rows))
         assert results['base']['bodies'] == ['helper_a', 'helper_b', 'root']
         assert results['base']['external_direct_boundaries'] == ['external']
@@ -66,9 +71,13 @@ def controls():
         assert not results['missing_tail']['external_direct_boundaries']
         assert dict(results['base']['physical_store_counts'])['movw'] == 2
         assert dict(results['missing_store']['physical_store_counts'])['movw'] == 1
+        assert len(call_to_tail(transfer_forms['base'], transfer_forms['external_tail'])) == 1
+        assert call_to_tail(transfer_forms['base'], transfer_forms['external_tail'])[0][1] == 'external'
+        assert not call_to_tail(transfer_forms['base'], transfer_forms['base'])
     return {'same_tu_call_expansion': True, 'sibling_tail_expansion': True,
             'external_boundary_retained': True, 'removed_call_rejected': True,
             'removed_tail_rejected': True, 'removed_callee_store_rejected': True,
+            'named_call_to_tail_positive': True, 'unchanged_transfer_negative': True,
             'scope': 'actual assembled synthetic i386 ELF detector controls, not modem lifecycle'}
 
 
@@ -98,7 +107,13 @@ def main():
         assert hashlib.sha256(obj.read_bytes()).hexdigest() == screen['objects'][row['object']]
         own = inventory(obj); edges = graph(obj, True)
         allowed = set(own) & set(original)
-        report['rows'].append({'symbol': symbol, 'source': row['source'], 'object': row['object'],
+        before_forms = forms(Path(d.b.BLOB), symbol)
+        after_forms = forms(obj, symbol)
+        transfers = lambda pair: [{'target': list(target), 'calls': pair[0][target], 'tails': pair[1][target]}
+                                  for target in sorted(set(pair[0]) | set(pair[1]))]
+        report['rows'].append({'original_named_transfers': transfers(before_forms),
+            'compiled_named_transfers': transfers(after_forms),
+            'call_to_tail_only': call_to_tail(before_forms, after_forms), 'symbol': symbol, 'source': row['source'], 'object': row['object'],
             'original': describe(original, old_edges, symbol, allowed),
             'compiled': describe(own, edges, symbol, allowed)})
     args.out.parent.mkdir(parents=True, exist_ok=True)
