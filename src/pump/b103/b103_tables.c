@@ -102,8 +102,8 @@ const short B103_IIR_LPF[15] = {
 	-15266, 16384, -15520, 16384, 22435, -19789, 16384,
 };
 
-const short MTDb103Org_CFG[6] = {
-	0, 0, 2, 29820, 10, 0,
+const struct fpm_mtd_cfg MTDb103Org_CFG = {
+	MTDb103_COEF, 2, 29820, 10, 0,
 };
 
 const short MTDb103_COEF[10] = {
