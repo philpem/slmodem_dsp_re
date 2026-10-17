@@ -111,11 +111,12 @@ EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 		if (update) {
 			if (mu != 0.0f) {
 				if (low) {
-					float g = e * mu;
 					unsigned int m;
 
-					for (m = 0; m < ntaps; m++)
+					for (m = 0; m < ntaps; m++) {
+						float g = mu * e;
 						coef[m] += g * hist[pos + m];
+					}
 				}
 			}
 		}

@@ -28,33 +28,29 @@
 # bitfields, fixed-point scaling).  That is a useful division of labour, and
 # it is why this exists.
 #
-# WHAT IT IS NOT
+# EVIDENCE AND EXPLORATION
 #
-# NOT EVIDENCE.  `docs/fastpass.md` says read from the disassembly and not
-# from a summary of it, and this is a summary.  The rule stands:
+# The owner-expanded policy in CLAUDE.md permits decompilation, graphs,
+# cross-references, P-code, tentative annotations and recorded hypotheses.
+# Use them to nominate bounded source experiments; independently verify the
+# decisive bytes, operands and relocations with tools/dis.py and ELF readers.
+# Inferred types and expressions do not become original-source facts merely
+# because the decompiler presents them. Period differential/full-TU checks
+# and the byte comparator remain the acceptance authorities.
 #
-#   Every line goes to `tools/dis.py` before it goes into src/.
-#   No name, no comment and no finding is ever written from this output --
-#   a Ghidra guess recorded as a derivation corrupts the record, and the
-#   record is the deliverable.
-#   The differential test remains the only thing that decides.  That is also
-#   the answer to "what if the decompilation does not match the assembly":
-#   it does not have to, because it is never what ships and never what is
-#   trusted.  A mismatch shows up as a failing test, which is the normal
-#   case this harness exists to catch.
+# X87 HAS BEEN MEASURED. docs/method/equivalence.md records a Ghidra11.4.2
+# probe where high P-code/decompilation lost a subtraction and parameter,
+# while raw P-code retained both. Re-run the controls on the actual version;
+# neither assume the old defect persists nor infer correctness from its fix.
+# See docs/method/ghidra-assisted.md for calibration and program provenance.
+# Its 12.2 controls restore missing arithmetic with explicit signatures,
+# but high P-code still conflates narrowed and unrounded x87 expressions.
 #
-# UNTESTED HERE: x87.  This object is built -mfpmath=387 and Ghidra's x87
-# modelling is its known weak spot.  The float-heavy modules are already
-# reconstructed, so this has not been measured -- treat any floating-point
-# output as suspect until someone does.  Still true after the 12.2 trial
-# below: the function picked as an x87 probe, `V34EchoFilter`, turned out to
-# be fixed-point shorts.
-#
-# WHICH GHIDRA.  Pinned to 11.4.2, and the pin has evidence behind it rather
-# than inertia: `ghidra_12.2_DEV` produces BYTE-IDENTICAL output on all eight
-# functions tried, C and C++, arrays and virtual dispatch.  `allow[6]` is
-# still three unrelated locals.  Two major versions, no movement on the one
-# weakness that matters here, so there is nothing to gain by moving.
+# WHICH GHIDRA.  This wrapper retains its historical 11.4.2 default.
+# An earlier comparison found `ghidra_12.2_DEV` produced byte-identical output
+# on all eight functions tried, C and C++, arrays and virtual dispatch.  `allow[6]` is
+# still three unrelated locals in that measured domain. This does not
+# establish a ceiling for other versions, analyses or functions.
 #
 # 12.x needs setting up before it runs this at all -- Ghidra 12 hands `.py` to
 # PyGhidra rather than Jython, and PyGhidra must be pip-installed first.  It
