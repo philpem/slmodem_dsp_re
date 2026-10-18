@@ -1017,3 +1017,58 @@ The bounded experiment crosses outlined/direct case placement with the old
 and recovered snapshot-index types, using retained flags and one physical
 body home. Historical claims of distinct missing exit classes were refuted
 by F11523; do not reintroduce those speculative exits.
+
+
+## V32 initialization after the storage-model cross
+
+The four-cell layout/initialization experiment separates the unresolved array
+extent from the native seven-store operation. The original fourteen-TU runs
+use the intended alternate headers: seven-element loop objects match the
+five-plus-two loop objects, and both explicit-store models match each other.
+The first promoted replay accidentally omitted `/include` from its overlay
+search path; its apparent pass is invalid and retained as such. The corrected
+replay must prove header selection with period layout witnesses and a wrong-
+header control before its results are used.
+
+Production now uses seven explicit stores through the current five-plus-two
+layout. This avoids exceeding the declared array and restores native addresses
++0x3c through +0x48 without changing the API or claiming original field extent.
+Its object raw-matches the previously period-validated explicit candidate.
+The constructor grows 3729 to 3745 bytes; the other five function bodies and
+nontext data remain unchanged. The two constructor-backed fixtures pass
+689769 checks in total.
+
+The canonical census remains 1109/1852 EXACT, 32 REGALLOC, 78 BYTES and 633
+SIZE. All 300 runtime objects raw-match canonical; eighteen differ from the
+opening checkpoint. Partial-link comparison is 72146/943398 positioned bytes,
+68 exact sections, 457/2931 exact symbols and 1000/18317 exact relocations.
+Strict whole-object identity remains DIFFERENT. Full `make phase J=4`
+validation passes 392 period fixtures with zero failures and all structural
+checks.
+
+
+The corrected register replay independently passes all 56 TU/cell builds,
+four layout witnesses, both absent-field controls and the wrong-header
+control. Its A-cell objects reproduce all fourteen frozen baseline hashes.
+The constructor recovery and durable replay are committed as `3f81aab29`.
+The invalid first promoted run remains excluded.
+
+## V8 DFT cursor and sample-read ordering
+
+A four-cell cross independently restores the sample cursor and moves the
+sample read after bin-phase publication, while keeping it inside the bin
+loop. Only the combined endpoint reproduces both native boundaries; their
+ordering is already visible in initial RTL. The selected body is 171 bytes
+against native 164, improving the previous 149-byte body's length gap from
+fifteen to seven. Its two exact siblings and all nontext data stay fixed.
+The existing component fixture passes 1081 DFT checks, and production
+raw-matches the selected replay object. No alias or unsafe-count fixture was
+invented. [The family audit](../v8-dft-read-age-recovery.md) records actual
+compiler header dependencies and all twelve body verdicts across four cells.
+
+The canonical census remains 1109/1852 EXACT (32 REGALLOC, 78 BYTES, 633 SIZE),
+with no exact membership change. All 300 runtime objects raw-match canonical;
+nineteen differ from the opening checkpoint. Partial-link comparison is
+72202/943398 positioned bytes, 68 exact sections, 457/2931 exact symbols and
+1002/18317 exact relocations. Full `make phase J=4` passes all 392 period
+fixtures with zero failures and all structural checks.
