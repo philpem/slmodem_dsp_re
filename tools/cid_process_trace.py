@@ -6,12 +6,16 @@ reachability. Only calls made directly by CID_process are expanded; receiver
 internals remain inside cid_progress. No compilation, input mutation, inferior
 calls or production source changes are performed. Debug/TTY return values are
 the harness host contract; CID_process itself ignores those int results.
+The period-linked fixture carrier is checked against a continuous sine within
+integer rounding bounds. Optional cap coverage requires four nonempty fields
+and a rendered fifth field, without fixing their payload text.
 """
 import playbook_small_patterns as d
 import argparse
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -126,7 +130,22 @@ def canonical(row):
             if key not in ('kind', 'input', 'receiver', 'modem', 'strings')}
 
 
-def validate(trace):
+def check_carrier(values):
+    """Check the period-compiled lookup against a continuous sine, within
+    half an integer sample for rounding; also check exact carrier symmetry."""
+    assert len(values) == 64
+    errors = [abs(value - 8000 * math.sin(2 * math.pi * i / 64))
+              for i, value in enumerate(values)]
+    half_cycle_errors = sum(values[i] != -values[i + 32] for i in range(32))
+    proof = {'samples': 64, 'max_quantization_error': max(errors),
+             'half_cycle_symmetry_errors': half_cycle_errors,
+             'quadrature': [values[i] for i in (0, 16, 32, 48)]}
+    assert max(errors) <= 0.500001 and half_cycle_errors == 0, proof
+    assert proof['quadrature'] == [0, 8000, 0, -8000], proof
+    return proof
+
+
+def validate(trace, require_cap=False):
     assert trace['exit_codes'] == [0] and not trace['errors']
     assert not trace['active'] and not trace['waiting'] and not trace['live']
     records = trace['records']
@@ -140,6 +159,9 @@ def validate(trace):
     counts = Counter()
     progress_results = Counter()
     chunks = Counter()
+    available_fields = Counter()
+    delivered_fields = Counter()
+    packets = Counter()
     for row in sides['original']:
         counts['process_calls'] += 1
         counts['debug_level_' + str(row['debug'])] += 1
@@ -158,6 +180,15 @@ def validate(trace):
                 used += p['n_in']
                 continue
             result = 1 if p['result'] == 1 else -1
+            packet = bytes.fromhex(p['packet_hex'])
+            assert packet == bytes.fromhex(row['wire_hex']), 'received packet differs from serialized fixture wire'
+            counts['exact_wire_packets'] += 1
+            assert len(packet) >= 3
+            frame_length = packet[1] + 3
+            checksum_ok = len(packet) >= frame_length and sum(packet[:frame_length]) % 256 == 0
+            packets[f'type_{packet[0]:02x}_result_{p["result"]}_checksum_{checksum_ok}'] += 1
+            if result == 1:
+                assert checksum_ok, 'successful packet has no complete valid wire checksum'
             if row['debug'] > 1:
                 msg = 'cid: CID Success\n' if result == 1 else 'cid: CID Failure\n'
                 assert events[pos] == {'call': 'debug', 'format': msg, 'result': 0}
@@ -166,8 +197,13 @@ def validate(trace):
                 strings = events[pos]
                 assert strings['call'] == 'get_strings' and strings['result_offset'] == 8
                 raw = bytes.fromhex(strings['strings_hex'])
+                fields, cursor = 0, 0
+                while raw[cursor]:
+                    fields += 1
+                    cursor = raw.index(0, cursor) + 1
+                available_fields[str(fields)] += 1
                 pos += 1
-                offset = 0
+                offset, delivered = 0, 0
                 for i in range(4):
                     empty = raw[offset] == 0
                     assert events[pos] == {'call': 'string_guard', 'index': i,
@@ -190,6 +226,12 @@ def validate(trace):
                     assert events[pos + 3] == length
                     pos += 4
                     offset = end + 1
+                    delivered += 1
+                delivered_fields[str(delivered)] += 1
+                if delivered == 4:
+                    counts['four_nonempty_calls'] += 1
+                    if raw[offset]:
+                        counts['four_field_cap_with_remaining'] += 1
             if used + p['n_in'] < row['count']:
                 counts['early_settled_calls'] += 1
             break
@@ -200,7 +242,13 @@ def validate(trace):
     assert {0, 2} == {row['debug'] for row in sides['original']}
     assert counts['early_settled_calls'] > 0
     assert counts['empty_guards'] > 0 and counts['nonempty_guards'] > 0
+    if require_cap:
+        assert counts['four_nonempty_calls'] > 0, 'no observed four nonempty string iterations'
+        assert counts['four_field_cap_with_remaining'] > 0, 'no observed fifth field withheld at the four-field cap'
     return {'per_side': dict(counts), 'progress_results_per_side': dict(progress_results),
+            'available_fields_per_success': dict(available_fields),
+            'delivered_fields_per_success': dict(delivered_fields),
+            'settled_packets_per_side': dict(packets),
             'progress_input_counts_per_side': dict(chunks),
             'create_calls_both_sides': len(trace['lifecycles']),
             'accepted_created_and_deleted_both_sides': sum(row['created'] for row in trace['lifecycles']),
@@ -208,7 +256,7 @@ def validate(trace):
             'ordered_events_both_sides': sum(len(r['events']) for r in records)}
 
 
-def controls(trace):
+def controls(trace, require_cap=False):
     caught = []
     mutations = ('progress-result', 'count-out', 'string-offset', 'callback-order')
     for mutation, both in [(m, False) for m in mutations] + [('count-out', True), ('callback-order', True), ('no-observations', False)]:
@@ -227,11 +275,54 @@ def controls(trace):
                     index = next(i for i, e in enumerate(row['events']) if e['call'] == 'tty')
                     row['events'][index], row['events'][index + 1] = row['events'][index + 1], row['events'][index]
         try:
-            validate(bad)
+            validate(bad, require_cap)
         except AssertionError:
             caught.append(mutation + ('-both-sides' if both else ''))
         else:
             raise AssertionError('negative control accepted: ' + mutation)
+    if require_cap:
+        for mutation in ('fourth-guard-index-both-sides', 'fifth-delivery-both-sides',
+                         'packet-drift-preserved-checksum-both-sides'):
+            bad = copy.deepcopy(trace)
+            for side in ('original', 'candidate'):
+                row = next(r for r in bad['records'] if r['kind'] == side
+                           and any(e['call'] == 'get_strings' and
+                                   len([field for field in bytes.fromhex(e['strings_hex']).split(b'\0') if field]) > 4
+                                   for e in r['events']))
+                guard = next(e for e in row['events'] if e['call'] == 'string_guard' and e['index'] == 3)
+                if mutation.startswith('packet'):
+                    event = next(e for e in row['events'] if e['call'] == 'progress' and e['result'] == 1)
+                    packet = bytearray.fromhex(event['packet_hex'])
+                    packet[-2] ^= 1
+                    packet[-1] = -sum(packet[:-1]) & 255
+                    assert sum(packet) % 256 == 0
+                    event['packet_hex'] = packet.hex()
+                elif mutation.startswith('fourth'):
+                    guard['index'] = 4
+                else:
+                    # Model a full fifth iteration from the actual rendered
+                    # extra field, on both sides: equality must not excuse it.
+                    raw = bytes.fromhex(next(e for e in row['events'] if e['call'] == 'get_strings')['strings_hex'])
+                    fields = raw.split(b'\0')
+                    offset = sum(len(field) + 1 for field in fields[:4])
+                    value = fields[4].decode('latin1')
+                    row['events'].append({'call': 'string_guard', 'index': 4,
+                                          'offset': offset, 'null': False, 'empty': False})
+                    if row['debug'] > 1:
+                        row['events'].append({'call': 'debug', 'format': "cid: STR: '%s'\n",
+                                              'text': value, 'offset': offset, 'result': 0})
+                    length = {'call': 'strlen', 'offset': offset, 'text': value, 'result': len(value)}
+                    row['events'].extend([length,
+                        {'call': 'tty', 'offset': offset, 'payload_hex': fields[4].hex(),
+                         'length': len(value), 'result': len(value)},
+                        {'call': 'tty', 'offset': None, 'payload_hex': '0d0a', 'length': 2, 'result': 2},
+                        copy.deepcopy(length)])
+            try:
+                validate(bad, require_cap)
+            except AssertionError:
+                caught.append(mutation)
+            else:
+                raise AssertionError('negative control accepted: ' + mutation)
     return caught
 
 
@@ -241,6 +332,8 @@ def main():
     parser.add_argument('--period-object', type=Path)
     parser.add_argument('--reference-object', type=Path, default=Path(d.b.BLOB))
     parser.add_argument('--out', type=Path, default=ROOT / 'build/cid-process-trace')
+    parser.add_argument('--require-four-field-cap', action='store_true',
+                        help='require four nonempty fields and a rendered fifth field withheld from TTY')
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     objpath = (args.period_object or fixture.parent / 'src_service_cid.o').resolve()
@@ -255,6 +348,19 @@ def main():
     linked = Object(snapshot)
     assert linked.elf['e_type'] == 'ET_EXEC' and linked.elf.get_section_by_name('.interp') is None
     assert GENTOO in linked.comments and set(linked.comments) <= {GENTOO, RUNTIME}
+    _, carrier_bytes = linked.body('sintab')
+    assert len(carrier_bytes) == 128
+    carrier = [int.from_bytes(carrier_bytes[i:i + 2], 'little', signed=True)
+               for i in range(0, 128, 2)]
+    carrier_proof = check_carrier(carrier)
+    bad_carrier = carrier[:]
+    bad_carrier[8] += 2
+    try:
+        check_carrier(bad_carrier)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError('changed carrier sample accepted')
     settings, evidence = {}, {}
     for kind, path in [('original', refpath), ('candidate', objpath)]:
         obj = Object(path)
@@ -279,6 +385,10 @@ def main():
                           for name in ('create', 'delete', 'process')}
         settings[kind].update(debug=linked.symbols[prefix + 'dsplibs_debug_level']['st_value'],
                               sites=sites, loop=loop)
+        for name, size in [('bits', 4096), ('nbits', 4)]:
+            symbols = [s for s in linked.symtab.iter_symbols() if s.name == name and s['st_size'] == size]
+            assert len(symbols) == 1, (name, 'ambiguous fixture wire owner')
+            settings[kind][name] = symbols[0]['st_value']
         evidence[kind] = dict(proof, object=str(path), object_sha256=before[str(path)], comments=obj.comments)
     # Preserve original companion exacts; this apparatus never changes source.
     companions = {name: d.b.verdict(*d.b.body(str(refpath), name), *d.b.body(str(objpath), name))
@@ -290,16 +400,19 @@ def main():
     with (out / 'gdb.log').open('w') as log:
         subprocess.run(command, cwd=out, stdout=log, stderr=subprocess.STDOUT, check=True)
     trace = json.loads((out / 'trace-observe.json').read_text())
-    report = validate(trace)
+    report = validate(trace, args.require_four_field_cap)
     report.update(fixture=str(fixture), fixture_sha256=before[str(fixture)], evidence=evidence,
                   input_hashes=before, command=command, companions=companions,
-                  negative_controls=controls(trace), production_source_changed=False)
+                  negative_controls=controls(trace, args.require_four_field_cap),
+                  four_field_cap_required=args.require_four_field_cap, production_source_changed=False)
+    report['carrier_calibration'] = carrier_proof
+    report['negative_controls'].append('changed-period-carrier-sample')
     assert before == {p: sha(Path(p)) for p in before}, 'input changed during observation'
     assert sha(snapshot) == before[str(fixture)], 'snapshot changed'
     report['fixture_and_objects_unchanged'] = True
     (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
     negatives = len(report['negative_controls'])
-    print(f"{report['paired_process_calls']} paired CID_process calls / {report['ordered_events_both_sides']} ordered events agree; {negatives}/{negatives} changed-trace controls rejected")
+    print(f"{report['paired_process_calls']} paired CID_process calls / {report['ordered_events_both_sides']} ordered events agree; {negatives}/{negatives} detector controls rejected")
 
 
 if __name__ == '__main__':

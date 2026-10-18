@@ -41,6 +41,25 @@ def receiver_state(address):
     return [signed(word(address + off)) for off in (0x260, 0x264, 0x3f8)]
 
 
+def declared_wire(config):
+    """Decode the fixture's actual serialized bits, without parser writes."""
+    count = word(config['nbits'])
+    if not count:  # Initial silence precedes the first generated burst.
+        return ''
+    assert 540 <= count <= 4096 and (count - 540) % 10 == 0
+    bits = mem(config['bits'], count)
+    assert bits[:300] == bytes(i & 1 for i in range(300))
+    assert bits[300:480] == b'\1' * 180 and bits[-60:] == b'\1' * 60
+    frame = bits[480:-60]
+    wire = bytearray()
+    for offset in range(0, len(frame), 10):
+        symbol = frame[offset:offset + 10]
+        assert symbol[0] == 0 and symbol[9] == 1 and set(symbol) <= {0, 1}
+        wire.append(sum(symbol[i + 1] << i for i in range(8)))
+    assert len(wire) == wire[1] + 3
+    return wire.hex()
+
+
 class Done(gdb.FinishBreakpoint):
     def __init__(self, kind, action, row):
         super().__init__(gdb.newest_frame(), internal=True)
@@ -97,6 +116,7 @@ class Entry(gdb.Breakpoint):
                        'finished': False}
                 assert row['receiver'] == owner['receiver']
                 row['input_sha256'] = hashlib.sha256(mem(row['input'], max(0, row['count']) * 2)).hexdigest()
+                row['wire_hex'] = declared_wire(settings[self.kind])
                 records.append(row)
                 active[self.kind] = row
                 Done(self.kind, 'process', row)
@@ -119,6 +139,13 @@ class After(gdb.Breakpoint):
                 event['n_out'] = signed(int.from_bytes(mem(aux, 2), 'little'), 16)
                 event['result'] = signed(value & 0xffff, 16)
                 event['state_out'] = receiver_state(row['receiver'])
+                if event['result']:
+                    # Valid fixtures use the FSK-only constructor. Preserve
+                    # the received wire packet, not a planted parser state.
+                    fsk = word(row['receiver'] + 4)
+                    length = signed(int.from_bytes(mem(fsk + 0x15c, 2), 'little'), 16)
+                    assert 0 <= length <= 120
+                    event['packet_hex'] = mem(fsk + 0xd8, length).hex()
             elif name == 'get_strings':
                 assert value == row['receiver'] + 8
                 row['strings'] = value
