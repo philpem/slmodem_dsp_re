@@ -2336,18 +2336,43 @@ modulatevector(void *obj)
 		/* 2. Peel against t2, then twice against t1. */
 		rem = target - (unsigned)tx->t3[lo];
 		n1 = shell_peel(tx->t2, lo, &rem);
-		q2 = rem / (unsigned short)tx->t2[n1];
-		rem = rem % (unsigned short)tx->t2[n1];
+		/*
+		 * The original uses signed division of the saved remainder,
+		 * not unsigned division of the shell-peel accumulator.  Each
+		 * table word is zero-extended first, so the divisor is a
+		 * positive int when the initialized table entry is nonzero.
+		 * 0x5a056 takes the remainder; 0x5a05c subtracts it from the
+		 * saved dividend before the second IDIV at 0x5a063.
+		 */
+		{
+			int dividend = (int)rem;
+			int divisor = (unsigned short)tx->t2[n1];
+
+			rem = (unsigned)(dividend % divisor);
+			q2 = (unsigned)((dividend - (int)rem) / divisor);
+		}
 
 		n2 = shell_peel(tx->t1, n1, &rem);
-		s2 = (unsigned short)(rem / (unsigned short)tx->t1[n2]);
-		a = (unsigned short)(rem % (unsigned short)tx->t1[n2]);
+		{
+			int divisor = (unsigned short)tx->t1[n2];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a0ef..0x5a10e: IDIV, multiply, subtract. */
+			s2 = (unsigned short)quotient;
+			a = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		rem = q2;
 		d = (unsigned short)(lo - n1);
 		n3 = shell_peel(tx->t1, d, &rem);
-		s6 = (unsigned short)(rem / (unsigned short)tx->t1[n3]);
-		b = (unsigned short)(rem % (unsigned short)tx->t1[n3]);
+		{
+			int divisor = (unsigned short)tx->t1[n3];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a17f..0x5a18b: the same signed quotient chain. */
+			s6 = (unsigned short)quotient;
+			b = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		/*
 		 * 3. Four pairs, each summing to a value checked against
