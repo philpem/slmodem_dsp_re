@@ -524,7 +524,8 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
 
 	enables = AGC_OF(fp)->f18;
 	SRE_OF(fp)->adapt = fp->int_04 & enables;
-	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);
+	/* The MRF result is promoted unsigned at this int-count boundary. */
+	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, n);
 
 	fp = owner->fp;
 	if (SRE_OF(fp)->active == 0) {
