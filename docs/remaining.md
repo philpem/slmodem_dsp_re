@@ -81,6 +81,22 @@ convergence, justify the changes. RX_L1's saved-gain member conversion leaves
 its complete object byte-identical. The ordered partial link still differs:
 72,235 of 943,398 positioned bytes and 1,004 of 18,317 relocation records match.
 
+The continuation recovers `V92Jd::unPackJdPhaseData`'s constant-index CRC
+shift and integer `abs` operation. The original promotes all sixteen CRC
+words across the payload loop; the recovered body grows from 532 to 956
+bytes against the original 987, reducing the size gap from 455 to 31 bytes.
+It remains `SIZE`. `V21RX_control` now captures its flag byte once across the
+HDX store, as the original does, and moves from `SIZE` to `BYTES` at 75 bytes.
+The exact set stays at **1,111/1,852**, with 32 `REGALLOC`, 78 `BYTES` and
+631 `SIZE`. No new reachable runtime defect is claimed. The post-0x441 V.34
+FSK/RTD audit found matching widths and read ages; its sole change corrects a
+fixture-control comment and preserves the whole object. The combined gate
+passes 394 period fixtures with zero failures; all 300 runtime objects match
+the canonical comparison objects. The ordered partial link still differs:
+72,330 of 943,398 positioned bytes and 1,001 of 18,317 relocations match. The phase-4
+five-byte wrapper discrepancy still lacks an independently supported source
+or translation-unit boundary change, so no edit is retained there.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
