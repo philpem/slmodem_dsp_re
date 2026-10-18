@@ -8490,3 +8490,29 @@ or unsafe buffer is needed. The full period gate passes after adoption,
 and the other ten TU bodies and their relocations stay unchanged. See the
 [tone ring/count audit](../fpm-tone-ring-count-recovery.md) for the crossed
 controls, header-resolution proof and remaining differences.
+
+
+## Recover shared continuations before expanding helper closures
+
+A small reconstructed root can hide substantial native code in artificial
+helpers. Moving one helper back into the root can evict others through the
+period compiler's inline budget, so inspect the whole call graph and first
+RTL instead of treating the root's size as an isolated score.
+
+V34's diagnostic closure expansion made this visible: ordinary body expansion
+created 104 copies of the same transmit dispatch, for 106 tables overall.
+Sharing the terminal continuation restored the native three-table shape and
+reduced the root from 149526 to 66889 bytes against native 61541. This is
+structural evidence, not permission to adopt the generated macro expansion.
+A production implementation still needs clear ordinary cases, one physical
+body home, direct fixture access and a reviewed root-lifetime frame.
+
+Debug text is a separate witness. Resolve the outgoing format argument through
+the control flow, including register clobbers and unknown indirect
+predecessors. A nearby literal or matching unique-string set does not prove
+that the right message is called on the right path. V34's shared candidate
+retains all 110 unique texts but has 286 debug calls against native 262;
+the remaining multiplicities expose cloned blocks and inline boundaries.
+Known wrong formats and removed argument assignments must make the detector
+fire. See the [V34 placement audit](../v34-handshake-body-placement-audit.md)
+for the bounded controls and the limits of argument resolution.

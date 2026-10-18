@@ -1116,3 +1116,19 @@ Full `make phase J=4` passes 392 period fixtures with zero failures and all
 structural checks on the integrated master base. Two existing mutation
 locators were mechanically retargeted, with all 41 tone locators passing;
 no full mutation run or snapshot refresh was needed.
+
+
+## V34 shared-continuation diagnostic checkpoint
+
+The [V34 placement audit](../v34-handshake-body-placement-audit.md) records
+an unadopted experiment: expanding the native-absent helper closure and
+sharing the terminal transmit continuation recovers three dispatch tables,
+with a 66889-byte root against native 61541. All nine exact common bodies
+remain exact. Debug format-slot analysis resolves 262/262 native and 286/286
+candidate calls, with no added or missing unique texts; differing static
+multiplicities remain to be explained by shared blocks and inline boundaries.
+Seven apparatus controls include removed arguments and register/stack
+clobbers. This checkpoint adds replay tools and evidence, not production V34
+source. The next implementation should express the shared continuation with
+ordinary cases and one body home, then remeasure complete-TU collateral and
+period fixtures.
