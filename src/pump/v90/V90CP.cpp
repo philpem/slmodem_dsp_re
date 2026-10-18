@@ -470,17 +470,22 @@ V90CP::evaluateInfo()
 		break;
 
 	case 8:
-		/* The four counted lists, one entry to a frame. */
+		/* The four counted lists, one entry to a frame.  The object
+		 * zero-extends its 16-bit shift accumulator (0x51ec0); the
+		 * signed destination receives the result after the complete frame. */
 		for (k = 0; k <= 3; k++) {
 			n = nof_58[k];
 			for (j = 0; j < n; j++) {
+				unsigned short value = 0;
+
 				short_58[k][j] = 0;
 				p = word_cb4 + 0x11;
 				word_cb4 = p;
 				for (i = 0, q = p; i <= 0xf; i++, q--)
-					short_58[k][j] = (short)
-					    ((short_58[k][j] << 1) |
+					value = (unsigned short)
+					    ((value << 1) |
 					     (bits[q] & 1));
+				short_58[k][j] = (short)value;
 				word_cb4 = q + 0x10;
 			}
 		}
