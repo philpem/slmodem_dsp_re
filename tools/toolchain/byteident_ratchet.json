@@ -1,9 +1,9 @@
 {
-  "bytes": 77,
+  "bytes": 78,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1110,
-  "exact_bytes": 127983,
+  "exact": 1109,
+  "exact_bytes": 127904,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -173,7 +173,6 @@
     "SeedScramblerV32",
     "SeqToRate",
     "SetAdaptEqV22",
-    "SetAdaptEqV32",
     "SetEncoderV17",
     "SetEncoderV29",
     "SetPulseMakeTime",
@@ -1118,8 +1117,8 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 31,
+  "regalloc": 32,
   "reloc": 0,
-  "size": 634,
+  "size": 633,
   "unresolved": 0
 }
