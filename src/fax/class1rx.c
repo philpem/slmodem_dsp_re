@@ -245,38 +245,26 @@ struct v29rx_control_req V29RX_CTL = {
 	0x00,				/* ctl1     */
 };
 
-/*
- * The three FRESH-CREATE finishers.  Each copies `ctx->rx_agc_mult`/`ctx->rx_agc_shift`
- * (16 bits each) into a per-modulation offset of the WRAPPED modem object
- * reached via the wrapped modem pointer `vmi_b->link->modem` -- but only
- * on the fresh path; the reinit path skips straight to the `f12d4` write.
- * `sub` is at a DIFFERENT offset for each of the three: V.27ter +0x54,
- * V.29 +0x50, V.17 +0x60 -- read straight off `dis.py`
- * (0x9455e-0x9457a, 0x946c2-0x946de, 0x94666-0x94682) and independently
- * re-confirmed for this pass.  Nothing establishes what `sub` or its own
- * +0x8c/+0x8e &c fields ARE beyond this site, so both stay raw offsets.
- *
- * The `f12d4` write and the state/current_mod update happen on BOTH paths
- * and are common to `finish_*rx`.
+/* Fresh creation copies two 16-bit AGC values; both paths copy f12d4.
+ * The member chains retain the period pointer/terminal offsets:
+ * V27 +0x54 -> +0x8c/+0x8e, +0x50 -> +0x14;
+ * V29 +0x50 -> +0x88/+0x8a, +0x4c -> +0x1c;
+ * V17 +0x60 -> +0xd8/+0xda, +0x5c -> low short at +0x20.
  */
 static void
 finish_v27rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = link->modem;
+	struct v27_rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x54);
-
-		*(short *)((char *)sub + 0x8c) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0x8e) = (short)ctx->rx_agc_shift;
+		wrapped->rx->agc.mult = (short)ctx->rx_agc_mult;
+		wrapped->rx->agc.shift = (short)ctx->rx_agc_shift;
 		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
-		void *sub = *(void **)((char *)wrapped + 0x50);
-
-		*(short *)((char *)sub + 0x14) = (short)ctx->f12d4;
+		wrapped->shared->v21_watch = (short)ctx->f12d4;
 	}
 
 	ctx->state = CLASS1_RX_LOOK_CARRIER;
@@ -287,20 +275,16 @@ static void
 finish_v29rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = link->modem;
+	struct v29_rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x50);
-
-		*(short *)((char *)sub + 0x88) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0x8a) = (short)ctx->rx_agc_shift;
+		wrapped->rx->agc.mult = (short)ctx->rx_agc_mult;
+		wrapped->rx->agc.shift = (short)ctx->rx_agc_shift;
 		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
-		void *sub = *(void **)((char *)wrapped + 0x4c);
-
-		*(short *)((char *)sub + 0x1c) = (short)ctx->f12d4;
+		wrapped->det->gate_1c = (short)ctx->f12d4;
 	}
 
 	ctx->current_mod = 1;
@@ -311,21 +295,17 @@ static void
 finish_v17rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = link->modem;
+	struct v17rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x60);
-
-		*(short *)((char *)sub + 0xd8) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0xda) = (short)ctx->rx_agc_shift;
+		wrapped->state->agc.value.mult = (short)ctx->rx_agc_mult;
+		wrapped->state->agc.value.shift = (short)ctx->rx_agc_shift;
 		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	ctx->state = CLASS1_RX_LOOK_CARRIER;
 	{
-		void *sub = *(void **)((char *)wrapped + 0x5c);
-
-		*(short *)((char *)sub + 0x20) = (short)ctx->f12d4;
+		wrapped->ctl->r20 = (short)ctx->f12d4;
 	}
 	ctx->current_mod = 2;
 }

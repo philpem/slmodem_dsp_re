@@ -94,17 +94,8 @@
  * byte for byte, with the embedded prototype pointer followed separately.
  *
  * ---------------------------------------------------------------------------
- * `fpm_sre_cfg` + 0x34 IS ONE 32-BIT FIELD AND THE HEADER MODELS TWO SHORTS
- *
- * 0x097265 is `mov %ecx,0xf4(%esp)`, a DWORD store of the instance's +0x24
- * into the recoverer configuration's +0x34 -- the same slot `fpm_mrf_cfg`
- * spells `aux` and `fpm_fse_cfg` spells `reserved34`, all three filled from
- * one value.  `fpm_sre.h` calls it `pad34`/`pad36`, which is a defect in the
- * tree's model rather than in the object; it is NOT corrected here, because
- * `src/pump/v32/v32fprecr.c` initialises the same struct positionally and is
- * not this pass's to edit.  The slot is written through `memcpy` for exactly
- * the reason that file gives -- the object's single 32-bit store without a
- * strict-aliasing pun -- and finding F9475 records the rename as still owed.
+ * fpm_sre_cfg.owner at period +0x34 receives the instance context
+ * (0x097265), as do fpm_mrf_cfg.aux and fpm_fse_cfg.reserved34.
  *
  * ---------------------------------------------------------------------------
  * WHAT THE SHORT-RETRAIN FLAG DOES, RECORDED AS AN INFERENCE
@@ -125,6 +116,10 @@
  * `ret` at 0x097820 that every path reaches; the return is the instance
  * pointer and there is no way to report failure.  Deviation D1223.
  */
+typedef char v17rx_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v17rx) == 0x64) ? 1 : -1];
+typedef char v17rx_priv_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v17rx_priv) == 0x5c) ? 1 : -1];
+typedef char v17rx_state_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v17rx_state) == 0x4fbc) ? 1 : -1];
+
 void *
 V17RX_create(void *modem, const struct v17rx_cfg *params)
 {
@@ -152,7 +147,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	if (modem == NULL) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
-		modem = sysdep_malloc(0x64);
+		modem = sysdep_malloc(sizeof(struct v17rx));
 		RXROOT(modem)->ctl = NULL;
 		RXROOT(modem)->state = NULL;
 		owned = 1;
@@ -171,7 +166,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 
 	ctl_fresh = 0;
 	if (CTL(modem) == NULL) {
-		RXROOT(modem)->ctl = (struct v17rx_priv *)sysdep_malloc(0x5c);
+		RXROOT(modem)->ctl = (struct v17rx_priv *)sysdep_malloc(sizeof(struct v17rx_priv));
 		/*
 		 * Three handles and nothing else.  The other 0x4c bytes of the
 		 * block keep whatever the allocator left until the code below
@@ -273,7 +268,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 
 	if (RXS(modem) == NULL) {
 		RXROOT(modem)->state =
-			(struct v17rx_state *)sysdep_malloc(0x4fbc);
+			(struct v17rx_state *)sysdep_malloc(sizeof(struct v17rx_state));
 		/*
 		 * NOTHING IS CLEARED HERE.  20,412 bytes of allocator fill,
 		 * and the writes below do not cover all of it -- see the
@@ -333,8 +328,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	srecfg.rms_min = (short)(RXS(modem)->agc.value.cfg.ref_level / 6);
 	srecfg.rms_len = 9;
 	/* fpm_sre_cfg + 0x34; see the head of this function and F9475. */
-	memcpy(&srecfg.pad34, &aux,
-	       sizeof srecfg.pad34 + sizeof srecfg.pad36);
+	srecfg.owner = aux;
 	FPM_SRE_init(&RXS(modem)->sre, &srecfg, owned);
 
 	/*

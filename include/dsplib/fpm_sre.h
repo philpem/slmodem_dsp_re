@@ -147,9 +147,11 @@ struct fpm_sre_cfg {
 	short err_lo;		/* +0x2e 3277  >> 3 =  409: enter mode 2      */
 	short rms_min;		/* +0x30 2252  the level gate's threshold     */
 	short rms_len;		/* +0x32    9  samples FPM_rms is given       */
-	short pad34;		/* +0x34  0 in the built-in instance         */
-	short pad36;		/* +0x36  0 in the built-in instance         */
+	void *owner;		/* +0x34 context pointer set by fax/V.32    */
 };
+
+typedef char fpm_sre_cfg_period_size[(sizeof(void *) != 4 || sizeof(struct fpm_sre_cfg) == 0x38) ? 1 : -1];
+typedef char fpm_sre_owner_period_offset[(sizeof(void *) != 4 || __builtin_offsetof(struct fpm_sre_cfg, owner) == 0x34) ? 1 : -1];
 
 /*
  * The state.  144 bytes, and NOTHING BOUNDS THAT: no allocation site for an

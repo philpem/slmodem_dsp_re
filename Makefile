@@ -1478,3 +1478,21 @@ clean:
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds
 # everything that includes it.
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
+
+# Native fax RX component lifecycle, using the actual modem and DSP endpoints.
+# Separate from the period differential and syntax-only check64 tiers.
+FAX_NATIVE_DIR := $(BUILD)/fax-native
+FAX_NATIVE_FLAGS := -g -O1 -ffunction-sections -fdata-sections -fsanitize=address,undefined -Iinclude -Itest/harness
+FAX_NATIVE_SRC := $(wildcard src/fax/*.c src/dsp/*.c)
+FAX_NATIVE_OBJ := $(patsubst %.c,$(FAX_NATIVE_DIR)/%.o,$(FAX_NATIVE_SRC))
+FAX_NATIVE_APP := $(FAX_NATIVE_DIR)/test/safety/t_fax_rx_native.o $(FAX_NATIVE_DIR)/test/harness/runtime.o $(FAX_NATIVE_DIR)/test/harness/harness.o
+.PHONY: fax-native
+fax-native: $(FAX_NATIVE_DIR)/t_fax_rx_native
+	UBSAN_OPTIONS=halt_on_error=1 $<
+$(FAX_NATIVE_DIR)/%.o: %.c $(shell find include -name '*.h') Makefile
+	@mkdir -p $(dir $@)
+	$(CC) $(FAX_NATIVE_FLAGS) -c $< -o $@
+$(FAX_NATIVE_DIR)/libfax.a: $(FAX_NATIVE_OBJ)
+	$(AR) rcs $@ $^
+$(FAX_NATIVE_DIR)/t_fax_rx_native: $(FAX_NATIVE_APP) $(FAX_NATIVE_DIR)/libfax.a
+	$(CC) -fsanitize=address,undefined -Wl,--gc-sections -o $@ $^ -lm

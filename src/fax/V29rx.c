@@ -55,14 +55,8 @@
  * assignments in every case; what survives of each template is stated beside
  * it below.
  *
- * `fpm_sre_cfg`'s +0x34 IS A POINTER AND THE HEADER SPELLS IT `pad34`/`pad36`.
- * The object stores 32 bits there (`mov %edi,0xa4(%esp)`), which two shorts
- * cannot express, so this file uses the `memcpy` idiom
- * `src/pump/v32/v32fprecr.c` already established for exactly this field rather
- * than renaming a shared header from a V.29 pass.  The same pointer goes to
- * `fpm_mrf_cfg::aux` and `fpm_fse_cfg::reserved34`, which ARE declared as
- * pointers -- so all three modules are handed one `aux` out of the caller's
- * configuration, and that is what says the sre field is one too.  F9324.
+ * The context pointer goes to fpm_sre_cfg.owner at period +0x34
+ * (mov %edi,0xa4(%esp)), as well as mrf.aux and fse.reserved34.
  *
  * THE ONE FIELD WITH A DEFAULT-LESS SWITCH is `V29RX_DEC_ERROR_LIMIT`: rate 0
  * writes 0x320, rate 1 writes 0x2bc, and any other value writes NOTHING.  On a
@@ -76,6 +70,10 @@
  * no others -- 0x30, 1000000 / (clock_len * 9600), 9600 and 0x68 -- which
  * turns that paragraph's inference into a reading.  Finding F9325.
  */
+typedef char v29_rx_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v29_rx) == 0x54) ? 1 : -1];
+typedef char v29_rx_detector_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v29_rx_detector) == 0x58) ? 1 : -1];
+typedef char v29_rx_block_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v29_rx_block) == 0x4f6c) ? 1 : -1];
+
 void *
 V29RX_create(void *modem, const struct v29rx_cfg *params)
 {
@@ -100,7 +98,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 
-		modem = sysdep_malloc(V29_OBJ_SIZE);
+		modem = sysdep_malloc(sizeof(struct v29_rx));
 		((struct v29_rx *)modem)->det = 0;
 		((struct v29_rx *)modem)->rx = 0;
 		new_handle = 1;
@@ -124,7 +122,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 
 	det = ((struct v29_rx *)modem)->det;
 	if (det == 0) {
-		det = sysdep_malloc(V29DET_SIZE);
+		det = sysdep_malloc(sizeof(struct v29_rx_detector));
 		((struct v29_rx *)modem)->det = det;
 
 		det->mtd = 0;
@@ -211,7 +209,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 
 	rx = ((struct v29_rx *)modem)->rx;
 	if (rx == 0) {
-		rx = sysdep_malloc(V29RX_SIZE);
+		rx = sysdep_malloc(sizeof(struct v29_rx_block));
 		((struct v29_rx *)modem)->rx = rx;
 
 		rx->buf_mrf =
@@ -232,7 +230,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	FPM_AGC_init(&((struct v29_rx *)modem)->rx->agc, &AGCv29_CFG, new_handle);
 
 	/*
-	 * The symbol recoverer.  `pad0e` and `pad36` survive; everything else
+	 * The symbol recoverer.  `pad0e` survives; everything else
 	 * is V.29's.
 	 *
 	 * `rms_min` IS READ BACK OUT OF THE GAIN CONTROL the line above just
@@ -261,7 +259,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	scfg.err_lo = 0xc8;
 	scfg.rms_min = (short)(((struct v29_rx *)modem)->rx->agc.cfg.ref_level / 6);
 	scfg.rms_len = 9;
-	memcpy(&scfg.pad34, &aux, sizeof aux);
+	scfg.owner = aux;
 	FPM_SRE_init(&((struct v29_rx *)modem)->rx->sre, &scfg, new_handle);
 
 	/* The four timing-meter fields `FPM_SRE_init` leaves to its caller. */
