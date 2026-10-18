@@ -12,7 +12,8 @@ no register, declaration, alias, or compiler-option palette was reopened.
 
 ## Replay and provenance
 
-Source and original mutation row are pinned to `6b16d64d90891138f9891067bb3e41cad136853d`. The initial frozen lead
+The historical mutation result is retained below as prior evidence; the
+source and original mutation row were pinned to `6b16d64d90891138f9891067bb3e41cad136853d`. The initial frozen lead
 at `dc4161c89` has identical V22 source. `build/v22-fse-capture293/frozen/` holds
 the pre-adoption canonical object and complete `.build-config`; `validation-pin.json`
 records their hashes and the source hash. The driver reads Git source rather than
@@ -22,7 +23,6 @@ mutable generated source. Post-adoption default replay reproduced both controls.
 python3 tools/recovery_v22_fse_capture.py
 python3 tools/recovery_v22_fse_capture.py --audit
 python3 tools/recovery_v22_fse_capture.py --period
-python3 tools/recovery_v22_fse_capture.py --mutant
 make period T='t_v22_fse t_v22rate' J=4
 ```
 

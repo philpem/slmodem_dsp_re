@@ -979,11 +979,10 @@ extent: seven registers with two private entries or an incorrect API bound
 remain possible. Constructor changes are held while accesses to the final
 two words are reviewed against those competing models.
 
-Mutation-gate policy belongs to the separate master follow-up
-[issue #296](https://github.com/philpem/slmodem_dsp_re/issues/296). This work keeps
-period correctness and source fidelity primary; no exhaustive mutation run is
-required. The following checkpoint validates the previously measured wrapper
-arithmetic and reload candidate.
+Mutation-gate policy and its historical results are archived; the mutation
+tooling has since been removed. This work keeps period correctness and source
+fidelity primary. The following checkpoint validates the previously measured
+wrapper arithmetic and reload candidate.
 
 
 ## Wrapper arithmetic and V34 snapshot index checkpoint
@@ -1091,7 +1090,7 @@ commits change no reconstruction source, headers or period toolchain inputs,
 and the reviewed head body/relocation fingerprint remains unchanged.
 
 [PR #297](https://github.com/philpem/slmodem_dsp_re/pull/297) has landed the
-[mutation policy](mutation-policy.md), closing the separate policy follow-up.
+[then-current mutation policy](https://github.com/philpem/slmodem_dsp_re/blob/28ccee066/docs/method/mutation-policy.md), closing the separate policy follow-up.
 Whole-tree mutation execution and snapshot refresh are optional; period
 differential correctness and structural anchor checks remain required.
 

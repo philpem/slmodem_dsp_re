@@ -1,3 +1,7 @@
+> **Historical mutation evidence:** this log preserves results from the removed
+> mutation system. Mentions of suites, anchors or mutation runs describe past
+> measurements only and do not prescribe current maintenance.
+
 # Refinement: what actually closes the last bytes
 
 For experiment planning, source/flag interactions and stopping/reframing a
@@ -8253,31 +8257,11 @@ These controls preserve the other family bodies and pass all four focused
 period fixtures. The remaining register and alias-context differences need
 new evidence, not another arbitrary spelling palette.
 
-## State what mutation evidence establishes
+## Historical mutation evidence and its limits
 
-A caught mutant proves that a particular injected fault makes a particular
-fixture fail. It does not establish valid input history, complete output
-coverage, or fidelity of the fixture's oracle. A fixture can reject arithmetic
-mutants while missing an omitted diagnostic or using an impossible internal
-state. Report assertion failures and runtime signals separately, and do not
-interpret either as proof of fixture validity.
-
-For reconstruction work, validate the fixture boundary and the observed defect
-before extending its mutation set. A known-bad control representing the actual
-missing operation, wrong owner or changed branch provides more direct evidence
-than a larger undifferentiated kill count. Byte-exact function bodies still
-need relocation/dependency and full-TU review, but do not need new mutants merely
-to reconfirm their already established instruction identity.
-
-Distinguish three costs in reports: `make phase` validates source anchors without
-executing mutants; the portability tier checks stored mutation snapshot
-consistency; explicit mutation campaigns compile and execute changed programs.
-The full campaign's cost effectiveness has not been measured here. Evaluate it
-with elapsed time and actionable new findings before treating repeated full
-runs as a routine reconstruction requirement. Targeted period mutation controls
-remain useful when they test a concrete fixture or changed fault anchor; they
-are not a refreshed whole-suite mutation result.
-
+The following recorded guidance was written while mutation tooling existed.
+Its examples remain historical evidence; the current tree uses differential,
+code-generation, transcript and conformance checks.
 
 ## Validate configuration capture at existing reset boundaries
 
@@ -8316,10 +8300,9 @@ no mutation execution or registry change is needed for this refinement.
 witness, bounded two-endpoint replay and the intentionally larger size gap.
 
 
-The master follow-up for mutation policy is
-[issue #296](https://github.com/philpem/slmodem_dsp_re/issues/296). Keep that
-review separate from reconstruction changes: this PR uses period differential
-correctness and native evidence, and does not require a full mutation campaign.
+Issue #296 recorded the historical mutation-policy follow-up. The mutation
+tooling has since been removed; the period differential and native evidence
+remain the reconstruction checks.
 
 
 ## Explain exact-set losses at the first differing compiler stage

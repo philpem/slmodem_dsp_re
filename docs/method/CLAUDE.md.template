@@ -66,9 +66,6 @@ Run `<PHASE>`, not `<CHEAPER>`.
 3. **Build the differential harness before the second function.** It is not
    overhead: it is what makes writing fast. One function here took three
    attempts and each fault was localised in one run.
-4. **Use targeted mutation for a named fixture-sensitivity question.** Record
-   both baseline agreement and whether the intended assertion rejects the
-   planted alternative. No campaign or snapshot refresh is mandatory.
 5. **Start `<FINDINGS>` on day one, with finding 1.** Everything else in this
    file rests on it: a rule keeps its force only while it carries the
    measurement that earned it, and you cannot cite a measurement you did not
@@ -115,7 +112,7 @@ So:
 ## The four oracles, and what each is blind to
 
 No single tier is sufficient and none subsumes another. Full argument in
-`docs/method/tiers.md`. Tier 3 needs `<COMPILER>` — whatever `.comment` named
+`docs/method/tiers.md`. Tier 2 needs `<COMPILER>` — whatever `.comment` named
 — in a container before it can say anything at all.
 
 1. **Differential** — reconstruction and blob in one binary, one deterministic
@@ -124,19 +121,17 @@ No single tier is sufficient and none subsumes another. Full argument in
    over values it never takes (finding 613), a diagnostic call site that is
    absent (finding 134), the order of two stores that leave the same bytes
    (finding 573).
-2. **Optional targeted mutation** — investigate a named fixture blind spot.
-   No global snapshot refresh is required. Break the code on purpose and
-   inspect which assertion fails. It
-   answers "would the test have caught this being wrong", which a green run
-   does not. It cannot tell you the test is *right*.
-3. **Codegen against the period compiler** — did the same compiler, given our
+2. **Codegen against the period compiler** — did the same compiler, given our
    source, emit what the original's emitted. **Act on what the compiler was
    FORCED to encode; ignore what it was free to choose** (see below).
-4. **Transcript / diagnostics** — compare what the two sides *print*. It is
+3. **Transcript / diagnostics** — compare what the two sides *print*. It is
    the only tier that can see a difference the bytes cannot: arm 54 stored a
    counter in an order that leaves identical bytes either way, invisible by
    construction to every byte comparison, and it hid for six batches
    (finding 573).
+4. **Spec conformance** — check the reference against the applicable
+   specification. This can identify a defect shared by both implementations;
+   it does not replace differential fidelity to the reference.
 
 ### The rule for reading a codegen difference
 
@@ -173,41 +168,13 @@ been the deciding number, the flag question would have been settled wrongly.
 100% is not the target: different factoring differs for ever while behaving
 identically. Ratchet on a **decrease**.
 
-## Every tool must be shown to fire
+## Every detector must be shown to fire
 
-The pattern behind every tooling defect this method has found is **a result
-indistinguishable from success**. Four for four, and then a fifth:
-
-- an anchor matching twice reads `UNUSABLE`, and the suite still says
-  `0 NOT caught` (finding 347);
-- an anchor that stays unique but silently re-points reads `CAUGHT`, at a
-  claim nobody made (finding 432);
-- a skipped suite reads `0 anchors wrong, exit 0` (finding 540);
-- a mutation whose `replace` equals its `find` reads `survived, equivalent`
-  (finding 542);
-- a signedness detector that could not find the one defect it was written for
-  printed `(none)` through four broken versions (finding 618).
-
-The rules that follow, and they are not negotiable:
-
-- **Make the tool COUNT what it examined and FAIL on the difference.**
-- **Reporting is not gating.** If the run still exits 0, the report is a
-  comment (finding 542).
-- **A detector nobody has seen fire is not a detector.** Validate it by
-  reintroducing a known defect and watching it appear, in both directions
-  (finding 134, and finding 618 where four versions passed without it).
-- **Measure the flag that looks obviously good.** Sharding a mutation suite
-  four ways made three small suites 60% *slower* — nobody would have put a
-  stopwatch on "parallel is faster" (finding 541).
-- **Reporting a measurement is not recording it, and read a baseline twice
-  before you record it.** A codegen ratchet was run at a merge, printed
-  `ratchet OK -- gained ... identical 92->105`, and was never blessed, so its
-  floor stayed at 92 and a later regression to 93 would have printed the same
-  line (finding 556); and the first invocation against a cold container
-  reported sixty symbols low, which a single reading would have locked in for
-  ever (finding 651).
-
-Full pattern and the checklist: `docs/method/gates.md`.
+A clean result is meaningful only after a known positive control proves that
+the detector can report the defect class under investigation. A signedness
+detector once printed `(none)` through four broken versions, despite a known
+defect (finding 618). Record the control, the denominator and the observed
+result alongside the clean run.
 
 ## Hand-overs: mark what is MEASURED and what is INHERITED
 
@@ -307,9 +274,7 @@ compiler's differential gate. Byte comparison remains the identity authority.
   610).
 - **Parallel workers must be siblings of the real tree, not under `/tmp`**, if
   anything in it is a relative symlink (finding 541).
-- **A killed mutation run leaves its mutant in the source**, and one was
-  committed that way (finding 349). Check `git diff` before committing after a
-  run that did not finish.
+
 
 ## Layout
 

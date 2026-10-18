@@ -219,53 +219,6 @@ def production_control():
     print('Production full object raw-matches combined selected control')
 
 
-def sensitivity():
-    """Recheck moved mutation meaning with period objects and isolated outputs."""
-    root = d.ROOT / 'build' / d.OUT_NAME
-    results = json.loads((root / 'results.json').read_text())
-    template = results['families']['V92ConvEncoder']['cells']['case-owned-native-tables']['command']
-    source = (d.ROOT / d.SOURCE_PATHS[0]).read_text()
-    rows = [row for row in json.loads((d.ROOT / 'test/mutations/v92convenc.json').read_text())
-            if row['label'].startswith('process ')]
-    assert len(rows) == 3
-    report = []
-    for index, row in enumerate(rows):
-        assert source.count(row['find']) == 1
-        label = 'mutation-' + str(index)
-        folder = root / 'V92ConvEncoder' / label
-        folder.mkdir(exist_ok=True)
-        (folder / 'V92ConvEncoder.cpp').write_text(source.replace(row['find'], row['replace']))
-        command = [s.replace('/V92ConvEncoder/case-owned-native-tables', '/V92ConvEncoder/' + label)
-                   for s in template]
-        with (folder / 'compile.log').open('w') as log:
-            subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
-        if 'equivalent' in row:
-            assert (folder / 'candidate.o').read_bytes() == (root / 'V92ConvEncoder/production-control/candidate.o').read_bytes()
-            report.append({'label': row['label'], 'equivalent_raw_object': True, 'command': command})
-            continue
-        out = root / ('period-' + label)
-        out.mkdir(exist_ok=True)
-        period = d.ROOT / 'build/period'
-        stable = list(period.glob('src_*.o')) + list(period.glob('test_harness_*.o'))
-        assert len(list(period.glob('src_*.o'))) == 300
-        stable.append(period / 'test_unit_t_v92convmapper.o')
-        for path in stable:
-            shutil.copy2(path, out / path.name)
-        obj = out / 'src_pump_v90_V92ConvEncoder.o'
-        shutil.copy2(folder / 'candidate.o', obj)
-        run = ['make', 'period', 'T=t_v92convmapper', 'J=4']
-        with (out / 'gate.log').open('w') as log:
-            status = subprocess.run(run, cwd=d.ROOT,
-                env=dict(os.environ, PERIOD_OUT=str(out.relative_to(d.ROOT))),
-                stdout=log, stderr=subprocess.STDOUT).returncode
-        assert status != 0 and 'FAIL' in (out / 't_v92convmapper.run.log').read_text()
-        assert obj.read_bytes() == (folder / 'candidate.o').read_bytes(), 'mutant overwritten'
-        report.append({'label': row['label'], 'period_exit': status,
-                       'caught': True, 'compile_command': command, 'run_command': run})
-    (root / 'period-sensitivity.json').write_text(json.dumps(report, indent=2) + '\n')
-    print('2/2 relocated process mutants caught by period fixture; equivalent index full object raw-identical')
-
-
 if __name__ == '__main__':
     d.REV = '8e216110a0d31fec024e50b28af4b80d91f0f881'
     d.OUT_NAME = 'v92-boundary-adoption'
@@ -277,8 +230,6 @@ if __name__ == '__main__':
         audit()
     elif sys.argv[1:] == ['--production-control']:
         production_control()
-    elif sys.argv[1:] == ['--sensitivity']:
-        sensitivity()
     else:
         d.main()
         audit()

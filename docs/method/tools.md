@@ -4,149 +4,16 @@ Every number cites `docs/findings.md` in this tree. Paths are relative to the
 reconstruction's root.
 
 Most tools here are about *this* blob and do not travel: the translation-unit
-mapper, the coefficient extractors, the offset checker. The five below are
-about **method** rather than about a modem, and each one exists because a
-specific failure happened. They are worth lifting into a new project on day
-one, with the host assumptions listed against each.
+mapper, the coefficient extractors and the offset checker. The methods below
+cover reusable tools and their host assumptions.
 
 ---
 
-## `tools/mutate.py` — break the code on purpose
+## Current tools
 
-An optional fixture-sensitivity tool. Prefer `--suite NAME --only TEXT
---verbose`; `--all` is a legacy explicit campaign command with no gate
-obligation or routine maintenance role. It also accepts a bare
-`source binary mutations.json` triple. A mutation set is JSON:
-
-```json
-[{"label": "swap the two arguments",
-  "find":  "...exact text, must appear exactly once...",
-  "replace": "..."}]
-```
-
-**Assumes:**
-
-- `make <target>` builds one test binary, and `make BUILD=<dir>` puts the
-  objects somewhere else. That one existing parameter is what made parallelism
-  cost no build-system change (finding F541).
-- `test/mutations/suites.json` maps each set to `[source, binary]`. **Use the
-  manifest, not the positional form** — getting the pairing wrong produces
-  NOT CAUGHT for every mutation in the set, which is the same output an
-  untested claim gives and indistinguishable from it without looking. Six sets
-  were misread that way before the manifest existed.
-- Verdicts are reproducible. 209 mutations were identical across a serial run
-  and two eight-way parallel runs (finding F541). The one classification that is
-  not reproducible in principle is `hang` — caught by a timeout rather than by
-  a check — because a loaded machine can move it.
-
-**`--jobs N`.** A tree per worker, not a lock: 209 mutations went 287.22 s →
-61.69 s, 4.7x (finding F541). Two host assumptions that will bite:
-
-- Workers are created as **siblings of the real tree**, not under `/tmp`,
-  because a relative symlink into a peer directory only resolves at the same
-  depth (finding F541). If your tree has no relative symlinks this is free; if
-  it does, keep it.
-- `MIN_PER_WORKER = 12`, because a worker must earn its setup. Below that
-  threshold sharding made three small suites 60% slower (finding F541). Retune
-  it against your own build time — the numbers behind it are a 0.67 s rebuild
-  and a 0.73 s run.
-
-A dying shard aborts the run with exit 2 rather than reporting a confident
-partial total (finding F541).
-
-**`--only TEXT`.** Runs just the mutations whose label contains TEXT, which is
-the question a batch actually asks twenty times: *did the mutations I have
-just touched still fail?* One label against `v34hshak`'s whole suite is
-**4.17 s against 62 s at `--jobs 8`**; against `v34hstx1`, ~4 s against ~180 s
-at `--jobs 4` (finding F555). The speed is the smaller half. **A subset run's
-summary is otherwise indistinguishable from a full run's**, and that number
-lands in commit messages, so the subset line deliberately does not contain the
-string the snapshot recorder scans for — verified by grepping its output for
-that string and getting zero (finding F555, and `gates.md` rule 2). Adding the
-flag invalidated all 48 snapshot entries, because the runner is what decides
-what "caught" means.
-
-## `tools/mutsnap.py` — optional historical records
-
-The [mutation policy](mutation-policy.md) defines the current workflow.
-Snapshot inspection and refresh are optional; no build or merge requires them.
-`--check` hashes dependencies and checks bookkeeping without executing mutants.
-`--update NAME` records only explicitly named suites; `--verify NAME` compares
-new per-label verdicts with historical ones. Both refuse an omitted selection.
-`--strict` optionally makes stale keys fail inspection.
-
-The coarse key includes `Makefile`, `src/`, `include/`, `test/harness/`, the
-runner, fixture driver and mutation JSON. Every test links all source objects;
-a key over only the mutated translation unit would miss dependencies. The key
-does not record compiler identity or every external input, so a matching key
-alone cannot validate a baseline. Record compiler identity alongside results.
-
-Historical full refreshes cost 12 minutes for 2,874 mutants at eight workers
-(F545), and a later 10,075-mutant campaign was estimated at 5.5 hours from a
-partial run (2026-08-31). Those observations do not establish actionable-finding
-ROI. Keep stale verdicts as history and run a named suite only for a concrete
-question. The full-refresh wrapper has been removed (issue #296).
-
-## `tools/anchorcheck.py` — the structural definition-finder
-
-Answers "does each mutation still mutate the thing its label names". Two things
-in it are worth lifting even if you never adopt its heuristic:
-
-1. **The definition finder.** Match the name, walk to the matching close paren,
-   require the next non-space character to be `{`. The lexical version
-   (`^([A-Za-z_][A-Za-z_0-9]*)\(`) missed every qualified C++ method and filled
-   its index with macro invocations at column 0 — 45 "definitions" in a file
-   with 8 (finding F540). The structural test does not care what characters the
-   name is spelled with, and it separates a definition from both a macro call
-   and a forward declaration.
-2. **The vacuous-mutation gate.** A string compare over the same JSON, no build
-   and no suite, and **it exits 1** — so a mutation whose `replace` equals its
-   `find` cannot be committed. Milliseconds against 2,874 mutations
-   (finding F542).
-
-**Assumes** the labels in your mutation sets name something the source names
-too — here, a microstate that the dispatch binds to one function. That part is
-a heuristic over prose and a clean run is not a proof; it is deliberately quiet
-about an anchor in a shared helper and about a label with no identifier in it.
-**It is the difference between checking nothing and checking the case that has
-already gone wrong nine times** (finding F432).
-
-It also counts and reports how many suites it examined, and fails on a skip —
-which is the whole of finding F540.
-
-## `tools/reanchor.py` — repairing anchors after a neighbour lands
-
-When a second near-identical body lands, an anchor written against the first
-matches twice, reports UNUSABLE, and does not fail the run (finding F347). The
-repair is mechanical — grow the `find` string by whole lines until it matches
-once — but **which occurrence to grow from is not.** Growing from the wrong one
-silently re-points a mutation at a different claim, which is worse than leaving
-it unusable.
-
-**Assumes a per-batch naming prefix.** It picks the occurrence whose
-surrounding 1,200 characters mention the batch's own prefix most (`--prefix
-T44_`), **prints the line number it chose for every one** so the choice is
-auditable, and refuses where no prefix separates the candidates. The prefixes
-were introduced for a different reason — stopping `#define` collisions between
-parallel batches — and turned out to be exactly what makes an anchor unique
-(finding F347). If your project has no such convention, introduce one before you
-need this tool.
-
-**That refusal was a promise the tool did not keep until finding F2150.** The
-guard was gated on `--prefix` having been given and the sort's second key was
-the file offset descending, so with no `--prefix` every occurrence scored the
-same, the guard could not be reached, and the LAST textual match won silently —
-nine mutations moved out of `getV90Decision` and into `getV92Decision`, reported
-as "9 re-anchored, 0 left for a human" (finding F2120; 455 is the same thing one
-occurrence at a time). The guard is now unconditional and the offset tiebreak is
-gone, so **an ambiguous anchor with no `--prefix` reads STUCK and exits 1**. The
-repair was demonstrated against the exact input that beat it, in all three
-directions: old tool wrong-and-silent, new tool refusing, new tool still placing
-a case a prefix genuinely separates.
-
-**Known limitation, and it is not academic:** it only grows anchors **upward**,
-and two of one batch's hardest cases needed downward growth — six identical
-lines that first differ in the diagnostic *below* them (finding F432).
+The mutation runner, snapshot manager, anchor checker and reanchoring tool
+described in older revisions were removed. Their archived measurements are
+retained in the method history, but they are not part of the current workflow.
 
 ## `tools/refcheck.py` — hold the tree to its own cross-references
 
@@ -179,10 +46,6 @@ wherever your one tool already walks every tracked file:
   a merge resolved by script, staged, committed, every gate green, because
   nothing else reads prose. The record is the deliverable, so a marker in it is
   as much a defect as a failing test.
-- **The mutation registry parses.** Merging two branches that each appended a
-  line produces a trailing comma about one time in three, and a malformed
-  registry makes **every** suite unrunnable while the phase gate stays green
-  (finding F346).
 
 ---
 
