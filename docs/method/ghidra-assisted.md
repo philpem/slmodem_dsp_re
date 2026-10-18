@@ -1072,3 +1072,33 @@ nineteen differ from the opening checkpoint. Partial-link comparison is
 72202/943398 positioned bytes, 68 exact sections, 457/2931 exact symbols and
 1002/18317 exact relocations. Full `make phase J=4` passes all 392 period
 fixtures with zero failures and all structural checks.
+
+
+## Rebase onto the mutation-policy update
+
+The PR was rebased onto `origin/master` at `c13fb7902` on 2026-10-18. Local
+`master` was fast-forwarded to the same commit; its unrelated unfinished edits
+were restored with an unchanged patch ID. The 61 PR commits replayed without
+conflicts. Range comparison found only changed surrounding workflow context;
+`src/`, `include/`, the period toolchain and shared experiment helper are
+unchanged between the old and rebased committed trees.
+
+The annotated tag `archive/pr293-before-rebase-20261018` preserves the old
+`24ceb2d08` history, including immutable source/evidence commits referenced by
+replay tools. Historical commit IDs in the audits remain valid. The reviewed
+`V34EchoPreFilter` loss now names base `c13fb7902`: the intervening master
+commits change no reconstruction source, headers or period toolchain inputs,
+and the reviewed head body/relocation fingerprint remains unchanged.
+
+[PR #297](https://github.com/philpem/slmodem_dsp_re/pull/297) has landed the
+[mutation policy](mutation-policy.md), closing the separate policy follow-up.
+Whole-tree mutation execution and snapshot refresh are optional; period
+differential correctness and structural anchor checks remain required.
+
+Repository cleanup removed 33 unchecked-out branches whose tips are ancestors
+of master or the pre-rebase PR tip, archived four additional fully patch-equivalent branch histories
+as local tags, and removed their redundant branch names. Five registrations
+for absent worktrees were pruned. Existing
+worktrees with changes or ignored build evidence were preserved. No remote
+branches or unique local commits were deleted. The pending tone-filter
+refinement was preserved across the rebase; its validation is recorded separately.

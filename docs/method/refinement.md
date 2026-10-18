@@ -8456,3 +8456,18 @@ are recorded rather than dismissed as register allocation.
 [The V8 read-age audit](../v8-dft-read-age-recovery.md) records source/header
 pins, actual compiler dependency output, both negative controls and the
 complete selected command. Production raw-matches the selected replay object.
+
+
+## Preserve replay ancestry when rebasing
+
+Source-recovery tools may pin commits for both source extraction and accepted
+collateral evidence. Before rewriting a published investigation branch, retain
+its old tip under an explicit archive tag and push that tag with the rebased
+branch. Verify the committed source, headers and period compiler inputs are
+unchanged by the rebase, then rerun the applicable gates on the integrated
+base. A successful cherry-pick does not establish those properties by itself.
+
+Base-pinned loss reviews also need revalidation. PR293's new master base
+changes mutation policy without changing reconstruction or period inputs;
+the reviewed PreFilter fingerprint stays identical. Updating that base pin
+is justified by those checks, not by disabling or widening the exactness gate.
