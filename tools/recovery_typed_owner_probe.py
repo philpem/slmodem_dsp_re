@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run and validate the bounded typed-owner offset probe with period GCC."""
+"""Run and validate the V32 typed-owner audit probe with period GCC."""
 from pathlib import Path
 import argparse
 import re
@@ -31,7 +31,7 @@ def read_config(path):
 def parse_rows(text):
     rows = {}
     for line in text.splitlines():
-        match = re.fullmatch(r"([\w.]+) off=(\d+) size=(\d+) signed=(n/a|[01])", line)
+        match = re.fullmatch(r"([\w.\[\]]+) off=(\d+) size=(\d+) signed=(n/a|[01])", line)
         if match:
             name, offset, size, signed = match.groups()
             if name in rows:
@@ -65,15 +65,15 @@ def main():
 
     toolchain.print_identity(image, gcc_path, True)
     print("period .build-config:", args.config)
-    print("period flags:", shlex.join(flags))
+    print("period flags:", shlex.join(flags + [toolchain.REPRODUCE_BUGS]))
     print("probe command:", shlex.join(command), flush=True)
     result = subprocess.run(command, cwd=ROOT, check=True,
                             capture_output=True, text=True)
     print(result.stdout, end="")
     rows = parse_rows(result.stdout)
 
-    # Thirty distinct ordinary members cover the 20 v32seq and 20 selected
-    # v32fpctl statement rows. Five more are the known positive controls.
+    # The complete v32seq/v32fpctl ledgers and changed mappings. The separate
+    # RXHDX-40 and V32.c-40 sample probes remain outside this denominator.
     ordinary = {
         "v32_hdx.gen_index": (0x4a, 2, "0"),
         "v32_hdx.gen_index_mask": (0x4c, 2, "0"),
@@ -106,6 +106,49 @@ def main():
         "v32_sdm.tap1_pos": (0x02, 2, "1"),
         "v32_sdm.tap2_pos": (0x04, 2, "1"),
     }
+    # Additional distinct paths from the complete v32seq/v32fpctl worksheets,
+    # including the nine changed owner-mapping macros and address-only VTB
+    # arguments. Expectations are static values from the period probe.
+    ordinary.update({
+        "v32_modem.params": (0x00, 48, "n/a"),
+        "v32_modem.hdx": (0x64, 4, "n/a"),
+        "v32_modem.fp": (0x68, 4, "n/a"),
+        "v32_modem.params.rx_rate": (0x04, 2, "1"),
+        "v32_modem.params.trellis": (0x1c, 4, "1"),
+        "v32_modem.params.ec_near_delay": (0x14, 2, "0"),
+        "v32_modem.params.symlen_sel": (0x18, 2, "1"),
+        "v32_fp.scrambler": (0x30, 24, "n/a"),
+        "v32_fp.descrambler": (0x50b0, 24, "n/a"),
+        "v32_fp.tx_smc": (0x48, 22, "n/a"),
+        "v32_fp.pps": (0x60, 56, "n/a"),
+        "v32_fp.symout": (0xb0, 20, "n/a"),
+        "v32_fp.ecc": (0xe0, 104, "n/a"),
+        "v32_fp.fse": (0x204, 19992, "n/a"),
+        "v32_fp.tx_rate_index": (0x28, 2, "1"),
+        "v32_fp.rx_rate_index": (0x2a, 2, "1"),
+        "v32_fp.encoder_sel": (0xa4, 2, "1"),
+        "v32_fp.short_2c": (0x2c, 2, "1"),
+        "v32_fp.int_00": (0x00, 4, "1"),
+        "v32_fp.int_04": (0x04, 4, "1"),
+        "v32_fp.int_08": (0x08, 4, "1"),
+        "v32_fp.int_0c": (0x0c, 4, "1"),
+        "v32_fp.eq_adapt": (0x10, 4, "1"),
+        "v32_fp.int_14": (0x14, 4, "1"),
+        "v32_fp.int_18": (0x18, 4, "1"),
+        "v32_fp.decoder": (0x5020, 120, "n/a"),
+        "v32_fp.decoder.vtb": (0x5038, 56, "n/a"),
+        "v32_fp.decoder.short_04": (0x5024, 2, "1"),
+        "v32_fp.decoder.short_74": (0x5094, 2, "0"),
+        "v32_hdx.regs": (0x3c, 10, "n/a"),
+        "v32_hdx.regs[0]": (0x3c, 2, "1"),
+        "v32_hdx.short_9c": (0x9c, 2, "1"),
+        "v32_hdx.symbol_len": (0x9e, 2, "1"),
+        "v32_hdx.turnaround": (0x94, 2, "1"),
+        "v32_hdx.short_98": (0x98, 2, "1"),
+        "v32_hdx.short_9a": (0x9a, 2, "1"),
+        "v32_dec.vtb": (0x18, 56, "n/a"),
+        "v32_dec.short_74": (0x74, 2, "0"),
+    })
     positives = {
         "v32_hdx.short_46": (0x46, 2, "1", 0x44),
         "v32_fp.ecc.pwr_out": (0x102, 2, "1", 0x182),
@@ -113,8 +156,8 @@ def main():
         "v32_fp.mrf.need": (0xd4, 2, "1", 0x100),
         "v32_fp.mrf.phase": (0xd6, 2, "1", 0x102),
     }
-    if len(ordinary) != 30:
-        raise SystemExit("worksheet must cover 30 unique ordinary member paths")
+    if len(ordinary) != 68:
+        raise SystemExit("worksheet must cover 68 unique ordinary member paths")
     if len(positives) != 5:
         raise SystemExit("worksheet must retain five selected positive controls")
     if set(rows) != set(ordinary) | set(positives):
@@ -126,7 +169,7 @@ def main():
     for name, (offset, size, signed, old) in positives.items():
         if rows[name] != (offset, size, signed) or offset == old:
             raise SystemExit("positive control failed: %s" % name)
-    print("typed-owner probe: 30 unique ordinary member paths match; "
+    print("typed-owner probe: 68 unique ordinary member paths match; "
           "5 selected positive controls mismatch as expected")
 
 

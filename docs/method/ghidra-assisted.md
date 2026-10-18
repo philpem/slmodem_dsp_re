@@ -921,3 +921,16 @@ Its complete per-file ledgers and selected-row coverage are recorded in the
 unverified changed access roles and native-supported partial candidates whose
 validation is incomplete; do not restart exhausted source palettes without
 new evidence.
+
+
+The next concrete validation lead is `V22_FSE_init`'s configuration capture
+(F11741, prior report `7b436a0ef`). The reference reads both configuration
+pointers before publishing either destination pointer. The earlier whole-config
+copy endpoint reaches the native 372-byte size with BYTES5 remaining and no
+reported bystander/data/binding changes, but was withheld without executing
+period or mutation validation. Replay only the baseline and that endpoint,
+then run `t_v22_fse` and `t_v22rate` at their existing init/reinit boundaries.
+Reanchor and execute the existing I/Q-swap mutant without changing its fault.
+The observed self-configuration reset path supports the boundary; arbitrary
+partially overlapping configurations are not established reachable inputs.
+Do not reopen the previous source palette solely to eliminate five bytes.
