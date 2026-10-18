@@ -1703,6 +1703,69 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 }
 
 /*
+ * Initialise both shell contexts and clear the digital state. The role
+ * selects the transmit and receive scrambler callbacks.
+ */
+void
+preinitdigital(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_shell *rx = (struct v34_shell *)obj;
+
+	/*
+	 * The original embeds both field initialisers here. Keeping their
+	 * bodies visible lets the period compiler inline these ordinary calls.
+	 */
+	preinitV34((char *)obj + V34_SHELL_TX + V34_SHELL_FIELDS);
+	preinitV34((char *)rx + V34_SHELL_FIELDS);
+
+	/* The receive context's trellis machinery, cleared wholesale. */
+	sysdep_memset(rx->cost, 0, sizeof(rx->cost));
+	sysdep_memset(rx->trellis, 0, sizeof(rx->trellis));
+	sysdep_memset(rx->state, 0, sizeof(rx->state));
+
+	{
+		struct v34_scrambler *s = &obj->scrambler;
+		struct v34_descrambler *r = &obj->descrambler;
+
+		s->w[0] = 0;
+		rx->state_idx = 0;
+		s->nbits = 0x20;
+		s->w[3] = 0;
+		s->w[2] = 0;
+		s->w[1] = 0;
+
+		r->count = 0;
+		r->w[0] = 0;
+		r->w[2] = 0;
+		r->w[1] = 0;
+	}
+
+	obj->data_enable = 0;
+	obj->train_symcount = 0;
+
+	/*
+	 * THE ONE DECISION IN THE FUNCTION.  The two ends of a V.34 call
+	 * must scramble with opposite polynomials, so this is the
+	 * originate/answer flag -- and `setTimingStateParameters` already
+	 * reads the same field to pick between two timing ramps, which is
+	 * the second use that makes the first one legible.  Finding F177.
+	 */
+	{
+		v34_scramble_fn *tx_scramble =
+			&((struct v34_shell *)((char *)obj + V34_SHELL_TX))->scramble;
+
+		if (obj->role == 0x65) {
+			*tx_scramble = scrambleGPC;
+			rx->scramble = (v34_scramble_fn)descrambleGPA;
+		} else {
+			*tx_scramble = scrambleGPA;
+			rx->scramble = (v34_scramble_fn)descrambleGPC;
+		}
+	}
+}
+
+/*
  * ---------------------------------------------------------------------------
  * The four bit callbacks -- `scrambleGPC`, `scrambleGPA`, `descrambleGPC`
  * and `descrambleGPA` -- are in src/pump/v34/v34scram.c.  The blob has them

@@ -151,28 +151,33 @@ GenericIIR<Sample, Coeff>::reset()
  * Move the most recent (n-1) entries back to the top of the buffer and reset
  * the write position beneath them.  Order is preserved: the newest stays
  * newest.  Copied high-to-low because source and destination overlap when the
- * slack is smaller than the history.
+ * slack is smaller than the history.  The original counts down from n-2 to
+ * the -1 sentinel while decrementing both pointers.
  */
 template <typename Sample, typename Coeff>
 inline void
 GenericIIR<Sample, Coeff>::compactIn()
 {
-	unsigned k;
-
 	m_inPos = m_inLen - m_nnum;
-	for (k = 0; k + 1 < m_nnum; k++)
-		m_inHist[m_inLen - 1 - k] = m_inHist[m_nnum - 2 - k];
+	if (m_nnum > 1) {
+		Coeff *dst = m_inHist + m_inLen - 1;
+		const Coeff *src = m_inHist + m_nnum - 2;
+		for (unsigned k = m_nnum - 2; k != (unsigned)-1; k--)
+			*dst-- = *src--;
+	}
 }
 
 template <typename Sample, typename Coeff>
 inline void
 GenericIIR<Sample, Coeff>::compactOut()
 {
-	unsigned k;
-
 	m_outPos = m_outLen - m_nden;
-	for (k = 0; k + 1 < m_nden; k++)
-		m_outHist[m_outLen - 1 - k] = m_outHist[m_nden - 2 - k];
+	if (m_nden > 1) {
+		Coeff *dst = m_outHist + m_outLen - 1;
+		const Coeff *src = m_outHist + m_nden - 2;
+		for (unsigned k = m_nden - 2; k != (unsigned)-1; k--)
+			*dst-- = *src--;
+	}
 }
 
 template <typename Sample, typename Coeff>
@@ -184,9 +189,9 @@ GenericIIR<Sample, Coeff>::process(Sample x)
 	 * The period compiler retains the live x87 value while emitting the
 	 * observed non-popping double stores; see the precision note above.
 	 */
-	m_acc = 0;
-
 	m_inHist[m_inPos] = x;
+
+	m_acc = 0;
 
 	/* Feedforward: the numerator over the input history. */
 	for (m_i = 0; m_i < m_nnum; m_i++)
@@ -202,15 +207,12 @@ GenericIIR<Sample, Coeff>::process(Sample x)
 
 	m_outHist[m_outPos] = m_acc;
 
-	if (m_outPos == 0)
+	/* Both original entry points test the signed, decremented position. */
+	if ((int)--m_outPos < 0)
 		compactOut();
-	else
-		m_outPos--;
 
-	if (m_inPos == 0)
+	if ((int)--m_inPos < 0)
 		compactIn();
-	else
-		m_inPos--;
 
 	return (Sample)m_acc;
 }
@@ -223,17 +225,17 @@ GenericIIR<Sample, Coeff>::process(const Sample *in, Sample *out,
 	/* The block entry point multiplies by a reciprocal. Direct division,
 	 * as used by the scalar entry point, can round differently. A unit
 	 * normalizer preserves the original zero-denominator convention. */
-	for (unsigned k = 0; k < count; k++) {
-		Sample x = in[k];
+	while (count-- != 0) {
+		Sample x = *in++;
 
 		/*
 		 * Publish the accumulator at the original update boundaries (F11992).
 		 * The period compiler retains the live x87 value while emitting the
 		 * observed non-popping double stores; see the precision note above.
 		 */
-		m_acc = 0;
-
 		m_inHist[m_inPos] = x;
+
+		m_acc = 0;
 
 		/* Feedforward: the numerator over the input history. */
 		for (m_i = 0; m_i < m_nnum; m_i++)
@@ -251,17 +253,13 @@ GenericIIR<Sample, Coeff>::process(const Sample *in, Sample *out,
 
 		m_outHist[m_outPos] = m_acc;
 
-		if (m_outPos == 0)
+		if ((int)--m_outPos < 0)
 			compactOut();
-		else
-			m_outPos--;
 
-		if (m_inPos == 0)
+		*out++ = (Sample)m_acc;
+
+		if ((int)--m_inPos < 0)
 			compactIn();
-		else
-			m_inPos--;
-
-		out[k] = (Sample)m_acc;
 	}
 }
 

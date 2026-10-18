@@ -172,14 +172,12 @@ static float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {
  * without reference to it.  D72 is the entry, finding F1188 the numbers and
  * the CANNOT FIRE verdict; this file neither clamps nor re-argues it.
  *
- * `setEchoDelay` IS CALLED, NOT INLINED, and the object inlined it.  The
- * instruction stream at +0x32..+0x4d is that method's body verbatim, down to
- * the diagnostic, and GCC at -O2 would not inline a non-`inline` external
- * function -- so the original's source and ours differ in factoring here and
- * agree in behaviour, which is CLAUDE.md's sanctioned case.  Writing it as a
- * call rather than a copy is also what keeps `v92ec`'s anchors unique
- * (finding F1264): the same three statements twice in one file would put half
- * the suite's `find` strings on two occurrences each.
+ * The native constructor contains setter-equivalent operations at
+ * +0x32..+0x4d, including the diagnostic, without a setEchoDelay call.
+ * The retained -O3 build also expands the ordinary source call below.
+ * This does not establish whether the original used a call or copied the
+ * statements.  Keeping one source body preserves the unique mutation anchors
+ * recorded in finding F1264.
  *
  * IT READS TWO MEMBERS BEFORE ANYTHING HAS WRITTEN THEM.  `echoLength +=
  * delay - echoDelay` runs on whatever the allocation held, and the object
@@ -205,6 +203,7 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 {
 	int length;
 	unsigned int span;
+	unsigned int roundedSpan;
 	FloatARMA *m;
 
 	if (DSPLIB_DEBUG_ON())
@@ -220,9 +219,12 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 
 	echoCoeff = (float *)sysdep_malloc(filterLength * sizeof(float));
 
-	span = filterLengthMinusOne + echoDelay;
-	historyAlloc = span + 2u * blockLen + span / blockLen * blockLen
-		       + extra;
+	span = echoDelay + filterLengthMinusOne;
+	/* Preserve the reference's separate rounded product and its lifetime.
+	 * A single sum lets the period parser fold both blockLen products into
+	 * (span / blockLen + 2) * blockLen before RTL is built. */
+	roundedSpan = span / blockLen * blockLen;
+	historyAlloc = span + 2u * blockLen + roundedSpan + extra;
 	echoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));
 
 	m = (FloatARMA *)sysdep_malloc(sizeof(FloatARMA));
@@ -286,9 +288,9 @@ V92EchoCanceller::resetEchoHistory()
  * Clear the canceller: both buffers, the write cursor, the tap count, the two
  * betas and the ARMA behind it.
  *
- * FOUR OF THIS CLASS'S OWN MEMBERS ARE INLINED HERE, AND THE FACTORING IS
- * RECORDED RATHER THAN REPRODUCED.  The first loop below is byte-for-byte the
- * body of `zeroEchoCoeff` (blob 0x10f60, 45 B); the block after it is
+ * FOUR STANDALONE MEMBER BODIES HAVE EQUIVALENT OPERATIONS HERE.  The native
+ * first loop is byte-for-byte the body of `zeroEchoCoeff` (blob 0x10f60,
+ * 45 B); the block after it is
  * byte-for-byte the body of `resetEchoHistory` (0x10f90, 62 B), down to the
  * order of the `historyIndex` store and the `echoLength` recomputation; and
  * the two store-and-print pairs are `setEchoBeta(0.0f)` (0x10cc0) and
@@ -298,16 +300,15 @@ V92EchoCanceller::resetEchoHistory()
  * `'-'`, and its `(int)fabs` and fractional terms to zero.  That is exactly
  * the `$0x2d, $0, $0` the object passes.
  *
- * TWO OF THE FOUR ARE NOW WRITTEN, just above -- `zeroEchoCoeff` and
- * `resetEchoHistory` have their own out-of-line definitions, claimed at
- * last -- and the inlined spelling HERE still stands: GCC inlined them in
- * the original too, so the emitted code is the same either way, and
- * CLAUDE.md's rule that a different factoring may differ for ever while
- * behaving identically is what makes that a choice rather than a compromise.
- * Finding F1271.  (`setEchoBeta(0.0f)` and `setDecayFactor(0.0f)` remain
- * unwritten and constant-folded, as the paragraph above describes.)
+ * All four members have out-of-line definitions: zeroEchoCoeff and
+ * resetEchoHistory above, setEchoBeta and setDecayFactor below.  This reset
+ * calls them in native operation order.  This preserves the exact reset
+ * body and restores the constructors' reset tail under retained options:
+ * helper expansion grows reset's estimate to 101 and GCC declines to inline
+ * it there.  The prior manual expansion (F1271) hid that caller effect.
+ * Native operations alone do not uniquely establish original call spelling.
  *
- * THE SECOND LOOP IS D72's, AND THIS FILE DOES NOT CLAMP IT.  `echoLength` is
+ * THE HISTORY LOOP IS D72's, AND THIS FILE DOES NOT CLAMP IT.  `echoLength` is
  * rebuilt from `filterLength`, `echoDelay` and the parameter block and used
  * as the bound on `echoHistory` with no reference to what that buffer was
  * allocated with.  D72 is the entry; it is CONFIRMED present and CANNOT FIRE
@@ -318,25 +319,11 @@ V92EchoCanceller::resetEchoHistory()
 void
 V92EchoCanceller::reset()
 {
-	unsigned int i;
-
-	for (i = 0; i < filterLength; i++)
-		echoCoeff[i] = 0.0f;
-
-	historyIndex = 0;
-	echoLength = (filterLength >> 1) + echoDelay
-		     + (unsigned int)params->V92_ECHO_DELAY_OFFSET;
-	for (i = 0; i < echoLength; i++)
-		echoHistory[i] = 0.0f;
-
+	zeroEchoCoeff();
+	resetEchoHistory();
 	state = V92_ECHO_FILTER_ONLY;
-
-	echoBeta = 0.0f;
-	edprintf("V92EchoCanceller: echoBeta = %c%d.%06d\r\n", '-', 0, 0);
-
-	echoBetaDecay = 0.0f;
-	edprintf("V92EchoCanceller: echoBetaDecay = %c%d.%06d\r\n", '-', 0, 0);
-
+	setEchoBeta(0.0f);
+	setDecayFactor(0.0f);
 	arma->reset();
 }
 
@@ -469,7 +456,11 @@ print_echo_coeffs(float *coeffs, unsigned int len)
  * The sign comes from the FIELD and the two integers from the ARGUMENT, which
  * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
  * register for the magnitude and `fcomps 0x30(%ebx)` reads the store back for
- * the sign.  They are the same float; the spelling is the object's.
+ * the sign in the reference.  The source names those operands, but retained
+ * Gentoo first RTL CSE forwards the stored argument into the sign comparison:
+ * the standalone setters retain an x87 value and emit `fcompp`, not a member
+ * readback.  Their 149-versus-147-byte residual also includes product/pop and
+ * scheduling differences; it is not just a two-byte reload discrepancy.
  *
  * TWO OF THE SIX INLINED COPIES COME OUT AS A CONSTANT `'-'` HERE AND AS A
  * COMPARE IN THE OBJECT, and it is a fold rather than a spelling.  The

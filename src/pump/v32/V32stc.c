@@ -32,7 +32,7 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 {
 	struct v32_fp *fp;
 	struct v32_hdx *hdx;
-	int rate;
+	unsigned short rate;
 
 	if (modem->status == V32_MSG_RETRAIN_REQ) {
 		if (DSPLIB_DEBUG_ON())
@@ -142,7 +142,8 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 		hdx->state = 0;
 		modem->flags &= (unsigned char)~V32_FLAG_DATA;
 		if (hdx->mode == V32_MODE_RING_RESP) {
-			hdx->short_46 = 0;
+			/* Reference 0x847fd clears HDX +0x44, the last register. */
+			hdx->regs[4] = 0;
 			V32RngRespNextState(modem);
 			ctl->ctl1 &= (unsigned char)~V32_CTL1_RENEG;
 			return 1;
@@ -153,29 +154,24 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 		rate = ctl->bps;
 		PARAMS(modem)->tx_rate = (short)rate;
 		PARAMS(modem)->rx_rate = (short)rate;
-		switch (rate) {
-		case 14400:
+		/*
+		 * The reference tests these four rates in this order, with
+		 * 16-bit equality comparisons.  A switch promotes the selector
+		 * and emits a 32-bit binary decision tree on the period compiler;
+		 * the explicit chain preserves the witnessed tests.
+		 */
+		if (rate == 14400)
 			fp->tx_rate_index = V32_RATE_14400;
-			break;
-		case 12000:
+		else if (rate == 12000)
 			fp->tx_rate_index = V32_RATE_12000;
-			break;
-		case 9600:
-			/*
-			 * `2 - (trellis == 0)`, which is the same six
-			 * instructions `V32FP_recreate` uses at 7f40b and
-			 * 7f60f -- v32seq.h records both.
-			 */
+		else if (rate == 9600)
 			fp->tx_rate_index = (unsigned short)
 				(2 - (PARAMS(modem)->trellis == 0));
-			break;
-		case 7200:
+		else if (rate == 7200)
 			fp->tx_rate_index = V32_RATE_7200;
-			break;
-		default:
+		else
 			fp->tx_rate_index = V32_RATE_4800;
-			break;
-		}
+
 		fp->rx_rate_index =
 			fp->tx_rate_index;
 		V32RngInitNextState(modem);
@@ -267,10 +263,10 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 			snr = ((int)(short)(t * 10) + 0x100) >> 9;
 		}
 		fp = FP(modem);
-		if (fp->mrf.phase != 0 && fp->mrf.need != 0) {
-			FPM_div((unsigned short)fp->mrf.phase, &recip, &shift);
+		if (fp->ecc.pwr_out != 0 && fp->ecc.pwr_in != 0) {
+			FPM_div((unsigned short)fp->ecc.pwr_out, &recip, &shift);
 			fp = FP(modem);
-			m = (fp->mrf.need * (int)recip) >> 15;
+			m = (fp->ecc.pwr_in * (int)recip) >> 15;
 			t = (int)FPM_log10((unsigned short)m,
 					   (short)-(short)shift) >> 3;
 			r0a = (short)(t * 10) >> 9;
@@ -295,7 +291,7 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	st->r0e = 0;
 	st->r0c = (short)(unsigned short)fp->agc.level;
 	st->r10 = (short)fp->pps.cfg.step_adj;
-	st->r12 = (short)(unsigned short)fp->ecc.pwr_out;
+	st->r12 = fp->sre.pll_acc;
 
 	/*
 	 * Eight read-modify-writes of the caller's byte, in the object's own
@@ -332,7 +328,7 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 					 >> 2) & 1));
 
 	fp = FP(modem);
-	st->r18 = fp->ecc.adapt_near;
+	st->r18 = fp->sre.active;
 	st->r1c = (fp->agc.signal != 1);
 
 	if (SnrToRetrainTable[rate_idx] <= (short)snr) {

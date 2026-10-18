@@ -383,16 +383,8 @@ SGD_sequence_gen(struct sgd *s, unsigned short *out, short n)
 	if (enable != 0 || s->status.seq_reps == 0)
 		active = 1;
 
-	for (k = (short)(n - 1); k != -1; k = (short)(k - 1)) {
-		unsigned short sym;
-
-		if (active != 0) {
-			sym = seq[i];
-			i = (short)(i + 1);
-		} else {
-			sym = s->cfg.gen.idle_sym;
-		}
-		*out++ = sym;
+	for (k = n; k-- != 0;) {
+		*out++ = active != 0 ? seq[i++] : s->cfg.gen.idle_sym;
 
 		len = s->cfg.gen.seq_len;
 		if ((short)len <= i) {
@@ -428,13 +420,14 @@ short
 SGD_correlate(const short *p, const unsigned short *a,
 	      const unsigned short *b, short n)
 {
-	int scale = 1 / (*p * n);
+	/* 0x9f86e narrows the quotient; the loop tests the old short count. */
+	short scale = 1 / (*p * n);
 	short acc = 0;
 	short i;
 
-	for (i = (short)(n - 1); i != -1; i = (short)(i - 1))
+	for (i = n; i-- != 0;)
 		acc = (short)(acc
-		    + FPM_xor_table[(unsigned short)(*b++ ^ *a++)]);
+		    + FPM_xor_table[(unsigned short)(*a++ ^ *b++)]);
 
 	return (short)(1 - acc * scale);
 }

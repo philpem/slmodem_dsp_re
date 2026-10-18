@@ -1591,7 +1591,13 @@ V34EqualizerAdapt(struct v34_equalizer *q, short err_re, short err_im)
 void
 V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 {
-	int n;
+	int first = q->cursor + V34_EQ_CENTRE_FIRST;
+	int limit = first + V34_EQ_CENTRE_TAPS;
+	int wrapped = 0;
+	int j;
+	short *re = q->re + V34_EQ_CENTRE_FIRST;
+	short *im = q->im + V34_EQ_CENTRE_FIRST;
+	short *dly_im = q->dly_im;
 
 	/*
 	 * The same gradient as V34EqualizerAdapt over the 8 centre taps, and
@@ -1607,25 +1613,39 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 	 * afterwards -- but the two do fight over the same eight taps if both
 	 * run, and nothing in this file arbitrates.  See docs/findings.md.
 	 */
-	for (n = 0; n < V34_EQ_CENTRE_TAPS; n++) {
-		int k = V34_EQ_CENTRE_FIRST + n;
-		int j = q->cursor + V34_EQ_CENTRE_FIRST + n;
-		int dre, dim, tap;
+	if (first >= V34_EQ_TAPS) {
+		first -= V34_EQ_TAPS;
+		limit -= V34_EQ_TAPS;
+	} else if (limit >= V34_EQ_TAPS) {
+		wrapped = limit - V34_EQ_TAPS;
+		limit = V34_EQ_TAPS;
+	}
 
-		if (j >= V34_EQ_TAPS)
-			j -= V34_EQ_TAPS;
-		dre = q->dly_re[j];
-		dim = q->dly_im[j];
+	for (j = first; j < limit; j++) {
+		int tap;
 
-		tap = (int)((unsigned)((unsigned)q->re[k] << 16)
-			    - (unsigned)(dre * err_re)
-			    - (unsigned)(dim * err_im) + 0x8000u);
-		q->re[k] = (short)(tap >> 16);
+		tap = (int)((unsigned)((unsigned)*re << 16)
+			    - (unsigned)(q->dly_re[j] * err_re)
+			    - (unsigned)(dly_im[j] * err_im) + 0x8000u);
+		*re++ = (short)(tap >> 16);
 
-		tap = (int)((unsigned)((unsigned)q->im[k] << 16)
-			    - (unsigned)(dre * err_im)
-			    + (unsigned)(dim * err_re) + 0x8000u);
-		q->im[k] = (short)(tap >> 16);
+		tap = (int)((unsigned)((unsigned)*im << 16)
+			    - (unsigned)(q->dly_re[j] * err_im)
+			    + (unsigned)(dly_im[j] * err_re) + 0x8000u);
+		*im++ = (short)(tap >> 16);
+	}
+	for (j = 0; j < wrapped; j++) {
+		int tap;
+
+		tap = (int)((unsigned)((unsigned)*re << 16)
+			    - (unsigned)(q->dly_re[j] * err_re)
+			    - (unsigned)(dly_im[j] * err_im) + 0x8000u);
+		*re++ = (short)(tap >> 16);
+
+		tap = (int)((unsigned)((unsigned)*im << 16)
+			    - (unsigned)(q->dly_re[j] * err_im)
+			    + (unsigned)(dly_im[j] * err_re) + 0x8000u);
+		*im++ = (short)(tap >> 16);
 	}
 }
 

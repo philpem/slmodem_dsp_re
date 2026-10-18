@@ -263,6 +263,23 @@ role can be bounded but not established, keep a neutral name and put the
 derivation in the comment — 3120 declined `+0x2f64` on exactly this ground and
 that was the right call.
 
+## Check the address when replacing a raw access
+
+A raw-offset-to-member conversion must preserve the **owner, byte offset and
+access width at every changed use**. Record the old constant's resolved value
+and the new member's complete nested offset; check them with the period layout
+before interpreting code-generation changes. Correct struct assertions alone
+do not prove that a use selected the correct member.
+
+The V.32 status/control audit found five wrong field selections introduced by
+one typed-owner conversion: a clear moved from HDX `+0x44` to `+0x46`, and status
+reads selected fields in the wrong embedded DSP modules. The surrounding source
+comments still carried the correct offsets. Constructor-only fixtures missed
+the status errors because several fields were zero together. Use component
+histories that give the plausible alternative fields distinct values; report
+synthetic states as such. A green differential suite is evidence for its input
+domain, not proof that an unchecked field substitution preserved an address.
+
 ## One type, one home
 
 A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.
@@ -576,6 +593,36 @@ not a reason to freeze potentially compensating source/flag choices. Do not
 require monotonic improvement during exploration or adopt a candidate merely
 for a net score gain. Record the next discriminating test in the issue before
 repeating a stalled line of inquiry.
+
+**A ratchet is a regression detector, not the reconstruction authority.** Do
+not reject or abandon an independently witnessed structural/source recovery
+solely because an exact count falls or a previously exact neighbour changes.
+Exact matches can depend on compensating source choices or compiler state
+carried from preceding functions. A hard monotonic rule can lock in those
+choices and stop progress toward the original source and complete object.
+
+Review a proposed tradeoff against original instructions and the complete TU:
+identify the restored structure, every lost/gained exact name, original bytes
+affected, changed operands, data, bindings and call edges. Trace collateral to
+its first compiler divergence using the Gentoo period compiler; distinguish a
+measured cause from an inference. Period differential failures remain hard
+failures, and retained source must pass `make phase`. A smaller SIZE gap or a
+net score gain alone is insufficient evidence.
+
+An explained byte regression may be retained for stronger original-source
+fidelity. Record the decision and recovery plan in the Playbook/PR, preserve
+the previous exact set in Git history, and rebase the current ratchet explicitly
+after reviewing the complete lost/gained sets. Do not silently lower the floor,
+mask losses with gains, widen tolerances, or add a period allow-list. Unexpected
+future losses must still fail the ratchet and trigger investigation.
+
+Finish structural refinement before compensating for a neighbour's register
+choices. For example, a preceding function can change the persistent peephole
+scratch-search cursor while the neighbour's source and algorithm stay intact;
+later structural recovery may restore its bytes naturally. Re-measure it after
+the structure settles rather than adding artificial scratch consumers or
+padding. See the measured V.34 case in
+`docs/method/refinement.md#review-exact-losses-against-source-fidelity`.
 
 **Every reconstruction experiment must enable `DSPLIB_REPRODUCE_BUGS`.**
 Use the shared experiment-toolchain helpers to append the define after

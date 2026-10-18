@@ -227,28 +227,105 @@ def render_relocation(target):
 
 # Grade 1 reuses the canonical grade-0 body for every non-exact candidate.
 @functools.lru_cache(maxsize=None)
+def function_owners(path):
+    """Read sized function ownership independently of objdump's name lookup.
+
+    Exact-extent aliases are normal C++ ABI entries. Other overlapping FUNC
+    intervals cannot supply a unique body. Cache per object, not per function.
+    """
+    from elftools.elf.elffile import ELFFile
+    from elftools.elf.relocation import RelocationSection
+    with open(path, 'rb') as stream:
+        elf = ELFFile(stream)
+        tab = elf.get_section_by_name('.symtab')
+        if tab is None:
+            return {}, {}, {}
+        functions, sections, relocations = {}, {}, {}
+        for symbol in tab.iter_symbols():
+            if symbol['st_info']['type'] != 'STT_FUNC' or not isinstance(symbol['st_shndx'], int):
+                continue
+            row = (symbol['st_shndx'], symbol['st_value'], symbol['st_size'])
+            functions.setdefault(symbol.name, []).append(row)
+        for index, section in enumerate(elf.iter_sections()):
+            if section['sh_flags'] & 4:
+                sections[index] = (section.name, section['sh_addr'], section.data())
+            if isinstance(section, RelocationSection):
+                relocations.setdefault(section['sh_info'], []).extend(
+                    (rel['r_offset'], rel['r_info_type']) for rel in section.iter_relocations())
+        return functions, sections, relocations
+
+
+def owned_function(path, sym):
+    """(section, address, raw bytes, relocation offsets), or unsupported.
+
+    A symbol-name disassembly can silently begin at another function when
+    symbols overlap. Validate ownership and the complete ELF byte span first;
+    body() then checks that the disassembler actually returned that span.
+    """
+    functions, sections, relocations = function_owners(path)
+    matches = functions.get(sym, [])
+    if len(matches) != 1:
+        return None
+    index, start, size = matches[0]
+    if size <= 0 or index not in sections:
+        return None
+    name, address, data = sections[index]
+    if sum(section[0] == name for section in sections.values()) != 1:
+        return None
+    offset = start - address
+    if offset < 0 or offset + size > len(data):
+        return None
+    for rows in functions.values():
+        for other_index, other_start, other_size in rows:
+            if other_index != index or (other_start, other_size) == (start, size):
+                continue
+            if start < other_start < start + size or (
+                    other_size and other_start < start + size and start < other_start + other_size):
+                return None
+    fields = relocations.get(index, [])
+    if any(kind not in (1, 2) or off < start < off + 4 or off < start + size < off + 4
+           for off,kind in fields):
+        return None
+    inside = [off - start for off,_ in fields if start <= off < start + size]
+    if len(inside) != len(set(inside)):
+        return None
+    return name, start, data[offset:offset + size], frozenset(inside)
+
+
+@functools.lru_cache(maxsize=None)
 def body(path, sym):
     """(bytes, {offset: (type, canonical target)}), offsets relative."""
+    owner = owned_function(path, sym)
+    if owner is None:
+        return None, None
+    section, base, expected, expected_relocations = owner
     out = subprocess.run(
-        ["objdump", "-dr", "--disassemble=" + sym, path],
-        capture_output=True, text=True).stdout
-    data, relocs, base = {}, {}, None
-    for line in out.splitlines():
+        ["objdump", "-dr", "--section=" + section,
+         "--start-address=" + str(base), "--stop-address=" + str(base + len(expected)), path],
+        capture_output=True, text=True)
+    if out.returncode:
+        return None, None
+    data, relocs = {}, {}
+    for line in out.stdout.splitlines():
         m = INSN.match(line)
         if m:
             at = int(m.group(1), 16)
-            if base is None:
-                base = at
             for i, byte in enumerate(m.group(2).split()):
+                if not base <= at + i < base + len(expected) or at - base + i in data:
+                    return None, None
                 data[at - base + i] = int(byte, 16)
             continue
         m = RELOC.match(line)
-        if m and base is not None:
-            relocs[int(m.group(1), 16) - base] = (m.group(2), m.group(3))
-    if base is None:
+        if m:
+            offset = int(m.group(1), 16) - base
+            if offset in relocs or offset not in expected_relocations:
+                return None, None
+            relocs[offset] = (m.group(2), m.group(3))
+    if len(data) != len(expected) or set(relocs) != expected_relocations:
         return None, None
-    n = max(data) + 1 if data else 0
-    raw = bytes(data.get(i, 0) for i in range(n))
+    raw = bytes(data[i] for i in range(len(expected)))
+    if raw != expected:
+        return None, None
     symbols = section_symbols(path) if relocs else ({}, {}, {}, {})
     relocs = {off: (kind, relocation_target(kind, target, raw[off:off + 4],
                                            symbols))
@@ -271,6 +348,18 @@ def body(path, sym):
             off = proof['relocation_offset']
             expected = ("R_386_32", ("section", proof['table_section'],
                                       proof['table_offset']))
+            if relocs.get(off) == expected:
+                relocs[off] = ("R_386_32", proof['identity'])
+    if b"\xf3\xa5" in raw and any(kind == "R_386_32" and target[0] == "section"
+                                    for kind, target in relocs.values()):
+        import readonly_copy
+        try:
+            proof = readonly_copy.prove(path, sym)
+        except readonly_copy.Refused:
+            proof = None
+        if proof is not None:
+            off = proof['relocation_offset']
+            expected = ("R_386_32", ("section", proof['table_section'], proof['table_offset']))
             if relocs.get(off) == expected:
                 relocs[off] = ("R_386_32", proof['identity'])
     return raw, relocs
@@ -871,7 +960,10 @@ def relocation_self_test():
     # Exercise both objdump consumers and the ELF metadata reader together.
     # The fixture has identical bytes in mergeable and ordinary rodata; only
     # the former may be interpreted as a string.
+    fixture_symbol = ['fixture']
     def fixture_run(command, **kwargs):
+        if command[0] == 'objdump' and not any(arg.startswith('--disassemble=') for arg in command):
+            command = command + ['--disassemble=' + fixture_symbol[0]]
         if "--syms" in command:
             output = ("1: 00000000 0 SECTION LOCAL DEFAULT 1 .data\n"
                       "2: 00000030 24 OBJECT LOCAL DEFAULT 1 vpcm_op\n"
@@ -913,10 +1005,27 @@ def relocation_self_test():
             output = "0:\tmov 0x30,%eax\n 1: R_386_32 .data\n5:\tret\n"
         else:
             output = "0:\ta1 30 00 00 00 \tmov 0x30,%eax\n 1: R_386_32 .data\n5:\tc3 \tret\n"
-        return SimpleNamespace(stdout=output)
+        return SimpleNamespace(stdout=output, returncode=0)
+
+    def fixture_owner(path, sym):
+        # These tests isolate relocation canonicalization with mocked objdump.
+        # Real ELF ownership/extraction has its own mutated-object regression.
+        fixture_symbol[0] = sym
+        output = fixture_run(['objdump', '-dr', '--disassemble=' + sym]).stdout
+        data, relocations = {}, set()
+        for line in output.splitlines():
+            match = INSN.match(line)
+            if match:
+                data.update((int(match[1], 16) + i, byte) for i,byte in
+                            enumerate(bytes.fromhex(match[2])))
+            match = RELOC.match(line)
+            if match:
+                relocations.add(int(match[1], 16))
+        return '.text', 0, bytes(data[i] for i in range(len(data))), frozenset(relocations)
 
     fixture_path = "<byteident-relocation-self-test>"
     with patch.object(subprocess, "run", side_effect=fixture_run), \
+            patch(__name__ + '.owned_function', side_effect=fixture_owner), \
             patch("builtins.open", return_value=BytesIO(b"same\0")):
         raw, relocs = body(fixture_path, "fixture")
         checks.append(("body preserves bytes and resolves inline addend",

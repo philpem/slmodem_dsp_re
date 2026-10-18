@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "reviews": [
+    {
+      "base_sha": "a87ae5c35533759b054109b553d2c801b6b7b5fb",
+      "symbol": "V34EchoPreFilter",
+      "head_body_sha256": "e79089d0f439210cf360112e8b0aa68d8482a2a7ed65f5407581be902eeab910",
+      "accepted_commit": "2621b1dcc9c83103f34b69d43332e98c5faad6e6",
+      "evidence_commit": "2621b1dcc9c83103f34b69d43332e98c5faad6e6",
+      "evidence": "docs/method/refinement.md#recover-the-centeradapt-history-owner-before-fitting-its-spill"
+    },
+    {
+      "base_sha": "a87ae5c35533759b054109b553d2c801b6b7b5fb",
+      "symbol": "SetAdaptEqV32",
+      "head_body_sha256": "f3bb17f9459ca088364df6b8747c39e416ee5bef4ad70995714377c201e98fd5",
+      "accepted_commit": "dfc23b7d1e92f5913b22b124771211d3e4650771",
+      "evidence_commit": "dfc23b7d1e92f5913b22b124771211d3e4650771",
+      "evidence": "docs/v32-mrf-count-audit.md#first-divergence-in-the-unchanged-collateral"
+    }
+  ]
+}

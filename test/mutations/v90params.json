@@ -19,8 +19,8 @@
  },
  {
   "label": "the printed whole part keeps its sign",
-  "find": "\t\tif (whole < 0)\n\t\t\twhole = -whole;",
-  "replace": "\t\tif (whole < 0 && 0)\n\t\t\twhole = -whole;",
+  "find": "\t\tint whole = (int)fabsf(pr);",
+  "replace": "\t\tint whole = (int)pr;",
   "equivalent": true,
   "why": "`tempPR` is `unsigned int` and the object divides it by 5, so `tempPR / 5` is at most 0x33333333 and `(int)(tempPR / 5)` can never be negative; `pr` is that times 0.5f and is therefore never negative either.  So `whole < 0` is unreachable over the WHOLE input domain and not merely over the fixture's.  The object has the same dead code -- `fabs` at .text+0x2a731 and `cltd; xor %edx,%eax; sub %edx,%eax` at +0x2a78f -- and it is reproduced because it is in the object, not because anything can reach it.  The identical argument covers the `frac < 0` line below."
  },

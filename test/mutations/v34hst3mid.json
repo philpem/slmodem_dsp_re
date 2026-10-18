@@ -1564,8 +1564,8 @@
   },
   {
     "label": "51's rate switch has a default that writes the 2800 scale",
-    "find": "\t\tdefault:\n\t\t\tbreak;\n\t\t}",
-    "replace": "\t\tdefault:\n\t\t\tf->obj->ratecfg.divtab = scale2800;\n\t\t\tbreak;\n\t\t}",
+    "find": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg.divtab = scale3429;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tbreak;\n\t\t}",
+    "replace": "\t\tcase 0xd65:\t\t/* 3429 */\n\t\t\tf->obj->ratecfg.divtab = scale3429;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tf->obj->ratecfg.divtab = scale2800;\n\t\t\tbreak;\n\t\t}",
     "fn": "t3m_micro51"
   },
   {

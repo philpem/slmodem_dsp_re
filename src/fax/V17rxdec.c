@@ -201,10 +201,10 @@ fse_rotate(int i, int q, short *ri, short *rq)
  * there: the function has exactly two zeroing stores in its prologue, for
  * `base` (0x97c50) and `amb` (0x97c60), where V.32's has three.  The search
  * loop assigns `best` unless all four candidates score exactly 0x7fff, and the
- * author's guard is what happens if they do.  We initialise it, which is D1201
- * -- writing an uninitialised read into `src/` is not something this tree does,
- * and the difference is confined to a case the loop's four simultaneous
- * equations in two unknowns make unreachable.
+ * author's guard is what happens if they do.  D1201 records this uninitialised
+ * local.  The reproduction build preserves it; the shipping build retains
+ * the zero fallback.  The fixture has not reached the all-0x7fff case, which
+ * does not establish that the case is impossible or that junk values agree.
  */
 
 /*
@@ -228,8 +228,12 @@ FAX_FSE_decision_128pt(struct fpm_fse *state, short *angle, short *mag)
 	int i, q, rot;
 	unsigned int amb = 0;
 	short ri, rq;
-	short k, base = 0, best = 0;
+	short k, base = 0, best;
 	short min, sym, n;
+
+#ifndef DSPLIB_REPRODUCE_BUGS
+	best = 0;
+#endif
 
 	m = (struct v17_dec *)state->cfg.owner;
 

@@ -9,8 +9,8 @@
  },
  {
   "label": "the resampler is given the equaliser's block instead of its own",
-  "find": "\tn = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),\n\t\t\t\t\t   (short)count);",
-  "replace": "\tn = (unsigned short)FPM_MRF_filter((struct fpm_mrf *)(void *)&fp->ecc, in, RXBUF_OF(fp),\n\t\t\t\t\t   (short)count);"
+  "find": "\tn = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),\n\t\t\t\t\t   count);",
+  "replace": "\tn = (unsigned short)FPM_MRF_filter((struct fpm_mrf *)(void *)&fp->ecc, in, RXBUF_OF(fp),\n\t\t\t\t\t   count);"
  },
  {
   "label": "the echo canceller runs on the cleaned copy, so the working buffer is never cancelled",

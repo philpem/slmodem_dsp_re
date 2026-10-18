@@ -115,8 +115,8 @@
  },
  {
   "label": "filter: the write index wraps one place late",
-  "find": "\t\tidx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;\n\t\thist[idx] = *samples;",
-  "replace": "\t\tidx = ((short)(idx + 1) <= taps) ? (short)(idx + 1) : 0;\n\t\thist[idx] = *samples;"
+  "find": "\t\tidx = (short)(idx + 1);\n\t\tif ((short)idx >= taps)\n\t\t\tidx = 0;\n\t\thist[idx] = *samples;",
+  "replace": "\t\tidx = (short)(idx + 1);\n\t\tif ((short)idx > taps)\n\t\t\tidx = 0;\n\t\thist[idx] = *samples;"
  },
  {
   "label": "filter: the input is consumed twice, so the output lands one sample on",
@@ -145,7 +145,7 @@
  },
  {
   "label": "filter: a negative count does nothing, as FPM_TONE_find_rev's does",
-  "find": "\tint idx = state->hist_idx;\n\tint i;\n\n\tfor (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {",
-  "replace": "\tint idx = state->hist_idx;\n\tint i;\n\n\tfor (i = 0; i < count; i++) {"
+  "find": "\tint idx = state->hist_idx;\n\tshort i;\n\n\tfor (i = count; i-- != 0;) {",
+  "replace": "\tint idx = state->hist_idx;\n\tshort i;\n\n\tfor (i = 0; i < count; i++) {"
  }
 ]

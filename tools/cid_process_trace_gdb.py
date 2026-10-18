@@ -1,0 +1,352 @@
+"""Read-only CID wrapper, constructor retune and receiver resampler trace."""
+import hashlib
+import json
+from pathlib import Path
+import gdb
+
+settings = json.loads(Path('trace-settings.json').read_text())
+records, lifecycles, errors, exits = [], [], [], []
+live, active, waiting = {}, {}, {}
+creating, wave_cache = {}, {}
+generations, serials = {}, {}
+deleting = {}
+delete_returns = {}
+
+
+def tick(kind):
+    serials[kind] = serials.get(kind, 0) + 1
+    return serials[kind]
+
+
+def reg(name):
+    return int(gdb.parse_and_eval('$' + name)) & 0xffffffff
+
+
+def mem(address, count):
+    return bytes(gdb.selected_inferior().read_memory(address, count))
+
+
+def word(address):
+    return int.from_bytes(mem(address, 4), 'little')
+
+
+def signed(value, bits=32):
+    return (value + (1 << (bits - 1))) % (1 << bits) - (1 << (bits - 1))
+
+
+def text(address, limit=600):
+    out = bytearray()
+    if not address:
+        return None
+    for offset in range(limit):
+        ch = mem(address + offset, 1)[0]
+        if not ch:
+            return out.decode('latin1')
+        out.append(ch)
+    raise AssertionError('unterminated string')
+
+
+def receiver_state(address):
+    return [signed(word(address + off)) for off in (0x260, 0x264, 0x3f8)]
+
+
+def declared_wire(config):
+    """Decode the fixture's actual serialized bits, without parser writes."""
+    count = word(config['nbits'])
+    rate = word(config['line_rate'])
+    assert rate in (8000, 9600)
+    if not count:  # Initial silence precedes the first generated burst.
+        return {'wire_hex': '', 'tx_rate': rate, 'wave_samples': 0}
+    assert 540 <= count <= 4096 and (count - 540) % 10 == 0
+    bits = mem(config['bits'], count)
+    assert bits[:300] == bytes(i & 1 for i in range(300))
+    assert bits[300:480] == b'\1' * 180 and bits[-60:] == b'\1' * 60
+    frame = bits[480:-60]
+    wire = bytearray()
+    for offset in range(0, len(frame), 10):
+        symbol = frame[offset:offset + 10]
+        assert symbol[0] == 0 and symbol[9] == 1 and set(symbol) <= {0, 1}
+        wire.append(sum(symbol[i + 1] << i for i in range(8)))
+    assert len(wire) == wire[1] + 3
+    samples = count * rate // 1200
+    assert word(config['nsamp']) == samples
+    # Independently reconstruct the fixture oscillator at its declared rate.
+    # Compare the actual full generated buffer on every entry; cache only
+    # the mathematical reference, never the observed buffer.
+    key = (rate, bits)
+    if key not in wave_cache:
+        phase, wave = 0, bytearray()
+        table = [signed(int.from_bytes(mem(config['carrier'] + 2 * i, 2), 'little'), 16) for i in range(64)]
+        for i in range(samples):
+            frequency = 1200 if bits[i * 1200 // rate] else 2200
+            phase = (phase + ((frequency << 32) + rate // 2) // rate) & 0xffffffff
+            wave.extend(table[phase >> 26].to_bytes(2, 'little', signed=True))
+        wave_cache[key] = hashlib.sha256(wave).hexdigest()
+    digest = hashlib.sha256(mem(config['burst'], samples * 2)).hexdigest()
+    assert digest == wave_cache[key], 'generated samples disagree with declared carrier rate/bit clock'
+    return {'wire_hex': wire.hex(), 'tx_rate': rate,
+            'wave_samples': samples, 'wave_sha256': digest}
+
+
+class DeleteReturn(gdb.Breakpoint):
+    """Track the i386 ABI return directly; optimized callers may not unwind."""
+    def __init__(self, address):
+        super().__init__('*' + hex(address), internal=True)
+        self.address = address
+
+    def stop(self):
+        key = (self.address, reg('esp'))
+        if key not in deleting:
+            return False
+        kind, row = deleting.pop(key)
+        row['deleted'] = True
+        row['deleted_sequence'] = tick(kind)
+        return False
+
+
+class Done(gdb.FinishBreakpoint):
+    def __init__(self, kind, action, row):
+        super().__init__(gdb.newest_frame(), internal=True)
+        self.kind, self.action, self.row = kind, action, row
+
+    def stop(self):
+        try:
+            result = reg('eax')
+            if self.action == 'create':
+                assert creating.pop(self.kind) is self.row
+                self.row['created_sequence'] = tick(self.kind)
+                self.row['created'] = bool(result)
+                if result:
+                    key = (self.kind, result)
+                    assert key not in live
+                    self.row['receiver'] = word(result + 4)
+                    self.row['wrapper'] = result
+                    assert all(ctx == self.row['receiver'] for ctx in self.row.pop('retune_contexts'))
+                    fsk = word(self.row['receiver'] + 4)
+                    self.row['fsk_rate'] = signed(int.from_bytes(mem(fsk + 0x2a, 2), 'little'), 16)
+                    self.row['mark_conf_step'] = signed(int.from_bytes(mem(fsk + 0x2c, 2), 'little'), 16)
+                    self.row['initial_packet_length'] = signed(int.from_bytes(mem(fsk + 0x15c, 2), 'little'), 16)
+                    self.row['initial_data_clear'] = mem(fsk + 0xd8, 120) == bytes(120)
+                    self.row['initial_fill'] = word(self.row['receiver'] + 0x3f8)
+                    live[key] = self.row
+            else:
+                assert self.kind not in waiting
+                self.row['result'] = signed(result)
+                self.row['finished'] = True
+                self.row['exit_sequence'] = tick(self.kind)
+                del active[self.kind]
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class Entry(gdb.Breakpoint):
+    def __init__(self, kind, action, address):
+        super().__init__('*' + hex(address), internal=True)
+        self.kind, self.action = kind, action
+
+    def stop(self):
+        try:
+            sp = reg('esp')
+            pointer = word(sp + 4)
+            if self.action == 'create':
+                generations[self.kind] = generations.get(self.kind, 0) + 1
+                row = {'kind': self.kind, 'modem': pointer, 'rate': word(sp + 8),
+                       'cid_val': word(sp + 12), 'created': None,
+                       'retunes': [], 'retune_contexts': [],
+                       'generation': generations[self.kind], 'create_sequence': tick(self.kind)}
+                assert self.kind not in creating
+                creating[self.kind] = row
+                lifecycles.append(row)
+                Done(self.kind, 'create', row)
+            elif self.action == 'delete':
+                if pointer:
+                    row = live.pop((self.kind, pointer))
+                    row['delete_sequence'] = tick(self.kind)
+                    address = word(sp)
+                    if address not in delete_returns:
+                        delete_returns[address] = DeleteReturn(address)
+                    key = (address, sp + 4)
+                    assert key not in deleting
+                    deleting[key] = (self.kind, row)
+            else:
+                assert self.kind not in active
+                owner = live[(self.kind, pointer)]
+                assert owner['rate'] in (8000, 9600) and owner['cid_val'] in (1, 2)
+                assert word(pointer) == owner['modem']
+                row = {'kind': self.kind, 'lifecycle': lifecycles.index(owner) // 2,
+                       'count': signed(word(sp + 12)), 'input': word(sp + 8),
+                       'receiver': word(pointer + 4), 'modem': word(pointer),
+                       'debug': word(settings[self.kind]['debug']), 'events': [],
+                       'rate': owner['rate'], 'cid_val': owner['cid_val'],
+                       'generation': owner['generation'], 'entry_sequence': tick(self.kind),
+                       'finished': False}
+                assert row['receiver'] == owner['receiver']
+                row['input_sha256'] = hashlib.sha256(mem(row['input'], max(0, row['count']) * 2)).hexdigest()
+                row.update(declared_wire(settings[self.kind]))
+                assert row['tx_rate'] == row['rate']
+                records.append(row)
+                active[self.kind] = row
+                Done(self.kind, 'process', row)
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class After(gdb.Breakpoint):
+    def __init__(self, kind, address):
+        super().__init__('*' + hex(address), internal=True)
+        self.kind = kind
+
+    def stop(self):
+        try:
+            row, event, aux = waiting.pop(self.kind)
+            value = reg('eax')
+            name = event['call']
+            if name == 'progress':
+                event['n_out'] = signed(int.from_bytes(mem(aux, 2), 'little'), 16)
+                event['result'] = signed(value & 0xffff, 16)
+                event['state_out'] = receiver_state(row['receiver'])
+                if event['result']:
+                    # Valid fixtures use the FSK-only constructor. Preserve
+                    # the received wire packet, not a planted parser state.
+                    fsk = word(row['receiver'] + 4)
+                    length = signed(int.from_bytes(mem(fsk + 0x15c, 2), 'little'), 16)
+                    assert 0 <= length <= 120
+                    event['packet_hex'] = mem(fsk + 0xd8, length).hex()
+            elif name == 'get_strings':
+                assert value == row['receiver'] + 8
+                row['strings'] = value
+                event['result_offset'] = 8
+                event['strings_hex'] = mem(value, 600).hex()
+            elif name == 'strlen':
+                event['result'] = value
+            else:
+                # These host functions return int, although CID_process
+                # ignores their results. Record the harness boundary too.
+                event['result'] = signed(value)
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class Call(gdb.Breakpoint):
+    def __init__(self, kind, address, name):
+        super().__init__('*' + hex(address), internal=True)
+        self.kind, self.name = kind, name
+        After(kind, address + 5)
+
+    def stop(self):
+        try:
+            row = active[self.kind]
+            assert self.kind not in waiting
+            sp = reg('esp')
+            args = [word(sp + 4 * i) for i in range(4)]
+            event, aux = {'call': self.name}, None
+            if self.name == 'progress':
+                assert args[0] == row['receiver']
+                assert (args[1] - row['input']) % 2 == 0
+                aux = args[3]
+                assert aux == sp + 0x1a, 'count pointer is not the witnessed wrapper stack slot'
+                event.update(input_offset=(args[1] - row['input']) // 2,
+                             what=signed(args[2]),
+                             n_in=signed(int.from_bytes(mem(aux, 2), 'little'), 16),
+                             state_in=receiver_state(args[0]))
+                event['resampler_counts'] = []
+            elif self.name == 'get_strings':
+                assert args[0] == row['receiver']
+            elif self.name == 'strlen':
+                event.update(offset=args[0] - row['strings'], text=text(args[0]))
+            elif self.name == 'tty':
+                assert args[0] == row['modem']
+                event.update(length=signed(args[2]), payload_hex=mem(args[1], args[2]).hex())
+                event['offset'] = args[1] - row['strings'] if row['strings'] <= args[1] < row['strings'] + 600 else None
+            else:
+                event['format'] = text(args[0])
+                if '%s' in event['format']:
+                    event['text'] = text(args[1])
+                    event['offset'] = args[1] - row['strings']
+            row['events'].append(event)
+            waiting[self.kind] = (row, event, aux)
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class Loop(gdb.Breakpoint):
+    def __init__(self, kind, address):
+        super().__init__('*' + hex(address), internal=True)
+        self.kind = kind
+
+    def stop(self):
+        try:
+            row = active[self.kind]
+            pointer = reg('ebx')
+            index = word(reg('esp') + 0x10) if self.kind == 'original' else reg('esi')
+            row['events'].append({'call': 'string_guard', 'index': index,
+                                  'offset': pointer - row['strings'] if pointer else None,
+                                  'null': pointer == 0,
+                                  'empty': pointer != 0 and mem(pointer, 1) == b'\0'})
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class Retune(gdb.Breakpoint):
+    def __init__(self, kind, address):
+        super().__init__('*' + hex(address), internal=True)
+        self.kind = kind
+
+    def stop(self):
+        try:
+            row = creating[self.kind]
+            sp = reg('esp')
+            context, rate = word(sp + 4), signed(word(sp + 8))
+            fsk = word(context + 4)
+            before = signed(int.from_bytes(mem(fsk + 0x2a, 2), 'little'), 16)
+            row['retunes'].append({'requested': rate, 'before': before})
+            row['retune_contexts'].append(context)
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+class Resample(gdb.Breakpoint):
+    def __init__(self, kind, config):
+        super().__init__('*' + hex(config['resampler']), internal=True)
+        self.kind, self.config = kind, config
+
+    def stop(self):
+        if self.kind not in active:
+            return False
+        try:
+            sp = reg('esp')
+            caller = word(sp)
+            low, high = self.config['modem_range']
+            assert low <= caller < high, 'unexpected active resampler caller'
+            row, event, _ = waiting[self.kind]
+            assert event['call'] == 'progress'
+            assert word(sp + 4) == word(row['receiver'] + 4) + 0xc
+            event['resampler_counts'].append(int.from_bytes(mem(sp + 16, 2), 'little'))
+        except Exception as exc:
+            errors.append(str(exc))
+        return False
+
+
+for kind, config in settings.items():
+    for action in ('create', 'delete', 'process'):
+        Entry(kind, action, config[action])
+    for offset, name in config['sites']:
+        Call(kind, config['process'] + offset, name)
+    Loop(kind, config['process'] + config['loop'])
+    Retune(kind, config['retune'])
+    Resample(kind, config)
+gdb.events.exited.connect(lambda event: exits.append(getattr(event, 'exit_code', None)))
+gdb.execute('run')
+result = {'records': records, 'lifecycles': lifecycles, 'errors': errors,
+          'exit_codes': exits, 'active': list(active), 'live': list(live),
+          'waiting': list(waiting), 'deleting': list(deleting)}
+Path('trace-observe.json').write_text(json.dumps(result, indent=2) + '\n')
+assert exits == [0] and not errors and not active and not live and not waiting and not deleting, result['errors']
+assert records, 'no CID_process observations'
+print('observed', len(records), 'completed CID_process calls')

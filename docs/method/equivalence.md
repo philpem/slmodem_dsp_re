@@ -253,6 +253,11 @@ the time to reason about x87, where §3 shows the available tool is wrong.
 
 ## F3. x87, measured
 
+Historical Ghidra 11.4.2 measurements follow. The
+[current 12.2 calibration](ghidra-assisted.md#calibration-results-and-limits)
+separates inferred-signature failures from the remaining loss of precision
+distinctions after correct signatures are supplied.
+
 `CLAUDE.md` records Ghidra's floating-point modelling as weak and explicitly
 **unmeasured here**; `tools/decompile.sh`'s header says the same and records
 that the one attempt picked `V34EchoFilter`, which turned out to be
