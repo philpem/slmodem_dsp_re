@@ -285,7 +285,7 @@ feed(void *ours, void *ref, short *samples, int count, int chunk, long tag)
  * transmitted as checksum-complete Bell 202 frames through fresh receivers.
  * Tag 1 supplies date/time, tag 2 number, tag 7 name; tag 3 renders MESG. */
 static void
-mdmf_lifecycle(int extra, unsigned rate, unsigned cid_val, long tag)
+mdmf_case(int extra, unsigned rate, unsigned cid_val, int wreck_checksum, long tag)
 {
 	static const unsigned char mdmf[] = {
 		0x80, 29,
@@ -310,8 +310,22 @@ mdmf_lifecycle(int extra, unsigned rate, unsigned cid_val, long tag)
 	ours = CID_create(&dummy_modem_ours, rate, cid_val);
 	ref = ref_CID_create(&dummy_modem_ref, rate, cid_val);
 	line_rate = rate;
-	build_frame(frame, length, 0);
+	build_frame(frame, length, wreck_checksum);
 	verdict = feed(ours, ref, burst, nsamp, 192, tag);
+	if (wreck_checksum) {
+		diff_eq_int("MDMF checksum failure is terminal (%ld)", verdict, -1, tag);
+		diff_eq_int("failed MDMF has no host callbacks (%ld)", host_calls[0] + host_calls[1], 0, tag);
+		diff_eq_int("failed MDMF has no TTY bytes (%ld)",
+			    harness_tty_ours.len + harness_tty_ref.len, 0, tag);
+		CID_delete(ours);
+		ref_CID_delete(ref);
+		diff_eq_int("failed MDMF lifecycle released (%ld)", harness_alloc.live, live0, tag);
+		printf("CID checksum failure rate %u value %u debug %u: verdict %d, callbacks %d/%d, bytes %d/%d\n",
+		       rate, cid_val, dsplibs_debug_level, verdict,
+		       host_calls[0], host_calls[1], harness_tty_ours.len, harness_tty_ref.len);
+		line_rate = 8000;
+		return;
+	}
 	diff_eq_int("MDMF delivers through receiver history (%ld)", verdict, 1, tag);
 	if (cid_val == 2) {
 		char expected[0x258];
@@ -352,6 +366,22 @@ mdmf_lifecycle(int extra, unsigned rate, unsigned cid_val, long tag)
 	printf("CID MDMF rate %u value %u debug %u extra %d: verdict %d, %d rendered fields, %d TTY calls\n",
 	       rate, cid_val, dsplibs_debug_level, extra, verdict, fields, host_calls[0]);
 	line_rate = 8000;
+}
+
+static void
+mdmf_lifecycle(int extra, unsigned rate, unsigned cid_val, long tag)
+{
+	mdmf_case(extra, rate, cid_val, 0, tag);
+}
+
+/* CID_process's terminal result ends the host's receive attempt. The public
+ * wrapper has no reset; modem_cid_stop/start releases and recreates it. Never
+ * clear private packet state or force a new message into the failed object. */
+static void
+mdmf_failure_recovery(unsigned rate, unsigned cid_val, long tag)
+{
+	mdmf_case(1, rate, cid_val, 1, tag);
+	mdmf_case(1, rate, cid_val, 0, tag + 1);
 }
 
 int
@@ -471,9 +501,9 @@ main(void)
 		    harness_alloc.live, live0, 3);
 	mdmf_lifecycle(0, 8000, 1, 7);
 	mdmf_lifecycle(1, 8000, 1, 8);
-	mdmf_lifecycle(1, 8000, 2, 11);
-	mdmf_lifecycle(1, 9600, 1, 12);
-	mdmf_lifecycle(1, 9600, 2, 13);
+	mdmf_failure_recovery(8000, 2, 20);
+	mdmf_failure_recovery(9600, 1, 22);
+	mdmf_failure_recovery(9600, 2, 24);
 
 	/*
 	 * Capture the debug tier over complete success/failure lifecycles,
@@ -506,9 +536,9 @@ main(void)
 		    harness_alloc.live, live0, 6);
 	mdmf_lifecycle(0, 8000, 1, 9);
 	mdmf_lifecycle(1, 8000, 1, 10);
-	mdmf_lifecycle(1, 8000, 2, 14);
-	mdmf_lifecycle(1, 9600, 1, 15);
-	mdmf_lifecycle(1, 9600, 2, 16);
+	mdmf_failure_recovery(8000, 2, 26);
+	mdmf_failure_recovery(9600, 1, 28);
+	mdmf_failure_recovery(9600, 2, 30);
 	dsplib_debug_capture_on = 0;
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
