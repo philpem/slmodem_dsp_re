@@ -263,10 +263,10 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 			snr = ((int)(short)(t * 10) + 0x100) >> 9;
 		}
 		fp = FP(modem);
-		if (fp->mrf.phase != 0 && fp->mrf.need != 0) {
-			FPM_div((unsigned short)fp->mrf.phase, &recip, &shift);
+		if (fp->ecc.pwr_out != 0 && fp->ecc.pwr_in != 0) {
+			FPM_div((unsigned short)fp->ecc.pwr_out, &recip, &shift);
 			fp = FP(modem);
-			m = (fp->mrf.need * (int)recip) >> 15;
+			m = (fp->ecc.pwr_in * (int)recip) >> 15;
 			t = (int)FPM_log10((unsigned short)m,
 					   (short)-(short)shift) >> 3;
 			r0a = (short)(t * 10) >> 9;
@@ -291,7 +291,7 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	st->r0e = 0;
 	st->r0c = (short)(unsigned short)fp->agc.level;
 	st->r10 = (short)fp->pps.cfg.step_adj;
-	st->r12 = (short)(unsigned short)fp->ecc.pwr_out;
+	st->r12 = fp->sre.pll_acc;
 
 	/*
 	 * Eight read-modify-writes of the caller's byte, in the object's own
@@ -328,7 +328,7 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 					 >> 2) & 1));
 
 	fp = FP(modem);
-	st->r18 = fp->ecc.adapt_near;
+	st->r18 = fp->sre.active;
 	st->r1c = (fp->agc.signal != 1);
 
 	if (SnrToRetrainTable[rate_idx] <= (short)snr) {
