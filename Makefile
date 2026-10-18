@@ -1246,6 +1246,17 @@ check64:
 	  && $(CXX) $(SYNCXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
 	  && echo "64-bit syntax check, both configurations: OK"
 
+# Native Caller ID owner-allocation boundary.
+$(BUILD)/safety/t_cid_owner64: test/safety/t_cid_owner64.c src/service/cidcore/cid.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_cid_owner64.c src/service/cidcore/cid.c
+
+.PHONY: safety-cid-owner64
+safety-cid-owner64: $(BUILD)/safety/t_cid_owner64
+	@./$(BUILD)/safety/t_cid_owner64
+
+safety: safety-cid-owner64
+
 # Regenerate the analysis documents from the blob.
 # Two numbers, both from symbol tables rather than from grepping source:
 # how much of the blob has a same-named function in this tree, and how much
