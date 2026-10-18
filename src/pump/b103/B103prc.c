@@ -194,22 +194,20 @@ TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count)
 short
 RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count)
 {
-	struct b103_hdx *hdx = fp->hdx;
-	struct b103_dsp *dsp = fp->dsp;
 
 	(void)out;
 
-	hdx->rx_count = (short)(hdx->rx_count + 1);
+	fp->hdx->rx_count = (short)(fp->hdx->rx_count + 1);
 
-	FPM_AGC_agc(&dsp->det_agc, in, (unsigned short)*count, 1);
+	FPM_AGC_agc(&fp->dsp->det_agc, in, (unsigned short)*count, 1);
 
-	if (FPM_TONE_detect(hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
-		dsp->rx_state = (short)(dsp->rx_state + 5);
-		if (hdx->substate == 1)
-			B103NextState[hdx->mode](fp);
-	} else if (hdx->rx_count >= hdx->tone_timeout) {
-		hdx->substate = 5;
-		B103NextState[hdx->mode](fp);
+	if (FPM_TONE_detect(fp->hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
+		fp->dsp->rx_state = (short)(fp->dsp->rx_state + 5);
+		if (fp->hdx->substate == 1)
+			B103NextState[fp->hdx->mode](fp);
+	} else if (fp->hdx->rx_count >= fp->hdx->tone_timeout) {
+		fp->hdx->substate = 5;
+		B103NextState[fp->hdx->mode](fp);
 		fp->flags |= B103_FLAG_TIMEOUT;
 		fp->status = 5;
 	}
@@ -538,41 +536,41 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 	struct b103_dsp *dsp;
 	int total;
 	short count;
-	int i;
+	short i;
 
 	/* Stage the transmit bits, narrowing int to short. */
-	for (i = 0; i < (short)*n_tx; i++)
+	for (i = 0; i < (unsigned short)*n_tx; i++)
 		tx_in_internal[i] = (short)tx_bits[i];
 
 	/* Not connected: send mark, whatever was offered. */
 	if (fp->status != 0) {
-		for (i = 0; i < (short)*n_tx; i++)
+		for (i = 0; i < (unsigned short)*n_tx; i++)
 			tx_in_internal[i] = 1;
 	}
 
 	/* The channel bandpass, in place. */
 	dsp = fp->dsp;
-	for (i = 0; i < (short)*n_rx; i++) {
+	for (i = 0; i < (unsigned short)*n_rx; i++) {
 		short *hist = (short *)dsp->bpf_hist;
 		const short *coeff = (const short *)dsp->bpf;
 		int taps = dsp->bpf_taps;
-		int widx = (unsigned short)dsp->bpf_idx;
 		const short *c;
 		short *p;
 		int acc = 0;
 		int k;
 
-		widx = (taps > widx + 1) ? widx + 1 : 0;
-		dsp->bpf_idx = (short)widx;
+		dsp->bpf_idx = (short)(dsp->bpf_idx + 1);
+		if (dsp->bpf_idx >= dsp->bpf_taps)
+			dsp->bpf_idx = 0;
 
-		hist[widx] = (short)(rx_in[i] >> 2);
+		hist[dsp->bpf_idx] = (short)(rx_in[i] >> 2);
 
 		c = coeff;
-		p = &hist[widx];
-		for (k = widx; k >= 0; k--)
+		p = &hist[dsp->bpf_idx];
+		for (k = dsp->bpf_idx; k >= 0; k--)
 			acc += *p-- * *c++;
 		p += taps;
-		for (k = taps - 1; k > widx; k--)
+		for (k = taps - 1; k > dsp->bpf_idx; k--)
 			acc += *p-- * *c++;
 
 		rx_in[i] = (short)(((unsigned)acc >> 15) << 2);
