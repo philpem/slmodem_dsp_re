@@ -166,9 +166,33 @@ def reference_wave(wire_hex, rate, oscillator_rate=None):
     return bytes(wave)
 
 
-def validate(trace, require_cap=False, require_raw9600=False):
+def recovery_pairs(trace):
+    """Match terminal loss to the immediately recreated public owner.
+    Generations come from native construction, so reused addresses are valid."""
+    births = {(r['kind'], r['generation']): r for r in trace['lifecycles'] if r['created']}
+    calls = {}
+    for row in trace['records']:
+        calls.setdefault((row['kind'], row['generation']), []).append(row)
+    pairs = []
+    for key, rows in calls.items():
+        failed = rows[-1]
+        next_key = (key[0], key[1] + 1)
+        if failed['result'] != -1 or next_key not in calls:
+            continue
+        good = calls[next_key][-1]
+        if good['result'] != 1:
+            continue
+        if (failed['rate'], failed['cid_val'], failed['debug']) != (good['rate'], good['cid_val'], good['debug']):
+            continue
+        if bytes.fromhex(failed['wire_hex'])[:-1] != bytes.fromhex(good['wire_hex'])[:-1]:
+            continue
+        pairs.append((key[0], failed, good, births[key], births[next_key]))
+    return pairs
+
+
+def validate(trace, require_cap=False, require_raw9600=False, require_recovery=False):
     assert trace['exit_codes'] == [0] and not trace['errors']
-    assert not trace['active'] and not trace['waiting'] and not trace['live']
+    assert not trace['active'] and not trace['waiting'] and not trace['live'] and not trace['deleting']
     records = trace['records']
     assert records
     sides = {kind: [canonical(r) for r in records if r['kind'] == kind]
@@ -177,12 +201,22 @@ def validate(trace, require_cap=False, require_raw9600=False):
     assert all(row['finished'] for row in records)
     assert all(isinstance(row['created'], bool) for row in trace['lifecycles'])
     assert all(row.get('deleted') for row in trace['lifecycles'] if row['created'])
+    births = {(r['kind'], r['generation']): r for r in trace['lifecycles'] if r['created']}
+    grouped = {}
+    for row in records:
+        owner = births[(row['kind'], row['generation'])]
+        assert (owner['rate'], owner['cid_val']) == (row['rate'], row['cid_val']), 'process uses a different recreated configuration'
+        assert owner['create_sequence'] < owner['created_sequence'] < row['entry_sequence'] < row['exit_sequence'] < owner['delete_sequence'] < owner['deleted_sequence'], 'process uses a stale or incomplete owner lifetime'
+        grouped.setdefault((row['kind'], row['generation']), []).append(row)
+    for rows in grouped.values():
+        assert all(r['result'] == 0 for r in rows[:-1]), 'fixture continued a terminal receive attempt'
     retunes = Counter()
     for row in trace['lifecycles']:
         if not row['created']:
             assert not row['retunes']
             continue
         assert row['fsk_rate'] == row['rate'] and row['mark_conf_step'] == 9
+        assert row['initial_packet_length'] == 0 and row['initial_data_clear'] and row['initial_fill'] == 0
         assert row['retunes'] == ([{'requested': 9600, 'before': 8000}] if row['rate'] == 9600 else [])
         if row['kind'] == 'original':
             retunes[str(row['rate'])] += len(row['retunes'])
@@ -297,6 +331,18 @@ def validate(trace, require_cap=False, require_raw9600=False):
     if require_raw9600:
         required = {f'{rate}/{value}/{debug}' for rate in (8000, 9600) for value in (1, 2) for debug in (0, 2)}
         assert required <= set(success_shapes), 'missing rate/raw/debug success coverage'
+    recovered = Counter()
+    for kind, failed, good, old, new in recovery_pairs(trace):
+        assert old['deleted_sequence'] < new['create_sequence'], 'recovery did not follow complete deletion and construction'
+        assert failed['exit_sequence'] < old['delete_sequence']
+        assert sum(bytes.fromhex(failed['wire_hex'])) % 256 != 0
+        assert sum(bytes.fromhex(good['wire_hex'])) % 256 == 0
+        assert not any(e['call'] in ('tty', 'get_strings', 'strlen', 'string_guard') for e in failed['events']), 'failed receiver emitted output'
+        if kind == 'original':
+            recovered[f'{failed["rate"]}/{failed["cid_val"]}/{failed["debug"]}'] += 1
+    if require_recovery:
+        required = {f'{rate}/{value}/{debug}' for rate, value in ((8000, 2), (9600, 1), (9600, 2)) for debug in (0, 2)}
+        assert required <= set(recovered), 'missing terminal failure/recreated-owner recovery coverage'
     return {'per_side': dict(counts), 'progress_results_per_side': dict(progress_results),
             'available_fields_per_success': dict(available_fields),
             'delivered_fields_per_success': dict(delivered_fields),
@@ -304,6 +350,7 @@ def validate(trace, require_cap=False, require_raw9600=False):
             'success_rate_value_debug_per_side': dict(success_shapes),
             'constructor_retunes_per_side': dict(retunes),
             'native_resampler_calls_per_side': dict(resamplers),
+            'failure_recreate_recovery_pairs_per_side': dict(recovered),
             'progress_input_counts_per_side': dict(chunks),
             'create_calls_both_sides': len(trace['lifecycles']),
             'accepted_created_and_deleted_both_sides': sum(row['created'] for row in trace['lifecycles']),
@@ -311,7 +358,7 @@ def validate(trace, require_cap=False, require_raw9600=False):
             'ordered_events_both_sides': sum(len(r['events']) for r in records)}
 
 
-def controls(trace, require_cap=False, require_raw9600=False):
+def controls(trace, require_cap=False, require_raw9600=False, require_recovery=False):
     caught = []
     mutations = ('progress-result', 'count-out', 'string-offset', 'callback-order')
     for mutation, both in [(m, False) for m in mutations] + [('count-out', True), ('callback-order', True), ('no-observations', False)]:
@@ -330,7 +377,7 @@ def controls(trace, require_cap=False, require_raw9600=False):
                     index = next(i for i, e in enumerate(row['events']) if e['call'] == 'tty')
                     row['events'][index], row['events'][index + 1] = row['events'][index + 1], row['events'][index]
         try:
-            validate(bad, require_cap, require_raw9600)
+            validate(bad, require_cap, require_raw9600, require_recovery)
         except AssertionError:
             caught.append(mutation + ('-both-sides' if both else ''))
         else:
@@ -373,7 +420,7 @@ def controls(trace, require_cap=False, require_raw9600=False):
                         {'call': 'tty', 'offset': None, 'payload_hex': '0d0a', 'length': 2, 'result': 2},
                         copy.deepcopy(length)])
             try:
-                validate(bad, require_cap, require_raw9600)
+                validate(bad, require_cap, require_raw9600, require_recovery)
             except AssertionError:
                 caught.append(mutation)
             else:
@@ -414,7 +461,30 @@ def controls(trace, require_cap=False, require_raw9600=False):
                             wrong = packet.hex().encode()
                         next(e for e in row['events'] if e['call'] == 'get_strings')['strings_hex'] = (wrong + bytes(600 - len(wrong))).hex()
             try:
-                validate(bad, require_cap, require_raw9600)
+                validate(bad, require_cap, require_raw9600, require_recovery)
+            except AssertionError:
+                caught.append(mutation)
+            else:
+                raise AssertionError('negative control accepted: ' + mutation)
+    if require_recovery:
+        for mutation in ('missing-terminal-error-both-sides', 'failed-output-both-sides',
+                         'stale-instance-recovery-both-sides', 'wrong-recreated-config-both-sides',
+                         'missing-failure-recovery-coverage'):
+            bad = copy.deepcopy(trace)
+            for kind in SITES:
+                _, failed, good, old, new = next(p for p in recovery_pairs(bad) if p[0] == kind and p[1]['rate'] == 9600 and p[1]['cid_val'] == 2)
+                if mutation.startswith('missing-terminal'):
+                    failed['result'] = 0
+                elif mutation.startswith('failed-output'):
+                    failed['events'].append({'call': 'tty', 'length': 2, 'offset': None, 'payload_hex': '0d0a', 'result': 2})
+                elif mutation.startswith('stale'):
+                    good['generation'] = old['generation']
+                elif mutation.startswith('wrong-recreated'):
+                    new['cid_val'] = 1
+                else:
+                    bad['records'].remove(failed)
+            try:
+                validate(bad, require_cap, require_raw9600, require_recovery)
             except AssertionError:
                 caught.append(mutation)
             else:
@@ -432,6 +502,8 @@ def main():
                         help='require four nonempty fields and a rendered fifth field withheld from TTY')
     parser.add_argument('--require-raw9600', action='store_true',
                         help='require successful raw/formatted delivery at 8000/9600 Hz and debug 0/2')
+    parser.add_argument('--require-failure-recovery', action='store_true',
+                        help='require six checksum-loss/delete/create/recovery pairs at the raw/rate boundaries')
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     objpath = (args.period_object or fixture.parent / 'src_service_cid.o').resolve()
@@ -503,12 +575,13 @@ def main():
     with (out / 'gdb.log').open('w') as log:
         subprocess.run(command, cwd=out, stdout=log, stderr=subprocess.STDOUT, check=True)
     trace = json.loads((out / 'trace-observe.json').read_text())
-    report = validate(trace, args.require_four_field_cap, args.require_raw9600)
+    report = validate(trace, args.require_four_field_cap, args.require_raw9600, args.require_failure_recovery)
     report.update(fixture=str(fixture), fixture_sha256=before[str(fixture)], evidence=evidence,
                   input_hashes=before, command=command, companions=companions,
-                  negative_controls=controls(trace, args.require_four_field_cap, args.require_raw9600),
+                  negative_controls=controls(trace, args.require_four_field_cap, args.require_raw9600, args.require_failure_recovery),
                   four_field_cap_required=args.require_four_field_cap, production_source_changed=False)
     report['raw9600_required'] = args.require_raw9600
+    report['failure_recovery_required'] = args.require_failure_recovery
     report['carrier_calibration'] = carrier_proof
     report['negative_controls'].append('changed-period-carrier-sample')
     assert before == {p: sha(Path(p)) for p in before}, 'input changed during observation'
