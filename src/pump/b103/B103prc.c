@@ -536,41 +536,41 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 	struct b103_dsp *dsp;
 	int total;
 	short count;
-	int i;
+	short i;
 
 	/* Stage the transmit bits, narrowing int to short. */
-	for (i = 0; i < (short)*n_tx; i++)
+	for (i = 0; i < (unsigned short)*n_tx; i++)
 		tx_in_internal[i] = (short)tx_bits[i];
 
 	/* Not connected: send mark, whatever was offered. */
 	if (fp->status != 0) {
-		for (i = 0; i < (short)*n_tx; i++)
+		for (i = 0; i < (unsigned short)*n_tx; i++)
 			tx_in_internal[i] = 1;
 	}
 
 	/* The channel bandpass, in place. */
 	dsp = fp->dsp;
-	for (i = 0; i < (short)*n_rx; i++) {
+	for (i = 0; i < (unsigned short)*n_rx; i++) {
 		short *hist = (short *)dsp->bpf_hist;
 		const short *coeff = (const short *)dsp->bpf;
 		int taps = dsp->bpf_taps;
-		int widx = (unsigned short)dsp->bpf_idx;
 		const short *c;
 		short *p;
 		int acc = 0;
 		int k;
 
-		widx = (taps > widx + 1) ? widx + 1 : 0;
-		dsp->bpf_idx = (short)widx;
+		dsp->bpf_idx = (short)(dsp->bpf_idx + 1);
+		if (dsp->bpf_idx >= dsp->bpf_taps)
+			dsp->bpf_idx = 0;
 
-		hist[widx] = (short)(rx_in[i] >> 2);
+		hist[dsp->bpf_idx] = (short)(rx_in[i] >> 2);
 
 		c = coeff;
-		p = &hist[widx];
-		for (k = widx; k >= 0; k--)
+		p = &hist[dsp->bpf_idx];
+		for (k = dsp->bpf_idx; k >= 0; k--)
 			acc += *p-- * *c++;
 		p += taps;
-		for (k = taps - 1; k > widx; k--)
+		for (k = taps - 1; k > dsp->bpf_idx; k--)
 			acc += *p-- * *c++;
 
 		rx_in[i] = (short)(((unsigned)acc >> 15) << 2);
