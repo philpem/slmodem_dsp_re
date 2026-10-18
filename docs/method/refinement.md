@@ -8549,6 +8549,23 @@ Known wrong formats and removed argument assignments must make the detector
 fire. See the [V34 placement audit](../v34-handshake-body-placement-audit.md)
 for the bounded controls and the limits of argument resolution.
 
+The subsequent ordinary-body implementation uses 27 shared continuations and
+nineteen direct transmit cases, with 48 physical bodies also available through
+the fixture facades. Review argument evaluation, frame lifetime, valued returns
+and the destination of each exit before adoption: a table1 exit rejoins the
+queue/fill loop, while a terminal continuation leaves the root. The reviewed
+implementation preserves nine exact TU functions and passes all 393 period
+fixtures. It removes fifteen native-absent helper bodies while leaving the
+root non-exact. Positioned partial-link matches decrease as duplicated code is
+removed; retain that result alongside the structural gains.
+
+When a physical body moves into an include, move its mutation anchors with it
+and preserve their logical function owner. A matching filename is insufficient:
+prove the literal include lies in that function and resolves to the declared
+file under the supported include search order. Reject conditional or shadowed
+ownership proofs, and restore each physical file immediately after a mutation.
+Static anchor maintenance does not require a new mutation campaign.
+
 
 ## Keep local and CI loss reviews consistent
 

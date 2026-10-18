@@ -115,13 +115,15 @@
     "label": "the tail dispatches on mode 2 rather than 1",
     "find": "\tif (mode == 1) {",
     "replace": "\tif (mode == 2) {",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's mode-1 arm scales the baud rate by 2",
     "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);",
     "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->ratecfg.rx_baud);",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's mode-1 arm does not re-read the txstate",
@@ -129,31 +131,36 @@
     "replace": "\t\t*f->progress = 4;",
     "equivalent": true,
     "why": "Measured, not assumed: the value handed to the transmit dispatch equals `obj->txstate` on EVERY path of every arm written here, so reading one in place of the other cannot change a byte.  The walk is exhaustive -- eleven exits over arms 47/56, 48 and 63, each either re-reading +0x3596 or loading a literal that a store four instructions earlier has just put there (0x6d200 before 0x6d225 and 0x6dfbd is the case that looks otherwise) -- and none of table 2's seven arms nor the tail's eighty-eight instructions writes +0x3592, +0x3594 or +0x3596, so nothing can separate them between the arm and the tail either.  An arm landed later that passes a value the object does not hold makes this catchable again, and `mutate.py` reports an equivalent mutation that IS caught as MIScounted, so this claim expires loudly.",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's mode-1 arm reports 5",
     "find": "\t\t*f->progress = 4;",
     "replace": "\t\t*f->progress = 5;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 4..5 window is 3..4",
     "find": "\tif ((unsigned)(mode - 4) <= 1u)",
     "replace": "\tif ((unsigned)(mode - 3) <= 1u)",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 4..5 window is signed",
     "find": "\tif ((unsigned)(mode - 4) <= 1u)",
     "replace": "\tif (mode - 4 <= 1)",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 2..3 window is signed",
     "find": "\tif ((unsigned)(mode - 2) <= 1u && tx == 0x4a) {",
     "replace": "\tif (mode - 2 <= 1 && tx == 0x4a) {",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 0x4a arm reads the object's txstate",
@@ -161,91 +168,106 @@
     "replace": "\tif ((unsigned)(mode - 2) <= 1u\n\t    && (short)T3M_U16(f, V34HS_TXSTATE_OFF) == 0x4a) {",
     "equivalent": true,
     "why": "Measured, not assumed: the value handed to the transmit dispatch equals `obj->txstate` on EVERY path of every arm written here, so reading one in place of the other cannot change a byte.  The walk is exhaustive -- eleven exits over arms 47/56, 48 and 63, each either re-reading +0x3596 or loading a literal that a store four instructions earlier has just put there (0x6d200 before 0x6d225 and 0x6dfbd is the case that looks otherwise) -- and none of table 2's seven arms nor the tail's eighty-eight instructions writes +0x3592, +0x3594 or +0x3596, so nothing can separate them between the arm and the tail either.  An arm landed later that passes a value the object does not hold makes this catchable again, and `mutate.py` reports an equivalent mutation that IS caught as MIScounted, so this claim expires loudly.",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's vect_idx test is at-least",
     "find": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;",
     "replace": "\t\t*f->progress = f->obj->vect_idx >= 0x3c ? 0 : 7;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's vect_idx answers are exchanged",
     "find": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;",
     "replace": "\t\t*f->progress = f->obj->vect_idx > 0x3c ? 7 : 0;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail compares elapsed against the deadline signed",
     "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
     "replace": "\tif (T3M_I32(f, T3M_ELAPSED) > T3M_I32(f, T3M_DEADLINE))",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's deadline test is at-least",
     "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
     "replace": "\tif (T3M_U32(f, T3M_ELAPSED) >= T3M_U32(f, T3M_DEADLINE))",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's two timer fields are exchanged",
     "find": "\tif (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))",
     "replace": "\tif (T3M_U32(f, T3M_DEADLINE) > T3M_U32(f, T3M_ELAPSED))",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's level test is strictly greater",
     "find": "\tif (esi >= f->obj->rx_energy_floor)",
     "replace": "\tif (esi > f->obj->rx_energy_floor)",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's level test is inverted",
     "find": "\tif (esi >= f->obj->rx_energy_floor)\n\t\tT3M_I32(f, T3M_TICK) = 0;\n\telse\n\t\tT3M_I32(f, T3M_TICK)++;",
     "replace": "\tif (esi >= f->obj->rx_energy_floor)\n\t\tT3M_I32(f, T3M_TICK)++;\n\telse\n\t\tT3M_I32(f, T3M_TICK) = 0;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's level is read unsigned",
     "find": "\tesi = f->rx->agc_level;",
     "replace": "\tesi = (unsigned short)f->rx->agc_level;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's tick threshold is at-least",
     "find": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)",
     "replace": "\tif (T3M_I32(f, T3M_TICK) >= 0x257f)",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's tick threshold is 0x257e",
     "find": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)",
     "replace": "\tif (T3M_I32(f, T3M_TICK) > 0x257e)",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's tick is tested before it is updated",
     "find": "\tif (esi >= f->obj->rx_energy_floor)\n\t\tT3M_I32(f, T3M_TICK) = 0;\n\telse\n\t\tT3M_I32(f, T3M_TICK)++;\n\n\tif (T3M_I32(f, T3M_TICK) > 0x257f)\n\t\t*f->progress = 9;",
     "replace": "\tif (T3M_I32(f, T3M_TICK) > 0x257f)\n\t\t*f->progress = 9;\n\n\tif (esi >= f->obj->rx_energy_floor)\n\t\tT3M_I32(f, T3M_TICK) = 0;\n\telse\n\t\tT3M_I32(f, T3M_TICK)++;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 0x53 and 0x54 codes are exchanged",
     "find": "\tif (tx == 0x53)\n\t\t*f->progress = 0x0f;",
     "replace": "\tif (tx == 0x53)\n\t\t*f->progress = 0x10;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 0x52 code is 0x0e",
     "find": "\t} else if (tx == 0x52)\n\t\t*f->progress = 0x0d;",
     "replace": "\t} else if (tx == 0x52)\n\t\t*f->progress = 0x0e;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail's 0x54 arm is reached for any txstate above 0x53",
     "find": "\telse if (tx > 0x53) {\n\t\tif (tx == 0x54)\n\t\t\t*f->progress = 0x10;\n\t}",
     "replace": "\telse if (tx > 0x53)\n\t\t*f->progress = 0x10;",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "the tail reads the txstate rather than the value it was given",
@@ -253,37 +275,43 @@
     "replace": "\tif ((short)T3M_U16(f, V34HS_TXSTATE_OFF) == 0x53)",
     "equivalent": true,
     "why": "Measured, not assumed: the value handed to the transmit dispatch equals `obj->txstate` on EVERY path of every arm written here, so reading one in place of the other cannot change a byte.  The walk is exhaustive -- eleven exits over arms 47/56, 48 and 63, each either re-reading +0x3596 or loading a literal that a store four instructions earlier has just put there (0x6d200 before 0x6d225 and 0x6dfbd is the case that looks otherwise) -- and none of table 2's seven arms nor the tail's eighty-eight instructions writes +0x3592, +0x3594 or +0x3596, so nothing can separate them between the arm and the tail either.  An arm landed later that passes a value the object does not hold makes this catchable again, and `mutate.py` reports an equivalent mutation that IS caught as MIScounted, so this claim expires loudly.",
-    "fn": "t3m_tail"
+    "fn": "t3m_tail",
+    "source": "include/dsplib/v34_continuations/t3m_tail.inc"
   },
   {
     "label": "table 2's SSEG arm reads bit 2 of the receiver's flags",
     "find": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
     "replace": "\t\t\t*f->progress = (f->rx->flags >> 2) & 1 ? 3 : 2;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 2's SSEG arm exchanges its two answers",
     "find": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
     "replace": "\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 2 : 3;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 2's SSEG arm tests the answer flag against 0x66",
     "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;",
     "replace": "\t\tif (f->obj->role == 0x66)\n\t\t\t*f->progress = 2;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 2's SSEG arm ignores the answer flag",
     "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;\n\t\telse\n\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
     "replace": "\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 2's 24/51/54/60/74 arm reports 2",
     "find": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 0;",
     "replace": "\tcase 74:\t\t\t/*         SILENCERETRAIN */\n\t\t*f->progress = 2;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 2 covers 69 entries",
@@ -300,7 +328,8 @@
     "label": "table 2's SILENCE arm reports 1 rather than 0",
     "find": "\t\t\telse\n\t\t\t\t*f->progress = 0;\n\t\t}\n\t\tbreak;",
     "replace": "\t\t\telse\n\t\t\t\t*f->progress = 1;\n\t\t}\n\t\tbreak;",
-    "fn": "t3m_txblock"
+    "fn": "t3m_txblock",
+    "source": "include/dsplib/v34_continuations/t3m_txblock.inc"
   },
   {
     "label": "table 3 covers 41 entries",

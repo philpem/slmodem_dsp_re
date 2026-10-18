@@ -15,301 +15,351 @@
     "label": "the counter is not incremented at all",
     "find": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n",
     "replace": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 0);\n",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the counter is incremented by two",
     "find": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n",
     "replace": "\t */\n\tobj->short_aa78 = (short)(obj->short_aa78 + 2);\n",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the branch is taken on the value BEFORE the store",
     "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\tif (obj->short_aa78 <= 0x440) {",
     "replace": "\tif ((short)(obj->short_aa78 + 1) <= 0x440) {\n\t\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the ladder guard is `<` rather than `<=`",
     "find": "\tif (obj->short_aa78 <= 0x440) {",
     "replace": "\tif (obj->short_aa78 < 0x440) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the ladder guard's constant is 0x441",
     "find": "\tif (obj->short_aa78 <= 0x440) {",
     "replace": "\tif (obj->short_aa78 <= 0x441) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the entry compare reads the counter UNSIGNED",
     "find": "\tif (obj->short_aa78 <= 0x440) {",
     "replace": "\tif ((unsigned short)obj->short_aa78 <= 0x440) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the gain control does not run above the ladder",
     "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */",
     "replace": "\t(void)rx;\t\t\t\t\t/* 0x650ee */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originate/answer test is inverted",
     "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x65) {",
     "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role == 0x65) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originate/answer flag is 0x66",
     "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x65) {",
     "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x66) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the one extra block is at 0x440 rather than 0x441",
     "find": "\tif (obj->short_aa78 == 0x441) {",
     "replace": "\tif (obj->short_aa78 == 0x440) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the FSK demodulator is given the wrong buffer",
     "find": "\t\t      rx->burst,\n\t\t      &obj->fsk);",
     "replace": "\t\t      rx->burst + 1,\n\t\t      &obj->fsk);",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the bit-count gate is `<` rather than `<=`",
     "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
     "replace": "\tif (obj->fsk.nbits < 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the bit-count gate wants 0x15 bits",
     "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
     "replace": "\tif (obj->fsk.nbits <= 0x15 || (obj->fsk.sr & 0xfff) != 0) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the shift-register mask is eight bits, not twelve",
     "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
     "replace": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xff) != 0) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the two halves of the gate are ANDed",
     "find": "\tif (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {",
     "replace": "\tif (obj->fsk.nbits <= 0x14 && (obj->fsk.sr & 0xfff) != 0) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the round-trip delay is shifted by one, not two",
     "find": "\t\tint limit = obj->rtd >> 2;",
     "replace": "\t\tint limit = obj->rtd >> 1;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the round-trip delay is shifted by three",
     "find": "\t\tint limit = obj->rtd >> 2;",
     "replace": "\t\tint limit = obj->rtd >> 3;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the round-trip delay is widened UNSIGNED",
     "find": "\t\tint limit = obj->rtd >> 2;",
     "replace": "\t\tint limit = (unsigned short)obj->rtd >> 2;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the first threshold is `>=` rather than `>`",
     "find": "\t\tif (count > 0xf10 + limit) {",
     "replace": "\t\tif (count >= 0xf10 + limit) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the first threshold's constant is 0xf11",
     "find": "\t\tif (count > 0xf10 + limit) {",
     "replace": "\t\tif (count > 0xf11 + limit) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the first threshold ignores the round-trip delay",
     "find": "\t\tif (count > 0xf10 + limit) {",
     "replace": "\t\tif (count > 0xf10) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the shift register is cleared to zero, not all ones",
     "find": "\t\t\tobj->fsk.sr = -1;\t\t/* 0x68851 */",
     "replace": "\t\t\tobj->fsk.sr = 0;\t\t/* 0x68851 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the shift register is not cleared past the first threshold",
     "find": "\t\t\tobj->fsk.sr = -1;\t\t/* 0x68851 */",
     "replace": "\t\t\t/* 0x68851 */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the tone-A wait is at 0xf15",
     "find": "\t\t\tif (count == 0xf14 + limit) {",
     "replace": "\t\t\tif (count == 0xf15 + limit) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the tone-A wait ignores the round-trip delay",
     "find": "\t\t\tif (count == 0xf14 + limit) {",
     "replace": "\t\t\tif (count == 0xf14) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "+0x358c is SET rather than toggled",
     "find": "\t\t\t\tobj->short_358c ^= 1;\t/* 0x6afe8 */",
     "replace": "\t\t\t\tobj->short_358c |= 1;\t/* 0x6afe8 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "+0x358c's toggle is of bit 1",
     "find": "\t\t\t\tobj->short_358c ^= 1;\t/* 0x6afe8 */",
     "replace": "\t\t\t\tobj->short_358c ^= 2;\t/* 0x6afe8 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the tone-A wait says nothing",
     "find": "\n\t\t\t\t\t    \"V34RETRAIN, waiting for tone A \" \"at the end of RX_L2\\n\");",
     "replace": "\t\t\t\t\t    \"V34RETRAIN, waiting for tone B \"\n\t\t\t\t\t    \"at the end of RX_L2\\n\");",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the give-up threshold is at 0xf2d",
     "find": "\t\t\t} else if (count == 0xf2c + limit) {",
     "replace": "\t\t\t} else if (count == 0xf2d + limit) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the give-up threshold ignores the round-trip delay",
     "find": "\t\t\t} else if (count == 0xf2c + limit) {",
     "replace": "\t\t\t} else if (count == 0xf2c) {",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "giving up does not restart the counter",
     "find": "\t\t\t\tobj->short_aa78 = 0;\t\t/* 0x6c9fa */",
     "replace": "\t\t\t\t/* 0x6c9fa */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "giving up goes to microstate 52, not 51",
     "find": "\t\t\t\ths_set_microstate(obj, V34HS_TX_L1);",
     "replace": "\t\t\t\ths_set_microstate(obj, V34HS_TX_L2);",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "giving up does not move the receive state",
     "find": "\t\t\t\ths_set_rxstate(obj, V34HS_RX_DPSK);\n\t\t\t\ths_set_microstate(obj, V34HS_TX_L1);",
     "replace": "\t\t\t\ths_set_microstate(obj, V34HS_TX_L1);",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "tone A moves the microstate to 63, not 62",
     "find": "\ths_set_microstate(obj, V34HS_RX_PHASE3_CALL);\t/* 0x651e9 */",
     "replace": "\ths_set_microstate(obj, V34HS_INFODONE);\t/* 0x651e9 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "tone A does not move the receive state",
     "find": "\ths_set_rxstate(obj, V34HS_RX_DPSK);\t\t/* 0x65162 */",
     "replace": "\t/* 0x65162 */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "tone A moves the TRANSMIT state instead",
     "find": "\ths_set_rxstate(obj, V34HS_RX_DPSK);\t\t/* 0x65162 */",
     "replace": "\ths_set_txstate(obj, V34HS_RX_DPSK);\t\t/* 0x65162 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the answering end goes to microstate 42, not 41",
     "find": "\t\ths_set_microstate(obj, V34HS_DET_SYNC); /* 0x67e7f */",
     "replace": "\t\ths_set_microstate(obj, V34HS_DET_CJ); /* 0x67e7f */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the answering end goes to txstate 24, not 60",
     "find": "\t\ths_set_txstate(obj, V34HS_TONE_AB);\t /* 0x67e4b */",
     "replace": "\t\ths_set_txstate(obj, V34HS_TX_DPSK);\t /* 0x67e4b */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the answering end does not re-arm the FSK receiver",
     "find": "\t\tdpskDetectInfo1Init(obj);\t\t\t /* 0x67eb3 */",
     "replace": "\t\t(void)obj;\t\t\t\t\t /* 0x67eb3 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the record length is INFO1a's 0x26, not INFO1c's 0x4d",
     "find": "\t\tobj->msgrec[3].nbits = 0x4d;\t\t /* 0x67f54 */",
     "replace": "\t\tobj->msgrec[3].nbits = 0x26;\t\t /* 0x67f54 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the record length goes to +0x1a of the record",
     "find": "\t\tobj->msgrec[3].nbits = 0x4d;\t\t /* 0x67f54 */",
     "replace": "\t\tobj->msgrec[3].pos = 0x4d;\t\t /* 0x67f54 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the trace companion is not cleared",
     "find": "\t\tobj->vect_idx = 0;\t\t\t\t /* 0x67f5a */",
     "replace": "\t\t/* 0x67f5a */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the FSK gate at +0xa8a0 is left shut",
     "find": "\t\tobj->retrain_poll = 1;\t\t\t\t /* 0x67f68 */",
     "replace": "\t\tobj->retrain_poll = 0;\t\t\t\t /* 0x67f68 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the FSK gate is written sixteen bits wide",
     "find": "\t\tobj->retrain_poll = 1;\t\t\t\t /* 0x67f68 */",
     "replace": "\t\t*(short *)((char *)obj + T72_FSKGATE) = 1;\t\t\t /* 0x67f68 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "+0xaa70 is aimed at the OTHER record",
     "find": "\t\tobj->paa70 = &obj->msgrec[3];\t\t\t /* 0x67f6e */",
     "replace": "\t\tobj->paa70 = &obj->msgrec[2];\t\t\t /* 0x67f6e */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the answering end does not restart the counter",
     "find": "\t\tobj->short_aa78 = 0;\t\t\t\t\t /* 0x67f74 */",
     "replace": "\t\t/* 0x67f74 */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originating end does not move the transmit state",
     "find": "\t\ths_set_txstate(obj, V34HS_TONE_AB);\t/* 0x696d0 */",
     "replace": "\t\t/* 0x696d0 */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originating end clears the shift register to zero",
     "find": "\t\tobj->fsk.sr = -1;\t\t\t\t/* 0x69710 */",
     "replace": "\t\tobj->fsk.sr = 0;\t\t\t\t/* 0x69710 */",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originating end leaves the bit count alone",
     "find": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */",
     "replace": "\t\t/* 0x69717 */;",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the originating end also re-arms the FSK receiver",
     "find": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */",
     "replace": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */\n\t\tdpskDetectInfo1Init(obj);",
-    "fn": "t72_rx_l1"
+    "fn": "t72_rx_l1",
+    "source": "include/dsplib/v34_continuations/t72_rx_l1.inc"
   },
   {
     "label": "the sample count is one short",

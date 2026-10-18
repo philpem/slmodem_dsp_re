@@ -292,3 +292,185 @@ its direct-fixture SHA-256 is
 Future single-cell compilation, audit and period runs merge existing summary
 rows instead of discarding other cells. Historical rows have not been invented
 or retroactively presented as newly executed tests.
+
+## Merged-source continuation checkpoint
+
+The ordinary continuation experiment has been replayed on merged source pin
+`28ccee0669a7f02a1663736b10900d239928b824`. Artifacts are separate from the
+historical runs, under `build/v34-continuations-current/`. The unchanged full TU
+reproduces the current canonical object raw, SHA-256
+`6b4972bed29ab1d4115bc518736e0efe957d010664c4db6d2ea14073838416d9`.
+The frozen canonical object, complete build configuration and provenance are
+in `canonical-baseline/`; compiler/assembler identity and actual complete
+commands are recorded by `results.json` and `identity.log`. Gentoo period
+flags and `DSPLIB_REPRODUCE_BUGS` remain unchanged.
+
+The generator retains PR295's normal-only `t3m_info0_carrier` helper and
+predicate. It asserts that the complete `t3m_micro47` body and the normal helper
+text survive verbatim in all three cells; `continuation-domain.json` records
+the assertion result and body hash. Period BUGS mode excludes the normal-only
+predicate without deleting it from the source overlays.
+
+| Cell | Root bytes | Direct calls | Initial RTL tables | TU bodies | Native-absent extras | Changed common bodies |
+|---|---:|---:|---|---:|---:|---:|
+| Unchanged | 12,867 | 113 | 82, 40 | 53 | 24 | 0 |
+| Ordinary terminal continuations | 24,868 | 199 | 82, 40, 70 | 48 | 19 | 17 |
+| Continuations and ordinary table1 | 42,026 | 308 | 82, 40, 70 | 38 | 9 | 14 |
+
+All 29 native-common bodies are audited in each cell. All nine exact bodies,
+strong bindings and canonical data bytes remain unchanged. The terminal cell
+changes `V34SetupDemodulator` from SIZE 11 to SIZE 41 as well as reducing the
+root gap. The table1 cell additionally changes `getbit` SIZE 14→18,
+`datapumpv34` SIZE 7→23 and `v34handshakinit` SIZE 11→12. Complete non-exact
+bodies and relocation-consumer changes are retained in `audit.json`.
+
+The source uses 27 ordinary void continuation labels, an ordinary scoped valued
+helper and ordinary frame-initialisation blocks. Table1 adds nineteen ordinary
+case bodies. Each of the 48 physical `.inc` bodies is also consumed by its
+original function facade where needed; no GNU statement-expression body macros
+or forced-inline attributes are introduced. The direct transmit fixture object
+is raw-identical in all three cells. Independent review of the 48 bodies,
+27 transfer macros and 91 transfer contexts found no skipped post-call work,
+escaped local-frame pointer or incorrect nested return; its scope remains
+static source review supplemented by the stated fixtures.
+
+All nine cell/fixture combinations pass. Per cell: `t_v34hstx1` 26,039 checks,
+`t_v34hshak` 14,368,945 checks and `t_v34hsfsk` 3,795 checks, totalling
+14,398,779. `period.json`, `period-roots.json` and
+`verified-fixture-provenance.json` verify the exact selected production and
+fixture object hashes at the actual period directories. These are the three
+focused component fixtures, not a new whole-phase or modem lifecycle claim.
+
+Replay from the worktree root:
+
+```sh
+python3 tools/recovery_v34_continuations.py --help
+python3 tools/recovery_v34_continuations.py \
+  --revision 28ccee0669a7f02a1663736b10900d239928b824 \
+  --out build/v34-continuations-current
+python3 tools/recovery_v34_continuations.py \
+  --revision 28ccee0669a7f02a1663736b10900d239928b824 \
+  --out build/v34-continuations-current --period
+```
+
+`--revision` also permits an explicit historical source pin; immutable output
+manifests reject mixing revisions or canonical inputs in one output directory.
+`--canonical-object` and `--config` select archived baseline inputs when needed.
+The current results' inherited case66 hypothesis description was corrected to
+the actual three-cell continuation domain; the original inherited text is
+preserved in the same JSON record, and historical experiment records were not
+modified.
+
+Production source remains unchanged at this checkpoint. The table1 partial is
+a supported retention candidate: it restores native shared dispatch and reduces
+unsupported boundaries while passing the component comparisons. Readable
+multiline transfer bindings were checked separately under `multiline/`: all
+three complete production objects and all three direct-fixture objects are
+raw-identical to the objects used by the nine passing focused runs.
+`multiline-identity.json` records the six pairs of hashes.
+The next separate discriminator is the single-call T72 ladder and its two
+native-inline measurement bodies. That experiment must retain the ordering of
+`rxtiming`, count/sample reloads, both `dftenergy` calls, zero/final accumulator
+stores, the zero-denominator branch and the subsequent bin reinitialisers.
+T72 expansion is paused while this source checkpoint is reviewed.
+
+### Integration and whole-object limits
+
+The multiline table1 candidate is installed as the shared-body implementation.
+The canonical Gentoo object and the runtime object both equal the validated
+candidate raw, SHA-256
+`abd7bd4b768eccf6d7ce528e164542fc212fb32cd29d5eea602e47f64ef09ed5`.
+All 300 runtime objects match their canonical counterparts. The final
+`make phase J=4` passes 393 period fixtures with no failures and all structural
+checks; the object hashes were checked again after that run. The fresh census remains
+1,109/1,852 exact, with the same exact-name set as the retained floor:
+32 REGALLOC, 78 BYTES, 633 SIZE, and no unresolved or relocation-only verdicts.
+
+The initial installation preserved generated-file timestamps, allowing the
+canonical build to reuse the previous object. The raw-object comparison caught
+this; installation timestamps were refreshed and the build rerun. An overlapping
+whole-tree before-census was marked invalid and excluded. The partial-link
+baseline below instead reconstructs all 300 inputs by their recorded PR293
+landing hashes; only the V34 object differs after adoption. Both links use the
+same recovered 300-input manifest and period linker.
+
+| Partial-link measurement | Before | After |
+| --- | ---: | ---: |
+| Positioned reference bytes equal / 943,398 | 72,202 | 71,784 |
+| Exact relocations / 18,317 | 1,002 | 997 |
+| Exact symbols / 2,931 | 457 | 457 |
+| Exact content sections | 68 | 68 |
+| Candidate `.text` bytes (reference 728,304) | 712,329 | 703,609 |
+
+Both strict comparisons remain DIFFERENT. The shared-body recovery removes
+duplicated helper code as it moves operations into the root; the resulting
+layout shifts reduce positioned-byte matches. This is an explained structural
+recovery, not a whole-object byte gain. The root remains 19,515 bytes shorter
+than native, and the remaining helper boundaries need investigation.
+The complete comparisons and input manifests are in
+`build/v34-continuation-partial/{before,after}/`.
+
+Extraction moves mutation anchors as well as source. The migration preserves
+all 16 affected suite identities, binaries and 2,428 mutation rows, plus 29
+non-mutation entries. Of the mutation rows, 1,455 remain in place, 927 move
+verbatim, 43 adapt their return syntax, and three preserve their dispatch-fault
+scope in the ordinary cases. Explicit per-row physical paths retain their
+original function owner; the shared resolver proves the include belongs to
+that function and respects quoted-include precedence. Conditional includes do
+not supply ownership proof. This maintains the static apparatus without a
+runtime mutation campaign or snapshot refresh.
+
+The apparatus has 24 resolver, restoration and live-mutant detector controls;
+all 10,044 targets across 285 suites pass the final static checks. The live-mutant
+detector follows the same physical paths while permitting an applied mutant's
+original anchor to be absent. It still rejects invalid ownership and paths.
+
+After adoption, the historical outlined cell was replayed against all three
+focused fixtures: 14,398,779 checks pass. Its production object remains
+`6b4972be...` in every isolated runtime directory, while the installed canonical
+object remains `abd7bd4b...`. The full hashes and fixture identities are in
+`build/v34-continuations-current/historical-replay-final/replay-identity.json`.
+This control verifies that the replay preserves the old body rather than
+silently rebuilding it from the newly installed source.
+
+The next T72 cell is bounded to one ladder expansion and two measurement
+expansions. Native ladder entry is `0x6551a`, with `rxtiming` at `0x65524`;
+the measurement regions are `0x69cd7..0x69d78` and `0x6a6c8..0x6a760`.
+Keep the sample/count reads after `rxtiming` and preserve both zero-denominator
+rejoins into their reinitialisers. The often-mentioned `0x64c04` and `0x6a0c8`
+regions instead concern receiver setup and belong to a separate experiment.
+
+After installation, replay uses the unchanged inputs already frozen under
+`OUT/canonical-baseline/`. The tool verifies their hashes and source pin and
+preserves their original manifest paths. It does not substitute the newly
+adopted canonical object for the historical unchanged baseline. Isolated period
+runs keep the selected compiled object and fixture newer than the installed
+source, then assert both hashes after `make`; this prevents a timestamp rebuild
+from silently replacing the baseline cell with adopted source.
+
+For a fresh output directory, name the archived unchanged inputs explicitly:
+
+```sh
+python3 tools/recovery_v34_continuations.py \
+  --revision 28ccee0669a7f02a1663736b10900d239928b824 \
+  --out build/v34-continuations-current/fresh-replay \
+  --canonical-object build/v34-continuations-current/canonical-baseline/src_pump_v34_V34hshak.c.o \
+  --config build/v34-continuations-current/canonical-baseline/.build-config
+```
+
+A new output directory without both archived inputs is rejected. Existing
+outputs can be audited or replayed without those options; passing alternate
+input paths verifies identical bytes without rewriting the original provenance.
+The frozen unchanged-object hash remains `6b4972be...`; the installed candidate
+hash is `abd7bd4b...` and serves a different comparison role.
+
+The final EOF/directive cleanup was checked in
+`build/v34-continuations-current/format-final/`. All 48 include bodies now end
+with exactly one newline, and the nested valued-helper macro is undefined
+before its replacement definition. All six generated production/fixture
+objects remain raw-identical to the validated three-cell checkpoint.
+`installed-identity.json` additionally records direct period-compiler builds
+of the installed production source and direct fixture, matching SHA-256
+`abd7bd4b768eccf6d7ce528e164542fc212fb32cd29d5eea602e47f64ef09ed5` and
+`2f7d62cc46bfd4ef030f20aca6dc944a1a4bb7ef393f7ded1b276bff9f1b420f`.
+No further full-phase run was performed as part of this cleanup verification.

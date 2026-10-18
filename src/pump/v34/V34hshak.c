@@ -3261,13 +3261,11 @@ struct t3m_frame {
 static void
 t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 {
-	f->obj = obj;
-	f->m = (unsigned char *)obj;
-	f->rx = &obj->receiver;
-	f->progress = &obj->progress;
-	f->mst = 0;
-	f->nbits = 0;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3m_frame_init.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -3288,61 +3286,11 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 static void
 t3m_tail(struct t3m_frame *f, short tx)
 {
-	int mode = f->obj->hs_mode;
-	int esi;
-
-	if (mode == 1) {
-		/*
-		 * The block at 0x62b45: `ratecfg.rx_baud` is the receive baud rate
-		 * and the receiver's +0x1d2 gets three times it, by
-		 * `lea (%ebp,%ebp,2)` on the sign-extended halfword, stored
-		 * back as one.  THE RELOAD IS THE NEXT INSTRUCTION, 0x62b5f
-		 * `movzwl 0x3596(%ebx),%ecx`, and 0x62b66 writes the 4.
-		 */
-		f->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);
-		tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
-		*f->progress = 4;
-	}
-
-	/* 0x62a56 and 0x62a68: both windows are UNSIGNED, so mode 1 and any
-	   negative mode fall through both. */
-	if ((unsigned)(mode - 4) <= 1u)
-		*f->progress = 6;
-
-	if ((unsigned)(mode - 2) <= 1u && tx == 0x4a) {
-		/*
-		 * 0x64884.  `setg`/`dec`/`and $7` is 0 when `vect_idx` is
-		 * above 60 and 7 when it is not -- the arithmetic is the
-		 * compiler's way of writing a two-valued select and the 7 is
-		 * not a mask of anything.
-		 */
-		*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;
-	}
-
-	/* 0x62a7a.  Unsigned, so an elapsed count past the deadline's wrap
-	   is late rather than early. */
-	if (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))
-		*f->progress = 8;
-
-	/* 0x62a92.  Signed: the level is a sign-extended halfword. */
-	esi = f->rx->agc_level;
-	if (esi >= f->obj->rx_energy_floor)
-		T3M_I32(f, T3M_TICK) = 0;
-	else
-		T3M_I32(f, T3M_TICK)++;
-
-	if (T3M_I32(f, T3M_TICK) > 0x257f)
-		*f->progress = 9;
-
-	/* 0x62ac5, a three-way compare on the SIGN-EXTENDED halfword. */
-	if (tx == 0x53)
-		*f->progress = 0x0f;
-	else if (tx > 0x53) {
-		if (tx == 0x54)
-			*f->progress = 0x10;
-	} else if (tx == 0x52)
-		*f->progress = 0x0d;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3m_tail.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -3403,85 +3351,11 @@ t3m_tail(struct t3m_frame *f, short tx)
 static void
 t3m_txblock(struct t3m_frame *f, short tx)
 {
-	unsigned idx = (unsigned)((int)tx - T3M_TBL2_FIRST);
-
-	if (idx >= T3M_TBL2_COUNT) {
-		t3m_tail(f, tx);
-		return;
-	}
-
-	switch ((int)tx) {
-	case 5:				/* 0x64480 SILENCE */
-		/*
-		 * Three ways to reach progress 1, all of them a microstate
-		 * and rxstate pair agreeing with the answer/originate flag
-		 * at +0x359c, and every other way is 0.
-		 */
-		{
-			unsigned short mst = T3M_U16(f, V34HS_MICROSTATE_OFF);
-			unsigned short rx = T3M_U16(f, V34HS_RXSTATE_OFF);
-
-			if (mst == 0x3f && f->obj->role == 0x66)
-				*f->progress = 1;
-			else if (rx == 0x04 && mst == 0x2c
-				 && f->obj->role == 0x65)
-				*f->progress = 1;
-			else if (rx == 0x23 && mst == 0x3f
-				 && f->obj->role == 0x65)
-				*f->progress = 1;
-			else
-				*f->progress = 0;
-		}
-		break;
-
-	case 18:			/* 0x64518 SSEG   */
-	case 19:			/*          SBARSEG */
-		/*
-		 * `sbb`/`add $3` is 3 when bit 3 of the receiver's flags is
-		 * set and 2 when it is not.  The originate side is 2 whatever
-		 * the flag says.
-		 */
-		if (f->obj->role == 0x65)
-			*f->progress = 2;
-		else
-			*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;
-		break;
-
-	case 20:			/* 0x64509 PPSEG    */
-	case 21:			/*         TRNSEG4  */
-	case 64:			/*         JTXMIT   */
-	case 68:			/*         J1TXMIT  */
-		*f->progress = 2;
-		break;
-
-	case 24:			/* 0x644c9 TX_DPSK  */
-	case 51:			/*         TX_L1    */
-	case 54:			/*         SILENCEINFO */
-	case 60:			/*         TONE_AB  */
-	case 74:			/*         SILENCERETRAIN */
-		*f->progress = 0;
-		break;
-
-	case 66:			/* 0x644fa TRNSEG4A */
-	case 67:			/*         XMITMP   */
-	case 69:			/*         EXMIT    */
-		*f->progress = 3;
-		break;
-
-	case 70:			/* 0x644d8 DATAXMIT */
-		/*
-		 * `cmp $0x1,%bp` then `sbb %eax,%eax` and `add $0x4,%eax`:
-		 * the borrow is set only when the halfword is zero.
-		 */
-		*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 3 : 4;
-		break;
-
-	default:			/* 0x62a40, straight to the tail */
-		break;
-	}
-
-	t3m_tail(f, tx);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3m_txblock.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -4807,11 +4681,11 @@ t3c_puti(struct v34_object *obj, unsigned off, int v)
 static void
 t3c_txblock(struct v34_object *obj)
 {
-	struct t3m_frame f;
-
-	t3m_frame_init(&f, obj);
-	t3m_txblock(&f, obj->txstate);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_txblock.inc"
+#undef V34_CONT_RETURN
 }
+
 
 
 /*
@@ -4830,34 +4704,11 @@ t3c_txblock(struct v34_object *obj)
 static void
 t3c_micro_rx_phase3_call(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-
-	if ((t3c_getb(obj, T3C_FAAE2) & 1) == 0) {
-		/*
-		 * 0x6abae.  Bit 0 clear -- `testb $0x1,0xaae2` at 0x65c81 --
-		 * and the counter at +0xaa78 keeps whatever it had: the copy
-		 * from +0xaa7c is on the other side of that branch, at 0x65c8e
-		 * and 0x65c99.
-		 */
-		t3c_txblock(obj);			/* 0x6abae */
-		return;
-	}
-
-	/* Sixteen bits, and the trace below reads it back as [2]. */
-	obj->short_aa78 = obj->filtdelay;
-
-	hs_set_microstate(obj, V34HS_TX_PHASE2_CALL);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34PHASE2, RX_PHASE3_CALL ,filtdelay = "
-				     "%d, rxflgs= 0x%x,rx->gain=0x%x\n",
-				     (int)obj->filtdelay,
-				     (unsigned)rx->flags,
-				     (unsigned)(int)rx->agc_gain);
-
-	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_rx_phase3_call.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * Microstate 79 `MOH_TONE`, 0x657ca, and 80 `MOH_TONE_DROP`, 0x656e0.
@@ -4882,145 +4733,20 @@ t3c_moh_step_detector(struct v34_object *obj)
 static void
 t3c_micro_moh_tone(struct v34_object *obj)
 {
-	if (t3c_moh_step_detector(obj) == 0) {
-		/*
-		 * 0x6afc4.  The detector said nothing -- `test %ax,%ax` at
-		 * 0x65806 -- and the counter step at 0x657ea/0x657eb stands,
-		 * so the count below resumes from it on the next block.
-		 */
-		t3c_txblock(obj);			/* 0x6afc4 */
-		return;
-	}
-
-	if (obj->short_aa78 < obj->short_abfc) {
-		/*
-		 * 0x6c701.  `cmp 0xabfc(%esi),%ax` at 0x6581d and a SIGNED
-		 * `jl`: the count and the limit are both halfwords and both
-		 * read off the object by adjacent instructions.
-		 */
-		t3c_txblock(obj);			/* 0x6c701 */
-		return;
-	}
-
-	hs_set_txstate(obj, V34HS_TX_DPSK);
-
-	/*
-	 * 0x6d57c.  THE GUARD IS 32 BITS WIDE (`cmpl $0x1,0xabf0`) and the
-	 * two sides of it choose a different NEXT MICROSTATE, not a different
-	 * amount of work: MHfrr re-aims the tone detector and waits for the
-	 * far end's carrier to DROP, anything else goes straight to DET_SYNC.
-	 * Both then run the block below, which 0x6d57c's own exit at 0x6589f
-	 * joins past the DET_SYNC store.
-	 *
-	 * AND THIS IS 0x6ebdf'S CALL WITH ONE CONSTANT CHANGED.  Microstate
-	 * 44's Modem-on-Hold accept arm builds the same detector -- same
-	 * coefficients, chosen the same way by `role`, same polarity, same
-	 * warm-up, same thresholds, and the same +0x356a store and
-	 * MOH_TONE_DROP after it.  The one difference is `limit`, 0xf0 here
-	 * against 0x64 there, so this end waits about two and a half times as
-	 * long before asserting.  Finding F749.
-	 */
-	if (obj->moh_message == 1) {
-		detectorinit(&obj->detector,
-			     obj->role == 0x65 ? c2400_ : c1200_,
-			     1, 0xf0, 0x32, 0x800, 0x400);
-		/*
-		 * 0x6d5db sits BETWEEN the microstate load at 0x6d5d4 and the
-		 * `cmp $0x50` at 0x6d5e2, so +0x356a takes its 1 whether or
-		 * not the transition below turns out to be a move.
-		 */
-		obj->detector.armed = 1;		/* 0x6d5db */
-		hs_set_microstate(obj, V34HS_MOH_TONE_DROP);
-	} else {
-		hs_set_microstate(obj, V34HS_DET_SYNC);
-	}
-
-	obj->fsk.phase = 0;
-	obj->fsk.nbits = 0;
-	obj->msgrec[1].crc = -1;
-	obj->msgrec[1].nbits = 8;
-	obj->short_aa78 = 0;
-	obj->paa70 = &obj->msgrec[1];
-	obj->paa6c = obj->msgrec;
-	obj->short_358c = 0;
-	obj->vect_idx = 0;
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_moh_tone.inc"
+#undef V34_CONT_RETURN
 }
+
 
 static void
 t3c_micro_moh_tone_drop(struct v34_object *obj)
 {
-	if (t3c_moh_step_detector(obj) != 0
-	    && obj->moh_msg_pending == 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34Handshake: Detected signal "
-					     "drop on FRR request, time to " "move to phase1...\r\n");
-		obj->moh_msg_pending = 1;
-	}
-
-	/* The round-trip delay sets how long the drop has to persist. */
-	if ((int)obj->short_aa78 < (((int)obj->rtd) >> 2) + 0x12c0) {
-		/*
-		 * 0x6aae6.  Both halfwords are sign-extended before the
-		 * arithmetic -- `movswl 0xaa7e`, `movswl 0xaa78`, `sar $0x2`,
-		 * `add $0x12c0` -- so a negative delay shortens the wait
-		 * rather than wrapping it.
-		 */
-		t3c_txblock(obj);			/* 0x6aae6 */
-		return;
-	}
-
-	/*
-	 * 0x6c8f8.  THE GUARD IS A BYTE (`cmpb $0x0,0xabf9`) and it is not
-	 * symmetrical with the one microstate 79 takes four fields away: this
-	 * one picks between giving up and retraining, and the fall-through --
-	 * which is the retrain -- is the case the byte being zero selects.
-	 *
-	 * GIVING UP IS FOUR STORES AND NO CALL.  The transmit machine goes to
-	 * MOH_CLEARDOWN and the receive machine to WAIT, +0xabe4 and +0xabe2
-	 * are both raised, and the arm leaves through the once-per-block
-	 * dispatch like every other path here -- no `v34handshakinit`, so
-	 * findings F359 and F324 do not apply to it and the library tables stay
-	 * where the bring-up put them.  Both state compares are LIVE, unlike
-	 * 81's: nothing on the way in constrains either word.
-	 */
-	if (obj->moh_path_sel != 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("MOH: Timeout waiting for MH " "sequence under MHfrr, "
-					     "disconnecting...\r\n");
-
-		hs_set_txstate(obj, V34HS_MOH_CLEARDOWN);
-		hs_set_rxstate(obj, V34HS_WAIT);
-		obj->short_abe4 = 1;		/* 0x6c983 */
-		/*
-		 * 0x6c983 and 0x6c98a are two halfword stores of the same
-		 * constant, out of %ax and %di loaded at 0x6c979 and 0x6c97e
-		 * -- so both fields are shorts, where the two guards that
-		 * chose this path read bytes.
-		 */
-		obj->short_abe2 = 1;				/* 0x6c98a */
-
-		/*
-		 * 0x62af1 IS the dispatch entry and not one of the stubs that
-		 * re-read +0x3596: 0x6c991 jumps straight in, because the
-		 * transition at 0x6c8f8 already left MOH_CLEARDOWN in %cx,
-		 * which the four stores between 0x6c93e and 0x6c991 do not
-		 * disturb.
-		 */
-		t3c_txblock(obj);			/* 0x62af1 */
-		return;
-	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("MOH: Timeout waiting for MH sequence "
-				     "under MHfrr, initiating retrain\r\n");
-
-	v34handshakinit(obj, 1);
-	obj->short_abe6 = 1;
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_moh_tone_drop.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -5104,39 +4830,11 @@ t41_record_head(struct v34_bitsource *rec, short f18)
 static void
 t41_frr_nack(struct v34_object *obj)
 {
-	/*
-	 * 0x6dca7's `cmpw $0x31,0x35a0` and `jle 6dd19`: the counter has to be
-	 * past 0x31 and not at it, and the compare is signed.
-	 */
-	if (obj->short_35a0 <= 0x31) {
-		t3c_txblock(obj);			/* 0x6dd19 */
-		return;
-	}
-	if (obj->fsk.sr != 0) {
-		/*
-		 * 0x6dd06.  `cmpw $0x0,0xaae2` at 0x6dcb1 -- sixteen bits,
-		 * where the arm's entry test on the same field is eight.
-		 */
-		t3c_txblock(obj);			/* 0x6dd06 */
-		return;
-	}
-	if (obj->moh_msg_pending != 0) {
-		/*
-		 * 0x6dcf3.  `cmpb $0x0,0xabf8` at 0x6dcbb: the drop has
-		 * already been reported, and reporting it is all the
-		 * fall-through has left to do.
-		 */
-		t3c_txblock(obj);			/* 0x6dcf3 */
-		return;
-	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34Handshake: Detected signal drop on "
-				     "FRR request (after NACK), time to move " "to phase1...\r\n");
-
-	obj->moh_msg_pending = 1;
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_frr_nack.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6ab33, where four of the arm's paths converge: the second door's own
@@ -5149,27 +4847,11 @@ t41_frr_nack(struct v34_object *obj)
 static void
 t41_after_guards(struct v34_object *obj, unsigned char abe8)
 {
-	/*
-	 * 0x6ab33's `test %cl,%cl` is a BYTE test of the +0xabe8 its callers
-	 * loaded, and 0x669fa is also where the arm's first door leaves -- one
-	 * stub for two paths.
-	 */
-	if (abe8 == 0) {
-		t3c_txblock(obj);			/* 0x669fa */
-		return;
-	}
-	/*
-	 * 0x6ab42's `cmpl $0x1,0xabf0` is THIRTY-TWO bits wide, so a low
-	 * halfword of 1 with anything at all in the high half does not reach
-	 * 0x6dca7.
-	 */
-	if (obj->moh_message == 1) {
-		t41_frr_nack(obj);			/* 0x6dca7 */
-		return;
-	}
-	/* 0x6ab4f, the fall-through: +0xabe8 set, +0xabf0 not 1. */
-	t3c_txblock(obj);				/* 0x6ab4f */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_after_guards.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6c862: the low byte of +0xaae2 is 0x72, and the state moves to DET_INFO.
@@ -5181,28 +4863,11 @@ t41_after_guards(struct v34_object *obj, unsigned char abe8)
 static void
 t41_to_det_info(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-	short *rec = (short *)obj->paa70;
-
-	hs_set_microstate(obj, V34HS_DET_INFO);
-
-	*(short *)((char *)rec +
-		    __builtin_offsetof(struct v34_bitsource, crc)) = -1;
-	obj->fsk.nbits = 0;
-
-	if (obj->short_358a == 0)
-		rx->flags = (unsigned short)(rx->flags
-					     & ~V34_RX_FLAG_DET_PENDING);
-
-	obj->short_aa78 = 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "DET_SYNC is received in RX_DPSK,rx->gain=0x%x\n",
-		    (int)rx->agc_gain);
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_to_det_info.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x709e1: the state has run long enough that the tone detector is consulted.
@@ -5217,76 +4882,11 @@ t41_to_det_info(struct v34_object *obj)
 static void
 t41_tone_search(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-	short det;
-	int i;
-
-	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
-
-	det = t41_detect(obj);
-	if (det == 0 && obj->fsk.nbits <= 0x384) {
-		/*
-		 * 0x70f8f.  Both halves of the guard: `test %ax,%ax` at
-		 * 0x70a1b and `cmpw $0x384,0xaae0` at 0x70a20.  The flag
-		 * lowered at 0x709f8 stays lowered on this exit -- it is
-		 * cleared before the detector runs, not after it answers.
-		 */
-		t3c_txblock(obj);			/* 0x70f8f */
-		return;
-	}
-
-	obj->is_short = 0;
-	obj->local_short = 0;
-	obj->short_358a = 1;
-	obj->short_3588 = (short)(obj->short_3588 | 1);
-
-	for (i = 0; i <= 9; i++)
-		obj->short_abae[i] = 0;
-
-	obj->short_abc2 = 0;
-
-	hs_set_txstate(obj, V34HS_TX_DPSK);
-	hs_set_microstate(obj, V34HS_DET_SYNC);
-
-	obj->fsk.sr = -1;
-	obj->fsk.nbits = 0;
-
-	/*
-	 * 0x70d35.  The longer warm-up is taken only when the far end's
-	 * marker says 0x65 AND the V.90 receiver is present; the object reads
-	 * that int through `obj + 4`, so it is +0x24c and not +0x248.
-	 */
-	if (obj->role == 0x65 && obj->v90_receiver != 0)
-		/*
-		 * ONE record with two heads.  0x70bd7 falls into the 0x11 head
-		 * at 0x70bdd, and 0x70d41's `test`/`je` jumps BACK to it when
-		 * the int loaded at 0x70d39 is zero, so 0x70d47 is reached
-		 * only with both conditions -- and both heads end at 0x70c07.
-		 */
-		t41_record_head(obj->msgrec, 0x1e);		/* 0x70d47 */
-	else
-		t41_record_head(obj->msgrec, 0x11);		/* 0x70bdd */
-
-	/*
-	 * 0x70c07 is where the two heads MEET: it is the next instruction
-	 * after the 0x11 arm's `movw $0x11,0x18` and it is the 0x1e arm's
-	 * `jmp` target at 0x70d6c, so everything from here down is emitted
-	 * once.
-	 */
-	obj->msgrec[0].wordbits = 8;				/* 0x70c07 */
-	obj->msgrec[0].crc_on = 1;
-	obj->msgrec[0].acc = 0xf72;
-	obj->msgrec[0].acc0 = 0xf72;
-	obj->msgrec[0].avail = 0xc;
-	obj->msgrec[0].avail0 = 0xc;
-	obj->msgrec[0].repeat = 1;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "errorrecovery is initialized in DET_SYNC\n");
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_tone_search.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6da9c: +0x358a is 1, so a tone is being waited for.
@@ -5301,81 +4901,11 @@ t41_tone_search(struct v34_object *obj)
 static void
 t41_tone_ab(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-	const unsigned char *rec;
-	short *out;
-	int i;
-
-	/*
-	 * 0x6dac7's `test %ax,%ax` sends a silent detector to 0x6de83, which
-	 * re-reads +0xabe8 with a `movzbl` before jumping to the junction --
-	 * the re-read the note above says is why `abe8` is a parameter.
-	 */
-	if (t41_detect(obj) == 0) {
-		t41_after_guards(obj, obj->moh_active); /* 0x6de83 */
-		return;
-	}
-
-	rec = (const unsigned char *)obj->paa6c;
-	if ((rec[4] & 0x80) == 0) {
-		/*
-		 * 0x6dae1's `testb $0x80,0x4(%eax)` on the record +0xaa6c
-		 * points at, and 0x6de70 re-reads +0xabe8 exactly as 0x6de83
-		 * does -- two stubs three instructions apart, one junction.
-		 */
-		t41_after_guards(obj, obj->moh_active); /* 0x6de70 */
-		return;
-	}
-
-	obj->short_358a = 0;
-
-	/*
-	 * 0x6dafa is `js`, so a negative count copies nothing at all, and
-	 * the loop itself is a do/while over 0..+0xabc2 INCLUSIVE -- the
-	 * test at 0x6db1b compares the already-incremented index.
-	 */
-	if (obj->short_abc2 >= 0) {
-		out = (short *)obj->paa70;
-		for (i = 0; (short)i <= obj->short_abc2; i++)
-			out[i] = obj->short_abae[i];
-	}
-
-	obj->short_aa78 = 0;
-
-	if (obj->role == 0x65) {
-		hs_set_microstate(obj, V34HS_RX_PHASE1_CALL);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Tone AB detected ending " "errorrecovery. Switch to "
-					     "RX_PHASE1_CALL.\n");
-	} else {
-		obj->fsk.sr = -1;
-		hs_set_microstate(obj, V34HS_TX_PHASE1_ANS);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Tone AB detected ending " "errorrecovery. Switch to "
-					     "TX_PHASE1_ANS.\n");
-	}
-
-	/* 0x6dbf3, which both of the two above fall into. */
-	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34INFO, info0 received in DET_SYNC\n");
-
-	if (DSPLIB_DEBUG_ON()) {
-		const unsigned short *p =
-		    (const unsigned short *)obj->paa70;
-
-		dsplibs_debug_printf(
-		    "%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
-		    "V34INFO, rxinfo0",
-		    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],
-		    (unsigned)p[3], (unsigned)p[4], (unsigned)p[5],
-		    (unsigned)p[6], (unsigned)p[7], (unsigned)p[8],
-		    (unsigned)p[9]);
-	}
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_tone_ab.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6dfc2, the late half of +0x358a == 2: the third and largest of the
@@ -5387,56 +4917,11 @@ t41_tone_ab(struct v34_object *obj)
 static void
 t41_marks_late(struct v34_object *obj, short aae0)
 {
-	if ((int)aae0 < (((int)obj->rtd) >> 4) + 0x1ea) {
-		/*
-		 * 0x6dfd5 is the `jl` itself, straight into the dispatch entry
-		 * with no stub, and the delay it compares against is the spill
-		 * at 0x42(%esp) -- read there at 0x6dfc2, not off the object.
-		 */
-		t3c_txblock(obj);			/* 0x6dfd5 */
-		return;
-	}
-
-	if (obj->role != 0x65) {
-		if (obj->retrain_state != 1) {
-			/*
-			 * 0x6dffb, another `jne` straight to the dispatch, on
-			 * the `cmpw $0x1,0xa24a` at 0x6dff3 -- sixteen bits
-			 * wide.
-			 */
-			t3c_txblock(obj);		/* 0x6dffb */
-			return;
-		}
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("DET_SYNC not detected, during "
-					     "search for info1c initiating a " "retrain\n");
-		/*
-		 * 0x6e029.  The second argument is built at 0x6e01d as a
-		 * literal 1, and 0x6e02e reloads +0x3596 after the call, so
-		 * the dispatch runs on whatever `v34handshakinit` left there.
-		 */
-		v34handshakinit(obj, 1);		/* 0x6e029 */
-		t3c_txblock(obj);
-		return;
-	}
-
-	/* 0x6e03a, and +0x3588 gets bit 1 before any transition. */
-	obj->short_3588 = (short)(obj->short_3588 | 2);
-	hs_set_microstate(obj, V34HS_RX_PHASE1_CALL);
-	hs_set_rxstate(obj, V34HS_RX_DPSK);
-	hs_set_txstate(obj, V34HS_TONE_AB);
-
-	obj->short_358c = 0;
-	obj->vect_idx = 0;
-	obj->short_aa78 = 0;
-	obj->fsk.sr = -1;
-	obj->fsk.nbits = 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("DET_SYNC not detected, during search " "for info1a\n");
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_marks_late.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6ce8b: +0x358a is 2, the info marks.
@@ -5450,121 +4935,11 @@ t41_marks_late(struct v34_object *obj, short aae0)
 static void
 t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 {
-	short rtd = obj->rtd;
-	short aae0 = obj->fsk.nbits;
-	int base = ((int)rtd) >> 4;
-	short next;
-	short tx;
-
-	if ((int)aae0 <= base + 100) {
-		/*
-		 * 0x6ceba's `jle` goes straight to the junction at 0x6ab33
-		 * with no stub, and 0x6cead has already spilled the delay to
-		 * 0x42(%esp) -- the copy `t41_marks_late` reads at 0x6dfc2.
-		 */
-		t41_after_guards(obj, abe8);		/* 0x6ceba */
-		return;
-	}
-
-	/*
-	 * 0x6ceca.  The reset is BEFORE the sentinel step at 0x6cef0, so
-	 * below the second threshold +0x35a0 never climbs: it is zero or
-	 * one whatever the sentinel does (finding F391).
-	 */
-	if ((int)aae0 <= base + 400)
-		obj->short_35a0 = 0;			/* 0x6ceca */
-
-	next = 0;
-	if (aae2 == 0 || aae2 == 0xffff)
-		next = (short)((unsigned short)obj->short_35a0 + 1);
-
-	tx = obj->txstate;
-	/*
-	 * 0x6da8e, out of line: `cmp $0x3c,%cx` at 0x6cf0f -- TONE_AB --
-	 * jumps here, zeroes +0x35a0 and returns to 0x6cf27 past the store,
-	 * so transmitting the tone discards the stepped value.
-	 */
-	if (tx == V34HS_TONE_AB)
-		obj->short_35a0 = 0;			/* 0x6da8e */
-	else
-		obj->short_35a0 = next;
-
-	/*
-	 * 0x6cf39.  The base is rebuilt here from the delay spilled at
-	 * 0x6cead -- `movswl 0x42(%esp)` then `sar $0x4` at 0x6cf27 -- and
-	 * `jl 62af1` is the once-per-block transmit dispatch (finding F390).
-	 */
-	if ((int)aae0 < base + 400) {
-		t3c_txblock(obj);			/* 0x6cf39 */
-		return;
-	}
-
-	/*
-	 * 0x6cf4e tests a +0x35a0 RE-READ at 0x6cf46, not the value the
-	 * step above stored: the TONE_AB arm at 0x6da8e wrote zero there
-	 * and rejoined below the store, so only memory has the answer.
-	 */
-	if (obj->short_35a0 <= 0x31) {
-		t41_marks_late(obj, aae0);		/* 0x6cf4e */
-		return;
-	}
-
-	if (aae2 == 0xffff) {
-		/*
-		 * 0x6d2f8.  The record at +0xa9ac is configured and +0xaa6c
-		 * aimed at it -- an INTERIOR pointer, which the fixture
-		 * compares by offset from each side's own base (finding F359).
-		 */
-		hs_set_txstate(obj, V34HS_TX_DPSK);
-
-		t41_record_head(&obj->msgrec[2], 0x4d);
-		obj->msgrec[2].wordbits = 8;
-		obj->msgrec[2].crc_on = 1;
-		obj->msgrec[2].avail = 0x10;
-		obj->msgrec[2].avail0 = 0x10;
-		obj->msgrec[2].repeat = 0;
-		obj->paa6c = &obj->msgrec[2];
-		obj->msgrec[2].acc = 0xff72;
-		obj->msgrec[2].acc0 = 0xff72;
-		obj->short_358c = 0;
-
-		hs_set_microstate(obj, V34HS_INFODONE);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34PHASE2,detected INFOMARKS, "
-					     "reinitializing Info1c\n");
-
-		t3c_txblock(obj);
-		return;
-	}
-
-	if (aae2 != 0) {
-		/*
-		 * 0x6cf61.  Finding F391's third answer: -1 took 0x6d2f8 at
-		 * 0x6cf58 and zero falls through to 0x6cf67, so every other
-		 * +0xaae2 lands in the late half.
-		 */
-		t41_marks_late(obj, aae0);		/* 0x6cf61 */
-		return;
-	}
-
-	/* 0x6cf67, +0xaae2 exactly zero -- finding F391's second answer. */
-	obj->short_3588 = (short)(obj->short_3588 | 2);
-	hs_set_txstate(obj, V34HS_SILENCERETRAIN);
-	hs_set_rxstate(obj, V34HS_WAIT);
-
-	obj->short_aa78 = 0;
-	obj->vect_idx = 0;
-	obj->short_358c = 0;
-	obj->fsk.sr = -1;
-	obj->fsk.nbits = 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("DET_SYNC not detected, but Tone is "
-				     "detected during info1\n");
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_info_marks.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * Microstate 41 `DET_SYNC`, 0x669a4.
@@ -5577,63 +4952,11 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 static void
 t41_micro_det_sync(struct v34_object *obj)
 {
-	unsigned short aae2 = (unsigned short)obj->fsk.sr;
-	unsigned char abe8;
-	short short_358a;
-
-	obj->short_aa7a = 0;
-
-	if ((unsigned char)aae2 == 0x72) {
-		/*
-		 * 0x6c862 opens with `cmp $0x2c,%si` -- the setters'
-		 * folded guard on DET_INFO, and one the dispatch that read
-		 * 41 can never satisfy (finding F392).
-		 */
-		t41_to_det_info(obj);			/* 0x6c862 */
-		return;
-	}
-
-	abe8 = obj->moh_active;
-	short_358a = obj->short_358a;
-
-	if (abe8 == 0 && short_358a == 0) {
-		if (obj->fsk.nbits > 0x64) {
-			/*
-			 * 0x709e1 clears bit 9 of the receiver's
-			 * +0x122 unconditionally (`and $0xfffffdff`
-			 * at 0x709f2), where the DET_INFO body only
-			 * does it when +0x358a is clear (finding F390).
-			 */
-			t41_tone_search(obj);		/* 0x709e1 */
-			return;
-		}
-		/*
-		 * 0x669fa.  A hundred blocks have not passed, so nothing
-		 * happens this call beyond the entry's +0xaa7a clear; the
-		 * tail loads +0x3596 into %ecx and jumps to 0x62af1.
-		 */
-		t3c_txblock(obj);			/* 0x669fa */
-		return;
-	}
-
-	/* 0x6ab21, which the two doors above arrive at with the same two. */
-	/*
-	 * 0x6ce8b and 0x6da9c, the junction's two bodies.  The first reads
-	 * the delay at +0xaa7e and spills it to 0x42(%esp) at 0x6cead, so
-	 * every threshold below sees the value the first one saw; the
-	 * second loads the receiver and aims the detector at obj+0x3564
-	 * (0x6dab1) before anything else.
-	 */
-	if (short_358a == 2) {
-		t41_info_marks(obj, aae2, abe8);	/* 0x6ce8b */
-		return;
-	}
-	if (short_358a == 1) {
-		t41_tone_ab(obj);			/* 0x6da9c */
-		return;
-	}
-	t41_after_guards(obj, abe8);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_micro_det_sync.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -5749,55 +5072,31 @@ t46_reset_core(struct v34_object *obj)
 static void
 t46_body_repeated_late(struct v34_object *obj)
 {
-	obj->short_3588 = 4;
-	t46_reset_core(obj);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Repeated info0 is detected (after 1200), "
-				     "errorrecovery is initialized in " "TX_PHASE1_ANS\n");
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_repeated_late.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /* 0x6abc1 -- the counter past 199 with +0xaae2's low ten bits at 0x372. */
 static void
 t46_body_repeated(struct v34_object *obj)
 {
-	obj->short_3588 = 4;
-	t46_reset_core(obj);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Repeated info0 is detected, errorrecovery "
-				     "is initialized in TX_PHASE1_ANS\n");
-
-	/*
-	 * 0x6adbd re-reads +0x3588 at 0x6adb6 before `cmp $0x2,%ax`, so
-	 * the 4 this body has just stored is what the chain sees and the
-	 * only way out is 0x6add0 (finding F418).
-	 */
-	t46_chain_full(obj);			/* 0x6adbd */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_repeated.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /* 0x6c459 -- +0x3588 was 2 and +0xaa7a has run out. */
 static void
 t46_body_detected(struct v34_object *obj)
 {
-	obj->short_aa7a = 0;
-	obj->short_3588 = 4;
-	obj->paa6c = obj->msgrec;
-	t46_reset_core(obj);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("info0 is detected, info0 is initialized "
-				     "in TX_PHASE1_ANS\n");
-
-	/*
-	 * 0x6adc7 enters the chain one compare in, past the `== 2` test.
-	 * Its `test %ax,%ax` cannot fire from here -- this body stored 4
-	 * into +0x3588 -- which is finding F418's unreachable arm.
-	 */
-	t46_chain_tail(obj, obj->short_3588);	/* 0x6adc7 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_detected.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6f90c -- the transmit state is TONE_AB and +0xac00 says a retrain is due.
@@ -5809,22 +5108,11 @@ t46_body_detected(struct v34_object *obj)
 static void
 t46_body_retrain(struct v34_object *obj)
 {
-	obj->paa6c = obj->msgrec;
-	obj->paa70 = &obj->msgrec[1];
-
-	V34SetINFO0aBits(obj, (short *)obj->msgrec);
-	if (obj->role == 0x66)
-		V34SetINFO0dBits(obj, (short *)obj->paa70);
-
-	obj->short_3588 = (short)(obj->short_3588 | 4);
-	t46_reset_core(obj);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Repeated info0 is initialized on " "retrain\n");
-
-	obj->retrain_req = 0;
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_retrain.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6c3f3 -- +0x3588 is 2: an INFO0 has been seen and is being counted.
@@ -5835,51 +5123,11 @@ t46_body_retrain(struct v34_object *obj)
 static void
 t46_info0_counting(struct v34_object *obj)
 {
-	short n;
-
-	if (obj->short_aa78 <= T46_CNT_LOW) {
-		/*
-		 * 0x6add0, the tail the whole chain funnels into: reload
-		 * the object, put +0x3596 in %ecx, jump to 0x62af1.  The
-		 * guard above it is `cmpw $0xc7,0xaa78(%ebx)` at 0x6c3fa.
-		 */
-		t3c_txblock(obj);			/* 0x6add0 */
-		return;
-	}
-	if ((obj->fsk.sr & 0xfff) != 0xf72) {
-		/*
-		 * 0x6add0 again, and this guard is TWELVE bits wide:
-		 * `and $0xfff` then `cmp $0xf72` at 0x6c410, where the
-		 * head at 0x65dbb masks ten and compares 0x372.  0xf72 &
-		 * 0x3ff is 0x372, so this test is the stricter of the two.
-		 */
-		t3c_txblock(obj);			/* 0x6add0 */
-		return;
-	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("TX_PHASE_ANS: count3 = %d \n",
-				     (int)obj->short_aa7a);
-
-	n = (short)(obj->short_aa7a + 1);
-	/*
-	 * 0x70c7f stores the stepped count and re-enters the chain at
-	 * 0x6adc7 with +0x3588 re-read at 0x70c8d -- still the 2 that
-	 * got here, so its zero arm cannot fire (finding F418).
-	 */
-	if (n <= T46_COUNT3_LIM) {			/* 0x70c7f */
-		obj->short_aa7a = n;
-		t46_chain_tail(obj, obj->short_3588);
-		return;
-	}
-
-	/*
-	 * 0x6c459.  The give-up zeroes +0xaa7a at 0x6c462 rather than
-	 * leaving the thirteenth step there -- 0x6c447 re-read the count
-	 * and `inc %eax`, and only 0x70c7f's arm stores it back.
-	 */
-	t46_body_detected(obj);				/* 0x6c459 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_info0_counting.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x65dcd -- the counter against 1200, and +0xaae2 against zero.
@@ -5890,32 +5138,11 @@ t46_info0_counting(struct v34_object *obj)
 static void
 t46_past_the_counter(struct v34_object *obj)
 {
-	if (obj->short_aa78 <= T46_CNT_HIGH) {
-		/*
-		 * 0x6c120, another copy of the tail: the object, +0x3596
-		 * into %ecx, and `jmp 62af1` at 0x6c12e.  The counter was
-		 * re-read at 0x65dd4 for the compare above.
-		 */
-		t3c_txblock(obj);			/* 0x6c120 */
-		return;
-	}
-	/*
-	 * 0x65de6 is `cmpw $0x0,0xaae2(%edi)` -- sixteen bits wide, not
-	 * the byte spelling microstate 62 keeps (findings F417 and F553) --
-	 * and 0x6bd7a is one more copy of the transmit tail.
-	 */
-	if (obj->fsk.sr == 0) {
-		t3c_txblock(obj);			/* 0x6bd7a */
-		return;
-	}
-
-	/*
-	 * 0x65df4 opens with the 1 for +0x358a in %eax and a 4 staged in
-	 * %ebp: this body STORES +0x3588, where 0x6f90c ORs into it
-	 * (finding F410).
-	 */
-	t46_body_repeated_late(obj);			/* 0x65df4 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_past_the_counter.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * 0x6adbd and 0x6adc7, the two doors into one chain on +0x3588.
@@ -5929,40 +5156,20 @@ t46_past_the_counter(struct v34_object *obj)
 static void
 t46_chain_full(struct v34_object *obj)
 {
-	short sub = obj->short_3588;
-
-	/*
-	 * 0x6c3f3 reloads the object and gates on the same 199 the head
-	 * uses at 0x65dad -- `cmpw $0xc7,0xaa78(%ebx)` at 0x6c3fa -- on
-	 * a path along which the head never read the counter at all.
-	 */
-	if (sub == 2) {
-		t46_info0_counting(obj);		/* 0x6c3f3 */
-		return;
-	}
-	t46_chain_tail(obj, sub);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_chain_full.inc"
+#undef V34_CONT_RETURN
 }
+
 
 static void
 t46_chain_tail(struct v34_object *obj, short sub)
 {
-	/*
-	 * 0x65dcd is the second limit on one counter: 0xc7 at the head
-	 * (0x65dad) and 0x4b0 here (0x65ddb), both `jle`, and this one
-	 * re-reads +0xaa78 at 0x65dd4 through a freshly loaded object.
-	 */
-	if (sub == 0) {
-		t46_past_the_counter(obj);		/* 0x65dcd */
-		return;
-	}
-	/*
-	 * 0x6add0.  With +0x3588 at 4 or 2 on every entry (finding F418),
-	 * this is where the two bodies that tail-call the chain really
-	 * end up, and it is two instructions and `jmp 62af1` -- `mov
-	 * 0xc0(%esp),%ebp` then `movzwl 0x3596(%ebp),%ecx`.
-	 */
-	t3c_txblock(obj);				/* 0x6add0 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_chain_tail.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * The head of the arm at 0x65d6d: two transmit states are special-cased
@@ -5976,95 +5183,11 @@ t46_chain_tail(struct v34_object *obj, short sub)
 static void
 t46_micro_tx_phase1_ans(struct v34_object *obj)
 {
-	short tx = obj->txstate;
-
-	/*
-	 * 0x6b5b0, reached by `cmp $0x18,%cx; je` at 0x65d7b.  The two
-	 * fields are two compares with their own `je 65d8f` (0x6b5bb and
-	 * 0x6b5c6), so either one clear leaves the counter alone.
-	 */
-	if (tx == V34HS_TX_DPSK) {			/* 0x6b5b0 */
-		short *r = (short *)obj->paa6c;
-
-		if (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {
-			obj->short_aa78 = 0;
-			r[0x20 / 2] = 0;
-		}
-	/*
-	 * 0x6b4ba, reached by `cmp $0x3c,%cx` at 0x65d85 on the transmit
-	 * state the head read once.  It re-reads +0xaa78 through its own
-	 * object load, steps it, and only then compares: `inc %eax` then
-	 * `cmp $0x18f,%ax`.
-	 */
-	} else if (tx == V34HS_TONE_AB) {		/* 0x6b4ba */
-		short n = (short)(obj->short_aa78 + 1);
-
-		if (n <= T46_TONE_LIMIT) {
-			/*
-			 * 0x6f8f9 stores the step and jumps
-			 * back to 0x65d8f -- the head's
-			 * +0x3588 test, not the transmit tail.
-			 */
-			obj->short_aa78 = n;	/* 0x6f8f9 */
-		} else if (obj->fsk.sr != 0) {
-			/*
-			 * 0x6fb6e is its twin for the
-			 * past-399 path with +0xaae2 set:
-			 * same store, same `jmp 65d8f`.
-			 */
-			obj->short_aa78 = n;	/* 0x6fb6e */
-		} else if (obj->retrain_req != 0) {
-			obj->short_aa78 = n;
-			/*
-			 * 0x6f90c stores the step through
-			 * the %edi 0x6b4ba loaded, then
-			 * aims +0xaa6c at obj+0xa94c and
-			 * +0xaa70 at obj+0xa97c.
-			 */
-			t46_body_retrain(obj);		/* 0x6f90c */
-			return;
-		/*
-		 * 0x6b4ee is the one path of the four that does NOT keep
-		 * the step: `xor %eax,%eax` and `mov %ax,0xaa78(%esi)`
-		 * restart the counter, and +0x358c is `xor $0x1` at
-		 * 0x6b50e, stored back sixteen bits wide (finding F413).
-		 */
-		} else {				/* 0x6b4ee */
-			obj->short_aa78 = 0;
-			obj->short_358c = (short)(obj->short_358c ^ 1);
-			hs_set_microstate(obj, V34HS_RX_PHASE1_ANS);
-			obj->short_358a = 2;
-			t3c_txblock(obj);
-			return;
-		}
-	}
-
-	/* 0x65d8f, where both head guards rejoin, 0x6f8f9 included. */
-	/* 0x6adbd re-reads +0x3588 at 0x6adb6; 0x65d96 is this test's. */
-	if (obj->short_3588 != 0) {
-		t46_chain_full(obj);			/* 0x6adbd */
-		return;
-	}
-
-	/* 0x65da6, on the %esi 0x65d8f loaded, and a ten-bit mask. */
-	if (obj->short_aa78 > T46_CNT_LOW
-	    && (obj->fsk.sr & 0x3ff) == 0x372) {
-		/*
-		 * 0x6abc1 opens by clearing +0xabca and storing 4 into
-		 * +0x3588 at 0x6abd8 -- a store, like the other two, and
-		 * not 0x6f90c's OR (finding F410).
-		 */
-		t46_body_repeated(obj);			/* 0x6abc1 */
-		return;
-	}
-
-	/*
-	 * 0x65dcd, and the head is the only thing that reaches it: the
-	 * chain's own `test %ax,%ax` at 0x6adc7 never sees zero
-	 * (finding F418).
-	 */
-	t46_past_the_counter(obj);			/* 0x65dcd */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -6722,265 +5845,20 @@ static int
 t44_det_info_accept(struct v34_object *obj, struct v34_bitsource *rec,
 		    short count2)
 {
-	struct v34_receiver *rx = &obj->receiver;
-	short len = rec->nbits;
-	short count;
-	int nbytes;
-	int i;
-
-	/*
-	 * THE ORDER IS THE OBJECT'S: 0x4d, then 0x26, then 0x08, and the
-	 * default is what falls out of all three.  The three constants are
-	 * pinned from both sides -- a case at each length drives its body and
-	 * a case one away drives the default.
-	 */
-	if (len == 0x4d)
-		return t44_accept_len4d(obj);		/* 0x6f438 */
-	if (len == 0x26)
-		return t44_accept_len26(obj, (short *)rec);	/* 0x6ed17 */
-	if (len == 0x08)
-		return t44_accept_len08(obj, (short *)rec, count2);	/* 0x6ea38 */
-
-	if (obj->short_358a == 1) {
-		struct v34_bitsource *blk = (struct v34_bitsource *)obj->paa6c;
-
-		/* 0x6e571, and it is the OTHER record's +0x04. */
-		if ((blk->word[2] & 0x80) == 0) {
-			blk->repeats = 0;
-			blk->word[2] = (short)(blk->word[2] | 0x80);
-		}
-
-		/*
-		 * How many BYTES arrived: the bit count divided by eight
-		 * truncating toward zero, plus one if any bits are left over.
-		 * 0x6e59b's `lea 0x7(%edx)` before the `and` is how GCC spells
-		 * a truncating divide of a value that may be negative, and
-		 * 0x6e5b8 tests the low three bits of the SAME count.
-		 */
-		count = obj->short_aa78;
-		nbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);
-		obj->short_abc2 = (short)nbytes;
-
-		/* Into the array the restart clears -- finding F401. */
-		for (i = 0; i < nbytes; i++)
-			obj->short_abae[i] = rec->word[i];
-
-		if ((rec->word[2] & 0x80) == 0) {
-			/*
-			 * 0x6e5fb.  This exit does NOT rejoin the bit clock:
-			 * 0x6e740 jumps straight to the transmit dispatch.
-			 */
-			hs_set_rxstate(obj, V34HS_RX_DPSK);
-			hs_set_microstate(obj, V34HS_DET_SYNC);
-			((struct v34_bitsource *)obj->paa70)->crc = -1;
-			/*
-			 * 0x6e739 puts -1 in +0xaae2 and 0x6e740 is one
-			 * `jmp 62af1`.  The `return 1` has no instructions
-			 * of its own -- caller and callee leave through the
-			 * same jump, which is why the caller's `return`
-			 * carries this address too.
-			 */
-			obj->fsk.sr = -1;
-			t3c_txblock(obj);		/* 0x6e740 */
-			return 1;
-		}
-	}
-
-	/* 0x6e745: F358A != 1 (0x6e561) and +0x04 bit 7 set (0x6e5f5). */
-	obj->short_aa78 = 0;
-
-	/*
-	 * The buffer is obj+0xa97c LITERALLY and not the +0xaa70 record --
-	 * 0x6e757 is `lea 0xa97c(%ebx)`.  `v34handshakinit` mode 0 hands
-	 * `V34SetINFO0dBits` the same fixed address.
-	 */
-	V34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);
-
-	if (DSPLIB_DEBUG_ON()) {
-		const short *r = (const short *)obj->paa70;
-
-		dsplibs_debug_printf("%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
-				     "0x%x,0x%x,0x%x\n", "V34INFO, rxinfo0",
-				     (unsigned)(unsigned short)r[0],
-				     (unsigned)(unsigned short)r[1],
-				     (unsigned)(unsigned short)r[2],
-				     (unsigned)(unsigned short)r[3],
-				     (unsigned)(unsigned short)r[4],
-				     (unsigned)(unsigned short)r[5],
-				     (unsigned)(unsigned short)r[6],
-				     (unsigned)(unsigned short)r[7],
-				     (unsigned)(unsigned short)r[8],
-				     (unsigned)(unsigned short)r[9]);
-	}
-
-	/*
-	 * Where the handshake goes next, and `is_short` is `V34GiveINFO0dBits`'s
-	 * own output rather than an input (v34info.c).
-	 *
-	 * The originating side skips BOTH the `sr` reset at 0x6e814 and the
-	 * counter reload at 0x6e8ac; the answering side does the reset either
-	 * way and the reload only on the short-phase-2 branch.
-	 *
-	 * The reset is one instruction sitting BETWEEN the compare and its
-	 * branch -- 0x6e80c is `cmpw $0x0,0xabcc(%eax)`, 0x6e814 is the store
-	 * to +0xaae2, and 0x6e81b is the `je`.  So "either way" is not a
-	 * reading of the control flow, it is what the instruction order
-	 * forces: the store has already happened whichever way the `je` goes.
-	 */
-	if (obj->role == 0x65) {
-		hs_set_microstate(obj, V34HS_RX_PHASE1_CALL);
-	} else {
-		obj->fsk.sr = -1;			/* 0x6e814 */
-		if (obj->is_short != 0) {
-			hs_set_microstate(obj, V34HS_RX_PHASE1_ANS);
-			/*
-			 * 0x6e8ac is also where the inlined setter
-			 * lands when the microstate ALREADY holds 0x31 --
-			 * `je 6e8ac` at 0x6e82c -- so the reload of +0xaa78
-			 * from +0xaa7c runs whether the state moved or not.
-			 */
-			obj->short_aa78 = obj->filtdelay;	/* 0x6e8ac */
-		} else {
-			hs_set_microstate(obj, V34HS_TX_PHASE1_ANS);
-		}
-	}
-
-	/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */
-	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34INFO,%s info0 received in DET_INFO\n",
-				     obj->is_short != 0 ? " Short Phase 2" : "");
-
-	return 0;					/* 0x6e90c */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t44_det_info_accept.inc"
+#undef V34_CONT_RETURN
 }
+
 
 static void
 t44_micro_det_info(struct v34_object *obj)
 {
-	struct v34_bitsource *rec;
-	short nbits, count, next;
-	int idx;
-
-	obj->short_aa7a = 0;
-
-	/* No bit waiting: the arm is over before it starts. */
-	nbits = obj->fsk.nbits;
-	if (nbits == 0) {
-		t3c_txblock(obj);			/* 0x6ab88 */
-		return;
-	}
-
-	/* 0x668e1 reads the record BEFORE 0x668e7 writes the count back. */
-	rec = (struct v34_bitsource *)obj->paa70;
-	obj->fsk.nbits = (short)(nbits - 1);
-
-	count = obj->short_aa78;
-
-	/*
-	 * The message's own bits go through the register; the sixteen after
-	 * it are the CRC and do not.  One bit per call, MSB first:
-	 *
-	 *   668ff  movswl %ax,%edx / shr $0x1f,%edx    the register's bit 15
-	 *   66907  testb  $0x1,0xaae2(%edi)            the incoming bit
-	 *   66910  xor    $0x1,%edx                    so %edx is their XOR
-	 *   66922  xor    $0x1021,%eax                 taken only when it is 1
-	 */
-	if (count < rec->nbits) {
-		unsigned crc = (unsigned short)rec->crc;
-		int fb = (int)(crc >> 15);
-
-		if ((obj->fsk.sr & 1) != 0)
-			fb ^= 1;
-		crc <<= 1;
-		/*
-		 * The `else` is a whole out-of-line block, not a fallthrough:
-		 * `mov %ax,0x14(%ecx)` exists twice, at 0x66927 after the xor
-		 * and at 0x6c133 without it; `je 6c133` at 0x66915 picks it.
-		 * The shift is unconditional -- 0x66905 `add %eax,%eax` runs
-		 * before the test.
-		 */
-		if (fb != 0)
-			crc ^= 0x1021;			/* else 0x6c133 */
-		rec->crc = (short)crc;
-	}
-
-	next = (short)(count + 1);
-	obj->short_aa78 = next;
-
-	/*
-	 * Sixteen CRC bits after the message: 0x66944 re-reads the length.
-	 * 0x6bda4 then compares the register against what arrived, sixteen
-	 * bits wide, and equal is the message accepted.
-	 */
-	if ((int)next == (int)rec->nbits + 0x10) {
-		if ((unsigned short)obj->fsk.sr
-		    == (unsigned short)rec->crc) {
-			if (t44_det_info_accept(obj, rec, next) != 0)
-				return;			/* 0x6e740 */
-		} else {
-			/*
-			 * The restart is the fallthrough of `je 6e534` at
-			 * 0x6bdab, and 0x6bdb1 is its FIRST instruction: the
-			 * debug-level test.  The compare feeding it is
-			 * 0x6bda4, sixteen bits, +0xaae2 against +0x14.
-			 */
-			t44_det_info_restart(obj);	/* 0x6bdb1 */
-		}
-	}
-
-	/*
-	 * 0x6695d RE-READS THE COUNTER, and it is not the value stored at
-	 * 0x6693d.  The restart leaves +0xaa78 alone, so on that path the two
-	 * agree -- but the accept path resets it at 0x6e750 and may reload it
-	 * from +0xaa7c at 0x6e8ac, and everything below runs on what is in
-	 * memory.  A reset counter therefore makes the whole byte clock a
-	 * no-op on the call that accepted a message, which is not what a
-	 * cached local would do and is how the object was caught saying so.
-	 */
-	next = obj->short_aa78;
-
-	/* Only every eighth bit completes a byte. */
-	if ((next & 7) != 0) {
-		/*
-		 * 0x66966 `jne 6bd8d`, and the test at 0x66964 is
-		 * `test $0x7,%al` -- ONE BYTE of a counter the source
-		 * carries as a short.
-		 */
-		t3c_txblock(obj);			/* 0x6bd8d */
-		return;
-	}
-	if (next <= 0) {
-		/*
-		 * 0x6696c `test %ax,%ax` + `jle 7186a`: sixteen bits and
-		 * SIGNED, so a negative counter leaves here too.
-		 */
-		t3c_txblock(obj);			/* 0x7186a */
-		return;
-	}
-
-	/*
-	 * Ten bytes and no more.  0x6697a re-signs the index through sixteen
-	 * bits before comparing, which cannot change it here -- `next` is
-	 * positive and a multiple of eight -- but the object does it, so the
-	 * cast stays where the compare is.
-	 */
-	idx = ((int)next >> 3) - 1;
-	if ((short)idx > 9) {
-		t3c_txblock(obj);			/* 0x71857 */
-		return;
-	}
-
-	/*
-	 * 0x6698e re-reads +0xaa70: the restart above may have run in
-	 * between, and it is the LOW BYTE of `sr` that is stored, widened to
-	 * a short.
-	 */
-	rec = (struct v34_bitsource *)obj->paa70;
-	rec->word[idx] = (short)(unsigned char)obj->fsk.sr;
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t44_micro_det_info.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -7017,224 +5895,11 @@ t44_micro_det_info(struct v34_object *obj)
 static void
 t53_rx_det_ab(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-
-	/*
-	 * 0x65473, and it runs before either guard -- so even the two exits
-	 * that do nothing else have run the gain control.
-	 *
-	 * THE ADDRESS IS ON THE LINE because rxstate 72's arm calls the same
-	 * function with the same argument, and `\tV34agc(rx);` is a PREFIX of
-	 * that line -- so the mutation anchored here matched twice the moment
-	 * 0x650ee landed.  Finding F432's repair: information, not indentation.
-	 */
-	V34agc(rx);					/* 0x65473 */
-
-	/* 0x65486, `cmpw $0x34`: 52 is TX_L2, not TX_PHASE3_ANS. */
-	if (obj->microstate != V34HS_TX_L2) {
-		/*
-		 * The object tests the other way: 0x65486 `cmpw $0x34` and
-		 * `je 6845e` jump TO the guard, so 0x65494 is the not-equal
-		 * fallthrough.
-		 */
-		t3c_txblock(obj);			/* 0x65494 */
-		return;
-	}
-
-	/* 0x6845e, sixteen bits and signed. */
-	if (obj->vect_idx <= 0x5db) {
-		t3c_txblock(obj);			/* 0x6846d */
-		return;
-	}
-
-	if (t41_detect(obj) == 0) {
-		/*
-		 * 0x6af24, and the arithmetic is THIRTY-TWO bits wide.  See
-		 * the head of this function.
-		 */
-		if ((int)obj->vect_idx <= (int)obj->rtd + 0x2418) {
-			t3c_txblock(obj);		/* 0x6af47 */
-			return;
-		}
-
-		/*
-		 * 0x6b0f4.  This runs INSIDE the step, so a test driving it
-		 * is the case finding F359 says `V34HS_REFINIT=1` cannot be
-		 * used against: side A installs our library tables and side B
-		 * the blob's, and no address comparison can settle two copies
-		 * of one table.
-		 */
-		v34handshakinit(obj, 1);		/* 0x6b0f4 */
-
-		/*
-		 * The trace is exiled past the end of the arm: `ja 7170a` at
-		 * 0x6b100, and it does not come back.  0x71716 is its own
-		 * copy of the exit below, so that exit is in the object twice.
-		 */
-		if (DSPLIB_DEBUG_ON())			/* 0x7170a */
-			dsplibs_debug_printf("V34RETRAIN, retrain is " "initiated in DET_AB\n");
-
-		t3c_txblock(obj);
-		return;
-	}
-
-	/*
-	 * 0x69851.  Both arguments are sign-extended halfwords: the gain is
-	 * the receiver's +0x136 and `count1` is the trace's `[1]`.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34RETRAIN, End of L2,rx->gain=0x%x," "count1=%d\n",
-				     rx->agc_gain, obj->vect_idx);
-
-	if (obj->role == 0x65) {
-		/*
-		 * 0x6b138.  The originating end builds INFO1c and hands the
-		 * receive machine back to the FSK demodulator.
-		 *
-		 * IT IS INFO1c AND NOT INFO1a, and the length field is what
-		 * says so: +0x18 of this record gets 0x4d, which is INFO1c's,
-		 * and the 0x26 INFO1a length goes to a SECOND record at
-		 * +0xa9dc below.  `V34SetINFO1aBits` assembles INFO1a or
-		 * INFO1c or INFO1d (v34info.h), so the callee's name settles
-		 * nothing; the object's own label for the trace at the bottom
-		 * is "V34PROBE, txinfo1c".
-		 */
-		hs_set_txstate(obj, V34HS_TX_DPSK);
-
-		probeselect(obj);			/* 0x6b1de */
-
-		/*
-		 * 0x6b1e3, and the store is BEFORE the call because the call
-		 * takes the same interior pointer as its second argument.
-		 *
-		 * THE OBJECT WRITES THE TWELVE STORES BELOW THROUGH +0xaa6c
-		 * AND THIS DOES NOT.  0x6b1f5 reloads the field into `%ebp`
-		 * although `%ebx` still holds the identical value, which is
-		 * what a source dereferencing the pointer rather than a local
-		 * compiles to.  The two spellings cannot differ: the store
-		 * two instructions earlier is what the reload reads, and
-		 * `V34SetINFO1aBits` does not touch +0xaa6c.  So the
-		 * differential tier cannot see the difference and these are
-		 * microstate 41's own statements verbatim rather than a
-		 * second reading of the same record.  Finding F726.
-		 */
-		obj->paa6c = &obj->msgrec[2];		/* 0x6b1e3 */
-		V34SetINFO1aBits(obj,			/* 0x6b1f0 */
-				 (short *)&obj->msgrec[2]);
-
-		/*
-		 * EACH STORE CARRIES ITS ADDRESS, and that is not decoration:
-		 * these nine statements are character for character
-		 * microstate 41's at 0x6d387, so without the addresses no
-		 * mutation anchored on one of them could tell the two apart.
-		 * Finding F432's hazard, answered with information rather than
-		 * with indentation.
-		 */
-		/*
-		 * 0x6b1fb IS FIVE STORES: +0x14 = 0xffff, +0x1a, +0x1e and
-		 * +0x22 = 0, then +0x18 = 0x4d, all through the %ebp reloaded
-		 * at 0x6b1f5.  The six that follow are in the object's order,
-		 * +0x1c, +0x16, +0x28, +0x2a, +0x20 -- and 0x6f669..0x6f6b3
-		 * writes the same twelve offsets in the same order with 0x26
-		 * at +0x18 (finding F443).
-		 */
-		t41_record_head(&obj->msgrec[2], 0x4d);     /* 0x6b1fb */
-		obj->msgrec[2].wordbits = 8;		    /* 0x6b219 */
-		obj->msgrec[2].crc_on = 1;		    /* 0x6b21f */
-		obj->msgrec[2].avail = 0x10;		    /* 0x6b225 */
-		obj->msgrec[2].avail0 = 0x10;		    /* 0x6b22b */
-		obj->msgrec[2].repeat = 0;		    /* 0x6b231 */
-		/*
-		 * THIRTY-TWO BITS, both of them: `movl $0xff72` and not
-		 * `movw`, so the immediate is +65394 and the halfword above
-		 * each is zeroed too.
-		 */
-		obj->msgrec[2].acc = 0xff72; /* 0x6b23e */
-		obj->msgrec[2].acc0 = 0xff72; /* 0x6b245 */
-
-		/*
-		 * 0x6b24c and the 0x26 arm's 0x6f6ba are the same seven
-		 * bytes, `mov %di,0x358c(%esi)`, and both clear +0x358c
-		 * immediately before a state move.  The word that move
-		 * compares was loaded at 0x6b237, in the middle of the record
-		 * fill: `cmp $0x2b` -- RX_DPSK is 43 -- is at 0x6b253.
-		 */
-		obj->short_358c = 0;		/* 0x6b24c */
-
-		hs_set_rxstate(obj, V34HS_RX_DPSK);
-		hs_set_microstate(obj, V34HS_INFODONE);
-
-		/* 0x6b379: the SECOND record, and INFO1a's length. */
-		obj->paa70 = &obj->msgrec[3];
-		obj->msgrec[3].nbits = 0x26;
-
-		/*
-		 * 0x6b3a2, and it reads the record through `%ebx` -- obj +
-		 * 0xa9ac -- rather than through the pointer it has just
-		 * aimed, which is the other half of the note above.
-		 */
-		if (DSPLIB_DEBUG_ON()) {
-			const unsigned short *p =
-			    (const unsigned short *)&obj->msgrec[2];
-
-			dsplibs_debug_printf(
-			    "%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x," "0x%x,0x%x\n",
-			    "V34PROBE, txinfo1c",
-			    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],
-			    (unsigned)p[3], (unsigned)p[4], (unsigned)p[5],
-			    (unsigned)p[6], (unsigned)p[7], (unsigned)p[8],
-			    (unsigned)p[9]);
-		}
-	} else {
-		/*
-		 * 0x69888.  The answering end moves three state words and
-		 * builds nothing.
-		 */
-		hs_set_txstate(obj, V34HS_TONE_AB);
-		hs_set_microstate(obj, V34HS_TX_PHASE3_ANS);
-		hs_set_rxstate(obj, V34HS_RX_DPSK);
-	}
-
-	/*
-	 * 0x69924, the tail both halves reach.  The receiver's +0x136 is
-	 * restored from its +0x264 -- an unmodelled halfword this arm only
-	 * reads -- and the FSK demodulator's four scalars are re-armed for
-	 * the next message, `next` at 6 rather than 0.
-	 */
-	/* 0x69933 */
-	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
-	rx->agc_gain = (short)*(const unsigned short *)((const char *)rx
-							+ T3M_RX_F264);
-
-	/*
-	 * +0xaae2 `sr` (finding F553), +0xaae0 `nbits`, +0xaadc `phase`,
-	 * +0xaade `next`: the object stores them in THAT order, which is
-	 * not the order they lie in, and all four values were already in
-	 * registers -- 0x69928, 0x6992a, 0x6992c and `mov $0x6,%ebx` at
-	 * 0x6992e -- before the flag word above was even read.
-	 */
-	obj->fsk.sr = 0;			/* 0x6995f */
-	obj->fsk.nbits = 0;			/* 0x69966 */
-	obj->fsk.phase = 0;			/* 0x6996d */
-	obj->fsk.next = 6;			/* 0x69974 */
-	/*
-	 * 0x6997b and 0x69982 store registers the block above cleared -- `xor
-	 * %eax,%eax` at 0x6994d, `xor %edi,%edi` at 0x6995d -- and both fields
-	 * are ones the state-transition trace reports: 0x6ff94 pushes +0x2aa2
-	 * and +0xaa78, finding F633's busiest counter, as two of its arguments.
-	 * The whole run of six goes through the object pointer reloaded at
-	 * 0x69956.
-	 */
-	obj->vect_idx = 0;			/* 0x6997b */
-	obj->short_aa78 = 0;		/* 0x69982 */
-
-	/*
-	 * 0x69989 is an exit and not a call: `movzwl 0x3596(%ecx),%ecx` and
-	 * `jmp 62af1`, where the txstate is sign-extended, has 5 subtracted
-	 * and is bounds-checked against 0x45 before the dispatch.
-	 */
-	t3c_txblock(obj);				/* 0x69989 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t53_rx_det_ab.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -8225,53 +6890,11 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 static void
 t4_rx_receive(struct v34_object *obj)
 {
-	struct v34_receiver *rx;
-	unsigned short flags;
-
-	/*
-	 * 0x653ee.  The arm's first act, ahead of the retrain test at 0x65401:
-	 * the block is demodulated even on the call that hands the handshake
-	 * back to `v34handshakinit`.
-	 */
-	receiver(obj);					/* 0x653ee */
-
-	rx = &obj->receiver;
-	/*
-	 * 0x653f7.  `movzwl 0x122(%edx),%esi` -- read once, and %esi carries
-	 * it into the whole arm as the working copy -- 0x67999 reads it as
-	 * `flags` -- while the retrain test below works on a second copy, in
-	 * %ebx.
-	 */
-	flags = rx->flags;				/* 0x653f7 */
-
-	if ((flags & V34_RX_FLAG_RETRAIN) != 0
-	    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud
-		&& (flags & 0x80) == 0)) {
-		/*
-		 * 0x6544e.  The second argument is a literal 1, pushed at
-		 * 0x65447, and nothing follows the call but the trace and the
-		 * shared tail -- the retrain path writes no state of its own.
-		 */
-		v34handshakinit(obj, 1);		/* 0x6544e */
-		/*
-		 * 0x690e1 is a cold block: the format string and no arguments
-		 * at all, then `movzwl 0x3596`/`jmp 62af1` rather than a
-		 * return to the gate at 0x65453.
-		 */
-		if (DSPLIB_DEBUG_ON())			/* 0x690e1 */
-			dsplibs_debug_printf("V34RETRAIN, going into retrain " "in Handshake\n");
-	} else {
-		/*
-		 * 0x67999 is the merge of both not-retraining branches -- the
-		 * `jle` at 0x65429 and the `jne` at 0x65435 -- and it is
-		 * entered with the flags in %si and the baud counter in %di,
-		 * where the entry left them.
-		 */
-		t4_receive_body(obj, flags);		/* 0x67999 */
-	}
-
-	t3c_txblock(obj);
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t4_rx_receive.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -8727,245 +7350,11 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 static void
 t72_rx_l1(struct v34_object *obj)
 {
-	struct v34_receiver *rx = &obj->receiver;
-
-	/*
-	 * 0x650c6, and THE STORE PRECEDES THE BRANCH: `movzwl`, `inc`,
-	 * `cmp $0x440,%di`, `mov %di,0xaa78`, `jle`.  So everything below
-	 * sees the incremented value, which is what makes the counter
-	 * pokeable in spite of finding F429 -- a poke of n drives the whole
-	 * arm as n + 1.  The compare is signed and sixteen bits.
-	 */
-	obj->short_aa78 = (short)(obj->short_aa78 + 1);
-
-	if (obj->short_aa78 <= 0x440) {
-		t72_ladder(obj, rx);
-		/*
-		 * 0x65597.  The ladder's exit, one of the arm's seventeen
-		 * `jmp 62af1`s: `mov 0xc0(%esp),%edi`, `movzwl
-		 * 0x3596(%edi),%ecx`, jump.  The txstate is reloaded into
-		 * %ecx first because the tail dispatches on whatever the
-		 * jumping arm left there.
-		 */
-		t3c_txblock(obj);			/* 0x65597 */
-		return;
-	}
-
-	/*
-	 * 0x650ee.  The `jle 6551a` at 0x650e1 keeps this off the ladder
-	 * path entirely, so the AGC runs only once the counter is past
-	 * 0x440 -- which on the originating end is every block of the
-	 * tone-A wait below, not one.  Its argument is `0x74(%esp)` --
-	 * the receiver at obj + 0x264 -- pushed with no displacement.
-	 */
-	V34agc(rx);					/* 0x650ee */
-
-	if (obj->role != 0x65) {
-		/*
-		 * 0x67d70 -- the ANSWERING end.  It finishes the probe, arms
-		 * the FSK receiver for INFO1, aims the second record pointer
-		 * at obj + 0xa9dc with INFO1c's length in it, opens the gate
-		 * at +0xa8a0 that diverts 0x64a87, and restarts the counter.
-		 */
-		t72_probe_done(obj, rx);
-
-		/*
-		 * 0x67e1e.  `movzwl 0x3594(%ecx),%edx; cmp $0x2b,%dx; je
-		 * 67e4b` -- and the `je` can never take, because the arm is
-		 * entered with the rxstate at 72 and nothing between 0x650c6
-		 * and here writes +0x3594.  The store and its trace always
-		 * run.
-		 */
-		hs_set_rxstate(obj, V34HS_RX_DPSK);	 /* 0x67e1e */
-		/*
-		 * 0x67e4b.  `cmp $0x3c,%dx`, and it is NOT one of the three
-		 * the head of this section calls unreachable: those three
-		 * compare +0x3594 and this one compares +0x3596.  An end
-		 * already in TONE_AB stores nothing and prints nothing.
-		 */
-		hs_set_txstate(obj, V34HS_TONE_AB);	 /* 0x67e4b */
-		/*
-		 * 0x67e7f.  `cmp $0x29,%dx` on +0x3592: microstate 41, whose
-		 * arm at 0x669a4 is the table-3 case at the bottom of this
-		 * file.  This store is what sends the next block there.
-		 */
-		hs_set_microstate(obj, V34HS_DET_SYNC); /* 0x67e7f */
-
-		/*
-		 * 0x67eb3.  Inlined, and it runs to 0x67f4d: `mov
-		 * %bx,0xaae6(%esi,%eax,2)` at 0x67ebe is the head of the
-		 * hundred-halfword clear, and the two stores at 0x67f46 and
-		 * 0x67f4d -- +0xaae2 to all ones, +0xaae0 to zero -- are the
-		 * last two of `fsk_state_init`'s eleven, not statements of
-		 * this arm.
-		 */
-		dpskDetectInfo1Init(obj);			 /* 0x67eb3 */
-
-		/*
-		 * 0x67f54.  `movw $0x4d,0x18(%ebp)`, and %ebp already holds
-		 * obj + 0xa9dc: the length field is filled in BEFORE 0x67f6e
-		 * publishes the pointer to the record.  Microstate 41 puts
-		 * INFO1a's 0x26 in the same field of the same record at
-		 * 0x6b379 before aiming the same pointer at it -- which
-		 * sequence the end expects is the whole difference.
-		 */
-		obj->msgrec[3].nbits = 0x4d;		 /* 0x67f54 */
-		obj->vect_idx = 0;				 /* 0x67f5a */
-		/*
-		 * 0x67f68.  `mov %ebx,0xa8a0(%esi)`, thirty-two bits.  This
-		 * is the gate 0x64a87 tests, so from the next block on the
-		 * RX_DPSK path polls the retrain detector as well -- and
-		 * falls through to the FSK demodulator either way, which is
-		 * finding F721.
-		 */
-		obj->retrain_poll = 1;				 /* 0x67f68 */
-		obj->paa70 = &obj->msgrec[3];			 /* 0x67f6e */
-		/*
-		 * 0x67f74.  `mov %di,0xaa78(%esi)`, a halfword.  +0xaa78 is
-		 * not this arm's private counter -- six arms bump it and it
-		 * is the `[2]` every state trace prints -- so leaving it at
-		 * 0x441 on the way out would be visible everywhere.
-		 */
-		obj->short_aa78 = 0;					 /* 0x67f74 */
-
-		/*
-		 * 0x67f7b.  The exit, and the %ecx it dispatches on was
-		 * loaded from +0x3596 at 0x67f61 -- scheduled into the middle
-		 * of the store run, three stores before the jump.
-		 */
-		t3c_txblock(obj);				 /* 0x67f7b */
-		return;
-	}
-
-	if (obj->short_aa78 == 0x441) {
-		/*
-		 * 0x69611 -- the ORIGINATING end, on the one block after the
-		 * probe.  Same finish, but it stays in RX_L1 and only clears
-		 * the FSK shift register, because what it is waiting for is
-		 * tone A and that is the test below.
-		 */
-		t72_probe_done(obj, rx);
-
-		/*
-		 * 0x696d0.  `cmp $0x3c,%cx; je 69702`: when the txstate is
-		 * already 60 the store at 0x696f6 and the trace are both
-		 * skipped -- and both paths leave 0x3c in %ecx, which is what
-		 * the exit at 0x6971e dispatches on.
-		 */
-		hs_set_txstate(obj, V34HS_TONE_AB);	/* 0x696d0 */
-
-		/*
-		 * 0x69710.  `mov $0xffffffff,%ebp` and then a halfword store,
-		 * so +0xaae2 gets 0xffff.  It is the shift register's reset
-		 * value and this arm writes it at three sites -- 0x67f46,
-		 * 0x68851 and here.
-		 */
-		obj->fsk.sr = -1;				/* 0x69710 */
-		obj->fsk.nbits = 0;				/* 0x69717 */
-
-		/* 0x6971e, and %ecx still holds TONE_AB from 0x696d0. */
-		t3c_txblock(obj);				/* 0x6971e */
-		return;
-	}
-
-	/*
-	 * 0x65140, and the two guards below read what it writes:
-	 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
-	 * 0x65153, both sixteen bits, both on fields this call has
-	 * just filled in.  No fixture can choose them by poking.
-	 */
-	fskdemodulate(obj,					/* 0x65140 */
-		      rx->burst,
-		      &obj->fsk);
-
-	if (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {
-		/*
-		 * 0x6881e.  Not enough bits, or the twelve are not all ZERO:
-		 * no tone A this block, so all that is left is the timeout
-		 * ladder.  The polarity is the object's and is worth stating,
-		 * because this comment used to have it backwards: 0x65153 is
-		 * `testw $0xfff,0xaae2(%esi)` with `jne 6881e`, so it is a
-		 * NON-zero masked register that fails.  The register is reset
-		 * to all ones at all three sites above, so twelve ZEROS
-		 * shifting in is what tone A looks like here.  See the head of this section for why the 32-bit
-		 * arithmetic here cannot be separated from a 16-bit spelling
-		 * by any trial, and what is tested instead.
-		 */
-		int limit = obj->rtd >> 2;
-		int count = obj->short_aa78;
-
-		if (count > 0xf10 + limit) {
-			/*
-			 * 0x68851, AND THE STORE PRECEDES THE BRANCH: it
-			 * sits between `cmp %ebx,%ecx` at 0x6884f and `je
-			 * 6afd7` at 0x68858, so every block past 0xf10 +
-			 * rtd/4 clears the shift register, not only the one
-			 * that matches 0xf14.
-			 */
-			obj->fsk.sr = -1;		/* 0x68851 */
-
-			if (count == 0xf14 + limit) {
-				/*
-				 * 0x6afe8 sits between the debug
-				 * test at 0x6afe1 and its `ja
-				 * 6b120` at 0x6afef -- the toggle
-				 * happens whether or not the
-				 * message prints.
-				 */
-				obj->short_358c ^= 1;	/* 0x6afe8 */
-				/*
-				 * 0x6b120 is out of line and does
-				 * not come back: it prints,
-				 * reloads +0x3596 into %ecx and
-				 * jumps to 0x62af1 itself.
-				 */
-				if (DSPLIB_DEBUG_ON())	/* 0x6b120 */
-					dsplibs_debug_printf(
-					    "V34RETRAIN, waiting for tone A " "at the end of RX_L2\n");
-			} else if (count == 0xf2c + limit) {
-				/* 0x6c9f1: give up and go round again. */
-				/*
-				 * 0x6c9fa zeroes the counter
-				 * before either transition below,
-				 * and 0x6ca01's `cmp $0x2b` is one
-				 * of the three that can never
-				 * match.
-				 */
-				obj->short_aa78 = 0;		/* 0x6c9fa */
-				hs_set_rxstate(obj, V34HS_RX_DPSK);
-				hs_set_microstate(obj, V34HS_TX_L1);
-			}
-		}
-
-		t3c_txblock(obj);
-		return;
-	}
-
-	/*
-	 * 0x65162.  Tone A: hand the receive machine to phase 2's DPSK and
-	 * the microstate to the caller's phase-3 wait.
-	 */
-	/*
-	 * 0x65162.  `cmp $0x2b,%dx` on +0x3594, and the `je 651e9`
-	 * can never take -- the arm is entered with the rxstate at 72
-	 * and nothing on the way here writes it -- so the store and
-	 * its trace always run.
-	 */
-	hs_set_rxstate(obj, V34HS_RX_DPSK);		/* 0x65162 */
-	/*
-	 * 0x651e9.  `cmp $0x3e,%dx` on +0x3592 -- 62 -- and it is
-	 * also 0x6516d's `je` target, so the microstate transition is
-	 * where the rxstate transition's "already there" exit lands.
-	 */
-	hs_set_microstate(obj, V34HS_RX_PHASE3_CALL);	/* 0x651e9 */
-
-	/*
-	 * 0x65289.  The exit, and its %ecx was loaded from +0x3596 at
-	 * 0x6527b -- after the trace call at 0x6526a and one
-	 * instruction before the microstate store at 0x65282.
-	 */
-	t3c_txblock(obj);					/* 0x65289 */
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t72_rx_l1.inc"
+#undef V34_CONT_RETURN
 }
+
 
 /*
  * The handshake, once per block.
@@ -8974,15 +7363,235 @@ t72_rx_l1(struct v34_object *obj)
  * 0x628f0; the cursor/limit compare is signed and sixteen bits wide, and so
  * is the receiver's own first halfword against 5.
  */
+#define V34_ROOT_CONTINUATIONS 1
+#define t3c_micro_moh_tone(v34_arg_t3c_micro_moh_tone_0) \
+    do { \
+        struct v34_object *v34_tmp_t3c_micro_moh_tone_0 = (v34_arg_t3c_micro_moh_tone_0); \
+        v34_ctx_t3c_micro_moh_tone_obj = v34_tmp_t3c_micro_moh_tone_0; \
+        goto v34_cont_t3c_micro_moh_tone; \
+    } while (0)
+#define t3c_micro_moh_tone_drop(v34_arg_t3c_micro_moh_tone_drop_0) \
+    do { \
+        struct v34_object *v34_tmp_t3c_micro_moh_tone_drop_0 = (v34_arg_t3c_micro_moh_tone_drop_0); \
+        v34_ctx_t3c_micro_moh_tone_drop_obj = v34_tmp_t3c_micro_moh_tone_drop_0; \
+        goto v34_cont_t3c_micro_moh_tone_drop; \
+    } while (0)
+#define t3c_micro_rx_phase3_call(v34_arg_t3c_micro_rx_phase3_call_0) \
+    do { \
+        struct v34_object *v34_tmp_t3c_micro_rx_phase3_call_0 = (v34_arg_t3c_micro_rx_phase3_call_0); \
+        v34_ctx_t3c_micro_rx_phase3_call_obj = v34_tmp_t3c_micro_rx_phase3_call_0; \
+        goto v34_cont_t3c_micro_rx_phase3_call; \
+    } while (0)
+#define t3c_txblock(v34_arg_t3c_txblock_0) \
+    do { \
+        struct v34_object *v34_tmp_t3c_txblock_0 = (v34_arg_t3c_txblock_0); \
+        v34_ctx_t3c_txblock_obj = v34_tmp_t3c_txblock_0; \
+        goto v34_cont_t3c_txblock; \
+    } while (0)
+#define t3m_tail(v34_arg_t3m_tail_0,v34_arg_t3m_tail_1) \
+    do { \
+        struct t3m_frame *v34_tmp_t3m_tail_0 = (v34_arg_t3m_tail_0); \
+        short v34_tmp_t3m_tail_1 = (v34_arg_t3m_tail_1); \
+        v34_ctx_t3m_tail_f.obj = v34_tmp_t3m_tail_0->obj; \
+        v34_ctx_t3m_tail_f.m = v34_tmp_t3m_tail_0->m; \
+        v34_ctx_t3m_tail_f.rx = v34_tmp_t3m_tail_0->rx; \
+        v34_ctx_t3m_tail_f.progress = v34_tmp_t3m_tail_0->progress; \
+        v34_ctx_t3m_tail_tx = v34_tmp_t3m_tail_1; \
+        goto v34_cont_t3m_tail; \
+    } while (0)
+#define t3m_txblock(v34_arg_t3m_txblock_0,v34_arg_t3m_txblock_1) \
+    do { \
+        struct t3m_frame *v34_tmp_t3m_txblock_0 = (v34_arg_t3m_txblock_0); \
+        short v34_tmp_t3m_txblock_1 = (v34_arg_t3m_txblock_1); \
+        v34_ctx_t3m_txblock_f.obj = v34_tmp_t3m_txblock_0->obj; \
+        v34_ctx_t3m_txblock_f.m = v34_tmp_t3m_txblock_0->m; \
+        v34_ctx_t3m_txblock_f.rx = v34_tmp_t3m_txblock_0->rx; \
+        v34_ctx_t3m_txblock_f.progress = v34_tmp_t3m_txblock_0->progress; \
+        v34_ctx_t3m_txblock_tx = v34_tmp_t3m_txblock_1; \
+        goto v34_cont_t3m_txblock; \
+    } while (0)
+#define t41_after_guards(v34_arg_t41_after_guards_0,v34_arg_t41_after_guards_1) \
+    do { \
+        struct v34_object *v34_tmp_t41_after_guards_0 = (v34_arg_t41_after_guards_0); \
+        unsigned char v34_tmp_t41_after_guards_1 = (v34_arg_t41_after_guards_1); \
+        v34_ctx_t41_after_guards_obj = v34_tmp_t41_after_guards_0; \
+        v34_ctx_t41_after_guards_abe8 = v34_tmp_t41_after_guards_1; \
+        goto v34_cont_t41_after_guards; \
+    } while (0)
+#define t41_frr_nack(v34_arg_t41_frr_nack_0) \
+    do { \
+        struct v34_object *v34_tmp_t41_frr_nack_0 = (v34_arg_t41_frr_nack_0); \
+        v34_ctx_t41_frr_nack_obj = v34_tmp_t41_frr_nack_0; \
+        goto v34_cont_t41_frr_nack; \
+    } while (0)
+#define t41_info_marks(v34_arg_t41_info_marks_0,v34_arg_t41_info_marks_1,v34_arg_t41_info_marks_2) \
+    do { \
+        struct v34_object *v34_tmp_t41_info_marks_0 = (v34_arg_t41_info_marks_0); \
+        unsigned short v34_tmp_t41_info_marks_1 = (v34_arg_t41_info_marks_1); \
+        unsigned char v34_tmp_t41_info_marks_2 = (v34_arg_t41_info_marks_2); \
+        v34_ctx_t41_info_marks_obj = v34_tmp_t41_info_marks_0; \
+        v34_ctx_t41_info_marks_aae2 = v34_tmp_t41_info_marks_1; \
+        v34_ctx_t41_info_marks_abe8 = v34_tmp_t41_info_marks_2; \
+        goto v34_cont_t41_info_marks; \
+    } while (0)
+#define t41_marks_late(v34_arg_t41_marks_late_0,v34_arg_t41_marks_late_1) \
+    do { \
+        struct v34_object *v34_tmp_t41_marks_late_0 = (v34_arg_t41_marks_late_0); \
+        short v34_tmp_t41_marks_late_1 = (v34_arg_t41_marks_late_1); \
+        v34_ctx_t41_marks_late_obj = v34_tmp_t41_marks_late_0; \
+        v34_ctx_t41_marks_late_aae0 = v34_tmp_t41_marks_late_1; \
+        goto v34_cont_t41_marks_late; \
+    } while (0)
+#define t41_micro_det_sync(v34_arg_t41_micro_det_sync_0) \
+    do { \
+        struct v34_object *v34_tmp_t41_micro_det_sync_0 = (v34_arg_t41_micro_det_sync_0); \
+        v34_ctx_t41_micro_det_sync_obj = v34_tmp_t41_micro_det_sync_0; \
+        goto v34_cont_t41_micro_det_sync; \
+    } while (0)
+#define t41_to_det_info(v34_arg_t41_to_det_info_0) \
+    do { \
+        struct v34_object *v34_tmp_t41_to_det_info_0 = (v34_arg_t41_to_det_info_0); \
+        v34_ctx_t41_to_det_info_obj = v34_tmp_t41_to_det_info_0; \
+        goto v34_cont_t41_to_det_info; \
+    } while (0)
+#define t41_tone_ab(v34_arg_t41_tone_ab_0) \
+    do { \
+        struct v34_object *v34_tmp_t41_tone_ab_0 = (v34_arg_t41_tone_ab_0); \
+        v34_ctx_t41_tone_ab_obj = v34_tmp_t41_tone_ab_0; \
+        goto v34_cont_t41_tone_ab; \
+    } while (0)
+#define t41_tone_search(v34_arg_t41_tone_search_0) \
+    do { \
+        struct v34_object *v34_tmp_t41_tone_search_0 = (v34_arg_t41_tone_search_0); \
+        v34_ctx_t41_tone_search_obj = v34_tmp_t41_tone_search_0; \
+        goto v34_cont_t41_tone_search; \
+    } while (0)
+#define t44_micro_det_info(v34_arg_t44_micro_det_info_0) \
+    do { \
+        struct v34_object *v34_tmp_t44_micro_det_info_0 = (v34_arg_t44_micro_det_info_0); \
+        v34_ctx_t44_micro_det_info_obj = v34_tmp_t44_micro_det_info_0; \
+        goto v34_cont_t44_micro_det_info; \
+    } while (0)
+#define t46_body_detected(v34_arg_t46_body_detected_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_body_detected_0 = (v34_arg_t46_body_detected_0); \
+        v34_ctx_t46_body_detected_obj = v34_tmp_t46_body_detected_0; \
+        goto v34_cont_t46_body_detected; \
+    } while (0)
+#define t46_body_repeated(v34_arg_t46_body_repeated_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_body_repeated_0 = (v34_arg_t46_body_repeated_0); \
+        v34_ctx_t46_body_repeated_obj = v34_tmp_t46_body_repeated_0; \
+        goto v34_cont_t46_body_repeated; \
+    } while (0)
+#define t46_body_repeated_late(v34_arg_t46_body_repeated_late_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_body_repeated_late_0 = (v34_arg_t46_body_repeated_late_0); \
+        v34_ctx_t46_body_repeated_late_obj = v34_tmp_t46_body_repeated_late_0; \
+        goto v34_cont_t46_body_repeated_late; \
+    } while (0)
+#define t46_body_retrain(v34_arg_t46_body_retrain_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_body_retrain_0 = (v34_arg_t46_body_retrain_0); \
+        v34_ctx_t46_body_retrain_obj = v34_tmp_t46_body_retrain_0; \
+        goto v34_cont_t46_body_retrain; \
+    } while (0)
+#define t46_chain_full(v34_arg_t46_chain_full_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_chain_full_0 = (v34_arg_t46_chain_full_0); \
+        v34_ctx_t46_chain_full_obj = v34_tmp_t46_chain_full_0; \
+        goto v34_cont_t46_chain_full; \
+    } while (0)
+#define t46_chain_tail(v34_arg_t46_chain_tail_0,v34_arg_t46_chain_tail_1) \
+    do { \
+        struct v34_object *v34_tmp_t46_chain_tail_0 = (v34_arg_t46_chain_tail_0); \
+        short v34_tmp_t46_chain_tail_1 = (v34_arg_t46_chain_tail_1); \
+        v34_ctx_t46_chain_tail_obj = v34_tmp_t46_chain_tail_0; \
+        v34_ctx_t46_chain_tail_sub = v34_tmp_t46_chain_tail_1; \
+        goto v34_cont_t46_chain_tail; \
+    } while (0)
+#define t46_info0_counting(v34_arg_t46_info0_counting_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_info0_counting_0 = (v34_arg_t46_info0_counting_0); \
+        v34_ctx_t46_info0_counting_obj = v34_tmp_t46_info0_counting_0; \
+        goto v34_cont_t46_info0_counting; \
+    } while (0)
+#define t46_micro_tx_phase1_ans(v34_arg_t46_micro_tx_phase1_ans_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_micro_tx_phase1_ans_0 = (v34_arg_t46_micro_tx_phase1_ans_0); \
+        v34_ctx_t46_micro_tx_phase1_ans_obj = v34_tmp_t46_micro_tx_phase1_ans_0; \
+        goto v34_cont_t46_micro_tx_phase1_ans; \
+    } while (0)
+#define t46_past_the_counter(v34_arg_t46_past_the_counter_0) \
+    do { \
+        struct v34_object *v34_tmp_t46_past_the_counter_0 = (v34_arg_t46_past_the_counter_0); \
+        v34_ctx_t46_past_the_counter_obj = v34_tmp_t46_past_the_counter_0; \
+        goto v34_cont_t46_past_the_counter; \
+    } while (0)
+#define t4_rx_receive(v34_arg_t4_rx_receive_0) \
+    do { \
+        struct v34_object *v34_tmp_t4_rx_receive_0 = (v34_arg_t4_rx_receive_0); \
+        v34_ctx_t4_rx_receive_obj = v34_tmp_t4_rx_receive_0; \
+        goto v34_cont_t4_rx_receive; \
+    } while (0)
+#define t53_rx_det_ab(v34_arg_t53_rx_det_ab_0) \
+    do { \
+        struct v34_object *v34_tmp_t53_rx_det_ab_0 = (v34_arg_t53_rx_det_ab_0); \
+        v34_ctx_t53_rx_det_ab_obj = v34_tmp_t53_rx_det_ab_0; \
+        goto v34_cont_t53_rx_det_ab; \
+    } while (0)
+#define t72_rx_l1(v34_arg_t72_rx_l1_0) \
+    do { \
+        struct v34_object *v34_tmp_t72_rx_l1_0 = (v34_arg_t72_rx_l1_0); \
+        v34_ctx_t72_rx_l1_obj = v34_tmp_t72_rx_l1_0; \
+        goto v34_cont_t72_rx_l1; \
+    } while (0)
 void
 v34handshak(void *vobj)
 {
+struct v34_object *v34_ctx_t3c_micro_moh_tone_obj;
+struct v34_object *v34_ctx_t3c_micro_moh_tone_drop_obj;
+struct v34_object *v34_ctx_t3c_micro_rx_phase3_call_obj;
+struct v34_object *v34_ctx_t3c_txblock_obj;
+struct t3m_frame v34_ctx_t3m_tail_f;
+short v34_ctx_t3m_tail_tx;
+struct t3m_frame v34_ctx_t3m_txblock_f;
+short v34_ctx_t3m_txblock_tx;
+struct v34_object *v34_ctx_t41_after_guards_obj;
+unsigned char v34_ctx_t41_after_guards_abe8;
+struct v34_object *v34_ctx_t41_frr_nack_obj;
+struct v34_object *v34_ctx_t41_info_marks_obj;
+unsigned short v34_ctx_t41_info_marks_aae2;
+unsigned char v34_ctx_t41_info_marks_abe8;
+struct v34_object *v34_ctx_t41_marks_late_obj;
+short v34_ctx_t41_marks_late_aae0;
+struct v34_object *v34_ctx_t41_micro_det_sync_obj;
+struct v34_object *v34_ctx_t41_to_det_info_obj;
+struct v34_object *v34_ctx_t41_tone_ab_obj;
+struct v34_object *v34_ctx_t41_tone_search_obj;
+struct v34_object *v34_ctx_t44_micro_det_info_obj;
+struct v34_object *v34_ctx_t46_body_detected_obj;
+struct v34_object *v34_ctx_t46_body_repeated_obj;
+struct v34_object *v34_ctx_t46_body_repeated_late_obj;
+struct v34_object *v34_ctx_t46_body_retrain_obj;
+struct v34_object *v34_ctx_t46_chain_full_obj;
+struct v34_object *v34_ctx_t46_chain_tail_obj;
+short v34_ctx_t46_chain_tail_sub;
+struct v34_object *v34_ctx_t46_info0_counting_obj;
+struct v34_object *v34_ctx_t46_micro_tx_phase1_ans_obj;
+struct v34_object *v34_ctx_t46_past_the_counter_obj;
+struct v34_object *v34_ctx_t4_rx_receive_obj;
+struct v34_object *v34_ctx_t53_rx_det_ab_obj;
+struct v34_object *v34_ctx_t72_rx_l1_obj;
+
 	struct v34_object *obj = (struct v34_object *)vobj;
 	struct t3m_frame frame;
 	const short *fskin;
 	short rxst;
 
-	t3m_frame_init(&frame, obj);
+	{ struct t3m_frame *v34_init_frame = &frame; struct v34_object *v34_init_obj = obj; { struct t3m_frame *f = v34_init_frame; struct v34_object *obj = v34_init_obj;
+#include "dsplib/v34_continuations/t3m_frame_init.inc"
+} }
 
 	/*
 	 * 0x62933..0x629ed.  Table 1, the per-sample transmit loop.
@@ -9027,65 +7636,160 @@ v34handshak(void *vobj)
 		case V34HS_SILENCE:		/* 5  0x640b4, three tails */
 		case V34HS_SILENCEINFO:		/* 54 */
 		case V34HS_SILENCERETRAIN:	/* 74 */
-			v34tx1_silence(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_silence.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_SSEG:		/* 18 0x64048 */
-			v34tx1_sseg(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_sseg.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_SBARSEG:		/* 19 0x6296d */
-			v34tx1_sbarseg(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_sbarseg.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_PPSEG:		/* 20 0x642bf */
-			v34tx1_ppseg(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_ppseg.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TRNSEG4:		/* 21 0x64339 */
-			v34tx1_trnseg4(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_trnseg4.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TX_DPSK:		/* 24 0x62b96 */
-			v34tx1_tx_dpsk(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_tx_dpsk.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TX_L1:		/* 51 0x62c69 */
-			v34tx1_tx_l1(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_tx_l1.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TONE_AB:		/* 60 0x62d3d */
-			v34tx1_tone_ab(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_tone_ab.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_JTXMIT:		/* 64 0x635cc, one body two tails */
 		case V34HS_J1TXMIT:		/* 68 */
-			v34tx1_jtxmit(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_jtxmit.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_XMIT0:		/* 65 0x62d83 */
-			v34tx1_xmit0(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_xmit0.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TRNSEG4A:		/* 66 0x62e28 */
-			v34tx1_trnseg4a(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_trnseg4a.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_XMITMP:		/* 67 0x6399b */
-			v34tx1_xmitmp(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_xmitmp.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_EXMIT:		/* 69 0x63858 */
-			v34tx1_exmit(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_exmit.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_DATAXMIT:		/* 70 0x63ca8 */
-			v34tx1_dataxmit(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_dataxmit.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TXLEVEL:		/* 71 0x641d1 */
-			v34tx1_txlevel(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_txlevel.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_JaTXMIT:		/* 78 0x64139 */
-			v34tx1_jatxmit(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_jatxmit.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_MOH_SILENCE:		/* 81 0x63d58, one behaviour */
 		case V34HS_MOH_ON_HOLD:		/* 82 */
 		case V34HS_MOH_FRR:		/* 83 */
 		case V34HS_MOH_CLEARDOWN:	/* 84 */
-			v34tx1_moh_silence(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_moh_silence.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_K56JaTXMIT:		/* 85 0x63fb0 */
-			v34tx1_k56jatxmit(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_k56jatxmit.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		case V34HS_TXMD:		/* 86 0x63dae */
-			v34tx1_txmd(obj);
+            {
+                void *objp = obj;
+#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)
+#include "dsplib/v34_continuations/v34tx1_txmd.inc"
+#undef V34_TX_CASE_RETURN
+            }
 			break;
 		default:
 			/*
@@ -9095,6 +7799,8 @@ v34handshak(void *vobj)
 			 */
 			break;
 		}
+v34_table1_continue:
+        ;
 
 		/*
 		 * AND NOTHING IS DISPATCHED ON THE RETURN VALUE ANY MORE.
@@ -9457,7 +8163,287 @@ v34handshak(void *vobj)
 	return;
 micro_txblock:
 	t3m_txblock(&frame, frame.tx);
+
+return;
+v34_cont_t3c_micro_moh_tone:
+{
+struct v34_object *obj = v34_ctx_t3c_micro_moh_tone_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_moh_tone.inc"
+#undef V34_CONT_RETURN
 }
+return;
+
+v34_cont_t3c_micro_moh_tone_drop:
+{
+struct v34_object *obj = v34_ctx_t3c_micro_moh_tone_drop_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_moh_tone_drop.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t3c_micro_rx_phase3_call:
+{
+struct v34_object *obj = v34_ctx_t3c_micro_rx_phase3_call_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_micro_rx_phase3_call.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t3c_txblock:
+{
+struct v34_object *obj = v34_ctx_t3c_txblock_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3c_txblock.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t3m_tail:
+{
+struct t3m_frame *f = &v34_ctx_t3m_tail_f;
+short tx = v34_ctx_t3m_tail_tx;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3m_tail.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t3m_txblock:
+{
+struct t3m_frame *f = &v34_ctx_t3m_txblock_f;
+short tx = v34_ctx_t3m_txblock_tx;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t3m_txblock.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_after_guards:
+{
+struct v34_object *obj = v34_ctx_t41_after_guards_obj;
+unsigned char abe8 = v34_ctx_t41_after_guards_abe8;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_after_guards.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_frr_nack:
+{
+struct v34_object *obj = v34_ctx_t41_frr_nack_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_frr_nack.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_info_marks:
+{
+struct v34_object *obj = v34_ctx_t41_info_marks_obj;
+unsigned short aae2 = v34_ctx_t41_info_marks_aae2;
+unsigned char abe8 = v34_ctx_t41_info_marks_abe8;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_info_marks.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_marks_late:
+{
+struct v34_object *obj = v34_ctx_t41_marks_late_obj;
+short aae0 = v34_ctx_t41_marks_late_aae0;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_marks_late.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_micro_det_sync:
+{
+struct v34_object *obj = v34_ctx_t41_micro_det_sync_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_micro_det_sync.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_to_det_info:
+{
+struct v34_object *obj = v34_ctx_t41_to_det_info_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_to_det_info.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_tone_ab:
+{
+struct v34_object *obj = v34_ctx_t41_tone_ab_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_tone_ab.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t41_tone_search:
+{
+struct v34_object *obj = v34_ctx_t41_tone_search_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t41_tone_search.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t44_micro_det_info:
+{
+struct v34_object *obj = v34_ctx_t44_micro_det_info_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t44_micro_det_info.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_body_detected:
+{
+struct v34_object *obj = v34_ctx_t46_body_detected_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_detected.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_body_repeated:
+{
+struct v34_object *obj = v34_ctx_t46_body_repeated_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_repeated.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_body_repeated_late:
+{
+struct v34_object *obj = v34_ctx_t46_body_repeated_late_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_repeated_late.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_body_retrain:
+{
+struct v34_object *obj = v34_ctx_t46_body_retrain_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_body_retrain.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_chain_full:
+{
+struct v34_object *obj = v34_ctx_t46_chain_full_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_chain_full.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_chain_tail:
+{
+struct v34_object *obj = v34_ctx_t46_chain_tail_obj;
+short sub = v34_ctx_t46_chain_tail_sub;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_chain_tail.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_info0_counting:
+{
+struct v34_object *obj = v34_ctx_t46_info0_counting_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_info0_counting.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_micro_tx_phase1_ans:
+{
+struct v34_object *obj = v34_ctx_t46_micro_tx_phase1_ans_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t46_past_the_counter:
+{
+struct v34_object *obj = v34_ctx_t46_past_the_counter_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t46_past_the_counter.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t4_rx_receive:
+{
+struct v34_object *obj = v34_ctx_t4_rx_receive_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t4_rx_receive.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t53_rx_det_ab:
+{
+struct v34_object *obj = v34_ctx_t53_rx_det_ab_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t53_rx_det_ab.inc"
+#undef V34_CONT_RETURN
+}
+return;
+
+v34_cont_t72_rx_l1:
+{
+struct v34_object *obj = v34_ctx_t72_rx_l1_obj;
+#define V34_CONT_RETURN(value) return value
+#include "dsplib/v34_continuations/t72_rx_l1.inc"
+#undef V34_CONT_RETURN
+}
+return;
+}
+#undef V34_ROOT_CONTINUATIONS
+#undef t3c_micro_moh_tone
+#undef t3c_micro_moh_tone_drop
+#undef t3c_micro_rx_phase3_call
+#undef t3c_txblock
+#undef t3m_tail
+#undef t3m_txblock
+#undef t41_after_guards
+#undef t41_frr_nack
+#undef t41_info_marks
+#undef t41_marks_late
+#undef t41_micro_det_sync
+#undef t41_to_det_info
+#undef t41_tone_ab
+#undef t41_tone_search
+#undef t44_micro_det_info
+#undef t46_body_detected
+#undef t46_body_repeated
+#undef t46_body_repeated_late
+#undef t46_body_retrain
+#undef t46_chain_full
+#undef t46_chain_tail
+#undef t46_info0_counting
+#undef t46_micro_tx_phase1_ans
+#undef t46_past_the_counter
+#undef t4_rx_receive
+#undef t53_rx_det_ab
+#undef t72_rx_l1
+
 
 /*
  * ---------------------------------------------------------------------------

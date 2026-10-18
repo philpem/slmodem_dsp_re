@@ -15,73 +15,85 @@
     "label": "the receive chain does not run at the entry",
     "find": "\treceiver(obj);\t\t\t\t\t/* 0x653ee */",
     "replace": "\t(void)obj;\t\t\t\t\t/* 0x653ee */",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's retrain flag is 0x20 RENEG, not 0x40",
     "find": "\tif ((flags & V34_RX_FLAG_RETRAIN) != 0",
     "replace": "\tif ((flags & V34_RX_FLAG_RENEG) != 0",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's retrain flag is not tested at all",
     "find": "\tif ((flags & V34_RX_FLAG_RETRAIN) != 0",
     "replace": "\tif (0",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's baud compare is `>=` rather than `>`",
     "find": "\t    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
     "replace": "\t    || ((int)rx->rx_blocks >= 7 * (int)obj->ratecfg.rx_baud",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's multiplier is six, not seven",
     "find": "\t    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
     "replace": "\t    || ((int)rx->rx_blocks > 6 * (int)obj->ratecfg.rx_baud",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's product is TRUNCATED to a short",
     "find": "\t    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
     "replace": "\t    || ((int)rx->rx_blocks > (short)(7 * (int)obj->ratecfg.rx_baud)",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's baud rate is read UNSIGNED",
     "find": "\t    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
     "replace": "\t    || ((int)rx->rx_blocks > 7 * (int)(unsigned short)obj->ratecfg.rx_baud",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's counter is read UNSIGNED",
     "find": "\t    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
     "replace": "\t    || ((int)(unsigned short)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's second flag is 0x40, not 0x80",
     "find": "\t\t&& (flags & 0x80) == 0)) {",
     "replace": "\t\t&& (flags & 0x40) == 0)) {",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the entry's second flag is not tested",
     "find": "\t\t&& (flags & 0x80) == 0)) {",
     "replace": "\t\t)) {",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the retrain comes up cold rather than in mode 1",
     "find": "\t\tv34handshakinit(obj, 1);\t\t/* 0x6544e */",
     "replace": "\t\tv34handshakinit(obj, 0);\t\t/* 0x6544e */",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the retrain does not report itself",
     "find": "\t\tif (DSPLIB_DEBUG_ON())\t\t\t/* 0x690e1 */",
     "replace": "\t\tif (0)\t\t\t\t\t/* 0x690e1 */",
-    "fn": "t4_rx_receive"
+    "fn": "t4_rx_receive",
+    "source": "include/dsplib/v34_continuations/t4_rx_receive.inc"
   },
   {
     "label": "the head's mask is 0x98 tested for ANY bit",

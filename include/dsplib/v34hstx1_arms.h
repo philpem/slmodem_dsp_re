@@ -531,22 +531,11 @@ tx1_put(void *objp, unsigned off, short v)
 static int
 v34tx1_xmit0(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-
-	o->txpoint.c[0] = 0;
-	o->txpoint.c[1] = 0;
-	txmit(o);
-
-	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);
-		hs_set_txstate(o, V34HS_SSEG);
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-	}
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_xmit0.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -586,13 +575,11 @@ tx1_scramble2(struct v34_object *o)
 static int
 v34tx1_txlevel(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-
-	o->cur_quadrant = tx1_scramble2(o);
-	tx1_put_point(o, vect4[0]);
-	txmit(o);
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_txlevel.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -650,24 +637,20 @@ tx1_ja_common(struct v34_object *o, const char *msg)
 static int
 v34tx1_jatxmit(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-
-	(void)tx1_ja_common(o, "V34Hshak: on JaTXMIT - time to freeze"
-				   " echo...\r\n");		/* 0x6821d */
-	v90Phase34(o);
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_jatxmit.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 static int
 v34tx1_k56jatxmit(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-
-	(void)tx1_ja_common(o, "V34Hshak: on K56JaTXMIT - time to freeze"
-				   " echo...\r\n");		/* 0x68282 */
-	(void)k56FlexPhase34(o);
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_k56jatxmit.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -709,36 +692,11 @@ v34tx1_k56jatxmit(void *objp)
 static int
 v34tx1_moh_silence(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	short quiet[4];
-
-	quiet[0] = 0;
-	quiet[1] = 0;
-	quiet[2] = 0;
-	quiet[3] = 0;
-	txwritequeue(&o->txq, quiet);
-
-	o->vect_idx = (short)(o->vect_idx + 1);
-	if ((unsigned short)o->vect_idx != 0xc0u)
-		return V34TX1_LOOP;			/* 0x63da2 */
-
-	/* 0x66d85 */
-	if (o->txstate != V34HS_MOH_SILENCE)
-		return V34TX1_LOOP;			/* 0x63941 */
-
-	if (dsplibs_debug_level > 1)			/* 0x66d98 */
-		dsplibs_debug_printf(
-			"V34F MOH: After 192 silence, org = %d ," " act = %d\r\n",
-			o->moh_org, o->moh_message);
-
-	/* 0x66dac */
-	hs_set_txstate(o,
-		    (o->moh_org == 1 || o->moh_message == 1)
-		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
-
-	o->vect_idx = 0;				/* 0x66dec */
-	return V34TX1_LOOP;				/* 0x63948 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_moh_silence.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -783,51 +741,11 @@ v34tx1_moh_silence(void *objp)
 static int
 v34tx1_txmd(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	short q = tx1_scramble2(o);
-
-	o->cur_quadrant = q;
-	tx1_put_point(o, vect4[q]);
-	txmit(o);
-
-	o->vect_idx = (short)(o->vect_idx + 1);
-	if ((unsigned short)o->vect_idx
-	    == (unsigned short)o->short_aa78) {
-		/* 0x66fe9 */
-		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf(
-				"On MD - enabling echo adaptation...\r\n");
-
-		o->echo_calls = 0;				/* 0x6700e */
-		o->tx_flags =				/* 0x67017 */
-			(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
-		o->echo_alpha = 0;				/* 0x6701e */
-		o->far_echo_alpha = 0;				/* 0x67025 */
-	}
-
-	if ((unsigned short)o->vect_idx
-	    == (unsigned short)o->seg_len) {
-		struct v34_ratecfg *cfg = &o->ratecfg;
-		int pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);
-
-		if (dsplibs_debug_level > 1)		/* 0x6800d */
-			dsplibs_debug_printf(
-				"TX: Done with MD, moving to S/Sbar" " again...\r\n");
-
-		V34SetupModulator(v34_object_modulator(o),
-				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
-
-		hs_set_txstate(o, V34HS_SSEG);
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags
-				     | (V34_TXFLAG_PPSEG | V34_EC_FROZEN));
-	}
-
-	/* 0x6430c */
-	o->seg_symcount = (short)(o->seg_symcount + 1);
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_txmd.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -853,13 +771,11 @@ v34tx1_txmd(void *objp)
 static int
 v34tx1_tone_ab(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	int sel = o->short_358c & 1;
-
-	tx1_put_point(o, vect4[2 * sel]);
-	txmit(o);
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_tone_ab.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -892,23 +808,11 @@ v34tx1_tone_ab(void *objp)
 static int
 v34tx1_sseg(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned short n;
-
-	tx1_put_point(o, vect4[0]);
-	txmit(o);
-	tx1_put_point(o, vect4[3]);
-	txmit(o);
-
-	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
-	o->seg_symcount = (short)n;
-	if (n == 0x40) {
-		/* 0x66d11 */
-		hs_set_txstate(o, V34HS_SBARSEG);
-		o->seg_symcount = 0;
-	}
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_sseg.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -947,44 +851,11 @@ v34tx1_sseg(void *objp)
 static int
 v34tx1_dataxmit(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-	int idx;
-
-	modulatevector(o);
-
-	if (!(o->tx_flags & PROG_TXBIT_DATA))
-		return V34TX1_LOOP;
-
-	rx->equerr_accum = 0;
-	rx->err_symcount = 0;
-	o->int_0248 = o->sample_count;
-
-	idx = o->ratecfg.rxbits;
-	o->rate_now = idx;
-	o->rate_want = idx;
-
-	/*
-	 * 0x63d11.  The data-mode transition reports both negotiated rates ONCE,
-	 * and only when the machine was not already in data mode: +0x2218 is read
-	 * at 0x63cf4 and a non-zero value jumps over the whole block (0x63d0f).
-	 * The guard is therefore the mode test AHEAD of the debug gate, which is
-	 * why the `test` precedes the `cmpl $0x1` and not the other way round.
-	 *
-	 * Both arguments are the rate INDEX times 2400 (0x960, the V.34 symbol
-	 * rate at the host rate), the transmit index first: 0x63d1a's `imul` is
-	 * on 0xaa88 and its sibling on 0xaa98, and 0xaa88 lands in the first
-	 * vararg slot.  Finding F11444's residual, closed here.
-	 */
-	if (o->hs_mode == 0 && DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-			"V34DATA, getting into data mode from Handshake, "
-			"Tx bit rate - %d, Rx bit Rate - %d\n",
-			o->ratecfg.txbits * 2400, idx * 2400);
-
-	o->hs_mode = 1;
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_dataxmit.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1031,39 +902,11 @@ v34tx1_dataxmit(void *objp)
 static int
 v34tx1_tx_l1(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	/* Arm 51 is the one arm here that reads a state word belonging to
-	 * another machine: it selects between two copies of its own loop on
-	 * `microstate == TX_L1`, having been dispatched on
-	 * `txstate == TX_L1`.  The two 51s are the same number in two
-	 * machines and `StateName` is one table for all three
-	 * (docs/v34handshak.md). */
-	int doubled = o->microstate == V34HS_TX_L1;
-	short buf[4];
-	int i;
-
-	for (i = 0; i < 4; i++) {
-		unsigned idx = (unsigned short)o->vect_idx;
-		int v = probe[idx & 0x3f];
-
-		if (doubled)
-			v = (short)(2 * v);
-		buf[i] = (short)((v * o->tx_scale) >> 14);
-		o->vect_idx = (short)(idx + 1);
-	}
-
-	txwritequeue(&o->txq, buf);
-
-	if (o->microstate != V34HS_TX_L1)
-		return V34TX1_LOOP;
-	if ((unsigned short)o->vect_idx != 0x600u)
-		return V34TX1_LOOP;
-
-	hs_set_microstate(o, V34HS_TX_L2);
-	/* 0x62d32 */
-	o->vect_idx = 0;
-	return V34TX1_LOOP;
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_tx_l1.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1126,65 +969,11 @@ v34tx1_tx_l1(void *objp)
 static int
 v34tx1_sbarseg(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned short n;
-
-	tx1_put_point(o, vect4[2]);
-	txmit(o);
-	tx1_put_point(o, vect4[1]);
-	txmit(o);
-
-	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
-	if (n != 8) {
-		o->seg_symcount = (short)n;
-		return V34TX1_LOOP;		/* 0x629c8 */
-	}
-
-	/* 0x671f0 */
-	o->seg_symcount = 0;
-	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
-		hs_set_txstate(o, V34HS_TRNSEG4A);
-	} else if (o->short_35a4 == 0) {
-		/* 0x68375 */
-		hs_set_txstate(o, V34HS_PPSEG);
-	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
-		/* 0x69eca */
-		o->seg_symcount = o->seg_len;
-		hs_set_txstate(o, V34HS_PPSEG);
-	} else {
-		/* 0x6783e */
-		int span;
-		short q;
-
-		o->seg_len = (short)((unsigned short)o->short_35a4 * 0x53);
-		hs_set_txstate(o, V34HS_TXMD);
-
-		/* 0x67885 */
-		V34SetupModulator(v34_object_modulator(o),
-				  4800, 2400, 0, 0, 0);
-
-		/*
-		 * `(0x5e8 - good_run) << 14` with the subtraction done in an int.
-		 * Spelled through `unsigned` because the left shift of a
-		 * negative int is undefined in C and the object's `shl` is
-		 * not; the bits are the same either way.
-		 */
-		span = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);
-		q = (short)(span / 9600);
-		o->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);
-		if (dsplibs_debug_level > 1)		/* 0x67916 */
-			dsplibs_debug_printf(
-				"Moving to TX MD, would take %d symbols ,"
-				" echo start delay is %d...\r\n",
-				o->seg_len,
-				o->short_aa78);
-	}
-
-	/* 0x67236 */
-	o->vect_idx = 0;
-	o->short_358e = 0;
-	return V34TX1_LOOP;			/* 0x63948 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_sbarseg.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1243,91 +1032,11 @@ v34tx1_sbarseg(void *objp)
 static int
 v34tx1_ppseg(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	int i = o->vect_idx;			/* movswl 0x2aa2 */
-	int point;
-
-	memcpy(&point, &vectpp[2 * i], sizeof(point));
-	o->vect_idx = (short)(i + 1);
-	tx1_put_point(o, point);
-	txmit(o);
-
-	if ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {
-		/* 0x66d57 */
-		unsigned short n = (unsigned short)
-			((unsigned short)o->short_358e + 1);
-
-		if (n != 6) {
-			o->short_358e = (short)n;
-			o->vect_idx = 0;
-		} else {
-			/* 0x680ac */
-			struct v34_ratecfg *cfg = &o->ratecfg;
-			short v = (short)((unsigned short)o->rtd + 0x90);
-			short baud = cfg->baud;
-			int span, q, acc;
-
-			o->vect_idx = v;
-			switch ((unsigned short)baud) {
-			case 2400:
-				o->ratecfg.period = (short)(v >> 2);
-				break;
-			case 2800:
-				o->ratecfg.period =
-					(short)(((int)v * 0x12ab) >> 14);
-				break;
-			case 3000:
-				o->ratecfg.period =
-					(short)(((int)v * 0x1400) >> 14);
-				break;
-			case 3200:
-				o->ratecfg.period =
-					(short)(((int)v * 0x1555) >> 14);
-				break;
-			case 3429:
-				o->ratecfg.period =
-					(short)(((int)v * 0x16dc) >> 14);
-				break;
-			default:
-				break;
-			}
-
-			/* 0x680fd */
-			o->short_358e = 0;
-			o->ratecfg.period =
-				(short)((unsigned short)o->ratecfg.period
-					+ 0x120);
-			hs_set_txstate(o, V34HS_TRNSEG4);
-
-			/* 0x68154 */
-			span = (0x5e8 - o->dmadelay) * (int)baud;
-			q = span / 9600;
-			o->short_aa78 = (short)q;	/* 0x6818d */
-
-			acc = q + (unsigned short)o->filtdelay
-				+ (unsigned short)o->seg_symcount + 1;
-			if (o->role == 0x65)			/* 0x6926d */
-				acc += (unsigned short)o->rtd;
-			o->short_aa78 = (short)acc;
-
-			/* 0x681c6 */
-			o->ratecfg.period =
-				(short)((unsigned short)o->ratecfg.period
-					+ (unsigned short)o->short_aa78);
-			if (dsplibs_debug_level > 1)	/* 0x681ef */
-				dsplibs_debug_printf(
-					"V34Hshak: echo start wait time would" " be: NEC %d symbols, FEC %d"
-					" symbols...\r\n",
-					o->short_aa78,
-					o->ratecfg.period);
-			return V34TX1_LOOP;		/* 0x63da2 */
-		}
-	}
-
-	/* 0x6430c */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-	return V34TX1_LOOP;			/* 0x6431f */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_ppseg.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1394,112 +1103,11 @@ v34tx1_ppseg(void *objp)
 static int
 v34tx1_silence(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-	short quiet[4];
-	short txst;
-	unsigned short n;
-
-	quiet[0] = 0;
-	quiet[1] = 0;
-	quiet[2] = 0;
-	quiet[3] = 0;
-	o->short_aa7a = 0;
-	txwritequeue(&o->txq, quiet);
-
-	txst = o->txstate;
-
-	if (txst == V34HS_SILENCERETRAIN) {
-		/* 0x66b87 */
-		short want;
-
-		n = (unsigned short)((unsigned short)o->vect_idx + 1);
-		o->vect_idx = (short)n;
-		if (n != 0xb4)
-			return V34TX1_LOOP;		/* 0x63da2 */
-
-		/* 0x66ba1 */
-		if (o->moh_active != 0)
-			want = V34HS_MOH_TONE;
-		else					/* 0x68a7c */
-			want = o->role == 0x65 ? V34HS_RX_PHASE1_CALL
-						: V34HS_TX_PHASE1_ANS;
-		hs_set_microstate(o, want);
-
-		/* 0x66be0 */
-		hs_set_rxstate(o, V34HS_RX_DPSK);
-		/* 0x66c10 */
-		hs_set_txstate(o, V34HS_TONE_AB);
-
-		/* 0x66c32 */
-		o->short_358c = 0;
-		o->vect_idx = 0;
-		o->short_aa78 = 0;
-		o->fsk.sr = -1;
-		o->fsk.nbits = 0;
-		if (dsplibs_debug_level > 1)		/* 0x66c72 */
-			dsplibs_debug_printf(
-				"V34RETRAIN, SILENCERETRAIN finished," " rx->rxflgs,=0x%x,rx->gain=0x%x,"
-				"gainestimate=0x%x\n",
-				rx->flags, rx->agc_gain, rx->agc_start_gain);
-		return V34TX1_LOOP;			/* 0x63941 */
-	}
-
-	if (txst != V34HS_SILENCEINFO)
-		return V34TX1_LOOP;			/* 0x6409a */
-
-	/*
-	 * 0x6410b.  THE COUNT IS STORED ON BOTH PATHS, and the transcript is
-	 * what says so: the blob's `SILENCEINFO=>TX_DPSK` line prints `[1]10`,
-	 * and `[1]` is `vect_idx` read at the moment of the print.  Zeroing
-	 * before the state change -- which is how this was written until
-	 * finding F573 -- prints `[1]0` instead.  Both orders leave the same
-	 * bytes behind, so no byte comparison can separate them and none did
-	 * for six batches; only turning the diagnostics on does.  74 stores
-	 * its count before its own comparison in exactly this shape, and
-	 * mutation 181 has asserted that since it landed.
-	 */
-	n = (unsigned short)((unsigned short)o->vect_idx + 1);
-	o->vect_idx = (short)n;
-	if (n != 0xa)
-		return V34TX1_LOOP;			/* 0x629cf */
-
-	/* 0x6858f */
-	hs_set_txstate(o, V34HS_TX_DPSK);
-	o->vect_idx = 0;
-	o->paa6c = o->msgrec;
-	V34SetINFO0aBits(o, (short *)o->msgrec);
-
-	{
-		/*
-		 * RE-READ, not the pointer just stored, because that is what
-		 * the object does at 0x685f2 and 0x69fe1 -- the same reading
-		 * V34hshak.c:1459 records for `v34handshakinit`'s copy of
-		 * this sequence.  `V34SetINFO0aBits` does not write +0xaa6c,
-		 * so nothing observable turns on it.
-		 */
-		struct v34_bitsource *r = (struct v34_bitsource *)o->paa6c;
-		short lead = (o->role == 0x65 && o->v90_receiver != 0)
-			     ? 0x1e : 0x11;
-
-		r->crc = -1;
-		r->pos = 0;
-		r->idx = 0;
-		r->repeats = 0;
-		r->nbits = lead;
-		/* 0x68616 */
-		r->wordbits = 8;
-		r->crc_on = 1;
-		r->avail = 0x10;
-		r->avail0 = 0x10;
-		r->repeat = 0;
-		r->acc = 0xff72;
-		r->acc0 = 0xff72;
-	}
-
-	o->short_358c = 0;
-	return V34TX1_LOOP;				/* 0x640a1 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_silence.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1572,46 +1180,11 @@ tx1_dpsk4(struct v34_object *o, short q)
 static int
 v34tx1_exmit(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	short mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
-	short q;
-
-	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
-		/* 0x67031 */
-		short k;
-		int point;
-
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);
-		o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
-
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
-		k = o->cur_quadrant;			/* re-read, 0x67131 */
-		o->prev_quadrant = k;
-		point = vect16[q + 4 * k];
-		tx1_put_point(o, point);
-		txmit(o);
-		o->vect_idx = (short)((unsigned short)o->vect_idx + 4);
-	} else {
-		/* 0x6386b */
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
-		(void)tx1_dpsk4(o, q);
-		txmit(o);
-		o->vect_idx = (short)((unsigned short)o->vect_idx + 2);
-	}
-
-	/* 0x6392c */
-	if ((unsigned short)o->vect_idx == 0x14u) {
-		/* 0x66e01 */
-		short txst = o->txstate;
-
-		o->vect_idx = 8;
-		hs_set_txstate(o, V34HS_DATAXMIT);
-		if (dsplibs_debug_level > 1)		/* 0x66e48 */
-			dsplibs_debug_printf("V34MP- E transmit completed\n");
-		return V34TX1_LOOP;			/* 0x6409a, 0x6431f */
-	}
-	return V34TX1_LOOP;				/* 0x63941 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_exmit.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -1690,80 +1263,11 @@ v34tx1_exmit(void *objp)
 static int
 v34tx1_jtxmit(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-	unsigned shift;
-	unsigned short idx;
-	short bits, mode, q;
-
-	/* 0x635cc, and the completion at 0x6533c falls back into 0x635f0 */
-	(void)tx1_ja_common(o, "V34Hshak: on JTXMIT - time to freeze"
-				   " echo...\r\n");		/* 0x682d6 */
-
-	/* 0x635f0 */
-	tx1_put(o, TX1_F25D8,
-		(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));
-
-	shift = (unsigned)(2 * (int)o->vect_idx) & 31u;
-	bits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);
-
-	mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
-	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);
-	(void)tx1_dpsk4(o, q);
-	txmit(o);
-
-	idx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);
-	o->vect_idx = (short)idx;
-
-	if (o->role == 0x66) {
-		/* 0x66ca8 */
-		if (!(rx->flags & V34_RX_FLAG_DATA)) {
-			if (o->md_length == 0)
-				return V34TX1_LOOP;	/* 0x629c8 */
-			if (tx1_get(o, TX1_F25DA) == 0)
-				return V34TX1_LOOP;	/* 0x63da2 */
-		}
-		/* 0x66cd1 */
-		hs_set_txstate(o, V34HS_XMIT0);
-		o->vect_idx = 0;			/* 0x62d32 */
-		return V34TX1_LOOP;			/* 0x62d70 */
-	}
-
-	/* 0x636f0 */
-	if (idx != 0)
-		return V34TX1_LOOP;			/* 0x63941 */
-
-	if (o->txstate == V34HS_J1TXMIT) {
-		/* 0x65653 */
-		o->tx_scr_sr = 0;
-		hs_set_txstate(o, V34HS_TRNSEG4A);
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		return V34TX1_LOOP;			/* 0x640a1 */
-	}
-
-	/* 0x6370d */
-	if (tx1_get(o, TX1_F25DA) != 2)
-		return V34TX1_LOOP;			/* 0x6409a */
-	if (tx1_get(o, TX1_F25D8) <= 0x80)
-		return V34TX1_LOOP;			/* 0x6431f */
-
-	/* 0x6372e */
-	tx1_put(o, TX1_F25D6, (short)0x899f);
-	hs_set_txstate(o, V34HS_J1TXMIT);
-
-	/* 0x637c8 */
-	if (o->short_aa78 != 0) {
-		if (dsplibs_debug_level > 1)		/* 0x6c725 */
-			dsplibs_debug_printf(
-				"V34Hshak: on J1TXMIT - forced freeze echo" " (count2 = %d)...\r\n",
-				o->short_aa78);
-		v34FreezeEcho(o);
-		o->short_aa78 = 0;
-		return V34TX1_LOOP;			/* 0x64326 */
-	}
-	return V34TX1_LOOP;				/* 0x629c8 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_jtxmit.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -2651,66 +2155,11 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 static int
 v34tx1_trnseg4a(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-	struct v34_ratecfg *cfg = &o->ratecfg;
-	int n, lim, baud, period;
-	short *rec;
-
-	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
-		/* 0x66e59 */
-		short k = tx1_scramble2(o);
-		short q;
-
-		o->cur_quadrant = k;
-		q = tx1_scramble2(o);
-		tx1_put_point(o, vect16[q + 4 * k]);
-	} else {
-		/* 0x62e3b */
-		short q = tx1_scramble2(o);
-
-		o->cur_quadrant = q;
-		tx1_put_point(o, vect4[q]);
-	}
-
-	/* 0x62ecd */
-	txmit(o);
-
-	/* 0x62edc */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-	n = o->seg_symcount;
-	baud = cfg->baud;
-	period = cfg->period;
-	lim = baud + (baud >> 1) + period;
-
-	if (n != lim) {
-		if ((unsigned)o->hs_mode <= 3u)
-			return V34TX1_LOOP;		/* 0x63941 */
-		if (n < lim) {
-			/* 0x6559c */
-			if (n < baud + period)
-				return V34TX1_LOOP;	/* 0x6409a */
-			if ((int)rx->equerr > (int)o->receiver.short_4b4 + 10)
-				return V34TX1_LOOP;	/* 0x6431f */
-		}
-	}
-
-	/* 0x62f22 */
-	rec = (short *)((char *)objp + TX1_FAA3C);
-	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
-	o->paa6c = rec;
-
-	if (rx->flags & V34_RX_FLAG_RENEG) {
-		/* 0x62f5f */
-		rec[2] = 0;
-		rec[0] = 0;
-		o->receiver.short_4b4 = rx->equerr;
-	} else {
-		tx1_ts_snapshot(o, rx, rec);
-	}
-
-	return tx1_ts_rates(o, rx, cfg, rec);
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_trnseg4a.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -2799,134 +2248,11 @@ v34tx1_trnseg4a(void *objp)
 static int
 v34tx1_trnseg4(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_ratecfg *cfg = &o->ratecfg;
-	short q;
-	int n, span, baud;
-
-	/* 0x64339: the scrambler, the quadrant and one sample. */
-	q = tx1_scramble2(o);
-	o->cur_quadrant = q;
-	tx1_put_point(o, vect4[q]);
-	txmit(o);
-
-	/* 0x643dc */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-
-	if (o->short_aa78 == o->seg_symcount) {
-		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
-		o->echo_calls = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
-		o->echo_alpha = 0;
-		o->far_echo_alpha = 0;
-		o->echo_energy = 0;
-		VPcmV34ReportStartOfEchoAdapt(o);
-	}
-
-	/* 0x643f8 */
-	if (((unsigned short)o->tx_flags & 0x100u) == 0
-	    && o->seg_symcount >= o->ratecfg.period)
-		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);
-
-	/* 0x64ae4 */
-	n = o->seg_symcount;
-	span = o->phase3_hd_length;
-
-	if (n == (span >> 1)) {
-		VPcmV34ReportMiddleOfEchoAdapt(o);	/* 0x67734 */
-		return V34TX1_LOOP;			/* 0x640a1 */
-	}
-
-	baud = cfg->baud;
-	if (n == baud + (baud >> 1)) {
-		/* 0x67278 */
-		o->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)
-				   | 0x400u);
-		return V34TX1_LOOP;			/* 0x63da2 */
-	}
-
-	if (n != span)
-		return V34TX1_LOOP;			/* 0x629c8 */
-
-	/* 0x64b24: the segment is over. */
-	hs_set_txstate(o, V34HS_JTXMIT);
-
-	if (o->rtd <= 2) {
-		/* 0x6801e */
-		v34FreezeEcho(o);
-		o->short_aa78 = 0;
-	} else {
-		if (o->v90_receiver != 0 || o->k56flex_receiver != 0) {
-			/* 0x68ad0 and 0x69de7, two copies of one store */
-			o->short_aa78 = o->rtd;
-		} else {
-			/* 0x64b96 */
-			o->short_aa78 = (short)(o->rtd >> 1);
-		}
-
-		/*
-		 * 0x64ba9, and the nesting is what the object says: BOTH
-		 * stores jump here (0x68ade and 0x69df5) and the `rtd <= 2`
-		 * arm does not -- it reports the freeze instead.  An
-		 * else-if chain cannot express a guard shared by two of its
-		 * three arms.
-		 */
-		if (dsplibs_debug_level > 1)		/* 0x6917e */
-			dsplibs_debug_printf(
-				"V34Hshak: On J TX start, would freeze EC" " after bulk delay (%d samples,"
-				" bulk=%d)\r\n",
-				o->short_aa78, o->rtd);
-	}
-
-	/* 0x64bb2 */
-	tx1_put(o, TX1_F25D6, (short)0x8990);
-	o->prev_quadrant = o->cur_quadrant;
-	hs_set_rxstate(o, V34HS_RECEIVE);
-	setupreceiver(o);				/* 0x64c04 */
-
-	/* 0x64d37: the +0xaa0c record, in the object's order */
-	{
-		unsigned char *r = (unsigned char *)objp + TX1_INFOREC;
-
-		*(int *)(r + 0x24) = 0;
-		*(int *)(r + 0x2c) = 0;
-		*(short *)(r + 0x14) = -1;
-		*(short *)(r + 0x1a) = 0;
-		*(short *)(r + 0x1e) = 0;
-		*(short *)(r + 0x22) = 0;
-		*(short *)(r + 0x18) = 0;
-		*(short *)(r + 0x1c) = 0;
-		*(short *)(r + 0x16) = 0;
-		*(short *)(r + 0x28) = 0;
-		*(short *)(r + 0x2a) = 0;
-		*(short *)(r + 0x20) = 0;
-	}
-
-	/* 0x64d8d */
-	hs_set_microstate(o, V34HS_DET_SYNC);
-
-	/* 0x64dba */
-	o->vect_idx = 0;
-	o->rate_change_pending = 1;
-
-	if ((unsigned)o->v90_receiver > 1u) {
-		/* 0x64de7 */
-		hs_set_txstate(o, V34HS_JaTXMIT);
-		hs_set_rxstate(o, V34HS_WAIT);
-		indicateJaTransmission(o);
-		return V34TX1_LOOP;			/* 0x629c8 */
-	}
-
-	if ((unsigned)o->k56flex_receiver > 1u) {
-		/* 0x67f91 */
-		hs_set_txstate(o, V34HS_K56JaTXMIT);
-		hs_set_rxstate(o, V34HS_WAIT);
-		indicateJaTransmission(o);
-		return V34TX1_LOOP;			/* 0x63948 */
-	}
-
-	return V34TX1_LOOP;				/* 0x63da2 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_trnseg4.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 /*
  * ---------------------------------------------------------------------------
@@ -3298,172 +2624,19 @@ tx1_moh_send(struct v34_object *o)
 static int
 v34tx1_xmitmp(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	struct v34_receiver *rx = &o->receiver;
-	int wide = 0;
-	int n = 0;
-
-	o->cur_quadrant = 0;					/* 0x639ab */
-
-	for (;;) {
-		struct v34_bitsource *b;
-		unsigned short flags;
-		short bit, idx;
-
-		wide = (unsigned short)o->receiver.short_382 == 0x89b0u;
-		if (n > (wide ? 3 : 1))
-			break;
-
-		/* 0x639db, and 0x6484c where it does not inline */
-		b = tx1_bitsource(o);
-		bit = getbit(b);
-
-		/*
-		 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
-		 * bit reaches it sign-extended -- so the reader's -1 fills
-		 * `cur_quadrant` from bit `n` up rather than setting one bit.
-		 */
-		o->cur_quadrant = (short)((unsigned short)o->cur_quadrant
-				   | (unsigned short)
-				     ((unsigned)(int)bit
-				      << ((unsigned)(unsigned char)n & 31u)));
-
-		/* 0x63ad8 */
-		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
-		idx = o->vect_idx;
-		flags = rx->flags;
-
-		if (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {
-			/* 0x6459b */
-			b = tx1_bitsource(o);
-			if (flags & 0x20u) {
-				b->acc = (int)((unsigned)b->acc << 3);
-				b->avail = (short)
-					   ((unsigned short)b->avail + 3);
-			} else {
-				b->acc = (int)((unsigned)b->acc << 1);
-				b->avail = (short)
-					   ((unsigned short)b->avail + 1);
-			}
-		} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {
-			if (tx1_mp_sequence_end(o, rx)) {
-				/* 0x6490e */
-				wide = (unsigned short)
-				       o->receiver.short_382 == 0x89b0u;
-				break;
-			}
-		} else if ((unsigned short)o->vect_idx
-			   == (unsigned short)o->short_3590) {
-			/* 0x64727 */
-			b = tx1_bitsource(o);
-			b->acc = (int)((unsigned)b->acc << 1);
-			b->avail = (short)((unsigned short)b->avail + 1);
-			o->short_3590 =
-				(short)((unsigned short)o->short_3590 + 0x11);
-		}
-
-		n = (short)(n + 1);			/* 0x63b38 */
-	}
-
-	if (wide)
-		tx1_mp16(o, o->cur_quadrant);
-	else
-		tx1_mp4(o, o->cur_quadrant);
-
-	txmit(o);				/* 0x62d5f and 0x64a42 */
-	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_xmitmp.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 static int
 v34tx1_tx_dpsk(void *objp)
 {
-	struct v34_object *o = (struct v34_object *)objp;
-	short bit;
-
-	/* 0x62b9d */
-	if (o->moh_active != 0)
-		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
-
-	/* 0x62bb5, and 0x684bb where it does not inline */
-	bit = getbit(tx1_bitsource(o));
-	if (bit >= 0) {
-		/* 0x64a13 */
-		tx1_dpsk_tone(o, bit);
-		txmit(o);				/* 0x64a42 */
-		return V34TX1_LOOP;			/* 0x640a1 */
-	}
-
-	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
-	if (o->moh_active == 0) {
-		/*
-		 * 0x654dd.  The compare against TONE_AB cannot be false, for
-		 * finding F342's reason at 65: the arm is reached only through
-		 * table 1 at `txstate == 24` and nothing between the dispatch
-		 * and here writes +0x3596 -- `getbit` does not.  It is
-		 * written as the object writes it.
-		 */
-		hs_set_txstate(o, V34HS_TONE_AB);
-		return V34TX1_LOOP;			/* 0x63948 */
-	}
-
-	if (dsplibs_debug_level > 1)			/* 0x68704 */
-		dsplibs_debug_printf(
-			"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
-			*((signed char *)o + TX1_MOH_MSG_PENDING), o->vect_idx,
-			tx1_bitsource(o)->repeats);
-
-	if (o->moh_msg_pending == 0) {
-		/*
-		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
-		 * `getbit`'s own restart arm with the `repeat` test taken out,
-		 * so a reader that declines to repeat is restarted anyway.
-		 * The stores are the object's, in the object's order; the
-		 * compiler sank the rest of them into the successors, which is
-		 * why 0x6a855 and 0x6c9c8 store 0xffff into `crc` again.
-		 */
-		struct v34_bitsource *b = tx1_bitsource(o);
-
-		b->repeats = (short)((unsigned short)b->repeats + 1);
-		b->crc = (short)0xffff;
-		b->pos = 0;
-		b->idx = 0;
-		b->acc = b->acc0;
-		b->avail = b->avail0;
-
-		tx1_dpsk_tone(o, getbit(b));
-		txmit(o);				/* 0x67d3e */
-		return tx1_moh_hold(o);			/* 0x64fec */
-	}
-
-	/*
-	 * 0x64e91.  Both selectors are read as ints and compared UNSIGNED --
-	 * `cmp $0x1 ; je ; jb` picks zero alone and `cmp $0x3 ; ja` sends a
-	 * negative one to the same place a large one goes.
-	 */
-	if (o->moh_message == 1) {
-		tx1_moh_on_hold(o);			/* 0x689f6 */
-	} else if (o->moh_message == 0) {
-		int got = o->moh_recvd;			/* 0x6901d */
-
-		if (got == 4)
-			tx1_moh_on_hold(o);
-		else if ((unsigned)got > 4u) {
-			/* 0x6a3c6 */
-			if (got != 5)
-				tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
-			else
-				tx1_moh_send(o);	/* 0x6a3cf */
-		} else if (got == 0)
-			tx1_moh_on_hold(o);
-		else
-			tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
-	} else if ((unsigned)o->moh_message <= 3u) {
-		tx1_moh_cleardown(o);			/* 0x64eaf */
-	}
-
-	/* 0x64fde */
-	o->moh_msg_pending = 0;
-	return tx1_moh_hold(o);				/* 0x64fec */
+#define V34_TX_CASE_RETURN(value) return (value)
+#include "dsplib/v34_continuations/v34tx1_tx_dpsk.inc"
+#undef V34_TX_CASE_RETURN
 }
+
 
 #endif /* DSPLIB_V34HSTX1_ARMS_H */

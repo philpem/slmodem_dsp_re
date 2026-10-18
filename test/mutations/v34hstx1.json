@@ -2,47 +2,65 @@
   {
     "label": "65: the segment flag test is inverted",
     "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
-    "replace": "\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {"
+    "replace": "\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: the segment flag is bit 4 rather than bit 3",
     "find": "\tif (rx->flags & V34_RX_FLAG_LATE_TRN) {",
-    "replace": "\tif (rx->flags & 0x10) {"
+    "replace": "\tif (rx->flags & 0x10) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: the segment bit raised in tx_flags is 0x1000",
     "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);",
-    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x1000u);"
+    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x1000u);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: only the first half of the silent point is cleared",
     "find": "\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;\n\ttxmit(o);",
-    "replace": "\to->txpoint.c[0] = 0;\n\ttxmit(o);"
+    "replace": "\to->txpoint.c[0] = 0;\n\ttxmit(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: the point is cleared after the symbol is sent",
     "find": "\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;\n\ttxmit(o);",
-    "replace": "\ttxmit(o);\n\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;"
+    "replace": "\ttxmit(o);\n\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: tx_scr_sr is left alone when the segment is armed",
     "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
-    "replace": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;"
+    "replace": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: prev_quadrant is left alone when the segment is armed",
     "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
-    "replace": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;"
+    "replace": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: seg_symcount is left alone when the segment is armed",
-    "find": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;\n\t}\n\treturn V34TX1_LOOP;",
-    "replace": "\t\to->tx_scr_sr = 0;\n\t}\n\treturn V34TX1_LOOP;"
+    "find": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;\n\t}\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);",
+    "replace": "\t\to->tx_scr_sr = 0;\n\t}\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "65: the transmit machine is not moved to SSEG",
     "find": "\t\ths_set_txstate(o, V34HS_SSEG);\n\t\to->prev_quadrant = 0;",
-    "replace": "\t\to->prev_quadrant = 0;"
+    "replace": "\t\to->prev_quadrant = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmit0.inc",
+    "fn": "v34tx1_xmit0"
   },
   {
     "label": "71/86: the generator select is inverted",
@@ -67,17 +85,23 @@
   {
     "label": "71: TXLEVEL sends the point the scrambler chose, as TXMD does",
     "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
-    "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->cur_quadrant = q71;\n\ttx1_put_point(o, vect4[q71]);"
+    "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->cur_quadrant = q71;\n\ttx1_put_point(o, vect4[q71]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txlevel.inc",
+    "fn": "v34tx1_txlevel"
   },
   {
     "label": "71: the quadrant is not recorded in cur_quadrant",
     "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
-    "replace": "\t(void)tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);"
+    "replace": "\t(void)tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txlevel.inc",
+    "fn": "v34tx1_txlevel"
   },
   {
     "label": "71: the register is not advanced at all",
     "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
-    "replace": "\ttx1_put_point(o, vect4[0]);"
+    "replace": "\ttx1_put_point(o, vect4[0]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txlevel.inc",
+    "fn": "v34tx1_txlevel"
   },
   {
     "label": "78/85: the counter is decremented even when it is already zero",
@@ -108,909 +132,1251 @@
     "label": "78: JaTXMIT hands the sample to the K56flex half",
     "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
     "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\t(void)k56FlexPhase34(o);",
-    "fn": "v34tx1_jatxmit"
+    "fn": "v34tx1_jatxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jatxmit.inc"
   },
   {
     "label": "85: K56JaTXMIT hands the sample to the V.90 half",
     "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\t(void)k56FlexPhase34(o);",
     "replace": "\t(void)tx1_ja_common(o, \"V34Hshak: on K56JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x68282 */\n\tv90Phase34(o);",
-    "fn": "v34tx1_k56jatxmit"
+    "fn": "v34tx1_k56jatxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_k56jatxmit.inc"
   },
   {
     "label": "78: the counter is not consulted at all",
     "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JaTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x6821d */\n\tv90Phase34(o);",
     "replace": "\tv90Phase34(o);",
-    "fn": "v34tx1_jatxmit"
+    "fn": "v34tx1_jatxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jatxmit.inc"
   },
   {
     "label": "81: the queue is fed a non-zero sample",
     "find": "\tquiet[0] = 0;\n\tquiet[1] = 0;\n\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);",
-    "replace": "\tquiet[0] = 1;\n\tquiet[1] = 0;\n\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);"
+    "replace": "\tquiet[0] = 1;\n\tquiet[1] = 0;\n\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc",
+    "fn": "v34tx1_moh_silence"
   },
   {
     "label": "81: the fourth sample is not silent",
     "find": "\tquiet[2] = 0;\n\tquiet[3] = 0;\n\ttxwritequeue(&o->txq, quiet);",
-    "replace": "\tquiet[2] = 0;\n\tquiet[3] = 1;\n\ttxwritequeue(&o->txq, quiet);"
+    "replace": "\tquiet[2] = 0;\n\tquiet[3] = 1;\n\ttxwritequeue(&o->txq, quiet);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc",
+    "fn": "v34tx1_moh_silence"
   },
   {
     "label": "81: the symbol counter is not advanced",
     "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx != 0xc0u)",
-    "replace": "\tif ((unsigned short)o->vect_idx != 0xc0u)"
+    "replace": "\tif ((unsigned short)o->vect_idx != 0xc0u)",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc",
+    "fn": "v34tx1_moh_silence"
   },
   {
     "label": "81: the wrap is at 0xc1",
     "find": "\tif ((unsigned short)o->vect_idx != 0xc0u)",
-    "replace": "\tif ((unsigned short)o->vect_idx != 0xc1u)"
+    "replace": "\tif ((unsigned short)o->vect_idx != 0xc1u)",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc",
+    "fn": "v34tx1_moh_silence"
   },
   {
     "label": "81: the wrap is tested before the counter is stored",
-    "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx != 0xc0u)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63da2 */",
-    "replace": "\tif ((unsigned short)(o->vect_idx + 1) != 0xc0u) {\n\t\to->vect_idx = (short)(o->vect_idx + 1);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63da2 */\n\t}\n\to->vect_idx = (short)(o->vect_idx + 1);",
+    "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx != 0xc0u)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63da2 */",
+    "replace": "\tif ((unsigned short)(o->vect_idx + 1) != 0xc0u) {\n\t\to->vect_idx = (short)(o->vect_idx + 1);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63da2 */\n\t}\n\to->vect_idx = (short)(o->vect_idx + 1);",
     "equivalent": true,
-    "why": "0x63d8b stores the incremented halfword and 0x63d90 compares the SAME register against 0xc0, so the object's order is store-then-test and this is the other one.  It cannot be OBSERVED: the value tested is `o->vect_idx + 1` promoted to int and cast to `unsigned short`, the value stored is that expression cast to `short`, and casting either back to `unsigned short` gives the same sixteen bits for every input -- so no seed separates them. Recorded equivalent rather than left NOT CAUGHT, which is what it read as before: the claim is real and the trial does not exist, which is finding F613's case rather than a gap in the fixture."
+    "why": "0x63d8b stores the incremented halfword and 0x63d90 compares the SAME register against 0xc0, so the object's order is store-then-test and this is the other one.  It cannot be OBSERVED: the value tested is `o->vect_idx + 1` promoted to int and cast to `unsigned short`, the value stored is that expression cast to `short`, and casting either back to `unsigned short` gives the same sixteen bits for every input -- so no seed separates them. Recorded equivalent rather than left NOT CAUGHT, which is what it read as before: the claim is real and the trial does not exist, which is finding F613's case rather than a gap in the fixture.",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc",
+    "fn": "v34tx1_moh_silence"
   },
   {
     "label": "86: TXMD sends vect4[0], as TXLEVEL does",
     "find": "\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);\n\n\to->vect_idx = (short)(o->vect_idx + 1);",
-    "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\n\to->vect_idx = (short)(o->vect_idx + 1);"
+    "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\n\to->vect_idx = (short)(o->vect_idx + 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the segment-complete test is missing",
     "find": "\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)o->short_aa78) {",
-    "replace": "\tif (1) {"
+    "replace": "\tif (1) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the reconfiguration point is +0xaa78 rather than +0x35a6",
     "find": "\t    == (unsigned short)o->seg_len) {",
-    "replace": "\t    == (unsigned short)o->short_aa78) {"
+    "replace": "\t    == (unsigned short)o->short_aa78) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the modulator is told 2400 baud whatever the rate config says",
     "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
-    "replace": "\t\t\t\t  2400, cfg->carrier, cfg->preemp, pcm, 0);"
+    "replace": "\t\t\t\t  2400, cfg->carrier, cfg->preemp, pcm, 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the carrier and the pre-emphasis index are swapped",
     "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
-    "replace": "\t\t\t\t  cfg->baud, cfg->preemp, cfg->carrier, pcm, 0);"
+    "replace": "\t\t\t\t  cfg->baud, cfg->preemp, cfg->carrier, pcm, 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the PCM argument is always zero",
     "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
-    "replace": "\t\tint pcm = 0;"
+    "replace": "\t\tint pcm = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the PCM argument reads only the V.90 receiver",
     "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
-    "replace": "\t\tint pcm = (o->v90_receiver != 0);"
+    "replace": "\t\tint pcm = (o->v90_receiver != 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the modulator's reset argument is one",
     "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
-    "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 1);"
+    "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
     "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags\n\t\t\t\t     | (V34_TXFLAG_PPSEG | V34_EC_FROZEN));",
-    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_PPSEG);"
+    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_PPSEG);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: seg_symcount is not cleared before it is counted",
     "find": "\t\ths_set_txstate(o, V34HS_SSEG);\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
-    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);\n\t\to->tx_scr_sr = 0;"
+    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);\n\t\to->tx_scr_sr = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the shared block at 0x6430c does not count the symbol",
     "find": "\t/* 0x6430c */\n\to->seg_symcount = (short)(o->seg_symcount + 1);",
-    "replace": "\t/* 0x6430c */"
+    "replace": "\t/* 0x6430c */",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the symbol counter is not advanced",
     "find": "\to->vect_idx = (short)(o->vect_idx + 1);\n\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)o->short_aa78) {",
-    "replace": "\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)o->short_aa78) {"
+    "replace": "\tif ((unsigned short)o->vect_idx\n\t    == (unsigned short)o->short_aa78) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the PCM argument reads only the K56flex receiver",
     "find": "\t\tint pcm = (o->v90_receiver != 0 || o->k56flex_receiver != 0);",
-    "replace": "\t\tint pcm = (o->k56flex_receiver != 0);"
+    "replace": "\t\tint pcm = (o->k56flex_receiver != 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "86: the transmit machine is not moved to SSEG",
     "find": "\t\ths_set_txstate(o, V34HS_SSEG);\n\t\to->seg_symcount = 0;",
-    "replace": "\t\to->seg_symcount = 0;"
+    "replace": "\t\to->seg_symcount = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc",
+    "fn": "v34tx1_txmd"
   },
   {
     "label": "60: the index is not scaled by two",
     "find": "\ttx1_put_point(o, vect4[2 * sel]);",
-    "replace": "\ttx1_put_point(o, vect4[sel]);"
+    "replace": "\ttx1_put_point(o, vect4[sel]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "60: the selector is bit 1 of +0x358c",
     "find": "\tint sel = o->short_358c & 1;",
-    "replace": "\tint sel = (o->short_358c >> 1) & 1;"
+    "replace": "\tint sel = (o->short_358c >> 1) & 1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "60: the selector is inverted",
     "find": "\tint sel = o->short_358c & 1;",
-    "replace": "\tint sel = (o->short_358c & 1) ^ 1;"
+    "replace": "\tint sel = (o->short_358c & 1) ^ 1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "60: the point is stored after the symbol is sent",
     "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
-    "replace": "\ttxmit(o);\n\ttx1_put_point(o, vect4[2 * sel]);"
+    "replace": "\ttxmit(o);\n\ttx1_put_point(o, vect4[2 * sel]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "60: nothing is transmitted",
     "find": "\ttx1_put_point(o, vect4[2 * sel]);\n\ttxmit(o);",
-    "replace": "\ttx1_put_point(o, vect4[2 * sel]);"
+    "replace": "\ttx1_put_point(o, vect4[2 * sel]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "60: +0x358c is read as an int",
     "find": "\tint sel = o->short_358c & 1;",
     "replace": "\tint sel = *(const int *)((const unsigned char *)o + TX1_F358C) & 1;",
     "equivalent": true,
-    "why": "the mask keeps bit 0 alone and a short load and an int load agree on it"
+    "why": "the mask keeps bit 0 alone and a short load and an int load agree on it",
+    "source": "include/dsplib/v34_continuations/v34tx1_tone_ab.inc",
+    "fn": "v34tx1_tone_ab"
   },
   {
     "label": "18: the second symbol is vect4[1]",
     "find": "\ttx1_put_point(o, vect4[3]);",
-    "replace": "\ttx1_put_point(o, vect4[1]);"
+    "replace": "\ttx1_put_point(o, vect4[1]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the second symbol is vect4[2]",
     "find": "\ttx1_put_point(o, vect4[3]);",
-    "replace": "\ttx1_put_point(o, vect4[2]);"
+    "replace": "\ttx1_put_point(o, vect4[2]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the first symbol is vect4[3] as well",
     "find": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[0]);",
-    "replace": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[3]);"
+    "replace": "\tunsigned short n;\n\n\ttx1_put_point(o, vect4[3]);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: only the first symbol is transmitted",
     "find": "\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the segment ends at 0x41",
     "find": "\tif (n == 0x40) {",
-    "replace": "\tif (n == 0x41) {"
+    "replace": "\tif (n == 0x41) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the segment ends at or past 0x40",
     "find": "\tif (n == 0x40) {",
-    "replace": "\tif (n >= 0x40) {"
+    "replace": "\tif (n >= 0x40) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the count is not advanced",
     "find": "\tn = (unsigned short)((unsigned short)o->seg_symcount + 1);\n\to->seg_symcount = (short)n;",
-    "replace": "\tn = (unsigned short)o->seg_symcount;"
+    "replace": "\tn = (unsigned short)o->seg_symcount;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the count is not cleared when the segment ends",
     "find": "\t\ths_set_txstate(o, V34HS_SBARSEG);\n\t\to->seg_symcount = 0;",
-    "replace": "\t\ths_set_txstate(o, V34HS_SBARSEG);"
+    "replace": "\t\ths_set_txstate(o, V34HS_SBARSEG);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the transmit machine is not moved to SBARSEG",
     "find": "\t\ths_set_txstate(o, V34HS_SBARSEG);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the machine is moved to SSEG rather than SBARSEG",
     "find": "\t\ths_set_txstate(o, V34HS_SBARSEG);",
-    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);"
+    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc",
+    "fn": "v34tx1_sseg"
   },
   {
     "label": "18: the SBARSEG guard is deleted",
     "find": "\t\ths_set_txstate(o, V34HS_SBARSEG);",
     "replace": "\t\to->txstate = V34HS_SBARSEG;",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only at txstate 18 and txmit does not write +0x3596, so the guard is always true -- finding F342's case at 65  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_sseg"
+    "fn": "v34tx1_sseg",
+    "source": "include/dsplib/v34_continuations/v34tx1_sseg.inc"
   },
   {
     "label": "70: the data-path test is inverted",
     "find": "\tif (!(o->tx_flags & PROG_TXBIT_DATA))",
-    "replace": "\tif (o->tx_flags & PROG_TXBIT_DATA)"
+    "replace": "\tif (o->tx_flags & PROG_TXBIT_DATA)",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the data-path flag is bit 3",
     "find": "\tif (!(o->tx_flags & PROG_TXBIT_DATA))",
-    "replace": "\tif (!(o->tx_flags & 8))"
+    "replace": "\tif (!(o->tx_flags & 8))",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the receiver's +0x220 is left alone",
     "find": "\trx->equerr_accum = 0;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the receiver's +0x21c is left alone",
     "find": "\trx->err_symcount = 0;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the sample-clock copy goes the other way",
     "find": "\to->int_0248 = o->sample_count;",
-    "replace": "\to->sample_count = o->int_0248;"
+    "replace": "\to->sample_count = o->int_0248;",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the sample-clock mark is not restarted",
     "find": "\to->int_0248 = o->sample_count;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the rate index is read unsigned",
     "find": "\tidx = o->ratecfg.rxbits;",
-    "replace": "\tidx = (unsigned short)o->ratecfg.rxbits;"
+    "replace": "\tidx = (unsigned short)o->ratecfg.rxbits;",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: rate_now is left alone",
     "find": "\to->rate_now = idx;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: rate_want is left alone",
     "find": "\to->rate_want = idx;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: +0x2218 is set to 2",
     "find": "\to->hs_mode = 1;",
-    "replace": "\to->hs_mode = 2;"
+    "replace": "\to->hs_mode = 2;",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: +0x2218 is left alone",
     "find": "\to->hs_mode = 1;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "70: the vector is not modulated",
     "find": "\tmodulatevector(o);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_dataxmit.inc",
+    "fn": "v34tx1_dataxmit"
   },
   {
     "label": "51: the loop select is inverted",
     "find": "\tint doubled = o->microstate == V34HS_TX_L1;",
-    "replace": "\tint doubled = o->microstate != V34HS_TX_L1;"
+    "replace": "\tint doubled = o->microstate != V34HS_TX_L1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the second copy of the loop does not double",
     "find": "\t\tif (doubled)\n\t\t\tv = (short)(2 * v);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: three samples rather than four",
     "find": "\tfor (i = 0; i < 4; i++) {",
-    "replace": "\tfor (i = 0; i < 3; i++) {"
+    "replace": "\tfor (i = 0; i < 3; i++) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the index is off by one",
     "find": "\t\tint v = probe[idx & 0x3f];",
-    "replace": "\t\tint v = probe[(idx + 1) & 0x3f];"
+    "replace": "\t\tint v = probe[(idx + 1) & 0x3f];",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the index is masked with 0x1f",
     "find": "\t\tint v = probe[idx & 0x3f];",
-    "replace": "\t\tint v = probe[idx & 0x1f];"
+    "replace": "\t\tint v = probe[idx & 0x1f];",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the scale is read unsigned",
     "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
-    "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->tx_scale) >> 14);"
+    "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->tx_scale) >> 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the shift is logical rather than arithmetic",
     "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
     "replace": "\t\tbuf[i] = (short)((unsigned)(v * o->tx_scale) >> 14);",
     "equivalent": true,
-    "why": "only the low sixteen bits are stored, and a logical shift right by 14 exceeds an arithmetic one by exactly 2^18 on a negative product -- a multiple of 2^16, so the two are equal in a short for EVERY input.  The object's `sar $0xe` at 0x62cbe and 0x652c4 is therefore unobservable at the store; recorded as equivalent rather than as a gap"
+    "why": "only the low sixteen bits are stored, and a logical shift right by 14 exceeds an arithmetic one by exactly 2^18 on a negative product -- a multiple of 2^16, so the two are equal in a short for EVERY input.  The object's `sar $0xe` at 0x62cbe and 0x652c4 is therefore unobservable at the store; recorded as equivalent rather than as a gap",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the shift is by 15",
     "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
-    "replace": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 15);"
+    "replace": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 15);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: vect_idx is not advanced inside the loop",
     "find": "\t\to->vect_idx = (short)(idx + 1);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the segment's end is not guarded by the microstate",
-    "find": "\tif (o->microstate != V34HS_TX_L1)\n\t\treturn V34TX1_LOOP;\n",
-    "replace": ""
+    "find": "\tif (o->microstate != V34HS_TX_L1)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the segment ends at or past 0x600",
     "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
-    "replace": "\tif ((unsigned short)o->vect_idx < 0x600u)"
+    "replace": "\tif ((unsigned short)o->vect_idx < 0x600u)",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the segment ends at 0x400",
     "find": "\tif ((unsigned short)o->vect_idx != 0x600u)",
-    "replace": "\tif ((unsigned short)o->vect_idx != 0x400u)"
+    "replace": "\tif ((unsigned short)o->vect_idx != 0x400u)",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the microstate is moved to TX_L1 rather than TX_L2",
     "find": "\ths_set_microstate(o, V34HS_TX_L2);",
-    "replace": "\ths_set_microstate(o, V34HS_TX_L1);"
+    "replace": "\ths_set_microstate(o, V34HS_TX_L1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: vect_idx is not zeroed when the segment ends",
     "find": "\t/* 0x62d32 */\n\to->vect_idx = 0;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the doubling is not truncated to a short",
     "find": "\t\t\tv = (short)(2 * v);",
     "replace": "\t\t\tv = 2 * v;",
     "equivalent": true,
-    "why": "the largest magnitude in `probe` is 13,317, so twice any sample still fits a short and the truncation cannot bite -- a property of the table's values, not of the code"
+    "why": "the largest magnitude in `probe` is 13,317, so twice any sample still fits a short and the truncation cannot bite -- a property of the table's values, not of the code",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "51: the microstate is not re-read after the queue is written",
     "find": "\tif (o->microstate != V34HS_TX_L1)",
     "replace": "\tif (!doubled)",
     "equivalent": true,
-    "why": "nothing between the two reads writes +0x3592: `txwritequeue` (V34RX.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation"
+    "why": "nothing between the two reads writes +0x3592: `txwritequeue` (V34RX.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_l1.inc",
+    "fn": "v34tx1_tx_l1"
   },
   {
     "label": "19: the first symbol is vect4[0]",
     "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
-    "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);"
+    "replace": "\ttx1_put_point(o, vect4[0]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the second symbol is vect4[3]",
     "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
-    "replace": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);"
+    "replace": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[3]);\n\ttxmit(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the two symbols are sent in the other order",
     "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
-    "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);"
+    "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: only the second symbol is sent",
     "find": "\ttx1_put_point(o, vect4[2]);\n\ttxmit(o);\n\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
-    "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);"
+    "replace": "\ttx1_put_point(o, vect4[1]);\n\ttxmit(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the segment is four pairs long",
     "find": "\tif (n != 8) {\n\t\to->seg_symcount = (short)n;",
-    "replace": "\tif (n != 4) {\n\t\to->seg_symcount = (short)n;"
+    "replace": "\tif (n != 4) {\n\t\to->seg_symcount = (short)n;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the segment ends at or past eight",
     "find": "\tif (n != 8) {\n\t\to->seg_symcount = (short)n;",
-    "replace": "\tif (n < 8) {\n\t\to->seg_symcount = (short)n;"
+    "replace": "\tif (n < 8) {\n\t\to->seg_symcount = (short)n;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the count is stored on the completing path too",
     "find": "\t/* 0x671f0 */\n\to->seg_symcount = 0;",
-    "replace": "\t/* 0x671f0 */\n\to->seg_symcount = (short)n;"
+    "replace": "\t/* 0x671f0 */\n\to->seg_symcount = (short)n;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the completion does not clear seg_symcount",
     "find": "\t/* 0x671f0 */\n\to->seg_symcount = 0;\n",
-    "replace": "\t/* 0x671f0 */\n"
+    "replace": "\t/* 0x671f0 */\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the first guard is bit 5 of tx_flags",
     "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {",
-    "replace": "\tif ((unsigned short)o->tx_flags & 0x0020u) {"
+    "replace": "\tif ((unsigned short)o->tx_flags & 0x0020u) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the first guard is inverted",
     "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {",
-    "replace": "\tif (!((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A)) {"
+    "replace": "\tif (!((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the sign guard is bit 14",
     "find": "\t} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {",
-    "replace": "\t} else if ((unsigned short)o->tx_flags & V34_TXFLAG_NLENCODE) {"
+    "replace": "\t} else if ((unsigned short)o->tx_flags & V34_TXFLAG_NLENCODE) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: short_35a4 is tested for non-zero",
     "find": "\t} else if (o->short_35a4 == 0) {",
-    "replace": "\t} else if (o->short_35a4 != 0) {"
+    "replace": "\t} else if (o->short_35a4 != 0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the bit-13 path moves to TRNSEG4",
     "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
-    "replace": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {\n\t\ths_set_txstate(o, V34HS_TRNSEG4);"
+    "replace": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {\n\t\ths_set_txstate(o, V34HS_TRNSEG4);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the short_35a4-zero path moves to TXMD",
     "find": "\t\t/* 0x68375 */\n\t\ths_set_txstate(o, V34HS_PPSEG);",
-    "replace": "\t\t/* 0x68375 */\n\t\ths_set_txstate(o, V34HS_TXMD);"
+    "replace": "\t\t/* 0x68375 */\n\t\ths_set_txstate(o, V34HS_TXMD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the sign path does not copy f35a6 into seg_symcount",
     "find": "\t\t/* 0x69eca */\n\t\to->seg_symcount = o->seg_len;\n",
-    "replace": "\t\t/* 0x69eca */\n"
+    "replace": "\t\t/* 0x69eca */\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the sign path copies short_35a4 into seg_symcount",
     "find": "\t\to->seg_symcount = o->seg_len;",
-    "replace": "\t\to->seg_symcount = o->short_35a4;"
+    "replace": "\t\to->seg_symcount = o->short_35a4;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the segment length scales by 0x52",
     "find": "\t\to->seg_len = (short)((unsigned short)o->short_35a4 * 0x53);",
-    "replace": "\t\to->seg_len = (short)((unsigned short)o->short_35a4 * 0x52);"
+    "replace": "\t\to->seg_len = (short)((unsigned short)o->short_35a4 * 0x52);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: short_35a4 is read signed for the scale",
     "find": "\t\to->seg_len = (short)((unsigned short)o->short_35a4 * 0x53);",
     "replace": "\t\to->seg_len = (short)(o->short_35a4 * 0x53);",
     "equivalent": true,
-    "why": "the store is sixteen bits wide and the low sixteen bits of a product depend only on the low sixteen bits of its operands, so `movzwl` and `movswl` cannot differ here for ANY value of +0x35a4 -- not just for the ones driven"
+    "why": "the store is sixteen bits wide and the low sixteen bits of a product depend only on the low sixteen bits of its operands, so `movzwl` and `movswl` cannot differ here for ANY value of +0x35a4 -- not just for the ones driven",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the last path moves to SSEG rather than TXMD",
     "find": "\t\ths_set_txstate(o, V34HS_TXMD);\n\n\t\t/* 0x67885 */",
-    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);\n\n\t\t/* 0x67885 */"
+    "replace": "\t\ths_set_txstate(o, V34HS_SSEG);\n\n\t\t/* 0x67885 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the modulator is set up at 3200 baud",
     "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
-    "replace": "\t\t\t\t  3200, 2400, 0, 0, 0);"
+    "replace": "\t\t\t\t  3200, 2400, 0, 0, 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the modulator's carrier is 1800",
     "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
-    "replace": "\t\t\t\t  4800, 1800, 0, 0, 0);"
+    "replace": "\t\t\t\t  4800, 1800, 0, 0, 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the modulator's v90 argument is one",
     "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
     "replace": "\t\t\t\t  4800, 2400, 0, 1, 0);",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and V34SetupModulator's own line, which prints all five arguments separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  `V34SetupModulator` reads `v90` at 3200 baud and nowhere else (finding F216), and this arm asks for 4800 with all six arguments as literals -- so the argument cannot change what the call does from THIS site.  It is written as the object passes it",
-    "fn": "v34tx1_sbarseg"
+    "fn": "v34tx1_sbarseg",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc"
   },
   {
     "label": "19: the modulator is reset",
     "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
-    "replace": "\t\t\t\t  4800, 2400, 0, 0, 1);"
+    "replace": "\t\t\t\t  4800, 2400, 0, 0, 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the modulator's pre-emphasis index is one",
     "find": "\t\t\t\t  4800, 2400, 0, 0, 0);",
     "replace": "\t\t\t\t  4800, 2400, 1, 0, 0);",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and V34SetupModulator's own line, which prints all five arguments separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  a non-zero `preemp_index` picks a row of the rate's p<baud> table and 4800 has none, so `V34SetupModulator`'s inner switch falls to `default` and `m->preemp` keeps the value the unconditional store above it left",
-    "fn": "v34tx1_sbarseg"
+    "fn": "v34tx1_sbarseg",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc"
   },
   {
     "label": "19: the span is measured from 0x5e9",
     "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
-    "replace": "\t\tspan = (int)((unsigned)(0x5e9 - o->dmadelay) << 14);"
+    "replace": "\t\tspan = (int)((unsigned)(0x5e9 - o->dmadelay) << 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the span is shifted by thirteen",
     "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
-    "replace": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 13);"
+    "replace": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 13);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: +0x25c is read unsigned",
     "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
-    "replace": "\t\tspan = (int)((unsigned)(0x5e8 - (unsigned short)o->dmadelay) << 14);"
+    "replace": "\t\tspan = (int)((unsigned)(0x5e8 - (unsigned short)o->dmadelay) << 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the counter divides by 9601",
     "find": "\t\tq = (short)(span / 9600);",
-    "replace": "\t\tq = (short)(span / 9601);"
+    "replace": "\t\tq = (short)(span / 9601);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the quotient is not truncated to a short",
     "find": "\t\tq = (short)(span / 9600);\n\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);",
-    "replace": "\t\tq = 0;\n\t\t(void)q;\n\t\ttx1_put(o, TX1_COUNT,\n\t\t\t(short)((((span / 9600) * 0x960) >> 14) + 0x96));"
+    "replace": "\t\tq = 0;\n\t\t(void)q;\n\t\ttx1_put(o, TX1_COUNT,\n\t\t\t(short)((((span / 9600) * 0x960) >> 14) + 0x96));",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the counter's offset is 0x95",
     "find": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);",
-    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x95);"
+    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x95);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the counter scales by 0x961",
     "find": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);",
-    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x961) >> 14) + 0x96);"
+    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x961) >> 14) + 0x96);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the counter's shift is fifteen",
     "find": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);",
-    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 15) + 0x96);"
+    "replace": "\t\to->short_aa78 = (short)((((int)q * 0x960) >> 15) + 0x96);",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: vect_idx is not cleared at the end",
     "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\to->short_358e = 0;",
-    "replace": "\t/* 0x67236 */\n\to->short_358e = 0;"
+    "replace": "\t/* 0x67236 */\n\to->short_358e = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: +0x358e is not cleared at the end",
     "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\to->short_358e = 0;",
-    "replace": "\t/* 0x67236 */\n\to->vect_idx = 0;"
+    "replace": "\t/* 0x67236 */\n\to->vect_idx = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "19: the four ways out are all taken from the object",
-    "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\to->short_358e = 0;\n\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-    "replace": "\t/* 0x67236 */\n\to->short_358e = 0;\n\to->vect_idx = 1;\n\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+    "find": "\t/* 0x67236 */\n\to->vect_idx = 0;\n\to->short_358e = 0;\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "replace": "\t/* 0x67236 */\n\to->short_358e = 0;\n\to->vect_idx = 1;\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_sbarseg.inc",
+    "fn": "v34tx1_sbarseg"
   },
   {
     "label": "20: vectpp is indexed as shorts rather than as points",
     "find": "\tmemcpy(&point, &vectpp[2 * i], sizeof(point));",
-    "replace": "\tmemcpy(&point, &vectpp[i], sizeof(point));"
+    "replace": "\tmemcpy(&point, &vectpp[i], sizeof(point));",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the point is taken from the NEXT entry",
     "find": "\tmemcpy(&point, &vectpp[2 * i], sizeof(point));",
-    "replace": "\tmemcpy(&point, &vectpp[2 * i + 2], sizeof(point));"
+    "replace": "\tmemcpy(&point, &vectpp[2 * i + 2], sizeof(point));",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: vect_idx is not advanced",
     "find": "\to->vect_idx = (short)(i + 1);\n\ttx1_put_point(o, point);",
-    "replace": "\ttx1_put_point(o, point);"
+    "replace": "\ttx1_put_point(o, point);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the point is sent before vect_idx is read",
     "find": "\tint i = o->vect_idx;\t\t\t/* movswl 0x2aa2 */",
-    "replace": "\tint i = o->vect_idx + 1;\t\t/* movswl 0x2aa2 */"
+    "replace": "\tint i = o->vect_idx + 1;\t\t/* movswl 0x2aa2 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the pass is forty-seven points long",
     "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {",
-    "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)(V34_VECTPP_POINTS - 1)) {"
+    "replace": "\tif ((unsigned short)o->vect_idx == (unsigned short)(V34_VECTPP_POINTS - 1)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the pass ends at or past forty-eight",
     "find": "\tif ((unsigned short)o->vect_idx == (unsigned short)V34_VECTPP_POINTS) {",
     "replace": "\tif ((unsigned short)o->vect_idx >= (unsigned short)V34_VECTPP_POINTS) {",
     "equivalent": true,
-    "why": "NOT an equivalence in the object -- it is a state the fixture cannot reach.  Separating `== 0x30` from `>= 0x30` needs `vect_idx` at 0x30 on entry, and the arm's first act is `vectpp[0x30]`, four bytes past a 192-byte table.  The blob would read its own adjacent `.rodata` and we would read ours, so the run would fail for the fixture's reason and not the arm's.  Within PPSEG the object cannot produce it either: 0x66d76 clears the field every time it reaches 48 and 0x680ac leaves the state.  Named here rather than left silent"
+    "why": "NOT an equivalence in the object -- it is a state the fixture cannot reach.  Separating `== 0x30` from `>= 0x30` needs `vect_idx` at 0x30 on entry, and the arm's first act is `vectpp[0x30]`, four bytes past a 192-byte table.  The blob would read its own adjacent `.rodata` and we would read ours, so the run would fail for the fixture's reason and not the arm's.  Within PPSEG the object cannot produce it either: 0x66d76 clears the field every time it reaches 48 and 0x680ac leaves the state.  Named here rather than left silent",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the segment is five passes long",
     "find": "\t\tif (n != 6) {",
-    "replace": "\t\tif (n != 5) {"
+    "replace": "\t\tif (n != 5) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the segment ends at or past six passes",
     "find": "\t\tif (n != 6) {",
-    "replace": "\t\tif (n < 6) {"
+    "replace": "\t\tif (n < 6) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: vect_idx is not cleared when the pass ends",
     "find": "\t\t\to->short_358e = (short)n;\n\t\t\to->vect_idx = 0;",
-    "replace": "\t\t\to->short_358e = (short)n;"
+    "replace": "\t\t\to->short_358e = (short)n;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: +0x358e is not stored when the pass ends",
     "find": "\t\t\to->short_358e = (short)n;\n\t\t\to->vect_idx = 0;",
-    "replace": "\t\t\to->vect_idx = 0;"
+    "replace": "\t\t\to->vect_idx = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: seg_symcount is bumped on the segment's end as well",
-    "find": "\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}",
-    "replace": "\t\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}"
+    "find": "\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63da2 */\n\t\t}\n\t}",
+    "replace": "\t\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63da2 */\n\t\t}\n\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: seg_symcount is not bumped on the counting paths",
-    "find": "\t/* 0x6430c */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */",
-    "replace": "\t/* 0x6430c */\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */"
+    "find": "\t/* 0x6430c */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x6431f */",
+    "replace": "\t/* 0x6430c */\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x6431f */",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: vect_idx is cleared rather than reloaded from rtd",
     "find": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x90);",
-    "replace": "\t\t\tshort v = 0;"
+    "replace": "\t\t\tshort v = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the rtd offset is 0x91",
     "find": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x90);",
-    "replace": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x91);"
+    "replace": "\t\t\tshort v = (short)((unsigned short)o->rtd + 0x91);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 2400 baud scales by three bits",
     "find": "\t\t\t\to->ratecfg.period = (short)(v >> 2);",
-    "replace": "\t\t\t\to->ratecfg.period = (short)(v >> 3);"
+    "replace": "\t\t\t\to->ratecfg.period = (short)(v >> 3);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 2400 baud shifts logically",
     "find": "\t\t\t\to->ratecfg.period = (short)(v >> 2);",
-    "replace": "\t\t\t\ttx1_put(o, TX1_FAA86,\n\t\t\t\t\t(short)((unsigned short)v >> 2));"
+    "replace": "\t\t\t\ttx1_put(o, TX1_FAA86,\n\t\t\t\t\t(short)((unsigned short)v >> 2));",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 2800 baud scales by 0x12ac",
     "find": "\t\t\t\t\t(short)(((int)v * 0x12ab) >> 14);",
-    "replace": "\t\t\t\t\t(short)(((int)v * 0x12ac) >> 14);"
+    "replace": "\t\t\t\t\t(short)(((int)v * 0x12ac) >> 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 3000 baud takes 3200's scale",
     "find": "\t\t\t\t\t(short)(((int)v * 0x1400) >> 14);",
-    "replace": "\t\t\t\t\t(short)(((int)v * 0x1555) >> 14);"
+    "replace": "\t\t\t\t\t(short)(((int)v * 0x1555) >> 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 3200 baud takes 3000's scale",
     "find": "\t\t\t\t\t(short)(((int)v * 0x1555) >> 14);",
-    "replace": "\t\t\t\t\t(short)(((int)v * 0x1400) >> 14);"
+    "replace": "\t\t\t\t\t(short)(((int)v * 0x1400) >> 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: 3429 baud scales by 0x16db",
     "find": "\t\t\t\t\t(short)(((int)v * 0x16dc) >> 14);",
-    "replace": "\t\t\t\t\t(short)(((int)v * 0x16db) >> 14);"
+    "replace": "\t\t\t\t\t(short)(((int)v * 0x16db) >> 14);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: an unrecognised baud falls to the 2400 scale",
     "find": "\t\t\tdefault:\n\t\t\t\tbreak;\n\t\t\t}",
-    "replace": "\t\t\tdefault:\n\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 2));\n\t\t\t\tbreak;\n\t\t\t}"
+    "replace": "\t\t\tdefault:\n\t\t\t\ttx1_put(o, TX1_FAA86, (short)(v >> 2));\n\t\t\t\tbreak;\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: +0xaa86 gains 0x121",
     "find": "\t\t\t\t\t+ 0x120);",
-    "replace": "\t\t\t\t\t+ 0x121);"
+    "replace": "\t\t\t\t\t+ 0x121);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: +0x358e is not cleared when the segment ends",
     "find": "\t\t\t/* 0x680fd */\n\t\t\to->short_358e = 0;",
-    "replace": "\t\t\t/* 0x680fd */"
+    "replace": "\t\t\t/* 0x680fd */",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the segment's end moves to TRNSEG4A",
     "find": "\t\t\ths_set_txstate(o, V34HS_TRNSEG4);",
-    "replace": "\t\t\ths_set_txstate(o, V34HS_TRNSEG4A);"
+    "replace": "\t\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the span is measured from 0x5e9",
     "find": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)baud;",
-    "replace": "\t\t\tspan = (0x5e9 - o->dmadelay) * (int)baud;"
+    "replace": "\t\t\tspan = (0x5e9 - o->dmadelay) * (int)baud;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the baud is read unsigned for the span",
     "find": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)baud;",
     "replace": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)(unsigned short)baud;",
     "equivalent": true,
-    "why": "every baud driven is 1234..3429, so the sign extension at 0x6815b cannot change the product.  A negative +0xaa84 would separate them and no run has one: the field is the rate configuration's baud, which the switch above has already compared against five positive constants"
+    "why": "every baud driven is 1234..3429, so the sign extension at 0x6815b cannot change the product.  A negative +0xaa84 would separate them and no run has one: the field is the rate configuration's baud, which the switch above has already compared against five positive constants",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the counter divides by 9601",
     "find": "\t\t\tq = span / 9600;",
-    "replace": "\t\t\tq = span / 9601;"
+    "replace": "\t\t\tq = span / 9601;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the intermediate store of the raw quotient is dropped",
     "find": "\t\t\to->short_aa78 = (short)q;\t/* 0x6818d */\n",
     "replace": "",
     "equivalent": true,
-    "why": "0x6818d's store is overwritten at 0x681bf on one path and at 0x69277 on the other, and nothing reads +0xaa78 in between -- the three addends come from +0xaa7c, +0x25c0 and a literal.  It is written because the object writes it"
+    "why": "0x6818d's store is overwritten at 0x681bf on one path and at 0x69277 on the other, and nothing reads +0xaa78 in between -- the three addends come from +0xaa7c, +0x25c0 and a literal.  It is written because the object writes it",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: the counter's literal one is dropped",
     "find": "\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
-    "replace": "\t\t\t\t+ (unsigned short)o->seg_symcount;"
+    "replace": "\t\t\t\t+ (unsigned short)o->seg_symcount;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: +0xaa7c is not added into the counter",
     "find": "\t\t\tacc = q + (unsigned short)o->filtdelay\n\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
-    "replace": "\t\t\tacc = q + (unsigned short)o->seg_symcount + 1;"
+    "replace": "\t\t\tacc = q + (unsigned short)o->seg_symcount + 1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: seg_symcount is not added into the counter",
     "find": "\t\t\tacc = q + (unsigned short)o->filtdelay\n\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
-    "replace": "\t\t\tacc = q + (unsigned short)o->filtdelay + 1;"
+    "replace": "\t\t\tacc = q + (unsigned short)o->filtdelay + 1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: rtd is added into the counter at role 0x64",
     "find": "\t\t\tif (o->role == 0x65)\t\t\t/* 0x6926d */",
-    "replace": "\t\t\tif (o->role == 0x64)\t\t\t/* 0x6926d */"
+    "replace": "\t\t\tif (o->role == 0x64)\t\t\t/* 0x6926d */",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: rtd is always added into the counter",
     "find": "\t\t\tif (o->role == 0x65)\t\t\t/* 0x6926d */\n\t\t\t\tacc += (unsigned short)o->rtd;",
-    "replace": "\t\t\tacc += (unsigned short)o->rtd;"
+    "replace": "\t\t\tacc += (unsigned short)o->rtd;",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "20: +0xaa86 is not accumulated with the counter",
     "find": "\t\t\t/* 0x681c6 */\n\t\t\to->ratecfg.period =\n\t\t\t\t(short)((unsigned short)o->ratecfg.period\n\t\t\t\t\t+ (unsigned short)o->short_aa78);\n",
-    "replace": "\t\t\t/* 0x681c6 */\n"
+    "replace": "\t\t\t/* 0x681c6 */\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_ppseg.inc",
+    "fn": "v34tx1_ppseg"
   },
   {
     "label": "5/54/74: +0xaa7a is not cleared",
     "find": "\to->short_aa7a = 0;\n\ttxwritequeue(&o->txq, quiet);",
-    "replace": "\ttxwritequeue(&o->txq, quiet);"
+    "replace": "\ttxwritequeue(&o->txq, quiet);",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "5/54/74: the fourth silent sample is not silent",
     "find": "\tquiet[3] = 0;\n\to->short_aa7a = 0;",
-    "replace": "\tquiet[3] = 1;\n\to->short_aa7a = 0;"
+    "replace": "\tquiet[3] = 1;\n\to->short_aa7a = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "5/54/74: the prologue clears +0xaa7a after the queue is written",
     "find": "\to->short_aa7a = 0;\n\ttxwritequeue(&o->txq, quiet);",
     "replace": "\ttxwritequeue(&o->txq, quiet);\n\to->short_aa7a = 0;",
     "equivalent": true,
-    "why": "`txwritequeue` (V34RX.c:58) writes q->count, four ring slots and q->wr, all inside +0x221c..+0x2668, and +0xaa7a is nowhere near it -- so the two stores commute.  The object does the clear first and it is written that way"
+    "why": "`txwritequeue` (V34RX.c:58) writes q->count, four ring slots and q->wr, all inside +0x221c..+0x2668, and +0xaa7a is nowhere near it -- so the two stores commute.  The object does the clear first and it is written that way",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "5/54/74: the arm dispatches on the microstate",
     "find": "\ttxst = o->txstate;",
-    "replace": "\ttxst = o->microstate;"
+    "replace": "\ttxst = o->microstate;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "5/54/74: 5 and 54 are one behaviour",
-    "find": "\tif (txst != V34HS_SILENCEINFO)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6409a */\n",
-    "replace": ""
+    "find": "\tif (txst != V34HS_SILENCEINFO)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x6409a */\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "5/54/74: 74 takes 54's tail",
     "find": "\tif (txst == V34HS_SILENCERETRAIN) {",
-    "replace": "\tif (txst == V34HS_SILENCE) {"
+    "replace": "\tif (txst == V34HS_SILENCE) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the countdown is nine blocks",
     "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
-    "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 9)"
+    "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 9)",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the countdown ends at or past ten",
     "find": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n != 0xa)",
-    "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n < 0xa)"
+    "replace": "\tn = (unsigned short)((unsigned short)o->vect_idx + 1);\n\to->vect_idx = (short)n;\n\tif (n < 0xa)",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the completing path does not zero the count",
     "find": "\ths_set_txstate(o, V34HS_TX_DPSK);\n\to->vect_idx = 0;",
-    "replace": "\ths_set_txstate(o, V34HS_TX_DPSK);"
+    "replace": "\ths_set_txstate(o, V34HS_TX_DPSK);",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the transmit machine moves to TX_L1",
     "find": "\ths_set_txstate(o, V34HS_TX_DPSK);",
-    "replace": "\ths_set_txstate(o, V34HS_TX_L1);"
+    "replace": "\ths_set_txstate(o, V34HS_TX_L1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the self-pointer is aimed at +0xa97c",
     "find": "\ths_set_txstate(o, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\to->paa6c = o->msgrec;",
-    "replace": "\ths_set_txstate(o, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\to->paa6c = &o->msgrec[1];"
+    "replace": "\ths_set_txstate(o, V34HS_TX_DPSK);\n\to->vect_idx = 0;\n\to->paa6c = &o->msgrec[1];",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: V34SetINFO0aBits is not called",
     "find": "\tV34SetINFO0aBits(o, (short *)o->msgrec);\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's lead is 0x11 on the V.90 path",
     "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-    "replace": "\t\tshort lead = 0x11;"
+    "replace": "\t\tshort lead = 0x11;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the lead turns on role alone",
     "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-    "replace": "\t\tshort lead = o->role == 0x65 ? 0x1e : 0x11;"
+    "replace": "\t\tshort lead = o->role == 0x65 ? 0x1e : 0x11;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the lead turns on v90_receiver alone",
     "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-    "replace": "\t\tshort lead = o->v90_receiver != 0 ? 0x1e : 0x11;"
+    "replace": "\t\tshort lead = o->v90_receiver != 0 ? 0x1e : 0x11;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the lead reads the K56flex receiver too",
     "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-    "replace": "\t\tshort lead = (o->role == 0x65\n\t\t\t      && (o->v90_receiver != 0\n\t\t\t\t  || o->k56flex_receiver != 0))\n\t\t\t     ? 0x1e : 0x11;"
+    "replace": "\t\tshort lead = (o->role == 0x65\n\t\t\t      && (o->v90_receiver != 0\n\t\t\t\t  || o->k56flex_receiver != 0))\n\t\t\t     ? 0x1e : 0x11;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's +0x14 is cleared rather than set to -1",
     "find": "\t\tr->crc = -1;\n\t\tr->pos = 0;\n\t\tr->idx = 0;\n\t\tr->repeats = 0;\n\t\tr->nbits = lead;",
-    "replace": "\t\tr->crc = 0;\n\t\tr->pos = 0;\n\t\tr->idx = 0;\n\t\tr->repeats = 0;\n\t\tr->nbits = lead;"
+    "replace": "\t\tr->crc = 0;\n\t\tr->pos = 0;\n\t\tr->idx = 0;\n\t\tr->repeats = 0;\n\t\tr->nbits = lead;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's +0x1c is 0x10",
     "find": "\t\tr->wordbits = 8;",
-    "replace": "\t\tr->wordbits = 0x10;"
+    "replace": "\t\tr->wordbits = 0x10;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's +0x16 is left alone",
     "find": "\t\tr->crc_on = 1;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's +0x2a is left alone",
     "find": "\t\tr->avail0 = 0x10;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's two ints are 0xff73",
     "find": "\t\tr->acc = 0xff72;\n\t\tr->acc0 = 0xff72;",
-    "replace": "\t\tr->acc = 0xff73;\n\t\tr->acc0 = 0xff73;"
+    "replace": "\t\tr->acc = 0xff73;\n\t\tr->acc0 = 0xff73;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: the record's +0x2c is a short",
     "find": "\t\tr->acc0 = 0xff72;",
-    "replace": "\t\tr->acc0 = (short)0xff72;"
+    "replace": "\t\tr->acc0 = (short)0xff72;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "54: short_358c is not cleared",
-    "find": "\to->short_358c = 0;\n\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */",
-    "replace": "\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */"
+    "find": "\to->short_358c = 0;\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t\t/* 0x640a1 */",
+    "replace": "\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t\t/* 0x640a1 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the countdown is 0xb3 blocks",
     "find": "\t\tif (n != 0xb4)",
-    "replace": "\t\tif (n != 0xb3)"
+    "replace": "\t\tif (n != 0xb3)",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the count is not stored before the comparison",
-    "find": "\t\to->vect_idx = (short)n;\n\t\tif (n != 0xb4)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */",
-    "replace": "\t\tif (n != 0xb4) {\n\t\t\to->vect_idx = (short)n;\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}",
+    "find": "\t\to->vect_idx = (short)n;\n\t\tif (n != 0xb4)\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63da2 */",
+    "replace": "\t\tif (n != 0xb4) {\n\t\t\to->vect_idx = (short)n;\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63da2 */\n\t\t}",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's line, which prints `vect_idx` as its `[1]` separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the object stores `vect_idx` at 0x66b94 and branches at 0x66b9b, so the store happens on both paths -- but the completing path clears the same field at 0x66c56 before anything reads it, and the other path is where the mutation still stores.  So no run can see the difference: measured, not argued, and the ordering at 0x66b94 is written as the object writes it",
-    "fn": "v34tx1_silence"
+    "fn": "v34tx1_silence",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc"
   },
   {
     "label": "74: the Modem-on-Hold flag is read as a halfword",
     "find": "\t\tif (o->moh_active != 0)",
-    "replace": "\t\tif (tx1_get(o, TX1_MOH_ACTIVE) != 0)"
+    "replace": "\t\tif (tx1_get(o, TX1_MOH_ACTIVE) != 0)",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the Modem-on-Hold flag is inverted",
     "find": "\t\tif (o->moh_active != 0)",
-    "replace": "\t\tif (o->moh_active == 0)"
+    "replace": "\t\tif (o->moh_active == 0)",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the flag chooses MOH_TONE_DROP",
     "find": "\t\t\twant = V34HS_MOH_TONE;",
-    "replace": "\t\t\twant = V34HS_MOH_TONE_DROP;"
+    "replace": "\t\t\twant = V34HS_MOH_TONE_DROP;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the two role microstates are swapped",
     "find": "\t\t\twant = o->role == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
-    "replace": "\t\t\twant = o->role == 0x65 ? V34HS_TX_PHASE1_ANS\n\t\t\t\t\t\t: V34HS_RX_PHASE1_CALL;"
+    "replace": "\t\t\twant = o->role == 0x65 ? V34HS_TX_PHASE1_ANS\n\t\t\t\t\t\t: V34HS_RX_PHASE1_CALL;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: role is compared against 0x64",
     "find": "\t\t\twant = o->role == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
-    "replace": "\t\t\twant = o->role == 0x64 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;"
+    "replace": "\t\t\twant = o->role == 0x64 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the microstate is not moved",
     "find": "\t\ths_set_microstate(o, want);\n",
-    "replace": "\t\t(void)want;\n"
+    "replace": "\t\t(void)want;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the rxstate moves to RECEIVE",
     "find": "\t\ths_set_rxstate(o, V34HS_RX_DPSK);",
-    "replace": "\t\ths_set_rxstate(o, V34HS_RECEIVE);"
+    "replace": "\t\ths_set_rxstate(o, V34HS_RECEIVE);",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: the txstate compare is deleted",
     "find": "\t\t/* 0x66c10 */\n\t\ths_set_txstate(o, V34HS_TONE_AB);",
     "replace": "\t\t/* 0x66c10 */\n\t\to->txstate = V34HS_TONE_AB;",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the compare is against the value read at 0x640f4, which on this path is 0x4a by construction -- the arm is only here because it was -- so it can never equal 0x3c and the store always happens.  Finding F342's case at 65, with the saved value in place of a re-read  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_silence"
+    "fn": "v34tx1_silence",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc"
   },
   {
     "label": "74: the txstate moves to TONE_AB_CALL",
     "find": "\t\t/* 0x66c10 */\n\t\ths_set_txstate(o, V34HS_TONE_AB);",
-    "replace": "\t\t/* 0x66c10 */\n\t\ths_set_txstate(o, V34HS_TONE_AB_CALL);"
+    "replace": "\t\t/* 0x66c10 */\n\t\ths_set_txstate(o, V34HS_TONE_AB_CALL);",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: short_358c is not cleared by the retrain",
     "find": "\t\t/* 0x66c32 */\n\t\to->short_358c = 0;\n\t\to->vect_idx = 0;",
-    "replace": "\t\t/* 0x66c32 */\n\t\to->vect_idx = 0;"
+    "replace": "\t\t/* 0x66c32 */\n\t\to->vect_idx = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: vect_idx is not cleared by the retrain",
     "find": "\t\t/* 0x66c32 */\n\t\to->short_358c = 0;\n\t\to->vect_idx = 0;",
-    "replace": "\t\t/* 0x66c32 */\n\t\to->short_358c = 0;"
+    "replace": "\t\t/* 0x66c32 */\n\t\to->short_358c = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: +0xaa78 is not cleared by the retrain",
     "find": "\t\to->short_aa78 = 0;\n\t\to->fsk.sr = -1;",
-    "replace": "\t\to->fsk.sr = -1;"
+    "replace": "\t\to->fsk.sr = -1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: +0xaae2 and +0xaae0 are swapped",
     "find": "\t\to->fsk.sr = -1;\n\t\to->fsk.nbits = 0;",
-    "replace": "\t\to->fsk.sr = 0;\n\t\to->fsk.nbits = -1;"
+    "replace": "\t\to->fsk.sr = 0;\n\t\to->fsk.nbits = -1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "74: +0xaae2 is set to 1 rather than -1",
     "find": "\t\to->fsk.sr = -1;",
-    "replace": "\t\to->fsk.sr = 1;"
+    "replace": "\t\to->fsk.sr = 1;",
+    "source": "include/dsplib/v34_continuations/v34tx1_silence.inc",
+    "fn": "v34tx1_silence"
   },
   {
     "label": "69/64: the quadrant is not added to the one last sent",
@@ -1055,521 +1421,695 @@
   {
     "label": "69: the constellation selector is inverted",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x67031 */",
-    "replace": "\tif ((unsigned short)o->receiver.short_382 != 0x89b0u) {\n\t\t/* 0x67031 */"
+    "replace": "\tif ((unsigned short)o->receiver.short_382 != 0x89b0u) {\n\t\t/* 0x67031 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the constellation selector is one count out",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x67031 */",
-    "replace": "\tif ((unsigned short)o->receiver.short_382 == 0x89b1u) {\n\t\t/* 0x67031 */"
+    "replace": "\tif ((unsigned short)o->receiver.short_382 == 0x89b1u) {\n\t\t/* 0x67031 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the constellation selector is the receiver's flags word",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x67031 */",
-    "replace": "\tif (o->receiver.flags == 0x89b0u) {\n\t\t/* 0x67031 */"
+    "replace": "\tif (o->receiver.flags == 0x89b0u) {\n\t\t/* 0x67031 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the constellation selector is compared as a byte",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x67031 */",
-    "replace": "\tif ((unsigned char)o->receiver.short_382 == 0xb0u) {\n\t\t/* 0x67031 */"
+    "replace": "\tif ((unsigned char)o->receiver.short_382 == 0xb0u) {\n\t\t/* 0x67031 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the generator select is inverted",
     "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
-    "replace": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);\n\tshort q;"
+    "replace": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);\n\tshort q;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the generator select is bit 1 of tx_flags",
     "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
-    "replace": "\tshort mode = (short)((o->tx_flags & 2) == 0);\n\tshort q;"
+    "replace": "\tshort mode = (short)((o->tx_flags & 2) == 0);\n\tshort q;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the generator select is role, as 71 and 86's is",
     "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
-    "replace": "\tshort mode = (short)(o->role == 0x65);\n\tshort q;"
+    "replace": "\tshort mode = (short)(o->role == 0x65);\n\tshort q;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the sixteen-point half sends a vect4 point",
     "find": "\t\tpoint = vect16[q + 4 * k];",
-    "replace": "\t\tpoint = vect4[(q + 4 * k) & 3];"
+    "replace": "\t\tpoint = vect4[(q + 4 * k) & 3];",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the vect16 row and column are swapped",
     "find": "\t\tpoint = vect16[q + 4 * k];",
-    "replace": "\t\tpoint = vect16[k + 4 * q];"
+    "replace": "\t\tpoint = vect16[k + 4 * q];",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the vect16 column is the row again",
     "find": "\t\tpoint = vect16[q + 4 * k];",
-    "replace": "\t\tpoint = vect16[k + 4 * k];"
+    "replace": "\t\tpoint = vect16[k + 4 * k];",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the vect16 index is not scaled by four",
     "find": "\t\tpoint = vect16[q + 4 * k];",
-    "replace": "\t\tpoint = vect16[(q + k) & 15];"
+    "replace": "\t\tpoint = vect16[(q + k) & 15];",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the first scrambler's quadrant is not stored",
     "find": "\t\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
-    "replace": "\t\t(void)0;"
+    "replace": "\t\t(void)0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the first scrambler's quadrant is not differenced",
     "find": "\t\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
-    "replace": "\t\to->cur_quadrant = (short)(q & 3);"
+    "replace": "\t\to->cur_quadrant = (short)(q & 3);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the sixteen-point half re-reads prev_quadrant rather than cur_quadrant",
     "find": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */",
-    "replace": "\t\tk = o->prev_quadrant;\t\t\t/* re-read, 0x67131 */"
+    "replace": "\t\tk = o->prev_quadrant;\t\t\t/* re-read, 0x67131 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the sixteen-point half does not carry the row forward",
     "find": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */\n\t\to->prev_quadrant = k;",
-    "replace": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */"
+    "replace": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the first scrambler is passed three rather than 0xf",
     "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);",
     "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);",
     "equivalent": true,
-    "why": "`nbits` is two, so `V34scrambler` consumes bits 0 and 1 of `bits` and no others -- both are set in 3 and in 0xf, and the register advances identically.  A proof over every input rather than over the ones driven; the object's own 0xf is what is written"
+    "why": "`nbits` is two, so `V34scrambler` consumes bits 0 and 1 of `bits` and no others -- both are set in 3 and in 0xf, and the register advances identically.  A proof over every input rather than over the ones driven; the object's own 0xf is what is written",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the first scrambler scrambles one bit",
     "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);",
-    "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 1);"
+    "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the sixteen-point half scrambles once",
     "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);\n\t\tk = o->cur_quadrant;",
-    "replace": "\t\tk = o->cur_quadrant;"
+    "replace": "\t\tk = o->cur_quadrant;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the sixteen-point half advances vect_idx by two",
     "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 4);",
-    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the four-point half advances vect_idx by four",
     "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);",
-    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 4);"
+    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 4);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the segment ends at 0x15",
     "find": "\tif ((unsigned short)o->vect_idx == 0x14u) {",
-    "replace": "\tif ((unsigned short)o->vect_idx == 0x15u) {"
+    "replace": "\tif ((unsigned short)o->vect_idx == 0x15u) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the segment ends at or past 0x14",
     "find": "\tif ((unsigned short)o->vect_idx == 0x14u) {",
-    "replace": "\tif ((unsigned short)o->vect_idx >= 0x14u) {"
+    "replace": "\tif ((unsigned short)o->vect_idx >= 0x14u) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the segment's end reloads vect_idx with four",
     "find": "\t\to->vect_idx = 8;",
-    "replace": "\t\to->vect_idx = 4;"
+    "replace": "\t\to->vect_idx = 4;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the segment's end clears vect_idx",
     "find": "\t\to->vect_idx = 8;",
-    "replace": "\t\to->vect_idx = 0;"
+    "replace": "\t\to->vect_idx = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the segment's end leaves vect_idx alone",
     "find": "\t\to->vect_idx = 8;\n\t\ths_set_txstate(o, V34HS_DATAXMIT);",
-    "replace": "\t\ths_set_txstate(o, V34HS_DATAXMIT);"
+    "replace": "\t\ths_set_txstate(o, V34HS_DATAXMIT);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the transmit machine moves to XMITMP",
     "find": "\t\ths_set_txstate(o, V34HS_DATAXMIT);",
-    "replace": "\t\ths_set_txstate(o, V34HS_XMITMP);"
+    "replace": "\t\ths_set_txstate(o, V34HS_XMITMP);",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the transmit machine is not moved at the segment's end",
     "find": "\t\ths_set_txstate(o, V34HS_DATAXMIT);",
-    "replace": "\t\t(void)txst;"
+    "replace": "\t\t(void)txst;",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "69: the txstate compare at 0x66e14 is deleted",
     "find": "\t\ths_set_txstate(o, V34HS_DATAXMIT);",
     "replace": "\t\t(void)txst;\n\t\ths_set_txstate(o, V34HS_DATAXMIT);",
     "equivalent": true,
-    "why": "the arm is reached only through table 1 at `txstate == 69` and `txmit` does not write +0x3596 (finding F285's sweep), so the compare is always true and the store always happens.  Finding F342's case at 65, exactly"
+    "why": "the arm is reached only through table 1 at `txstate == 69` and `txmit` does not write +0x3596 (finding F285's sweep), so the compare is always true and the store always happens.  Finding F342's case at 65, exactly",
+    "source": "include/dsplib/v34_continuations/v34tx1_exmit.inc",
+    "fn": "v34tx1_exmit"
   },
   {
     "label": "64/68: the countdown at +0xaa78 is not run",
     "find": "\t(void)tx1_ja_common(o, \"V34Hshak: on JTXMIT - time to freeze\"\n\t\t\t\t   \" echo...\\r\\n\");\t\t/* 0x682d6 */\n\n\t/* 0x635f0 */",
     "replace": "\t/* 0x635f0 */",
-    "fn": "v34tx1_jtxmit"
+    "fn": "v34tx1_jtxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc"
   },
   {
     "label": "64/68: +0x25d8 is not counted",
     "find": "\ttx1_put(o, TX1_F25D8,\n\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));",
-    "replace": "\t(void)0;"
+    "replace": "\t(void)0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: +0x25d8 counts down",
     "find": "\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) + 1));",
-    "replace": "\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) - 1));"
+    "replace": "\t\t(short)((unsigned short)tx1_get(o, TX1_F25D8) - 1));",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the bit source is shifted by vect_idx rather than twice it",
     "find": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 31u;",
-    "replace": "\tshift = (unsigned)((int)o->vect_idx) & 31u;"
+    "replace": "\tshift = (unsigned)((int)o->vect_idx) & 31u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the shift count is masked with fifteen",
     "find": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 31u;",
-    "replace": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 15u;"
+    "replace": "\tshift = (unsigned)(2 * (int)o->vect_idx) & 15u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the bit source is read signed",
     "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
-    "replace": "\tbits = (short)((int)tx1_get(o, TX1_F25D6) >> shift);"
+    "replace": "\tbits = (short)((int)tx1_get(o, TX1_F25D6) >> shift);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the bit source is +0x25d8",
     "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
-    "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D8) >> shift);"
+    "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D8) >> shift);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the bit source is shifted left",
     "find": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);",
-    "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) << shift);"
+    "replace": "\tbits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) << shift);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the generator select is inverted",
     "find": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);",
-    "replace": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);"
+    "replace": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the generator select is role, as 71 and 86's is",
     "find": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);",
-    "replace": "\tmode = (short)(o->role == 0x65);"
+    "replace": "\tmode = (short)(o->role == 0x65);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: three bits are scrambled rather than two",
     "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);",
-    "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 3);"
+    "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 3);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the scrambler is fed a literal three",
     "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);",
-    "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);"
+    "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: vect_idx is masked with fifteen",
     "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);",
-    "replace": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 15);"
+    "replace": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 15);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: vect_idx is masked before it is advanced",
     "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);",
-    "replace": "\tidx = (unsigned short)((((unsigned short)o->vect_idx) & 7) + 1);"
+    "replace": "\tidx = (unsigned short)((((unsigned short)o->vect_idx) & 7) + 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: vect_idx is not advanced",
     "find": "\tidx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);\n\to->vect_idx = (short)idx;",
-    "replace": "\tidx = (unsigned short)((unsigned short)o->vect_idx & 7);"
+    "replace": "\tidx = (unsigned short)((unsigned short)o->vect_idx & 7);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: role is compared against 0x65",
     "find": "\tif (o->role == 0x66) {",
-    "replace": "\tif (o->role == 0x65) {"
+    "replace": "\tif (o->role == 0x65) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the wrap is tested before role",
     "find": "\tif (o->role == 0x66) {",
-    "replace": "\tif (o->role == 0x66 && idx != 0) {"
+    "replace": "\tif (o->role == 0x66 && idx != 0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8's flag is bit 3 of the receiver's flags",
     "find": "\t\tif (!(rx->flags & V34_RX_FLAG_DATA)) {",
-    "replace": "\t\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {"
+    "replace": "\t\tif (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8's flag test is inverted",
     "find": "\t\tif (!(rx->flags & V34_RX_FLAG_DATA)) {",
-    "replace": "\t\tif (rx->flags & V34_RX_FLAG_DATA) {"
+    "replace": "\t\tif (rx->flags & V34_RX_FLAG_DATA) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 does not test +0x35a2",
-    "find": "\t\t\tif (o->md_length == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */\n",
-    "replace": ""
+    "find": "\t\t\tif (o->md_length == 0)\n\t\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t/* 0x629c8 */\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 does not test +0x25da",
-    "find": "\t\t\tif (tx1_get(o, TX1_F25DA) == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x63da2 */\n",
-    "replace": ""
+    "find": "\t\t\tif (tx1_get(o, TX1_F25DA) == 0)\n\t\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t/* 0x63da2 */\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 tests +0x35a2 against two",
     "find": "\t\t\tif (o->md_length == 0)",
-    "replace": "\t\t\tif (o->md_length == 2)"
+    "replace": "\t\t\tif (o->md_length == 2)",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 moves the transmit machine to XMITMP",
     "find": "\t\ths_set_txstate(o, V34HS_XMIT0);",
-    "replace": "\t\ths_set_txstate(o, V34HS_XMITMP);"
+    "replace": "\t\ths_set_txstate(o, V34HS_XMITMP);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 does not clear vect_idx",
     "find": "\t\to->vect_idx = 0;\t\t\t/* 0x62d32 */",
-    "replace": "\t\t(void)0;\t\t\t\t/* 0x62d32 */"
+    "replace": "\t\t(void)0;\t\t\t\t/* 0x62d32 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: 0x66ca8 clears vect_idx on every one of its three exits",
-    "find": "\t\t\tif (o->md_length == 0)\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */",
-    "replace": "\t\t\tif (o->md_length == 0) {\n\t\t\t\to->vect_idx = 0;\n\t\t\t\treturn V34TX1_LOOP;\t/* 0x629c8 */\n\t\t\t}"
+    "find": "\t\t\tif (o->md_length == 0)\n\t\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t/* 0x629c8 */",
+    "replace": "\t\t\tif (o->md_length == 0) {\n\t\t\t\to->vect_idx = 0;\n\t\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t/* 0x629c8 */\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the txstate compare at 0x66cdf is deleted",
     "find": "\t\ths_set_txstate(o, V34HS_XMIT0);",
     "replace": "\t\to->txstate = V34HS_XMIT0;",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate` 64 or 68 and nothing between the dispatch and 0x66cdf writes +0x3596 (`txmit` does not, finding F285), so the compare is always true.  Table 1 dispatches txstate 65 to 0x62d83, so the fixture cannot present the other value either  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_jtxmit"
+    "fn": "v34tx1_jtxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc"
   },
   {
     "label": "64/68: the wrap test is inverted",
-    "find": "\tif (idx != 0)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
-    "replace": "\tif (idx == 0)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+    "find": "\tif (idx != 0)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "replace": "\tif (idx == 0)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64/68: the tails are chosen by txstate 64 rather than 68",
     "find": "\tif (o->txstate == V34HS_J1TXMIT) {",
-    "replace": "\tif (o->txstate == V34HS_JTXMIT) {"
+    "replace": "\tif (o->txstate == V34HS_JTXMIT) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: tx_scr_sr is not cleared at the segment's end",
     "find": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
-    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);"
+    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: tx_scr_sr is cleared as a halfword",
     "find": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
-    "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);"
+    "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: prev_quadrant is not cleared at the segment's end",
     "find": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
-    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->seg_symcount = 0;"
+    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->seg_symcount = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: seg_symcount is not cleared at the segment's end",
     "find": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
-    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;"
+    "replace": "\t\ths_set_txstate(o, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: the transmit machine moves to TRNSEG4",
     "find": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
-    "replace": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4);"
+    "replace": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "68: the segment's end stores without comparing",
     "find": "\t\to->tx_scr_sr = 0;\n\t\ths_set_txstate(o, V34HS_TRNSEG4A);",
     "replace": "\t\to->tx_scr_sr = 0;\n\t\to->txstate = V34HS_TRNSEG4A;",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding F572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_jtxmit"
+    "fn": "v34tx1_jtxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc"
   },
   {
     "label": "64: +0x25da is compared against three",
     "find": "\tif (tx1_get(o, TX1_F25DA) != 2)",
-    "replace": "\tif (tx1_get(o, TX1_F25DA) != 3)"
+    "replace": "\tif (tx1_get(o, TX1_F25DA) != 3)",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the +0x25da test is deleted",
-    "find": "\tif (tx1_get(o, TX1_F25DA) != 2)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6409a */\n",
-    "replace": ""
+    "find": "\tif (tx1_get(o, TX1_F25DA) != 2)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x6409a */\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the segment ends at or past 0x80",
     "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)",
-    "replace": "\tif (tx1_get(o, TX1_F25D8) < 0x80)"
+    "replace": "\tif (tx1_get(o, TX1_F25D8) < 0x80)",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: +0x25d8 is compared unsigned",
     "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)",
-    "replace": "\tif ((unsigned short)tx1_get(o, TX1_F25D8) <= 0x80)"
+    "replace": "\tif ((unsigned short)tx1_get(o, TX1_F25D8) <= 0x80)",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the +0x25d8 test is deleted",
-    "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */\n",
-    "replace": ""
+    "find": "\tif (tx1_get(o, TX1_F25D8) <= 0x80)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x6431f */\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the bit source is reloaded with 0x8990",
     "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);",
-    "replace": "\ttx1_put(o, TX1_F25D6, (short)0x8990);"
+    "replace": "\ttx1_put(o, TX1_F25D6, (short)0x8990);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the bit source is not reloaded",
     "find": "\ttx1_put(o, TX1_F25D6, (short)0x899f);\n\ths_set_txstate(o, V34HS_J1TXMIT);",
-    "replace": "\ths_set_txstate(o, V34HS_J1TXMIT);"
+    "replace": "\ths_set_txstate(o, V34HS_J1TXMIT);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the transmit machine does not become 68",
     "find": "\ths_set_txstate(o, V34HS_J1TXMIT);",
-    "replace": "\t(void)0;"
+    "replace": "\t(void)0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the transmit machine becomes TRNSEG4A rather than 68",
     "find": "\ths_set_txstate(o, V34HS_J1TXMIT);",
-    "replace": "\ths_set_txstate(o, V34HS_TRNSEG4A);"
+    "replace": "\ths_set_txstate(o, V34HS_TRNSEG4A);",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the txstate compare at 0x63748 is deleted",
     "find": "\ths_set_txstate(o, V34HS_J1TXMIT);",
     "replace": "\to->txstate = V34HS_J1TXMIT;",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  this path is reached only because 0x636ff found `txstate` was NOT 68, and nothing between the two writes +0x3596, so the compare can never be true and the store always happens.  The object re-reads the field where it could have kept the value; both readings are the same here  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_jtxmit"
+    "fn": "v34tx1_jtxmit",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc"
   },
   {
     "label": "64: the second echo report pair runs whatever the counter holds",
     "find": "\tif (o->short_aa78 != 0) {",
-    "replace": "\tif (1) {"
+    "replace": "\tif (1) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the second echo report pair is guarded the other way",
     "find": "\tif (o->short_aa78 != 0) {",
-    "replace": "\tif (o->short_aa78 == 0) {"
+    "replace": "\tif (o->short_aa78 == 0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: bit 3 of tx_flags is raised at the segment's end",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: no flag is raised at the segment's end",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the counter is not zeroed at the segment's end",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\tv34FreezeEcho(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\tv34FreezeEcho(o);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the counter is set to one rather than zero",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 1;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 1;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the segment's end reports only the first echo canceller",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "64: the segment's end reports the first echo canceller twice",
-    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\to->short_aa78 = 0;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+    "find": "\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\to->short_aa78 = 0;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x64326 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_jtxmit.inc",
+    "fn": "v34tx1_jtxmit"
   },
   {
     "label": "21: the quadrant is stored but the point is vect4[0]",
     "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
     "replace": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[0]);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the quadrant is not stored in cur_quadrant",
     "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
     "replace": "\tq = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[q]);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the quadrant goes to prev_quadrant rather than cur_quadrant",
     "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
     "replace": "\tq = tx1_scramble2(o);\n\to->prev_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the sample is sent before the point is stored",
     "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);",
     "replace": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttxmit(o);\n\ttx1_put_point(o, vect4[q]);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: seg_symcount is not incremented",
     "find": "\t/* 0x643dc */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
     "replace": "\t/* 0x643dc */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: seg_symcount is incremented by two",
     "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\n\tif (o->short_aa78 == o->seg_symcount) {",
     "replace": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 2);\n\n\tif (o->short_aa78 == o->seg_symcount) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: seg_symcount is incremented after the count is compared",
     "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\n\tif (o->short_aa78 == o->seg_symcount) {",
     "replace": "\tif (o->short_aa78 == o->seg_symcount) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start compares against +0xaa86 rather than +0xaa78",
     "find": "\tif (o->short_aa78 == o->seg_symcount) {",
     "replace": "\tif (o->ratecfg.period == o->seg_symcount) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start fires whenever the count is above seg_symcount",
     "find": "\tif (o->short_aa78 == o->seg_symcount) {",
     "replace": "\tif (o->short_aa78 >= o->seg_symcount) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start leaves echo_calls alone",
     "find": "\t\to->echo_calls = 0;\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start leaves echo_alpha alone",
     "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
     "replace": "\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start leaves far_echo_alpha alone",
     "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
     "replace": "\t\to->echo_alpha = 0;\n\t\to->echo_energy = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start leaves echo_energy alone",
     "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
     "replace": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start writes echo_energy as a halfword",
     "find": "\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
     "replace": "\t\to->far_echo_alpha = 0;\n\t\t*(short *)&o->echo_energy = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start raises bit 2 of tx_flags rather than clearing it",
     "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start clears bit 3 of tx_flags",
     "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~8u);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start LEAVES the compare chain",
     "find": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t}",
     "replace": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t\treturn V34TX1_LOOP;\n\t}",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the echo-adapt start is not reported",
     "find": "\t\tVPcmV34ReportStartOfEchoAdapt(o);\n\t}",
     "replace": "\t}",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag is not guarded on bit 8 already being clear",
@@ -1577,217 +2117,253 @@
     "replace": "\tif (o->seg_symcount >= o->ratecfg.period)",
     "fn": "v34tx1_trnseg4",
     "equivalent": true,
-    "why": "raising a bit that is already raised writes the value already there, so the guard at 0x643ff can change nothing the object holds -- it is a branch and no more.  It is written as the object writes it"
+    "why": "raising a bit that is already raised writes the value already there, so the guard at 0x643ff can change nothing the object holds -- it is a branch and no more.  It is written as the object writes it",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag's guard is on bit 8 being SET",
     "find": "\tif (((unsigned short)o->tx_flags & 0x100u) == 0\n\t    && o->seg_symcount >= o->ratecfg.period)",
     "replace": "\tif (((unsigned short)o->tx_flags & 0x100u) != 0\n\t    && o->seg_symcount >= o->ratecfg.period)",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag needs seg_symcount strictly above +0xaa86",
     "find": "\t    && o->seg_symcount >= o->ratecfg.period)",
     "replace": "\t    && o->seg_symcount > o->ratecfg.period)",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag compares seg_symcount unsigned",
     "find": "\t    && o->seg_symcount >= o->ratecfg.period)",
     "replace": "\t    && (unsigned short)o->seg_symcount >= (unsigned short)o->ratecfg.period)",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag reads the counter rather than +0xaa86",
     "find": "\t    && o->seg_symcount >= o->ratecfg.period)",
     "replace": "\t    && o->seg_symcount >= o->short_aa78)",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period flag is bit 9",
     "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x200u);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the middle point is +0xa244 itself",
     "find": "\tif (n == (span >> 1)) {",
     "replace": "\tif (n == span) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the middle point is a quarter of +0xa244",
     "find": "\tif (n == (span >> 1)) {",
     "replace": "\tif (n == (span >> 2)) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: +0xa244 is read as a halfword",
     "find": "\tspan = o->phase3_hd_length;",
     "replace": "\tspan = tx1_get(o, TX1_FA244);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: seg_symcount is compared zero-extended",
     "find": "\tn = o->seg_symcount;\n\tspan = o->phase3_hd_length;",
     "replace": "\tn = (unsigned short)o->seg_symcount;\n\tspan = o->phase3_hd_length;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the middle point is not reported",
     "find": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */",
     "replace": "\t\t(void)0;\t/* 0x67734 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the middle point falls through into the period test",
-    "find": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x640a1 */\n\t}",
+    "find": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x640a1 */\n\t}",
     "replace": "\t\tVPcmV34ReportMiddleOfEchoAdapt(o);\t/* 0x67734 */\n\t}",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point is the baud alone",
     "find": "\tif (n == baud + (baud >> 1)) {",
     "replace": "\tif (n == baud) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point is twice the baud",
     "find": "\tif (n == baud + (baud >> 1)) {",
     "replace": "\tif (n == baud + baud) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point reads the receive baud at +0xaa96",
     "find": "\tbaud = cfg->baud;\n\tif (n == baud + (baud >> 1)) {",
     "replace": "\tbaud = tx1_get(o, 0xaa96);\n\tif (n == baud + (baud >> 1)) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point raises 0x400 without clearing bit 15",
     "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x400u);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point clears bit 15 without raising 0x400",
     "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
     "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the period point raises 0x800",
     "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
     "replace": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x800u);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the segment ends whenever seg_symcount is at or past +0xa244",
-    "find": "\tif (n != span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
-    "replace": "\tif (n < span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
-    "fn": "v34tx1_trnseg4"
+    "find": "\tif (n != span)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x629c8 */",
+    "replace": "\tif (n < span)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x629c8 */",
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion moves the transmit machine to 68 rather than 64",
     "find": "\ths_set_txstate(o, V34HS_JTXMIT);",
     "replace": "\ths_set_txstate(o, V34HS_J1TXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion does not move the transmit machine to 64",
     "find": "\ths_set_txstate(o, V34HS_JTXMIT);",
     "replace": "\t(void)0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: rtd is compared against three",
     "find": "\tif (o->rtd <= 2) {",
     "replace": "\tif (o->rtd <= 3) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: rtd is compared unsigned",
     "find": "\tif (o->rtd <= 2) {",
     "replace": "\tif ((unsigned short)o->rtd <= 2u) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: rtd below the boundary takes the other arm",
     "find": "\tif (o->rtd <= 2) {",
     "replace": "\tif (o->rtd > 2) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the boundary arm does not raise bit 2 of tx_flags",
     "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t} else {\n\t\tif (o->v90_receiver",
     "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t} else {\n\t\tif (o->v90_receiver",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the boundary arm raises bit 3 of tx_flags",
     "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t} else {\n\t\tif (o->v90_receiver",
     "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\to->short_aa78 = 0;\n\t} else {\n\t\tif (o->v90_receiver",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the boundary arm does not clear the counter",
     "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\to->short_aa78 = 0;\n\t} else {\n\t\tif (o->v90_receiver",
     "replace": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t} else {\n\t\tif (o->v90_receiver",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the boundary arm reports only the first canceller",
     "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
     "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the boundary arm reports the first canceller twice",
     "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
     "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the whole-counter arm needs BOTH receivers non-zero",
     "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
     "replace": "\t\tif (o->v90_receiver != 0 && o->k56flex_receiver != 0) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the whole-counter arm looks only at the V.90 receiver",
     "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
     "replace": "\t\tif (o->v90_receiver != 0) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the whole-counter arm looks only at the K56flex receiver",
     "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
     "replace": "\t\tif (o->k56flex_receiver != 0) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the whole-counter arm tests the receivers above one",
     "find": "\t\tif (o->v90_receiver != 0 || o->k56flex_receiver != 0) {",
     "replace": "\t\tif ((unsigned)o->v90_receiver > 1u\n\t\t    || (unsigned)o->k56flex_receiver > 1u) {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the counter is halved on the receiver arm too",
     "find": "\t\t\to->short_aa78 = o->rtd;\n\t\t} else {",
     "replace": "\t\t\to->short_aa78 = (short)(o->rtd >> 1);\n\t\t} else {",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the counter is taken whole where it should be halved",
     "find": "\t\t\t/* 0x64b96 */\n\t\t\to->short_aa78 = (short)(o->rtd >> 1);",
     "replace": "\t\t\t/* 0x64b96 */\n\t\t\to->short_aa78 = o->rtd;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the halved counter is shifted twice",
     "find": "\t\to->short_aa78 = (short)(o->rtd >> 1);",
     "replace": "\t\to->short_aa78 = (short)(o->rtd >> 2);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the halved counter shifts an unsigned rtd",
@@ -1795,61 +2371,71 @@
     "replace": "\t\to->short_aa78 = (short)((unsigned short)o->rtd >> 1);",
     "fn": "v34tx1_trnseg4",
     "equivalent": true,
-    "why": "the halving arm is reached only when `rtd > 2` SIGNED, so `rtd` is positive there and an arithmetic and a logical shift agree on every value that can reach it.  The object's `movswl` is what is written"
+    "why": "the halving arm is reached only when `rtd > 2` SIGNED, so `rtd` is positive there and an arithmetic and a logical shift agree on every value that can reach it.  The object's `movswl` is what is written",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: +0x25d6 is reloaded with 64's 0x899f",
     "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);",
     "replace": "\ttx1_put(o, TX1_F25D6, (short)0x899f);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: +0x25d6 is not reloaded",
     "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);\n\to->prev_quadrant = o->cur_quadrant;",
     "replace": "\to->prev_quadrant = o->cur_quadrant;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: prev_quadrant is cleared rather than taking the quadrant",
     "find": "\to->prev_quadrant = o->cur_quadrant;",
     "replace": "\to->prev_quadrant = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: cur_quadrant takes prev_quadrant rather than the other way round",
     "find": "\to->prev_quadrant = o->cur_quadrant;",
     "replace": "\to->cur_quadrant = o->prev_quadrant;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the receiver is not moved to RECEIVE",
     "find": "\ths_set_rxstate(o, V34HS_RECEIVE);\n\tsetupreceiver(o);",
     "replace": "\tsetupreceiver(o);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the receiver is moved to WAIT rather than RECEIVE",
     "find": "\ths_set_rxstate(o, V34HS_RECEIVE);\n\tsetupreceiver(o);",
     "replace": "\ths_set_rxstate(o, V34HS_WAIT);\n\tsetupreceiver(o);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion calls rxinit rather than setupreceiver",
     "find": "\tsetupreceiver(o);\t\t\t\t/* 0x64c04 */",
     "replace": "\trxinit(o);\t\t\t\t/* 0x64c04 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion does not set the receiver up",
     "find": "\tsetupreceiver(o);\t\t\t\t/* 0x64c04 */",
     "replace": "\t(void)0;\t\t\t\t/* 0x64c04 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x14 is cleared rather than set to -1",
     "find": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(short *)(r + 0x14) = -1;",
     "replace": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(short *)(r + 0x14) = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x14 is set to -1 as an int",
@@ -1857,195 +2443,227 @@
     "replace": "\t\t*(int *)(r + 0x2c) = 0;\n\t\t*(int *)(r + 0x14) = -1;",
     "fn": "v34tx1_trnseg4",
     "equivalent": true,
-    "why": "the upper half of a 32-bit -1 at r+0x14 lands on r+0x16, which the store seven lines later clears before anything reads it -- and the object writes 0x14 at 0x64d51 and 0x16 at 0x64d75, in that order, so the same is true of the blob"
+    "why": "the upper half of a 32-bit -1 at r+0x14 lands on r+0x16, which the store seven lines later clears before anything reads it -- and the object writes 0x14 at 0x64d51 and 0x16 at 0x64d75, in that order, so the same is true of the blob",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x24 is blanked as a halfword",
     "find": "\t\t*(int *)(r + 0x24) = 0;",
     "replace": "\t\t*(short *)(r + 0x24) = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x2c is blanked as a halfword",
     "find": "\t\t*(int *)(r + 0x2c) = 0;",
     "replace": "\t\t*(short *)(r + 0x2c) = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x16 is left alone",
     "find": "\t\t*(short *)(r + 0x16) = 0;\n",
     "replace": "",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x20 is left alone",
     "find": "\t\t*(short *)(r + 0x2a) = 0;\n\t\t*(short *)(r + 0x20) = 0;\n",
     "replace": "\t\t*(short *)(r + 0x2a) = 0;\n",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record's +0x2a is left alone",
     "find": "\t\t*(short *)(r + 0x2a) = 0;\n",
     "replace": "",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the record blanked is the one at +0xa94c",
     "find": "\t\tunsigned char *r = (unsigned char *)objp + TX1_INFOREC;",
     "replace": "\t\tunsigned char *r = (unsigned char *)objp + 0xa94c;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion does not move the microstate to DET_SYNC",
     "find": "\ths_set_microstate(o, V34HS_DET_SYNC);",
     "replace": "\t(void)0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion moves the microstate to DET_INFO",
     "find": "\ths_set_microstate(o, V34HS_DET_SYNC);",
     "replace": "\ths_set_microstate(o, V34HS_DET_INFO);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion does not clear vect_idx",
     "find": "\to->vect_idx = 0;\n\to->rate_change_pending = 1;",
     "replace": "\to->rate_change_pending = 1;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the completion does not write one into +0xaa80",
     "find": "\to->vect_idx = 0;\n\to->rate_change_pending = 1;",
     "replace": "\to->vect_idx = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: +0xaa80 takes zero rather than one",
     "find": "\to->rate_change_pending = 1;",
     "replace": "\to->rate_change_pending = 0;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: +0xaa80 is written where the counter is",
     "find": "\to->rate_change_pending = 1;",
     "replace": "\to->short_aa78 = 1;",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the V.90 Ja tail is taken on any non-zero receiver",
     "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
     "replace": "\tif (o->v90_receiver != 0) {\n\t\t/* 0x64de7 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the V.90 Ja tail is taken at one as well",
     "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
     "replace": "\tif ((unsigned)o->v90_receiver >= 1u) {\n\t\t/* 0x64de7 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the K56flex Ja tail is taken on any non-zero receiver",
     "find": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x67f91 */",
     "replace": "\tif (o->k56flex_receiver != 0) {\n\t\t/* 0x67f91 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the K56flex Ja tail is tested before the V.90 one",
     "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_set_txstate(o, V34HS_JaTXMIT);",
     "replace": "\tif ((unsigned)o->k56flex_receiver > 1u) {\n\t\t/* 0x64de7 */\n\t\ths_set_txstate(o, V34HS_JaTXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the V.90 Ja tail moves the transmit machine to 85 rather than 78",
     "find": "\t\ths_set_txstate(o, V34HS_JaTXMIT);",
     "replace": "\t\ths_set_txstate(o, V34HS_K56JaTXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the K56flex Ja tail moves the transmit machine to 78 rather than 85",
     "find": "\t\ths_set_txstate(o, V34HS_K56JaTXMIT);",
     "replace": "\t\ths_set_txstate(o, V34HS_JaTXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the V.90 Ja tail leaves the receiver in RECEIVE",
     "find": "\t\ths_set_txstate(o, V34HS_JaTXMIT);\n\t\ths_set_rxstate(o, V34HS_WAIT);",
     "replace": "\t\ths_set_txstate(o, V34HS_JaTXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the K56flex Ja tail leaves the receiver in RECEIVE",
     "find": "\t\ths_set_txstate(o, V34HS_K56JaTXMIT);\n\t\ths_set_rxstate(o, V34HS_WAIT);",
     "replace": "\t\ths_set_txstate(o, V34HS_K56JaTXMIT);",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the V.90 Ja tail does not announce the transmission",
-    "find": "\t\tindicateJaTransmission(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
-    "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
-    "fn": "v34tx1_trnseg4"
+    "find": "\t\tindicateJaTransmission(o);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x629c8 */",
+    "replace": "\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x629c8 */",
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: the K56flex Ja tail does not announce the transmission",
-    "find": "\t\tindicateJaTransmission(o);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-    "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+    "find": "\t\tindicateJaTransmission(o);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "replace": "\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
     "fn": "v34tx1_trnseg4",
     "equivalent": true,
-    "why": "on this path `indicateJaTransmission` reaches `K56FlexFloModem::enterPhase3FullDuplex`, which is a bare `ret` at 0x101d0 (finding F381), so the call has no effect any test can see.  The V.90 tail's identical mutation IS caught, which is what says the call is reached and not that it is dead"
+    "why": "on this path `indicateJaTransmission` reaches `K56FlexFloModem::enterPhase3FullDuplex`, which is a bare `ret` at 0x101d0 (finding F381), so the call has no effect any test can see.  The V.90 tail's identical mutation IS caught, which is what says the call is reached and not that it is dead",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "21: neither Ja tail is taken",
     "find": "\tif ((unsigned)o->v90_receiver > 1u) {\n\t\t/* 0x64de7 */",
     "replace": "\tif (0) {\n\t\t/* 0x64de7 */",
-    "fn": "v34tx1_trnseg4"
+    "fn": "v34tx1_trnseg4",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4.inc"
   },
   {
     "label": "66: the constellation is chosen on 0x8990",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x66e59 */",
     "replace": "\tif ((unsigned short)o->receiver.short_382 == 0x8990u) {\n\t\t/* 0x66e59 */",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the constellation test is inverted",
     "find": "\tif ((unsigned short)o->receiver.short_382 == 0x89b0u) {\n\t\t/* 0x66e59 */",
     "replace": "\tif ((unsigned short)o->receiver.short_382 != 0x89b0u) {\n\t\t/* 0x66e59 */",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the sixteen-point half scrambles once",
     "find": "\t\to->cur_quadrant = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
     "replace": "\t\to->cur_quadrant = k;\n\t\tq = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the sixteen-point row and column are swapped",
     "find": "\t\ttx1_put_point(o, vect16[q + 4 * k]);",
     "replace": "\t\ttx1_put_point(o, vect16[k + 4 * q]);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: cur_quadrant holds the SECOND dibit of the sixteen-point half",
     "find": "\t\to->cur_quadrant = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
     "replace": "\t\tq = tx1_scramble2(o);\n\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the sixteen-point half also writes prev_quadrant",
     "find": "\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
     "replace": "\t\tq = tx1_scramble2(o);\n\t\to->prev_quadrant = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the four-point half sends vect4[0]",
     "find": "\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[q]);",
     "replace": "\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[0]);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the four-point half differentially encodes",
     "find": "\t\tshort q = tx1_scramble2(o);\n\n\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[q]);",
     "replace": "\t\tshort q = tx1_scramble2(o);\n\n\t\t(void)tx1_dpsk4(o, q);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the symbol is sent before txmit and the count after",
@@ -2053,43 +2671,50 @@
     "replace": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\ttxmit(o);\n\n\t/* 0x62edc */",
     "fn": "v34tx1_trnseg4a",
     "equivalent": true,
-    "why": "`txmit` (V34RX.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way"
+    "why": "`txmit` (V34RX.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the count is advanced after the segment test, as 86 advances it",
     "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\tn = o->seg_symcount;",
     "replace": "\tn = (short)((unsigned short)o->seg_symcount + 1);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the length halves baud with a divide",
     "find": "\tlim = baud + (baud >> 1) + period;",
     "replace": "\tlim = baud + baud / 2 + period;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the length does not carry period",
     "find": "\tlim = baud + (baud >> 1) + period;",
     "replace": "\tlim = baud + (baud >> 1);",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the length is baud + baud/4 + period",
     "find": "\tlim = baud + (baud >> 1) + period;",
     "replace": "\tlim = baud + (baud >> 2) + period;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: f2218 is compared signed",
-    "find": "\t\tif ((unsigned)o->hs_mode <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-    "replace": "\t\tif (o->hs_mode <= 3)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-    "fn": "v34tx1_trnseg4a"
+    "find": "\t\tif ((unsigned)o->hs_mode <= 3u)\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63941 */",
+    "replace": "\t\tif (o->hs_mode <= 3)\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63941 */",
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: f2218 is compared against two",
-    "find": "\t\tif ((unsigned)o->hs_mode <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-    "replace": "\t\tif ((unsigned)o->hs_mode <= 2u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-    "fn": "v34tx1_trnseg4a"
+    "find": "\t\tif ((unsigned)o->hs_mode <= 3u)\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63941 */",
+    "replace": "\t\tif ((unsigned)o->hs_mode <= 2u)\n\t\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t/* 0x63941 */",
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short threshold is reached at or below the length",
@@ -2097,73 +2722,85 @@
     "replace": "\t\tif (n <= lim) {\n\t\t\t/* 0x6559c */",
     "fn": "v34tx1_trnseg4a",
     "equivalent": true,
-    "why": "the two readings differ only at `n == lim`, and that value never reaches this test: 0x62f0b has already sent it to the completion.  A state the arm cannot present, not an agreement over the ones driven"
+    "why": "the two readings differ only at `n == lim`, and that value never reaches this test: 0x62f0b has already sent it to the completion.  A state the arm cannot present, not an agreement over the ones driven",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short threshold is baud alone",
     "find": "\t\t\tif (n < baud + period)",
     "replace": "\t\t\tif (n < baud)",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short threshold is inclusive",
     "find": "\t\t\tif (n < baud + period)",
     "replace": "\t\t\tif (n <= baud + period)",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the settled error may equal the mark plus ten",
     "find": "\t\t\tif ((int)rx->equerr > (int)o->receiver.short_4b4 + 10)",
     "replace": "\t\t\tif ((int)rx->equerr >= (int)o->receiver.short_4b4 + 10)",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the settled error's window is eleven",
     "find": "\t\t\tif ((int)rx->equerr > (int)o->receiver.short_4b4 + 10)",
     "replace": "\t\t\tif ((int)rx->equerr > (int)o->receiver.short_4b4 + 11)",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: prev_quadrant does not take cur_quadrant at the completion",
     "find": "o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;\n\to->paa6c = rec;",
     "replace": "o->paa6c = rec;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the record pointer is left alone",
     "find": "\to->paa6c = rec;\n",
     "replace": "",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the snapshot branches on bit 4 of the flags",
     "find": "\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\t/* 0x62f5f */",
     "replace": "\tif (rx->flags & V34_RX_FLAG_TRN_WATCH) {\n\t\t/* 0x62f5f */",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the snapshot branch is inverted",
     "find": "\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\t/* 0x62f5f */",
     "replace": "\tif (!(rx->flags & V34_RX_FLAG_RENEG)) {\n\t\t/* 0x62f5f */",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short snapshot leaves the record's word 0",
     "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\to->receiver.short_4b4 = rx->equerr;",
     "replace": "\t\trec[2] = 0;\n\t\to->receiver.short_4b4 = rx->equerr;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short snapshot leaves the record's word 2",
     "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\to->receiver.short_4b4 = rx->equerr;",
     "replace": "\t\trec[0] = 0;\n\t\to->receiver.short_4b4 = rx->equerr;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the short snapshot moves the mark to the predictor error",
     "find": "\t\trec[0] = 0;\n\t\to->receiver.short_4b4 = rx->equerr;",
     "replace": "\t\trec[0] = 0;\n\t\to->receiver.short_4b4 = rx->preerr;",
-    "fn": "v34tx1_trnseg4a"
+    "fn": "v34tx1_trnseg4a",
+    "source": "include/dsplib/v34_continuations/v34tx1_trnseg4a.inc"
   },
   {
     "label": "66: the snapshot's word 0 is zero rather than 0x8000",
@@ -2830,166 +3467,193 @@
   {
     "label": "81: the wrap does not re-read the transmit state",
     "fn": "v34tx1_moh_silence",
-    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */\n\n",
-    "replace": ""
+    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */\n\n",
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap's state test is against MOH_ON_HOLD",
     "fn": "v34tx1_moh_silence",
-    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
-    "replace": "\tif (o->txstate != V34HS_MOH_ON_HOLD)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "replace": "\tif (o->txstate != V34HS_MOH_ON_HOLD)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap's state test is inverted",
     "fn": "v34tx1_moh_silence",
-    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
-    "replace": "\tif (o->txstate == V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "replace": "\tif (o->txstate == V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap reads the microstate rather than the transmit state",
     "fn": "v34tx1_moh_silence",
-    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */",
-    "replace": "\tif (o->microstate != V34HS_MOH_SILENCE)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63941 */"
+    "find": "\tif (o->txstate != V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "replace": "\tif (o->microstate != V34HS_MOH_SILENCE)\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63941 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap's diagnostic is dropped",
     "fn": "v34tx1_moh_silence",
     "find": "\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\" \" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);\n\n\t",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap's diagnostic prints moh_message twice",
     "fn": "v34tx1_moh_silence",
     "find": "\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\" \" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);",
-    "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_message);"
+    "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_message);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap's diagnostic prints its two arguments the other way round",
     "fn": "v34tx1_moh_silence",
     "find": "\n\n\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\" \" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);",
-    "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_org);"
+    "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_org);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap reads only moh_message",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap reads only +0xabec",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap needs BOTH message fields at 1",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 && o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 && o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: +0xabec is read sixteen bits wide",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (*(const short *)&o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (*(const short *)&o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: +0xabec is tested for non-zero rather than for 1",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org != 0 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org != 0 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: moh_message is tested for non-zero rather than for 1",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message != 0)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message != 0)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the two Modem-on-Hold states are exchanged",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_ON_HOLD : V34HS_MOH_FRR);"
+    "replace": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_ON_HOLD : V34HS_MOH_FRR);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap always leaves MOH_ON_HOLD",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\ths_set_txstate(o, V34HS_MOH_ON_HOLD);"
+    "replace": "\ths_set_txstate(o, V34HS_MOH_ON_HOLD);",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap stores the transmit state without the trace",
     "fn": "v34tx1_moh_silence",
     "find": "\ths_set_txstate(o,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-    "replace": "\to->txstate = (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD;"
+    "replace": "\to->txstate = (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD;",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap does not clear the symbol counter",
     "fn": "v34tx1_moh_silence",
     "find": "\to->vect_idx = 0;\t\t\t\t/* 0x66dec */\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "81: the wrap sets the symbol counter to one",
     "fn": "v34tx1_moh_silence",
     "find": "\to->vect_idx = 0;\t\t\t\t/* 0x66dec */",
-    "replace": "\to->vect_idx = 1;\t\t\t\t/* 0x66dec */"
+    "replace": "\to->vect_idx = 1;\t\t\t\t/* 0x66dec */",
+    "source": "include/dsplib/v34_continuations/v34tx1_moh_silence.inc"
   },
   {
     "label": "86: the echo block does not clear echo_calls",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
+    "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block raises bit 2 of tx_flags rather than clearing it",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
+    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block clears bit 3 of tx_flags",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
+    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block leaves echo_alpha alone",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
+    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block leaves far_echo_alpha alone",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n"
+    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block clears echo_energy too, as 21's does",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
     "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
-    "note": "0x67613 in 21 TRNSEG4 clears the same four AND echo_energy; 0x66fe9 does not."
+    "note": "0x67613 in 21 TRNSEG4 clears the same four AND echo_energy; 0x66fe9 does not.",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo block reports the start of echo adaptation, as 21's does",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
-    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+    "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the echo diagnostic is dropped",
     "fn": "v34tx1_txmd",
     "find": "\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"On MD - enabling echo adaptation...\\r\\n\");\n\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "label": "86: the segment end returns rather than falling into the reconfiguration",
     "fn": "v34tx1_txmd",
     "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t}",
     "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
-    "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
+    "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive.",
+    "source": "include/dsplib/v34_continuations/v34tx1_txmd.inc"
   },
   {
     "note": "The handshake state closure's own mutations.  F11506 moved hs_get/hs_put/hs_setstate and their StateName/HS_* into include/dsplib/v34hstx1_arms.h as one `static inline` home (the blob inlines the closure into v34handshak and defines no hs symbol).  These anchors came from v34hshak.json's V34hshak.c source; the text and the test binary (t_v34hshak links V34hshak.o) are unchanged."

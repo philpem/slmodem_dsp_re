@@ -23,19 +23,22 @@
  },
  {
   "label": "68 J1TXMIT dispatches to a different arm",
-  "find": "\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n\t\t\tv34tx1_jtxmit(obj);",
-  "replace": "\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n\t\t\tv34tx1_sseg(obj);"
+  "find": "\t\tcase V34HS_JTXMIT:\t\t/* 64 0x635cc, one body two tails */\n\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_jtxmit.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "replace": "\t\tcase V34HS_JTXMIT:\t\t/* 64 0x635cc, one body two tails */\n\t\tcase V34HS_J1TXMIT:\t\t/* 68 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_sseg.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "fn": "v34handshak"
  },
  {
   "label": "54 SILENCEINFO does not share 5's entry",
-  "find": "\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n\t\t\tv34tx1_silence(obj);",
-  "replace": "\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n\t\t\tv34tx1_silence(obj);\n\t\t\tbreak;\n\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n\t\t\tv34tx1_sseg(obj);",
-  "why": "54 and 74 share 5's table entry at 0x640b4; giving 54 a different arm has to be caught by the state's own trial."
+  "find": "\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_silence.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "replace": "\t\tcase V34HS_SILENCERETRAIN:\t/* 74 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_silence.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n\t\tcase V34HS_SILENCEINFO:\t\t/* 54 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_sseg.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "why": "54 and 74 share 5's table entry at 0x640b4; giving 54 a different arm has to be caught by the state's own trial.",
+  "fn": "v34handshak"
  },
  {
   "label": "83 MOH_FRR is not one of 81's four",
-  "find": "\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n\t\t\tv34tx1_moh_silence(obj);",
-  "replace": "\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n\t\t\tv34tx1_moh_silence(obj);\n\t\t\tbreak;\n\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n\t\t\tv34tx1_txmd(obj);"
+  "find": "\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_moh_silence.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "replace": "\t\tcase V34HS_MOH_CLEARDOWN:\t/* 84 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_moh_silence.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n\t\tcase V34HS_MOH_FRR:\t\t/* 83 */\n            {\n                void *objp = obj;\n#define V34_TX_CASE_RETURN(value) do { (void)(value); goto v34_table1_continue; } while (0)\n#include \"dsplib/v34_continuations/v34tx1_txmd.inc\"\n#undef V34_TX_CASE_RETURN\n            }\n\t\t\tbreak;\n",
+  "fn": "v34handshak"
  },
  {
   "label": "the transmit state is read once, outside the loop",

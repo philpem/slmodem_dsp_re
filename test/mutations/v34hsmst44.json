@@ -6,223 +6,260 @@
     "label": "+0xaa7a is not cleared on entry",
     "find": "\tint idx;\n\n\tobj->short_aa7a = 0;\n\n\t/* No bit waiting: the arm is over before it starts. */",
     "replace": "\tint idx;\n\n\t(void)0;\n\n\t/* No bit waiting: the arm is over before it starts. */",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "+0xaa7a is cleared with one instead of zero",
     "find": "\tint idx;\n\n\tobj->short_aa7a = 0;\n\n\t/* No bit waiting: the arm is over before it starts. */",
     "replace": "\tint idx;\n\n\tobj->short_aa7a = 1;\n\n\t/* No bit waiting: the arm is over before it starts. */",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the empty gate is inverted",
     "find": "\tif (nbits == 0) {",
     "replace": "\tif (nbits != 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the empty gate tests <= 0 rather than == 0",
     "find": "\tif (nbits == 0) {",
     "replace": "\tif (nbits <= 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "nbits is not decremented",
     "find": "\tobj->fsk.nbits = (short)(nbits - 1);",
     "replace": "\tobj->fsk.nbits = (short)(nbits);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "nbits is decremented twice",
     "find": "\tobj->fsk.nbits = (short)(nbits - 1);",
     "replace": "\tobj->fsk.nbits = (short)(nbits - 2);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the whole queue is consumed instead of one bit",
     "find": "\tobj->fsk.nbits = (short)(nbits - 1);",
     "replace": "\tobj->fsk.nbits = 0;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the register steps one bit past the message",
     "find": "\tif (count < rec->nbits) {",
     "replace": "\tif (count <= rec->nbits) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the register steps for the whole exchange",
     "find": "\tif (count < rec->nbits) {",
     "replace": "\tif (count < rec->nbits + 0x10) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the feedback takes the register's bit 14",
     "find": "\t\tint fb = (int)(crc >> 15);",
     "replace": "\t\tint fb = (int)((crc >> 14) & 1);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the feedback ignores the register",
     "find": "\t\tint fb = (int)(crc >> 15);",
     "replace": "\t\tint fb = 0;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the feedback ignores the incoming bit",
     "find": "\t\tif ((obj->fsk.sr & 1) != 0)\n\t\t\tfb ^= 1;",
     "replace": "\t\tif (0)\n\t\t\tfb ^= 1;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the incoming bit is taken from bit 1 of sr",
     "find": "\t\tif ((obj->fsk.sr & 1) != 0)",
     "replace": "\t\tif ((obj->fsk.sr & 2) != 0)",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the feedback ors the two bits instead of xoring them",
     "find": "\t\t\tfb ^= 1;",
     "replace": "\t\t\tfb = 1;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the polynomial is 0x1020",
     "find": "\t\t\tcrc ^= 0x1021;\t\t\t/* else 0x6c133 */",
     "replace": "\t\t\tcrc ^= 0x1020;\t\t\t/* else 0x6c133 */",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the polynomial is applied on every bit",
     "find": "\t\tif (fb != 0)\n\t\t\tcrc ^= 0x1021;",
     "replace": "\t\tif (1)\n\t\t\tcrc ^= 0x1021;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the polynomial is never applied",
     "find": "\t\tif (fb != 0)\n\t\t\tcrc ^= 0x1021;",
     "replace": "\t\tif (0)\n\t\t\tcrc ^= 0x1021;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the register shifts right",
     "find": "\t\tcrc <<= 1;",
     "replace": "\t\tcrc >>= 1;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the register does not shift",
     "find": "\t\tcrc <<= 1;",
     "replace": "\t\tcrc <<= 0;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the counter is stepped by two",
     "find": "\tnext = (short)(count + 1);",
     "replace": "\tnext = (short)(count + 2);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the counter is not written back",
     "find": "\tobj->short_aa78 = next;",
     "replace": "\t(void)next;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the restart threshold is one bit early",
     "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
     "replace": "\tif ((int)next == (int)rec->nbits + 0x0f)",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the restart threshold is one bit late",
     "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
     "replace": "\tif ((int)next == (int)rec->nbits + 0x11)",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the restart threshold is at-or-beyond rather than equal",
     "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
     "replace": "\tif ((int)next >= (int)rec->nbits + 0x10)",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the restart threshold forgets the sixteen CRC bits",
     "find": "\tif ((int)next == (int)rec->nbits + 0x10)",
     "replace": "\tif ((int)next == (int)rec->nbits)",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "a byte every four bits",
     "find": "\tif ((next & 7) != 0) {",
     "replace": "\tif ((next & 3) != 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "a byte every sixteen bits",
     "find": "\tif ((next & 7) != 0) {",
     "replace": "\tif ((next & 15) != 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the byte-boundary test is inverted",
     "find": "\tif ((next & 7) != 0) {",
     "replace": "\tif ((next & 7) == 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "a counter of zero still stores a byte",
     "find": "\tif (next <= 0) {",
     "replace": "\tif (next < 0) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the slot index is not biased by one",
     "find": "\tidx = ((int)next >> 3) - 1;",
     "replace": "\tidx = ((int)next >> 3);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the slot index divides by four",
     "find": "\tidx = ((int)next >> 3) - 1;",
     "replace": "\tidx = ((int)next >> 2) - 1;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "an eleventh slot",
     "find": "\tif ((short)idx > 9) {",
     "replace": "\tif ((short)idx > 10) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "only nine slots",
     "find": "\tif ((short)idx > 9) {",
     "replace": "\tif ((short)idx > 8) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the byte stored is sign extended",
     "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
     "replace": "\trec->word[idx] = (short)obj->fsk.sr;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the byte stored is the high half of sr",
     "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
     "replace": "\trec->word[idx] = (short)(obj->fsk.sr >> 8);",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the byte goes to the slot after the one it belongs in",
     "find": "\trec->word[idx] = (short)(unsigned char)obj->fsk.sr;",
     "replace": "\trec->word[idx + 1] = (short)(unsigned char)obj->fsk.sr;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "an accepted message takes the restart",
     "find": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    == (unsigned short)rec->crc) {",
     "replace": "\t\tif ((unsigned short)obj->fsk.sr\n\t\t    != (unsigned short)rec->crc) {",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the restart moves the microstate to DET_CJ",
@@ -463,7 +500,8 @@
     "label": "the restart does not fall back into the byte clock",
     "find": "\t\t\tt44_det_info_restart(obj);\t/* 0x6bdb1 */",
     "replace": "\t\t\tt44_det_info_restart(obj); return;",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the record is not re-read after the restart",
@@ -471,7 +509,8 @@
     "replace": "\trec->word[idx]",
     "equivalent": true,
     "why": "0x6698e reloads +0xaa70 after the restart may have run, and the restart writes +0xaa6c and never +0xaa70 -- so the reloaded pointer is the cached one on every path that exists.  This becomes testable, and stops being equivalent, the moment an arm that moves +0xaa70 lands; the accept path at 0x6e534 is where to look.",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the answering side's store copies V34SetINFO0dBits's V.90 guard",
@@ -483,285 +522,331 @@
     "label": "the byte clock's tail uses the stepped count instead of re-reading it",
     "find": "\tnext = obj->short_aa78;\n\n\t/* Only every eighth bit completes a byte. */",
     "replace": "\t/* Only every eighth bit completes a byte. */",
-    "fn": "t44_micro_det_info"
+    "fn": "t44_micro_det_info",
+    "source": "include/dsplib/v34_continuations/t44_micro_det_info.inc"
   },
   {
     "label": "the accept dispatch lets the 77-bit message through",
     "find": "\tif (len == 0x4d)",
     "replace": "\tif (len == 0x4e)",
     "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the accept dispatch lets the 38-bit message through",
     "find": "\tif (len == 0x26)",
     "replace": "\tif (len == 0x25)",
     "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the accept dispatch lets the 8-bit message through",
     "find": "\tif (len == 0x08)",
     "replace": "\tif (len == 0x07)",
     "note": "REWRITTEN: this used to move the constant and be caught by the arm's `t3c_unwritten` aborting.  The arm exists now, so it is caught by the message taking the default body instead of its own -- a differing byte rather than a dead run.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the accept dispatch claims the length this case is driven with",
     "find": "\tif (len == 0x08)",
     "replace": "\tif (len == 0x18)",
     "note": "REWRITTEN with the arm in place: 0x18 is the length the default arm's own cases are driven with, so this sends them into the Modem-on-Hold body.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the byte copy runs whatever +0x358a holds",
     "find": "\tif (obj->short_358a == 1) {",
     "replace": "\tif (1) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "+0x358a is tested against zero",
     "find": "\tif (obj->short_358a == 1) {",
     "replace": "\tif (obj->short_358a == 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the other record's flag is bit 6",
     "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
     "replace": "\t\tif ((blk->word[2] & 0x40) == 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the other record's flag test is inverted",
     "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
     "replace": "\t\tif ((blk->word[2] & 0x80) != 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the other record's +0x22 is not cleared with the flag",
     "find": "\t\t\tblk->repeats = 0;",
     "replace": "\t\t\t(void)0;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the flag is assigned rather than ored in",
     "find": "\t\t\tblk->word[2] = (short)(blk->word[2] | 0x80);",
     "replace": "\t\t\tblk->word[2] = (short)0x80;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the flag is set on the record being clocked, not the other one",
     "find": "\t\tif ((blk->word[2] & 0x80) == 0) {",
     "replace": "\t\tif ((rec->word[2] & 0x80) == 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the byte count is not rounded up",
     "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
     "replace": "\t\tnbytes = count / 8;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the byte count is always rounded up",
     "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
     "replace": "\t\tnbytes = count / 8 + 1;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the byte count divides by sixteen",
     "find": "\t\tnbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);",
     "replace": "\t\tnbytes = count / 16 + ((count & 15) != 0 ? 1 : 0);",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the byte count is not recorded",
     "find": "\t\tobj->short_abc2 = (short)nbytes;",
     "replace": "\t\t(void)nbytes;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the copy runs one slot too far",
     "find": "\t\tfor (i = 0; i < nbytes; i++)",
     "replace": "\t\tfor (i = 0; i <= nbytes; i++)",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the copy starts at slot one",
     "find": "\t\tfor (i = 0; i < nbytes; i++)",
     "replace": "\t\tfor (i = 1; i < nbytes; i++)",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the copy goes the other way",
     "find": "\t\t\tobj->short_abae[i] = rec->word[i];",
     "replace": "\t\t\trec->word[i] = obj->short_abae[i];",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the copy reads the other record",
     "find": "\t\t\tobj->short_abae[i] = rec->word[i];",
     "replace": "\t\t\tobj->short_abae[i] = blk->word[i];",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the record's own flag is bit 6",
     "find": "\t\tif ((rec->word[2] & 0x80) == 0) {",
     "replace": "\t\tif ((rec->word[2] & 0x40) == 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the record's own flag test is inverted",
     "find": "\t\tif ((rec->word[2] & 0x80) == 0) {",
     "replace": "\t\tif ((rec->word[2] & 0x80) != 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the early exit moves the microstate to DET_CJ",
     "find": "\t\t\ths_set_microstate(obj, V34HS_DET_SYNC);\n\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "replace": "\t\t\ths_set_microstate(obj, V34HS_DET_CJ);\n\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the early exit leaves the register alone",
     "find": "\t\t\t((struct v34_bitsource *)obj->paa70)->crc = -1;",
     "replace": "\t\t\t(void)0;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the early exit leaves sr alone",
     "find": "\t\t\tobj->fsk.sr = -1;\n\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */",
     "replace": "\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the early exit rejoins the byte clock",
-    "find": "\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */\n\t\t\treturn 1;",
-    "replace": "\t\t\treturn 0;",
-    "fn": "t44_det_info_accept"
+    "find": "\t\t\tt3c_txblock(obj);\t\t/* 0x6e740 */\n\t\t\tV34_CONT_RETURN(1);",
+    "replace": "\t\t\tV34_CONT_RETURN(0);",
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the counter is not reset before the decoder",
     "find": "\tobj->short_aa78 = 0;\n\n\t/*\n\t * The buffer is obj+0xa97c LITERALLY",
     "replace": "\t/*\n\t * The buffer is obj+0xa97c LITERALLY",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the decoder is handed the +0xaa70 record instead of the fixed address",
     "find": "\tV34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);",
     "replace": "\tV34GiveINFO0dBits(obj, (struct v34_bitsource *)obj->paa70);",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the decoder is not called",
     "find": "\tV34GiveINFO0dBits(obj, (const short *)&obj->msgrec[1]);",
     "replace": "\t(void)0;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the originating side is 0x66 in the accept path",
     "find": "\t */\n\tif (obj->role == 0x65) {\n\t\ths_set_microstate(obj, V34HS_RX_PHASE1_CALL);",
     "replace": "\t */\n\tif (obj->role == 0x66) {\n\t\ths_set_microstate(obj, V34HS_RX_PHASE1_CALL);",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the originating side goes to RX_PHASE2_CALL",
     "find": "\t */\n\tif (obj->role == 0x65) {\n\t\ths_set_microstate(obj, V34HS_RX_PHASE1_CALL);",
     "replace": "\t */\n\tif (obj->role == 0x65) {\n\t\ths_set_microstate(obj, V34HS_RX_PHASE2_CALL);",
     "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the originating side resets sr too",
     "find": "\t\ths_set_microstate(obj, V34HS_RX_PHASE1_CALL);\n\t} else {\n\t\tobj->fsk.sr = -1;",
     "replace": "\t\ths_set_microstate(obj, V34HS_RX_PHASE1_CALL);\n\t\tobj->fsk.sr = -1;\n\t} else {\n\t\tobj->fsk.sr = -1;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "short phase 2 is decided by local_short",
     "find": "\t\tif (obj->is_short != 0) {",
     "replace": "\t\tif (obj->local_short != 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "short phase 2's test is inverted",
     "find": "\t\tif (obj->is_short != 0) {",
     "replace": "\t\tif (obj->is_short == 0) {",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "short phase 2 goes to RX_PHASE2_ANS",
     "find": "\t\tif (obj->is_short != 0) {\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
     "replace": "\t\tif (obj->is_short != 0) {\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE2_ANS);",
     "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the long phase 2 goes to RX_PHASE1_ANS as well",
     "find": "\t\t\ths_set_microstate(obj, V34HS_TX_PHASE1_ANS);",
     "replace": "\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the counter reload is not conditional on short phase 2",
     "find": "\t\t\tobj->short_aa78 = obj->filtdelay;\t/* 0x6e8ac */\n\t\t} else {",
     "replace": "\t\t} else {\n\t\t\tobj->short_aa78 = obj->filtdelay;",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the counter reload copies the counter onto itself",
     "find": "\t\t\tobj->short_aa78 = obj->filtdelay;\t/* 0x6e8ac */",
     "replace": "\t\t\tobj->short_aa78 = obj->short_aa78;\t/* 0x6e8ac */",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the detector's pending flag is raised rather than cleared",
     "find": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
     "replace": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
     "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the detector is left armed",
     "find": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
     "replace": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\t(void)rx;",
     "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the arrival trace names short phase 2 the wrong way round",
     "find": "\t\t\t\t     obj->is_short != 0 ? \" Short Phase 2\" : \"\");",
     "replace": "\t\t\t\t     obj->is_short == 0 ? \" Short Phase 2\" : \"\");",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the 0x4d arm is claimed at 0x4c",
     "find": "\tif (len == 0x4d)",
     "replace": "\tif (len == 0x4c)",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the 0x26 arm is claimed at 0x27",
     "find": "\tif (len == 0x26)",
     "replace": "\tif (len == 0x27)",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the 0x08 arm is claimed at 0x09",
     "find": "\tif (len == 0x08)",
     "replace": "\tif (len == 0x09)",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "0x4d takes the INFO1a body",
-    "find": "\t\treturn t44_accept_len4d(obj);",
-    "replace": "\t\treturn t44_accept_len26(obj, (short *)rec);",
-    "fn": "t44_det_info_accept"
+    "find": "\t\tV34_CONT_RETURN(t44_accept_len4d(obj));",
+    "replace": "\t\tV34_CONT_RETURN(t44_accept_len26(obj, (short *)rec));",
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "0x26 takes the MOH body",
-    "find": "\t\treturn t44_accept_len26(obj, (short *)rec);",
-    "replace": "\t\treturn t44_accept_len08(obj, (short *)rec, count2);",
-    "fn": "t44_det_info_accept"
+    "find": "\t\tV34_CONT_RETURN(t44_accept_len26(obj, (short *)rec));",
+    "replace": "\t\tV34_CONT_RETURN(t44_accept_len08(obj, (short *)rec, count2));",
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the length's first field is three bits wide",
@@ -1289,7 +1374,8 @@
     "label": "the byte copy is bounded at ten slots",
     "find": "\t\tfor (i = 0; i < nbytes; i++)\n\t\t\tobj->short_abae[i] = rec->word[i];",
     "replace": "\t\tfor (i = 0; i < nbytes && i < 10; i++)\n\t\t\tobj->short_abae[i] = rec->word[i];",
-    "fn": "t44_det_info_accept"
+    "fn": "t44_det_info_accept",
+    "source": "include/dsplib/v34_continuations/t44_det_info_accept.inc"
   },
   {
     "label": "the probeselect diagnostic prints the carrier as the transmit rate",

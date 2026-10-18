@@ -794,427 +794,592 @@
   {
     "label": "67: the four-point half collects one bit",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > (wide ? 3 : 0))\n\t\t\tbreak;"
+    "replace": "\t\tif (n > (wide ? 3 : 0))\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the four-point half collects three bits",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > (wide ? 3 : 2))\n\t\t\tbreak;"
+    "replace": "\t\tif (n > (wide ? 3 : 2))\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sixteen-point half collects three bits",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > (wide ? 2 : 1))\n\t\t\tbreak;"
+    "replace": "\t\tif (n > (wide ? 2 : 1))\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sixteen-point half collects five bits",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > (wide ? 4 : 1))\n\t\t\tbreak;"
+    "replace": "\t\tif (n > (wide ? 4 : 1))\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the two bit counts are swapped",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > (wide ? 1 : 3))\n\t\t\tbreak;"
+    "replace": "\t\tif (n > (wide ? 1 : 3))\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the bit count does not depend on the constellation",
     "find": "\t\tif (n > (wide ? 3 : 1))\n\t\t\tbreak;",
-    "replace": "\t\tif (n > 3)\n\t\t\tbreak;"
+    "replace": "\t\tif (n > 3)\n\t\t\tbreak;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: cur_quadrant is not cleared before the loop",
     "find": "\to->cur_quadrant = 0;\t\t\t\t\t/* 0x639ab */",
-    "replace": "\t/* 0x639ab, deleted */"
+    "replace": "\t/* 0x639ab, deleted */",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the bits are not accumulated",
     "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-    "replace": "\t\to->cur_quadrant = (short)((unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));"
+    "replace": "\t\to->cur_quadrant = (short)((unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: every bit lands in bit 0",
     "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)((unsigned)(int)bit));"
+    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)((unsigned)(int)bit));",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the bits are shifted one place too far",
     "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << (((unsigned)(unsigned char)n + 1u) & 31u)));"
+    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << (((unsigned)(unsigned char)n + 1u) & 31u)));",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the bits go in highest first",
     "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((3u - (unsigned)(unsigned char)n) & 31u)));"
+    "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((3u - (unsigned)(unsigned char)n) & 31u)));",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the constellation selector is inverted",
     "find": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b0u;",
-    "replace": "\t\twide = (unsigned short)o->receiver.short_382 != 0x89b0u;"
+    "replace": "\t\twide = (unsigned short)o->receiver.short_382 != 0x89b0u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the constellation selector is one count out",
     "find": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b0u;",
-    "replace": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b1u;"
+    "replace": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b1u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the constellation selector is compared as a byte",
     "find": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b0u;",
-    "replace": "\t\twide = (unsigned char)o->receiver.short_382 == 0xb0u;"
+    "replace": "\t\twide = (unsigned char)o->receiver.short_382 == 0xb0u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the constellation selector is the receiver's flags word",
     "find": "\t\twide = (unsigned short)o->receiver.short_382 == 0x89b0u;",
-    "replace": "\t\twide = o->receiver.flags == 0x89b0u;"
+    "replace": "\t\twide = o->receiver.flags == 0x89b0u;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the two mappers are the other way round",
     "find": "\tif (wide)\n\t\ttx1_mp16(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp4(o, o->cur_quadrant);",
-    "replace": "\tif (wide)\n\t\ttx1_mp4(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp16(o, o->cur_quadrant);"
+    "replace": "\tif (wide)\n\t\ttx1_mp4(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp16(o, o->cur_quadrant);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the mapper is fed prev_quadrant rather than the collected bits",
     "find": "\tif (wide)\n\t\ttx1_mp16(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp4(o, o->cur_quadrant);",
-    "replace": "\tif (wide)\n\t\ttx1_mp16(o, o->prev_quadrant);\n\telse\n\t\ttx1_mp4(o, o->prev_quadrant);"
+    "replace": "\tif (wide)\n\t\ttx1_mp16(o, o->prev_quadrant);\n\telse\n\t\ttx1_mp4(o, o->prev_quadrant);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the symbol is not transmitted",
     "find": "\ttxmit(o);\t\t\t\t/* 0x62d5f and 0x64a42 */",
-    "replace": "\t/* txmit deleted */\t\t\t/* 0x62d5f and 0x64a42 */"
+    "replace": "\t/* txmit deleted */\t\t\t/* 0x62d5f and 0x64a42 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff point with bit 5 set is 0x54",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x54 : 0xbb)) {"
+    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x54 : 0xbb)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff point with bit 5 clear is 0xbc",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbc)) {"
+    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbc)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff points are not selected by bit 5",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx == 0xbb) {"
+    "replace": "\t\tif (idx == 0xbb) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff point is selected by bit 4",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx == ((flags & 0x10u) ? 0x55 : 0xbb)) {"
+    "replace": "\t\tif (idx == ((flags & 0x10u) ? 0x55 : 0xbb)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the two stuff points are the other way round",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0xbb : 0x55)) {"
+    "replace": "\t\tif (idx == ((flags & 0x20u) ? 0xbb : 0x55)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff point is at or past its index",
     "find": "\t\tif (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {",
-    "replace": "\t\tif (idx >= ((flags & 0x20u) ? 0x55 : 0xbb)) {"
+    "replace": "\t\tif (idx >= ((flags & 0x20u) ? 0x55 : 0xbb)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the two stuff widths are swapped",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff always pushes one bit",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff always pushes three bits",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the wide stuff pushes two bits",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 2);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 2);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 2);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 2);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the wide stuff advances the count but not the accumulator",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 0);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 0);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the wide stuff advances the accumulator but not the count",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the narrow stuff advances the accumulator but not the count",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 0);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff shifts the accumulator right",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc >> 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the stuff's width is chosen by bit 4",
     "find": "\t\t\tif (flags & 0x20u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
-    "replace": "\t\t\tif (flags & 0x10u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}"
+    "replace": "\t\t\tif (flags & 0x10u) {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 3);\n\t\t\t} else {\n\t\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\t\tb->avail = (short)\n\t\t\t\t\t   ((unsigned short)b->avail + 1);\n\t\t\t}",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sequence's end with bit 5 set is 0x59",
     "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
-    "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x59 : 0xbc)) {"
+    "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x59 : 0xbc)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sequence's end with bit 5 clear is 0xbd",
     "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
-    "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbd)) {"
+    "replace": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbd)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sequence's end is not selected by bit 5",
     "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
-    "replace": "\t\t} else if (idx == 0xbc) {"
+    "replace": "\t\t} else if (idx == 0xbc) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sequence's end is at or past its index",
     "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
-    "replace": "\t\t} else if (idx >= ((flags & 0x20u) ? 0x58 : 0xbc)) {"
+    "replace": "\t\t} else if (idx >= ((flags & 0x20u) ? 0x58 : 0xbc)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the sequence's end is selected by bit 4",
     "find": "\t\t} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {",
-    "replace": "\t\t} else if (idx == ((flags & 0x10u) ? 0x58 : 0xbc)) {"
+    "replace": "\t\t} else if (idx == ((flags & 0x10u) ? 0x58 : 0xbc)) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 is tested even on a pass that has stuffed",
     "find": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)o->short_3590) {",
-    "replace": "\t\t}\n\t\tif ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)o->short_3590) {"
+    "replace": "\t\t}\n\t\tif ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)o->short_3590) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 is tested at or past the index",
     "find": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   == (unsigned short)o->short_3590) {",
-    "replace": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   >= (unsigned short)o->short_3590) {"
+    "replace": "\t\t} else if ((unsigned short)o->vect_idx\n\t\t\t   >= (unsigned short)o->short_3590) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 is advanced by 0x10",
     "find": "\t\t\to->short_3590 =\n\t\t\t\t(short)((unsigned short)o->short_3590 + 0x11);",
-    "replace": "\t\t\to->short_3590 =\n\t\t\t\t(short)((unsigned short)o->short_3590 + 0x10);"
+    "replace": "\t\t\to->short_3590 =\n\t\t\t\t(short)((unsigned short)o->short_3590 + 0x10);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 is not advanced",
     "find": "\t\t\to->short_3590 =\n\t\t\t\t(short)((unsigned short)o->short_3590 + 0x11);",
-    "replace": "\t\t\t(void)0;"
+    "replace": "\t\t\t(void)0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 is reloaded from the index",
     "find": "\t\t\to->short_3590 =\n\t\t\t\t(short)((unsigned short)o->short_3590 + 0x11);",
-    "replace": "\t\t\to->short_3590 = o->vect_idx;"
+    "replace": "\t\t\to->short_3590 = o->vect_idx;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 pushes three bits",
     "find": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 1);\n\t\t\to->short_3590 =",
-    "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 3);\n\t\t\to->short_3590 ="
+    "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 3);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 3);\n\t\t\to->short_3590 =",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: +0x3590 pushes nothing into the reader",
     "find": "\t\t\tb = tx1_bitsource(o);\n\t\t\tb->acc = (int)((unsigned)b->acc << 1);\n\t\t\tb->avail = (short)((unsigned short)b->avail + 1);\n\t\t\to->short_3590 =",
-    "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\t(void)b;\n\t\t\to->short_3590 ="
+    "replace": "\t\t\tb = tx1_bitsource(o);\n\t\t\t(void)b;\n\t\t\to->short_3590 =",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: vect_idx is not advanced",
     "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
-    "replace": "\t\tidx = o->vect_idx;"
+    "replace": "\t\tidx = o->vect_idx;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: vect_idx advances by two",
     "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
-    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);\n\t\tidx = o->vect_idx;"
+    "replace": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);\n\t\tidx = o->vect_idx;",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the checkpoints see the index before it is advanced",
     "find": "\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);\n\t\tidx = o->vect_idx;",
-    "replace": "\t\tidx = o->vect_idx;\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+    "replace": "\t\tidx = o->vect_idx;\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "67: the checkpoints read the transmitter's flags",
     "find": "\t\tflags = rx->flags;\n\n\t\tif (idx == ",
-    "replace": "\t\tflags = (unsigned short)o->tx_flags;\n\n\t\tif (idx == "
+    "replace": "\t\tflags = (unsigned short)o->tx_flags;\n\n\t\tif (idx == ",
+    "source": "include/dsplib/v34_continuations/v34tx1_xmitmp.inc",
+    "fn": "v34tx1_xmitmp"
   },
   {
     "label": "24: the entry does not tick vect_idx",
     "find": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the entry tick is unconditional",
     "find": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-    "replace": "\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+    "replace": "\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the entry tick is by two",
     "find": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-    "replace": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+    "replace": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the Modem-on-Hold flag is read as a halfword at the entry",
     "find": "\tif (o->moh_active != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-    "replace": "\tif (*(short *)((char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+    "replace": "\tif (*(short *)((char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: a zero bit counts as the message being over",
     "find": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit >= 0) {",
-    "replace": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit > 0) {"
+    "replace": "\tbit = getbit(tx1_bitsource(o));\n\tif (bit > 0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the reader is the record at +0xa94c rather than +0xaa6c's",
     "find": "\tbit = getbit(tx1_bitsource(o));",
-    "replace": "\tbit = getbit(o->msgrec);"
+    "replace": "\tbit = getbit(o->msgrec);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the tone is sent after the sample is transmitted",
     "find": "\t\ttx1_dpsk_tone(o, bit);\n\t\ttxmit(o);\t\t\t\t/* 0x64a42 */",
-    "replace": "\t\ttxmit(o);\t\t\t\t/* 0x64a42 */\n\t\ttx1_dpsk_tone(o, bit);"
+    "replace": "\t\ttxmit(o);\t\t\t\t/* 0x64a42 */\n\t\ttx1_dpsk_tone(o, bit);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the message-over flag test is inverted",
     "find": "\tif (o->moh_active == 0) {\n",
-    "replace": "\tif (o->moh_active != 0) {\n"
+    "replace": "\tif (o->moh_active != 0) {\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the message ends in TONE_AB_CALL",
-    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-    "replace": "\t\ths_set_txstate(o, V34HS_TONE_AB_CALL);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "replace": "\t\ths_set_txstate(o, V34HS_TONE_AB_CALL);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the message over leaves the transmit machine alone",
-    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-    "replace": "\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */"
+    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "replace": "\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the txstate compare at 0x654e4 is deleted",
-    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
-    "replace": "\t\to->txstate = V34HS_TONE_AB;\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x63948 */",
+    "find": "\t\ths_set_txstate(o, V34HS_TONE_AB);\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
+    "replace": "\t\to->txstate = V34HS_TONE_AB;\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);\t\t\t/* 0x63948 */",
     "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  the arm is reached only through table 1 at `txstate == 24` and nothing between the dispatch and 0x654e4 writes +0x3596 -- `getbit` does not -- so the compare against 0x3c can never be true and the store always happens.  Finding F342's case at 65, and the fifth of its kind in this file  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
-    "fn": "v34tx1_tx_dpsk"
+    "fn": "v34tx1_tx_dpsk",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc"
   },
   {
     "label": "24: the one-shot test is inverted",
     "find": "\tif (o->moh_msg_pending == 0) {",
-    "replace": "\tif (o->moh_msg_pending != 0) {"
+    "replace": "\tif (o->moh_msg_pending != 0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the reader is not re-armed by hand",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": ""
+    "replace": "",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm does not count the repeat",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm leaves the CRC alone",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm leaves pos alone",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm leaves idx alone",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm does not reload the accumulator",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm does not reload avail",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-arm's CRC is zero",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
-    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = 0;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = 0;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the re-armed reader is read before it is re-armed",
     "find": "\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n\n\t\ttx1_dpsk_tone(o, getbit(b));",
-    "replace": "\t\ttx1_dpsk_tone(o, getbit(b));\n\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n"
+    "replace": "\t\ttx1_dpsk_tone(o, getbit(b));\n\t\tb->repeats = (short)((unsigned short)b->repeats + 1);\n\t\tb->crc = (short)0xffff;\n\t\tb->pos = 0;\n\t\tb->idx = 0;\n\t\tb->acc = b->acc0;\n\t\tb->avail = b->avail0;\n",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: on hold, the tone is sent and the hold tail is not run",
-    "find": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn tx1_moh_hold(o);\t\t\t/* 0x64fec */",
-    "replace": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\treturn V34TX1_LOOP;"
+    "find": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\tV34_TX_CASE_RETURN(tx1_moh_hold(o));\t\t\t/* 0x64fec */",
+    "replace": "\t\ttxmit(o);\t\t\t\t/* 0x67d3e */\n\t\tV34_TX_CASE_RETURN(V34TX1_LOOP);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: moh_message one clears down rather than holding",
     "find": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_on_hold(o);\t\t\t/* 0x689f6 */",
-    "replace": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_cleardown(o);"
+    "replace": "\tif (o->moh_message == 1) {\n\t\ttx1_moh_cleardown(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: moh_message one is not a case of its own",
     "find": "\tif (o->moh_message == 1) {",
-    "replace": "\tif (0) {"
+    "replace": "\tif (0) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the clear-down is for moh_message two alone",
     "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
-    "replace": "\t} else if (o->moh_message == 2) {"
+    "replace": "\t} else if (o->moh_message == 2) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the clear-down runs to moh_message four",
     "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
-    "replace": "\t} else if ((unsigned)o->moh_message <= 4u) {"
+    "replace": "\t} else if ((unsigned)o->moh_message <= 4u) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the clear-down's range is signed",
     "find": "\t} else if ((unsigned)o->moh_message <= 3u) {",
-    "replace": "\t} else if (o->moh_message <= 3) {"
+    "replace": "\t} else if (o->moh_message <= 3) {",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: moh_recvd four is not a wait",
     "find": "\t\tif (got == 4)\n\t\t\ttx1_moh_on_hold(o);",
-    "replace": "\t\tif (0)\n\t\t\ttx1_moh_on_hold(o);"
+    "replace": "\t\tif (0)\n\t\t\ttx1_moh_on_hold(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: moh_recvd zero is not a wait",
     "find": "\t\t} else if (got == 0)\n\t\t\ttx1_moh_on_hold(o);",
-    "replace": "\t\t} else if (0)\n\t\t\ttx1_moh_on_hold(o);"
+    "replace": "\t\t} else if (0)\n\t\t\ttx1_moh_on_hold(o);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: anything past four builds the message",
     "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
     "replace": "\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
-    "fn": "v34tx1_tx_dpsk"
+    "fn": "v34tx1_tx_dpsk",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc"
   },
   {
     "label": "24: five restarts the handshake like anything else",
     "find": "\t\t\tif (got != 5)\n\t\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */\n\t\t\telse\n\t\t\t\ttx1_moh_send(o);\t/* 0x6a3cf */",
     "replace": "\t\t\ttx1_moh_reinit(o, MOH_ILLEGAL);\t/* 0x69041 */",
-    "fn": "v34tx1_tx_dpsk"
+    "fn": "v34tx1_tx_dpsk",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc"
   },
   {
     "label": "24: moh_recvd is compared signed",
     "find": "\t\telse if ((unsigned)got > 4u) {",
     "replace": "\t\telse if (got > 4) {",
     "equivalent": true,
-    "why": "a proof over every input rather than over the ones driven.  0x69033's `ja` and a signed `jg` can differ only for a NEGATIVE `moh_recvd`, and there the two readings reach the same block: unsigned it is above four, is not five, and restarts the handshake; signed it is not above four, is not zero, and falls to the same restart.  Every other value answers alike by construction, so no run can separate them and the object's unsigned compare is what is written"
+    "why": "a proof over every input rather than over the ones driven.  0x69033's `ja` and a signed `jg` can differ only for a NEGATIVE `moh_recvd`, and there the two readings reach the same block: unsigned it is above four, is not five, and restarts the handshake; signed it is not above four, is not zero, and falls to the same restart.  Every other value answers alike by construction, so no run can separate them and the object's unsigned compare is what is written",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the one-shot is not cleared",
-    "find": "\to->moh_msg_pending = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
-    "replace": "\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */"
+    "find": "\to->moh_msg_pending = 0;\n\tV34_TX_CASE_RETURN(tx1_moh_hold(o));\t\t\t\t/* 0x64fec */",
+    "replace": "\tV34_TX_CASE_RETURN(tx1_moh_hold(o));\t\t\t\t/* 0x64fec */",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the one-shot is cleared as a halfword",
     "find": "\to->moh_msg_pending = 0;",
-    "replace": "\t*(short *)((char *)o + TX1_MOH_MSG_PENDING) = 0;"
+    "replace": "\t*(short *)((char *)o + TX1_MOH_MSG_PENDING) = 0;",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   },
   {
     "label": "24: the message dispatch does not run the hold tail",
-    "find": "\to->moh_msg_pending = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
-    "replace": "\to->moh_msg_pending = 0;\n\treturn V34TX1_LOOP;"
+    "find": "\to->moh_msg_pending = 0;\n\tV34_TX_CASE_RETURN(tx1_moh_hold(o));\t\t\t\t/* 0x64fec */",
+    "replace": "\to->moh_msg_pending = 0;\n\tV34_TX_CASE_RETURN(V34TX1_LOOP);",
+    "source": "include/dsplib/v34_continuations/v34tx1_tx_dpsk.inc",
+    "fn": "v34tx1_tx_dpsk"
   }
 ]

@@ -12,43 +12,50 @@
     "label": "the head's first guard names TX_L1 rather than TX_DPSK",
     "find": "\tif (tx == V34HS_TX_DPSK) {\t\t\t/* 0x6b5b0 */",
     "replace": "\tif (tx == V34HS_TX_L1) {\t\t\t/* 0x6b5b0 */",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the head's second guard names TONE_AB_CALL rather than TONE_AB",
     "find": "\t} else if (tx == V34HS_TONE_AB) {\t\t/* 0x6b4ba */",
     "replace": "\t} else if (tx == V34HS_TONE_AB_CALL) {\t\t/* 0x6b4ba */",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the TX_DPSK guard needs only one of its two fields",
     "find": "\t\tif (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {",
     "replace": "\t\tif (r[0x20 / 2] != 0 || r[0x22 / 2] != 0) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the TX_DPSK guard reads +0x20 twice",
     "find": "\t\tif (r[0x20 / 2] != 0 && r[0x22 / 2] != 0) {",
     "replace": "\t\tif (r[0x20 / 2] != 0 && r[0x20 / 2] != 0) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the TX_DPSK guard clears +0x22 rather than +0x20",
     "find": "\t\t\tobj->short_aa78 = 0;\n\t\t\tr[0x20 / 2] = 0;",
     "replace": "\t\t\tobj->short_aa78 = 0;\n\t\t\tr[0x22 / 2] = 0;",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the TX_DPSK guard does not restart the counter",
     "find": "\t\t\tobj->short_aa78 = 0;\n\t\t\tr[0x20 / 2] = 0;",
     "replace": "\t\t\tr[0x20 / 2] = 0;",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the TX_DPSK guard reaches through +0xaa70 rather than +0xaa6c",
     "find": "\t\tshort *r = (short *)obj->paa6c;",
     "replace": "\t\tshort *r = (short *)obj->paa70;",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "TONE_AB's limit is 400 rather than 399",
@@ -59,98 +66,114 @@
     "label": "TONE_AB's compare is strict",
     "find": "\t\tif (n <= T46_TONE_LIMIT) {",
     "replace": "\t\tif (n < T46_TONE_LIMIT) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "TONE_AB does not step the counter before comparing it",
     "find": "\t\tshort n = (short)(obj->short_aa78 + 1);",
     "replace": "\t\tshort n = (short)(obj->short_aa78);",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "TONE_AB's +0xaae2 test is inverted",
     "find": "\t\t} else if (obj->fsk.sr != 0) {",
     "replace": "\t\t} else if (obj->fsk.sr == 0) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "TONE_AB's +0xac00 test is inverted",
     "find": "\t\t} else if (obj->retrain_req != 0) {",
     "replace": "\t\t} else if (obj->retrain_req == 0) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the hand-over steps the counter rather than restarting it",
     "find": "\t\t} else {\t\t\t\t/* 0x6b4ee */\n\t\t\tobj->short_aa78 = 0;",
     "replace": "\t\t} else {\t\t\t\t/* 0x6b4ee */\n\t\t\tobj->short_aa78 = n;",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the hand-over sets bit 0 of +0x358c rather than toggling it",
     "find": "\t\t\tobj->short_358c = (short)(obj->short_358c ^ 1);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
     "replace": "\t\t\tobj->short_358c = (short)(obj->short_358c | 1);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the hand-over toggles bit 1 of +0x358c",
     "find": "\t\t\tobj->short_358c = (short)(obj->short_358c ^ 1);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
     "replace": "\t\t\tobj->short_358c = (short)(obj->short_358c ^ 2);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the hand-over goes to RX_PHASE2_ANS",
     "find": "\t\t\tobj->short_358c = (short)(obj->short_358c ^ 1);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE1_ANS);\n\t\t\tobj->short_358a = 2;",
     "replace": "\t\t\tobj->short_358c = (short)(obj->short_358c ^ 1);\n\t\t\ths_set_microstate(obj, V34HS_RX_PHASE2_ANS);\n\t\t\tobj->short_358a = 2;",
     "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the hand-over writes 1 into +0x358a like a body does",
     "find": "\t\t\tobj->short_358a = 2;",
     "replace": "\t\t\tobj->short_358a = 1;",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the head tests +0x3588 for zero rather than non-zero",
     "find": "\tif (obj->short_3588 != 0) {\n\t\tt46_chain_full(obj);",
     "replace": "\tif (obj->short_3588 == 0) {\n\t\tt46_chain_full(obj);",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the 199 compare is not strict",
     "find": "\tif (obj->short_aa78 > T46_CNT_LOW\n",
     "replace": "\tif (obj->short_aa78 >= T46_CNT_LOW\n",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the ten-bit mask is twelve bits wide",
     "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
     "replace": "\t    && (obj->fsk.sr & 0xfff) == 0x372) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the ten-bit mask is sixteen bits wide",
     "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
     "replace": "\t    && (obj->fsk.sr & 0xffff) == 0x372) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the ten-bit test is for 0x373",
     "find": "\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
     "replace": "\t    && (obj->fsk.sr & 0x3ff) == 0x373) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the 199 guard and the 0x372 guard are either rather than both",
     "find": "\tif (obj->short_aa78 > T46_CNT_LOW\n\t    && (obj->fsk.sr & 0x3ff) == 0x372) {",
     "replace": "\tif (obj->short_aa78 > T46_CNT_LOW\n\t    || (obj->fsk.sr & 0x3ff) == 0x372) {",
-    "fn": "t46_micro_tx_phase1_ans"
+    "fn": "t46_micro_tx_phase1_ans",
+    "source": "include/dsplib/v34_continuations/t46_micro_tx_phase1_ans.inc"
   },
   {
     "label": "the 1200 compare is strict",
     "find": "\tif (obj->short_aa78 <= T46_CNT_HIGH) {",
     "replace": "\tif (obj->short_aa78 < T46_CNT_HIGH) {",
-    "fn": "t46_past_the_counter"
+    "fn": "t46_past_the_counter",
+    "source": "include/dsplib/v34_continuations/t46_past_the_counter.inc"
   },
   {
     "label": "the 1200 limit is 1201",
@@ -161,49 +184,57 @@
     "label": "0x65dcd's +0xaae2 test is inverted",
     "find": "\tif (obj->fsk.sr == 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
     "replace": "\tif (obj->fsk.sr != 0) {\n\t\tt3c_txblock(obj);\t\t\t/* 0x6bd7a */",
-    "fn": "t46_past_the_counter"
+    "fn": "t46_past_the_counter",
+    "source": "include/dsplib/v34_continuations/t46_past_the_counter.inc"
   },
   {
     "label": "the chain's +0x3588 test is for 4 rather than 2",
     "find": "\tif (sub == 2) {\n\t\tt46_info0_counting(obj);",
     "replace": "\tif (sub == 4) {\n\t\tt46_info0_counting(obj);",
-    "fn": "t46_chain_full"
+    "fn": "t46_chain_full",
+    "source": "include/dsplib/v34_continuations/t46_chain_full.inc"
   },
   {
     "label": "the chain's tail tests +0x3588 for non-zero",
     "find": "\tif (sub == 0) {\n\t\tt46_past_the_counter(obj);",
     "replace": "\tif (sub != 0) {\n\t\tt46_past_the_counter(obj);",
-    "fn": "t46_chain_tail"
+    "fn": "t46_chain_tail",
+    "source": "include/dsplib/v34_continuations/t46_chain_tail.inc"
   },
   {
     "label": "0x6c3f3's 199 compare is strict",
     "find": "\tif (obj->short_aa78 <= T46_CNT_LOW) {",
     "replace": "\tif (obj->short_aa78 < T46_CNT_LOW) {",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "0x6c3f3's twelve-bit mask is sixteen bits wide",
     "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
     "replace": "\tif ((obj->fsk.sr & 0xffff) != 0xf72) {",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "0x6c3f3's twelve-bit mask is ten bits wide",
     "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
     "replace": "\tif ((obj->fsk.sr & 0x3ff) != 0xf72) {",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "0x6c3f3 tests +0xaae2 for 0xf73",
     "find": "\tif ((obj->fsk.sr & 0xfff) != 0xf72) {",
     "replace": "\tif ((obj->fsk.sr & 0xfff) != 0xf73) {",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "the count3 trace prints the stepped value",
     "find": "\t\tdsplibs_debug_printf(\"TX_PHASE_ANS: count3 = %d \\n\",\n\t\t\t\t     (int)obj->short_aa7a);\n\n\tn = (short)(obj->short_aa7a + 1);",
     "replace": "\t\tdsplibs_debug_printf(\"TX_PHASE_ANS: count3 = %d \\n\",\n\t\t\t\t     (int)obj->short_aa7a + 1);\n\n\tn = (short)(obj->short_aa7a + 1);",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "+0xaa7a's limit is thirteen",
@@ -214,79 +245,92 @@
     "label": "+0xaa7a's compare is strict",
     "find": "\tif (n <= T46_COUNT3_LIM) {",
     "replace": "\tif (n < T46_COUNT3_LIM) {",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "+0xaa7a is not stepped",
     "find": "\tn = (short)(obj->short_aa7a + 1);",
     "replace": "\tn = (short)(obj->short_aa7a);",
-    "fn": "t46_info0_counting"
+    "fn": "t46_info0_counting",
+    "source": "include/dsplib/v34_continuations/t46_info0_counting.inc"
   },
   {
     "label": "0x65df4 stores 5 into +0x3588",
     "find": "\tobj->short_3588 = 4;\n\tt46_reset_core(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"",
     "replace": "\tobj->short_3588 = 5;\n\tt46_reset_core(obj);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"",
-    "fn": "t46_body_repeated_late"
+    "fn": "t46_body_repeated_late",
+    "source": "include/dsplib/v34_continuations/t46_body_repeated_late.inc"
   },
   {
     "label": "0x65df4 and 0x6abc1 print each other's message",
     "find": "\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"\n\t\t\t\t     \"errorrecovery is initialized in \" \"TX_PHASE1_ANS\\n\");",
     "replace": "\t\tdsplibs_debug_printf(\"Repeated info0 is detected, errorrecovery \"\n\t\t\t\t     \"is initialized in TX_PHASE1_ANS\\n\");",
-    "fn": "t46_body_repeated_late"
+    "fn": "t46_body_repeated_late",
+    "source": "include/dsplib/v34_continuations/t46_body_repeated_late.inc"
   },
   {
     "label": "0x6c459 does not restart +0xaa7a",
     "find": "\tobj->short_aa7a = 0;\n\tobj->short_3588 = 4;",
     "replace": "\tobj->short_3588 = 4;",
-    "fn": "t46_body_detected"
+    "fn": "t46_body_detected",
+    "source": "include/dsplib/v34_continuations/t46_body_detected.inc"
   },
   {
     "label": "0x6c459 aims +0xaa6c at the INFO0d record",
     "find": "\tobj->paa6c = obj->msgrec;\n\tt46_reset_core(obj);",
     "replace": "\tobj->paa6c = &obj->msgrec[1];\n\tt46_reset_core(obj);",
-    "fn": "t46_body_detected"
+    "fn": "t46_body_detected",
+    "source": "include/dsplib/v34_continuations/t46_body_detected.inc"
   },
   {
     "label": "0x6f90c swaps the two records it aims at",
     "find": "\tobj->paa6c = obj->msgrec;\n\tobj->paa70 = &obj->msgrec[1];",
     "replace": "\tobj->paa6c = &obj->msgrec[1];\n\tobj->paa70 = obj->msgrec;",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c stores 4 into +0x3588 instead of or-ing it",
     "find": "\n\tobj->short_3588 = (short)(obj->short_3588 | 4);\n\tt46_reset_core(obj);",
     "replace": "\n\tobj->short_3588 = 4;\n\tt46_reset_core(obj);",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c calls the INFO0d builder on +0x359c == 0x65",
     "find": "\tif (obj->role == 0x66)\n\t\tV34SetINFO0dBits(obj,",
     "replace": "\tif (obj->role == 0x65)\n\t\tV34SetINFO0dBits(obj,",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c calls the INFO0d builder unconditionally",
     "find": "\tif (obj->role == 0x66)\n\t\tV34SetINFO0dBits(obj,",
     "replace": "\tif (1)\n\t\tV34SetINFO0dBits(obj,",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c hands the INFO0a record to the INFO0d builder",
     "find": "\t\tV34SetINFO0dBits(obj, (short *)obj->paa70);",
     "replace": "\t\tV34SetINFO0dBits(obj, (short *)obj->paa6c);",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c does not clear +0xac00",
     "find": "\tobj->retrain_req = 0;\n\tt3c_txblock(obj);",
     "replace": "\tt3c_txblock(obj);",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "0x6f90c resets before it builds the message",
     "find": "\tV34SetINFO0aBits(obj, (short *)obj->msgrec);",
     "replace": "\tt46_reset_core(obj);\n\tV34SetINFO0aBits(obj, (short *)obj->msgrec);",
-    "fn": "t46_body_retrain"
+    "fn": "t46_body_retrain",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc"
   },
   {
     "label": "the reset clears nine message shorts, not ten",
@@ -451,6 +495,8 @@
   {
     "label": "the INFO0d record is at +0xa980",
     "find": "\tobj->paa6c = obj->msgrec;\n\tobj->paa70 = &obj->msgrec[1];",
-    "replace": "\tobj->paa6c = obj->msgrec;\n\tobj->paa70 = (struct v34_bitsource *)((char *)&obj->msgrec[1] + 4);"
+    "replace": "\tobj->paa6c = obj->msgrec;\n\tobj->paa70 = (struct v34_bitsource *)((char *)&obj->msgrec[1] + 4);",
+    "source": "include/dsplib/v34_continuations/t46_body_retrain.inc",
+    "fn": "t46_body_retrain"
   }
 ]
