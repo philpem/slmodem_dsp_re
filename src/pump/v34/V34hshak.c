@@ -3606,8 +3606,9 @@ t3m_errrec_arm(struct t3m_frame *f)
  *      0x78    invert bit 0 of +0x358c, and leave with the object's txstate
  *      0xa2    force txstate to SILENCE and microstate to RX_PHASE2_ANS
  *              (0x32), clear the
- *              counter, and leave with 5 -- both forcings announce
- *              themselves, and both are the setters' compare-print-store
+ *              counter, and leave with the txstate after the transitions.
+ *              Both setters use compare-print-store; the traced microstate
+ *              transition reloads txstate at 0x6d570.
  *      else    leave with the object's txstate
  */
 static void
@@ -3629,15 +3630,16 @@ t3m_micro48(struct t3m_frame *f)
 		 * 0x6c670.  Both transitions are the setters inlined, and
 		 * the first leaves 5 in %ecx on BOTH arms of its already-there
 		 * test -- the value loaded from +0x3596 when it matches,
-		 * 0x6c6a4's `mov $0x5,%ecx` when it does not -- which is why
-		 * the dispatch is reached with a literal SILENCE and not with
-		 * a re-read.
+		 * 0x6c6a4's `mov $0x5,%ecx` when it does not.  The later
+		 * microstate trace path reloads +0x3596 at 0x6d570; the
+		 * untraced path retains the known 5.
 		 */
 		/* 0x6c670. */
 		hs_set_txstate(f->obj, V34HS_SILENCE);
 		hs_set_microstate(f->obj, V34HS_RX_PHASE2_ANS);
 		T3M_U16(f, T3M_COUNTER) = 0;
-		f->tx = (V34HS_SILENCE);
+		/* 0x6d570 reloads after the traced microstate transition. */
+		f->tx = f->obj->txstate;
 		return;
 	}
 

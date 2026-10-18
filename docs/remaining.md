@@ -97,6 +97,31 @@ the canonical comparison objects. The ordered partial link still differs:
 five-byte wrapper discrepancy still lacks an independently supported source
 or translation-unit boundary change, so no edit is retained there.
 
+The following CRC operation pass preserves that exact set while bringing the
+V.90 and V.92 data unpackers closer in structure: their fixed CRC shifts and
+integer absolute residual checks now follow the original promoted loops.
+`V90Jd::unPackData` grows from 525 to 854 bytes against 879; the V.92 data
+unpacker grows from 590 to 988 against 1,003. Both remain `SIZE`. V90MP and
+V92CP also recover the original branchless absolute value operation; the MP
+size gap grows from 15 to 16 bytes, while the CP checker's halves from 32 to
+16. Its inlined decoder caller's gap grows, although the original absolute
+value loop is restored there too. These are operation recoveries, with no
+additional exact or register-allocation gains.
+
+The V.34 transmit dispatch and common tail now take the modem object directly,
+removing their synthetic-frame indirections. Sixteen field substitutions
+preserve their complete owner offsets and widths under the period compiler.
+The incoming state parameter and the conditional reload in mode 1 remain
+separate. A microstate-48 owner read also restores the reload after the trace
+call; its emitted untraced path still reloads rather than carrying the known
+constant, consistent with the remaining frame-pointer alias boundary. This is
+partial read-age recovery, with no reachable callback-mutation bug claimed.
+The original table/tail closure is 155 instructions over 666 disjoint bytes;
+its boundaries differ from the emitted source helpers, so their sizes are not
+an identity score. All nine exact functions in the translation unit remain
+exact. The new combined strict partial comparison still differs: 72,184 of
+943,398 positioned bytes and 1,002 of 18,317 relocations match.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
