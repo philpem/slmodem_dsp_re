@@ -431,9 +431,9 @@ V90Demapper::resetLinearMappStudy(unsigned int n)
  * over-capacity arm below reaches the multiply with it unset.  THE OBJECT
  * DOES EXACTLY THAT -- it loads 0x20(%esp) at 0x31229 having never written it
  * on that path -- and it is unobservable, because `level` is zero there and
- * anything times zero is zero.  This reconstruction initialises it instead,
- * which is a deviation of one instruction and no behaviour: docs/deviations.md
- * D385.
+ * anything times zero is zero at the instruction level.  The reproduction
+ * build leaves the local unset; the normal build initialises it to one.
+ * C++ still treats the unset read as undefined: docs/deviations.md D385.
  *
  * THE SEARCH IS A LINEAR SCAN DOWN A DESCENDING CONSTELLATION, unswitched by
  * the compiler into two copies that differ only in their bound -- `size - 1`
@@ -465,7 +465,11 @@ short
 V90Demapper::hardDecision(short in)
 {
 	unsigned int code = 0;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	int sign;
+#else
 	int sign = 1;
+#endif
 	short level = 0;
 
 	decisionFramePosition = (short)rbsFramePosition;
