@@ -17,6 +17,19 @@ FIELDS={0x6c:('float_06c','V34/V90: -12.0f minus obj signed16+25dc tx_pwr_reduct
 TARGET='VPcmV34GetDiagnostics'
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def result_owner(rows):
+    depth=0
+    for i in rows:
+        if i.mnemonic=='push':depth+=4
+        elif i.mnemonic=='pop':depth-=4
+        elif i.mnemonic in ('sub','add') and i.op_str.startswith('esp, '):
+            amount=i.operands[1].imm;depth+=amount if i.mnemonic=='sub' else -amount
+        elif i.mnemonic=='mov' and len(i.operands)==2 and i.operands[1].type==X86_OP_MEM:
+            mem=i.operands[1].mem
+            if i.reg_name(mem.base)=='esp' and not mem.index and mem.disp==depth+8:
+                return i.reg_name(i.operands[0].reg)
+        if i.mnemonic.startswith('j') or i.mnemonic=='call':break
+    raise AssertionError('second cdecl argument owner not recovered before first branch')
 def stores(rows,owner):
     result={}
     for i in rows:
@@ -38,7 +51,8 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,default=ROOT/'build/v34-status-owners293');args=ap.parse_args();args.out.mkdir(exist_ok=True)
     blob=Path(d.b.BLOB).resolve();native=s.load(blob);ours=ROOT/'build/period/src_pump_v34_v34diag.o';current=s.load(ours)
     outputs={}
-    for label,rows,owner in [('native',native[TARGET],'esi'),('current',current[TARGET],'ebx')]:
+    for label,rows in [('native',native[TARGET]),('current',current[TARGET])]:
+        owner=result_owner(rows)
         output=stores(rows,owner);validate(output);outputs[label]={hex(k):v for k,v in output.items()}
     positive=stores(native[TARGET],'esi');negative=copy.deepcopy(positive);negative.pop(0x74)
     try:validate(negative)
@@ -50,13 +64,21 @@ def main():
     for expr in ('cfg->baud','cfg->rx_baud','cfg->carrier','cfg->rx_carrier','cfg->txbits','cfg->rxbits','obj->tx_bps','obj->rx_bps','obj->rrn_local + obj->rrn_remote','obj->short_ac14','obj->short_ac12','obj->v90_timing_offset','obj->rtd','mod->bitsToSymbol->transmitter->K'):
         assert expr in body,expr
     obj=ROOT/'build/period/src_pump_v34_VPcmV34Main.o';getters={}
-    for name in d.b.sizes(str(obj)):
+    getter_objects={}
+    for owner_object in (obj,ours):
+        for name in d.b.sizes(str(owner_object)):
+            if name.startswith(('VPcmV34Get','GetVPcm','getTiming')):
+                assert name not in getter_objects
+                getter_objects[name]=owner_object
+    for name,owner_object in getter_objects.items():
         if name.startswith(('VPcmV34Get','GetVPcm','getTiming')):
-            getters[name]={'verdict':list(d.b.verdict(*d.b.body(str(blob),name),*d.b.body(str(obj),name))),'native':d.b.insns(str(blob),name),'current':d.b.insns(str(obj),name)}
+            getters[name]={'object':str(owner_object),'verdict':list(d.b.verdict(*d.b.body(str(blob),name),*d.b.body(str(owner_object),name))),'native':d.b.insns(str(blob),name),'current':d.b.insns(str(owner_object),name)}
+    getters.pop('VPcmV34GetDiagnostics',None)
+    getters.pop('VPcmV34GetVisualDiagnostics',None)
     assert len(getters)==14 and sum(v['verdict'][0]=='EXACT' for v in getters.values())==11
     for name in (TARGET,'GetVPcmMinimalTxPowerReduction','VPcmV34GetMaxUpstreamRateIndex','VPcmV34GetCurrentTxBitRate'):
         (args.out/(name+'.native.dis')).write_text(subprocess.check_output(['python3',str(ROOT/'tools/dis.py'),str(blob),name],text=True,stderr=subprocess.DEVNULL))
-    report={'revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'input_hashes':{str(p):sha(p) for p in (blob,ours,obj,source,ROOT/'src/pump/v34/VPcmV34Main.cpp',ROOT/'include/dsplib/v34fsk.h',ROOT/'include/dsplib/v34recv.h',ROOT/'include/dsplib/TAG_DiagnosticResults.h',ROOT/'include/dsplib/VPcmFloModem.h')},'diagnostic_verdict':list(d.b.verdict(*d.b.body(str(blob),TARGET),*d.b.body(str(ours),TARGET))),'output_fields':{hex(k):{'field':v[0],'manual_native_to_source_review':v[1]} for k,v in FIELDS.items()},'output_store_sites':outputs,'output_field_count':19,'native_instruction_count':len(native[TARGET]),'current_instruction_count':len(current[TARGET]),'controls':'All19 fields found in both bodies; known x87 positive0x70/0x74; dropped0x74 rejected.14publicgetters/11 exact controls.','getters':getters,'manual_nonexact_getter_review':{'GetVPcmMinimalTxPowerReduction':'obj+ac3c->config+44 signed16 clamp[-10,7],config+54 codec;obj+3548->session+6120 info0Layout and+610c params;+4f8 sensitive;+4f4 highleveltx writes;obj+24c/+250 receiver flags;obj+3554/+3558/+355c echo publications. All source fields agree. Native7b67 rereads params pointer at session+610c; current also rereads it. Existing comment incorrectly calls that a reloaded session pointer.','VPcmV34GetMaxUpstreamRateIndex':'obj+ac3c->config+3c maxRate;obj+3548->session+6120/+610c,params+4f8 sensitive and+4fc cap. All agree;no offset bug.','VPcmV34GetCurrentTxBitRate':'obj+3548->session;role signed16+359c,status32+0;fallback signed16+aa88;V90 session+1758->tx+2c state,+40 bitsToSymbol->+0 mapper->+4 bitsPerFrame;V92 session+6124->tx+2c phase,+4c bitsToSymbol->+0 transmitter->+4 K. All agree.'},'limits':'Result registers are manually verified fixed callee-saved owners (nativeESI/currentEBX); this census covers stores addressed through those owners and checks source assignment destination names, not arbitrary alias stores or delegated getAT_UD output fields. Native source-owner ledger is manual instruction-backed review, not inferred automatically from equal destination sets. Current SIZE40 diagnostic mismatch includes native inlineSNR versus source out-of-line call; same destinations do not prove path equivalence. Existing t_v34diag planted-object fixtures are exploratory component probes, not lifecycle reachability proof. No behavior discrepancy demonstrated; no new source or test mutation licensed.'}
+    report={'revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'input_hashes':{str(p):sha(p) for p in (blob,ours,obj,source,ROOT/'src/pump/v34/VPcmV34Main.cpp',ROOT/'include/dsplib/v34fsk.h',ROOT/'include/dsplib/v34recv.h',ROOT/'include/dsplib/TAG_DiagnosticResults.h',ROOT/'include/dsplib/VPcmFloModem.h')},'diagnostic_verdict':list(d.b.verdict(*d.b.body(str(blob),TARGET),*d.b.body(str(ours),TARGET))),'output_fields':{hex(k):{'field':v[0],'manual_native_to_source_review':v[1]} for k,v in FIELDS.items()},'output_store_sites':outputs,'output_field_count':19,'native_instruction_count':len(native[TARGET]),'current_instruction_count':len(current[TARGET]),'controls':'All19 fields found in both bodies; known x87 positive0x70/0x74; dropped0x74 rejected.14publicgetters/11 exact controls.','getters':getters,'manual_nonexact_getter_review':{'GetVPcmMinimalTxPowerReduction':'obj+ac3c->config+44 signed16 clamp[-10,7],config+54 codec;obj+3548->session+6120 info0Layout and+610c params;+4f8 sensitive;+4f4 highleveltx writes;obj+24c/+250 receiver flags;obj+3554/+3558/+355c echo publications. All source fields agree. Native7b67 rereads params pointer at session+610c; current also rereads it. Existing comment incorrectly calls that a reloaded session pointer.','VPcmV34GetMaxUpstreamRateIndex':'obj+ac3c->config+3c maxRate;obj+3548->session+6120/+610c,params+4f8 sensitive and+4fc cap. All agree;no offset bug.','VPcmV34GetCurrentTxBitRate':'obj+3548->session;role signed16+359c,status32+0;fallback signed16+aa88;V90 session+1758->tx+2c state,+40 bitsToSymbol->+0 mapper->+4 bitsPerFrame;V92 session+6124->tx+2c phase,+4c bitsToSymbol->+0 transmitter->+4 K. All agree.'},'limits':'Result pointer owners are recovered from the second cdecl argument using explicit prologue stack depth and then manually verified fixed callee-saved registers; this census covers stores addressed through those owners and checks source assignment destination names, not arbitrary alias stores or delegated getAT_UD output fields. Native source-owner ledger is manual instruction-backed review, not inferred automatically from equal destination sets. The original audit found SIZE40 with an out-of-line SNR call; the visibility refinement restores inlining and leaves SIZE2. Same destinations do not prove path equivalence. Existing t_v34diag planted-object fixtures are exploratory component probes, not lifecycle reachability proof. No behavior discrepancy demonstrated; no new source or test mutation licensed.'}
     (args.out/'audit.json').write_text(json.dumps(report,indent=2)+'\n')
     print('19/19 output fields in both bodies;1 float-store omission refused;14getter bodies reviewed/11 EXACT;0 wrong-owner discrepancies demonstrated')
 
