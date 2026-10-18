@@ -7,9 +7,9 @@
  * where it does and does not follow V90Jd's.
  *
  * Plain cdecl, `this` as the first stack argument (finding F215).  The CRC
- * helper is a duplicate of V90Jd.cpp's rather than shared: the original keeps
- * these in two translation units and each carries its own copy, and a shared
- * header would be a claim about the original that nothing here supports.
+ * recurrence agrees with V90Jd.cpp. The packet methods retain direct member
+ * accesses and constant CRC shift indices: the reference promotes all sixteen
+ * CRC words across the bit loops and keeps these methods out of the getters.
  */
 
 #include <stddef.h>
@@ -312,26 +312,11 @@ V92Jd::resetCrc()
  * The same CRC-16 V90Jd.cpp computes: sixteen ints shifting down toward
  * crc[0], feedback t = <input bit> + crc[0] folded into positions 3, 10 and
  * 15.  Addition with a one-bit mask afterwards is XOR, which is why the input
- * byte goes in unmasked -- only its low bit can reach the answer.
+ * byte goes in unmasked -- only its low bit can reach the answer. Constant
+ * shift indices and direct member inputs preserve the reference's promotion
+ * graph; separate pointer arguments with a rolled shift lose that graph and
+ * lower the period compiler's cost enough to inline both packers into getters.
  */
-static void
-v92jd_crc_bits(int *crc, const unsigned char *in)
-{
-	int k;
-
-	for (k = 0; k <= 15; k++) {
-		int t = in[k] + crc[0];
-		int tap3 = (crc[4] + t) & 1;
-		int tap10 = (crc[11] + t) & 1;
-		int i;
-
-		for (i = 0; i <= 14; i++)
-			crc[i] = crc[i + 1];
-		crc[3] = tap3;
-		crc[10] = tap10;
-		crc[15] = t & 1;
-	}
-}
 
 void
 V92Jd::packJdData()
@@ -360,9 +345,32 @@ V92Jd::packJdData()
 	for (i = 0; i <= 15; i++)
 		crc[i] = 1;
 
-	for (g = 0; g <= 1; g++)
-		v92jd_crc_bits(crc,
-			       &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);
+	for (g = 0; g <= 1; g++) {
+		int k;
+		for (k = 0; k <= 15; k++) {
+			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+	}
 
 	for (i = 0; i <= 15; i++)
 		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
@@ -397,9 +405,32 @@ V92Jd::packJdPhaseData()
 	for (i = 0; i <= 15; i++)
 		crc[i] = 1;
 
-	for (g = 0; g <= 1; g++)
-		v92jd_crc_bits(crc,
-			       &phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);
+	for (g = 0; g <= 1; g++) {
+		int k;
+		for (k = 0; k <= 15; k++) {
+			int t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+	}
 
 	for (i = 0; i <= 15; i++)
 		phaseBits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
