@@ -8868,10 +8868,13 @@ t72_rx_l1(struct v34_object *obj)
 	}
 
 	/*
-	 * 0x65140, and the two guards below read what it writes:
+	 * 0x65140.  The two guards below read the FSK state after this call:
 	 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
-	 * 0x65153, both sixteen bits, both on fields this call has
-	 * just filled in.  No fixture can choose them by poking.
+	 * 0x65153, both sixteen bits.  `fskdemodulate` returns without
+	 * changing either field when `rx->retrain_gate` is nonzero.
+	 * `t_v34hsrx72` uses that inhibit to preserve seeded values for
+	 * exploratory component probes; those seeds do not establish a
+	 * public modem history reaching this state.
 	 */
 	fskdemodulate(obj,					/* 0x65140 */
 		      rx->burst,
