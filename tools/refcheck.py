@@ -200,6 +200,11 @@ DEV_REF_TAG = re.compile(r"\b(D-[A-Z][A-Z0-9]*-\d+)\b")
 ABI_VARIANT = re.compile(
     r"`[CD][012]`"
     r"|`?\b[CD][012]\b`?(?:\s*[/,]\s*`?\b[CD][012]\b`?)+")
+# Hayes command strings use `AT&D0` through `AT&D3`; the embedded D-number is
+# a serial-control setting, not a deviation citation. Require command-token
+# boundaries so a longer identifier or unsupported setting such as D77 still
+# reaches the ordinary reference checker.
+AT_D_COMMAND = re.compile(r"(?<![A-Z0-9_])AT&D[0-3](?![A-Z0-9_])", re.I)
 NUM = re.compile(r"\d+[a-z]?")
 
 SCAN_EXT = (".c", ".h", ".md", ".py")
@@ -326,7 +331,8 @@ def refs_in(path, text):
             continue
         found.append(("finding", m.group(1), lines[m.start()],
                       ctx(m.start(), m.end())))
-    masked = [m.span() for m in ABI_VARIANT.finditer(flat)]
+    masked = [m.span() for pattern in (ABI_VARIANT, AT_D_COMMAND)
+              for m in pattern.finditer(flat)]
     for m in DEV_REF.finditer(flat):
         if any(a <= m.start() < b for a, b in masked):
             continue
