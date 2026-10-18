@@ -45,6 +45,8 @@
  * so the field, not a register, carries the loop.
  */
 
+#include <math.h>
+
 #include "dsplib/V90Parameters.h"
 
 #include "dsplib/debug.h"
@@ -872,19 +874,16 @@ V90Parameters::loadModemParamsData()
 		 * only thing that objected was the differential test.
 		 */
 		float pr = (float)(int)(tempPR / 5) * 0.5f;
-		int whole = (int)pr;
+		int whole = (int)fabsf(pr);
 		int frac = (int)((pr - (float)(int)pr) * 100.0f);
 
 		DIGITAL_POWER_REDUCTION = pr;
 
 		/*
-		 * The object takes the whole part from |v| and the fraction
-		 * from the signed v, then makes the fraction positive.
-		 * `trunc` is odd, so `(int)|v|` and `|(int)v|` are the same
-		 * number and this is the second spelling.
+		 * The object applies `fabs` before converting the whole part
+		 * (0x2a731, then 0x2a76b). The fraction comes from signed pr
+		 * and is made positive after conversion.
 		 */
-		if (whole < 0)
-			whole = -whole;
 		if (frac < 0)
 			frac = -frac;
 
