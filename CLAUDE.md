@@ -10,6 +10,20 @@ is about *how to work here* rather than what the work is.
 progress belonging to a different effort. To you it does not exist. Scope any
 subagent prompt to exclude it.
 
+## Experiments and temporary files
+
+Use `scratch/<investigation>/` in the current worktree for one-off scripts,
+experimental source variants, temporary inputs and investigation artifacts.
+The repository-root `scratch/` directory is gitignored. Keep each investigation
+in its own directory; use it instead of `/tmp` or adding temporary scripts to
+`tools/`. Standard build outputs still belong in `build/`.
+
+Record durable conclusions in the relevant documentation, with reproduction
+commands, revisions and artifact hashes where needed. A useful finding does
+not make its temporary scripts maintained tools. Add a tracked utility only
+when it has definite ongoing value: a reusable workflow, a documented entry
+point and maintained validation. See [tools guidance](tools/README.md).
+
 ## Scope: which services are open, and the one that is not
 
 This was a conversational rule for a long time and had no home in the tree,
