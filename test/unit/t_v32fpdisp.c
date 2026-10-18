@@ -73,6 +73,7 @@
 #include "dsplib/v32fpstat.h"
 #include "dsplib/v32hdx.h"
 #include "dsplib/v32hdxst.h"
+#include "dsplib/v32seq.h"
 
 /* The blob's copies. */
 extern void *ref_V32FP_create(const void *cfg, void *arg1);
@@ -82,6 +83,7 @@ extern int ref_V32FP_status(void *modem, void *st);
 extern int ref_V32FP_modem(void *modem, const int *txbits, short *out,
 			   const short *in, int *rxbits, int *nout, int *nin);
 extern int ref_Control_Flag;
+extern void ref_StoreReg(struct v32_modem *, short, short);
 
 extern void *ref_V32_PROTOCOL[9];
 extern void ref_v32_handshake(void *modem, unsigned short *txdata,
@@ -453,6 +455,50 @@ test_control(void)
 	return diff_end();
 }
 
+/*
+ * Synthetic component handoff probe: v32_data sets mode RING_RESP after a
+ * positive RenegotiateDetectV32 result, then calls V32FP_control.  This test
+ * models that handoff on constructor-built objects; it does not establish
+ * the preceding detector or modem signal history.  StoreReg supplies a
+ * nonzero register through its normal API.  The ordinary constructor-backed
+ * control sweep above remains the lifecycle control for renegotiation.
+ */
+static int
+test_control_ring_response(void)
+{
+	struct v32fp_cfg cfg;
+	struct v32fp_ctl ca, cb;
+	void *a, *b;
+
+	diff_begin("V32FP_control modeled ring-response handoff");
+	make_cfg(&cfg, 0, 9600, 60, 1);
+	a = V32FP_create(&cfg, 0);
+	b = ref_V32FP_create(&cfg, 0);
+	if (a == 0 || b == 0) {
+		diff_eq_int("both objects built", 0, 1, 0);
+		return diff_end();
+	}
+	StoreReg((struct v32_modem *)a, 0x1357, 4);
+	ref_StoreReg((struct v32_modem *)b, 0x1357, 4);
+	F_U16(OBJ_HDX(a), 0x76) = V32_MODE_RING_RESP;
+	F_U16(OBJ_HDX(b), 0x76) = V32_MODE_RING_RESP;
+	ca = V32_CTL;
+	ca.ctl1 = V32_CTL1_RENEG;
+	cb = ca;
+	diff_eq_int("control returns", V32FP_control(a, &ca),
+		    ref_V32FP_control(b, &cb), 0);
+	/* First byte identifies HDX +0x44; include its adjacent +0x46 word. */
+	diff_eq_obj_(__FILE__, __LINE__, "ring-response register reset",
+		"struct v32_hdx (region +0x44)", FIELD(OBJ_HDX(a), 0x44),
+		FIELD(OBJ_HDX(b), 0x44), 4, 0);
+	diff_eq_int("ring-response register 4 cleared", F_U16(OBJ_HDX(a), 0x44), 0, 0);
+	diff_eq_int("request consumed", ca.ctl1, cb.ctl1, 0);
+	cmp_object("ring-response", a, b, 0);
+	V32FP_delete(a);
+	ref_V32FP_delete(b);
+	return diff_end();
+}
+
 /* ------------------------------------------------------------------------ */
 
 /*
@@ -645,6 +691,7 @@ main(void)
 	rc |= test_create();
 	rc |= test_status();
 	rc |= test_control();
+	rc |= test_control_ring_response();
 	rc |= test_modem();
 	rc |= test_protocol_table();
 
