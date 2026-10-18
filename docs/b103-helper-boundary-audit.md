@@ -224,3 +224,72 @@ The replay raw-reproduces both frozen baseline objects, crosses both owner
 choices independently, and retains the same complete pair controls and
 compiler dumps as the preceding replay. It also checks that the retained
 cell's source literally equals the adopted source.
+
+## Modem loop and circular-index widths
+
+The next screen starts from `76630dbd7`. Constructor diagnostics and shared
+schema history were reviewed first; no new missing constructor call was
+established. The modem dispatcher supplies independent width witnesses.
+Its five outer loops sign-extend the incremented low word at 0x8f042,
+0x8f074, 0x8f165, 0x8f1a0 and 0x8f2a2. Source instead used an `int` index.
+The first copy, mark-fill and input-filter loops compare against zero-extended
+count words, whereas source explicitly cast those limits to signed short.
+The pad loop still begins at the signed input count; the output-copy limit
+was already unsigned. Only the three mismatched limit conversions change.
+
+| Cell | Modem bytes | Reference verdict | Changed bodies |
+| --- | ---: | --- | --- |
+| Baseline | 714 | SIZE(61) | none |
+| Short outer index | 734 | SIZE(41) | modem, constructor |
+| Unsigned outer limits | 714 | SIZE(61) | modem |
+| Both outer widths | 751 | SIZE(24) | modem |
+| Direct signed-short circular field, retained | 783 | SIZE(8) | modem |
+| Later filter owner captures, rejected | 799 | SIZE(24) | modem |
+
+The reference modem is 775 bytes. The independent outer cross distinguishes
+index narrowing from limit extension, including the otherwise unchanged
+length of the unsigned-limit cell. First RTL already contains the short
+index's narrow/sign-extension boundary and the unsigned count conversions.
+The short-index-only cell also perturbs the constructor's register choices;
+the retained combined source leaves that bystander entirely unchanged.
+
+The filter has a separate field-publication witness. Native code increments
+the low word of `bpf_idx`, compares that signed word to `bpf_taps` at
+0x8f0ac, and publishes either the incremented word or zero. It loads the
+signed index for history access and reloads it after the history store
+(0x8f0f0). The previous widened local compared an untruncated increment
+and retained the local across the history write. The retained source
+increments/resets the actual short field and reads it at each use. Its
+first RTL preserves the HI comparison and post-store field read. This is
+native arithmetic and value-age evidence, without a claim that invalid
+internal indices arise in normal operation.
+
+One further cell moves history, coefficient and tap captures to their
+observed native use boundaries. GCC still hoists the pointer loads outside
+the filter loop, so that cell does not recover the native load graph. It
+is recorded and excluded. The remaining modem mismatch includes that
+unresolved load/alias context and allocation/scheduling differences; the
+source is still nonexact. No additional declaration or register palette was
+run, and no original source spelling is claimed uniquely recovered.
+
+The retained pair changes only `B103FP_modem`. Other 16 canonical bodies and
+relocations are unchanged; all 17 strong exports, nontext bytes and section
+metadata, nontext relocations and resolved imports agree with baseline.
+All 13 exact bodies remain exact. The unchanged four focused period
+fixtures pass with zero failures, including the existing 120,048 modem
+checks and real link fixture. Those fixtures exercise normal component
+counts and circular-filter wraps; they do not establish reachability for
+negative counts, oversized staging requests or corrupted internal indices.
+No such synthetic fixture was added to justify the correction.
+
+```sh
+python3 tools/recovery_b103_modem_widths.py \
+  --objects build/b103-owner-baseline --out /tmp/b103-modem-widths
+make period T='t_b103fp t_b103hdx t_b103create t_b103link' J=8
+```
+
+The six-cell replay pins the source revision, raw-reproduces both frozen
+post-owner objects, preserves complete commands and RTL dumps, checks the
+full pair for each cell, and requires retained source equality. The rejected
+owner-capture cell stays visible. Full `make phase` remains the integration
+gate; the eight-byte length gap alone is not an instruction-distance claim.
