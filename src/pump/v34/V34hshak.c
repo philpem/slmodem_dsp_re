@@ -9964,8 +9964,9 @@ setInitialPhase(void *objp)
  * There are TWO tables, chosen by whether `role` is 0x65, and they agree
  * except on states 5, 6 and 7 -- the fast part of the acquisition ramp --
  * so the second is a retuning of the same schedule rather than a different
- * one.  Both are reproduced as one switch with the variant inline, since
- * splitting them would hide how little differs.
+ * one. Keep both role-specific switches and their direct reporting arms:
+ * collapsing these lowers the period compiler's inline cost and absorbs
+ * this helper into TimingV34, where the reference retains two calls.
  *
  * States 0 and 1 install nothing.  States 5 and 8 additionally report the
  * timing offset to the V.90 side, as `timing_ppm * 10` -- the only place that
@@ -9980,56 +9981,97 @@ setTimingStateParameters(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
-	int variant = (obj->role == 0x65);
-	int state = (short)rx->pllcnt;
-	int report = 0;
-
-	if ((unsigned)state <= 8) {
-		switch (state) {
+	if (obj->role != 0x65) {
+		switch ((int)(short)rx->pllcnt) {
+		case 0:
+		case 1:
+			break;
 		case 2:
-			rx->timing_p_gain = 0x36b0; rx->timing_i_gain = 0;    rx->dwell_limit = 0x190;
+			rx->timing_p_gain = 0x36b0;
+			rx->timing_i_gain = 0x0;
+			rx->dwell_limit = 0x190;
 			break;
 		case 3:
-			rx->timing_p_gain = 0x2ee0; rx->timing_i_gain = 0xd2; rx->dwell_limit = 0x3e8;
+			rx->timing_p_gain = 0x2ee0;
+			rx->timing_i_gain = 0xd2;
+			rx->dwell_limit = 0x3e8;
 			break;
 		case 4:
-			rx->timing_p_gain = 0x1770; rx->timing_i_gain = 0x5a; rx->dwell_limit = 0x3e8;
+			rx->timing_p_gain = 0x1770;
+			rx->timing_i_gain = 0x5a;
+			rx->dwell_limit = 0x3e8;
 			break;
 		case 5:
-			rx->timing_p_gain = 0xdac;  rx->timing_i_gain = 0x1e;
-			rx->dwell_limit = (short)(variant ? -1 : 0x3e8);
-			report = 1;
+			rx->timing_p_gain = 0xdac;
+			rx->timing_i_gain = 0x1e;
+			rx->dwell_limit = 0x3e8;
+			VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
 			break;
 		case 6:
-			if (variant) {
-				rx->timing_p_gain = 0xdac; rx->timing_i_gain = 3;
-			} else {
-				rx->timing_p_gain = 0x7d0; rx->timing_i_gain = 0xa;
-			}
+			rx->timing_p_gain = 0x7d0;
+			rx->timing_i_gain = 0xa;
 			rx->dwell_limit = 0x7d0;
 			break;
 		case 7:
-			if (variant) {
-				rx->timing_p_gain = 0x3e8; rx->timing_i_gain = 2;
-				rx->dwell_limit = 0x7d0;
-			} else {
-				rx->timing_p_gain = 0x5dc; rx->timing_i_gain = 2;
-				rx->dwell_limit = 0xfa0;
-			}
+			rx->timing_p_gain = 0x5dc;
+			rx->timing_i_gain = 0x2;
+			rx->dwell_limit = 0xfa0;
 			break;
 		case 8:
-			rx->timing_p_gain = 0x1f4;  rx->timing_i_gain = 1;    rx->dwell_limit = -1;
-			report = 1;
+			rx->timing_p_gain = 0x1f4;
+			rx->timing_i_gain = 0x1;
+			rx->dwell_limit = -1;
+			VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
 			break;
-		default:		/* 0 and 1 install nothing */
+		default:
+			break;
+		}
+	} else {
+		switch ((int)(short)rx->pllcnt) {
+		case 0:
+		case 1:
+			break;
+		case 2:
+			rx->timing_p_gain = 0x36b0;
+			rx->timing_i_gain = 0x0;
+			rx->dwell_limit = 0x190;
+			break;
+		case 3:
+			rx->timing_p_gain = 0x2ee0;
+			rx->timing_i_gain = 0xd2;
+			rx->dwell_limit = 0x3e8;
+			break;
+		case 4:
+			rx->timing_p_gain = 0x1770;
+			rx->timing_i_gain = 0x5a;
+			rx->dwell_limit = 0x3e8;
+			break;
+		case 5:
+			rx->timing_p_gain = 0xdac;
+			rx->timing_i_gain = 0x1e;
+			rx->dwell_limit = -1;
+			VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
+			break;
+		case 6:
+			rx->timing_p_gain = 0xdac;
+			rx->timing_i_gain = 0x3;
+			rx->dwell_limit = 0x7d0;
+			break;
+		case 7:
+			rx->timing_p_gain = 0x3e8;
+			rx->timing_i_gain = 0x2;
+			rx->dwell_limit = 0x7d0;
+			break;
+		case 8:
+			rx->timing_p_gain = 0x1f4;
+			rx->timing_i_gain = 0x1;
+			rx->dwell_limit = -1;
+			VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
+			break;
+		default:
 			break;
 		}
 	}
-
-	if (report)
-		VPcmV34LogTimingOffset(obj, (short)(rx->timing_ppm * 10));
-
-	/* State 2 alone also sets the dwell from the frame length. */
 	if ((unsigned short)rx->pllcnt == 2)
 		rx->report_interval = (short)(obj->ratecfg.rx_baud >> 3);
 }
