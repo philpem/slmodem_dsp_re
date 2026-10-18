@@ -3321,8 +3321,10 @@ Trace the instruction back to the source owner before reopening a closed family.
 
 Whole configuration capture is a separate source boundary from pointer-store
 permutations. V22 FSE's bounded copy-before-assignment control recovers instruction
-structure but leaves five register bytes; retain that grade-1 preimage for compiler
-allocation tracing and decline production adoption until strict proof.
+structure but leaves five register bytes. The initial decision to withhold it
+pending strict identity is superseded by the completed period and mutation
+validation below; complete-function identity is not a prerequisite for retaining
+an independently supported source boundary.
 
 A short source loop counter can still have an SI pseudo in GCC3 RTL. Tone IIR's
 short tap counters expose low-word sign extension and cmpw boundaries while
@@ -4786,7 +4788,9 @@ partial recoveries even when the whole function misses. Validate values under
 the period compiler and audit all unmatched helper bodies too. Preserve
 original high-count defects; do not execute an unsafe wrap/nontermination case
 merely to add coverage. Report larger size gaps and exact-loss controls openly;
-V32's unresolved collateral is withheld, not fitted with local permutations.
+V32's collateral was initially withheld. The later period-stage audit below
+identifies its scratch-register cause and retains the native unsigned count
+without fitting local permutations.
 [Complete partial-recovery table](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/boundary-transfer-results.md).
 
 ### Fail an unknown test selection before claiming a denominator (F11993)
@@ -8248,3 +8252,144 @@ rejected; it still fails to recover the reference's per-iteration loads.
 These controls preserve the other family bodies and pass all four focused
 period fixtures. The remaining register and alias-context differences need
 new evidence, not another arbitrary spelling palette.
+
+## State what mutation evidence establishes
+
+A caught mutant proves that a particular injected fault makes a particular
+fixture fail. It does not establish valid input history, complete output
+coverage, or fidelity of the fixture's oracle. A fixture can reject arithmetic
+mutants while missing an omitted diagnostic or using an impossible internal
+state. Report assertion failures and runtime signals separately, and do not
+interpret either as proof of fixture validity.
+
+For reconstruction work, validate the fixture boundary and the observed defect
+before extending its mutation set. A known-bad control representing the actual
+missing operation, wrong owner or changed branch provides more direct evidence
+than a larger undifferentiated kill count. Byte-exact function bodies still
+need relocation/dependency and full-TU review, but do not need new mutants merely
+to reconfirm their already established instruction identity.
+
+Distinguish three costs in reports: `make phase` validates source anchors without
+executing mutants; the portability tier checks stored mutation snapshot
+consistency; explicit mutation campaigns compile and execute changed programs.
+The full campaign's cost effectiveness has not been measured here. Evaluate it
+with elapsed time and actionable new findings before treating repeated full
+runs as a routine reconstruction requirement. Targeted period mutation controls
+remain useful when they test a concrete fixture or changed fault anchor; they
+are not a refreshed whole-suite mutation result.
+
+
+## Validate configuration capture at existing reset boundaries
+
+`V22_FSE_init` reads both coefficient-owner pointers before publishing either
+in the reference. Capturing the two-field configuration restores that ordering;
+the old reconstruction interleaved a publication and the second read. Replaying
+only the previously measured baseline/copy endpoints narrows SIZE7 to BYTES5 at
+the native 372-byte length. The five residual bytes encode register choices;
+the other three TU bodies, data, bindings and relocation consumers stay fixed.
+
+The ordering detector accepts native/copy and rejects the old body. Existing
+period fixtures pass 21570 checks per endpoint, including reference-warmed
+constructor graphs whose reset reuses the equaliser as its own configuration.
+That boundary does not justify arbitrary partially overlapping configurations.
+The existing I/Q-swap mutant is preserved and caught after reanchoring; no new
+mutation campaign was needed. Production raw-matches the audited candidate.
+[The V22 capture audit](../v22-fse-capture-audit.md) records replay provenance,
+actual commands, all four body verdicts and the remaining register differences.
+
+
+## Preserve an unsupported guard as an explicit nonbug fallback
+
+`FPM_TONE_create`'s post-allocation NULL return was absent from the reference.
+The earlier removal control had been withheld because its length gap grew
+from 84 to 90 bytes without an exact gain. The native allocation branch is
+stronger evidence: restore its unchecked path under `DSPLIB_REPRODUCE_BUGS`
+while retaining the defensive return for normal builds. This changes only the
+constructor among eleven audited functions; seven exact bodies remain exact,
+and nontext data, bindings and unrelated relocations are unchanged.
+
+Three focused period fixtures pass through successful constructor and owner
+histories. There is no reason to manufacture an allocation-failure crash just
+to obtain another test result. All 41 existing source anchors remain valid;
+no mutation execution or registry change is needed for this refinement.
+[The tone allocation audit](../fpm-tone-allocation-boundary.md) records the
+witness, bounded two-endpoint replay and the intentionally larger size gap.
+
+
+The master follow-up for mutation policy is
+[issue #296](https://github.com/philpem/slmodem_dsp_re/issues/296). Keep that
+review separate from reconstruction changes: this PR uses period differential
+correctness and native evidence, and does not require a full mutation campaign.
+
+
+## Explain exact-set losses at the first differing compiler stage
+
+`DemodDataV32` passes an unsigned short count to the MRF's integer argument in
+the reference. The reconstruction's explicit short cast changed the outgoing
+word's extension. Removing that cast restores the observed MOVZWL and full-word
+argument store. Valid existing period fixtures compare the operation without
+inventing unsafe high-count histories.
+
+The unchanged `SetAdaptEqV32` loses byte identity in the same TU. Its normalized
+period RTL agrees through `27.flow2`; `28.peephole2` first chooses opposite
+CX/DX scratch registers for constant-one/constant-zero stores. Record those
+seven differing bytes as compiler-state collateral. The source contract has
+independent native evidence; an exact-membership ratchet should expose this
+tradeoff, not require retaining the incorrect narrowing. No allocator flags,
+register annotations or local spelling search is justified by that loss alone.
+
+
+The V32 replay audits all twenty-four bodies, including the two other changed
+non-exact methods; twenty stay fixed. All three existing focused period fixtures
+pass 27045 checks per endpoint. [The count-boundary audit](../v32-mrf-count-audit.md)
+records the exact-name loss, full data/relocation collateral and thirty period
+RTL streams per unchanged method. The existing wrong-owner fault anchor is
+updated mechanically; no mutation execution is needed to establish this result.
+
+
+## Separate API bounds from storage extent
+
+A checked accessor establishes which indices it exposes, not necessarily the
+size of its backing array. The V32 constructor clears seven consecutive words
+at offsets +0x3c through +0x48, while native `LoadReg` and `StoreReg` accept
+only indices 0–4. This permits a five-element array followed by two fields,
+a seven-element array with two private entries, or an incorrect API limit.
+Our `regs[5]` declaration makes the reconstructed seven-iteration loop exceed
+its declared bounds; it does not establish which original model is correct.
+Review all producers and consumers before changing the layout or API, and
+record uncertainty when the binary cannot distinguish the source models.
+
+## Recover arithmetic signedness and reload timing together
+
+`dp_wrapper_run` uses three unsigned minima, two unsigned remainders and an
+unsigned fragment comparison in the reference. It also reloads the fragment
+size after each external copy. Restoring these operations changes its length
+gap from two to five bytes, but removes independently observed instruction
+and value-timing discrepancies. Keep the public positive-count guard signed.
+
+A shared-field type change requires measuring every header consumer. The
+wrapper replay checks nine translation units and 55 emitted bodies per
+endpoint; eight non-wrapper objects remain raw-identical, all thirty exact
+entries survive, and data, bindings and relocation consumers stay fixed.
+The existing component lifecycle fixture passes 33686 checks per endpoint
+and in production. [The wrapper audit](../dp-wrapper-unsigned-audit.md) records
+the complete commands, read-age detector and signed-baseline negative control.
+
+
+## Check a shared helper in both production and its direct fixture
+
+The V34 snapshot index refinement changes one declaration in a header included
+by production and a direct component fixture. Both must receive the selected
+header. The two six-entry loops now use signed-word operations seen in the
+reference; the arithmetic temporary remains an integer. Audit every emitted
+body, including helpers with no same-named native counterpart. Here all nine
+exact functions survive among 53 production bodies, and the fixture's selected
+object also reproduces production bytes.
+
+Changing helper size can move call and jump-table destinations without changing
+their meaning. Resolve each affected relocation to its owning function and
+interior offset before normalising it. The snapshot recovery changes its parent
+by 24 bytes and one dispatcher call-displacement byte; all other dispatcher
+bytes and canonical nontext destinations agree. Raw nontext equality would be
+an inaccurate claim. [The snapshot audit](../v34-snapshot-index-recovery.md)
+records the complete comparison and the corrected fixture `__FILE__` control.

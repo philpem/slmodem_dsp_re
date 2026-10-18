@@ -40,6 +40,18 @@ def parse_rows(text):
     return rows
 
 
+def parse_sizes(text):
+    sizes = {}
+    for line in text.splitlines():
+        match = re.fullmatch(r"sizeof\.([\w]+) size=(\d+)", line)
+        if match:
+            name, size = match.groups()
+            if name in sizes:
+                raise SystemExit("duplicate probe size: " + name)
+            sizes[name] = int(size)
+    return sizes
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=CONFIG)
@@ -71,9 +83,11 @@ def main():
                             capture_output=True, text=True)
     print(result.stdout, end="")
     rows = parse_rows(result.stdout)
+    sizes = parse_sizes(result.stdout)
 
-    # The complete v32seq/v32fpctl ledgers and changed mappings. The separate
-    # RXHDX-40 and V32.c-40 sample probes remain outside this denominator.
+    # Complete v32seq/v32fpctl ledgers and changed mappings, plus the complete
+    # V32rxhdx body ledger and mappings. This denominator counts unique measured
+    # member paths, not source occurrences; some paths serve multiple ledgers.
     ordinary = {
         "v32_hdx.gen_index": (0x4a, 2, "0"),
         "v32_hdx.gen_index_mask": (0x4c, 2, "0"),
@@ -90,6 +104,7 @@ def main():
         "v32_hdx.tone2": (0x34, 4, "n/a"),
         "v32_hdx.tone1": (0x30, 4, "n/a"),
         "v32_hdx.tone0": (0x2c, 4, "n/a"),
+        "v32_hdx.regs[4]": (0x44, 2, "1"),
         "v32_fp.decoder.vtb.paths": (0x5038, 4, "n/a"),
         "v32_fp.sre": (0x148, 144, "n/a"),
         "v32_fp.mrf": (0xc4, 28, "n/a"),
@@ -107,8 +122,8 @@ def main():
         "v32_sdm.tap2_pos": (0x04, 2, "1"),
     }
     # Additional distinct paths from the complete v32seq/v32fpctl worksheets,
-    # including the nine changed owner-mapping macros and address-only VTB
-    # arguments. Expectations are static values from the period probe.
+    # including changed owner-mapping macros and address-only VTB arguments.
+    # Expectations are static values from period layout probes.
     ordinary.update({
         "v32_modem.params": (0x00, 48, "n/a"),
         "v32_modem.hdx": (0x64, 4, "n/a"),
@@ -148,6 +163,68 @@ def main():
         "v32_hdx.short_9a": (0x9a, 2, "1"),
         "v32_dec.vtb": (0x18, 56, "n/a"),
         "v32_dec.short_74": (0x74, 2, "0"),
+        # V32rxhdx complete body ledger and changed mapping macros.
+        "v32_modem.params.protocol": (0x00, 2, "1"),
+        "v32_modem.params.options": (0x10, 4, "0"),
+        "v32_hdx.agc": (0x00, 44, "n/a"),
+        "v32_hdx.timer": (0x7c, 4, "0"),
+        "v32_hdx.limit": (0x80, 4, "0"),
+        "v32_hdx.state_left": (0x78, 4, "1"),
+        "v32_hdx.state": (0x74, 2, "1"),
+        "v32_hdx.mode": (0x76, 2, "1"),
+        "v32_hdx.short_48": (0x48, 2, "1"),
+        "v32_hdx.short_aa": (0xaa, 2, "1"),
+        "v32_hdx.short_a8": (0xa8, 2, "1"),
+        "v32_hdx.int_90": (0x90, 4, "1"),
+        "v32_hdx.rtd": (0x96, 2, "1"),
+        "v32_hdx.short_ac": (0xac, 2, "1"),
+        "v32_fp.rx_len": (0x50c8, 2, "0"),
+        "v32_fp.agc": (0x1d8, 44, "n/a"),
+        "v32_fp.encoders[0]": (0x98, 4, "n/a"),
+        "v32_fp.encoder_sel": (0xa4, 2, "1"),
+        "v32_fp.imap": (0xa8, 4, "n/a"),
+        "v32_fp.qmap": (0xac, 4, "n/a"),
+        "v32_fp.decision_error": (0x50d6, 2, "1"),
+        "v32_fp.rate_fallback": (0x50d8, 2, "0"),
+        "v32_hdx.tone0": (0x2c, 4, "n/a"),
+        "v32_hdx.agc": (0x00, 44, "n/a"),
+        "v32_hdx.state": (0x74, 2, "1"),
+        "v32_hdx.mode": (0x76, 2, "1"),
+        "v32_hdx.block_charge": (0x84, 2, "1"),
+        "v32_hdx.sample_len": (0xa0, 2, "1"),
+        "v32_hdx.loss_blocks": (0xae, 2, "1"),
+        "v32_hdx.int_88": (0x88, 4, "1"),
+        "v32_hdx.tx_state": (0x6c, 4, "n/a"),
+        "v32_hdx.rx_state": (0x70, 4, "n/a"),
+        "v32_modem.status_word": (0x30, 4, "0"),
+        "v32_modem.diag_out_i": (0x34, 4, "n/a"),
+        "v32_modem.diag_out_q": (0x38, 4, "n/a"),
+        "v32_modem.diag_n_out": (0x3c, 4, "n/a"),
+        "v32_modem.diag_icoeff": (0x40, 4, "n/a"),
+        "v32_modem.diag_qcoeff": (0x44, 4, "n/a"),
+        "v32_modem.diag_fse_taps": (0x48, 2, "1"),
+        "v32_modem.diag_near_i": (0x4c, 4, "n/a"),
+        "v32_modem.diag_near_q": (0x50, 4, "n/a"),
+        "v32_modem.diag_near_n": (0x54, 2, "0"),
+        "v32_modem.diag_far_i": (0x58, 4, "n/a"),
+        "v32_modem.diag_far_q": (0x5c, 4, "n/a"),
+        "v32_modem.diag_far_n": (0x60, 2, "0"),
+        "v32_sdm.group": (0x00, 2, "1"),
+        "v32_sdm.tap1": (0x14, 2, "1"),
+        "v32_sdm.tap2": (0x16, 2, "1"),
+        "v32_smc.mode": (0x00, 2, "1"),
+        "v32_smc.pad02": (0x02, 2, "1"),
+        "v32_smc.shift": (0x04, 2, "1"),
+        "v32_smc.state[0]": (0x08, 2, "1"),
+        "v32_smc.quad": (0x06, 2, "1"),
+        "v32_smc.trellis_diff_state": (0x0e, 2, "1"),
+        "v32_smc.trellis_state": (0x10, 2, "1"),
+        "v32_smc.pad12": (0x12, 2, "1"),
+        "v32_smc.uncoded_bits": (0x14, 2, "0"),
+        "v32_dec.int_68": (0x68, 4, "1"),
+        "v32_dec.short_06": (0x06, 2, "1"),
+        "v32_dec.sym[0]": (0x52, 2, "1"),
+        "v32_dec.scram_tap": (0x6c, 2, "1"),
     })
     positives = {
         "v32_hdx.short_46": (0x46, 2, "1", 0x44),
@@ -156,8 +233,13 @@ def main():
         "v32_fp.mrf.need": (0xd4, 2, "1", 0x100),
         "v32_fp.mrf.phase": (0xd6, 2, "1", 0x102),
     }
-    if len(ordinary) != 68:
-        raise SystemExit("worksheet must cover 68 unique ordinary member paths")
+    if len(ordinary) != 125:
+        raise SystemExit("worksheet must cover 125 unique ordinary member paths")
+    expected_sizes = {"v32_modem": 0x6c, "v32_fp": 0x50dc,
+                      "v32_hdx": 0xb0, "v32_smc": 0x16,
+                      "v32_sdm": 0x18}
+    if sizes != expected_sizes:
+        raise SystemExit("constructor allocation/aggregate sizeof checks differ: %r" % sizes)
     if len(positives) != 5:
         raise SystemExit("worksheet must retain five selected positive controls")
     if set(rows) != set(ordinary) | set(positives):
@@ -169,8 +251,8 @@ def main():
     for name, (offset, size, signed, old) in positives.items():
         if rows[name] != (offset, size, signed) or offset == old:
             raise SystemExit("positive control failed: %s" % name)
-    print("typed-owner probe: 68 unique ordinary member paths match; "
-          "5 selected positive controls mismatch as expected")
+    print("typed-owner probe: 125 unique ordinary member paths and five sizeof "
+          "checks match; 5 selected positive controls mismatch as expected")
 
 
 if __name__ == "__main__":
