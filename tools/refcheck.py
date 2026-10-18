@@ -367,9 +367,12 @@ def tracked():
     # and a checker that miscounts in the case it was built for is one nobody
     # should have to second-guess.
     #
-    out = subprocess.run(["git", "ls-files"], capture_output=True, text=True)
+    out = subprocess.run(["git", "ls-files", "--", ".", ":(exclude)re/**"],
+                          capture_output=True, text=True)
     seen, paths = set(), []
     for p in out.stdout.split("\n"):
+        if p.startswith("re/"):
+            continue
         if p in seen or not p.endswith(SCAN_EXT) or not os.path.exists(p):
             continue
         seen.add(p)
@@ -649,66 +652,6 @@ def check_conflict_markers():
     return bad
 
 
-#
-# THE MUTATION REGISTRY IS JSON AND NOTHING PARSED IT.
-#
-# `test/mutations/suites.json` is the list every `mutate.py --suite` reads.
-# Merging two branches that each appended a line to it produces a trailing
-# comma about one time in three, and a malformed registry makes EVERY suite
-# unrunnable -- while `make phase` stays green, because nothing in the phase
-# boundary opens the file.  A test suite that cannot be run reports no
-# failures, which is finding F134's argument in its purest form.
-#
-# Checked here because this is the gate that already walks the tree, and
-# because the same merge that breaks it is the one that breaks references.
-# Finding F346.
-#
-def check_suites():
-    path = os.path.join("test", "mutations", "suites.json")
-    if not os.path.exists(path):
-        return []
-    try:
-        reg = json.load(open(path))
-    except ValueError as e:
-        print("  MALFORMED  %s: %s" % (path, e))
-        return [path]
-    bad = []
-    for name, entry in sorted(reg.items()):
-        # `_` holds the file's own prose header, which is a list of strings
-        # and not a suite.  Any leading-underscore key is documentation.
-        if name.startswith("_"):
-            continue
-        if (not isinstance(entry, list) or len(entry) != 2
-                or not all(isinstance(x, str) for x in entry)):
-            print("  MALFORMED  %s: suite %r is not [source, binary]"
-                  % (path, name))
-            bad.append(name)
-            continue
-        src = entry[0]
-        if not os.path.exists(src):
-            print("  MISSING    %s: suite %r names %s, which does not exist"
-                  % (path, name, src))
-            bad.append(name)
-    return bad
-
-
-#
-# A MUTATION RUN THAT DIES LEAVES ITS MUTANT IN THE SOURCE.
-#
-# `mutate.py` edits the file, builds, runs, and puts the file back.  Kill it
-# between the first and the last -- a timeout, a disconnect, a Ctrl-C -- and
-# the mutant stays.  `git add -A` then commits it, and if the commit's
-# `make phase` ran BEFORE the mutation run rather than after, nothing objects.
-#
-# That happened: merge commit 92e565e captured `47 tests the counter before
-# incrementing it` into src/pump/v34/v34hshak_t3mid.c.  The differential test
-# does catch it -- 84 of 31,328 checks -- so the tree was one `make phase`
-# away from noticing, and the ordering of two commands was the whole defect.
-#
-# Detection is exact rather than heuristic: for a correctly restored source
-# every mutation's `find` string is present.  If `find` is ABSENT and
-# `replace` is PRESENT, that mutation is live in the tree.  Finding F349.
-#
 def check_finding_headings():
     """A finding heading whose number has lost its period defines nothing."""
     text = read(FINDINGS)
@@ -720,38 +663,6 @@ def check_finding_headings():
               % (FINDINGS, n, lines[n - 1][:64]))
         bad.append(m.group(1))
     return bad, len(FINDING_HEAD.findall(text))
-
-
-def check_live_mutants():
-    reg_path = os.path.join("test", "mutations", "suites.json")
-    if not os.path.exists(reg_path):
-        return []
-    try:
-        reg = json.load(open(reg_path))
-    except ValueError:
-        return []                       # check_suites() reports this
-    live = []
-    for name, entry in sorted(reg.items()):
-        if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
-            continue
-        path = os.path.join("test", "mutations", name + ".json")
-        if not os.path.exists(path) or not os.path.exists(entry[0]):
-            continue
-        try:
-            muts = json.load(open(path))
-        except ValueError:
-            print("  MALFORMED  %s" % path)
-            live.append(path)
-            continue
-        text = open(entry[0]).read()
-        for m in muts:
-            if not isinstance(m, dict) or "find" not in m or "replace" not in m:
-                continue
-            if m["find"] not in text and m["replace"] in text:
-                print("  LIVE MUTANT  %s: %s"
-                      % (entry[0], m.get("label", "(unlabelled)")))
-                live.append(entry[0])
-    return live
 
 
 def read_pending():
@@ -815,8 +726,6 @@ def check_dangling():
                          if pending[(h[2], h[3])][0] == branch),
                      len(nums), branch, ", ".join(nums)))
     marks = check_conflict_markers()
-    suites = check_suites()
-    live = check_live_mutants()
     badhead, nheads = check_finding_headings()
     #
     # EVERY COUNT CARRIES ITS DENOMINATOR (finding F2401), including the held
@@ -824,14 +733,12 @@ def check_dangling():
     # lie as a coverage tier reporting 0.0% (0/0) and calling it OK.
     #
     print("\n  %d references checked, %d resolve to nothing, %d held pending "
-          "an unmerged branch, %d stale entr(y/ies)%s%s%s%s"
+          "an unmerged branch, %d stale entr(y/ies)%s%s"
           % (total, len(bad), len(held), len(stale),
              "" if not marks else ", %d conflict marker(s)" % len(marks),
-             "" if not suites else ", %d bad mutation suite(s)" % len(suites),
-             "" if not live else ", %d LIVE MUTANT(S)" % len(live),
              "" if not badhead else ", %d MALFORMED HEADING(S)" % len(badhead)))
     print("  %d finding heading(s) checked for their number's period" % nheads)
-    return 1 if (bad or stale or marks or suites or live or badhead) else 0
+    return 1 if (bad or stale or marks or badhead) else 0
 
 
 def check_since(rev):

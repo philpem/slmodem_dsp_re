@@ -116,44 +116,8 @@ def period(out):
         (out/'period.json').write_text(json.dumps(report,indent=2)+'\n')
         print(label,'period2passed0failed',checks,flush=True)
 
-def mutations(out):
-    ledger=json.loads((out/'results.json').read_text());source=(ROOT/PATHS[1]).read_text()
-    rows=[r for r in json.loads((ROOT/'test/mutations/v34diag.json').read_text()) if r.get('label','').startswith('V.34 arm: the SNR')]
-    assert len(rows)==2
-    main=(ROOT/PATHS[0]).read_text();start=main.find('\nint\nVPcmV34GetSNR(');assert start<0
-    # Count every mutation tied to Main: none touches the moved definition.
-    old=subprocess.check_output(['git','show',REV+':'+PATHS[0]],cwd=ROOT,text=True);a=old.index('\nint\nVPcmV34GetSNR(')+1;b=old.index('\n}\n',a)+3
-    registry=json.loads((ROOT/'test/mutations/suites.json').read_text());suites=anchors=overlap=0
-    for suite,entry in registry.items():
-        if not isinstance(entry,list) or entry[0]!=PATHS[0]:continue
-        suites+=1
-        for row in json.loads((ROOT/('test/mutations/'+suite+'.json')).read_text()):
-            if 'find' not in row:continue
-            anchors+=1;pos=old.find(row['find'])
-            if pos>=0 and pos<b and pos+len(row['find'])>a:overlap+=1
-    assert overlap==0
-    report={'main_bound_suites':suites,'main_bound_anchors':anchors,'overlap_moved_definition':overlap,'mutants':[]}
-    stable=ROOT/'build/period';template=ledger['cells']['separate-visible']['commands'][1]
-    for index,row in enumerate(rows):
-        assert source.count(row['find'])==1
-        label='mutation-snr-'+str(index);folder=out/label;folder.mkdir(exist_ok=True);(folder/'v34diag.cpp').write_text(source.replace(row['find'],row['replace']))
-        command=[x.replace('/separate-visible/','/'+label+'/') for x in template];run(command,folder,'compile')
-        periodout=out/('period-'+label);periodout.mkdir(exist_ok=True)
-        sources=list(stable.glob('src_*.o'));assert len(sources)==300
-        for path in sources+list(stable.glob('test_harness_*.o'))+[stable/'test_unit_t_v34diag.o']:
-            shutil.copy2(path,periodout/path.name)
-        obj=periodout/'src_pump_v34_v34diag.o';shutil.copy2(folder/'v34diag.cpp.o',obj)
-        test=['make','period','T=t_v34diag','J=4']
-        with (periodout/'gate.log').open('w') as log:status=subprocess.run(test,cwd=ROOT,env=dict(os.environ,PERIOD_OUT=str(periodout.relative_to(ROOT))),stdout=log,stderr=subprocess.STDOUT).returncode
-        assert sha(obj)==sha(folder/'v34diag.cpp.o'),'mutant overwritten'
-        text=(periodout/'t_v34diag.run.log').read_text();assert status!=0 and 'FAIL' in text
-        report['mutants'].append({'label':row['label'],'command':command,'period_command':test,'exit':status,'caught':True,'object_sha256':sha(obj),'log':text})
-        (out/'mutation-sensitivity.json').write_text(json.dumps(report,indent=2)+'\n')
-        print(row['label'],'period CAUGHT',flush=True)
-
 if __name__=='__main__':
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,default=ROOT/'build/v34-diag-visibility293');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/tc_repro',help='used only to initialize immutable frozen baseline; later rebuilds never overwrite it');ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');ap.add_argument('--mutations',action='store_true');args=ap.parse_args()
-    if args.mutations:mutations(args.out)
-    elif args.period:period(args.out)
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,default=ROOT/'build/v34-diag-visibility293');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/tc_repro',help='used only to initialize immutable frozen baseline; later rebuilds never overwrite it');ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');args=ap.parse_args()
+    if args.period:period(args.out)
     elif args.audit:audit(args.out)
     else:compile_cells(args.out,args.baseline_dir)

@@ -113,16 +113,9 @@ def main():
     source = (d.ROOT / 'src/pump/v90/V90AutoDigitalImpDetector.cpp').read_text()
     _, _, grouping = d.function(source, 'V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases')
     _, _, uref = d.function(source, 'V90AutoDigitalImpDetector::unitePhasesInfoOfUref')
-    locators = json.loads((d.ROOT / 'test/mutations/v90adid.json').read_text())
-    for index in range(134, 163):
-        assert source.count(locators[index]['find']) == 1
-        assert locators[index]['find'] in '\n' + grouping
-    for index in (99, 102, 103):
-        assert source.count(locators[index]['find']) == 1
-        assert locators[index]['find'] in '\n' + uref
     report.update({'named_spills': traces, 'source_cells': total, 'common_body_verdicts': verdicts,
                    'observation_runs': 14, 'target_and_positive_allocations': events,
-                   'production_raw_equal_to_winner': True, 'owned_static_locators': 32})
+                   'production_raw_equal_to_winner': True})
     assert events == 137
     (d.ROOT / 'build/adid-spill-audit.json').write_text(json.dumps(report, indent=2) + '\n')
     print('9 cells /306 verdicts; 14 raw-equal observations /137 allocations; production raw equals winner')

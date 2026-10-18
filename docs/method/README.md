@@ -31,14 +31,12 @@ identifies the evidence and tools that need adapting for another target.
 | [Build recovery](recovering-build.md) | GCC provenance, option experiments, compiler stages and identity checks. |
 | [Compiler policy](compilers.md) | Period compiler authority, portability and floating-point boundaries. |
 | [Experiment design](experiment-design.md) | Baseline controls, crossed experiments and stopping conditions. |
-| [Mutation policy](mutation-policy.md) | Optional targeted investigations; no mandatory snapshot refreshes. |
 | [Evidence](evidence.md) | What each form of evidence establishes. |
 | [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
 | [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |
 | `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Adapt after establishing your project's boundary. |
-| `tiers.md` | the five oracles and what each is structurally blind to |
+| `tiers.md` | the current oracles and what each is structurally blind to; archived mutation results are labelled historical |
 | `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
-| `gates.md` | the pattern behind every tooling defect this tree has found |
 | `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
 | `agents.md` | parallel batches: briefs, shared data, numbering, merging |
 | `tools.md` | which tools are portable, and what each assumes about its host |

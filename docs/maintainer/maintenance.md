@@ -75,12 +75,10 @@ flags and shims belong in the build/toolchain apparatus, and a modern failure
 needs its own reproducible follow-up. See
 [compiler policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/compilers.md).
 
-When improving test coverage, demonstrate that a meaningful perturbation is
-detected. Maintain affected mutation anchors and report uncaught/unusable
-cases when using targeted mutation. Mutation execution and snapshot maintenance
-are optional; commits and merges require no whole-tree refresh. A stale snapshot
-is historical evidence. See the
-[mutation policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/mutation-policy.md).
+When improving coverage, construct valid inputs at a stated boundary and
+compare the observable result with the blob. Keep synthetic states labelled as
+such. A passing differential fixture establishes agreement only over its input
+history and observations.
 
 ### Example: detecting a scheduling regression
 
@@ -92,18 +90,13 @@ non-crossing case checks that the test responds to the latch transition.
 Reversing the two data loops must fail its training-counter oracle and state
 comparison. Merely showing both loops run would miss that dependency.
 
-Run the focused period test. If investigating this specific sensitivity,
-optionally run just the loop-order mutation and inspect the failing assertion:
+Run the focused period test and inspect the differing output or state:
 
 ```sh
 make period T=t_v34datapump J=4
-python3 tools/mutate.py --suite v34datapump \
-    --only "the receiver loop runs before the modulator loop" --verbose --jobs 1
 ```
 
-A filtered run reports its selection and cannot become a full-suite snapshot.
-If a complete suite is needed for an investigation, `tools/mutsnap.py --update v34datapump` executes and records only that named suite. Never refresh keys by
-hand or claim stale records are current. The
+The
 [coverage record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/maintainer-offset-access.md#loop-order-coverage)
 keeps the measured denominators and the distinction between component,
 synthetic and public-call evidence.

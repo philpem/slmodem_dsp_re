@@ -64,7 +64,7 @@ strongly (0xb3c0, 0x71d0, 0x6eb0, 0x6f40, 0x6fa0) and this tree defines too,
 so in a whole-object link they are non-null and the guards are unreachable;
 `V34hshak.c`'s range test admits exactly 41..80 and its forty `case` labels
 cover exactly those values, so its `default` cannot be taken. What remains is
-a different kind of work: byte-exactness, differential/mutation coverage, the
+a different kind of work: byte-exactness, differential coverage, the
 V.90 digital-side bring-up and the 8 kHz retarget -- `docs/remaining.md`
 carries that list. Do not re-open the fax reconstruction.
 
@@ -108,27 +108,6 @@ is committed that is wrong-but-plausible. If a function cannot be made to
 pass, leave it out and record the attempt. The goal is a replacement that
 behaves *identically* to the blob, so any test disagreeing with the blob is a
 hard failure whatever build it came from — never a tolerance to widen.
-
-## Mutation policy (issue #296)
-
-Mutation execution and snapshot maintenance are optional investigations.
-No commit, merge, release, `make test`, `make portability` or `make phase-full`
-requires a snapshot refresh or whole-tree mutation campaign. Historical verdicts
-remain available; stale records must not be quoted as current evidence.
-
-Use `tools/mutate.py --suite NAME --only TEXT --verbose --jobs 1` only to
-answer a named fixture-sensitivity question. Establish valid inputs and a green
-baseline first, inspect which assertion fired, and report selected/total
-mutants, exclusions, compiler, wall/CPU time and independently verified findings.
-A kill alone does not establish fixture validity, reachability or equivalence.
-A known negative control is required when relying on a detector's clean result.
-Prioritise meaningful period differential coverage of non-binary-identical
-functions. Fuzzing is an optional way to generate inputs for that same oracle,
-not a replacement gate or an assumed next priority.
-`tools/mutsnap.py --update NAME` and `--verify NAME` require explicit suite names;
-no whole-tree refresh is implicit. Keep affected anchors valid: `refs` still
-runs structural anchor validation without compiling mutants. See
-[mutation policy](docs/method/mutation-policy.md) for commands and evidence.
 
 Run `make phase`, not `make test`. `make phase` is now the period/compiler and
 structural reconstruction gate by default. Modern GCC, 64-bit, interop and
@@ -430,27 +409,6 @@ declared in `tools/gccdiverge.json` -- eight entries today, thirteen checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
-
-**AN ENTRY COSTS ITS BINARY'S WHOLE MUTATION SURFACE, so the divergent check
-goes in a binary of its own.** `tools/mutate.py` judges a mutant caught by a
-non-zero exit, and a declared binary exits non-zero on the UNMUTATED source --
-so it cannot score a mutation set against that baseline and it refuses, for
-the SUITE and not the row. That silently removed nine suites and 647 verdicts
-before anyone counted them (findings F2157 and F3002). Three binaries now carry
-one declared check each for this reason -- `t_v90p4dnan`, `t_v92ecnan`,
-`t_v90adidnan` -- and **none of them has a mutation suite**, because a
-registered suite with a red baseline cannot produce meaningful mutation
-verdicts. Optional `mutsnap.py --check` reports its bookkeeping status; it is
-not a build or merge gate. `t_v92ecparams` is the same move the
-other way round: three GREEN members lifted out of a declared parent, so it
-keeps its suite. Split the VALUE where you can rather than the group -- the
-blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of
-4,570 and kept every shape. Findings F6000, F6001 and F6002.
-
-`t_v90equproc` is declared without being a split -- it is `V90Equalizer::
-process`'s own binary and its divergence is the whole test's, not one check
-lifted out of a healthy group -- and the no-suite rule binds it just the same.
-**Do not register a mutation suite for it.**
 
 **The eight are two causes, and only two.** Five of them are the object's
 equality tests: a single ordered `fcom` with no parity test, which GCC 13
@@ -993,10 +951,9 @@ Task numbers are not safe across sessions either: two task stores exist whose
   touching flags: the split recovers the boundary with NO flag change, where the
   global `-fno-unit-at-a-time` workaround buys it by changing the whole tree.
   Finding F11351 (`rd.c` and `ringDetector.c` split out of `voice.c`, +3 exact);
-  the same question for the rest of the object is #6/#20. **A new TU means its
-  `t_*` mutation suite must move with it** -- `anchorcheck` reports the detached
-  anchors as "matches 0 time(s)", and a suite covering two new files has to be
-  split so each anchor is searched in the file that now holds it.
+  the same question for the rest of the object is #6/#20. **A new TU changes
+  the ownership boundary.** Recheck the complete source and integration gates
+  after moving functions between translation units.
 - `tools/dis.py` shadows the standard library's `dis`, which `inspect`
   imports. A tool in `tools/` that reaches for pyelftools dies with
   `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,
@@ -1044,8 +1001,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
   shell that runs it carries the pattern as its own `/bin/bash -c` text.
   A wait loop built on it reports RUNNING for ever and the session burns
   its turns believing work is still alive -- three sessions in the #260
-  cleanup lost time to exactly this (`make phase`, `byteident`,
-  `mutsnap`).  Poll the LOG's completion line instead
+  cleanup lost time to exactly this (`make phase`, `byteident`).  Poll the LOG's completion line instead
   (`grep -q "period differential:" log && ...`), or break the self-match
   with a character class: `pgrep -f "byteiden[t].py"` -- the real process
   matches, the poller's own `[t]` spelling cannot.

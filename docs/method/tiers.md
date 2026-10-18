@@ -1,13 +1,13 @@
-> Current policy: mutation execution is optional and targeted. Historical
-> examples below do not require snapshot refreshes or campaigns. See the
-> [mutation policy](mutation-policy.md).
+> **Historical record:** the mutation runner, snapshots and suites were removed.
+> The mutation results below describe past measurements only; they are not a
+> current test tier or a maintenance instruction.
 
-# The five oracles, and what each cannot see
+# The reconstruction oracles, and what each cannot see
 
 Every number here cites `docs/findings.md` in this tree. Nothing in this file
 is advice that was not measured.
 
-The four tiers do not form a hierarchy. **Neither of any two subsumes the
+The current oracles do not form a hierarchy. **Neither of any two subsumes the
 other** (finding F613), and each has a blindness that is structural rather than
 a matter of writing more tests. Knowing which tier can possibly see a given
 class of defect is most of the value; the rest is running them.
@@ -15,9 +15,9 @@ class of defect is most of the value; the rest is running them.
 | tier | decides | structurally blind to |
 |---|---|---|
 | differential, **under GCC 3.4.2** | correctness over the reachable input domain | anything that does not change an output |
-| mutation | whether a claim is tested at all | whether the claim is *right* |
 | codegen vs. the object | what the compiler was forced to encode | anything the compiler was free to choose |
 | transcript / diagnostics | what the two sides *say* | anything that prints nothing |
+| spec conformance | whether the reference follows its stated standard | behavior outside that standard |
 
 ---
 
@@ -95,7 +95,7 @@ mutation sets were misread that way before a manifest existed
 
 ---
 
-## F2. Mutation — anti-vacuity, not correctness
+## Historical record: mutation evidence
 
 Break the code on purpose; check the tests notice. It exists because the code
 and the test are written by the same hand at the same sitting from the same
@@ -180,7 +180,7 @@ Both are defaults, not caps. Run higher deliberately when the machine is
 yours -- and note mutate.py's own record that a real bug was found BECAUSE
 jobs were high, so this is a load choice and not a determinism one.
 
-## F3. Codegen against the period compiler
+## F2. Codegen against the period compiler
 
 Not "does it behave the same" but "did the same compiler, given our source,
 emit what the original's compiler emitted". It reaches exactly the class tier 1
@@ -384,7 +384,7 @@ twice before blessing it, too: a cold container reports a partial
 
 ---
 
-## F4. Transcript / diagnostics — not decoration
+## F3. Transcript / diagnostics — not decoration
 
 The diagnostic call sites are carried because the gate is real control flow and
 **the format strings are the original author's own words**. Discarding a call
@@ -561,7 +561,7 @@ the part the message text will mislead you about:
 > that carries one extra character, and transcribing that character onto both
 > produced **two missing lines and two spurious ones** (finding F650).
 
-## F5. Spec conformance -- the only oracle that can indict the OBJECT
+## F4. Spec conformance -- the only oracle that can indict the OBJECT
 
 **Every tier above measures agreement with the blob. None of them can tell you
 whether the blob is right.** The differential tier compares our output to the

@@ -4,6 +4,8 @@
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import refcheck
@@ -13,6 +15,15 @@ class ReferenceMasking(unittest.TestCase):
     def refs(self, text):
         return [(kind, number, line) for kind, number, line, _ in
                 refcheck.refs_in("sample.md", text)]
+
+    def test_tracked_scan_excludes_out_of_scope_tree(self):
+        result = SimpleNamespace(stdout="docs/current.md\nre/private.c\n")
+        with patch.object(refcheck.subprocess, "run", return_value=result) as run, \
+                patch.object(refcheck.os.path, "exists", return_value=True):
+            self.assertEqual(refcheck.tracked(), ["docs/current.md"])
+        run.assert_called_once_with(
+            ["git", "ls-files", "--", ".", ":(exclude)re/**"],
+            capture_output=True, text=True)
 
     def test_fixture_source_has_no_literal_deviation_citations(self):
         self.assertEqual(self.refs(Path(__file__).read_text()), [])

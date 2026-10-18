@@ -387,8 +387,8 @@ explicitly says that milestone remains open.
 The source-reconstruction phase is therefore complete. Work that remains is
 deliberately a different kind of work:
 
-- close differential-test and mutation-coverage gaps where a real observable
-  path can be constructed;
+- close differential-test gaps where a real observable path can be
+  constructed;
 - improve period-compiler object-code identity without changing behaviour;
 - finish the V.90 digital-side experiment far enough to terminate a live 56k
   call; and
@@ -398,13 +398,13 @@ The detailed wave record below explains how the reconstruction reached this
 state and preserves the evidence behind decisions that still constrain those
 follow-up tasks.
 
-## Mutation maintenance policy, 2026-10-18
+## Mutation system retirement, 2026-10-18
 
-Issue #296 retires mandatory mutation snapshot checks, refreshes and whole-tree
-campaigns. Historical mutation counts and deferred-refresh plans below are
-retained as dated evidence, not outstanding release obligations. Targeted
-mutation remains optional for named fixture-sensitivity questions; `refs`
-retains structural anchor validation. See [policy](method/mutation-policy.md).
+The mutation runner, suites, snapshots and anchor-maintenance tools have been
+removed. Mutation counts and plans in the dated wave history below remain
+historical evidence; they are not current test coverage or outstanding work.
+The current checks are differential, period-codegen and structural/provenance
+checks. `refs` checks references and conflict markers only.
 
 ## Superseded 2026-09-03 snapshot
 
