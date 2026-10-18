@@ -3082,8 +3082,8 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3M_RX_F264		((int)__builtin_offsetof(struct v34_receiver, \
 					    short_264))
 	/* short, arm 49's last write; the receiver member's own
-	   offset (issue #260 wave 11); t72's read of it stays a
-	   BYTE wide (finding F553's shape)     */
+	   offset (issue #260 wave 11); t72 restores the full
+	   halfword (movzwl at 0x67de0 and 0x69692). */
 
 /* The microstate table: 40 entries, index = microstate - 41. */
 #define T3M_TBL3_FIRST		41
@@ -8557,8 +8557,7 @@ t72_probe_done(struct v34_object *obj, struct v34_receiver *rx)
 	 * copied, so the zero-extension never reaches the field -- which
 	 * 0x67adc reads back with `movswl`.
 	 */
-	rx->agc_gain = (short)*(const unsigned short *)		/* 0x67e17 */
-			((const char *)rx + T3M_RX_F264);
+	rx->agc_gain = (short)*(const unsigned short *)&rx->short_264; /* 0x67e17 */
 }
 
 /*

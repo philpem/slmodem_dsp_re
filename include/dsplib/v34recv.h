@@ -495,7 +495,8 @@ struct v34_receiver {
 	/*
 	 * +0x264 (was `pad_264`, issue #260 wave 11).  The handshake's arm 49
 	 * writes a halfword here (V34hshak.c's `T3M_RX_F264`) and t72's
-	 * probe-done arm reads its LOW BYTE -- a written, read halfword the
+	 * probe-done arm reads the full halfword (0x67de0 and 0x69692,
+	 * `movzwl`, then a halfword store into +0x136) -- a written, read halfword the
 	 * alignment audit below had left alone because its two bytes are not
 	 * what natural alignment would insert.  What it counts is not
 	 * established, so the name stays neutral.
