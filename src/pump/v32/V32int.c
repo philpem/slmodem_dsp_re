@@ -788,17 +788,19 @@ EpochDetectV32(struct v32_modem *modem)
 int
 RetrainDetectV32(struct v32_modem *modem)
 {
+	/* The poll result owns the common exit, independently of the counter. */
+	int detected = 0;
 	struct v32_dec *dec = DEC(FP(modem));
 	unsigned short req = (unsigned short)dec->retrain;
 
-	if (!(req & V32_DEC_RETRAIN_REQ))
-		return 0;
-
-	dec->count = 0;
-	dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RETRAIN_REQ);
-	dec->short_74 =
-		(unsigned short)(dec->short_74 + 1);
-	return 1;
+	if (req & V32_DEC_RETRAIN_REQ) {
+		dec->count = 0;
+		detected = 1;
+		dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RETRAIN_REQ);
+		dec->short_74 =
+			(unsigned short)(dec->short_74 + 1);
+	}
+	return detected;
 }
 
 /* The renegotiation request, bit 1 of the same word.  It is not counted. */
