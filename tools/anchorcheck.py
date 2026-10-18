@@ -140,6 +140,16 @@ def label_of(m):
     return m.get("label", "(no label)")
 
 
+def anchor_positions(src, anchor):
+    """Find all matches, including overlaps, without a Python loop per byte."""
+    hits = []
+    pos = src.find(anchor)
+    while 0 <= pos < len(src):
+        hits.append(pos)
+        pos = src.find(anchor, pos + 1)
+    return hits
+
+
 def enclosing(index, pos):
     lo, best = 0, None
     for start, name in index:
@@ -248,8 +258,7 @@ def main():
             if m.get("replace") == m["find"]:
                 vacuous.append((name, label_of(m)))
                 continue
-            hits = [i for i in range(len(src))
-                    if src.startswith(m["find"], i)]
+            hits = anchor_positions(src, m["find"])
             if len(hits) != 1:
                 #
                 # `reanchor.py` repairs these, but nothing FAILED on them:

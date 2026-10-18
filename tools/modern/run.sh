@@ -6,7 +6,7 @@
 # this tree mounted read-write at its own path, so paths and git both work.
 #
 #     tools/modern/run.sh make -j4 portability
-#     tools/modern/run.sh python3 tools/mutsnap.py --update --jobs 4
+#     tools/modern/run.sh python3 tools/mutsnap.py --update --jobs 4 pulse
 #
 # MUTATE_WORKDIR is passed through onto the SAME host path, mounted, so the
 # ~1 GB per-worker copies stay on the host's disk and reach the host's view.

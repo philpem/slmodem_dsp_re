@@ -143,8 +143,8 @@ the generic bit recurrence and constructor tap checks do not close that issue.
    candidate proceeds to FILE `call.c`.
 2. **Audit behavioural confidence before buying more byte matches.** Separate
    functions with no direct differential observable, shallow dispatcher-arm
-   coverage, stale or absent mutation evidence, or a missing independent
-   standards oracle. Work the highest-risk reachable groups before returning
+   coverage, unverified fixture sensitivity where relevant, or a missing
+   independent standards oracle. Work the highest-risk reachable groups before returning
    to compiler archaeology. Exact object code is conclusive evidence for an
    exact definition, but does not validate the other 1,041 definitions.
 3. **Resume constrained same-size work in paired families.** The first fresh
@@ -165,9 +165,10 @@ the generic bit recurrence and constructor tap checks do not close that issue.
 “Phase 1” is a historical content phase, not a universal confidence grade. A
 useful line to bring a definition up to is: period-compiler differential
 agreement on meaningful reachable inputs; assertions over outputs, persistent
-state and guarded buffers; an explicit non-vacuity count; and current mutation
-evidence for the claims the fixture makes. Independent Recommendation-derived
-answers are a further oracle for whether the blob itself is correct. On that
+state and guarded buffers; and an explicit non-vacuity count. Targeted mutation
+can optionally investigate a specific blind spot; current mutation snapshots
+are not a completion, commit or merge requirement (issue #296). Independent
+Recommendation-derived answers are a further oracle for whether the blob itself is correct. On that
 definition, the choices are:
 
 Mutation evidence is deliberately not called equivalence proof. A green
@@ -396,6 +397,14 @@ deliberately a different kind of work:
 The detailed wave record below explains how the reconstruction reached this
 state and preserves the evidence behind decisions that still constrain those
 follow-up tasks.
+
+## Mutation maintenance policy, 2026-10-18
+
+Issue #296 retires mandatory mutation snapshot checks, refreshes and whole-tree
+campaigns. Historical mutation counts and deferred-refresh plans below are
+retained as dated evidence, not outstanding release obligations. Targeted
+mutation remains optional for named fixture-sensitivity questions; `refs`
+retains structural anchor validation. See [policy](method/mutation-policy.md).
 
 ## Superseded 2026-09-03 snapshot
 
@@ -861,7 +870,10 @@ tool had the last word over both readings.
 **When briefing concurrent agents, re-measure readiness at the commit each brief
 is actually written against, and say in the brief which commit that was.**
 
-## The mutation re-record is DEFERRED to a faster machine, and here is what it needs
+## Historical deferred mutation re-record (retired by issue #296)
+
+The following is the 2026-08-31 record. The proposed repeat is retired; it is
+not work required of a faster machine or a future release.
 
 Attempted 2026-08-31 and stopped deliberately at 11% (1,065 of 10,075
 mutations, ~35 minutes) once the full cost was measured: **about 5.5 hours on

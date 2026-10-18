@@ -926,21 +926,12 @@ refs:
 	 $(PYTHON) tools/anchorcheck.py || rc=1; \
 	 exit $$rc
 #
-# The mutation snapshot: hashing only, 0.03 s, runs nothing.  It fails on
-# MISSING, ORPHANED and INCONSISTENT -- always defects -- and REPORTS
-# staleness without failing.  That is deliberate: this target is on the
-# path everybody takes, almost any src/ edit makes every entry stale, and a
-# gate that is red by default gets ignored while the cheapest way to clear
-# it (`--update`) would manufacture a baseline nobody examined.  `--strict`
-# adds staleness and is what a MERGE passes, where refreshing is honest.
-#
-# Mutation execution uses the modern host compiler. Keep its snapshot gate
-# mandatory for host tests/portability, not a prerequisite for the period
-# reconstruction gate. Source-anchor validation above remains in both tiers.
+# Optional inspection of historical mutation records; hashing only, no builds.
+# No reconstruction, portability or merge gate requires a snapshot refresh.
+# Source-anchor validation in refs remains mandatory. See issue #296 and
+# docs/method/mutation-policy.md for targeted execution and evidence limits.
 mutation-snapshot:
 	@$(PYTHON) tools/mutsnap.py --check
-
-test: mutation-snapshot
 
 # Everything the historical full boundary checked, split into the default
 # reconstruction gate (`make phase`) and the explicit portability gate
@@ -1085,8 +1076,7 @@ PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
                dis-selftest period-compile-selftest
 
-PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov \
-                     mutation-snapshot
+PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)

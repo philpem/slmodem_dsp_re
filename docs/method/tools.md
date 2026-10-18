@@ -13,7 +13,9 @@ one, with the host assumptions listed against each.
 
 ## `tools/mutate.py` — break the code on purpose
 
-The anti-vacuity tier. `--suite NAME`, `--all`, or a bare
+An optional fixture-sensitivity tool. Prefer `--suite NAME --only TEXT
+--verbose`; `--all` is a legacy explicit campaign command with no gate
+obligation or routine maintenance role. It also accepts a bare
 `source binary mutations.json` triple. A mutation set is JSON:
 
 ```json
@@ -64,52 +66,26 @@ that string and getting zero (finding F555, and `gates.md` rule 2). Adding the
 flag invalidated all 48 snapshot entries, because the runner is what decides
 what "caught" means.
 
-## `tools/mutsnap.py` — the keyed snapshot
+## `tools/mutsnap.py` — optional historical records
 
-Records what every suite last said **together with a hash of everything that
-can reach its test binary**, so staleness is detectable without re-measuring.
-That is what removes the baseline pass every batch was paying twice for
-(finding F545). `--update`, `--check`, `--verify`, `--strict`, `--jobs`.
+The [mutation policy](mutation-policy.md) defines the current workflow.
+Snapshot inspection and refresh are optional; no build or merge requires them.
+`--check` hashes dependencies and checks bookkeeping without executing mutants.
+`--update NAME` records only explicitly named suites; `--verify NAME` compares
+new per-label verdicts with historical ones. Both refuse an omitted selection.
+`--strict` optionally makes stale keys fail inspection.
 
-**Assumes:**
+The coarse key includes `Makefile`, `src/`, `include/`, `test/harness/`, the
+runner, fixture driver and mutation JSON. Every test links all source objects;
+a key over only the mutated translation unit would miss dependencies. The key
+does not record compiler identity or every external input, so a matching key
+alone cannot validate a baseline. Record compiler identity alongside results.
 
-- **You can name the link closure.** Here it is `Makefile`, `src/`, `include/`,
-  `test/harness/`, plus the suite's own driver, its mutation JSON, and
-  `tools/mutate.py` — the runner, because *what counts as caught is its code*.
-  Nothing else under `tools/` can move a verdict, so nothing else is in the key.
-- **The closure is coarse on purpose.** A first design keyed each suite on its
-  own source plus its own mutations. That is unsound when every test binary
-  links all of `src/` — editing one file can change another suite's verdicts
-  while both hashes still match. **If your binaries link narrowly, a narrower
-  key is sound; if they link everything, a per-file key is a precise lie**
-  (finding F545).
-- **It fails on MISSING / ORPHANED / INCONSISTENT and only reports staleness.**
-  Deliberate: a gate that is red by default is worse than none (finding F545,
-  and `gates.md` rule 2).
-
-Port the cross-check too: it records per-mutation verdicts and the summary line
-from different code paths and compares them, and **both times it fired the tool
-was wrong, not the record** (finding F545).
-
-**What a day of using it costs, and it is the right trade.** The key is coarse,
-so almost any edit invalidates every entry: naming twelve struct fields touched
-`include/` and restaled all 48 (finding F638), and adding one flag to the
-mutation runner restaled all 48 again (finding F555) — on the same day.
-Re-running all 48 is 2,874 mutations:
-**12 minutes at `--jobs 8`** (finding F545), **15m 40s at `--jobs 4`** on a
-machine shared three ways (finding F638). The honest answer to invalidation is
-therefore **re-run, not re-key**, including — especially — when the edit
-obviously cannot move a verdict: that field-map re-run moved **not one verdict
-out of 2,874** (finding F638), and the run that did find something found it
-because `--verify` compares against the record **by name** rather than by
-count, catching one mutation that had gone CAUGHT → UNUSABLE while the phase
-gate stayed green (finding F637). A count would have seen one verdict move
-between two columns of a 209-mutation suite and had nothing to say about which
-mutation it was.
-
-If you size the batches, `--jobs 4` on a shared machine ran the four biggest
-suites — 749, 443, 214 and 209 mutations — in 7m 31s and the remaining 44 in
-8m 09s (finding F638).
+Historical full refreshes cost 12 minutes for 2,874 mutants at eight workers
+(F545), and a later 10,075-mutant campaign was estimated at 5.5 hours from a
+partial run (2026-08-31). Those observations do not establish actionable-finding
+ROI. Keep stale verdicts as history and run a named suite only for a concrete
+question. The full-refresh wrapper has been removed (issue #296).
 
 ## `tools/anchorcheck.py` — the structural definition-finder
 
