@@ -41,21 +41,20 @@
  * about which source file the original lived in.
  *
  * ===========================================================================
- * THE SNR IS `VPcmV34GetSNR`, INLINED, AND WE CALL IT INSTEAD
+ * SNR helper visibility
  * ===========================================================================
  *
- * .text+0x76a8..0x76f0 is `VPcmV34GetSNR`'s body verbatim -- the same
- * `sig_energy / equerr` ratio off the receiver, the same two reciprocal loops with
- * 0x1013 (a -6 dB step, counted six at a time) and 0x32d6 (a -1 dB step,
- * counted one at a time), and the same `>> 14`.  The two functions are in one
- * translation unit in the original and `-O3` inlined the callee.
+ * .text+0x7691..0x76f0 contains the standalone `VPcmV34GetSNR` algorithm:
+ * the signed `sig_energy / equerr` ratio, reciprocal loops with 0x1013
+ * and 0x32d6, and arithmetic shifts by 14. There is no helper call there.
+ * Making the single public definition visible in this translation unit
+ * reproduces that inlining under the recovered period compiler. This
+ * supports shared definition visibility; the original source filename
+ * remains ambiguous between `dp_wrapper.c` and `V34.c`.
  *
- * They are in two translation units here, so this is a call.  That is a
- * FACTORING difference and not a behavioural one: `make phase` compares what
- * the record ends up holding, and `compare.py` will read this function as
- * shorter by the inlined body for as long as the split lasts.  Writing the
- * loops out a second time would be a second copy to keep in step for a codegen
- * score, which finding F605 is the standing argument against.
+ * Keep one definition here so the diagnostic caller can inline it while
+ * the standalone public entry point remains available. The complete-TU
+ * visibility controls preserve its original body and global binding.
  *
  * ===========================================================================
  * WHAT IS FORCED IN HERE
@@ -153,6 +152,86 @@
  * `VPcmV34GetCurrentTxBitRate` multiplies the same units by the same figure.
  */
 #define V34DIAG_BPS_PER_RATE_UNIT	2400
+
+/*
+ * The signal-to-noise ratio, in whole dB.
+ *
+ * NO LOGARITHM AND NO TABLE: the object divides down by two constants and
+ * counts how many times it can, which is a base-conversion of the ratio into
+ * decibels with the two step sizes chosen so the counts add.
+ *
+ *     0x1013 / 0x4000 = 0.25074   ~= -6.0 dB, counted 6 at a time
+ *     0x32d6 / 0x4000 = 0.79431   ~= -1.0 dB, counted 1 at a time
+ *
+ * so the coarse loop takes the ratio down to below 4 and the fine loop
+ * finishes it, and the answer is the sum of the two counts.  The coarse loop
+ * hands the fine one the LAST value that was still positive, not the one that
+ * ended it -- `mov %ecx,%esi` at 0x717b saves the pre-multiply value each
+ * time round -- so the two loops do not double-count the step between them.
+ *
+ * WHAT IS DIVIDED BY WHAT.  `sig_energy` over `equerr`: the equaliser error energy
+ * republished every 1024 symbols (v34recv.h names it from receiver's own
+ * "V34EQU, equerr = %d, preerr = %d") divides into the int at +0x248.  A
+ * ratio reported in dB with the error underneath is a signal-to-noise ratio,
+ * which is the only thing this says about +0x248 and is not enough to name
+ * it: `equerr` could equally be the numerator of something else.
+ *
+ * `equerr` IS SIGNED AND THE GUARD IS `jle`, so a zero or negative error
+ * returns 0 dB rather than dividing.  Declared `short` for that reason and
+ * not `unsigned short`, which would make the guard `jbe` and let a large
+ * positive error through as a divisor.
+ *
+ * BOTH MULTIPLIES ARE SPELLED THROUGH `unsigned`, AND THAT IS THE
+ * INSTRUCTION AND NOT A STYLE.  0x7175 and 0x7191 are `imul $imm,%r,%r`
+ * followed by `sar $0xe` -- a 32-bit multiply that WRAPS, then an arithmetic
+ * shift -- and the loop exit is `test`/`jg` on the shifted result.  A ratio
+ * past 2^31/0x1013, which is about 522,000 and which
+ * `VPcmV34GetDiagnostics` can reach, therefore wraps NEGATIVE and ends the
+ * loop; that is the object's behaviour and the only way out for a large
+ * ratio.  Written as a plain `v * 0x1013` it is signed overflow, which is
+ * undefined, and GCC 13 duly assumes a positive `v` keeps a positive
+ * product and compiles the coarse loop into one that never terminates.
+ * `(int)((unsigned)v * 0x1013u) >> 14` is the same two instructions with the
+ * wrap made legal -- the same reason `VPcmV34InitiateRateRenegotiation`'s
+ * step is spelled unsigned, and the same class of defect as findings F2300 to
+ * 2302.
+ *
+ * THIS BODY IS INLINED VERBATIM INTO `VPcmV34GetDiagnostics` at 0x7691, so
+ * whatever shape reproduces it here has to reproduce it there too.  It is
+ * left as one function rather than factored into a static helper, because a
+ * helper has no blob symbol and its bytes would count against neither side.
+ */
+
+int
+VPcmV34GetSNR(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = &obj->receiver;
+	int db = 0;
+	int last = 0;
+
+	int v = 0;
+
+	if (rx->equerr > 0)
+		v = rx->sig_energy / rx->equerr;
+
+	while (v > 0) {
+		int product = (int)((unsigned int)v * 0x1013u);
+		last = v;
+		v = product >> 14;
+		if (v > 0)
+			db += 6;
+	}
+
+	v = last;
+	while (v > 0) {
+		v = (int)((unsigned int)v * 0x32d6u) >> 14;
+		if (v > 0)
+			db += 1;
+	}
+
+	return db;
+}
 
 void
 VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
