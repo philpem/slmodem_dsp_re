@@ -242,6 +242,23 @@ role can be bounded but not established, keep a neutral name and put the
 derivation in the comment — 3120 declined `+0x2f64` on exactly this ground and
 that was the right call.
 
+## Check the address when replacing a raw access
+
+A raw-offset-to-member conversion must preserve the **owner, byte offset and
+access width at every changed use**. Record the old constant's resolved value
+and the new member's complete nested offset; check them with the period layout
+before interpreting code-generation changes. Correct struct assertions alone
+do not prove that a use selected the correct member.
+
+The V.32 status/control audit found five wrong field selections introduced by
+one typed-owner conversion: a clear moved from HDX `+0x44` to `+0x46`, and status
+reads selected fields in the wrong embedded DSP modules. The surrounding source
+comments still carried the correct offsets. Constructor-only fixtures missed
+the status errors because several fields were zero together. Use component
+histories that give the plausible alternative fields distinct values; report
+synthetic states as such. A green differential suite is evidence for its input
+domain, not proof that an unchecked field substitution preserved an address.
+
 ## One type, one home
 
 A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.

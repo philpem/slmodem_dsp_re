@@ -7792,3 +7792,264 @@ The focused controls run in Gentoo CI after canonical compilation. Its metric
 cache keys include the proof module. The older body-extraction audit explicitly
 disables the new literal canonicalization during its extraction-only comparison,
 so its historical no-change assertion still tests extraction independently.
+
+## Audit recorded defensive defaults before tuning the compiler
+
+A deviation labelled harmless can still encode source absent from the reference.
+The D385, D386 and D1201 entries explicitly described invented initialisers,
+but their sources unconditionally supplied those values even in the reproduction
+build. Check the native definition/use paths, rather than trusting the old claim
+that undefined source must never appear in this tree.
+
+Three bounded corrections retain the existing fallback only outside
+`DSPLIB_REPRODUCE_BUGS`:
+
+| Function | Native evidence | Period result under retained flags |
+| --- | --- | --- |
+| `V90Demapper::hardDecision` | Capacity refusal skips both sign-slot stores, then multiplies the loaded value by zero | 559 → 560 bytes, reference 660; thirteen other TU bodies unchanged |
+| `V90SignBitsExtractor::process` | States other than 0/1 reach the action dispatch without assigning its register | 418 bytes before and after, reference 417; eleven other TU bodies unchanged |
+| `FAX_FSE_decision_128pt` | Prologue initialises `base` and `amb`, but not `best` | 904 → 888 bytes, reference 910; six other TU bodies unchanged |
+
+These are source-fidelity corrections, not exact-function gains. The V.17 size
+gap grows from six to twenty-two bytes while removing an invented store. The
+full-TU comparison preserves data, exports and resolved relocation consumers;
+a smaller scalar score would not justify restoring that store.
+
+The focused period fixtures pass: `t_v90demap` and `t_v90sbereset` cover the
+sign-bit process with 1027 checks and reset with 488; `hardDecision` has 88328
+checks. `t_v17slicer` passes 19 groups and 2798739 checks, including component
+handshake walks and the existing region/threshold tests. No test asserts that
+two indeterminate register or stack values agree. Sign-bit reset permits an
+invalid state at the component boundary, but this is not modem-lifecycle
+reachability. The all-0x7fff V.17 search outcome remains unproved, not impossible
+because a finite scan did not reach it.
+
+Replay the V.17 full-TU control against the frozen pre-change objects:
+
+```sh
+python3 tools/recovery_v17_best_initialization.py \
+  --domain documented-native-best --baseline-dir build/copy293-baseline
+```
+
+The replay first reproduces the complete baseline object, then checks all seven
+bodies, data, binding and relocation consumers. Initial RTL supplies a positive
+and negative control: exactly one zero assignment to target local `best` in the
+baseline and none in the candidate. Scope this count to the target function;
+the same local name occurs in four other slicers in this TU.
+
+## Distinguish forwarding passes across diagnostic consumers
+
+A broader native inventory finds 24 lexical SF store/member-compare pairs in
+11 symbols, across 1852 functions and 185305 decoded instructions. Its domain
+contains 195 explicit SF member stores and 57 direct SF member comparisons.
+It excludes indexed addresses, EBP owners, integer stores and register-based
+comparisons; lexical address equality is not an alias or control-flow proof.
+Known setter positives, removed-store negatives and reset controls calibrate
+this screen. All nominated baseline consumers are nonexact.
+
+Two independent witnesses widen the Echo investigation:
+`V90Parameters::loadModemParamsData` stores member `+0x380` then rereads it for
+the sign with no intervening call or branch; `ResamplerTiming::adjustHalfBaudBpfGain`
+does so at `+0x80` with no intervening call. The Parameters source uses a direct
+sign expression, so a sign-helper spelling alone cannot explain this family.
+
+The period traces falsify a shared first-CSE explanation. Echo's sign loads
+vanish in first local CSE. Parameters' load UID85 and Resampler's member load
+UID126 survive that pass, then disappear across GCSE. Precisely skipping the
+first `cse_main` invocation in the installed period compiler leaves both full
+objects raw-identical; plain, unchanged-GDB and absent-target controls reproduce
+the baseline too. This intrusive diagnostic is not a compiler profile or source
+change.
+
+A separate `-fno-gcse` control preserves those two loads but does not recover
+an exact function. Parameters emits the native member comparison and remains
+BYTES173. Resampler still compares a loaded register and changes constant
+sections. Echo still forwards its setter reads in first CSE. Across 38 function
+bodies and two profiles, the control gains zero exact names and loses five.
+All export bindings survive. Retain these observations, not the option.
+
+```sh
+python3 tools/recovery_diagnostic_inventory.py
+python3 tools/recovery_diagnostic_cse.py --domain independent-sign-readbacks \
+  --baseline-dir build/copy293-baseline
+python3 tools/recovery_diagnostic_cse.py --observe
+python3 tools/recovery_diagnostic_cse.py --audit
+```
+
+The audit checks complete compiler commands, the selected period assembler,
+three raw-reproduced baselines, 76 body verdicts, data and relocation collateral,
+and three corrupted-stage controls. A restored memory operand is an observed
+mechanism effect; it does not uniquely recover the original source or flags.
+
+## Recover the quotient and countdown before explaining scratch registers
+
+`SGD_correlate` supplies a small, independently witnessed width and loop recovery.
+The reference narrows the integer division result with `cwtl` before saving its
+scale. It carries a decremented short loop counter while testing the previous
+value, and loads the `a` operand before `b` for the XOR table index. The source
+now declares `short scale` and uses `for (i = n; i-- != 0;)` with that operand
+order. The 107-byte body becomes 114 bytes, matching the reference length and
+its first forty instructions; the verdict moves from SIZE7 to BYTES3.
+
+The eight-cell width/countdown/operand cross and twelve ordinary declaration/
+product-order controls preserve all nine TU symbols, three exact names, binding,
+visibility and allocated nontext contents. Only `SGD_correlate` changes. Two
+corrupted-nontext controls demonstrate the collateral audit. The isolated
+candidate passes `make phase`: 392 period fixtures, zero failures, including
+192 correlate checks.
+
+The last three differing bytes belong to the scale reload register, multiply
+operand and dead pop. Do not infer their origin from final assembly: dumps
+through `27.flow2` still contain a memory multiply and a stack adjustment.
+`28.peephole2` introduces both the BX reload and CX pop; the reference uses SI
+and BX. The bounded declaration/product domain has no exact hit. Reopen source
+only with a new lifetime or surrounding-source witness, not a forced register.
+
+```sh
+python3 tools/sgd_structure293_reproduce.py --domain native-short-countdown \
+  --baseline-dir build/copy293-baseline
+python3 tools/sgd_tail293_reproduce.py --domain ordinary-tail-order \
+  --baseline-dir build/copy293-baseline
+python3 tools/sgd_structure293_audit.py
+```
+
+Pin whole-object baselines independently of the source experiment. An agent's
+300-object partial-link pair included the parent's concurrent V.17 correction;
+its 71975 → 72089 positioned-byte result is an isolated pair, not the delta
+against the frozen PR partial object. Object hashes identified the changed
+V.17 body. Preserve that provenance and use the integrated parent comparison
+for the PR checkpoint.
+
+## Preserve floating absolute value before diagnostic conversion
+
+The wider member-readback investigation exposed a separate operation mismatch
+in `V90Parameters::loadModemParamsData`. Native `fabs` at `0x2a731` feeds the
+whole-part integer conversion at `0x2a76b`. The reconstructed integer absolute
+value after conversion produced the same ordinary values but a different
+instruction graph. Use `(int)fabsf(pr)` and retain the signed fractional path.
+The earlier conversion at `0x2a752` serves the fraction; pairing it with the
+whole-part `fabs` would misidentify the expression.
+
+Under retained flags this source correction makes the target 344 bytes, the
+reference length, from 332. BYTES159 remains. All eight other TU bodies, data,
+binding and relocation-consumer inventories are unchanged, with no exact-name
+gain or loss. The focused period fixture passes 4005 checks, including 642
+checks of this method across debug levels 0..3 and unsigned input endpoints.
+The input-derived value is finite, nonnegative and below 2^29; this result does
+not excuse a NaN or integer-conversion overflow mismatch elsewhere.
+
+The first candidate lacked a declaration for `fabsf` and was rejected by the
+period compiler. Preserve that invalid run separately, then rerun with the
+ordinary `<math.h>` declaration before interpreting emitted code. The source
+operation is supported by the binary; the declaration makes that source valid
+for the compiler which must decide it.
+
+```sh
+python3 tools/recovery_diagnostic_cse.py --whole-expression \
+  --domain native-float-absolute --baseline-dir build/copy293-baseline
+python3 tools/recovery_diagnostic_cse.py --audit-whole
+```
+
+Publishing `DIGITAL_POWER_REDUCTION` immediately after computing `pr` recovers
+another native ordering constraint. The store moves from initial RTL UID70 to
+UID42, before the fractional and whole-part work, and restores the native
+`fsts` / `fmul`, `fld`, `fabs`, `fxch` sequence. Under retained flags the
+344-byte body improves from BYTES159 to BYTES106. Five source cells and two
+GCSE controls produce four distinct complete objects; the three early-store
+source spellings are raw-identical. Their original spelling remains unknown.
+All 63 body verdicts preserve the other eight bodies and nontext collateral;
+the 4005-check period fixture passes. Replay with `--owner`, `--audit-owner`
+and `--owner-period` on `recovery_diagnostic_cse.py`.
+
+Reanchor a displaced mutation explicitly. Removing `fabsf` changes the object
+but still passes all 4005 checks: `pr` is nonnegative throughout this input
+domain. The existing mutation remains labelled equivalent. The 37 mutation
+anchors are valid; this is not a newly detected functional difference.
+
+## Trace a predecessor before tuning its successor's scratch register
+
+The SGD peephole trace opens a new source lead in `SGD_sequence_gen`. Native
+code advances the output pointer before fetching the symbol, saves the old
+short sequence index before incrementing it, and tests the old loop count.
+Combining the output assignment with `seq[i++]` and using short postdecrement
+recovers that graph. Four crossed expression/countdown cells move its 214-byte
+body, SIZE32, to the native 246-byte length, BYTES47. After offset `+0x49`, only
+four MOV displacement bytes differ, selecting different local stack slots.
+Keep all 47 raw differences in the result; that suffix observation is not a
+normalisation or an exactness claim.
+
+Read-only GDB tracing of the actual period compiler models all 52 scratch
+searches across these four cells. The expression adds four predecessor
+searches. Its last search selects DI, changing the cursor inherited by
+`SGD_correlate`; correlate moves from BYTES3 to BYTES9. Only these two of nine
+bodies change, and the three exact names and nontext contents survive. The
+focused period fixture passes 26256 generator and 192 correlate checks.
+
+The isolated whole-object pair makes the cost visible: replacing only SGD in
+300 frozen objects moves positioned matches from 72230 to 72102 out of
+943398, while exact symbols stay 457. Both are raw-different from the reference.
+The frozen PR-start object has 72088 positioned matches and is a separate
+baseline. Retain the independently supported source graph with its measured
+layout tradeoff. Do not infer the original source from the aggregate score.
+
+`sgd_scratch293_reproduce.py` / `sgd_scratch293_audit.py` retain the read-only
+trace controls; `sgd_sequence293_reproduce.py` / `sgd_sequence293_audit.py`
+retain the crossed source experiment. Their baseline pins the durable
+intermediate correlate commit. Plain and observed compilations must remain
+raw-identical. The initial `-dP` attempt emitted nondeterministic pointer
+comments and remains invalid evidence; the valid replay uses `-v -save-temps
+-da` without deleting differences.
+
+## Audit raw-to-typed replacements at the use site
+
+Five V32 errors came from commit `0e473a213` replacing correct raw addresses
+with incorrect typed members. Correct structure sizes and offset assertions
+did not catch the wrong *choice* of field. Existing comments still quoted the
+correct addresses. Review the complete owner chain, effective offset, width
+and signedness at each replacement, using the binary as the authority.
+
+| Consumer | Native location | Incorrect member | Correct member |
+| --- | --- | --- | --- |
+| Control ring-response clear | HDX `+0x44` | `short_46` | `regs[4]` |
+| Status `r12` | FP `+0x182` | `ecc.pwr_out` | `sre.pll_acc` |
+| Status `r18` | FP `+0x188` | `ecc.adapt_near` | `sre.active` |
+| Status `r0a` guard/denominator | FP `+0x102` | `mrf.phase` | `ecc.pwr_out` |
+| Status `r0a` numerator | FP `+0x100` | `mrf.need` | `ecc.pwr_in` |
+
+A complete status census covers 17 declared fields: sixteen written, one
+untouched. No other mapping error was found. Constructor and component calls
+for echo cancellation, timing recovery and FSE reception distinguish the
+relevant fields without planting their values. At the proper aggregate link
+boundary, the old source fails 80 of 560 new lifecycle checks; all 560 pass
+after correction. The ring-response probe is separate: it models an internal
+handoff without proving the preceding detector history, and remains labelled
+synthetic. Its original source fails two of 77 checks; the correction passes.
+
+The V34 audit is a useful bounded negative: nineteen diagnostic destinations
+agree, including calibrated x87 stores at `+0x70` and `+0x74`, and fourteen
+public getter bodies were reviewed, eleven already exact. Dropping the known
+float store makes the audit fail. This does not prove arbitrary aliases,
+delegated outputs or lifecycle reachability; no V34 field correction follows.
+Replay `tools/recovery_v34_status_owners.py`.
+
+## Keep the reference's link boundary when testing adjacent-data reads
+
+The V32 lifecycle test initially remained red after all four status operands
+were corrected. Equal component inputs reached `FPM_log10(64716, 0)`, whose
+index 378 reads beyond its declared 128-word table into neighboring data.
+The existing exhaustive logarithm fixture already requires aggregate linking
+for this reason. Linking individual source objects changes those neighbors.
+
+The new audit holds all 305 linked objects and the fixture constant. Individual
+linking fails 79 of 560 lifecycle checks; aggregate linking passes all 560 at
+the unchanged signal amplitude. At index 378 the individual source sees 26702
+instead of 32381, explaining scaled results 417 versus 505. Aggregate source
+and reference match the original across all 385 words reachable by unsigned
+mantissas, plus one extra layout-guard word. The declared table stays 128 words.
+
+`t_v32fpdisp.ldmode` therefore selects the established aggregate mode. No
+arithmetic source, tolerance or input-amplitude workaround is warranted. The
+existing log/div/sqrt period fixtures pass three binaries and 1217541 checks,
+including all 65535 nonzero unsigned mantissas at exponent zero. Replay
+`tools/recovery_status_log_link_audit.py` against the preserved aggregate and
+individual binaries; retain the individual failure as a negative control.
