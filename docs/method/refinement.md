@@ -8393,3 +8393,66 @@ by 24 bytes and one dispatcher call-displacement byte; all other dispatcher
 bytes and canonical nontext destinations agree. Raw nontext equality would be
 an inaccurate claim. [The snapshot audit](../v34-snapshot-index-recovery.md)
 records the complete comparison and the corrected fixture `__FILE__` control.
+
+
+## Cross layout hypotheses with the observed operation
+
+V32's five-element array plus two fields and seven-element backing array are
+indistinguishable across fourteen period translation units. Keeping the API
+limit at five, both loop forms produce the same objects; both explicit-store
+forms also produce the same objects. This experiment cannot recover the
+original declaration, but it separates that uncertainty from initialization:
+the native constructor emits seven ascending word stores, whereas the loop
+forms emit a loop.
+
+Use the explicit stores with the current layout to recover the observed
+operation without choosing an unsupported declaration or changing the API.
+That also removes indexing beyond the currently declared array. The two
+constructor-backed fixtures pass 689769 checks in total, and production
+raw-matches the previously validated explicit-store object. The constructor
+grows sixteen bytes; the other five emitted function bodies, nontext contents
+and canonical relocation consumers remain unchanged. The other thirteen
+header-consuming translation units remain raw-identical. Do not describe this as
+proof that the original bank had five or seven entries.
+
+
+## Prove that an overlay header reached the compiler
+
+A raw-identical baseline cannot detect an ignored candidate header. The first
+promoted V32 storage replay used `-I.../overlay` instead of
+`-I.../overlay/include`; the compiler silently fell back to the live header.
+Its apparent four-cell pass was invalid. The seven-element explicit cell also
+retained names of members removed by its intended header, a contradiction that
+should have caused compilation to fail. Preserve such a run as invalid and
+exclude its verdicts rather than adjusting the interpretation afterward.
+
+Check the actual preprocessed declaration or a period-compiled layout witness
+for every cell, alongside dependency paths. Here the array must occupy ten
+bytes in the five-element cells and fourteen in the seven-element cells; the
+latter must not expose the removed named fields. Deliberately using the wrong
+include path must fail that witness. Copying pinned headers into a directory
+is not evidence that the compiler read them.
+
+
+## Cross a sample cursor with the sample's read boundary
+
+The V8 DFT reference publishes the bin phase before loading the current input
+sample, and advances the sample pointer by two bytes in the outer loop. The
+reconstruction used an indexed sample load before phase publication. A
+four-cell cursor/read-order cross separates these two discrepancies: each
+single-axis control restores only its own native operation, while the
+combined candidate restores both. The ordering difference is already present
+in initial RTL; register allocation did not introduce it.
+
+Keep the sample read inside the bin loop. Hoisting it would introduce another
+unsupported value-capture boundary. The existing component fixture passes
+1081 DFT checks, including zero and nonzero counts and bin counts; this is
+not evidence for arbitrary aliasing or unsafe large counts. All three emitted
+bodies are audited per cell; only the update changes, with both exact
+siblings, table data and bindings preserved. Its size gap improves from
+fifteen to seven bytes, but the remaining inner-loop and extension differences
+are recorded rather than dismissed as register allocation.
+
+[The V8 read-age audit](../v8-dft-read-age-recovery.md) records source/header
+pins, actual compiler dependency output, both negative controls and the
+complete selected command. Production raw-matches the selected replay object.
