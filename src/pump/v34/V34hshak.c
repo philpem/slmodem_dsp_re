@@ -3901,6 +3901,9 @@ t3m_micro49(struct t3m_frame *f)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
 					     "errorrecovery is initialized in " "RX_PHASE1_ANS\n");
+
+		/* Both reset continuations reload +0xaa7c (0x70f83/0x70fc0). */
+		filt = f->obj->filtdelay;
 	}
 
 	/*
@@ -4030,12 +4033,15 @@ t3m_micro50(struct t3m_frame *f)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
 					     "errorrecovery is initialized in " "RX_PHASE2_ANS\n");
+
+		/* Both reset continuations reload +0xaa7c (0x6671d/0x6e4ec). */
+		filt = f->obj->filtdelay;
 	}
 
 	/*
 	 * 0x66724, where the last three guards above converge.  The COUNTER is
 	 * re-read off the object -- `movswl 0xaa78(%ebx),%ebp` -- while the
-	 * delay is still the +0xaa7c that 0x664d8 left in %cx.
+	 * delay is the +0xaa7c in %cx, reloaded after reset if it ran.
 	 */
 	/* 0x66724. */
 	if ((int)f->obj->short_aa78 <= filt + 0x50) {
