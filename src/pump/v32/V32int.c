@@ -482,7 +482,7 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
 
 	fp = owner->fp;
 	n = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),
-					   (short)count);
+					   count);
 
 	fp = owner->fp;
 	if (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)
