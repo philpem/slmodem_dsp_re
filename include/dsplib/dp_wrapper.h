@@ -48,7 +48,7 @@ struct dp_wrapper {
 	struct rc *rc_to_host;		/* +0x010 dp rate -> host rate   */
 	short scratch_in[DPW_MAX_FRAG];	 /* +0x014 resampled input       */
 	short scratch_out[DPW_MAX_FRAG]; /* +0x194 datapump output       */
-	int host_frag;			/* +0x314 dp_frag scaled to host */
+	unsigned int host_frag;			/* +0x314 dp_frag scaled to host */
 	struct dpw_ring out;		/* +0x318                        */
 	struct dpw_ring in;		/* +0x628                        */
 };
