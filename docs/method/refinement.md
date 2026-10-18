@@ -8053,3 +8053,85 @@ existing log/div/sqrt period fixtures pass three binaries and 1217541 checks,
 including all 65535 nonzero unsigned mantissas at exponent zero. Replay
 `tools/recovery_status_log_link_audit.py` against the preserved aggregate and
 individual binaries; retain the individual failure as a negative control.
+
+## Recover a shared narrow intermediate without guessing its spelling
+
+The native phasor routines narrow the interpolation fraction after both
+`phase - (idx << 5)` and the odd-quadrant reflection `32 - frac`. A `short`
+fraction models both boundaries in the shared helper. The period compiler
+still folds the initial subtraction into `phase & 31` at `20.combine`, but
+now retains the reference's sign extension after reflection in all three
+functions. Their size gaps improve by one byte each: 11 for `FPM_phasor`,
+12 for `FPM_phasor_dp`, and 18 for `FPM_phasor_demod`. None becomes exact.
+
+A four-cell phase-carrier/fraction-width cross and one HI-mode mechanism
+control delimit the result. The unsigned-phase control changes behavior for
+negative phases and remains diagnostic only. The retained change preserves
+all nontext section contents and exported bindings. The focused period
+fixtures pass 3342336 phasor checks, 4456448 demodulator checks and 1005941
+double-precision trials; all 36 mutation anchors remain valid. The ordinary
+fraction range makes narrowing redundant at runtime, so these tests do not
+uniquely identify a `short` local rather than casts on both assignments.
+
+[The phasor audit](../phasor-fraction-width-audit.md) records the complete
+cross and replay command. The initial-subtraction difference now needs new
+compiler-context evidence; further nearby spellings are not a fresh lead.
+
+## Cross helper visibility against translation-unit context
+
+`VPcmV34GetDiagnostics` contains the standalone SNR algorithm in the reference,
+including both reciprocal loops, but the reconstruction called a definition
+in another translation unit. Cross two factors before moving an entire module:
+whether diagnostics shares the complete Main TU, and whether the SNR definition
+is visible to its caller. Keep every public definition exactly once.
+
+| Context | Definition unavailable | Definition visible |
+| --- | ---: | ---: |
+| Diagnostics separate from Main | SIZE40, helper call | SIZE2, inlined |
+| Diagnostics merged into Main | SIZE47, helper call | SIZE5, inlined |
+
+Definition visibility controls the inline boundary in all four cells. Only
+the diagnostic caller changes across the 59 exported function bodies;
+the standalone SNR body remains exact with strong public binding. Allocated
+nonstring data and exported bindings agree. The retained change moves the
+single SNR definition beside diagnostics, preserving the separate Main TU.
+This supports shared definition visibility; it does not identify the original
+source filename within the `dp_wrapper.c|V34.c` attribution ambiguity.
+
+Two additional cells remove the persistent rate-configuration pointer, since
+the native body addresses those fields directly from the root owner. This
+restores that addressing feature but also changes early captures and moves
+round-trip-delay publication ahead of the SNR loops. The native publication
+is later. No independent source history settles those tradeoffs, so the
+owner rewrite remains diagnostic. SIZE2 describes a length gap, not two
+isolated wrong bytes: operand and scheduling differences remain throughout.
+
+Both production objects raw-match the selected complete-TU candidate. The
+focused period fixtures pass 108775 checks across two binaries; their planted
+component states do not establish modem-lifecycle reachability. Ten Main-bound
+mutation suites contain 450 anchors, none overlapping the moved definition.
+No registry reanchor is needed. Both existing SNR caller mutants are executed
+and caught; the restored production candidate passes. The nineteen-output
+field audit still passes, including its missing-float-store negative control.
+
+Replay `tools/recovery_v34_diag_visibility.py` against a frozen baseline with
+`--baseline-dir`, then `--audit`, `--period` and `--mutations`. The source pin
+and immutable baseline manifest prevent a later rebuild from silently replacing
+the control. An initial helper-only cell omitted the public `extern "C"`
+prototype; the missing-export assertion rejected it. That run is retained as
+invalid, and the valid cells include the public declaration.
+
+## Bound historical field audits explicitly
+
+The [typed-owner worksheet](../typed-owner-conversion-audit.md) follows up the
+V32 regression with forty selected sequence/control substitutions and five
+known-error controls. Pairing uses statement role before offset comparison.
+The period probe checks offset, width and signedness for 35 unique member
+paths; forty ordinary statement occurrences share thirty of those paths.
+No additional address mismatch was found in this sample. Two tap-position
+reads changed from unsigned accessors to signed members, but subtraction
+followed by conversion to short preserves the same target low sixteen bits.
+The signedness difference is recorded without claiming a functional defect.
+This is a bounded historical audit, not coverage of all substitutions in the
+commit. Replays use this checkout's recorded compiler configuration, rather
+than assuming a particular worktree nesting or borrowing another build.
