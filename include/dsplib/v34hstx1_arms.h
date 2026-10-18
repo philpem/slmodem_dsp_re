@@ -2299,7 +2299,8 @@ static void
 tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 {
 	short *co = (short *)((char *)o + TX1_RXCOEFF);
-	int sum = 0, i, t;
+	int sum = 0, t;
+	short i;
 
 	rec[0] = (short)0x8000;
 	for (i = 0; i <= 5; i++) {
