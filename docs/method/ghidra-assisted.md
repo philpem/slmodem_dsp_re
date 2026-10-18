@@ -171,24 +171,24 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Complete the bounded anonymous-copy identity proof for
-   `getSegmentPointer(PcmType, int)` after the overlapping-symbol extraction
-   regression is protected. The complete 64-byte literals agree; prove pointer
-   nonescape, destination bounds, direction/count, post-copy register death,
-   readonly extent and safe entries. Keep every unsafe identical-pair control
-   in the shared comparator. This would recognize existing emitted code, not
-   recover new source; the function remains UNRESOLVED for now.
-2. Inspect V92EchoCanceller `setDecayFactor`'s remaining 149-versus-147-byte
-   body through the period x87 pipeline. Native code compares against member
-   `+0x34` with `fcomps`; current code retains a value and uses `fcompp`.
-   Establish the first value-lifetime divergence before proposing a source
-   cell. The constructors are now EXACT313 after the bounded parser-fold
-   investigation below; do not reopen their closed arithmetic variants.
-3. CID raw/9600 positive histories now pass, with 430 paired calls, 1420 events
-   and nineteen rejection controls. Extend failure/recovery histories at those
-   mode/rate boundaries if seeking a production discrepancy. Keep the 1433
-   source/option cells closed without new path/operand evidence; process remains
-   368 versus 386 bytes. See [#24](https://github.com/philpem/slmodem_dsp_re/issues/24).
+1. Widen the V92 diagnostic investigation to native consumers that publish a
+   float and then reread that member for the sign argument. The current named-
+   setter comparison found no exact analogue: the equalizer setters compare
+   before publication, while exact `setParamEia6` compares a computed local.
+   Require a new ownership/helper/macro witness before changing `setEchoBeta`,
+   `setDecayFactor` or `setState`; first-CSE forwarding is now measured, and a
+   blanket qualifier change on the current shared-helper source contradicts
+   native reset's literal signs. Do not repeat local arithmetic spellings.
+2. Use that native-consumer inventory to choose a fresh structural family if it
+   supplies no discriminator. Prioritise actual load-width, call-boundary or
+   publication-order differences over a small byte score. The constructor and
+   readonly-copy domains are closed; no anonymous unresolved operand remains
+   in the current compared-function census.
+3. CID raw/9600 success and checksum-failure/recreate/recovery histories now
+   pass: 646 paired calls, 1858 events and 24 controls. Further source changes
+   need a different reachable failing path or native operand witness, not
+   another spelling of the 368-versus-386-byte process body. Keep the 1433
+   source/option cells closed. See [#24](https://github.com/philpem/slmodem_dsp_re/issues/24).
 4. CenterAdapt's allocated history home and reload deletion are now measured.
    Reopen only with independent death-note/lifetime or common-profile evidence
    explaining the reference's selective two surviving stores. The eleven-byte
@@ -784,3 +784,59 @@ all structural checks, including 285 mutation suites and 10042 unique anchors.
 All 300 runtime source objects raw-match canonical builds. The strict manual
 build, documentation audit and finding-reference check pass. No tolerance,
 compiler profile, fixture denominator or modern-portability claim changes.
+
+
+## Readonly-copy identity and first-CSE diagnostic tracing
+
+From frozen `51f62d213`, the decoded readonly-copy proof resolves the existing
+115-byte `getSegmentPointer` body. It proves direction, count, private frame,
+saved-register disjointness, pointer nonescape, immediate source-register death,
+readonly contents and safe entry boundaries. Only the consumed anonymous
+relocation receives the proved content identity. No reconstruction source or
+emitted bytes change. The completed before/after audit covers 1852 names,
+1886 candidate body copies and 300 objects: this is the sole body-identity and
+grade change, with no losses. Twenty-seven focused ELF cases pass, including
+25 hazardous/unsupported same-pair refusals and two safe variants that differ
+from the original. The shared extractor additionally rejects relocations
+crossing function boundaries. CI runs the focused controls and keys its metric
+cache on the new proof module.
+
+The setter trace identifies first RTL CSE as the missing member read's origin,
+not parser folding, reload or final stack conversion. Both setters and all six
+`setState` diagnostic copies lose their reads there. Native `reset`, however,
+uses literal signs, matching current EXACT195 reset. The result does not
+license a blanket qualifier, profile or source change. Two complete baseline/
+comment objects are raw-identical; thirty body verdicts, 64 RTL streams, eight
+trees and six corrupted-trace controls pass. Four focused period binaries pass
+161199 checks. The source comment now distinguishes native readback from the
+current emitted register comparison. A read-only 72-copy named-setter screen
+finds no exact store-then-member-sign analogue; current local spelling domains
+remain closed pending a wider independent source witness.
+
+CID follows the real host's terminal-result contract: failure, deletion,
+fresh construction and successful delivery at the same configuration. Six
+mode/rate/debug pairs pass per implementation, raising the fixture to **1106
+checks**. Independent native replay agrees on **646 paired calls and 1858
+events**, rejecting **24/24 controls**. All 44 accepted constructions across
+both sides have fresh packet state. Receiver addresses are reused in all twelve
+recovery pairs, so event generations—not pointer inequality—establish freshness.
+The failed attempt emits no TTY or host delivery. No production CID discrepancy
+is found, and its complete object remains raw-identical.
+
+The body census becomes **1105/1852 EXACT**, covering **127324/720125 original
+function bytes**. The remaining **747** comprise 29 REGALLOC, 71 BYTES and
+647 SIZE; none is UNRESOLVED. This batch adds one identity proof for existing
+code, not a newly reconstructed executable body. All 300 canonical objects
+remain raw-identical to the frozen baseline. Whole-object raw identity remains
+DIFFERENT.
+
+
+The final integrated `make phase J=4` passes **392 period fixtures, zero
+failed**, plus all structural checks (285 mutation suites, 10042 unique
+anchors). All 300 runtime source objects raw-match canonical builds. The
+partial object is raw-identical to the prior checkpoint and still fails strict
+reference identity: 68 exact sections, 72088/943398 positioned matching bytes,
+457/2931 exact symbols. The exact floor adds only the proved 115-byte function.
+Strict documentation build/audit and comparator self-tests pass. No new
+executable source recovery, field-type correction, modern-portability result or
+full mutation snapshot refresh is claimed.

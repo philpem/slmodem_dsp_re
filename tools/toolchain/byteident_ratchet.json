@@ -2,8 +2,8 @@
   "bytes": 71,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1104,
-  "exact_bytes": 127209,
+  "exact": 1105,
+  "exact_bytes": 127324,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -286,6 +286,7 @@
     "_Z10float2BitsfPsi",
     "_Z12designWindowIfEv10WindowTypePT_j",
     "_Z16setDilDescriptorP19tagV90DILdescriptor7DilType",
+    "_Z17getSegmentPointer7PcmTypei",
     "_Z20resetRetrainDetectorP17tag_retrainReqDets",
     "_Z25SetUpstreamModulationInfoP12tagV34Object",
     "_Z3StdIfET_PS0_j",
@@ -1115,5 +1116,5 @@
   "regalloc": 29,
   "reloc": 0,
   "size": 647,
-  "unresolved": 1
+  "unresolved": 0
 }
