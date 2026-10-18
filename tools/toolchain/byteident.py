@@ -251,7 +251,7 @@ def function_owners(path):
                 sections[index] = (section.name, section['sh_addr'], section.data())
             if isinstance(section, RelocationSection):
                 relocations.setdefault(section['sh_info'], []).extend(
-                    rel['r_offset'] for rel in section.iter_relocations())
+                    (rel['r_offset'], rel['r_info_type']) for rel in section.iter_relocations())
         return functions, sections, relocations
 
 
@@ -282,7 +282,11 @@ def owned_function(path, sym):
             if start < other_start < start + size or (
                     other_size and other_start < start + size and start < other_start + other_size):
                 return None
-    inside = [off - start for off in relocations.get(index, []) if start <= off < start + size]
+    fields = relocations.get(index, [])
+    if any(kind not in (1, 2) or off < start < off + 4 or off < start + size < off + 4
+           for off,kind in fields):
+        return None
+    inside = [off - start for off,_ in fields if start <= off < start + size]
     if len(inside) != len(set(inside)):
         return None
     return name, start, data[offset:offset + size], frozenset(inside)
@@ -344,6 +348,18 @@ def body(path, sym):
             off = proof['relocation_offset']
             expected = ("R_386_32", ("section", proof['table_section'],
                                       proof['table_offset']))
+            if relocs.get(off) == expected:
+                relocs[off] = ("R_386_32", proof['identity'])
+    if b"\xf3\xa5" in raw and any(kind == "R_386_32" and target[0] == "section"
+                                    for kind, target in relocs.values()):
+        import readonly_copy
+        try:
+            proof = readonly_copy.prove(path, sym)
+        except readonly_copy.Refused:
+            proof = None
+        if proof is not None:
+            off = proof['relocation_offset']
+            expected = ("R_386_32", ("section", proof['table_section'], proof['table_offset']))
             if relocs.get(off) == expected:
                 relocs[off] = ("R_386_32", proof['identity'])
     return raw, relocs
