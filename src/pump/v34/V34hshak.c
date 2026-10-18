@@ -8915,9 +8915,11 @@ v34handshak(void *vobj)
 	short rxst;
 
 	/* 0x62933: fill the transmit queue one symbol at a time.
-	 * Every iteration reloads the count and target. Unsupported states
-	 * retain the reference's non-progressing loop. The native dispatch
-	 * is .rodata+0x2da0 (states 5..86).
+	 * The native dispatch is .rodata+0x2da0 (states 5..86). Active arms
+	 * reload the target at their loop rejoins. Unsupported states instead
+	 * reach 0x629e0 with the target still in DX and make no progress.
+	 * This C condition also makes no progress there; its load placement
+	 * remains a difference in generated control flow, not a recovered snapshot.
 	 */
 	while (obj->txq.count < obj->tx_fill_target) {
 		switch ((int)obj->txstate) {

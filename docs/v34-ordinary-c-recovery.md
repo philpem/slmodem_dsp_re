@@ -109,7 +109,94 @@ structural checks passed. The final log is retained at
 Saved Gentoo callgraph/RTL diagnostics show `t72_ladder` rejected for inlining
 because its inline limit is reached. The retained T41, T44, T46, RECEIVE,
 DET_AB and MOH helpers likewise require further source-boundary investigation.
-The native sample loop carries its fill target across some paths and reloads
-it at specific joins; the ordinary C currently reloads it at the loop test.
-This is a remaining value-lifetime/code-generation question, with no measured
-differential failure in the tested input domain.
+The sample-loop fill-target review narrows the earlier lifetime question.
+The reference captures the target at `0x62925`, then reloads it at five active
+arm rejoins: `0x629cf`, `0x62d70`, `0x63948`, `0x640a1` and `0x64326`.
+The retained-DX path at `0x629e0` is reached by range rejection and 57 of the
+82 table entries, all no-work defaults. All 25 active table entries reach
+reload paths. The other two dispatch tables have no targets at these loop
+tests. This is a static control-flow finding, not a runtime reachability claim;
+no progressing-arm snapshot discrepancy was established.
+
+One isolated initial-if plus do/while trial, built with the same Gentoo flags,
+still reloaded on the unsupported-state back edge. It changed only the root
+among 40 TU bodies, preserving all nine reference-exact functions, but did not
+recover the reference path. The trial was rejected. The ordinary while remains;
+only its misleading reload comment was corrected. The baseline diagnostic
+object matched the canonical object byte-for-byte. Evidence and compiler dumps
+are retained in `scratch/fill-target/`.
+
+## T72 declaration trial
+
+The existing counter ladder, paired bank updates, parameterized measurement
+and shared completion sequence remain coherent source units. A single ordinary
+`static inline` declaration was tested for `t72_ladder`, with no attributes,
+parameter changes or compiler-flag changes. Gentoo GCC considered the ladder
+earlier, at 221 estimated instructions, and inlined it; the baseline considers
+it later at 330 instructions and rejects it at its inline limit. This measures
+the compiler's decision, not the original author's declaration.
+
+The trial removes the ladder's 1,096-byte local body and its root call, but
+emits `t41_tone_ab` (790 bytes) and `t44_det_info_restart` (901 bytes), neither
+of which is an out-of-line reference boundary. The TU grows from 40 to 41
+emitted functions. Besides the root, `t41_info_marks` and
+`t44_det_info_accept` change instructions. All nine reference-exact names
+survive, but the extra call boundaries prevent treating this as an overall
+recovery. The declaration was rejected. Its root-size reduction, from 34,029
+to 33,534 bytes, is not an identity gain.
+
+Both rejected trials remain under `scratch/fill-target/` and
+`scratch/t72-inline/`, with complete-TU audits, saved compiler dumps and exact
+reproduction scripts. Neither requires new tests or production machinery.
+
+## Review of unchanged-source bystanders
+
+Relocation-normalized comparisons separate moved addresses from changed
+instructions. `ApplyBulkDelay`, `probeselect`, `settxlevel`, `tx1_moh_hold`,
+`t4_receive_body` and `v34FreezeEcho` retain their canonical instruction bytes;
+their changed raw body records reflect relocation/layout effects.
+The four following unchanged-source functions have real instruction changes:
+
+| Function | Master bytes | PR303 bytes | Observed differences |
+| --- | ---: | ---: | --- |
+| `V34SetupDemodulator` | 788 | 795 | Register allocation, constant materialization and reordered independent baud-field stores |
+| `getbit` | 447 | 451 | Register allocation and counter/accumulator load-store scheduling |
+| `probe_preemp_shape` | 1,273 | 1,273 | Integer register allocation and scheduling; all 171 x87 instructions, operands and relocation text retain their order |
+| `v34handshakinit` | 2,618 | 2,617 | Register allocation and initialization-store scheduling |
+
+The inspected paths retain their field offsets, constants and predicates.
+This is a bounded instruction review, not a proof of equivalence or a causal
+explanation of GCC's decisions. A `SIZE` verdict measures a body-length gap;
+it never counts differing instruction bytes. Disassembly and the review are
+retained in `scratch/collateral-review/`.
+
+`test/unit/t_v34rx.c` directly exercises demodulator setup;
+`test/unit/t_v34hshak.c` exercises `getbit` and initialization, with additional
+initialization coverage in call, retrain and PCM fixtures.
+`probe_preemp_shape` is an optional repaired preemphasis selector, not an
+original reference function. Under `DSPLIB_REPRODUCE_BUGS`,
+`dsplib_v34_blob_preemp` defaults to one and bypasses it; no test override was
+found. The period result therefore does not establish coverage of that
+optional repaired path.
+
+## Review disposition
+
+Keep PR303 in draft. It removes test-facing production-body sharing and
+explicit continuation state, but the current checkpoint has no demonstrated
+whole-object identity gain. The two bounded follow-ups do not justify further
+executable edits: the proposed fill-target snapshot is unsupported on active
+paths, and the T72 annotation displaces other inlining decisions.
+
+The next source revision needs a coherent explanation of the remaining helper
+boundaries across the handshake, supported by the reference control flow and
+complete-TU compiler output. Repeated local inline annotations or mechanical
+body expansion would not settle that question. The findings above narrow the
+remaining work without claiming a global limit on reconstruction accuracy.
+
+Final review validation rebuilt the canonical objects and ran `make phase J=8`:
+393 period fixtures passed, zero failed, and all structural checks passed.
+All 300 runtime source objects match their canonical counterparts. The V34
+object and final partial-link SHA-256 are unchanged from the initial PR303
+checkpoint; the exact symbol set remains 1,109/1,852. Final measurements and
+logs are in `scratch/pr303-review/`. Rejected variants were not installed in
+production and were not submitted as passing differential candidates.
