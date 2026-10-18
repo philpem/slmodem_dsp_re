@@ -874,10 +874,10 @@ V90Parameters::loadModemParamsData()
 		 * only thing that objected was the differential test.
 		 */
 		float pr = (float)(int)(tempPR / 5) * 0.5f;
+		DIGITAL_POWER_REDUCTION = pr;
+
 		int whole = (int)fabsf(pr);
 		int frac = (int)((pr - (float)(int)pr) * 100.0f);
-
-		DIGITAL_POWER_REDUCTION = pr;
 
 		/*
 		 * The object applies `fabs` before converting the whole part
