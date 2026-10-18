@@ -437,14 +437,38 @@ rate stores at +2 where the original uses +0. V.27 TX uses +2. Only V.17 TX
 request construction is reachable through the valid short-training rate-code
 histories; the V.29 correction rests on the original store address.
 
-The wider audit also found a native-layout mismatch in the V.90 parameter
-overlays: `LOOP_TYPE` moves from +0x500 to +0x504 on LP64, while raw consumers
-still address +0x500. The individual conversions and native component
-coverage are tracked in [issue #306](https://github.com/philpem/slmodem_dsp_re/issues/306).
-The fax RX constructors also retain fixed period allocation sizes and raw
-finisher offsets that diverge on LP64. Their nine measured allocations and
-the required member-access audit are tracked in
-[issue #307](https://github.com/philpem/slmodem_dsp_re/issues/307).
+The V.90 parameter consumers now use typed members instead of the period
+`V90PW`/`V90PF`/`V90PB` overlays ([issue #306](https://github.com/philpem/slmodem_dsp_re/issues/306)).
+Representation copies use `memcpy` on the named members. The fax RX
+constructors allocate their nine recovered owners with `sizeof`, and the
+finishers use typed owner chains ([issue #307](https://github.com/philpem/slmodem_dsp_re/issues/307)).
+The shared FPM SRE configuration now models its context pointer as a pointer,
+rather than copying it into two 16-bit slots. Caller ID also allocates its
+complete native owner.
+
+Only the 32-bit layouts must match the original object. Native pointer size,
+alignment, member offsets and structure sizes may grow; that growth is not a
+defect. Storing a native pointer in a 32-bit integer, allocating only the
+period owner's size, or retaining a period byte offset after its target member
+moves can be defects. Period layout assertions remain conditional on pointer
+size; native tests use the recovered members and owner sizes.
+
+Run `make native-layout-checks` for the maintained native component checks,
+also included in `make portability`. The current set reports 207 checks:
+110 V.90 parameter checks, 38 checks over seven real fax RX
+creation/reinitialisation/deletion histories, 12 Caller ID owner checks and
+the 47 instrumented pointer checks above. ASan/UBSan covers these fixtures.
+Old-offset, undersized-allocation and deliberately truncated-pointer controls
+establish that the checks detect those failures. These are bounded component
+checks, not evidence of a complete native modem connection.
+
+The wider audit parsed all 299 production C/C++ translation units without
+errors and inventoried pointer/integer casts, allocations and raw offsets.
+Its post-fix offset census contains 494 sites across 525 source/header files;
+that is an inventory, not 494 defects or a complete manual review. In
+particular, remaining V.34 literal-address consumers need owner-by-owner
+review. A changed native offset alone is insufficient evidence: the access
+must still select the intended member with the correct width.
 
 ## The shims are gone
 

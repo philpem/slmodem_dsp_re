@@ -1110,7 +1110,11 @@ PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
                dis-selftest period-compile-selftest
 
-PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov
+PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov native-layout-checks
+
+.PHONY: native-layout-checks
+native-layout-checks: safety-v90-parameters64 fax-native safety-cid-owner64 \
+                      safety-fax-pointer64 safety-class1-pointer64
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)

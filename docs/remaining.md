@@ -59,6 +59,17 @@ same reference denominators above; it still differs. Pointer typing changes
 three nonexact constructor bodies and their following layout, so the
 positioned-match count decreases relative to the shared-control checkpoint.
 
+The subsequent V.90 parameter, fax RX owner and Caller ID allocation repairs
+preserve that exact set: **1,110 exact functions, zero gains or losses** from
+the field/pointer checkpoint. Of 300 period objects, 292 remain raw-identical;
+the eight changed translation units preserve their symbol interfaces and
+allocated non-text contents. The ordered partial link now matches 72,265 of
+943,398 positioned reference bytes and 1,002 of 18,317 relocation records. It
+still reports `DIFFERENT`; the small positioned-byte increase is not a new
+exact function. The merged gate passes 394 period fixtures, and the separate
+native component gate passes 207 checks. Native structures may grow; these
+repairs preserve the original layout only on 32-bit builds.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
