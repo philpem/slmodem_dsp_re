@@ -38,7 +38,6 @@
 
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
-#include "dsplib/v34hstx1.h"
 #include "harness.h"
 #include "v34hsstep.h"
 

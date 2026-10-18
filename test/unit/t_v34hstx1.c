@@ -1,53 +1,27 @@
 /*
- * t_v34hstx1.c -- seventeen arms of `v34handshak`'s per-sample transmit
- * dispatch, each compared against the blob on its own.
+ * t_v34hstx1.c -- per-sample transmit scenarios through `v34handshak`.
  *
  * ---------------------------------------------------------------------------
- * HOW ONE ARM IS COMPARED WHEN THE FUNCTION AROUND IT IS NOT WRITTEN.
+ * Each scenario compares the compiled production entry with the blob.
  *
- * `v34handshak` has no reconstruction and will not have one until all four
- * dispatches are done, so `V34HS_OURS` -- the fixture's one-line swap that
- * puts our function on side A -- cannot be defined yet: it is one switch over
- * one shared harness object and it would demand all forty-three cases at
- * once.  What makes a single arm testable anyway is the loop's own guard,
- * read off the prologue at 0x62933:
- *
- *     cmp %dx,0x221c(%ebx)     ; queue count against the block's limit
- *     jge 629ed                ; at or above: skip the loop entirely
- *
- * So `ref_v34handshak` with the count already at the limit runs the
- * ONCE-PER-BLOCK HALF AND NOTHING ELSE.  Every arm here ends by rejoining the
- * loop test with the count advanced, so `v34hs_step_case` runs our arm first
- * on side A and the blob then contributes exactly the tail:
- *
- *     side A   our arm         + the blob's tail
- *     side B   the blob's arm  + the blob's tail
- *
- * on two congruent arenas (finding F319).  A difference is our arm's, because
- * the tail is the same code on both sides reading the same object -- if our
- * arm left the object right.
+ * `v34hs_ours(1)` selects the compiled production entry on side A;
+ * `ref_v34handshak` runs on side B. Both receive congruent arenas and the
+ * same route, state, pokes, and fixups. This checks the dispatch and its
+ * surrounding loop/tail without substituting a test-owned arm body.
  *
  * ---------------------------------------------------------------------------
- * THE VACUITY THIS INVITES, AND THE TWO GUARDS AGAINST IT.
+ * FIXTURE VALIDITY AND SCOPE.
  *
- * If an arm did nothing, side A's count would still be below the limit, side
- * A's step would run THE BLOB'S ARM, and the comparison would pass having
- * tested nothing at all.  So every case is run TWICE:
- *
- *   - once with the arm alone, which is where the count reaching the limit
- *     and the arm having written anything can still be seen.  After the
- *     blob's tail has run on top, neither can;
- *   - once through `v34hs_step_case`, which is the differential comparison.
- *
- * The fixture is deterministic, so the two runs start from the same object.
- * `test/mutations/v34hstx1.json` is the empirical form of the same question.
+ * Each case checks that both sides made an observable change as well as
+ * comparing the full object and transcript. The scenarios are synthetic
+ * component-entry probes, not modem-level reachability evidence.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS HELD FIXED, and it has to be stated because the separation results
  * in finding F323 are properties of the fill as much as of the object:
  *
  *   - one object fill, `v34hs_setup(0)`, the fixture's default seed;
- *   - route TXSAMPLE with a budget of ONE sample;
+ *   - the `run_case` scenarios route TXSAMPLE with a budget of ONE sample;
  *   - microstate PHASE1 and rxstate SILENCE, so neither of the other two
  *     machines contributes to the tail;
  *   - THE DIAGNOSTICS ARE ON, which is a REVERSAL and the reason the
@@ -81,8 +55,6 @@
 
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
-#include "dsplib/v34hstx1.h"
-#include "dsplib/v34hstx1_arms.h"
 
 /* Companion fields, by offset in the object.  See src/pump/v34/v34hstx1.c. */
 #define TX1_RXFLAGS	0x0386		/* receiver +0x122                 */
@@ -129,11 +101,17 @@
 #define TX1_MOH_MSG_PENDING	0x00abf8	/* byte: 24's message-dispatch     */
 					/* one-shot.  Up here rather than  */
 					/* with 24's other companions      */
-					/* because `run_case_ex` reads it   */
+					/* consumed by the 24 TX_DPSK dispatch */
 #define TX1_MOH_PATH_SEL	0x00abf9	/* byte: picks 24's message AND    */
 					/* its hold tail's first way out   */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
+
+enum tx1_progress {
+	TX1_PROGRESS_QUEUE,
+	TX1_PROGRESS_STATE,
+	TX1_PROGRESS_ONESHOT
+};
 
 /*
  * A companion field to set before the arm runs.  `kind` is 0 for a halfword,
@@ -164,6 +142,12 @@ static unsigned char before[sizeof(struct v34_object)];
 static void (*fixup)(void);
 
 static void
+tx1_noop(void *obj)
+{
+	(void)obj;
+}
+
+static void
 apply(short txst, const struct tx1_poke *p, int np)
 {
 	int i;
@@ -185,142 +169,65 @@ apply(short txst, const struct tx1_poke *p, int np)
 		fixup();
 }
 
-/*
- * One case: the arm alone, then the arm against the blob.
- *
- * `want` is the exit the case is supposed to take.  IT IS `V34TX1_LOOP` ON
- * EVERY CASE IN THIS FILE NOW, and it is kept as a parameter rather than
- * dropped because the check is still a check: an arm that returned anything
- * else would be claiming a transfer out of the dispatch, and there is no
- * longer any such transfer to claim.  Two cases used to pass something else
- * -- 81's wrap and 86's segment end, finding F343's gap -- and both of those
- * blocks are written now, so both run the differential half as well.
- *
- * `guard` IS THE SECOND ANTI-VACUITY GUARD, AND IT HAS THREE FORMS BECAUSE
- * ONE ARM HAS PATHS THAT DO NOT TRANSMIT.  What the guard is FOR is that side
- * A's `ref_v34handshak` must not go on to run the blob's own copy of the arm
- * we are checking and supply what our arm left out -- if it did, an arm that
- * did nothing would be compared against itself and pass.  Sixteen of the
- * seventeen arms stop that by leaving the queue's count at the block's limit,
- * which makes the blob skip the per-sample loop outright (0x62933).
- *
- * 24 `TX_DPSK` has four paths and only two of them reach `txmit`.  The two
- * that end the message move the TRANSMIT STATE instead, so the blob's loop
- * re-dispatches -- to a DIFFERENT arm, and the two sides converge because
- * side B's blob arm moved the state the same way.  `TX1_GUARD_STATE` is that,
- * and it is the same claim by the other route: nothing else in table 1 shares
- * 24's entry, and `case_tx_dpsk_entry` asserts that against the blob's own
- * `.rodata`.
- *
- * AND ONE OF 24'S PATHS MOVES NEITHER, which is the third form.  With
- * `moh_message` outside 0..3 the dispatch does NOTHING but clear its own
- * one-shot at +0xabf8, and clearing it is what stops the re-dispatch being a
- * repeat: the blob then takes the arm's OTHER branch (0x67c4e) rather than
- * the message dispatch again.  `TX1_GUARD_ONESHOT` asserts the clear, and it
- * is a real guard for the same reason the other two are -- an arm that did
- * nothing fails it.  It is 24's alone and the offset is named at the head of
- * this file for that reason.
- *
- * `run_case` passes `TX1_GUARD_QUEUE`, so the sixteen arms that landed before
- * this one are unchanged and no run of theirs silently moved to a weaker
- * form.
- */
-enum tx1_guard {
-	TX1_GUARD_QUEUE = 0,	/* the arm left the queue at the block limit */
-	TX1_GUARD_STATE,	/* the arm moved the transmit machine        */
-	TX1_GUARD_ONESHOT	/* 24 only: the arm cleared +0xabf8          */
-};
-
+/* Run the ordinary handshake entry on side A and the reference on side B. */
 static void
-run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
-	    long tag, const struct tx1_poke *p, int np, int guard)
+run_entry(short samples, const char *what, long tag)
 {
-	const unsigned char *o;
-	char msg[192];
-	unsigned i, nd = 0;
-	int rc;
-
-	apply(txst, p, np);
-	o = (const unsigned char *)v34hs_object(0);
-	memcpy(before, o, sizeof(before));
-	rc = arm(v34hs_object(0));
-
-	snprintf(msg, sizeof(msg), "%s: exit code", what);
-	diff_eq_int(msg, rc, want, tag);
-
-	for (i = 0; i < sizeof(before); i++)
-		if (o[i] != before[i])
-			nd++;
-	snprintf(msg, sizeof(msg), "%s: the arm wrote something", what);
-	diff_eq_int(msg, nd != 0, 1, tag);
-
-	/*
-	 * AND THIS BRANCH IS UNREACHABLE NOW, ON PURPOSE.  It skipped the
-	 * differential half for a case that had left the dispatch for a block
-	 * this file did not model, and there is no such block left: every arm
-	 * returns `V34TX1_LOOP` on every path (finding F748).  It stays as an
-	 * ASSERTION -- if an arm ever reports something else the run says so
-	 * and does not silently compare -- and it is safe to have it stay
-	 * because the `exit code` check above has already failed by then.
-	 * Deleting it would leave a wrong return value to be caught by one
-	 * `diff_eq_int` alone.
-	 */
-	if (rc != V34TX1_LOOP) {
-		if (dump)
-			printf("  %-38s tx %2d  arm wrote %4u  exit %d\n",
-			       what, txst, nd, rc);
-		return;
-	}
-
-	/*
-	 * The guard that stops the differential run below passing for free:
-	 * the blob's own loop test must now be false on side A, or side A
-	 * runs the blob's copy of the arm we are trying to check.
-	 */
-	if (guard == TX1_GUARD_QUEUE) {
-		snprintf(msg, sizeof(msg),
-			 "%s: the arm advanced the queue to the limit", what);
-		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXCURSOR)
-			    >= v34hs_peek_short(0, V34HS_TXLIMIT), 1, tag);
-	} else if (guard == TX1_GUARD_STATE) {
-		snprintf(msg, sizeof(msg),
-			 "%s: the arm moved the transmit machine off %d",
-			 what, (int)txst);
-		diff_eq_int(msg,
-			    v34hs_peek_short(0, V34HS_TXSTATE) != txst, 1, tag);
-	} else {
-		/*
-		 * BOTH HALVES, and the second is the guard.  "+0xabf8 is
-		 * zero" is true of an arm that did nothing whenever the fixture
-		 * seeded it zero, which is a check that reads as a check and is
-		 * not; what has to be asserted is that the arm CLEARED it.
-		 */
-		snprintf(msg, sizeof(msg),
-			 "%s: the arm cleared the one-shot at +0xabf8", what);
-		diff_eq_int(msg,
-			    before[TX1_MOH_MSG_PENDING] != 0 && o[TX1_MOH_MSG_PENDING] == 0, 1, tag);
-	}
-
-	apply(txst, p, np);
-	rc = v34hs_step_case(arm);
-	snprintf(msg, sizeof(msg), "%s: exit code, differential run", what);
-	diff_eq_int(msg, rc, want, tag);
+	v34hs_route(V34HS_ROUTE_TXSAMPLE, samples);
+	v34hs_ours(1);
+	v34hs_step();
+	v34hs_ours(0);
 	v34hs_compare(what, tag);
-
-	if (trace && strcmp(v34hs_text(0), v34hs_text(1)) != 0)
-		printf("=@= %s\n--- ours ---\n%s--- blob ---\n%s",
-		       what, v34hs_text(0), v34hs_text(1));
-
-	if (dump)
-		printf("  %-38s tx %2d  arm wrote %4u  step wrote %4u\n",
-		       what, txst, nd, v34hs_observed(0)->changed);
 }
 
 static void
-run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
+run_case_progress(short txst, const char *what, long tag,
+		  const struct tx1_poke *p, int np, enum tx1_progress progress)
+{
+    char msg[192];
+    const struct v34hs_obs *ours, *blob;
+	const unsigned char *o;
+
+    apply(txst, p, np);
+	memcpy(before, v34hs_object(0), sizeof(before));
+    run_entry(1, what, tag);
+    ours = v34hs_observed(0);
+    blob = v34hs_observed(1);
+    snprintf(msg, sizeof(msg), "%s: production side changed state", what);
+    diff_eq_int(msg, ours->changed != 0, 1, tag);
+    snprintf(msg, sizeof(msg), "%s: reference side changed state", what);
+    diff_eq_int(msg, blob->changed != 0, 1, tag);
+	o = (const unsigned char *)v34hs_object(0);
+	if (progress == TX1_PROGRESS_QUEUE) {
+		snprintf(msg, sizeof(msg), "%s: TX loop reached its sample limit",
+			 what);
+		diff_eq_int(msg,
+			    v34hs_peek_short(0, V34HS_TXCURSOR)
+			    >= v34hs_peek_short(0, V34HS_TXLIMIT), 1, tag);
+	} else if (progress == TX1_PROGRESS_STATE) {
+		snprintf(msg, sizeof(msg), "%s: TX state took its expected exit",
+			 what);
+		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXSTATE) != txst,
+			    1, tag);
+	} else {
+		snprintf(msg, sizeof(msg), "%s: one-shot was cleared", what);
+		diff_eq_int(msg, before[TX1_MOH_MSG_PENDING] != 0
+			    && o[TX1_MOH_MSG_PENDING] == 0, 1, tag);
+	}
+
+    if (trace && strcmp(v34hs_text(0), v34hs_text(1)) != 0)
+        printf("=@= %s\n--- ours ---\n%s--- blob ---\n%s",
+               what, v34hs_text(0), v34hs_text(1));
+    if (dump)
+        printf("  %-38s tx %2d  ours wrote %4u  blob wrote %4u\n",
+               what, txst, ours->changed, blob->changed);
+}
+
+static void
+run_case(short txst, const char *what, long tag,
 	 const struct tx1_poke *p, int np)
 {
-	run_case_ex(txst, arm, want, what, tag, p, np, TX1_GUARD_QUEUE);
+	run_case_progress(txst, what, tag, p, np, TX1_PROGRESS_QUEUE);
 }
 
 /* --- 65 XMIT0 ------------------------------------------------------------- */
@@ -354,11 +261,11 @@ case_xmit0(void)
 	flags = v34hs_peek_short(0, TX1_RXFLAGS);
 
 	p[0].val = (short)(flags & ~8);
-	run_case(V34HS_XMIT0, v34tx1_xmit0, V34TX1_LOOP,
+	run_case(V34HS_XMIT0,
 		 "65 XMIT0, segment flag clear", 6500, p, NP(p));
 
 	p[0].val = (short)(flags | 8);
-	run_case(V34HS_XMIT0, v34tx1_xmit0, V34TX1_LOOP,
+	run_case(V34HS_XMIT0,
 		 "65 XMIT0, segment flag set", 6501, p, NP(p));
 }
 
@@ -388,9 +295,9 @@ static const struct tx1_poke gen_b[] = {
 static void
 case_txlevel(void)
 {
-	run_case(V34HS_TXLEVEL, v34tx1_txlevel, V34TX1_LOOP,
+	run_case(V34HS_TXLEVEL,
 		 "71 TXLEVEL, generator A", 7100, gen_a, NP(gen_a));
-	run_case(V34HS_TXLEVEL, v34tx1_txlevel, V34TX1_LOOP,
+	run_case(V34HS_TXLEVEL,
 		 "71 TXLEVEL, generator B", 7101, gen_b, NP(gen_b));
 }
 
@@ -402,7 +309,7 @@ case_txlevel(void)
  * that raises bit 2 of `tx_flags` and calls `V34EchoReportCoeff` twice.
  */
 static void
-case_ja(short txst, int (*arm)(void *), const char *name, long tag)
+case_ja(short txst, const char *name, long tag)
 {
 	/*
 	 * `tx_flags` is seeded with bit 2 CLEAR, which is what makes the
@@ -421,7 +328,7 @@ case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 	for (k = 0; k < 3; k++) {
 		p[0].val = counts[k];
 		snprintf(what, sizeof(what), "%s, %s", name, names[k]);
-		run_case(txst, arm, V34TX1_LOOP, what, tag + k, p, NP(p));
+		run_case(txst, what, tag + k, p, NP(p));
 	}
 }
 
@@ -473,37 +380,30 @@ case_moh_silence(void)
 	};
 	int i;
 
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+	run_case(V34HS_MOH_SILENCE,
 		 "81 MOH_SILENCE, counting", 8100, moh_run, 1);
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+	run_case(V34HS_MOH_SILENCE,
 		 "81 MOH_SILENCE, wrap at 0xc0", 8101, moh_wrap, 1);
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+	run_case(V34HS_MOH_SILENCE,
 		 "81 MOH_SILENCE, wrap, org MHfrr", 8102,
 		 moh_wrap_org, NP(moh_wrap_org));
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+	run_case(V34HS_MOH_SILENCE,
 		 "81 MOH_SILENCE, wrap, act MHfrr", 8103,
 		 moh_wrap_act, NP(moh_wrap_act));
-	run_case(V34HS_MOH_SILENCE, v34tx1_moh_silence, V34TX1_LOOP,
+	run_case(V34HS_MOH_SILENCE,
 		 "81 MOH_SILENCE, wrap, neither MHfrr", 8104,
 		 moh_wrap_hold, NP(moh_wrap_hold));
 
 	for (i = 0; i < 3; i++) {
 		char msg[96];
 
-		run_case(shared[i].txst, v34tx1_moh_silence, V34TX1_LOOP,
+		run_case(shared[i].txst,
 			 shared[i].what, 8105 + i,
 			 moh_wrap_org, NP(moh_wrap_org));
 
-		/*
-		 * The two things 81 would have moved, asserted on the ARM
-		 * ALONE -- `run_case`'s second half runs the blob's tail
-		 * after ours and the tail is entitled to move either word.
-		 * `vect_idx` is left AT the wrap value rather than reset,
-		 * and the transmit machine is where it was.  81's own runs
-		 * above assert the other side of both.
-		 */
+		/* These shared entries leave the wrap index and state in place. */
 		apply(shared[i].txst, moh_wrap_org, NP(moh_wrap_org));
-		(void)v34tx1_moh_silence(v34hs_object(0));
+		run_entry(1, shared[i].what, 8108 + i);
 
 		snprintf(msg, sizeof(msg),
 			 "%s: vect_idx left at the wrap", shared[i].what);
@@ -608,22 +508,22 @@ static const struct tx1_poke txmd_setup_v90[] = {
 static void
 case_txmd(void)
 {
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, generator A", 8600, txmd_a, NP(txmd_a));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, generator B", 8601, txmd_b, NP(txmd_b));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, segment complete", 8602, txmd_done, NP(txmd_done));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, segment end and reconfiguration together", 8606,
 		 txmd_both, NP(txmd_both));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, reconfigure, no PCM", 8603,
 		 txmd_setup_nopcm, NP(txmd_setup_nopcm));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, reconfigure, K56flex receiver", 8604,
 		 txmd_setup_pcm, NP(txmd_setup_pcm));
-	run_case(V34HS_TXMD, v34tx1_txmd, V34TX1_LOOP,
+	run_case(V34HS_TXMD,
 		 "86 TXMD, reconfigure, V.90 receiver", 8605,
 		 txmd_setup_v90, NP(txmd_setup_v90));
 }
@@ -672,13 +572,13 @@ case_tone_ab(void)
 	}
 
 	tone_ab[0].val = 0x1234;
-	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+	run_case(V34HS_TONE_AB,
 		 "60 TONE_AB, +0x358c even", 6000, tone_ab, NP(tone_ab));
 	tone_ab[0].val = 0x1235;
-	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+	run_case(V34HS_TONE_AB,
 		 "60 TONE_AB, +0x358c odd", 6001, tone_ab, NP(tone_ab));
 	tone_ab[0].val = 0x1236;
-	run_case(V34HS_TONE_AB, v34tx1_tone_ab, V34TX1_LOOP,
+	run_case(V34HS_TONE_AB,
 		 "60 TONE_AB, +0x358c even with bit 1 set", 6002,
 		 tone_ab, NP(tone_ab));
 }
@@ -702,10 +602,10 @@ static void
 case_sseg(void)
 {
 	sseg[0].val = 0x10;
-	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+	run_case(V34HS_SSEG,
 		 "18 SSEG, counting", 1800, sseg, NP(sseg));
 	sseg[0].val = 0x3f;
-	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+	run_case(V34HS_SSEG,
 		 "18 SSEG, segment complete at 0x40", 1801, sseg, NP(sseg));
 	/*
 	 * PAST 0x40, which the object never reaches by counting but which is
@@ -715,7 +615,7 @@ case_sseg(void)
 	 * segment does NOT end -- it counts on to the sixteen-bit wrap.
 	 */
 	sseg[0].val = 0x50;
-	run_case(V34HS_SSEG, v34tx1_sseg, V34TX1_LOOP,
+	run_case(V34HS_SSEG,
 		 "18 SSEG, counting past 0x40", 1802, sseg, NP(sseg));
 }
 
@@ -766,7 +666,7 @@ run_sbarseg(int c0, int c2, int a4, int good_run, const char *what, long tag)
 	sbarseg[SB_C2].val = c2;
 	sbarseg[SB_A4].val = a4;
 	sbarseg[SB_25C].val = good_run;
-	run_case(V34HS_SBARSEG, v34tx1_sbarseg, V34TX1_LOOP, what, tag,
+	run_case(V34HS_SBARSEG, what, tag,
 		 sbarseg, NP(sbarseg));
 }
 
@@ -884,7 +784,7 @@ run_ppseg(int idx, int f358e, int rtd, int baud, int role, int good_run,
 	ppseg[PP_RTD].val = rtd;
 	ppseg[PP_BAUD].val = baud;
 	ppseg[PP_59C].val = role;
-	run_case(V34HS_PPSEG, v34tx1_ppseg, V34TX1_LOOP, what, tag,
+	run_case(V34HS_PPSEG, what, tag,
 		 ppseg, NP(ppseg));
 }
 
@@ -1100,7 +1000,7 @@ run_silence(short txst, int idx, int role, int v90, int abe8,
 	silence[SI_V90].val = v90;
 	silence[SI_E8].val = abe8;
 	fixup = v90 != 0 ? aim_session : NULL;
-	run_case(txst, v34tx1_silence, V34TX1_LOOP, what, tag,
+	run_case(txst, what, tag,
 		 silence, NP(silence));
 	fixup = NULL;
 }
@@ -1265,13 +1165,13 @@ static const struct tx1_poke dataxmit_neg[] = {
 static void
 case_dataxmit(void)
 {
-	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+	run_case(V34HS_DATAXMIT,
 		 "70 DATAXMIT, data path off", 7000,
 		 dataxmit_off, NP(dataxmit_off));
-	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+	run_case(V34HS_DATAXMIT,
 		 "70 DATAXMIT, data path on", 7001,
 		 dataxmit_on, NP(dataxmit_on));
-	run_case(V34HS_DATAXMIT, v34tx1_dataxmit, V34TX1_LOOP,
+	run_case(V34HS_DATAXMIT,
 		 "70 DATAXMIT, negative rate index", 7002,
 		 dataxmit_neg, NP(dataxmit_neg));
 }
@@ -1311,7 +1211,7 @@ run_tx_l1(short mst, short vect, short scale, const char *what, long tag)
 	tx_l1[0].val = mst;
 	tx_l1[1].val = vect;
 	tx_l1[2].val = scale;
-	run_case(V34HS_TX_L1, v34tx1_tx_l1, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TX_L1, what, tag,
 		 tx_l1, NP(tx_l1));
 }
 
@@ -1489,24 +1389,20 @@ case_table17_tx_l1(void)
 	v34hs_poke_short(TX1_VECTIDX, 0);
 	v34hs_poke_short(TX1_F25D4, 0x4000);
 	o = (struct v34_object *)v34hs_object(0);
-	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
-		written = o->txq.wr;
-		v34tx1_tx_l1(o);
-		for (j = 0; j < V34_QUEUE_BURST; j++)
-			nominal[i * V34_QUEUE_BURST + j] = (short)written[j];
-	}
+	written = o->txq.wr;
+	run_entry(V34_PROBE_SAMPLES, "Table 17 TX_L2 nominal period", 5267);
+	for (i = 0; i < V34_PROBE_SAMPLES; i++)
+		nominal[i] = (short)written[i];
 
 	v34hs_setup(0);
 	v34hs_state(V34HS_TX_L1, V34HS_SILENCE, V34HS_TX_L1);
 	v34hs_poke_short(TX1_VECTIDX, 0);
 	v34hs_poke_short(TX1_F25D4, 0x4000);
 	o = (struct v34_object *)v34hs_object(0);
-	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
-		written = o->txq.wr;
-		v34tx1_tx_l1(o);
-		for (j = 0; j < V34_QUEUE_BURST; j++)
-			doubled[i * V34_QUEUE_BURST + j] = (short)written[j];
-	}
+	written = o->txq.wr;
+	run_entry(V34_PROBE_SAMPLES, "Table 17 TX_L1 doubled period", 5268);
+	for (i = 0; i < V34_PROBE_SAMPLES; i++)
+		doubled[i] = (short)written[i];
 
 	for (i = 0; i < V34_PROBE_SAMPLES; i++) {
 		if (nominal[i] != probe[i])
@@ -1529,14 +1425,15 @@ case_table17_tx_l1(void)
 	v34hs_poke_short(TX1_VECTIDX, 0);
 	v34hs_poke_short(TX1_F25D4, 0x4000);
 	o = (struct v34_object *)v34hs_object(0);
-	for (i = 0; i < 383; i++) {
-		v34tx1_tx_l1(o);
-		if (o->microstate != V34HS_TX_L1 || o->vect_idx != 4 * (i + 1))
-			early = 1;
-	}
+	run_entry((short)(383 * V34_QUEUE_BURST),
+		  "TX_L1 before its period transition", 5272);
+	if (o->microstate != V34HS_TX_L1
+	    || o->vect_idx != 4 * 383)
+		early = 1;
 	diff_eq_int("TX_L1 does not transition before the 384th four-sample call",
 		    early, 0, 5272);
-	v34tx1_tx_l1(o);
+	run_entry(V34_QUEUE_BURST,
+		  "TX_L1 period transition", 5273);
 	diff_eq_int("TX_L1 transitions to TX_L2 on the 384th four-sample call",
 		    o->microstate, V34HS_TX_L2, 5273);
 	diff_eq_int("TX_L1 resets its period index at the 24th repetition",
@@ -1605,7 +1502,7 @@ run_exmit(int short_382, int c2, int idx, int c6, const char *what, long tag)
 	exmit[EX_C2].val = c2;
 	exmit[EX_IDX].val = idx;
 	exmit[EX_C6].val = c6;
-	run_case(V34HS_EXMIT, v34tx1_exmit, V34TX1_LOOP, what, tag,
+	run_case(V34HS_EXMIT, what, tag,
 		 exmit, NP(exmit));
 }
 
@@ -1746,7 +1643,7 @@ jt_reset(void)
 static void
 run_jtxmit(short txst, const char *what, long tag)
 {
-	run_case(txst, v34tx1_jtxmit, V34TX1_LOOP, what, tag,
+	run_case(txst, what, tag,
 		 jtxmit, NP(jtxmit));
 }
 
@@ -2197,7 +2094,7 @@ aim_xmitmp_initdigital(void)
 static void
 run_xmitmp(const char *what, long tag)
 {
-	run_case(V34HS_XMITMP, v34tx1_xmitmp, V34TX1_LOOP, what, tag,
+	run_case(V34HS_XMITMP, what, tag,
 		 xmitmp, NP(xmitmp));
 }
 
@@ -2611,9 +2508,8 @@ case_xmitmp_entry(void)
 /*
  * ONE BIT OF A MESSAGE PER PASS AND FOUR WAYS OUT, and only TWO of the four
  * reach `txmit`.  The other two end the message and move the transmit machine
- * instead, so they are driven through `run_case_ex(..., 0)` and guarded by
- * the state rather than by the queue -- see the comment on `run_case_ex` for
- * why that is the same claim and not a weaker one.
+ * instead, so these cases assert the TX-state exit rather than queue progress.
+ * The ordinary entry is compared in full on both sides.
  *
  * WHERE THE READER LIVES IS A POKE, as it is for 67.  The fixture aims
  * +0xaa6c at a block OUTSIDE the object, so left alone the reader's own
@@ -2639,7 +2535,7 @@ case_xmitmp_entry(void)
 #define TX1_FABE4	0xabe4		/* short: raised by the clear-down  */
 #define TX1_FABE6	0xabe6		/* short: raised by the retrain     */
 #define TX1_MOHRCV	0xabf4		/* int: moh_recvd                   */
-/* +0xabf8 and +0xabf9 are at the head of this file; `run_case_ex` reads one. */
+/* +0xabf8 and +0xabf9 are the message-dispatch one-shot and path selector. */
 
 /*
  * TWO OF THE FIVE 0x30-BYTE MESSAGE RECORDS, chosen because nothing else in
@@ -2771,7 +2667,7 @@ dp_exhaust(void)
 static void
 run_dpsk(const char *what, long tag)
 {
-	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TX_DPSK, what, tag,
 		 dpsk, NP(dpsk));
 }
 
@@ -2779,16 +2675,16 @@ run_dpsk(const char *what, long tag)
 static void
 run_dpsk_nq(const char *what, long tag)
 {
-	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
-		    dpsk, NP(dpsk), TX1_GUARD_STATE);
+	run_case_progress(V34HS_TX_DPSK, what, tag,
+			  dpsk, NP(dpsk), TX1_PROGRESS_STATE);
 }
 
 /* And the one that moves neither: the one-shot is the guard. */
 static void
 run_dpsk_1s(const char *what, long tag)
 {
-	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
-		    dpsk, NP(dpsk), TX1_GUARD_ONESHOT);
+	run_case_progress(V34HS_TX_DPSK, what, tag,
+			  dpsk, NP(dpsk), TX1_PROGRESS_ONESHOT);
 }
 
 /*
@@ -2820,8 +2716,7 @@ case_dpsk_cold(void)
 	diff_eq_int("24 TX_DPSK cold: the fill leaves +0xabe8 clear",
 		    o[TX1_MOH_ACTIVE], 0, 2490);
 	memcpy(&short_358c, o + TX1_F358C, sizeof(short_358c));
-
-	(void)v34tx1_tx_dpsk(v34hs_object(0));
+	run_entry(1, "24 TX_DPSK cold, ordinary entry", 2495);
 	diff_eq_int("24 TX_DPSK cold: the message is not over",
 		    v34hs_peek_short(0, V34HS_TXSTATE), V34HS_TX_DPSK, 2491);
 	diff_eq_int("24 TX_DPSK cold: +0x358c is unchanged, so the bit was zero",
@@ -2829,17 +2724,6 @@ case_dpsk_cold(void)
 	memcpy(&point, o + TX1_F25D0, sizeof(point));
 	diff_eq_int("24 TX_DPSK cold: the tone is 60 TONE_AB's",
 		    point, vect4[2 * (short_358c & 1)], 2493);
-	memcpy(before, o, sizeof(before));
-
-	apply(V34HS_TX_DPSK, NULL, 0);
-	(void)v34tx1_tone_ab(v34hs_object(0));
-	diff_eq_obj("24 TX_DPSK and 60 TONE_AB leave the same object cold",
-		    struct v34_object, (const struct v34_object *)before,
-		    (const struct v34_object *)v34hs_object(0), 2494);
-
-	/* And the same thing against the blob, which is the real check. */
-	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP,
-		 "24 TX_DPSK, cold, no pokes at all", 2495, NULL, 0);
 }
 
 /*
@@ -3063,8 +2947,8 @@ case_tx_dpsk(void)
 	 * negative -- which is the one thing neither of the other two guards
 	 * can carry.  The arm here writes ONE byte, the one-shot at +0xabf8,
 	 * and the hold tail leaves at 0x6431f, so the transmit machine does
-	 * not move and there is no queue to advance; `TX1_GUARD_ONESHOT` is
-	 * what says the arm ran.  It is not a weaker check of the DISPATCH: a
+	 * not move and there is no queue to advance; the one-shot postcondition
+	 * identifies that arm path. It is not a weaker check of the DISPATCH: a
 	 * reconstruction that cleared down here leaves the transmit machine at
 	 * MOH_CLEARDOWN, side A's `ref_v34handshak` then sends four silent
 	 * samples where side B sends a tone, and the comparison says so.
@@ -3390,7 +3274,7 @@ seed_inforec(void)
 static void
 run_trn(const char *what, long tag)
 {
-	run_case(V34HS_TRNSEG4, v34tx1_trnseg4, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TRNSEG4, what, tag,
 		 trn, NP(trn));
 }
 
@@ -3877,7 +3761,7 @@ static void
 run_trnseg(const char *what, long tag)
 {
 	fixup = aim_case;
-	run_case(V34HS_TRNSEG4A, v34tx1_trnseg4a, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TRNSEG4A, what, tag,
 		 trnseg, NP(trnseg));
 	fixup = NULL;
 }
@@ -3886,8 +3770,8 @@ run_trnseg(const char *what, long tag)
  * The symbol on all four of its combinations, then the four ways out of the
  * segment test, then the completion.
  *
- * EVERY RUN IS A `V34TX1_LOOP` RUN, so every one of them is compared byte for
- * byte against the blob over the whole object and arena.  That is the
+ * Every scenario runs through the compiled ordinary entry and compares byte
+ * for byte against the blob over the whole object and arena. That is the
  * difference this arm has from 81 and 86: its long path rejoins the loop
  * rather than transferring to a block with no oracle past it.
  */
@@ -4508,6 +4392,19 @@ main(void)
 	 * transcripts of a differing case to be printed side by side.
 	 */
 	v34hs_debug(1);
+	if (getenv("V34TX1_NOOP_CONTROL")) {
+		diff_begin("v34handshak ordinary-entry no-op negative control");
+		v34hs_refinit(1);
+		v34hs_setup(0);
+		v34hs_route(V34HS_ROUTE_TXSAMPLE, 1);
+		v34hs_state(V34HS_PHASE1, V34HS_SILENCE, V34HS_XMIT0);
+		v34hs_entry(tx1_noop, ref_v34handshak, 0);
+		v34hs_step();
+		v34hs_entry(NULL, NULL, 0);
+		v34hs_refinit(0);
+		v34hs_compare("no-op side A versus reference side B", 3999);
+		return diff_end();
+	}
 	trace = getenv("V34TX1_TRACE") != NULL;
 	diff_begin("V.34 Table 17/reconstruction");
 	case_table17_reconstruction();
@@ -4521,8 +4418,8 @@ main(void)
 
 	case_xmit0();
 	case_txlevel();
-	case_ja(V34HS_JaTXMIT, v34tx1_jatxmit, "78 JaTXMIT", 7800);
-	case_ja(V34HS_K56JaTXMIT, v34tx1_k56jatxmit, "85 K56JaTXMIT", 8500);
+	case_ja(V34HS_JaTXMIT, "78 JaTXMIT", 7800);
+	case_ja(V34HS_K56JaTXMIT, "85 K56JaTXMIT", 8500);
 	case_moh_silence();
 	case_txmd();
 
