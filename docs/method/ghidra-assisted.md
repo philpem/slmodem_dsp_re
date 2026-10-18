@@ -840,3 +840,44 @@ reference identity: 68 exact sections, 72088/943398 positioned matching bytes,
 Strict documentation build/audit and comparator self-tests pass. No new
 executable source recovery, field-type correction, modern-portability result or
 full mutation snapshot refresh is claimed.
+
+## Native-operation and field-owner checkpoint (18 October 2026)
+
+The next batch preserves **1105/1852 EXACT** and **127324/720125 original
+function bytes**, with no exact-name gains or losses. The 747 remaining names
+are now 29 REGALLOC, 74 BYTES and 644 SIZE, with no unresolved identities.
+Six of 300 canonical objects change; all 300 runtime objects raw-match their
+canonical period builds.
+
+The principal corrections are five wrong V32 field selections inherited from
+a raw-to-typed refactor, native unset locals in three reproduction paths,
+SGD short quotient/countdown and sequence-expression recovery, and floating
+absolute value plus early publication in the Parameters diagnostic. Some
+native source recoveries increase a local size or byte distance. The Playbook
+records those tradeoffs, the compiler stages that explain them, and the
+bounded source domains already tried. No global flag change is adopted.
+
+The four status operand fixes are tested through constructor/component
+histories: old source fails 80/560 new checks and corrected source passes all
+560. This fixture uses the established aggregate link mode because a reached
+logarithm lookup reads neighboring data. Holding the objects and input fixed,
+individual linking fails 79/560; the physical table-word audit explains the
+result. The existing math fixtures independently pass 1217541 checks.
+
+The integrated `make phase J=4` passes **392 period fixtures, zero failed**, and
+all structural checks, including **285 mutation suites / 10042 anchors**.
+This is anchor validation, not a refreshed whole mutation snapshot. The
+Parameters mutation was explicitly reanchored and executed; it retains its
+existing equivalent classification for the nonnegative input domain.
+
+The integrated partial link has **72216/943398 positioned matching bytes**,
+up 128 from the frozen 72088 checkpoint. Its 68 exact sections and 457/2931
+exact symbols remain unchanged. Both strict function-independent and raw-file
+identity still fail as expected. Strict documentation build and audit pass.
+No modern portability claim is made.
+
+Continue with the raw-to-typed substitution audit, checking statement roles
+before comparing offsets; matching pairs by equal offsets would conceal the
+very defect being sought. Two further bounded leads are phasor intermediate
+widths and V34 SNR helper visibility/TU ownership. These remain investigations,
+not accepted changes or evidence of exhausted leads.

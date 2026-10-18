@@ -383,16 +383,8 @@ SGD_sequence_gen(struct sgd *s, unsigned short *out, short n)
 	if (enable != 0 || s->status.seq_reps == 0)
 		active = 1;
 
-	for (k = (short)(n - 1); k != -1; k = (short)(k - 1)) {
-		unsigned short sym;
-
-		if (active != 0) {
-			sym = seq[i];
-			i = (short)(i + 1);
-		} else {
-			sym = s->cfg.gen.idle_sym;
-		}
-		*out++ = sym;
+	for (k = n; k-- != 0;) {
+		*out++ = active != 0 ? seq[i++] : s->cfg.gen.idle_sym;
 
 		len = s->cfg.gen.seq_len;
 		if ((short)len <= i) {
