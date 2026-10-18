@@ -19,6 +19,7 @@
  */
 
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/V90Jd.h"
 #include "dsplib/V90Parameters.h"	/* the constructor's five fields */
@@ -660,8 +661,22 @@ V90Jd::unPackData(int bit)
 			int tap3 = (crc[4] + t) & 1;
 			int tap10 = (crc[11] + t) & 1;
 
-			for (i = 0; i <= 14; i++)
-				crc[i] = crc[i + 1];
+			/* The object promotes this fixed register shift across the loop. */
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[3] = tap3;
 			crc[10] = tap10;
 			crc[15] = t & 1;
@@ -671,7 +686,7 @@ V90Jd::unPackData(int bit)
 		for (i = 0; i <= 15; i++) {
 			int d = crc[i] - bits[32 + i];
 
-			sum += d < 0 ? -d : d;
+			sum += abs(d);
 		}
 		if (sum != 0) {
 			unPackReset();
