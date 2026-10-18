@@ -68,7 +68,8 @@ static void
 phasor_split(int phase, int *idx_out, int *frac_out, int *quad_out)
 {
 	int idx = phase >> 5;
-	int frac = phase - (idx << 5);
+	/* The reference narrows both this difference and its reflection below. */
+	short frac = (short)(phase - (idx << 5));
 	int quad = idx >> 8;
 
 	if (quad & 1) {
