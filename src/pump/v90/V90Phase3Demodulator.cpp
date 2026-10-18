@@ -30,6 +30,7 @@
  * object's, not an omission.
  */
 
+#include <string.h>
 #include <stddef.h>
 
 extern "C" {
@@ -255,12 +256,6 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
  * ordinary C++.
  */
 
-/* The four parameter-block slots the SD detector is built from. */
-#define PARAMS_SD_THRESH_08	(0x284 / 4)	/* float */
-#define PARAMS_SD_THRESH_0C	(0x288 / 4)	/* float */
-#define PARAMS_SD_VALUE_10	(0x28c / 4)	/* float */
-#define PARAMS_SD_LIMIT		(0x290 / 4)	/* int   */
-
 /*
  * The descrambler's three constants, and the ANSam detector's eight.  All
  * eleven are immediates in the object, so they are constants of the source
@@ -325,10 +320,10 @@ V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
 	autoDigitalImpDetector = adid;
 
 	sd = (V90SdDetector *)sysdep_malloc(sizeof(V90SdDetector));
-	new (sd) V90SdDetector(V90PF(params)[PARAMS_SD_THRESH_08],
-			       V90PF(params)[PARAMS_SD_THRESH_0C],
-			       V90PF(params)[PARAMS_SD_VALUE_10],
-			       (unsigned int)V90PW(params)[PARAMS_SD_LIMIT]);
+	new (sd) V90SdDetector(params->SD_DETECTOR_ENERGY_THRESHOLD,
+			       params->SD_DETECTOR_POSITIVE_CORR_THRESHOLD,
+			       params->SD_DETECTOR_NEGATIVE_CORR_THRESHOLD,
+			       (unsigned int)params->SD_DETECTOR_DETECTION_COUNTER_THRESHOLD);
 	sdDetector = sd;
 
 	an = (ANSamToneDetector *)sysdep_malloc(sizeof(ANSamToneDetector));
@@ -501,38 +496,12 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
 #define P3D_PREVLINMAPP(a, c) \
 	(((const unsigned short *)(const void *)&(a)->prevLinMapp[0])[(c)])
 
-/* The parameter block, by index, for the reason the constructor above uses. */
-#define P3D_P_PROBING_MODE	(0x004 / 4)
-#define P3D_P_DFE_LENGTH	(0x1fc / 4)
-#define P3D_P_TRN1D_DD_LENGTH	(0x2fc / 4)
-#define P3D_P_300		(0x300 / 4)
-#define P3D_P_308		(0x308 / 4)
-#define P3D_P_30C		(0x30c / 4)
-#define P3D_P_310		(0x310 / 4)
-#define P3D_P_314		(0x314 / 4)
-#define P3D_P_318		(0x318 / 4)
-#define P3D_P_31C		(0x31c / 4)
-#define P3D_P_320		(0x320 / 4)
-#define P3D_P_344		(0x344 / 4)
-#define P3D_P_438		(0x438 / 4)
-#define P3D_P_440		(0x440 / 4)
-#define P3D_P_TRN1_QC_DD	(0x4a0 / 4)
-#define P3D_P_4A4		(0x4a4 / 4)
-#define P3D_P_ANSPCM_LENGTH	(0x4cc / 4)
-
-/*
- * `params->unnamed_438 = params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS`
- * is `mov 0x440(%c),%eax;
- * mov %eax,0x438(%c)` -- a raw 32-bit copy.  This comment used to add "between
- * a slot this tree types `float` and one it types `int`", which was the reason
- * for the word view; finding F2112 has since retyped +0x440 to `float` on the
- * strength of exactly this instruction pair, so BOTH slots are `float` now and
- * `getV90Decision` spells the same copy as a plain float assignment.  The word
- * view is kept here because it is what the object encodes and because it is
- * what this function was tested with; the two are the same four bytes.
- */
+/* The blob copies the four-byte representation at +0x440 to +0x438.
+ * Preserve that copy without an x87 load/store that could quiet an sNaN. */
 #define P3D_COPY_440_TO_438() \
-	(V90PW(params)[P3D_P_438] = V90PW(params)[P3D_P_440])
+	memcpy(&params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH, \
+	       &params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS, \
+	       sizeof params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH)
 
 /* `framePosition` runs 0,1,2,3,4,5,0 -- `inc; cmp $6; je; mov`. */
 #define P3D_BUMP_FRAME() \
@@ -1601,9 +1570,9 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			if (quickConnect != 0) {
 				state = (Phase3DemodulatorState)4;
 				trn1dDdLength = (unsigned int)
-				    V90PW(params)[P3D_P_TRN1_QC_DD];
+				    params->TRN1_QC_DD_LENGTH;
 				word_3f4 = (unsigned int)
-				    V90PW(params)[P3D_P_4A4];
+				    params->unnamed_4a4;
 				jdV92->unPackJdReset();
 				edprintf("V90Phase3Demodulator: enter TRN1d " "DD state\r\n");
 			} else {
@@ -1635,12 +1604,12 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				dsplibs_debug_printf("V90Phase3Demodulator: "
 				    "V92 setting params for short TRN1\n");
 			trn1dDdLength = (unsigned int)
-			    V90PW(params)[P3D_P_TRN1_QC_DD];
-			word_3f4 = (unsigned int)V90PW(params)[P3D_P_4A4];
+			    params->TRN1_QC_DD_LENGTH;
+			word_3f4 = (unsigned int)params->unnamed_4a4;
 		} else {
 			trn1dDdLength = (unsigned int)
-			    V90PW(params)[P3D_P_TRN1D_DD_LENGTH];
-			word_3f4 = (unsigned int)V90PW(params)[P3D_P_344];
+			    params->TRN1D_DD_LENGTH;
+			word_3f4 = (unsigned int)params->unnamed_344;
 		}
 		autoDigitalImpDetector->resetStudyUrefHandler(quickConnect);
 		jdV92->unPackJdReset();
@@ -1761,7 +1730,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 					    "V90Phase3Demodulator: changing " "state to DILDemodQCfirstStudy\n");
 			} else {
 				state = (Phase3DemodulatorState)
-				    (V90PW(params)[P3D_P_PROBING_MODE] == 0
+				    (params->PROBING_MODE == 0
 					? 0xa : 0x11);
 			}
 			samplesInState = 0;
@@ -1799,7 +1768,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
 		P3D_BUMP_FRAME();
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_30C]) {
+		if (samplesInState == (unsigned int)params->unnamed_30c) {
 			adid->porcessFirstStudy();
 			if ((short)adid->isThereAnyAltRbsPhase() != 0)
 				P3D_COPY_440_TO_438();
@@ -1853,21 +1822,21 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (mod->segmentPos == 0 && mod->dilPcmCode != ucode)
 			adid->uniteLinMappInfoOfUnsuspectedPhases(
 			    mod->dilPcmCode);
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_314]) {
+		if (samplesInState == (unsigned int)params->unnamed_314) {
 			eventCode = 0xc;
 		} else if (samplesInState == (unsigned int)
-			   V90PW(params)[P3D_P_300]) {
+			   params->unnamed_300) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
-				V90PW(params)[P3D_P_31C] =
-				    V90PW(params)[P3D_P_320];
+				params->unnamed_31c =
+				    params->unnamed_320;
 			} else {
 				eventCode = 0xa;
 			}
 		}
 		P3D_BUMP_FRAME();
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_308]) {
-			if (V90PW(params)[P3D_P_310] == 0) {
+		if (samplesInState == (unsigned int)params->unnamed_308) {
+			if (params->unnamed_310 == 0) {
 				adid->porcessSecondStudy();
 				eventCode = 0x11;
 				state = (Phase3DemodulatorState)0x10;
@@ -1914,7 +1883,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (mod->segmentPos == 0 && mod->dilPcmCode != ucode)
 			adid->uniteLinMappInfoOfUnsuspectedPhases(
 			    mod->dilPcmCode);
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_310]) {
+		if (samplesInState == (unsigned int)params->unnamed_310) {
 			adid->porcessSecondStudy();
 			samplesInState = 0;
 			eventCode = 0x11;
@@ -1949,7 +1918,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
 		P3D_BUMP_FRAME();
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_30C]) {
+		if (samplesInState == (unsigned int)params->unnamed_30c) {
 			adid->porcessFirstStudy();
 			if ((short)adid->isThereAnyAltRbsPhase() != 0)
 				P3D_COPY_440_TO_438();
@@ -2004,20 +1973,20 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			}
 		}
 		word_408 = 1;
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_314]) {
+		if (samplesInState == (unsigned int)params->unnamed_314) {
 			eventCode = 0xc;
 		} else if (samplesInState == (unsigned int)
-			   V90PW(params)[P3D_P_300]) {
+			   params->unnamed_300) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
-				V90PW(params)[P3D_P_31C] =
-				    V90PW(params)[P3D_P_320];
+				params->unnamed_31c =
+				    params->unnamed_320;
 			} else {
 				eventCode = 0xa;
 			}
 		}
 		P3D_BUMP_FRAME();
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_308]) {
+		if (samplesInState == (unsigned int)params->unnamed_308) {
 			samplesInState = 0;
 			eventCode = 0x10;
 			state = (Phase3DemodulatorState)0xf;
@@ -2055,7 +2024,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		}
 		word_408 = 0;
 		P3D_BUMP_FRAME();
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_310]) {
+		if (samplesInState == (unsigned int)params->unnamed_310) {
 			adid->setQcLinearMapping();
 			samplesInState = 0;
 			eventCode = 0x11;
@@ -2096,12 +2065,12 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (byte_3f9 != 0) {
 			word_3fc++;
 			if (word_3fc == (unsigned int)
-			    V90PW(params)[P3D_P_31C]) {
+			    params->unnamed_31c) {
 				eventCode = 0xf;
 				word_408 = 1;
 			}
 		}
-		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_318]) {
+		if (samplesInState == (unsigned int)params->unnamed_318) {
 			eventCode = 0x12;
 		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
@@ -2118,7 +2087,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		sym = (short)mod->generateSymbol();
 		if (P3D_ABS(sym) == 0xffc &&
 		    mod->segmentPos > (unsigned int)
-			V90PW(params)[P3D_P_DFE_LENGTH])
+			params->DFE_LENGTH)
 			word_408 = 1;
 		else
 			word_408 = 0;
@@ -2152,7 +2121,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			samplesInState = 0;
 			eventCode = 0x37;
 		} else if (samplesInState ==
-			   (unsigned int)V90PW(params)[P3D_P_ANSPCM_LENGTH]) {
+			   (unsigned int)params->ANSPCM_DEMODULATION_LENGTH) {
 			state = (Phase3DemodulatorState)0x20;
 			samplesInState = 0;
 			verificationStatus = 0;
@@ -2178,7 +2147,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				 "TimeOut, decision is set to not same " "line\r\n");
 			if (((*(const unsigned char *const *)(const void *)
 			      params)[0] & 1) != 0)
-				V90PW(params)[P3D_P_ANSPCM_LENGTH] = 0x320;
+				params->ANSPCM_DEMODULATION_LENGTH = 0x320;
 		}
 		break;
 
@@ -2189,7 +2158,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			samplesInState = 0;
 			if (((*(const unsigned char *const *)(const void *)
 			      params)[0] & 1) != 0)
-				V90PW(params)[P3D_P_ANSPCM_LENGTH] = 0x320;
+				params->ANSPCM_DEMODULATION_LENGTH = 0x320;
 			eventCode = 0x39;
 			verificationStatus = 1;
 			ansamToneDetector->reset();
@@ -2201,7 +2170,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		decision = (short)level;
 		ansamToneDetector->process(sample);
 		if (samplesInState ==
-		    (unsigned int)V90PW(params)[P3D_P_ANSPCM_LENGTH])
+		    (unsigned int)params->ANSPCM_DEMODULATION_LENGTH)
 			eventCode = 0x3a;
 		break;
 
@@ -2237,7 +2206,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		decision = (short)level;
 		if (ansamToneDetector->process(sample) != 0 &&
 		    samplesInState >= (unsigned int)
-			V90PW(params)[P3D_P_ANSPCM_LENGTH]) {
+			params->ANSPCM_DEMODULATION_LENGTH) {
 			edprintf("V90Phase3Demodulator: ANSpcm detected on "
 				 "recovery, move to wait for drop...\r\n");
 			eventCode = 0x3a;

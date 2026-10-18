@@ -664,6 +664,20 @@ safety-class1-pointer64: $(BUILD)/safety/t_class1_pointer64
 safety-fax-pointer64: $(BUILD)/safety/t_fax_pointer64
 	@./$(BUILD)/safety/t_fax_pointer64
 
+# Native runtime component check, separate from syntax-only check64 and period.
+V90_PARAMETERS64_SRC := src/pump/v90/V90PreFilter.cpp \
+ src/pump/v90/V90Parameters.cpp src/pump/v90/V90Phase2Info.cpp \
+ src/pump/v90/V90PreFilterCoeffType1.cpp src/pump/v90/V90PreFilterCoeffType2.cpp \
+ src/pump/v90/V90PreFilterCoeffType3.cpp src/pump/v90/V90PreFilterRefLoops.cpp \
+ src/dsp/FloatFIR.cpp src/core/Vparser.c
+$(BUILD)/safety/t_v90_parameters64: test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) $(wildcard include/dsplib/*.h)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) -lm
+
+.PHONY: safety-v90-parameters64
+safety-v90-parameters64: $(BUILD)/safety/t_v90_parameters64
+	@./$(BUILD)/safety/t_v90_parameters64
+
 safety: safety-class1-pointer64 safety-fax-pointer64 firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
         $(BUILD)/safety/t_v34info0carrier \
         $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed \

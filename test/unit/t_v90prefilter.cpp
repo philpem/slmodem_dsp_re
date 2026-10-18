@@ -29,6 +29,7 @@
  *                     which matters because two paths here do not clamp.
  */
 
+#include "v90_params_period_view.h"
 #include <string.h>
 
 #include "harness.h"

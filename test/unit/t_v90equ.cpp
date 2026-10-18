@@ -36,6 +36,7 @@
  * -- none of which the object state can show.
  */
 
+#include "v90_params_period_view.h"
 #include <string.h>
 
 #include "harness.h"
