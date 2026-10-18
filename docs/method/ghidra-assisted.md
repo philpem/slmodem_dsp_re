@@ -1167,3 +1167,31 @@ this final base. The first integrated period run passed 393 fixtures with
 zero failures but stopped on that parser error; the final gate includes its
 fix. New tone tracing and ordinary V34 continuation experiments are held for
 the next PR rather than extending this source checkpoint.
+
+## Typed owner comparisons
+
+Generate analysis declarations from the canonical headers, preserving the
+ILP32 data organisation. Compare imported structure sizes and field offsets
+and widths with constants emitted by the period compiler. Keep the untouched
+reference separate from the copy carrying reconstructed types: those types
+are hypotheses, and their presence in the decompilation is not independent
+confirmation of the source layout.
+
+Check imported function ownership before using CFG statistics. The current
+ELF importer can leave one-byte function placeholders even when the decompiler
+follows enough flow to return a large function. Verify body extents against
+ELF symbol sizes and instruction coverage against independent disassembly.
+Record unsupported regions rather than interpreting an incomplete CFG as
+missing source logic.
+
+Inspect private helper argument storage before applying prototypes. The
+ordinary-C candidate's `t72_ladder` receives its two pointers in EAX and EDX;
+Ghidra's `__regparm2` model describes that measured storage. This analysis
+annotation neither changes the reconstruction's compiler flags nor establishes
+that the original author declared a register calling convention. Incorrect
+stack-argument annotations can hide the very dataflow being compared.
+
+Export the complete decompilation once, then review bounded address-backed
+regions with their owner types, signatures, original instructions and fixture
+domain. Distinguish arithmetic and memory-access recovery, helper-boundary
+recovery, REGALLOC gains and exact-function gains in the result.

@@ -70,6 +70,17 @@ exact function. The merged gate passes 394 period fixtures, and the separate
 native component gate passes 207 checks. Native structures may grow; these
 repairs preserve the original layout only on 32-bit builds.
 
+The next V.32 batch makes `RetrainDetectV32` exact at 53 bytes by restoring
+its separate result and common exit: **1,111 of 1,852 exact functions**,
+covering **128,392 of 720,125 original function bytes**, with no exact losses.
+The residual grades are 32 `REGALLOC`, 77 `BYTES` and 632 `SIZE`.
+Two further source changes recover the unsigned count passed to V.32 SRE and
+V90CP's unsigned local list accumulator; both remain `SIZE`, and their size
+gaps grow. Their original argument/accumulator instructions, rather than size
+convergence, justify the changes. RX_L1's saved-gain member conversion leaves
+its complete object byte-identical. The ordered partial link still differs:
+72,235 of 943,398 positioned bytes and 1,004 of 18,317 relocation records match.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
