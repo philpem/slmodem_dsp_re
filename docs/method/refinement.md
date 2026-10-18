@@ -8135,3 +8135,116 @@ The signedness difference is recorded without claiming a functional defect.
 This is a bounded historical audit, not coverage of all substitutions in the
 commit. Replays use this checkout's recorded compiler configuration, rather
 than assuming a particular worktree nesting or borrowing another build.
+
+## Use native calls to test a suspected compilation boundary
+
+Bell 103's merged source made four signal helpers available for automatic
+inlining, while the reference's half-duplex states call them. Splitting carrier
+detection alone recovers `RxHdxStartB103` byte-for-byte; splitting all four
+helpers also recovers `TxHdxDataB103`. These are 139 and 54 original bytes,
+respectively, with no exact losses across the seventeen-function pair.
+The first call-graph dump records the unwanted inlining; the separated source
+retains the native calls in initial RTL under unchanged compiler options.
+
+The four controls distinguish merged source, carrier-only separation and
+four-helper separation in two emission orders. Helper order does not change
+the per-function results; the retained source follows the native order.
+Static dispatcher buffers remain with their proven owner. The existing
+`B103int.c` slot is a plausible destination, but no local symbol assigns the
+four globals to that filename: retain this attribution limit alongside the
+stronger call-boundary evidence.
+
+An additional receive-data count correction follows actual use timing:
+capture the demodulator's low word as unsigned, then sign-extend only at the
+short return. Its size gap grows relative to the original merged function,
+while the native calls and narrowing boundaries return. Keep that partial
+result explicit rather than restoring unwanted inlining to improve a length
+score. Transmit marks and silence narrow their gaps to three and two bytes.
+
+[The Bell 103 audit](../b103-helper-boundary-audit.md) records all seventeen
+bodies, nontext data and relocations, public bindings, replay controls and
+four passing period fixtures. Searching both source and test names finds no
+registered mutation suites for this family; there is no mutation coverage
+claim or reanchoring to report.
+
+## Recover helper structure before blaming an inline threshold
+
+`TimingV34` called `setTimingStateParameters` in the reference, but the
+reconstruction inlined it. The helper's comment explained why: two native
+role-specific switches had been collapsed into one switch with conditional
+values and a shared reporting flag. That simplification changed the compiler's
+cost estimate. The current helper has 66 front-end instructions and is cloned
+three times; the native two-switch/direct-report form has 118 and retains the
+reference's calls under the same flags.
+
+Earlier role-control artifacts had already shown that direct-report switches
+restore the calls. The new experiment credits that finding and crosses it
+with unchanged-helper visibility: moving the unchanged definition below its
+caller changes nothing, while placing it in a separate TU restores calls but
+leaves the helper graph unchanged. Recovering both native switches improves
+both bodies, leaving SIZE4 in `TimingV34` and SIZE7 in the helper. The source
+structure, native tables and report sites support this choice; the speculative
+separate-TU cell remains diagnostic. Neither size gap is an isolated number
+of wrong bytes.
+
+Across 53 bodies, only the helper and its caller change; public exports are
+preserved. The two actual relocated jump tables cover eighteen entries.
+Executing original and candidate helper instructions for 150 synthetic
+role/state/offset cases agrees on four output fields and external callback
+arguments. Redirecting case 2 to case 0 is rejected in five cases. Unrelated
+rodata and relocation consumers remain identical after accounting for the
+target switch tables. This apparatus checks table semantics, not reachability.
+
+Three focused period cells each pass 164106837 checks, including captured
+Timing transcripts. One existing mutation anchor becomes ambiguous because
+the new switches contain the same short default-arm text. Extend its anchor
+with the preceding rate case while preserving the exact fault. The production
+fixture passes 45805 checks; the mutant fails two of 45803. All 1644 anchors
+in fourteen same-source suites remain unique. The mutation driver's actual
+matching behavior is the authority: its `fn` annotation does not scope the
+replacement, even though it looks as if it might.
+
+`tools/recovery_v34_timing_visibility.py` retains the four complete-TU controls,
+table negative control, mutation replay and immutable baseline manifest.
+A fresh replay after source adoption reproduces all four earlier objects.
+
+These three families distinguish superficially similar inline mismatches:
+V34 diagnostics needed its helper definition visible, Bell 103 needed helper
+separation, and V34 timing needed the original helper graph. A call inventory
+must include tail jumps and distinguish an absent callee from fewer shared
+call sites before nominating a visibility experiment.
+
+## Finish validation of supported partial recoveries
+
+A closed source-search domain does not mean its best supported candidate was
+validated and rejected. The earlier Jd CRC investigation retained a native-like
+expanded/direct-member endpoint but did not run its period or mutation gates:
+zero whole-function exact gains had stopped adoption. Reopen the missing
+validation, not the exhausted source palette.
+
+The two-endpoint replay restores both native wrapper calls, the 0x48 packer
+frames, and the sixteen CRC word promotions. Both packers reach their native
+665/681-byte lengths and instruction counts, with BYTES255/BYTES259 remaining;
+the getters shrink to their native 22 bytes, with BYTES1/BYTES4 remaining.
+These are partial graph recoveries, not four new exact functions. Of twenty-one
+TU bodies, four change and seventeen remain fixed; twelve exact names survive.
+Public bindings, nontext data and unrelated relocations remain unchanged.
+
+Both endpoints pass 99446 period checks. Eight affected mutation rows are
+reanchored, splitting two shared tap faults by packer; all ten affected mutants
+are caught. The sibling suite's 51 anchors remain unchanged. The durable
+`tools/recovery_v92jd_crc_retention.py` replay reproduces the adopted object.
+Compiler cost changes explain the wrapper boundary, but do not reveal the
+unknown original source's cost. Keep that distinction explicit.
+
+The subsequent Bell 103 controls also recover useful partial structure after
+whole-function gains. Unsigned count capture and native branch/result sharing
+make marks, silence and receive-data exact, bringing the family to thirteen
+of seventeen exact bodies. Direct receive-owner reloads reduce `RxDetMarkB103`
+to its native 238 bytes with six differing bytes. Short outer-loop indices,
+unsigned limits and direct circular-index publication reduce the modem's size
+gap from 61 to eight bytes. A later owner-capture variant is measured and
+rejected; it still fails to recover the reference's per-iteration loads.
+These controls preserve the other family bodies and pass all four focused
+period fixtures. The remaining register and alias-context differences need
+new evidence, not another arbitrary spelling palette.

@@ -10,33 +10,43 @@
  },
  {
   "label": "V.92 data CRC covers only its first 16 payload bits",
-  "find": "for (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
-  "replace": "for (g = 0; g <= 0; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);"
+  "find": "for (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "for (g = 0; g <= 0; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
   "label": "V.92 phase CRC covers only its first 16 payload bits",
-  "find": "for (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
-  "replace": "for (g = 0; g <= 0; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);"
+  "find": "for (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "for (g = 0; g <= 0; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
   "label": "V.92 data CRC starts one bit into the wrong framed group",
-  "find": "&bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
-  "replace": "&bits[V90JD_GROUP1 + 2 + g * V90JD_GROUP]);"
+  "find": "\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "\t\t\tint t = bits[V90JD_GROUP1 + 2 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
   "label": "V.92 phase CRC starts one bit into the wrong framed group",
-  "find": "&phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
-  "replace": "&phaseBits[V90JD_GROUP1 + 2 + g * V90JD_GROUP]);"
+  "find": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 2 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
-  "label": "V.92 CRC tap 3 reads the wrong register cell",
-  "find": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;",
-  "replace": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[5] + t) & 1;"
+  "label": "V.92 CRC tap 3 reads the wrong register cell (data)",
+  "find": "\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;",
+  "replace": "\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[5] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;"
  },
  {
-  "label": "V.92 CRC tap 10 reads the wrong register cell",
-  "find": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;\n\t\tint tap10 = (crc[11] + t) & 1;",
-  "replace": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;\n\t\tint tap10 = (crc[12] + t) & 1;"
+  "label": "V.92 CRC tap 3 reads the wrong register cell (phase)",
+  "find": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;",
+  "replace": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[5] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;"
+ },
+ {
+  "label": "V.92 CRC tap 10 reads the wrong register cell (data)",
+  "find": "\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;",
+  "replace": "\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[12] + t) & 1;"
+ },
+ {
+  "label": "V.92 CRC tap 10 reads the wrong register cell (phase)",
+  "find": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;",
+  "replace": "\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[12] + t) & 1;"
  },
  {
   "label": "V.92 data CRC is wired most-significant bit first",
@@ -50,13 +60,13 @@
  },
  {
   "label": "V.92 data CRC does not preload all ones",
-  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits",
-  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits"
+  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
   "label": "V.92 phase CRC does not preload all ones",
-  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits",
-  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits"
+  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];",
+  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];"
  },
  {
   "label": "V.92 Jd sync run has only sixteen ones",
