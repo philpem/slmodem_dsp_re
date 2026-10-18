@@ -8516,3 +8516,15 @@ the remaining multiplicities expose cloned blocks and inline boundaries.
 Known wrong formats and removed argument assignments must make the detector
 fire. See the [V34 placement audit](../v34-handshake-body-placement-audit.md)
 for the bounded controls and the limits of argument resolution.
+
+
+## Keep local and CI loss reviews consistent
+
+When an independently supported source correction has explained exactness
+collateral, updating the local exact baseline is only one part of the review.
+CI separately checks losses against the PR base using a base revision, current
+body/relocation digest and immutable evidence commit. Record the accepted loss
+there too, and demonstrate rejection without the review and acceptance with
+it. PR293's V32 unsigned-count correction initially missed this second record;
+its existing period and peephole evidence justified the record without changing
+source or weakening the comparator. Revalidate these pins when rebasing.

@@ -90,3 +90,19 @@ raw-identical to the audited count candidate (`production-audit.json`). Default
 replay also succeeds after source adoption using the frozen baseline. Main source
 is frozen for parent integration, which owns the full reconstruction gate and
 records the intentional exact loss.
+
+
+## CI review registry
+
+The original source commit recorded the deliberate exact loss and updated the
+local exact baseline, but omitted CI's separate reviewed-loss registry. The
+registry now pins this accepted result to master base `a87ae5c35` and body plus
+relocation fingerprint
+`f3bb17f9459ca088364df6b8747c39e416ee5bef4ad70995714377c201e98fd5`.
+The archived source/evidence commit `dfc23b7d1` remains available after rebase.
+The first master update changed no reconstruction inputs; PR295 then added
+an INFO0 carrier fix guarded out of bug-reproduction builds. It does not
+change this V32 TU or its reviewed fingerprint. Comparing the retained base census to the current canonical census
+rejects the missing review, then accepts the two documented losses with the
+registry complete. The metric still reports both losses numerically; it does
+not raise the exact count or relax period differential checks.

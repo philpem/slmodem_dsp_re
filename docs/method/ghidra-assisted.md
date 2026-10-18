@@ -1132,3 +1132,39 @@ clobbers. This checkpoint adds replay tools and evidence, not production V34
 source. The next implementation should express the shared continuation with
 ordinary cases and one body home, then remeasure complete-TU collateral and
 period fixtures.
+
+
+## Consolidated history and PR295 integration
+
+The 66-commit checkpoint at `a5a661a06` is preserved by the published tag
+`archive/pr293-before-consolidation-20261018`. Related adjacent implementation,
+evidence and follow-up commits were consolidated into 48 commits without
+reordering. Every group endpoint and the complete final tree matched its old
+counterpart exactly before integration. Unrelated source recoveries remain
+separate; immutable replay and reviewed-loss references remain available
+through the archive tags.
+
+The resulting branch rebased cleanly onto master `2a41138f4`, which includes
+PR295's INFO0 carrier fix. Local master was fast-forwarded to that same commit
+and the owner's unfinished edits restored with the same patch ID. PR295's
+normal-build fix is retained, including its fixture and mutation locators.
+Both accepted CI loss reviews now name the integrated base; neither reviewed
+function's implementation changes. The next V34 continuation candidate must
+carry the new normal-build guard forward as well as preserving the period
+reproduction path.
+
+The canonical period rebuild retains all 300 object hashes from the prior
+checkpoint, including the complete V34 TU. The reconstruction census therefore
+remains 1109/1852 exact, with unchanged body/relocation review fingerprints.
+
+
+Final integration also includes master `a87ae5c35`, which lands the separate
+PR298 reference-checker fix and PR299 fixture correction. PR295's documented `AT&D0` command had been
+misread as a deviation citation; the standalone parser correction preserves
+real citations. A fifth control ensures the tracked regression fixture itself
+contains no literal citation examples for the repository scan to misread.
+Both CI loss reviews name
+this final base. The first integrated period run passed 393 fixtures with
+zero failures but stopped on that parser error; the final gate includes its
+fix. New tone tracing and ordinary V34 continuation experiments are held for
+the next PR rather than extending this source checkpoint.
