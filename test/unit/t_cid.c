@@ -39,7 +39,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 /* ------------------------------------------------------------------ */
 /* A Bell 202 caller-ID burst: 1200 baud FSK, mark 1200 Hz, space     */
-/* 2200 Hz, at the 8000 Hz line rate.                                 */
+/* 2200 Hz, at either supported 8000 or 9600 Hz line rate.             */
 /* ------------------------------------------------------------------ */
 
 #define MAXBITS		4096
@@ -49,6 +49,7 @@ static unsigned char bits[MAXBITS];
 static int nbits;
 static short burst[MAXSAMP];
 static int nsamp;
+static unsigned line_rate = 8000;
 
 static void
 put_bit(int b)
@@ -83,22 +84,22 @@ static const short sintab[64] = {
 
 /*
  * Render the bit string to samples.  The bit clock is exact -- bit index
- * = i*1200/8000 = 3i/20 -- and the carrier runs on a 26.6 fixed-point
+ * = i*1200/line_rate -- and the carrier runs on a 26.6 fixed-point
  * accumulator through the table above, phase-continuous across the mark/
  * space switch the way a real transmitter is.
  */
 static void
 render(void)
 {
-	/* freq * 64 slots * 2^26 / 8000, for 1200 and 2200 Hz. */
-	const unsigned int step_mark = 644245094ul;
-	const unsigned int step_space = 1181116006ul;
+	/* Rounded freq * 64 slots * 2^26 / line_rate, for 1200 and 2200 Hz. */
+	const unsigned int step_mark = (unsigned int)((((uint64_t)1200 << 32) + line_rate / 2) / line_rate);
+	const unsigned int step_space = (unsigned int)((((uint64_t)2200 << 32) + line_rate / 2) / line_rate);
 	unsigned int phase = 0;
-	long i, total = (long)nbits * 20 / 3;
+	long i, total = (long)nbits * line_rate / 1200;
 
 	nsamp = 0;
 	for (i = 0; i < total && nsamp < MAXSAMP; i++) {
-		long bi = i * 3 / 20;
+		long bi = i * 1200 / line_rate;
 
 		phase += bits[bi] ? step_mark : step_space;	/* wraps at 2^32 */
 		burst[nsamp++] = sintab[(phase >> 26) & 63];
@@ -136,7 +137,7 @@ build_frame(const unsigned char *frame, unsigned length, int wreck_checksum)
 	diff_eq_int("wire frame bit buffer fits (%ld)", nbits,
 		    540 + (length + 1) * 10, length);
 	diff_eq_int("wire frame sample buffer fits (%ld)", nsamp,
-		    nbits * 20 / 3, length);
+		    nbits * line_rate / 1200, length);
 }
 
 /* An SDMF message: 0x04, length, MMDDHHMM + number, checksum. */
@@ -284,7 +285,7 @@ feed(void *ours, void *ref, short *samples, int count, int chunk, long tag)
  * transmitted as checksum-complete Bell 202 frames through fresh receivers.
  * Tag 1 supplies date/time, tag 2 number, tag 7 name; tag 3 renders MESG. */
 static void
-mdmf_lifecycle(int extra, long tag)
+mdmf_lifecycle(int extra, unsigned rate, unsigned cid_val, long tag)
 {
 	static const unsigned char mdmf[] = {
 		0x80, 29,
@@ -302,17 +303,31 @@ mdmf_lifecycle(int extra, long tag)
 	void *ours, *ref;
 	int live0 = harness_alloc.live, verdict, fields = 0;
 	const char *p, *end, *fifth = 0;
+	const unsigned char *frame = extra ? mdmf_extra : mdmf;
+	unsigned length = extra ? sizeof(mdmf_extra) : sizeof(mdmf);
 
 	harness_tty_reset();
-	ours = CID_create(&dummy_modem_ours, 8000, 1);
-	ref = ref_CID_create(&dummy_modem_ref, 8000, 1);
-	build_frame(extra ? mdmf_extra : mdmf,
-		    extra ? sizeof(mdmf_extra) : sizeof(mdmf), 0);
+	ours = CID_create(&dummy_modem_ours, rate, cid_val);
+	ref = ref_CID_create(&dummy_modem_ref, rate, cid_val);
+	line_rate = rate;
+	build_frame(frame, length, 0);
 	verdict = feed(ours, ref, burst, nsamp, 192, tag);
 	diff_eq_int("MDMF delivers through receiver history (%ld)", verdict, 1, tag);
-	diff_eq_int("MDMF emits four text/CRLF pairs (%ld)", host_calls[0], 8, tag);
-	diff_eq_int("MDMF NAME actually delivered (%ld)",
+	if (cid_val == 2) {
+		char expected[0x258];
+		unsigned i;
+		/* Raw mode dumps type/length/payload, not its checksum. */
+		for (i = 0; i < length; i++)
+			sprintf(expected + i * 2, "%02x", (unsigned)frame[i]);
+		strcpy(expected + length * 2, "\r\n");
+		diff_eq_int("raw MDMF emits one text/CRLF pair (%ld)", host_calls[0], 2, tag);
+		diff_eq_int("raw MDMF wire hex excludes checksum (%ld)",
+			    strcmp(harness_tty_ours.data, expected), 0, tag);
+	} else {
+		diff_eq_int("MDMF emits four text/CRLF pairs (%ld)", host_calls[0], 8, tag);
+		diff_eq_int("MDMF NAME actually delivered (%ld)",
 		    strstr(harness_tty_ours.data, "NAME = ABCDE\r\n") != 0, 1, tag);
+	}
 
 	/* Read the get_strings buffer captured at the first real callback.
 	 * Count all rendered fields independently of the wrapper's loop cap. */
@@ -326,16 +341,17 @@ mdmf_lifecycle(int extra, long tag)
 			fifth = p;
 		p = nul + 1;
 	}
-	diff_eq_int("MDMF rendered field count (%ld)", fields, extra ? 5 : 4, tag);
+	diff_eq_int("MDMF rendered field count (%ld)", fields, cid_val == 2 ? 1 : extra ? 5 : 4, tag);
 	diff_eq_int("MDMF extra field rendered as MESG (%ld)",
-		    fifth != 0 && strncmp(fifth, "MESG = ", 7) == 0, extra, tag);
+		    fifth != 0 && strncmp(fifth, "MESG = ", 7) == 0, cid_val != 2 && extra, tag);
 	diff_eq_int("MDMF fifth field withheld from TTY (%ld)",
 		    strstr(harness_tty_ours.data, "MESG = ") == 0, 1, tag);
 	CID_delete(ours);
 	ref_CID_delete(ref);
 	diff_eq_int("MDMF lifecycle released (%ld)", harness_alloc.live, live0, tag);
-	printf("CID MDMF debug %u extra %d: verdict %d, %d rendered fields, %d TTY calls\n",
-	       dsplibs_debug_level, extra, verdict, fields, host_calls[0]);
+	printf("CID MDMF rate %u value %u debug %u extra %d: verdict %d, %d rendered fields, %d TTY calls\n",
+	       rate, cid_val, dsplibs_debug_level, extra, verdict, fields, host_calls[0]);
+	line_rate = 8000;
 }
 
 int
@@ -453,8 +469,11 @@ main(void)
 	ref_CID_delete(ref);
 	diff_eq_int("everything released (%ld live)",
 		    harness_alloc.live, live0, 3);
-	mdmf_lifecycle(0, 7);
-	mdmf_lifecycle(1, 8);
+	mdmf_lifecycle(0, 8000, 1, 7);
+	mdmf_lifecycle(1, 8000, 1, 8);
+	mdmf_lifecycle(1, 8000, 2, 11);
+	mdmf_lifecycle(1, 9600, 1, 12);
+	mdmf_lifecycle(1, 9600, 2, 13);
 
 	/*
 	 * Capture the debug tier over complete success/failure lifecycles,
@@ -485,8 +504,11 @@ main(void)
 	ref_CID_delete(ref);
 	diff_eq_int("debug lifecycles released (%ld live)",
 		    harness_alloc.live, live0, 6);
-	mdmf_lifecycle(0, 9);
-	mdmf_lifecycle(1, 10);
+	mdmf_lifecycle(0, 8000, 1, 9);
+	mdmf_lifecycle(1, 8000, 1, 10);
+	mdmf_lifecycle(1, 8000, 2, 14);
+	mdmf_lifecycle(1, 9600, 1, 15);
+	mdmf_lifecycle(1, 9600, 2, 16);
 	dsplib_debug_capture_on = 0;
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
