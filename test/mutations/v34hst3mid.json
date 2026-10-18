@@ -354,38 +354,38 @@
   },
   {
     "label": "47's shift-register guard masks three bits",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif ((f->obj->fsk.sr & 0x7) == 0x7 && f->obj->short_3588 == 0) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif ((f->obj->fsk.sr & 0x7) == 0x7 && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {
     "label": "47's shift-register guard wants 0xe",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xe && f->obj->short_3588 == 0) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xe && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {
     "label": "47's shift-register guard is an equality on the whole word",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif (f->obj->fsk.sr == 0xf && f->obj->short_3588 == 0) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif (f->obj->fsk.sr == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {
     "label": "47's second guard wants a non-zero +0x3588",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 != 0) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 != 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {
     "label": "47 has no second guard",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif ((f->obj->fsk.sr & 0xf) == 0xf\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {
     "label": "47's first guard reads +0xaae0 rather than +0xaae2",
-    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0) {",
-    "replace": "\tif ((f->obj->fsk.nbits & 0xf) == 0xf && f->obj->short_3588 == 0) {",
+    "find": "\tif ((f->obj->fsk.sr & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
+    "replace": "\tif ((f->obj->fsk.nbits & 0xf) == 0xf && f->obj->short_3588 == 0\n#ifndef DSPLIB_REPRODUCE_BUGS\n\t    && t3m_info0_carrier(f->rx->burst)\n#endif\n\t   ) {",
     "fn": "t3m_micro47"
   },
   {

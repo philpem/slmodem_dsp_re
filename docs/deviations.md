@@ -3165,27 +3165,31 @@ was added for `FPM_sqrt` (D1). This is the most severe defect in the object.
 
 ---
 
-## D77 🐛 V.34 cannot connect below `IODELAY` 86, and one shipped driver answers 0
+## D77 🐛 Carrierless INFO0 detection can restart V.34 phase 2
 
-*Task #98 sweep, from fix list §5.2. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: host-side.*
+**DSP correction:** the normal build now requires at least 64 counts RMS in
+the four-sample AGC output before the shared `TX_PHASE2_ANS` /
+`TX_PHASE2_CALL` arm accepts its four-one repeat prefix. The
+`DSPLIB_REPRODUCE_BUGS` build retains the original test. The reference object
+also accepts a prefix produced by silent input; this is an inherited defect,
+not a reconstruction failure. See [the regression and live-call
+results](v34-info0-carrier.md) for the boundary tests and remaining limits.
 
-**Findings F960, F1022, F1026** (and 962). Arm 47 `TX_PHASE2_ANS` reads an
-all-ones `fsk.sr` from a carrierless slicer as "repeated INFO0" during the
-window in which the far end is *correctly* silent, and loses the race by one
-block — about 22 samples out of 200. The wait it must sit out is
-`0x5f - filtdelay`, so `filtdelay >= 57` is the threshold, which is
-`IODELAY >= 86`. Measured: **85 fails and 86 connects**, with 86..240 all
-connecting.
+The earlier host-delay workaround and its simulated-call measurements follow.
+The 85/86 boundary applies to that experiment; it is not a universal minimum
+for all peers or audio paths. Live D-Modem calls at `IODELAY` 48 connected to
+a Courier before this correction and now connect to the Olinet too.
 
-`slmodemd`'s **socket driver** — the one a SIP deployment inherits — returns
-**0** for `MDMCTL_IODELAY`, with the real expression commented out beside it at
-`modem_main.c:682-686`. A V.34 call on that driver cannot complete phase 2, and
-says nothing about why beyond *"Repeated info0 is detected"*.
+Findings F960, F1022 and F1026 recorded a simulated-call race between the
+counter's transition to `TX_L1` and the unqualified four-one detector. In that
+setup, `filtdelay >= 57` avoided the race: `IODELAY` 85 failed and 86 connected,
+with 86..240 connecting. The socket driver examined then returned zero for
+`MDMCTL_IODELAY`, leaving calls exposed to the race.
 
-*Fix class:* **host-side**, and D74 is that fix: `SLMODEMD_IODELAY` now
-overrides at runtime with a default of 120. D74 records the fix; this entry
-records the threshold it has to stay above and the reason. **The two are one
-defect — do not file them separately.**
+D74 supplied a host-side workaround through a runtime `SLMODEMD_IODELAY`
+override and a default of 120 in that bench. D74 and D77 describe the same
+defect and its earlier workaround. The DSP correction addresses the false
+repeat detection directly; it does not change the host delay.
 
 ---
 
