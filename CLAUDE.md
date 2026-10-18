@@ -122,6 +122,9 @@ baseline first, inspect which assertion fired, and report selected/total
 mutants, exclusions, compiler, wall/CPU time and independently verified findings.
 A kill alone does not establish fixture validity, reachability or equivalence.
 A known negative control is required when relying on a detector's clean result.
+Prioritise meaningful period differential coverage of non-binary-identical
+functions. Fuzzing is an optional way to generate inputs for that same oracle,
+not a replacement gate or an assumed next priority.
 `tools/mutsnap.py --update NAME` and `--verify NAME` require explicit suite names;
 no whole-tree refresh is implicit. Keep affected anchors valid: `refs` still
 runs structural anchor validation without compiling mutants. See

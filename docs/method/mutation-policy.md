@@ -29,6 +29,20 @@ misdirected locators have produced misleading historical results. It reports
 its suite and mutation denominators. Retaining this structural check does not
 require executing or refreshing the associated suites.
 
+## Testing priority
+
+Prioritise meaningful period-compiler differential tests against the blob for
+functions whose machine code is not identical. Extend valid construction and
+processing histories, boundary inputs and observations of outputs, persistent
+state and callbacks where current fixtures leave gaps.
+
+The coverage-guided fuzzer uses the same differential oracle; it supplies
+additional generated inputs. It has no assumed priority over focused fixtures
+and does not replace their state-validity or comparison obligations. Expand it
+only where it demonstrates useful additional input coverage at an acceptable
+cost. No fuzzing expansion or all-function fuzz/mutation routing is a condition
+of retiring mutation maintenance.
+
 ## Targeted investigation
 
 First state the question and boundary: for example, whether a fixture observes
