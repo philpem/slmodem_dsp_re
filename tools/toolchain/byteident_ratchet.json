@@ -1,9 +1,9 @@
 {
-  "bytes": 78,
+  "bytes": 77,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1111,
-  "exact_bytes": 128392,
+  "exact": 1112,
+  "exact_bytes": 129442,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -1053,6 +1053,7 @@
     "v21tx_status",
     "v22_create",
     "v22_delete",
+    "v22_org_rmloop2",
     "v23FP_rx_create",
     "v23FP_rx_delete",
     "v23FP_tx_create",

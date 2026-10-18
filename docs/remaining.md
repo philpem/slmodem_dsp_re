@@ -141,6 +141,39 @@ an independent operation, ownership, width or read-age discrepancy. Further
 source changes in these domains need new evidence rather than nearby
 statement, local-type or register variants.
 
+The next detector-boundary pass makes `v22_org_rmloop2` exact at 1,050
+bytes: **1,112/1,852 EXACT**, covering **129,442/720,125 original bytes**,
+with zero exact losses. The residual grades are 32 `REGALLOC`, 77 `BYTES`
+and 631 `SIZE`. Reading the child owner and accumulator after the detector
+call restores the original instruction sequence. The same correction in
+`v22_local_loop` reduces 116 differing body bytes to four; it remains `BYTES`.
+Four full-TU controls preserve the other eight functions and non-text data.
+The existing fixtures establish synthetic component fidelity, not a public
+modem history demonstrating child replacement across these calls.
+
+Three further native-operation corrections remain `SIZE`: `modulatevector`
+restores signed remainder/subtract/redivide and quotient/product/subtract
+chains (2,877 -> 2,996 bytes against 3,388); `MTK_phasor` restores the signed
+16-bit integer-to-x87 carrier (255 -> 256 against 271); and
+`checkSignalStability` removes a zero-reference bypass absent from both
+original division paths (152 -> 154 against 196). Their other 24 TU bodies
+are unchanged. Valid nonzero shell divisors and positive V8 reference
+histories bound the differential evidence; no invalid-input safety claim.
+
+V34 answer microstates 49 and 50 now read the filter delay after resetting
+the filter, as the original does. The handshake body grows 12,898 -> 12,924
+bytes; compiler collateral shrinks `datapumpv34` from 1,035 to 1,005. The
+other 50 TU bodies and all nine exact functions remain unchanged. These
+changes restore witnessed reads without claiming full-handshake identity.
+The integrated gate passes 394 period fixtures with zero failures; all 300
+runtime objects raw-match the comparison builds. Of 300 objects, 295 remain
+raw-identical to the preceding checkpoint. Across the five changed TUs,
+82 of 89 function bodies preserve raw bytes and relocation tuples. Exports,
+named data and string contents remain preserved. The ordered partial object
+still differs: 72,205/943,398 positioned bytes, 997/18,317 relocation records
+and 457/2,931 symbol records match. Function identity improves while position
+changes reduce these whole-object counts; no whole-object identity is claimed.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
