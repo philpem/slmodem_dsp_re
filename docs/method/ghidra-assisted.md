@@ -1102,3 +1102,17 @@ for absent worktrees were pruned. Existing
 worktrees with changes or ignored build evidence were preserved. No remote
 branches or unique local commits were deleted. The pending tone-filter
 refinement was preserved across the rebase; its validation is recorded separately.
+
+
+## Tone filter ring/count refinement after rebase
+
+The [tone filter audit](../fpm-tone-ring-count-recovery.md) recovers the native
+word countdown and conditional ring-index clearing together. The function
+moves from 238 to 236 bytes against native 235; it remains nonexact. Seven
+exact TU bodies and all ten bystander bodies/relocations are retained. The
+four-cell Gentoo replay distinguishes both operation witnesses independently,
+and its selected object raw-matches both canonical and runtime objects.
+Full `make phase J=4` passes 392 period fixtures with zero failures and all
+structural checks on the integrated master base. Two existing mutation
+locators were mechanically retargeted, with all 41 tone locators passing;
+no full mutation run or snapshot refresh was needed.

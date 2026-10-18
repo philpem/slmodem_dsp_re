@@ -8471,3 +8471,22 @@ Base-pinned loss reviews also need revalidation. PR293's new master base
 changes mutation policy without changing reconstruction or period inputs;
 the reviewed PreFilter fingerprint stays identical. Updating that base pin
 is justified by those checks, not by disabling or widening the exactness gate.
+
+
+## Cross independent native operations before judging a near-size body
+
+The tone filter has two independent native witnesses: a word-sized old-count
+test and a conditional ring increment that GCC converts to SETL/NEG/AND.
+A four-cell source cross separates their effects. The baseline is 238 bytes,
+the ring-only cell 233, the countdown-only cell 258, and the combined cell
+236 against the native 235. Both operation witnesses, rather than size alone,
+justify the combined source. A one-byte length gap still hides register,
+stack-home and scheduling differences throughout the body.
+
+Keep zero and wrapped negative counts in the component validation when the
+native word counter admits them. Existing constructor-backed tone fixtures
+already supply enough storage for the minus-one case; no impossible history
+or unsafe buffer is needed. The full period gate passes after adoption,
+and the other ten TU bodies and their relocations stay unchanged. See the
+[tone ring/count audit](../fpm-tone-ring-count-recovery.md) for the crossed
+controls, header-resolution proof and remaining differences.

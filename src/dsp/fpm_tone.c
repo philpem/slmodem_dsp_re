@@ -702,17 +702,19 @@ FPM_TONE_filter(struct fpm_tone *state, short *samples, short count)
 {
 	const short *kernel = state->kernel;
 	short *hist = state->history;
-	int taps = state->cfg.len;
+	short taps = state->cfg.len;
 	int idx = state->hist_idx;
-	int i;
+	short i;
 
-	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+	for (i = count; i-- != 0;) {
 		const short *c = kernel;
 		short *p;
 		int acc = 0;
 		int k;
 
-		idx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;
+		idx = (short)(idx + 1);
+		if ((short)idx >= taps)
+			idx = 0;
 		hist[idx] = *samples;
 
 		p = &hist[idx];
