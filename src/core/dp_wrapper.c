@@ -118,8 +118,8 @@ failed:
 
 
 
-static int
-imin(int a, int b)
+static unsigned int
+imin(unsigned int a, unsigned int b)
 {
 	return a < b ? a : b;
 }
@@ -130,7 +130,6 @@ dp_wrapper_run(struct dp *dp, void *in, void *out, int count)
 	struct dp_wrapper *w = (struct dp_wrapper *)dp->dp_data;
 	const short *inp = (const short *)in;
 	short *outp = (short *)out;
-	int span = 2 * w->host_frag;
 	int status = 0;
 
 	while (count > 0) {
@@ -138,6 +137,7 @@ dp_wrapper_run(struct dp *dp, void *in, void *out, int count)
 		 * Take as much as fits: no more than one fragment, and no more
 		 * than the space left before either ring position wraps.
 		 */
+		unsigned int span = 2U * w->host_frag;
 		int n = imin(count, w->host_frag);
 
 		n = imin(n, span - w->in.wr);
@@ -146,7 +146,7 @@ dp_wrapper_run(struct dp *dp, void *in, void *out, int count)
 		sysdep_memcpy(&w->in.data[w->in.wr], inp, n * sizeof(short));
 		inp += n;
 		w->in.total += n;
-		w->in.wr = (w->in.wr + n) % span;
+		w->in.wr = (w->in.wr + n) % (2U * w->host_frag);
 
 		/* Run the datapump only once a whole fragment has arrived. */
 		if (w->in.total >= w->host_frag) {
@@ -197,7 +197,7 @@ dp_wrapper_run(struct dp *dp, void *in, void *out, int count)
 			      n * sizeof(short));
 		w->out.total -= n;
 		outp += n;
-		w->out.rd = (w->out.rd + n) % span;
+		w->out.rd = (w->out.rd + n) % (2U * w->host_frag);
 
 		count -= n;
 	}
