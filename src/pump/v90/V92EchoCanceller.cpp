@@ -456,7 +456,11 @@ print_echo_coeffs(float *coeffs, unsigned int len)
  * The sign comes from the FIELD and the two integers from the ARGUMENT, which
  * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
  * register for the magnitude and `fcomps 0x30(%ebx)` reads the store back for
- * the sign.  They are the same float; the spelling is the object's.
+ * the sign in the reference.  The source names those operands, but retained
+ * Gentoo first RTL CSE forwards the stored argument into the sign comparison:
+ * the standalone setters retain an x87 value and emit `fcompp`, not a member
+ * readback.  Their 149-versus-147-byte residual also includes product/pop and
+ * scheduling differences; it is not just a two-byte reload discrepancy.
  *
  * TWO OF THE SIX INLINED COPIES COME OUT AS A CONSTANT `'-'` HERE AND AS A
  * COMPARE IN THE OBJECT, and it is a fold rather than a spelling.  The
