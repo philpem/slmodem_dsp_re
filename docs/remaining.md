@@ -122,6 +122,25 @@ an identity score. All nine exact functions in the translation unit remain
 exact. The new combined strict partial comparison still differs: 72,184 of
 943,398 positioned bytes and 1,002 of 18,317 relocations match.
 
+A later bounded microstate-48 change removes that remaining frame alias at
+this boundary: the helper takes the modem object directly and returns its
+short state value. The untraced threshold path now carries known state 5,
+while the trace path reloads the owner after its print call, as the original
+does. Only `v34handshak` changes among 52 TU functions, from 12,924 to 12,898
+bytes; return extension, counter conversion and the frame-state join remain
+code-generation differences. The combined gate passes 394 fixtures with zero
+failures; exact membership remains 1,111/1,852. Ordered partial comparison
+still differs: 72,401/943,398 positioned bytes and 1,001/18,317 relocations.
+
+The accompanying Jd audit found matching old-value dependencies for all
+sixteen CRC outputs. Two direct-tap recurrence controls reached smaller SIZE
+gaps but retained multiple CFG and allocation differences, with no supported
+source correction or identity gain; neither was adopted. The 32 REGALLOC
+bodies were also reviewed, including 30 source nominations, without finding
+an independent operation, ownership, width or read-age discrepancy. Further
+source changes in these domains need new evidence rather than nearby
+statement, local-type or register variants.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
