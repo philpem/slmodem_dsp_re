@@ -203,6 +203,7 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 {
 	int length;
 	unsigned int span;
+	unsigned int roundedSpan;
 	FloatARMA *m;
 
 	if (DSPLIB_DEBUG_ON())
@@ -218,9 +219,12 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 
 	echoCoeff = (float *)sysdep_malloc(filterLength * sizeof(float));
 
-	span = filterLengthMinusOne + echoDelay;
-	historyAlloc = span + 2u * blockLen + span / blockLen * blockLen
-		       + extra;
+	span = echoDelay + filterLengthMinusOne;
+	/* Preserve the reference's separate rounded product and its lifetime.
+	 * A single sum lets the period parser fold both blockLen products into
+	 * (span / blockLen + 2) * blockLen before RTL is built. */
+	roundedSpan = span / blockLen * blockLen;
+	historyAlloc = span + 2u * blockLen + roundedSpan + extra;
 	echoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));
 
 	m = (FloatARMA *)sysdep_malloc(sizeof(FloatARMA));
