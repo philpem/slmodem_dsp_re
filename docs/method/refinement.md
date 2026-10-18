@@ -7464,17 +7464,95 @@ Physical emission order alone does not prove declaration order under
 unit-at-a-time, and ordinary header-inline factoring can change the strong
 export to weak or omit it. Do not add an inline annotation to force a score.
 
-The next bounded diagnostic is a four-cell cross: move only the unchanged
-delay definition before the constructors, versus current order, under retained
-and unit-off profiles. Predict that unit-off then inlines delay while keeping
-the later reset tail; reject that explanation if either boundary fails to
-recover. Score all bodies/data/exports, not just the constructors. This tests
-source visibility while retaining a strong definition; even a hit would not
-uniquely recover the original global profile. This four-cell source experiment
-has not been run.
+The subsequent four-cell cross moves only the unchanged delay definition
+before the constructors, versus current order, under retained and unit-off
+profiles. Under retained options both complete objects are raw-identical:
+zero of fifteen bodies, positions or records change. Before-plus-unit-off
+restores the original constructor edge bags and keeps all fifteen strong
+exports, but the constructors remain BYTES112. Current-plus-unit-off instead
+has two explicit delay sites per constructor and loses exact `setEchoDelay`.
+Emission-order inversions also remain. This establishes the predicted
+visibility interaction without recovering an original global profile or
+justifying a retained source-order change. No move or option is adopted.
+
+The replay checks sixty original-function verdicts, a raw baseline and three
+negative controls. Its focused Gentoo gate passes three binaries, twenty-five
+groups and 161066 checks. Matching standalone/expanded operations support
+inlining or manual expansion; they do not uniquely prove the original author
+called the helper.
+
+```sh
+python3 tools/recovery_echo_delay_order.py --domain ordinary-delay-definition-order-by-unit-visibility-four \
+  --baseline-dir build/order293-baseline
+python3 tools/recovery_echo_delay_order.py --audit
+```
 
 ```sh
 python3 tools/recovery_visibility_cross.py --domain visibility-profile-twelve \
   --baseline-dir build/native293-baseline
 python3 tools/recovery_visibility_cross.py --audit
 ```
+
+## Trace helper factoring before changing the inline profile
+
+V92EchoCanceller reset originally duplicated four existing helpers' operations
+in its source. Native operands and order agree with `zeroEchoCoeff`,
+`resetEchoHistory`, `setEchoBeta(0)` and `setDecayFactor(0)`, around the same
+state publication and ARMA reset. Other methods in this TU already call these
+ordinary helpers. Native constructor references to LOCAL coefficient arrays
+anchor the constructors to this TU; they do not establish the setter/reset
+source owner or original call spelling.
+
+A two-cell retained-profile experiment replaces only the duplicated reset
+regions with ordinary helper calls. Definitions, headers, source order and
+compiler flags stay fixed. The period compiler still emits EXACT195 for reset
+and preserves the other twelve non-constructor bodies after relocation
+normalization. Both constructors fall from 447 to 313 bytes, matching the
+reference size and original ordered call/reset-tail edges. They remain
+BYTES112; no exact name or exact original byte is gained or lost.
+
+The causal evidence is in the actual Gentoo callgraph dump. Baseline reset's
+initial estimate is 69 instructions and it is inlined into the constructors.
+Factored reset starts at 58, then grows through 65, 83 and 101 as helper
+expansions are considered. GCC explicitly declines the constructor expansion
+after that growth, reporting `--param max-inline-insns-single limit reached
+after inlining into the callee`. The installed defaults are auto 100 and single
+500; that generic diagnostic is not proof that a 500-instruction bound was
+exceeded. The constructor estimate changes from 159 to 157 rather than growing
+to 216. This recovers a native boundary under retained options
+without tuning thresholds, disabling automatic inlining or adding attributes.
+An already-exact out-of-line body can conceal a different source factoring
+that changes its callers.
+
+All fifteen strong exports and named data survive; emitted function bytes fall
+from 4513 to 4245. Other raw body differences come from pooled-string relocation
+addends, whose canonical consumers are unchanged. The replay audits thirty
+body verdicts, complete commands and actual compiler/assembler versions.
+Missing-edge, missing-cost and WEAK-export controls fail, including a changed
+export whose function-body verdict remains EXACT. Four focused Gentoo binaries
+pass 28 groups and 161199 checks. Sixteen moved reset mutation anchors now name
+the shared helper/reset owners; all sixteen faults are caught (fourteen
+differential failures, two runtime signals), and the restored baseline passes.
+This is a targeted mutation run, not a full snapshot refresh.
+
+```sh
+python3 tools/recovery_echo_reset_factoring.py --domain ordinary-reset-factoring-two \
+  --baseline-dir build/order293-baseline
+python3 tools/recovery_echo_reset_factoring.py --audit
+```
+
+The next discriminator is the constructor history-allocation arithmetic.
+Reference code keeps `quotient*blockLen` separate from `span+2*blockLen`;
+current code forms `(quotient+2)*blockLen`. Its extra instruction and spill
+therefore do not establish a missing statement. In both constructors this
+factoring already appears in the earliest saved `.original` tree, remains in
+`.inlined`, and reaches initial RTL as DIV, ADD2, MULT, ADD span, ADD extra and
+store (UIDs 147 through 152 in the retained C1 dump). Later CSE, reload and
+scheduling do not introduce it. The saved preprocessed source still has the
+separate source terms. The `.original` tree already contains helper expansions,
+so its name does not establish parse/pre-inline timing.
+
+Trace expression construction/folding in the installed period compiler before
+proposing another arithmetic spelling. Require independent expression/lifetime
+evidence, an absent-target control and full-object preservation from the
+observer, then review the full TU for any source candidate.

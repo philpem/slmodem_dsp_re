@@ -171,18 +171,23 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Test V92EchoCanceller's ordinary `setEchoDelay` definition before its
-   constructors, crossed with retained/unit-off profiles under #22. Its
-   native body precedes the constructors and is inlined there, while reset
-   remains a tail call. The completed twelve-cell cross cannot reproduce both
-   boundaries from current source. Preserve strong exports and review every
-   TU body/data/relocation; no per-file flag or inline attribute is licensed.
-2. Extend CID's real audio lifecycle to MDMF NAME/four nonempty fields, then
-   its extra-tag four-field cap ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)).
-   The native call/result trace is equal on 90 paired calls and 394 events;
-   the debug failure path is now covered. Sizes remain 368 versus 386 bytes.
-   Preserve both exact companions and keep the 1433 source/option cells closed
-   unless new path/operand evidence supplies a discriminator.
+1. Trace V92EchoCanceller constructor history-allocation folding in the period
+   tree/RTL dumps. Ordinary reset-helper factoring now restores the reference
+   reset tail under retained options and reduces both constructors from 447
+   to 313 bytes, but they remain BYTES112. The reference keeps quotient-times-
+   block separate from span-plus-two-blocks; the current code combines them.
+   This factoring already appears in the earliest saved tree and initial RTL;
+   trace expression construction/folding before another source experiment.
+   Preserve the exact reset and all fifteen strong exports; no per-file flag
+   or inline attribute is licensed. The completed definition-order cross is
+   diagnostic and does not justify a production move or profile change.
+2. CID's MDMF four-field and fifth-field-cap lifecycles now pass through real
+   audio ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)). The native
+   trace agrees on 214 paired calls and 830 events, with exact transmitted-wire
+   checks and eleven detector controls. Correcting a malformed fixture carrier
+   was required; production code is unchanged. Raw output and 9600-Hz lifecycles
+   remain coverage gaps. Keep the 1433 source/option cells closed unless new
+   path/operand evidence supplies a discriminator; sizes remain 368 versus 386.
 3. CenterAdapt's allocated history home and reload deletion are now measured.
    Reopen only with independent death-note/lifetime or common-profile evidence
    explaining the reference's selective two surviving stores. The eleven-byte
@@ -643,3 +648,71 @@ layout/exact neighbours. No production profile changes. The
 [CID trace](refinement.md#check-native-delivery-boundaries-before-reopening-cid-source-variants)
 and [ownership audit](refinement.md#separate-helper-reference-evidence-from-original-tu-ownership)
 record controls, replay commands, bounded conclusions and the next discriminators.
+
+
+## Reset factoring and CID fixture audit
+
+From frozen `7efb67f39`, ordinary calls to four existing V92EchoCanceller
+helpers replace reset's duplicated expansions. The retained period profile
+now emits both constructors at **313 bytes, BYTES112**, down from 447 bytes,
+with the original ordered reset-tail boundary and inlined delay operations.
+Reset stays **EXACT195**, all fifteen strong exports survive, and only the
+two constructor code bodies change after relocation normalization. Pooled
+string order/addends also move; resolved non-constructor consumers agree.
+The complete canonical object raw-matches the independently audited candidate;
+the other 299 of 300 canonical objects are raw-identical to the frozen baseline.
+
+The actual Gentoo callgraph explains the change: helper expansions grow
+factored reset from an initial inline estimate of 58 through 65/83/101.
+GCC then declines constructor inlining; the manually expanded baseline reset
+was estimated at 69 and inlined. This is source-factoring evidence at unchanged
+flags, not a new threshold setting or unique proof of original source spelling.
+The four-cell delay-definition-order cross is complete and remains diagnostic:
+retained before/current objects are raw-identical; before-plus-unit-off recovers
+the boundary mixture but still differs in bytes and method order. No production
+source-order or profile change is adopted.
+
+Focused Gentoo validation passes four binaries, 28 groups and 161199 checks.
+Sixteen reset mutation anchors move to their shared helper/reset owners; all
+sixteen faults are caught (fourteen differential failures, two runtime signals),
+and the restored baseline passes. The two-cell audit checks thirty body
+verdicts plus commands, compiler/assembler provenance, data and exports; its
+three negatives include a WEAK export whose body remains EXACT. The parent
+independently replays both source audits and canonical production compilation.
+
+CID's malformed fixture sine table initially corrupts the new MDMF packets in
+both receivers. Replacing it with the intended rounded sine adds four valid
+MDMF audio histories and raises the existing fixture from **193 to 476 checks**.
+Four nonempty fields are delivered; a rendered fifth field is withheld. The
+integrated native trace agrees on **214 paired calls and 830 events**, rejecting
+eleven controls. Actual serialized bits independently anchor exact received
+wire bytes, including a checksum-preserving equal-corruption negative. Production
+CID bytes and both exact companions stay unchanged; process remains 368 versus
+386 bytes. The [Playbook](refinement.md#check-native-delivery-boundaries-before-reopening-cid-source-variants)
+records the fixture correction and its evidence limits.
+
+The census remains **1102/1852 EXACT**, covering **126583/720125 original
+function bytes**, with no exact names gained or lost. Both constructors move
+from SIZE to BYTES: current categories are 29 REGALLOC, 73 BYTES, 647 SIZE and
+one UNRESOLVED. The exact-membership ratchet passes without a floor update.
+Strict partial/raw identity remains DIFFERENT: 68 exact sections, 72093/943398
+positioned matching bytes and 457/2931 exact symbols. Positioned bytes fall
+from 72161 as code/relocations shift; that aggregate does not decide whether a
+native source/call boundary has been recovered.
+
+The remaining constructor reassociation is already present in the earliest
+saved tree and initial RTL. Trace installed-compiler expression construction
+next; later allocation/scheduling cannot explain its origin. CID raw output
+and 9600-Hz histories remain coverage tasks. Keep previously closed spelling
+and option domains closed without new evidence.
+
+
+The integrated `make phase J=4` passes **392 period fixtures, zero failed** and
+all structural checks, including 285 mutation suites and 10042 unique anchors.
+All 300 runtime source objects raw-match canonical builds. The final comment
+clarification also preserves the complete audited object. No fixture count,
+tolerance or exact floor changes; no modern-portability or full mutation
+snapshot refresh is claimed. Strict documentation build and audit pass,
+including 549 Markdown targets, 300 module links, 972 HTML targets/fragments,
+both detector controls and eleven doc-audit unit tests. All 13067 finding
+references resolve.
