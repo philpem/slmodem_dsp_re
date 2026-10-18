@@ -103,8 +103,10 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 		 * that `make check64` cannot see, because it only compiles.
 		 */
 		state = sysdep_malloc(sizeof(*state));
+#ifndef DSPLIB_REPRODUCE_BUGS
 		if (state == NULL)
 			return NULL;
+#endif
 		owned = 1;
 	}
 
