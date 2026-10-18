@@ -478,8 +478,8 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 					status = fax_class1_progress(
 					    ctx->class1, rx_buf, tx_buf,
-					    (int)(long)ctx->host_tx_buf,
-					    (int)(long)ctx->host_rx_buf,
+					    ctx->host_tx_buf,
+					    ctx->host_rx_buf,
 					    &rxc, &txc, &w7, &recv_n);
 					ctx->host_rx_want = recv_n;
 

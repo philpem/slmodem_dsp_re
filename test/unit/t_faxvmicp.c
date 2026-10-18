@@ -218,8 +218,8 @@ cmp_vmi_scalars(const char *what, struct faxvmi *a, struct faxvmi *b,
 	FLD(max_frame);
 	FLD(frame_size);
 	FLD(slot);
-	FLD(int_0010);
-	FLD(int_0014);
+	diff_eq_int("modem_cfg", b->modem_cfg == a->modem_cfg, 1, tag);
+	diff_eq_int("ptr_0014", b->ptr_0014 == a->ptr_0014, 1, tag);
 	FLD(underrun);
 	FLD(overflow);
 	FLD(status);
@@ -525,11 +525,11 @@ run_process(void)
  * FAXVMI_control, over a fresh slot-0 (null) instance -- the same "only the
  * NULL slots are safe to actually invoke through" reasoning run_tables' own
  * comment gives for vxx_create/vxx_process, since a real modulation's
- * `int_0014` recursion target needs a fully-formed modem handle this file
+ * `control_req` recursion target needs a fully-formed modem handle this file
  * has no route to build.  Six cases: ctl==NULL, the all-zero FAXVMI_CTL
  * (quiescent), ptr_0000-only (ring empty), int_000c+short_0010 in range
  * (full reset + mode change), int_000c+short_0010 OUT of range (treated as
- * quiescent for the reset, per faxvmi.h step 3), and int_0014 (recursion
+ * quiescent for the reset, per faxvmi.h step 3), and control_req (recursion
  * through the null slot, ret == -1).  Every case also exercises the
  * unconditional zero_run_send/zero_run_bits copy from int_0004/short_0008.
  */
@@ -617,17 +617,17 @@ run_control(void)
 	cmp_vmi_scalars("int_000c out-of-range", va, vb, 4);
 	cmp_framer("int_000c out-of-range framer", va->framer, vb->framer, 4);
 
-	/* int_0014 nonzero: recurse through vxx_control[slot] (slot 0, null). */
+	/* control_req nonzero: recurse through vxx_control[slot] (slot 0, null). */
 	memset(&ctl, 0, sizeof(ctl));
-	ctl.int_0014 = 0x1234;
+	ctl.control_req = (void *)0x1234;
 	ctl.int_0004 = 66;
 	ctl.short_0008 = 77;
 	ra = ref_FAXVMI_control(va, &ctl);
 	rb = FAXVMI_control(vb, &ctl);
-	diff_eq_int("int_0014: return (%ld)", rb, ra, 5);
-	diff_eq_int("int_0014: return is null_control's -1 (%ld)", rb, -1, 5);
-	cmp_vmi_scalars("int_0014", va, vb, 5);
-	cmp_framer("int_0014 framer", va->framer, vb->framer, 5);
+	diff_eq_int("control_req: return (%ld)", rb, ra, 5);
+	diff_eq_int("control_req: return is null_control's -1 (%ld)", rb, -1, 5);
+	cmp_vmi_scalars("control_req", va, vb, 5);
+	cmp_framer("control_req framer", va->framer, vb->framer, 5);
 
 	return diff_end();
 }

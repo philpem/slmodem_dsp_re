@@ -153,7 +153,7 @@ struct v17tx_cfg V17TX_CFG = {
 	1,		/* fifo_size_factor -- V17TX_create's own transmit FIFO
 			   size is fifo_size_factor * 3 * 16                */
 	0,		/* int_0018 -- V17TX_create's own V17TXP_INT_000C     */
-	0,		/* int_001c -- V17TX_create's own FPM_PPS_CFG.aux     */
+	0,		/* aux -- V17TX_create's own FPM_PPS_CFG.aux     */
 };
 
 

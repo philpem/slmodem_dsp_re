@@ -81,16 +81,20 @@
  * reproduced as fresh field reads rather than of one cached value, matching
  * the object's own reload discipline elsewhere in this file.
  *
- * `PCFG.AUX` CARRIES THE CALLER'S OWN `int_0018`, ACROSS THE INT/POINTER
- * BOUNDARY -- `mov 0x18(%ebp),%ebx` at 0x9bb67 (the FULL 32 bits, unlike
+ * `PCFG.AUX` CARRIES THE CALLER'S OWN POINTER `aux` -- `mov 0x18(%ebp),%ebx` at 0x9bb67 (the FULL 32 bits, unlike
  * `int_0014`'s 16-bit read above) is spilled to a stack slot and reloaded
  * at 0x9bcbf, 260 bytes later, to become `FPM_PPS_CFG`'s `aux` field
- * (0x9bccf).  `V29TX_CFG`'s own `int_0018` is 0, so this is invisible on
- * the default config; the `(void *)(long)` idiom is D1250's, for the same
- * reason.
+ * (0x9bccf).  `V29TX_CFG`'s own `aux` is 0, so this is invisible on
+ * the default config. The pointer type follows both the init producer and
+ * the pulse-shaper configuration consumer.
  *
  * Finding F9701.
  */
+typedef char v29tx_cfg_aux_offset[(sizeof(void *) != 4 ||
+ __builtin_offsetof(struct v29tx_cfg, aux) == 0x18) ? 1 : -1];
+typedef char v29tx_cfg_period_size[(sizeof(void *) != 4 ||
+ sizeof(struct v29tx_cfg) == 0x1c) ? 1 : -1];
+
 void *
 V29TX_create(void *modem, const struct v29tx_cfg *params)
 {
@@ -105,7 +109,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 
-		modem = sysdep_malloc(0x28);
+		modem = sysdep_malloc(sizeof(struct v29_tx_root));
 		((struct v29_tx_root *)modem)->params = 0;
 		((struct v29_tx_root *)modem)->tx = 0;
 		fresh = 1;
@@ -243,7 +247,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		pcfg.scale = V29TX_PPS_SCALE[prm->rate];
 		pcfg.coeff_i = V29TX_PPS_IFILT;
 		pcfg.coeff_q = V29TX_PPS_QFILT;
-		pcfg.aux = (void *)(long)(&((struct v29_tx_root *)modem)->cfg)->int_0018;
+		pcfg.aux = (&((struct v29_tx_root *)modem)->cfg)->aux;
 
 		FPM_PPS_init(&((struct v29_tx_root *)modem)->tx->pps, &pcfg, fresh);
 	}

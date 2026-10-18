@@ -53,7 +53,7 @@ struct faxvmi_link;
 /**
  * @brief Install the "no modulation active" pump into a fax VMI link.
  *
- * Sets `dp->int_0014 = 0`, `dp->pack_count = 0x32`, `dp->pack_width = 8`,
+ * Sets `dp->modem = 0`, `dp->pack_count = 0x32`, `dp->pack_width = 8`,
  * `dp->unpack_width = 8`, in that order (the object's own).
  *
  * @param dp   Link slot to decorate in place.

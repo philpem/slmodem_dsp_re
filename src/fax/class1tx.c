@@ -93,10 +93,9 @@
  * and matched field-by-field against `v21fax.h`'s already-established
  * `struct v21rx_ctl`/`struct v21tx_ctl` (both typed from `V21RX_control`'s
  * and `V21TX_control`'s own reads, an earlier wave).  Zero relocations in
- * either template.  `unmapped_0000`'s leading dword is 300 (0x12c) on BOTH
- * -- V.21's own fixed 300 baud/bps rate, not a per-modulation placeholder
- * the caller overwrites the way the data modes' own templates are (F10116);
- * nothing here patches it.
+ * either template. The leading four bytes hold 300 (0x12c) in the upper
+ * halfword for RX and lower halfword for TX. Neither caller patches them
+ * (F10116); that constant alone does not establish the complete field map.
  */
 struct v21rx_ctl V21RX_CTL = {
 	{ 0x00, 0x00, 0x2c, 0x01 },	/* unmapped_0000 */
@@ -133,10 +132,8 @@ struct v21tx_ctl V21TX_CTL = {
  * WHAT DIFFERS FROM THE RX TRIO.  Every RX constructor stores the fourth
  * argument into the VMI's own `ptr_0014` (and, for V.17, into a *config*
  * field too); all three TX constructors ALSO store it into the config's
- * OWN LAST FIELD (`int_001c`/`int_0018`, `struct v29tx_cfg`'s `int_0018`
- * one field earlier, per `v27fax.h`'s own comment on the shape) -- the
- * `(void *)(long)` idiom faxadapt.h names, since that field is declared
- * `int` in each config struct and not a pointer.  And each RETURNS
+ * `aux` pointer at +0x1c (V.17/V.27ter) or +0x18 (V.29), which
+ * reaches the pulse shaper configuration. Each returns
  * `(int)cfg->bitrate`, reloaded from the freshly-built config right before
  * `ret` -- dead code under `-O3` unless the source has an explicit `return`,
  * so unlike the RX trio (`void`) these three are `int`.
@@ -175,7 +172,7 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	cfg->bitrate = bit_rate;
 	cfg->fifo_size_factor = 1;
 	cfg->int_0018 = 0;
-	cfg->int_001c = (int)(long)arg_3;
+	cfg->aux = arg_3;
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
@@ -205,7 +202,7 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	*cfg = V29TX_CFG;
 	cfg->bitrate = bit_rate;
 	cfg->fifo_size_factor = 2;
-	cfg->int_0018 = (int)(long)arg_3;
+	cfg->aux = arg_3;
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
@@ -235,7 +232,7 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	*cfg = V27TX_CFG;
 	cfg->bitrate = bit_rate;
 	cfg->fifo_size_factor = 2;
-	cfg->int_001c = (int)(long)arg_3;
+	cfg->aux = arg_3;
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
@@ -306,16 +303,15 @@ static int (*init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
  * `v29fax.h`'s `struct v29tx_control_req`).  Zero relocations in any of the
  * three (F10109).
  *
- * `pad_0000`/`unmapped_0000`'s own LOW 16 bits hold a per-modulation
- * PLACEHOLDER bit rate (0x3840/0x2580/0x2580 -- V.17/V.27ter/V.29 -- note
- * this is the OPPOSITE half from the receive-side templates, which put the
- * placeholder in the UPPER 16 bits) that `_init_transmitter` overwrites with
- * the live negotiated rate (`mov %di,...` on the HIGH 16 this time); the
- * flags/ctl1 byte's REINIT bit is OR'd in at runtime, not baked into the
- * constant.
+ * V.17 and V.29 place `bit_rate` in the leading short (+0), initially
+ * 14400 and 9600 respectively. V.27ter leaves its leading word neutral
+ * (0x2580) and places the negotiated `bit_rate` at +2, initially zero.
+ * `_init_transmitter` overwrites each named short at its native offset;
+ * the flags/ctl1 byte's REINIT bit is OR'd in at runtime.
  */
 struct v17tx_control_req V17TX_CTL = {
-	{ 0x40, 0x38, 0x00, 0x00 },	/* pad_0000  */
+	14400,				/* bit_rate, replaced at runtime */
+	{ 0x00, 0x00 },		/* pad_0002 */
 	60000,				/* int_0004  */
 	1,				/* scale_mul */
 	0x00,				/* ctl0      */
@@ -324,7 +320,8 @@ struct v17tx_control_req V17TX_CTL = {
 };
 
 struct v27tx_ctl V27TX_CTL = {
-	{ 0x80, 0x25, 0x00, 0x00 },	/* unmapped_0000 */
+	{ 0x80, 0x25 },		/* unmapped_0000: template leading word */
+	0,				/* bit_rate, replaced at runtime */
 	60000,				/* int_0004      */
 	1,				/* scale_mul     */
 	0x00,				/* mask          */
@@ -334,7 +331,8 @@ struct v27tx_ctl V27TX_CTL = {
 };
 
 struct v29tx_control_req V29TX_CTL = {
-	{ 0x80, 0x25, 0x00, 0x00 },	/* pad_0000 */
+	9600,				/* bit_rate, replaced at runtime */
+	{ 0x00, 0x00 },		/* pad_0002 */
 	60000,				/* int_0004 */
 	1,				/* scale_mul */
 	0x00,				/* ctl0     */
@@ -468,23 +466,23 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 		if (cfg->slot == VMI_SLOT_V17TX) {
 			struct v17tx_control_req req = V17TX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
+			req.bit_rate = (short)rate;
 			req.ctl1 |= V17TXCTL_CTL1_BIT1;
-			ctl.int_0014 = (int)(long)&req;
+			ctl.control_req = &req;
 			FAXVMI_control(ctx->vmi_b, &ctl);
 		} else if (cfg->slot == VMI_SLOT_V29TX) {
 			struct v29tx_control_req req = V29TX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
+			req.bit_rate = (short)rate;
 			req.ctl1 |= V29TXCTL_CTL1_BIT1;
-			ctl.int_0014 = (int)(long)&req;
+			ctl.control_req = &req;
 			FAXVMI_control(ctx->vmi_b, &ctl);
 		} else {
 			struct v27tx_ctl req = V27TX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
+			req.bit_rate = (short)rate;
 			req.flags |= V27TXCTL_FLAGS_REINIT;
-			ctl.int_0014 = (int)(long)&req;
+			ctl.control_req = &req;
 			FAXVMI_control(ctx->vmi_b, &ctl);
 		}
 	}

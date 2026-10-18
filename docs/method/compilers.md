@@ -407,8 +407,44 @@ applies.
 | `make portability` | modern GCC, 64-bit, interop and coverage/debug-site gate |
 
 The modern build stays as an explicit opt-in. It compiles in seconds against
-minutes, it is the portability check, and `make check64` still proves the tree
-is 64-bit clean. It is not the default gate and not the thing that decides.
+minutes, it is the portability check, and `make check64` verifies native
+compilation. It is not the default gate and not the thing that decides.
+
+### Native compilation and runtime portability
+
+`make check64` uses `-fsyntax-only`. It cannot establish pointer round trips,
+correct native member selection, allocation extents or runtime behaviour.
+Casting a pointer through `long` and then `int` still truncates it on LP64;
+casting the integer back through `long` only hides the cast-size warning.
+
+Fax control requests and wrapped modem handles use pointer members, including
+the configuration pointers carried into `FAXVMI_create` and the transmit
+configuration's pulse-shaper `aux` pointer. Their period offsets and sizes
+remain asserted; native allocations use the size of the recovered owner.
+The Class 1 progress callback also carries the host input/output buffers and
+output-count address as pointers throughout dispatch. An integer parameter
+would truncate those addresses before the data and HDLC handlers use them.
+Run `make safety-fax-pointer64 safety-class1-pointer64` for the bounded native
+component checks and their deliberate truncation controls. The modem
+endpoints and the progress fixture's state callback are instrumented; these
+checks do not establish a working 64-bit fax connection.
+
+The request-boundary differential fixture `t_faxctlrequests` observes valid
+creation and reinitialisation histories. It compares the initialized request
+prefix before the real control consumer sees it. This matters when a consumer
+ignores a field: lifecycle output comparisons alone missed V.17 and V.29 TX
+rate stores at +2 where the original uses +0. V.27 TX uses +2. Only V.17 TX
+request construction is reachable through the valid short-training rate-code
+histories; the V.29 correction rests on the original store address.
+
+The wider audit also found a native-layout mismatch in the V.90 parameter
+overlays: `LOOP_TYPE` moves from +0x500 to +0x504 on LP64, while raw consumers
+still address +0x500. The individual conversions and native component
+coverage are tracked in [issue #306](https://github.com/philpem/slmodem_dsp_re/issues/306).
+The fax RX constructors also retain fixed period allocation sizes and raw
+finisher offsets that diverge on LP64. Their nine measured allocations and
+the required member-access audit are tracked in
+[issue #307](https://github.com/philpem/slmodem_dsp_re/issues/307).
 
 ## The shims are gone
 

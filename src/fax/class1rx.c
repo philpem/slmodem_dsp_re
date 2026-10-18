@@ -208,14 +208,15 @@ static void (*init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
  * `struct v27rx_ctl`, `v29fax.h`'s `struct v29rx_control_req`).  Zero
  * relocations in any of the three (F10109).
  *
- * `unmapped_0000`/`pad_0000`'s own UPPER 16 bits hold a per-modulation
+ * The `bit_rate` members hold a per-modulation
  * PLACEHOLDER bit rate (0x3840/0x12c0/0x2580 = 14400/4800/9600) that
  * `_init_receiver` overwrites with the live negotiated rate before use
  * (`mov %di,...+2` in the disassembly); the flags/ctl1 byte's REINIT bit is
  * OR'd in at runtime, not baked into the constant.
  */
 struct v17rx_ctl V17RX_CTL = {
-	{ 0x00, 0x00, 0x40, 0x38 },	/* unmapped_0000 */
+	{ 0x00, 0x00 },			/* unmapped_0000 */
+	0x3840,				/* bit_rate      */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
 	0x00,				/* flags_0c      */
@@ -225,7 +226,8 @@ struct v17rx_ctl V17RX_CTL = {
 };
 
 struct v27rx_ctl V27RX_CTL = {
-	{ 0x00, 0x00, 0xc0, 0x12 },	/* unmapped_0000 */
+	{ 0x00, 0x00 },			/* unmapped_0000 */
+	0x12c0,				/* bit_rate      */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
 	0x00,				/* mask          */
@@ -235,7 +237,8 @@ struct v27rx_ctl V27RX_CTL = {
 };
 
 struct v29rx_control_req V29RX_CTL = {
-	{ 0x00, 0x00, 0x80, 0x25 },	/* pad_0000 */
+	{ 0x00, 0x00 },			/* pad_0000 */
+	0x2580,				/* bit_rate */
 	60000,				/* int_0004 */
 	{ 0, 0, 0, 0 },			/* pad_0008 */
 	0x00,				/* ctl0     */
@@ -245,9 +248,7 @@ struct v29rx_control_req V29RX_CTL = {
 /*
  * The three FRESH-CREATE finishers.  Each copies `ctx->rx_agc_mult`/`ctx->rx_agc_shift`
  * (16 bits each) into a per-modulation offset of the WRAPPED modem object
- * reached via `vmi_b->link->int_0014` cast to a pointer (the same
- * `(void *)(long)` idiom `faxadapt.c`'s `FIELD_PTR` macro already uses on
- * this exact field, just spelled out here rather than imported) -- but only
+ * reached via the wrapped modem pointer `vmi_b->link->modem` -- but only
  * on the fresh path; the reinit path skips straight to the `f12d4` write.
  * `sub` is at a DIFFERENT offset for each of the three: V.27ter +0x54,
  * V.29 +0x50, V.17 +0x60 -- read straight off `dis.py`
@@ -262,14 +263,14 @@ static void
 finish_v27rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	void *wrapped = link->modem;
 
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x54);
 
 		*(short *)((char *)sub + 0x8c) = (short)ctx->rx_agc_mult;
 		*(short *)((char *)sub + 0x8e) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
@@ -286,14 +287,14 @@ static void
 finish_v29rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	void *wrapped = link->modem;
 
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x50);
 
 		*(short *)((char *)sub + 0x88) = (short)ctx->rx_agc_mult;
 		*(short *)((char *)sub + 0x8a) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
@@ -310,14 +311,14 @@ static void
 finish_v17rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	void *wrapped = link->modem;
 
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x60);
 
 		*(short *)((char *)sub + 0xd8) = (short)ctx->rx_agc_mult;
 		*(short *)((char *)sub + 0xda) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	ctx->state = CLASS1_RX_LOOK_CARRIER;
@@ -484,26 +485,26 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 
 			ctl = FAXVMI_CTL;
 			req17.flags_0d |= V17RXCTL_REINIT;
-			*(short *)((char *)&req17 + 2) = (short)rate;
-			ctl.int_0014 = (int)(long)&req17;
+			req17.bit_rate = (short)rate;
+			ctl.control_req = &req17;
 		} else if (cfg->slot == VMI_SLOT_V29RX) {
 			req29 = V29RX_CTL;
 
 			ctl = FAXVMI_CTL;
 			req29.ctl1 |= V29RXCTL_CTL1_BIT1;
-			*(short *)((char *)&req29 + 2) = (short)rate;
-			ctl.int_0014 = (int)(long)&req29;
+			req29.bit_rate = (short)rate;
+			ctl.control_req = &req29;
 		} else {
 			req27 = V27RX_CTL;
 
 			ctl = FAXVMI_CTL;
 			req27.flags |= V27RXCTL_FLAGS_REINIT;
-			*(short *)((char *)&req27 + 2) = (short)rate;
-			ctl.int_0014 = (int)(long)&req27;
+			req27.bit_rate = (short)rate;
+			ctl.control_req = &req27;
 		}
 
 		link = ctx->vmi_b->link;
-		wrapped = (void *)(long)link->int_0014;
+		wrapped = link->modem;
 		*(short *)((char *)wrapped + 4) = (short)rate;
 
 		switch (rate) {

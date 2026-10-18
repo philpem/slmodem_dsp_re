@@ -100,7 +100,7 @@ struct fpm_mtd;
  * The transmit handle's first 32 bytes, `V27TX_create` copies wholesale from
  * the caller's `params` or, when NULL, from `V27TX_CFG` -- eight dwords, one
  * more than `struct v29tx_cfg`'s seven at the identical role: V.27ter's
- * `int_001c` is its own field, where V.29's `int_0018` fills the same role
+ * `aux` is its own pointer field, where V.29's +0x18 fills the same role
  * (`FPM_PPS_CFG`'s `aux`) one field earlier.
  *
  * `protocol`/`bitrate` are rank 2: `V27TX_status` reads the transmit
@@ -157,8 +157,7 @@ struct v27tx_cfg {
 					`faxcfg.h`'s own
 					`v27rx_cfg::short_train` (Batch 27);
 					checked and left neutral            */
-	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
-					`(void *)(long)` idiom D1250 names   */
+	void *	aux;		/* +0x1c -> FPM_PPS_CFG.aux pointer */
 };
 
 union v27_status_word {
@@ -1312,16 +1311,17 @@ int V27RX_status(void *rx, void *status);
  * though `V27RX_control` correctly stays untyped above.  Same shape
  * `v17fax.h`'s `struct v17rx_ctl` uses for the identical reason: an
  * `unmapped_NNNN` name where nothing establishes the field, a real name
- * where the `V27RXCTL_*` macros above already do.  `unmapped_0000`'s own
- * upper 16 bits hold a per-modulation placeholder bit rate the caller
- * overwrites with the live one; `flags`'s `V27RXCTL_FLAGS_REINIT` bit is
+ * where the `V27RXCTL_*` macros above already do. The `bit_rate` short
+ * at +0x02 holds a per-modulation placeholder that the caller overwrites
+ * with the live negotiated rate; `flags`'s `V27RXCTL_FLAGS_REINIT` bit is
  * OR'd in at runtime, not baked into the constant.  `unmapped_0010` is read
  * by neither `V27RX_control` nor `_init_receiver` -- the object still
  * reserves it, all zero, matching `v17rx_ctl`'s `int_0010` at the identical
  * offset.
  */
 struct v27rx_ctl {
-	unsigned char	unmapped_0000[4];
+	unsigned char unmapped_0000[2];
+	short bit_rate;		/* +0x02, _init_receiver negotiated rate */
 	/* +0x04  copied straight into the handle's `v27rx_cfg::int_0008`,
 	 * which nothing reads -- retained neutral (Batch 27), the same
 	 * disposition `v17rx_ctl::int_0004` has. */
@@ -1332,6 +1332,11 @@ struct v27rx_ctl {
 	unsigned char	unmapped_000e[2];
 	unsigned char	unmapped_0010[4];
 };
+
+typedef char v27rx_ctl_rate_offset[
+	(__builtin_offsetof(struct v27rx_ctl, bit_rate) == 2) ? 1 : -1];
+typedef char v27rx_ctl_rate_width[
+	(sizeof(((struct v27rx_ctl *)0)->bit_rate) == 2) ? 1 : -1];
 
 #define V27RXCTL_INT_0004		0x04
 #define V27RXCTL_MASK			0x0c
@@ -1386,8 +1391,11 @@ int V27RX_control(void *rx, void *req);
  * twin's own unmapped final dword), so it is a real field here, matching
  * the macro below.
  */
+/* The leading template word remains neutral. The caller writes a separate
+ * negotiated-rate short at +2; the control consumer does not read it. */
 struct v27tx_ctl {
-	unsigned char	unmapped_0000[4];
+	unsigned char	unmapped_0000[2];
+	short		bit_rate;	/* +0x02, _init_transmitter negotiated rate */
 	/* +0x04  copied into the handle's `v27tx_cfg::int_0008`, which nothing
 	 * reads -- retained neutral (Batch 27). */
 	int		int_0004;
@@ -1400,6 +1408,11 @@ struct v27tx_ctl {
 	 * keeps its offset -- retained neutral (Batch 27). */
 	int		int_0010;
 };
+
+typedef char v27tx_ctl_rate_offset[
+	(__builtin_offsetof(struct v27tx_ctl, bit_rate) == 2) ? 1 : -1];
+typedef char v27tx_ctl_rate_width[
+	(sizeof(((struct v27tx_ctl *)0)->bit_rate) == 2) ? 1 : -1];
 
 #define V27TXCTL_INT_0004		0x04
 #define V27TXCTL_SCALE_MUL		0x08

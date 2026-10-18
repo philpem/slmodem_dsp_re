@@ -42,13 +42,22 @@ the separate strict completion check with `make partial-compare-exact`.
 Record the compiler, source revision and ordered input manifest with either
 measurement.
 
-The subsequent `_init_receiver` shared-control recovery preserves that exact
+The `_init_receiver` shared-control checkpoint preserves that exact
 set: no gains or losses. Its body changes from 1,769 to 1,560 bytes against
 the original's 1,583, while the other four bodies in its translation unit and
 all allocated non-text contents remain unchanged. The ordered partial link
 then has 72,362 matching positioned bytes and 1,004 matching relocation
 records, with the same denominators above. It remains different from the
 reference; these aggregate changes are not new exact functions.
+
+The following fax field and pointer repairs make `_tx_nulls_state` exact at
+435 bytes: **1,110 of 1,852 exact functions**, covering **128,339 of 720,125
+original function bytes**, with no exact losses. The residual grades are 32
+`REGALLOC`, 77 `BYTES` and 633 `SIZE`. The ordered partial link has 72,220
+matching positioned bytes and 1,002 matching relocation records, with the
+same reference denominators above; it still differs. Pointer typing changes
+three nonexact constructor bodies and their following layout, so the
+positioned-match count decreases relative to the shared-control checkpoint.
 
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU

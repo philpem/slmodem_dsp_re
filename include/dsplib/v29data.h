@@ -183,7 +183,7 @@ struct v29tx_cfg {
 	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
 	int	fifo_size_factor; /* +0x14  1 -> FIFO capacity, * 3 * 16,
 					  `v17tx_cfg`'s own field, same name */
-	int	int_0018;	/* +0x18  0; `V29TX_create` passes it as `FPM_PPS_CFG::aux`, itself unnamed -- retained neutral (Batch 27) */
+	void *aux;	/* +0x18 -> FPM_PPS_CFG::aux; init stores caller pointer */
 };
 
 extern struct v29tx_cfg V29TX_CFG;

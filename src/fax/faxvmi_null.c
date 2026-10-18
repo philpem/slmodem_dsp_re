@@ -33,7 +33,7 @@ void
 null_create(struct faxvmi_link *dp, const void *cfg)
 {
 	(void)cfg;
-	dp->int_0014 = 0;
+	dp->modem = 0;
 	dp->pack_count = 0x32;
 	dp->pack_width = 8;
 	dp->unpack_width = 8;

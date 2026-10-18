@@ -70,8 +70,8 @@ struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
  * identical shape.  Nothing in the object calls `V17RX_control` directly:
  * its only referrer is the lowercase adapter `v17rx_control`
  * (`faxadapt.c`), which forwards this argument unchanged from its own
- * caller, so nothing reconstructed corroborates the type further than
- * these four loads do.
+ * caller. `_init_receiver` also writes the negotiated-rate short at
+ * +0x02 when building this request; the control consumer does not read it.
  *
  * `int_0004` and `short_train` are `int`, both loaded and stored whole
  * (`mov`/`mov`, no narrowing).  `flags_0c` and `flags_0d` are `unsigned
@@ -84,7 +84,8 @@ struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
  * read by nothing, so it stays an offset.  Batch 25.
  */
 struct v17rx_ctl {
-	unsigned char	unmapped_0000[0x04];
+	unsigned char unmapped_0000[2];
+	short bit_rate;		/* +0x02, _init_receiver negotiated rate */
 	/* +0x04 -> cfg->int_0008, which nothing reads back; retained
 	 * neutral (Batch 25). */
 	int		int_0004;
@@ -95,6 +96,11 @@ struct v17rx_ctl {
 	/* +0x10 -> cfg->short_train, REINIT only; rank 2 (Batch 25). */
 	int		short_train;
 };
+
+typedef char v17rx_ctl_rate_offset[
+	(__builtin_offsetof(struct v17rx_ctl, bit_rate) == 2) ? 1 : -1];
+typedef char v17rx_ctl_rate_width[
+	(sizeof(((struct v17rx_ctl *)0)->bit_rate) == 2) ? 1 : -1];
 
 /*
  * `flags_0c`.  Both bits clear a field of the demodulator state
@@ -504,10 +510,9 @@ struct v17_status {
  * constant's own comment for what little is established about what it
  * steers.
  *
- * `int_001c` becomes `FPM_PPS_CFG.aux`, read back and stored through to
- * the shaper's own configuration -- the same "aux carries the caller's
- * own field, across the `(void *)(long)` idiom" shape D1250 already names
- * for `V29TX_create`'s `int_0018`, one field over because V.17's config
+ * `aux` is the caller's pointer, copied through `FPM_PPS_CFG.aux` into
+ * the shaper's own configuration. It occupies period offset +0x1c, one
+ * field beyond V.29's +0x18 because V.17's config
  * carries one more dword than V.29's (`int_0010`, below, which nothing
  * traced reads at all).
  *
@@ -542,7 +547,7 @@ struct v17tx_cfg {
 					 * the dword V.29's own cfg lacks    */
 	int		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16     */
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
-	int		int_001c;	/* +0x1c -> FPM_PPS_CFG.aux          */
+	void *		aux;	/* +0x1c -> FPM_PPS_CFG.aux          */
 };
 
 union v17_result {
@@ -1960,8 +1965,11 @@ int V17TX_status(void *params, struct v17_status *status);
  * in this project phase, and its own copy is a candidate for whoever
  * visits it next.  Finding F10144.
  */
+/* The caller writes the negotiated-rate short at +0; the control consumer
+ * does not read it. The trailing two template bytes remain unmodelled. */
 struct v17tx_control_req {
-	unsigned char	pad_0000[0x04];
+	short		bit_rate;	/* +0x00, _init_transmitter negotiated rate */
+	unsigned char	pad_0002[2];
 	int		int_0004;	/* +0x04 -> handle's v17tx_cfg::int_0008 */
 	int		scale_mul;	/* +0x08 -> fpm_pps_cfg::scale, * table  */
 	unsigned char	ctl0;		/* +0x0c */
@@ -1981,6 +1989,11 @@ struct v17tx_control_req {
 					 * alignment reproduces the gap exactly.
 					 * See V17TX_CTLREQ_ASSERT_OFF below   */
 };
+
+typedef char v17tx_control_req_rate_offset[
+	(__builtin_offsetof(struct v17tx_control_req, bit_rate) == 0) ? 1 : -1];
+typedef char v17tx_control_req_rate_width[
+	(sizeof(((struct v17tx_control_req *)0)->bit_rate) == 2) ? 1 : -1];
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V17TX_CTLREQ_ASSERT_OFF(field, off) \

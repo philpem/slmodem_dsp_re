@@ -9,7 +9,7 @@
  * D955/F8587: every `struct faxvmi_link` field is planted with a
  * recognisable non-zero pattern before every call and checked afterward --
  * `null_delete`/`null_status`/`null_control` touch none of it, and
- * `null_create` touches exactly `int_0014`/`pack_count`/`pack_width`/
+ * `null_create` touches exactly `modem`/`pack_count`/`pack_width`/
  * `unpack_width`, so a wrong-offset write anywhere else is caught even
  * though nothing here NEEDS those fields to be real.  `null_process` is the
  * one exception -- it DEREFERENCES `dp->ptr_0000` as the destination it
@@ -73,8 +73,8 @@ run_create(void)
 		ref_null_create(&dp_a, (p & 1) ? cfgbuf : NULL);
 		null_create(&dp_b, (p & 1) ? cfgbuf : NULL);
 
-		diff_eq_int("create: int_0014 (%ld)", dp_b.int_0014,
-			    dp_a.int_0014, tag);
+		diff_eq_int("create: modem (%ld)", dp_b.modem == dp_a.modem,
+			    1, tag);
 		diff_eq_int("create: pack_count (%ld)", dp_b.pack_count,
 			    dp_a.pack_count, tag);
 		diff_eq_int("create: pack_width (%ld)", dp_b.pack_width,
@@ -204,8 +204,8 @@ run_process(void)
 		/* every field but the two buffer pointers, unchanged */
 		diff_eq_int("process: pack_count (%ld)", dp_b.pack_count,
 			    dp_a.pack_count, tag);
-		diff_eq_int("process: int_0014 (%ld)", dp_b.int_0014,
-			    dp_a.int_0014, tag);
+		diff_eq_int("process: modem (%ld)", dp_b.modem == dp_a.modem,
+			    1, tag);
 
 		if (count_a > 0 && count_a <= IN_MAX)
 			copied++;
