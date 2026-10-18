@@ -367,6 +367,14 @@ observable.
 **If a caller-supplied state is ever introduced**, this must be revisited
 first — it is a double-free and a free-of-non-heap in one.
 
+**Allocation failure in `create`.** The native allocation path also proceeds
+without testing the returned pointer. Bug-reproduction builds now preserve
+that path; normal builds retain the reconstruction's defensive NULL return
+under `#ifndef DSPLIB_REPRODUCE_BUGS`. The successful-construction fixtures
+pass, but do not prove equivalent behavior after allocation failure.
+[The allocation-boundary audit](fpm-tone-allocation-boundary.md) records the
+native branch evidence and complete-TU comparison.
+
 ---
 
 ## Bugs found in the reconstruction (not deviations)
