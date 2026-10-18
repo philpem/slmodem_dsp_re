@@ -291,15 +291,6 @@ const short V32_S_DATA_COEF[15] = {
 #define V32HDX_SHORT_AE		0xae
 
 /*
- * The scratch register bank is SEVEN shorts here and the accessors bound it
- * at FIVE.  `LoadReg`/`StoreReg` reject an index above 4 (v32seq.h), and this
- * function clears +0x3c through +0x48 -- seven -- with seven separate stores.
- * Recorded rather than reconciled: nothing says the two extra words belong to
- * the array, and nothing says they do not.  Finding F8654.
- */
-#define V32HDX_REGS_CLEARED	7
-
-/*
  * The five bit rates the two ladders recognise, and the rate index each one
  * maps to is v32seq.h's.  Written as the object writes them -- four 16-bit
  * compares in this order, with index 0 as the fall-through.
@@ -784,10 +775,19 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	((struct v32_dec *)FSE(fp)->cfg.owner)->scram_tap =
 		(short)(unsigned short)SDM_RX(fp)->tap1;
 
-	/* The scratch register bank, and the multi-tone detector. */
+	/*
+	 * Native code clears seven consecutive shorts with separate stores.
+	 * LoadReg/StoreReg expose only the first five. The original array
+	 * extent is unresolved; these accesses respect our current layout.
+	 */
 	hdx = HDX(modem);
-	for (i = 0; i < V32HDX_REGS_CLEARED; i++)
-		hdx->regs[i] = 0;
+	hdx->regs[0] = 0;
+	hdx->regs[1] = 0;
+	hdx->regs[2] = 0;
+	hdx->regs[3] = 0;
+	hdx->regs[4] = 0;
+	hdx->short_46 = 0;
+	hdx->short_48 = 0;
 	hdx->int_88 = 0;
 
 	/*
