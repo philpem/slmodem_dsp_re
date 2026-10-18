@@ -934,6 +934,7 @@ refs:
 # never reached.  A red gate must report everything it knows, not just the
 # first thing that went wrong.  Finding 7002.
 #
+	@$(PYTHON) tools/ci/test_refcheck.py
 	@rc=0; $(PYTHON) tools/refcheck.py || rc=1; \
 	 $(PYTHON) tools/anchorcheck.py || rc=1; \
 	 exit $$rc
