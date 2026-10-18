@@ -23,8 +23,8 @@
  },
  {
   "label": "I and Q are swapped",
-  "find": "\tstate->icoff = cfg->icoff;\n\tstate->qcoff = cfg->qcoff;",
-  "replace": "\tstate->icoff = cfg->qcoff;\n\tstate->qcoff = cfg->icoff;"
+  "find": "\tstate->icoff = copied.icoff;\n\tstate->qcoff = copied.qcoff;",
+  "replace": "\tstate->icoff = copied.qcoff;\n\tstate->qcoff = copied.icoff;"
  },
  {
   "label": "the history is cleared only as far as the coefficient loop reached",

@@ -382,10 +382,12 @@ V22_FSE_receive(struct v22_fse *state, const short *in, unsigned short *out,
 void
 V22_FSE_init(struct v22_fse *state, const struct v22_fse_cfg *cfg, int fresh)
 {
+	/* Capture both coefficient owners before publishing either pointer. */
+	struct v22_fse_cfg copied = *cfg;
 	short i;
 
-	state->icoff = cfg->icoff;
-	state->qcoff = cfg->qcoff;
+	state->icoff = copied.icoff;
+	state->qcoff = copied.qcoff;
 
 	state->mu_sel = 0;
 	state->pll_sel = 0;
