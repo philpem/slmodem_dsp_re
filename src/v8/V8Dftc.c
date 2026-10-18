@@ -64,18 +64,19 @@ v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
 {
 	short j;
 
-	for (j = 0; j < nsamples; j++) {
+	for (j = 0; j < nsamples; j++, samples++) {
 		short i;
 
 		for (i = 0; i < nbins; i++) {
 			struct v8_dft_bin *b = &bins[i];
 			unsigned phase;
 			unsigned idx;
-			int x = samples[j];
+			int x;
 
 			phase = ((unsigned)(unsigned short)b->phase
 				 + (unsigned short)b->step) & 0x3fff;
 			b->phase = (short)phase;
+			x = *samples;
 
 			idx = phase >> 6;
 			b->re += (v8_cosread(idx) * x) >> 6;
