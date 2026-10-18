@@ -36,6 +36,9 @@ jobs:
       - name: Self-test metric status logic
         run: python3 tools/ci/period_metrics.py --self-test
 
+      - name: Self-test mutation policy and subset isolation
+        run: python3 -m unittest discover -s test/safety -p 'test_mutation*.py' -v
+
       - name: Self-test bounded induction jump-table proof
         run: python3 tools/toolchain/induction_jumptable_controls.py
 

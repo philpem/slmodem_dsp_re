@@ -31,6 +31,7 @@ identifies the evidence and tools that need adapting for another target.
 | [Build recovery](recovering-build.md) | GCC provenance, option experiments, compiler stages and identity checks. |
 | [Compiler policy](compilers.md) | Period compiler authority, portability and floating-point boundaries. |
 | [Experiment design](experiment-design.md) | Baseline controls, crossed experiments and stopping conditions. |
+| [Mutation policy](mutation-policy.md) | Optional targeted investigations; no mandatory snapshot refreshes. |
 | [Evidence](evidence.md) | What each form of evidence establishes. |
 | [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
 | [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |

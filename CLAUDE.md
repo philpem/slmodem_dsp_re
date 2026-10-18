@@ -109,6 +109,27 @@ pass, leave it out and record the attempt. The goal is a replacement that
 behaves *identically* to the blob, so any test disagreeing with the blob is a
 hard failure whatever build it came from — never a tolerance to widen.
 
+## Mutation policy (issue #296)
+
+Mutation execution and snapshot maintenance are optional investigations.
+No commit, merge, release, `make test`, `make portability` or `make phase-full`
+requires a snapshot refresh or whole-tree mutation campaign. Historical verdicts
+remain available; stale records must not be quoted as current evidence.
+
+Use `tools/mutate.py --suite NAME --only TEXT --verbose --jobs 1` only to
+answer a named fixture-sensitivity question. Establish valid inputs and a green
+baseline first, inspect which assertion fired, and report selected/total
+mutants, exclusions, compiler, wall/CPU time and independently verified findings.
+A kill alone does not establish fixture validity, reachability or equivalence.
+A known negative control is required when relying on a detector's clean result.
+Prioritise meaningful period differential coverage of non-binary-identical
+functions. Fuzzing is an optional way to generate inputs for that same oracle,
+not a replacement gate or an assumed next priority.
+`tools/mutsnap.py --update NAME` and `--verify NAME` require explicit suite names;
+no whole-tree refresh is implicit. Keep affected anchors valid: `refs` still
+runs structural anchor validation without compiling mutants. See
+[mutation policy](docs/method/mutation-policy.md) for commands and evidence.
+
 Run `make phase`, not `make test`. `make phase` is now the period/compiler and
 structural reconstruction gate by default. Modern GCC, 64-bit, interop and
 coverage tiers are explicit portability checks (`make portability` or
@@ -401,8 +422,9 @@ the SUITE and not the row. That silently removed nine suites and 647 verdicts
 before anyone counted them (findings F2157 and F3002). Three binaries now carry
 one declared check each for this reason -- `t_v90p4dnan`, `t_v92ecnan`,
 `t_v90adidnan` -- and **none of them has a mutation suite**, because a
-registered suite that can never be recorded reads MISSING to
-`mutsnap.py --check` and fails the gate. `t_v92ecparams` is the same move the
+registered suite with a red baseline cannot produce meaningful mutation
+verdicts. Optional `mutsnap.py --check` reports its bookkeeping status; it is
+not a build or merge gate. `t_v92ecparams` is the same move the
 other way round: three GREEN members lifted out of a declared parent, so it
 keeps its suite. Split the VALUE where you can rather than the group -- the
 blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of

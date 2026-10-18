@@ -1,3 +1,7 @@
+> Current policy: mutation execution is optional and targeted. Historical
+> examples below do not require snapshot refreshes or campaigns. See the
+> [mutation policy](mutation-policy.md).
+
 # The five oracles, and what each cannot see
 
 Every number here cites `docs/findings.md` in this tree. Nothing in this file

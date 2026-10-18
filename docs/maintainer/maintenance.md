@@ -77,7 +77,10 @@ needs its own reproducible follow-up. See
 
 When improving test coverage, demonstrate that a meaningful perturbation is
 detected. Maintain affected mutation anchors and report uncaught/unusable
-cases. A stale mutation snapshot is historical evidence, not a fresh result.
+cases when using targeted mutation. Mutation execution and snapshot maintenance
+are optional; commits and merges require no whole-tree refresh. A stale snapshot
+is historical evidence. See the
+[mutation policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/mutation-policy.md).
 
 ### Example: detecting a scheduling regression
 
@@ -89,17 +92,18 @@ non-crossing case checks that the test responds to the latch transition.
 Reversing the two data loops must fail its training-counter oracle and state
 comparison. Merely showing both loops run would miss that dependency.
 
-Run the focused period test and measure the complete owning mutation suite:
+Run the focused period test. If investigating this specific sensitivity,
+optionally run just the loop-order mutation and inspect the failing assertion:
 
 ```sh
 make period T=t_v34datapump J=4
-python3 tools/mutsnap.py --update --jobs 4 v34datapump
-python3 tools/mutsnap.py --check
+python3 tools/mutate.py --suite v34datapump \
+    --only "the receiver loop runs before the modulator loop" --verbose --jobs 1
 ```
 
-`--update` runs the mutations before recording their verdicts and dependency
-key. Finish source, fixture and mutation edits first; never refresh keys by
-hand. A current result for this suite does not refresh other suites. The
+A filtered run reports its selection and cannot become a full-suite snapshot.
+If a complete suite is needed for an investigation, `tools/mutsnap.py --update v34datapump` executes and records only that named suite. Never refresh keys by
+hand or claim stale records are current. The
 [coverage record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/maintainer-offset-access.md#loop-order-coverage)
 keeps the measured denominators and the distinction between component,
 synthetic and public-call evidence.

@@ -2,6 +2,13 @@
 
 Every number cites `docs/findings.md` in this tree.
 
+## Current mutation gate policy
+
+[Issue #296](mutation-policy.md) retires mandatory snapshot maintenance and
+whole-tree refreshes. The historical examples below explain detector failure
+modes; they do not impose a campaign or merge obligation. `refs` retains anchor
+validation. `mutation-snapshot` is optional bookkeeping inspection.
+
 ## The pattern
 
 **A result indistinguishable from success.**

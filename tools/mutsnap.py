@@ -1,68 +1,16 @@
 #!/usr/bin/env python3
-"""
-What every mutation suite last said, and whether that is still true of THIS tree.
+"""Optional historical mutation records and source-dependency hashes.
 
-WHY THIS EXISTS
+No build, merge or release gate requires these records to be current.
+--check inspects bookkeeping without executing mutants. --update and --verify
+require explicit suite names; there is no implicit whole-tree campaign.
 
-Every batch here runs its suites twice -- once for a baseline, once after --
-because `make phase` cannot see a lost mutation: an UNUSABLE mutation does not
-fail a run (finding F347) and four batches have silently lost mutations that
-way.  The baseline half is pure repetition of what the previous batch already
-measured, and it is half the mutation cost of every batch.
-
-The obvious fix is to write the numbers down.  The tree has been doing that
-for a year, in `docs/findings.md`, and it does not work: those numbers are
-snapshots from whichever batch created each suite and nothing has ever made
-them keep up.  `v34hsmst44` is recorded at 77 mutations and has 215.  A number
-nobody can tell is stale is worse than no number, because it gets quoted.
-
-So this file records the verdicts WITH A KEY THAT SAYS WHAT THEY DESCRIBE.  If
-the key still matches, the recorded verdicts are valid by construction and a
-batch may use them as its baseline.  If it does not, the entry says so and the
-suite has to be run.  Staleness becomes detectable WITHOUT running anything,
-which is the whole point -- checking it by re-measuring is the cost we are
-trying to avoid.
-
-WHAT THE KEY COVERS, AND WHY IT IS COARSE ON PURPOSE
-
-A first design keyed each suite on its own mutated source plus its mutation
-JSON.  That is UNSOUND.  A suite's verdicts depend on everything linked into
-its test binary, and `OBJ` in the Makefile is `find src -name '*.c'` -- every
-test binary links ALL of `src/`.  So editing `V34RX.c` can change
-`v34hshak`'s verdicts while both of those hashes still match, and the snapshot
-would read valid while being wrong.  That is the failure mode this file exists
-to kill, reintroduced one level down.
-
-The key is therefore over everything that can reach the binary:
-
-    Makefile, src/, include/, test/harness/    -- the shared closure
-    test/unit/t_<binary>.c                     -- the suite's own driver
-    test/mutations/<suite>.json                -- its mutations
-
-Coarse, so almost any edit invalidates almost every entry.  That is correct
-rather than unfortunate: with every binary linking every object, an edit in
-`src/` genuinely can move any suite, and a precise key here would be a
-precise lie.  Coarse-and-correct beats precise-and-unsound for a gate whose
-only job is detecting staleness.
-
-WHAT IT DOES NOT DO
-
-It does not make the AFTER pass free, and nothing can: a batch that changes
-`V34hshak.c` still has to run all six suites pinned to it before it can claim
-anything.  What it removes is the BEFORE pass, for suites whose key still
-matched at the fork point.  "Baselines are committed now" does not mean "skip
-the before" -- it means the before was already run, by whoever last touched
-the tree, and is on record with the key to prove it.
-
-DETERMINISM
-
-Verdicts have to be reproducible or none of this holds.  `v34hshak`'s 209
-were identical across a serial run and two eight-way parallel runs (finding
-F541), which is the evidence for it.  The one classification that is NOT
-reproducible in principle is `hang` -- a mutation caught by the 120-second
-timeout rather than by a check -- because a loaded machine can move it.  No
-suite in this tree has ever produced one; if one appears, it is recorded as
-`hang` and exempted from the comparison, and this comment stops being true.
+The coarse key covers Makefile, src/, include/, test/harness/, tools/mutate.py,
+the suite driver and its mutation JSON. Tests link all of src/, so a key over
+only the mutated translation unit would miss dependencies. The key does not
+identify the compiler or all external inputs: a matching key alone cannot
+establish a comparable baseline. Record compiler identity with any new result.
+See docs/method/mutation-policy.md for the policy and evidence limits.
 """
 
 import argparse
@@ -110,8 +58,8 @@ def digest_path(h, path):
 #
 # THE SHARED CLOSURE IS HASHED ONCE, NOT ONCE PER SUITE.
 #
-# `--check` runs inside `make test` inside `make phase`, so it is on the path
-# everybody takes constantly and has to be cheap.  Hashing Makefile + src/ +
+# `--check` is optional inspection. Hash the shared closure once so its cost
+# does not grow with the number of suites.  Hashing Makefile + src/ +
 # include/ + test/harness/ is ~8 MB; doing it for each of 48 suites is 384 MB
 # of pointless work for a value that is identical every time.
 #
@@ -284,7 +232,7 @@ def cmd_update(args):
     snap.setdefault("_", HEADER)
     snap.setdefault("suites", {})
     reg = registered()
-    names = args.suite or sorted(reg)
+    names = args.suite
     failed = []
     for name in names:
         if name not in reg:
@@ -342,37 +290,9 @@ def cmd_update(args):
 
 
 #
-# WHAT FAILS, AND WHY STALE DOES NOT
-#
-# The obvious wiring is "fail if any entry is stale", and it is wrong.  This
-# runs inside `make test`, which runs inside `make phase`, which CLAUDE.md
-# tells everyone to run constantly.  Almost any edit to `src/` invalidates
-# almost every entry, so a strict gate here is RED from a batch's first edit
-# until it has re-run its suites -- which is most of a batch's life.
-#
-# Two things then happen, and the second is the dangerous one.  People learn
-# to ignore a red that is red by default.  And the cheapest way to clear it is
-# `mutsnap --update`, which would refresh the record with numbers nobody
-# examined -- manufacturing exactly the false baseline this file exists to
-# prevent, now with a key attached vouching for it.  A snapshot refreshed as a
-# chore is worse than no snapshot: `docs/findings.md`'s stale numbers at least
-# LOOK old.
-#
-# It is the same lesson as the `tag:` heuristic that was measured and deleted
-# (six flags, six false): a check that cries wolf is worse than no check.
-#
-# So staleness is REPORTED and does not fail -- it is the normal state during
-# work, and `--verify` and the STALE label already stop a stale entry being
-# quoted as a baseline.  What fails is what is always a defect:
-#
-#   MISSING       a registered suite that has never been recorded at all
-#   ORPHANED      a recorded suite no longer in suites.json
-#   INCONSISTENT  an entry whose summary line disagrees with its own
-#                 per-label verdicts -- i.e. one edited by hand
-#
-# `--strict` adds staleness, and is what a MERGE has to pass: at a merge the
-# work has just been verified, so refreshing the record is honest there and
-# nowhere else.
+# Optional inspection fails on missing, orphaned or inconsistent records.
+# Staleness is reported; --strict can fail on it for an explicit investigation.
+# Neither mode is a merge requirement, and neither executes mutants.
 #
 def summary_counts(text):
     """(mutations, uncaught, unusable, equivalent) out of the summary line."""
@@ -451,8 +371,8 @@ def cmd_check(args):
           "%d declared-unscoreable, of %d registered"
           % (len(current), len(stale), len(missing), len(declared), len(reg)))
     if stale:
-        print("  A stale entry is not a baseline -- re-run those suites "
-              "rather than quoting it.")
+        print("  Stale entries are historical evidence, not current baselines. "
+              "No refresh is required; run named suites only when needed.")
     if declared:
         print("  A declared suite is not a defect either: its binary exits "
               "non-zero on the unmutated modern source, so mutate.py cannot "
@@ -467,7 +387,7 @@ def cmd_verify(args):
     snap = load(SNAP, {})
     reg = registered()
     have = snap.get("suites", {})
-    names = args.suite or sorted(have)
+    names = args.suite
     bad = 0
     for name in names:
         if name in reg and declared_entry(reg[name]) is not None:
@@ -501,23 +421,27 @@ def main():
     ap.add_argument("--update", action="store_true",
                     help="run the suites and record what they said")
     ap.add_argument("--check", action="store_true",
-                    help="hash only: which recorded entries still describe "
-                         "this tree.  Runs nothing and takes milliseconds")
+                    help="inspect source keys and bookkeeping without executing mutants")
     ap.add_argument("--verify", action="store_true",
                     help="run the suites and diff every label against the "
                          "record -- the mechanical form of 'the same seven "
                          "NOT CAUGHT, matched by name'")
     ap.add_argument("--strict", action="store_true",
-                    help="also fail on a STALE entry.  What a MERGE has to "
-                         "pass; deliberately not what `make phase` runs, see "
-                         "the comment above cmd_check")
+                    help="also fail on stale source keys during optional inspection; "
+                         "never a merge requirement")
     ap.add_argument("--jobs", type=int, metavar="N",
-                    help="passed through to mutate.py.  Unset means mutate.py "
-                         "picks, which is HALF the cores -- deliberately not "
-                         "all of them, since a full re-record is tens of "
-                         "minutes and should leave the machine usable")
-    ap.add_argument("suite", nargs="*", help="default: all of them")
+                    help="worker count passed through to mutate.py for named suites")
+    ap.add_argument("suite", nargs="*", help="explicit suites for --update or --verify")
     args = ap.parse_args()
+    if sum((args.update, args.check, args.verify)) > 1:
+        ap.error("choose only one of --update, --check or --verify")
+    if args.check and args.suite:
+        ap.error("--check inspects all records; suite names select execution only")
+    if (args.update or args.verify) and not args.suite:
+        ap.error("--update and --verify require explicit suite names; "
+                 "whole-tree refreshes are retired")
+    if args.suite and not (args.update or args.verify):
+        ap.error("suite names require --update or --verify")
     if args.update:
         return cmd_update(args)
     if args.verify:

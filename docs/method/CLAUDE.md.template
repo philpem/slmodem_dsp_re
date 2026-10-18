@@ -66,9 +66,9 @@ Run `<PHASE>`, not `<CHEAPER>`.
 3. **Build the differential harness before the second function.** It is not
    overhead: it is what makes writing fast. One function here took three
    attempts and each fault was localised in one run.
-4. **Build the mutation runner early too.** "The test passes" and "the test
-   would have caught this being wrong" are different claims, and only the
-   second is worth writing down.
+4. **Use targeted mutation for a named fixture-sensitivity question.** Record
+   both baseline agreement and whether the intended assertion rejects the
+   planted alternative. No campaign or snapshot refresh is mandatory.
 5. **Start `<FINDINGS>` on day one, with finding 1.** Everything else in this
    file rests on it: a rule keeps its force only while it carries the
    measurement that earned it, and you cannot cite a measurement you did not
@@ -124,7 +124,9 @@ No single tier is sufficient and none subsumes another. Full argument in
    over values it never takes (finding 613), a diagnostic call site that is
    absent (finding 134), the order of two stores that leave the same bytes
    (finding 573).
-2. **Mutation** — break the code on purpose and check the tests notice. It
+2. **Optional targeted mutation** — investigate a named fixture blind spot.
+   No global snapshot refresh is required. Break the code on purpose and
+   inspect which assertion fails. It
    answers "would the test have caught this being wrong", which a green run
    does not. It cannot tell you the test is *right*.
 3. **Codegen against the period compiler** — did the same compiler, given our
