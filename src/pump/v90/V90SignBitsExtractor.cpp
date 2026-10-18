@@ -224,17 +224,23 @@ V90SignBitsExtractor::applyFrameAction(ACTIONS action, unsigned char *in,
  * %al,0x8(%esi,%ebx,1)` -- a byte read back to where it came from), which is
  * what a `x = cond ? f(x) : x` compiles to and is why it is written that way.
  *
- * A THIRD STATE IS REACHABLE AND THE OBJECT DOES NOT HANDLE IT.  `reset`
+ * A THIRD STATE IS CALLABLE AT THE COMPONENT BOUNDARY.  `reset`
  * stores its second argument into `state` unfiltered, and with anything but 0
  * or 1 there the object falls past both tests and switches on whatever its
- * `%edi` happened to hold on entry.  This reconstruction gives `action` a
- * defined value instead -- one instruction, and no behaviour that is defined
- * on both sides.  docs/deviations.md D386.
+ * `%edi` happened to hold on entry.  The reproduction build leaves `action`
+ * unset too.  The normal build
+ * chooses V90SBE_PASS_ALL for this otherwise indeterminate arm.  Neither
+ * choice establishes a defined output for the reference on states above 1.
+ * docs/deviations.md D386.
  */
 void
 V90SignBitsExtractor::process(unsigned char *in, unsigned char *out)
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
+	ACTIONS action;
+#else
 	ACTIONS action = V90SBE_PASS_ALL;
+#endif
 	unsigned int i;
 
 	if (state == 0) {

@@ -7528,43 +7528,51 @@ hold. The bound that could overrun a buffer is enforced; the pointer that
 could be null is not.
 ## D385 ✅ `V90Demapper::hardDecision` reads `sign` uninitialised on its refusal arm
 
-*Batch of 2026-08-16, from `V90Demapper::hardDecision` (blob 0x31050).
-**Reachability: only when `sampleCount >= sampleCapacity`, which is the arm
-that prints "Hard decision input buffers are full" and decides nothing.**
-**Observability: none -- the value is multiplied by `level`, which is zero on
-that arm and on no other.**  Status: verified bit-exact with `sign`
-initialised.  Fix class: initialised to 1 at its declaration; one instruction,
-no behaviour.*
+*The reference at 0x31050 leaves `sign` unset when
+`sampleCount >= sampleCapacity`, the diagnostic arm that prints "Hard
+decision input buffers are full". The reproduction build now leaves the
+local unset under `DSPLIB_REPRODUCE_BUGS`; the normal build retains its
+initializer of one.*
 
-The object assigns 0x20(%esp) in both arms of the sign test and nowhere else,
-then loads it at 0x31229 -- on a path that reaches the load without having
-taken either arm -- and multiplies it by a register it has just zeroed. So the
-original source declares the variable without an initialiser and the C++ rules
-make that path undefined. Reproducing the undefinedness would put a genuine
-uninitialised read into `src/`, where a later compiler is entitled to delete
-the multiply; initialising costs one `mov` on a diagnostic path and makes the
-function total. The differential suite drives the arm on every trial mode and
-both sides return zero.
+The reference assigns 0x20(%esp) in both arms of the sign test. The refusal
+path skips those stores, then loads the slot at 0x31229 and multiplies it by
+zero. That instruction sequence returns zero regardless of the slot's bits;
+the corresponding C++ read remains undefined. The period differential suite
+covers refusal and requires the measured zero result, without asserting an
+indeterminate intermediate value.
+
+The old unconditional initializer invented a source assignment on this path.
+Guarding it restores the witnessed unset local and retains the normal build's
+fallback. Under the retained Gentoo profile, the function changes from 559 to
+560 bytes against the reference's 660; it remains nonexact. All thirteen
+other shared full-translation-unit bodies and relocation targets are unchanged.
+The focused Gentoo period run passed `t_v90demap`, including 88,328
+`hardDecision` checks.
 
 ## D386 ✅ `V90SignBitsExtractor::process` switches on an unset action when its state is neither 0 nor 1
 
-*Batch of 2026-08-16, from `V90SignBitsExtractor::process` (blob 0x31ab0).
-**Reachability: `reset`'s second argument is stored into `state` unfiltered, so
-any caller that seeds it above 1 reaches it -- `reset` is not yet written and
-no caller is.**  **Observability: total, if it is ever reached -- the switch
-selects an inversion pattern from whatever `%edi` held on entry.**  Status: our
-version verified bit-exact over states 0 and 1; states above 1 cannot be
-compared because the blob has no defined answer.  Fix class: `action` is
-initialised to `V90SBE_PASS_ALL`, the arm a zero register would have selected.*
+*The reference at 0x31ab0 leaves its action register unset outside states 0
+and 1. The reproduction build now leaves the source local unset under
+`DSPLIB_REPRODUCE_BUGS`; the normal build retains `V90SBE_PASS_ALL` as its
+fallback. Defined-state differential coverage compares states 0 and 1 only.*
 
-The object tests `state == 0` and then `state == 1` and falls out of both with
-its action register never written (0x31abf..0x31acb, then 0x31b6a reading
-`%edi`). This is a live gap and not a dead one: nothing in the class clamps
-`reset`'s argument. It is recorded rather than silently repaired because the
-choice of `V90SBE_PASS_ALL` is OURS -- the object has no answer to reproduce --
-and because the batch that writes `reset` should check whether any caller
-passes a third value, in which case this becomes a real behavioural difference
-rather than a formal one.
+The reference tests `state == 0` and then `state == 1` and falls out of both
+without writing `%edi` before the action switch (0x31abf..0x31acb, then
+0x31b6a). `reset` stores its second argument without filtering it, so this
+arm is callable at the component boundary; this does not establish that a
+modem lifecycle reaches it. Its output depends on an incoming register and
+has no defined C++ value to compare. Tests must not assert equality of that
+indeterminate output.
+
+The old unconditional initialization was an invented source fallback in the
+reproduction build. Guarding it restores the witnessed unset local while
+preserving the normal build's fallback. This correction does not make the
+function byte exact: both source forms produce 418 bytes against the
+reference's 417 under the retained Gentoo profile. The changed register and
+branch operands require separate reconstruction work. The focused Gentoo
+period differential run passed both `t_v90demap` and `t_v90sbereset`, including
+1,027 checks of `V90SignBitsExtractor::process`. All eleven other shared
+full-translation-unit function bodies and relocation targets remain unchanged.
 
 ## D430 -- the transmit ring cursor is truncated to a short before the wrap test  `unmeasured`
 
@@ -11956,7 +11964,7 @@ derived separately.
 the table were ever "corrected" the deviation would become wrong and the test
 says so.
 
-## D1201 ⚠ `FAX_FSE_decision_128pt` reads `best` uninitialised, and we initialise it
+## D1201 ⚠ `FAX_FSE_decision_128pt` reads `best` uninitialised
 
 The object's prologue has exactly TWO zeroing stores -- 0x97c50 for `base` and
 0x97c60 for `amb` -- where V.32bis' copy of the same function has three. The
@@ -11971,14 +11979,15 @@ report immediately afterwards (0x97dbe onwards) exist for no other reason: the
 region tree bounds `best + 32*rot` at 127 on every reachable input, so the
 guard is unreachable UNLESS `best` is garbage. See F9416.
 
-**We write `short best = 0;`.** An uninitialised read is undefined behaviour
-and this tree does not put that in `src/`; it would also read OUR stack rather
-than the object's, so it is not reproducible in any useful sense. The
-difference is confined to the case where four squared-distance metrics are
-simultaneously exactly 0x7fff -- four equations in two unknowns, inside a
-region cell -- which no input in `t_v17slicer.c`'s scan reaches.
+**The reproduction build leaves `best` uninitialised.** The earlier unconditional
+zero fallback invented a store absent from the reference. The fallback remains
+only when `DSPLIB_REPRODUCE_BUGS` is disabled. This restores the native source
+boundary; it does not make arbitrary uninitialised values agree between builds.
+The difference concerns four squared-distance metrics simultaneously equal to
+0x7fff, which no input in `t_v17slicer.c`'s scan reaches.
 
-**Status:** NOT reproduced, deliberately, and unmeasured as to reachability.
+**Status:** native missing initialisation reproduced; exceptional-path
+reachability and junk-value equivalence remain unproved.
 `test/unit/t_v17slicer.c` asserts the clamp's bound over its whole scan and
 reports the denominator, so what is measured is that the guard never fires --
 not that it cannot.
