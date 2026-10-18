@@ -91,3 +91,82 @@ make period T='t_b103fp t_b103hdx t_b103create t_b103link' J=8
 The replay does not run differential tests. Full `make phase` and strict
 partial-link checks remain integration gates; the function gains do not
 establish whole-object identity.
+
+## Post-separation count and control recovery
+
+The next bounded experiment starts from the integrated separation at
+`eaf95d618`. It recovers three further byte-exact bodies without changing
+any helper, prototype or compiler option:
+
+| Cell | Marks (ref 156) | Silence (ref 130) | Receive data (ref 180) |
+| --- | ---: | ---: | ---: |
+| Baseline | 153 | 128 | 171 |
+| Marks unsigned count | 154 | 128 | 171 |
+| Silence unsigned count | 153 | 130 EXACT | 171 |
+| Both unsigned counts | 154 | 130 EXACT | 171 |
+| Marks zero-first tone-plan branch | 156 EXACT | 130 EXACT | 171 |
+| Receive shared result | 156 EXACT | 130 EXACT | 174 |
+| Receive carrier-loss-first branch | 156 EXACT | 130 EXACT | 180 EXACT |
+
+The four initial cells cross the two count carriers independently. Native
+Marks captures AX with `movzwl` at 0x8f557, then returns through
+`movswl %di,%eax` at 0x8f572. Silence captures AX unsigned at 0x8f5de
+and sign-extends SI at both returns (0x8f5ef and 0x8f60f), including the
+state-transition arm. Unsigned locals retain those boundaries; the public
+return type stays `short`. The first RTL dump already distinguishes the
+unsigned SI carrier and final HI-to-SI sign extension from the baseline's
+sign-extended SI carrier and plain SI return copy. This is a type witness, rather than a register preference.
+
+Marks tests the tone-plan selector at 0x8f562 and jumps on nonzero at
+0x8f568. Its zero arm checks both the expired transmit counter and receive
+state greater than 14; its nonzero arm needs only the expired counter.
+Writing these arms in native orientation restores the shared state-change
+call tail. The branch topology is present in the first RTL dump, before
+register allocation and final block placement.
+
+Receive data captures the demodulator count unsigned in EDI (0x8f66b).
+Carrier detection's nonzero result branches to the carrier-present arm
+(0x8f67c): it sets the carrier flag and resets the loss counter. The absent
+arm increments the signed short counter; values through seven retain the
+count. Above seven it calls the selected next-state function, clears flag
+0x80, zeros EDI, returns via `movswl %di,%eax`, and publishes status 6.
+The other two paths also clear flag 0x80 and return through the same signed
+low-word conversion. The prior source returned a literal zero on timeout;
+the native zeroing of the saved count carrier independently supports the
+shared-result source. The intermediate shared-result cell remains nonexact;
+the separately witnessed branch orientation completes recovery. These CFG
+changes are visible in the first RTL dump. The compiler still duplicates
+machine return tails; the source requires neither a forced join nor padding.
+
+The final pair has 13 exact bodies out of 17, up from 10. Exactly these
+three bodies change; the other 14 bodies and their canonical relocations
+are unchanged. All 17 strong function exports, nontext bytes and section
+metadata, nontext relocations and resolved external imports are unchanged.
+EXACT here checks instruction bytes and relocation targets/addends, rather
+than mnemonic similarity.
+
+Focused period validation again passes four binaries with zero failures:
+`t_b103fp`, `t_b103hdx`, `t_b103create` and `t_b103link`. The existing
+component histories include transmit countdown/state changes and tone then
+silence through receive carrier detection/loss. The half-duplex fixture
+reports 30,600 transmit and 41,079 receive checks, with receive-data visited
+215 times. These are component fixtures, including shortened timeout setup;
+they do not establish public modem end-to-end reachability for every planted
+state. The unchanged link fixture also passes. No test input, amplitude or
+tolerance changed, and there are still no registered Bell 103 mutation
+suites to reanchor.
+
+The replay requires raw reproduction of the two frozen post-separation
+objects before interpreting any cell. It records complete commands,
+source/object hashes, all 17 body verdicts and relocations, and every GCC
+RTL pass. Its final generated source must equal the adopted source.
+
+```sh
+python3 tools/recovery_b103_count_control.py \
+  --objects build/b103-eaf-baseline --out /tmp/b103-count-control
+make period T='t_b103fp t_b103hdx t_b103create t_b103link' J=8
+```
+
+The historical separation table above records its own baseline; its three
+residual rows are superseded by this follow-up. Full `make phase` remains
+an integration gate.
