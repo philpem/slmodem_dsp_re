@@ -171,36 +171,37 @@ memory operand, GenericIIR's compaction/publication boundaries and byte-exact
 [Playbook follow-up](refinement.md#compiler-stage-follow-up-exact-silence-guards-and-echo-operands)
 records the measured compiler decisions and closed domains.
 
-1. Trace V92EchoCanceller constructor history-allocation folding in the period
-   tree/RTL dumps. Ordinary reset-helper factoring now restores the reference
-   reset tail under retained options and reduces both constructors from 447
-   to 313 bytes, but they remain BYTES112. The reference keeps quotient-times-
-   block separate from span-plus-two-blocks; the current code combines them.
-   This factoring already appears in the earliest saved tree and initial RTL;
-   trace expression construction/folding before another source experiment.
-   Preserve the exact reset and all fifteen strong exports; no per-file flag
-   or inline attribute is licensed. The completed definition-order cross is
-   diagnostic and does not justify a production move or profile change.
-2. CID's MDMF four-field and fifth-field-cap lifecycles now pass through real
-   audio ([#24](https://github.com/philpem/slmodem_dsp_re/issues/24)). The native
-   trace agrees on 214 paired calls and 830 events, with exact transmitted-wire
-   checks and eleven detector controls. Correcting a malformed fixture carrier
-   was required; production code is unchanged. Raw output and 9600-Hz lifecycles
-   remain coverage gaps. Keep the 1433 source/option cells closed unless new
-   path/operand evidence supplies a discriminator; sizes remain 368 versus 386.
-3. CenterAdapt's allocated history home and reload deletion are now measured.
+1. Complete the bounded anonymous-copy identity proof for
+   `getSegmentPointer(PcmType, int)` after the overlapping-symbol extraction
+   regression is protected. The complete 64-byte literals agree; prove pointer
+   nonescape, destination bounds, direction/count, post-copy register death,
+   readonly extent and safe entries. Keep every unsafe identical-pair control
+   in the shared comparator. This would recognize existing emitted code, not
+   recover new source; the function remains UNRESOLVED for now.
+2. Inspect V92EchoCanceller `setDecayFactor`'s remaining 149-versus-147-byte
+   body through the period x87 pipeline. Native code compares against member
+   `+0x34` with `fcomps`; current code retains a value and uses `fcompp`.
+   Establish the first value-lifetime divergence before proposing a source
+   cell. The constructors are now EXACT313 after the bounded parser-fold
+   investigation below; do not reopen their closed arithmetic variants.
+3. CID raw/9600 positive histories now pass, with 430 paired calls, 1420 events
+   and nineteen rejection controls. Extend failure/recovery histories at those
+   mode/rate boundaries if seeking a production discrepancy. Keep the 1433
+   source/option cells closed without new path/operand evidence; process remains
+   368 versus 386 bytes. See [#24](https://github.com/philpem/slmodem_dsp_re/issues/24).
+4. CenterAdapt's allocated history home and reload deletion are now measured.
    Reopen only with independent death-note/lifetime or common-profile evidence
    explaining the reference's selective two surviving stores. The eleven-byte
    gap does not justify adding stores or reviving closed scalar spellings.
-4. Reopen EchoCanceler only with a new operand/lifetime or original-profile
+5. Reopen EchoCanceler only with a new operand/lifetime or original-profile
    witness. Both reload orientations cost eight, and the first wins the tie.
    The retained frame has two spill words and zero padding; the original's
    extra four bytes do not establish another local or an alignment option.
-5. GenericIIR: require allocator/liveness provenance for the scalar scratch
+6. GenericIIR: require allocator/liveness provenance for the scalar scratch
    and renaming choices and block destination spill. The original block's
    second extra slot receives an input-length store that is never read.
    The prior source domains are closed until a new discriminator appears.
-6. Keep silence's two previously surviving opposite-direction threshold
+7. Keep silence's two previously surviving opposite-direction threshold
    mutations visible as fixture limits. Byte-exact recovery does not create
    new lifecycle evidence for those inputs.
 
@@ -623,7 +624,7 @@ complete header consumers contribute 103 function copies; only the two selector
 copies change. Canonical and runtime builds agree on all 300 source objects,
 with only two changed from `6fe0b1e42`.
 
-Current census: **1102/1852 EXACT**, **126583/720125 original function bytes
+At the BOXCAR checkpoint: **1102/1852 EXACT**, **126583/720125 original function bytes
 exact**, 29 REGALLOC, 71 BYTES, 649 SIZE and one UNRESOLVED. The exact-set floor
 adds only the selector. `make phase J=4` passes 392 period fixtures and all
 structural checks, including 285 suites/10042 unique mutation anchors.
@@ -716,3 +717,70 @@ snapshot refresh is claimed. Strict documentation build and audit pass,
 including 549 Markdown targets, 300 module links, 972 HTML targets/fragments,
 both detector controls and eleven doc-audit unit tests. All 13067 finding
 references resolve.
+
+
+## Parser-fold recovery and raw/9600 CID coverage
+
+From frozen `c7cf4f8cd`, the installed Gentoo parser observer identifies the
+constructor's multiplication factoring inside `fold`, called from C++ additive
+expression construction. Actual tree pointers connect that unsigned 32-bit
+fold to the `historyAlloc` assignment. Target and absent-target observations
+preserve the complete period object; missing target, binding, fold and changed
+type controls reject. Independent fresh-directory replay passes.
+
+Three bounded source cells retain the baseline, separate the quotient product
+into `roundedSpan`, and restore the native order of the two span operands.
+Both constructors progress **BYTES112 → BYTES2 → EXACT313**. The selected
+source gains two exact names and **626 original function bytes**, with no exact
+losses. All thirteen other TU bodies, fifteen strong exports, data, positions
+and relocation consumers remain unchanged. The canonical object raw-matches
+the independently audited candidate; the other **299/300** source objects are
+raw-identical to the frozen baseline. Four focused period binaries pass
+161199 checks; four moved mutation faults are caught (three differential
+failures, one runtime signal), and the restored baseline passes.
+
+CID adds six positive raw/9600 histories at debug 0/2, raising the fixture from
+476 to **836 checks**. Independent native replay agrees on **430 paired calls
+and 1420 ordered events**, rejecting **19/19 controls**. Rate-dependent FSK
+retuning, resampling, raw formatting and complete rendered waveforms are
+checked. No production discrepancy is found; the CID object is raw-identical.
+These are component success histories, not failure/recovery or modem end-to-end
+coverage.
+
+The anonymous literal-copy audit leaves `getSegmentPointer` UNRESOLVED. Its
+64 copied bytes agree, but a future identity proof must establish bounded
+copy state, pointer nonescape and safe entries. Thirteen hazardous ELF controls
+also expose an independent overlapping-symbol extraction defect in the existing
+comparator. Keep the detector fix separate from any identity-proof extension;
+no literal-derived exact gain is claimed in this batch.
+
+The [Playbook parser-fold entry](refinement.md#trace-parser-folding-before-explaining-a-spill)
+records the causal trace and replay commands. The
+[CID entry](refinement.md#cross-cid-output-mode-and-sample-rate-at-the-component-boundary)
+records mode/rate boundaries and negative controls. Next priorities are the
+bounded literal-copy proof, `setDecayFactor`'s x87 member-readback lifetime,
+and CID failure/recovery coverage at the new mode/rate boundaries.
+
+
+The canonical census is **1104/1852 EXACT**, covering **127209/720125 original
+function bytes**; 29 REGALLOC, 71 BYTES, 647 SIZE and one UNRESOLVED remain.
+There are 748 inexact compared symbols. No exact names are lost. Strict
+partial/raw identity remains **DIFFERENT**: 68 exact sections,
+72088/943398 positioned matching bytes and 457/2931 exact symbols. These
+position-dependent whole-object measures remain separate from the two exact
+function-body gains; no whole-blob completion claim is made.
+
+
+The comparator now validates ELF function ownership, explicit address coverage,
+raw bytes and relocation-offset inventory before grading a body. Overlapping
+owners fail closed as NODATA; exact-extent aliases remain supported. An
+immutable old/new audit of 300 objects, 1852 names and 1886 candidate copies
+finds no ordinary body or verdict changes. Four real ELF regression cases,
+two constructor alias entries and five decoder-output corruptions cover the
+fix. The literal-copy identity extension remains deferred.
+
+Integrated `make phase J=4` passes **392 period fixtures, zero failed**, plus
+all structural checks, including 285 mutation suites and 10042 unique anchors.
+All 300 runtime source objects raw-match canonical builds. The strict manual
+build, documentation audit and finding-reference check pass. No tolerance,
+compiler profile, fixture denominator or modern-portability claim changes.
