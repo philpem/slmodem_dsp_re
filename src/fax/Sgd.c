@@ -428,13 +428,14 @@ short
 SGD_correlate(const short *p, const unsigned short *a,
 	      const unsigned short *b, short n)
 {
-	int scale = 1 / (*p * n);
+	/* 0x9f86e narrows the quotient; the loop tests the old short count. */
+	short scale = 1 / (*p * n);
 	short acc = 0;
 	short i;
 
-	for (i = (short)(n - 1); i != -1; i = (short)(i - 1))
+	for (i = n; i-- != 0;)
 		acc = (short)(acc
-		    + FPM_xor_table[(unsigned short)(*b++ ^ *a++)]);
+		    + FPM_xor_table[(unsigned short)(*a++ ^ *b++)]);
 
 	return (short)(1 - acc * scale);
 }
