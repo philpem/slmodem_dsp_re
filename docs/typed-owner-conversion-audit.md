@@ -410,3 +410,270 @@ member offsets, widths and signedness; the historical statement-role pairing
 and consumer analysis remain explicit review evidence, not an automatic proof
 that every field in the project is correct. No reconstruction source changed
 in this audit extension.
+
+
+## Historical typed-owner access audit: `V32rxhdx.c`
+
+Scope is the historical file `src/pump/v32/V32rxhdx.c` in commit `0e473a213b6be1dcc75e8fd0394e3f87c05ad66a` and its parent. This file has 143 raw `FIELD*` macro invocations total: 20 occur in 14 accessor/mapping macro definitions, and 123 occur in function bodies. Every body invocation was converted in the audited commit; no raw `FIELD` call remains in the new file. The grouped rows below list all 123 occurrences by historical source line, access constant, and old type. Counts sum to the denominator.
+
+Macro mapping definitions are reviewed separately after the body ledger. Their repeated use sites are not added to the 123 raw FIELD-call denominator. No unchanged raw FIELD body occurrences were found.
+
+### Period measurement
+
+`rxhdx_full_probe.c` was compiled with `run_rxhdx_full_probe.py` using `build/tc_repro/.build-config` and `tools/experiment_toolchain.py`; the helper appended exactly one `-DDSPLIB_REPRODUCE_BUGS`. Compiler is Gentoo GCC 3.4.2-r2, target `i386-pc-linux-gnu`; assembler is GNU as 2.15.92.0.2. The full flags and command are recorded in `rxhdx_full_probe.log`.
+
+The probe reports every typed member used in this file, with offset, size, and signedness for scalar fields. It measures `v32_modem.hdx` at 0x64 and `.fp` at 0x68; `v32_hdx` timer/limit at 0x7c/0x80, symbol length at 0x9e, mode/state at 0x76/0x74, state-left at 0x78, `short_48` at 0x48, `int_90` at 0x90, RTD at 0x96, short accumulators at 0xa8/0xaa/0xac, and regs at 0x3c with signed-short elements. It also measures the root config/status fields and `v32_fp.rx_len`/`rx_buf` at 0x50c8/0x50cc.
+
+### Function-body accesses
+
+Each row represents the listed number of separate old FIELD invocations. Where a row includes multiple old access types for one member, each type has its own line list and count. All current offsets, widths, and signs below are from the period probe; old offsets/types are from the historical local constants and FIELD macro types.
+
+| # | Count | Historical old lines | Old field / offset / type | New typed path / period layout | Consumer check |
+|---:|---:|---|---|---|---|
+| 1 | 23 | 309, 329, 346, 358, 363, 388, 403, 462, 480, 498, 516, 526, 544, 577, 596, 612, 620, 641, 668, 684, 693, 723, 726 | `V32HDX_TIMER`, +0x7c, unsigned int | `hdx->timer`, +0x7c, unsigned int (4) | Added to unsigned-cast symbol length; compared to limit with unsigned branch semantics |
+| 2 | 10 | 329, 363, 462, 498, 526, 578, 620, 668, 693, 726 | `V32HDX_LIMIT`, +0x80, unsigned int | `hdx->limit`, +0x80, unsigned int (4) | Right side of timer bound checks; same unsigned comparison |
+| 3 | 12 | 310, 347, 389, 392, 481, 517, 545, 597, 613, 642, 685, 724 | `V32HDX_SYMBOL_LEN`, +0x9e, signed short | `hdx->symbol_len`, +0x9e, signed short (2) | Read into timer update via explicit unsigned-int cast, or short arithmetic |
+| 4 | 3 | 350, 420, 555 | `V32HDX_SYMBOL_LEN`, +0x9e, unsigned short | `hdx->symbol_len`, +0x9e, signed short (2) | Accumulator/rtd arithmetic is narrowed to 16 bits; signed-vs-unsigned promotion changes the intermediate by a multiple of 65536, preserving the stored low 16 bits |
+| 5 | 1 | 316 | `V32_OBJ_PROTOCOL`, modem +0x00, signed short | `modem->params.protocol`, +0x00, signed short (2) | Compared with 1 |
+| 6 | 1 | 317 | `V32_OBJ_OPTIONS`, modem +0x10, signed int | `modem->params.options`, +0x10, unsigned int (4) | Only masked with `V32_OPT_0400` and compared to zero; the selected bit is unchanged by signedness |
+| 7 | 1 | 318 | `V32HDX_INT_78`, hdx +0x78, signed int | `hdx->state_left`, +0x78, signed int (4) | Compared signed against 180 |
+| 8 | 12 | 330, 364, 463, 499, 527, 557, 579, 621, 669, 694, 713, 727 | `V32_OBJ_FLAGS`, modem +0x31, unsigned byte | `modem->flags`, +0x31, unsigned byte (1) | Fault/bit flags set with OR; same byte and mask |
+| 9 | 10 | 331, 365, 464, 500, 528, 580, 622, 670, 695, 728 | `V32_OBJ_STATUS`, modem +0x30, unsigned byte | `modem->status`, +0x30, unsigned byte (1) | Stores the same status code |
+| 10 | 10 | 334, 368, 467, 503, 531, 583, 625, 673, 698, 731 | `V32HDX_STATE`, hdx +0x74, signed short | `hdx->state`, +0x74, signed short (2) | Stores error state |
+| 11 | 9 | 324, 358, 413, 435, 495, 523, 617, 665, 690 | `V32HDX_MODE`, hdx +0x76, signed short | `hdx->mode`, +0x76, signed short (2) | Indexes/dispatches through `V32NextState` |
+| 12 | 2 | 348, 349 | `V32HDX_SHORT_AA`, hdx +0xaa, unsigned short | `hdx->short_aa`, +0xaa, signed short (2) | Unsigned-short accumulation is narrowed to 16 bits; low-16-bit store preserved |
+| 13 | 5 | 552, 553, 554, 573, 574 | `V32HDX_SHORT_48`, hdx +0x48, unsigned short | `hdx->short_48`, +0x48, signed short (2) | Counter test/update; writes narrow to the same 16 bits |
+| 14 | 1 | 556 | `V32HDX_SHORT_48`, hdx +0x48, signed short | `hdx->short_48`, +0x48, signed short (2) | Signed comparison `> 0x17`; source and typed member signedness agree |
+| 15 | 3 | 394, 446, 457 | `V32HDX_INT_90`, hdx +0x90, signed int | `hdx->int_90`, +0x90, signed int (4) | Latch read/write as boolean; same width and sign |
+| 16 | 5 | 414, 418, 427, 432, 433 | `V32HDX_RTD`, hdx +0x96, signed short | `hdx->rtd`, +0x96, signed short (2) | Stored, passed to integer calculation, checked/clamped as signed short |
+| 17 | 1 | 415 | `V32_HDX_SHORT_94`, hdx +0x94, signed short | `hdx->turnaround`, +0x94, signed short (2) | Doubled and subtracted on the originate branch before narrowing to RTD |
+| 18 | 1 | 421 | `V32_HDX_SHORT_94`, hdx +0x94, unsigned short | `hdx->turnaround`, +0x94, signed short (2) | Subtraction is cast to short for RTD; changed promotion differs by a multiple of 65536 and preserves low 16 bits |
+| 19 | 1 | 422 | `V32_HDX_SHORT_9C`, hdx +0x9c, unsigned short | `hdx->short_9c`, +0x9c, signed short (2) | RTD subtraction/narrowing; same low 16-bit result |
+| 20 | 1 | 423 | `V32_HDX_SHORT_98`, hdx +0x98, unsigned short | `hdx->short_98`, +0x98, signed short (2) | RTD subtraction/narrowing; same low 16-bit result |
+| 21 | 1 | 424 | `V32_HDX_SHORT_9A`, hdx +0x9a, unsigned short | `hdx->short_9a`, +0x9a, signed short (2) | RTD subtraction/narrowing; same low 16-bit result |
+| 22 | 2 | 390, 391 | `V32HDX_SHORT_A8`, hdx +0xa8, unsigned short | `hdx->short_a8`, +0xa8, signed short (2) | Accumulation explicitly narrows to unsigned short; low 16-bit result preserved |
+| 23 | 1 | 449 | `V32HDX_SHORT_AC`, hdx +0xac, unsigned short | `hdx->short_ac`, +0xac, signed short (2) | Read then explicitly cast to short for miss count; same 16-bit value |
+| 24 | 3 | 455, 456, 458 | `V32HDX_SHORT_AC`, hdx +0xac, signed short | `hdx->short_ac`, +0xac, signed short (2) | Signed counter store, compare, and reset |
+| 25 | 2 | 562, 566 | `V32HDX_REGS`, hdx +0x3c, address of signed-short array | `hdx->regs`, +0x3c, 10-byte array; element 0 is signed short (2) | Preserves pointer base; same index 4 element operation |
+| 26 | 1 | 658 | `V32FP_RXBUF`, fp +0x50cc, pointer | `fp->rx_buf`, +0x50cc, pointer (4) | Passed as detector sample-buffer argument |
+| 27 | 1 | 659 | `V32FP_RXLEN`, fp +0x50c8, signed short | `fp->rx_len`, +0x50c8, unsigned short (2) | `FPM_MTD_detect` takes `short count`; conversion to that parameter preserves the low 16-bit argument representation |
+
+Counts sum to 123/123. Unresolved field-role pairings: 0. No offset or width mismatch was found. Signedness deviations at rows 4, 6, 18–23, and 27 are recorded with their consuming operations; no functional bug is established. Row 14 was checked against the object's native signed branch below.
+
+### Changed access-mapping macros (separate denominator)
+
+The seven raw mapping definitions changed; the low-level `FIELD*` accessor definitions themselves are excluded from body access counting. Every mapping below has an old constant/source definition and an independently measured period member offset.
+
+| Macro | Old raw mapping | New typed mapping | Period layout |
+|---|---|---|---|
+| `HDX(m)` | modem +0x64 pointer | `((struct v32_modem *)m)->hdx` | `v32_modem.hdx` +0x64, pointer 4 |
+| `FP(m)` | modem +0x68 pointer | `((struct v32_modem *)m)->fp` | `v32_modem.fp` +0x68, pointer 4 |
+| `AGC_OF(hdx)` | hdx +0x00 aggregate address | `&hdx->agc` | `v32_hdx.agc` +0x00, size 44 |
+| `TONE_OF(hdx, off)` | pointer load at `off`; used for tone0 +0x2c, tone1 +0x30, tone2 +0x34 | `hdx->tone0`, `hdx->tone1`, `hdx->tone2` | +0x2c/+0x30/+0x34, each pointer 4 |
+| `MTD_OF(hdx)` | pointer load at +0x38 | `hdx->mtd` | `v32_hdx.mtd` +0x38, pointer 4 |
+| `TXSTATE(hdx)` | function pointer at +0x6c | `hdx->tx_state` | +0x6c, function pointer 4 |
+| `RXSTATE(hdx)` | function pointer at +0x70 | `hdx->rx_state` | +0x70, function pointer 4 |
+
+No same-file reference to these changed macros was left textually in raw FIELD form after the conversion. The macro definitions, their uses, and the body FIELD accesses are separate denominators; do not add macro expansions to the 123.
+
+### Native check and known controls
+
+Native disassembly of the historical object (`ref/slmodemd/dsplibs.o`, `RxHdxSequenceE`, around 0x84013) shows `cmp $0x17,%bx` followed by signed `jle`; this is consistent with the signed-short `short_48` member used by row 14. In `RxHdxSTone` around 0x84362, the old `rx_len` access is loaded with sign extension (`movswl 0x50c8(%ecx),%edx`). The current `rx_len` member is unsigned short, then passed to `FPM_MTD_detect`, whose `short count` parameter converts it back to signed short. This preserves the 16-bit argument representation on the measured i386 ABI; no behavioral mismatch is established from the type spelling alone.
+
+The period control probe was rerun through `tools/recovery_typed_owner_probe.py` in the same canonical build configuration: five selected known mismatches reproduced (old/current: 0x44/0x46, 0x182/0x102, 0x188/0x108, 0x100/0xd4, 0x102/0xd6). The output is in `recovery_probe_full.log`. These controls validate the offset detector; they are not part of this file's occurrence denominator.
+
+
+The complete receiver ledger supersedes its earlier forty-row sample.
+Only the constructor's forty-row batch remains sampled coverage at this
+checkpoint. The per-file denominators remain separate from distinct probe
+member paths; repeated accesses share layout measurements but retain their
+individual statement-role review.
+
+
+The shared durable replay now checks 83 distinct ordinary paths, including the
+complete receiver ledger, and retains the same five known mismatch controls.
+The receiver's historical 123-access denominator counts uses; the 83-path
+probe denominator counts layout locations shared across all three complete
+ledgers. The constructor sample still uses its separate probe.
+
+
+## Historical `V32.c` constructor conversion audit
+
+Scope is `src/pump/v32/V32.c` in historical commit `0e473a213b6be1dcc75e8fd0394e3f87c05ad66a` against its parent. This is beyond the earlier 40-access sample. The old constructor body contains 116 `FIELD*` access invocations; every one was converted in the commit. The 13 owner-mapping macros are counted separately. A direct `int *` store through decoder padding was also replaced and is recorded separately. The function still accepts `void *modem`, so owner identity is considered separately from byte offset.
+
+### Period evidence
+
+`v32c_probe.c` was compiled and run with `run_v32c_probe.py`, using `tools/experiment_toolchain.py`, canonical `build/tc_repro/.build-config`, Gentoo GCC 3.4.2-r2 and GNU as 2.15.92.0.2. The helper appended one `-DDSPLIB_REPRODUCE_BUGS`. Full command, flags, tool identity and output are in `v32c_probe.log`.
+
+The measured allocation sizes agree with the historical allocator constants: `v32_modem` 0x6c, `v32_fp` 0x50dc, and `v32_hdx` 0xb0. Their allocated child/sample buffers retain their original explicit sizes.
+
+| Historical mapping | Old owner and offset | New owner/path | Period layout |
+|---|---|---|---|
+| `HDX` | modem +0x64 pointer load | `v32_modem.hdx` | +0x64, pointer/4 |
+| `FP` | modem +0x68 pointer load | `v32_modem.fp` | +0x68, pointer/4 |
+| `SDM_TX` | fp +0x30 aggregate address | `v32_fp.scrambler` | +0x30, size 24 |
+| `SDM_RX` | fp +0x50b0 aggregate address | `v32_fp.descrambler` | +0x50b0, size 24 |
+| `SMC_TX` | fp +0x48 aggregate address | `v32_fp.tx_smc` | +0x48, size 22 |
+| `PPS` | fp +0x60 aggregate address | `v32_fp.pps` | +0x60, size 56 |
+| `RING` | fp +0xb0 aggregate address | `v32_fp.symout` | +0xb0, size 20 |
+| `MRF` | fp +0xc4 aggregate address | `v32_fp.mrf` | +0xc4, size 28 |
+| `ECC` | fp +0xe0 aggregate address | `v32_fp.ecc` | +0xe0, size 104 |
+| `SRE` | fp +0x148 aggregate address | `v32_fp.sre` | +0x148, size 144 |
+| `FSE` | fp +0x204 aggregate address | `v32_fp.fse` | +0x204, size 19992 |
+| `SMC_RX` | fp +0x5098 aggregate address | `v32_fp.rx_smc` | +0x5098, size 22 |
+| `DEC` | fp +0x5020 aggregate address | `v32_fp.decoder` | +0x5020, size 120 |
+
+Pointer-valued mappings above are loads; aggregate mappings are addresses. They were paired by owner and operation, then compared with independently measured period layout.
+
+### Grouped occurrence ledger
+
+The old constructor body has 116 FIELD invocations grouped by identical historical owner/type/offset operands. The table below lists each group count, exact historical source lines, raw owner plus independently resolved literal offset and access type, current expression, period offset/width/signedness, and the member's use. Counts sum to 116. It excludes changed accessor/mapping macro definitions (listed above) and the separate direct padding write (below).
+
+| Count | Historical lines | Old owner + literal offset / access type | New expression | Period layout and consumer check |
+|---:|---|---|---|---|
+| 1 | 339 | `modem + 0x68` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->fp` | 0x68/4/n/a; statement role at these historical lines; store |
+| 1 | 341 | `modem + 0x64` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->hdx` | 0x64/4/n/a; statement role at these historical lines; store |
+| 2 | 342,617 | `hdx + 0x2c` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->tone0` | 0x2c/4/n/a; tone pointer null/init/create/load sequence |
+| 2 | 343,704 | `hdx + 0x38` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->mtd` | 0x38/4/n/a; detector pointer null/init/create/load sequence |
+| 1 | 344 | `hdx + 0xa4` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->buffer` | 0xa4/4/n/a; statement role at these historical lines; store |
+| 1 | 346 | `FP(modem) + 0x50cc` via `FIELD_PTR` (pointer load/store) | `FP(modem)->rx_buf` | 0x50cc/4/n/a; statement role at these historical lines; store |
+| 1 | 348 | `FP(modem) + 0x50d0` via `FIELD_PTR` (pointer load/store) | `FP(modem)->clean_buf` | 0x50d0/4/n/a; statement role at these historical lines; store |
+| 1 | 373 | `fp + 0x1c` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_1c` | 0x1c/4/1; statement role at these historical lines; store |
+| 1 | 374 | `fp + 0x20` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_20` | 0x20/4/1; statement role at these historical lines; store |
+| 1 | 375 | `fp + 0x0` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_00` | 0x0/4/1; statement role at these historical lines; store |
+| 1 | 376 | `fp + 0x4` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_04` | 0x4/4/1; statement role at these historical lines; store |
+| 1 | 377 | `fp + 0x8` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_08` | 0x8/4/1; statement role at these historical lines; store |
+| 1 | 378 | `fp + 0x24` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_24` | 0x24/4/1; statement role at these historical lines; store |
+| 1 | 379 | `fp + 0xc` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_0c` | 0xc/4/1; statement role at these historical lines; store |
+| 1 | 380 | `fp + 0x10` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->eq_adapt` | 0x10/4/1; statement role at these historical lines; store |
+| 1 | 381 | `fp + 0x14` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_14` | 0x14/4/1; statement role at these historical lines; store |
+| 1 | 382 | `fp + 0x18` via `FIELD_INT` (signed int) | `((struct v32_fp *)fp)->int_18` | 0x18/4/1; statement role at these historical lines; store |
+| 7 | 391,393,395,398,400,434,437 | `fp + 0x28` via `FIELD_S16` (signed short) | `((struct v32_fp *)fp)->tx_rate_index` | 0x28/2/1; rate ladder writes plus scrambler/coder mode reads |
+| 6 | 404,406,408,411,413,529 | `fp + 0x2a` via `FIELD_S16` (signed short) | `((struct v32_fp *)fp)->rx_rate_index` | 0x2a/2/1; rate ladder writes and decoder selector read |
+| 6 | 419,421,423,436,622,660 | `hdx + 0x76` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->mode` | 0x76/2/1; mode initialization and mode-index/configuration reads |
+| 4 | 441,445,563,566 | `sdm + 0x2` via `FIELD_U16` (unsigned short) | `sdm->tap1_pos` | 0x2/2/1; absolute tap storage/read feeding explicitly narrowed tap1 |
+| 4 | 443,446,564,567 | `sdm + 0x4` via `FIELD_U16` (unsigned short) | `sdm->tap2_pos` | 0x4/2/1; absolute tap storage/read feeding explicitly narrowed tap2 |
+| 1 | 469 | `HDX(modem) + 0x76` via `FIELD_S16` (signed short) | `HDX(modem)->mode` | 0x76/2/1; mode initialization and mode-index/configuration reads |
+| 1 | 493 | `FP(modem) + 0x1d8` via `FIELD` (address) | `&FP(modem)->agc` | 0x1d8/44/n/a; aggregate address passed to FPM_AGC_init |
+| 1 | 524 | `FP(modem) + 0x5020` via `FIELD` (address) | `&FP(modem)->decoder` | 0x5020/120/n/a; aggregate address stored as FSE config owner |
+| 1 | 538 | `DEC(fp) + 0x74` via `FIELD_S16` (signed short) | `((struct v32_dec *)FSE(fp)->cfg.owner)->short_74` | 0x74/2/0; zero initialization through copied FSE owner configuration |
+| 1 | 540 | `DEC(fp) + 0x52 + 2*i` via `FIELD_S16` (signed short) | `DEC(fp)->sym[i]` | 0x52/2/1; statement role at these historical lines; store |
+| 1 | 544 | `DEC(fp) + 0x4` via `FIELD_S16` (signed short) | `DEC(fp)->short_04` | 0x4/2/1; statement role at these historical lines; store |
+| 1 | 545 | `DEC(fp) + 0x6` via `FIELD_S16` (signed short) | `DEC(fp)->short_06` | 0x6/2/1; statement role at these historical lines; store |
+| 3 | 582,584,586 | `fp + 0x98` via `FIELD` (address) | `((struct v32_fp *)fp)->encoders[0]` | 0x98/4/0; statement role at these historical lines; address formation |
+| 1 | 588 | `fp + 0xa4` via `FIELD_S16` (signed short) | `((struct v32_fp *)fp)->encoder_sel` | 0xa4/2/1; statement role at these historical lines; store |
+| 1 | 589 | `fp + 0xa8` via `FIELD_PTR` (pointer load/store) | `((struct v32_fp *)fp)->imap` | 0xa8/4/n/a; statement role at these historical lines; store |
+| 1 | 590 | `fp + 0xac` via `FIELD_PTR` (pointer load/store) | `((struct v32_fp *)fp)->qmap` | 0xac/4/n/a; statement role at these historical lines; store |
+| 3 | 615,618,748 | `HDX(modem) + 0x2c` via `FIELD_PTR` (pointer load/store) | `HDX(modem)->tone0` | 0x2c/4/n/a; tone pointer null/init/create/load sequence |
+| 2 | 624,625 | `hdx + 0x30` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->tone1` | 0x30/4/n/a; tone pointer null/init/create/load sequence |
+| 1 | 626 | `HDX(modem) + 0x30` via `FIELD_PTR` (pointer load/store) | `HDX(modem)->tone1` | 0x30/4/n/a; tone pointer null/init/create/load sequence |
+| 2 | 631,634 | `HDX(modem) + 0x34` via `FIELD_PTR` (pointer load/store) | `HDX(modem)->tone2` | 0x34/4/n/a; tone pointer null/init/create/load sequence |
+| 1 | 633 | `hdx + 0x34` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->tone2` | 0x34/4/n/a; tone pointer null/init/create/load sequence |
+| 3 | 644,746,762 | `hdx + 0x74` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->state` | 0x74/2/1; statement role at these historical lines; store |
+| 2 | 645,757 | `hdx + 0x7c` via `FIELD_INT` (signed int) | `((struct v32_hdx *)hdx)->timer` | 0x7c/4/0; statement role at these historical lines; store |
+| 2 | 646,756 | `hdx + 0x80` via `FIELD_INT` (signed int) | `((struct v32_hdx *)hdx)->limit` | 0x80/4/0; statement role at these historical lines; store |
+| 2 | 647,754 | `hdx + 0x70` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->rx_state` | 0x70/4/n/a; statement role at these historical lines; store |
+| 1 | 648 | `hdx + 0x84` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->block_charge` | 0x84/2/1; statement role at these historical lines; store |
+| 1 | 649 | `hdx + 0x9e` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->symbol_len` | 0x9e/2/1; statement role at these historical lines; store |
+| 1 | 650 | `hdx + 0xa0` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->sample_len` | 0xa0/2/1; statement role at these historical lines; store |
+| 1 | 651 | `hdx + 0x94` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->turnaround` | 0x94/2/1; statement role at these historical lines; store |
+| 2 | 652,655 | `hdx + 0x9a` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->short_9a` | 0x9a/2/1; statement role at these historical lines; store |
+| 1 | 653 | `hdx + 0x98` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->short_98` | 0x98/2/1; statement role at these historical lines; store |
+| 1 | 657 | `hdx + 0x9c` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->short_9c` | 0x9c/2/1; statement role at these historical lines; store |
+| 3 | 661,664,753 | `hdx + 0x6c` via `FIELD_PTR` (pointer load/store) | `((struct v32_hdx *)hdx)->tx_state` | 0x6c/4/n/a; statement role at these historical lines; store |
+| 4 | 662,665,755,770 | `hdx + 0x78` via `FIELD_INT` (signed int) | `((struct v32_hdx *)hdx)->state_left` | 0x78/4/1; statement role at these historical lines; store |
+| 1 | 667 | `hdx + 0xae` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->loss_blocks` | 0xae/2/1; statement role at these historical lines; store |
+| 1 | 668 | `hdx + 0xac` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->short_ac` | 0xac/2/1; statement role at these historical lines; store |
+| 1 | 689 | `hdx + 0x3c + 2*i` via `FIELD_S16` (signed short) | `((struct v32_hdx *)hdx)->regs[i]` | historical loop i=0..6 addresses +0x3c through +0x48; current `regs` declaration has five elements, so the current expression indexes beyond that declared member for i=5,6. The native constructor stores all seven words. Native API accessors accept only indexes 0..4, but that API bound does not establish the historical storage declaration or extent. See the extent note below. |
+| 1 | 690 | `hdx + 0x88` via `FIELD_INT` (signed int) | `((struct v32_hdx *)hdx)->int_88` | 0x88/4/1; statement role at these historical lines; store |
+| 1 | 705 | `HDX(modem) + 0x38` via `FIELD_PTR` (pointer load/store) | `HDX(modem)->mtd` | 0x38/4/n/a; detector pointer null/init/create/load sequence |
+| 1 | 711 | `fp + 0x50d4` via `FIELD_U16` (unsigned short) | `((struct v32_fp *)fp)->clean_n` | 0x50d4/2/0; statement role at these historical lines; store |
+| 1 | 712 | `fp + 0x50d6` via `FIELD_S16` (signed short) | `((struct v32_fp *)fp)->decision_error` | 0x50d6/2/1; statement role at these historical lines; store |
+| 1 | 713 | `fp + 0x50d8` via `FIELD_S16` (signed short) | `((struct v32_fp *)fp)->rate_fallback` | 0x50d8/2/0; statement role at these historical lines; store |
+| 1 | 716 | `modem + 0x30` via `FIELD_INT` (signed int) | `((struct v32_modem *)modem)->status_word` | 0x30/4/0; four-byte status/flags zeroing before byte status write |
+| 1 | 717 | `modem + 0x31` via `FIELD_U8` (unsigned byte) | `((struct v32_modem *)modem)->flags` | 0x31/1/0; statement role at these historical lines; store |
+| 1 | 718 | `modem + 0x30` via `FIELD_U8` (unsigned byte) | `((struct v32_modem *)modem)->status` | 0x30/1/0; statement role at these historical lines; store |
+| 1 | 720 | `modem + 0x34` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_out_i` | 0x34/4/n/a; statement role at these historical lines; store |
+| 1 | 721 | `modem + 0x38` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_out_q` | 0x38/4/n/a; statement role at these historical lines; store |
+| 1 | 722 | `modem + 0x40` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_icoeff` | 0x40/4/n/a; statement role at these historical lines; store |
+| 1 | 723 | `modem + 0x44` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_qcoeff` | 0x44/4/n/a; statement role at these historical lines; store |
+| 1 | 727 | `modem + 0x4c` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_near_i` | 0x4c/4/n/a; statement role at these historical lines; store |
+| 1 | 728 | `modem + 0x50` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_near_q` | 0x50/4/n/a; statement role at these historical lines; store |
+| 1 | 729 | `modem + 0x48` via `FIELD_S16` (signed short) | `((struct v32_modem *)modem)->diag_fse_taps` | 0x48/2/1; statement role at these historical lines; store |
+| 1 | 730 | `modem + 0x58` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_far_i` | 0x58/4/n/a; statement role at these historical lines; store |
+| 1 | 731 | `modem + 0x3c` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_n_out` | 0x3c/4/n/a; statement role at these historical lines; store |
+| 1 | 732 | `modem + 0x54` via `FIELD_U16` (unsigned short) | `((struct v32_modem *)modem)->diag_near_n` | 0x54/2/0; statement role at these historical lines; store |
+| 1 | 734 | `modem + 0x5c` via `FIELD_PTR` (pointer load/store) | `((struct v32_modem *)modem)->diag_far_q` | 0x5c/4/n/a; statement role at these historical lines; store |
+| 1 | 735 | `modem + 0x60` via `FIELD_U16` (unsigned short) | `((struct v32_modem *)modem)->diag_far_n` | 0x60/2/0; statement role at these historical lines; store |
+| 1 | 752 | `hdx + 0x90` via `FIELD_INT` (signed int) | `((struct v32_hdx *)hdx)->int_90` | 0x90/4/1; statement role at these historical lines; store |
+
+
+Separate changed direct padding access: historical line 537 writes `*(int *)(void *)DEC(fp)->pad68 = 0`, i.e. decoder owner +0x68, signed 32-bit zero store; the new expression is `DEC(fp)->int_68 = 0`, measured at decoder +0x68, size 4, signed int. This is address/width/type-aligned and remains a zero initialization.
+
+
+The particularly opaque decoder path was checked independently: constructor config sets `fsecfg.owner = &FP(modem)->decoder`; `FPM_FSE_init` copies with `state->cfg = *cfg`; the later `FSE(fp)->cfg.owner` cast therefore resolves to that same decoder allocation. `short_74` is decoder +0x74 and is zeroed, so the new unsigned-short member store and old signed-short zero store have identical effect.
+
+No scalar address or width mismatch was found. One dynamic path, `regs[i]`, exceeds its declared array bounds for two loop iterations as noted in its ledger row. Old `FIELD_U16` tap accesses now use signed-short member declarations; their values come from `SDMv32_CFG={4,5,23}` and `SDMv32_GPA/GPC` entries 5 or 18, and the derived tap is explicitly narrowed to `short`. This signedness difference does not establish a functional mismatch. The old five selected positive controls were rerun through `tools/recovery_typed_owner_probe.py`; all still mismatch as expected. The canonical probe also checks 125 unique ordinary paths and five `sizeof` values. Full replay is in `v32c_durable_probe.log`.
+
+The occurrence ledger accounts for all 116 raw FIELD invocations, with 75 distinct old owner/type/offset groups and a separately recorded direct padding write. All mapped paths were checked against the period probe. Native `V32FP_recreate` disassembly corroborates seven contiguous word-zero stores at offsets +0x3c through +0x48; evidence is in `v32c_native.txt` around 0x7f256–0x7f27a. The period layout probe measures the current declarations, not the original author's C member boundaries.
+
+
+The constructor occurrence ledger supersedes its forty-row sample. All four
+historical files now have counted access coverage. The shared durable period
+probe checks 125 ordinary member paths, five size expectations and the five
+known offset-mismatch controls. This closes the sampled-coverage gap, not the
+open question about the original register-bank storage model.
+
+### V32 hdx +0x3c through +0x48: storage extent remains unresolved
+
+The historical constructor loop writes seven consecutive 16-bit words,
+starting at hdx +0x3c. The native `LoadReg` at 0x838b0 and `StoreReg` at
+0x838d0 each sign-extend the index, compare it with 4, and use unsigned
+`ja` to reject larger indexes. Their only indexed memory operation is based
+at +0x3c with a scale of two. Specifically, `LoadReg` compares `%dx` with
+4 at 0x838b7, branches `ja` at 0x838bb, and loads `0x3c(%eax,%edx,2)` at
+0x838c4; `StoreReg` has the same compare and branch at 0x838da/0x838de and
+stores through `0x3c(%eax,%edx,2)` at 0x838e7. This establishes a five-index
+public accessor range; it does **not** establish that the underlying storage
+stopped after five words.
+
+The other two words have independent roles in the native state machine.
+`ref_V32OrgNextState` stores a narrowed difference to +0x46 at 0x82f21 and
+reads +0x46 with sign extension at 0x82eb6 for the alignment calculation.
+`ref_RxHdxSequenceE` reads +0x48 at 0x84000, updates it at 0x84017, and
+increments/stores it at 0x840b1 after a detected sequence; the threshold
+comparison against 0x17 is at 0x84013. `ref_V32RngInitNextState` and
+`ref_V32RngRespNextState` read +0x48 at 0x85128 and 0x857ce respectively,
+then subtract the sign-extended value from 0x18 for a next-state countdown.
+The reconstructed source has corresponding roles in `V32org.c` (current
+lines 582, 618), `V32rxhdx.c` (579–600), and `V32RNG.c` (427, 623). The native
+constructor also clears both words before handing control to these states.
+
+These observations support two compatible physical models: a seven-word
+array whose last two elements are private to those state-machine roles, or a
+five-word register array followed by separate `short_46` and `short_48`
+members. Both layouts place the same two-byte values at the same addresses;
+the API bounds and uses do not distinguish them. The historical seven-loop
+form indexed beyond the five elements in the current declaration, but the
+audit has not established that the original object used that declaration or
+that physical storage stopped after five words. Do not treat the API bound
+alone as proof for either model.
+
+The constructor now uses seven explicit zero stores through the five declared
+register elements and the two adjacent members, preserving the current layout
+and accessor API without asserting that this was the original C declaration.
+The independent four-cell replay found that the explicit five-plus-two and
+seven-element source forms emitted identical objects across all 14 transitive
+consumers; the separate 7-element loop cell stayed byte-identical to the
+pinned baseline but retained a runtime loop. The `V32.c.o` audit covers six
+function bodies; the five non-constructor bodies stay unchanged.
+[The storage-model audit](v32-register-storage-audit.md) records the replay
+and actual-header selection controls.
+
+For the adopted constructor, `V32FP_recreate` grew by 16 bytes and `V32.c.o`
+by 32 bytes relative to the pinned loop baseline. The two constructor-backed
+period fixtures passed 689,769 checks in total: `t_v32fprecr` 583,756 and
+`t_v32fpdisp` 106,013. The full period gate passed 392 fixtures with zero
+failures. This resolves the current out-of-bounds indexing while leaving the
+original physical extent and historical member declaration explicitly
+unresolved.

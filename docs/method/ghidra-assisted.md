@@ -934,3 +934,86 @@ Reanchor and execute the existing I/Q-swap mutant without changing its fault.
 The observed self-configuration reset path supports the boundary; arbitrary
 partially overlapping configurations are not established reachable inputs.
 Do not reopen the previous source palette solely to eliminate five bytes.
+
+
+## Configuration capture and argument fidelity (18 October 2026)
+
+The next refinements retain V22 FSE's two-pointer configuration capture and
+FPM tone's native unchecked allocation path in bug-reproduction mode. The V22
+initializer reaches the native 372-byte length, leaving five register bytes;
+the tone constructor's size gap grows from 84 to 90 bytes while removing an
+unsupported branch. Each complete-TU comparison preserves its exact bystanders.
+Both changes pass the integrated period/structural gate: 392 fixtures, zero
+failures, with no full mutation campaign.
+
+The V32 MRF call now zero-extends the unsigned-word count into its integer
+argument slot, matching the reference. Twenty of twenty-four TU bodies stay
+fixed; three unchanged-source methods change first at period `28.peephole2`.
+The sole exact-name loss is `SetAdaptEqV32`, whose seven differing bytes are
+scratch-register choices. Three focused period fixtures pass 27045 checks
+per endpoint; no high-count reachability claim or unsafe fixture is added.
+The exact-floor change records this intentional source-fidelity tradeoff.
+The final integrated V32 checkpoint also passes all 392 period fixtures and
+structural checks, with zero failures.
+
+The fresh canonical census is **1109/1852 EXACT**, covering
+**127904/720125 original bytes**. The remaining 743 names are **32 REGALLOC,
+78 BYTES and 633 SIZE**, with no unresolved identities. All 300 runtime objects
+raw-match their canonical counterparts; sixteen objects differ from the
+opening frozen checkpoint. Partial-link comparison is **72456/943398 positioned
+bytes**, 68 exact sections, 457/2931 exact symbols and 1001/18317 exact
+relocations. Strict whole-object/raw identity remains DIFFERENT.
+
+The receiver field audit now covers all 123 changed historical accesses and
+seven mappings, with no additional offset/width mismatch. Its forty-row sample
+is superseded. The durable period probe checks 83 distinct ordinary member paths
+across the complete ledgers and detects the same five known mismatch controls.
+The completed constructor ledger counts 116 accesses in 75 groups plus thirteen
+mappings and a direct padding store. Its period probe extends the shared checks
+to 125 ordinary paths and five size expectations. A path inventory alone was
+insufficient; occurrence pairing exposed a separate bounds issue: seven words
+are cleared through a five-element register array into two adjacent fields.
+The seven native stores are confirmed. Native `LoadReg` and `StoreReg` also
+limit indices to 0–4, but that API bound does not prove the original array
+extent: seven registers with two private entries or an incorrect API bound
+remain possible. Constructor changes are held while accesses to the final
+two words are reviewed against those competing models.
+
+Mutation-gate policy belongs to the separate master follow-up
+[issue #296](https://github.com/philpem/slmodem_dsp_re/issues/296). This work keeps
+period correctness and source fidelity primary; no exhaustive mutation run is
+required. The following checkpoint validates the previously measured wrapper
+arithmetic and reload candidate.
+
+
+## Wrapper arithmetic and V34 snapshot index checkpoint
+
+The wrapper now follows the native unsigned minima, division and fragment
+comparison, and reloads fragment size after both external copies. All nine
+header consumers were audited; only the wrapper object changes. Its existing
+component fixture passes 33686 checks. The V34 snapshot loop now uses a signed
+short index, recovering native word increments and comparisons. Both changes
+retain their independently measured native evidence even though their emitted
+bodies grow.
+
+The canonical period build covers all 300 objects. Its census remains
+**1109/1852 EXACT**, with **32 REGALLOC, 78 BYTES and 633 SIZE**; exact
+membership is unchanged from the V32 count checkpoint. All 300 runtime objects
+raw-match canonical, and seventeen differ from the opening frozen checkpoint.
+Partial-link identity is **71996/943398 positioned bytes**, with 68 exact
+sections, 457/2931 exact symbols and 1002/18317 exact relocations. The lower
+positioned-byte score includes placement changes; whole-object identity is
+still DIFFERENT. The complete `make phase J=4` gate passes **392 period
+fixtures, zero failures**, plus structural checks. The source refinements are
+committed as `58e65e409` (wrapper) and `13c1e3ded` (snapshot).
+
+The next larger discriminator is one ordinary V34 case-body reintegration.
+Before the snapshot change, the canonical handshake was 12867 bytes against
+the native 61541, with 113 versus 394 direct calls. Twenty-four additional
+local functions remain emitted, including five large table-1 arms which a
+source comment incorrectly claimed were all inlined. Period cgraph output
+raw-linked to that baseline reports the inline limit for `v34tx1_trnseg4a`.
+The bounded experiment crosses outlined/direct case placement with the old
+and recovered snapshot-index types, using retained flags and one physical
+body home. Historical claims of distinct missing exit classes were refuted
+by F11523; do not reintroduce those speculative exits.
