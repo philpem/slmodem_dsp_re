@@ -7357,38 +7357,48 @@ execution order. Receiver internals remain behind `cid_progress`. All sixteen
 relocations per wrapper and all other linked body bytes are checked against
 the input objects; normalized body hashes pin the reviewed instruction sites.
 
-The fixture now includes debug-enabled bad-checksum Bell 202 audio. It fails
-normally, emits no TTY bytes and releases its objects; this adds 31 checks,
-bringing the fixture to 193. The old comment claiming a shared blob receiver
-is retired. These are valid CID component histories, not modem end-to-end
-reachability evidence.
+The fixture includes debug-enabled bad-checksum Bell 202 audio and four
+real MDMF histories: date/number/NAME, with and without an extra tag, at debug
+levels zero and two. It now passes 476 checks, up from 193. These are valid
+CID component histories, not modem end-to-end reachability evidence.
 
-Ninety paired wrapper calls produce 394 matching ordered events. Each side
-makes 141 progress calls (136 pending, three successes, two failures), three
-string acquisitions, eighteen length calls, eighteen TTY calls and five direct
-debug calls. Three successes visit DATE/TIME/NMBR and then the empty fourth
-guard. Debug failure prints after the failed progress call and performs no
-string or TTY operation. The whole-buffer success stops before its remaining
-input is offered. Seven changed-trace controls fail, including equal corruptions
-on both sides and zero observations; equality alone cannot certify a trace.
+The MDMF investigation first failed in both independent receivers before
+`get_strings`. Decoded received bytes exposed matching packet corruption.
+The fixture's old sine lookup was malformed: its quadrature samples were
+0, 7688, -929 and -7331, rather than 0, 8000, 0 and -8000. Replacing it with
+rounded `8000*sin(2*pi*i/64)` restores the intended carrier without changing
+frequency, amplitude or production source. The observer independently checks
+the actual period-linked table against the continuous formula and half-cycle
+symmetry. The old table fails that calibration. The original failed executable
+was not frozen; retained packet observations do not substitute for that missing
+artifact. Do not describe this fixture correction as a receiver bug fix.
 
-The complete CID source object is raw-identical to baseline and both exact
-companions survive. `CID_process` remains 368 versus 386 bytes. No new source
-discrepancy or codegen gain is established; keep the 1433 recorded source/option
-cells closed.
+The expanded trace has 214 paired wrapper calls and 830 matching ordered
+events. Four successful histories per side visit four nonempty fields; two
+also leave a rendered fifth field undelivered. NAME reaches TTY, while the
+extra MESG does not. Debug failure still prints after failed progress and
+performs no string or TTY operation. Whole-buffer success stops before its
+remaining input is offered.
+
+At wrapper entry the observer decodes the actual fixture `bits`/`nbits`,
+checking the seizure/mark prefix, async start/stop framing and trailing mark.
+Every settled received packet must equal those transmitted bytes; successful
+packets must also have a valid checksum. Eleven detector controls fail,
+including changed carrier samples, fourth-guard and fifth-delivery mutations,
+zero observations and equal received-byte corruption with a recomputed valid
+checksum. Equality between implementations and a valid checksum alone cannot
+certify a transmitted message.
+
+The complete CID source object remains raw-identical and both exact companions
+survive. `CID_process` remains 368 versus 386 bytes. No new source discrepancy
+or codegen gain is established; keep the 1433 recorded source/option cells
+closed. Raw output and 9600-Hz processing remain separate fixture limits.
+Do not plant a null string return: the actual callee returns its owned buffer.
 
 ```sh
 python3 tools/cid_process_trace.py build/period/t_cid \
-  --out build/native293-cid-trace
+  --require-four-field-cap --out build/order293-cid-trace
 ```
-
-The next cheap discriminator is a real MDMF audio lifecycle carrying NAME,
-so all four string slots are nonempty. Existing `t_cidsvc.c` has checksum-frame
-payloads for date/number/name and an extra tag, but its packet-routing tests do
-not demodulate those frames. Transmit those bytes through the existing Bell 202
-generator before testing the four-field cap. Raw output and 9600-Hz processing
-remain separate fixture limits. Do not plant a null string return: the actual
-callee always returns its owned buffer.
 
 ## Separate helper-reference evidence from original TU ownership
 
