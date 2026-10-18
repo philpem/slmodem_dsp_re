@@ -881,3 +881,43 @@ before comparing offsets; matching pairs by equal offsets would conceal the
 very defect being sought. Two further bounded leads are phasor intermediate
 widths and V34 SNR helper visibility/TU ownership. These remain investigations,
 not accepted changes or evidence of exhausted leads.
+
+## Helper graphs, widths and retained partial recoveries (18 October 2026)
+
+At source checkpoint `95c40ead0`, the fresh canonical census is
+**1110/1852 EXACT**, covering **127983/720125 original function bytes**.
+Five Bell 103 functions become exact: `RxHdxStartB103`, `TxHdxDataB103`,
+`TxHdxMarksB103`, `TxHdxSilenceB103` and `RxHdxDataB103`. No exact name is
+lost. The remaining 742 functions are **31 REGALLOC, 77 BYTES and 634 SIZE**;
+there are no unresolved identities or relocation/data-only rejections.
+Thirteen of 300 objects differ from the frozen opening baseline; all 300
+runtime objects raw-match the canonical period objects.
+
+The batch also retains supported partial recoveries: phasor short fractions,
+V34 SNR helper visibility, the native two-switch timing helper, Bell 103
+receiver owner reloads and modem index widths, and Jd CRC promotion/wrapper
+structure. The Playbook and linked family audits distinguish source evidence
+from compiler-state hypotheses and record full-TU collateral. The Jd endpoint
+had previously been withheld without period/mutation validation because it
+produced no exact-name gain; completing those gates supports retaining it.
+
+The stable-source `make phase J=4` passes **392 period fixtures, zero failed**
+and all structural checks, including **285 mutation suites / 10044 anchors**.
+Ten affected Jd mutants are caught; the timing default-arm mutant is also
+executed and caught. These targeted executions do not refresh the whole
+mutation snapshot. No modern portability result is claimed.
+
+The final partial link measures **72502/943398 positioned matching bytes**,
+414 above the frozen opening baseline. It has 68 exact sections,
+457/2931 exact symbols and 1002/18317 exact relocations. Intermediate partial
+links did regress while function identity improved; these metrics describe
+different properties and must not be treated as interchangeable. Strict
+whole-object and raw-file identity remain DIFFERENT.
+
+The historical field-access audit remains a bounded review of a known
+raw-to-typed conversion, not proof that every reconstructed field is correct.
+Its complete per-file ledgers and selected-row coverage are recorded in the
+[typed-owner audit](../typed-owner-conversion-audit.md). Continue following
+unverified changed access roles and native-supported partial candidates whose
+validation is incomplete; do not restart exhausted source palettes without
+new evidence.
