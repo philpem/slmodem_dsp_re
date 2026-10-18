@@ -3611,18 +3611,17 @@ t3m_errrec_arm(struct t3m_frame *f)
  *              transition reloads txstate at 0x6d570.
  *      else    leave with the object's txstate
  */
-static void
-t3m_micro48(struct t3m_frame *f)
+static short
+t3m_micro48(struct v34_object *obj)
 {
-	unsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+	unsigned short n = (unsigned short)(obj->short_aa78 + 1);
 
-	T3M_U16(f, T3M_COUNTER) = n;
+	obj->short_aa78 = (short)n;
 
 	if (n == 0x78) {
 		/* 0x6c6e4.  An XOR of bit 0, not a store of a constant. */
-		T3M_U16(f, T3M_TOGGLE) ^= 1;
-		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
-		return;
+		obj->short_358c ^= 1;
+		return obj->txstate;
 	}
 
 	if (n == 0xa2) {
@@ -3635,15 +3634,14 @@ t3m_micro48(struct t3m_frame *f)
 		 * untraced path retains the known 5.
 		 */
 		/* 0x6c670. */
-		hs_set_txstate(f->obj, V34HS_SILENCE);
-		hs_set_microstate(f->obj, V34HS_RX_PHASE2_ANS);
-		T3M_U16(f, T3M_COUNTER) = 0;
+		hs_set_txstate(obj, V34HS_SILENCE);
+		hs_set_microstate(obj, V34HS_RX_PHASE2_ANS);
+		obj->short_aa78 = 0;
 		/* 0x6d570 reloads after the traced microstate transition. */
-		f->tx = f->obj->txstate;
-		return;
+		return obj->txstate;
 	}
 
-	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	return obj->txstate;
 }
 
 /*
@@ -9384,7 +9382,7 @@ v34handshak(void *vobj)
 		t3m_micro47(&frame);
 		goto micro_txblock;
 	case V34HS_TX_PHASE3_ANS:	/* 48 */
-		t3m_micro48(&frame);
+		frame.tx = t3m_micro48(obj);
 		goto micro_txblock;
 	case V34HS_RX_PHASE1_ANS:	/* 49 */
 		t3m_micro49(&frame);
