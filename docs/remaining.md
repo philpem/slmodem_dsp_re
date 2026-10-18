@@ -174,6 +174,37 @@ still differs: 72,205/943,398 positioned bytes, 997/18,317 relocation records
 and 457/2,931 symbol records match. Function identity improves while position
 changes reduce these whole-object counts; no whole-object identity is claimed.
 
+A further inverse-shell and PCM/precoder pass preserves that exact set:
+**1,112/1,852 EXACT**, with zero gains or losses. `demapFrame` restores two
+ordered parameter producers per iteration and signed low-word candidate
+products (1,350 -> 1,426 bytes against 1,569); `decodeDepth` restores short
+rounded coordinates before nudging (1,836 -> 1,862 against 2,075).
+`V92Precoder::process` now reads `tableA[n]` inside each search iteration,
+matching the original's load epochs (711 -> 723 against 738). Finally,
+`VPcmFloModem::runPcmModem` restores signed 32-bit integer-to-float conversion
+of the ramp counter (2,034 -> 2,025 against 2,041). Its size gap increases;
+the original FILDL instruction is the correction's independent evidence.
+All four functions remain `SIZE`. Runtime ramp values 0..177 fit signed int;
+the other fixtures establish component fidelity, with synthetic states
+explicitly retained as such. No caller-alias reachability claim is made.
+
+Across these three TUs, 51 of 55 function bodies preserve bytes and relocation
+tuples; all existing exact functions, interfaces, ordinary data and canonical
+call targets survive. Thirty PCM jump-table addends move by nine bytes while
+preserving their target owners. The bounded ring-detector audit retains no
+edit: Create's division counts reflect Reset inlining, while Process's eighth
+static division duplicates a reporting quotient across exclusive branches.
+All seven original arithmetic producers agree. These are checked negative
+findings, not a new whole-function equivalence proof.
+The final combined gate passes 394 period fixtures with zero failures and
+structural checks OK; all 300 runtime objects raw-match final comparison
+builds. Of 300 objects, 297 preserve raw bytes against the preceding head.
+Strict ordered partial comparison still differs: 72,468/943,398 positioned
+bytes, 1,005/18,317 relocation records and 457/2,931 symbol records match.
+No whole-object identity is claimed. The operation screen now has nine
+manually reviewed discrepancy names and 309 still unreviewed; the 234 names
+with equal operation counts remain unproved.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
