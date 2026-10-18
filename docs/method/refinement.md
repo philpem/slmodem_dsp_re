@@ -146,6 +146,27 @@ normal (7769).
 
 ## AIM A PASS AT A TRANSLATION UNIT, NOT AT A SYMBOL
 
+### Link order and compiler order answer different questions
+
+Use the recovered link order to audit final-object layout from the first
+divergence onwards. An earlier input's size or alignment can displace later
+symbols and relocation sites even when those later function bodies are exact.
+Record the local body verdict separately from the inherited section offset;
+an address difference alone does not justify rewriting the later function.
+
+`tools/toolchain/recoverorder.py` records the evidence behind its ordering
+candidates, and `tools/toolchain/partiallink.sh` passes the manifest entries
+to the period linker in that order. A filename or naming heuristic remains an
+ordering candidate, not proof of original TU membership. Preserve ambiguous
+attributions and distinguish repeated FILE names by occurrence.
+
+Within a TU, helper visibility, definition placement and emission order can
+change inlining and register allocation. Across independently compiled TUs,
+link order does not explain those compiler decisions. Audit the complete TU
+when changing a helper or declaration, then compare the partial link for
+placement and relocation effects. Keep independent, evidenced recoveries
+moving when the earliest layout discrepancy has no actionable source lead.
+
 The tree's own evidence says the compilation unit is the natural unit of work,
 and every mechanism this file documents that acts at range does so through one:
 
@@ -8490,6 +8511,17 @@ or unsafe buffer is needed. The full period gate passes after adoption,
 and the other ten TU bodies and their relocations stay unchanged. See the
 [tone ring/count audit](../fpm-tone-ring-count-recovery.md) for the crossed
 controls, header-resolution proof and remaining differences.
+
+Trace a residual through the period dumps before calling it extra spill code.
+The retained tone filter has one state-pointer load through `24.lreg` and five
+from `25.greg` onwards, with four field captures throughout. Its one-byte size
+gap combines an extra load, changed alignment and different stack-slot
+encodings; both bodies reserve the same 20-byte frame. These observations
+locate the reconstruction's allocation change without claiming access to the
+original compiler's IR. `tools/trace_fpm_tone_residual.py` checks all 30 named
+stages against the retained whole object; five damaged-artifact controls
+demonstrate rejection. Further source changes need an independent lifetime or
+operation witness, rather than a palette chosen to move allocation.
 
 
 ## Recover shared continuations before expanding helper closures

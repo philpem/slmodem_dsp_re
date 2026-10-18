@@ -140,3 +140,62 @@ Three COMDAT names have differing copy verdicts and are scored by the worst
 copy, as the census reports. The tone family contributes the same seven exact
 names established by the complete-TU controls; its filter remains SIZE(1).
 No ratchet floor or comparator rule was changed for this measurement.
+
+## Residual trace after adoption
+
+The adopted filter remains 236 bytes against the native 235. A read-only
+trace of all 30 retained RTL dumps finds one shared state-argument load and
+four field captures through `24.lreg`. `25.greg` first materialises five
+state-argument loads: four at entry and one for final index publication.
+This count persists through postreload, peephole2 and the final machine dump.
+The native body has three entry loads and one final publication load. This
+locates a change in the reconstruction's compiler pipeline only; the original
+compiler's intermediate representation is unavailable.
+
+Both bodies reserve 20 stack bytes. Native spill offsets are count 0,
+taps-minus-one 4, kernel 8, history 12 and taps 16; the reconstruction uses
+taps-minus-one 0, count 4, taps 8, history 12 and kernel 16. The complete
+one-byte length difference accounts as follows:
+
+| Encoding difference | Bytes |
+| --- | ---: |
+| Extra state-argument load | +4 |
+| Six-byte alignment LEA becomes two-byte self MOV | -4 |
+| Count slot moves from 0 to 4 across three accesses | +3 |
+| Taps-minus-one slot moves from 4 to 0 across two accesses | -2 |
+| Total | +1 |
+
+Excluding alignment, native has 81 instructions and the reconstruction 82.
+No additional missing operation, width error or publication-order discrepancy
+was identified. The entry field captures have no intervening calls or writes;
+their ordering supplies no independent source-lifetime witness. No further
+source candidate was selected, and no declaration or register palette was run.
+The existing eleven-body controls and raw canonical-object identity remain
+intact; this trace required no compilation or additional period run.
+
+The trace script consumes the completed four-cell replay above, checks the
+whole canonical object and eleven-body ledger, deduplicates repeated RTL
+instruction UIDs, and asserts all 30 dump counts and the `25.greg` transition.
+It writes the actual matched instructions to its JSON report. `--help` reads
+no artifacts and performs no build.
+
+```sh
+python3 tools/trace_fpm_tone_residual.py --replay /tmp/tone-ring-count \
+  --canonical build/tc_repro/src_dsp_fpm_tone.c.o \
+  --out /tmp/tone-residual.json
+```
+
+The continuation-branch review reran this command against the retained
+post-rebase four-cell replay and the current canonical object: all eleven
+ledger rows, raw whole-object identity and all 30 named stages pass. The
+script checks the retained replay ledger; it does not recompute the original
+native comparison or infer original compiler IR from the dumps. Explicit
+validation checks remain enabled under `python3 -O`.
+
+Five independent negative controls used temporary copies or links to the
+retained artifacts, leaving the originals unchanged. Removing `25.greg`,
+removing its state-load markers, removing its kernel-capture marker,
+removing one ledger row, and supplying a different canonical object each
+exit 1 with the corresponding diagnostic and no output report. All five
+were run with `python3 -O`; the positive replay and safe `--help` also pass.
+These are apparatus controls, requiring no production build or full phase.
