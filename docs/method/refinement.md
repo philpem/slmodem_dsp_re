@@ -7556,3 +7556,113 @@ Trace expression construction/folding in the installed period compiler before
 proposing another arithmetic spelling. Require independent expression/lifetime
 evidence, an absent-target control and full-object preservation from the
 observer, then review the full TU for any source candidate.
+
+
+## Trace parser folding before explaining a spill
+
+The V92 constructor history-allocation expression is a worked counterexample
+to attributing a spill to register allocation. A read-only GDB observer of
+the installed Gentoo `cc1plus` binds the actual `historyAlloc` assignment to
+parser `build_binary_op` and nested `fold` calls. The parser factors
+`blockLen*2 + (span/blockLen)*blockLen` into
+`(span/blockLen+2)*blockLen` before adding `extra`. The captured arithmetic
+is unsigned 32-bit. This establishes the stage and transformation; it does
+not uniquely recover the original declaration spelling.
+
+The observer requires the frozen complete compiler command, installed compiler
+hash, actual selected assembler, source/header provenance and raw equality of
+the complete reassembled object. An absent assignment target must compile
+successfully but fail observation; missing binding, missing fold and changed
+arithmetic type controls must also fail. A dump's filename alone is not a
+timestamp for the transformation.
+
+A bounded three-cell experiment retains the baseline, computes
+`roundedSpan = span / blockLen * blockLen` in a separate ordinary statement,
+then commutes only the two operands forming `span`. The product statement
+restores the reference DIV/IMUL product lifetime and stack spill: both
+constructors move from BYTES112 to BYTES2 at 313 bytes. Those two remaining
+displacement bytes identify the native loads of `echoDelay` before
+`filterLengthMinusOne`. Restoring that operand order makes both constructors
+EXACT313. No flags, barriers, volatile stores or forced registers are needed.
+Review the complete TU, including all fifteen strong exports, data, positions,
+relocation consumers and the thirteen other function bodies.
+
+Replay against the frozen `c7cf4f8cd` baseline:
+
+```sh
+python3 tools/gcc3_echo_history_fold_observe.py --baseline-dir build/fold293-baseline
+python3 tools/recovery_echo_history_product.py --domain history-product-three \
+  --baseline-dir build/fold293-baseline
+python3 tools/recovery_echo_history_product.py --audit
+```
+
+Four focused period binaries pass 28 groups and 161199 checks. Four moved
+arithmetic mutation anchors are caught: three differential failures and one
+runtime signal; the restored baseline passes. These are targeted mutation
+checks, not a full snapshot refresh. Independent observer replay preserves
+both complete objects, including the absent-target control.
+
+## Audit anonymous-copy identity without hiding extraction failures
+
+`getSegmentPointer(PcmType, int)` has one unresolved anonymous relocation:
+the original uses `.rodata+0xb80`, the candidate `.rodata+0`. All 64 copied
+bytes agree, and the other bytes of the 115-byte function agree. A diagnostic
+can establish forward REP MOVSL, a bounded private stack destination, sixteen
+words, no source-pointer escape, and a full source-register overwrite after
+the copy. That is evidence for a future bounded identity proof, not a source
+change or permission to canonicalize arbitrary equal anonymous data.
+
+Thirteen actual ELF mutations exercise extent, contents, writability,
+relocations, copy state, pointer escape and interior entry hazards. The
+named-interior-entry mutation exposed an independent extraction defect:
+`objdump --disassemble=name` can return bytes from the wrong address when
+symbols overlap. Comparing two identical malformed inputs then falsely says
+EXACT because the intended relocation was never extracted. Validate symbol
+ownership and decoded address coverage before interpreting such a verdict.
+The shared extractor now reads the ELF owner independently, accepts exact-extent
+aliases, refuses ambiguous overlaps, and disassembles the selected section's
+explicit address interval. It verifies every extracted byte and the complete
+in-function relocation-offset inventory before canonicalization. Unsupported
+ownership returns NODATA, never EXACT. The original false-EXACT control now
+returns NODATA; legitimate free-function and constructor aliases still work.
+
+The immutable before/after audit covers 300 objects, 1852 shared names and
+1886 candidate body copies: no ordinary body or verdict changes. Four real
+ELF cases, two constructor alias entries and five corrupted decoder-output
+controls exercise the guard. The literal-copy proof remains unimplemented;
+a future proof would credit existing emitted code, not newly recovered source.
+
+```sh
+python3 tools/recovery_body_extraction.py --objects build/tc_repro
+```
+
+
+## Cross CID output mode and sample rate at the component boundary
+
+The raw-output contract is `cid_val == 2`: lowercase hexadecimal type, length
+and payload, excluding the checksum, delivered as one field plus CRLF.
+Formatted output retains its four-field delivery cap. Native constructor
+arguments establish that 9600 Hz retunes the FSK receiver; native wrapper
+calls establish that 8000 Hz uses 160-sample resampling and 9600 Hz uses the
+192-sample direct path. These are component contracts, not modem end-to-end
+reachability claims.
+
+Six added positive lifecycles cross raw 8000, formatted 9600 and raw 9600
+with debug 0/2. All pass without waveform tuning. The fixture has 836 checks;
+the observer compares 430 paired calls and 1420 events. Per side it sees five
+constructor retunes and 218 resampler calls at 8000 Hz, none at 9600 Hz.
+It checks the complete waveform on 426 entries per side against the actual
+decoded wire bits, line rate and calibrated sine table, rather than trusting
+the fixture's case label. Nineteen rejection controls cover equal corruption,
+wrong oscillator rate at unchanged packet length, a changed sample, raw case,
+byte order and checksum inclusion, missing retuning, resampling and coverage.
+
+Production CID source and its complete object stay unchanged; no discrepancy
+was found in this domain. Raw/9600 failure and recovery histories remain open.
+Do not interpret positive success coverage as a reason to repeat closed source
+spelling experiments on the remaining 368-versus-386-byte process body.
+
+```sh
+python3 tools/cid_process_trace.py build/period/t_cid \
+  --require-four-field-cap --require-raw9600
+```
