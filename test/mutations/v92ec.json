@@ -197,23 +197,23 @@
  },
  {
   "label": "the history's span leaves out the delay",
-  "find": "\tspan = filterLengthMinusOne + echoDelay;",
+  "find": "\tspan = echoDelay + filterLengthMinusOne;",
   "replace": "\tspan = filterLengthMinusOne;"
  },
  {
   "label": "the history's block term is not doubled",
-  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
-  "replace": "\thistoryAlloc = span + blockLen + span / blockLen * blockLen\n\t\t       + extra;"
+  "find": "\thistoryAlloc = span + 2u * blockLen + roundedSpan + extra;",
+  "replace": "\thistoryAlloc = span + blockLen + roundedSpan + extra;"
  },
  {
   "label": "the history leaves out the rounded-down span",
-  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
+  "find": "\thistoryAlloc = span + 2u * blockLen + roundedSpan + extra;",
   "replace": "\thistoryAlloc = span + 2u * blockLen + extra;"
  },
  {
   "label": "the history leaves out the final addend",
-  "find": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen\n\t\t       + extra;",
-  "replace": "\thistoryAlloc = span + 2u * blockLen + span / blockLen * blockLen;"
+  "find": "\thistoryAlloc = span + 2u * blockLen + roundedSpan + extra;",
+  "replace": "\thistoryAlloc = span + 2u * blockLen + roundedSpan;"
  },
  {
   "label": "the history is allocated one float short",
