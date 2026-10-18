@@ -135,6 +135,28 @@ output.write_bytes(b'compiled')
         self.run_stage()
         self.assertEqual(len(self.calls()), 2*len(INPUTS))
 
+    def test_inc_only_edit_rebuilds_cached_objects(self):
+        # Runtime conservatively invalidates every object on any included-body
+        # edit. Exercise all three scanned trees without changing .c/.h inputs.
+        watched = [self.root/name for name in INPUTS + ('include/test.h',)]
+        watched.append(self.script)
+        original_times = [path.stat().st_mtime_ns for path in watched]
+        for directory in ('include', 'src/core', 'test/harness'):
+            with self.subTest(directory=directory):
+                inc = self.root/directory/'body.inc'
+                inc.write_text('/* initial extracted body */\n')
+                os.utime(inc, (1_700_000_000, 1_700_000_000))
+                self.run_stage()
+                count = len(self.calls())
+                self.run_stage()
+                self.assertEqual(len(self.calls()), count)
+                inc.write_text('/* changed extracted body only */\n')
+                self.newer_than_objects(inc)
+                self.run_stage()
+                self.assertEqual(len(self.calls()), count + len(INPUTS))
+                self.assertEqual([path.stat().st_mtime_ns for path in watched],
+                                 original_times)
+
     def test_source_edit_rebuilds_only_affected_object(self):
         self.run_stage()
         self.newer_than_objects(self.root/'src/core/plain.c')

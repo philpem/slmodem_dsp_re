@@ -65,8 +65,9 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # The newest header by mtime.  NOT `find -newer "$OUT"`: $OUT is written on
 # every build, so its own mtime is always fresher than any header and the test
 # would never fire.  An object is reusable only if it is newer than BOTH its
-# source and this.
-NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
+# source and this. Extracted .inc bodies are compiler inputs just like .h
+# headers; an inc-only edit must invalidate cached runtime objects too.
+NEWEST_HDR=$(ls -t $(find include src test/harness \( -name '*.h' -o -name '*.inc' \)) test/unit/*.cxxflags 2>/dev/null | head -1)
 
 # COMPILE AND LINK ARE SPLIT, because binutils 2.15 (the period linker) has no
 # `objcopy --globalize-symbols`.  The host does that step between the two

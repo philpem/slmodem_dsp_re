@@ -8566,6 +8566,12 @@ file under the supported include search order. Reject conditional or shadowed
 ownership proofs, and restore each physical file immediately after a mutation.
 Static anchor maintenance does not require a new mutation campaign.
 
+Treat extracted `.inc` bodies as build dependencies too. The runtime period
+cache watches both `.h` and `.inc` inputs in its header search trees; its
+compile self-test changes only an included body and verifies recompilation.
+Canonical builds retain their generated dependency files. Check both paths:
+a correct canonical rebuild cannot prove the differential fixture used it.
+
 
 ## Keep local and CI loss reviews consistent
 
