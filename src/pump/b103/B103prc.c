@@ -194,22 +194,20 @@ TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count)
 short
 RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count)
 {
-	struct b103_hdx *hdx = fp->hdx;
-	struct b103_dsp *dsp = fp->dsp;
 
 	(void)out;
 
-	hdx->rx_count = (short)(hdx->rx_count + 1);
+	fp->hdx->rx_count = (short)(fp->hdx->rx_count + 1);
 
-	FPM_AGC_agc(&dsp->det_agc, in, (unsigned short)*count, 1);
+	FPM_AGC_agc(&fp->dsp->det_agc, in, (unsigned short)*count, 1);
 
-	if (FPM_TONE_detect(hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
-		dsp->rx_state = (short)(dsp->rx_state + 5);
-		if (hdx->substate == 1)
-			B103NextState[hdx->mode](fp);
-	} else if (hdx->rx_count >= hdx->tone_timeout) {
-		hdx->substate = 5;
-		B103NextState[hdx->mode](fp);
+	if (FPM_TONE_detect(fp->hdx->tone_detect, in, *count) == FPM_TONE_PRESENT) {
+		fp->dsp->rx_state = (short)(fp->dsp->rx_state + 5);
+		if (fp->hdx->substate == 1)
+			B103NextState[fp->hdx->mode](fp);
+	} else if (fp->hdx->rx_count >= fp->hdx->tone_timeout) {
+		fp->hdx->substate = 5;
+		B103NextState[fp->hdx->mode](fp);
 		fp->flags |= B103_FLAG_TIMEOUT;
 		fp->status = 5;
 	}

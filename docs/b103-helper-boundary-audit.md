@@ -170,3 +170,57 @@ make period T='t_b103fp t_b103hdx t_b103create t_b103link' J=8
 The historical separation table above records its own baseline; its three
 residual rows are superseded by this follow-up. Full `make phase` remains
 an integration gate.
+
+## Receiver owner reloads after calls
+
+A further bounded cross starts at `64d53dd51`, after the three count/control
+recoveries. `RxDetMarkB103` cached both `fp->hdx` and `fp->dsp` on entry.
+The reference instead obtains each owner when used across the two external
+signal-processing calls: it reloads `fp->hdx` after AGC at 0x8f374, then
+reloads `fp->dsp` and `fp->hdx` after tone detection at 0x8f387/0x8f38a.
+The timeout arm independently reloads `fp->hdx` at 0x8f3c0. These are actual
+operand value-age differences, even if the tested callees leave the owners
+unchanged. No hypothetical callback fixture is needed to justify the source
+boundary.
+
+| Owner access | Receiver length | Reference verdict |
+| --- | ---: | --- |
+| Both cached, baseline | 246 | SIZE(8) |
+| HDX direct, DSP cached | 247 | SIZE(9) |
+| HDX cached, DSP direct | 241 | SIZE(3) |
+| Both direct, retained | 238 | BYTES(6) |
+
+The native receiver is 238 bytes. The retained source accesses owners directly
+rather than keeping either pointer alive across calls. The first RTL dump
+contains the post-call owner loads; by register allocation the unnecessary
+long-lived owners and extra saved register disappear. The final stack frame,
+save set, call targets and branch layout agree with the reference. The six
+remaining differing instruction bytes select scratch registers in the
+next-state index and timeout comparison; no missing field, operation or
+branch is established there. No register spelling experiment is adopted.
+
+Only this receiver body changes. The other 16 bodies and their canonical
+relocations, all 17 strong function exports, nontext bytes and section
+metadata, nontext relocations and resolved external imports are unchanged.
+The pair retains 13 exact bodies out of 17, with zero exact gains or losses.
+This is a supported partial source recovery, rather than a new exact claim.
+The four focused period binaries again pass with zero failures, using the
+unchanged component fixtures described above.
+
+`B103AnswerNextState` was reviewed alongside this receiver. Its native
+fields, widths, case predicates and diagnostic guards agree with source.
+Its prior closed MRF interaction (`tools/batch20_b103_mrf_stages.py`) reports
+identical RTL through `27.flow2`, with the first difference at `28.peephole2`
+in scratch-register choices. That history provides no new source witness;
+the 250-byte candidate versus 237-byte reference remains nonexact.
+
+```sh
+python3 tools/recovery_b103_receiver_owners.py \
+  --objects build/b103-count-baseline --out /tmp/b103-receiver-owners
+make period T='t_b103fp t_b103hdx t_b103create t_b103link' J=8
+```
+
+The replay raw-reproduces both frozen baseline objects, crosses both owner
+choices independently, and retains the same complete pair controls and
+compiler dumps as the preceding replay. It also checks that the retained
+cell's source literally equals the adopted source.
