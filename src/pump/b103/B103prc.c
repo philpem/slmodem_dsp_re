@@ -133,7 +133,7 @@ TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count)
 	unsigned short *bits = (unsigned short *)in;
 	struct b103_hdx *hdx;
 	unsigned short i;
-	short n;
+	unsigned short n;
 
 	for (i = 0; i < (unsigned short)*count; i++)
 		bits[i] = 1;
@@ -151,10 +151,10 @@ TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count)
 	 * is named `v21` rather than `is_answer` because that is what it
 	 * selects everywhere else -- see the tone table in b103fp.h.
 	 */
-	if (fp->cfg.v21) {
-		if (hdx->tx_blocks <= 0)
+	if (fp->cfg.v21 == 0) {
+		if (hdx->tx_blocks <= 0 && fp->dsp->rx_state > 14)
 			B103NextState[hdx->mode](fp);
-	} else if (hdx->tx_blocks <= 0 && fp->dsp->rx_state > 14) {
+	} else if (hdx->tx_blocks <= 0) {
 		B103NextState[hdx->mode](fp);
 	}
 
@@ -166,7 +166,7 @@ short
 TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count)
 {
 	struct b103_hdx *hdx;
-	short n;
+	unsigned short n;
 
 	n = TxNoCarrierB103(fp, (const unsigned short *)in, out,
 			    (unsigned short)*count);
@@ -269,24 +269,20 @@ RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count)
 
 	fp->flags &= (unsigned char)~B103_FLAG_CARRIER;
 
-	if (CarrierDetectB103(fp)) {
+	if (CarrierDetectB103(fp) == 0) {
+		hdx = fp->hdx;
+		hdx->rx_count = (short)(hdx->rx_count + 1);
+		if (hdx->rx_count > 7) {
+			B103NextState[hdx->mode](fp);
+			fp->status = 6;
+			nbits = 0;
+		}
+	} else {
 		fp->flags |= B103_FLAG_CARRIER;
 		fp->hdx->rx_count = 0;
-		fp->flags &= (unsigned char)~0x80;
-		return nbits;
 	}
-
-	hdx = fp->hdx;
-	hdx->rx_count = (short)(hdx->rx_count + 1);
-	if (hdx->rx_count <= 7) {
-		fp->flags &= (unsigned char)~0x80;
-		return nbits;
-	}
-
-	B103NextState[hdx->mode](fp);
 	fp->flags &= (unsigned char)~0x80;
-	fp->status = 6;
-	return 0;
+	return nbits;
 }
 
 /*
