@@ -2,8 +2,9 @@
 """Trace ordered CID_process boundaries in an existing static Gentoo fixture.
 
 This observes public-create/feed/delete component histories, not modem end-to-end
-reachability. Only calls made directly by CID_process are expanded; receiver
-internals remain inside cid_progress. No compilation, input mutation, inferior
+reachability. Calls made directly by CID_process are expanded, plus constructor
+retuning and the receiver's resampler calls; other receiver internals remain
+inside cid_progress. No compilation, input mutation, inferior
 calls or production source changes are performed. Debug/TTY return values are
 the harness host contract; CID_process itself ignores those int results.
 The period-linked fixture carrier is checked against a continuous sine within
@@ -20,6 +21,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from collections import Counter
+from functools import lru_cache
 from elftools.elf.elffile import ELFFile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,7 +147,26 @@ def check_carrier(values):
     return proof
 
 
-def validate(trace, require_cap=False):
+@lru_cache(maxsize=32)
+def reference_wave(wire_hex, rate, oscillator_rate=None):
+    """Independent sample reference from the decoded async wire and line rate.
+    The optional oscillator divisor exists only for a known-wrong control."""
+    assert rate in (8000, 9600)
+    oscillator_rate = oscillator_rate or rate
+    bits = [i & 1 for i in range(300)] + [1] * 180
+    for value in bytes.fromhex(wire_hex):
+        bits += [0] + [(value >> i) & 1 for i in range(8)] + [1]
+    bits += [1] * 60
+    table = [round(8000 * math.sin(2 * math.pi * i / 64)) for i in range(64)]
+    phase, wave = 0, bytearray()
+    for i in range(len(bits) * rate // 1200):
+        frequency = 1200 if bits[i * 1200 // rate] else 2200
+        phase = (phase + ((frequency << 32) + oscillator_rate // 2) // oscillator_rate) & 0xffffffff
+        wave.extend(table[phase >> 26].to_bytes(2, 'little', signed=True))
+    return bytes(wave)
+
+
+def validate(trace, require_cap=False, require_raw9600=False):
     assert trace['exit_codes'] == [0] and not trace['errors']
     assert not trace['active'] and not trace['waiting'] and not trace['live']
     records = trace['records']
@@ -156,13 +177,29 @@ def validate(trace, require_cap=False):
     assert all(row['finished'] for row in records)
     assert all(isinstance(row['created'], bool) for row in trace['lifecycles'])
     assert all(row.get('deleted') for row in trace['lifecycles'] if row['created'])
+    retunes = Counter()
+    for row in trace['lifecycles']:
+        if not row['created']:
+            assert not row['retunes']
+            continue
+        assert row['fsk_rate'] == row['rate'] and row['mark_conf_step'] == 9
+        assert row['retunes'] == ([{'requested': 9600, 'before': 8000}] if row['rate'] == 9600 else [])
+        if row['kind'] == 'original':
+            retunes[str(row['rate'])] += len(row['retunes'])
     counts = Counter()
     progress_results = Counter()
     chunks = Counter()
     available_fields = Counter()
     delivered_fields = Counter()
     packets = Counter()
+    resamplers = Counter()
+    success_shapes = Counter()
     for row in sides['original']:
+        if row['wire_hex']:
+            wave = reference_wave(row['wire_hex'], row['rate'])
+            assert row['wave_samples'] == len(wave) // 2
+            assert row['wave_sha256'] == hashlib.sha256(wave).hexdigest(), 'captured waveform differs from declared wire/rate'
+            counts['waveform_checks'] += 1
         counts['process_calls'] += 1
         counts['debug_level_' + str(row['debug'])] += 1
         events = row['events']
@@ -172,7 +209,13 @@ def validate(trace, require_cap=False):
             assert p['call'] == 'progress'
             assert p['input_offset'] == used and p['n_in'] == min(192, row['count'] - used)
             assert p['what'] == 0 and p['n_out'] == 0
-            assert p['state_in'][:2] == [0, 1] and p['state_out'][:2] == [0, 1]
+            assert p['state_in'][:2] == [0, row['cid_val']] and p['state_out'][:2] == [0, row['cid_val']]
+            assert row['rate'] in (8000, 9600) and row['tx_rate'] == row['rate']
+            if row['rate'] == 9600:
+                assert not p['resampler_counts'], '9600-Hz path unexpectedly resamples'
+            else:
+                assert all(n == 160 for n in p['resampler_counts'])
+            resamplers[str(row['rate'])] += len(p['resampler_counts'])
             progress_results[str(p['result'])] += 1
             chunks[str(p['n_in'])] += 1
             pos += 1
@@ -189,6 +232,7 @@ def validate(trace, require_cap=False):
             packets[f'type_{packet[0]:02x}_result_{p["result"]}_checksum_{checksum_ok}'] += 1
             if result == 1:
                 assert checksum_ok, 'successful packet has no complete valid wire checksum'
+                success_shapes[f'{row["rate"]}/{row["cid_val"]}/{row["debug"]}'] += 1
             if row['debug'] > 1:
                 msg = 'cid: CID Success\n' if result == 1 else 'cid: CID Failure\n'
                 assert events[pos] == {'call': 'debug', 'format': msg, 'result': 0}
@@ -197,6 +241,10 @@ def validate(trace, require_cap=False):
                 strings = events[pos]
                 assert strings['call'] == 'get_strings' and strings['result_offset'] == 8
                 raw = bytes.fromhex(strings['strings_hex'])
+                if row['cid_val'] == 2:
+                    expected = packet[:-1].hex().encode()
+                    assert raw == expected + bytes(600 - len(expected)), 'raw output differs from type/length/payload hex without checksum'
+                    counts['raw_wire_output_checks'] += 1
                 fields, cursor = 0, 0
                 while raw[cursor]:
                     fields += 1
@@ -242,13 +290,20 @@ def validate(trace, require_cap=False):
     assert {0, 2} == {row['debug'] for row in sides['original']}
     assert counts['early_settled_calls'] > 0
     assert counts['empty_guards'] > 0 and counts['nonempty_guards'] > 0
+    assert resamplers['8000'] > 0, 'no observed 8000-Hz resampler calls'
     if require_cap:
         assert counts['four_nonempty_calls'] > 0, 'no observed four nonempty string iterations'
         assert counts['four_field_cap_with_remaining'] > 0, 'no observed fifth field withheld at the four-field cap'
+    if require_raw9600:
+        required = {f'{rate}/{value}/{debug}' for rate in (8000, 9600) for value in (1, 2) for debug in (0, 2)}
+        assert required <= set(success_shapes), 'missing rate/raw/debug success coverage'
     return {'per_side': dict(counts), 'progress_results_per_side': dict(progress_results),
             'available_fields_per_success': dict(available_fields),
             'delivered_fields_per_success': dict(delivered_fields),
             'settled_packets_per_side': dict(packets),
+            'success_rate_value_debug_per_side': dict(success_shapes),
+            'constructor_retunes_per_side': dict(retunes),
+            'native_resampler_calls_per_side': dict(resamplers),
             'progress_input_counts_per_side': dict(chunks),
             'create_calls_both_sides': len(trace['lifecycles']),
             'accepted_created_and_deleted_both_sides': sum(row['created'] for row in trace['lifecycles']),
@@ -256,7 +311,7 @@ def validate(trace, require_cap=False):
             'ordered_events_both_sides': sum(len(r['events']) for r in records)}
 
 
-def controls(trace, require_cap=False):
+def controls(trace, require_cap=False, require_raw9600=False):
     caught = []
     mutations = ('progress-result', 'count-out', 'string-offset', 'callback-order')
     for mutation, both in [(m, False) for m in mutations] + [('count-out', True), ('callback-order', True), ('no-observations', False)]:
@@ -275,7 +330,7 @@ def controls(trace, require_cap=False):
                     index = next(i for i, e in enumerate(row['events']) if e['call'] == 'tty')
                     row['events'][index], row['events'][index + 1] = row['events'][index + 1], row['events'][index]
         try:
-            validate(bad, require_cap)
+            validate(bad, require_cap, require_raw9600)
         except AssertionError:
             caught.append(mutation + ('-both-sides' if both else ''))
         else:
@@ -318,7 +373,48 @@ def controls(trace, require_cap=False):
                         {'call': 'tty', 'offset': None, 'payload_hex': '0d0a', 'length': 2, 'result': 2},
                         copy.deepcopy(length)])
             try:
-                validate(bad, require_cap)
+                validate(bad, require_cap, require_raw9600)
+            except AssertionError:
+                caught.append(mutation)
+            else:
+                raise AssertionError('negative control accepted: ' + mutation)
+    if require_raw9600:
+        for mutation in ('raw-includes-checksum-both-sides', '9600-resample-both-sides',
+                         'wrong-oscillator-rate-both-sides', 'changed-wave-sample-both-sides',
+                         'raw-uppercase-both-sides', 'raw-byte-order-both-sides',
+                         'missing-retune-both-sides', 'missing-raw9600-coverage'):
+            bad = copy.deepcopy(trace)
+            if mutation.startswith('missing-retune'):
+                for row in bad['lifecycles']:
+                    if row['created'] and row['rate'] == 9600:
+                        row['retunes'] = []
+            elif mutation.endswith('coverage'):
+                bad['records'] = [r for r in bad['records'] if (r['rate'], r['cid_val']) != (9600, 2)]
+            else:
+                for side in SITES:
+                    row = next(r for r in bad['records'] if r['kind'] == side
+                               and r['rate'] == 9600 and r['cid_val'] == 2 and r['result'] == 1)
+                    if mutation.startswith('wrong-oscillator'):
+                        wrong = reference_wave(row['wire_hex'], row['rate'], 8000)
+                        row['wave_sha256'] = hashlib.sha256(wrong).hexdigest()
+                    elif mutation.startswith('changed-wave'):
+                        wrong = bytearray(reference_wave(row['wire_hex'], row['rate']))
+                        wrong[0] ^= 1
+                        row['wave_sha256'] = hashlib.sha256(wrong).hexdigest()
+                    elif mutation.startswith('9600'):
+                        next(e for e in row['events'] if e['call'] == 'progress')['resampler_counts'] = [192]
+                    else:
+                        packet = bytes.fromhex(next(e for e in row['events'] if e['call'] == 'progress' and e['result'] == 1)['packet_hex'])
+                        if mutation.startswith('raw-uppercase'):
+                            wrong = packet[:-1].hex().upper().encode()
+                            assert wrong != packet[:-1].hex().encode()
+                        elif mutation.startswith('raw-byte-order'):
+                            wrong = packet[:-1][::-1].hex().encode()
+                        else:
+                            wrong = packet.hex().encode()
+                        next(e for e in row['events'] if e['call'] == 'get_strings')['strings_hex'] = (wrong + bytes(600 - len(wrong))).hex()
+            try:
+                validate(bad, require_cap, require_raw9600)
             except AssertionError:
                 caught.append(mutation)
             else:
@@ -334,6 +430,8 @@ def main():
     parser.add_argument('--out', type=Path, default=ROOT / 'build/cid-process-trace')
     parser.add_argument('--require-four-field-cap', action='store_true',
                         help='require four nonempty fields and a rendered fifth field withheld from TTY')
+    parser.add_argument('--require-raw9600', action='store_true',
+                        help='require successful raw/formatted delivery at 8000/9600 Hz and debug 0/2')
     args = parser.parse_args()
     fixture = args.fixture.resolve()
     objpath = (args.period_object or fixture.parent / 'src_service_cid.o').resolve()
@@ -385,10 +483,15 @@ def main():
                           for name in ('create', 'delete', 'process')}
         settings[kind].update(debug=linked.symbols[prefix + 'dsplibs_debug_level']['st_value'],
                               sites=sites, loop=loop)
-        for name, size in [('bits', 4096), ('nbits', 4)]:
+        for name, size in [('bits', 4096), ('nbits', 4), ('line_rate', 4), ('nsamp', 4), ('burst', 80000)]:
             symbols = [s for s in linked.symtab.iter_symbols() if s.name == name and s['st_size'] == size]
             assert len(symbols) == 1, (name, 'ambiguous fixture wire owner')
             settings[kind][name] = symbols[0]['st_value']
+        settings[kind]['carrier'] = linked.symbols['sintab']['st_value']
+        settings[kind]['retune'] = linked.symbols[prefix + 'cid_freq_sampl']['st_value']
+        settings[kind]['resampler'] = linked.symbols[prefix + 'FPM_MRF_filter']['st_value']
+        modem = linked.symbols[prefix + 'cid_modem']
+        settings[kind]['modem_range'] = [modem['st_value'], modem['st_value'] + modem['st_size']]
         evidence[kind] = dict(proof, object=str(path), object_sha256=before[str(path)], comments=obj.comments)
     # Preserve original companion exacts; this apparatus never changes source.
     companions = {name: d.b.verdict(*d.b.body(str(refpath), name), *d.b.body(str(objpath), name))
@@ -400,11 +503,12 @@ def main():
     with (out / 'gdb.log').open('w') as log:
         subprocess.run(command, cwd=out, stdout=log, stderr=subprocess.STDOUT, check=True)
     trace = json.loads((out / 'trace-observe.json').read_text())
-    report = validate(trace, args.require_four_field_cap)
+    report = validate(trace, args.require_four_field_cap, args.require_raw9600)
     report.update(fixture=str(fixture), fixture_sha256=before[str(fixture)], evidence=evidence,
                   input_hashes=before, command=command, companions=companions,
-                  negative_controls=controls(trace, args.require_four_field_cap),
+                  negative_controls=controls(trace, args.require_four_field_cap, args.require_raw9600),
                   four_field_cap_required=args.require_four_field_cap, production_source_changed=False)
+    report['raw9600_required'] = args.require_raw9600
     report['carrier_calibration'] = carrier_proof
     report['negative_controls'].append('changed-period-carrier-sample')
     assert before == {p: sha(Path(p)) for p in before}, 'input changed during observation'
