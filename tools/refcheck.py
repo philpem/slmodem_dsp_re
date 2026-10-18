@@ -84,6 +84,9 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mutation_source import resolve_source, SourceError
 
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -727,30 +730,42 @@ def check_live_mutants():
     if not os.path.exists(reg_path):
         return []
     try:
-        reg = json.load(open(reg_path))
+        reg = json.loads(Path(reg_path).read_text())
     except ValueError:
         return []                       # check_suites() reports this
     live = []
+    checked_suites, checked_targets = 0, 0
     for name, entry in sorted(reg.items()):
         if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
             continue
         path = os.path.join("test", "mutations", name + ".json")
         if not os.path.exists(path) or not os.path.exists(entry[0]):
             continue
+        checked_suites += 1
         try:
-            muts = json.load(open(path))
+            muts = json.loads(Path(path).read_text())
         except ValueError:
             print("  MALFORMED  %s" % path)
             live.append(path)
             continue
-        text = open(entry[0]).read()
         for m in muts:
             if not isinstance(m, dict) or "find" not in m or "replace" not in m:
                 continue
+            checked_targets += 1
+            try:
+                physical, _ = resolve_source(entry[0], m, validate_anchor=False)
+                text = physical.read_text()
+            except (SourceError, OSError, TypeError) as error:
+                print("  BAD MUTATION SOURCE  %s: %s: %s"
+                      % (name, m.get("label", "(unlabelled)"), error))
+                live.append(str(m.get("source", entry[0])))
+                continue
             if m["find"] not in text and m["replace"] in text:
                 print("  LIVE MUTANT  %s: %s"
-                      % (entry[0], m.get("label", "(unlabelled)")))
-                live.append(entry[0])
+                      % (physical, m.get("label", "(unlabelled)")))
+                live.append(str(physical))
+    print("  live-mutant scan: %d suite(s), %d target(s), %d live or invalid"
+          % (checked_suites, checked_targets, len(live)))
     return live
 
 

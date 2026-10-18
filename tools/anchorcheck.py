@@ -45,6 +45,9 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mutation_source import resolve_source, SourceError
 
 #
 # THE MAP COMES FROM THE HEADER, NOT FROM A COMMENT.
@@ -189,7 +192,7 @@ def main():
                     help="suites to check; default every registered one")
     args = ap.parse_args()
 
-    reg = json.load(open(os.path.join("test", "mutations", "suites.json")))
+    reg = json.loads(Path("test/mutations/suites.json").read_text())
     names = args.suite or [k for k in reg if not k.startswith("_")]
     suspect = 0
     #
@@ -221,12 +224,12 @@ def main():
             skipped.append((name, "registered, but there is no %s" % path))
             continue
         try:
-            muts = json.load(open(path))
+            muts = json.loads(Path(path).read_text())
         except ValueError as e:
             skipped.append((name, "%s is malformed: %s" % (path, e)))
             continue
         checked += 1
-        src = open(source).read()
+        src = Path(source).read_text()
         idx, arms = defn_index(src), arm_map(src)
         defined = {n for _, n in idx}
         #
@@ -258,7 +261,14 @@ def main():
             if m.get("replace") == m["find"]:
                 vacuous.append((name, label_of(m)))
                 continue
-            hits = anchor_positions(src, m["find"])
+            try:
+                physical, proven_owner = resolve_source(source, m)
+            except SourceError as error:
+                print("  BAD SOURCE  %s: %s: %s" % (name, label_of(m), error))
+                suspect += 1
+                continue
+            row_src = physical.read_text() if proven_owner else src
+            hits = anchor_positions(row_src, m["find"])
             if len(hits) != 1:
                 #
                 # `reanchor.py` repairs these, but nothing FAILED on them:
@@ -270,7 +280,7 @@ def main():
                 #
                 nonuniq.append((name, label_of(m), len(hits)))
                 continue
-            fn = enclosing(idx, hits[0])
+            fn = proven_owner or enclosing(idx, hits[0])
             label = m.get("label", "")
 
             #
@@ -290,7 +300,8 @@ def main():
                     print("      fn says  %s" % want)
                     print("      lands in %s\n" % fn)
                     suspect += 1
-                continue
+                if not proven_owner:
+                    continue
 
             if fn not in owner:
                 continue                      # shared helper: legitimate

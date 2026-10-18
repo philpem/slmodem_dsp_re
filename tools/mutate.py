@@ -90,6 +90,8 @@ import subprocess
 import sys
 import tempfile
 import time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mutation_source import resolve_source, SourceError, mutated_file
 
 #
 # OPERATE ON THIS SCRIPT'S OWN TREE, whatever the caller's directory is.
@@ -1049,7 +1051,6 @@ def main():
     else:
         for note in [m for m in entries if "find" not in m]:
             print("  note  %s" % note_text(note))
-    good = open(args.source).read()
     target = args.test
 
     #
@@ -1078,6 +1079,14 @@ def main():
                      (out or "") + diverge_note(args.test, out or ""))
 
         for m in muts:
+            try:
+                physical_source, _ = resolve_source(args.source, m)
+            except SourceError as error:
+                broken.append((m["label"], str(error)))
+                print("  ????  %-52s  BAD SOURCE: %s" % (m["label"], error))
+                continue
+            with open(physical_source) as stream:
+                good = stream.read()
             n = good.count(m["find"])
             if n != 1:
                 broken.append((m["label"], "matches %d times, need 1" % n))
@@ -1107,8 +1116,8 @@ def main():
                       % m["label"])
                 continue
 
-            open(args.source, "w").write(mutated)
-            rc, out, gate = build_and_run(target, args.test)
+            with mutated_file(physical_source, good, mutated):
+                rc, out, gate = build_and_run(target, args.test)
 
             if rc is None:
                 broken.append((m["label"], "does not compile"))
@@ -1140,7 +1149,6 @@ def main():
                 for f in fails:
                     print("            %s" % f)
     finally:
-        open(args.source, "w").write(good)
         if stdout:
             stdout.__exit__(None, None, None)
 

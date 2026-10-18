@@ -25,12 +25,13 @@ SNAP = os.path.join("test", "mutations", "snapshot.json")
 SUITES = os.path.join("test", "mutations", "suites.json")
 #
 # `tools/mutate.py` is IN the closure: it is the runner, and what counts as
-# caught, unusable or equivalent is its code.  Change it and these verdicts
-# describe a classification that no longer exists.  Nothing else under
-# `tools/` can move a verdict, so nothing else is here.
+# caught, unusable or equivalent is its code. Its shared mutation-source
+# resolver also decides which physical file is changed. Both belong here;
+# changing either can invalidate historical verdicts.
 #
 CLOSURE = ("Makefile", "src", "include", os.path.join("test", "harness"),
-           os.path.join("tools", "mutate.py"))
+           os.path.join("tools", "mutate.py"),
+           os.path.join("tools", "mutation_source.py"))
 
 HEADER = [
     "What every mutation suite last said, and the key saying what it",
