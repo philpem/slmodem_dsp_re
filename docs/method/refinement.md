@@ -5158,9 +5158,11 @@ inline all expressions into their consumers.
 The constructor-based boundary regression from
 [issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292) now runs in
 the normal tone-detector fixture. Its 64 scalar checks were followed by
-192 block-overload checks; the fixture now reports 82,628 checks. The standalone `tools/probe_generic_tone_unordered.py`
-reuses that same test definition and preserves its exit status. Keep the
-historical failing run as evidence of the coverage gap; the new passing
+192 block-overload checks; that measurement reported 82,628 checks. The
+[standalone driver](https://github.com/philpem/slmodem_dsp_re/blob/e82145fe7/tools/probe_generic_tone_unordered.py)
+and its [replay wrapper](https://github.com/philpem/slmodem_dsp_re/blob/e82145fe7/test/explore/t_gtonedet_unordered.cpp)
+were retired after the default fixture acquired the same scalar regression.
+The historical failing run remains evidence of the coverage gap; the passing
 regression closes the demonstrated component failure, without claiming a
 nonfinite input is reachable through the modem lifecycle.
 
