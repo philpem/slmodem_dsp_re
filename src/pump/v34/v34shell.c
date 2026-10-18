@@ -807,7 +807,8 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	int st = (unsigned short)(s->state_idx - 1) & 0x1f;
 	int branch = s->state[st].seed;
 	int code;
-	int a, b, c, d;
+	/* Native rounded coordinates are word stores, signed before each nudge. */
+	short a, b, c, d;
 	short r0, r1, r2, r3;
 	int k1, k2;
 	int packed, g;
@@ -941,7 +942,8 @@ demap_candidates(int p, int div, short *lo, short *hi)
 	int q = p / div;
 
 	q = ((p > 0 ? q + 1 : q) & ~3) + 1;
-	q *= div;
+	/* The native neighbour arithmetic consumes the signed low word. */
+	q = (short)(q * div);
 
 	*lo = (short)q;
 	*hi = (short)(p > (short)q ? q + 2 * div : q - 2 * div);
@@ -970,10 +972,13 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 
 	s->state[st].pair[1] = *(int *)ap;
 
-	/* 1. Eight candidates, two per parameter. */
-	for (i = 0; i < 4; i++)
-		demap_candidates(s->state[st].par[i], div,
-				 &cand[i * 2], &cand[i * 2 + 1]);
+	/* 1. Two parameter pairs, each producing four candidates in order. */
+	for (i = 0; i < 2; i++) {
+		demap_candidates(s->state[st].par[i * 2], div,
+				 &cand[i * 4], &cand[i * 4 + 1]);
+		demap_candidates(s->state[st].par[i * 2 + 1], div,
+				 &cand[i * 4 + 2], &cand[i * 4 + 3]);
+	}
 
 	/* 2. Squared distances, four combinations per parameter pair. */
 	for (i = 0; i < 2; i++) {
