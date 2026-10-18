@@ -22,6 +22,14 @@ from elftools.elf.elffile import ELFFile
 SYMBOL = '_Z17getSegmentPointer7PcmTypei'
 OBJECT = 'src_pump_v90_V90DilDescriptorSettings.cpp.o'
 BASE = 'c7cf4f8cd'
+IDENTITY_SCOPE = 'extraction-only'
+PROVENANCE_PATHS = (Path(__file__),d.ROOT/'tools/toolchain/byteident.py',
+                    d.ROOT/'tools/toolchain/readonly_copy.py')
+
+
+def validate_census(report):
+    assert not report['verdict_changes'] and not report['body_changes'], (
+        report['verdict_changes'],report['body_changes'])
 
 
 def digest(path):
@@ -137,6 +145,25 @@ def main():
     parser.add_argument('--out',type=Path,default=d.ROOT/'build/body-extraction')
     parser.add_argument('--focused-only',action='store_true')
     args = parser.parse_args()
+    if IDENTITY_SCOPE == 'extraction-only':
+        import readonly_copy
+        d.b.body.cache_clear()
+        try:
+            with patch.object(readonly_copy,'prove',side_effect=readonly_copy.Refused('extraction-only audit')):
+                run(args)
+        finally:
+            d.b.body.cache_clear()
+    else:
+        run(args)
+
+
+def run(args):
+    apparatus_before = {str(p.relative_to(d.ROOT)):digest(p) for p in PROVENANCE_PATHS}
+    def provenance(report):
+        after = {str(p.relative_to(d.ROOT)):digest(p) for p in PROVENANCE_PATHS}
+        report['apparatus_hashes_before'] = apparatus_before
+        report['apparatus_hashes_after'] = after
+        assert apparatus_before == after, 'apparatus changed during observation'
     out = args.out.resolve()
     out.mkdir(parents=True,exist_ok=True)
     frozen = out/'objects'
@@ -168,7 +195,8 @@ def main():
     report = {'mutations':mutations(frozen/OBJECT,out,old),
         'constructor_alias':constructor_alias(frozen/'src_pump_v90_V92EchoCanceller.cpp.o',out),
         'extraction_controls':extraction_controls(frozen/OBJECT),'objects':len(inputs['objects']),
-        'production_source_changed':False,'identity_rules_changed':False,
+        'production_source_changed':False,'identity_rules_changed':IDENTITY_SCOPE != 'extraction-only',
+        'identity_proof_scope':IDENTITY_SCOPE,
         'input_manifest_sha256':digest(manifest),'comparator_baseline_revision':BASE,
         'comparator_after_sha256':digest(d.ROOT/'tools/toolchain/byteident.py')}
     if not args.focused_only:
@@ -213,9 +241,11 @@ def main():
             reference_symbols=len(originals),unrepresented_reference_symbols=sorted(set(originals)-set(owners)),
             before=dict(counts[0]),after=dict(counts[1]),verdict_changes=changes,
             body_changes=body_changes,body_ledger=ledgers)
+        provenance(report)
         (out/'results.json').write_text(json.dumps(report,indent=2)+'\n')
-        assert not changes and not body_changes, (changes,body_changes)
+        validate_census(report)
     else:
+        provenance(report)
         (out/'focused-results.json').write_text(json.dumps(report,indent=2)+'\n')
     assert inputs['objects'] == {p.name:digest(p) for p in sorted(frozen.glob('*.o'))}
     print('body extraction:',len(report['mutations']),'real ELF controls; objects',report['objects'],

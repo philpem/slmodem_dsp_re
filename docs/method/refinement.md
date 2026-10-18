@@ -7629,8 +7629,8 @@ returns NODATA; legitimate free-function and constructor aliases still work.
 The immutable before/after audit covers 300 objects, 1852 shared names and
 1886 candidate body copies: no ordinary body or verdict changes. Four real
 ELF cases, two constructor alias entries and five corrupted decoder-output
-controls exercise the guard. The literal-copy proof remains unimplemented;
-a future proof would credit existing emitted code, not newly recovered source.
+controls exercise the guard. The subsequent [readonly-copy proof](#prove-readonly-initializer-copies-without-changing-emitted-code)
+credits existing emitted code, not newly recovered source.
 
 ```sh
 python3 tools/recovery_body_extraction.py --objects build/tc_repro
@@ -7666,3 +7666,129 @@ spelling experiments on the remaining 368-versus-386-byte process body.
 python3 tools/cid_process_trace.py build/period/t_cid \
   --require-four-field-cap --require-raw9600
 ```
+
+
+## Trace store forwarding across related native consumers
+
+For V92EchoCanceller's two diagnostic setters, the source tree and initial
+period RTL retain the sign's member read. The first RTL CSE pass removes that
+read and substitutes the incoming argument. In the pinned complete TU, the
+store is UID 14 from SF pseudo 59, the member load is UID 75 into pseudo 74,
+and branch UID 83 changes to use pseudo 59. The member load survives through
+`05.null` and first disappears in `06.cse`. Reload and x87 stack conversion
+therefore inherit this value lifetime; they do not originate the missing read.
+
+The native setters compare with `fcomps` against member `+0x30` or `+0x34`;
+the candidate keeps a value live and uses `fcompp`. The remaining difference
+also includes a register-stack multiply versus a memory multiply, pop behaviour
+and scheduling. A two-byte length difference does not isolate a two-byte defect.
+
+Use related native consumers to test the explanation. All six `setState`
+member comparisons survive in the reference, including two zero-valued cases.
+Its candidate loses those reads in first CSE. But native `reset` folds both
+zero-valued signs to literal `'-'`, and the current reset is already EXACT195.
+Its initial RTL also has member reads, removed by the same first CSE pass.
+A blanket volatile-member change on the current shared-helper source does not
+explain both native behaviours. This does not exclude a crossed original
+source/qualification explanation in which reset used different diagnostic
+expressions. No such source reconstruction is established by the present trace.
+
+Keep the source and profile unchanged until a discriminator explains the
+site-dependent reloads. Compare original helper/macro argument ownership and
+reset's sign expression before trying another arithmetic spelling. A field
+read written in source is not evidence that the compiler emitted it; comments
+must distinguish the native operand from the current generated operand.
+
+The read-only named-setter follow-up does not provide that missing witness.
+Across 72 emitted setter copies, 51 are exact and six call `edprintf`; the
+only exact floating diagnostic in that subset is `V90PreFilter::setParamEia6`.
+It compares a computed local, not a published member. The related equalizer
+beta setters are SIZE9 and compare the incoming argument before publication.
+Their shared sign predicate does not license transferring their source spelling
+to V92's store-then-readback case.
+
+Replay the two raw-identical complete-TU controls and the trace audit:
+
+```sh
+python3 tools/recovery_echo_decay_lifetime.py --baseline-dir build/copy293-baseline
+python3 tools/recovery_echo_decay_lifetime.py --audit --baseline-dir build/copy293-baseline
+```
+
+The audit checks thirty body verdicts, 52 setter RTL streams, twelve consumer
+streams and eight trees. Six changed-trace controls reject missing loads,
+wrong fields/replacements, retained loads, wrong scale mode and missing death
+notes. Four focused period binaries pass 161199 checks. No executable source,
+type, profile or exact-membership change is licensed by this result.
+
+## Model recovery at the receiver's actual lifecycle boundary
+
+The CID host treats any nonzero `CID_process` result as terminal, calls the
+stop path, and creates a new receiver for the next start. The public wrapper
+has no reset method. A checksum-error recovery fixture must therefore delete
+and recreate the receiver before delivering another packet. Replaying into the
+failed object or clearing private parser state would test a different lifecycle.
+
+Cross raw 8000 Hz, formatted 9600 Hz and raw 9600 Hz with debug 0/2. Preserve
+the existing calibrated waveform and require a checksum error with no callback
+or TTY delivery, destruction, a fresh construction at the same configuration,
+and then successful delivery. Identify lifetimes by observed construction
+and destruction events; pointer inequality is not a valid freshness test,
+because the allocator may reuse the same address.
+
+
+The six failure/recreate/recovery pairs raise CID's fixture to 1106 checks.
+Independent native replay compares 646 paired calls and 1858 ordered events;
+all 24 controls reject. All 44 accepted constructions across both sides have
+zero packet length, packet bytes and fill count. Receiver addresses are reused
+in all twelve paired histories, confirming why construction generations matter.
+Production source and its complete object remain unchanged.
+
+```sh
+python3 tools/cid_process_trace.py build/period/t_cid \
+  --require-four-field-cap --require-raw9600 --require-failure-recovery
+```
+
+## Prove readonly initializer copies without changing emitted code
+
+The shared comparator can now identify an anonymous readonly literal consumed
+by a bounded stack initializer. The proof decodes instructions and dataflow;
+it contains no function-name, function-size or fixed-byte-template exception.
+Its supported domain is deliberately narrow: an ELF32 i386 leaf with entry
+CLD, one fixed private frame, a straight-line setup, one default-width REP
+MOVSL with a known positive count, and an immediate full source-register kill.
+It tracks register aliases and source/stack pointers, rejects pointer escape,
+checks saved-register disjointness and both arms of the remaining CFG, and
+requires balanced restoration. Unknown forms fail closed.
+
+The complete source extent must be ordinary allocated readonly data, without
+ambiguous ownership or relocations. Named, encoded-direct and relocated
+interior entries must not bypass the setup. Only the consumed relocation gets
+a tagged identity containing width, count and every copied byte. All other
+instruction bytes and relocation operands retain their ordinary comparison.
+Function extraction also rejects relocation fields crossing either function
+boundary: a relocation starting outside the symbol can still overwrite its
+first instruction at link time.
+
+For `getSegmentPointer(PcmType, int)`, the two 64-byte literals are identical.
+The decoded copy uses sixteen words in a 92-byte frame; saved registers occupy
+slots 76, 80, 84 and 88. REP MOVSL is at function offset 50 and the full ESI
+kill at 52; seventeen tail CFG states are checked. This completes an identity
+proof for existing emitted code. It is not a newly reconstructed source body,
+and it does not make the partial object raw-identical.
+
+Controls must distinguish unsafe copies from different safe copies. Twenty-five
+hazardous or unsupported actual ELF variants remain UNRESOLVED or NODATA even
+when compared with themselves. Two safe variants—a changed final literal byte
+and a shorter bounded copy—are exact against themselves but fail against the
+original. Requiring every mutation to refuse its own identity would merely
+replace a semantic proof with a hidden encoding whitelist.
+
+```sh
+python3 tools/recovery_readonly_copy.py --objects build/tc_repro
+python3 tools/recovery_readonly_copy.py --objects build/tc_repro --focused-only
+```
+
+The focused controls run in Gentoo CI after canonical compilation. Its metric
+cache keys include the proof module. The older body-extraction audit explicitly
+disables the new literal canonicalization during its extraction-only comparison,
+so its historical no-change assertion still tests extraction independently.
