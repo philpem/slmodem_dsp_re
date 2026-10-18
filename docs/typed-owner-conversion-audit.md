@@ -653,12 +653,27 @@ These observations support two compatible physical models: a seven-word
 array whose last two elements are private to those state-machine roles, or a
 five-word register array followed by separate `short_46` and `short_48`
 members. Both layouts place the same two-byte values at the same addresses;
-the API bounds and current uses do not distinguish them. The present source
-declares the second model, so its seven-iteration `regs[i]` expression is
-outside the declared five-element array for i=5 and i=6 in C. That is a
-current declaration/bounds issue, but the audit has not established that the
-historical object used the same member declaration or that the physical
-storage extent was five. Do not treat the API bound alone as proof for either
-model, or as sufficient evidence to enlarge or split the source declaration.
-The explicit-seven-store candidate remains held pending a source-model
-decision; its build artifacts are experiment records, not an adopted fix.
+the API bounds and uses do not distinguish them. The historical seven-loop
+form indexed beyond the five elements in the current declaration, but the
+audit has not established that the original object used that declaration or
+that physical storage stopped after five words. Do not treat the API bound
+alone as proof for either model.
+
+The constructor now uses seven explicit zero stores through the five declared
+register elements and the two adjacent members, preserving the current layout
+and accessor API without asserting that this was the original C declaration.
+The independent four-cell replay found that the explicit five-plus-two and
+seven-element source forms emitted identical objects across all 14 transitive
+consumers; the separate 7-element loop cell stayed byte-identical to the
+pinned baseline but retained a runtime loop. The `V32.c.o` audit covers six
+function bodies; the five non-constructor bodies stay unchanged.
+[The storage-model audit](v32-register-storage-audit.md) records the replay
+and actual-header selection controls.
+
+For the adopted constructor, `V32FP_recreate` grew by 16 bytes and `V32.c.o`
+by 32 bytes relative to the pinned loop baseline. The two constructor-backed
+period fixtures passed 689,769 checks in total: `t_v32fprecr` 583,756 and
+`t_v32fpdisp` 106,013. The full period gate passed 392 fixtures with zero
+failures. This resolves the current out-of-bounds indexing while leaving the
+original physical extent and historical member declaration explicitly
+unresolved.
