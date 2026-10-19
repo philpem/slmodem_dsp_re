@@ -699,9 +699,14 @@ and what the domain was; "closed by reordering" without the domain is not
 reviewable.
 
 **`docs/method/refinement.md` is the playbook for all of this** — rule 0 and
-nine levers, each with the measurement that established it AND the case where
-it failed. Read it before a refinement pass. It is where these entries are
-maintained; this section is the summary.
+levers 0 to 18 (17 and 18 are the newest: loop-body statement order, and
+"an unobservable declaration should be spelled with no casts"), each with the
+measurement that established it AND the case where it failed. Read it before a
+refinement pass. **It is where these entries are maintained; this section is
+the summary. When a probe closes, add the lever or the correction there in the
+same pass that updates the handover and Hindsight** — a trick that lives only
+in a findings entry or a session transcript is not available to the next
+agent.
 
 ### The tools, and their precision
 

@@ -230,6 +230,16 @@ finding and never generalised**, and were swept up afterwards (7813). Their
 measurements are as real as the rest and their yield in a refinement pass is
 unknown, which is the one thing to hold in mind when a brief quotes them.
 
+**17 and 18 are the newest and their scope is stated with them**: both come
+from one 116-byte V.8 function (2026-10-19), 17's domain is two cells and 18's
+is four, and neither has been swept across the tree. 17 did convert a SIZE
+function to grade-1 ACCEPT, so it is worth trying first on any small
+pointer-walk loop whose size is short by a few instructions.
+
+**14 now carries a measured bound as well as a success:** a TU split pays only
+when it recovers a call boundary; the `V34.c` merge was a bit-identical NULL.
+Read the lever's second half before planning a TU move.
+
 **13 has the same caveat as 10 to 12, and it is stated here rather than
 discovered later.** It closed 74 instructions in ONE function (F7940) and has
 never been swept across the tree, so its yield in a refinement pass is
@@ -316,6 +326,9 @@ enumeration turns back into a search.
 ### Lever 1. Statement order — enumerate, do not search
 
 The single most productive lever: ten of the closures across four passes.
+**Lever 17 is this same question one level in** — the order of the two
+statements inside a loop body — and it is worth checking first when a small
+pointer-walk loop is short by a handful of instructions.
 
 When a difference is a statement order, the candidate source spellings form a
 small finite family. **Compile all of them.** If exactly one maps onto the
@@ -1704,10 +1717,26 @@ them.
 because it inlined a helper, or a constructor that `SIZE`s large because it did
 not inline one the reference contains, is the signal; so is an exact function
 that gains or loses a helper call under an unrelated change. Reach for this
-lever before the flags, and when you do move a function, split its `t_*`
-mutation suite with it: `anchorcheck` reports the detached anchors as "matches 0
-time(s)" and a suite whose anchors now live in two files has to become two
-suites. The same question for the rest of the object is #6/#20.
+lever before the flags. (Splitting a TU used to require moving its `t_*`
+mutation suite; that system is retired, so there is no anchor bookkeeping to
+do. The same question for the rest of the object is #6/#20.)
+
+**A TU SPLIT IS NOT ITSELF A LEVER -- it pays only when a CALL BOUNDARY is
+recovered. Measured NULL (2026-10-19).** The object records a `V34.c` FILE
+record that this tree does not have; its `.text` is `0x57860..0x5AF10`, 20
+global functions, which this tree spreads over `v34scram.c` (4), `v34shell.c`
+(13) and `V34RX.c` (3). Renaming the two `.c` files to `.inc` and adding one
+`V34.c` that includes both -- the whole merge, one compile -- left the census
+**bit-identical**: same sizes, same exact set, `diff` of `--list-exact` empty.
+The reason is measurable and general: the object has **no relocations at all**
+to `scrambleGPC`/`scrambleGPA`/`descrambleGPC`/`descrambleGPA`/`agcadapt`/
+`decision` (every call site inlined them), so there was no boundary for the
+merge to restore, and the 908-byte deficit sits inside functions that already
+shared a TU. **Before any TU move, count the cross-TU relocations into the
+function set. Zero relocations in, zero recovery out.** The same screen would
+have saved the `v8seq.c` question: the source comments annotate seven
+`V8Interface.c` functions with `(v8seq.c)`, but the object has no `v8seq.c`
+FILE record at all.
 
 ### Lever 15. A header-only template has NO translation unit — the user instantiates it
 
@@ -1799,6 +1828,114 @@ codegen-neutral is a different finding -- record it and leave the cast.
 
 Issues #140 (tree-wide retyping audit) and #141 (replace the cast macros this
 hides behind -- `RXS`, `RXS_SRE`, `RXS_FSE`, `RXSTATE`).
+
+### Lever 17. Inside a loop body, the ORDER of the accumulate and the store is a source property
+
+Lever 1 is about statements in a function; this is the same question one level
+in, and it is cheap because the domain is two cells. Measured on
+`v8_fsktxfilter` (V.8, F-2026-10-19, 116-byte function): the object walks three
+moving pointers and, in one pass, both copies the delay line and multiplies
+into an accumulator:
+
+    movzwl (%edi),%ecx      ; x = *src--      (zero-extending 16-bit load)
+    movswl %cx,%eax         ; (short)x
+    imul %edx,%eax          ; * tap++
+    add %eax,(%esp)         ; acc +=
+    mov %cx,(%esi)          ; *dst-- = x
+
+With the same declarations, the same `short k` and the same bounds, the two
+statement orders in the body compile differently and only one is the object:
+
+    acc += (short)x * *tap++;   *dst-- = x;     36 instructions, the object's exact 116 bytes
+    *dst-- = x;   acc += (short)x * *tap++;     33 instructions, 94 bytes
+
+So GCC 3.4.2 does not move an accumulate across a store here, and a 33-vs-36
+instruction gap in a small pointer-walk loop is a body-order question before it
+is an allocation question. Result: grade 0 `BYTES (1 byte)` -- the discarded
+`pop %ecx` versus `pop %edx` -- and **grade 1 `ACCEPT`**. `make period` 394/0.
+
+**A SIZE -> REGALLOC conversion is a win, and it is worth stating as a
+success criterion.** The census has four buckets and the reconstruction
+question is "is the function's source right", not "is its register assignment
+right". When the object's size is reached and grade 1 accepts, the SIZE
+question is answered; the residual is allocation and belongs to levers 3/5.
+Do not keep hill-climbing a `BYTES (1..4)` residual -- that is how a
+`pop %ecx`/`pop %edx` rename becomes an afternoon. Here the conversion moved
+REGALLOC 32 -> 33 and SIZE 631 -> 630 with the exact set unchanged.
+
+### Lever 18. A 16-bit store does not pin the pointee type -- prefer the spelling with the FEWEST casts
+
+Lever 16 removes casts by retyping a holder to its truthful type. This is the
+mirror case, and it BOUNDS what byte identity can claim: when a value's only
+observable use is a 16-bit store, the declaration that produced it is not in
+the object at all.
+
+Measured on `v8_fsktxfilter`, four spellings of the two moving pointers, same
+body and same local:
+
+    unsigned short *src, *dst, with casts       116 B, byte-identical
+    short          *src, *dst, no casts         116 B, byte-identical
+    short *src, unsigned short *dst             116 B, byte-identical
+    unsigned short *src, short *dst             116 B, byte-identical
+
+A 16-bit store cannot distinguish them, and `unsigned short x = *short_ptr`
+is the low 16 bits, which the compiler loads with `movzwl` anyway. **So the
+object proves nothing about the pointer types here, and the reconstruction
+should take the spelling with the fewest casts** (the declared `short
+rx_scratch[]` needed no cast at all). Treat "this declaration is unobservable"
+as a reason to prefer the truthful, cast-free spelling -- not as a licence to
+pick a type the header does not support.
+
+**And the cast that IS forced is worth recognising.** The object's pair
+
+    movzwl (%edi),%ecx      zero-extending load
+    movswl %cx,%eax         sign-extended for the product
+
+is reachable only from an unsigned 16-bit local re-signed for the multiply:
+`unsigned short x = *p; acc += (short)x * t;`. Both directions of removing it
+were measured and both are wrong:
+
+    (short)x present      116 B, movzwl + movswl + imul   (the object)
+    x * *tap++            93 B, movzwl + imul             UNSIGNED multiply
+    short x              93 B, movswl + imul              signed load, no zero-extension
+
+So a load extension that disagrees with the product's signedness is evidence
+for a narrow unsigned local plus one explicit conversion, not for a field
+retype (compare Lever 8) and not for a stray cast.
+
+## A detector names a hypothesis; the gate names the answer
+
+`tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
+only**. It does not check the base register, so two different structs at the
+same displacement are paired freely, and one hit in five is real (F2402).
+
+Measured false positive (V.34, 2026-10-19): `receiver` reported
+`mem 0x214`/`mem 0x216` with object `movzwl` versus ours `movswl`, on
+`include/dsplib/v34recv.h:360-361` (`short pred_err_re`/`pred_err_im`). The
+object's only two loads of those displacements in the whole object were indeed
+`movzwl`, and the change made our sites `movzwl` -- and the period gate
+**rejected it: 392 passed, 2 failed** (`t_v34datapump` 11/18753 checks;
+`t_v34rx` 244054/120452400 plus 602/8451852 transcript checks). Reverted;
+394/0 restored.
+
+The rule that follows: **a detector hit is a hypothesis until the period
+differential corroborates it.** A clean codegen argument is not stronger
+evidence than the gate -- in this case the object's `movzwl 0x214(%ebp)` was
+evidently not that field at all, and the tree's sign-extending source is what
+matches. Run the gate before recording a retype as recovered.
+
+## A findings entry is a historical measurement, not a state
+
+Findings record what was true when they were written. Before acting on one,
+re-measure the claim it makes. F7817 listed `v8_fskmodulate` among eight
+functions where "the blob sibcalls and we do not", and stated that our source
+does not call `v8_fsktxfilter`; measured today it is **grade 0 EXACT**, calls
+`v8_fsktxfilter` at `V8Fsk.c:190`, and tail-calls `v8_txwritequeue` exactly as
+the object does. The only visible difference was NOP padding placement, which
+`byteident` strips. Reading F7817 as a work item would have "fixed" an exact
+function.
+
+`python3 tools/toolchain/byteident.py --why SYMBOL` is the two-line answer.
 
 ## Narrow where the object narrows, not earlier
 
