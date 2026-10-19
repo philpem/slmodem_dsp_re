@@ -462,6 +462,9 @@ summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
 			mx = a;
 			*maxOut = mx;
 		}
+		/* Native 0x37df1/0x38111 reloads after the maximum store;
+		   phase 4 independently repeats this at 0x36cf1/0x37011. */
+		a = fabsf(coefs[i]);
 		if (a < mn) {
 			mn = a;
 			*minOut = mn;
