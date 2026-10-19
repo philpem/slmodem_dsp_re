@@ -951,8 +951,17 @@ v8_TONEq_generate(struct v8 *v, short *out)
  *
  * The reversal counter only runs while the enable at +0x0e is set, so a
  * caller can have the tone without the reversals.
+ *
+ * The DEFINITION is `inline`.  The object has NO `R_386_PC32` call to
+ * `v8_ansamgenerate` anywhere in its 1.2 MB while the symbol itself is
+ * still emitted (0x77210, 249 bytes), which is what a globally visible
+ * function declared `inline` leaves when its only call site -- the tone
+ * arm of `v8handshak` -- runs the body inline.  At -O3 the automatic
+ * budget (max-inline-insns-auto, about 130 RTL instructions) is under this
+ * body, so the copy is reachable only with the declaration.  The header
+ * declaration stays plain, which keeps the out-of-line copy emitted.
  */
-void
+inline void
 v8_ansamgenerate(struct v8 *v, short *out)
 {
 	struct v8_tone *t = &v->tone;
