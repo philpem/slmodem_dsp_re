@@ -228,6 +228,40 @@ missing operations. Nineteen discrepancy names have now been manually reviewed;
 The strict ordered partial object remains different: 72,403/943,398 positioned
 bytes, 1,001/18,317 relocations and 457/2,931 symbol records match.
 
+After PR305 and PR308 landed, the next batch starts from `5a09b5ca7`.
+Two bounded source recoveries preserve **1,112/1,852 EXACT**, with zero
+exact gains or losses and unchanged residual grades. The V.32 differential
+lookup now uses a signed-short counter, restoring INC/CWTL/CMP16 in both
+`FSE_decision_4pt` (436 -> 440 bytes against 468) and `FSE_decision_AB`
+(627 -> 633 against 678). Its complete counter domain is 0..16; no runtime
+overflow defect is claimed. The other seven TU bodies remain unchanged.
+
+`V90Phase3Modulator::generateDIL` now reads sequence indices after companding,
+matching the original byte loads at `0x2b0dd` and `0x2b0fc` and the four
+inlined DIL arms in the two symbol generators. The bodies change from
+362 -> 346, 1,755 -> 1,727 and 1,934 -> 1,906 bytes, against 426, 1,790 and
+2,044 respectively. These size gaps increase; the restored post-call reads
+are the independent reconstruction evidence. All three remain `SIZE`; the
+other 25 TU bodies and its 19 exact functions survive. Repeated-predicate
+and code-load expression controls remain evidence-only. Existing fixtures
+do not establish a history in which companding changes the cursors.
+
+The combined period gate passes 394 fixtures with zero failures and structural
+checks OK. All 300 runtime objects raw-match comparison builds; 298 preserve
+raw bytes against the merged baseline. Across the changed TUs, 32 of 37
+function bodies are unchanged. Interfaces, ordinary data and canonical call
+targets survive. All 68 phase-3 jump-table entries retain their dispatch
+mapping: 64 entry blocks compare unchanged and four identify the reviewed DIL
+cases; a deliberately wrong destination within the same function is rejected.
+Strict ordered partial comparison remains different: 72,536/943,398 positioned
+bytes, 998/18,317 relocation records and 457/2,931 symbols match. The refreshed
+[V.34 typed comparison](method/ghidra-assisted.md#current-v34-baseline-refresh)
+provides a bounded reset-loop width target for the next source investigation.
+The frozen operation screen now has 24 manually reviewed discrepancy names
+(14 supported partial recoveries and ten no-edit reviews), leaving 294 of
+its original 318 names unreviewed. These are progress counts for that screen,
+not a fresh opcode census or a whole-function equivalence result.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
