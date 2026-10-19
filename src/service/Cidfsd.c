@@ -88,7 +88,8 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 		int acc;
 		int j;
 		int d, baud, half;
-		short rate, idx, lidx;
+		unsigned short rate;
+		short idx, lidx;
 		short corr, y, last, bit;
 
 		rate = cid->rate;
