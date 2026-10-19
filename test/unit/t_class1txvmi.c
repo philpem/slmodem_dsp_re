@@ -151,10 +151,10 @@ test_init_v17(void)
 			    i);
 		diff_eq_int("cfg.int_0018, input %ld", ca->int_0018,
 			    cb->int_0018, i);
-		diff_eq_int("cfg.int_001c is the argument, input %ld",
-			    ca->int_001c == (int)(long)&marker[i & 3], 1, i);
-		diff_eq_int("cfg.int_001c same on both sides, input %ld",
-			    ca->int_001c == cb->int_001c, 1, i);
+		diff_eq_int("cfg.aux is the argument, input %ld",
+			    ca->aux == &marker[i & 3], 1, i);
+		diff_eq_int("cfg.aux same on both sides, input %ld",
+			    ca->aux == cb->aux, 1, i);
 	}
 
 	return diff_end();
@@ -209,10 +209,10 @@ test_init_v27(void)
 			    ca->fifo_size_factor, cb->fifo_size_factor, i);
 		diff_eq_int("cfg.int_0018, input %ld", ca->int_0018,
 			    cb->int_0018, i);
-		diff_eq_int("cfg.int_001c is the argument, input %ld",
-			    ca->int_001c == (int)(long)&marker[i & 3], 1, i);
-		diff_eq_int("cfg.int_001c same on both sides, input %ld",
-			    ca->int_001c == cb->int_001c, 1, i);
+		diff_eq_int("cfg.aux is the argument, input %ld",
+			    ca->aux == &marker[i & 3], 1, i);
+		diff_eq_int("cfg.aux same on both sides, input %ld",
+			    ca->aux == cb->aux, 1, i);
 	}
 
 	return diff_end();
@@ -267,10 +267,10 @@ test_init_v29(void)
 			    cb->short_0012, i);
 		diff_eq_int("cfg.fifo_size_factor, input %ld",
 			    ca->fifo_size_factor, cb->fifo_size_factor, i);
-		diff_eq_int("cfg.int_0018 is the argument, input %ld",
-			    ca->int_0018 == (int)(long)&marker[i & 3], 1, i);
-		diff_eq_int("cfg.int_0018 same on both sides, input %ld",
-			    ca->int_0018 == cb->int_0018, 1, i);
+		diff_eq_int("cfg.aux is the argument, input %ld",
+			    ca->aux == &marker[i & 3], 1, i);
+		diff_eq_int("cfg.aux same on both sides, input %ld",
+			    ca->aux == cb->aux, 1, i);
 	}
 
 	return diff_end();

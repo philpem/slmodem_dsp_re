@@ -36,23 +36,21 @@
 /*
  * The three sizes are not inferred: FAXVMI_create asks `sysdep_malloc` for
  * 0x2c, 0x58 and 0x18 at 0x953ab, 0x953c0 and 0x953d4.  The offsets are the
- * loads and stores quoted in faxvmi.h.  Under GCC 3.4.2 this whole block is
- * `#if 0` -- `__SIZEOF_POINTER__` is a 4.6 predefine -- which is the tree's
- * known and documented state; see docs/method/compilers.md.
+ * loads and stores quoted in faxvmi.h. sizeof guards keep these active
+ * under the period compiler while allowing native pointer layouts on LP64.
  */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
 #define VMI_ASSERT_OFF(field, off) \
 	typedef char faxvmi_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi, field) == (off)) \
+		(sizeof(void *) != 4 || (int)__builtin_offsetof(struct faxvmi, field) == (off)) \
 			? 1 : -1]
 #define FRAMER_ASSERT_OFF(field, off) \
 	typedef char faxvmi_framer_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi_framer, field) \
+		(sizeof(void *) != 4 || (int)__builtin_offsetof(struct faxvmi_framer, field) \
 		 == (off)) ? 1 : -1]
 #define LINK_ASSERT_OFF(field, off) \
 	typedef char faxvmi_link_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi_link, field) == (off)) \
+		(sizeof(void *) != 4 || (int)__builtin_offsetof(struct faxvmi_link, field) == (off)) \
 			? 1 : -1]
 
 VMI_ASSERT_OFF(mode, 0x00);
@@ -61,12 +59,14 @@ VMI_ASSERT_OFF(fifo_size, 0x08);
 VMI_ASSERT_OFF(max_frame, 0x0a);
 VMI_ASSERT_OFF(frame_size, 0x0c);
 VMI_ASSERT_OFF(slot, 0x0e);
+VMI_ASSERT_OFF(modem_cfg, 0x10);
+VMI_ASSERT_OFF(ptr_0014, 0x14);
 VMI_ASSERT_OFF(underrun, 0x18);
 VMI_ASSERT_OFF(overflow, 0x1c);
 VMI_ASSERT_OFF(status, 0x20);
 VMI_ASSERT_OFF(framer, 0x24);
 VMI_ASSERT_OFF(link, 0x28);
-typedef char faxvmi_size[(sizeof(struct faxvmi) == 0x2c) ? 1 : -1];
+typedef char faxvmi_size[(sizeof(void *) != 4 || sizeof(struct faxvmi) == 0x2c) ? 1 : -1];
 
 FRAMER_ASSERT_OFF(fifo, 0x00);
 FRAMER_ASSERT_OFF(fifo_size, 0x04);
@@ -94,7 +94,7 @@ FRAMER_ASSERT_OFF(flags_wanted, 0x4a);
 FRAMER_ASSERT_OFF(pack_flagging, 0x4c);
 FRAMER_ASSERT_OFF(ones, 0x50);
 FRAMER_ASSERT_OFF(in_frame, 0x54);
-typedef char faxvmi_framer_size[(sizeof(struct faxvmi_framer) == 0x58)
+typedef char faxvmi_framer_size[(sizeof(void *) != 4 || sizeof(struct faxvmi_framer) == 0x58)
 				? 1 : -1];
 
 LINK_ASSERT_OFF(ptr_0000, 0x00);
@@ -102,10 +102,8 @@ LINK_ASSERT_OFF(buf, 0x04);
 LINK_ASSERT_OFF(pack_count, 0x0c);
 LINK_ASSERT_OFF(pack_width, 0x0e);
 LINK_ASSERT_OFF(unpack_width, 0x10);
-LINK_ASSERT_OFF(int_0014, 0x14);
-typedef char faxvmi_link_size[(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
-
-#endif
+LINK_ASSERT_OFF(modem, 0x14);
+typedef char faxvmi_link_size[(sizeof(void *) != 4 || sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
 
 /*
  * The three framing tables, in the object's own `.rodata` order -- unpack at
@@ -207,10 +205,10 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 	int i;
 
 	if (vmi == NULL) {
-		vmi = sysdep_malloc(0x2c);
-		vmi->framer = sysdep_malloc(0x58);
+		vmi = sysdep_malloc(sizeof(*vmi));
+		vmi->framer = sysdep_malloc(sizeof(*vmi->framer));
 		created = 1;
-		vmi->link = sysdep_malloc(0x18);
+		vmi->link = sysdep_malloc(sizeof(*vmi->link));
 	}
 
 	src = (cfg != NULL) ? cfg : &FAXVMI_CFG;
@@ -221,8 +219,8 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 	vmi->max_frame = src->max_frame;
 	vmi->frame_size = src->frame_size;
 	vmi->slot = src->slot;
-	vmi->int_0010 = (int)(long)src->modem_cfg;
-	vmi->int_0014 = (int)(long)src->ptr_0014;
+	vmi->modem_cfg = src->modem_cfg;
+	vmi->ptr_0014 = src->ptr_0014;
 
 	fr = vmi->framer;
 
@@ -271,7 +269,7 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 
 	lk = vmi->link;
 	if (created) {
-		lk->int_0014 = 0;
+		lk->modem = 0;
 		lk->buf = sysdep_malloc(0x64);
 		lk->ptr_0000 = sysdep_malloc(0x190);
 	}
@@ -281,7 +279,7 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 		lk->ptr_0000[i] = 0;
 
 	vxx_create[(unsigned short)vmi->slot](lk,
-					      (const void *)(long)vmi->int_0010);
+					      vmi->modem_cfg);
 
 	vmi->underrun = 1;
 	vmi->overflow = 0;
@@ -521,9 +519,9 @@ FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl)
 	if (ctl == NULL)
 		return -1;
 
-	if (ctl->int_0014 != 0)
+	if (ctl->control_req != 0)
 		ret = vxx_control[(unsigned short)vmi->slot](
-			vmi->link, (void *)(long)ctl->int_0014);
+			vmi->link, ctl->control_req);
 
 	if (ctl->int_000c != 0 && ctl->short_0010 <= 2) {
 		fr = vmi->framer;

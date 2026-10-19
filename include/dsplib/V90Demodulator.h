@@ -689,7 +689,7 @@ public:
 
 	/*
 	 * +0x278  Wave 6 (F10173): `enterDataSteadyState` does
-	 * `timingHistoryEval = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL]`,
+	 * `timingHistoryEval = params->TIMING_HISTORY_EVALUATION_ENABLED`,
 	 * copying the flag rather than testing it in place -- the store is
 	 * scheduled between the load and the `test`, but it IS in the source,
 	 * because `sessionTermination` reads the identical parameter slot a

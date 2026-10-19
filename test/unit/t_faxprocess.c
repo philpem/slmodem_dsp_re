@@ -55,8 +55,8 @@ extern unsigned int ref_dsplibs_debug_level;
 extern int ref_FAX_process(struct fax_ctx *ctx, const void *in, void *out,
 			   int count);
 extern int ref__idle_state(struct fax_class1 *ctx, const short *rx,
-	short *tx, int word3, int word4, int *rx_count, int *tx_count,
-	int word7, int *word8);
+	short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	int *word7, int *word8);
 extern class1_state_fn ref_class1_state_functions[19];
 
 /*
@@ -67,8 +67,8 @@ extern class1_state_fn ref_class1_state_functions[19];
  * (tools/testvisible.py).
  */
 extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8);
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8);
 
 extern struct rc *ref_RcFixed_Create(int mode);
 extern void ref_RcFixed_Delete(struct rc *h);

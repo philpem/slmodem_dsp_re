@@ -18,14 +18,14 @@
  * functions below is therefore NOT reached from these tests and is noted as
  * such per-function, the same allowance `t_class1hdlcctl.c`'s own
  * `run_send_hdlc_buffer` comment already uses ("not reached from THIS entry
- * point"). `_hdlc_receive_state` also chases `ctx->vmi_a->link->int_0014`'s
+ * point"). `_hdlc_receive_state` also chases `ctx->vmi_a->link->modem`'s
  * own +0x50 -- ONLY on the path where the unpack step actually produced a
  * nonzero element count, which `null_process`'s no-op pack/unpack never
  * does, so that chase is provably never dereferenced from this file's own
  * `_hdlc_receive_state` cases; a true structural fact checked against
  * `dis.py`, not an assumption. `_hdlc_receive_look_carrier_state` makes the
  * SAME chase unconditionally instead, so its own test below overrides
- * `link->int_0014` with a synthetic fixture rather than relying on the null
+ * `link->modem` with a synthetic fixture rather than relying on the null
  * slot -- see that test's own comment.
  *
  * FIFO SETUP.  `_tx_nulls_state`, `_tx_scrambled_ones_state` and
@@ -50,38 +50,38 @@
 #include "dsplib/faxvmi.h"
 
 extern int ref__rx_look_carrier_state(void *ctx, const short *rx, short *tx,
-				      int word3, int word4, int *rx_count,
-				      int *tx_count, int word7, int *word8);
+				      unsigned char *word3, const unsigned char *word4, int *rx_count,
+				      int *tx_count, int *word7, int *word8);
 extern int ref__rx_data_state(void *ctx, const short *rx, short *tx,
-			      int word3, int word4, int *rx_count,
-			      int *tx_count, int word7, int *word8);
+			      unsigned char *word3, const unsigned char *word4, int *rx_count,
+			      int *tx_count, int *word7, int *word8);
 extern int ref__tx_nulls_state(void *ctx, const short *rx, short *tx,
-			       int word3, int word4, int *rx_count,
-			       int *tx_count, int word7, int *word8);
+			       unsigned char *word3, const unsigned char *word4, int *rx_count,
+			       int *tx_count, int *word7, int *word8);
 extern int ref__tx_scrambled_ones_state(void *ctx, const short *rx,
-					short *tx, int word3, int word4,
+					short *tx, unsigned char *word3, const unsigned char *word4,
 					int *rx_count, int *tx_count,
-					int word7, int *word8);
+					int *word7, int *word8);
 extern int ref__tx_data_state(void *ctx, const short *rx, short *tx,
-			      int word3, int word4, int *rx_count,
-			      int *tx_count, int word7, int *word8);
+			      unsigned char *word3, const unsigned char *word4, int *rx_count,
+			      int *tx_count, int *word7, int *word8);
 extern int ref__hdlc_receive_state(void *ctx, const short *rx, short *tx,
-				   int word3, int word4, int *rx_count,
-				   int *tx_count, int word7, int *word8);
+				   unsigned char *word3, const unsigned char *word4, int *rx_count,
+				   int *tx_count, int *word7, int *word8);
 extern int ref__hdlc_receive_between_buffers_state(void *ctx,
 						    const short *rx,
-						    short *tx, int word3,
-						    int word4, int *rx_count,
-						    int *tx_count, int word7,
+						    short *tx, unsigned char *word3,
+						    const unsigned char *word4, int *rx_count,
+						    int *tx_count, int *word7,
 						    int *word8);
 extern int ref__hdlc_receive_look_carrier_state(void *ctx, const short *rx,
-						 short *tx, int word3,
-						 int word4, int *rx_count,
-						 int *tx_count, int word7,
+						 short *tx, unsigned char *word3,
+						 const unsigned char *word4, int *rx_count,
+						 int *tx_count, int *word7,
 						 int *word8);
 extern int ref__t30_preabmle_state(void *ctx, const short *rx, short *tx,
-				   int word3, int word4, int *rx_count,
-				   int *tx_count, int word7, int *word8);
+				   unsigned char *word3, const unsigned char *word4, int *rx_count,
+				   int *tx_count, int *word7, int *word8);
 extern struct faxvmi *ref_FAXVMI_create(struct faxvmi *vmi,
 					const struct faxvmi_cfg *cfg);
 extern struct fax_fifo *ref_FIFO_create(struct fax_fifo *f,
@@ -232,9 +232,9 @@ run_rx_pair(void)
 		w8_a = w8_b = 0;
 
 		ra = ref__rx_look_carrier_state(&ctx_a, rx_a, tx_a, 0, 0,
-		    &rxc_a, &txc_a, w7_a, &w8_a);
+		    &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = _rx_look_carrier_state(&ctx_b, rx_b, tx_b, 0, 0, &rxc_b,
-		    &txc_b, w7_b, &w8_b);
+		    &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -251,11 +251,8 @@ run_rx_pair(void)
 		int ra, rb;
 		long tag = (long)i;
 		/*
-		 * `word7` is a plain `int` in the `class1_state_fn`
-		 * signature, but `_rx_data_state` treats it as a pointer,
-		 * `(int *)(long)word7` -- both dereferenced at entry (to
-		 * seed `cnt`) and written at exit.  It must be the ADDRESS
-		 * of a real variable, cast to `int`, never a raw value: a
+		 * `_rx_data_state` reads `*word7` at entry to seed `cnt` and
+		 * writes it at exit. Pass the address of a real variable: a
 		 * first version of this loop passed the literal `3`, which
 		 * dereferences address 0x3 and segfaults immediately.  Kept
 		 * at 0 (not e.g. 3) to sidestep `_handle_data_output`'s own
@@ -270,10 +267,10 @@ run_rx_pair(void)
 		txc_a = txc_b = (int)0x7e7e7e7e;
 		w8_a = w8_b = 0;
 
-		ra = ref__rx_data_state(&ctx_a, rx_a, tx_a, (int)(long)src_a,
-		    0, &rxc_a, &txc_a, (int)(long)&w7val_a, &w8_a);
-		rb = _rx_data_state(&ctx_b, rx_b, tx_b, (int)(long)src_b, 0,
-		    &rxc_b, &txc_b, (int)(long)&w7val_b, &w8_b);
+		ra = ref__rx_data_state(&ctx_a, rx_a, tx_a, src_a,
+		    0, &rxc_a, &txc_a, &w7val_a, &w8_a);
+		rb = _rx_data_state(&ctx_b, rx_b, tx_b, src_b, 0,
+		    &rxc_b, &txc_b, &w7val_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -325,9 +322,9 @@ run_tx_nulls(void)
 		 * behind.
 		 */
 		ra = ref__tx_nulls_state(&ctx_a, rx_a, tx_a, 0,
-		    (int)(long)src_a, &rxc_a, &txc_a, w7_a, &w8_a);
-		rb = _tx_nulls_state(&ctx_b, rx_b, tx_b, 0, (int)(long)src_b,
-		    &rxc_b, &txc_b, w7_b, &w8_b);
+		    src_a, &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
+		rb = _tx_nulls_state(&ctx_b, rx_b, tx_b, 0, src_b,
+		    &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -360,9 +357,9 @@ run_tx_scrambled_ones(void)
 		/* word4, not word3, is _handle_data_input's src (see
 		 * run_tx_nulls's own note on the same fix). */
 		ra = ref__tx_scrambled_ones_state(&ctx_a, rx_a, tx_a, 0,
-		    (int)(long)src_a, &rxc_a, &txc_a, w7_a, &w8_a);
+		    src_a, &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = _tx_scrambled_ones_state(&ctx_b, rx_b, tx_b, 0,
-		    (int)(long)src_b, &rxc_b, &txc_b, w7_b, &w8_b);
+		    src_b, &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -396,9 +393,9 @@ run_tx_data(void)
 		/* word4, not word3, is _handle_data_input's src (see
 		 * run_tx_nulls's own note on the same fix). */
 		ra = ref__tx_data_state(&ctx_a, rx_a, tx_a, 0,
-		    (int)(long)src_a, &rxc_a, &txc_a, w7_a, &w8_a);
-		rb = _tx_data_state(&ctx_b, rx_b, tx_b, 0, (int)(long)src_b,
-		    &rxc_b, &txc_b, w7_b, &w8_b);
+		    src_a, &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
+		rb = _tx_data_state(&ctx_b, rx_b, tx_b, 0, src_b,
+		    &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -411,7 +408,7 @@ run_tx_data(void)
 /* _hdlc_receive_state / _hdlc_receive_between_buffers_state             */
 /*                                                                        */
 /* Both drive `ctx->vmi_a` and, per this file's own top comment, never    */
-/* dereference the `link->int_0014`/+0x50 chase from the NULL slot -- the */
+/* dereference the `link->modem`/+0x50 chase from the NULL slot -- the */
 /* unpack step's own `count` stays 0, so `cnt != 0` is never reached.     */
 
 static int
@@ -450,11 +447,11 @@ run_hdlc_receive_pair(void)
 			w8_a = w8_b = word8s[j];
 
 			ra = ref__hdlc_receive_state(&ctx_a, rx_a, tx_a,
-			    (int)(long)src_a, 0, &rxc_a, &txc_a,
-			    (int)(long)&w7val_a, &w8_a);
+			    src_a, 0, &rxc_a, &txc_a,
+			    &w7val_a, &w8_a);
 			rb = _hdlc_receive_state(&ctx_b, rx_b, tx_b,
-			    (int)(long)src_b, 0, &rxc_b, &txc_b,
-			    (int)(long)&w7val_b, &w8_b);
+			    src_b, 0, &rxc_b, &txc_b,
+			    &w7val_b, &w8_b);
 
 			diff_eq_int("return (%ld)", rb, ra, tag);
 			compare_common(tag);
@@ -478,11 +475,11 @@ run_hdlc_receive_pair(void)
 		w8_a = w8_b = word8s[j];
 
 		ra = ref__hdlc_receive_between_buffers_state(&ctx_a, rx_a,
-		    tx_a, (int)(long)src_a, 0, &rxc_a, &txc_a,
-		    (int)(long)&w7val_a, &w8_a);
+		    tx_a, src_a, 0, &rxc_a, &txc_a,
+		    &w7val_a, &w8_a);
 		rb = _hdlc_receive_between_buffers_state(&ctx_b, rx_b, tx_b,
-		    (int)(long)src_b, 0, &rxc_b, &txc_b,
-		    (int)(long)&w7val_b, &w8_b);
+		    src_b, 0, &rxc_b, &txc_b,
+		    &w7val_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -499,12 +496,12 @@ run_hdlc_receive_pair(void)
 /* Same NULL-slot argument as the pair above: `FAXVMI_RESULT_BIT_2000` is */
 /* always SET (null_process returns -1), which sends every case through   */
 /* the table-scan arm -- and THIS function's own chase of `vmi_a->link->  */
-/* int_0014`'s own +0x50 is UNCONDITIONAL there (unlike the two functions  */
+/* modem`'s own +0x50 is UNCONDITIONAL there (unlike the two functions  */
 /* above, where the same chase is behind `cnt != 0`), so it cannot be      */
-/* left at 0: `null_create` never sets `link->int_0014` (it zeroes it),    */
+/* left at 0: `null_create` never sets `link->modem` (it zeroes it),    */
 /* and reading `*(char **)(0 + 0x50)` is a null-pointer fault.  This does  */
 /* NOT need a real V.21RX slot, though -- the chase is raw offset          */
-/* arithmetic through `int_0014`, `+0x50` and `+0x2c` with no other field  */
+/* arithmetic through `modem`, `+0x50` and `+0x2c` with no other field  */
 /* of `link` or of what it points at ever read, so a synthetic fixture at  */
 /* those three offsets is exactly as safe as a real modem's own, and both  */
 /* `ctx_a`/`ctx_b` read the SAME fixture bytes since this is one process:  */
@@ -540,13 +537,13 @@ run_hdlc_receive_look_carrier(void)
 
 		lc_quality_target.level = levels[i];
 		lc_link_target.chase = &lc_quality_target;
-		ctx_a.vmi_a->link->int_0014 = (int)(long)&lc_link_target;
-		ctx_b.vmi_a->link->int_0014 = (int)(long)&lc_link_target;
+		ctx_a.vmi_a->link->modem = &lc_link_target;
+		ctx_b.vmi_a->link->modem = &lc_link_target;
 
 		ra = ref__hdlc_receive_look_carrier_state(&ctx_a, rx_a, tx_a,
-		    0, 0, &rxc_a, &txc_a, w7_a, &w8_a);
+		    0, 0, &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = _hdlc_receive_look_carrier_state(&ctx_b, rx_b, tx_b, 0,
-		    0, &rxc_b, &txc_b, w7_b, &w8_b);
+		    0, &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -584,9 +581,9 @@ run_t30_preabmle(void)
 		/* word4, not word3, is _handle_hdlc_input's src here too
 		 * (see run_tx_nulls's own note on the same fix). */
 		ra = ref__t30_preabmle_state(&ctx_a, rx_a, tx_a, 0,
-		    (int)(long)src_a, &rxc_a, &txc_a, w7_a, &w8_a);
+		    src_a, &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = _t30_preabmle_state(&ctx_b, rx_b, tx_b, 0,
-		    (int)(long)src_b, &rxc_b, &txc_b, w7_b, &w8_b);
+		    src_b, &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);

@@ -83,9 +83,10 @@ suits a *missing value* and is actively unsafe against a *missing decision*.
 - **This tree builds standalone.** It never modifies `slmodemd/` or its
   Makefile, and never references `../re/` — that is separate work belonging to
   another effort and is out of scope entirely.
-- **32-bit for now.** Differential testing needs `-m32` for as long as the blob
-  is the reference. The reconstruction itself is written 64-bit-clean, so the
-  blob is the only thing forcing `-m32`.
+- **32-bit differential authority.** Differential testing needs `-m32` while
+  the blob is the reference. `make check64` checks native compilation;
+  runtime portability also requires pointer, layout and allocation checks.
+  See the [compiler policy](docs/method/compilers.md#native-compilation-and-runtime-portability).
 - **SpanDSP is a test peer only.** It is LGPL; this reconstruction is BSD. It
   is linked into `test/` as an independent interop partner and stimulus
   source. No SpanDSP code, tables or algorithms are read into or copied into

@@ -23,21 +23,58 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity result is **811 of 1,852 functions
-positionally byte-exact (43.8%)**. A further 52 are instruction-equivalent
-after consistent register renaming. The tool's displayed grade-0-or-1 total
-is 867 (46.8%), including four conservatively unresolved anonymous
-ordinary-rodata tables; the tool also reports no differing named relocation
-target, 86 same-size byte mismatches and 899 size mismatches. `byteident.py`
-ratchets the complete exact-name set, not just its cardinality, so an exact function
-cannot regress while an unrelated gain conceals it. F10207 explains why this
-stricter baseline adds seven real exact functions but removes three earlier
-false claims whose relocation addends had never been compared; F10208 records
-the first Phase-4 convergence batch. F10237 records the fresh aggregate
-checkpoint, with 35 exact names added and none lost since that batch. The
-full phase gate passes and the complete 810-name set is the enforced ratchet
-floor; one newer exact function is above that floor. Phase 4 remains in
-progress.
+The 18 October 2026 baseline at `6e650c6e2` has **1,109 of 1,852 functions
+positionally byte/relocation-exact (59.9%)**, covering **127,904 of 720,125
+original function bytes (17.8%)**. The remaining functions comprise 32
+`REGALLOC`, 78 `BYTES` and 633 `SIZE`; there are no `UNRESOLVED`, `RELOC` or
+`NODATA` results. Register-renaming equivalence is reported separately from
+byte identity. All 300 freshly rebuilt Gentoo GCC 3.4.2-r2 objects raw-match
+the independently measured `28ccee066` baseline; the intervening commits
+change no reconstruction source or headers. All 1,109 exact names match the
+checked-in ratchet.
+
+The ordered partial link remains different from the reference: 72,202 of
+943,398 positioned allocated bytes agree, 1,002 of 18,317 relocation records
+match, and NOBITS sizes are 2,840 candidate versus 2,836 reference bytes.
+These dimensions measure layout as well as content and are not a percentage
+of source recovered. Reproduce function identity with `make byteident` and
+the separate strict completion check with `make partial-compare-exact`.
+Record the compiler, source revision and ordered input manifest with either
+measurement.
+
+The `_init_receiver` shared-control checkpoint preserves that exact
+set: no gains or losses. Its body changes from 1,769 to 1,560 bytes against
+the original's 1,583, while the other four bodies in its translation unit and
+all allocated non-text contents remain unchanged. The ordered partial link
+then has 72,362 matching positioned bytes and 1,004 matching relocation
+records, with the same denominators above. It remains different from the
+reference; these aggregate changes are not new exact functions.
+
+The following fax field and pointer repairs make `_tx_nulls_state` exact at
+435 bytes: **1,110 of 1,852 exact functions**, covering **128,339 of 720,125
+original function bytes**, with no exact losses. The residual grades are 32
+`REGALLOC`, 77 `BYTES` and 633 `SIZE`. The ordered partial link has 72,220
+matching positioned bytes and 1,002 matching relocation records, with the
+same reference denominators above; it still differs. Pointer typing changes
+three nonexact constructor bodies and their following layout, so the
+positioned-match count decreases relative to the shared-control checkpoint.
+
+The subsequent V.90 parameter, fax RX owner and Caller ID allocation repairs
+preserve that exact set: **1,110 exact functions, zero gains or losses** from
+the field/pointer checkpoint. Of 300 period objects, 292 remain raw-identical;
+the eight changed translation units preserve their symbol interfaces and
+allocated non-text contents. The ordered partial link now matches 72,265 of
+943,398 positioned reference bytes and 1,002 of 18,317 relocation records. It
+still reports `DIFFERENT`; the small positioned-byte increase is not a new
+exact function. The merged gate passes 394 period fixtures, and the separate
+native component gate passes 207 checks. Native structures may grow; these
+repairs preserve the original layout only on 32-bit builds.
+
+`byteident.py` checks exact-name membership, so an unrelated gain cannot hide
+a loss. An explained loss still requires the original-source and complete-TU
+review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
+F10207, F10208 and F10237 retain the earlier comparator and convergence
+checkpoints; their counts are historical.
 
 This is a function-level `.text` measurement, not yet proof that the
 partially-linked object is byte-for-byte identical. The final objective also
@@ -48,9 +85,10 @@ code-generation improvement may not weaken the differential evidence.
 
 ## Byte-exact convergence plan
 
-1. **Secure the measurement — done.** Refuse partial test-object trees,
-   regenerate the tested baseline from all 374 drivers, and ratchet exact
-   symbol membership rather than the headline count.
+1. **Establish the current baseline.** Build all source objects with the
+   Gentoo period compiler, record their hashes and configuration, and compare
+   the complete exact-name set. A cached census is usable only when its inputs
+   reproduce. Run `make phase` for the period differential and structural gate.
 2. **Clear named-relocation mismatches — done.** The single case,
    `FPM_FSM_init`, is exact after correcting the shared `FPM_TONE_CFG`
    representation. The complete period, behavioural and SpanDSP interop gates
@@ -58,27 +96,36 @@ code-generation improvement may not weaken the differential evidence.
    assumptions uncovered when the aggregate gate first reached that tier.
 3. **Resolve ambiguous section relocations — done.** All seven original cases
    are exact. Relocation addends are now part of the identity proof, which also
-   exposed three anonymous ordinary-rodata tables the old tool had incorrectly
-   called exact; they remain explicit `UNRESOLVED` rather than being accepted
-   by an unsafe byte-prefix heuristic.
-4. **Close same-size byte mismatches — in progress.** The constrained
-   batches have reduced `BYTES` from 138 to 86, with additional exact gains
-   from other grades; work the remainder from the smallest differing-byte
-   count, always diffing the complete exact set.
-5. **Recover translation-unit emission order.** Use the 53 `REGALLOC`
-   functions and their neighbours to infer definition/declaration order and
-   GCC 3.4.2's carried allocation state; retain only changes that improve the
-   whole translation unit.
-6. **Partition the size mismatches.** Split the 899 `SIZE` functions by
-   instruction delta, source-shape family and translation unit, taking the
-   smallest constrained domains before the large algorithmic cases.
+   exposed anonymous ordinary-rodata cases requiring further identity proofs.
+   The current census has no unresolved case; retain conservative refusal and
+   the comparator's positive and negative controls.
+4. **Screen the full residual set.** Inventory all 743 nonexact names and all
+   defining copies, including C++, fax and large functions. The historical
+   value-timing filter admits only 367 of these names. Group the 633 `SIZE`
+   functions by witnessed control flow, calls, widths and value ownership;
+   byte or instruction-count gaps alone do not establish a source discrepancy.
+   Expand same-TU helper and tail-call closures before interpreting apparent
+   missing operations.
+5. **Select bounded source hypotheses.** Require an original operand,
+   caller/callee or lifetime witness before trying another source form. Trace
+   the earliest differing compiler stage, state a prediction and falsifier,
+   and review every changed body in the complete TU. Previously closed
+   declaration-order, loop-spelling and option domains need new evidence.
+   Keep whole-handshake V.34 restructuring separate from this residual queue.
+6. **Validate each retained recovery.** Use valid component histories and the
+   period differential oracle, then run `make phase`. Report exact names gained
+   and lost, data/binding/relocation collateral and partial-link changes.
+   Distinguish supported partial source recovery from a newly exact function.
 7. **Converge the partially-linked object.** The first
    section/data/relocation/layout comparator now exists alongside function
    identity; use its independent dimensions to recover input and definition
    order, close direct-test naming gaps where a real observable exists, and
    keep `make period` authoritative throughout.
 
-### Immediate execution order (2026-09-08)
+### Historical execution order (2026-09-08)
+
+This dated sequence records earlier scheduling and tool counts. Use the
+current plan above; mutation infrastructure has since been removed.
 
 The partially-linked objective changes the order of the remaining refinement
 work. A locally exact function is not progress if it moves the aggregate's

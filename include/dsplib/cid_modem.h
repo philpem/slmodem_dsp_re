@@ -69,7 +69,7 @@ struct cid;
 #define CID_BLOCK_8000		160
 #define CID_BLOCK_9600		192
 
-/* 0x3fc bytes; `cid_create` allocates exactly that. */
+/* 0x3fc bytes in the period layout; native pointers enlarge the owner. */
 struct cid_modem {
 	struct dtmf_rx *dtmf;		/* +0x000 DTMF receiver, modes 1/5  */
 	struct cid *fsk;		/* +0x004 FSK receiver, modes 0/5   */
@@ -117,8 +117,11 @@ struct cid_modem {
 					 *         cid_reset                */
 };
 
-/* One home for the sizeof claim above. */
+/* Reference ABI extent, not a native allocation size. */
 #define CID_MODEM_BYTES	0x3fc
+typedef char cid_modem_period_size[
+	(sizeof(void *) != 4 || sizeof(struct cid_modem) == CID_MODEM_BYTES)
+	? 1 : -1];
 
 /**
  * @brief Set the detection threshold on whichever receivers the mode
@@ -162,7 +165,7 @@ char *cid_get_strings(struct cid_modem *ctx);
 /**
  * @brief Build the Caller ID service object and its receivers.
  *
- * @param ctx      NULL allocates #CID_MODEM_BYTES and takes @p mode from
+ * @param ctx      NULL allocates the owner and takes @p mode from
  *                 the argument, clamped to #CID_MODE_AUTOMATIC above 1;
  *                 non-NULL keeps the mode it already has and only
  *                 (re)builds, handing each constructor the existing

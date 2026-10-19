@@ -81,8 +81,9 @@ struct V90CodecEntry {
  * definition of it (0x504 against the real 0x558, from how far five methods
  * happened to reach) -- undefined behaviour wherever both were visible, and
  * what V90ModemCtor.cpp's long comment about which header it may not include
- * is about. One definition now, in V90Parameters.h; the raw word and float
- * views the block form provided live there as V90PW()/V90PF()/V90PB().
+ * is about. One definition now, in V90Parameters.h. Production consumers
+ * select its members; ILP32 differential fixtures keep their raw view in
+ * test/harness/v90_params_period_view.h.
  * Finding F1112.
  */
 #include "dsplib/V90Parameters.h"

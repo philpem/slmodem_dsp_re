@@ -244,8 +244,7 @@ const struct fpm_sre_cfg FPM_SRE_CFG = {
 	3277,			/* +0x2e err_lo     >> 3 =  409              */
 	2252,			/* +0x30 rms_min                             */
 	9,			/* +0x32 rms_len                             */
-	0,			/* +0x34 pad34                               */
-	0			/* +0x36 pad36                               */
+	0			/* +0x34 owner */
 };
 
 /* --- PPS_CFG --- */

@@ -35,15 +35,15 @@
 #include "dsplib/faxvmi.h"
 
 extern int ref__send_hdlc_buffer_state(void *ctx, const short *rx, short *tx,
-				       int word3, int word4, int *rx_count,
-				       int *tx_count, int word7, int *word8);
+				       unsigned char *word3, const unsigned char *word4, int *rx_count,
+				       int *tx_count, int *word7, int *word8);
 extern int ref__send_hdlc_between_buffer_state(void *ctx, const short *rx,
-						short *tx, int word3,
-						int word4, int *rx_count,
-						int *tx_count, int word7,
+						short *tx, unsigned char *word3,
+						const unsigned char *word4, int *rx_count,
+						int *tx_count, int *word7,
 						int *word8);
-extern int ref_cHDLCtx_off(void *ctx, const short *rx, short *tx, int word3,
-			   int word4, int *rx_count, int *tx_count, int word7,
+extern int ref_cHDLCtx_off(void *ctx, const short *rx, short *tx, unsigned char *word3,
+			   const unsigned char *word4, int *rx_count, int *tx_count, int *word7,
 			   int *word8);
 extern struct faxvmi *ref_FAXVMI_create(struct faxvmi *vmi,
 					const struct faxvmi_cfg *cfg);
@@ -200,9 +200,9 @@ run_send_hdlc_buffer(void)
 		txc_a = txc_b = 88;
 
 		ra = ref__send_hdlc_buffer_state(&ctx_a, rx_dummy, tx_a, 0, 0,
-		    &rxc_a, &txc_a, w7_a, &w8_a);
+		    &rxc_a, &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = _send_hdlc_buffer_state(&ctx_b, rx_dummy, tx_b, 0, 0,
-		    &rxc_b, &txc_b, w7_b, &w8_b);
+		    &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -241,9 +241,9 @@ run_chdlctx_off(void)
 		w8_a = w8_b = (int)0x87654321;
 
 		ra = ref_cHDLCtx_off(&ctx_a, rx_dummy, tx_a, 0, 0, &rxc_a,
-		    &txc_a, w7_a, &w8_a);
+		    &txc_a, (int *)(long)w7_a, &w8_a);
 		rb = cHDLCtx_off(&ctx_b, rx_dummy, tx_b, 0, 0, &rxc_b, &txc_b,
-		    w7_b, &w8_b);
+		    (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -302,10 +302,10 @@ run_send_hdlc_between_buffer(void)
 		txc_a = txc_b = 88;
 
 		ra = ref__send_hdlc_between_buffer_state(&ctx_a, rx_dummy,
-		    tx_a, 0, (int)(long)src_dummy, &rxc_a, &txc_a, w7_a,
+		    tx_a, 0, src_dummy, &rxc_a, &txc_a, (int *)(long)w7_a,
 		    &w8_a);
 		rb = _send_hdlc_between_buffer_state(&ctx_b, rx_dummy, tx_b,
-		    0, (int)(long)src_dummy, &rxc_b, &txc_b, w7_b, &w8_b);
+		    0, src_dummy, &rxc_b, &txc_b, (int *)(long)w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);

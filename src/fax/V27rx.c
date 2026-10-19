@@ -45,19 +45,13 @@
  * separate stack slots in the object (0x99773 reads one, 0x998b0 the other)
  * and they are not interchangeable -- see the header.
  *
- * THE SYMBOL RECOVERY'S CONTEXT POINTER GOES THROUGH A CAST, and that is the
- * one place this function cannot be spelled in the tree's own types.
- * `fpm_mrf_cfg` has `void *aux` at +0x0c and `fpm_fse_cfg` has
- * `void *reserved34` at +0x34, and `V27RX_create` gives both of them
- * `cfg->ptr_0018`.  It gives `fpm_sre_cfg` +0x34 the same pointer with the same
- * single `movl` -- but `fpm_sre.h` models that word as two `short`, `pad34`
- * and `pad36`, because nothing had ever been seen to write it.  Writing two
- * shorts would be a different instruction pair and an endianness assumption,
- * so the pointer is stored through a cast and `fpm_sre.h` is left alone: it is
- * another module's header and three sessions are live in this tree.  Whoever
- * owns it next should make those two fields one `void *aux`, at which point
- * the cast here becomes a plain assignment.  Finding F9306.
+ * The same context pointer is stored in mrf.aux, sre.owner and
+ * fse.reserved34 (period offsets +0x0c, +0x34 and +0x34).
  */
+typedef char v27_rx_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v27_rx) == 0x58) ? 1 : -1];
+typedef char v27_rx_shared_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v27_rx_shared) == 0x50) ? 1 : -1];
+typedef char v27_rx_block_allocation_extent[(sizeof(void *) != 4 || sizeof(struct v27_rx_block) == 0x4f58) ? 1 : -1];
+
 void *
 V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 {
@@ -85,7 +79,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	if (modem == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
-		modem = sysdep_malloc(V27RXH_SIZE);
+		modem = sysdep_malloc(sizeof(struct v27_rx));
 		((struct v27_rx *)modem)->shared = 0;
 		((struct v27_rx *)modem)->rx = 0;
 		fresh_handle = 1;
@@ -104,7 +98,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 
 	sh = ((struct v27_rx *)modem)->shared;
 	if (sh == 0) {
-		sh = sysdep_malloc(V27SH_SIZE);
+		sh = sysdep_malloc(sizeof(struct v27_rx_shared));
 		((struct v27_rx *)modem)->shared = sh;
 		fresh_sh = 1;
 		sh->mtd = 0;
@@ -172,7 +166,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 
 	rx = ((struct v27_rx *)modem)->rx;
 	if (rx == 0) {
-		rx = sysdep_malloc(V27RX_BLOCK_SIZE);
+		rx = sysdep_malloc(sizeof(struct v27_rx_block));
 		((struct v27_rx *)modem)->rx = rx;
 		rx->buf_a = sysdep_malloc(V27RX_BUF_A_BYTES);
 		rx = ((struct v27_rx *)modem)->rx;
@@ -203,14 +197,8 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 							V27_AGC_BLOCK_4800;
 
 	scfg = FPM_SRE_CFG;
-	/*
-	 * The context pointer, over `pad34`/`pad36`.  See the note above.
-	 * `memcpy` rather than a pointer cast because the cast is a
-	 * strict-aliasing violation the modern build warns about, and a
-	 * four-byte `memcpy` of a constant size is one `movl` to both
-	 * compilers -- which is what the object has (0x99919).
-	 */
-	memcpy(&scfg.pad34, &aux, sizeof aux);
+	/* One pointer store at period configuration +0x34 (0x99919). */
+	scfg.owner = aux;
 	scfg.groups_acq = V27_SRE_GROUPS_ACQ;
 	scfg.groups_trk = V27_SRE_GROUPS_TRK;
 	scfg.settle = V27_SRE_SETTLE;

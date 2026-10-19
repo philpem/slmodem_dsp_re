@@ -106,6 +106,7 @@
  * the second save once the blob's side has run.
  */
 
+#include "v90_params_period_view.h"
 #include <string.h>
 #include <malloc.h>
 

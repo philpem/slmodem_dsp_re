@@ -27,7 +27,9 @@
  */
 
 #include <math.h>
+#include <string.h>
 
+#include "dsplib/modem_params.h"
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/V90PreFilter.h"
@@ -109,7 +111,7 @@ V90PreFilter::isV90WithEia6() const
 	if (refLoop >= 0)
 		cap = (dataBase[codecType].loops[refLoop].capability == 2);
 
-	return (cap == 1) || (V90PW(params)[0x500 / 4] == 6);
+	return (cap == 1) || (params->LOOP_TYPE == 6);
 }
 
 /*
@@ -409,44 +411,63 @@ void
 V90PreFilter::setParamEia6()
 {
 	V90Parameters *p;
-	const int *blk;
+	const _tagModemParameters *blk;
 	float x;
 	float xf;
-	int whole, frac, i;
+	int whole, frac;
 
 	edprintf("V90PreFilter: setParamEIA6 called\r\n");
 
 	p = params;
-	V90PW(p)[0x010 / 4] = V90PW(p)[0x014 / 4];
-	V90PW(p)[0x2a4 / 4] = V90PW(p)[0x2a8 / 4];
-	V90PW(p)[0x374 / 4] = V90PW(p)[0x388 / 4];
-	V90PW(p)[0x3a8 / 4] = V90PW(p)[0x3d8 / 4];
-	V90PW(p)[0x3ac / 4] = V90PW(p)[0x3dc / 4];
-	V90PW(p)[0x3b0 / 4] = V90PW(p)[0x3e0 / 4];
-	V90PW(p)[0x3b4 / 4] = V90PW(p)[0x3e4 / 4];
-	V90PW(p)[0x3b8 / 4] = V90PW(p)[0x3e8 / 4];
-	V90PW(p)[0x3bc / 4] = V90PW(p)[0x3ec / 4];
-	V90PW(p)[0x188 / 4] = V90PW(p)[0x1d4 / 4];
-	V90PW(p)[0x18c / 4] = V90PW(p)[0x1d8 / 4];
-	V90PW(p)[0x1c0 / 4] = V90PW(p)[0x1e4 / 4];
-	V90PW(p)[0x1c4 / 4] = V90PW(p)[0x1dc / 4];
-	V90PW(p)[0x1c8 / 4] = V90PW(p)[0x1e0 / 4];
-	V90PW(p)[0x190 / 4] = V90PW(p)[0x198 / 4];
-	V90PW(p)[0x194 / 4] = V90PW(p)[0x19c / 4];
-	V90PW(p)[0x210 / 4] = V90PW(p)[0x218 / 4];
-	V90PW(p)[0x214 / 4] = V90PW(p)[0x21c / 4];
-	V90PW(p)[0x078 / 4] = V90PW(p)[0x07c / 4];
-	V90PW(p)[0x1bc / 4] = V90PW(p)[0x1a0 / 4];
-	V90PW(p)[0x230 / 4] = V90PW(p)[0x220 / 4];
-	V90PW(p)[0x178 / 4] = V90PW(p)[0x1e8 / 4];
-	V90PW(p)[0x17c / 4] = V90PW(p)[0x1ec / 4];
-	V90PW(p)[0x180 / 4] = V90PW(p)[0x1f0 / 4];
-	V90PW(p)[0x204 / 4] = V90PW(p)[0x244 / 4];
-	V90PW(p)[0x20c / 4] = V90PW(p)[0x24c / 4];
+	p->ENABLE_EQUALIZER_MMX = p->EIA6_ENABLE_EQUALIZER_MMX;
+	p->SPECTRAL_VERIFIER_ENABLE = p->EIA6_SPECTRAL_VERIFIER_ENABLE;
+	p->USE_RESTRICED_DMIN = p->EIA6_USE_RESTRICED_DMIN;
+	memcpy(&p->SPECTRAL_SHAPER_A1, &p->EIA6_SPECTRAL_SHAPER_A1,
+	       sizeof p->SPECTRAL_SHAPER_A1);
+	memcpy(&p->SPECTRAL_SHAPER_A2, &p->EIA6_SPECTRAL_SHAPER_A2,
+	       sizeof p->SPECTRAL_SHAPER_A2);
+	memcpy(&p->SPECTRAL_SHAPER_B1, &p->EIA6_SPECTRAL_SHAPER_B1,
+	       sizeof p->SPECTRAL_SHAPER_B1);
+	memcpy(&p->SPECTRAL_SHAPER_B2, &p->EIA6_SPECTRAL_SHAPER_B2,
+	       sizeof p->SPECTRAL_SHAPER_B2);
+	p->SPECTRAL_SHAPER_SR = p->EIA6_SPECTRAL_SHAPER_SR;
+	p->SPECTRAL_SHAPER_ID = p->EIA6_SPECTRAL_SHAPER_ID;
+	memcpy(&p->LINEAR_EQU_TRN1D_BETA, &p->EIA6_LINEAR_EQU_TRN1D_BETA,
+	       sizeof p->LINEAR_EQU_TRN1D_BETA);
+	memcpy(&p->GERMAN_PBX_LINEAR_EQU_DIL_BETA, &p->EIA6_LINEAR_EQU_DIL_BETA,
+	       sizeof p->GERMAN_PBX_LINEAR_EQU_DIL_BETA);
+	memcpy(&p->LINEAR_EQU_TRN2D_INITIAL_BETA, &p->EIA6_LINEAR_EQU_TRN2D_INITIAL_BETA,
+	       sizeof p->LINEAR_EQU_TRN2D_INITIAL_BETA);
+	memcpy(&p->LINEAR_EQU_TRN2D_BETA, &p->EIA6_LINEAR_EQU_TRN2D_BETA,
+	       sizeof p->LINEAR_EQU_TRN2D_BETA);
+	memcpy(&p->LINEAR_EQU_DATA_BETA, &p->EIA6_LINEAR_EQU_DATA_BETA,
+	       sizeof p->LINEAR_EQU_DATA_BETA);
+	memcpy(&p->GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA, &p->EIA6_LINEAR_EQU_DIL_MED_UCODE_BETA,
+	       sizeof p->GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA);
+	memcpy(&p->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA, &p->EIA6_LINEAR_EQU_DIL_HIGH_UCODE_BETA,
+	       sizeof p->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
+	memcpy(&p->DFE_DIL_MED_UCODE_BETA, &p->EIA6_DFE_DIL_MED_UCODE_BETA,
+	       sizeof p->DFE_DIL_MED_UCODE_BETA);
+	memcpy(&p->DFE_DIL_HIGH_UCODE_BETA, &p->EIA6_DFE_DIL_HIGH_UCODE_BETA,
+	       sizeof p->DFE_DIL_HIGH_UCODE_BETA);
+	p->nofUcodesInTrn2 = p->unnamed_07c;
+	memcpy(&p->LINEAR_EQU_DIL_ERROR_RELAX_BETA, &p->EIA6_LINEAR_EQU_DIL_ERROR_RELAX_BETA,
+	       sizeof p->LINEAR_EQU_DIL_ERROR_RELAX_BETA);
+	memcpy(&p->DFE_DIL_ERROR_RELAX_BETA, &p->EIA6_DFE_DIL_ERROR_RELAX_BETA,
+	       sizeof p->DFE_DIL_ERROR_RELAX_BETA);
+	p->LINEAR_EQU_FADE_EDGES_CYCLE = p->EIA6_LINEAR_EQU_FADE_EDGES_CYCLE;
+	memcpy(&p->LINEAR_EQU_FADE_LEFT_EDGE_RATIO, &p->EIA6_LINEAR_EQU_FADE_LEFT_EDGE_RATIO,
+	       sizeof p->LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
+	memcpy(&p->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO, &p->EIA6_LINEAR_EQU_FADE_RIGHT_EDGE_RATIO,
+	       sizeof p->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
+	memcpy(&p->DFE_DIL_BETA, &p->EIA6_DFE_DIL_BETA,
+	       sizeof p->DFE_DIL_BETA);
+	memcpy(&p->DFE_DATA_BETA, &p->EIA6_DFE_DATA_BETA,
+	       sizeof p->DFE_DATA_BETA);
 
 	/* The block +0x00 points at; the deviation is the int at its +0x4c. */
-	blk = *(const int *const *)&V90PB(p)[0];
-	x = (float)blk[0x4c / 4] * 0.001f;
+	blk = p->modemParams;
+	x = (float)blk->clockDeviation * 0.001f;
 	whole = (int)x;
 	double magnitude = fabs(x);
 	frac = (int)(10000.0 * (x - (float)whole));
@@ -464,33 +485,54 @@ V90PreFilter::setParamEia6()
 	if (xf != 0.0) {
 		edprintf("V90PreFilter: Setting timing parameters " "(registry)...\r\n");
 		p = params;
-		V90PF(p)[0x84 / 4] = xf;
-		V90PW(p)[0x088 / 4] = V90PW(p)[0x110 / 4];
-		V90PW(p)[0x08c / 4] = V90PW(p)[0x114 / 4];
-		V90PW(p)[0x090 / 4] = V90PW(p)[0x118 / 4];
-		V90PW(p)[0x094 / 4] = V90PW(p)[0x11c / 4];
-		V90PW(p)[0x098 / 4] = V90PW(p)[0x120 / 4];
-		V90PW(p)[0x09c / 4] = V90PW(p)[0x124 / 4];
-		V90PW(p)[0x0a0 / 4] = V90PW(p)[0x128 / 4];
-		V90PW(p)[0x0a4 / 4] = V90PW(p)[0x12c / 4];
-		V90PW(p)[0x0a8 / 4] = V90PW(p)[0x130 / 4];
-		V90PW(p)[0x0ac / 4] = V90PW(p)[0x134 / 4];
-		V90PW(p)[0x0b0 / 4] = V90PW(p)[0x138 / 4];
-		V90PW(p)[0x0b4 / 4] = V90PW(p)[0x13c / 4];
-		V90PW(p)[0x0b8 / 4] = V90PW(p)[0x140 / 4];
-		V90PW(p)[0x0bc / 4] = V90PW(p)[0x144 / 4];
-		V90PW(p)[0x0c0 / 4] = V90PW(p)[0x148 / 4];
-		V90PW(p)[0x0c4 / 4] = V90PW(p)[0x14c / 4];
-		V90PW(p)[0x0c8 / 4] = V90PW(p)[0x150 / 4];
-		V90PW(p)[0x0cc / 4] = V90PW(p)[0x154 / 4];
+		p->INITIAL_BAUD_OFFSET = xf;
+		memcpy(&p->BLL_INITIAL_K1, &p->EIA6_BLL_INITIAL_K1,
+	       sizeof p->BLL_INITIAL_K1);
+		memcpy(&p->BLL_INITIAL_K2, &p->EIA6_BLL_INITIAL_K2,
+	       sizeof p->BLL_INITIAL_K2);
+		memcpy(&p->BLL_FAST_K1, &p->EIA6_BLL_FAST_K1,
+	       sizeof p->BLL_FAST_K1);
+		memcpy(&p->BLL_FAST_K2, &p->EIA6_BLL_FAST_K2,
+	       sizeof p->BLL_FAST_K2);
+		memcpy(&p->BLL_MEDIUM_K1, &p->EIA6_BLL_MEDIUM_K1,
+	       sizeof p->BLL_MEDIUM_K1);
+		memcpy(&p->BLL_MEDIUM_K2, &p->EIA6_BLL_MEDIUM_K2,
+	       sizeof p->BLL_MEDIUM_K2);
+		memcpy(&p->BLL_SLOW_K1, &p->EIA6_BLL_SLOW_K1,
+	       sizeof p->BLL_SLOW_K1);
+		memcpy(&p->BLL_SLOW_K2, &p->EIA6_BLL_SLOW_K2,
+	       sizeof p->BLL_SLOW_K2);
+		memcpy(&p->BLL_SLOW2_K1, &p->EIA6_BLL_SLOW2_K1,
+	       sizeof p->BLL_SLOW2_K1);
+		memcpy(&p->BLL_SLOW2_K2, &p->EIA6_BLL_SLOW2_K2,
+	       sizeof p->BLL_SLOW2_K2);
+		memcpy(&p->BLL_DIL_K1, &p->EIA6_BLL_DIL_K1,
+	       sizeof p->BLL_DIL_K1);
+		memcpy(&p->BLL_DIL_K2, &p->EIA6_BLL_DIL_K2,
+	       sizeof p->BLL_DIL_K2);
+		memcpy(&p->BLL_TRN2_INITIAL_K1, &p->EIA6_BLL_TRN2_INITIAL_K1,
+	       sizeof p->BLL_TRN2_INITIAL_K1);
+		memcpy(&p->BLL_TRN2_INITIAL_K2, &p->EIA6_BLL_TRN2_INITIAL_K2,
+	       sizeof p->BLL_TRN2_INITIAL_K2);
+		memcpy(&p->BLL_TRN2_K1, &p->EIA6_BLL_TRN2_K1,
+	       sizeof p->BLL_TRN2_K1);
+		memcpy(&p->BLL_TRN2_K2, &p->EIA6_BLL_TRN2_K2,
+	       sizeof p->BLL_TRN2_K2);
+		memcpy(&p->BLL_STEADY_STATE_K1, &p->EIA6_BLL_STEADY_STATE_K1,
+	       sizeof p->BLL_STEADY_STATE_K1);
+		memcpy(&p->BLL_STEADY_STATE_K2, &p->EIA6_BLL_STEADY_STATE_K2,
+	       sizeof p->BLL_STEADY_STATE_K2);
 	} else {
 		p = params;
 	}
 
-	V90PW(p)[0x460 / 4] = V90PW(p)[0x490 / 4];
-	V90PW(p)[0x40c / 4] = V90PW(p)[0x488 / 4];
-	V90PW(p)[0x410 / 4] = V90PW(p)[0x484 / 4];
-	V90PW(p)[0x414 / 4] = V90PW(p)[0x48c / 4];
+	p->MAX_NOF_V90_RETRAINS = p->EIA6_MAX_NOF_V90_RETRAINS;
+	memcpy(&p->PDSNR_THRESHOLD_IN_PHASE3, &p->EIA6_PDSNR_THRESHOLD_IN_PHASE3,
+	       sizeof p->PDSNR_THRESHOLD_IN_PHASE3);
+	memcpy(&p->PDSNR_THRESHOLD_IN_PHASE4, &p->EIA6_PDSNR_THRESHOLD_IN_PHASE4,
+	       sizeof p->PDSNR_THRESHOLD_IN_PHASE4);
+	memcpy(&p->TRN1D_ERROR_FOR_V34_FALLBACK, &p->EIA6_TRN1D_ERROR_FOR_V34_FALLBACK,
+	       sizeof p->TRN1D_ERROR_FOR_V34_FALLBACK);
 }
 
 void
@@ -502,18 +544,18 @@ V90PreFilter::selectFilter()
 
 	refLoop = 0;
 
-	if (V90PW(p)[0x0c / 4] == 1) {
+	if (p->LINE_CONNECTION_TYPE == 1) {
 		edprintf("V90PreFilter: Connection Type is ISDN NT1 BOX "
 			 "(4.2kHz Null)\r\n");
-		g = V90PW(p)[0x54 / 4];
+		g = p->GERMAN_ISDN_NT1_BOX_FILTER_GAIN;
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
-	} else if (V90PW(p)[0x0c / 4] == 2) {
+	} else if (p->LINE_CONNECTION_TYPE == 2) {
 		edprintf("V90PreFilter: Connection Type is PBX ISDN BOX " "(4kHz Null)\r\n");
-		g = V90PW(p)[0x58 / 4];
+		g = p->GERMAN_PBX_PRE_FILTER_GAIN;
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
-	} else if (V90PW(p)[0x4c / 4] == -1) {
+	} else if (p->PRE_FILTER_GAIN == -1) {
 		int want = autoSelection();
 		unsigned int len = 20;
 		int loop, row;
@@ -570,7 +612,7 @@ V90PreFilter::selectFilter()
 		edprintf("V90PreFilter: Filter Gain = %d\r\n", want);
 		return;
 	} else {
-		int force = V90PW(p)[0x50 / 4];
+		int force = p->PRE_FILTER_COEF_TYPE;
 		int wide;
 
 		if (force == 1) {
@@ -597,11 +639,11 @@ V90PreFilter::selectFilter()
 
 		p = params;
 		if (wide) {
-			int v = V90PW(p)[0x4c / 4];
+			int v = p->PRE_FILTER_GAIN;
 
 			g = (v > 49) ? 50 : ((v > 19) ? v : 20);
 		} else {
-			int v = V90PW(p)[0x4c / 4];
+			int v = p->PRE_FILTER_GAIN;
 
 			g = (v > 29) ? 30 : v;
 		}
@@ -757,14 +799,14 @@ V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 	phase2 = info;
 	params = parms;
 
-	if (V90PW(params)[0x008 / 4] < 0) {
+	if (params->HW_CODEC_TYPE < 0) {
 		codecType = (int)codec;
 	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90PreFilter: HardwareCodecType"
 					     " loaded by configuration" " parameters\r\n");
 
-		switch (V90PW(params)[0x008 / 4]) {
+		switch (params->HW_CODEC_TYPE) {
 		case 0:		codecType = 0;	break;
 		case 1:		codecType = 1;	break;
 		case 2:		codecType = 2;	break;

@@ -208,14 +208,15 @@ static void (*init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
  * `struct v27rx_ctl`, `v29fax.h`'s `struct v29rx_control_req`).  Zero
  * relocations in any of the three (F10109).
  *
- * `unmapped_0000`/`pad_0000`'s own UPPER 16 bits hold a per-modulation
+ * The `bit_rate` members hold a per-modulation
  * PLACEHOLDER bit rate (0x3840/0x12c0/0x2580 = 14400/4800/9600) that
  * `_init_receiver` overwrites with the live negotiated rate before use
  * (`mov %di,...+2` in the disassembly); the flags/ctl1 byte's REINIT bit is
  * OR'd in at runtime, not baked into the constant.
  */
 struct v17rx_ctl V17RX_CTL = {
-	{ 0x00, 0x00, 0x40, 0x38 },	/* unmapped_0000 */
+	{ 0x00, 0x00 },			/* unmapped_0000 */
+	0x3840,				/* bit_rate      */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
 	0x00,				/* flags_0c      */
@@ -225,7 +226,8 @@ struct v17rx_ctl V17RX_CTL = {
 };
 
 struct v27rx_ctl V27RX_CTL = {
-	{ 0x00, 0x00, 0xc0, 0x12 },	/* unmapped_0000 */
+	{ 0x00, 0x00 },			/* unmapped_0000 */
+	0x12c0,				/* bit_rate      */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
 	0x00,				/* mask          */
@@ -235,47 +237,34 @@ struct v27rx_ctl V27RX_CTL = {
 };
 
 struct v29rx_control_req V29RX_CTL = {
-	{ 0x00, 0x00, 0x80, 0x25 },	/* pad_0000 */
+	{ 0x00, 0x00 },			/* pad_0000 */
+	0x2580,				/* bit_rate */
 	60000,				/* int_0004 */
 	{ 0, 0, 0, 0 },			/* pad_0008 */
 	0x00,				/* ctl0     */
 	0x00,				/* ctl1     */
 };
 
-/*
- * The three FRESH-CREATE finishers.  Each copies `ctx->rx_agc_mult`/`ctx->rx_agc_shift`
- * (16 bits each) into a per-modulation offset of the WRAPPED modem object
- * reached via `vmi_b->link->int_0014` cast to a pointer (the same
- * `(void *)(long)` idiom `faxadapt.c`'s `FIELD_PTR` macro already uses on
- * this exact field, just spelled out here rather than imported) -- but only
- * on the fresh path; the reinit path skips straight to the `f12d4` write.
- * `sub` is at a DIFFERENT offset for each of the three: V.27ter +0x54,
- * V.29 +0x50, V.17 +0x60 -- read straight off `dis.py`
- * (0x9455e-0x9457a, 0x946c2-0x946de, 0x94666-0x94682) and independently
- * re-confirmed for this pass.  Nothing establishes what `sub` or its own
- * +0x8c/+0x8e &c fields ARE beyond this site, so both stay raw offsets.
- *
- * The `f12d4` write and the state/current_mod update happen on BOTH paths
- * and are common to `finish_*rx`.
+/* Fresh creation copies two 16-bit AGC values; both paths copy f12d4.
+ * The member chains retain the period pointer/terminal offsets:
+ * V27 +0x54 -> +0x8c/+0x8e, +0x50 -> +0x14;
+ * V29 +0x50 -> +0x88/+0x8a, +0x4c -> +0x1c;
+ * V17 +0x60 -> +0xd8/+0xda, +0x5c -> low short at +0x20.
  */
 static void
 finish_v27rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	struct v27_rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x54);
-
-		*(short *)((char *)sub + 0x8c) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0x8e) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped->rx->agc.mult = (short)ctx->rx_agc_mult;
+		wrapped->rx->agc.shift = (short)ctx->rx_agc_shift;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
-		void *sub = *(void **)((char *)wrapped + 0x50);
-
-		*(short *)((char *)sub + 0x14) = (short)ctx->f12d4;
+		wrapped->shared->v21_watch = (short)ctx->f12d4;
 	}
 
 	ctx->state = CLASS1_RX_LOOK_CARRIER;
@@ -286,20 +275,16 @@ static void
 finish_v29rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	struct v29_rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x50);
-
-		*(short *)((char *)sub + 0x88) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0x8a) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped->rx->agc.mult = (short)ctx->rx_agc_mult;
+		wrapped->rx->agc.shift = (short)ctx->rx_agc_shift;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	{
-		void *sub = *(void **)((char *)wrapped + 0x4c);
-
-		*(short *)((char *)sub + 0x1c) = (short)ctx->f12d4;
+		wrapped->det->gate_1c = (short)ctx->f12d4;
 	}
 
 	ctx->current_mod = 1;
@@ -310,21 +295,17 @@ static void
 finish_v17rx(struct fax_class1 *ctx, int fresh)
 {
 	struct faxvmi_link *link = ctx->vmi_b->link;
-	void *wrapped = (void *)(long)link->int_0014;
+	struct v17rx *wrapped = link->modem;
 
 	if (fresh) {
-		void *sub = *(void **)((char *)wrapped + 0x60);
-
-		*(short *)((char *)sub + 0xd8) = (short)ctx->rx_agc_mult;
-		*(short *)((char *)sub + 0xda) = (short)ctx->rx_agc_shift;
-		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+		wrapped->state->agc.value.mult = (short)ctx->rx_agc_mult;
+		wrapped->state->agc.value.shift = (short)ctx->rx_agc_shift;
+		wrapped = ctx->vmi_b->link->modem;
 	}
 
 	ctx->state = CLASS1_RX_LOOK_CARRIER;
 	{
-		void *sub = *(void **)((char *)wrapped + 0x5c);
-
-		*(short *)((char *)sub + 0x20) = (short)ctx->f12d4;
+		wrapped->ctl->r20 = (short)ctx->f12d4;
 	}
 	ctx->current_mod = 2;
 }
@@ -465,81 +446,65 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 	cfg = ctx->modem_vmi;
 
 	{
-		struct faxvmi_ctl ctl = FAXVMI_CTL;
+		struct faxvmi_ctl ctl;
+		struct v17rx_ctl req17;
+		struct v29rx_control_req req29;
+		struct v27rx_ctl req27;
 		void *wrapped;
 
+		/*
+		 * In the object these three request-template arms use separate
+		 * stack homes (+0x20, +0x40, +0x50) and join at 0x9443c.  The
+		 * negotiated rate and unpack width are then shared, followed by
+		 * one FAXVMI_control call at 0x94490.  Its return dispatch uses
+		 * the already-computed `mod` at 0x94495; keep that value across
+		 * the call rather than re-reading cfg->slot afterward.
+		 */
 		if (cfg->slot == VMI_SLOT_V17RX) {
-			struct v17rx_ctl req = V17RX_CTL;
+			req17 = V17RX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.flags_0d |= V17RXCTL_REINIT;
-			ctl.int_0014 = (int)(long)&req;
-
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v17rx(ctx, 0);
+			ctl = FAXVMI_CTL;
+			req17.flags_0d |= V17RXCTL_REINIT;
+			req17.bit_rate = (short)rate;
+			ctl.control_req = &req17;
 		} else if (cfg->slot == VMI_SLOT_V29RX) {
-			struct v29rx_control_req req = V29RX_CTL;
+			req29 = V29RX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.ctl1 |= V29RXCTL_CTL1_BIT1;
-			ctl.int_0014 = (int)(long)&req;
-
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v29rx(ctx, 0);
+			ctl = FAXVMI_CTL;
+			req29.ctl1 |= V29RXCTL_CTL1_BIT1;
+			req29.bit_rate = (short)rate;
+			ctl.control_req = &req29;
 		} else {
-			struct v27rx_ctl req = V27RX_CTL;
+			req27 = V27RX_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.flags |= V27RXCTL_FLAGS_REINIT;
-			ctl.int_0014 = (int)(long)&req;
-
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v27rx(ctx, 0);
+			ctl = FAXVMI_CTL;
+			req27.flags |= V27RXCTL_FLAGS_REINIT;
+			req27.bit_rate = (short)rate;
+			ctl.control_req = &req27;
 		}
+
+		link = ctx->vmi_b->link;
+		wrapped = link->modem;
+		*(short *)((char *)wrapped + 4) = (short)rate;
+
+		switch (rate) {
+		case 0x960:  sym = 2; break;
+		case 0x12c0: sym = 3; break;
+		case 0x1c20: sym = 3; break;
+		case 0x2580: sym = 4; break;
+		case 0x2ee0: sym = 5; break;
+		case 0x3840: sym = 6; break;
+		default:     sym = 0; break;
+		}
+		link->unpack_width = (unsigned short)sym;
+
+		FAXVMI_control(ctx->vmi_b, &ctl);
+
+		if (mod == 2)
+			finish_v17rx(ctx, 0);
+		else if (mod == 1)
+			finish_v29rx(ctx, 0);
+		else
+			finish_v27rx(ctx, 0);
 	}
 }

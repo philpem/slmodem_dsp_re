@@ -1409,16 +1409,25 @@ int V29TX_status(void *tx, void *status);
  * The request type is new, the same footing as `V29RX_control`'s and
  * `V17TX_control`'s: nothing else reconstructed reads this argument, so
  * every field below is established from this function alone. Nothing
- * here establishes what precedes `+0x04` or separates the fields from
- * each other, so the gaps stay padding. Finding F10107.
+ * in this consumer establishes what precedes `+0x04`. The caller
+ * establishes the negotiated-rate short at +0; the trailing word remains
+ * unmodelled, and alignment gaps remain padding. Finding F10107.
  */
+/* The caller writes the negotiated-rate short at +0; the control consumer
+ * does not read it. The trailing two template bytes remain unmodelled. */
 struct v29tx_control_req {
-	unsigned char	pad_0000[0x04];
+	short		bit_rate;	/* +0x00, _init_transmitter negotiated rate */
+	unsigned char	pad_0002[2];
 	int		int_0004;	/* +0x04 -> handle's v29tx_cfg::int_0008 */
 	int		scale_mul;	/* +0x08  scales the PPS shaper's gain; rank-2 rename of the sibling `v27tx_ctl::scale_mul` / `v17tx_control_req::scale_mul` (Batch 27, F10144) */
 	unsigned char	ctl0;		/* +0x0c */
 	unsigned char	ctl1;		/* +0x0d */
 };
+
+typedef char v29tx_control_req_rate_offset[
+	(__builtin_offsetof(struct v29tx_control_req, bit_rate) == 0) ? 1 : -1];
+typedef char v29tx_control_req_rate_width[
+	(sizeof(((struct v29tx_control_req *)0)->bit_rate) == 2) ? 1 : -1];
 
 /* Bits of `ctl0`, named by value; see V29TX_control's own derivation. */
 #define V29TXCTL_CTL0_BIT2	(1 << 2)	/* -> V29TXS_10_BIT2 of the
@@ -1486,17 +1495,24 @@ int V29RX_status(void *modem, void *status);
  * argument, so every field below is established from this function
  * alone. The two control bytes match `v32fp.h`'s `struct v32fp_ctl::
  * ctl0`/`ctl1` in shape and position -- corroboration, not derivation,
- * since that struct belongs to an unrelated modem family. Nothing here
- * establishes what precedes `+0x04` or separates it from `+0x0c`, so
- * both gaps stay padding. Finding F10103.
+ * since that struct belongs to an unrelated modem family.
+ * `_init_receiver` establishes a 16-bit negotiated bit rate at +0x02
+ * from its template and runtime stores. The leading two bytes and +0x08
+ * gap remain unmodelled. Finding F10103.
  */
 struct v29rx_control_req {
-	unsigned char pad_0000[0x04];
+	unsigned char pad_0000[2];
+	short bit_rate;		/* +0x02, _init_receiver negotiated rate */
 	int int_0004;			/* +0x04 -> handle's V29_OBJ_INT_0008 */
 	unsigned char pad_0008[0x04];
 	unsigned char ctl0;		/* +0x0c */
 	unsigned char ctl1;		/* +0x0d */
 };
+
+typedef char v29rx_control_req_rate_offset[
+	(__builtin_offsetof(struct v29rx_control_req, bit_rate) == 2) ? 1 : -1];
+typedef char v29rx_control_req_rate_width[
+	(sizeof(((struct v29rx_control_req *)0)->bit_rate) == 2) ? 1 : -1];
 
 /* Bits of `ctl0`, named by value; see V29RX_control's own derivation. */
 #define V29RXCTL_CTL0_BIT3	(1 << 3)	/* clears V29RX_INT_0000      */

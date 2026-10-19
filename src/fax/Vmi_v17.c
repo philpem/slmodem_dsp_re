@@ -59,9 +59,9 @@ v17tx_create(struct faxvmi_link *dp, const struct v17tx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V17TX_CFG;
 
-	handle = V17TX_create((void *)(long)dp->int_0014, &local);
+	handle = V17TX_create(dp->modem, &local);
 	dp->pack_count = 0x30;
-	dp->int_0014 = (int)(long)handle;
+	dp->modem = handle;
 
 	if (local.bitrate == 14400) {
 		dp->pack_width = 6;
@@ -83,8 +83,8 @@ v17rx_create(struct faxvmi_link *dp, const struct v17rx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V17RX_CFG;
 
-	handle = V17RX_create((void *)(long)dp->int_0014, &local);
-	dp->int_0014 = (int)(long)handle;
+	handle = V17RX_create(dp->modem, &local);
+	dp->modem = handle;
 	dp->pack_count = 0;
 
 	if (local.bit_rate == 14400) {
@@ -102,20 +102,20 @@ v17rx_create(struct faxvmi_link *dp, const struct v17rx_cfg *cfg)
 void
 v17tx_delete(struct faxvmi_link *dp)
 {
-	V17TX_delete((void *)(long)dp->int_0014);
+	V17TX_delete(dp->modem);
 }
 
 void
 v17rx_delete(struct faxvmi_link *dp)
 {
-	V17RX_delete((void *)(long)dp->int_0014);
+	V17RX_delete(dp->modem);
 }
 
 int
 v17tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		     unsigned short *result)
 {
-	int status = V17TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
+	int status = V17TX_modem(dp->modem, dp->buf, out, count);
 	*result = *count;
 	*count = 0;
 	return status;
@@ -125,7 +125,7 @@ int
 v17rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		     unsigned short *count)
 {
-	int status = V17RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf, count);
+	int status = V17RX_modem(dp->modem, in, (short *)dp->buf, count);
 	*result = *count;
 	*count = 0;
 	return status;
@@ -134,23 +134,23 @@ v17rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 int
 v17tx_status(struct faxvmi_link *dp, struct v17_status *status)
 {
-	return V17TX_status((void *)(long)dp->int_0014, status);
+	return V17TX_status(dp->modem, status);
 }
 
 int
 v17rx_status(struct faxvmi_link *dp, struct v17_status *status)
 {
-	return V17RX_status((void *)(long)dp->int_0014, status);
+	return V17RX_status(dp->modem, status);
 }
 
 int
 v17tx_control(struct faxvmi_link *dp, const struct v17tx_control_req *arg)
 {
-	return V17TX_control((void *)(long)dp->int_0014, arg);
+	return V17TX_control(dp->modem, arg);
 }
 
 int
 v17rx_control(struct faxvmi_link *dp, const struct v17rx_ctl *arg)
 {
-	return V17RX_control((void *)(long)dp->int_0014, arg);
+	return V17RX_control(dp->modem, arg);
 }

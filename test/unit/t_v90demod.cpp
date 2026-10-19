@@ -45,6 +45,7 @@
  * `V90Demodulator::enterPhase3`.
  */
 
+#include "v90_params_period_view.h"
 #include "v90demfix.h"
 /*
  * The designer is a POINTER in V90Demodulator.h, so the fixture needs only the

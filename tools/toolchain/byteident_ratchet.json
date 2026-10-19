@@ -1,9 +1,9 @@
 {
-  "bytes": 78,
+  "bytes": 77,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1109,
-  "exact_bytes": 127904,
+  "exact": 1110,
+  "exact_bytes": 128339,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -926,6 +926,7 @@
     "_send_silence_state_init",
     "_set_modem_rate",
     "_status",
+    "_tx_nulls_state",
     "_tx_scrambled_ones_state",
     "_tx_silence_before_scrm_ones",
     "alaw2linear",

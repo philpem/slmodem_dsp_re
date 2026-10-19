@@ -11,7 +11,7 @@
  * fuller one than t_faxvmicp.c chose to take on.
  *
  * THE WRAPPED-OBJECT POKES (`ctx->rx_agc_mult`/`rx_agc_shift`/`f12d4` propagated into an
- * unmodelled per-modulation sub-object reached via `vmi_b->link->int_0014`)
+ * unmodelled per-modulation sub-object reached via `vmi_b->link->modem`)
  * are verified the same way: both sides call the IDENTICAL already-written
  * constructor, so the sub-object's shape and size are identical on both
  * sides by construction, and reading the same computed offset back on both
@@ -111,7 +111,7 @@ cmp_link_scalars(const char *what, struct faxvmi_link *a,
 /*
  * Read the SAME computed offset back on both sides.  `off1` is the offset
  * of the sub-pointer inside the wrapped modem object (`vmi->link->
- * int_0014`, cast to a pointer, the same idiom `faxadapt.c`'s own `FIELD_
+ * modem`, cast to a pointer, the same idiom `faxadapt.c`'s own `FIELD_
  * PTR` macro uses on this exact field); `off2` is the offset of the 16-bit
  * value inside THAT sub-object.  Neither object is named anywhere in this
  * tree, so this reads raw bytes rather than through a struct -- safe here
@@ -120,7 +120,7 @@ cmp_link_scalars(const char *what, struct faxvmi_link *a,
 static short
 wrapped_short(struct faxvmi *vmi, int off1, int off2)
 {
-	void *wrapped = (void *)(long)vmi->link->int_0014;
+	void *wrapped = vmi->link->modem;
 	void *sub = *(void **)((char *)wrapped + off1);
 
 	return *(short *)((char *)sub + off2);

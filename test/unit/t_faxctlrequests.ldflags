@@ -1,0 +1,1 @@
+-Wl,--wrap=v17tx_control -Wl,--wrap=v17rx_control -Wl,--wrap=v29rx_control -Wl,--wrap=v27rx_control

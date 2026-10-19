@@ -59,7 +59,7 @@
  * `fax_class1_progress` WAS DECLINED TWICE (F9600's wave, F9802) on
  * `ctx->0x1254`'s meaning; findings F10051/F10052 settle it as a T.30 modem
  * RATE CODE, in (mostly) `_set_modem_rate`'s own code space, and the walk
- * through `ctx->0x1208 (vmi_b) -> link(+0x28) -> int_0014(+0x14)` reaches
+ * through `ctx->0x1208 (vmi_b) -> link(+0x28) -> modem(+0x14)` reaches
  * whichever modulation's own RX object that code names -- `V17RX_OBJ_STATE`
  * (0x60), `V29_OBJ_RX` (0x50) or `V27_OBJ_RX` (0x54) -- each already typed by
  * v17fax.h/v27fax.h/v29fax.h, whose own `V17RXS_SHORT_4FB2`/
@@ -346,8 +346,8 @@ _idle_state_init(struct fax_class1 *ctx)
  */
 static int
 _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-	    int word3, int word4, int *rx_count, int *tx_count,
-	    int word7, int *word8)
+	    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	    int *word7, int *word8)
 {
 	int n = *rx_count;
 	int i;
@@ -384,8 +384,8 @@ _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 static int
 _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		   int word3, int word4, int *rx_count, int *tx_count,
-		   int word7, int *word8)
+		   unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		   int *word7, int *word8)
 {
 	(void)rx;
 	(void)word3;
@@ -407,8 +407,8 @@ _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 static int
 _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		    int word3, int word4, int *rx_count, int *tx_count,
-		    int word7, int *word8)
+		    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		    int *word7, int *word8)
 {
 	int i;
 	/* Keep the bound named: GCC 3.4.2 otherwise rewrites the signed
@@ -444,8 +444,8 @@ _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 static int
 _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8)
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8)
 {
 	int i;
 
@@ -937,8 +937,7 @@ class1_status_name(int id)
  * THE DISPATCH'S LOCAL COPY (step 3): `local_rx_count` starts as `n`
  * (loaded once, at entry, from `*rx_count`) and is handed to the state
  * handler BY ADDRESS -- class1.h's `class1_state_fn` contract already
- * documents that a handler may read (never write, in the three handlers
- * reconstructed so far) through it.
+ * documents that a handler may read or write through it.
  *
  * THE RATE-CODE SWITCH (step 7) TESTS FOUR SEPARATE EQUALITIES for V.17,
  * not the two-code RANGES `_set_modem_rate` uses for the same rates --
@@ -950,7 +949,7 @@ class1_status_name(int id)
  */
 int
 fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
-		    int word3, int word4, int *rx_count, int *tx_count,
+		    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
 		    int *word7, int *word8)
 {
 	int n = *rx_count;
@@ -994,17 +993,9 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 		FPM_iir_filt_II(rx, ctx->iir_coeff, ctx->iir_state, 2,
 				(short)n);
 
-	/*
-	 * `class1_state_fn`'s own position-8 slot is `int`, the LEAST claim
-	 * (nothing written so far reads it), so this function's genuinely
-	 * pointer-typed `word7` is forwarded through it the same
-	 * `(void *)(long)`-shaped idiom `faxadapt.h` already names for a
-	 * pointer riding through a plain `int` slot -- not a claim that the
-	 * callee treats the value as anything but bits.
-	 */
 	(*class1_state_functions[ctx->state])(ctx, rx, tx, word3, word4,
 					      &local_rx_count, tx_count,
-					      (int)(long)word7, word8);
+					      word7, word8);
 
 	if (ctx->state != ctx->prev_state) {
 		const char *new_name = class1_state_name(ctx->state);
@@ -1038,7 +1029,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 		    code == 0x49) {
 			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
-				void *modem = (void *)(long)link->int_0014;
+				void *modem = link->modem;
 				void *obj = *(void **)((char *)modem +
 							V17RX_OBJ_STATE);
 				short *flag = (short *)((char *)obj +
@@ -1052,7 +1043,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 		} else if (code == 0x60 || code == 0x48) {
 			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
-				void *modem = (void *)(long)link->int_0014;
+				void *modem = link->modem;
 				void *obj = *(void **)((char *)modem +
 							V29_OBJ_RX);
 				short *flag = (short *)((char *)obj +
@@ -1066,7 +1057,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 		} else if (code == 0x30 || code == 0x18) {
 			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
-				void *modem = (void *)(long)link->int_0014;
+				void *modem = link->modem;
 				void *obj = *(void **)((char *)modem +
 							V27_OBJ_RX);
 				short *flag = (short *)((char *)obj +

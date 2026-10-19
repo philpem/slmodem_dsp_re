@@ -67,7 +67,7 @@ _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
 	ctl.short_0010 = 2;
-	ctl.int_0014 = (int)(long)&req;
+	ctl.control_req = &req;
 
 	ret = FAXVMI_control(ctx->vmi_a, &ctl);
 
@@ -139,7 +139,7 @@ _hdlc_receive_state_init(struct fax_class1 *ctx)
  * ctx->scratch_frame_len, 1)` (the frame's own bytes, length-prefixed the same way
  * `_hdlc_emulate_receive_state`'s records are) whose count goes through
  * `word7`, a delayed FAX_CLASS1_OK two calls out, THEN the pointer chase:
- * `ctx->vmi_a->link->int_0014` (an untyped "active modem" handle per
+ * `ctx->vmi_a->link->modem` (an untyped "active modem" handle per
  * `faxvmi.h`'s own note) to its own +0x50, and the sign-extended shorts at
  * +0x30/+0x32 of THAT into `ctx->rx_agc_mult`/`rx_agc_shift` -- V.21RX's internal layout
  * at those two offsets is out of this batch's scope, so this is raw offset
@@ -161,8 +161,8 @@ _hdlc_receive_state_init(struct fax_class1 *ctx)
  */
 int
 _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		    int word3, int word4, int *rx_count, int *tx_count,
-		    int word7, int *word8)
+		    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		    int *word7, int *word8)
 {
 	short cnt = 0;
 	unsigned short result = (unsigned short)*rx_count;
@@ -186,9 +186,9 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 				    "At %2d.%02d[sec] No carrier in HDLC " "receive state\n",
 				    ctx->clock_sec, ctx->clock_frac);
 			ctx->state = CLASS1_IDLE_STATE;
-			*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+			*word7 = cTOOLS_handle_hdlc_output(ctx,
 			    (const unsigned short *)((char *)ctx + 2),
-			    (unsigned char *)(long)word3, 0, 1);
+			    word3, 0, 1);
 			ctx->delayed_status_countdown = 2;
 			ctx->delayed_status = FAX_CLASS1_NO_CARRIER;
 		}
@@ -212,14 +212,14 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 					dsplibs_debug_printf(
 					    "%2d.%02d[sec] Receive buffer OK " "in _hdlc_receive_state\n",
 					    ctx->clock_sec, ctx->clock_frac);
-				*(int *)(long)word7 =
+				*word7 =
 				    cTOOLS_handle_hdlc_output(ctx,
 				    (const unsigned short *)((char *)ctx + 2),
-				    (unsigned char *)(long)word3, len, 1);
+				    word3, len, 1);
 				ctx->delayed_status_countdown = 2;
 				ctx->delayed_status = FAX_CLASS1_OK;
 
-				modem = (void *)(long)ctx->vmi_a->link->int_0014;
+				modem = ctx->vmi_a->link->modem;
 				p = *(char **)((char *)modem + 0x50);
 				ctx->rx_agc_mult = *(short *)(p + 0x30);
 				ctx->rx_agc_shift = *(short *)(p + 0x32);
@@ -236,9 +236,9 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
-		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		*word7 = cTOOLS_handle_hdlc_output(ctx,
 		    (const unsigned short *)((char *)ctx + 2),
-		    (unsigned char *)(long)word3, 0, 1);
+		    word3, 0, 1);
 		ctx->status = FAX_CLASS1_OK;
 	}
 
@@ -292,8 +292,8 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 int
 _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
-				    short *tx, int word3, int word4,
-				    int *rx_count, int *tx_count, int word7,
+				    short *tx, unsigned char *word3, const unsigned char *word4,
+				    int *rx_count, int *tx_count, int *word7,
 				    int *word8)
 {
 	short cnt = 0;
@@ -372,9 +372,9 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
-		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		*word7 = cTOOLS_handle_hdlc_output(ctx,
 		    (const unsigned short *)((char *)ctx + 2),
-		    (unsigned char *)(long)word3, 0, 1);
+		    word3, 0, 1);
 		ctx->status = FAX_CLASS1_OK;
 	}
 
@@ -414,7 +414,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  * countdown/`FAXVMI_process` call, BEFORE the S7 logic above -- the object's
  * own branch order): if the raw status's bit 0/1 pair `(status >> 8) & 0x3`
  * -- no, this function does NOT read that pair; instead it walks
- * `ctx->vmi_a->link->int_0014`'s own +0x50, up to FOUR signed 16-bit reads
+ * `ctx->vmi_a->link->modem`'s own +0x50, up to FOUR signed 16-bit reads
  * at +0x2c of the pointer chain (re-chased each iteration, since the object
  * re-reads it every loop pass rather than hoisting it), each compared
  * against `GAIN_THRESHOLD_TABLE[i]` -- the FIRST index `i` (0..3) where
@@ -431,7 +431,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  * log ("At %2d.%02d[sec] hdlc_receive_state_init\n" -- narrating a
  * transition this function inlines rather than calling out to), `ctx->
  * countdown = 0`, `ctx->state = CLASS1_HDLC_RECEIVE_STATE`, `ctx->cng_enabled =
- * 0`, and the SAME `ctx->vmi_a->link->int_0014`/+0x50 chase
+ * 0`, and the SAME `ctx->vmi_a->link->modem`/+0x50 chase
  * `_hdlc_receive_state` makes, but reading +0x2c this time (once, not per
  * table entry) -- discarded here, spent only on the table scan above; no
  * ctx field receives it in THIS function.
@@ -450,7 +450,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  *   0x12968  "At %2d.%02d[sec], curent_timeout = %d, No carrier in "
  *            "_hdlc_receive_look_carrier_state, S7 = %d[sec]\n"
  *
- * THE POINTER CHASE (`ctx->vmi_a->link->int_0014`, then that pointer's own
+ * THE POINTER CHASE (`ctx->vmi_a->link->modem`, then that pointer's own
  * +0x50, then +0x2c or +0x30/+0x32 of THAT) is the same shape
  * `_hdlc_receive_state` uses; see that function's own note.  V.21RX's
  * internal layout at these offsets is out of this batch's scope, so this is
@@ -458,8 +458,8 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  */
 int
 _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
-				 short *tx, int word3, int word4,
-				 int *rx_count, int *tx_count, int word7,
+				 short *tx, unsigned char *word3, const unsigned char *word4,
+				 int *rx_count, int *tx_count, int *word7,
 				 int *word8)
 {
 	short cnt = 0;
@@ -511,7 +511,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 		for (i = 0; i <= 3; i++) {
 			short v;
 
-			modem = (void *)(long)ctx->vmi_a->link->int_0014;
+			modem = ctx->vmi_a->link->modem;
 			p = *(char **)((char *)modem + 0x50);
 			v = *(short *)(p + 0x2c);
 
@@ -564,9 +564,9 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
-		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		*word7 = cTOOLS_handle_hdlc_output(ctx,
 		    (const unsigned short *)((char *)ctx + 2),
-		    (unsigned char *)(long)word3, 0, 1);
+		    word3, 0, 1);
 		ctx->status = FAX_CLASS1_OK;
 	}
 
@@ -609,8 +609,8 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  */
 int
 _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
-			    short *tx, int word3, int word4, int *rx_count,
-			    int *tx_count, int word7, int *word8)
+			    short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+			    int *tx_count, int *word7, int *word8)
 {
 	int total = ctx->superframe_len;
 	int idx = 0;
@@ -662,9 +662,9 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 
 			n = cTOOLS_handle_hdlc_output(ctx,
 			    &ctx->superframe[start + 1],
-			    (unsigned char *)(long)word3,
+			    word3,
 			    ctx->superframe[start], 1);
-			*(int *)(long)word7 = n;
+			*word7 = n;
 			ctx->delayed_status = 1;
 			ctx->delayed_status_countdown = 2;
 			next = ctx->superframe_read_idx + 1;

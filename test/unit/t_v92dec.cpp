@@ -57,6 +57,7 @@
  * visible rather than a silent gap.
  */
 
+#include "v90_params_period_view.h"
 #include <string.h>
 
 #include "harness.h"

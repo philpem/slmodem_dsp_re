@@ -5843,7 +5843,7 @@ run_smh(void)
  * THE THREE CONTEXT POINTERS ARE COMPARED BY VALUE, not skipped, because both
  * sides are given the same one: `cfg->ptr_0018` reaches `fpm_mrf_cfg::aux`,
  * `fpm_fse_cfg::reserved34` and the four bytes `fpm_sre.h` calls
- * `pad34`/`pad36`.  That third one is F9306's site and this is what measures
+ * `owner`.  That third one is F9306's site and this is what measures
  * it -- a `short`-at-a-time reading would put the halves elsewhere.
  *
  * AND THE DECISIONS ARE MODELLED SEPARATELY.  `crt_read` lifts 68 values out
@@ -6055,7 +6055,7 @@ crt_read(void *h, long *v, int is_ref)
 	v[n++] = crt_which(sre->cfg.yclock, T(4)[0], T(4)[1]);
 	v[n++] = crt_which(sre->cfg.pll_k1, T(5)[0], T(5)[1]);
 	v[n++] = crt_which(sre->cfg.pll_k2, T(6)[0], T(6)[1]);
-	v[n++] = memcmp(&sre->cfg.pad34, &aux, sizeof aux) == 0;
+	v[n++] = sre->cfg.owner == aux;
 	v[n++] = sre->ppm_step;
 	v[n++] = sre->ppm_period;
 	v[n++] = sre->ppm_scale;

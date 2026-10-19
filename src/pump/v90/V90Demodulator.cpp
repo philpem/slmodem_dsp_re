@@ -10,7 +10,7 @@
  *
  * `V90PreFilter::isV90WithEia6()` IS CALLED TWICE, and the second call is
  * kept because the blob makes it -- NOT because the answer can change.  It
- * cannot: `isV90WithEia6` is `(cap == 1) || (V90PW(params)[0x500/4] == 6)`, and
+ * cannot: `isV90WithEia6` is `(cap == 1) || (params->LOOP_TYPE == 6)`, and
  * between the two calls the object runs `setParamEia6`, which writes thirty
  * words of the parameter block and none of them is +0x500, and
  * `displayParamEia6`, which is one `ret`.  Neither touches `refLoop` or
@@ -32,6 +32,7 @@
 #include <math.h>
 
 extern "C" {
+#include "dsplib/modem_params.h"
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 }
@@ -156,48 +157,6 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #endif
 
 /*
- * Where the two words copied out of the parameter block live, and where the
- * timing offset comes from.  Spelled as indices because V90Parameters is a
- * block of unrecovered layout (V90PreFilter.h), and naming a field of it here
- * would be inventing one.
- */
-#define PARAMS_TIMING_OFFSET	(0x084 / 4)
-#define PARAMS_WORD_264		(0x264 / 4)
-#define PARAMS_WORD_278		(0x278 / 4)
-
-/*
- * The four the phase-4 and data-phase entries copy into +0x288 and +0x290.
- * `enterPhase3` already used +0x264 and +0x278 for the same PAIR of
- * destinations, so the parameter block holds one (+0x288, +0x290) pair per
- * phase and these are phases 4 and data:
- *
- *     enterPhase3           +0x264 -> +0x288      +0x278 -> +0x290
- *     enterRRN, enterFPE,
- *     enterPhase4           +0x268 -> +0x288      +0x27c -> +0x290
- *     enterDataPhase        +0x26c -> +0x288      +0x280 -> +0x290
- *
- * -- three consecutive words in each of two runs, indexed by phase.  That is
- * the shape of the block and not a name for either quantity, so these keep
- * offset names: the author's own names are in V90Parameters.h, which this
- * file cannot include (finding F1112), and inventing two here would be worse
- * than an offset.
- */
-#define PARAMS_WORD_268		(0x268 / 4)
-#define PARAMS_WORD_26C		(0x26c / 4)
-#define PARAMS_WORD_27C		(0x27c / 4)
-#define PARAMS_WORD_280		(0x280 / 4)
-
-/*
- * `sessionTermination`'s two.  The names in the comments are the ORIGINAL
- * AUTHOR'S, out of `include/dsplib/V90Parameters.h`, for the reason the three
- * `reset` indices below give: this file cannot include that header, and
- * writing the offsets down without the names it carries throws information
- * away.  `TIMING_OFFESET` is the author's spelling.
- */
-#define PARAMS_TIMING_HISTORY_EVAL	(0x160 / 4)	/* int   */
-#define PARAMS_MIN_STD_FOR_SAVE		(0x16c / 4)	/* float */
-
-/*
  * Where the timing offset is SAVED, which is not in the parameter block at
  * all: it is +0x4c of the `_tagModemParameters` the block's first word points
  * at, as a signed count of thousandths.  The same word is what
@@ -206,18 +165,6 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * Finding F1274; the pairing is why "saved in Registry" is not a figure of
  * speech.
  */
-#define MODEM_CLOCK_DEVIATION	(0x04c / 4)
-
-/*
- * The three `reset` adds.  The names in the comments are the ORIGINAL
- * AUTHOR'S, out of `include/dsplib/V90Parameters.h` -- that header cannot be
- * included here, because this file already has the other definition of the
- * class (finding F1112), but the map it carries is still what these indices
- * mean and writing them down without it would be throwing information away.
- */
-#define PARAMS_AGC_NOMINAL_ENERGY	(0x05c / 4)	/* float */
-#define PARAMS_AGC_BLOCK_LEN		(0x064 / 4)	/* int   */
-#define PARAMS_LINEAR_EQU_CURSOR_PLACE	(0x184 / 4)	/* int   */
 
 /*
  * `V90Resampler::reset()` BY A QUALIFIED CALL, and it is not a shortcut.
@@ -285,7 +232,7 @@ V90Demodulator::setSessionFlag(unsigned int flag)
 void
 V90Demodulator::enterPhase3()
 {
-	const signed char *block;
+	const _tagModemParameters *block;
 
 	/*
 	 * EXACTLY 1, not merely non-zero.  `cmpl $0x1,0x34(%esi)`, and the
@@ -314,7 +261,7 @@ V90Demodulator::enterPhase3()
 		 * -- and the offset is read out of the parameter block, not
 		 * out of this object.
 		 */
-		resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
+		resampler.setTimingOffset(params->INITIAL_BAUD_OFFSET);
 	}
 
 	spectralVerifier.reset();
@@ -338,8 +285,8 @@ V90Demodulator::enterPhase3()
 
 	equalizer->enterPhase3();
 
-	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_264];
-	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_278];
+	errorEnergyPrintPeriod = params->ERROR_ENERGY_PRINT_PERIOD_PHASE3;
+	timingOffsetPrintPeriod = params->TIMING_OFFSET_PRINT_PERIOD_PHASE3;
 
 	/*
 	 * Four words of the evaluator, all zero.  The blob writes them
@@ -356,12 +303,11 @@ V90Demodulator::enterPhase3()
 
 	/*
 	 * `mov (%edx),%ebx; cmpb $0x0,0x2(%ebx); js` -- a pointer out of the
-	 * parameter block's first word, and a SIGNED byte two in from it.  The
-	 * class it points at is not modelled and this is the only thing in
-	 * wave 2 that reaches it.
+	 * parameter block's first word, and a SIGNED byte two in from it.
+	 * That byte is qcFlags in the typed modem parameter owner.
 	 */
-	block = *(const signed char *const *)&V90PB(params)[0];
-	if (block[2] < 0)
+	block = params->modemParams;
+	if ((signed char)block->qcFlags < 0)
 		return;
 
 	if (sessionFlag != 0) {
@@ -453,7 +399,7 @@ int
 V90Demodulator::sessionTermination()
 {
 	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
-		if (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {
+		if (params->TIMING_HISTORY_EVALUATION_ENABLED != 0) {
 			float mean = resampler.getTimingHistoryMean();
 			float std = resampler.getTimingHistoryStd();
 			int frac;
@@ -484,14 +430,14 @@ V90Demodulator::sessionTermination()
 			 * called it TIMING_OFFESET_MIN_STD_FOR_SAVE and uses
 			 * it as a maximum.
 			 */
-			if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
-				int *modemParams;
+			if (params->TIMING_OFFESET_MIN_STD_FOR_SAVE >= std) {
+				_tagModemParameters *modemParams;
 
 				edprintf("V90Demodulator on " "sessionTermination: Timing offset "
 					 "saved in Registry!\r\n");
 
-				modemParams = *(int *const *)&V90PB(params)[0];
-				modemParams[MODEM_CLOCK_DEVIATION] =
+				modemParams = params->modemParams;
+				modemParams->clockDeviation =
 				    (int)(1000.0f * mean);
 			}
 		} else {
@@ -604,8 +550,8 @@ V90Demodulator::enterRRN()
 	inPhase3 = 2;
 	phase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
-	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
-	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = params->ERROR_ENERGY_PRINT_PERIOD_PHASE4;
+	timingOffsetPrintPeriod = params->TIMING_OFFSET_PRINT_PERIOD_PHASE4;
 
 	additionalCPinfo->word_10 =
 	    (connectionEvaluator->silenceRrnRequest != 0 &&
@@ -639,8 +585,8 @@ V90Demodulator::enterFPE()
 	inPhase3 = 2;
 	phase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
-	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
-	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = params->ERROR_ENERGY_PRINT_PERIOD_PHASE4;
+	timingOffsetPrintPeriod = params->TIMING_OFFSET_PRINT_PERIOD_PHASE4;
 }
 
 /*
@@ -702,16 +648,9 @@ V90Demodulator::enterPhase4()
 	phase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
 	samplesInPhase = 0;
 
-	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
-	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = params->ERROR_ENERGY_PRINT_PERIOD_PHASE4;
+	timingOffsetPrintPeriod = params->TIMING_OFFSET_PRINT_PERIOD_PHASE4;
 }
-
-/*
- * `V90Parameters` +0x048.  `tools/vparse.py` gives the author's own name for
- * it; the index spelling is this file's convention (see PARAMS_TIMING_OFFSET
- * above) and not a statement that the named map is unavailable.
- */
-#define PARAMS_ANALOG_RATE_MASK	(0x048 / 4)
 
 /*
  * exitPhase3 -- 768 bytes at 0x1bb50, and the hand-over from phase 3 to phase
@@ -805,7 +744,7 @@ V90Demodulator::exitPhase3()
 	additionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;
 	additionalCPinfo->word_10 = 0;
 	additionalCPinfo->short_14 =
-	    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK];
+	    (short)params->ANALOG_RATE_MASK;
 
 	phase3Demodulator->exitDIL();
 
@@ -878,8 +817,8 @@ V90Demodulator::enterDataPhase()
 	inPhase3 = 3;
 	word_3c = 0x1e;
 
-	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_26C];
-	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_280];
+	errorEnergyPrintPeriod = params->ERROR_ENERGY_PRINT_PERIOD_DATA;
+	timingOffsetPrintPeriod = params->TIMING_OFFSET_PRINT_PERIOD_DATA;
 
 	resampler.setBllState(V90_BLL_STEADY_STATE, 1);
 
@@ -901,9 +840,9 @@ V90Demodulator::enterDataPhase()
  *
  * IT IS `sessionTermination`'S TIMING-HISTORY BLOCK WITH A DIFFERENT GUARD.
  * Same two resampler accessors, same `%c%d.%04d` split, same `1000* std`
- * line, same `PARAMS_MIN_STD_FOR_SAVE >= std` test with the parameter on the
+ * line, same `TIMING_OFFESET_MIN_STD_FOR_SAVE >= std` test with the parameter on the
  * LEFT, and the same store into the modem parameter block's
- * `MODEM_CLOCK_DEVIATION`.  Everything that comment says about the sign
+ * `clockDeviation`.  Everything that comment says about the sign
  * character applies here unchanged and is not repeated: `fldz` puts the ZERO
  * in %st(0), the character is `0x2d - 2*CF` with no branch, and an unordered
  * value therefore prints '+'.  Findings F2300 and F2410.
@@ -934,7 +873,7 @@ V90Demodulator::enterDataSteadyState()
 	inPhase3 = 4;
 	edprintf("V90Demodulator: enter Data steady state\r\n");
 
-	timingHistoryEval = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
+	timingHistoryEval = params->TIMING_HISTORY_EVALUATION_ENABLED;
 	if (timingHistoryEval != 0) {
 		float mean = resampler.getTimingHistoryMean();
 		float std = resampler.getTimingHistoryStd();
@@ -955,13 +894,13 @@ V90Demodulator::enterDataSteadyState()
 		edprintf("V90Demodulator: 1000* std = %d\r\n",
 			 (int)(std * 1000.0f));
 
-		if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
-			int *modemParams;
+		if (params->TIMING_OFFESET_MIN_STD_FOR_SAVE >= std) {
+			_tagModemParameters *modemParams;
 
 			edprintf("V90Demodulator: Timing offset saved in " "Registry!\r\n");
 
-			modemParams = *(int *const *)&V90PB(params)[0];
-			modemParams[MODEM_CLOCK_DEVIATION] =
+			modemParams = params->modemParams;
+			modemParams->clockDeviation =
 			    (int)(1000.0f * mean);
 		}
 	}
@@ -1220,34 +1159,15 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
  * that is a role bounded by two sites rather than a meaning the object states.
  */
 
-/*
- * SIX PARAMETER SLOTS THIS MEMBER READS AS `float` WHERE V90Parameters.h
- * DECLARES THEM `int`, and the object's own load width is what says so:
- * `flds` at 0x1deb2 (+0x06c), 0x1def6 (+0x070) and 0x1d2ce (+0x328), and a
- * bare 32-bit `mov` at 0x1e06d, 0x1e079 and 0x1e085 that lands in three slots
- * the header already types `float` (+0x18c, +0x190, +0x194).  A `mov` between
- * two `float`s is a copy; the same statement written between an `int` and a
- * `float` is a CONVERSION and two more instructions, so the view is forced
- * rather than cosmetic.  Reaching them through the union is how this file
- * avoids retyping a shared header that half the object's constructors take a
- * pointer to; the names stay `unnamed_` because nothing here says what they
- * hold.
- */
-#define PARAMS_UNNAMED_06C	(0x06c / 4)	/* float */
-#define PARAMS_UNNAMED_070	(0x070 / 4)	/* float */
-#define PARAMS_UNNAMED_1B0	(0x1b0 / 4)	/* float */
-#define PARAMS_UNNAMED_1B4	(0x1b4 / 4)	/* float */
-#define PARAMS_UNNAMED_1B8	(0x1b8 / 4)	/* float */
-#define PARAMS_UNNAMED_328	(0x328 / 4)	/* float */
-
-/* `_tagModemParameters::connectionType`; MODEM_CLOCK_DEVIATION's neighbour. */
-#define MODEM_CONNECTION_TYPE	(0x048 / 4)
+/* The unnamed +0x328 parameter has an integer initializer and a float
+ * arithmetic reader. Its member union preserves those two representations;
+ * the other float parameters are already typed in V90Parameters.h. */
 
 void
 V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			 unsigned int nofIn)
 {
-	int *modemParams;
+	_tagModemParameters *modemParams;
 	V90BllState bllState;
 	int bllSamples;
 	unsigned int prevRate;
@@ -1285,8 +1205,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			case 0:
 				autoDigitalImpDetector->setConnectionType(0);
 				modemParams =
-				    *(int *const *)&V90PB(params)[0];
-				modemParams[MODEM_CONNECTION_TYPE] = 0;
+				    params->modemParams;
+				modemParams->connectionType = 0;
 				break;
 
 			case 1:
@@ -1298,8 +1218,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				    params->GERMAN_ISDN_NT1_LINEAR_EQU_DATA_BETA;
 				autoDigitalImpDetector->setConnectionType(1);
 				modemParams =
-				    *(int *const *)&V90PB(params)[0];
-				modemParams[MODEM_CONNECTION_TYPE] = 1;
+				    params->modemParams;
+				modemParams->connectionType = 1;
 				break;
 
 			case 2:
@@ -1312,15 +1232,15 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				params->DFE_DATA_BETA =
 				    params->GERMAN_PBX_DFE_DATA_BETA;
 				params->GERMAN_PBX_LINEAR_EQU_DIL_BETA =
-				    V90PF(params)[PARAMS_UNNAMED_1B0];
+				    params->unnamed_1b0;
 				params->GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA =
-				    V90PF(params)[PARAMS_UNNAMED_1B4];
+				    params->unnamed_1b4;
 				params->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA =
-				    V90PF(params)[PARAMS_UNNAMED_1B8];
+				    params->unnamed_1b8;
 				autoDigitalImpDetector->setConnectionType(2);
 				modemParams =
-				    *(int *const *)&V90PB(params)[0];
-				modemParams[MODEM_CONNECTION_TYPE] = 2;
+				    params->modemParams;
+				modemParams->connectionType = 2;
 				break;
 
 			case 3:
@@ -1535,20 +1455,20 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			}
 			energyDropDetectorArmed = 1;
 
-			if (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {
-				if (V90PF(params)[PARAMS_UNNAMED_06C] * 0.85 >
+			if (params->unnamed_06c > agc.gain) {
+				if (params->unnamed_06c * 0.85 >
 				    agc.gain) {
 					phase3Demodulator->short_400 = 1;
 				} else {
 					equalizer->dfeProtectionOnDil = (short)
 					    ((short)((1.0f - agc.gain /
-					      V90PF(params)[PARAMS_UNNAMED_06C])
+					      params->unnamed_06c)
 						     * 250.0f) + 1);
 				}
 				phase3Demodulator->dilMaxUcode = 0x74;
 
 				if (agc.gain <
-				    V90PF(params)[PARAMS_UNNAMED_070]) {
+				    params->unnamed_070) {
 					params->unnamed_300 -=
 					    params->unnamed_304;
 					if (DSPLIB_DEBUG_ON())
@@ -1636,7 +1556,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 			if (quickConnect != 0 &&
 			    constellationDesigner->word_24 == 0)
-				pdSnr = V90PF(params)[PARAMS_UNNAMED_328] *
+				pdSnr = params->unnamed_328_float *
 					equalizer->meanErrorEnergyMean;
 			else
 				pdSnr = equalizer->meanErrorEnergyMean;
@@ -2066,12 +1986,12 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 	descrambler.reset(0);
 
 	agc.reset();
-	agc.blockLen = V90PW(params)[PARAMS_AGC_BLOCK_LEN];
-	agc.ref = V90PF(params)[PARAMS_AGC_NOMINAL_ENERGY];
+	agc.blockLen = params->AGC_BLOCK_LEN;
+	agc.ref = params->AGC_NOMINAL_ENERGY;
 
 	preFilter.reset();
 
-	offset = V90PF(params)[PARAMS_TIMING_OFFSET];
+	offset = params->INITIAL_BAUD_OFFSET;
 	whole = (int)offset;
 	frac = (int)((offset - (float)whole) * 1000.0f);
 	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
@@ -2080,9 +2000,9 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 		 (frac < 0) ? -frac : frac);
 
 	resampler.V90Resampler::reset();
-	resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
+	resampler.setTimingOffset(params->INITIAL_BAUD_OFFSET);
 
-	cursor = V90PW(params)[PARAMS_LINEAR_EQU_CURSOR_PLACE];
+	cursor = params->LINEAR_EQU_CURSOR_PLACE;
 	if (cursor < 0)
 		equalizer->reset(equalizer->linearEquLength >> 1);
 	else
@@ -2363,15 +2283,6 @@ V90Demodulator::getBitRate() const
 #define V90DEM_ARRAY_254_WIDTH		8u
 #define V90DEM_ARRAY_25C_WIDTH		8u
 
-/*
- * The equaliser's two lengths, which are the only arguments this constructor
- * reads out of the parameter block.  The names are the ORIGINAL AUTHOR'S, out
- * of include/dsplib/V90Parameters.h, which this file cannot include (finding
- * F1112) -- the same convention the three `reset` indices above follow.
- */
-#define PARAMS_LINEAR_EQU_LENGTH	(0x170 / 4)	/* int */
-#define PARAMS_DFE_LENGTH		(0x1fc / 4)	/* int */
-
 V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 			       V90Jd *jdArg, V92Jd *jdV92Arg,
 			       tagV90DILdescriptor *dilArg,
@@ -2481,8 +2392,8 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 	phase4Demodulator = p4d;
 
 	equ = (V90Equalizer *)sysdep_malloc(sizeof(V90Equalizer));
-	new (equ) V90Equalizer((unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
-			       (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
+	new (equ) V90Equalizer((unsigned int)params->LINEAR_EQU_LENGTH,
+			       (unsigned int)params->DFE_LENGTH,
 			       phase3Demodulator, phase4Demodulator, demapper,
 			       connectionEvaluator, &spectralVerifier, params,
 			       &resampler, &preFilter, compMode);

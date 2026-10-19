@@ -721,9 +721,14 @@ int _idle_state_init(struct fax_class1 *ctx);
  *   rx         the received block.  `_recieve_silence_state` hands it to
  *              `FPM_rms(const short *, unsigned)`, which types the samples.
  *   tx         the block to transmit.
- *   word3      not read by any handler this batch writes.  Only the
- *   word4      WIDTH is established (a 32-bit argument slot); `int` is
- *   word7      the least claim, and is not a claim that they are ints.
+ *   word3      host output byte buffer, written by the receive handlers
+ *              through `_handle_data_output`/`cTOOLS_handle_hdlc_output`.
+ *   word4      host input byte buffer, read by the transmit handlers
+ *              through `_handle_data_input`/`_handle_hdlc_input`.
+ *   word7      output byte-count pointer. Receive handlers read or write
+ *              through it; progress clears it before the dispatch.
+ *              All three are 32-bit pointers in the period ABI and native
+ *              pointers in a 64-bit build. `fax.c` supplies the buffers.
  *   rx_count   how many samples `rx` holds.  `fax_class1_progress` passes
  *              the address of its OWN copy, not its caller's pointer, so a
  *              handler writing through this does not reach the caller.
@@ -740,12 +745,11 @@ int _idle_state_init(struct fax_class1 *ctx);
  *              HDLC_RECEIVE_STATE) and nothing here chooses between them,
  *              so it keeps a neutral name.
  *
- * Every handler returns 0 in the three reconstructed so far; nothing is
- * known to read the return.
+ * `fax_class1_progress` ignores the handler return value.
  */
 typedef int (*class1_state_fn)(struct fax_class1 *ctx, const short *rx,
-			       short *tx, int word3, int word4,
-			       int *rx_count, int *tx_count, int word7,
+			       short *tx, unsigned char *word3, const unsigned char *word4,
+			       int *rx_count, int *tx_count, int *word7,
 			       int *word8);
 
 /**
@@ -949,7 +953,7 @@ int fax_class1_status(struct fax_class1 *ctx, void *modem_status);
  * @return The session's current #FAX_CLASS1_* status code.
  */
 int fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
-			int word3, int word4, int *rx_count, int *tx_count,
+			unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
 			int *word7, int *word8);
 
 /**

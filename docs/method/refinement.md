@@ -11,6 +11,29 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## Screen beyond the historical candidate filter
+
+Inventory every residual function and every defining copy before applying a
+size or source-family filter. A filter used for one experiment is not the
+remaining-work boundary. Likewise, a detector that nominates physical
+backedges says nothing about functions outside that detector's domain.
+Report both denominators and inspect helper and tail-call closures before
+calling an operation missing.
+
+Shared calls can expose a source-lifetime discrepancy. In `_init_receiver`,
+the original's three modulation-specific request buffers survive to one
+common `FAXVMI_control` call. Branch-local request objects and three copies
+of the control path obscure that structure. Keep the typed requests alive
+in the enclosing scope, initialise the selected request and control template
+in the witnessed order, then join the common rate and control path. Dispatch
+after the call using the saved modulation value, as the original does;
+rereading the configuration would introduce a different value source.
+
+This is a supported partial recovery, not a byte-identity claim. Check the
+complete translation unit, the exact-name set and period component histories
+before retaining it. Neither a smaller size gap nor a green differential
+test alone establishes the original source structure.
+
 ## Classify the compiler stage before searching register spellings
 
 The [V.34 small-RTL study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/v34-small-rtl.md) separates several mechanisms

@@ -52,6 +52,7 @@
  * fail rather than agree.
  */
 
+#include "v90_params_period_view.h"
 #include <string.h>
 #include <malloc.h>
 

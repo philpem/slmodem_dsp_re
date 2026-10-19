@@ -97,9 +97,9 @@ MAKEFLAGS  += -j$(J) --output-sync=target
 endif
 BUILD      := build
 
-# 32-bit is forced by the reference object, not by our own code -- the
-# reconstruction is written 64-bit-clean.  `make check64` proves it still
-# compiles for a native target; it just cannot be differential-tested there.
+# The reference object forces 32-bit differential testing. `make check64`
+# checks native compilation; it does not establish runtime pointer safety,
+# native structure layouts or allocation extents.
 ARCH32     := -m32
 CC         := gcc
 CXX        := g++
@@ -421,6 +421,16 @@ $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
 VPARSER_WEAK := --weaken-symbol=ref_Vparser_read_int \
                 --weaken-symbol=ref_Vparser_read_float
 
+# Observe lifecycle-produced request bytes in t_faxctlrequests. The blob's
+# adapter table and callees share one object, so --wrap cannot interpose them.
+# Only that fixture supplies these strong adapters; each records the request
+# then forwards to the original upper-case control endpoint. Other fixtures
+# retain the blob adapters. No instruction or relocation addend is changed.
+FAX_ADAPTER_WEAK := --weaken-symbol=ref_v17tx_control \
+                    --weaken-symbol=ref_v17rx_control \
+                    --weaken-symbol=ref_v29rx_control \
+                    --weaken-symbol=ref_v27rx_control
+
 # `Makefile` IS A PREREQUISITE, for finding 1387's reason one level up: the
 # weakening above is a recipe flag, not an input file, so an edit to it left a
 # stale reference object with STRONG stubs and the one binary that overrides
@@ -428,7 +438,7 @@ VPARSER_WEAK := --weaken-symbol=ref_Vparser_read_int \
 # 1387's silent class -- but the fix is the same and costs one objcopy.
 $(REF): $(SYMMAP) $(BLOB) tools/refrename.py Makefile
 	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
-	objcopy --redefine-syms=$(SYMMAP) $(VPARSER_WEAK) \
+	objcopy --redefine-syms=$(SYMMAP) $(VPARSER_WEAK) $(FAX_ADAPTER_WEAK) \
 	        $(BUILD)/dsplibs_glob.o $@
 	@# The blob's linkonce sections carry the SAME names our objects would
 	@# use if built by the period compiler, and linkonce keeps only the
@@ -638,7 +648,37 @@ $(BUILD)/safety/t_numeric_storage64: test/safety/t_numeric_storage.c $(BUILD)/sa
 $(BUILD)/safety/t_numeric_storage_exact64: test/safety/t_numeric_storage.c $(BUILD)/safety/harness_exact64.o
 	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -Itest/harness -o $@ $^ -lm
 
-safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
+$(BUILD)/safety/t_fax_pointer64: test/safety/t_fax_pointer64.c src/fax/faxvmi.c src/fax/Vmi_v21.c src/fax/faxvmi_null.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_fax_pointer64.c src/fax/faxvmi.c src/fax/Vmi_v21.c src/fax/faxvmi_null.c
+
+$(BUILD)/safety/t_class1_pointer64: test/safety/t_class1_pointer64.c src/fax/class1.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_class1_pointer64.c src/fax/class1.c
+
+.PHONY: safety-class1-pointer64
+safety-class1-pointer64: $(BUILD)/safety/t_class1_pointer64
+	@./$(BUILD)/safety/t_class1_pointer64
+
+.PHONY: safety-fax-pointer64
+safety-fax-pointer64: $(BUILD)/safety/t_fax_pointer64
+	@./$(BUILD)/safety/t_fax_pointer64
+
+# Native runtime component check, separate from syntax-only check64 and period.
+V90_PARAMETERS64_SRC := src/pump/v90/V90PreFilter.cpp \
+ src/pump/v90/V90Parameters.cpp src/pump/v90/V90Phase2Info.cpp \
+ src/pump/v90/V90PreFilterCoeffType1.cpp src/pump/v90/V90PreFilterCoeffType2.cpp \
+ src/pump/v90/V90PreFilterCoeffType3.cpp src/pump/v90/V90PreFilterRefLoops.cpp \
+ src/dsp/FloatFIR.cpp src/core/Vparser.c
+$(BUILD)/safety/t_v90_parameters64: test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) $(wildcard include/dsplib/*.h)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) -lm
+
+.PHONY: safety-v90-parameters64
+safety-v90-parameters64: $(BUILD)/safety/t_v90_parameters64
+	@./$(BUILD)/safety/t_v90_parameters64
+
+safety: safety-class1-pointer64 safety-fax-pointer64 firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
         $(BUILD)/safety/t_v34info0carrier \
         $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed \
         $(BUILD)/safety/t_region_float $(BUILD)/safety/t_region_float_exact \
@@ -1070,7 +1110,11 @@ PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
                dis-selftest period-compile-selftest
 
-PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov
+PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov native-layout-checks
+
+.PHONY: native-layout-checks
+native-layout-checks: safety-v90-parameters64 fax-native safety-cid-owner64 \
+                      safety-fax-pointer64 safety-class1-pointer64
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
@@ -1218,7 +1262,18 @@ check64:
 	  && $(CXX) $(SYNCXXFLAGS) -fsyntax-only $(CXXSRC) \
 	  && $(CC) $(SYNCFLAGS) $(REPRODUCE) -fsyntax-only $(SRC) \
 	  && $(CXX) $(SYNCXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
-	  && echo "64-bit clean, both configurations: OK"
+	  && echo "64-bit syntax check, both configurations: OK"
+
+# Native Caller ID owner-allocation boundary.
+$(BUILD)/safety/t_cid_owner64: test/safety/t_cid_owner64.c src/service/cidcore/cid.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_cid_owner64.c src/service/cidcore/cid.c
+
+.PHONY: safety-cid-owner64
+safety-cid-owner64: $(BUILD)/safety/t_cid_owner64
+	@./$(BUILD)/safety/t_cid_owner64
+
+safety: safety-cid-owner64
 
 # Regenerate the analysis documents from the blob.
 # Two numbers, both from symbol tables rather than from grepping source:
@@ -1427,3 +1482,21 @@ clean:
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds
 # everything that includes it.
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
+
+# Native fax RX component lifecycle, using the actual modem and DSP endpoints.
+# Separate from the period differential and syntax-only check64 tiers.
+FAX_NATIVE_DIR := $(BUILD)/fax-native
+FAX_NATIVE_FLAGS := -g -O1 -ffunction-sections -fdata-sections -fsanitize=address,undefined -Iinclude -Itest/harness
+FAX_NATIVE_SRC := $(wildcard src/fax/*.c src/dsp/*.c)
+FAX_NATIVE_OBJ := $(patsubst %.c,$(FAX_NATIVE_DIR)/%.o,$(FAX_NATIVE_SRC))
+FAX_NATIVE_APP := $(FAX_NATIVE_DIR)/test/safety/t_fax_rx_native.o $(FAX_NATIVE_DIR)/test/harness/runtime.o $(FAX_NATIVE_DIR)/test/harness/harness.o
+.PHONY: fax-native
+fax-native: $(FAX_NATIVE_DIR)/t_fax_rx_native
+	UBSAN_OPTIONS=halt_on_error=1 $<
+$(FAX_NATIVE_DIR)/%.o: %.c $(shell find include -name '*.h') Makefile
+	@mkdir -p $(dir $@)
+	$(CC) $(FAX_NATIVE_FLAGS) -c $< -o $@
+$(FAX_NATIVE_DIR)/libfax.a: $(FAX_NATIVE_OBJ)
+	$(AR) rcs $@ $^
+$(FAX_NATIVE_DIR)/t_fax_rx_native: $(FAX_NATIVE_APP) $(FAX_NATIVE_DIR)/libfax.a
+	$(CC) -fsanitize=address,undefined -Wl,--gc-sections -o $@ $^ -lm

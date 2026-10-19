@@ -25,14 +25,10 @@
  * That is evidence class 1 for the mode constants below: the author's
  * words, not an inference from what the code does.
  *
- * What is reconstructed here, and what is not: `FAXVMI_message` and the
- * three pure buffer walks came from the leaf pass; the batch after it
- * added the three unpackers and the two ring writers; this one adds
- * `faxvmi_simp_pack` and `faxvmi_asyc_pack`. `FAXVMI_create`, `_delete`,
- * `_process`, `_status`, `_control` and the third packer `faxvmi_hdlc_frame`
- * are not written -- but create, control, process and status are read
- * below for the layout, because they are what establishes the sizes and
- * the initial values, and every field's evidence is quoted with it.
+ * The VMI lifecycle, control, status and framing functions are reconstructed.
+ * Their object loads, stores and allocation sizes establish the layouts below.
+ * Offsets and sizes in this header describe the period 32-bit ABI. Pointer
+ * members and their enclosing objects grow naturally in a native 64-bit build.
  *
  * The pack side is the unpack side's mirror, and that is a structural
  * fact rather than a resemblance (F9190). `framer` carries two bit
@@ -282,11 +278,11 @@ struct faxvmi_framer {
 
 /*
  * The link block, `vmi->link` (+0x28). `sysdep_malloc(0x18)` at 0x953d4, so
- * 24 bytes, and it is the handle every `vxx_*` entry point receives:
- * `FAXVMI_create` calls `vxx_create[slot](vmi->link, cfg->int_0010)` and
+ * 24 bytes in the period ABI, and it is the handle every `vxx_*` entry point receives:
+ * `FAXVMI_create` calls `vxx_create[slot](vmi->link, cfg->modem_cfg)` and
  * message, status and control all pass it as their first argument.
  *
- * Four fields are established here, and every one of them by being read.
+ * The framing widths and buffer roles are established by their readers.
  * `buf` is the element buffer both directions use -- see its own field
  * comment below (F9194).
  *
@@ -326,12 +322,13 @@ struct faxvmi_link {
 	unsigned short unpack_width;	/* +0x10 significant bits per input
 					 * element: every unpacker starts its
 					 * mask at 1 << (unpack_width - 1)   */
-	int int_0014;			/* +0x14 create zeroes it            */
+	void *modem;			/* +0x14 wrapped modem handle; zero on create */
 };
 
 /*
  * `pad_0012` is gone (pad-region removal audit, F10145): `unpack_width` ends
- * at +0x12 and `int_0014` needs 4-byte alignment, so the compiler inserts
+ * at +0x12 and `modem` needs 4-byte alignment in the period ABI, so the
+ * compiler inserts
  * the same 2-byte gap on its own; nothing in this tree ever names the field.
  * `pad_0008[4]` above is NOT the same shape and stays explicit -- `buf` ends
  * already 4-byte aligned at +0x0c, where `pack_count` (a `short`, needing no
@@ -343,7 +340,7 @@ struct faxvmi_link {
 /*
  * No new assertion here -- `src/fax/faxvmi.c` already carries a complete
  * `LINK_ASSERT_OFF` list covering every field of this struct including
- * `int_0014` at this exact offset, plus the matching `faxvmi_link_size`
+ * `modem` at this exact offset, plus the matching `faxvmi_link_size`
  * assertion; a second copy in this header would redefine the same macro
  * and re-declare the same typedefs once faxvmi.c includes this file, the
  * same defect as `struct faxvmi_framer`'s (finding F10153).
@@ -376,9 +373,9 @@ struct faxvmi {
 	unsigned short frame_size;	/* +0x0c sizes the framer's HDLC
 					 * assembly buffer                   */
 	short slot;			/* +0x0e index into the vxx tables   */
-	int int_0010;			/* +0x10 handed to vxx_create as its
+	const void *modem_cfg;			/* +0x10 handed to vxx_create as its
 					 * second argument                   */
-	int int_0014;			/* +0x14 copied by create, read by
+	void *ptr_0014;			/* +0x14 copied by create, read by
 					 * nothing reconstructed             */
 	int underrun;			/* +0x18 the transmit ring ran dry.
 					 * All three packers set it to 1 on
@@ -428,8 +425,7 @@ struct faxvmi {
  *
  * `null_create` takes an untyped `const void *cfg` (`nulldp.h`); the eight
  * `v??tx_create`/`v??rx_create` each take a typed `const struct v??[tr]x_cfg
- * *` (`faxadapt.h`). The table's own caller passes `vmi->int_0010` -- plain
- * `int` -- straight into the argument slot with no type-specific handling
+ * *` (`faxadapt.h`). The table's own caller passes `vmi->modem_cfg` straight into the argument slot with no type-specific handling
  * (`FAXVMI_create`, 0x952be..0x952cf), so the table's element type is the
  * untyped form and the eight typed entries need the same kind of explicit
  * cast `vxx_status` already carries for its own typed four.
@@ -623,24 +619,19 @@ int FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status);
  * evidence in `faxvmi_framer`'s own fields, above. `int_000c` nonzero (and
  * `short_0010` at most 2) additionally resets the whole HDLC receiver to
  * `FAXVMI_create`'s own initial values and sets `vmi->mode` from
- * `short_0010`; `int_0014` nonzero makes `FAXVMI_control` recurse through
- * `vxx_control[vmi->slot](vmi->link, (void *)(long)ctl->int_0014)` before
- * applying anything else -- `int_0014` itself cast to a pointer, not a
- * literal -1 (confirmed against `dis.py`, F10108). Four of the six real
- * fields already have a habitable name (the struct carried eight members
- * before the pad-region removal audit, F10145, took out `pad_000a` and
- * `pad_0012` -- both were the compiler's own alignment gap ahead of
- * `int_000c`/`int_0014`, confirmed by the CTL_ASSERT_OFF entries below
- * still holding); the rest are usage inference only, hedged as such, and
- * left neutral rather than guessed further -- CLAUDE.md's "naming wrongly
- * is worse than padding" ground.
+ * `short_0010`; `control_req` nonzero makes `FAXVMI_control` recurse through
+ * `vxx_control[vmi->slot](vmi->link, ctl->control_req)` before
+ * applying anything else (confirmed against `dis.py`, F10108). Request
+ * producers pass stack request addresses; the adapters pass the request
+ * unchanged to each modem's control method. The member is therefore a
+ * pointer in the source model. Its period offset and the surrounding
+ * implicit alignment gaps are checked below using sizeof guards that are
+ * active under GCC 3.4.2.
  */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define CTL_ASSERT_OFF(field, off) \
 	typedef char faxvmi_ctl_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi_ctl, field) == (off)) \
+		(sizeof(void *) != 4 || (int)__builtin_offsetof(struct faxvmi_ctl, field) == (off)) \
 			? 1 : -1]
-#endif
 
 struct faxvmi_ctl {
 	void *ptr_0000;		/* +0x00 nonzero: also empty the ring */
@@ -655,26 +646,24 @@ struct faxvmi_ctl {
 				 * the CTL_ASSERT_OFF(int_000c, 0x0c) below
 				 * still holds, which is the proof          */
 	unsigned short short_0010;	/* +0x10 new vmi->mode, 0..2       */
-	int int_0014;		/* +0x14 nonzero: also call
+	void *control_req;		/* +0x14 nonzero: also call
 				 * vxx_control[vmi->slot](vmi->link,
-				 * (void *)(long)int_0014) before anything
+				 * control_req) before anything
 				 * else applies.  Same removal as
 				 * `int_000c`'s own note above: `pad_0012`
 				 * is gone, `short_0010` ends at +0x12 and
-				 * this field's own 4-byte alignment
+				 * this field's period 4-byte alignment
 				 * reproduces the gap, CTL_ASSERT_OFF(
-				 * int_0014, 0x14) below is the proof       */
+				 * control_req, 0x14) below is the proof       */
 };
 
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 CTL_ASSERT_OFF(ptr_0000, 0x00);
 CTL_ASSERT_OFF(int_0004, 0x04);
 CTL_ASSERT_OFF(short_0008, 0x08);
 CTL_ASSERT_OFF(int_000c, 0x0c);
 CTL_ASSERT_OFF(short_0010, 0x10);
-CTL_ASSERT_OFF(int_0014, 0x14);
-typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
-#endif
+CTL_ASSERT_OFF(control_req, 0x14);
+typedef char faxvmi_ctl_size[(sizeof(void *) != 4 || sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
 
 /*
  * The object's own instance: 24 bytes of zero at `.rodata` 0x9478,
@@ -711,9 +700,9 @@ extern faxvmi_control_fn const vxx_control[13];
  * object's own order:
  *
  *   1. `ctl == NULL` returns -1 immediately, nothing touched.
- *   2. `ctl->int_0014` nonzero recurses FIRST, before anything else
+ *   2. `ctl->control_req` nonzero recurses FIRST, before anything else
  *      applies: `vxx_control[vmi->slot](vmi->link,
- *      (void *)(long)ctl->int_0014)`, and that call's return becomes this
+ *      ctl->control_req)`, and that call's return becomes this
  *      function's own return (0 otherwise) -- confirmed against `dis.py`,
  *      matching F10108's own trace of this same site.
  *   3. `ctl->int_000c` nonzero AND `ctl->short_0010 <= 2` (unsigned; an
@@ -733,7 +722,7 @@ extern faxvmi_control_fn const vxx_control[13];
  *      `fifo_size`, then `rd`/`wr`/`count`/`residue` = 0.
  *   5. Unconditionally: `zero_run_send = ctl->int_0004`,
  *      `zero_run_bits = ctl->short_0008`.
- *   6. Returns whatever step 2 left (0 if `int_0014` was zero).
+ *   6. Returns whatever step 2 left (0 if `control_req` was zero).
  *
  * @param vmi  The instance.
  * @param ctl  The control record, or NULL (returns -1, nothing touched).

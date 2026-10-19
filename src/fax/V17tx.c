@@ -97,11 +97,11 @@
  * `ring.q` stay NULL, because V.17's transmitter uses the MAPPED ring form
  * exclusively (v17data.h's own derivation from `TxNoCarrierV17`).
  *
- * `FPM_PPS_CFG.AUX` CARRIES THE CALLER'S OWN `int_001c`, read back at
+ * `FPM_PPS_CFG.AUX` CARRIES THE CALLER'S OWN `aux`, read back at
  * 0x098b4e and stored through to the shaper's own configuration at 0x098be3
- * -- `V17TX_CFG`'s own `int_001c` is 0, so this is invisible on the default
- * config, the same `(void *)(long)` idiom D1250 records for `V29TX_create`'s
- * `int_0018`.
+ * -- `V17TX_CFG`'s own `aux` is 0, so this is invisible on the default
+ * config. The source member is pointer typed, matching the request producer
+ * and the pulse-shaper callee; V.29 carries the same pointer one field earlier.
  *
  * THE THREE ENCODER TABLE ENTRIES ARE PLANTED IN THE OBJECT'S OWN ORDER --
  * `SMCv17_encoder_abs` (fp + 0x84), then `SMCv17_encoder_dif` (fp + 0x80),
@@ -110,6 +110,11 @@
  *
  * Finding F9911.
  */
+typedef char v17tx_cfg_aux_offset[(sizeof(void *) != 4 ||
+ __builtin_offsetof(struct v17tx_cfg, aux) == 0x1c) ? 1 : -1];
+typedef char v17tx_cfg_period_size[(sizeof(void *) != 4 ||
+ sizeof(struct v17tx_cfg) == 0x20) ? 1 : -1];
+
 void *
 V17TX_create(void *modem, const struct v17tx_cfg *params)
 {
@@ -122,7 +127,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 		dsplibs_debug_printf("V.17 TX Create ");
 
 	if (modem == 0) {
-		modem = sysdep_malloc(0x2c);
+		modem = sysdep_malloc(sizeof(struct v17tx));
 		TXROOT(modem)->priv = 0;
 		TXROOT(modem)->fp = 0;
 		fresh = 1;
@@ -255,7 +260,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 		pcfg.coeff_i = PPSv17_ICOFFS;
 		pcfg.coeff_q = PPSv17_QCOFFS;
 		pcfg.coeffs = 120;
-		pcfg.aux = (void *)(long)TXROOT(modem)->cfg.int_001c;
+		pcfg.aux = TXROOT(modem)->cfg.aux;
 
 		FPM_PPS_init(&TXBLOCK(modem)->pps, &pcfg, fresh);
 	}

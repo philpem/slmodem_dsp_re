@@ -52,8 +52,8 @@ v21tx_create(struct faxvmi_link *dp, const struct v21tx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V21TX_CFG;
 
-	handle = V21TX_create((void *)(long)dp->int_0014, &local);
-	dp->int_0014 = (int)(long)handle;
+	handle = V21TX_create(dp->modem, &local);
+	dp->modem = handle;
 	dp->pack_count = 6;
 	dp->pack_width = 1;
 	dp->unpack_width = 0;
@@ -67,8 +67,8 @@ v21rx_create(struct faxvmi_link *dp, const struct v21rx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V21RX_CFG;
 
-	handle = V21RX_create((void *)(long)dp->int_0014, &local);
-	dp->int_0014 = (int)(long)handle;
+	handle = V21RX_create(dp->modem, &local);
+	dp->modem = handle;
 	dp->pack_count = 0;
 	dp->unpack_width = 1;
 	dp->pack_width = 0;
@@ -77,20 +77,20 @@ v21rx_create(struct faxvmi_link *dp, const struct v21rx_cfg *cfg)
 void
 v21tx_delete(struct faxvmi_link *dp)
 {
-	V21TX_delete((void *)(long)dp->int_0014);
+	V21TX_delete(dp->modem);
 }
 
 void
 v21rx_delete(struct faxvmi_link *dp)
 {
-	V21RX_delete((void *)(long)dp->int_0014);
+	V21RX_delete(dp->modem);
 }
 
 int
 v21tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		     unsigned short *result)
 {
-	int status = V21TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
+	int status = V21TX_modem(dp->modem, dp->buf, out, count);
 	*result = *count;
 	*count = 0;
 	return status;
@@ -100,7 +100,7 @@ int
 v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		     unsigned short *count)
 {
-	int status = V21RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf,
+	int status = V21RX_modem(dp->modem, in, (short *)dp->buf,
 		    (short *)count);
 	*result = *count;
 	*count = 0;
@@ -110,23 +110,23 @@ v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 int
 v21tx_status(struct faxvmi_link *dp, struct v21_status *status)
 {
-	return V21TX_status((void *)(long)dp->int_0014, status);
+	return V21TX_status(dp->modem, status);
 }
 
 int
 v21rx_status(struct faxvmi_link *dp, struct v21_status *status)
 {
-	return V21RX_status((void *)(long)dp->int_0014, status);
+	return V21RX_status(dp->modem, status);
 }
 
 int
 v21tx_control(struct faxvmi_link *dp, const struct v21tx_ctl *arg)
 {
-	return V21TX_control((void *)(long)dp->int_0014, arg);
+	return V21TX_control(dp->modem, arg);
 }
 
 int
 v21rx_control(struct faxvmi_link *dp, const struct v21rx_ctl *arg)
 {
-	return V21RX_control((void *)(long)dp->int_0014, arg);
+	return V21RX_control(dp->modem, arg);
 }

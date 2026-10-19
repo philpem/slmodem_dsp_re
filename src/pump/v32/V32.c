@@ -99,12 +99,8 @@
  * fills them; what the value MEANS is still not established and +0x24 keeps
  * its neutral name.  Finding F8651.
  *
- * Two of the six have no member to assign: `fpm_sre_cfg` spells the slot
- * `pad34`/`pad36` and `fpm_tone_cfg` spells it inside `r16[3]`.  Renaming
- * either is a change to a header two other datapumps initialise
- * positionally -- `src/pump/v22/v22rxtab.c` is one, and this pass does not own
- * it -- so those two are written through the slot's address with the object's
- * own single 32-bit store, and the finding records the rename as owed.
+ * fpm_tone_cfg still spells its slot inside r16[3]. Its neutral raw
+ * access remains; fpm_sre_cfg now models its slot as the owner pointer.
  */
 
 #include <string.h>
@@ -588,11 +584,10 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	/* The timing recovery. */
 	srecfg = SREv32_CFG;
 	/*
-	 * fpm_sre_cfg + 0x34, spelled `pad34`/`pad36`; see the head of file.
-	 * `memcpy` and not a cast so that the one 32-bit store the object makes
-	 * survives without a strict-aliasing pun.
+	 * fpm_sre_cfg.owner at period +0x34.
+	 * The same context value is passed to the other DSP configurations.
 	 */
-	memcpy(&srecfg.pad34, &p->r24, sizeof p->r24);
+	srecfg.owner = (void *)(long)p->r24;
 	FPM_SRE_init(SRE(FP(modem)), &srecfg, fresh);
 
 	/*
