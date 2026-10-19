@@ -19,28 +19,6 @@
 
 static const short a[3] = { 16384, -8057, 14787 };
 
-/*
- * One biquad, direct form I, with the histories kept as four shorts: x1, x2
- * then y1, y2.  The original writes them back in a fixed order that matters,
- * because x2 takes the old x1 and y2 the old y1.
- */
-static int
-biquad(short *x, short *y, const short *b, const short *a, int in)
-{
-	int acc = in;
-
-	acc += v8_mpyint(x[0], b[0]);
-	acc += v8_mpyint(x[1], b[1]);
-	acc -= v8_mpyint(y[0], a[0]);
-	acc -= v8_mpyint(y[1], a[1]);
-
-	x[1] = x[0];
-	y[1] = y[0];
-	x[0] = (short)in;
-	y[0] = (short)acc;
-
-	return acc;
-}
 
 /*
  * The fixed input biquad every tone detector shares, in Q14.  The originals
@@ -201,19 +179,35 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 		for (i = 0; i < 2; i++)
 			acc -= v8_mpyint(d->acc_d[i], a[i + 1]);
 
-		d->acc_c[2] = d->acc_c[1];
-		d->acc_d[2] = d->acc_d[1];
-		d->acc_c[1] = d->acc_c[0];
-		d->acc_d[1] = d->acc_d[0];
+		for (i = 0; i < 2; i++) {
+			d->acc_c[2 - i] = d->acc_c[1 - i];
+			d->acc_d[2 - i] = d->acc_d[1 - i];
+		}
 		d->acc_d[0] = (short)acc;
 
 		*in++ = (short)acc;
 
 		/* Then the detector's own two sections. */
-		stage1 = biquad(&d->acc_a[0], &d->acc_b[0], &d->table[0],
-				&d->table[4], (short)acc >> 4);
-		stage2 = biquad(&d->acc_a[2], &d->acc_b[2], &d->table[2],
-				&d->table[6], (short)stage1 >> 4);
+		const short *t = d->table;
+		stage1 = (short)acc >> 4;
+		for (i = 0; i < 2; i++) {
+			stage1 += v8_mpyint(d->acc_a[i], t[i]);
+			stage1 -= v8_mpyint(d->acc_b[i], t[4 + i]);
+		}
+		d->acc_a[1] = d->acc_a[0];
+		d->acc_b[1] = d->acc_b[0];
+		d->acc_a[0] = (short)((short)acc >> 4);
+		d->acc_b[0] = (short)stage1;
+
+		stage2 = (short)stage1 >> 4;
+		for (i = 0; i < 2; i++) {
+			stage2 += v8_mpyint(d->acc_a[2 + i], t[2 + i]);
+			stage2 -= v8_mpyint(d->acc_b[2 + i], t[6 + i]);
+		}
+		d->acc_a[3] = d->acc_a[2];
+		d->acc_b[3] = d->acc_b[2];
+		d->acc_a[2] = (short)((short)stage1 >> 4);
+		d->acc_b[2] = (short)stage2;
 
 		d->integrator = (short)(v8_absfn((short)((short)stage2 >> 4))
 				 + v8_mpyint(d->integrator, 0x3ccd));
