@@ -763,8 +763,19 @@ setfinalrate(void *objp)
  * The debug string is `V34SetupDemodulator`'s, shared by string pooling --
  * `V34SetupDemodulator` at 0x5def0 prints the same one.  This is a second
  * call site for one literal, not a call to that function.
+ *
+ * The DEFINITION is `inline`.  The object contains NO `R_386_PC32` call to
+ * `setupreceiver` anywhere in its 1.2 MB, while the symbol itself is still
+ * emitted (0x5f040, 946 bytes) -- exactly the shape a globally visible
+ * function declared `inline` leaves when every call site inlines it.  Both
+ * of this tree's call sites (0x64c04 and 0x6a0c8) are places the object
+ * runs the body inline, as the comments there record.  At -O3 the automatic
+ * budget (`--param max-inline-insns-auto`, about 130 RTL instructions) is
+ * far below this body, so the inline copies are reachable only with the
+ * declaration.  The header stays plain, which is what keeps the
+ * out-of-line copy emitted.
  */
-void
+inline void
 setupreceiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
