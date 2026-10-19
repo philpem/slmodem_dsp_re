@@ -45,9 +45,9 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 	fp->int_1c = ctl->ctl0 & 1;
 	fp->int_20 = (ctl->ctl0 >> 1) & 1;
 	fp->int_24 = (ctl->ctl0 >> 2) & 1;
-	fp->int_00 = ((ctl->ctl0 & 0x08) == 0);
-	fp->int_0c = ((ctl->ctl0 & 0x10) == 0);
-	fp->eq_adapt = ((ctl->ctl0 & 0x20) == 0);
+	fp->int_00 = (ctl->ctl0 & 0x08) ? 0 : 1;
+	fp->int_0c = (ctl->ctl0 & 0x10) ? 0 : 1;
+	fp->eq_adapt = (ctl->ctl0 & 0x20) ? 0 : 1;
 	fp->int_14 = ctl->r18;
 	fp->int_18 = ctl->r1c;
 	((unsigned char *)&modem->params.options)[1] =
@@ -75,7 +75,7 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 		hdx = HDX(modem);
 		hdx->short_9c =
 			(unsigned short)(ratio
-					 * hdx->short_9c);
+					 * (unsigned short)hdx->short_9c);
 		hdx->block_charge =
 			(unsigned short)V32_SYMBOL_LEN[PARAMS(modem)->symlen_sel];
 		hdx->symbol_len =

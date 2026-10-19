@@ -190,7 +190,7 @@ struct fpm_sre {
 	short *clk;		/* +0x58 FPM_SRE_CLOCK entries               */
 	int acc_x;		/* +0x5c discriminant . cfg.xclock           */
 	int acc_y;		/* +0x60 discriminant . cfg.yclock, SUBTRACTED */
-	short frac;		/* +0x64 sub-branch phase, 0 .. 0x7ff        */
+	unsigned short frac;	/* +0x64 sub-branch phase, 0 .. 0x7ff        */
 	short branch;		/* +0x66 polyphase branch, 0 .. 9            */
 	short groups;		/* +0x68 clock groups per PLL update         */
 	short settle;		/* +0x6a update counter, held at cfg.settle  */

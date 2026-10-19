@@ -1195,3 +1195,52 @@ Export the complete decompilation once, then review bounded address-backed
 regions with their owner types, signatures, original instructions and fixture
 domain. Distinguish arithmetic and memory-access recovery, helper-boundary
 recovery, REGALLOC gains and exact-function gains in the result.
+
+## Current V34 baseline refresh
+
+After PR305 and PR308 merged, the typed candidate was refreshed from
+`5a09b5ca7` in a separate Ghidra program:
+`/source-recovery-size-regalloc/current-5a09b5ca7-verified/typed`.
+The original verified reference and frozen PR303+305 experiment remain
+untouched. The latter is not the merged delivery. The baseline ELF SHA-256 is
+`f582fdbd9ecfa2071ab3fc81f9439377f09541b7921725576d17f974517e3be8`.
+
+The source checkpoint `7c98085fc` is also imported separately as
+`/source-recovery-size-regalloc/current-7c98085fc-verified/typed`, from ELF
+SHA-256 `c55f4542a75ca67b7d90abddee5ec6bcf457638760cc76768176d79ffba5cdb8`.
+It repeats all checks below. Every selected body is unchanged from the merged
+baseline, while its ELF entry moves by -64 bytes after the V.32 and phase-3
+changes. Its ledger carries the revised addresses; the baseline export remains
+preserved. Final evidence is in the sibling directory
+`source-recovery-handover/2026-10-19-next-batch/v34-current-final-c55f4542/`.
+
+The refresh checks 492 layouts: 17 structure sizes and 467 fields, plus the
+candidate frame size and seven fields. A deliberately wrong field offset is
+rejected. Eleven selected function bodies contain 4,651 instructions;
+independent objdump and Capstone decoding agree on all instruction starts and
+bytes. All 635 selected relocation sites agree on offsets, types, targets,
+addends and applied status. Copied types validate annotation consistency, not
+the inferred meaning of fields. Static helper register conventions are
+analysis annotations, not recovered source compiler flags.
+
+The current root contains 12,924 bytes, 2,662 instructions and 117 calls;
+the reference root contains 61,541 bytes, 12,234 instructions and 394 calls.
+Their helper boundaries differ. Compare bounded closures, including shared
+callees and joins, before interpreting these root-size differences.
+
+Six analysis partitions cover micro55, three micro58 regions, micro59 and
+the micro62/63 common successor. A proposed micro59 setup-call discrepancy
+was rejected: the emitted setup is already inline on both sides. The next
+confirmed target is the micro58 reset family: native loops at
+`0x660e5..0x660fc` and `0x6d78b..0x6d7a2` increment and sign-extend a short
+counter, then compare its low word with nine. Current code uses int induction.
+Both write ten short elements at root `+0xabae + 2*k`, followed by the separate
+`+0xabc2` store. The bounded counter cannot overflow; this is a reconstruction
+width discrepancy, not an established output defect. Trace all shared-helper
+callers and preserve owner/read timing before experimenting with source.
+
+The source/input manifests, type checks, native excerpts, typed output,
+state-transition ledger and verification controls are preserved outside Git
+under `source-recovery-handover/2026-10-19-next-batch/v34-current/` beside the
+repository. No V.34 source change or new differential claim accompanies this
+analysis refresh.

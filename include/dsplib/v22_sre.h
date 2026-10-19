@@ -114,7 +114,7 @@ struct v22_sre {
 				 *       sections, each { now, previous }       */
 	int acc_x;		/* +0x24 discriminant . SREv22_xCLOCK           */
 	int acc_y;		/* +0x28 discriminant . SREv22_yCLOCK           */
-	short frac;		/* +0x2c sub-branch phase, 0 .. 2047            */
+	unsigned short frac;	/* +0x2c sub-branch phase, 0 .. 2047            */
 	short branch;		/* +0x2e polyphase branch, 0 .. 9               */
 	short groups;		/* +0x30 six-sample groups per PLL update: 3
 				 *       in modes 0 and 1, 12 in mode 2         */

@@ -376,115 +376,34 @@ V90Phase3Modulator::updateCodeSegmentPointer()
 }
 
 /*
- * ===========================================================================
- * `V90Phase3Modulator::generateDIL` -- .text+0x2b070, 0x1aa = 426 bytes.
+ * One DIL symbol: .text+0x2b070, 426 bytes in the reference object.
  *
- * One symbol of the digital impairment learning sequence, and the four
- * cursors it steps.
+ * Capture the signed level before companding, but read the sequence cursors
+ * afterwards.  The reference reloads seq2Index (+0x389) at 0x2b0dd and
+ * seq1Index (+0x388) at 0x2b0fc after the linear2alaw/linear2ulaw call.
+ * The two DIL arms in each symbol generator retain the same read boundary.
+ * These are byte cursors; next1/next2 wrap at their byte sequence lengths.
  *
- * IT IS A METHOD HERE AND WAS THE FILE-STATIC `dilSymbol` BEFORE, and the
- * difference is the whole point of claiming it.  The blob carries
- * `generateDIL` as a `T` symbol AND inlines the identical body into
- * `generateV90Symbol` and `generateV92Symbol` rather than calling it -- the
- * same treatment `generateSd`, `generateJd` and the rest get.  Defining the
- * method in this translation unit and calling it from the two generators is
- * what reproduces both halves of that: GCC 3.4.2 at -O3 inlines it at all
- * four call sites, and still emits the out-of-line copy because an external
- * symbol has to exist whether or not anything reaches it.  Measured rather
- * than assumed, with tools/instrcount.py over the period toolchain -- the
- * generators are 560 and 696 instructions before this change and 560 and 696
- * after it, unchanged to the instruction, and the standalone copy appears
- * beside them at 98 against the blob's 117.
+ * The level choice and PCM code differ deliberately: seq2 chooses between
+ * segmentLevel and dilLevel, while dilPcmCode always encodes dilLevel.
+ * seq1 subsequently chooses the sign.  The short result is widened to int,
+ * including after negation, as the reference's NEG/MOVSWL requires.
  *
- * NOTHING CALLS IT, IN THE BLOB OR IN THE PERIOD BUILD, AND NOTHING MAY BE
- * ADDED THAT DOES.  `readelf -rW` over the 1.2 MB object finds ZERO
- * relocations of any kind naming `_ZN18V90Phase3Modulator11generateDILEv`,
- * against two naming `generateV90Symbol`, which is what shows the
- * measurement can fire at all; the period object is zero as well.  A source
- * call the compiler declined to inline would appear as exactly such a
- * relocation, so that one measurement is both the callerless proof and the
- * proof that the inlining shape is the object's.
+ * generateDIL is emitted standalone and inlined into both symbol generators
+ * by the period compiler.  Restoring the post-call cursor reads is a partial
+ * recovery; predicate reuse, code-load placement and other graph differences
+ * remain.  This observation does not establish a caller history in which the
+ * companding call changes either cursor.
  *
- * THE MODERN BUILD MAKES THE OTHER CHOICE AND THAT IS NOT A DEFECT.  GCC 13
- * at -O2 declines to inline it and leaves four `call` relocations in
- * build/repro; the differential tier is green either way, because the
- * inlining decision changes no behaviour.  The compiler that decides the
- * SHAPE is the period one, and it agrees with the blob.
- *
- * THE 19-INSTRUCTION GAP IS ACCOUNTED FOR AND IS NOT A MISSING CALL --
- * instrcount.py's standing reading, and worth writing down because that is
- * the failure it exists to catch.  Each side has exactly TWO `call`s and
- * THREE relocations, so nothing is missing.
- *
- * THIRTEEN of the nineteen are alignment padding counted inside `st_size`:
- * the blob carries seventeen filler instructions (three `lea 0x0(%e_,%eiz,1)`
- * forms, one `lea 0x0(%esi),%esi` and thirteen `nop`s, most of them ahead of
- * the search loop at 0x2b1f0) against four in ours.  Real instructions are
- * 100 against 94.
- *
- * THE REMAINING SIX are one shape, seen three times: the blob re-reads what
- * ours keeps.  It evaluates `seq2[seq2Index] == 0` twice, once for the branch
- * at 0x2b08c and once for the `sete` at 0x2b0af, where ours computes the flag
- * once; it re-reads `seq1Index` and `seq2Index` out of the object after the
- * companding call (0x2b0dd, 0x2b0fc) where ours spills the two locals to the
- * stack; and its ternary branches out to a tail at 0x2b180 that repeats four
- * instructions ours reaches by falling through.
- *
- * The re-reads are a FORCED difference and a real observation about the
- * original's source: a memory read cannot be moved across an opaque call in
- * either direction, so the author's code reads those members after the
- * companding call rather than caching them in locals as `i1` and `i2` do
- * here.  It is left as it stands because this body is the one the
- * differential tier has already proved, and rewriting it would move the two
- * generators' counts and with them the evidence above.  Worth a pass of its
- * own; it is a codegen-tier gain and no test can see it.
- *
- * THE RETURN TYPE IS `int`, AND ONLY THE INSTRUCTIONS SAY SO.  A mangled name
- * carries the parameter types and not the return type, so `...generateDILEv`
- * settles nothing.  The two loads that build the value are `movswl` --
- * 0x188(%ebx,%esi,2) for `dilLevel[dilIndex]` and 0x178(%ebx,%edx,2) for
- * `segmentLevel[segmentIndex]` -- and those are NOT evidence: the upper half
- * of a load feeding a `short` is free either way, and finding F614 is the
- * standing ruling against reading anything into it.  What IS forced is the
- * re-extension after the negation, `neg %ecx ; movswl %cx,%edi` at 0x2b10f.
- * Truncating the negated value to sixteen bits is demanded by `short level`
- * however the function returns; widening it back to thirty-two is demanded
- * only if a 32-bit consumer wants it, and its only consumer is the
- * `mov %edi,%eax` at both `ret`s.  Under a `short` return the upper half of
- * %eax is dead and that extension would not be emitted.  It is the same
- * argument on the same evidence that the header already records for
- * `generateV90Symbol` and `generateV92Symbol`, whose every path ends
- * `movswl %si,%esi ; mov %esi,%eax`.
- *
- * `seq2` chooses the level -- a zero there means this symbol carries the
- * segment's own boundary level rather than the DIL entry's -- and `seq1`
- * chooses its sign.  The PCM CODE stored in `dilPcmCode` is the DIL entry's
- * either way; it does not follow the level.  Both index bytes wrap at their
- * sequence's length rather than at 256, and a length of zero therefore never
- * wraps them, which is the object's behaviour and is preserved.
- *
- * The two companding arms are two of the symbol's three relocations: mu-law
- * goes through `linear2ulaw` and is complemented (`not %al`), anything else
- * goes through `linear2alaw` and is exclusive-ored with 0xd5.  The third is
- * `codeSegmentsBoundriesLookupTable`, reached because
- * `updateCodeSegmentPointer` is inlined into the restart arm -- its own
- * symbol is not among the relocations, which is what says it is inlined and
- * not called.
- *
- * Reaching `segmentLength[segmentIndex]` restarts the segment: all three
- * cursors go to zero, `dilIndex` advances modulo `dilCount`, and the segment
- * index is recomputed from the new level.  `segmentIndex` can be 8 -- one
- * past the end of both eight-element arrays -- which is what the object's own
- * search produces when no boundary matches; the reads that follow land inside
- * the object either way and are reproduced rather than corrected.
- * ===========================================================================
+ * At segment end the three position cursors reset, dilIndex advances modulo
+ * dilCount and updateCodeSegment searches the new level.  Its result can be
+ * 8, aliasing the following member at both eight-entry array boundaries;
+ * that reference behavior is preserved.
  */
 int
 V90Phase3Modulator::generateDIL()
 {
-	unsigned char i1 = seq1Index;
-	unsigned char i2 = seq2Index;
-	int fromSegment = (seq2[i2] == 0);
+	int fromSegment = (seq2[seq2Index] == 0);
 	unsigned short code = (unsigned short)dilLevel[dilIndex];
 	unsigned char next1, next2;
 	unsigned int pos;
@@ -499,10 +418,12 @@ V90Phase3Modulator::generateDIL()
 	else
 		dilPcmCode = (unsigned char)~linear2ulaw((int)code);
 
+	unsigned char i2 = seq2Index;
 	next2 = (unsigned char)(i2 + 1);
 	if (next2 == seq2Length)
 		next2 = 0;
 
+	unsigned char i1 = seq1Index;
 	if (seq1[i1] == 0)
 		level = (short)-level;
 

@@ -107,7 +107,7 @@ fse_differential(struct v32_dec *m, short ib, short qb)
 	int prev = m->prev_sym[(short)m->chan];
 	int found = 0;
 	int quad;
-	int j;
+	short j;
 
 	for (j = 0; j <= 15; j++)
 		if (SMCv32_IMAP16[j] == ib && SMCv32_QMAP16[j] == qb) {
