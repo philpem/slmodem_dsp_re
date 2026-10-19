@@ -1903,6 +1903,48 @@ So a load extension that disagrees with the product's signedness is evidence
 for a narrow unsigned local plus one explicit conversion, not for a field
 retype (compare Lever 8) and not for a stray cast.
 
+### Lever 19. An inlined copy in the OBJECT proves an `inline` declaration
+
+`-O3` inlines on two budgets: `max-inline-insns-auto` (130 by default) for an
+ordinary function, and `max-inline-insns-single` (600) for one DECLARED
+`inline`. So when a callee is far above the auto budget and the object still
+contains its body inlined at a call site, the source declared it `inline` --
+the compiler could not have got there any other way. That is a forced fact
+about the source, like a `movswl`, and it is worth acting on.
+
+Measured on `src/service/ringDetector.c` (2026-10-19). `RingDetector_Reset` is
+449 bytes / 124 instructions and has ONE call site, in `RingDetector_Create`.
+With a plain definition our `Create` was 41 bytes:
+
+    malloc(0x54); call RingDetector_Reset; ret
+
+while the object's `Create` is 452 bytes and contains the whole reset body.
+Adding `inline` to the DEFINITION in the .c (the header's non-inline
+declaration is left alone) inlined it:
+
+    Create   41 B / 9 insns  ->  435 B / 121 insns   (object 452 / 125)
+    structsim  longest run 0 -> 14,  LCS 0% -> 77.6%
+
+Two checks say the object's copy is the same function and not a copy-paste:
+
+- A `difflib.SequenceMatcher` of the object's `RingDetector_Reset` instruction
+  list against the object's `RingDetector_Create` list scores 0.787, and every
+  non-equal opcode is the malloc/return prologue, a branch displacement, or a
+  pure register rename (`%ecx` <-> `%edx`, `%esi` vs `%edi`). A hand copy would
+  be textually identical; this differs exactly where inlining reallocates.
+- The standalone symbol is still emitted in both, which is what the language
+  says should happen: the header declares the function without `inline`, so
+  the inline definition is an external definition too.
+
+**The bound.** A callee inside the auto budget proves nothing -- `-O3` may
+inline it whether or not the source said `inline`. This lever only fires when
+the callee is too big for automatic inlining AND the call site is present in
+the object's own TU. It also does not fix the callee: `RingDetector_Create`
+stayed SIZE because `Reset`'s own body still differs by 4 instructions of
+register allocation (the object spills `c` into a third callee-saved register
+and reloads it), so the inline decision and the body's residual are separate
+questions.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
