@@ -205,6 +205,29 @@ No whole-object identity is claimed. The operation screen now has nine
 manually reviewed discrepancy names and 309 still unreviewed; the 234 names
 with equal operation counts remain unproved.
 
+The next coefficient-summary pass restores the read after a maximum-field
+store before testing the minimum. `V90Equalizer::enterDataPhase` changes
+1,576 -> 1,608 bytes against 1,688; `enterPhase4` changes 1,922 -> 1,970
+against 2,050. Both remain `SIZE`. The other 33 TU function bodies and all
+20 exact functions are unchanged. All 51 moved jump-table entries preserve
+their destination function and relative offset; ordinary data, interfaces
+and canonical call targets survive. The final combined gate passes 394 period
+fixtures with zero failures and structural checks OK. All 300 runtime objects
+raw-match comparison builds; 299 objects preserve raw bytes against the
+preceding head. The exact set remains **1,112/1,852**, with zero gains or losses.
+No public caller-alias history is established by the existing component tests.
+
+The broader uncached-magnitude control was rejected because it introduced a
+helper call absent from the original. The retained control changes only the
+read across the output store, without forcing inlining or rotating source
+spellings. Bounded Uinfo, phase2 print, VTB, DTMF and V34 microstate reviews
+retain no other source edit. Their negative ledgers distinguish x87 consumer
+lifetimes, strength reduction and historically closed source forms from
+missing operations. Nineteen discrepancy names have now been manually reviewed;
+299 remain unreviewed, and equal operation counts still do not prove equivalence.
+The strict ordered partial object remains different: 72,403/943,398 positioned
+bytes, 1,001/18,317 relocations and 457/2,931 symbol records match.
+
 `byteident.py` checks exact-name membership, so an unrelated gain cannot hide
 a loss. An explained loss still requires the original-source and complete-TU
 review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
