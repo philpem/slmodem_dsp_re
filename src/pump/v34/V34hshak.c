@@ -3526,7 +3526,7 @@ static void
 t3m_errrec_core(struct t3m_frame *f)
 {
 	struct v34_bitsource *r = f->obj->msgrec;
-	int k;
+	short k;
 
 	f->obj->is_short = 0;
 	f->obj->local_short = 0;
@@ -5222,7 +5222,7 @@ t41_tone_search(struct v34_object *obj)
 {
 	struct v34_receiver *rx = &obj->receiver;
 	short det;
-	int i;
+	short i;
 
 	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);
 
@@ -5307,7 +5307,7 @@ t41_tone_ab(struct v34_object *obj)
 	struct v34_receiver *rx = &obj->receiver;
 	const unsigned char *rec;
 	short *out;
-	int i;
+	short i;
 
 	/*
 	 * 0x6dac7's `test %ax,%ax` sends a silent detector to 0x6de83, which
@@ -5729,7 +5729,7 @@ t46_init_record(struct v34_object *obj, struct v34_bitsource *rec)
 static void
 t46_reset_core(struct v34_object *obj)
 {
-	int i;
+	short i;
 
 	obj->is_short = 0;
 	obj->local_short = 0;
@@ -6159,7 +6159,7 @@ t44_det_info_restart(struct v34_object *obj)
 	struct v34_bitsource *rec = (struct v34_bitsource *)obj->paa70;
 	struct v34_bitsource *blk = obj->msgrec;
 	short nbits;
-	int i;
+	short i;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34INFO, info0 CRC not received "
@@ -6729,7 +6729,7 @@ t44_det_info_accept(struct v34_object *obj, struct v34_bitsource *rec,
 	short len = rec->nbits;
 	short count;
 	int nbytes;
-	int i;
+	short i;
 
 	/*
 	 * THE ORDER IS THE OBJECT'S: 0x4d, then 0x26, then 0x08, and the
