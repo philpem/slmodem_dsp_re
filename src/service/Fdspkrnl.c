@@ -196,14 +196,10 @@ FDSP_Kernel_InitObj(struct fdsp_kernel *k)
 	a->short_1690 = 0;
 	b->short_1690 = 0;
 
-	for (i = 0; i < FDSP_DLY; i++)
-		b->dly[i] = 0.0f;
-	for (i = 0; i < 240; i++)
-		b->coef[i] = 0.0f;
-	for (i = 0; i < FDSP_DLY; i++)
-		a->dly[i] = 0.0f;
-	for (i = 0; i < 240; i++)
-		a->coef[i] = 0.0f;
+	zFLTUTL_FloatMemSet(0.0f, b->dly, FDSP_DLY);
+	zFLTUTL_FloatMemSet(0.0f, b->coef, 240);
+	zFLTUTL_FloatMemSet(0.0f, a->dly, FDSP_DLY);
+	zFLTUTL_FloatMemSet(0.0f, a->coef, 240);
 }
 
 /*
