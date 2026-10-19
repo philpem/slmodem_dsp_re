@@ -766,6 +766,20 @@ agent.
   integer if-conversion. 69 rows classified in finding F2900, of which three
   were real (2901), three were 614 and declined (2902), and ten are forced
   and named for the next pass (2903).
+- `structsim.py` (`make structsim S=SYMBOL`) — **structural similarity as a
+  measure, not a grade.** Reports the longest common contiguous run and the
+  longest common subsequence (LCS) between the object's function and ours,
+  with registers canonicalised, call targets kept by name, and per-TU section
+  addends masked. It exists because byteident grade 1 rejects any length
+  difference, so a two-instruction miss and a function that shares nothing both
+  read REJECT. Controls: `v8_fsktxfilter` (grade 1) and `v8_fskmodulate`
+  (grade 0) both score 100%, so a pure renaming is not punished; a real
+  structural recovery (inlining a helper whose pointer arguments were being
+  spilled) moved `v8_tone_detect` from 48.9% to 85.2% LCS and longest run 14
+  to 50 while it stayed grade-0 SIZE. `--worst N` ranks the least structurally
+  right symbols first (~34 s on 8 cores). **Never a gate or a ratchet**: LCS
+  falls on legitimate scheduling differences and a score invites hill-climbing
+  — use it to choose a target and to record what a recovery restored.
 - `storeorder.py` — store order, and a HINT, not a defect list. 617's
   acceptance test is full-text identity, operands included: nineteen examined,
   two passed. It reports 57 differing functions and, of those, **the 14 whose

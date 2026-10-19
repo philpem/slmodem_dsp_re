@@ -1363,7 +1363,7 @@ period: $(REF)
 # was standing in for.  The guard STAYS: it still catches the directory being
 # read by something that did not come through make.
 #
-.PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
+.PHONY: tc tc-repro byteident byteident-ratchet similarity structsim partial-link \
 	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
@@ -1386,6 +1386,25 @@ byteident-ratchet: tc
 
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
+
+#
+# STRUCTURAL SIMILARITY, as a MEASURE and not a grade.  `byteident` answers
+# exact-or-not and its grade 1 rejects any length difference, so a function
+# two instructions out and one that shares nothing both read the same.
+# `structsim` reports the longest common contiguous run and the LCS between
+# the object's copy and ours, registers canonicalised and per-TU section
+# addends masked.  A pure renaming scores 100% (measured on v8_fsktxfilter,
+# grade 1, and v8_fskmodulate, grade 0), so it measures SHAPE.
+#
+# NOT a gate and NOT a ratchet: LCS falls when the compiler schedules
+# independent statements differently, and a whole-tree score invites
+# hill-climbing a number -- the fit-versus-recovery rule declines that.
+# `make structsim S=SYMBOL` is the single-symbol form; `--worst N` ranks the
+# least structurally right symbols first (about 34 s on 8 cores, because it
+# objdumps each symbol on each side).
+#
+structsim: tc
+	@$(PYTHON) tools/toolchain/structsim.py $(S)
 
 # Cast audit: explicit numeric casts the context already performs (issue #69,
 # finding F11353).  clang is analysis apparatus, not a reconstruction

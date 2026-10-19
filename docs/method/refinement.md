@@ -2105,6 +2105,47 @@ a zeroing idiom that failed exactly when a register was renamed (7762), and a
 padding guard that matched no padding (7769). If `--why` reports something that
 looks like a tool artefact, it may be one; say so and check.
 
+### Measure how much of a function's shape a recovery restored
+
+`tools/toolchain/structsim.py` reports, per symbol, the longest common
+contiguous run and the longest common subsequence (LCS) between the object's
+copy and ours. Registers are canonicalised to `R`; a call keeps WHICH function
+it calls but loses its displacement; a per-TU `.rodata`/`.bss` relocation
+addend is masked because it is not comparable with the merged object's; small
+displacements and immediates are kept. Alignment padding is stripped, and the
+number stripped is printed.
+
+It exists because grade 1 rejects any length difference: a function two
+instructions out and one that shares nothing both read REJECT, and neither
+says how far from the shape we are. `compare.py` is coarser still -- mnemonics
+with operands dropped -- and its report is per-symbol identical-or-not.
+
+    make structsim S=v8_tone_detect
+    python3 tools/toolchain/structsim.py v8_tone_detect v8_getbit
+    python3 tools/toolchain/structsim.py --worst 40
+
+**Controls, measured 2026-10-19.** `v8_fsktxfilter` (grade 1 REGALLOC) and
+`v8_fskmodulate` (grade 0 EXACT) both score **100%**, so the metric does not
+punish a pure renaming. `v8_tone_detect` moved from 227 instructions, longest
+run 14, LCS 48.9% to 182 instructions, longest run 50, LCS 85.2% when the
+biquad was inlined and a pointer-taking helper removed (its four pointer
+arguments had been hoisted out of the loop and spilled), while remaining
+grade-0 SIZE. That is the case this is for: size alone said 760 bytes against
+the object's 603 and could not tell a structural recovery from a stylistic
+one, and the byte gap afterwards (605 vs 603) is smaller than the shape
+improvement warrants quoting.
+
+**It is NOT a gate and NOT a ratchet.** LCS falls when the compiler schedules
+two independent statements differently even though the source is right, which
+is why `compare.py --ratchet` is deliberately outside `make phase`; and a
+whole-tree scoreboard invites hill-climbing a number, which the
+fit-versus-recovery rule declines. Use `--worst` to CHOOSE a target and the
+single-symbol form to record what a recovery restored. Denominator: the
+symbols the blob and `TC_OUT` both define; the tool refuses on an empty or
+stale object tree, and `--self-test` carries ten cases including the ones it
+must NOT equate (different displacement, different call target, symbol addend
+versus section addend).
+
 ### Byte/word aliases require an explicit endian boundary
 
 A recovered union of named bytes and a word can faithfully model i386 partial
