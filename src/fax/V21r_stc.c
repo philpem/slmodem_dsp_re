@@ -41,16 +41,19 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
 {
 	struct v21_rx *rx = (struct v21_rx *)modem;
 	struct v21rx_cfg *cfg = &rx->cfg;
+	unsigned char flags;
 
 	if (arg == NULL)
 		return 0;
 
 	cfg->int_0008 = arg->int_0004;
+	/* 0xa242d: one flags read supplies both decisions across the HDX store. */
+	flags = arg->flags;
 
 	rx->hdx->int_0000 =
-		(arg->flags & V21RXCTL_SET_HDX_INT0000) != 0;
+		(flags & V21RXCTL_SET_HDX_INT0000) != 0;
 
-	if (arg->flags & V21RXCTL_REINIT)
+	if (flags & V21RXCTL_REINIT)
 		V21RX_create(modem, (const struct v21rx_cfg *)modem);
 
 	return 1;

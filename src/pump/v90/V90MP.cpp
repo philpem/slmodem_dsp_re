@@ -800,7 +800,7 @@ V90MP::evaluateCRC()
 	for (i = 0; i <= 0xf; i++) {
 		int d = (int)crc[i] - (int)bits[n - 0x10 + i];
 
-		sum += (unsigned char)(d < 0 ? -d : d);
+		sum += (unsigned char)abs(d);
 	}
 
 	return sum == 0;

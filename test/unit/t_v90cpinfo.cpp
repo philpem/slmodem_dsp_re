@@ -560,6 +560,72 @@ run_cp_evaluatecrc(void)
 	return diff_end();
 }
 
+/* Component history: the encoder supplies binary CP frames, then the decoder
+ * consumes header, pairs, counts and lists in their receive-state order.
+ * This establishes the case-8 input boundary, not modem transport reachability.
+ */
+static int
+run_cp_list_history(void)
+{
+	static const unsigned short values[] = { 0, 1, 0x7fff, 0x8000, 0xffff };
+	int trial, k, j, state;
+	unsigned int entries = 0, high = 0;
+
+	diff_begin("V90CP::evaluateInfo, encoder-produced list history");
+	for (trial = 0; trial < 8; trial++) {
+		short expected[4][4];
+		unsigned int counts[4];
+
+		seed_pair(trial + 400, 0);
+		set_info(trial);
+		CPA->word_00 = CPB->word_00 = 0;
+		CPA->word_04 = CPB->word_04 = 1;
+		CPA->word_08 = CPB->word_08 = 1;
+		CPA->word_0c = CPB->word_0c = 0;
+		CPA->byte_11 = CPB->byte_11 = trial % 4;
+		CPA->groupSize = CPB->groupSize = 17;
+		for (k = 0; k < 12; k++)
+			CPA->word_18[k] = CPB->word_18[k] = (trial + k) & 255;
+		for (k = 0; k < 4; k++) {
+			counts[k] = (trial + k) % 4;
+			CPA->nof_58[k] = CPB->nof_58[k] = counts[k];
+			for (j = 0; j < 4; j++) {
+				expected[k][j] = (short)values[(trial + k + j) % 5];
+				CPA->short_58[k][j] = CPB->short_58[k][j] = expected[k][j];
+			}
+		}
+		CPA->infoToBits();
+		ref_cp_infotobits(cp_b);
+		compare_pair("encoded list history", 8000 + trial);
+		/* Previous decoded fields may differ from the incoming frame. */
+		for (k = 0; k < 4; k++) {
+			CPA->nof_58[k] = CPB->nof_58[k] = 0;
+			for (j = 0; j < 4; j++)
+				CPA->short_58[k][j] = CPB->short_58[k][j] =
+				    (short)~expected[k][j];
+		}
+		for (state = 5; state <= 8; state++) {
+			CPA->rxState = CPB->rxState = state;
+			CPA->evaluateInfo();
+			ref_cp_evaluateinfo(cp_b);
+			compare_pair("decoded list history", 8100 + trial * 4 + state);
+		}
+		for (k = 0; k < 4; k++) {
+			diff_eq_int("decoded count", CPB->nof_58[k], counts[k], trial * 4 + k);
+			for (j = 0; j < (int)counts[k]; j++) {
+				diff_eq_int("decoded list value", CPB->short_58[k][j], expected[k][j],
+					    trial * 16 + k * 4 + j);
+				entries++;
+				if ((unsigned short)expected[k][j] & 0x8000)
+					high++;
+			}
+		}
+	}
+	diff_eq_int("history decoded entries", entries, 48, 0);
+	diff_eq_int("history included high-bit values", high > 0, 1, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -567,6 +633,7 @@ main(void)
 
 	rc |= run_cp_infotobits();
 	rc |= run_cp_evaluateinfo();
+	rc |= run_cp_list_history();
 	rc |= run_cp_evaluatecrc();
 
 	return rc;

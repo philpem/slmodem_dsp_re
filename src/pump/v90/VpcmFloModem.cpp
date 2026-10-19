@@ -1533,7 +1533,8 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	if (ecMode == VPCM_EC_RAMP_MODE) {			/* 0xe53c */
 		if (ecRampCounter != VPCM_EC_RAMP_SENTINEL)
 			ecRampCounter++;
-		rx[0] = (float)ecRampCounter;
+		/* Native 0xe550..0xe557 converts the +0x7f64 word with FILDL. */
+		rx[0] = (float)(int)ecRampCounter;
 	} else {						/* 0xe48b */
 		rx[0] = 0.0f;
 	}

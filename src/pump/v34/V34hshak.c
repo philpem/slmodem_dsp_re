@@ -3082,8 +3082,8 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3M_RX_F264		((int)__builtin_offsetof(struct v34_receiver, \
 					    short_264))
 	/* short, arm 49's last write; the receiver member's own
-	   offset (issue #260 wave 11); t72's read of it stays a
-	   BYTE wide (finding F553's shape)     */
+	   offset (issue #260 wave 11); t72 restores the full
+	   halfword (movzwl at 0x67de0 and 0x69692). */
 
 /* The microstate table: 40 entries, index = microstate - 41. */
 #define T3M_TBL3_FIRST		41
@@ -3251,12 +3251,11 @@ struct t3m_frame {
 #define T3M_U16(f, off)		(*(unsigned short *)((f)->m + (off)))
 
 /*
- * The prologue's four stack slots, in the one place that fills them.  Every
- * caller of `t3m_txblock` outside `v34handshak` itself -- the forty-odd
- * `t3c_txblock` sites in the arms below -- reaches the dispatch without
- * having gone through the prologue, so it needs one of these too.  `nbits`
- * is zero there and is not read on that path: only arms 55 and 58 read it,
- * and both are entered from the prologue.
+ * The prologue's saved owners and microstate inputs.  Only v34handshak's
+ * microstate helpers use this frame; the transmit dispatch and common tail
+ * use their object owner directly and keep the incoming txstate separate.
+ * `nbits` is read only by arms 55 and 58, after the prologue fills it from
+ * the value before fskdemodulate.
  */
 static void
 t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
@@ -3286,9 +3285,9 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
  * other passes at txstate 18 and fails at txstate 5.
  */
 static void
-t3m_tail(struct t3m_frame *f, short tx)
+t3m_tail(struct v34_object *obj, short tx)
 {
-	int mode = f->obj->hs_mode;
+	int mode = obj->hs_mode;
 	int esi;
 
 	if (mode == 1) {
@@ -3299,15 +3298,15 @@ t3m_tail(struct t3m_frame *f, short tx)
 		 * back as one.  THE RELOAD IS THE NEXT INSTRUCTION, 0x62b5f
 		 * `movzwl 0x3596(%ebx),%ecx`, and 0x62b66 writes the 4.
 		 */
-		f->rx->report_interval = (short)(3 * (int)f->obj->ratecfg.rx_baud);
-		tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
-		*f->progress = 4;
+		obj->receiver.report_interval = (short)(3 * (int)obj->ratecfg.rx_baud);
+		tx = obj->txstate;
+		obj->progress = 4;
 	}
 
 	/* 0x62a56 and 0x62a68: both windows are UNSIGNED, so mode 1 and any
 	   negative mode fall through both. */
 	if ((unsigned)(mode - 4) <= 1u)
-		*f->progress = 6;
+		obj->progress = 6;
 
 	if ((unsigned)(mode - 2) <= 1u && tx == 0x4a) {
 		/*
@@ -3316,32 +3315,32 @@ t3m_tail(struct t3m_frame *f, short tx)
 		 * compiler's way of writing a two-valued select and the 7 is
 		 * not a mask of anything.
 		 */
-		*f->progress = f->obj->vect_idx > 0x3c ? 0 : 7;
+		obj->progress = obj->vect_idx > 0x3c ? 0 : 7;
 	}
 
 	/* 0x62a7a.  Unsigned, so an elapsed count past the deadline's wrap
 	   is late rather than early. */
-	if (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))
-		*f->progress = 8;
+	if ((unsigned)obj->sample_count > (unsigned)obj->timeout_deadline)
+		obj->progress = 8;
 
 	/* 0x62a92.  Signed: the level is a sign-extended halfword. */
-	esi = f->rx->agc_level;
-	if (esi >= f->obj->rx_energy_floor)
-		T3M_I32(f, T3M_TICK) = 0;
+	esi = obj->receiver.agc_level;
+	if (esi >= obj->rx_energy_floor)
+		obj->low_energy_count = 0;
 	else
-		T3M_I32(f, T3M_TICK)++;
+		obj->low_energy_count++;
 
-	if (T3M_I32(f, T3M_TICK) > 0x257f)
-		*f->progress = 9;
+	if (obj->low_energy_count > 0x257f)
+		obj->progress = 9;
 
 	/* 0x62ac5, a three-way compare on the SIGN-EXTENDED halfword. */
 	if (tx == 0x53)
-		*f->progress = 0x0f;
+		obj->progress = 0x0f;
 	else if (tx > 0x53) {
 		if (tx == 0x54)
-			*f->progress = 0x10;
+			obj->progress = 0x10;
 	} else if (tx == 0x52)
-		*f->progress = 0x0d;
+		obj->progress = 0x0d;
 }
 
 /*
@@ -3401,12 +3400,12 @@ t3m_tail(struct t3m_frame *f, short tx)
  * measures what that costs the mutation set.
  */
 static void
-t3m_txblock(struct t3m_frame *f, short tx)
+t3m_txblock(struct v34_object *obj, short tx)
 {
 	unsigned idx = (unsigned)((int)tx - T3M_TBL2_FIRST);
 
 	if (idx >= T3M_TBL2_COUNT) {
-		t3m_tail(f, tx);
+		t3m_tail(obj, tx);
 		return;
 	}
 
@@ -3418,19 +3417,19 @@ t3m_txblock(struct t3m_frame *f, short tx)
 		 * at +0x359c, and every other way is 0.
 		 */
 		{
-			unsigned short mst = T3M_U16(f, V34HS_MICROSTATE_OFF);
-			unsigned short rx = T3M_U16(f, V34HS_RXSTATE_OFF);
+			unsigned short mst = (unsigned short)obj->microstate;
+			unsigned short rx = (unsigned short)obj->rxstate;
 
-			if (mst == 0x3f && f->obj->role == 0x66)
-				*f->progress = 1;
+			if (mst == 0x3f && obj->role == 0x66)
+				obj->progress = 1;
 			else if (rx == 0x04 && mst == 0x2c
-				 && f->obj->role == 0x65)
-				*f->progress = 1;
+				 && obj->role == 0x65)
+				obj->progress = 1;
 			else if (rx == 0x23 && mst == 0x3f
-				 && f->obj->role == 0x65)
-				*f->progress = 1;
+				 && obj->role == 0x65)
+				obj->progress = 1;
 			else
-				*f->progress = 0;
+				obj->progress = 0;
 		}
 		break;
 
@@ -3441,17 +3440,17 @@ t3m_txblock(struct t3m_frame *f, short tx)
 		 * set and 2 when it is not.  The originate side is 2 whatever
 		 * the flag says.
 		 */
-		if (f->obj->role == 0x65)
-			*f->progress = 2;
+		if (obj->role == 0x65)
+			obj->progress = 2;
 		else
-			*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;
+			obj->progress = (obj->receiver.flags >> 3) & 1 ? 3 : 2;
 		break;
 
 	case 20:			/* 0x64509 PPSEG    */
 	case 21:			/*         TRNSEG4  */
 	case 64:			/*         JTXMIT   */
 	case 68:			/*         J1TXMIT  */
-		*f->progress = 2;
+		obj->progress = 2;
 		break;
 
 	case 24:			/* 0x644c9 TX_DPSK  */
@@ -3459,13 +3458,13 @@ t3m_txblock(struct t3m_frame *f, short tx)
 	case 54:			/*         SILENCEINFO */
 	case 60:			/*         TONE_AB  */
 	case 74:			/*         SILENCERETRAIN */
-		*f->progress = 0;
+		obj->progress = 0;
 		break;
 
 	case 66:			/* 0x644fa TRNSEG4A */
 	case 67:			/*         XMITMP   */
 	case 69:			/*         EXMIT    */
-		*f->progress = 3;
+		obj->progress = 3;
 		break;
 
 	case 70:			/* 0x644d8 DATAXMIT */
@@ -3473,14 +3472,14 @@ t3m_txblock(struct t3m_frame *f, short tx)
 		 * `cmp $0x1,%bp` then `sbb %eax,%eax` and `add $0x4,%eax`:
 		 * the borrow is set only when the halfword is zero.
 		 */
-		*f->progress = T3M_U16(f, T3M_F0E4C) == 0 ? 3 : 4;
+		obj->progress = (unsigned short)obj->modem_up == 0 ? 3 : 4;
 		break;
 
 	default:			/* 0x62a40, straight to the tail */
 		break;
 	}
 
-	t3m_tail(f, tx);
+	t3m_tail(obj, tx);
 }
 
 /*
@@ -3607,22 +3606,22 @@ t3m_errrec_arm(struct t3m_frame *f)
  *      0x78    invert bit 0 of +0x358c, and leave with the object's txstate
  *      0xa2    force txstate to SILENCE and microstate to RX_PHASE2_ANS
  *              (0x32), clear the
- *              counter, and leave with 5 -- both forcings announce
- *              themselves, and both are the setters' compare-print-store
+ *              counter, and leave with the txstate after the transitions.
+ *              Both setters use compare-print-store; the traced microstate
+ *              transition reloads txstate at 0x6d570.
  *      else    leave with the object's txstate
  */
-static void
-t3m_micro48(struct t3m_frame *f)
+static short
+t3m_micro48(struct v34_object *obj)
 {
-	unsigned short n = (unsigned short)(T3M_U16(f, T3M_COUNTER) + 1);
+	unsigned short n = (unsigned short)(obj->short_aa78 + 1);
 
-	T3M_U16(f, T3M_COUNTER) = n;
+	obj->short_aa78 = (short)n;
 
 	if (n == 0x78) {
 		/* 0x6c6e4.  An XOR of bit 0, not a store of a constant. */
-		T3M_U16(f, T3M_TOGGLE) ^= 1;
-		f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
-		return;
+		obj->short_358c ^= 1;
+		return obj->txstate;
 	}
 
 	if (n == 0xa2) {
@@ -3630,19 +3629,19 @@ t3m_micro48(struct t3m_frame *f)
 		 * 0x6c670.  Both transitions are the setters inlined, and
 		 * the first leaves 5 in %ecx on BOTH arms of its already-there
 		 * test -- the value loaded from +0x3596 when it matches,
-		 * 0x6c6a4's `mov $0x5,%ecx` when it does not -- which is why
-		 * the dispatch is reached with a literal SILENCE and not with
-		 * a re-read.
+		 * 0x6c6a4's `mov $0x5,%ecx` when it does not.  The later
+		 * microstate trace path reloads +0x3596 at 0x6d570; the
+		 * untraced path retains the known 5.
 		 */
 		/* 0x6c670. */
-		hs_set_txstate(f->obj, V34HS_SILENCE);
-		hs_set_microstate(f->obj, V34HS_RX_PHASE2_ANS);
-		T3M_U16(f, T3M_COUNTER) = 0;
-		f->tx = (V34HS_SILENCE);
-		return;
+		hs_set_txstate(obj, V34HS_SILENCE);
+		hs_set_microstate(obj, V34HS_RX_PHASE2_ANS);
+		obj->short_aa78 = 0;
+		/* 0x6d570 reloads after the traced microstate transition. */
+		return obj->txstate;
 	}
 
-	f->tx = ((short)T3M_U16(f, V34HS_TXSTATE_OFF));
+	return obj->txstate;
 }
 
 /*
@@ -3902,6 +3901,9 @@ t3m_micro49(struct t3m_frame *f)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
 					     "errorrecovery is initialized in " "RX_PHASE1_ANS\n");
+
+		/* Both reset continuations reload +0xaa7c (0x70f83/0x70fc0). */
+		filt = f->obj->filtdelay;
 	}
 
 	/*
@@ -4031,12 +4033,15 @@ t3m_micro50(struct t3m_frame *f)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
 					     "errorrecovery is initialized in " "RX_PHASE2_ANS\n");
+
+		/* Both reset continuations reload +0xaa7c (0x6671d/0x6e4ec). */
+		filt = f->obj->filtdelay;
 	}
 
 	/*
 	 * 0x66724, where the last three guards above converge.  The COUNTER is
 	 * re-read off the object -- `movswl 0xaa78(%ebx),%ebp` -- while the
-	 * delay is still the +0xaa7c that 0x664d8 left in %cx.
+	 * delay is the +0xaa7c in %cx, reloaded after reset if it ran.
 	 */
 	/* 0x66724. */
 	if ((int)f->obj->short_aa78 <= filt + 0x50) {
@@ -4807,10 +4812,7 @@ t3c_puti(struct v34_object *obj, unsigned off, int v)
 static void
 t3c_txblock(struct v34_object *obj)
 {
-	struct t3m_frame f;
-
-	t3m_frame_init(&f, obj);
-	t3m_txblock(&f, obj->txstate);
+	t3m_txblock(obj, obj->txstate);
 }
 
 
@@ -5004,9 +5006,10 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 		/*
 		 * 0x62af1 IS the dispatch entry and not one of the stubs that
 		 * re-read +0x3596: 0x6c991 jumps straight in, because the
-		 * transition at 0x6c8f8 already left MOH_CLEARDOWN in %cx,
-		 * which the four stores between 0x6c93e and 0x6c991 do not
-		 * disturb.
+		 * transmit transition left MOH_CLEARDOWN in %cx.  The receive
+		 * transition's untraced path carries it through its stores;
+		 * its traced path reloads +0x3596 after printf at 0x70725.
+		 * The shim's owner read also occurs after that transition.
 		 */
 		t3c_txblock(obj);			/* 0x62af1 */
 		return;
@@ -8557,8 +8560,7 @@ t72_probe_done(struct v34_object *obj, struct v34_receiver *rx)
 	 * copied, so the zero-extension never reaches the field -- which
 	 * 0x67adc reads back with `movswl`.
 	 */
-	rx->agc_gain = (short)*(const unsigned short *)		/* 0x67e17 */
-			((const char *)rx + T3M_RX_F264);
+	rx->agc_gain = (short)*(const unsigned short *)&rx->short_264; /* 0x67e17 */
 }
 
 /*
@@ -8869,10 +8871,13 @@ t72_rx_l1(struct v34_object *obj)
 	}
 
 	/*
-	 * 0x65140, and the two guards below read what it writes:
+	 * 0x65140.  The two guards below read the FSK state after this call:
 	 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
-	 * 0x65153, both sixteen bits, both on fields this call has
-	 * just filled in.  No fixture can choose them by poking.
+	 * 0x65153, both sixteen bits.  `fskdemodulate` returns without
+	 * changing either field when `rx->retrain_gate` is nonzero.
+	 * `t_v34hsrx72` uses that inhibit to preserve seeded values for
+	 * exploratory component probes; those seeds do not establish a
+	 * public modem history reaching this state.
 	 */
 	fskdemodulate(obj,					/* 0x65140 */
 		      rx->burst,
@@ -9383,7 +9388,7 @@ v34handshak(void *vobj)
 		t3m_micro47(&frame);
 		goto micro_txblock;
 	case V34HS_TX_PHASE3_ANS:	/* 48 */
-		t3m_micro48(&frame);
+		frame.tx = t3m_micro48(obj);
 		goto micro_txblock;
 	case V34HS_RX_PHASE1_ANS:	/* 49 */
 		t3m_micro49(&frame);
@@ -9456,7 +9461,7 @@ v34handshak(void *vobj)
 
 	return;
 micro_txblock:
-	t3m_txblock(&frame, frame.tx);
+	t3m_txblock(obj, frame.tx);
 }
 
 /*

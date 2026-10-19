@@ -807,7 +807,8 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	int st = (unsigned short)(s->state_idx - 1) & 0x1f;
 	int branch = s->state[st].seed;
 	int code;
-	int a, b, c, d;
+	/* Native rounded coordinates are word stores, signed before each nudge. */
+	short a, b, c, d;
 	short r0, r1, r2, r3;
 	int k1, k2;
 	int packed, g;
@@ -941,7 +942,8 @@ demap_candidates(int p, int div, short *lo, short *hi)
 	int q = p / div;
 
 	q = ((p > 0 ? q + 1 : q) & ~3) + 1;
-	q *= div;
+	/* The native neighbour arithmetic consumes the signed low word. */
+	q = (short)(q * div);
 
 	*lo = (short)q;
 	*hi = (short)(p > (short)q ? q + 2 * div : q - 2 * div);
@@ -970,10 +972,13 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 
 	s->state[st].pair[1] = *(int *)ap;
 
-	/* 1. Eight candidates, two per parameter. */
-	for (i = 0; i < 4; i++)
-		demap_candidates(s->state[st].par[i], div,
-				 &cand[i * 2], &cand[i * 2 + 1]);
+	/* 1. Two parameter pairs, each producing four candidates in order. */
+	for (i = 0; i < 2; i++) {
+		demap_candidates(s->state[st].par[i * 2], div,
+				 &cand[i * 4], &cand[i * 4 + 1]);
+		demap_candidates(s->state[st].par[i * 2 + 1], div,
+				 &cand[i * 4 + 2], &cand[i * 4 + 3]);
+	}
 
 	/* 2. Squared distances, four combinations per parameter pair. */
 	for (i = 0; i < 2; i++) {
@@ -2336,18 +2341,43 @@ modulatevector(void *obj)
 		/* 2. Peel against t2, then twice against t1. */
 		rem = target - (unsigned)tx->t3[lo];
 		n1 = shell_peel(tx->t2, lo, &rem);
-		q2 = rem / (unsigned short)tx->t2[n1];
-		rem = rem % (unsigned short)tx->t2[n1];
+		/*
+		 * The original uses signed division of the saved remainder,
+		 * not unsigned division of the shell-peel accumulator.  Each
+		 * table word is zero-extended first, so the divisor is a
+		 * positive int when the initialized table entry is nonzero.
+		 * 0x5a056 takes the remainder; 0x5a05c subtracts it from the
+		 * saved dividend before the second IDIV at 0x5a063.
+		 */
+		{
+			int dividend = (int)rem;
+			int divisor = (unsigned short)tx->t2[n1];
+
+			rem = (unsigned)(dividend % divisor);
+			q2 = (unsigned)((dividend - (int)rem) / divisor);
+		}
 
 		n2 = shell_peel(tx->t1, n1, &rem);
-		s2 = (unsigned short)(rem / (unsigned short)tx->t1[n2]);
-		a = (unsigned short)(rem % (unsigned short)tx->t1[n2]);
+		{
+			int divisor = (unsigned short)tx->t1[n2];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a0ef..0x5a10e: IDIV, multiply, subtract. */
+			s2 = (unsigned short)quotient;
+			a = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		rem = q2;
 		d = (unsigned short)(lo - n1);
 		n3 = shell_peel(tx->t1, d, &rem);
-		s6 = (unsigned short)(rem / (unsigned short)tx->t1[n3]);
-		b = (unsigned short)(rem % (unsigned short)tx->t1[n3]);
+		{
+			int divisor = (unsigned short)tx->t1[n3];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a17f..0x5a18b: the same signed quotient chain. */
+			s6 = (unsigned short)quotient;
+			b = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		/*
 		 * 3. Four pairs, each summing to a value checked against

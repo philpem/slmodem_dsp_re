@@ -20,6 +20,7 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/V92CP.h"
@@ -300,7 +301,7 @@ V92CP::evaluateCRC()
 	for (j = 0; j < V92CP_CRC; j++) {
 		int d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];
 
-		acc = (unsigned char)(acc + (d < 0 ? -d : d));
+		acc = (unsigned char)(acc + abs(d));
 	}
 
 	return acc == 0;

@@ -388,10 +388,8 @@ checkSignalStability(struct v8 *v)
 	 * in the original; nothing reaches it, because the gain is only ever
 	 * this function's reference after having been non-zero.
 	 */
-	if (r->gain_ref == 0)
-		delta = 0;
-	else
-		delta = (short)((((int)r->gain - r->gain_ref) << 14) / r->gain_ref);
+	/* Both native paths divide unconditionally (0x753ba, 0x7540e). */
+	delta = (short)((((int)r->gain - r->gain_ref) << 14) / r->gain_ref);
 
 	if (delta < 0)
 		delta = -(short)delta;

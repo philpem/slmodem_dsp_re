@@ -2,8 +2,8 @@
   "bytes": 77,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1110,
-  "exact_bytes": 128339,
+  "exact": 1112,
+  "exact_bytes": 129442,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -119,6 +119,7 @@
     "ResetCallingTone",
     "ResetRx",
     "Restore_rateV17",
+    "RetrainDetectV32",
     "RingDetector_Delete",
     "RingDetector_GetLastRing",
     "RxClampV22",
@@ -1052,6 +1053,7 @@
     "v21tx_status",
     "v22_create",
     "v22_delete",
+    "v22_org_rmloop2",
     "v23FP_rx_create",
     "v23FP_rx_delete",
     "v23FP_tx_create",
@@ -1120,6 +1122,6 @@
   "reference_functions": 1852,
   "regalloc": 32,
   "reloc": 0,
-  "size": 633,
+  "size": 631,
   "unresolved": 0
 }
