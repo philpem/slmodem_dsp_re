@@ -2968,7 +2968,6 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg = &obj->ratecfg;
 	unsigned int n;
 
 	/*
@@ -3005,7 +3004,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 		return K56FLEX_TX_BITRATE;
 	}
 
-	return cfg->txbits * (int)RATE_STEP;
+	return obj->ratecfg.txbits * (int)RATE_STEP;
 }
 
 int
