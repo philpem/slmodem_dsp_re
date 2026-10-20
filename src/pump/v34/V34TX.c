@@ -104,9 +104,9 @@ txinit(void *objp)
 
 	obj->echo_alpha = 0;
 	obj->far_echo_alpha = 0;
-	obj->tx_scr_sr = 0;
-	obj->prev_quadrant = 0;
-	obj->seg_symcount = 0;
+	obj->tx.tx_scr_sr = 0;
+	obj->tx.prev_quadrant = 0;
+	obj->tx.seg_symcount = 0;
 
 	V34EchoCleanUp(&obj->echo0);
 	V34EchoCleanUp(&obj->echo1);
@@ -117,10 +117,10 @@ txinit(void *objp)
 	 * the modulator a full block of silence to draw on before the first
 	 * symbol arrives.
 	 */
-	obj->txq.count = 0x20;
-	obj->txq.rd = obj->txq.ring;
-	obj->txq.wr = obj->txq.ring + 0x20;
-	sysdep_memset(obj->txq.ring, 0, V34_TXQ_RING * sizeof(int));
+	obj->tx.txq.count = 0x20;
+	obj->tx.txq.rd = obj->tx.txq.ring;
+	obj->tx.txq.wr = obj->tx.txq.ring + 0x20;
+	sysdep_memset(obj->tx.txq.ring, 0, V34_TXQ_RING * sizeof(int));
 
 	/* The receive queue is emptied outright. */
 	obj->receiver.rxq.count = 0;
@@ -157,12 +157,12 @@ void
 txmit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_queue *txq = &obj->txq;
+	struct v34_queue *txq = &obj->tx.txq;
 	short local[38];
 	int sym, n, i;
 
-	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
-		    | (unsigned short)obj->txpoint.c[0]);
+	sym = (int)(((unsigned)(unsigned short)obj->tx.txpoint.c[1] << 16)
+		    | (unsigned short)obj->tx.txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
 		v34_object_modulator(obj), sym, local);
 
@@ -170,7 +170,7 @@ txmit(void *objp)
 		int *wr = txq->wr;
 
 		for (i = 0; i < n; i++) {
-			int v = (local[i] * obj->tx_scale + 0x2000) >> 14;
+			int v = (local[i] * obj->tx.tx_scale + 0x2000) >> 14;
 
 			/*
 			 * One per sample.  txwritequeue adds four per call to
@@ -189,7 +189,7 @@ txmit(void *objp)
 	V34EchoPreFilter(local, (short)n, &obj->prefilter);
 
 	/* Bit 9 of the short at +0x25c2; the original tests byte 0x25c3 for 2. */
-	if ((obj->tx_flags & V34_EC_FEED) == 0)
+	if ((obj->tx.tx_flags & V34_EC_FEED) == 0)
 		return;
 
 	for (i = 0; i < n; i++) {
@@ -235,7 +235,7 @@ int
 adaptecho(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_queue *txq = &obj->txq;
+	struct v34_queue *txq = &obj->tx.txq;
 	short lag;
 	short acc;
 	int y;
@@ -265,7 +265,7 @@ adaptecho(void *objp)
 	e = (short)(acc + ((y * 4 + 0x8000) >> 16));
 	obj->echo_residual = (short)e;
 
-	if (obj->tx_flags & V34_EC_FROZEN)
+	if (obj->tx.tx_flags & V34_EC_FROZEN)
 		return 0;
 
 	count = obj->echo_calls + 1;

@@ -1255,7 +1255,7 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.tx_scale = ob.tx_scale = 0x4000;
+			oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
@@ -1285,7 +1285,7 @@ main(void)
 			 * training counter instead of the data path, and
 			 * `latched` is what lets that counter run at all.
 			 */
-			oa.tx_flags = ob.tx_flags = (short)(nle ? 0x4000 : 0);
+			oa.tx.tx_flags = ob.tx.tx_flags = (short)(nle ? 0x4000 : 0);
 			((struct v34_shell *)&oa)->latched = 1;
 			((struct v34_shell *)&ob)->latched = 1;
 
@@ -1448,7 +1448,7 @@ mv_next:		;
 			 * rather than this sharing one: two inputs driven
 			 * from one variable cannot be told apart.
 			 */
-			oa.tx_flags = ob.tx_flags =
+			oa.tx.tx_flags = ob.tx.tx_flags =
 				(short)(((c >> 9) & 1) ? 0x4000 : 0);
 
 			ca->baud = cb->baud = bauds[c & 3];

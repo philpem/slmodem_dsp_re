@@ -182,7 +182,7 @@ setup(int dataflag, int state, short constel, short vidx, short txbits,
 
 	oa.prefilter.coeff = ob.prefilter.coeff = V34TimingPrefilterCoeff;
 	oa.prefilter.shift = ob.prefilter.shift = 14;
-	oa.tx_scale = ob.tx_scale = 0x4000;
+	oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
 	/*
 	 * The bulk-delay ring, and the two cursors into it.  A varied fill
 	 * leaves those cursors holding a pseudo-random int, and `txmit`
@@ -196,11 +196,11 @@ setup(int dataflag, int state, short constel, short vidx, short txbits,
 	oa.bulk_tail = ob.bulk_tail = 17;
 
 	/* A scrambler register that is neither zero nor all ones. */
-	oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
-	oa.prev_quadrant = ob.prev_quadrant = 2;
-	oa.cur_quadrant = ob.cur_quadrant = 1;
-	oa.seg_symcount = ob.seg_symcount = 0x1234;
-	oa.tx_flags = ob.tx_flags = tx_flags;
+	oa.tx.tx_scr_sr = ob.tx.tx_scr_sr = 0x2f6b3d51;
+	oa.tx.prev_quadrant = ob.tx.prev_quadrant = 2;
+	oa.tx.cur_quadrant = ob.tx.cur_quadrant = 1;
+	oa.tx.seg_symcount = ob.tx.seg_symcount = 0x1234;
+	oa.tx.tx_flags = ob.tx.tx_flags = tx_flags;
 
 	oa.k56flex_receiver = ob.k56flex_receiver = state;
 	oa.receiver.short_382 = ob.receiver.short_382 = constel;
@@ -267,10 +267,10 @@ compare(long t)
 static void
 check_idle(int quad, short f25c6_before, long t)
 {
-	int q = oa.cur_quadrant;
-	int pt = oa.txpoint.word;
+	int q = oa.tx.cur_quadrant;
+	int pt = oa.tx.txpoint.word;
 
-	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.prev_quadrant, f25c6_before, t);
+	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.tx.prev_quadrant, f25c6_before, t);
 	diff_eq_int("idle quadrant in range %ld", q >= 0 && q <= 3, 1, t);
 	if (q < 0 || q > 3)
 		return;
@@ -340,8 +340,8 @@ main(void)
 			for (it = 0; it < 12; it++) {
 				struct v34_receiver *ra = (struct v34_receiver *)
 					((char *)&oa + OB_RECEIVER);
-				short before_c6 = oa.prev_quadrant;
-				short before_c0 = oa.seg_symcount;
+				short before_c6 = oa.tx.prev_quadrant;
+				short before_c0 = oa.tx.seg_symcount;
 				int before_state = oa.k56flex_receiver;
 				int r, rr;
 
@@ -374,13 +374,13 @@ main(void)
 						n_s3_wrap++;
 						diff_eq_int("wrap zeroes "
 							    "prev_quadrant %ld",
-							    oa.prev_quadrant, 0, tag);
+							    oa.tx.prev_quadrant, 0, tag);
 						diff_eq_int("wrap zeroes "
 							    "seg_symcount %ld",
-							    oa.seg_symcount, 0, tag);
+							    oa.tx.seg_symcount, 0, tag);
 						diff_eq_int("wrap zeroes "
 							    "tx_scr_sr %ld",
-							    oa.tx_scr_sr, 0, tag);
+							    oa.tx.tx_scr_sr, 0, tag);
 					}
 				} else if (before_state == 4) {
 					if (quad)
@@ -389,7 +389,7 @@ main(void)
 						n_s4_dibit++;
 					check_idle(quad, before_c6, tag);
 					diff_eq_int("idle bumps seg_symcount %ld",
-						    (unsigned short)oa.seg_symcount,
+						    (unsigned short)oa.tx.seg_symcount,
 						    (unsigned short)
 						    (before_c0 + 1), tag);
 					diff_eq_int("idle leaves state %ld",
@@ -523,19 +523,19 @@ main(void)
 					tag++;
 				}
 				if (gpc == 0) {
-					f25cc0 = oa.tx_scr_sr;
-					f25c80 = oa.cur_quadrant;
-					pt0 = oa.txpoint.word;
+					f25cc0 = oa.tx.tx_scr_sr;
+					f25c80 = oa.tx.cur_quadrant;
+					pt0 = oa.tx.txpoint.word;
 				} else {
 					diff_eq_int("gpc does not move tx_scr_sr "
-						    "%ld", oa.tx_scr_sr, f25cc0,
+						    "%ld", oa.tx.tx_scr_sr, f25cc0,
 						    c);
 					diff_eq_int("gpc does not move cur_quadrant "
-						    "%ld", oa.cur_quadrant, f25c80,
+						    "%ld", oa.tx.cur_quadrant, f25c80,
 						    c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
-						    oa.txpoint.word,
+						    oa.tx.txpoint.word,
 						    pt0, c);
 				}
 			}

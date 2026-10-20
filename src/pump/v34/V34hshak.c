@@ -501,7 +501,7 @@ v34modeminit(void *objp)
 	rx->rrn_local_dir = 0;
 	rx->baud_copy = 0;
 	obj->is_short = 0;
-	obj->tx_flags = V34_EC_FROZEN;
+	obj->tx.tx_flags = V34_EC_FROZEN;
 	obj->echo_calls = 0;
 	obj->short_3588 = 0;
 	obj->short_358a = 0;
@@ -539,7 +539,7 @@ v34modeminit(void *objp)
 
 	originate = (obj->role == 0x65);
 
-	obj->tx_flags = (short)(originate ? V34_EC_FROZEN
+	obj->tx.tx_flags = (short)(originate ? V34_EC_FROZEN
 					   : (V34_EC_FROZEN | V34_TXFLAG_CALLER));
 	rx->flags = (unsigned short)(originate ? 0 : V34_SCR_ANSWERER);
 
@@ -1332,7 +1332,7 @@ v34handshakinit(void *objp, int mode)
 	m[0xabff] = 0;
 
 	/* txflags, which the V34RNEG diagnostic below names. */
-	obj->tx_flags = (short)(obj->tx_flags & ~V34_TXFLAG_PPSEG);
+	obj->tx.tx_flags = (short)(obj->tx.tx_flags & ~V34_TXFLAG_PPSEG);
 
 	switch (mode) {
 	case 0:
@@ -1350,7 +1350,7 @@ v34handshakinit(void *objp, int mode)
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
 		obj->paa70 = &obj->msgrec[1];
 		obj->msgrec[1].nbits = 0x11;
-		obj->tx_pwr_reduction = 0;
+		obj->tx.tx_pwr_reduction = 0;
 
 		/*
 		 * 0x66 and not 0x65: `role` is the originate/answer flag
@@ -1437,10 +1437,10 @@ v34handshakinit(void *objp, int mode)
 			r->acc0 = 0;
 		}
 
-		obj->seg_symcount = 0;
-		obj->prev_quadrant = 0;
-		obj->tx_scr_sr = 0;
-		obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
+		obj->tx.seg_symcount = 0;
+		obj->tx.prev_quadrant = 0;
+		obj->tx.tx_scr_sr = 0;
+		obj->tx.tx_flags = (short)((obj->tx.tx_flags & ~0x4018) | 0x2000);
 
 		rx->rx_blocks = 0x21e;
 		obj->receiver.short_382 = (short)0x8990;
@@ -1457,7 +1457,7 @@ v34handshakinit(void *objp, int mode)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"V34RNEG, initialize RNEG, tx->txflags= 0x%x," "rx->rxflgs= 0x%x\n",
-				(int)obj->tx_flags, (int)rx->flags);
+				(int)obj->tx.tx_flags, (int)rx->flags);
 		break;
 
 	case 4:
@@ -1636,7 +1636,7 @@ const short probe[V34_PROBE_SAMPLES] = {
 static short
 tx_scrambler_mode(const struct v34_object *o)
 {
-	return (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	return (short)((o->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
 }
 
 /*
@@ -1649,17 +1649,17 @@ void
 txmitdibit(void *obj, short bits)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	unsigned sr = (unsigned)o->tx_scr_sr;
+	unsigned sr = (unsigned)o->tx.tx_scr_sr;
 	int d, q;
 
 	d = V34scrambler(&sr, tx_scrambler_mode(o), bits, 2);
-	o->tx_scr_sr = (int)sr;
+	o->tx.tx_scr_sr = (int)sr;
 
-	q = (d + (unsigned short)o->prev_quadrant) & 3;
+	q = (d + (unsigned short)o->tx.prev_quadrant) & 3;
 
-	o->txpoint.word = vect4[q];
-	o->cur_quadrant = (short)q;
-	o->prev_quadrant = (short)q;
+	o->tx.txpoint.word = vect4[q];
+	o->tx.cur_quadrant = (short)q;
+	o->tx.prev_quadrant = (short)q;
 
 	txmit(obj);
 }
@@ -1678,21 +1678,21 @@ txmitquadbit(void *obj, short bits)
 {
 	struct v34_object *o = (struct v34_object *)obj;
 	short mode = tx_scrambler_mode(o);
-	unsigned sr = (unsigned)o->tx_scr_sr;
+	unsigned sr = (unsigned)o->tx.tx_scr_sr;
 	int d, q;
 
 	d = V34scrambler(&sr, mode, bits, 2);
-	o->tx_scr_sr = (int)sr;
-	q = (d + (unsigned short)o->prev_quadrant) & 3;
-	o->cur_quadrant = (short)q;
+	o->tx.tx_scr_sr = (int)sr;
+	q = (d + (unsigned short)o->tx.prev_quadrant) & 3;
+	o->tx.cur_quadrant = (short)q;
 
-	sr = (unsigned)o->tx_scr_sr;
+	sr = (unsigned)o->tx.tx_scr_sr;
 	d = V34scrambler(&sr, mode, (short)(bits >> 2), 2);
-	o->tx_scr_sr = (int)sr;
+	o->tx.tx_scr_sr = (int)sr;
 
-	q = (unsigned short)o->cur_quadrant;
-	o->prev_quadrant = (short)q;
-	o->txpoint.word = vect16[d + q * 4];
+	q = (unsigned short)o->tx.cur_quadrant;
+	o->tx.prev_quadrant = (short)q;
+	o->tx.txpoint.word = vect16[d + q * 4];
 
 	txmit(obj);
 }
@@ -2710,33 +2710,33 @@ settxlevel(void *objp, const short *mp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
-	int scale = obj->tx_scale;
+	int scale = obj->tx.tx_scale;
 	short extra;
 	short want;
 	short n;
 
 	/* The second MP read follows this store, as in the object. */
-	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
+	obj->tx.tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
 
 	extra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);
 	if (extra > 3)
 		extra = 3;
 
-	obj->tx_pwr_reduction = (short)(extra + (unsigned short)obj->tx_pwr_reduction);
+	obj->tx.tx_pwr_reduction = (short)(extra + (unsigned short)obj->tx.tx_pwr_reduction);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, power reduction requested "
 				     "by remote modem is %d dB\n",
-				     (int)obj->tx_pwr_reduction);
+				     (int)obj->tx.tx_pwr_reduction);
 
 	if (obj->v90_receiver != 0) {
 		if (minpr < 0)
-			obj->tx_pwr_reduction = (short)(minpr
-					     + (unsigned short)obj->tx_pwr_reduction);
-		else if (obj->tx_pwr_reduction < minpr)
-			obj->tx_pwr_reduction = minpr;
+			obj->tx.tx_pwr_reduction = (short)(minpr
+					     + (unsigned short)obj->tx.tx_pwr_reduction);
+		else if (obj->tx.tx_pwr_reduction < minpr)
+			obj->tx.tx_pwr_reduction = minpr;
 	}
-	want = obj->tx_pwr_reduction;
+	want = obj->tx.tx_pwr_reduction;
 
 	if (want < 0) {
 		for (n = want; n < 0; n = (short)(n + 1))
@@ -2753,10 +2753,10 @@ settxlevel(void *objp, const short *mp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
 				     "reduced txscale is %d dB," "final txscale is %d\n",
-				     (int)obj->tx_scale, (int)want,
+				     (int)obj->tx.tx_scale, (int)want,
 				     scale);
 
-	obj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);
+	obj->tx.tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);
 }
 
 /*
@@ -2801,8 +2801,8 @@ v34setuptxmit(void *objp)
 	hs_set_rxstate(obj, V34HS_WAIT);
 	hs_set_txstate(obj, V34HS_SSEG);
 
-	obj->seg_symcount = 0;
-	obj->tx_flags = (short)(obj->tx_flags | V34_EC_FEED);
+	obj->tx.seg_symcount = 0;
+	obj->tx.tx_flags = (short)(obj->tx.tx_flags | V34_EC_FEED);
 
 	txinit(obj);
 }
@@ -3241,6 +3241,7 @@ HS_OFF_ASSERT(moh_org,       moh_org,      0xabec);
 struct t3m_frame {
 	struct v34_object	*obj;
 	struct v34_receiver	*rx;	/* obj + 0x264                     */
+	struct v34_tx		*txb;	/* obj + 0x221c                    */
 	int			*progress;	/* &obj->progress             */
 	short			mst;	/* the microstate the dispatch read*/
 	/*
@@ -3272,6 +3273,7 @@ t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 {
 	f->obj = obj;
 	f->rx = &obj->receiver;
+	f->txb = &obj->tx;
 	f->progress = &obj->progress;
 }
 
@@ -8218,7 +8220,7 @@ v34handshak(void *vobj)
 	 * `$(CXXOBJ64)` and this file already calls `V34SetINFO1aBits`.
 	 * Finding F711.
 	 */
-	while (obj->txq.count < obj->tx_fill_target) {
+	while (frame.txb->txq.count < obj->tx_fill_target) {
 		switch ((int)obj->txstate) {
 		case V34HS_SILENCE:		/* 5  0x640b4, three tails */
 		case V34HS_SILENCEINFO:		/* 54 */
@@ -9532,7 +9534,7 @@ datapumpv34(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
-	struct v34_queue *tx = &obj->txq;
+	struct v34_queue *tx = &obj->tx.txq;
 
 	if ((unsigned)obj->sample_count
 	    - (unsigned)obj->int_0248 > DP_TIMER_STALE)
@@ -9706,7 +9708,7 @@ v34FreezeEcho(void *objp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34HSHAK: Freeze EC\n");
 
-	obj->tx_flags = (short)(obj->tx_flags | V34_EC_FROZEN);
+	obj->tx.tx_flags = (short)(obj->tx.tx_flags | V34_EC_FROZEN);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -10355,11 +10357,11 @@ V34HS_OFF(fir_coeff,    struct v34_receiver, fir_coeff,       0x2a4);
 typedef char v34hs_clear_fits[
 	((0xaae6 + 100 * 2) <= (int)sizeof(struct v34_object)) ? 1 : -1];
 
-V34HS_OFF(tx_flags,   struct v34_object,   tx_flags,      0x25c2);
-V34HS_OFF(prev_quadrant,   struct v34_object,   prev_quadrant,      0x25c6);
-V34HS_OFF(cur_quadrant,   struct v34_object,   cur_quadrant,      0x25c8);
-V34HS_OFF(tx_scr_sr,   struct v34_object,   tx_scr_sr,      0x25cc);
-V34HS_OFF(txpoint, struct v34_object,   txpoint,    0x25d0);
-V34HS_OFF(txpim,   struct v34_object,   txpoint.c[1], 0x25d2);
+V34HS_OFF(tx_flags,   struct v34_object,   tx.tx_flags,      0x25c2);
+V34HS_OFF(prev_quadrant,   struct v34_object,   tx.prev_quadrant,      0x25c6);
+V34HS_OFF(cur_quadrant,   struct v34_object,   tx.cur_quadrant,      0x25c8);
+V34HS_OFF(tx_scr_sr,   struct v34_object,   tx.tx_scr_sr,      0x25cc);
+V34HS_OFF(txpoint, struct v34_object,   tx.txpoint,    0x25d0);
+V34HS_OFF(txpim,   struct v34_object,   tx.txpoint.c[1], 0x25d2);
 
 #endif

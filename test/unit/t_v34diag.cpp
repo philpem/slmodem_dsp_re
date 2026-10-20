@@ -358,7 +358,7 @@ setup(int n, const struct trial *t)
 
 		o->status = t->status;
 		o->p3548 = x;
-		o->tx_pwr_reduction = pr_v[t->pi];
+		o->tx.tx_pwr_reduction = pr_v[t->pi];
 		o->v90_timing_offset = fac_v[t->fi];
 
 		RX(side)->sig_energy = snr_v[t->si].num;

@@ -1949,9 +1949,9 @@ initdigital(void *obj)
 
 	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
 	if (info & 0x2000)
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_NLENCODE);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags | V34_TXFLAG_NLENCODE);
 	else
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_TXFLAG_NLENCODE);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags & ~V34_TXFLAG_NLENCODE);
 
 	if (level > 1)
 		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d," "rxbitrate %d\n",
@@ -2293,7 +2293,7 @@ modulatevector(void *obj)
 	unsigned n = (unsigned short)o->vect_idx;
 
 	if (n == 8) {
-		unsigned flags = (unsigned short)o->tx_flags;
+		unsigned flags = (unsigned short)o->tx.tx_flags;
 		unsigned count = (unsigned short)tx->count;
 		unsigned shift = (unsigned short)tx->idx_width;
 		unsigned target, quad, lo, hi, mid, si, rem, d;
@@ -2314,7 +2314,7 @@ modulatevector(void *obj)
 			o->train_symcount = c + 1;
 			if (c >= (int)(unsigned short)tx->span) {
 				o->data_enable = 1;
-				o->tx_flags = (short)(flags | PROG_TXBIT_DATA);
+				o->tx.tx_flags = (short)(flags | PROG_TXBIT_DATA);
 			}
 		}
 
@@ -2496,10 +2496,10 @@ modulatevector(void *obj)
 	}
 
 	o->vect_idx = (short)(n + 1);
-	if (o->tx_flags & V34_TXFLAG_NLENCODE)
-		V34nlencoder(&o->vect[2 * n], o->txpoint.c);
+	if (o->tx.tx_flags & V34_TXFLAG_NLENCODE)
+		V34nlencoder(&o->vect[2 * n], o->tx.txpoint.c);
 	else
-		o->txpoint.word = o->vectp[n];
+		o->tx.txpoint.word = o->vectp[n];
 
 	txmit(obj);
 }
@@ -2597,6 +2597,12 @@ typedef char v34shf_size[(sizeof(struct v34_shell_fields)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
+/* Same, for a field that is now reached through a nested member. */
+#define V34OB_SUB_ASSERT(name, path, off) \
+	typedef char v34ob_off_##name[ \
+		((int)__builtin_offsetof(struct v34_object, path) == (off)) \
+		? 1 : -1]
+
 V34OB_ASSERT(rx_data, 0x014);
 V34OB_ASSERT(rx_n, 0x114);
 V34OB_ASSERT(tx_data, 0x118);
@@ -2606,8 +2612,8 @@ V34OB_ASSERT(data_enable, 0x2214);
 V34OB_ASSERT(train_symcount, 0xaa74);
 V34OB_ASSERT(vect, 0x2a80);
 V34OB_ASSERT(vect_idx, 0x2aa2);
-V34OB_ASSERT(txpoint, 0x25d0);
-V34OB_ASSERT(tx_flags, 0x25c2);
+V34OB_SUB_ASSERT(txpoint, tx.txpoint, 0x25d0);
+V34OB_SUB_ASSERT(tx_flags, tx.tx_flags, 0x25c2);
 /* initdigital's, including the two that grew the struct past 0xac10. */
 V34OB_ASSERT(ptc, 0x008);
 V34OB_ASSERT(nof_tx_bits, 0x010);

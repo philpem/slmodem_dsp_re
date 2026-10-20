@@ -1115,13 +1115,13 @@ V34EchoHistoryBackwardClean(void *objp, unsigned n)
 	 * bytes below the object.  See findings F109.
 	 */
 	{
-		int *p = obj->txq.wr - 1;
+		int *p = obj->tx.txq.wr - 1;
 		char *base = (char *)obj - 4;
 
 		for (i = 2; i >= 0; i--) {
 			short *q;
 
-			if (p >= obj->txq.ring) {
+			if (p >= obj->tx.txq.ring) {
 				q = (short *)p;
 			} else {
 				q = (short *)(base + 0x25c0);

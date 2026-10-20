@@ -311,6 +311,78 @@ typedef char v34ratecfg_size[
 
 #define V34_RATECFG	0xaa84
 
+/*
+ * ---------------------------------------------------------------------------
+ * The TRANSMIT BLOCK, +0x221c .. +0x2a54, as one type.
+ *
+ * WHY IT IS A TYPE AND NOT A FLAT RUN OF FIELDS.  `v34handshak` computes ONE
+ * base at 0x62920 (`add $0x221c,%eax`) and stores it in its frame at
+ * 0x4c(%esp), then reaches EVERY transmit scalar through that base with a
+ * displacement: `+0x3a4` (seg_symcount, six uses), `+0x3a6` (tx_flags,
+ * sixteen), `+0x3aa`/`+0x3ac` (the quadrants), `+0x3b0` (tx_scr_sr),
+ * `+0x3b4` (txpoint), `+0x3b8` (tx_scale), `+0x3bc`/`+0x3be` -- measured over
+ * the whole function, and not one use outside 0x3a4..0x3be.  A base at
+ * +0x221c addressing +0x3be is 958 bytes, which no `struct v34_queue *`
+ * covers, so the original's pointer had a type spanning the queue, its ring
+ * tail AND those scalars.  This is that type.
+ *
+ * The same base appears in the standalone functions the object kept: the
+ * handshake-entry pair `V34XF_IndicateDilReceived`/`V34XF_IndicateJdReceived`
+ * do `lea 0x221c(%obj)` and then `mov %si,0x3a4(...)` -- seg_symcount -- and
+ * `txmitquadbit` reaches tx_flags and the quadrants through it.  Those were
+ * recorded as "lea-base, cause not established"; this is the cause.
+ *
+ * `txq` is a `struct v34_queue` and is 0x10 bytes in a container (its
+ * `ring[1]` member sits at +0x0c and the last four bytes of the struct are
+ * the first ring entry's tail padding), so the tail starts at +0x010 and the
+ * 230-entry ring runs exactly to +0x3a4 = V34_TXQ_END.
+ *
+ * The trailing unmapped run is inside the type rather than after it so that
+ * the member's extent is the object's: `scrambler` follows at +0x2a54.
+ */
+struct v34_tx {
+	struct v34_queue txq;			/* +0x000 count, rd, wr, ring[0] */
+	int ring_tail[V34_TXQ_RING - 1];	/* +0x010 .. +0x3a4 = TXQ_END  */
+	short seg_symcount;			/* +0x3a4                      */
+	short tx_flags;				/* +0x3a6                      */
+	unsigned char unmapped_3a8[0x3aa - 0x3a8];
+	short prev_quadrant;			/* +0x3aa                      */
+	short cur_quadrant;			/* +0x3ac                      */
+	unsigned char unmapped_3ae[0x3b0 - 0x3ae];
+	int tx_scr_sr;				/* +0x3b0                      */
+	union {
+		int word;			/* +0x3b4 both at once         */
+		short c[2];			/* [0] real, [1] imag          */
+	} txpoint;
+	short tx_scale;				/* +0x3b8                      */
+	unsigned char unmapped_3ba[0x3c0 - 0x3ba];
+	short tx_pwr_reduction;			/* +0x3c0                      */
+	unsigned char unmapped_3c2[0x838 - 0x3c2];	/* to +0x2a54 */
+};
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34tx_off_ring_tail[
+	((int)__builtin_offsetof(struct v34_tx, ring_tail) == 0x010) ? 1 : -1];
+typedef char v34tx_off_seg_symcount[
+	((int)__builtin_offsetof(struct v34_tx, seg_symcount) == 0x3a4) ? 1 : -1];
+typedef char v34tx_off_tx_flags[
+	((int)__builtin_offsetof(struct v34_tx, tx_flags) == 0x3a6) ? 1 : -1];
+typedef char v34tx_off_prev_quadrant[
+	((int)__builtin_offsetof(struct v34_tx, prev_quadrant) == 0x3aa) ? 1 : -1];
+typedef char v34tx_off_cur_quadrant[
+	((int)__builtin_offsetof(struct v34_tx, cur_quadrant) == 0x3ac) ? 1 : -1];
+typedef char v34tx_off_tx_scr_sr[
+	((int)__builtin_offsetof(struct v34_tx, tx_scr_sr) == 0x3b0) ? 1 : -1];
+typedef char v34tx_off_txpoint[
+	((int)__builtin_offsetof(struct v34_tx, txpoint) == 0x3b4) ? 1 : -1];
+typedef char v34tx_off_tx_scale[
+	((int)__builtin_offsetof(struct v34_tx, tx_scale) == 0x3b8) ? 1 : -1];
+typedef char v34tx_off_tx_pwr_reduction[
+	((int)__builtin_offsetof(struct v34_tx, tx_pwr_reduction) == 0x3c0)
+		? 1 : -1];
+typedef char v34tx_size[(sizeof(struct v34_tx) == 0x838) ? 1 : -1];
+#endif
+
 struct v34_object {
 	/*
 	 * The datapump's own status word: `receiver` puts 10 in it on loss
@@ -564,97 +636,13 @@ struct v34_object {
 	 * table-2 tail is the same int's other reader.
 	 */
 	int hs_mode;					/* +0x2218 */
-	struct v34_queue txq;				/* +0x221c */
-	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
-	short seg_symcount;					/* +0x25c0 */
 	/*
-	 * The transmit-side flag word `v34hstx1.cpp` and `v34shell.c` both
-	 * test directly, bit by bit, rather than through a name for the
-	 * whole field -- eight bits with an established meaning and two with
-	 * none yet:
-	 *
-	 *   bit 0   V34_TXFLAG_CALLER       set for the calling station's
-	 *           scrambler generator, clear for the answering one --
-	 *           `txmitdibit`/`txmitquadbit` pin this one.
-	 *   bit 2   V34_EC_FROZEN (v34rx.h) both echo cancellers frozen; the
-	 *           echo-adapt start/stop reports clear and set it.
-	 *   bit 4   PROG_TXBIT_DATA (v34pcmmain.cpp) set by `modulatevector`
-	 *           once the training-to-data symbol count (`train_symcount`
-	 *           against `span`) expires; gates the shell mapper's
-	 *           non-idle input.
-	 *   bit 8   set once the segment counter passes a threshold during echo
-	 *           adaptation (`v34hstx1.cpp`); no established name.
-	 *   bit 9   V34_EC_FEED (v34rx.h) gates the echo feed.
-	 *   bit 10  set on one baud-ratio branch of the echo-adapt ladder,
-	 *           alongside clearing bit 15; no established name.
-	 *   bit 13  V34_TXFLAG_SEG4A        raised entering TRNSEG4A/SSEG.
-	 *   bit 14  V34_TXFLAG_NLENCODE     `initdigital`'s own comment names
-	 *           it: "Bit 13 of the same word is modulatevector's
-	 *           non-linear encoder" (bit 13 of the INFO word, stored here
-	 *           at bit 14); selects `V34nlencoder` over a plain point copy.
-	 *   bit 15  V34_TXFLAG_PPSEG        raised for PPSEG, read as the
-	 *           field's sign.
-	 *
-	 * Bits 8 and 10 are usage inference only -- a single write site each,
-	 * no format string, no reader that types them -- and are left as bare
-	 * hex rather than guessed into a name.
+	 * The transmit block, +0x221c .. +0x2a54, as ONE member: see
+	 * `struct v34_tx` above for the measurement that settles it (the
+	 * object keeps a base at +0x221c and reaches every one of these
+	 * scalars through it).
 	 */
-	short tx_flags;					/* +0x25c2 */
-	unsigned char unmapped_25c4[0x25c6 - 0x25c4];
-	/*
-	 * The differentially-encoded quadrant, carried from one symbol to the
-	 * next: prev_quadrant is the previous one and cur_quadrant the current.  In the
-	 * dibit case the two end up equal; in the quadbit case cur_quadrant is set
-	 * first and prev_quadrant only catches up at the end, because the second
-	 * dibit indexes off the first one's quadrant.
-	 */
-	short prev_quadrant;					/* +0x25c6 */
-	short cur_quadrant;					/* +0x25c8 */
-	unsigned char unmapped_25ca[0x25cc - 0x25ca];
-	/* The transmit scrambler's shift register. */
-	int tx_scr_sr;					/* +0x25cc */
-	/*
-	 * The point being transmitted: two shorts, real then imaginary.
-	 * Every arm that sends a constellation point writes both halves with
-	 * one 32-bit store (txmitdibit(), txmitquadbit(), modulatevector()),
-	 * which is why `vect4` and `vect16` hold ints at all -- but the
-	 * halves are also written and read separately as shorts: the silent
-	 * symbol zeroes each on its own, and `txmit` reassembles them as
-	 * `(im << 16) | (unsigned short)re` before handing the result to
-	 * `V34ModulatorProcess`. That reader is the only thing in the object
-	 * that reads this pair, which is what settles it as the point going
-	 * out rather than one coming in.
-	 *
-	 * The union spells the aliasing out rather than casting a pointer,
-	 * which -O2 is entitled to reorder (the same remedy as
-	 * `v34_receiver::energy`). `c` is an array rather than two named
-	 * fields because `V34nlencoder` is handed `txpoint.c` and writes
-	 * `out[0]` and `out[1]` through it -- two named shorts would make
-	 * that second store its own out-of-bounds defect.
-	 *
-	 * A 4-byte struct assignment would emit the same single `movl` and
-	 * is an equally consistent reading of the original; nothing in the
-	 * object separates the two, so this does not claim to have settled
-	 * which the author wrote (finding F5303).
-	 */
-	union {
-		int word;				/* +0x25d0 both at once */
-		short c[2];				/* [0] real, [1] imag  */
-	} txpoint;
-	short tx_scale;					/* +0x25d4 tx scale  */
-	unsigned char unmapped_25d6[0x25dc - 0x25d6];
-	/*
-	 * The transmit power reduction in whole dB, which `settxlevel`
-	 * assembles from the far end's MP message and then applies to
-	 * `tx_scale` above -- so this is the request and that is the result.
-	 * Its own diagnostic names it: "power reduction requested by remote
-	 * modem is %d dB". It can be negative: with a V.90 receiver running,
-	 * a `GetVPcmMinimalTxPowerReduction` below zero is added to the
-	 * request rather than compared with it, and the result drives
-	 * `settxlevel`'s other loop -- the one that raises the scale.
-	 */
-	short tx_pwr_reduction;					/* +0x25dc */
-	unsigned char unmapped_25de[0x2a54 - 0x25de];
+	struct v34_tx tx;				/* +0x221c .. +0x2a54 */
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
 	/*

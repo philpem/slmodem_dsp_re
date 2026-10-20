@@ -317,7 +317,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		cfg->baud = SHORT_PHASE2_BAUD;
 		cfg->carrier = SHORT_PHASE2_CARRIER;
 		cfg->preemp = 0;
-		obj->tx_pwr_reduction = 0;
+		obj->tx.tx_pwr_reduction = 0;
 	}
 
 	/*
@@ -446,7 +446,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	    ((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
 
 V34INFO1A_ASSERT(short_35a4,   struct v34_object,  short_35a4,		0x35a4);
-V34INFO1A_ASSERT(tx_pwr_reduction,   struct v34_object,  tx_pwr_reduction,		0x25dc);
+V34INFO1A_ASSERT(tx_pwr_reduction,   struct v34_object,  tx.tx_pwr_reduction,		0x25dc);
 V34INFO1A_ASSERT(baud,    struct v34_ratecfg, baud,		0x00);
 V34INFO1A_ASSERT(preemp,  struct v34_ratecfg, preemp,		0x06);
 V34INFO1A_ASSERT(carrier, struct v34_ratecfg, carrier,		0x10);
