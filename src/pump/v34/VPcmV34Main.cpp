@@ -3181,10 +3181,13 @@ short
 GetVPcmMinimalTxPowerReduction(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	struct _tagModemParameters *cfg = obj->pac3c;
 	V90Parameters *pcm = sess->modem.params;
-	short want = *(const short *)(cfg + CFG_MINPWR_DB);
+	short want = *(const short *)((const unsigned char *)cfg
+				      + CFG_MINPWR_DB);
 	short red;
 
 	if (want < -10)
@@ -3194,9 +3197,9 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	else
 		red = want;
 
-	if (!(sess->info0Layout != 0 && obj->v90_receiver != 0
+	if (!(sess->info0Layout != 0 && e->v90_receiver != 0
 	      && pcm->SENSITIVE_ISP_DETECTED == 0)
-	    && obj->k56flex_receiver == 0)
+	    && e->k56flex_receiver == 0)
 		red = 0;
 
 	if (red > 0) {
@@ -3213,7 +3216,7 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;
+		obj->echo_beta = (cfg->codecType == 4) ? 4 : 6;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
@@ -4313,6 +4316,8 @@ int
 k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&o->progress;
 	unsigned char *m = (unsigned char *)objp;
 	struct v34_receiver *rx = &o->receiver;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
@@ -4335,11 +4340,11 @@ k56FlexPhase34(void *objp)
 		rx->flags |= V34_RX_FLAG_DATA;
 		*(short *)(m + OB_TXBITS) = (short)0x899f;
 		o->vect_idx = 0;
-		o->k56flex_receiver = 3;
+		e->k56flex_receiver = 3;
 		return 0;
 	}
 
-	switch (o->k56flex_receiver) {
+	switch (e->k56flex_receiver) {
 	case 3: {
 		/*
 		 * Eight dibits out of one word, `vect_idx` counting them.
@@ -4377,7 +4382,7 @@ k56FlexPhase34(void *objp)
 		o->tx.prev_quadrant = 0;
 		o->tx.seg_symcount = 0;
 		o->tx.tx_scr_sr = 0;
-		o->k56flex_receiver = 4;
+		e->k56flex_receiver = 4;
 		return 0;
 	}
 
@@ -4438,7 +4443,7 @@ k56FlexPhase34(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->k56flex_receiver = 2;
+		e->k56flex_receiver = 2;
 		return 0;
 	}
 	}
