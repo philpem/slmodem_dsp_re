@@ -3717,67 +3717,70 @@ extern "C" int
 v90RateReneg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_tx *t = &o->tx;
+	struct v34_engine *e = (struct v34_engine *)(void *)&o->progress;
+	struct v34_receiver *rx = &o->receiver;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
+	int r = e->v90_receiver;
 	short n;
 
 	if (r == 11) {
 		/* `v90Phase34`'s case 6, counted to 0x7f. */
-		o->tx.txpoint.word = vect4[0];
+		t->txpoint.word = vect4[0];
 		txmit(o);
-		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
-		o->tx.txpoint.word = vect4[3];
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		t->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->tx.seg_symcount + 1);
+		n = (short)((unsigned short)t->seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->tx.seg_symcount = n;
+			t->seg_symcount = n;
 			return 0;
 		}
-		o->v90_receiver = 12;
-		o->tx.seg_symcount = 0;
+		e->v90_receiver = 12;
+		t->seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 12) {
 		/* `v90Phase34`'s case 7, counted to 0x10. */
-		o->tx.txpoint.word = vect4[2];
+		t->txpoint.word = vect4[2];
 		txmit(o);
-		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
-		o->tx.txpoint.word = vect4[1];
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		t->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->tx.seg_symcount + 1);
+		n = (short)((unsigned short)t->seg_symcount + 1);
 		if (n != 0x10) {
-			o->tx.seg_symcount = n;
+			t->seg_symcount = n;
 			return 0;
 		}
-		o->v90_receiver = 13;
+		e->v90_receiver = 13;
 		/* Reset the transmitter for the symbols that follow. */
-		o->tx.prev_quadrant = 0;
-		o->tx.seg_symcount = 0;
-		o->tx.tx_scr_sr = 0;
+		t->prev_quadrant = 0;
+		t->seg_symcount = 0;
+		t->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->receiver.short_382 == OB_CONSTEL_16)
+		if (rx->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
 		return 0;
 	}
 
 	if (r == 14) {
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
-		int done = (short)vp->getV90CpBits(&o->tx.cur_quadrant);
+		int done = (short)vp->getV90CpBits(&t->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->tx.cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, t->cur_quadrant);
 		else
-			txmitdibit(o, o->tx.cur_quadrant);
+			txmitdibit(o, t->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3785,7 +3788,7 @@ v90RateReneg(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->v90_receiver = 2;
+		e->v90_receiver = 2;
 		return 0;
 	}
 
