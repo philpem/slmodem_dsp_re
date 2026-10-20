@@ -1984,6 +1984,27 @@ function has one at 0x9a74 after `getV90CpBits`, and ours matches it there), so
 the test is per SITE: ours has the extension, the object's corresponding
 instruction does not.
 
+**A `short` RETURN does the same thing as a `short` local**, and it is easy to
+miss because the narrowing lives in the callee's signature rather than in the
+expression. `V92Phase3Modulator` (`src/pump/v90/V92Phase3Modulator.cpp`, same
+day) had five `cwtl` the object does not have, at sites reading
+
+    movzwl 0x4(%esi),%eax / neg %eax / cwtl / movswl %ax,%ebx
+
+where the object reads `movzwl 0x4(%esi),%eax / neg %eax / movswl %ax,%ebx` --
+one widening, not two. The causes were a `(short)` cast on the negation AND
+`static short jaSymbol(...)` / `static short trn1uSymbol(...)` returning `short`,
+so the value was narrowed on return and widened again by the caller. With the
+helpers returning `int` and the casts gone the symbol's instruction count became
+the object's exactly (391 vs 391, was 394); the common run stayed 78 and LCS
+went 299 of 394 (75.9%) to 299 of 391 (76.5%), which is a count result and not a
+run result -- quote it that way. The temporary itself is still a `short`: with
+`int sample` the same function measured 18 differing bytes instead of 3.
+
+So when the fingerprint is present, check three places, cheapest first: the
+compare (test the field), the cast on the expression, and the helper's return
+type.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
