@@ -699,9 +699,11 @@ and what the domain was; "closed by reordering" without the domain is not
 reviewable.
 
 **`docs/method/refinement.md` is the playbook for all of this** — rule 0 and
-levers 0 to 19 (17, 18 and 19 are the newest: loop-body statement order,
-"an unobservable declaration should be spelled with no casts", and "an inlined
-body in the object proves an `inline` declaration"), each with the
+levers 0 to 20 (17 to 20 are the newest: loop-body statement order, "an
+unobservable declaration should be spelled with no casts", "an inlined body in
+the object proves an `inline` declaration", and "a `cwtl` the object does not
+have is a 16-bit temporary, not allocation" -- test the stored field instead of
+a `short` local that exists only to be compared), each with the
 measurement that established it AND the case where it failed. Read it before a
 refinement pass. **It is where these entries are maintained; this section is
 the summary. When a probe closes, add the lever or the correction there in the
@@ -781,6 +783,14 @@ agent.
   right symbols first (~34 s on 8 cores). **Never a gate or a ratchet**: LCS
   falls on legitimate scheduling differences and a score invites hill-climbing
   — use it to choose a target and to record what a recovery restored.
+  **SIZE IS NOT EVIDENCE, AND THIS IS THE METRIC TO USE INSTEAD.** A symbol can
+  hit the object's exact byte count while sharing almost no instruction run,
+  and a structural change can make a function SMALLER while moving it AWAY
+  from the object: hand-moving one 2,186-byte arm body into `v34handshak`
+  took it 12,851 -> 12,270 bytes with the arm's own code absorbed, because
+  the compiler promoted the frame fields the object keeps in memory. Quote a
+  longest-run and an LCS before and after, not a byte delta, and never grade a
+  candidate on its size alone.
 - `storeorder.py` — store order, and a HINT, not a defect list. 617's
   acceptance test is full-text identity, operands included: nineteen examined,
   two passed. It reports 57 differing functions and, of those, **the 14 whose

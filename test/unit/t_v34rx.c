@@ -372,7 +372,7 @@ main(void)
 			unsigned skip[][2] = {
 			  { __builtin_offsetof(struct v34_object, receiver.rxq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
-			  { __builtin_offsetof(struct v34_object, txq)
+			  { __builtin_offsetof(struct v34_object, tx.txq)
 			    + __builtin_offsetof(struct v34_queue, rd), 8 },
 			  { __builtin_offsetof(struct v34_object, p_2074), 4 },
 			  /*
@@ -399,15 +399,15 @@ main(void)
 				    ((unsigned char *)&ob)[b], b);
 		}
 		/* And the cursors, as offsets. */
-		diff_eq_int("txq rd", oa.txq.rd - oa.txq.ring,
-			    ob.txq.rd - ob.txq.ring, 0);
-		diff_eq_int("txq wr", oa.txq.wr - oa.txq.ring,
-			    ob.txq.wr - ob.txq.ring, 0);
+		diff_eq_int("txq rd", oa.tx.txq.rd - oa.tx.txq.ring,
+			    ob.tx.txq.rd - ob.tx.txq.ring, 0);
+		diff_eq_int("txq wr", oa.tx.txq.wr - oa.tx.txq.ring,
+			    ob.tx.txq.wr - ob.tx.txq.ring, 0);
 		diff_eq_int("rxq rd", oa.receiver.rxq.rd - oa.receiver.rxq.ring,
 			    ob.receiver.rxq.rd - ob.receiver.rxq.ring, 0);
 		diff_eq_int("rxq wr", oa.receiver.rxq.wr - oa.receiver.rxq.ring,
 			    ob.receiver.rxq.wr - ob.receiver.rxq.ring, 0);
-		diff_eq_int("txq primed with 32", oa.txq.count, 0x20, 0);
+		diff_eq_int("txq primed with 32", oa.tx.txq.count, 0x20, 0);
 	}
 	rc |= diff_end();
 
@@ -545,16 +545,16 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.tx_scale = ob.tx_scale = 0x4000;
-			oa.tx_flags = ob.tx_flags = (short)(gate ? 0x200 : 0);
+			oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
+			oa.tx.tx_flags = ob.tx.tx_flags = (short)(gate ? 0x200 : 0);
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
 			for (it = 0; it < 60; it++) {
 				unsigned b;
 
-				oa.txpoint.c[0] = ob.txpoint.c[0] = (short)(it * 811 - 9000);
-				oa.txpoint.c[1] = ob.txpoint.c[1] = (short)(it * 337 - 5000);
+				oa.tx.txpoint.c[0] = ob.tx.txpoint.c[0] = (short)(it * 811 - 9000);
+				oa.tx.txpoint.c[1] = ob.tx.txpoint.c[1] = (short)(it * 337 - 5000);
 				txmit(&oa); ref_txmit(&ob);
 
 				for (b = 0; b < sizeof(oa); b++) {
@@ -982,7 +982,7 @@ main(void)
 		V34InitializeImplementationSpecific(&oa);
 		ref_V34InitializeImplementationSpecific(&ob);
 		txinit(&oa); ref_txinit(&ob);
-		oa.tx_flags = ob.tx_flags = 0x0102;
+		oa.tx.tx_flags = ob.tx.tx_flags = 0x0102;
 
 		v34FreezeEcho(&oa);
 		ref_v34FreezeEcho(&ob);
@@ -1007,9 +1007,9 @@ main(void)
 					    ((unsigned char *)&oa)[b],
 					    ((unsigned char *)&ob)[b], b);
 		}
-		diff_eq_int("freeze set bit 2", oa.tx_flags & V34_EC_FROZEN,
+		diff_eq_int("freeze set bit 2", oa.tx.tx_flags & V34_EC_FROZEN,
 			    V34_EC_FROZEN, 0);
-		diff_eq_int("freeze kept the rest", oa.tx_flags & ~V34_EC_FROZEN,
+		diff_eq_int("freeze kept the rest", oa.tx.tx_flags & ~V34_EC_FROZEN,
 			    0x0102, 0);
 	}
 	rc |= diff_end();
@@ -1137,7 +1137,7 @@ main(void)
 			ref_V34InitializeImplementationSpecific(&ob);
 			txinit(&oa); ref_txinit(&ob);
 
-			oa.tx_flags = ob.tx_flags = 0;
+			oa.tx.tx_flags = ob.tx.tx_flags = 0;
 			oa.echo_residual  = ob.echo_residual  = 0;
 			oa.echo_correction = ob.echo_correction = 0;
 			oa.echo_alpha = ob.echo_alpha = -0x2000;
@@ -1170,9 +1170,9 @@ main(void)
 			oa.dmadelay = ob.dmadelay = (short)(lagbase == 3 ? 8 : 0x40);
 
 			for (b = 0; b < V34_TXQ_RING; b++)
-				oa.txq.ring[b] = ob.txq.ring[b] =
+				oa.tx.txq.ring[b] = ob.tx.txq.ring[b] =
 				    (int)(short)(b * 3571 - 15000);
-			oa.txq.count = ob.txq.count = 0x30;
+			oa.tx.txq.count = ob.tx.txq.count = 0x30;
 
 			dsplibs_debug_level = lvl;
 			ref_dsplibs_debug_level = lvl;
@@ -1230,8 +1230,8 @@ main(void)
 						    (long)lagbase * 100000 + b);
 			}
 			diff_eq_int("adaptecho txq rd",
-				    (long)(oa.txq.rd - oa.txq.ring),
-				    (long)(ob.txq.rd - ob.txq.ring), lagbase);
+				    (long)(oa.tx.txq.rd - oa.tx.txq.ring),
+				    (long)(ob.tx.txq.rd - ob.tx.txq.ring), lagbase);
 			diff_eq_int("adapt counter stepped",
 				    oa.echo0.adapt_count != 0, 1, lagbase);
 		}
@@ -1294,7 +1294,7 @@ main(void)
 			ra->fir_coeff = rb->fir_coeff = coeff;
 
 			oa.dmadelay  = ob.dmadelay  = (short)(lag ? 8 : 0x40);
-			oa.tx_flags = ob.tx_flags = (short)(feed ? V34_EC_FEED : 0);
+			oa.tx.tx_flags = ob.tx.tx_flags = (short)(feed ? V34_EC_FEED : 0);
 			oa.echo_residual  = ob.echo_residual  = 1234;
 			oa.far_echo_enable = ob.far_echo_enable = (short)(far ? 1 : 0);
 			oa.echo_correction = ob.echo_correction = 0;
@@ -1343,9 +1343,9 @@ main(void)
 				oa.hist_2f58[b] = ob.hist_2f58[b] = 0;
 
 			for (b = 0; b < V34_TXQ_RING; b++)
-				oa.txq.ring[b] = ob.txq.ring[b] =
+				oa.tx.txq.ring[b] = ob.tx.txq.ring[b] =
 				    (int)(short)(b * 2777 - 12000);
-			oa.txq.count = ob.txq.count = 0x30;
+			oa.tx.txq.count = ob.tx.txq.count = 0x30;
 			oa.receiver.rxq.count = ob.receiver.rxq.count = 0;
 			for (b = 0; b < V34_RXQ_RING; b++)
 				oa.receiver.rxq.ring[b] = ob.receiver.rxq.ring[b] = 0;
@@ -1420,8 +1420,8 @@ main(void)
 				    (long)(ob.receiver.rxq.wr - ob.receiver.rxq.ring),
 				    (long)mode * 100 + feed * 10 + far);
 			diff_eq_int("serrint txq rd",
-				    (long)(oa.txq.rd - oa.txq.ring),
-				    (long)(ob.txq.rd - ob.txq.ring),
+				    (long)(oa.tx.txq.rd - oa.tx.txq.ring),
+				    (long)(ob.tx.txq.rd - ob.tx.txq.ring),
 				    (long)mode * 100 + feed * 10 + far);
 		}
 	}
@@ -2674,7 +2674,7 @@ main(void)
 			 */
 			ra->fir_coeff = rb->fir_coeff = coeff2;
 			oa2.dmadelay  = ob2.dmadelay  = 0x40;
-			oa2.tx_flags = ob2.tx_flags = V34_EC_FEED;
+			oa2.tx.tx_flags = ob2.tx.tx_flags = V34_EC_FEED;
 			oa2.echo_residual  = ob2.echo_residual  = 1234;
 			oa2.far_echo_enable = ob2.far_echo_enable = 1;
 			oa2.echo_correction = ob2.echo_correction = 0;
@@ -2696,9 +2696,9 @@ main(void)
 			for (b = 0; b < 0x258; b++)
 				oa2.hist_2f58[b] = ob2.hist_2f58[b] = 0;
 			for (b = 0; b < V34_TXQ_RING; b++)
-				oa2.txq.ring[b] = ob2.txq.ring[b] =
+				oa2.tx.txq.ring[b] = ob2.tx.txq.ring[b] =
 				    (int)(short)(b * 2777 - 12000);
-			oa2.txq.count = ob2.txq.count = 0x30;
+			oa2.tx.txq.count = ob2.tx.txq.count = 0x30;
 
 			adaptecho(&oa2);
 			ref_adaptecho(&ob2);

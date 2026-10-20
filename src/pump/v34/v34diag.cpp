@@ -261,7 +261,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 			results->txDataRate =
 			    V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;
 			results->float_06c = V34DIAG_TX_LEVEL_BASE_DB -
-					     obj->tx_pwr_reduction;
+					     obj->tx.tx_pwr_reduction;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("...It is diagnostics of V.90 " "Digital...\r\n");
 		}
@@ -311,7 +311,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 		results->rxCarrier = cfg->rx_carrier;
 		results->txDataRate = V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;
 		results->dataRate   = V34DIAG_BPS_PER_RATE_UNIT * cfg->rxbits;
-		results->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->tx_pwr_reduction;
+		results->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->tx.tx_pwr_reduction;
 
 		/*
 		 * The round-trip delay goes in unscaled, into both offsets.

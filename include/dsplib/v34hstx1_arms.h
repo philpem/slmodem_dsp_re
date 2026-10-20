@@ -205,12 +205,12 @@ hs_set_microstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->microstate;
+
 		const char *ctx1 = StateName[obj->txstate];
 		const char *ctx2 = StateName[obj->rxstate];
 
 		dsplibs_debug_printf("V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->microstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
@@ -226,12 +226,12 @@ hs_set_rxstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->rxstate;
+
 		const char *ctx1 = StateName[obj->txstate];
 		const char *ctx2 = StateName[obj->microstate];
 
 		dsplibs_debug_printf("V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->rxstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
@@ -247,12 +247,12 @@ hs_set_txstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->txstate;
+
 		const char *ctx1 = StateName[obj->rxstate];
 		const char *ctx2 = StateName[obj->microstate];
 
 		dsplibs_debug_printf("V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->txstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
@@ -474,7 +474,7 @@ hs_set_txstate(struct v34_object *obj, short next)
  * `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it the same way.
  *
  * This used to be a `memcpy`, which was a workaround for the C front end
- * warning about `*(int *)&o->txpoint` (then still bare, `f25d0`) where the
+ * warning about `*(int *)&o->tx.txpoint` (then still bare, `f25d0`) where the
  * C++ one did not.  The
  * declaration carries it now: `txpoint` is a union, so the wide store has a
  * member of its own and there is nothing left to work around.
@@ -482,7 +482,7 @@ hs_set_txstate(struct v34_object *obj, short next)
 static void
 tx1_put_point(struct v34_object *o, int point)
 {
-	o->txpoint.word = point;
+	o->tx.txpoint.word = point;
 }
 
 static short
@@ -534,16 +534,16 @@ v34tx1_xmit0(void *objp)
 	struct v34_object *o = (struct v34_object *)objp;
 	struct v34_receiver *rx = &o->receiver;
 
-	o->txpoint.c[0] = 0;
-	o->txpoint.c[1] = 0;
+	o->tx.txpoint.c[0] = 0;
+	o->tx.txpoint.c[1] = 0;
 	txmit(o);
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags | V34_TXFLAG_SEG4A);
 		hs_set_txstate(o, V34HS_SSEG);
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
 	}
 	return V34TX1_LOOP;
 }
@@ -569,7 +569,7 @@ v34tx1_xmit0(void *objp)
 static short
 tx1_scramble2(struct v34_object *o)
 {
-	return (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+	return (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 				   (short)(o->role == 0x65), 3, 2);
 }
 
@@ -588,7 +588,7 @@ v34tx1_txlevel(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	o->cur_quadrant = tx1_scramble2(o);
+	o->tx.cur_quadrant = tx1_scramble2(o);
 	tx1_put_point(o, vect4[0]);
 	txmit(o);
 	return V34TX1_LOOP;
@@ -716,7 +716,7 @@ v34tx1_moh_silence(void *objp)
 	quiet[1] = 0;
 	quiet[2] = 0;
 	quiet[3] = 0;
-	txwritequeue(&o->txq, quiet);
+	txwritequeue(&o->tx.txq, quiet);
 
 	o->vect_idx = (short)(o->vect_idx + 1);
 	if ((unsigned short)o->vect_idx != 0xc0u)
@@ -786,7 +786,7 @@ v34tx1_txmd(void *objp)
 	struct v34_object *o = (struct v34_object *)objp;
 	short q = tx1_scramble2(o);
 
-	o->cur_quadrant = q;
+	o->tx.cur_quadrant = q;
 	tx1_put_point(o, vect4[q]);
 	txmit(o);
 
@@ -799,8 +799,8 @@ v34tx1_txmd(void *objp)
 				"On MD - enabling echo adaptation...\r\n");
 
 		o->echo_calls = 0;				/* 0x6700e */
-		o->tx_flags =				/* 0x67017 */
-			(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
+		o->tx.tx_flags =				/* 0x67017 */
+			(short)((unsigned short)o->tx.tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;				/* 0x6701e */
 		o->far_echo_alpha = 0;				/* 0x67025 */
 	}
@@ -818,14 +818,14 @@ v34tx1_txmd(void *objp)
 				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
 		hs_set_txstate(o, V34HS_SSEG);
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags
 				     | (V34_TXFLAG_PPSEG | V34_EC_FROZEN));
 	}
 
 	/* 0x6430c */
-	o->seg_symcount = (short)(o->seg_symcount + 1);
+	o->tx.seg_symcount = (short)(o->tx.seg_symcount + 1);
 	return V34TX1_LOOP;
 }
 
@@ -900,12 +900,12 @@ v34tx1_sseg(void *objp)
 	tx1_put_point(o, vect4[3]);
 	txmit(o);
 
-	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
-	o->seg_symcount = (short)n;
+	n = (unsigned short)((unsigned short)o->tx.seg_symcount + 1);
+	o->tx.seg_symcount = (short)n;
 	if (n == 0x40) {
 		/* 0x66d11 */
 		hs_set_txstate(o, V34HS_SBARSEG);
-		o->seg_symcount = 0;
+		o->tx.seg_symcount = 0;
 	}
 	return V34TX1_LOOP;
 }
@@ -953,7 +953,7 @@ v34tx1_dataxmit(void *objp)
 
 	modulatevector(o);
 
-	if (!(o->tx_flags & PROG_TXBIT_DATA))
+	if (!(o->tx.tx_flags & PROG_TXBIT_DATA))
 		return V34TX1_LOOP;
 
 	rx->equerr_accum = 0;
@@ -1048,11 +1048,11 @@ v34tx1_tx_l1(void *objp)
 
 		if (doubled)
 			v = (short)(2 * v);
-		buf[i] = (short)((v * o->tx_scale) >> 14);
+		buf[i] = (short)((v * o->tx.tx_scale) >> 14);
 		o->vect_idx = (short)(idx + 1);
 	}
 
-	txwritequeue(&o->txq, buf);
+	txwritequeue(&o->tx.txq, buf);
 
 	if (o->microstate != V34HS_TX_L1)
 		return V34TX1_LOOP;
@@ -1134,22 +1134,22 @@ v34tx1_sbarseg(void *objp)
 	tx1_put_point(o, vect4[1]);
 	txmit(o);
 
-	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
+	n = (unsigned short)((unsigned short)o->tx.seg_symcount + 1);
 	if (n != 8) {
-		o->seg_symcount = (short)n;
+		o->tx.seg_symcount = (short)n;
 		return V34TX1_LOOP;		/* 0x629c8 */
 	}
 
 	/* 0x671f0 */
-	o->seg_symcount = 0;
-	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
+	o->tx.seg_symcount = 0;
+	if ((unsigned short)o->tx.tx_flags & V34_TXFLAG_SEG4A) {
 		hs_set_txstate(o, V34HS_TRNSEG4A);
 	} else if (o->short_35a4 == 0) {
 		/* 0x68375 */
 		hs_set_txstate(o, V34HS_PPSEG);
-	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
+	} else if ((unsigned short)o->tx.tx_flags & V34_TXFLAG_PPSEG) {
 		/* 0x69eca */
-		o->seg_symcount = o->seg_len;
+		o->tx.seg_symcount = o->seg_len;
 		hs_set_txstate(o, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
@@ -1305,7 +1305,7 @@ v34tx1_ppseg(void *objp)
 			o->short_aa78 = (short)q;	/* 0x6818d */
 
 			acc = q + (unsigned short)o->filtdelay
-				+ (unsigned short)o->seg_symcount + 1;
+				+ (unsigned short)o->tx.seg_symcount + 1;
 			if (o->role == 0x65)			/* 0x6926d */
 				acc += (unsigned short)o->rtd;
 			o->short_aa78 = (short)acc;
@@ -1325,7 +1325,7 @@ v34tx1_ppseg(void *objp)
 	}
 
 	/* 0x6430c */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+	o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 	return V34TX1_LOOP;			/* 0x6431f */
 }
 
@@ -1405,7 +1405,7 @@ v34tx1_silence(void *objp)
 	quiet[2] = 0;
 	quiet[3] = 0;
 	o->short_aa7a = 0;
-	txwritequeue(&o->txq, quiet);
+	txwritequeue(&o->tx.txq, quiet);
 
 	txst = o->txstate;
 
@@ -1521,11 +1521,11 @@ v34tx1_silence(void *objp)
 static short
 tx1_dpsk4(struct v34_object *o, short q)
 {
-	short k = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+	short k = (short)((q + (unsigned short)o->tx.prev_quadrant) & 3);
 	int point = vect4[k];
 
-	o->cur_quadrant = k;
-	o->prev_quadrant = k;
+	o->tx.cur_quadrant = k;
+	o->tx.prev_quadrant = k;
 	tx1_put_point(o, point);
 	return k;
 }
@@ -1573,7 +1573,7 @@ static int
 v34tx1_exmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	short mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short mode = (short)((o->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
 	short q;
 
 	if ((unsigned short)o->receiver.short_382 == 0x89b0u) {
@@ -1581,19 +1581,19 @@ v34tx1_exmit(void *objp)
 		short k;
 		int point;
 
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);
-		o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+		q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, mode, 0xf, 2);
+		o->tx.cur_quadrant = (short)((q + (unsigned short)o->tx.prev_quadrant) & 3);
 
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
-		k = o->cur_quadrant;			/* re-read, 0x67131 */
-		o->prev_quadrant = k;
+		q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, mode, 3, 2);
+		k = o->tx.cur_quadrant;			/* re-read, 0x67131 */
+		o->tx.prev_quadrant = k;
 		point = vect16[q + 4 * k];
 		tx1_put_point(o, point);
 		txmit(o);
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 4);
 	} else {
 		/* 0x6386b */
-		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
+		q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, mode, 3, 2);
 		(void)tx1_dpsk4(o, q);
 		txmit(o);
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 2);
@@ -1707,8 +1707,8 @@ v34tx1_jtxmit(void *objp)
 	shift = (unsigned)(2 * (int)o->vect_idx) & 31u;
 	bits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);
 
-	mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
-	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);
+	mode = (short)((o->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
+	q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, mode, bits, 2);
 	(void)tx1_dpsk4(o, q);
 	txmit(o);
 
@@ -1735,10 +1735,10 @@ v34tx1_jtxmit(void *objp)
 
 	if (o->txstate == V34HS_J1TXMIT) {
 		/* 0x65653 */
-		o->tx_scr_sr = 0;
+		o->tx.tx_scr_sr = 0;
 		hs_set_txstate(o, V34HS_TRNSEG4A);
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
 		return V34TX1_LOOP;			/* 0x640a1 */
 	}
 
@@ -2662,14 +2662,14 @@ v34tx1_trnseg4a(void *objp)
 		short k = tx1_scramble2(o);
 		short q;
 
-		o->cur_quadrant = k;
+		o->tx.cur_quadrant = k;
 		q = tx1_scramble2(o);
 		tx1_put_point(o, vect16[q + 4 * k]);
 	} else {
 		/* 0x62e3b */
 		short q = tx1_scramble2(o);
 
-		o->cur_quadrant = q;
+		o->tx.cur_quadrant = q;
 		tx1_put_point(o, vect4[q]);
 	}
 
@@ -2677,8 +2677,8 @@ v34tx1_trnseg4a(void *objp)
 	txmit(o);
 
 	/* 0x62edc */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-	n = o->seg_symcount;
+	o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+	n = o->tx.seg_symcount;
 	baud = cfg->baud;
 	period = cfg->period;
 	lim = baud + (baud >> 1) + period;
@@ -2697,7 +2697,7 @@ v34tx1_trnseg4a(void *objp)
 
 	/* 0x62f22 */
 	rec = (short *)((char *)objp + TX1_FAA3C);
-	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
+	o->tx.prev_quadrant = (short)(unsigned short)o->tx.cur_quadrant;
 	o->paa6c = rec;
 
 	if (rx->flags & V34_RX_FLAG_RENEG) {
@@ -2806,17 +2806,17 @@ v34tx1_trnseg4(void *objp)
 
 	/* 0x64339: the scrambler, the quadrant and one sample. */
 	q = tx1_scramble2(o);
-	o->cur_quadrant = q;
+	o->tx.cur_quadrant = q;
 	tx1_put_point(o, vect4[q]);
 	txmit(o);
 
 	/* 0x643dc */
-	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+	o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 
-	if (o->short_aa78 == o->seg_symcount) {
+	if (o->short_aa78 == o->tx.seg_symcount) {
 		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
 		o->echo_calls = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;
 		o->far_echo_alpha = 0;
 		o->echo_energy = 0;
@@ -2824,12 +2824,12 @@ v34tx1_trnseg4(void *objp)
 	}
 
 	/* 0x643f8 */
-	if (((unsigned short)o->tx_flags & 0x100u) == 0
-	    && o->seg_symcount >= o->ratecfg.period)
-		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);
+	if (((unsigned short)o->tx.tx_flags & 0x100u) == 0
+	    && o->tx.seg_symcount >= o->ratecfg.period)
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags | 0x100u);
 
 	/* 0x64ae4 */
-	n = o->seg_symcount;
+	n = o->tx.seg_symcount;
 	span = o->phase3_hd_length;
 
 	if (n == (span >> 1)) {
@@ -2840,7 +2840,7 @@ v34tx1_trnseg4(void *objp)
 	baud = cfg->baud;
 	if (n == baud + (baud >> 1)) {
 		/* 0x67278 */
-		o->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)
+		o->tx.tx_flags = (short)(((unsigned short)o->tx.tx_flags & ~V34_TXFLAG_PPSEG)
 				   | 0x400u);
 		return V34TX1_LOOP;			/* 0x63da2 */
 	}
@@ -2880,7 +2880,7 @@ v34tx1_trnseg4(void *objp)
 
 	/* 0x64bb2 */
 	tx1_put(o, TX1_F25D6, (short)0x8990);
-	o->prev_quadrant = o->cur_quadrant;
+	o->tx.prev_quadrant = o->tx.cur_quadrant;
 	hs_set_rxstate(o, V34HS_RECEIVE);
 	setupreceiver(o);				/* 0x64c04 */
 
@@ -3104,7 +3104,7 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf(
 			"V34MP, Starting txmit MP again(%d)," " rxflgs=0x%x,txflags=0x%x\n",
-			o->short_359e, flags, o->tx_flags);
+			o->short_359e, flags, o->tx.tx_flags);
 }
 
 static int
@@ -3162,25 +3162,25 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 static void
 tx1_mp16(struct v34_object *o, short src)
 {
-	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short pick = (short)((o->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
 	short k, q;
 	int point;
 
-	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
-	o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+	q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, pick, src, 2);
+	o->tx.cur_quadrant = (short)((q + (unsigned short)o->tx.prev_quadrant) & 3);
 
-	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,
+	q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, pick,
 				(short)(src >> 2), 2);
-	k = o->cur_quadrant;					/* re-read, 0x63c72 */
-	o->prev_quadrant = k;
+	k = o->tx.cur_quadrant;					/* re-read, 0x63c72 */
+	o->tx.prev_quadrant = k;
 	point = vect16[q + 4 * k];
 	tx1_put_point(o, point);
 }
 static void
 tx1_mp4(struct v34_object *o, short src)
 {
-	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
-	short q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+	short pick = (short)((o->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
+	short q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr, pick, src, 2);
 
 	(void)tx1_dpsk4(o, q);
 }
@@ -3303,7 +3303,7 @@ v34tx1_xmitmp(void *objp)
 	int wide = 0;
 	int n = 0;
 
-	o->cur_quadrant = 0;					/* 0x639ab */
+	o->tx.cur_quadrant = 0;					/* 0x639ab */
 
 	for (;;) {
 		struct v34_bitsource *b;
@@ -3323,7 +3323,7 @@ v34tx1_xmitmp(void *objp)
 		 * bit reaches it sign-extended -- so the reader's -1 fills
 		 * `cur_quadrant` from bit `n` up rather than setting one bit.
 		 */
-		o->cur_quadrant = (short)((unsigned short)o->cur_quadrant
+		o->tx.cur_quadrant = (short)((unsigned short)o->tx.cur_quadrant
 				   | (unsigned short)
 				     ((unsigned)(int)bit
 				      << ((unsigned)(unsigned char)n & 31u)));
@@ -3366,9 +3366,9 @@ v34tx1_xmitmp(void *objp)
 	}
 
 	if (wide)
-		tx1_mp16(o, o->cur_quadrant);
+		tx1_mp16(o, o->tx.cur_quadrant);
 	else
-		tx1_mp4(o, o->cur_quadrant);
+		tx1_mp4(o, o->tx.cur_quadrant);
 
 	txmit(o);				/* 0x62d5f and 0x64a42 */
 	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */

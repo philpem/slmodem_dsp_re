@@ -223,18 +223,19 @@ V34SetINFO0aBits(void *objp, short *bits)
 	 */
 	bits[2] = 0x30;
 	{
-		const void *up = session_ptr(sess, SESSION_UPSTREAM);
 		int r = bitreverse((unsigned short)
-				   *((const unsigned char *)up + 9), 5);
+				   *((const unsigned char *)
+				     session_ptr(sess, SESSION_UPSTREAM) + 9), 5);
 		int v;
 
 		bits[2] = (short)(((short)r >> 2 & 7) | (unsigned short)bits[2]);
 
 		v = ((short)r << 6) & 0xc0;
-		if (*(const int *)((const char *)up + 0xc) == 1)
-			v |= 0x20;
 		bits[3] = (short)v;
-		if (*(const int *)up == 1)
+		if (*(const int *)((const char *)
+				   session_ptr(sess, SESSION_UPSTREAM) + 0xc) == 1)
+			bits[3] = (short)(bits[3] | 0x20);
+		if (*(const int *)session_ptr(sess, SESSION_UPSTREAM) == 1)
 			bits[3] = (short)(bits[3] | 0x10);
 		bits[3] = (short)(bits[3] | 8);
 	}
@@ -243,8 +244,10 @@ void
 V34SetINFO0dBits(void *objp, short *bits)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	if (obj->v90_receiver == 0)
+	if (e->v90_receiver == 0)
 		return;
 
 	if (DSPLIB_DEBUG_ON())
@@ -463,11 +466,12 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 	const void *pcm = obj->pac18;
 	int baud_index;
 	short uinfo;
+	struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;
 
 	*(int *)((char *)sess + SESSION_UINFO6) = 0;
 
-	if (obj->v90_receiver == 0) {
-		if (obj->k56flex_receiver == 0)
+	if (e->v90_receiver == 0) {
+		if (e->k56flex_receiver == 0)
 			goto out;
 
 		if (((unsigned short)bits[3] & 8) != 0) {
@@ -478,12 +482,12 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 					*(const int *)((const char *)pcm
 						       + 0xc),
 					(unsigned short)bits[3] & 2);
-			obj->k56flex_receiver = 2;
+			e->k56flex_receiver = 2;
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"VPcmV34Main: K56Flex disabled by " "remote\r\n");
-			obj->k56flex_receiver = 0;
+			e->k56flex_receiver = 0;
 		}
 		goto out;
 	}

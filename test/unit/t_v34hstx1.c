@@ -1490,7 +1490,7 @@ case_table17_tx_l1(void)
 	v34hs_poke_short(TX1_F25D4, 0x4000);
 	o = (struct v34_object *)v34hs_object(0);
 	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
-		written = o->txq.wr;
+		written = o->tx.txq.wr;
 		v34tx1_tx_l1(o);
 		for (j = 0; j < V34_QUEUE_BURST; j++)
 			nominal[i * V34_QUEUE_BURST + j] = (short)written[j];
@@ -1502,7 +1502,7 @@ case_table17_tx_l1(void)
 	v34hs_poke_short(TX1_F25D4, 0x4000);
 	o = (struct v34_object *)v34hs_object(0);
 	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
-		written = o->txq.wr;
+		written = o->tx.txq.wr;
 		v34tx1_tx_l1(o);
 		for (j = 0; j < V34_QUEUE_BURST; j++)
 			doubled[i * V34_QUEUE_BURST + j] = (short)written[j];

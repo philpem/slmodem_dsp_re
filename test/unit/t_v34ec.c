@@ -574,8 +574,8 @@ main(void)
 			oa.prefilter.hist_pos = ob.prefilter.hist_pos = 9;
 			oa.prefilter.hist_len = ob.prefilter.hist_len = 42;
 			oa.prefilter.span = ob.prefilter.span = 84;
-			oa.txq.wr = oa.txq.ring + 40;
-			ob.txq.wr = ob.txq.ring + 40;
+			oa.tx.txq.wr = oa.tx.txq.ring + 40;
+			ob.tx.txq.wr = ob.tx.txq.ring + 40;
 			for (b = 0; b < sizeof(oa.echo0_dline)
 					/ sizeof(short); b++) {
 				oa.echo0_dline[b] = ob.echo0_dline[b] =
@@ -596,8 +596,7 @@ main(void)
 					struct v34_object, echo0);
 				int o1 = (int)__builtin_offsetof(
 					struct v34_object, echo1);
-				int rp = (int)__builtin_offsetof(
-					struct v34_object, txq)
+				int rp = (int)__builtin_offsetof(struct v34_object, tx.txq)
 					+ (int)__builtin_offsetof(
 						struct v34_queue, rd);
 				int pc = (int)__builtin_offsetof(

@@ -761,7 +761,7 @@ rxtiming(void *objp)
 static short
 serr_dequeue(struct v34_object *obj)
 {
-	struct v34_queue *txq = &obj->txq;
+	struct v34_queue *txq = &obj->tx.txq;
 	short lag;
 
 	lag = (short)((unsigned short)obj->dmadelay - (unsigned short)txq->count);
@@ -797,7 +797,7 @@ modem_serrint(void *objp)
 	acc = (short)((unsigned short)obj->echo_residual + (unsigned short)obj->echo_correction);
 	obj->echo_correction = (short)((acc * 0xed8 - ((int)obj->echo_residual << 12)) >> 12);
 
-	if (obj->tx_flags & V34_EC_FEED) {
+	if (obj->tx.tx_flags & V34_EC_FEED) {
 		int near = V34EchoFilter(&obj->echo0, lag);
 		int far = 0;
 
@@ -883,7 +883,7 @@ modem_serrint(void *objp)
 
 	rxq->wr = q_next(rxq, (int *)wr + 1, V34_RXQ_END);
 
-	if (obj->tx_flags & V34_EC_FROZEN)
+	if (obj->tx.tx_flags & V34_EC_FROZEN)
 		return 0;
 
 	/* The second history ring: the residual in both halves of an entry. */

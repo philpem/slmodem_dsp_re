@@ -2128,11 +2128,11 @@ typedef char v34pcmcreate_objlen[
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
-V34PCMIF_ASSERT(txscale, tx_scale,           0x25d4);
+V34PCMIF_ASSERT(txscale, tx.tx_scale,           0x25d4);
 V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
 V34PCMIF_ASSERT(short_382,    receiver.short_382,    0x0382);
-V34PCMIF_ASSERT(seg_symcount,   seg_symcount,            0x25c0);
+V34PCMIF_ASSERT(seg_symcount,   tx.seg_symcount,            0x25c0);
 V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
 V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
 V34PCMIF_ASSERT(rtd,     rtd,              0xaa7e);
@@ -2367,6 +2367,8 @@ void
 VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	int level = obj->pac3c->unnamed_0060;
 	unsigned idx = (unsigned)level + 0x30u;
 	int thresh;
@@ -2375,13 +2377,13 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 		idx = 3u;
 
 	thresh = V34DisconnectThreshTable[idx];
-	obj->rx_energy_floor = thresh;
+	e->rx_energy_floor = thresh;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
 				     "minSigLevel set to %d\n", level, thresh);
 
-	obj->low_energy_count = 0;
+	e->low_energy_count = 0;
 }
 
 void
@@ -2426,8 +2428,10 @@ void
 VPcmV34SetMaxBlockLength(void *objp, int len)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	obj->ptc = len;
+	e->ptc = len;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Max Block Length modified "
@@ -2767,15 +2771,17 @@ void
 VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	struct v34_receiver *rx = &obj->receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"VPcmV34Main: VPcmV34InitiateHangUp called !\r\n");
 
-	obj->rate_want = 0;
-	obj->rate_min = 0;
-	obj->rate_max = 0;
+	e->rate_want = 0;
+	e->rate_min = 0;
+	e->rate_max = 0;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
 		VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
@@ -2789,7 +2795,7 @@ VPcmV34InitiateHangUp(void *objp)
 
 	v34handshakinit(obj, 2);
 
-	obj->progress = 6;
+	e->progress = 6;
 	obj->hs_mode = 5;
 
 	rx->bad_run = 0;
@@ -2873,8 +2879,9 @@ void
 VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	obj->sample_count = 0;
 	/*
 	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
 	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
@@ -2888,7 +2895,8 @@ VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 	 * no caller is reconstructed, so "no real caller passes 223,696" is
 	 * not something this can rely on.
 	 */
-	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+	e->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+	e->sample_count = 0;
 }
 
 int
@@ -2960,7 +2968,6 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg = &obj->ratecfg;
 	unsigned int n;
 
 	/*
@@ -2997,7 +3004,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 		return K56FLEX_TX_BITRATE;
 	}
 
-	return cfg->txbits * (int)RATE_STEP;
+	return obj->ratecfg.txbits * (int)RATE_STEP;
 }
 
 int
@@ -3166,7 +3173,7 @@ VPcmV34SetTxScale(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	obj->tx_scale = 0x16a1;
+	obj->tx.tx_scale = 0x16a1;
 	edprintf("VPcmV34SetTxScale: tx scale set to %d\r\n", 0x16a1);
 }
 
@@ -3174,10 +3181,13 @@ short
 GetVPcmMinimalTxPowerReduction(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	struct _tagModemParameters *cfg = obj->pac3c;
 	V90Parameters *pcm = sess->modem.params;
-	short want = *(const short *)(cfg + CFG_MINPWR_DB);
+	short want = *(const short *)((const unsigned char *)cfg
+				      + CFG_MINPWR_DB);
 	short red;
 
 	if (want < -10)
@@ -3187,9 +3197,9 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	else
 		red = want;
 
-	if (!(sess->info0Layout != 0 && obj->v90_receiver != 0
+	if (!(sess->info0Layout != 0 && e->v90_receiver != 0
 	      && pcm->SENSITIVE_ISP_DETECTED == 0)
-	    && obj->k56flex_receiver == 0)
+	    && e->k56flex_receiver == 0)
 		red = 0;
 
 	if (red > 0) {
@@ -3206,7 +3216,7 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;
+		obj->echo_beta = (cfg->codecType == 4) ? 4 : 6;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
@@ -3231,10 +3241,12 @@ int
 VPcmV34GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && e->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
@@ -3259,10 +3271,12 @@ int
 V34XF_GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && e->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
@@ -3569,36 +3583,36 @@ v90RateRenegSilence(void *objp)
 	short n;
 
 	if (r == 15) {
-		o->txpoint.word = vect4[0];
+		o->tx.txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[3];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 16;
-		o->seg_symcount = 0;
+		o->tx.seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 16) {
-		o->txpoint.word = vect4[2];
+		o->tx.txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n != 0x10) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 17;
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
 		return 0;
 	}
 
@@ -3607,7 +3621,7 @@ v90RateRenegSilence(void *objp)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 		return 0;
 	}
 
@@ -3619,12 +3633,12 @@ v90RateRenegSilence(void *objp)
 		 * and 19 then transmits scrambled idle symbols until something
 		 * outside moves it on.
 		 */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&o->tx.cur_quadrant);
 
 		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+			txmitquadbit(o, o->tx.cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3632,7 +3646,7 @@ v90RateRenegSilence(void *objp)
 			dsplibs_debug_printf("move to SCR on silence rrn "
 					     "(disabling SAS detector on " "silence)\r\n");
 		o->v90_receiver = 19;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags & ~V34_EC_FROZEN);
 		o->pac3c->unnamed_0003 &= (unsigned char)~CFG_SAS_DETECT;
 		return 0;
 	}
@@ -3647,25 +3661,25 @@ v90RateRenegSilence(void *objp)
 		if (o->receiver.short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			o->tx.cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
+			q = o->tx.cur_quadrant;
+			o->tx.txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
+			o->tx.cur_quadrant = (short)q;
+			o->tx.txpoint.word = vect4[q];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 		/* And the quadrant DOES advance here.  See the note above. */
-		o->prev_quadrant = o->cur_quadrant;
+		o->tx.prev_quadrant = o->tx.cur_quadrant;
 		return 0;
 	}
 
@@ -3678,13 +3692,13 @@ v90RateRenegSilence(void *objp)
 		 */
 		int done;
 
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
-		done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags | V34_EC_FROZEN);
+		done = (short)vp->getV90CpBits(&o->tx.cur_quadrant);
 
 		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+			txmitquadbit(o, o->tx.cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3703,67 +3717,67 @@ extern "C" int
 v90RateReneg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_tx *t = &o->tx;
+	struct v34_engine *e = (struct v34_engine *)(void *)&o->progress;
+	struct v34_receiver *rx = &o->receiver;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
-	short n;
+	int r = e->v90_receiver;
 
 	if (r == 11) {
 		/* `v90Phase34`'s case 6, counted to 0x7f. */
-		o->txpoint.word = vect4[0];
+		t->txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		t->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
+		/* The object increments the field and tests the FIELD: no short
+		 * temporary, so no sign-extension in front of the compare. */
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		if (t->seg_symcount <= 0x7f)
 			return 0;
-		}
-		o->v90_receiver = 12;
-		o->seg_symcount = 0;
+		e->v90_receiver = 12;
+		t->seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 12) {
 		/* `v90Phase34`'s case 7, counted to 0x10. */
-		o->txpoint.word = vect4[2];
+		t->txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		t->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		if (t->seg_symcount != 0x10)
 			return 0;
-		}
-		o->v90_receiver = 13;
+		e->v90_receiver = 13;
 		/* Reset the transmitter for the symbols that follow. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		t->prev_quadrant = 0;
+		t->seg_symcount = 0;
+		t->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->receiver.short_382 == OB_CONSTEL_16)
+		if (rx->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
 		return 0;
 	}
 
 	if (r == 14) {
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&t->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, t->cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, t->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3771,7 +3785,7 @@ v90RateReneg(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->v90_receiver = 2;
+		e->v90_receiver = 2;
 		return 0;
 	}
 
@@ -3799,9 +3813,9 @@ v90Phase34(void *objp)
 		 * K56flex twin's three-byte stub, so everything below here is
 		 * reachable and is tested.
 		 */
-		int done = (short)vp->getV90JaBits(&o->cur_quadrant);
+		int done = (short)vp->getV90JaBits(&o->tx.cur_quadrant);
 
-		txmitdibit(o, o->cur_quadrant);
+		txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3822,14 +3836,14 @@ v90Phase34(void *objp)
 		 * where every other arm stores the whole packed complex at
 		 * once -- and arm it only once the state has moved past 2.
 		 */
-		o->txpoint.c[0] = 0;
-		o->txpoint.c[1] = 0;
+		o->tx.txpoint.c[0] = 0;
+		o->tx.txpoint.c[1] = 0;
 		txmit(o);
 		if (o->v90_receiver <= 2)
 			return 0;
 		rx->flags = (unsigned short)(rx->flags
 					     | V34_RX_FLAG_TRN_WATCH);
-		o->seg_symcount = 0;
+		o->tx.seg_symcount = 0;
 		return 0;
 	}
 
@@ -3843,15 +3857,15 @@ v90Phase34(void *objp)
 	 * because folding would have to invent a conditional debug site.
 	 */
 	case 3:
-		o->txpoint.word = vect4[0];
+		o->tx.txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		if (DSPLIB_DEBUG_ON()) {
@@ -3860,64 +3874,64 @@ v90Phase34(void *objp)
 			 * zeroes it again below; the store is unobservable
 			 * either way, and it is here because it is there.
 			 */
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			dsplibs_debug_printf("Entered v34m->v90Receiver == "
 					     "V90RCV_P3_THIRD_S with " "tx->symcnt = %d period = %d\n",
 					     (int)n,
 					     (int)o->ratecfg.period);
 		}
 		o->v90_receiver = 4;
-		o->seg_symcount = 0;
+		o->tx.seg_symcount = 0;
 		return 0;
 
 	case 6:
-		o->txpoint.word = vect4[0];
+		o->tx.txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[3];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 7;
-		o->seg_symcount = 0;
+		o->tx.seg_symcount = 0;
 		return 0;
 
 	case 4:
-		o->txpoint.word = vect4[2];
+		o->tx.txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n != 0x10) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 5;
 		/* Reset the transmitter for the idle symbols that follow. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
 		return 0;
 
 	case 7:
-		o->txpoint.word = vect4[2];
+		o->tx.txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
+		o->tx.txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
+		n = (short)((unsigned short)o->tx.seg_symcount + 1);
 		if (n != 0x10) {
-			o->seg_symcount = n;
+			o->tx.seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 8;
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
 		return 0;
 
 	case 5: {
@@ -3928,26 +3942,26 @@ v90Phase34(void *objp)
 		if (c == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			o->tx.cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
+			q = o->tx.cur_quadrant;
+			o->tx.txpoint.word = vect16[d + q * 4];
 		} else if (c == OB_CONSTEL_4) {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
+			o->tx.cur_quadrant = (short)q;
+			o->tx.txpoint.word = vect4[q];
 		} else {
-			o->txpoint.c[0] = 0;
-			o->txpoint.c[1] = 0;
+			o->tx.txpoint.c[0] = 0;
+			o->tx.txpoint.c[1] = 0;
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 		return 0;
 	}
 
@@ -3963,7 +3977,7 @@ v90Phase34(void *objp)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->tx.seg_symcount = (short)((unsigned short)o->tx.seg_symcount + 1);
 		return 0;
 
 	case 8: {
@@ -3974,12 +3988,12 @@ v90Phase34(void *objp)
 		 * reports the end of the sequence, and the symbol carrying it
 		 * is transmitted before the state moves.
 		 */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&o->tx.cur_quadrant);
 
 		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+			txmitquadbit(o, o->tx.cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 		o->v90_receiver = 9;
@@ -3987,12 +4001,12 @@ v90Phase34(void *objp)
 	}
 
 	case 10: {
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&o->tx.cur_quadrant);
 
 		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+			txmitquadbit(o, o->tx.cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -4034,10 +4048,10 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	 */
 	obj->v90_receiver = (rrn_type != 0) ? 15 : 11;
 
-	obj->prev_quadrant = 0;
-	obj->seg_symcount = 0;
-	obj->tx_scr_sr = 0;
-	obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
+	obj->tx.prev_quadrant = 0;
+	obj->tx.seg_symcount = 0;
+	obj->tx.tx_scr_sr = 0;
+	obj->tx.tx_flags = (short)((obj->tx.tx_flags & ~0x4018) | 0x2000);
 
 	preinitdigital(obj);
 
@@ -4064,13 +4078,15 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 			 unsigned char silence_scr)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"V34Main: IndicateJdReceived - constel size = %d, " "silence SCR = %d\r\n",
 			constel, silence_scr);
 
-	obj->v90_receiver = 3;
+	e->v90_receiver = 3;
 
 	if (silence_scr != 0)
 		obj->receiver.short_382 = 0;
@@ -4091,7 +4107,7 @@ V34XF_IndicateDilReceived(void *objp, unsigned char constel)
 			constel);
 
 	obj->v90_receiver = 6;
-	obj->seg_symcount = 0;
+	obj->tx.seg_symcount = 0;
 
 	if (constel != 0)
 		obj->receiver.short_382 = (short)0x89b0;
@@ -4105,18 +4121,30 @@ V34XF_IndicateTrn2dReceived(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	int v = obj->v90_receiver;
 
-	if (v <= 9)
+	/*
+	 * Each arm stores and prints on its own; the object's tests at 0xa3aa
+	 * and 0xa3c5 are two copies of the same test, and its single print
+	 * call is a cross-jump of three identical blocks.
+	 */
+	if (v <= 9) {
 		v = 10;
-	else if (v <= 14)
+		obj->v90_receiver = v;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
+				obj->v90_receiver);
+		return;
+	}
+	if (v <= 14) {
 		v = 14;
-	else if (v <= 17)
-		v = 18;
-	else
-		v = 20;
-
-	obj->v90_receiver = v;
-
-	/* Re-read, not `v`: the object loads the field back for the print. */
+		obj->v90_receiver = v;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
+				obj->v90_receiver);
+		return;
+	}
+	obj->v90_receiver = (v <= 17) ? 18 : 20;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
@@ -4225,9 +4253,9 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 	if (obj->txstate != 0x12)
 		obj->txstate = 0x12;
 
-	obj->seg_symcount = 0;
-	obj->prev_quadrant = 0;
-	obj->tx_scr_sr = 0;
+	obj->tx.seg_symcount = 0;
+	obj->tx.prev_quadrant = 0;
+	obj->tx.tx_scr_sr = 0;
 
 	*(short *)(m + 0x254) =
 		(short)(336 * (int)obj->short_35a4 + 10000);
@@ -4239,12 +4267,17 @@ void
 V34XF_IndicateK56FlexRateDetermined(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	if (DSPLIB_DEBUG_ON())
+	if (DSPLIB_DEBUG_ON()) {
 		dsplibs_debug_printf(
 			"K56Flex rate determined, starting MP " "transmission...\r\n");
+		e->k56flex_receiver = 5;
+		return;
+	}
 
-	obj->k56flex_receiver = 5;
+	e->k56flex_receiver = 5;
 }
 
 void
@@ -4283,6 +4316,8 @@ int
 k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&o->progress;
 	unsigned char *m = (unsigned char *)objp;
 	struct v34_receiver *rx = &o->receiver;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
@@ -4295,9 +4330,9 @@ k56FlexPhase34(void *objp)
 		 * The dibit is transmitted either way, so the last one is
 		 * sent and then acted on.
 		 */
-		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
+		int done = (short)k56->getK56FlexJaBits(&o->tx.cur_quadrant);
 
-		txmitdibit(o, o->cur_quadrant);
+		txmitdibit(o, o->tx.cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -4305,11 +4340,11 @@ k56FlexPhase34(void *objp)
 		rx->flags |= V34_RX_FLAG_DATA;
 		*(short *)(m + OB_TXBITS) = (short)0x899f;
 		o->vect_idx = 0;
-		o->k56flex_receiver = 3;
+		e->k56flex_receiver = 3;
 		return 0;
 	}
 
-	switch (o->k56flex_receiver) {
+	switch (e->k56flex_receiver) {
 	case 3: {
 		/*
 		 * Eight dibits out of one word, `vect_idx` counting them.
@@ -4344,10 +4379,10 @@ k56FlexPhase34(void *objp)
 			return 0;
 
 		/* The word is spent: reset the transmitter and advance. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		o->k56flex_receiver = 4;
+		o->tx.prev_quadrant = 0;
+		o->tx.seg_symcount = 0;
+		o->tx.tx_scr_sr = 0;
+		e->k56flex_receiver = 4;
 		return 0;
 	}
 
@@ -4358,23 +4393,23 @@ k56FlexPhase34(void *objp)
 		if (o->receiver.short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			o->tx.cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						1, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
+			q = o->tx.cur_quadrant;
+			o->tx.txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&o->tx.tx_scr_sr,
 						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
+			o->tx.cur_quadrant = (short)q;
+			o->tx.txpoint.word = vect4[q];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
+		o->tx.seg_symcount = (short)((unsigned)(unsigned short)o->tx.seg_symcount + 1);
 		return 0;
 	}
 
@@ -4385,12 +4420,12 @@ k56FlexPhase34(void *objp)
 		 * they are scrambled and differentially encoded the way the
 		 * rest of the handshake is.
 		 */
-		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
+		int done = (short)k56->getK56FlexMpBits(&o->tx.cur_quadrant);
 
 		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+			txmitquadbit(o, o->tx.cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, o->tx.cur_quadrant);
 
 		if (done == 0)
 			return 0;
@@ -4408,7 +4443,7 @@ k56FlexPhase34(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->k56flex_receiver = 2;
+		e->k56flex_receiver = 2;
 		return 0;
 	}
 	}
@@ -4874,9 +4909,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in++;
 				modem_serrint(obj);
 				*out++ = (float)obj->tx_sample;
-				if (obj->txq.count < obj->tx_fill_target
+				if (obj->tx.txq.count < obj->tx_fill_target
 				    || obj->receiver.rxq.count > 5) {
-					if (obj->tx_flags & PROG_TXBIT_DATA)
+					if (obj->tx.tx_flags & PROG_TXBIT_DATA)
 						datapumpv34(obj);
 					else
 						v34handshak(obj);
@@ -5181,13 +5216,13 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		if (ret <= 1)
 			goto wrongstate;
 		obj->tx_fill_target = (short)n;
-		while (obj->txq.count < obj->tx_fill_target) {
+		while (obj->tx.txq.count < obj->tx_fill_target) {
 			r = obj->v90_receiver;
 			if (r > 14) {
 				v90RateRenegSilence(obj);
 			} else if (r > 10) {
 				v90RateReneg(obj);
-			} else if (obj->tx_flags & PROG_TXBIT_DATA) {
+			} else if (obj->tx.tx_flags & PROG_TXBIT_DATA) {
 				modulatevector(obj);
 			} else {
 				v34handshak(obj);
@@ -5378,8 +5413,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	/* --- 3: K56flex ----------------------------------------------- */
 	case 3:
 		obj->tx_fill_target = (short)n;
-		while (obj->txq.count < obj->tx_fill_target) {
-			if (obj->tx_flags & PROG_TXBIT_DATA)
+		while (obj->tx.txq.count < obj->tx_fill_target) {
+			if (obj->tx.tx_flags & PROG_TXBIT_DATA)
 				modulatevector(obj);
 			else
 				v34handshak(obj);
