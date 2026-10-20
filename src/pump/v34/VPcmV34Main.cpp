@@ -2426,8 +2426,10 @@ void
 VPcmV34SetMaxBlockLength(void *objp, int len)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	obj->ptc = len;
+	e->ptc = len;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Max Block Length modified "
@@ -2873,8 +2875,9 @@ void
 VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	obj->sample_count = 0;
 	/*
 	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
 	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
@@ -2888,7 +2891,8 @@ VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 	 * no caller is reconstructed, so "no real caller passes 223,696" is
 	 * not something this can rely on.
 	 */
-	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+	e->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+	e->sample_count = 0;
 }
 
 int
