@@ -223,18 +223,19 @@ V34SetINFO0aBits(void *objp, short *bits)
 	 */
 	bits[2] = 0x30;
 	{
-		const void *up = session_ptr(sess, SESSION_UPSTREAM);
 		int r = bitreverse((unsigned short)
-				   *((const unsigned char *)up + 9), 5);
+				   *((const unsigned char *)
+				     session_ptr(sess, SESSION_UPSTREAM) + 9), 5);
 		int v;
 
 		bits[2] = (short)(((short)r >> 2 & 7) | (unsigned short)bits[2]);
 
 		v = ((short)r << 6) & 0xc0;
-		if (*(const int *)((const char *)up + 0xc) == 1)
-			v |= 0x20;
 		bits[3] = (short)v;
-		if (*(const int *)up == 1)
+		if (*(const int *)((const char *)
+				   session_ptr(sess, SESSION_UPSTREAM) + 0xc) == 1)
+			bits[3] = (short)(bits[3] | 0x20);
+		if (*(const int *)session_ptr(sess, SESSION_UPSTREAM) == 1)
 			bits[3] = (short)(bits[3] | 0x10);
 		bits[3] = (short)(bits[3] | 8);
 	}
