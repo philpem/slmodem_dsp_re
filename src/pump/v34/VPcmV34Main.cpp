@@ -4105,18 +4105,30 @@ V34XF_IndicateTrn2dReceived(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	int v = obj->v90_receiver;
 
-	if (v <= 9)
+	/*
+	 * Each arm stores and prints on its own; the object's tests at 0xa3aa
+	 * and 0xa3c5 are two copies of the same test, and its single print
+	 * call is a cross-jump of three identical blocks.
+	 */
+	if (v <= 9) {
 		v = 10;
-	else if (v <= 14)
+		obj->v90_receiver = v;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
+				obj->v90_receiver);
+		return;
+	}
+	if (v <= 14) {
 		v = 14;
-	else if (v <= 17)
-		v = 18;
-	else
-		v = 20;
-
-	obj->v90_receiver = v;
-
-	/* Re-read, not `v`: the object loads the field back for the print. */
+		obj->v90_receiver = v;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
+				obj->v90_receiver);
+		return;
+	}
+	obj->v90_receiver = (v <= 17) ? 18 : 20;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
