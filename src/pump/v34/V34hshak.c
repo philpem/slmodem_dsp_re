@@ -1301,28 +1301,32 @@ v34handshakinit(void *objp, int mode)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
+	/* The object forms these two in its prologue (0x5face, 0x5fad5) and
+	 * reaches every transmit scalar and engine word through them. */
+	struct v34_tx *t = &obj->tx;
+	struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;
 	unsigned char *m = (unsigned char *)obj;
 	int delta;
 	int base;
 
 	obj->hs_mode = 0;
 
-	delta = obj->int_0248;
+	delta = e->int_0248;
 	if (delta > 0) {
-		unsigned d = (unsigned)(obj->sample_count - delta);
+		unsigned d = (unsigned)(e->sample_count - delta);
 
 		if (d <= 0x176ff) {
-			obj->sample_count = (int)d;
-			obj->int_0248 = 0;
+			e->sample_count = (int)d;
+			e->int_0248 = 0;
 		} else {
-			obj->sample_count = 0;
-			obj->int_0248 = (int)0xfff15a00;
+			e->sample_count = 0;
+			e->int_0248 = (int)0xfff15a00;
 		}
 	}
 
-	base = obj->sample_count;
-	obj->int_0244 = base;
-	obj->timeout_deadline = base + 0x69780;
+	base = e->sample_count;
+	e->int_0244 = base;
+	e->timeout_deadline = base + 0x69780;
 
 	obj->short_abe6 = 0;
 	m[0xabe8] = 0;
@@ -1332,7 +1336,7 @@ v34handshakinit(void *objp, int mode)
 	m[0xabff] = 0;
 
 	/* txflags, which the V34RNEG diagnostic below names. */
-	obj->tx.tx_flags = (short)(obj->tx.tx_flags & ~V34_TXFLAG_PPSEG);
+	t->tx_flags = (short)(t->tx_flags & ~V34_TXFLAG_PPSEG);
 
 	switch (mode) {
 	case 0:
@@ -1440,7 +1444,7 @@ v34handshakinit(void *objp, int mode)
 		obj->tx.seg_symcount = 0;
 		obj->tx.prev_quadrant = 0;
 		obj->tx.tx_scr_sr = 0;
-		obj->tx.tx_flags = (short)((obj->tx.tx_flags & ~0x4018) | 0x2000);
+		t->tx_flags = (short)((t->tx_flags & ~0x4018) | 0x2000);
 
 		rx->rx_blocks = 0x21e;
 		obj->receiver.short_382 = (short)0x8990;
@@ -1457,7 +1461,7 @@ v34handshakinit(void *objp, int mode)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"V34RNEG, initialize RNEG, tx->txflags= 0x%x," "rx->rxflgs= 0x%x\n",
-				(int)obj->tx.tx_flags, (int)rx->flags);
+				(int)t->tx_flags, (int)rx->flags);
 		break;
 
 	case 4:

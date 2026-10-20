@@ -411,7 +411,9 @@ struct v34_engine {
 	int low_energy_count;			/* +0x230 */
 	int sample_count;			/* +0x234 */
 	int timeout_deadline;			/* +0x238 */
-	unsigned char unmapped_23c[0x248 - 0x23c];
+	unsigned char unmapped_23c[0x240 - 0x23c];
+	int int_0244;				/* +0x240 (object +0x244) */
+	int int_0248;				/* +0x244 (object +0x248) */
 	int v90_receiver;			/* +0x248 */
 	int k56flex_receiver;			/* +0x24c */
 };
@@ -428,6 +430,8 @@ V34_ENGINE_ASSERT(rx_energy_floor,   0x22c);
 V34_ENGINE_ASSERT(low_energy_count,  0x230);
 V34_ENGINE_ASSERT(sample_count,      0x234);
 V34_ENGINE_ASSERT(timeout_deadline,  0x238);
+V34_ENGINE_ASSERT(int_0244,          0x240);
+V34_ENGINE_ASSERT(int_0248,          0x244);
 V34_ENGINE_ASSERT(v90_receiver,      0x248);
 V34_ENGINE_ASSERT(k56flex_receiver,  0x24c);
 typedef char v34_engine_size[(sizeof(struct v34_engine) == 0x250) ? 1 : -1];
