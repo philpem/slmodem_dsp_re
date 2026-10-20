@@ -4064,13 +4064,15 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 			 unsigned char silence_scr)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"V34Main: IndicateJdReceived - constel size = %d, " "silence SCR = %d\r\n",
 			constel, silence_scr);
 
-	obj->v90_receiver = 3;
+	e->v90_receiver = 3;
 
 	if (silence_scr != 0)
 		obj->receiver.short_382 = 0;
@@ -4251,15 +4253,17 @@ void
 V34XF_IndicateK56FlexRateDetermined(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
 	if (DSPLIB_DEBUG_ON()) {
 		dsplibs_debug_printf(
 			"K56Flex rate determined, starting MP " "transmission...\r\n");
-		obj->k56flex_receiver = 5;
+		e->k56flex_receiver = 5;
 		return;
 	}
 
-	obj->k56flex_receiver = 5;
+	e->k56flex_receiver = 5;
 }
 
 void

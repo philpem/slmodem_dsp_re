@@ -383,6 +383,41 @@ typedef char v34tx_off_tx_pwr_reduction[
 typedef char v34tx_size[(sizeof(struct v34_tx) == 0x838) ? 1 : -1];
 #endif
 
+/*
+ * The engine-level view of `struct v34_object`, +0x0004 .. +0x250.
+ *
+ * THIRTY-NINE functions in the object form a base at `obj+4` on entry
+ * (`add $0x4,%r` or `lea 0x4(%r),%r` within their first fourteen
+ * instructions) and then reach members at displacements four less than
+ * their absolute offsets: 0x248 x30, 0x220 x14, 0x24c x12, 0x21c x11,
+ * 0x234 x6, 0x218 x5, 0x230 x4, 0x250 x4, 0x244 x4, and more.  Adding
+ * four back lands on `v90_receiver` (+0x24c), `k56flex_receiver`
+ * (+0x250), `hs_mode` (+0x218), `ptc` (+0x8) and the rest, so the
+ * original declared the outer type as `{ int status; struct <body> body; }`
+ * with the body starting at `progress`.  This is that body, as far as the
+ * evidence reaches; the flat members of `struct v34_object` stay where
+ * they are because the DSP core reads the same words directly (see
+ * `V34demodulate`, `receiver`, `datapumpv34`).
+ */
+struct v34_engine {
+	int progress;				/* +0x000 */
+	int ptc;				/* +0x004 */
+	unsigned char unmapped_008[0x248 - 0x008];
+	int v90_receiver;			/* +0x248 */
+	int k56flex_receiver;			/* +0x24c */
+};
+
+#define V34_ENGINE_ASSERT(field, off) \
+	typedef char v34_engine_##field[(__builtin_offsetof(struct v34_engine, field) == (off)) ? 1 : -1]
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+V34_ENGINE_ASSERT(progress,          0x000);
+V34_ENGINE_ASSERT(ptc,               0x004);
+V34_ENGINE_ASSERT(v90_receiver,      0x248);
+V34_ENGINE_ASSERT(k56flex_receiver,  0x24c);
+typedef char v34_engine_size[(sizeof(struct v34_engine) == 0x250) ? 1 : -1];
+#endif
+#undef V34_ENGINE_ASSERT
+
 struct v34_object {
 	/*
 	 * The datapump's own status word: `receiver` puts 10 in it on loss

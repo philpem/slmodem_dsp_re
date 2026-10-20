@@ -243,8 +243,10 @@ void
 V34SetINFO0dBits(void *objp, short *bits)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
-	if (obj->v90_receiver == 0)
+	if (e->v90_receiver == 0)
 		return;
 
 	if (DSPLIB_DEBUG_ON())
