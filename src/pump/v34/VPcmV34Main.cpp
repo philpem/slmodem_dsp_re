@@ -3722,7 +3722,6 @@ v90RateReneg(void *objp)
 	struct v34_receiver *rx = &o->receiver;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	int r = e->v90_receiver;
-	short n;
 
 	if (r == 11) {
 		/* `v90Phase34`'s case 6, counted to 0x7f. */
@@ -3732,11 +3731,11 @@ v90RateReneg(void *objp)
 		t->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)t->seg_symcount + 1);
-		if (n <= 0x7f) {
-			t->seg_symcount = n;
+		/* The object increments the field and tests the FIELD: no short
+		 * temporary, so no sign-extension in front of the compare. */
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		if (t->seg_symcount <= 0x7f)
 			return 0;
-		}
 		e->v90_receiver = 12;
 		t->seg_symcount = 0;
 		return 0;
@@ -3749,11 +3748,9 @@ v90RateReneg(void *objp)
 		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
 		t->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)t->seg_symcount + 1);
-		if (n != 0x10) {
-			t->seg_symcount = n;
+		t->seg_symcount = (short)((unsigned short)t->seg_symcount + 1);
+		if (t->seg_symcount != 0x10)
 			return 0;
-		}
 		e->v90_receiver = 13;
 		/* Reset the transmitter for the symbols that follow. */
 		t->prev_quadrant = 0;
