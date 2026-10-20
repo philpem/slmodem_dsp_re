@@ -205,12 +205,12 @@ hs_set_microstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->microstate;
+
 		const char *ctx1 = StateName[obj->txstate];
 		const char *ctx2 = StateName[obj->rxstate];
 
 		dsplibs_debug_printf("V34HSHAKE: microstate %s=>%s(tx %s, rx %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->microstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
@@ -226,12 +226,12 @@ hs_set_rxstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->rxstate;
+
 		const char *ctx1 = StateName[obj->txstate];
 		const char *ctx2 = StateName[obj->microstate];
 
 		dsplibs_debug_printf("V34HSHAKE: rxstate %s=>%s(tx %s, mst %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->rxstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
@@ -247,12 +247,12 @@ hs_set_txstate(struct v34_object *obj, short next)
 		return;
 
 	if (DSPLIB_DEBUG_ON()) {
-		short now = obj->txstate;
+
 		const char *ctx1 = StateName[obj->rxstate];
 		const char *ctx2 = StateName[obj->microstate];
 
 		dsplibs_debug_printf("V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n",
-				     StateName[now], StateName[next],
+				     StateName[obj->txstate], StateName[next],
 				     ctx1, ctx2,
 				     (long)obj->vect_idx,
 				     (long)obj->short_aa78);
