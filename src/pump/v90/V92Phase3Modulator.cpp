@@ -107,11 +107,14 @@ typedef char v92p3m_size[(sizeof(V92Phase3Modulator) == 0x50) ? 1 : -1];
  *
  * The negation is taken as a SHORT before it is widened: `movzwl 0x4(%esi);
  * neg; movswl %di,%ebx`, so -32768 stays -32768 rather than becoming 32768.
+ * The temporary is `short` and the helpers return `int` -- a `(short)` cast on
+ * the negation, or a `short` return, narrows the value a second time where the
+ * object widens it once (`cwtl` before the `movswl`).
  */
 static int
 ruSymbol(const V92Phase3Modulator *m)
 {
-	int sample;
+	short sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 1:
@@ -121,7 +124,7 @@ ruSymbol(const V92Phase3Modulator *m)
 	case 3:
 	case 4:
 	case 5:
-		sample = (short)-m->codeLevel;
+		sample = -m->codeLevel;
 		break;
 	}
 	return sample;
@@ -131,12 +134,12 @@ ruSymbol(const V92Phase3Modulator *m)
 static int
 ruNotSymbol(const V92Phase3Modulator *m)
 {
-	int sample;
+	short sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 1:
 	case 2:
-		sample = (short)-m->codeLevel;
+		sample = -m->codeLevel;
 		break;
 	case 3:
 	case 4:
@@ -158,7 +161,7 @@ ruNotSymbol(const V92Phase3Modulator *m)
 static int
 suSymbol(const V92Phase3Modulator *m)
 {
-	int sample;
+	short sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
@@ -170,7 +173,7 @@ suSymbol(const V92Phase3Modulator *m)
 		break;
 	case 3:
 	case 5:
-		sample = (short)-m->suLevel;
+		sample = -m->suLevel;
 		break;
 	}
 	return sample;
@@ -180,11 +183,11 @@ suSymbol(const V92Phase3Modulator *m)
 static int
 suNotSymbol(const V92Phase3Modulator *m)
 {
-	int sample;
+	short sample;
 	switch ((m->symbolCount - 1u) % 6u) {
 	case 0:
 	case 2:
-		sample = (short)-m->suLevel;
+		sample = -m->suLevel;
 		break;
 	case 1:
 	case 4:
@@ -213,7 +216,7 @@ suNotSymbol(const V92Phase3Modulator *m)
  * `test %eax,%eax; je; neg %edx` at .text+0x165af.  That is the opposite of
  * V90Phase3Modulator's Jd arms and was read here rather than assumed.
  */
-static short
+static int
 jaSymbol(V92Phase3Modulator *m)
 {
 	unsigned char bit = 1;
@@ -235,11 +238,11 @@ jaSymbol(V92Phase3Modulator *m)
  * TRN1u: the scrambler driven with a constant 1 bit, the output choosing the
  * sign.  `generateTRN1u` (+0x165c0) is six instructions and the whole of it.
  */
-static short
+static int
 trn1uSymbol(V92Phase3Modulator *m)
 {
 	if (m->scrambler.process(1) != 0)
-		return (short)-m->codeLevel;
+		return -m->codeLevel;
 	return m->codeLevel;
 }
 
@@ -288,8 +291,11 @@ V92Phase3Modulator::generateJa()
 int
 V92Phase3Modulator::generateTRN1u()
 {
-	/* Preserve the standalone body's single sign extension on each path;
-	 * the helper's short return adds a second extension here (F10212). */
+	/* The negation is a SHORT and is widened once: `movzwl 0x4(%esi);
+	 * neg; cwtl` in `jaSymbol`/`trn1uSymbol` and again here, so -32768
+	 * stays -32768 rather than becoming 32768.  The helpers return `int`:
+	 * a `short` return narrows the value a second time before the caller
+	 * widens it again, which is the extra instruction F10212 recorded. */
 	return scrambler.process(1) ? (short)-codeLevel : codeLevel;
 }
 
