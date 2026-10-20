@@ -3240,7 +3240,6 @@ HS_OFF_ASSERT(moh_org,       moh_org,      0xabec);
  */
 struct t3m_frame {
 	struct v34_object	*obj;
-	unsigned char		*m;	/* the object as bytes             */
 	struct v34_receiver	*rx;	/* obj + 0x264                     */
 	int			*progress;	/* &obj->progress             */
 	short			mst;	/* the microstate the dispatch read*/
@@ -3256,10 +3255,10 @@ struct t3m_frame {
 	short			tx;
 };
 
-#define T3M_I32(f, off)		(*(int *)((f)->m + (off)))
-#define T3M_U32(f, off)		(*(unsigned *)((f)->m + (off)))
-#define T3M_I16(f, off)		(*(short *)((f)->m + (off)))
-#define T3M_U16(f, off)		(*(unsigned short *)((f)->m + (off)))
+#define T3M_I32(f, off)		(*(int *)((unsigned char *)(f)->obj + (off)))
+#define T3M_U32(f, off)		(*(unsigned *)((unsigned char *)(f)->obj + (off)))
+#define T3M_I16(f, off)		(*(short *)((unsigned char *)(f)->obj + (off)))
+#define T3M_U16(f, off)		(*(unsigned short *)((unsigned char *)(f)->obj + (off)))
 
 /*
  * The prologue's saved owners and microstate inputs.  Only v34handshak's
@@ -3272,11 +3271,8 @@ static void
 t3m_frame_init(struct t3m_frame *f, struct v34_object *obj)
 {
 	f->obj = obj;
-	f->m = (unsigned char *)obj;
 	f->rx = &obj->receiver;
 	f->progress = &obj->progress;
-	f->mst = 0;
-	f->nbits = 0;
 }
 
 /*
@@ -3833,7 +3829,7 @@ t3m_micro63(struct t3m_frame *f)
 	}
 
 	/* 0x65947, a SIGNED byte, and 0x65958, a SIGNED int against 0x240. */
-	if ((signed char)f->m[T3M_FABFF] <= 0
+	if ((signed char)((unsigned char *)f->obj)[T3M_FABFF] <= 0
 	    || T3M_I32(f, T3M_F0240) <= 0x240) {
 		f->tx = (tx);
 		return;

@@ -781,6 +781,14 @@ agent.
   right symbols first (~34 s on 8 cores). **Never a gate or a ratchet**: LCS
   falls on legitimate scheduling differences and a score invites hill-climbing
   — use it to choose a target and to record what a recovery restored.
+  **SIZE IS NOT EVIDENCE, AND THIS IS THE METRIC TO USE INSTEAD.** A symbol can
+  hit the object's exact byte count while sharing almost no instruction run,
+  and a structural change can make a function SMALLER while moving it AWAY
+  from the object: hand-moving one 2,186-byte arm body into `v34handshak`
+  took it 12,851 -> 12,270 bytes with the arm's own code absorbed, because
+  the compiler promoted the frame fields the object keeps in memory. Quote a
+  longest-run and an LCS before and after, not a byte delta, and never grade a
+  candidate on its size alone.
 - `storeorder.py` — store order, and a HINT, not a defect list. 617's
   acceptance test is full-text identity, operands included: nineteen examined,
   two passed. It reports 57 differing functions and, of those, **the 14 whose
