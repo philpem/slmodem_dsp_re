@@ -699,9 +699,11 @@ and what the domain was; "closed by reordering" without the domain is not
 reviewable.
 
 **`docs/method/refinement.md` is the playbook for all of this** — rule 0 and
-levers 0 to 19 (17, 18 and 19 are the newest: loop-body statement order,
-"an unobservable declaration should be spelled with no casts", and "an inlined
-body in the object proves an `inline` declaration"), each with the
+levers 0 to 20 (17 to 20 are the newest: loop-body statement order, "an
+unobservable declaration should be spelled with no casts", "an inlined body in
+the object proves an `inline` declaration", and "a `cwtl` the object does not
+have is a 16-bit temporary, not allocation" -- test the stored field instead of
+a `short` local that exists only to be compared), each with the
 measurement that established it AND the case where it failed. Read it before a
 refinement pass. **It is where these entries are maintained; this section is
 the summary. When a probe closes, add the lever or the correction there in the

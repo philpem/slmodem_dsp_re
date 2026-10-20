@@ -1945,6 +1945,45 @@ register allocation (the object spills `c` into a third callee-saved register
 and reloads it), so the inline decision and the body's residual are separate
 questions.
 
+### Lever 20. A `cwtl` the object does not have is a 16-bit TEMPORARY, not allocation
+
+When our code emits `cwtl` (`movswl %ax,%eax`), `movzwl %ax,%eax` or a
+`movswl %ax,%reg` and the object's corresponding site has no extension at all,
+the first suspect is not register allocation. It is a **short local that exists
+only to be compared**: the source narrows a value into a `short`, the compiler
+sign-extends it back to a word for the compare, and the compare then narrows it
+again. The object never builds the temporary -- it increments or reads the
+FIELD and tests the field.
+
+Measured on `v90RateReneg` (`src/pump/v34/VPcmV34Main.cpp`, 2026-10-19):
+
+    source:   short n = (short)((unsigned short)t->seg_symcount + 1);
+              if (n <= 0x7f) ...
+
+    object:   movzwl 0x3a4(%esi),%eax / inc %eax / cmp $0x7f,%ax / jle <store>
+    ours:     movzwl 0x3a4(%esi),%eax / inc %eax / cwtl / cmp $0x7f,%ax / jle
+    fixed:    movzwl 0x3a4(%esi),%eax / inc %eax / cmp $0x7f,%ax / jle <store>
+
+Nine spellings were enumerated, and the result is a clean discrimination:
+
+| spelling | emitted |
+|---|---|
+| `if (t->seg_symcount <= 0x7f)`, `(short)` of it, or `< 0x80` | identical, correct -- no extension |
+| `short n` or `int n` + `(short)` compare | keeps the `cwtl` |
+| `unsigned short n` + `(short)` compare | `movzwl %ax,%eax` instead |
+| plain `int n` | 32-bit `cmp $0x7f,%eax` |
+
+So the plainest field test is the preimage. The change also restored the exact
+instruction count (121 vs 121, was 123) and took structsim to LCS 118 (97.5%).
+
+**Read the fingerprint before trusting it.** A cast at the declaration is the
+tell: `(short)((unsigned short)x + 1)` says the author was fighting a width, and
+the object usually shows which width he settled on. But the object legitimately
+contains `cwtl` where a `short`-returning call feeds wider arithmetic (the same
+function has one at 0x9a74 after `getV90CpBits`, and ours matches it there), so
+the test is per SITE: ours has the extension, the object's corresponding
+instruction does not.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
