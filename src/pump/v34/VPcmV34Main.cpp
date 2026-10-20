@@ -4252,9 +4252,12 @@ V34XF_IndicateK56FlexRateDetermined(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	if (DSPLIB_DEBUG_ON())
+	if (DSPLIB_DEBUG_ON()) {
 		dsplibs_debug_printf(
 			"K56Flex rate determined, starting MP " "transmission...\r\n");
+		obj->k56flex_receiver = 5;
+		return;
+	}
 
 	obj->k56flex_receiver = 5;
 }
