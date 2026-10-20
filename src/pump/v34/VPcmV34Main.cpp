@@ -2367,6 +2367,8 @@ void
 VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	int level = obj->pac3c->unnamed_0060;
 	unsigned idx = (unsigned)level + 0x30u;
 	int thresh;
@@ -2375,13 +2377,13 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 		idx = 3u;
 
 	thresh = V34DisconnectThreshTable[idx];
-	obj->rx_energy_floor = thresh;
+	e->rx_energy_floor = thresh;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
 				     "minSigLevel set to %d\n", level, thresh);
 
-	obj->low_energy_count = 0;
+	e->low_energy_count = 0;
 }
 
 void
@@ -3235,10 +3237,12 @@ int
 VPcmV34GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && e->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
@@ -3263,10 +3267,12 @@ int
 V34XF_GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && e->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {

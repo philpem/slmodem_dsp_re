@@ -402,7 +402,8 @@ typedef char v34tx_size[(sizeof(struct v34_tx) == 0x838) ? 1 : -1];
 struct v34_engine {
 	int progress;				/* +0x000 */
 	int ptc;				/* +0x004 */
-	unsigned char unmapped_008[0x230 - 0x008];
+	unsigned char unmapped_008[0x22c - 0x008];
+	int rx_energy_floor;			/* +0x22c */
 	int low_energy_count;			/* +0x230 */
 	int sample_count;			/* +0x234 */
 	int timeout_deadline;			/* +0x238 */
@@ -416,6 +417,7 @@ struct v34_engine {
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 V34_ENGINE_ASSERT(progress,          0x000);
 V34_ENGINE_ASSERT(ptc,               0x004);
+V34_ENGINE_ASSERT(rx_energy_floor,   0x22c);
 V34_ENGINE_ASSERT(low_energy_count,  0x230);
 V34_ENGINE_ASSERT(sample_count,      0x234);
 V34_ENGINE_ASSERT(timeout_deadline,  0x238);
