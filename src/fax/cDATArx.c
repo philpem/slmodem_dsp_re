@@ -28,7 +28,9 @@
 /*
  * `_rx_look_carrier_init`, 0x9cb00, 45 bytes.  Three calls and one store,
  * nothing else: reinit the data-mode receiver, reset the async octet
- * recovery search, clear `countdown`.  Returns 0.
+ * recovery search, clear `countdown`.  Returns 0 -- but the object has no
+ * final `return 0` statement: its `%eax` is already zero from the
+ * `countdown` store, and a literal return would be a second `xor`.
  */
 int
 _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
@@ -36,7 +38,6 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
 	_init_receiver(ctx, rate_code);
 	cTOOLS_handle_data_output_reset(ctx);
 	ctx->countdown = 0;
-	return 0;
 }
 
 
