@@ -812,7 +812,7 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	short r0, r1, r2, r3;
 	int k1, k2;
 	int packed, g;
-	short prev;
+	unsigned short prev;
 	int n;
 
 	/*
@@ -871,23 +871,23 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	/* The quadrant pair, and the running quadrant folded back. */
 	prev = s->prev_k;
 	quad[0] = (short)(((k2 - k1) & 2) >> 1);
-	quad[1] = (short)((k1 - (unsigned short)prev) & 3);
+	quad[1] = (short)((k1 - prev) & 3);
 	s->prev_k = (short)k1;
 
 	/* First grid lookup, from the first half's residues. */
 	packed = (unsigned short)(a - r0)
 	       | ((unsigned)(unsigned short)(b - r1) << 16);
 	g = grid[(depth_rotate(packed, k1) + 0x408) >> 2];
-	idx[0] = (short)((g >> (s->idx_width & 31)) & 0x1f);
+	idx[0] = (short)((g >> ((unsigned short)s->idx_width & 31)) & 0x1f);
 	/* The mask is truncated to a short first, so idx_width == 16 gives -1. */
-	quad[2] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
+	quad[2] = (short)(g & (short)((1 << ((unsigned short)s->idx_width & 31)) - 1));
 
 	/* Second, from the second half's. */
 	packed = (unsigned short)(c - r2)
 	       | ((unsigned)(unsigned short)(d - r3) << 16);
 	g = grid[(depth_rotate(packed, k2) + 0x408) >> 2];
-	idx[1] = (short)((g >> (s->idx_width & 31)) & 0x1f);
-	quad[3] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
+	idx[1] = (short)((g >> ((unsigned short)s->idx_width & 31)) & 0x1f);
+	quad[3] = (short)(g & (short)((1 << ((unsigned short)s->idx_width & 31)) - 1));
 }
 
 
@@ -1945,7 +1945,7 @@ initdigital(void *obj)
 	}
 
 	cfg->depth = (short)((info >> 11) & 3);
-	cfg->use_max = (short)((info >> 14) & 1);
+	cfg->use_max = (info >> 14) & 1;
 
 	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
 	if (info & 0x2000)
@@ -1961,7 +1961,7 @@ initdigital(void *obj)
 	/* --- the transmit context --- */
 	{
 		int bits = (unsigned short)cfg->txbits;
-		int umax = (unsigned short)cfg->use_max;
+		int umax = cfg->use_max;
 		int div;
 
 		/*
@@ -1986,7 +1986,7 @@ initdigital(void *obj)
 					     (short)bits, o->ptc,
 					     o->nof_tx_bits);
 			bits = (unsigned short)cfg->txbits;
-			umax = (unsigned short)cfg->use_max;
+			umax = cfg->use_max;
 		}
 
 		initV34((char *)obj + V34_SHELL_TX + V34_SHELL_FIELDS,
@@ -2009,7 +2009,7 @@ initdigital(void *obj)
 	/* --- the receive context --- */
 	{
 		int bits = (unsigned short)cfg->rxbits;
-		int umax = (unsigned short)cfg->rx_use_max;
+		int umax = cfg->rx_use_max;
 		int div;
 
 		/*
@@ -2023,7 +2023,7 @@ initdigital(void *obj)
 			if (level > 1) {
 				dsplibs_debug_printf("FATAL ERROR(initdigital)" " - ZERODIV expected!");
 				bits = (unsigned short)cfg->rxbits;
-				umax = (unsigned short)cfg->rx_use_max;
+				umax = cfg->rx_use_max;
 			}
 			div = 1;
 		}

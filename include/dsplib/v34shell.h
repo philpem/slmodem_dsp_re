@@ -172,7 +172,7 @@ struct v34_shell {
 	const short *   conv;			/* +0xa28 */
 	/* Six shorts preinitV34 clears and nothing read so far touches. */
 	short           conv_sr[6];		/* +0xa2c */
-	short           prev_k;			/* +0xa38 last quadrant   */
+	unsigned short  prev_k;			/* +0xa38 last quadrant   */
 	short           invert;			/* +0xa3a picks kkInvert  */
 	short           subframe_count;			/* +0xa3c sub-frame count */
 	short           frame_count;			/* +0xa3e frame count     */
