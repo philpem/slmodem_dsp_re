@@ -285,8 +285,9 @@ int
 agcadapt(struct v34_receiver *a)
 {
 	int level;
-	int err;
-	int acc;
+	short err;
+	short acc;
+	short diff;
 
 	/* Smooth: 0.85 of the old level plus the new measurement. */
 	level = ((a->agc_level * V34_AGC_SMOOTH) >> 15) + a->energy.h.agc_input;
@@ -308,12 +309,14 @@ agcadapt(struct v34_receiver *a)
 
 	/* How far off target, and is it outside the deadband? */
 	err = (short)((unsigned short)a->agc_level - V34_AGC_TARGET);
-	if ((short)((err < 0 ? -err : err) - V34_AGC_DEADBAND) <= 0)
+	diff = (short)((err < 0 ? -err : err) - V34_AGC_DEADBAND);
+	if (diff <= 0)
 		return 0;
 
 	/* Integrate the error, and check that against its own deadband. */
 	acc = (short)(((a->agc_step * err) >> 16) + (unsigned short)a->agc_accum);
-	if ((short)((acc < 0 ? -acc : acc) - V34_AGC_ACCUM_LIMIT) <= 0) {
+	diff = (short)((acc < 0 ? -acc : acc) - V34_AGC_ACCUM_LIMIT);
+	if (diff <= 0) {
 		a->agc_accum = (short)acc;
 		return 0;
 	}
