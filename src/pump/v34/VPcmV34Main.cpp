@@ -2369,8 +2369,7 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_engine *e =
 		(struct v34_engine *)(void *)&obj->progress;
-	int level = obj->pac3c->unnamed_0060;
-	unsigned idx = (unsigned)level + 0x30u;
+	unsigned idx = (unsigned)obj->pac3c->unnamed_0060 + 0x30u;
 	int thresh;
 
 	if (idx > 7u)
@@ -2381,7 +2380,8 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
-				     "minSigLevel set to %d\n", level, thresh);
+				     "minSigLevel set to %d\n",
+				     obj->pac3c->unnamed_0060, thresh);
 
 	e->low_energy_count = 0;
 }
