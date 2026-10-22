@@ -148,9 +148,12 @@ struct v27tx_cfg {
 					same role as `v27tx_ctl::scale_mul`  */
 	short	flags;		/* +0x10  `V27TX_HANDLE_FLAGS`                */
 	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
-	int	fifo_size_factor; /* +0x14  the transmit FIFO's element count
+	short	fifo_size_factor; /* +0x14  the transmit FIFO's element count
 					  is this * `V27TX_FRMSIZE[rate]`;
-					  `v17tx_cfg`'s own field, same name */
+					  `v17tx_cfg`'s own field, same name.
+					  SHORT: init_vmi_v27tx writes it with
+					  `movw $0x2,0x14`, as `int` with
+					  `movl`.  +0x16 is padding.          */
 	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`,
 					the same role `V27RX_create` derives
 					`V27SH_TRAIN_LONG` from out of
