@@ -154,7 +154,7 @@ TxNextStateV21(void *modem)
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", state);
+			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", tx->hdx->state);
 		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
 		tx->result.byte.status = V21TX_STATUS_DEFAULT;
