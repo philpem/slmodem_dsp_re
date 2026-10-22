@@ -396,8 +396,7 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 					v = v92me_add(v / field_1c,
 						      v92me_mul(V92ME_HALF /
 								field_1c,
-								dq %
-								field_1c));
+								r1));
 				} else {
 					out[1] = (unsigned int)(v % field_1c);
 					v = v92me_sub(v, out[1]) / field_1c;
