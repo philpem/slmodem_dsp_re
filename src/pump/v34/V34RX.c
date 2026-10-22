@@ -1163,7 +1163,7 @@ rx_phase_error(const struct v34_receiver *rx)
  * `short` too -- the object sign-extends the incremented counter (`cwtl`).
  */
 static void
-rx_predict(struct v34_receiver *rx, short *px, short *py)
+rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
 {
 	int acc;
 	int outi, outq;
@@ -1462,7 +1462,8 @@ receiver(void *objp)
 	 * it.  Coefficients shared with the adapting copy below.
 	 */
 	if (flags & V34_RX_FLAG_PRECODE)
-		rx_predict(rx, &rx->f208, &rx->f20a);
+		rx_predict(rx, (unsigned short *)&rx->f208,
+			   (unsigned short *)&rx->f20a);
 
 	/* Derotate by the recovered carrier: target = conj(nco) * equalised. */
 	{
@@ -1639,8 +1640,8 @@ carrier_loop:
 
 		rx_predict(rx, &rx->pred_err_re, &rx->pred_err_im);
 
-		ei = rx->pred_err_re;
-		eqv = rx->pred_err_im;
+		ei = (short)rx->pred_err_re;
+		eqv = (short)rx->pred_err_im;
 		rx->preerr_acc += ei * ei + eqv * eqv;
 
 		/*

@@ -357,8 +357,8 @@ struct v34_receiver {
 	short           target_im;       /* +0x212 */
 	/* The decision error, target - decision, and the predictor's input
 	 * and output (rx_predict mutates both in place). */
-	short           pred_err_re;     /* +0x214 (was f214) */
-	short           pred_err_im;     /* +0x216 (was f216) */
+	unsigned short  pred_err_re;     /* +0x214 (was f214) */
+	unsigned short  pred_err_im;     /* +0x216 (was f216) */
 	/*
 	 * +0x218.  The equaliser's step, Q15, selected by `decoderv34`
 	 * (0x2000 or 0x4000) from how far into the frame the symbol count
