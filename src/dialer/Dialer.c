@@ -507,39 +507,38 @@ void
 DialerAbort(struct dialer *d)
 {
 	/*
-	 * The one path that is an error, and the only one that does not reach
-	 * the message below.
+	 * The two arms are the object's physical order: the ordinary body is
+	 * the fall-through and the error arm is out of line behind `ja` at
+	 * 0x7bdef, with both converging on one return at 0x7bdfb.  Writing the
+	 * range check as an early return instead lays the error arm first and
+	 * inverts the branch, which is a 2-byte layout difference.
 	 */
-	/* The original range check is unsigned (JA at 0x7bdef). */
-	if ((unsigned int)d->progress_state > 10u) {
+	if ((unsigned int)d->progress_state <= 10u) {
+		/*
+		 * One condition rather than two early returns: 0x7be2c and
+		 * 0x7bdf9 both fall into the same gate at 0x7bdfb, so an abort
+		 * with nothing to release still says so.  Three guards that look
+		 * alike, and one of them is not like the others.
+		 */
+		if (d->pulse_released == 0 && d->pulse_active != 0) {
+			LastPulseDigitDialed(d->modem);
+
+			/* After the call, and before the flag is set (0x7be3c). */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    " **** Dialer.C: " "LastPulseDigitDialed was "
+				    "called\n");
+
+			d->pulse_released = 1;
+		}
+
+		/* A tail call in the object -- `jmp` at 0x7be11, not `call`. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Dialer was aborted.\n");
+	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Dialer was aborted - error. \n");
-
-		return;
 	}
-
-	/*
-	 * Written as one condition rather than two early returns, which is
-	 * what it was until the call sites were restored.  Behaviour is
-	 * identical -- both returns did nothing but return -- but the object
-	 * does not return there: 0x7be2c and 0x7bdf9 both fall into the same
-	 * gate at 0x7bdfb, so an abort with nothing to release still says so.
-	 * Three guards that look alike, and one of them is not like the others.
-	 */
-	if (d->pulse_released == 0 && d->pulse_active != 0) {
-		LastPulseDigitDialed(d->modem);
-
-		/* After the call, and before the flag is set (0x7be3c). */
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" **** Dialer.C: " "LastPulseDigitDialed was "
-					     "called\n");
-
-		d->pulse_released = 1;
-	}
-
-	/* A tail call in the object -- `jmp` at 0x7be11, not `call`. */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Dialer was aborted.\n");
 }
 
 /* The country's rule for turning a keypad position into pulses. */
