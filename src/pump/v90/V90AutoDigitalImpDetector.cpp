@@ -1441,9 +1441,9 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 short
 V90AutoDigitalImpDetector::unSuspectedPhaseNearestLinMapp(short v, short phase)
 {
-	int mag = adid_abs(v);
 	int best = 1000000;
-	unsigned short at = 5;
+	int mag = adid_abs(v);
+	unsigned short at;
 	unsigned short ci;
 
 	for (ci = 5; ci <= 0x74; ci++) {
