@@ -211,6 +211,12 @@ FloatFIR::~FloatFIR()
  * The write position is pulled back to the new run's start only if it is
  * already past it, and that comparison is signed -- so a filter whose index
  * is about to wrap keeps its negative position rather than being reset.
+ *
+ * THE CLAMP IS A SELECT, NOT AN IF.  The object stores the result
+ * unconditionally (`mov %eax,0x10(%ebx)`) after choosing between `index` and
+ * `room`, so the source is the ternary below and the `taps` early return is
+ * the inverted guard: a plain `if (taps == want) return 0;` gives the
+ * compiler a second `xor` on the mid return.
  */
 int
 FloatFIR::setCoefficients(float *coef, unsigned int nTaps)
@@ -222,13 +228,11 @@ FloatFIR::setCoefficients(float *coef, unsigned int nTaps)
 		return -1;
 
 	coefficients = coef;
-	if (taps == want)
-		return 0;
-
-	taps = want;
-	room = (int)(bufferLength - want);
-	if (index > room)
-		index = room;
+	if (taps != want) {
+		taps = want;
+		room = (int)(bufferLength - want);
+		index = index > room ? room : index;
+	}
 
 	return 0;
 }
