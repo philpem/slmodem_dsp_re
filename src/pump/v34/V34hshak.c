@@ -8257,8 +8257,98 @@ v34handshak(void *vobj)
 			break;
 		case V34HS_JTXMIT:		/* 64 0x635cc, one body two tails */
 		case V34HS_J1TXMIT:		/* 68 */
-			v34tx1_jtxmit(obj);
-			break;
+		{
+			/* Native 0x635cc joins its complete arm and continuations here.
+			 * Transmitter fields use the prologue's obj+0x221c owner;
+			 * 0x66ca8 uses its separately saved receiver. The three
+			 * short accesses resolve to obj+0x25d6/+0x25d8/+0x25da.
+			 * Keep this arm in the dispatcher: outlining it prevents
+			 * its scrambler and continuation from sharing those owners.
+			 */
+			unsigned shift;
+			unsigned short idx;
+			short bits, mode, q;
+			int point;
+
+			/* 0x635cc, and the completion at 0x6533c falls back into 0x635f0 */
+			(void)tx1_ja_common(obj, "V34Hshak: on JTXMIT - time to freeze"
+						   " echo...\r\n");		/* 0x682d6 */
+
+			/* 0x635f0 */
+			*(short *)(frame.txb->unmapped_3ba + 2) =
+				(short)((unsigned short)*(short *)(frame.txb->unmapped_3ba + 2) + 1);
+
+			shift = (unsigned)(2 * (int)obj->vect_idx) & 31u;
+			bits = (short)((unsigned short)*(short *)(frame.txb->unmapped_3ba + 0) >> shift);
+
+			mode = (short)((frame.txb->tx_flags & V34_TXFLAG_CALLER) == 0);
+			q = (short)V34scrambler((unsigned *)&obj->tx.tx_scr_sr, mode, bits, 2);
+			q = (short)((q + (unsigned short)frame.txb->prev_quadrant) & 3);
+			frame.txb->cur_quadrant = q;
+			point = vect4[q];
+			frame.txb->prev_quadrant = q;
+			frame.txb->txpoint.word = point;
+			txmit(obj);
+
+			idx = (unsigned short)(((unsigned short)obj->vect_idx + 1) & 7);
+			obj->vect_idx = (short)idx;
+
+			if (obj->role == 0x66) {
+				/* 0x66ca8 */
+				if (!(frame.rx->flags & V34_RX_FLAG_DATA)) {
+					if (obj->md_length == 0)
+						break;	/* 0x629c8 */
+					if (*(short *)(frame.txb->unmapped_3ba + 4) == 0)
+						break;	/* 0x63da2 */
+				}
+				/* 0x66cd1 */
+				hs_set_txstate(obj, V34HS_XMIT0);
+				obj->vect_idx = 0;			/* 0x62d32 */
+				break;			/* 0x62d70 */
+			}
+
+			/* 0x636f0 */
+			if (idx != 0)
+				break;			/* 0x63941 */
+
+			if (obj->txstate == V34HS_J1TXMIT) {
+				/* 0x6915b prints before the clears at 0x65676. */
+				if (DSPLIB_DEBUG_ON()) {
+					const char *ctx1 = StateName[obj->rxstate];
+					const char *ctx2 = StateName[obj->microstate];
+					dsplibs_debug_printf("V34HSHAKE: txstate %s=>%s(rx %s, mst %s, [1]%ld, [2]%ld)\n",
+						StateName[V34HS_J1TXMIT], StateName[V34HS_TRNSEG4A],
+						ctx1, ctx2, (long)obj->vect_idx, (long)obj->short_aa78);
+				}
+				frame.txb->tx_scr_sr = 0;
+				obj->txstate = V34HS_TRNSEG4A;
+				frame.txb->prev_quadrant = 0;
+				frame.txb->seg_symcount = 0;
+				break;			/* 0x640a1 */
+			}
+
+			/* 0x6370d */
+			if (*(short *)(frame.txb->unmapped_3ba + 4) != 2)
+				break;			/* 0x6409a */
+			if (*(short *)(frame.txb->unmapped_3ba + 2) <= 0x80)
+				break;			/* 0x6431f */
+
+			/* 0x6372e */
+			*(short *)(frame.txb->unmapped_3ba + 0) = (short)0x899f;
+			hs_set_txstate(obj, V34HS_J1TXMIT);
+
+			/* 0x637c8 */
+			if (obj->short_aa78 != 0) {
+				if (dsplibs_debug_level > 1)		/* 0x6c725 */
+					dsplibs_debug_printf(
+						"V34Hshak: on J1TXMIT - forced freeze echo" " (count2 = %d)...\r\n",
+						obj->short_aa78);
+				v34FreezeEcho(obj);
+				obj->short_aa78 = 0;
+				break;			/* 0x64326 */
+			}
+			break;				/* 0x629c8 */
+		}
 		case V34HS_XMIT0:		/* 65 0x62d83 */
 			v34tx1_xmit0(obj);
 			break;
