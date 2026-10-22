@@ -405,7 +405,7 @@ struct v34_engine {
 	unsigned char unmapped_008[0x21c - 0x008];
 	int rate_min;				/* +0x21c */
 	int rate_max;				/* +0x220 */
-	unsigned char unmapped_224[0x228 - 0x224];
+	int rate_now;				/* +0x224 (object +0x228) */
 	int rate_want;				/* +0x228 */
 	int rx_energy_floor;			/* +0x22c */
 	int low_energy_count;			/* +0x230 */
@@ -425,6 +425,7 @@ V34_ENGINE_ASSERT(progress,          0x000);
 V34_ENGINE_ASSERT(ptc,               0x004);
 V34_ENGINE_ASSERT(rate_min,          0x21c);
 V34_ENGINE_ASSERT(rate_max,          0x220);
+V34_ENGINE_ASSERT(rate_now,          0x224);
 V34_ENGINE_ASSERT(rate_want,         0x228);
 V34_ENGINE_ASSERT(rx_energy_floor,   0x22c);
 V34_ENGINE_ASSERT(low_energy_count,  0x230);

@@ -1363,7 +1363,7 @@ period: $(REF)
 # was standing in for.  The guard STAYS: it still catches the directory being
 # read by something that did not come through make.
 #
-.PHONY: tc tc-repro byteident byteident-ratchet similarity structsim partial-link \
+.PHONY: tc tc-repro byteident byteident-ratchet similarity structsim contentgap partial-link \
 	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
@@ -1405,6 +1405,16 @@ similarity: tc
 #
 structsim: tc
 	@$(PYTHON) tools/toolchain/structsim.py $(S)
+
+# `contentgap` answers a different question from `structsim`: does a size gap
+# mean MISSING CODE or a different ARRANGEMENT?  It aligns the two instruction
+# lists and reports the multiset surplus at three levels -- mnemonic only,
+# operands masked, operands kept.  A structure-level ZERO proves arrangement
+# (nothing is missing at that granularity); a surplus is a question, because
+# GCC substitutes `lea` for `add` and `xor` for `mov $0` without any source
+# difference.  Not a gate: use `S=SYMBOL`, or `--worst 40` to rank the tree.
+contentgap: tc
+	@$(PYTHON) tools/toolchain/contentgap.py $(S)
 
 # Cast audit: explicit numeric casts the context already performs (issue #69,
 # finding F11353).  clang is analysis apparatus, not a reconstruction
