@@ -171,14 +171,18 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 	prm->int_0008 = 0;
 	prm->handler = TxHdxStartV29;
 
-	if ((&((struct v29_tx_root *)modem)->cfg)->bitrate == V29_BPS_7200) {
+	switch ((&((struct v29_tx_root *)modem)->cfg)->bitrate) {
+	case V29_BPS_7200:
 		prm->rate = V29_RATE_7200;
-	} else if ((&((struct v29_tx_root *)modem)->cfg)->bitrate == V29_BPS_9600) {
+		break;
+	case V29_BPS_9600:
 		prm->rate = V29_RATE_9600;
-	} else {
+		break;
+	default:
 		prm->rate = V29_RATE_9600;
 		((struct v29_tx_root *)modem)->result.byte.flags |= V29TX_RESULT_B1_BIT1;
 		((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_DEFAULT;
+		break;
 	}
 
 	/* ---- the private block: the ring, the scrambler, the symbol coder

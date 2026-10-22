@@ -117,14 +117,18 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	prm->train_long = (short)
 		((&((struct v27_tx *)modem)->cfg)->int_0018 == 0);
 
-	if ((&((struct v27_tx *)modem)->cfg)->bitrate == 2400) {
+	switch ((&((struct v27_tx *)modem)->cfg)->bitrate) {
+	case 2400:
 		prm->rate = 0;
-	} else if ((&((struct v27_tx *)modem)->cfg)->bitrate == 4800) {
+		break;
+	case 4800:
 		prm->rate = 1;
-	} else {
+		break;
+	default:
 		prm->rate = 1;
 		((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT1;
 		((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DEFAULT;
+		break;
 	}
 
 	/* ---- the FIFO --------------------------------------------------- */
