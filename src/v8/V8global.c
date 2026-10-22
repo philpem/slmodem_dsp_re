@@ -573,39 +573,39 @@ v8_txinit(struct v8 *v)
 int
 v8_rxinit(struct v8 *v)
 {
-	int i;
+	struct v8_rx *rx = &v->rx;
+	short i;
 
 	for (i = 0; i < V8_RX_SCRATCH; i++)
 		v->rx_scratch[i] = 0;
 	v->rx_scratch[V8_RX_SCRATCH_SEED_INDEX] = V8_RX_SCRATCH_SEED;
 
-	v->rx.gain_ref = 0x200;
-	v->rx.hist_idx = 0;
-	v->rx.gain = 0x200;
-	v->rx.adapt_rate = 0x3333;
+	rx->gain_ref = 0x200;
+	rx->hist_idx = 0;
+	rx->gain = 0x200;
+	rx->adapt_rate = 0x3333;
 
 	for (i = 0; i < V8_RX_HIST; i++)
-		v->rx.hist[i] = 0;
+		rx->hist[i] = 0;
 
-	v->rx.accum = 0;
-	v->rx.refresh_timer = 0;
-	v->rx.stable_timer = 0;
-	v->rx.stable = 0;
-	v->rx.fc2 = 0x50;
-	v->rx.fc8 = 0;
-	v->rx.fc6 = 0;
-	v->rx.fda = 0;
-	v->rx.fd8 = 0;
+	rx->accum = 0;
+	rx->refresh_timer = 0;
+	rx->stable_timer = 0;
+	rx->stable = 0;
+	rx->fc2 = 0x50;
+	rx->fc8 = 0;
+	rx->fc6 = 0;
+	rx->fda = 0;
+	rx->fd8 = 0;
 
-	v->rx.buf = v->rx_stage;
-	v->rx.level = 0;
+	rx->buf = v->rx_stage;
+	rx->level = 0;
 	/*
 	 * One 32-bit store in the original, covering both halves.  They are
 	 * two shorts here because v8_agcadapt reads the upper one on its own.
 	 */
-	v->rx.energy_lo = 0;
-	v->rx.energy_hi = 0;
-	v->rx.clip_count = 0;
+	*(int *)&rx->energy_lo = 0;
+	rx->clip_count = 0;
 
 	return 0;
 }

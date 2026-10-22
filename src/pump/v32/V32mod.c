@@ -181,21 +181,20 @@ v32_handshake(struct v32_modem *modem, unsigned short *txdata, short *txout, sho
 	      unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {
 	struct v32_hdx *hdx;
-	unsigned char flags;
 	short i;
 
 	hdx = modem->hdx;
 
-	flags = modem->flags;
 	if (hdx->mode == V32_MODE_RING_INIT)
-		flags = (unsigned char)(flags & ~(V32_FLAG_04 | V32_FLAG_08));
-	modem->flags = (unsigned char)(flags & ~V32_FLAG_01);
+		modem->flags = (unsigned char)
+			(modem->flags & ~(V32_FLAG_04 | V32_FLAG_08));
+	modem->flags = (unsigned char)(modem->flags & ~V32_FLAG_01);
 
+	i = 0;
 	if (hdx->symbol_len > 0) {
 		unsigned short *buf;
 
 		buf = (unsigned short *)hdx->buffer;
-		i = 0;
 		do {
 			buf[i] = txdata[i];
 			i = (short)(i + 1);
@@ -208,8 +207,7 @@ v32_handshake(struct v32_modem *modem, unsigned short *txdata, short *txout, sho
 	 * RE-READ, and it matters: the receive state may have replaced the
 	 * whole context, exactly as `V32TxHdxModem`'s own loop allows.
 	 */
-	hdx = modem->hdx;
-	V32TxHdxModem(modem, (short *)hdx->buffer, txout,
+	V32TxHdxModem(modem, (short *)modem->hdx->buffer, txout,
 		      nsamples);
 }
 

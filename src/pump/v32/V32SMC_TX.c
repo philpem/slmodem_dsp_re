@@ -149,26 +149,27 @@ void
 SMCv32_encoder_abs(struct v32_smc *smc, struct v32_symout *out,
 		   const short *in, unsigned short count)
 {
-	short *const buf = out->buf;
-	const short limit = out->limit;
-	short widx = out->widx;
 	int quad = smc->quad;
+	short *const buf = out->buf;
+	short widx = out->widx;
+	const short limit = out->limit;
 	/*
 	 * The high-byte tag.  `smc->mode` is loaded as a signed char here in
 	 * the object; only its low eight bits reach the 16-bit store, so the
 	 * width of the load is not observable.
 	 */
-	const int tag = smc->mode << 8;
-	unsigned int i;
+	const int tag = (signed char)smc->mode << 8;
 
-	for (i = 0; i < count; i++) {
-		unsigned int sel = (unsigned int)(unsigned short)in[i] & 3u;
+	while (count--) {
+		unsigned int sel = (unsigned int)(unsigned short)*in++ & 3u;
 		int point;
 
 		quad = (quad + 3) & 3;
 		point = (int)(SMCv32_PMAP_ABS16[sel] + quad * 4) & 0xf;
 		buf[widx] = (short)(point | tag);
-		widx = ring_advance(widx, limit);
+		widx = (short)(widx + 1);
+		if (widx >= limit)
+			widx = 0;
 	}
 
 	smc->quad = (short)quad;
@@ -214,7 +215,7 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 	const unsigned short mask_low = (unsigned short)((1 << nbits) - 1);
 	const unsigned short bit_hi = (unsigned short)(1 << (nbits + 2));
 	const unsigned short mask_all = (unsigned short)(bit_hi - 1);
-	const int tag = smc->mode << 8;
+	const int tag = (signed char)smc->mode << 8;
 	short widx = out->widx;
 	int quad = smc->quad;
 	int trellis = smc->trellis_diff_state;

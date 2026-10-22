@@ -841,16 +841,20 @@ SeqToRate(struct v32_modem *modem, unsigned short seq)
  * The object loads `V32_ESEQ[rate]` UNCONDITIONALLY, before the test, and
  * discards it on the no-rate path.  That is safe only because index 6 is
  * inside the table -- the ladder's "none" value is the table's last entry, not
- * one past it -- and it is why this is written as a conditional expression
- * rather than as the `if` the two rate functions above use.
+ * one past it -- and it is why the load is the `code` initialiser below and
+ * the early return is a separate statement: a conditional expression puts
+ * the load in the taken arm instead, and the object's load is not there.
  */
 unsigned short
 CodeESeq(struct v32_modem *modem, unsigned short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
+	unsigned short code = (unsigned short)V32_ESEQ[rate];
 
-	return rate == V32_RATE_NONE ? V32_ESEQ_NONE
-				     : (unsigned short)V32_ESEQ[rate];
+	if (rate == V32_RATE_NONE)
+		return V32_ESEQ_NONE;
+
+	return code;
 }
 
 unsigned short

@@ -569,20 +569,14 @@ voice_command(struct voice_ctx *v, int cmd, int *arg)
 		 * path including the one that recognised nothing: 0xac65e is
 		 * the join of all five edges, the default among them.
 		 */
-		switch (arg[0]) {
-		case VOICE_MODE_RX:
+		if (arg[0] == VOICE_MODE_RX)
 			voice_set_rx(v);
-			break;
-		case VOICE_MODE_TX:
+		else if (arg[0] == VOICE_MODE_TX)
 			voice_set_tx(v);
-			break;
-		case VOICE_MODE_ONLINE:
+		else if (arg[0] == VOICE_MODE_ONLINE)
 			voice_set_online(v);
-			break;
-		case VOICE_MODE_DUPLEX:
+		else if (arg[0] == VOICE_MODE_DUPLEX)
 			voice_set_duplex(v);
-			break;
-		}
 		v->beep_done = 1;
 		break;
 
