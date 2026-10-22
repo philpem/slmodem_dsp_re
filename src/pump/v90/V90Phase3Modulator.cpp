@@ -319,18 +319,24 @@ vectorBit(const unsigned char *bits, unsigned int symbolCount)
  * level falls in.  Identical to the search at the end of `resetDILGenerator`
  * -- the level is read back as UNSIGNED sixteen bits and the index runs one
  * past the end of the row when no boundary matches.
+ *
+ * `type` IS A LOCAL COPY of `pcmType` in the object: it loads the field into
+ * a register and shifts it (`mov 0x4(%esi),%edx; shl $3,%edx`), where
+ * indexing through `m->pcmType` directly makes the compiler build the row
+ * base with `lea`.  The loop itself is the object's `for (i = 0; i <= 7)`.
  */
 static void
 updateCodeSegment(V90Phase3Modulator *m)
 {
+	unsigned int i;
+	unsigned int type = m->pcmType;
 	unsigned int level =
 	    (unsigned int)(unsigned short)m->dilLevel[m->dilIndex];
-	unsigned int i;
 
 	for (i = 0; i <= 7; i++) {
 		if ((int)level <=
 		    V90Phase3Modulator::codeSegmentsBoundriesLookupTable
-			[(int)m->pcmType][i])
+			[type][i])
 			break;
 	}
 	m->segmentIndex = (unsigned char)i;
