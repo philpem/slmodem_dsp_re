@@ -2092,34 +2092,6 @@ initdigital(void *obj)
  */
 
 /*
- * Peel `d` off the running total in `tab` steps: subtract tab[0]*tab[d], then
- * tab[1]*tab[d-1], and so on until it goes negative.  Returns how many steps
- * were taken and leaves the last NON-NEGATIVE total in `*rem`.
- *
- * The object has this three times, inlined, once against t2 and twice against
- * t1.  Unsigned throughout with an explicit sign-bit test, because a 16x16
- * product can legitimately carry past INT_MAX and the object's `jns` reads
- * the bit rather than the value.
- */
-static unsigned
-shell_peel(const short *tab, unsigned d, unsigned *rem)
-{
-	unsigned r = *rem;
-	unsigned saved = r;
-	unsigned k = 0;
-
-	r -= (unsigned)(unsigned short)tab[0] * (unsigned)(unsigned short)tab[d];
-	while (!(r & 0x80000000u)) {
-		saved = r;
-		k++;
-		r -= (unsigned)(unsigned short)tab[k]
-		     * (unsigned)(unsigned short)tab[d - k];
-	}
-	*rem = saved;
-	return k;
-}
-
-/*
  * One sub-index and one frame field into a packed pair of signed byte
  * offsets: the entry's HIGH byte in the low half of the result, and its LOW
  * byte -- sign-extended by an explicit test of bit 7 rather than by a shift,
@@ -2294,13 +2266,13 @@ modulatevector(void *obj)
 
 	if (n == 8) {
 		unsigned flags = (unsigned short)o->tx.tx_flags;
-		unsigned count = (unsigned short)tx->count;
-		unsigned shift = (unsigned short)tx->idx_width;
-		unsigned target, quad, lo, hi, mid, si, rem, d;
+		unsigned count, shift;
+		unsigned target, quad, si, rem, d;
+		short lo, hi, mid;
 		unsigned n1, n2, n3, q2, s2, s6, a, b, g;
 		const short *coeff;
 		short sub[V34_SHELL_SUBS];
-		int i;
+		short i;
 
 		/*
 		 * Training to data.  While bit 4 is clear the mapper still
@@ -2320,27 +2292,45 @@ modulatevector(void *obj)
 
 		getFrame(obj);
 
+		count = (unsigned short)tx->count;
+		shift = (unsigned short)tx->idx_width;
 		target = (unsigned)tx->frame_wide;
 		quad = (unsigned short)(short)tx->prev_k;
 
-		/* 1. Seven halvings over t3, unsigned. */
+		/* Unsigned table comparison; signed-short bisection state. */
 		lo = 0;
 		mid = 0x40;
 		hi = 0x80;
 		for (i = 0; i <= 6; i++) {
 			if ((unsigned)tx->t3[mid] > target) {
 				hi = mid;
-				mid = (unsigned short)(short)((lo + hi) / 2);
+				mid = (lo + hi) / 2;
 			} else {
 				lo = mid;
-				mid = (unsigned short)(short)((hi + mid) / 2);
+				mid = (hi + mid) / 2;
 			}
 		}
-		lo = (unsigned short)lo;
 
-		/* 2. Peel against t2, then twice against t1. */
+		/*
+		 * Opposing table pointers recover the three sub-indices.
+		 * Products and differences retain all 32 bits; the object's
+		 * jns tests the sign bit after each subtraction.
+		 */
 		rem = target - (unsigned)tx->t3[lo];
-		n1 = shell_peel(tx->t2, lo, &rem);
+		{
+			const short *up = tx->t2 + 1;
+			const short *down = tx->t2 + lo;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t2[0]
+					       * (unsigned)(unsigned short)*down--;
+
+			/* 0x59fc4..0x5a03a: the index comes from the pointer. */
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n1 = (unsigned short)(up - tx->t2 - 1);
+		}
 		/*
 		 * The original uses signed division of the saved remainder,
 		 * not unsigned division of the shell-peel accumulator.  Each
@@ -2357,7 +2347,19 @@ modulatevector(void *obj)
 			q2 = (unsigned)((dividend - (int)rem) / divisor);
 		}
 
-		n2 = shell_peel(tx->t1, n1, &rem);
+		{
+			const short *up = tx->t1 + 1;
+			const short *down = tx->t1 + n1;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t1[0]
+					       * (unsigned)(unsigned short)*down--;
+
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n2 = (unsigned short)(up - tx->t1 - 1);
+		}
 		{
 			int divisor = (unsigned short)tx->t1[n2];
 			int quotient = (int)rem / divisor;
@@ -2369,7 +2371,19 @@ modulatevector(void *obj)
 
 		rem = q2;
 		d = (unsigned short)(lo - n1);
-		n3 = shell_peel(tx->t1, d, &rem);
+		{
+			const short *up = tx->t1 + 1;
+			const short *down = tx->t1 + d;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t1[0]
+					       * (unsigned)(unsigned short)*down--;
+
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n3 = (unsigned short)(up - tx->t1 - 1);
+		}
 		{
 			int divisor = (unsigned short)tx->t1[n3];
 			int quotient = (int)rem / divisor;
