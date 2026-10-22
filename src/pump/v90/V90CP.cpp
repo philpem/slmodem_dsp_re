@@ -454,40 +454,86 @@ V90CP::evaluateInfo()
 		break;
 
 	case 7:
-		/* Four nine-bit counts, one to a frame. */
+		/* Four nine-bit counts, one to a frame, one block each. */
 		for (k = 0; k <= 3; k++)
 			nof_58[k] = 0;
 
 		p = word_cb4 + 0xa;
-		q = p;
-		for (k = 0; k <= 3; k++) {
-			word_cb4 = p;
-			for (i = 0, q = p; i <= 8; i++, q--)
-				nof_58[k] = (nof_58[k] << 1) | (bits[q] & 1);
-			p += 0x11;
-		}
+
+		word_cb4 = p;
+		for (i = 0, q = p; i <= 8; i++, q--)
+			nof_58[0] = (nof_58[0] << 1) | (bits[q] & 1);
+		p += 0x11;
+
+		word_cb4 = p;
+		for (i = 0, q = p; i <= 8; i++, q--)
+			nof_58[1] = (nof_58[1] << 1) | (bits[q] & 1);
+		p += 0x11;
+
+		word_cb4 = p;
+		for (i = 0, q = p; i <= 8; i++, q--)
+			nof_58[2] = (nof_58[2] << 1) | (bits[q] & 1);
+		p += 0x11;
+
+		word_cb4 = p;
+		for (i = 0, q = p; i <= 8; i++, q--)
+			nof_58[3] = (nof_58[3] << 1) | (bits[q] & 1);
+		p += 0x11;
+
 		word_cb4 = q + 0x10;
 		break;
 
 	case 8:
-		/* The four counted lists, one entry to a frame.  The object
-		 * zero-extends its 16-bit shift accumulator (0x51ec0); the
-		 * signed destination receives the result after the complete frame. */
-		for (k = 0; k <= 3; k++) {
-			n = nof_58[k];
-			for (j = 0; j < n; j++) {
-				unsigned short value = 0;
+		/* The four counted lists, one entry to a frame, one block each.
+		 * The object zero-extends its 16-bit shift accumulator (0x51ec0);
+		 * the signed destination receives the result after the frame. */
+		n = nof_58[0];
+		for (j = 0; j < n; j++) {
+			unsigned short value = 0;
 
-				short_58[k][j] = 0;
-				p = word_cb4 + 0x11;
-				word_cb4 = p;
-				for (i = 0, q = p; i <= 0xf; i++, q--)
-					value = (unsigned short)
-					    ((value << 1) |
-					     (bits[q] & 1));
-				short_58[k][j] = (short)value;
-				word_cb4 = q + 0x10;
-			}
+			short_58[0][j] = 0;
+			p = word_cb4 + 0x11;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 0xf; i++, q--)
+				value = (unsigned short)((value << 1) | (bits[q] & 1));
+			short_58[0][j] = (short)value;
+			word_cb4 = q + 0x10;
+		}
+		n = nof_58[1];
+		for (j = 0; j < n; j++) {
+			unsigned short value = 0;
+
+			short_58[1][j] = 0;
+			p = word_cb4 + 0x11;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 0xf; i++, q--)
+				value = (unsigned short)((value << 1) | (bits[q] & 1));
+			short_58[1][j] = (short)value;
+			word_cb4 = q + 0x10;
+		}
+		n = nof_58[2];
+		for (j = 0; j < n; j++) {
+			unsigned short value = 0;
+
+			short_58[2][j] = 0;
+			p = word_cb4 + 0x11;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 0xf; i++, q--)
+				value = (unsigned short)((value << 1) | (bits[q] & 1));
+			short_58[2][j] = (short)value;
+			word_cb4 = q + 0x10;
+		}
+		n = nof_58[3];
+		for (j = 0; j < n; j++) {
+			unsigned short value = 0;
+
+			short_58[3][j] = 0;
+			p = word_cb4 + 0x11;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 0xf; i++, q--)
+				value = (unsigned short)((value << 1) | (bits[q] & 1));
+			short_58[3][j] = (short)value;
+			word_cb4 = q + 0x10;
 		}
 		break;
 
@@ -544,11 +590,9 @@ V90CP::evaluateInfo()
 		 * `dst[j]` may alias it -- that is the object's own reading
 		 * and it is why this arm reloads where the others do not.
 		 */
-		for (k = 0; k <= 5; k++) {
-			if (nof_buf[k] == 0)
-				continue;
-			dst = buf[k];
-			for (j = 0; j < nof_buf[k]; j++) {
+		if (nof_buf[0] != 0) {
+			dst = buf[0];
+			for (j = 0; j < nof_buf[0]; j++) {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -559,6 +603,77 @@ V90CP::evaluateInfo()
 				word_cb4 += 0x10;
 			}
 		}
+
+		if (nof_buf[1] != 0) {
+			dst = buf[1];
+			for (j = 0; j < nof_buf[1]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+
+		if (nof_buf[2] != 0) {
+			dst = buf[2];
+			for (j = 0; j < nof_buf[2]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+
+		if (nof_buf[3] != 0) {
+			dst = buf[3];
+			for (j = 0; j < nof_buf[3]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+
+		if (nof_buf[4] != 0) {
+			dst = buf[4];
+			for (j = 0; j < nof_buf[4]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+
+		if (nof_buf[5] != 0) {
+			dst = buf[5];
+			for (j = 0; j < nof_buf[5]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+
 		break;
 
 	default:
