@@ -771,11 +771,10 @@ V90MP::evaluateCRC()
 
 	end = type ? 0xaa : 0x44;
 
-	for (i = 0x12; i < end; ) {
+	for (i = 0x12; i < end; i++) {
 		if (i % 17 == 0)
 			i++;
 		a = (unsigned char)(crc[0] + bits[i]);
-		i++;
 
 		crc[0] = crc[1];
 		crc[1] = crc[2];
