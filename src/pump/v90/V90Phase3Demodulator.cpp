@@ -2042,24 +2042,33 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		mod = &phase3Modulator;
 		sym = (short)mod->generateSymbol();
 		adid = autoDigitalImpDetector;
+		/* Capture the mapping row before companding. The inner arms
+		 * reacquire its owner after isAltRbs (0x23109 / 0x2354d)
+		 * and retain the decision for its sign; the outer arm keeps
+		 * the saved owner (0x229d6). */
 		if (adid->altRbsFlag[framePosition] != 0) {
 			decision = (short)level;
 			if (mod->usingSegmentLevel != 0) {
 				if ((short)adid->isAltRbs((short)framePosition,
 							  ucode, sample) != 0) {
+					short *mapping = autoDigitalImpDetector->
+					    linMappAlt[(unsigned short)framePosition];
+					int sign = P3D_SIGN(decision);
 					code = P3D_CODE(P3D_ABS(sym));
-					decision = (short)(P3D_SIGN(level) *
-					    P3D_LINMAPPALT(adid, code));
+					decision = (short)(sign * mapping[code]);
 				} else {
+					short *mapping = autoDigitalImpDetector->
+					    linMapp[(unsigned short)framePosition];
+					int sign = P3D_SIGN(decision);
 					code = P3D_CODE(P3D_ABS(sym));
-					decision = (short)(P3D_SIGN(level) *
-					    P3D_LINMAPP(adid, code));
+					decision = (short)(sign * mapping[code]);
 				}
 			}
 		} else {
+			short *mapping = adid->linMapp[(unsigned short)framePosition];
+			int sign = P3D_SIGN(level);
 			code = P3D_CODE(P3D_ABS(sym));
-			decision = (short)(P3D_SIGN(level) *
-			    P3D_LINMAPP(adid, code));
+			decision = (short)(sign * mapping[code]);
 		}
 		P3D_BUMP_FRAME();
 		if (byte_3f9 != 0) {
