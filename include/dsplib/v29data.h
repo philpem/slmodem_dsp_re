@@ -181,8 +181,11 @@ struct v29tx_cfg {
 	int	int_000c;	/* +0x0c  1; never read -- retained neutral (Batch 27) */
 	short	flags;		/* +0x10  0; V29TXS_FLAGS_10                 */
 	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
-	int	fifo_size_factor; /* +0x14  1 -> FIFO capacity, * 3 * 16,
-					  `v17tx_cfg`'s own field, same name */
+	short	fifo_size_factor; /* +0x14  1 -> FIFO capacity, * 3 * 16,
+					  `v17tx_cfg`'s own field, same name.
+					  SHORT: init_vmi_v29tx writes it with
+					  `movw $0x2,0x14`, as `int` with
+					  `movl`.  +0x16 is padding.          */
 	void *aux;	/* +0x18 -> FPM_PPS_CFG::aux; init stores caller pointer */
 };
 

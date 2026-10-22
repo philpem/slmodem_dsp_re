@@ -50,19 +50,23 @@ null_delete(struct faxvmi_link *dp)
  * `*count <= 0` (0x09f0ec), matching the tail test that would otherwise stop
  * it after zero iterations.  `i` is 16-bit in the object -- `lea 0x1(%edx),
  * %eax` then `movswl %ax,%edx` re-narrows and re-sign-extends the index
- * after every increment, which a plain `int` would not need.
+ * after every increment, which a plain `int` would not need.  `count` is
+ * SIGNED here: the object pre-tests `cmpw $0x0,(%ebx); jle` and compares
+ * with `cmp %dx,(%ebx); jg`, where an `unsigned short` count yields
+ * `movzwl` and a 32-bit unsigned compare.  `dst` is deliberately not a
+ * local: the object reloads `dp->ptr_0000` in the loop preheader, after the
+ * zero-count test.
  */
 int
 null_process(struct faxvmi_link *dp, short *in, unsigned short *result,
-	    unsigned short *count)
+	    short *count)
 {
-	unsigned short *dst = dp->ptr_0000;
 	short i;
 
 	(void)result;
 
 	for (i = 0; i < *count; i++)
-		dst[i] = (unsigned short)in[i];
+		dp->ptr_0000[i] = (unsigned short)in[i];
 
 	return -1;
 }

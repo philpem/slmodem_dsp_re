@@ -545,7 +545,13 @@ struct v17tx_cfg {
 					 * V17TX_status's own read and
 					 * V17TX_control's own ctl0 bit 2 --
 					 * the dword V.29's own cfg lacks    */
-	int		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16     */
+	short		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16.
+					 * SHORT, not `int`: the object's
+					 * `cfg->fifo_size_factor = 1` in
+					 * init_vmi_v17tx is a 16-bit
+					 * `movw $0x1,0x14`, and the `int`
+					 * spelling gave `movl`.  The two
+					 * bytes at +0x16 are padding.     */
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
 	void *		aux;	/* +0x1c -> FPM_PPS_CFG.aux          */
 };

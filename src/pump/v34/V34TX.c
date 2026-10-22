@@ -136,13 +136,22 @@ txinit(void *objp)
 int
 bitreverse(unsigned short v, short nbits)
 {
-	int out = (v & 1) ? 1 : 0;
+	int out;
+
+	if (v & 1)
+		out = 1;
+	else
+		out = 0;
 	short i;
 
 	/*
 	 * Starts at one, not zero: bit 0 is taken before the loop.  The
 	 * accumulator is truncated to 16 bits on each shift, so a `nbits`
 	 * above 16 silently drops the top of the result.
+	 *
+	 * The initial bit is a two-armed `if`, not a ternary: the object
+	 * pre-zeroes `out` and materialises the flag with `test/setne`, which
+	 * the compiler only emits for the if/else form.
 	 */
 	for (i = 1; i < nbits; i = (short)(i + 1)) {
 		v = (unsigned short)(v >> 1);
