@@ -699,12 +699,28 @@ and what the domain was; "closed by reordering" without the domain is not
 reviewable.
 
 **`docs/method/refinement.md` is the playbook for all of this** — rule 0 and
-levers 0 to 20 (17 to 20 are the newest: loop-body statement order, "an
+levers 0 to 26 (17 to 26 are the newest: loop-body statement order, "an
 unobservable declaration should be spelled with no casts", "an inlined body in
-the object proves an `inline` declaration", and "a `cwtl` the object does not
-have is a 16-bit temporary, not allocation" -- test the stored field instead of
-a `short` local that exists only to be compared), each with the
-measurement that established it AND the case where it failed. Read it before a
+the object proves an `inline` declaration", "a `cwtl` the object does not have is
+a 16-bit temporary, not allocation" -- test the stored field instead of a `short`
+local that exists only to be compared -- and "between two locals of the same
+class, DECLARATION ORDER is the source property", which is what a grade 0 `BYTES`
+/ grade 1 `ACCEPT` row naming a register on two different members means, and "a
+base that survives a CALL forces the frame -- and a repeated base offset is a
+nested type", which is what a push prologue where the object spills, or a constant
+`lea 0xK(%reg)` in dozens of functions, is telling you, and "a single scratch
+register is not evidence" -- the 34-symbol REGALLOC census, which says a bare
+`pop %reg` or a constant carried into a stack slot is translation-unit
+allocation and must not be chased, and "taking a member's ADDRESS creates a base
+the object does not have" -- eight member pointers made GCC materialise eight
+prologue `lea`s and spill them, where the object stores with full displacements; and
+"a size gap is content only if the unmatched hunks are few and large, and the
+pairing test is the multiset of instructions" (25) with "a constant-count
+repetition is UNROLLED in the SOURCE, not by the compiler" (26), whose control is
+`V90CP::evaluateInfo` state 10 keeping its loops while 7, 8 and 11 are written
+longhand.
+Each lever carries the measurement that established it AND the case where it
+failed. Read it before a
 refinement pass. **It is where these entries are maintained; this section is
 the summary. When a probe closes, add the lever or the correction there in the
 same pass that updates the handover and Hindsight** — a trick that lives only
@@ -769,6 +785,19 @@ agent.
   integer if-conversion. 69 rows classified in finding F2900, of which three
   were real (2901), three were 614 and declined (2902), and ten are forced
   and named for the next pass (2903).
+- `contentgap.py` (`make contentgap S=SYMBOL`) — **is a size gap MISSING CODE
+  or a different ARRANGEMENT?** Aligns the two canonicalised instruction lists
+  and reports the multiset surplus at three levels: mnemonic only, operands
+  masked, operands kept. A structure-level ZERO proves arrangement (nothing is
+  absent at that granularity); a NONZERO count is a question, because GCC
+  legitimately substitutes `lea` for `add` and `xor` for `mov $0`. Read the
+  surplus list before touching source: `initdigital`'s is `movzwl N(R),R`
+  against `movswl R,R`, which is a 16-bit-temporary shape (Lever 20), not
+  missing content. `--worst N` ranks by instruction kinds with no counterpart.
+  **Never a gate.** The earlier ad-hoc version counted only alignment
+  `delete` opcodes and reported 0 unmatched for `initdigital`; including
+  `replace` gives 20/7 kinds, which is why the rule is "zero proves, surplus
+  asks".
 - `structsim.py` (`make structsim S=SYMBOL`) — **structural similarity as a
   measure, not a grade.** Reports the longest common contiguous run and the
   longest common subsequence (LCS) between the object's function and ours,

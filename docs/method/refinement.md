@@ -2005,6 +2005,381 @@ So when the fingerprint is present, check three places, cheapest first: the
 compare (test the field), the cast on the expression, and the helper's return
 type.
 
+### Lever 21. Between two locals of the same class, DECLARATION ORDER is the source property
+
+`V34XF_GetMaxUpstreamRateIndex` was five bytes and grade 1 `ACCEPT`, and the five
+bytes were one swap: the object loads the session pointer into `%ecx` and forms the
+engine base in `%edx`, ours the other way round.
+
+    object   mov 0x3548(%ebx),%ecx     lea 0x4(%ebx),%edx
+    ours     mov 0x3548(%ebx),%edx     lea 0x4(%ebx),%ecx
+
+Nothing about the statements changed it. What changed it was moving
+`const VPcmFloModem *sess = ...;` above `struct v34_engine *e = ...;`, i.e. the
+order the two locals are DECLARED in. With session first, GCC gives it `%ecx`, the
+later engine pointer `%edx`, and the function is byte-exact (34 of 34 instructions,
+longest run 34). The twin `VPcmV34GetMaxUpstreamRateIndex` has the same body and
+took the same fix, so the pair closed together: census 1116 -> 1118 exact.
+
+The domain was enumerated rather than searched — four orderings of the block's four
+declarations:
+
+    e, sess, rate (as written)   BYTES 5    run 34   ACCEPT
+    sess, e, rate (landed)       EXACT      run 34   LCS 100.0%
+    sess, rate, e                BYTES 19   run 28   LCS 94.1%
+    rate, sess, e                BYTES 19   run 27   LCS 94.1%
+
+Only one of the four maps onto the object, and the other three lose six or seven
+instructions of contiguous run — so this is a recovered declaration order within
+the tested family, not a hill-climb on differing bytes.
+
+**When to reach for it.** A grade 0 `BYTES` verdict with grade 1 `ACCEPT` whose
+`--why` row is a register name on two instructions that read two DIFFERENT members
+of the same object is the fingerprint: nothing is wrong with the statements, two
+live ranges of the same class are competing for one register pair, and the
+allocator resolves it in declaration order. Enumerate the permutations of that
+declaration block (they are few) and take the one the object matches. Do not do
+this where the two locals are of different classes or where the row also changes a
+mnemonic or a displacement — that is a different defect and the order will not fix
+it.
+
+### Lever 22. A base that survives a CALL forces the FRAME -- and a repeated base offset is a NESTED TYPE
+
+Two findings that arrived together and belong together, because the second is what
+makes the first available.
+
+**A. The prologue's shape is about what stays live across a call.**
+`VPcmV34InitMOH` was 32 differing bytes and four instructions short. The object
+builds two bases and writes progress through the second one AFTER a call:
+
+    sub $0x1c,%esp
+    mov %ebx,0xc(%esp)  ... mov %ebp,0x18(%esp)      four mov-to-stack saves
+    lea 0x264(%ebx),%esi                             receiver
+    lea 0x4(%ebx),%edi                               engine
+    call v34handshakinit
+    movl $0x7,(%edi)                                 progress, through the engine base
+
+Ours wrote `movl $0x7,0x4(%ebx)` with the full displacement, so nothing had to
+survive the call and GCC chose the push prologue (`push` x3 + `sub $0x10`). One
+declaration —
+
+    struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;
+
+— plus `e->progress = 7;` took the function to the object's instruction count
+(95 of 95), run 8 -> 18 and LCS 68.4% -> 86.3%, and 32 differing bytes to 6.
+
+**When to reach for it.** Ours is push-based where the object is
+`sub $0xNN,%esp` with `mov %reg,K(%esp)` saves. Then look for a field written on
+BOTH SIDES of a call through a base: that is what makes the base live across the
+call and forces the frame. A base used only before the call, or only after it,
+will not do it, and adding a pointer where the object really does push makes the
+function worse.
+
+**B. A base formed at a constant offset in many functions is an inner struct.**
+A prologue scan for `lea 0xK(%reg)` / `add $0xK,%reg` (`/tmp/opencode/obj4.py`)
+found **39 to 51 functions** forming a base at `obj+4`, with a displacement
+histogram of `0x248` x30, `0x220` x14, `0x24c` x12, `0x21c` x11 and so on. Adding
+the base offset back maps every one of those displacements onto a real member, so
+the object's outer type was `{ int status; struct body body; }` and those
+functions were reaching the body directly. Modelling the body as a struct and
+taking its pointer in each of those functions is what produced `struct v34_engine`
+and `struct v34_tx`, and with them the exact symbols `V34XF_IndicateK56FlexRateDetermined`,
+`V34SetINFO0dBits`, `V34XF_IndicateJdReceived`, `VPcmV34SetMaxBlockLength`,
+`V34XF_GetMaxUpstreamRateIndex` and `VPcmV34GetMaxUpstreamRateIndex`.
+
+Two rules that keep it honest. The FLAT members stay: where the DSP core reads the
+same words with full displacements, that spelling is the original too, so the
+choice is per FUNCTION and the flat accessor is not wrong. And the base is taken
+only where the object forms one — it is a property of the function, not of the
+field, and each candidate must be measured (`byteident --why` plus the run and
+LCS) rather than assumed from the scan.
+
+### Lever 23. A single scratch register is not evidence -- measure first
+
+`byteident`'s REGALLOC bucket is the tempting one: grade 0 `BYTES` and grade 1
+`ACCEPT` means the two sequences are the same instructions with the operands
+renamed, so it looks like one register away from an EXACT symbol. It is 34 of
+the tree's 1852 symbols, and a census of what the differing register CARRIES
+says most of them cannot be moved by source at all.
+
+| what the register carries | symbols |
+| --- | --- |
+| a value the function discards (a `pop %reg`) | 8: `V92Jd::getJdBitVector`, `Scrambler<h,h>::reset`, `Scrambler<h,i>::reset`, `ParallelDifferentialDecoder<unsigned char>::reset`, `v8_fsktxfilter`, `V90AutoDigitalImpDetector::applyPadGainToLinMapper`, `V90MP::evaluateInfo`, `V90Phase4Modulator::setRdRtSymbols` |
+| a constant or a symbol ADDRESS carried into a stack argument slot | 9: `dp_v8_init`, `dp_v8_exit`, `dp_v22_init`, `dp_vpcm_init`, `V90SignBitsExtractor` ctor, `V92Phase3Modulator::generateTRN1u`, `V90Phase3Modulator` ctor (`$0x63`), `V90CP` ctor (`$0x12`), `V92Phase4Modulator::recivedRt` |
+| a field loaded, tested and then printed | 6: `V90Phase4Modulator::recivedE2u`/`recivedFirstRrnE2u`/`recivedCPtag`, `V92Phase4Modulator::recivedEd`/`recivedEd`, `RxDetMarkB103` |
+| two values swapped between two pointers | 4: `FloatFIR::reset`, `Scrambler<h,h>::process`, `V22_FSE_init`, `_iir_filter_create` (the two ARGUMENTS swap registers) |
+| a zero or small constant kept for a store | 4: `V90Parameters` ctor, `V92Jd` ctor, `V90Phase4Modulator::setMappingParams` and its V.92 twin |
+
+**The worked negative is `V90SignBitsExtractor::V90SignBitsExtractor()`**
+(`src/pump/v90/V90SignBitsExtractor.cpp:91`), 13 instructions, 2 bytes:
+
+```
+object 31931:  push %ebx / mov $0x6,%ecx / sub $0x8,%esp / mov 0x10(%esp),%ebx ...
+ours   371:    push %ebx / mov $0x6,%edx / sub $0x8,%esp / mov 0x10(%esp),%ebx ...
+```
+
+Instruction for instruction identical otherwise -- the constant is hoisted to
+the same place, before the same frame and the same loads. The source is an
+empty constructor whose only content is `decoder(V90SBE_DECODER_SIZE)`, so
+there is no declaration pair to order (Lever 21), no expression to reshape, and
+nothing live across the call (Lever 22A). The 2 bytes are the translation
+unit's `-frename-registers` state, not a source property.
+
+Three earlier attempts in this bucket failed the same way: the Jd zero register
+(`xor %eax` against `xor %ebx`) was invariant under three further spellings, and
+`V8GetMessage`'s field/local pair never reproduced the object.
+
+So: chase a REGALLOC symbol only when the two registers carry **different
+members**, when the swapped value **survives a call**, or when the pair is two
+locals of the same class. A bare scratch carrier is rejected, and the census
+above is the denominator to say so.
+
+### Lever 24. Taking a member's ADDRESS creates a base the object does not have
+
+`setfinalrate` opened with eight locals that were addresses of members:
+
+```c
+	short *tx_baud = &obj->ratecfg.baud;
+	short *tx_preemp = &obj->ratecfg.preemp;
+	const short **tx_scale = &obj->ratecfg.divtab;
+	short *tx_carrier = &obj->ratecfg.carrier;
+	...
+```
+
+and wrote through the pointers (`*tx_baud = 0x960;`). GCC 3.4.2 materialised
+**eight** `lea` bases in the prologue and spilled every one of them to
+`0x1c..0x34(%esp)`: 194 instructions against the object's 175, longest common
+run 4, LCS 52 (26.8%). The object has no bases there at all -- it stores with
+full displacements, `0xaa84`, `0xaa8a`, `0xaa90`, `0xaa94`, `0xaa96`, `0xaaa8`,
+`0xaaac`, `0xaab0(%ebx)`. Writing the members inline (`obj->ratecfg.baud = 0x960;`)
+took the same function to 174 instructions, run 8 and LCS 89 (50.9%) in one
+edit, and two further corrections (below) reached 171 instructions and LCS 101
+(57.7%).
+
+The fingerprint is a prologue full of `lea` **and** a spilled pointer per
+member, with the body storing through `(%reg)` at displacement zero. The object
+proves the source did not take the address: a `lea` the object does not have is
+a local it did not declare. It is the inverse of Lever 22B -- there we ADDED a
+base because the object forms one, here we remove locals because it does not.
+
+Two companion findings from the same function, both worth reusing:
+
+- **A hoist the object does not make.** `unsigned short a9e2 = *(unsigned short
+  *)(m + 0xa9e2);` was read once and used twice. The object loads only `0xa9de`
+  and `0xa9e0` in its prologue and **re-reads** `0xa9e2` at each use site, which
+  is the source reading the field where it is needed. Reading it inline took 174
+  to 169 instructions and LCS 50.9% to 56.6%. A local that exists to shorten two
+  expressions is visible as a prologue load the object lacks.
+- **A rate code is 16-bit.** `int code; int high;` against every object test
+  being `cmp $0x2,%ax`, `cmp $0x5,%ax`, `testb $0x4,0xa9de(%ebx)`. `short code;
+  short high;` took 169 to 171 and LCS 56.6% to 57.7% -- this is Lever 20's
+  shape at a place where it costs two instructions rather than saving them.
+
+Bound: taking an address is legitimate when the pointer is passed to a callee
+(`rx_predict(rx, &rx->pred_err_re, ...)`) or genuinely re-seated; the lever
+applies where the pointer only abbreviates a store.
+
+
+### Lever 25. A size gap is missing CONTENT only if the unmatched hunks are few and LARGE
+
+Lever 2 says a size difference is "an absence or an extra". That is true of the
+verdict and useless as a plan: a function can be short by eighty instructions
+because four arms are absent, or because the compiler scheduled the same
+statements differently. Measure the SHAPE of the gap before reading any source.
+
+    python3: canonicalise each side (registers -> R, relocation class -> RELOC,
+    absolute addresses -> A), align with difflib.SequenceMatcher, then list the
+    blob-only hunks sorted by size with the address of each.
+
+Three calibrations from the same day (`/tmp/opencode/missingHunks.py`, which needs
+`--start-address=0x%x` and `hi = addr + size`, not `size`):
+
+- `modulatevector` (V.34): blob 820, ours 739, hunks **62, 61, 56, 47, 37, 20,
+  19, 18** -- a handful of large blocks separated by long matched runs. That is
+  content: several arms are partly absent, and each hunk is worth reading.
+- `v8_getbit` (V.8): blob 129, ours 121, hunks **21, 17, 8, 6, 5, 4, 3, 2** --
+  many small hunks interleaved with matches, and the largest ones are a 21-line
+  bit-fetch block whose logic ours has in a different arrangement. That is
+  scheduling/if-conversion and register state, the class that has been declined
+  every time it was chased (`adaptecho`, `RxHdxTone`, `SetAdaptEqV32`).
+- The counter-example that justifies the rule: `setfinalrate` before its fix was
+  blob 175 vs ours 194 with run 4 and eight member-pointer `lea`s in the
+  prologue -- ONE large cause, visible in the head, and the fix moved LCS
+  26.8% -> 57.7%.
+
+So: one or two large hunks means reconstruct; many interleaved small hunks with
+a small count delta means do not, unless a single hunk can be shown to be a
+self-contained statement block. Quote the hunk sizes in the finding either way,
+because "SIZE (48 bytes)" alone cannot tell you which of the two you have.
+
+### The hunk list alone over-reports content: PAIR the two sides
+
+Measured 19 Oct 2026 on the V.34 body family, and it changes how the list above
+must be read. `missingHunks.py` prints only the BLOB-only hunks, so a merely
+REARRANGED block shows up looking exactly like a missing one. Count both sides
+instead (`/tmp/opencode/gapshape.py` does: blob-only total, ours-only total,
+number of hunks >= 12 and their sum):
+
+| symbol | blob | ours | net | blob-only | ours-only | hunks>=12 | sum | largest |
+|---|---|---|---|---|---|---|---|---|
+| `modulatevector` | 829 | 748 | -81 | 760 | 679 | 17 | 641 | 112 |
+| `decodeDepth` | 529 | 524 | -5 | 461 | 456 | 11 | 371 | 101 |
+| `demapFrame` | 416 | 364 | -52 | 358 | 306 | 11 | 284 | 73 |
+| `initdigital` | 318 | 304 | -14 | 270 | 256 | 8 | 187 | 62 |
+| `getFrame` | 274 | 260 | -14 | 242 | 228 | 8 | 200 | 45 |
+| `initV34` | 245 | 239 | -6 | 203 | 197 | 4 | 149 | 86 |
+| `initG248` | 86 | 81 | -5 | 67 | 62 | 3 | 48 | 20 |
+| `agcadapt` | 72 | 70 | -2 | 27 | 25 | 0 | 0 | 7 |
+
+Every one of them has blob-only ~= ours-only, and a hunk sum that is three to
+twenty times the net gap. That is ARRANGEMENT, not content: the same statements
+appear twice in different orders and with different spill slots. The 73-
+instruction `demapFrame` hunk at `0x594d3`, the largest in that function, is a
+loop body whose spilled counter lives in different stack slots on each side --
+`0x34(%esp)`/`0x38(%esp)` in the object against ours' own frame -- so nothing is
+missing from it.
+
+The rule that follows: a CONTENT gap has a blob-only hunk with NO
+same-sized ours-only counterpart nearby, and its size is comparable to the net
+deficit. An ARRANGEMENT difference has the counterpart. So print both sides'
+hunks and pair them before reading any source, and treat a large hunk in a
+function whose blob-only and ours-only totals match as arrangement.
+
+### Even ONE large deletion can be arrangement: test the INSTRUCTION MULTISET
+
+The pairing above compares hunk SIZES, and a single pure deletion in the object
+can still be a block ours has somewhere else. The sharper test is the
+instruction MULTISET, and it is now a repository tool:
+
+    make contentgap S=SYM            # one symbol
+    python3 tools/toolchain/contentgap.py --worst 40
+
+It aligns the two canonicalised instruction lists and reports the surplus --
+instructions present more times on one side than the other -- at THREE levels,
+because each answers a different question:
+
+    kinds       mnemonic only         is an instruction KIND absent?
+    structure   operands masked       is an instruction absent once constants
+                                      and displacements are folded?
+    operands    operands kept         how much of the operand text moved?
+
+Measured on the V.34 body family (`kinds` / `structure` / `operands`, blob ours):
+
+| symbol | blob | ours | kinds | structure | operands |
+|---|---|---|---|---|---|
+| `initdigital` | 292 | 279 | 20 / 7 | 36 / 23 | 45 / 32 |
+| `V34SetINFO1aBits` | 326 | 317 | 13 / 4 | 16 / 7 | 36 / 27 |
+| `demapFrame` | 397 | 353 | 61 / 17 | 91 / 47 | 150 / 106 |
+| `modulatevector` | 807 | 725 | 119 / 37 | 149 / 67 | 324 / 242 |
+| `getFrame` | 256 | 253 | 17 / 14 | 25 / 22 | 99 / 96 |
+| `initV34` | 235 | 228 | 29 / 22 | 32 / 25 | 65 / 58 |
+| `agcadapt` | 71 | 69 | 3 / 1 | 3 / 1 | 3 / 1 |
+
+**A ZERO is the only thing that is a proof.** Structure-level zero means every
+instruction has a counterpart somewhere in the other build, so nothing is
+missing at that granularity and the difference is order, spilling or
+scheduling. A NONZERO count is a QUESTION, not a verdict: GCC legitimately
+substitutes `lea` for `add` and `xor` for `mov $0`, so a kinds surplus can be
+codegen with no source difference at all.
+
+**CORRECTION, and the reason this subsection was rewritten the same day.** The
+first version of this test (an ad-hoc script, `/tmp/opencode/contentgap.py`)
+took only the alignment's `delete` opcodes and ignored `replace`, and on that
+measurement `initdigital` reported **0 unmatched from 110 deleted
+instructions**, which was read as "the whole family is arrangement". The
+production tool includes `replace` and reports kinds 20 / 7 for the same
+symbol. Both numbers are internally consistent; they answer different
+questions, and the flat claim "every deleted instruction exists elsewhere, so
+it is arrangement" was **too strong**. What survives is the narrower rule
+above: structure-level zero proves arrangement, a surplus invites a look.
+
+**And the surplus list is where the lead usually is.** `initdigital`'s surplus
+is `movzwl N(R),R` thirteen times in the blob against `movswl R,R` ten times in
+ours -- a zero-extending LOAD against a sign-extending register read. That is
+not missing content and not arrangement: it is the Lever 20 shape, a 16-bit
+temporary or a signedness choice, and the next pass on this function should
+start there rather than at the hunks.
+
+`initdigital`, `V34SetINFO1aBits`, `demapFrame`, `modulatevector`, `getFrame`,
+`initV34` and `agcadapt` are therefore closed as RECONSTRUCTION targets -- none
+of them is missing a statement block that the multiset can see.
+
+What actually closed the real gaps in this family
+was never content -- it was declaration order (Lever 21), a `short` temporary
+or return (Lever 20), taking a member's address (Lever 24), or the frame a
+base forces (Lever 22).
+
+### Lever 26. A constant-count repetition is UNROLLED in the SOURCE, not by the compiler
+
+`V90CP::evaluateInfo` had four arms 1,003 bytes short of the object across a
+1,024-byte gap, with no call on either side and no internal duplication, so
+the deficit was content. The object's arms showed what that content is: at
+these flags GCC does **not** unroll a small constant-count loop that writes
+through an array, but it *does* emit one longhand copy per array element when
+the SOURCE has them.
+
+    state   blob   ours   short by
+      7      220     80     140     four 9-bit reads, one per nof_58[k]
+      8      425    136     289     four per-frame loops, frames 0x58/0x358/0x658/0x958
+     11      578    120     458     six guarded per-buffer blocks
+     10      385    269     116     KEEPS its loops -- the control case
+
+Writing states 7, 8 and 11 out longhand took ours 275 -> 483 instructions
+against the object's 510 and the grade 0 difference from `SIZE (925)` to
+`SIZE (131)` (LCS 309, 60.6%). State 10 is the control that proves the rule is
+per-site evidence and not a policy: the object kept its loops there, and
+unrolling it as well overshot to 572 instructions (a 1,139-byte arm against
+511). A local accumulator is also NOT the source shape: `n = (n << 1) | bit`
+in a loop over the nine bits gives 479 instructions but a WORSE LCS (301).
+
+Fingerprint: an arm that is a fixed multiple of a smaller arm's size, with the
+same instruction multiset repeated and the cursor advanced by a constant
+between copies. Read the arm extents from the JUMP TABLE, not from byte deltas
+between neighbouring targets (block placement reorders those).
+
+**And gate it on the affected fixtures FIRST.** The first full run of this
+change failed 392/2 because three of state 7's four blocks had lost their
+`p += 0x11;` and re-read the same nine bits: `t_v90cpinfo` and `t_v90cpb2i`
+reported `short_58[1][0]` reading `ff ff` against `00 00`. A hand-unrolled
+block sequence must keep the cursor advance in EVERY block, and
+`make period T=<test> J=8` on the two fixtures that read the field is a
+95-second check that the full eight-minute gate would only find later.
+
+### Trade two neighbours, and RECORD the loss: the codegen ratchet needs a review
+
+Moving one function can take an EXACT neighbour with it, because the period
+compiler allocates registers for a whole translation unit at a time. The trade
+can still be right, but it is not free and it is not silent.
+
+The worked case is `v90RateRenegSilence` in `VPcmV34Main.cpp`. Writing it with
+the object's three bases took it from 83 differing bytes to 22 (LCS 97.7%), and
+in the same translation unit `V34XF_IndicateJdReceived` fell from byte-identical
+to `BYTES (3)`. The three bytes are ONE register choice in ONE instruction --
+`xor %eax,%eax` in the object against `xor %ebx,%ebx` in ours, with the whole
+instruction sequence still matching (longest run 37 of 37, LCS 100%). Four
+spellings of the zero failed to move it, so it is allocation rather than source.
+
+That loss is acceptable, and it is *recorded*:
+
+- `tools/ci/period_reviewed_losses.json` holds one entry per reviewed loss with
+  `base_sha` (the pull request's base revision), `symbol`, `accepted_commit`
+  (where the trade was made), `evidence_commit` and `evidence` (a path plus
+  `#anchor` into this documentation), and `head_body_sha256`.
+- The digest comes from
+  `python3 tools/ci/period_metrics.py --fingerprint SYMBOL --head-objects build/tc_out`
+  and covers the function BODY and its relocation identity, so editing that
+  function again invalidates the review rather than letting it ride.
+- The Gentoo Period check FAILS on any loss without a matching, current review,
+  even when `make period` is green and the census counts are unchanged. `make
+  period` alone cannot see it: the differential asks whether behaviour matches,
+  and this loss is behavioural nothing; it is a codegen regression in a
+  neighbouring symbol.
+
+So the discipline is: make the trade deliberately, quote the neighbour's before
+and after in the commit message, add the review entry in the same batch, and
+expect the ratchet to keep failing until you do. A loss with no review is not a
+smaller problem than a red differential -- it is the same problem with a quieter
+alarm.
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
