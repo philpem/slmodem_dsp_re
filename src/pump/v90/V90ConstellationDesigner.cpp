@@ -2377,7 +2377,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 			u = mappingParams->constellation[minIndex][0];
 
 			if (dmin[minIndex] == 0) {
-				short lim = ucode[minIndex][u] + dMin;
+				int lim = ucode[minIndex][u] + dMin;
 
 				while (u < 128) {
 					if (ucode[minIndex][u] >= lim)
@@ -2385,8 +2385,8 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 					u++;
 				}
 			} else {
-				short lo = ucode[minIndex][u] + short_10;
-				short hi = alt[minIndex][u] + short_10;
+				int lo = ucode[minIndex][u] + short_10;
+				int hi = alt[minIndex][u] + short_10;
 
 				while (u <= 0x71) {
 					if (ucode[minIndex][u] >= lo
