@@ -135,6 +135,6 @@ V92Mapper::process(unsigned char *bitsIn)
 	for (i = bits - 1; i >= 0; i--)
 		acc = (short)(acc * 2 | bitsIn[i]);
 
-	return (short)(scale * (constelAmplitudeTable[acc + 8 * mode]
-				/ v92mapper_fsqrt(power)));
+	return (short)((constelAmplitudeTable[acc + 8 * mode]
+			/ v92mapper_fsqrt(power)) * scale);
 }
