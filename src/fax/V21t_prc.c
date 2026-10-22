@@ -154,7 +154,7 @@ TxNextStateV21(void *modem)
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", state);
+			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", tx->hdx->state);
 		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
 		tx->result.byte.status = V21TX_STATUS_DEFAULT;
@@ -182,14 +182,14 @@ TxHdxStartV21(void *modem, unsigned short *in, short *out, short *budget)
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx = tx->hdx;
 	unsigned short taken;
-	short nsamples;
+	unsigned short nsamples;
 
 	taken = (unsigned short)
 		FIFO_read(hdx->fifo,
 			  in, (unsigned short)*budget);
 	*budget = (short)((unsigned short)*budget - taken);
 
-	nsamples = (short)ModDataV21(modem, in, out, taken);
+	nsamples = ModDataV21(modem, in, out, taken);
 
 	TxNextStateV21(modem);
 	tx->result.byte.status = V21TX_STATUS_START;

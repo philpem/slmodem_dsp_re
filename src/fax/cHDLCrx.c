@@ -319,8 +319,9 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 				&cnt, &result);
 
 	if (cnt != 0) {
-		unsigned short len = *(unsigned short *)(void *)ctx;
-		int new_len = ctx->superframe_len + len + 1;
+		unsigned short len;
+		int d;
+		int new_len;
 
 		/*
 		 * Printed whenever `cnt != 0`, BEFORE the bounds check below
@@ -335,23 +336,27 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] Missing HDLC frame of "
 			    "%d during command mode(%d already in)!\n",
-			    ctx->clock_sec, ctx->clock_frac, len,
+			    ctx->clock_sec, ctx->clock_frac,
+			    *(unsigned short *)(void *)ctx,
 			    ctx->superframe_len);
+
+		len = *(unsigned short *)(void *)ctx;
+		d = ctx->superframe_len;
+		new_len = d + len + 1;
 
 		if (new_len > 0xff) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "SuperFrame full, skipping HDLC " "frame!\n");
 		} else {
-			unsigned short *sf = ctx->superframe + ctx->superframe_len;
-			unsigned short *src = (unsigned short *)(void *)ctx
-					     + 1;
-			int i;
+			short i;
 
-			*sf = len;
-			for (i = 0; i < len; i++)
-				sf[1 + i] = src[i];
-			ctx->superframe_len += len + 1;
+			ctx->superframe[d] = len;
+			d++;
+			for (i = 0; i < len; i++, d++)
+				ctx->superframe[d] =
+				    ((unsigned short *)(void *)ctx)[1 + i];
+			ctx->superframe_len = d;
 		}
 	}
 

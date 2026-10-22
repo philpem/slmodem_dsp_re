@@ -2839,8 +2839,9 @@ static void
 ApplyBulkDelay(void *objp, short delay)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;
 	unsigned char *m = (unsigned char *)obj;
-	int d = delay;
+	short d = delay;
 
 	if (d <= 0) {
 		if (DSPLIB_DEBUG_ON())
@@ -2860,11 +2861,9 @@ ApplyBulkDelay(void *objp, short delay)
 	obj->bulk_head = 0;
 	sysdep_memset(m + 0x35b8, 0, (size_t)(d * 2));
 
-	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0
+	if (e->v90_receiver == 0 && e->k56flex_receiver == 0
 	    && obj->far_echo_enable != 0) {
-		if ((short)d > 0x1d) {
-			obj->far_echo_enable = 1;
-		} else {
+		if ((short)d < 0x1e) {
 			int back;
 
 			if (DSPLIB_DEBUG_ON())
@@ -2882,6 +2881,8 @@ ApplyBulkDelay(void *objp, short delay)
 				    obj->dmadelay, obj->dmadelay - back);
 
 			obj->dmadelay = (short)((unsigned short)obj->dmadelay - back);
+		} else {
+			obj->far_echo_enable = 1;
 		}
 	} else {
 		obj->far_echo_enable = 0;
