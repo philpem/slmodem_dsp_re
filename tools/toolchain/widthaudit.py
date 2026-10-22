@@ -25,6 +25,20 @@ TWO CLASSES ARE SUPPRESSED, because a measurement established each:
     a stack offset is not comparable, so they are excluded from store/load
     pairing (their widths are still visible to `--why`-style reading).
 
+TWO LIMITS OF THE KEY, measured on the residual list, are not suppressions
+and must be read into every remaining hit:
+
+  * the two-step suppression matches the SAME register.  The object also
+    zero-extends into one register and sign-extends into a DIFFERENT one
+    (`movzwl 0xaa78(%ebp),%eax` ... `cwtl`), and the zero-extended copy then
+    dies; the tool still reports that.  Four of `v34handshak`'s residual hits
+    are this shape.
+  * a base REGISTER NAME is not an owner.  GCC may hold one struct in `%ebp`
+    in the object and in `%ebx` here, so the same base+displacement can pair
+    two different logical objects (and vice versa).  `v34handshak`'s
+    `0x0/0x6/0x10` hits are `obj->ratecfg` reached through `%ebx` here and
+    `%edi` there; `retrainDetector`'s are a role swap of `%ebp`/`%edi`.
+
 CALIBRATION (measured at fc174e5fc, GCC 3.4.2-r2): with `--exact-only`,
 **2 of 1,118 EXACT symbols** report a conflict.  Both are the documented
 displacement-collision class the key cannot avoid: the object loads BOTH
