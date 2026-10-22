@@ -1120,10 +1120,10 @@ decoderv34(void *objp)
 static int
 rx_slice_err(const struct v34_receiver *rx)
 {
-	int dr = (short)((unsigned short)rx->target_re
-			 - (unsigned short)rx->dp.iir2.i);
-	int di = (short)((unsigned short)rx->target_im
-			 - (unsigned short)rx->dp.iir2.q);
+	short dr = (short)((unsigned short)rx->target_re
+			   - (unsigned short)rx->dp.iir2.i);
+	short di = (short)((unsigned short)rx->target_im
+			   - (unsigned short)rx->dp.iir2.q);
 
 	return (dr * dr + di * di) >> 14;
 }
@@ -1136,8 +1136,8 @@ rx_slice_err(const struct v34_receiver *rx)
 static int
 rx_phase_error(const struct v34_receiver *rx)
 {
-	int p = (short)rx->dp.iir2.i * (short)rx->target_im
-		- (short)rx->dp.iir2.q * (short)rx->target_re;
+	int p = rx->dp.iir2.i * rx->target_im
+		- rx->dp.iir2.q * rx->target_re;
 
 	return (int)((unsigned)p << 2);
 }
@@ -1157,20 +1157,33 @@ rx_phase_error(const struct v34_receiver *rx)
  * the real one is formed as `(b.hist_i) - (0x2000 + a.hist_q)`, so its half
  * -LSB lands on the wrong side.  That is what the object does; it costs one
  * count of bias and is reproduced rather than corrected.
+ *
+ * THE FOUR THREE-TAP LOOPS WALK POINTERS, NOT SUBSCRIPTS.  The object carries
+ * two descending history pointers (`&pred_i[2]`/`&pred_q[2]`, one element above
+ * the write pointer in the shift) and two ascending coefficient pointers, and
+ * its loop bodies step them by two (`add $0x2`/`sub $0x2`).  An indexed
+ * `rx->pred_a[k]` cannot produce that: it compiles to scaled addressing
+ * `0x28e(%ebp,%ecx,2)`, which the object does not contain here.  `k` is a
+ * `short` too -- the object sign-extends the incremented counter (`cwtl`).
  */
 static void
-rx_predict(struct v34_receiver *rx, short *px, short *py)
+rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
 {
 	int acc;
 	int outi, outq;
-	int k;
+	short k;
+	short *pa, *pb, *pi, *pq, *pw;
 
 	acc = 0x2000;
+	pa = rx->pred_a;
+	pq = &rx->pred_q[2];
 	for (k = 0; k < 3; k++)
-		acc += rx->pred_a[k] * rx->pred_q[2 - k];
+		acc += *pa++ * *pq--;
 	acc = -acc;
+	pb = rx->pred_b;
+	pi = &rx->pred_i[2];
 	for (k = 0; k < 3; k++)
-		acc += rx->pred_b[k] * rx->pred_i[2 - k];
+		acc += *pb++ * *pi--;
 	outi = (short)(acc >> 14);
 
 	/*
@@ -1179,20 +1192,33 @@ rx_predict(struct v34_receiver *rx, short *px, short *py)
 	 * then copied up, so splitting them would read the shifted value.
 	 */
 	acc = 0x2000;
+	pa = rx->pred_a;
+	pi = &rx->pred_i[2];
+	pw = &rx->pred_i[3];
 	for (k = 0; k < 3; k++) {
-		rx->pred_i[3 - k] = rx->pred_i[2 - k];
-		acc += rx->pred_i[2 - k] * rx->pred_a[k];
+		*pw-- = *pi;
+		acc += *pi * *pa++;
+		pi--;
 	}
+	pb = rx->pred_b;
+	pq = &rx->pred_q[2];
+	pw = &rx->pred_q[3];
 	for (k = 0; k < 3; k++) {
-		rx->pred_q[3 - k] = rx->pred_q[2 - k];
-		acc += rx->pred_q[2 - k] * rx->pred_b[k];
+		*pw-- = *pq;
+		acc += *pq * *pb++;
+		pq--;
 	}
 	outq = (short)(acc >> 14);
 
-	rx->pred_i[0] = *px;
-	rx->pred_q[0] = *py;
-	*px = (short)((unsigned short)*px + outi);
-	*py = (short)((unsigned short)*py + outq);
+	{
+		unsigned short x = *px;
+		unsigned short y = *py;
+
+		rx->pred_i[0] = x;
+		rx->pred_q[0] = y;
+		*px = (short)(x + outi);
+		*py = (short)(y + outq);
+	}
 }
 
 /*
@@ -1297,9 +1323,16 @@ receiver(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
 	struct v34_timing *t = &obj->receiver.timing;
-	struct v34_equalizer *eq =
-		(struct v34_equalizer *)((char *)rx + V34_RX_EQ_OFFSET);
-	unsigned flags;
+	/*
+	 * 16-bit, as the object has it: the cached value lives in a halfword
+	 * stack slot (`mov %cx,0x30(%esp)`) and every test on it is a `testw`,
+	 * never a `testl`.  The equaliser is reached as `&rx->equalizer` at the
+	 * five call sites that take it (the object emits `lea 0x3cc(%ebp)`,
+	 * a base on the receiver) but as `&obj->receiver.equalizer` at
+	 * V34EqualizerFilter, which the object bases on the object pointer
+	 * (`add $0x630`).
+	 */
+	unsigned short flags;
 	int eq_re, eq_im;
 	int pherr;
 	short i;
@@ -1324,7 +1357,7 @@ receiver(void *objp)
 		if (i & 1) {
 			int v = V34TimingPrefilter(t);
 
-			V34EqualizerUpdateDelayLine(eq, (short)v,
+			V34EqualizerUpdateDelayLine(&rx->equalizer, (short)v,
 						    (short)(v >> 16));
 		}
 
@@ -1352,7 +1385,7 @@ receiver(void *objp)
 	}
 
 	TimingV34(obj);
-	V34EqualizerFilter(eq, &eq_re, &eq_im);
+	V34EqualizerFilter(&obj->receiver.equalizer, &eq_re, &eq_im);
 
 	flags = rx->flags;
 	rx->f208 = (short)((eq_re + 0x2000) >> 14);
@@ -1401,7 +1434,7 @@ receiver(void *objp)
 			} else {
 				flags |= V34_RX_FLAG_RETRAIN;
 				rx->rtncount = 0;
-				rx->flags = (unsigned short)flags;
+				rx->flags = flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "V34RETRAIN, retrain request " "detected, rtncount = %d \n",
@@ -1416,7 +1449,7 @@ receiver(void *objp)
 
 			if (n + 0x78 <= 0 && n + 0x84 > 0) {
 				flags |= V34_RX_FLAG_RENEG;
-				rx->flags = (unsigned short)flags;
+				rx->flags = flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "V34RENEG, RRN request detected," "rtncount = %d\n", (int)n);
@@ -1433,7 +1466,8 @@ receiver(void *objp)
 	 * it.  Coefficients shared with the adapting copy below.
 	 */
 	if (flags & V34_RX_FLAG_PRECODE)
-		rx_predict(rx, &rx->f208, &rx->f20a);
+		rx_predict(rx, (unsigned short *)&rx->f208,
+			   (unsigned short *)&rx->f20a);
 
 	/* Derotate by the recovered carrier: target = conj(nco) * equalised. */
 	{
@@ -1491,7 +1525,7 @@ receiver(void *objp)
 			decoderv34(obj);
 			flags = rx->flags;
 		} else {
-			flags = rx_train_point(rx, eq, n, flags);
+			flags = rx_train_point(rx, &rx->equalizer, n, flags);
 		}
 	} else if (rx->pllcnt > 1) {
 		/*
@@ -1534,11 +1568,11 @@ receiver(void *objp)
 
 		if (n > 0x40) {
 			flags |= V34_RX_FLAG_DET_PENDING;
-			rx->flags = (unsigned short)flags;
+			rx->flags = flags;
 		}
 		if (n > 0x68) {
 			flags |= V34_RX_FLAG_TRAINED;
-			rx->flags = (unsigned short)flags;
+			rx->flags = flags;
 
 			/*
 			 * Trained, and still this far out: the centre taps
@@ -1557,8 +1591,8 @@ receiver(void *objp)
 				rx->rx_blocks = 0;
 				flags = (rx->flags & ~V34_RX_FLAG_TRAINED)
 					| (V34_RX_FLAG_DATA | V34_RX_FLAG_DET_PENDING);
-				rx->flags = (unsigned short)flags;
-				V34EqualizerClearCenterTaps(eq);
+				rx->flags = flags;
+				V34EqualizerClearCenterTaps(&rx->equalizer);
 				flags = rx->flags;
 			}
 		}
@@ -1601,7 +1635,7 @@ carrier_loop:
 	 */
 	if (flags & V34_RX_FLAG_PREDICT) {
 		int ei, eqv;
-		int k;
+		short k;
 
 		rx->pred_err_re = (short)((unsigned short)rx->target_re
 				   - (unsigned short)rx->dp.iir2.i);
@@ -1610,8 +1644,8 @@ carrier_loop:
 
 		rx_predict(rx, &rx->pred_err_re, &rx->pred_err_im);
 
-		ei = rx->pred_err_re;
-		eqv = rx->pred_err_im;
+		ei = (short)rx->pred_err_re;
+		eqv = (short)rx->pred_err_im;
 		rx->preerr_acc += ei * ei + eqv * eqv;
 
 		/*
@@ -1620,21 +1654,30 @@ carrier_loop:
 		 * at 3..1 rather than 2..0 because rx_predict has already
 		 * shifted it: those are the same three entries the
 		 * prediction used.
+		 *
+		 * Pointer walks here as well, and for the same reason: the
+		 * object's body reads `(%reg)` and steps the four pointers by
+		 * two, so the source had pointers rather than `[3 - k]`.
 		 */
+		short *pi = &rx->pred_i[3];
+		short *pq = &rx->pred_q[3];
+		short *pb = rx->pred_b;
+		short *pa = rx->pred_a;
+
 		for (k = 0; k < 3; k++) {
-			int hi = rx->pred_i[3 - k];
-			int hq = rx->pred_q[3 - k];
 			unsigned acc;
 
-			acc = (unsigned)rx->pred_b[k] << 16;
-			acc -= (unsigned)(hi * ei);
-			acc -= (unsigned)(hq * eqv);
-			rx->pred_b[k] = (short)((int)(acc + 0x8000) >> 16);
+			acc = (unsigned)*pb << 16;
+			acc -= (unsigned)(*pi * ei);
+			acc -= (unsigned)(*pq * eqv);
+			*pb++ = (short)((int)(acc + 0x8000) >> 16);
 
-			acc = (unsigned)rx->pred_a[k] << 16;
-			acc -= (unsigned)(hi * eqv);
-			acc += (unsigned)(hq * ei);
-			rx->pred_a[k] = (short)((int)(acc + 0x8000) >> 16);
+			acc = (unsigned)*pa << 16;
+			acc -= (unsigned)(*pi * eqv);
+			acc += (unsigned)(*pq * ei);
+			*pa++ = (short)((int)(acc + 0x8000) >> 16);
+			pi--;
+			pq--;
 		}
 	}
 
@@ -1737,9 +1780,9 @@ carrier_loop:
 		}
 
 		if (flags & V34_RX_FLAG_DATA)
-			V34EqualizerAdapt(eq, (short)er, (short)ei);
+			V34EqualizerAdapt(&rx->equalizer, (short)er, (short)ei);
 		else
-			V34EqualizerCenterAdapt(eq, (short)(er * 2),
+			V34EqualizerCenterAdapt(&rx->equalizer, (short)(er * 2),
 						(short)(ei * 2));
 	}
 }

@@ -261,7 +261,7 @@ struct v34_ratecfg {
 	 */
 	short preemp;			/* +0x06                         */
 	short depth;			/* +0x08 trellis, initV34's arg  */
-	short use_max;			/* +0x0a picks MMaxTable         */
+	unsigned short use_max;		/* +0x0a picks MMaxTable         */
 	const short *divtab;		/* +0x0c the divisor table       */
 	short carrier;			/* +0x10 transmit carrier, Hz    */
 	short rx_baud;			/* +0x12 receive symbol rate     */
@@ -283,7 +283,7 @@ struct v34_ratecfg {
 	short pe_3000;			/* +0x1c                         */
 	short pe_3200;			/* +0x1e                         */
 	short pe_3429;			/* +0x20                         */
-	short rx_use_max;		/* +0x22                         */
+	unsigned short rx_use_max;	/* +0x22                         */
 	/*
 	 * The receive carrier: the field `VPcmV34GetCurrentRxCarrier`
 	 * returns, and the receive half of the same tx/rx pairing every

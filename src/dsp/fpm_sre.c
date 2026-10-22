@@ -190,7 +190,8 @@ sre_interpolate(struct fpm_sre *sre, short w0, short w1)
 static void
 sre_update(struct fpm_sre *sre, short yq, short xq)
 {
-	short angle, e, m, step;
+	short angle, e, step;
+	unsigned short m;
 	int q, rem, frac, branch;
 
 	FPM_atan(yq, xq, &angle);
@@ -252,9 +253,9 @@ sre_update(struct fpm_sre *sre, short yq, short xq)
 		short p;
 		int acc = sre->pll_acc;
 
-		p = (short)(((sre->cfg.pll_k1[m] * e) >> 12) + acc);
+		p = (short)(((sre->cfg.pll_k1[(short)m] * e) >> 12) + acc);
 		sre->pll_acc = (short)
-			(((sre->cfg.pll_k2[m] * e + 0x800) >> 12) + acc);
+			(((sre->cfg.pll_k2[(short)m] * e + 0x800) >> 12) + acc);
 
 		/*
 		 * Ten sub-branch steps per input sample, and the sign is
@@ -363,7 +364,8 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 	short remaining = (short)count;
 
 	while (remaining != 0) {
-		short y, d, tick, mode, extra;
+		short y, d, extra;
+		unsigned short tick, mode;
 		int acc_x, acc_y;
 
 		/*
@@ -405,9 +407,9 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 		 * Note the y term SUBTRACTS.
 		 */
 		tick = sre->tick;
-		sre->tick = (short)(tick + 1);
-		acc_x = sre->acc_x + ((d * sre->cfg.xclock[tick]) >> 3);
-		acc_y = sre->acc_y - ((d * sre->cfg.yclock[tick]) >> 3);
+		sre->tick = tick + 1;
+		acc_x = sre->acc_x + ((d * sre->cfg.xclock[(short)tick]) >> 3);
+		acc_y = sre->acc_y - ((d * sre->cfg.yclock[(short)tick]) >> 3);
 
 		/*
 		 * The envelope.  15/16 with no rounding, and the decay's
@@ -430,7 +432,7 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 			sre->acc_x = acc_x;
 			sre->acc_y = acc_y;
 		} else {
-			short group = sre->group;
+			unsigned short group = sre->group;
 
 			sre->tick = 0;
 			if (sre->groups > (short)(group + 1)) {
