@@ -16,6 +16,10 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v21fax.h"
 
+/* The object re-derives this from `modem` at every use; a local pointer
+ * changes the loop rotation at 0x0a2527 and costs two instructions. */
+#define TXROOT(modem)		((struct v21_tx *)(modem))
+
 /*
  * V21TX_modem -- .text 0x0a24f0, 182 bytes.  See v21fax.h for the two arms,
  * the budget and why `in` does not advance while `out` does.
@@ -34,15 +38,14 @@
 int
 V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 {
-	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx;
 	unsigned short taken;
 	short budget;
 	short total;
 
-	hdx = tx->hdx;
+	hdx = TXROOT(modem)->hdx;
 
-	tx->result.byte.flags1 &=
+	TXROOT(modem)->result.byte.flags1 &=
 		(unsigned char)~V21TX_RESULT_B1_BIT1;
 
 	if (hdx->int_0004 == 0)
@@ -57,7 +60,7 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	do {
 		short got;
 
-		hdx = tx->hdx;
+		hdx = TXROOT(modem)->hdx;
 		got = hdx->handler(modem, in, out, &budget);
 
 		out += got;
@@ -65,18 +68,20 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	} while (budget > 0);
 
 	if (*count != taken) {
-		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
+		TXROOT(modem)->result.byte.flags1 |=
+			V21TX_RESULT_B1_BIT1;
 		/*
 		 * A BYTE store into the low byte of the int this function
 		 * returns -- `movb $0x4,0x1c(%edi)` at 0x0a2564 -- which is
 		 * why it cannot be written through `AT_I`.
 		 */
-		tx->result.byte.status = V21TX_RESULT_BYTE_04;
+		TXROOT(modem)->result.byte.status =
+			V21TX_RESULT_BYTE_04;
 	}
 
 	*count = (unsigned short)total;
 
-	return tx->result.word;
+	return TXROOT(modem)->result.word;
 }
 
 /*
