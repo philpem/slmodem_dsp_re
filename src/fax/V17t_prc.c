@@ -248,8 +248,7 @@ TxNextStateV17(void *modem)
 
 			prm = TXPRIV(modem);
 			mode = prm->mode;
-			gen.data_word =
-				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
@@ -294,8 +293,7 @@ TxNextStateV17(void *modem)
 
 			prm = TXPRIV(modem);
 			mode = prm->mode;
-			gen.data_word =
-				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
@@ -332,8 +330,7 @@ TxNextStateV17(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word =
-				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;

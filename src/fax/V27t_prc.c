@@ -187,8 +187,7 @@ TxNextStateV27(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V27TX_PATTERN_CARR[prm->rate];
+			gen.data_word = V27TX_PATTERN_CARR[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
@@ -224,8 +223,7 @@ TxNextStateV27(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V27TX_PATTERN_ALT[prm->rate];
+			gen.data_word = V27TX_PATTERN_ALT[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
@@ -261,8 +259,7 @@ TxNextStateV27(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V27TX_PATTERN_SCR1[prm->rate];
+			gen.data_word = V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
@@ -300,8 +297,7 @@ TxNextStateV27(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V27TX_PATTERN_SCR1[prm->rate];
+			gen.data_word = V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
