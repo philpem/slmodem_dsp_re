@@ -33,8 +33,9 @@
 #define FCS16_NIBBLE(fcs, shifted)					\
 	do {								\
 		unsigned int t_ = ((shifted) ^ (fcs)) & 0xf000u;	\
-		(fcs) = (unsigned short)					\
-			(((((fcs) ^ (t_ >> 11)) << 4) ^ t_) | (t_ >> 12)); \
+		unsigned short n_ = (unsigned short)				\
+			((((fcs) ^ (t_ >> 11)) << 4) ^ t_);		\
+		(fcs) = (unsigned short)(n_ | (t_ >> 12));		\
 	} while (0)
 
 int
@@ -43,7 +44,7 @@ faxvmi_gen_fcs16(unsigned short *buf, short count)
 	unsigned short fcs = 0xffff;
 	short i;
 
-	for (i = count; i != 0; i--) {
+	for (i = count; i-- != 0;) {
 		unsigned int octet = *buf++;
 
 		FCS16_NIBBLE(fcs, octet << 8);
