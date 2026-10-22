@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""Does a size gap mean MISSING CODE, or just a different arrangement?
+"""Screen instruction surpluses without claiming source equivalence.
 
 THE QUESTION THIS ANSWERS
 
 `byteident.py` says a symbol is SIZE and how many bytes differ.  That is not
-enough to decide what to do next: a function with ten missing instructions and
-a function whose loops are scheduled in a different order both read as SIZE,
-and only the first is a reconstruction target.  Reading the source to find out
-is expensive and, on this object, usually wasted -- the V.34 body family was
-repeatedly assumed to be missing content and every one of those hunks turned
-out to be the same statements in a different order.
+enough to decide what to inspect next. Missing operations, different source
+control flow, value capture, types and scheduling can all produce a SIZE
+result. This screen reports projections that help select an investigation;
+none of its counts establishes source equivalence or closes reconstruction.
 
-The discriminating fact is not hunk SIZE, it is the INSTRUCTION MULTISET.  If
-every instruction in a blob-only hunk also appears somewhere in our build (and
-vice versa), the two functions contain the same instructions and differ only in
-order, spilling or scheduling -- an ARRANGEMENT difference no source edit will
-close.  If an instruction appears on one side and nowhere on the other, the
-shapes genuinely differ and there is something to reconstruct.
+An INSTRUCTION MULTISET detects multiplicity differences hidden by alignment.
+Equality of that multiset says only that each projected instruction has a
+counterpart. Dependent operation order, register relationships and branch
+conditions can differ while the projection agrees. Conversely, a surplus can
+come from compiler instruction selection rather than a missing operation.
 
 WHAT IS REPORTED
 
@@ -32,7 +29,8 @@ carry those instructions, so `unique` on a hunk means "this instruction has no
 counterpart anywhere in the other build", not "this hunk is wholly novel".
 
 Canonicalisation is `structsim.py`'s, imported rather than re-grown: registers
-become `R`, a call keeps WHICH symbol it targets and loses the displacement,
+become `R`, branch opcodes become classes, a call keeps WHICH symbol it targets
+and loses the displacement,
 section-relative `.rodata`/`.bss` addends are masked (they are per-TU layout
 artefacts), and small displacements and immediates are KEPT, because they
 carry the structure.  Alignment padding (`nop`, self-moves, `lea 0x0(%reg,
@@ -50,7 +48,8 @@ WHAT THIS IS NOT
 
 Not a grade and not a gate.  A `unique` count of a few instructions can still
 be the compiler choosing a different constant materialisation, and a zero
-merely says no instruction is absent -- it does not say the source is right.
+merely says no projected instruction is absent. It does not establish control
+flow, operand ownership, read timing or source fidelity.
 Use it to decide whether to READ the function at all, and record the numbers
 beside the finding: "SIZE (48 bytes)" alone cannot tell the two cases apart.
 
@@ -83,13 +82,10 @@ code = structsim.code            # canonical list, padding stripped
 canon = structsim.canon          # one instruction, registers masked
 
 #
-# An OPERAND-masked form.  A spilled counter in slot 0x34 on one side and 0x38
-# on the other is the same statement, and so is a different constant feeding
-# the same arithmetic; neither is missing code.  Structure (mnemonics, operand
-# shapes, call targets) is preserved, operands are not -- so a symbol whose
-# operands differ but whose instructions all have counterparts reads as
-# arrangement, and the STRICT count beside it says how much of the operand
-# text moved.
+# An OPERAND-masked projection. Different stack slots or arithmetic constants
+# can agree here without representing the same value or statement. The strict
+# count retains those operands; neither count reconstructs register dataflow
+# or CFG edges. structsim.canon also folds branch opcodes into branch classes.
 #
 OPERAND = re.compile(r"\$?-?0x[0-9a-f]+|\$\d+")
 
@@ -159,11 +155,11 @@ def split(blob, ours):
 def shape(d):
     """A statement of the multiset result, in the words the playbook uses."""
     if d["unique_blob"] == 0 and d["unique_ours"] == 0:
-        return ("PROVEN arrangement: every operand-masked instruction has a "
-                "counterpart, so nothing is missing at this granularity")
+        return ("zero surplus in the operand-masked projection; control flow, "
+                "register relationships and operand values remain unchecked")
     if d["mn_blob"] == 0 and d["mn_ours"] == 0:
-        return ("same instruction KINDS, different operands -- substitution or "
-                "different constants, not missing code")
+        return ("same projected instruction KINDS, different operand shapes; "
+                "inspect operands and dataflow before classifying the cause")
     return ("%d instruction kind(s) have no counterpart -- READ the surplus "
             "list: a different MNEMONIC is often still the compiler's choice "
             "(lea for add, xor for mov $0), so this is a question, not a "
@@ -299,7 +295,7 @@ def worst(index, count):
 
 
 def self_test():
-    """Prove the multiset test separates arrangement from content."""
+    """Check surplus accounting and demonstrate its known blind spots."""
     checks = []
 
     def check(label, cond):
@@ -345,11 +341,11 @@ def self_test():
           d["unique_blob"] == 1 and d["unique_ours"] == 1)
     d = split(relaxed([canon("cmp", "$0x7f,%ax")]),
               relaxed([canon("cmp", "$0x10,%ax")]))
-    check("same mnemonic, different constant -> arrangement when MASKED",
+    check("different constants agree in the MASKED projection",
           d["unique_blob"] == 0 and d["unique_ours"] == 0)
     d = split(relaxed([canon("mov", "0x34(%esp),%eax")]),
               relaxed([canon("mov", "0x38(%esp),%ebx")]))
-    check("spilled counter in another slot -> arrangement when MASKED",
+    check("different displacements agree in the MASKED projection",
           d["unique_blob"] == 0 and d["unique_ours"] == 0)
     d = split(relaxed([canon("mov", "0x34(%esp),%eax")]),
               relaxed([canon("xor", "0x34(%esp),%eax")]))
@@ -361,6 +357,29 @@ def self_test():
     c2 = canon("call", ".+393 @R_386_PC32:('symbol', 'v8_mpyint', -4)")
     c3 = canon("call", ".+70 @R_386_PC32:('symbol', 'v8_absfn', -4)")
     check("call displacement ignored, target kept", c1 == c2 and c1 != c3)
+
+    # Known bad controls: all have different semantics despite zero surplus.
+    # Exercise the real canonicalisation pipeline rather than feeding it an
+    # already projected example that could hide a parser change.
+    blind_spots = [
+        ("dependent add/multiply order",
+         [("add", "$0x1,%eax"), ("imul", "$0x2,%eax,%eax")],
+         [("imul", "$0x2,%eax,%eax"), ("add", "$0x1,%eax")]),
+        ("different persistent member and value",
+         [("movl", "$0x1,0x4(%eax)")],
+         [("movl", "$0x2,0x8(%eax)")]),
+        ("opposite conditional branch",
+         [("test", "%eax,%eax"), ("je", "10")],
+         [("test", "%eax,%eax"), ("jne", "10")]),
+    ]
+    for label, original, changed in blind_spots:
+        d = split(relaxed([canon(*row) for row in original]),
+                  relaxed([canon(*row) for row in changed]))
+        check(label + " -> zero surplus with explicit limits",
+              d["unique_blob"] == 0 and d["unique_ours"] == 0
+              and "remain unchecked" in shape(d))
+    check("dependent-order control has different results at input 3",
+          (3 + 1) * 2 == 8 and 3 * 2 + 1 == 7)
 
     bad = sum(not ok for _, ok in checks)
     for label, ok in checks:
@@ -378,7 +397,7 @@ def main():
                     help="rank the N shared symbols with the most instructions "
                          "that have no counterpart on the other side")
     ap.add_argument("--self-test", action="store_true",
-                    help="prove the test separates arrangement from content")
+                    help="check surplus accounting and known projection limits")
     a = ap.parse_args()
 
     if a.self_test:

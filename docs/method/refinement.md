@@ -2180,7 +2180,7 @@ Bound: taking an address is legitimate when the pointer is passed to a callee
 applies where the pointer only abbreviates a store.
 
 
-### Lever 25. A size gap is missing CONTENT only if the unmatched hunks are few and LARGE
+### Lever 25. Use unmatched hunks to nominate operations for inspection
 
 Lever 2 says a size difference is "an absence or an extra". That is true of the
 verdict and useless as a plan: a function can be short by eighty instructions
@@ -2196,7 +2196,8 @@ Three calibrations from the same day (`/tmp/opencode/missingHunks.py`, which nee
 
 - `modulatevector` (V.34): blob 820, ours 739, hunks **62, 61, 56, 47, 37, 20,
   19, 18** -- a handful of large blocks separated by long matched runs. That is
-  content: several arms are partly absent, and each hunk is worth reading.
+  a reason to inspect those arms; hunk size alone does not establish absent
+  source.
 - `v8_getbit` (V.8): blob 129, ours 121, hunks **21, 17, 8, 6, 5, 4, 3, 2** --
   many small hunks interleaved with matches, and the largest ones are a 21-line
   bit-fetch block whose logic ours has in a different arrangement. That is
@@ -2207,9 +2208,9 @@ Three calibrations from the same day (`/tmp/opencode/missingHunks.py`, which nee
   prologue -- ONE large cause, visible in the head, and the fix moved LCS
   26.8% -> 57.7%.
 
-So: one or two large hunks means reconstruct; many interleaved small hunks with
-a small count delta means do not, unless a single hunk can be shown to be a
-self-contained statement block. Quote the hunk sizes in the finding either way,
+One or two large hunks can nominate a source block; many interleaved small
+hunks can suggest scheduling or operand differences. Neither pattern decides
+whether source recovery is needed. Quote the hunk sizes in the finding either way,
 because "SIZE (48 bytes)" alone cannot tell you which of the two you have.
 
 ### The hunk list alone over-reports content: PAIR the two sides
@@ -2232,18 +2233,16 @@ number of hunks >= 12 and their sum):
 | `agcadapt` | 72 | 70 | -2 | 27 | 25 | 0 | 0 | 7 |
 
 Every one of them has blob-only ~= ours-only, and a hunk sum that is three to
-twenty times the net gap. That is ARRANGEMENT, not content: the same statements
-appear twice in different orders and with different spill slots. The 73-
+twenty times the net gap. This suggests investigating arrangement, but equal
+hunk totals do not establish that the statements or their operands agree. The 73-
 instruction `demapFrame` hunk at `0x594d3`, the largest in that function, is a
 loop body whose spilled counter lives in different stack slots on each side --
 `0x34(%esp)`/`0x38(%esp)` in the object against ours' own frame -- so nothing is
 missing from it.
 
-The rule that follows: a CONTENT gap has a blob-only hunk with NO
-same-sized ours-only counterpart nearby, and its size is comparable to the net
-deficit. An ARRANGEMENT difference has the counterpart. So print both sides'
-hunks and pair them before reading any source, and treat a large hunk in a
-function whose blob-only and ours-only totals match as arrangement.
+Print both sides' hunks and pair their operations before classifying a gap.
+Similar hunk sizes are a triage clue, not evidence that a source block exists
+elsewhere. Compare control flow, operands and value lifetimes as well.
 
 ### Even ONE large deletion can be arrangement: test the INSTRUCTION MULTISET
 
@@ -2258,7 +2257,8 @@ It aligns the two canonicalised instruction lists and reports the surplus --
 instructions present more times on one side than the other -- at THREE levels,
 because each answers a different question:
 
-    kinds       mnemonic only         is an instruction KIND absent?
+    kinds       projected opcode      is an instruction KIND absent after
+                                      branch opcodes become classes?
     structure   operands masked       is an instruction absent once constants
                                       and displacements are folded?
     operands    operands kept         how much of the operand text moved?
@@ -2275,10 +2275,10 @@ Measured on the V.34 body family (`kinds` / `structure` / `operands`, blob ours)
 | `initV34` | 235 | 228 | 29 / 22 | 32 / 25 | 65 / 58 |
 | `agcadapt` | 71 | 69 | 3 / 1 | 3 / 1 | 3 / 1 |
 
-**A ZERO is the only thing that is a proof.** Structure-level zero means every
-instruction has a counterpart somewhere in the other build, so nothing is
-missing at that granularity and the difference is order, spilling or
-scheduling. A NONZERO count is a QUESTION, not a verdict: GCC legitimately
+**A zero proves equality of the projection only.** It cannot establish source
+equivalence: register relationships, constants, offsets, branch conditions
+and dependent operation order can disappear from the comparison. A NONZERO
+count is also a QUESTION, not a verdict: GCC legitimately
 substitutes `lea` for `add` and `xor` for `mov $0`, so a kinds surplus can be
 codegen with no source difference at all.
 
@@ -2291,7 +2291,8 @@ production tool includes `replace` and reports kinds 20 / 7 for the same
 symbol. Both numbers are internally consistent; they answer different
 questions, and the flat claim "every deleted instruction exists elsewhere, so
 it is arrangement" was **too strong**. What survives is the narrower rule
-above: structure-level zero proves arrangement, a surplus invites a look.
+above needs further narrowing: neither zero nor surplus proves the source
+cause. Both are prompts for operand and control-flow inspection.
 
 **And the surplus list is where the lead usually is.** `initdigital`'s surplus
 is `movzwl N(R),R` thirteen times in the blob against `movswl R,R` ten times in
@@ -2300,14 +2301,25 @@ not missing content and not arrangement: it is the Lever 20 shape, a 16-bit
 temporary or a signedness choice, and the next pass on this function should
 start there rather than at the hunks.
 
-`initdigital`, `V34SetINFO1aBits`, `demapFrame`, `modulatevector`, `getFrame`,
-`initV34` and `agcadapt` are therefore closed as RECONSTRUCTION targets -- none
-of them is missing a statement block that the multiset can see.
+The multiset screen does not close `initdigital`, `V34SetINFO1aBits`,
+`demapFrame`, `modulatevector`, `getFrame`, `initV34` or `agcadapt` as
+reconstruction targets. Their published structural surpluses are nonzero in
+any case. Reopen individual operations only with a native operand, control-flow
+or lifetime witness; the screen alone establishes neither a defect nor its
+absence.
 
-What actually closed the real gaps in this family
-was never content -- it was declaration order (Lever 21), a `short` temporary
-or return (Lever 20), taking a member's address (Lever 24), or the frame a
-base forces (Lever 22).
+Three known bad controls now demonstrate this boundary through the actual
+canonicalisation pipeline: reversed dependent add/multiply order, a different
+value stored to a different member, and an opposite conditional branch. All
+have zero structural surplus. The first produces 8 versus 7 at input 3.
+`python3 tools/toolchain/contentgap.py --self-test` reports these blind spots
+alongside its positive surplus controls; diagnostic output states what remains
+unchecked. No grading or normalisation rule is relaxed.
+
+Earlier recoveries in this family used declaration order (Lever 21), a `short`
+temporary or return (Lever 20), taking a member's address (Lever 24), and the
+frame a base forces (Lever 22). Those results do not exclude further source
+control-flow, ownership or arithmetic recovery.
 
 ### Lever 26. A constant-count repetition is UNROLLED in the SOURCE, not by the compiler
 
