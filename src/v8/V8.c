@@ -272,7 +272,6 @@ void
 rebuildJMSequence(struct v8 *v)
 {
 	struct v8_tx_sequence *jm = v->tx_seq;
-	struct v8_tx_sequence *rx = &v->seq[0];
 	struct v8_cm *cm = v->cm;
 	int n = 2;
 	int base;
@@ -287,8 +286,8 @@ rebuildJMSequence(struct v8 *v)
 	jm->word[1] = V8_SEQ_PREAMBLE_1;
 
 	/* Find the call function in what arrived, and try to accept it. */
-	for (i = 0; i < (short)rx->wordidx; i++) {
-		unsigned short w = (unsigned short)rx->word[i];
+	for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+		unsigned short w = (unsigned short)v->seq[0].word[i];
 		int accept = 0;
 
 		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
@@ -304,7 +303,7 @@ rebuildJMSequence(struct v8 *v)
 
 			while (cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 				unsigned short got =
-					(unsigned short)rx->word[i];
+					(unsigned short)v->seq[0].word[i];
 
 				if (got == (unsigned short)
 					   ext_expected(cm->ext1[k])) {
@@ -352,7 +351,7 @@ rebuildJMSequence(struct v8 *v)
 			accept = 1;
 		}
 
-		w = (unsigned short)rx->word[i];
+		w = (unsigned short)v->seq[0].word[i];
 
 		/* Or one the menu lists explicitly? */
 		if (!accept
@@ -408,23 +407,23 @@ rebuildJMSequence(struct v8 *v)
 		 * the three already in the buffer, gathering the three flags
 		 * on the way.
 		 */
-		for (i = 0; i < (short)rx->wordidx; i++) {
-			unsigned short w = (unsigned short)rx->word[i];
+		for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+			unsigned short w = (unsigned short)v->seq[0].word[i];
 
 			if ((w & V8_JM_FN_MASK) == 0x141) {
 				int at = base;
 
 				jm->word[at] = (short)(jm->word[at] & w);
 				at++;
-				v90_mod = (rx->word[i] >> 3) & 1;
+				v90_mod = (v->seq[0].word[i] >> 3) & 1;
 				i++;
-				w = (unsigned short)rx->word[i];
+				w = (unsigned short)v->seq[0].word[i];
 				while ((w & 0x39) == 0x11 && at < base + 3) {
 					jm->word[at] = (short)(jm->word[at]
 							       & w);
 					at++;
 					i++;
-					w = (unsigned short)rx->word[i];
+					w = (unsigned short)v->seq[0].word[i];
 				}
 				n = base + 3;
 			}
@@ -489,8 +488,8 @@ rebuildJMSequence(struct v8 *v)
 	 */
 	if (all_flags) {
 		if (cm->b2 & V8_CM_EXT2_PRESENT) {
-			for (i = 0; i < (short)rx->wordidx; i++) {
-				unsigned short w = (unsigned short)rx->word[i];
+			for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+				unsigned short w = (unsigned short)v->seq[0].word[i];
 				int k = 0;
 
 				if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
@@ -499,7 +498,7 @@ rebuildJMSequence(struct v8 *v)
 				while (cm->ext2[k] != 0
 				       && k <= V8_CM_EXT_MAX - 1) {
 					unsigned short got = (unsigned short)
-							     rx->word[i];
+							     v->seq[0].word[i];
 
 					if (got == (unsigned short)
 						   ext_expected(cm->ext2[k])) {
@@ -519,8 +518,8 @@ rebuildJMSequence(struct v8 *v)
 			}
 		}
 	} else {
-		for (i = 0; i < (short)rx->wordidx; i++) {
-			unsigned short w = (unsigned short)rx->word[i];
+		for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+			unsigned short w = (unsigned short)v->seq[0].word[i];
 			int k = 0;
 
 			if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
@@ -530,7 +529,7 @@ rebuildJMSequence(struct v8 *v)
 				while (cm->ext2[k] != 0
 				       && k <= V8_CM_EXT_MAX - 1) {
 					unsigned short got = (unsigned short)
-							     rx->word[i];
+							     v->seq[0].word[i];
 
 					if (got == (unsigned short)
 						   ext_expected(cm->ext2[k])) {
