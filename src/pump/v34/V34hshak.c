@@ -7104,7 +7104,7 @@ t4_md_over(struct v34_object *obj, unsigned short flags)
 	if (DSPLIB_DEBUG_ON())					/* 0x71667 */
 		dsplibs_debug_printf("RX MDLENGTH over, it was %d bauds,"
 				     "rxflgs = 0x%x,pllcnt = %d,rxgain=0x%x\n",
-				     (int)rx->rx_blocks, (unsigned)flags,
+				     (short)rx->rx_blocks, (unsigned)flags,
 				     (int)rx->pllcnt, (int)rx->agc_gain);
 
 	/*
@@ -7405,8 +7405,11 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
  * THE ENTRY IS A RETRAIN TEST AND THE COMPARISON IS THIRTY-TWO BITS WIDE.
  * 0x65417 sign-extends +0xaa96 into a register, 0x6541e forms `7 *` there
  * with a `lea`/`sub` pair, and 0x65427 compares 32 bits against the
- * sign-extended baud counter.  Spelling it sixteen bits wide is a defect no
- * legal baud can expose -- 7 * 3429 is 23,853, inside a short -- so
+ * sign-extended baud counter.  The counter itself is loaded unsigned
+ * (`movzwl`) and narrowed to `short` only for that compare, which is the
+ * `(int)blocks` / `(short)blocks` pair written below.  Spelling it sixteen
+ * bits wide is a defect no legal baud can expose -- 7 * 3429 is 23,853,
+ * inside a short -- so
  * `t_v34hsrx4.c` drives it at a baud of 20,000, where the two readings
  * disagree about whether the modem retrains at all.  Finding F724's shape in
  * a second arm.
@@ -7418,6 +7421,7 @@ t4_rx_receive(struct v34_object *obj)
 {
 	struct v34_receiver *rx;
 	unsigned short flags;
+	int blocks;
 
 	/*
 	 * 0x653ee.  The arm's first act, ahead of the retrain test at 0x65401:
@@ -7434,9 +7438,17 @@ t4_rx_receive(struct v34_object *obj)
 	 * %ebx.
 	 */
 	flags = rx->flags;				/* 0x653f7 */
+	/*
+	 * 0x65406 loads the unsigned counter and widens it twice, not once:
+	 * `movzwl 0x124(%edx),%edi` then `movswl %di,%ecx`.  The field is
+	 * `unsigned short`, so `blocks` keeps the zero-extended load, and the
+	 * comparison then narrows it with `(short)` for the 32-bit signed
+	 * compare against `7 * rx_baud`.
+	 */
+	blocks = (int)rx->rx_blocks;
 
 	if ((flags & V34_RX_FLAG_RETRAIN) != 0
-	    || ((int)rx->rx_blocks > 7 * (int)obj->ratecfg.rx_baud
+	    || ((short)blocks > 7 * (int)obj->ratecfg.rx_baud
 		&& (flags & 0x80) == 0)) {
 		/*
 		 * 0x6544e.  The second argument is a literal 1, pushed at
@@ -9555,7 +9567,7 @@ datapumpv34(void *objp)
 		unsigned span;
 		short err;
 
-		if (rx->rx_blocks <= DP_RX_BLOCK_CAP)
+		if ((short)rx->rx_blocks <= DP_RX_BLOCK_CAP)
 			rx->rx_blocks = (short)(rx->rx_blocks + 1);
 
 		receiver(obj);

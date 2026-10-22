@@ -111,8 +111,15 @@ struct v34_receiver {
 	 * -- derived: rxsymcnt, withheld (F10123): eleven references in
 	 * `V34hshak.c` and two mutation fixtures (`v34hsrx4.json`,
 	 * `v34hsrx72.json`) match this field's text verbatim.
+	 *
+	 * UNSIGNED, and every one of the object's nine loads is `movzwl`
+	 * (0x5bd15, 0x5c320, 0x5c55b, 0x5cd44, 0x65406, 0x67a33, 0x699f5,
+	 * 0x6a0ab, 0x71a2a).  The two sites that need a SIGNED reading narrow
+	 * at the use site with `(short)`; 0x65406 shows the pair explicitly --
+	 * `movzwl 0x124(%edx),%edi` then `movswl %di,%ecx` -- which is the
+	 * `(int)blocks` local plus `(short)blocks` in the comparison.
 	 */
-	short           rx_blocks;            /* +0x124 */
+	unsigned short  rx_blocks;            /* +0x124 */
 	short           best_index;      /* +0x126 */
 	/*
 	 * +0x128.  `rxtiming`'s and `receiver`'s output count -- always 4,
