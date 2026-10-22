@@ -390,7 +390,8 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
 	short remaining = count;
 
 	while (remaining != 0) {
-		short y, tick, mode;
+		short y, mode;
+		unsigned short tick;
 		int d, acc_x, acc_y;
 
 		/*
@@ -432,9 +433,9 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
 		 * clock reference.  Note the y term SUBTRACTS.
 		 */
 		tick = sre->tick;
-		sre->tick = (short)(tick + 1);
-		acc_x = sre->acc_x + ((d * SREv22_xCLOCK[tick]) >> 3);
-		acc_y = sre->acc_y - ((d * SREv22_yCLOCK[tick]) >> 3);
+		sre->tick = tick + 1;
+		acc_x = sre->acc_x + ((d * SREv22_xCLOCK[(short)tick]) >> 3);
+		acc_y = sre->acc_y - ((d * SREv22_yCLOCK[(short)tick]) >> 3);
 
 		/* The envelope, and the only rounded smoother of the two. */
 		mode = sre->mode;
@@ -446,7 +447,7 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
 			sre->acc_x = acc_x;
 			sre->acc_y = acc_y;
 		} else {
-			short group = sre->group;
+			unsigned short group = sre->group;
 
 			sre->tick = 0;
 			if (sre->groups > (short)(group + 1)) {

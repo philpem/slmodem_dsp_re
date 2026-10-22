@@ -168,7 +168,7 @@ typedef char fpm_sre_owner_period_offset[(sizeof(void *) != 4 || __builtin_offse
 struct fpm_sre {
 	struct fpm_sre_cfg cfg;	/* +0x00 copied wholesale by init            */
 
-	short mode;		/* +0x38 0..2; indexes pll_k1 / pll_k2       */
+	unsigned short mode;	/* +0x38 0..2; indexes pll_k1 / pll_k2       */
 	short pll_acc;		/* +0x3a loop-filter integrator              */
 	short err_avg;		/* +0x3c smoothed phase error, 15/16, signed */
 	short mag_avg;		/* +0x3e smoothed |discriminant|; the squelch
@@ -194,8 +194,8 @@ struct fpm_sre {
 	short branch;		/* +0x66 polyphase branch, 0 .. 9            */
 	short groups;		/* +0x68 clock groups per PLL update         */
 	short settle;		/* +0x6a update counter, held at cfg.settle  */
-	short group;		/* +0x6c groups since the last update        */
-	short tick;		/* +0x6e sample within the group             */
+	unsigned short group;	/* +0x6c groups since the last update        */
+	unsigned short tick;	/* +0x6e sample within the group             */
 	short need;		/* +0x70 input samples owed before the next
 				 *       output; carried across calls        */
 	short pad72;		/* +0x72 written by neither function         */

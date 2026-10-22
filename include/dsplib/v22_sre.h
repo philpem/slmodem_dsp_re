@@ -120,8 +120,8 @@ struct v22_sre {
 				 *       in modes 0 and 1, 12 in mode 2         */
 	short settle;		/* +0x32 update counter, 0 .. 65; at 64 the
 				 *       loop leaves mode 0 for mode 1          */
-	short group;		/* +0x34 groups counted since the last update   */
-	short tick;		/* +0x36 sample within the group, 0 .. 5;
+	unsigned short group;	/* +0x34 groups counted since the last update   */
+	unsigned short tick;	/* +0x36 sample within the group, 0 .. 5;
 				 *       indexes SREv22_xCLOCK / yCLOCK         */
 	short need;		/* +0x38 input samples owed before the next
 				 *       output; carried across calls           */
