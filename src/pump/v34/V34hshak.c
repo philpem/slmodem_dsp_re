@@ -607,108 +607,99 @@ setfinalrate(void *objp)
 	unsigned char *m = (unsigned char *)obj;
 	unsigned short a9de = *(unsigned short *)(m + 0xa9de);
 	unsigned short a9e0 = *(unsigned short *)(m + 0xa9e0);
-	unsigned short a9e2 = *(unsigned short *)(m + 0xa9e2);
-	short *tx_baud    = &obj->ratecfg.baud;
-	short *tx_preemp  = &obj->ratecfg.preemp;
-	const short **tx_scale = &obj->ratecfg.divtab;
-	short *tx_carrier = &obj->ratecfg.carrier;
-	short *rx_baud    = &obj->ratecfg.rx_baud;
-	short *rx_carrier = &obj->ratecfg.rx_carrier;
-	const short **rx_scale = &obj->ratecfg.rx_divtab;
-	const short **rx_cdesc = &obj->det_coefs;
-	int code;
-	int high;
+	short code;
+	short high;
 
-	*tx_preemp = (short)bitreverse((unsigned short)
+	obj->ratecfg.preemp = (short)bitreverse((unsigned short)
 				       (((a9de & 3) << 2)
 					| ((a9e0 & 0xc0) >> 6)), 4);
 
-	code = bitreverse((unsigned short)((a9e2 >> 4) & 7), 3);
+	code = bitreverse((unsigned short)((*(const unsigned short *)(m + 0xa9e2) >> 4) & 7), 3);
 	high = (a9de & 4) != 0;
 
 	switch (code) {
 	case 0:
-		*tx_baud = 2400;
-		*tx_scale = scale2400;
-		*tx_carrier = high ? 1800 : 1600;
+		obj->ratecfg.baud = 2400;
+		obj->ratecfg.divtab = scale2400;
+		obj->ratecfg.carrier = high ? 1800 : 1600;
 		break;
 	case 2:
-		*tx_baud = 2800;
-		*tx_scale = scale2800;
-		*tx_carrier = high ? 1867 : 1680;
+		obj->ratecfg.baud = 2800;
+		obj->ratecfg.divtab = scale2800;
+		obj->ratecfg.carrier = high ? 1867 : 1680;
 		break;
 	case 3:
-		*tx_baud = 3000;
-		*tx_scale = scale3000;
-		*tx_carrier = high ? 2000 : 1800;
+		obj->ratecfg.baud = 3000;
+		obj->ratecfg.divtab = scale3000;
+		obj->ratecfg.carrier = high ? 2000 : 1800;
 		break;
 	case 4:
-		*tx_baud = 3200;
-		*tx_scale = scale3200;
-		*tx_carrier = high ? 1920 : 1829;
+		obj->ratecfg.baud = 3200;
+		obj->ratecfg.divtab = scale3200;
+		obj->ratecfg.carrier = high ? 1920 : 1829;
 		break;
 	case 5:
-		*tx_baud = 3429;
-		*tx_scale = scale3429;
-		*tx_carrier = 1959;
+		obj->ratecfg.baud = 3429;
+		obj->ratecfg.divtab = scale3429;
+		obj->ratecfg.carrier = 1959;
 		break;
 	default:
 		break;
 	}
 
 	code = bitreverse((unsigned short)(((a9e0 * 2) & 7)
-					   | ((a9e2 >> 7) & 1)), 3);
+					   | ((*(const unsigned short *)(m + 0xa9e2) >> 7) & 1)), 3);
 
 	switch (code) {
 	case 0:
-		*rx_baud = 2400;
-		*rx_scale = scale2400;
+		obj->ratecfg.rx_baud = 2400;
+		obj->ratecfg.rx_divtab = scale2400;
 		if (m[0xa9ae] & 4) {
-			*rx_carrier = 1800;
-			*rx_cdesc = c1800_;
+			obj->ratecfg.rx_carrier = 1800;
+			obj->det_coefs = c1800_;
 		} else {
-			*rx_carrier = 1600;
-			*rx_cdesc = c1600;
+			obj->ratecfg.rx_carrier = 1600;
+			obj->det_coefs = c1600;
 		}
 		break;
 	case 2:
-		*rx_baud = 2800;
-		*rx_scale = scale2800;
+		obj->ratecfg.rx_baud = 2800;
+		obj->ratecfg.rx_divtab = scale2800;
 		if (m[0xa9b2] & 1) {
-			*rx_carrier = 1867;
-			*rx_cdesc = c1867;
+			obj->ratecfg.rx_carrier = 1867;
+			obj->det_coefs = c1867;
 		} else {
-			*rx_carrier = 1680;
-			*rx_cdesc = c1680;
+			obj->ratecfg.rx_carrier = 1680;
+			obj->det_coefs = c1680;
 		}
 		break;
 	case 3:
-		*rx_baud = 3000;
-		*rx_scale = scale3000;
+		obj->ratecfg.rx_baud = 3000;
+		obj->ratecfg.rx_divtab = scale3000;
 		if (m[0xa9b6] & 0x80) {
-			*rx_carrier = 2000;
-			*rx_cdesc = c2000;
+			obj->ratecfg.rx_carrier = 2000;
+			obj->det_coefs = c2000;
 		} else {
-			*rx_carrier = 1800;
-			*rx_cdesc = c1800_;
+			obj->ratecfg.rx_carrier = 1800;
+			obj->det_coefs = c1800_;
 		}
 		break;
 	case 4:
-		*rx_baud = 3200;
-		*rx_scale = scale3200;
+		obj->ratecfg.rx_baud = 3200;
+		obj->ratecfg.rx_divtab = scale3200;
 		if (m[0xa9b8] & 0x40) {
-			*rx_carrier = 1920;
-			*rx_cdesc = c1920;
+			obj->ratecfg.rx_carrier = 1920;
+			obj->det_coefs = c1920;
 		} else {
-			*rx_carrier = 1829;
-			*rx_cdesc = c1829;
+			obj->ratecfg.rx_carrier = 1829;
+			obj->det_coefs = c1829;
 		}
 		break;
 	case 5:
-		*rx_baud = 3429;
-		*rx_scale = scale3429;
-		*rx_carrier = 1959;
-		*rx_cdesc = c1959;
+		obj->ratecfg.rx_baud = 3429;
+		obj->ratecfg.rx_divtab = scale3429;
+		obj->ratecfg.rx_carrier = 1959;
+		obj->det_coefs = c1959;
 		break;
 	default:
 		break;
@@ -718,7 +709,7 @@ setfinalrate(void *objp)
 		dsplibs_debug_printf(
 			"V34PROBESELECT, setfinalrate, txbaudrate = %d,"
 			"rxbaudrate = %d,txpreemp= %d\n",
-			*tx_baud, *rx_baud, *tx_preemp);
+			obj->ratecfg.baud, obj->ratecfg.rx_baud, obj->ratecfg.preemp);
 }
 
 /*
