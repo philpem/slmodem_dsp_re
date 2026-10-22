@@ -1028,12 +1028,9 @@ v8_ansamgenerate(struct v8 *v, short *out)
  * carry on, or a value to return from the handshake.
  */
 static int
-transmit(struct v8 *v, int *done)
+transmit(struct v8 *v)
 {
-	struct v8_v21_params *p = &v->v21_params;
 	int i;
-
-	*done = 0;
 
 	switch ((short)v->tx_state) {
 	case V8_TX_SILENCE:
@@ -1064,7 +1061,6 @@ transmit(struct v8 *v, int *done)
 				v->elapsed++;
 			}
 			v->rx_state = 4;
-			*done = 1;
 			return 1;
 		}
 		v8_ansamgenerate(v, v->tx_stage);
@@ -1088,22 +1084,21 @@ transmit(struct v8 *v, int *done)
 					    v->side == 1 ? "CJ" : "JM");
 				v->elapsed++;
 			}
-			*done = 1;
 			return 1;
 		}
 		v8_fskmodulate(v, v->tx_bit);
-		p->sample_count = (short)(p->sample_count + 4);
-		if (p->samples_per_bit == p->sample_count) {
+		v->v21_params.sample_count = (short)(v->v21_params.sample_count + 4);
+		if (v->v21_params.samples_per_bit == v->v21_params.sample_count) {
 			v->tx_bit = (short)v8_getbit(v->tx_seq);
-			p->sample_count = 0;
+			v->v21_params.sample_count = 0;
 		}
 		v->elapsed++;
 		return 0;
 
 	case V8_TX_FSK:
 		v8_fskmodulate(v, v->tx_bit);
-		p->sample_count = (short)(p->sample_count + 4);
-		if (p->samples_per_bit == p->sample_count) {
+		v->v21_params.sample_count = (short)(v->v21_params.sample_count + 4);
+		if (v->v21_params.samples_per_bit == v->v21_params.sample_count) {
 			v->tx_bit = (short)v8_getbit(v->tx_seq);
 			v->cm_bit_count = (short)(v->cm_bit_count + 1);
 			if (v->cm_bit_count == V8_HS_CM_BITS) {
@@ -1114,7 +1109,7 @@ transmit(struct v8 *v, int *done)
 				v->tx_state = V8_TX_FSK_TIMED;
 				v->tx_seq = &v->seq[0];
 			}
-			p->sample_count = 0;
+			v->v21_params.sample_count = 0;
 		}
 		return 0;
 
@@ -1444,8 +1439,8 @@ v8_hs_qca1(struct v8 *v, int ch)
 {
 	struct v8_tx_sequence *s = v->seq_spare;
 	int idx = (short)v->word_count;
-	int w1;
-	int w4;
+	unsigned w1;
+	unsigned w4;
 	int is_d;
 	int ok;
 
@@ -1665,7 +1660,6 @@ int
 v8handshak(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	int done = 0;
 	int rc;
 
 	/*
@@ -1679,8 +1673,8 @@ v8handshak(struct v8 *v)
 
 		if ((unsigned)st > 0x28)
 			continue;
-		rc = transmit(v, &done);
-		if (done)
+		rc = transmit(v);
+		if (rc)
 			return rc;
 	}
 

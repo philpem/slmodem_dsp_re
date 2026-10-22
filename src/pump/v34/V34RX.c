@@ -776,6 +776,7 @@ modem_serrint(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
+	struct v34_tx *tx = &obj->tx;
 	struct v34_queue *rxq = (struct v34_queue *)rx;
 	short lag = serr_dequeue(obj);
 	short acc;
@@ -797,7 +798,7 @@ modem_serrint(void *objp)
 	acc = (short)((unsigned short)obj->echo_residual + (unsigned short)obj->echo_correction);
 	obj->echo_correction = (short)((acc * 0xed8 - ((int)obj->echo_residual << 12)) >> 12);
 
-	if (obj->tx.tx_flags & V34_EC_FEED) {
+	if (tx->tx_flags & V34_EC_FEED) {
 		int near = V34EchoFilter(&obj->echo0, lag);
 		int far = 0;
 
@@ -849,14 +850,17 @@ modem_serrint(void *objp)
 		short *dl = obj->echo1.coeff_frac;
 		const short *c = rx->fir_coeff;
 		int sum = 0x8000;
-		int i;
+		short i;
+		short *p = &dl[0x3b];
+		short *q = &dl[0x3c];
+		const short *cp = c;
 
 		dl[0] = sample;
 		for (i = 0; i < 60; i++) {
-			short v = dl[0x3b - i];
+			short v = *p--;
 
-			dl[0x3c - i] = v;
-			sum += (int)c[i] * v;
+			*q-- = v;
+			sum += (int)*cp++ * v;
 		}
 		/*
 		 * And the filtered value REPLACES the residual from here
@@ -883,7 +887,7 @@ modem_serrint(void *objp)
 
 	rxq->wr = q_next(rxq, (int *)wr + 1, V34_RXQ_END);
 
-	if (obj->tx.tx_flags & V34_EC_FROZEN)
+	if (tx->tx_flags & V34_EC_FROZEN)
 		return 0;
 
 	/* The second history ring: the residual in both halves of an entry. */
@@ -930,11 +934,11 @@ modem_serrint(void *objp)
 		 * interesting thing about it.  Taking it from `count` cost a
 		 * real divergence -- finding F200.
 		 */
-		int far_count = (short)(prev - 0x2bb);
-		int every45 = (count % 45) == 0;
+		short far_count = (short)(prev - 0x2bb);
+		short rem45 = (short)(count % 45);
 
-		near_step = every45 && count > 2000;
-		far_step = every45 && far_count > 2000;
+		near_step = count > 2000 && rem45 == 0;
+		far_step = far_count > 2000 && rem45 == 0;
 
 		if (count == 0x90)
 			near_energy =
