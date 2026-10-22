@@ -238,11 +238,24 @@ extern "C" {
  * `vpcm_create` DOES check the result -- `test %eax,%eax` at .text+0x3b31 and
  * a branch into the failure unwind -- so the null return matters to the caller
  * even though nothing but a failing allocator can produce one.
+ *
+ * THE NULL TEST IS ALSO WHAT KEEPS THE CALL A CALL.  `return
+ * sysdep_malloc(...)` is a sibling call -- `mov $0x14,%eax; mov %eax,0x4(%esp);
+ * jmp sysdep_malloc`, three instructions -- and the object has the five of a
+ * normal call (`sub $0xc; movl $0x14,(%esp); call; add $0xc; ret`).  A null
+ * test that returns the same value is folded away but inhibits the sibling
+ * call, which is the only spelling of six tried that maps onto those five
+ * instructions: direct return, temp, cast, sizeof, discard-the-result and this
+ * one.  The test is the author's, and the object's size depends on it.
  */
 void *
 K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3)
 {
-	return sysdep_malloc(K56FLEX_OBJECT_SIZE);
+	void *obj = sysdep_malloc(K56FLEX_OBJECT_SIZE);
+
+	if (obj == 0)
+		return 0;
+	return obj;
 }
 
 /*

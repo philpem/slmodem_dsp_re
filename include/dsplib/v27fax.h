@@ -318,7 +318,7 @@ struct v27_tx_source {
 	short (*handler)(void *modem, unsigned short *in, short *out,
 			 short *budget);
 	short state;
-	short countdown;
+	unsigned short countdown;
 };
 
 struct v27_tx_block {
