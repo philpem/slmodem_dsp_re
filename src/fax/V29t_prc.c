@@ -120,13 +120,13 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
  * two fewer instructions.  There is no `srp` pointer local: the object keeps
  * the BLOCK base in %ebp and addresses +0x18 twice (`movswl 0x18(%ebp)` and
  * `mov %bx,0x18(%ebp)`), so the source names the offset at both sites; a
- * `short *srp` costs a `lea` and moves the base.  And the XOR operands are
- * `(lsb << 7) ^ ((sr << 6) & 0x80)`, that order and not the reverse: it is
- * what puts the feedback term in %eax, where `and $0x80,%eax` has the short
- * encoding the object uses (`and $0x80,%edx` is one byte longer).  The
- * remaining difference is two allocation choices (which of two same-class
- * temporaries takes %eax, and the scheduler's order of the `shl $7`/`and`
- * pair), so this is BYTES and not yet EXACT.  Finding F11430.
+ * `short *srp` costs a `lea` and moves the base.  And the feedback is
+ * computed and DECLARED BEFORE `lsb`, from `(sr & 1)` written inline:
+ * `((sr << 6) & 0x80) ^ ((sr & 1) << 7)`.  That order is what lands the
+ * feedback term in %eax, where `and $0x80,%eax` has the short encoding the
+ * object uses (`and $0x80,%edx` is one byte longer); with `lsb` declared
+ * first GCC allocates the other way and the function is BYTES.  Finding
+ * F11430.
  */
 void
 GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
@@ -137,8 +137,8 @@ GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
 	unsigned short i;
 
 	for (i = n; i-- != 0; ) {
+		int fb = ((sr << 6) & 0x80) ^ ((sr & 1) << 7);
 		int lsb = sr & 1;
-		int fb = (lsb << 7) ^ ((sr << 6) & 0x80);
 
 		sr = (int)(((unsigned)(sr | fb) >> 1) & 0x7f);
 		*out++ = (unsigned short)(lsb ? 0xb : 0);
