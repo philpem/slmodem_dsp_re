@@ -1416,6 +1416,17 @@ structsim: tc
 contentgap: tc
 	@$(PYTHON) tools/toolchain/contentgap.py $(S)
 
+# `widthaudit` reports every memory access whose WIDTH or EXTENSION disagrees
+# with the object, keyed by owning base and displacement.  A store-width
+# disagreement is a field or local type fact; a load-extension disagreement is
+# a signedness fact when the value is live (`extcheck.py` decides that).  Two
+# classes are suppressed because they carry no type information: a `movzwl`
+# immediately re-sign-extended, and `%esp` slots.  `EXACT_LIST=... --exact-only`
+# is the calibration check (2 of 1,118 EXACT symbols at fc174e5fc, both
+# displacement collisions).  Triage aid, never a gate.
+widthaudit: tc
+	@$(PYTHON) tools/toolchain/widthaudit.py $(S)
+
 # Cast audit: explicit numeric casts the context already performs (issue #69,
 # finding F11353).  clang is analysis apparatus, not a reconstruction
 # authority, so this is deliberately NOT a phase tier.
