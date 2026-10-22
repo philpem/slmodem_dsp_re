@@ -213,17 +213,21 @@ call paths, with shared tails explaining the smaller native call count:
 | waiting-user timeout | zero | `0xb97c` |
 
 Consequently, a retrain call-count difference is not evidence of missing
-inlining. A bounded next control would let each of the three inner
-switches select its request before a common call, then inspect the first RTL
-stage that merges those tails. The falsifier is unchanged or worse tail
-sharing, a changed behavior at the component boundary, or any lost exact
-neighbor. Shared machine tails alone do not prove which source form the
-author used; no such Progress source change has been tested or adopted here.
-Progress already declares engine, transmitter and receiver owners, so the
-successful DIL owner spelling is not a missing change to copy blindly.
-The native and current complete disassemblies are retained as
-`scratch/progress-native.txt` and `scratch/progress-candidate.txt`; the
-complete call/tail inventory is `scratch/progress-retrain-edges.json`.
+inlining. One subsequent bounded control, in a separate clean worktree, let
+each of the three inner switches select its request before a shared call.
+It preserved the nine source requests and reached five calls with no tail
+jumps, but reduced LCS from 723 to 720/1581 and instructions from 1493 to
+1479, farther from the reference's 1581. Longest run stayed 31. Only Progress
+changed among 56 common functions; all 30 exact neighbors survived.
+
+The control fails the structural-improvement discriminator and was discarded.
+No differential or full phase gate was run for that discarded source, so its
+compilation result carries no behavioral-equivalence claim. The next useful
+witness must distinguish incoming blocks and live owners beyond the known
+shared calls. Progress already declares engine, transmitter and receiver
+owners, so the DIL owner spelling is not a missing change to copy blindly.
+See [the complete bounded control report](vpcm-progress-call-sharing-control.md)
+for the original addresses, denominators, candidate and retained evidence.
 
 ## Reproduction and evidence
 
