@@ -79,7 +79,7 @@ void null_delete(struct faxvmi_link *dp);
  * @return Always -1 -- there is no modem to report a real count from.
  */
 int null_process(struct faxvmi_link *dp, short *in, unsigned short *result,
-		 unsigned short *count);
+		 short *count);
 
 /**
  * @brief Report status. Does nothing but return -1 (`mov $0xffffffff,%eax;
