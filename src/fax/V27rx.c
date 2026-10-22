@@ -139,14 +139,18 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	 * THE RATE, and the two numbers are V.27ter's own.  An unrecognised
 	 * one is reported through the status word and then treated as 4800.
 	 */
-	if ((&((struct v27_rx *)modem)->cfg)->bit_rate == 2400) {
+	switch ((&((struct v27_rx *)modem)->cfg)->bit_rate) {
+	case 2400:
 		sh->rate = V27SH_RATE_2400;
-	} else if ((&((struct v27_rx *)modem)->cfg)->bit_rate == 4800) {
+		break;
+	case 4800:
 		sh->rate = V27SH_RATE_4800;
-	} else {
+		break;
+	default:
 		sh->rate = V27SH_RATE_4800;
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_ERROR;
 		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_DEFAULT;
+		break;
 	}
 
 	/* The data-channel detector, which does depend on the rate. */

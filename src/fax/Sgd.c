@@ -72,7 +72,6 @@ struct sgd_cfg SGD_CFG = {
 		0,			/* gen.idle_sym   */
 		0,			/* gen.short_000e */
 		0,			/* gen.data_word  */
-		0,			/* gen.short_0012 */
 		1,			/* gen.word_syms  */
 		0			/* gen.short_0016 */
 	},
@@ -338,7 +337,7 @@ SGD_sequence_det(struct sgd *s, const unsigned short *sym, short n)
 short
 SGD_symbol_gen(struct sgd *s, unsigned short *out, short n)
 {
-	int data = s->cfg.gen.data_word;
+	unsigned short data = s->cfg.gen.data_word;
 	int bits = s->cfg.sym_bits;
 	int k = s->word_left;
 	short last = (short)(s->cfg.gen.word_syms - 1);

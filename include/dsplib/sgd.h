@@ -38,10 +38,14 @@ struct sgd_gen_cfg {
 					 *       has run out and does not
 					 *       repeat                     */
 	short short_000e;		/* +0x0e never read                 */
-	unsigned short data_word;	/* +0x10 the word SGD_symbol_gen
+	int data_word;			/* +0x10 the word SGD_symbol_gen
 					 *       shifts out, most significant
-					 *       field first                */
-	short short_0012;		/* +0x12 never read                 */
+					 *       field first.  A 32-BIT field:
+					 *       every writer stores it with a
+					 *       long move of a sign-extended
+					 *       short, and the generator
+					 *       narrows it to `unsigned short`
+					 *       at its own read.            */
 	unsigned short word_syms;	/* +0x14 fields per data word       */
 	short short_0016;		/* +0x16 never read                 */
 };

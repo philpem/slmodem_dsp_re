@@ -251,8 +251,7 @@ TxNextStateV29(void *modem)
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V29TX_PATTERN_SCR1[prm->rate];
+			gen.data_word = V29TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;

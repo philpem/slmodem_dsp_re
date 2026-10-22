@@ -191,18 +191,24 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 	TXPRIV(modem)->process = TxHdxStartV17;
 	((struct v17tx_priv *)prm)->r0c = TXROOT(modem)->cfg.int_0018;
 
-	if (TXROOT(modem)->cfg.bitrate == 9600) {
+	switch (TXROOT(modem)->cfg.bitrate) {
+	case 9600:
 		TXPRIV(modem)->mode = 1;
-	} else if (TXROOT(modem)->cfg.bitrate == 12000) {
+		break;
+	case 12000:
 		TXPRIV(modem)->mode = 2;
-	} else if (TXROOT(modem)->cfg.bitrate == 7200) {
+		break;
+	case 7200:
 		TXPRIV(modem)->mode = 0;
-	} else if (TXROOT(modem)->cfg.bitrate == 14400) {
+		break;
+	case 14400:
 		TXPRIV(modem)->mode = 3;
-	} else {
+		break;
+	default:
 		TXPRIV(modem)->mode = 3;
 		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
 		TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
+		break;
 	}
 
 	/* ---- the private block: the ring, the scrambler, the symbol coder

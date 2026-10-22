@@ -414,7 +414,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  * countdown/`FAXVMI_process` call, BEFORE the S7 logic above -- the object's
  * own branch order): if the raw status's bit 0/1 pair `(status >> 8) & 0x3`
  * -- no, this function does NOT read that pair; instead it walks
- * `ctx->vmi_a->link->modem`'s own +0x50, up to FOUR signed 16-bit reads
+ * `ctx->vmi_a->link->modem`'s own +0x50, up to FOUR 16-bit reads
  * at +0x2c of the pointer chain (re-chased each iteration, since the object
  * re-reads it every loop pass rather than hoisting it), each compared
  * against `GAIN_THRESHOLD_TABLE[i]` -- the FIRST index `i` (0..3) where
@@ -424,8 +424,8 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  * countdown, ecx, of 12/9/6/3/0) is stored (an ALREADY-established field,
  * `fax_class1_info(0)`'s own; this is a SECOND writer, evidence class 3 --
  * see class1.h's existing note on it), logged ("Gain Attenuation Reuqest:
- * +%d[dB], avg_rms = %d.\n", `ecx`, sign-extended low byte of the chased
- * value -- object's own typo "Reuqest" kept verbatim), and THEN (whether or
+ * +%d[dB], avg_rms = %d.\n", `ecx`, the chased value as a sign-extended
+ * 16-bit quantity -- object's own typo "Reuqest" kept verbatim), and THEN (whether or
  * not that inner debug line fired): log ("Carrier Detected in
  * _hdlc_receive_look_carrier_state\n"), `ctx->status = FAX_CLASS1_CONNECT`,
  * log ("At %2d.%02d[sec] hdlc_receive_state_init\n" -- narrating a
@@ -509,18 +509,18 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 		 * way execution falls through to the tone-cadence tail below.
 		 */
 		for (i = 0; i <= 3; i++) {
-			short v;
+			unsigned short v;
 
 			modem = ctx->vmi_a->link->modem;
 			p = *(char **)((char *)modem + 0x50);
-			v = *(short *)(p + 0x2c);
+			v = *(unsigned short *)(p + 0x2c);
 
-			if (v < (short)GAIN_THRESHOLD_TABLE[i]) {
+			if ((short)v < (short)GAIN_THRESHOLD_TABLE[i]) {
 				ctx->gain_attenuation_db = 12 - 3 * i;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
 					    "Gain Attenuation Reuqest: " "+%d[dB], avg_rms = %d",
-					    ctx->gain_attenuation_db, (int)(signed char)v);
+					    ctx->gain_attenuation_db, (int)(short)v);
 				break;
 			}
 		}

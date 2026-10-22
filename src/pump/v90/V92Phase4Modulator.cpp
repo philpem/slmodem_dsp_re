@@ -302,7 +302,7 @@ V92Phase4Modulator::~V92Phase4Modulator()
 int V92Phase4Modulator::generateCPt()
 {
 	unsigned int bit;
-	short sym;
+	unsigned int sym;
 
 	if (symbolCount <= 24)
 		bit = prevBit ^ 1;
@@ -312,10 +312,10 @@ int V92Phase4Modulator::generateCPt()
 		      ^ prevBit;
 	prevBit = bit;
 
-	sym = amplitude;
+	sym = (unsigned short)amplitude;
 	if (bit != 0)
 		sym = -sym;
-	return sym;
+	return (short)sym;
 }
 
 /*

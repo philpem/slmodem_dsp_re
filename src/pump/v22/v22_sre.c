@@ -326,7 +326,7 @@ sre_update(struct v22_sre *sre, short yq, short xq)
 
 	{
 		short p;
-		int acc = sre->pll_acc;
+		unsigned short acc = sre->pll_acc;
 
 		p = (short)(((SREv22_PLL_K1[m] * e) >> 12) + acc);
 		sre->pll_acc = (short)(((SREv22_PLL_K2[m] * e + 0x800) >> 12)
