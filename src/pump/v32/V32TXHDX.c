@@ -261,7 +261,7 @@ TxHdxCarrierState(struct v32_modem *modem, short *data, short *out, unsigned sho
 	else
 		count = (unsigned short)hdx->state_left;
 
-	hdx->state_left -= *left;
+	HDX(modem)->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	n = (short)ModDataV32(modem, data, out, count);
@@ -287,7 +287,7 @@ TxHdxScrSequence(struct v32_modem *modem, short *data, short *out, unsigned shor
 	else
 		count = (unsigned short)hdx->state_left;
 
-	hdx->state_left -= *left;
+	HDX(modem)->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	ScrambleDataV32(modem, data, count);
@@ -333,7 +333,7 @@ TxHdxTRN(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 	else
 		count = (unsigned short)hdx->state_left;
 
-	hdx->state_left -= *left;
+	HDX(modem)->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	ScrambleDataV32(modem, data, count);
@@ -367,7 +367,7 @@ TxHdxData(struct v32_modem *modem, short *data, short *out, unsigned short *left
 	else
 		count = (unsigned short)hdx->state_left;
 
-	hdx->state_left -= *left;
+	HDX(modem)->state_left -= *left;
 
 	ScrambleDataV32(modem, data, count);
 	n = (short)ModDataV32(modem, data, out, count);
@@ -402,10 +402,10 @@ TxHdxNoCarrier(struct v32_modem *modem, short *data, short *out, unsigned short 
 	else
 		count = (unsigned short)hdx->state_left;
 
-	if (hdx->state_left <= 0)
+	if (HDX(modem)->state_left <= 0)
 		count = 0;
 
-	hdx->state_left -= *left;
+	HDX(modem)->state_left -= *left;
 
 	ScrambleDataV32(modem, data, count);
 	n = (short)TxNoCarrierV32(modem, data, out, count);
