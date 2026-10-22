@@ -186,10 +186,10 @@ SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
 	short widx = ring->widx;
 	int quad = statep->quad;
 	int state = statep->state;
-	unsigned int i;
+	short i;
 
-	for (i = 0; i < count; i++) {
-		unsigned int sel = (unsigned int)data[i] & 3u;
+	for (i = count; i != 0; i--) {
+		unsigned int sel = (unsigned int)*data++ & 3u;
 		int point;
 
 		quad = (quad + 3) & 3;
