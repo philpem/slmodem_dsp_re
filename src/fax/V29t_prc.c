@@ -112,24 +112,38 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
  * The register is a short in a block this tree has not modelled (see
  * V29TX_OBJ_SCRAM in v29data.h); it is read once, stepped n times and
  * written back once, exactly as the object does.
+ *
+ * FOUR SOURCE FACTS WERE READ OFF THE COUNTER, and each is visible.
+ * The increment is IN THE CONDITION -- `for (i = n; i-- != 0; )` -- because
+ * the object tests the OLD value (`lea -1(%esi),%ecx; movzwl %cx,%esi;
+ * inc %cx; jne`), where `i != 0; i--` gives a plain `test %esi,%esi` and
+ * two fewer instructions.  There is no `srp` pointer local: the object keeps
+ * the BLOCK base in %ebp and addresses +0x18 twice (`movswl 0x18(%ebp)` and
+ * `mov %bx,0x18(%ebp)`), so the source names the offset at both sites; a
+ * `short *srp` costs a `lea` and moves the base.  And the XOR operands are
+ * `(lsb << 7) ^ ((sr << 6) & 0x80)`, that order and not the reverse: it is
+ * what puts the feedback term in %eax, where `and $0x80,%eax` has the short
+ * encoding the object uses (`and $0x80,%edx` is one byte longer).  The
+ * remaining difference is two allocation choices (which of two same-class
+ * temporaries takes %eax, and the scheduler's order of the `shl $7`/`and`
+ * pair), so this is BYTES and not yet EXACT.  Finding F11430.
  */
 void
 GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
 {
 	void *blk = *(void **)(void *)((unsigned char *)modem
 				       + V29TX_OBJ_SCRAM);
-	short *srp = (short *)(void *)((unsigned char *)blk + V29SCRAM_SR);
-	int sr = *srp;
+	int sr = *(short *)(void *)((unsigned char *)blk + V29SCRAM_SR);
 	unsigned short i;
 
-	for (i = n; i != 0; i--) {
+	for (i = n; i-- != 0; ) {
 		int lsb = sr & 1;
-		int fb = ((sr << 6) & 0x80) ^ (lsb << 7);
+		int fb = (lsb << 7) ^ ((sr << 6) & 0x80);
 
 		sr = (int)(((unsigned)(sr | fb) >> 1) & 0x7f);
 		*out++ = (unsigned short)(lsb ? 0xb : 0);
 	}
-	*srp = (short)sr;
+	*(short *)(void *)((unsigned char *)blk + V29SCRAM_SR) = (short)sr;
 }
 
 /*
