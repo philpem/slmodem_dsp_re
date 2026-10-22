@@ -1705,6 +1705,17 @@ V90Equalizer::enterChannelVerification()
  *   - `fdot` carries TWO accumulators and is unrolled by four.  GCC 3.4.2 at
  *     -O3 neither unrolls a loop nor reassociates a float sum, so both are in
  *     the source; collapsing them changes the arithmetic.
+ *   - EVERY `getDecision` RESULT IS NARROWED AT THE CALL SITE.  The object
+ *     emits `cwtl` after each of the five calls in `process` (0x39b45,
+ *     0x39bab, 0x39d2c, 0x39ff0, 0x3a09f) -- a widening only an `int`
+ *     caller handed a 16-bit value performs.  `getDecision` itself returns
+ *     `int` (its own two arms are what widen), so the narrowing is the
+ *     caller's and is spelled as the cast it is; `demapper->hardDecision`
+ *     already carries one in its declared return type.
+ *   - the linear-equ update is unrolled four taps per pass, like `fdot`,
+ *     and forms `-linearEquBeta * lerr` ONCE before the loop: the object's
+ *     four-store body at 0x39970 and scalar tail at 0x399b0 are source-
+ *     level, and the multiplier is one x87 register loaded at 0x39951.
  *   - the high-error test is a `long double`, and the TYPE is what selects
  *     the object's `fld %st(0); fabs; flds; fcomp %st(1); jae`.  Every
  *     `float` spelling emits `fcoms mem; jbe` whatever the operand order and
@@ -1930,7 +1941,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_CHANNEL_VERIFY: {
 			int st;
 
-			decision = phase3Demod->getDecision(soft);
+			decision = (short)phase3Demod->getDecision(soft);
 			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
@@ -1945,7 +1956,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_FPE: {
 			int st;
 
-			decision = phase4Demod->getDecision((short)softInt);
+			decision = (short)phase4Demod->getDecision((short)softInt);
 			st = phase4Demod->int_0028;
 			if (st) {
 				stateCount = st;
@@ -1981,7 +1992,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_RRN: {
 			int st;
 
-			decision = phase4Demod->getDecision((short)softInt);
+			decision = (short)phase4Demod->getDecision((short)softInt);
 			st = phase4Demod->int_0028;
 			if (st) {
 				stateCount = st;
@@ -2137,7 +2148,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			else if (soft < -32767.0f)
 				soft = -32767.0f;
 
-			decision = phase4Demod->getDecision(
+			decision = (short)phase4Demod->getDecision(
 			    (short)(phase4Demod->state > 1 ? soft : y));
 			st = phase4Demod->int_0028;
 			if (st) {
@@ -2240,7 +2251,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_PHASE3: {
 			int st;
 
-			decision = phase3Demod->getDecision(soft);
+			decision = (short)phase3Demod->getDecision(soft);
 			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
@@ -2562,7 +2573,6 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * of counts there.  Finding F6203.
 			 */
 			err = soft - fdec;
-			lerr = (long double)y - (long double)fdec;
 			/*
 			 * The magnitude in `long double`, computed once,
 			 * tested and then printed -- and the TYPE is what
@@ -2593,6 +2603,15 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				}
 			}
 
+			/*
+			 * `fsubrs 0xb0(%esp)` at 0x396bb, after the print
+			 * and not before it: the object computes this
+			 * difference once the high-error block has closed,
+			 * so it does not have to survive the `edprintf`
+			 * call and never reaches a stack slot.
+			 */
+			lerr = (long double)y - (long double)fdec;
+
 			if (updateCoefs) {
 				/*
 				 * 0x396e0 multiplies by %st(2), which the
@@ -2604,10 +2623,38 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				for (i = 0; i < dfeLength; i++)
 					dfeCoefs[i] += (dfeBeta * err)
 					    * array_44[i];
-				for (i = 0; i < linearEquLength; i++)
-					linearEquCoefs[i] +=
-					    (-linearEquBeta * lerr)
-					    * array_18[historyIndex + i];
+				float *lc = linearEquCoefs;
+				const float *xh = &array_18[historyIndex];
+				unsigned int m = linearEquLength;
+				/*
+				 * The object forms `-linearEquBeta * lerr` ONCE,
+				 * before the loop (`flds 0x10; fchs; fmul
+				 * %st(1)` at 0x39951), and every tap multiplies
+				 * by that register.  Spelled inline at each tap
+				 * GCC reloads and redoes it four times.
+				 */
+				long double k = -linearEquBeta * lerr;
+				/*
+				 * FOUR TAPS PER PASS, the same source-level
+				 * unroll `fdot` carries: the object emits
+				 * `cmp $0x3,%ebx; ja` around a four-store
+				 * body at 0x39970 and a scalar tail at
+				 * 0x399b0, and our single `for` loop is
+				 * nothing like it.  Lever 26.
+				 */
+				while (m > 3) {
+					lc[0] += xh[0] * k;
+					lc[1] += xh[1] * k;
+					lc[2] += xh[2] * k;
+					lc[3] += xh[3] * k;
+					xh += 4;
+					lc += 4;
+					m -= 4;
+				}
+				while (m != 0) {
+					*lc++ += *xh++ * k;
+					m--;
+				}
 			}
 
 			/* 0x39830, and the update path rejoins at 0x39840. */
@@ -2668,7 +2715,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		blockErrorEnergyRms = (float)rms;
 		meanErrorEnergyCurrent = errorEnergyMeanK
 		    * meanErrorEnergyCurrent
-		    + (1.0f - errorEnergyMeanK) * rms;
+		    + (1.0 - errorEnergyMeanK) * rms;
 		connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount);
 		blockSampleCount = 0;
 		blockErrorEnergySum = 0;
