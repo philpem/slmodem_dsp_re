@@ -213,13 +213,20 @@ def artifact(path, name, check_entry=True):
     return elf, symbols, index, fn, section, relocs, hashlib.sha256(data).hexdigest()
 
 
+def _align_up(value, alignment):
+    alignment = alignment or 1
+    return (value + alignment - 1) // alignment * alignment
+
+
 def _function_identity(path, name):
     """Masked body bytes and relocation shape for one sized function.
 
     A `ld -r` artifact rebases section-relative addends, so the raw four-byte
     fields are not expected to equal the input object's. Bytes outside those
     fields must match, the relocation offsets/types/targets must match, and
-    every relocation to one target must move by the same link rebase.
+    every relocation to one target must move by the same link rebase. Each
+    record also carries the target's section and symbol value so the caller can
+    compare that rebase with the actual section placement.
     """
     with open(path, 'rb') as stream:
         elf = ELFFile(stream)
@@ -256,16 +263,87 @@ def _function_identity(path, name):
                 if (target['st_info']['type'] == 'STT_SECTION' and
                         isinstance(target['st_shndx'], int)):
                     key = ('section', elf.get_section(target['st_shndx']).name)
+                    target_section = key[1]
                 else:
                     key = ('symbol', target.name)
+                    target_section = (elf.get_section(target['st_shndx']).name
+                                      if isinstance(target['st_shndx'], int) else None)
                 addend = int.from_bytes(raw[offset:offset + 4], 'little')
-                relocations.append((offset, relocation['r_info_type'], key, addend))
+                relocations.append((offset, relocation['r_info_type'], key, addend,
+                                    target['st_value'], target_section))
                 raw[offset:offset + 4] = b'\0\0\0\0'
         return bytes(raw), tuple(sorted(relocations))
 
 
-def _same_linked_body(source, linked, name):
-    """Is `linked` the same coded body as `source`, rebased by `ld -r`?"""
+def _manifest_inputs(manifest):
+    """The ordered link inputs, exactly as `ld -r` received them."""
+    directory = Path(manifest).parent
+    paths = []
+    for number, line in enumerate(Path(manifest).read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        fields = line.split()
+        require(len(fields) == 2, 'recovered-order manifest record')
+        object_path = directory / fields[0]
+        require(object_path.is_file(), 'recovered-order manifest object missing')
+        paths.append(object_path)
+    return paths
+
+
+def _unique_section(elf, name, what):
+    sections = [s for s in elf.iter_sections() if s.name == name]
+    require(len(sections) == 1, what + ' section is missing or ambiguous: ' + name)
+    return sections[0]
+
+
+def _section_placement(manifest, source, section_name, linked_elf):
+    """Where `source`'s named input section landed in the linked output section.
+
+    The partial link is `ld -r` over the ordered manifest, so each same-named
+    input section is concatenated at its own alignment. Reproducing that layout
+    from the manifest's section headers and requiring it to explain the linked
+    section's whole size turns the expected relocation delta into an observed
+    placement rather than a guess.
+    """
+    inputs = _manifest_inputs(manifest)
+    source = os.path.realpath(str(source))
+    indices = [i for i, path in enumerate(inputs)
+               if os.path.realpath(str(path)) == source]
+    require(len(indices) == 1,
+            'manifest-selected copy is not a unique ordered link input')
+    selected = indices[0]
+    cursor = 0
+    placement = None
+    for index, path in enumerate(inputs):
+        with open(path, 'rb') as stream:
+            elf = ELFFile(stream)
+            require(elf.elfclass == 32 and elf.little_endian and
+                    elf['e_type'] == 'ET_REL', 'unsupported manifest object ELF/ABI')
+            matching = [s for s in elf.iter_sections() if s.name == section_name]
+        require(len(matching) <= 1, 'ambiguous input section: ' + section_name)
+        if matching:
+            section = matching[0]
+            cursor = _align_up(cursor, section['sh_addralign'])
+            if index == selected:
+                placement = cursor
+            cursor += section['sh_size']
+    require(placement is not None,
+            'manifest-selected copy has no target section: ' + section_name)
+    linked_section = _unique_section(linked_elf, section_name, 'linked')
+    require(cursor == linked_section['sh_size'],
+            'manifest layout does not explain linked section: ' + section_name)
+    return placement
+
+
+def _same_linked_body(source, linked, name, manifest):
+    """Is `linked` the same coded body as `source`, rebased by `ld -r`?
+
+    The masked body and relocation shape must match. Each relocation's addend
+    delta must equal the rebase implied by the actual output section placement:
+    a section-symbol target moves by the input section's placement offset, and
+    a named-symbol target keeps its addend while the symbol itself moves by
+    that offset. A uniform but stale delta is therefore a refusal.
+    """
     source_raw, source_relocations = _function_identity(source, name)
     linked_raw, linked_relocations = _function_identity(linked, name)
     require(len(source_raw) == len(linked_raw),
@@ -274,28 +352,66 @@ def _same_linked_body(source, linked, name):
             'linked callee relocation shape differs from the manifest-selected copy')
     require(source_raw == linked_raw,
             'linked callee body bytes differ from the manifest-selected copy')
-    rebase = {}
-    for (_, kind, key, source_addend), (_, other_kind, other_key, linked_addend) in \
-            zip(source_relocations, linked_relocations):
-        require((kind, key) == (other_kind, other_key),
-                'linked callee relocation target differs from the manifest-selected copy')
-        delta = linked_addend - source_addend
-        require(rebase.setdefault((kind, key), delta) == delta,
-                'linked callee relocation is not a uniform section rebase')
-    return True
+    with open(linked, 'rb') as stream:
+        linked_elf = ELFFile(stream)
+        placements = {}
+        def placement(section):
+            if section not in placements:
+                placements[section] = _section_placement(
+                    manifest, source, section, linked_elf)
+            return placements[section]
+        rebase = {}
+        section_rebases = {}
+        symbol_rebases = {}
+        for source_record, linked_record in zip(source_relocations, linked_relocations):
+            (_, kind, key, source_addend, source_value,
+             source_section) = source_record
+            (_, other_kind, other_key, linked_addend, linked_value,
+             linked_section) = linked_record
+            require((kind, key) == (other_kind, other_key),
+                    'linked callee relocation target differs from the '
+                    'manifest-selected copy')
+            if key[0] == 'section':
+                require(source_section == linked_section == key[1],
+                        'linked callee section target differs from the '
+                        'manifest-selected copy')
+                expected = placement(key[1])
+                section_rebases[key[1]] = {
+                    'placement': expected,
+                    'observed_addend_delta': linked_addend - source_addend}
+            else:
+                # A named-symbol relocation keeps its addend: `ld -r` rebases
+                # the symbol, not the four-byte field. An undefined reference
+                # in the input may simply become defined in the link, which is
+                # symbol resolution and not a section rebase.
+                expected = 0
+                if source_section is not None:
+                    require(linked_section == source_section,
+                            'linked callee symbol target section differs from '
+                            'the manifest-selected copy')
+                    moved = linked_value - source_value
+                    require(moved == placement(source_section),
+                            'linked callee symbol is not rebased by its section '
+                            'placement')
+                symbol_rebases[key[1]] = {
+                    'section': source_section,
+                    'resolved_section': linked_section,
+                    'observed_value_delta': (linked_value - source_value
+                                             if source_section is not None else None),
+                    'observed_addend_delta': linked_addend - source_addend}
+            delta = linked_addend - source_addend
+            require(delta == expected,
+                    'linked callee relocation delta does not match section '
+                    'placement')
+            require(rebase.setdefault((kind, key), delta) == delta,
+                    'linked callee relocation is not a uniform section rebase')
+    return {'section_rebases': section_rebases, 'symbol_rebases': symbol_rebases}
 
 
 def _selected_manifest_copy(manifest, name):
     """The unique strong definition of `name` among the link's input objects."""
-    directory = Path(manifest).parent
     copies = []
-    for number, line in enumerate(Path(manifest).read_text().splitlines(), 1):
-        if not line.strip():
-            continue
-        fields = line.split()
-        require(len(fields) == 2, 'recovered-order manifest record')
-        object_path = directory / fields[0]
-        require(object_path.is_file(), 'recovered-order manifest object missing')
+    for object_path in _manifest_inputs(manifest):
         with open(object_path, 'rb') as stream:
             elf = ELFFile(stream)
             table = elf.get_section_by_name('.symtab')
@@ -324,9 +440,8 @@ def _linked_callee(path, name, link, manifest):
     require(Path(manifest).is_file() and Path(manifest).stat().st_size > 0,
             'recovered-order link manifest missing')
     source = _selected_manifest_copy(str(manifest), name)
-    require(_same_linked_body(str(source), str(link), name),
-            'linked callee body does not match the manifest-selected copy')
-    return source
+    rebase = _same_linked_body(str(source), str(link), name, str(manifest))
+    return source, rebase
 
 
 def prove(path, name, argument=1, capacity=64):
@@ -558,10 +673,11 @@ def prove_call(path, caller, address, argument=1, capacity=64, link=None, manife
         require(result['symbol_index']==matches[0]['r_info_sym'], 'callee symbol identity mismatch')
         resolution='per-tu'
         selected=None
+        callee_rebase=None
     else:
         require(target['st_info']['bind']=='STB_GLOBAL',
                 'undefined callee is not a global definition')
-        selected=_linked_callee(path,target.name,link,manifest)
+        selected,callee_rebase=_linked_callee(path,target.name,link,manifest)
         result=prove(str(link),target.name,argument,capacity)
         require(result['binding']=='STB_GLOBAL',
                 'linked callee is not a strong global definition')
@@ -571,7 +687,8 @@ def prove_call(path, caller, address, argument=1, capacity=64, link=None, manife
                     'caller_target_symbol_index':matches[0]['r_info_sym'],
                     'resolution':resolution,'caller_artifact_sha256':digest,
                     'link_manifest':str(manifest) if selected is not None else None,
-                    'selected_object':str(selected) if selected is not None else None}
+                    'selected_object':str(selected) if selected is not None else None,
+                    'callee_rebase':callee_rebase}
     return result
 
 
