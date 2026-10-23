@@ -1746,8 +1746,13 @@ jt_reset(void)
 static void
 run_jtxmit(short txst, const char *what, long tag)
 {
-	run_case(txst, v34tx1_jtxmit, V34TX1_LOOP, what, tag,
-		 jtxmit, NP(jtxmit));
+	/* Exercise the complete reconstructed owner. These are synthetic
+	 * component states, not a claim of a public handshake history. */
+	apply(txst, jtxmit, NP(jtxmit));
+	v34hs_ours(1);
+	v34hs_step();
+	v34hs_ours(0);
+	v34hs_compare(what, tag);
 }
 
 static void
