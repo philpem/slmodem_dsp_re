@@ -172,15 +172,31 @@ The resolution refuses unless all of the following hold:
   of the name, and the linked body matches that object's body. Matching masks
   every relocation's four addend bytes, requires the non-relocated bytes to be
   equal, requires the relocation offsets/types/target sections to be equal,
-  and requires each target section's addend shift to be a single uniform
-  `ld -r` rebase. A missing, ambiguous, differently coded or differently
-  rebound body refuses.
+  and requires each target section's addend shift to equal the rebase implied
+  by that section's **actual placement** in the link. The placement is
+  reproduced from the ordered manifest's input section headers (each same-named
+  section concatenated at its own alignment) and must explain the linked output
+  section's whole size. A section-symbol target moves by its input section's
+  placement offset; a named-symbol target defined in the input keeps its
+  addend while the symbol itself moves by that offset, and an undefined
+  reference may instead resolve to a definition in the link without changing
+  its addend. A uniform but stale delta, a missing or ambiguous section, a
+  manifest that does not explain the linked section, or a differently
+  coded/rebound body refuses.
 
 The same `artifact()` and `prove()` code then prove the linked body; nothing
 about the proof's instruction, path, store or mask checks is relaxed. The
 integration point is the existing `byteident.body()` jump-table path, which
 passes the link context into `jumptable.prove()`. The blob and every artifact
 without a link context keep the previous refusal.
+
+For the real `v22_local_loop` proof, the selected `v22stc.c.o` relocation in
+`V22_status` has addend `0` against `.rodata`. The ordered-manifest layout puts
+that input's `.rodata` at **24,948 (0x6174)**, and the linked relocation addend
+is also `0x6174`, so the observed delta equals the section placement. As an
+independent witness, the linked `.rodata` bytes at `0x6174` are exactly the
+selected copy's 14 bytes (`0300000001000200070008000500`). A uniform value alone
+would not have established this.
 
 Proof parameters for the reconstructed caller: fixed frame 92 bytes,
 private-frame envelope **44 bytes**, 14 table entries, callee **315 bytes**,
@@ -226,17 +242,33 @@ generated fixtures and certificates belong in `scratch/callee-effects/`, not in
 the committed source tree.
 
 Control denominators: 10 positive leaf/call + 44 adversarial + two stale-cache
-negatives + the native preserved-bit negative, plus **5 cross-TU controls** —
-one link-resolved positive, three refusals (missing from the link, a linked
-body writing past the proved 8-byte capacity, a linked body that differs from
-the manifest-selected copy), and one per-object definition that is proved from
-its own ELF while the supplied link holds a different body. The positive also
-asserts the certificate's artifact hash is the link's; the per-object case
-asserts it is the per-TU object's. The frame suite passes 39/39, fixed-SETcc
-135/135, the fixed-ABI suite 35/35 with the real V32 pair EXACT, the base
-jumptable suite 47 synthetic/2 real, induction 20/20,
-`byteident --self-test` 79 checks (20 register, 59 relocation) and
-`byteident --ratchet-self-test` 3/3.
+negatives + the native preserved-bit negative, plus **10 cross-TU controls** —
+three link-resolved positives (one with a zero-placement `.text` body, one
+whose `.rodata` is placed at offset 16, and one whose undefined `exttable`
+reference resolves to a `.rodata` definition in another input without changing
+its addend), six refusals (missing from the link, a linked body writing past
+the proved 8-byte capacity, a linked body that differs from the
+manifest-selected copy, a changed addend, a uniform-but-stale addend, and a
+manifest that omits a section contribution the link contains), and one
+per-object definition that is proved from its own ELF while the supplied link
+holds a different body. A separate one-case refusal checks a target section
+name absent from the selected copy. The positives assert the certificate's
+artifact hash and `callee_rebase`; the rebased positive also asserts that the
+linked `.rodata` bytes at the certified placement equal the selected copy's
+bytes, and the per-object case asserts the certificate is the per-TU object's.
+
+The changed-addend and stale-uniform fixtures are measured changes, not
+tautologies: a control predicate reproducing the pre-change check (masked body,
+relocation shape, per-target uniform delta) accepts both patched links, while
+`_same_linked_body` refuses each because the delta disagrees with the section
+placement. The missing-layout fixture is likewise accepted by the old
+predicate and refused because the manifest layout cannot explain the linked
+section's size.
+
+The frame suite passes 39/39, fixed-SETcc 135/135, the fixed-ABI suite 35/35
+with the real V32 pair EXACT, the base jumptable suite 47 synthetic/2 real,
+induction 20/20, `byteident --self-test` 79 checks (20 register, 59 relocation)
+and `byteident --ratchet-self-test` 28/28.
 
 ## Recommendations after the tests
 
