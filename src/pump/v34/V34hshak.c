@@ -605,53 +605,40 @@ setfinalrate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
-	unsigned short a9de = *(unsigned short *)(m + 0xa9de);
-	unsigned short a9e0 = *(unsigned short *)(m + 0xa9e0);
 	short code;
-	short high;
 
 	obj->ratecfg.preemp = (short)bitreverse((unsigned short)
-				       (((a9de & 3) << 2)
-					| ((a9e0 & 0xc0) >> 6)), 4);
+				       (((*(const unsigned short *)(m + 0xa9de) & 3) << 2)
+					| ((*(const unsigned short *)(m + 0xa9e0) & 0xc0) >> 6)), 4);
 
 	code = bitreverse((unsigned short)((*(const unsigned short *)(m + 0xa9e2) >> 4) & 7), 3);
-	high = (a9de & 4) != 0;
 
-	switch (code) {
-	case 0:
+	if (code == 0) {
 		obj->ratecfg.baud = 2400;
 		obj->ratecfg.divtab = scale2400;
-		obj->ratecfg.carrier = high ? 1800 : 1600;
-		break;
-	case 2:
+		obj->ratecfg.carrier = (m[0xa9de] & 4) ? 1800 : 1600;
+	} else if (code == 2) {
 		obj->ratecfg.baud = 2800;
 		obj->ratecfg.divtab = scale2800;
-		obj->ratecfg.carrier = high ? 1867 : 1680;
-		break;
-	case 3:
+		obj->ratecfg.carrier = (m[0xa9de] & 4) ? 1867 : 1680;
+	} else if (code == 3) {
 		obj->ratecfg.baud = 3000;
 		obj->ratecfg.divtab = scale3000;
-		obj->ratecfg.carrier = high ? 2000 : 1800;
-		break;
-	case 4:
+		obj->ratecfg.carrier = (m[0xa9de] & 4) ? 2000 : 1800;
+	} else if (code == 4) {
 		obj->ratecfg.baud = 3200;
 		obj->ratecfg.divtab = scale3200;
-		obj->ratecfg.carrier = high ? 1920 : 1829;
-		break;
-	case 5:
+		obj->ratecfg.carrier = (m[0xa9de] & 4) ? 1920 : 1829;
+	} else if (code == 5) {
 		obj->ratecfg.baud = 3429;
 		obj->ratecfg.divtab = scale3429;
 		obj->ratecfg.carrier = 1959;
-		break;
-	default:
-		break;
 	}
 
-	code = bitreverse((unsigned short)(((a9e0 * 2) & 7)
+	code = bitreverse((unsigned short)(((*(const unsigned short *)(m + 0xa9e0) * 2) & 7)
 					   | ((*(const unsigned short *)(m + 0xa9e2) >> 7) & 1)), 3);
 
-	switch (code) {
-	case 0:
+	if (code == 0) {
 		obj->ratecfg.rx_baud = 2400;
 		obj->ratecfg.rx_divtab = scale2400;
 		if (m[0xa9ae] & 4) {
@@ -661,8 +648,7 @@ setfinalrate(void *objp)
 			obj->ratecfg.rx_carrier = 1600;
 			obj->det_coefs = c1600;
 		}
-		break;
-	case 2:
+	} else if (code == 2) {
 		obj->ratecfg.rx_baud = 2800;
 		obj->ratecfg.rx_divtab = scale2800;
 		if (m[0xa9b2] & 1) {
@@ -672,8 +658,7 @@ setfinalrate(void *objp)
 			obj->ratecfg.rx_carrier = 1680;
 			obj->det_coefs = c1680;
 		}
-		break;
-	case 3:
+	} else if (code == 3) {
 		obj->ratecfg.rx_baud = 3000;
 		obj->ratecfg.rx_divtab = scale3000;
 		if (m[0xa9b6] & 0x80) {
@@ -683,8 +668,7 @@ setfinalrate(void *objp)
 			obj->ratecfg.rx_carrier = 1800;
 			obj->det_coefs = c1800_;
 		}
-		break;
-	case 4:
+	} else if (code == 4) {
 		obj->ratecfg.rx_baud = 3200;
 		obj->ratecfg.rx_divtab = scale3200;
 		if (m[0xa9b8] & 0x40) {
@@ -694,15 +678,11 @@ setfinalrate(void *objp)
 			obj->ratecfg.rx_carrier = 1829;
 			obj->det_coefs = c1829;
 		}
-		break;
-	case 5:
+	} else if (code == 5) {
 		obj->ratecfg.rx_baud = 3429;
 		obj->ratecfg.rx_divtab = scale3429;
 		obj->ratecfg.rx_carrier = 1959;
 		obj->det_coefs = c1959;
-		break;
-	default:
-		break;
 	}
 
 	if (DSPLIB_DEBUG_ON())
