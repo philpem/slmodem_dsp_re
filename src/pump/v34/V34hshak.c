@@ -9635,31 +9635,26 @@ datapumpv34(void *objp)
 		modulatevector(obj);
 
 	while (rx->rxq.count > 5) {
-		unsigned span;
-		short err;
-
 		if ((short)rx->rx_blocks <= DP_RX_BLOCK_CAP)
 			rx->rx_blocks = (short)(rx->rx_blocks + 1);
 
 		receiver(obj);
 
-		err = rx->equerr;
-		if (err > rx->bad_thresh)
+		if (rx->equerr > rx->bad_thresh)
 			rx->bad_run = (short)(rx->bad_run + 1);
 		else
 			rx->bad_run = 0;
 
-		span = (unsigned)obj->sample_count
-		     - (unsigned)obj->int_0248;
-
-		if (span > DP_TIMER_MID) {
-			if (err > rx->bad_long_thresh)
+		if ((unsigned)obj->sample_count
+		    - (unsigned)obj->int_0248 > DP_TIMER_MID) {
+			if (rx->equerr > rx->bad_long_thresh)
 				rx->bad_long_run = (short)(rx->bad_long_run + 1);
 			else
 				rx->bad_long_run = 0;
 		}
-		if (span > DP_TIMER_LONG) {
-			if (err < rx->good_thresh)
+		if ((unsigned)obj->sample_count
+		    - (unsigned)obj->int_0248 > DP_TIMER_LONG) {
+			if (rx->equerr < rx->good_thresh)
 				rx->good_run = (short)(rx->good_run + 1);
 			else
 				rx->good_run = 0;
