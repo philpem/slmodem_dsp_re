@@ -134,6 +134,16 @@ unresolved, pending or stale references. No source-runtime differential is claim
 changes; the meaningful checks are the adversarial ELF controls, actual
 artifact proofs and unchanged comparison census.
 
+**Integration note (`2c72de0e9`).** On the current master the conservative
+census is 1,145 EXACT / 1 UNRESOLVED / 36 REGALLOC / 86 BYTES / 584 SIZE.
+`v22_local_loop` remains the UNRESOLVED symbol when graded per object:
+`V22_status` is defined in the separate `v22stc.c.o`, so
+`private_frame_effects` refuses an undefined strong callee. The same proof
+succeeds against the recovered-order partial link
+(`build/partial/dsplibs.o`), so the remaining gap is cross-TU callee
+resolution in the comparator, not a table or frame fact. These apparatus
+changes move no grade on their own.
+
 Reproduction from a tree with canonical Gentoo objects:
 
 ```sh
