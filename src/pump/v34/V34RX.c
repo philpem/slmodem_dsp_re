@@ -169,21 +169,12 @@ static const unsigned short sqrt_table[192] = {
  * ---------------------------------------------------------------------------
  * The AGC's measurement chain.
  *
- * The object carries this code THREE times: once in `agcadapt`, which is a
- * real global; once inlined in `V34agc`; and once inlined in `V34demodulate`.
- * They were almost certainly one set of functions in the original -- the
- * instruction sequences match one for one -- so they are one set here, with
- * the two places the copies genuinely differ passed in as arguments rather
- * than duplicated.  The differences are real and neither is a slip:
- *
- *   - V34demodulate rounds before the Q10 gain shift (`lea 0x200(%ecx)`);
- *     V34agc truncates (`sar $0xa` with nothing added).
- *   - the two overflow messages name their own function.
- *
- * Keeping one copy is also the only way to keep them honest: the reason this
- * function was reconstructed six times is that a hand-transcribed second copy
- * of a 40-line fixed-point chain is indistinguishable from a correct one
- * until a differential test disagrees.
+ * These entry points share fixed-point arithmetic, including the square-root
+ * normalization below, but their gain paths differ in more than their
+ * diagnostic strings:
+ * V34demodulate rounds by 0x200 before the Q10 shift and returns a value;
+ * V34agc truncates and publishes each burst sample before its overflow print.
+ * Keep that in-place store/call boundary in V34agc's own loop.
  */
 
 /*
@@ -206,11 +197,6 @@ agc_gain_sample(struct v34_receiver *rx, int x, int round, const char *fmt)
 	if (top == 0 || top == 0x7f)
 		return (short)((g + round) >> 10);
 
-	/*
-	 * V34agc tests this 16 bits wide and V34demodulate 32; with both
-	 * operands 16-bit the product cannot leave [-2^30, 2^30], so the
-	 * shifted value cannot leave a short and the two always agree.
-	 */
 	over = g >> 16;
 
 	if (DSPLIB_DEBUG_ON())
@@ -219,18 +205,29 @@ agc_gain_sample(struct v34_receiver *rx, int x, int round, const char *fmt)
 	return over > 0 ? 0x7f00 : (short)0x8100;
 }
 
+/* The inlined normalizer takes caller-owned halfword outputs.  The blob
+ * explicitly forms their addresses in V34agc at 0x5b80d/0x5b816 and in
+ * V34demodulate at 0x5b05d/0x5b066; it stores through those addresses and
+ * reloads both as unsigned shorts.  This is the same output contract as
+ * sqrt_normalize32 in fpm_sqrt.c, rather than two widened private locals.
+ */
+static inline void
+agc_normalize32(unsigned v, unsigned short *mant, unsigned short *shift)
+{
+	*shift = 0;
+	while (v <= 0x1fffffffu) {
+		v += v;
+		(*shift)++;
+	}
+	*mant = (unsigned short)(v >> 15);
+}
+
 /*
- * The 36-sample RMS, and the gate it feeds.
- *
- * Worth being clear about what this returns and what uses it: the square
- * root is computed in full -- normalise, halve the mantissa on an odd
- * exponent, look up `sqrt_table`, shift back -- and then the ONLY thing
- * either caller does with it is compare it against 31.  The quantity that
- * actually drives the loop is the energy sum, not this.  So the whole
- * square root exists to answer "is there enough signal to adapt on?".
- *
- * 0x38e is 910, and 910/32768 is 1/36.008 -- the reciprocal of the window
- * length, so the accumulator is a mean square rather than a sum.
+ * The 36-sample RMS feeds the signal-energy gates. Normalise, halve the
+ * mantissa for an odd exponent, look up sqrt_table, then shift back.
+ * The adaptation loops compare this result against 31; receiver compares
+ * it against the configured energy floor. The energy sum drives adaptation.
+ * V34_AGC_RMS_SCALE is 910; in Q15 this approximates 1/36.
  */
 static int
 agc_rms(const short *buf)
@@ -238,51 +235,27 @@ agc_rms(const short *buf)
 	int acc = 0;
 	unsigned short i = V34_AGC_RMS_TAPS - 1;
 	const short *p = buf;
-	unsigned shift = 0;
-	unsigned mant;
-	unsigned v;
+	unsigned short mant;
+	unsigned short shift;
+	unsigned short idx;
+	unsigned half;
 
 	do {
 		int x = *p++;
-
 		acc += ((x * V34_AGC_RMS_SCALE) >> 15) * x;
 	} while (i-- != 0);
-
 	if (acc == 0)
 		return 0;
-
-	/* Normalise into the top three bits, counting the shifts. */
-	v = (unsigned)acc;
-	if (v <= 0x1fffffffu) {
-		do {
-			v += v;
-			shift++;
-		} while (v <= 0x1fffffffu);
-	}
-	mant = v >> 15;
-
-	/* An odd exponent is carried as a halved mantissa, not a half-shift. */
-	if (shift != ((shift >> 1) * 2))
-		mant = (unsigned short)mant >> 1;
-
-	/*
-	 * The index is formed as a signed round-and-bias and then compared
-	 * UNSIGNED, so a mantissa small enough to make it negative wraps to
-	 * a huge value and clamps to the top of the table rather than the
-	 * bottom.  The normalisation above keeps `mant` >= 0x2000, which is
-	 * exactly the value that makes the biased index zero, so the wrap is
-	 * unreachable from here -- but it is the code that is written.
-	 */
-	{
-		unsigned idx = (unsigned short)((((unsigned short)mant + 0x40)
-						 >> 7) - 0x40);
-
-		if (idx > 0xbf)
-			idx = 0xbf;
-
-		return (short)(unsigned short)(sqrt_table[idx]
-					       >> ((shift >> 1) & 31));
-	}
+	agc_normalize32((unsigned)acc, &mant, &shift);
+	half = shift / 2;
+	/* Carry an odd exponent by halving the halfword mantissa. */
+	if (shift != half * 2)
+		mant >>= 1;
+	/* The signed round-and-bias truncates before an unsigned clamp. */
+	idx = ((mant + 0x40) >> 7) - 0x40;
+	if (idx > 0xbf)
+		idx = 0xbf;
+	return (short)(unsigned short)(sqrt_table[idx] >> half);
 }
 
 int
@@ -461,7 +434,12 @@ void
 V34agc(struct v34_receiver *rx)
 {
 	short *buf = (short *)((char *)rx + V34_RXQ_END);
-	int i;
+	/* Native loop increments sign-extend the low word; each buffer access
+	 * uses a separately advanced sample pointer (0x5b6f0..0x5b728,
+	 * 0x5b730..0x5b7a0, and 0x5b890..0x5b8a5).
+	 */
+	short i;
+	short *p;
 	int sum;
 
 	rxreadqueue((struct v34_queue *)rx);
@@ -474,18 +452,33 @@ V34agc(struct v34_receiver *rx)
 	 * measures the line, not the AGC's own output, and the loop it closes
 	 * is therefore feed-forward rather than feedback.
 	 */
-	for (i = 0; i < V34_QUEUE_BURST; i++) {
+	for (i = 0, p = buf; i < V34_QUEUE_BURST; i++) {
 		short idx = rx->rms_idx;
 
 		rx->rms_idx = (short)(idx + 1);
-		rx->rms_buf[idx] = buf[i];
+		rx->rms_buf[idx] = *p++;
 		if ((short)(idx + 1) > V34_AGC_RMS_TAPS - 1)
 			rx->rms_idx = 0;
 	}
 
-	for (i = 0; i < V34_QUEUE_BURST; i++)
-		buf[i] = (short)agc_gain_sample(rx, buf[i], 0,
-						"V34AGC, overflow = 0x%x,\n");
+	for (i = 0, p = buf; i < V34_QUEUE_BURST; i++) {
+		int g = (int)rx->agc_gain * *p;
+		unsigned short top = (unsigned)g >> 25;
+
+		if (top == 0 || top == 0x7f) {
+			*p++ = (short)(g >> 10);
+		} else {
+			short over = g >> 16;
+
+			/* The saturated sample is visible before the diagnostic
+			 * call, as at 0x5b775..0x5b791 in the object.
+			 */
+			*p++ = over > 0 ? 0x7f00 : (short)0x8100;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V34AGC, overflow = 0x%x,\n",
+						     over);
+		}
+	}
 
 	if (rx->flags & V34_RX_FLAG_AGC_FREEZE)
 		return;
@@ -495,8 +488,10 @@ V34agc(struct v34_receiver *rx)
 
 	/* The gained burst's energy is what the loop actually integrates. */
 	sum = 0;
-	for (i = 0; i < V34_QUEUE_BURST; i++)
-		sum += (int)buf[i] * buf[i];
+	for (i = 0, p = buf; i < V34_QUEUE_BURST; i++) {
+		int x = *p++;
+		sum += x * x;
+	}
 
 	rx->energy.sum = sum;
 	agcadapt(rx);
@@ -1229,73 +1224,6 @@ rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
 }
 
 /*
- * TRN, the training sequence: the reference is the scrambler's own output
- * sliced onto `rxvect4`, so both ends generate it and neither transmits it.
- *
- * Two scramblers run, not one.  The first drives the reference.  The second,
- * over `scrambler_sr`, is stepped for sixteen symbols (0x143..0x152) and its
- * output DISCARDED on every symbol but one -- it exists to be in the right
- * state at symbol 0x153, where it names the point to fall back to if the
- * equaliser has locked onto the wrong TRN.
- *
- * That last check is the "shifted TRN2" case, and it is decided by energy:
- * if taps 60..75 of the equaliser hold more than taps 32..47, the impulse
- * response has settled a symbol period late, and the whole equaliser is
- * thrown away rather than nudged.
- *
- * Returns the caller's `flags`, refreshed wherever a call could have moved
- * it -- see the note on `receiver`.
- */
-static unsigned
-rx_train_point(struct v34_receiver *rx, struct v34_equalizer *eq, short n,
-	       unsigned flags)
-{
-	short k;
-
-	k = (short)V34scrambler((unsigned *)&rx->trn_ref_sr, (short)(flags & 4),
-				3, 2);
-	rx->dp.point = rxvect4[k];
-	flags = rx->flags;
-
-	if (!(flags & V34_RX_FLAG_TRN_WATCH))
-		return flags;
-
-	if ((unsigned short)(n - 0x143) <= 0xf)
-		k = (short)V34scrambler(&rx->scrambler_sr,
-					(short)(flags & 4), 3, 2);
-
-	if (n == 0x153) {
-		int early = 0, late = 0;
-		int z;
-
-		for (z = 0x20; z <= 0x2f; z++)
-			early += eq->re[z] * eq->re[z]
-				 + eq->im[z] * eq->im[z];
-		for (z = 0x3c; z <= 0x4b; z++)
-			late += eq->re[z] * eq->re[z]
-				+ eq->im[z] * eq->im[z];
-
-		if (late > early) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-				    "Detected shifted TRN2... assuming 32 " "symbols Snot\n");
-			rx->trn_ref_sr = (int)rx->scrambler_sr;
-			V34EqualizerCleanUp(eq);
-			rx->dp.point = rxvect4[k];
-		}
-		/*
-		 * The second scrambler is reset HERE and only here -- not on
-		 * every symbol of the window that stepped it, and not when
-		 * the check decides the equaliser was fine.  It has done its
-		 * one job; the next TRN starts it again from zero.
-		 */
-		rx->scrambler_sr = 0;
-	}
-
-	return rx->flags;
-}
-
-/*
  * ---------------------------------------------------------------------------
  * receiver -- the per-symbol receive chain, end to end.
  *
@@ -1329,6 +1257,7 @@ receiver(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
+	struct v34_engine *engine = (struct v34_engine *)&obj->progress;
 	struct v34_timing *t = &obj->receiver.timing;
 	/*
 	 * 16-bit, as the object has it: the cached value lives in a halfword
@@ -1350,7 +1279,7 @@ receiver(void *objp)
 		int wa = (unsigned short)rx->phase_frac;
 		int wb = (short)((unsigned short)rx->phase_wrap
 				 - (unsigned short)rx->phase_frac);
-		int wrap = (short)rx->phase_wrap;
+		int wrap;
 		int ir, ii, pos;
 
 		ir = (rx->demod_i * wa + rx->demod_i_prev * wb + 0x2000) >> 14;
@@ -1369,6 +1298,8 @@ receiver(void *objp)
 		}
 
 		pos = (unsigned short)rx->phase_frac + (unsigned short)rx->phase_inc;
+		/* Native +0x126 reloads the wrap after the timing calls. */
+		wrap = rx->phase_wrap;
 
 		if ((int)(unsigned short)pos < wrap) {
 			rx->phase_frac = (short)pos;
@@ -1532,7 +1463,62 @@ receiver(void *objp)
 			decoderv34(obj);
 			flags = rx->flags;
 		} else {
-			flags = rx_train_point(rx, &rx->equalizer, n, flags);
+			/*
+			 * TRN's reference is the scrambler output sliced onto rxvect4.
+			 * A second scrambler advances during symbols 0x143..0x152.
+			 * At 0x153, compare tap energies 60..75 and 32..47. If the
+			 * later taps dominate, discard the shifted equaliser and
+			 * select the fallback point.
+			 *
+			 * Native +0xff2..+0x105a accumulates into the addressed
+			 * equaliser-output slots with signed-short loop indices.
+			 * Reusing those outputs preserves the memory accumulation;
+			 * shared stack slots alone do not identify the original
+			 * C variables, whose disjoint lifetimes could share storage.
+			 */
+			short k;
+
+			k = (short)V34scrambler((unsigned *)&rx->trn_ref_sr, (short)(flags & 4),
+						3, 2);
+			rx->dp.point = rxvect4[k];
+			flags = rx->flags;
+
+			if (flags & V34_RX_FLAG_TRN_WATCH) {
+
+				if ((unsigned short)(n - 0x143) <= 0xf)
+					k = (short)V34scrambler(&rx->scrambler_sr,
+								(short)(flags & 4), 3, 2);
+
+				if (n == 0x153) {
+					short z;
+
+					eq_re = 0;
+					eq_im = 0;
+
+					for (z = 0x20; z <= 0x2f; z++)
+						eq_re += rx->equalizer.re[z] * rx->equalizer.re[z]
+							 + rx->equalizer.im[z] * rx->equalizer.im[z];
+					for (z = 0x3c; z <= 0x4b; z++)
+						eq_im += rx->equalizer.re[z] * rx->equalizer.re[z]
+							+ rx->equalizer.im[z] * rx->equalizer.im[z];
+
+					if (eq_im > eq_re) {
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "Detected shifted TRN2... assuming 32 " "symbols Snot\n");
+						rx->trn_ref_sr = (int)rx->scrambler_sr;
+						V34EqualizerCleanUp(&rx->equalizer);
+						rx->dp.point = rxvect4[k];
+					}
+					/*
+					 * Reset at symbol 0x153, regardless of which tap window
+					 * won; the next TRN starts from zero.
+					 */
+					rx->scrambler_sr = 0;
+				}
+
+				flags = rx->flags;
+			}
 		}
 	} else if (rx->pllcnt > 1) {
 		/*
@@ -1605,7 +1591,6 @@ receiver(void *objp)
 		}
 
 		rx->cloop_phase_err = rx_phase_error(rx);
-		pherr = rx->cloop_phase_err;
 
 		if (flags & V34_RX_FLAG_DATA) {
 			/*
@@ -1614,27 +1599,29 @@ receiver(void *objp)
 			 * the datapump outright.
 			 */
 			if ((short)agc_rms(rx->rms_buf)
-			    <= obj->rx_energy_floor) {
+			    <= engine->rx_energy_floor) {
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "Signal Energy below Threshold " "%d, initiate a disconnection",
-					    obj->rx_energy_floor);
+					    engine->rx_energy_floor);
 					flags = rx->flags;
 				}
 				obj->status = 10;
 			}
-			return;
 		}
 
+		/* The diagnostic call can refresh the decision at +0x66c. */
+		if (flags & V34_RX_FLAG_DATA)
+			return;
 		goto carrier_loop;
 	} else {
 		return;
 	}
 
 	rx->cloop_phase_err = rx_phase_error(rx);
-	pherr = rx->cloop_phase_err;
 
 carrier_loop:
+	pherr = rx->cloop_phase_err;
 	/*
 	 * The predictor proper: the same three taps, now driven by the
 	 * decision error, adapted by a complex LMS, and with the error energy
