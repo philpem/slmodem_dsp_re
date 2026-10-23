@@ -36,10 +36,20 @@ destination does not prove the same symbol interposition or export behavior.
 
     tools/toolchain/byteident.py                  counts, then the misses
     tools/toolchain/byteident.py --list-exact     the exact set, for a diff
+    tools/toolchain/byteident.py --link-selected  the body the recovered-order
+                                                  partial link keeps, beside the
+                                                  worst-copy verdict
     BLOB=/abs/path/to/dsplibs.o TC_OUT=build/tc_out tools/toolchain/byteident.py
 
 Denominator: the symbols the blob and `TC_OUT` both define, which is
 `compare.py`'s denominator exactly, so the two numbers are comparable.
+
+`--link-selected` is a DIAGNOSTIC and changes nothing above it.  It reads the
+artifacts `make partial-link` already writes (`build/tc_repro/tc_link_manifest.txt`
+from `recoverorder.py`, and `build/partial/dsplibs.o` from `partiallink.sh`) and
+reports the selected body with `linkedcopies.py`.  It refuses rather than
+reporting a clean zero when those inputs are absent.  The report is written to
+stderr so the default census on stdout is byte-identical with and without it.
 """
 
 import argparse
@@ -1179,12 +1189,142 @@ def ratchet_self_test():
     return 1 if bad else 0
 
 
+LINK_SELECTED_SCRIPTS = ("recoverorder.py", "partiallink.sh",
+                         "partialcmp.py", "linkedcopies.py")
+
+
+def _link_selected_paths(manifest, linked):
+    """Default to the artifacts `make partial-link` writes beside TC_OUT."""
+    build = os.path.dirname(os.path.abspath(OURS))
+    return (manifest or os.path.join(build, "tc_repro", "tc_link_manifest.txt"),
+            linked or os.path.join(build, "partial", "dsplibs.o"))
+
+
+def _link_selected_inputs(manifest, linked):
+    """Refuse early when the recovered-order machinery is not there."""
+    manifest, linked = _link_selected_paths(manifest, linked)
+    missing = [name for name in LINK_SELECTED_SCRIPTS
+               if not os.path.isfile(os.path.join(HERE, name))]
+    if missing:
+        sys.exit(
+            "byteident.py --link-selected: recovered-order machinery is NOT\n"
+            "  available: missing tools/toolchain/%s.\n"
+            "  Refusing to report a link-selected view rather than a clean\n"
+            "  zero." % ", ".join(missing))
+    for path, what in ((manifest, "recovered-order manifest"),
+                       (linked, "partial-link artifact")):
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            sys.exit(
+                "byteident.py --link-selected: %s is missing or empty:\n"
+                "    %s\n"
+                "  Run `make partial-link` (needs tc-repro, attribution and\n"
+                "  the binutils 2.15 image), or pass --link-manifest/--linked.\n"
+                "  Refusing to report a link-selected view rather than a clean\n"
+                "  zero." % (what, path))
+    return manifest, linked
+
+
+def link_selected_report(manifest, linked, out=None):
+    """Print the body the recovered-order partial link keeps, beside the worst.
+
+    DIAGNOSTIC ONLY.  This consumes the artifacts the existing
+    `recoverorder.py` + `partiallink.sh` path writes; it does not derive a
+    second link order, and it never touches the census, buckets, ratchet or
+    exit status.  The report goes to stderr so the default census on stdout is
+    byte-for-byte unchanged whether or not the flag is present.
+    """
+    out = out or sys.stderr
+    manifest, linked = _link_selected_inputs(manifest, linked)
+    #
+    # Reuse linkedcopies.audit: it is the established reader of the supplied
+    # link, the ordered manifest and the conservative policy.  Imported late
+    # because linkedcopies imports this module.
+    #
+    import linkedcopies
+    try:
+        report = linkedcopies.audit(BLOB, manifest, linked)
+    except (OSError, ValueError) as error:
+        sys.exit("byteident.py --link-selected: cannot read the recovered-order\n"
+                 "  inputs: %s\n"
+                 "  Run `make partial-link`.  Refusing to report a clean zero."
+                 % error)
+    rows = report["duplicates"]
+    examined = len(rows)
+    records = sum(len(row["copies"]) for row in rows)
+    resolved = [row for row in rows
+                if "linked" in row and
+                len(row["linked_definition_records"]) == 1 and
+                row["linked"]["raw"] != "NODATA"]
+    if examined and not resolved:
+        sys.exit("byteident.py --link-selected: the supplied link resolves NONE\n"
+                 "  of the %d multiply-defined name(s).  That is not a clean\n"
+                 "  result; the artifact and manifest do not agree."
+                 % examined)
+    disagree = [row for row in rows
+                if len({copy["raw"] for copy in row["copies"]}) > 1]
+    order = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(manifest))), "partial", "link-order.json")
+    provenance = ""
+    if os.path.isfile(order):
+        try:
+            meta = json.load(open(order))
+            provenance = ("; %d ordering candidate(s), %d retained by source "
+                          "order" % (meta["anchored"], meta["unanchored"]))
+        except (OSError, ValueError, KeyError):
+            provenance = "; order report unreadable"
+    print("\n  link-selected view -- recovered-order partial link (diagnostic "
+          "only;", file=out)
+    print("  census, buckets and exit status are unchanged)", file=out)
+    print("    order       : %s (%d input(s)%s)"
+          % (manifest, report["summary"]["input_objects"], provenance), file=out)
+    print("    linked      : %s  sha256 %s"
+          % (linked, linkedcopies.digest(linked)), file=out)
+    print("    denominator : %d multiply-defined name(s), %d definition "
+          "record(s);" % (examined, records), file=out)
+    print("                  %d link-resolved, %d unresolved"
+          % (len(resolved), examined - len(resolved)), file=out)
+    print("    disagreements: %d name(s) whose copies get different verdicts"
+          % len(disagree), file=out)
+    if disagree:
+        print("    %-11s %-11s %s" % ("worst-copy", "selected", "symbol"),
+              file=out)
+        for row in disagree:
+            worst = row.get("conservative_grade", "-")
+            selected = (row["linked"]["grade"] if "linked" in row
+                        else "UNRESOLVED")
+            worst_obj = os.path.basename(row.get("conservative_object", ""))
+            detail = ""
+            for copy in row["copies"]:
+                if copy.get("object") == row.get("conservative_object"):
+                    detail = "raw %s, %d byte(s)" % (copy["raw"],
+                                                     copy["delta"])
+            if worst_obj:
+                detail = "%s; %s" % (worst_obj, detail) if detail else worst_obj
+            print("    %-11s %-11s %s%s"
+                  % (worst, selected, row["symbol"],
+                     "  [worst: %s]" % detail if detail else ""),
+                  file=out)
+    matched = sum(bool(row["linked_body_matching_inputs"]) for row in resolved)
+    print("    selected linked bodies matching an input copy: %d/%d"
+          % (matched, len(resolved)), file=out)
+    return report
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list-exact", action="store_true")
     ap.add_argument("--comdat", action="store_true",
                     help="list symbols whose defining objects disagree")
+    ap.add_argument("--link-selected", action="store_true",
+                    help="report the body the recovered-order partial link keeps, "
+                         "beside the worst-copy verdict (diagnostic only; report "
+                         "on stderr, census unchanged)")
+    ap.add_argument("--link-manifest", metavar="PATH",
+                    help="ordered manifest from recoverorder.py (default: "
+                         "<build>/tc_repro/tc_link_manifest.txt)")
+    ap.add_argument("--linked", metavar="PATH",
+                    help="partial-link artifact (default: <build>/partial/dsplibs.o)")
     ap.add_argument("--near", type=int, metavar="N", default=0,
                     help="list the N symbols closest to closing, by |instruction "
                          "delta| with alignment padding stripped")
@@ -1263,6 +1403,13 @@ def main():
         if why is not None:
             print("    %s" % why)
         return 0
+
+    #
+    # Fail fast: a missing link artifact must be refused BEFORE the census
+    # spends minutes producing a denominator it cannot annotate.
+    #
+    if a.link_selected:
+        _link_selected_inputs(a.link_manifest, a.linked)
 
     blob = sizes(BLOB)
     if not blob:
@@ -1368,6 +1515,8 @@ def main():
         print("\n  The blob has ONE copy because the linker picked one, and we\n"
               "  cannot know which.  Scoring the best would be scoring the\n"
               "  luckiest, so the worst is scored (F8146).")
+    if a.link_selected:
+        link_selected_report(a.link_manifest, a.linked)
     print("  grade 0  EXACT      same bytes, same places  : %4d  (%.1f%%)"
           % (ex, 100.0 * ex / n))
     print("           UNRESOLVED as EXACT, but a section  : %4d" % un)
