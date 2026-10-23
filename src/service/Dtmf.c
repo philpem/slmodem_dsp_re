@@ -260,13 +260,24 @@ dtmf_detect(float x, struct dtmf *d, short mode)
 	d->total = x * x + d->total;
 
 	state = &d->notch_state[0][0];
-	coef = (mode == DTMF_MODE_EUR) ? eur_coef : us_coef;
-	for (i = 0; i <= 7; i++) {
-		float y = notch(x, state, coef);
+	if (mode == DTMF_MODE_EUR) {
+		coef = eur_coef;
+		for (i = 0; i <= 7; i++) {
+			float y = notch(x, state, coef);
 
-		d->energy[i] = y * y + d->energy[i];
-		state += 2;
-		coef += 4;
+			d->energy[i] = y * y + d->energy[i];
+			state += 2;
+			coef += 4;
+		}
+	} else {
+		coef = us_coef;
+		for (i = 0; i <= 7; i++) {
+			float y = notch(x, state, coef);
+
+			d->energy[i] = y * y + d->energy[i];
+			state += 2;
+			coef += 4;
+		}
 	}
 
 	d->count++;
