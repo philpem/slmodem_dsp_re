@@ -71,12 +71,18 @@ link-selected metric as unavailable rather than failing.
 
 THE DISPLACEMENT LEDGER (`tools/ci/displaced.json`) is the only way an EXACT
 or link-selected-EXACT loss can pass the ratchet.  Each reviewed entry pins
-the CURRENT head body (raw bytes plus canonical relocation identity, the same
-SHA-256 `tools/ci/period_metrics.py` uses), the phase that caused it, where
-the evidence is, and how re-measurement should recover it.  A loss moves
-metric only when an entry matches the loss, the evidence path exists, and the
-hash still describes the current body.  Stale entries fail: an unreviewed
-drift must not be inherited as permission.
+the body of the CURRENT head that the loss is about (raw bytes plus canonical
+relocation identity, the same SHA-256 `tools/ci/period_metrics.py` uses), the
+phase that caused it, where the evidence is, and how re-measurement should
+recover it.  The two identities are separate because they are different
+bodies: `body_sha256` pins the WORST per-TU copy the census scored, while
+`selected_body_sha256` pins the body the recovered-order link selects.
+`metric=exact` requires the former, `metric=selected` the latter, and
+`metric=both` both.  A selected-body pin is read from the input copy that
+`linkedcopies` proves matches the linked body, so unrelated size changes do
+not move it.  A loss moves metric only when an entry matches the loss, the
+evidence path exists, and the relevant hash still describes the current body.
+Stale entries fail: an unreviewed drift must not be inherited as permission.
 """
 
 import argparse
@@ -180,9 +186,17 @@ def ledger_entry_problem(entry, root=ROOT):
     if entry.get("to") not in DISPLACED_TARGETS:
         return "%s: to must be one of %s" % (
             symbol, "/".join(DISPLACED_TARGETS))
-    if not isinstance(entry.get("body_sha256"), str) or not \
-            SHA256.fullmatch(entry.get("body_sha256", "")):
-        return "%s: body_sha256 must be a full 64-hex SHA-256" % symbol
+    metric = entry.get("metric")
+    if metric in ("exact", "both"):
+        if not isinstance(entry.get("body_sha256"), str) or not \
+                SHA256.fullmatch(entry.get("body_sha256", "")):
+            return ("%s: body_sha256 must be a full 64-hex SHA-256 for "
+                    "metric=%s" % (symbol, metric))
+    if metric in ("selected", "both"):
+        if not isinstance(entry.get("selected_body_sha256"), str) or not \
+                SHA256.fullmatch(entry.get("selected_body_sha256", "")):
+            return ("%s: selected_body_sha256 must be a full 64-hex SHA-256 "
+                    "for metric=%s" % (symbol, metric))
     if entry.get("phase") not in DISPLACED_PHASES:
         return "%s: phase must be one of %s" % (
             symbol, "/".join(DISPLACED_PHASES))
@@ -270,6 +284,48 @@ def _current_body_digest(object_for_symbol, symbol):
     if raw is None or relocs is None:
         raise ValueError("%s has no measurable head body" % symbol)
     return body_digest(raw, relocs)
+
+
+def _selected_body_digest(report, directory):
+    """Hash the body the recovered-order link SELECTS, not the worst twin.
+
+    `linkedcopies` records, per duplicate name, the input object copies whose
+    bodies are byte-identical to the linked body
+    (`linked_body_matching_inputs`).  Hashing one of those input copies pins
+    the selected identity without the linked ELF's layout: an unrelated
+    function changing size moves the linked body's address, not the input
+    object's bytes.  The selected body is refused when it matches no input
+    copy, or when the matching copies do not agree on one identity -- falling
+    back to the worst per-TU body would pin the wrong body and re-open the
+    hole this function exists to close.
+    """
+    rows = {row.get("symbol"): row for row in report.get("duplicates", [])
+            if isinstance(row, dict)}
+    def digest(symbol):
+        row = rows.get(symbol)
+        if row is None:
+            raise ValueError(
+                "%s is not a multiply-defined name in the link-selected audit"
+                % symbol)
+        matches = row.get("linked_body_matching_inputs") or []
+        if not matches:
+            raise ValueError(
+                "the recovered-order link selects no input copy for %s"
+                % symbol)
+        hashes = set()
+        for name in matches:
+            path = os.path.join(directory, name)
+            raw, relocs = body(path, symbol)
+            if raw is None or relocs is None:
+                raise ValueError(
+                    "%s has no measurable selected input body" % symbol)
+            hashes.add(body_digest(raw, relocs))
+        if len(hashes) != 1:
+            raise ValueError(
+                "%s's selected body matches %d input copies with different "
+                "identities" % (symbol, len(hashes)))
+        return hashes.pop()
+    return digest
 
 
 # The recovered-order partial link used to resolve an UNDEFINED private-frame
@@ -1378,7 +1434,7 @@ def _ratchet_membership(was, now):
 
 
 def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
-                         root=ROOT):
+                         root=ROOT, selected_digest=None):
     """The three-phase ratchet decision, as a pure function.
 
     Returns `(failures, allowed)`.  `failures` is a list of human-readable
@@ -1388,11 +1444,14 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
       * A grade-0/1 loss ALWAYS fails.  It means the function itself got
         worse, and no ledger entry can make a different function acceptable.
       * A conservative EXACT loss may be displaced only while the function is
-        still grade 1 (REGALLOC) and the ledger entry's body hash still
-        describes the current head body.
-      * A link-selected EXACT loss may be displaced by a ledger entry without
-        the grade-1 requirement: the worst per-TU copy can legitimately be
-        BYTES while the selected body was EXACT.
+        still grade 1 (REGALLOC) and the entry's `body_sha256` still describes
+        the WORST per-TU head body the census scored.
+      * A link-selected EXACT loss may be displaced by an entry without the
+        grade-1 requirement, because the worst per-TU copy can legitimately be
+        BYTES while the selected body was EXACT.  It is checked against
+        `selected_body_sha256`, the body the recovered-order link SELECTS, so
+        a changed selected body cannot hide behind an unchanged worst twin.
+      * `metric=both` entries carry both pins and each phase checks its own.
       * An entry that matches no current loss is stale and fails.
     """
     failures, allowed = [], []
@@ -1441,13 +1500,23 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
             if symbol not in set(grade1_symbols):
                 return ("the symbol is not grade 1 (REGALLOC) in the current "
                         "census, so this EXACT loss cannot be displaced")
+        if metric == "selected":
+            if selected_digest is None:
+                return ("the selected-body identity is unavailable, so this "
+                        "loss cannot be pinned")
+            hasher, field, label = selected_digest, "selected_body_sha256", \
+                "selected"
+        else:
+            hasher, field, label = digest, "body_sha256", "worst per-TU"
         try:
-            actual = digest(symbol)
+            actual = hasher(symbol)
         except ValueError as error:
-            return "cannot measure the current head body: %s" % error
-        if actual != entry.get("body_sha256"):
-            return ("body hash mismatch: entry pins %s, the current head "
-                    "body is %s" % (entry.get("body_sha256"), actual))
+            return "cannot measure the current %s body: %s" % (label, error)
+        if actual != entry.get(field):
+            prefix = ("selected body hash mismatch" if metric == "selected"
+                      else "body hash mismatch")
+            return ("%s: entry pins %s, the current %s body is %s"
+                    % (prefix, entry.get(field), label, actual))
         used.add(id(entry))
         return None
 
@@ -1492,6 +1561,9 @@ def ratchet_self_test():
     def digest(symbol):
         return hashlib.sha256(("body:" + symbol).encode()).hexdigest()
 
+    def selected_digest(symbol):
+        return hashlib.sha256(("selected:" + symbol).encode()).hexdigest()
+
     def row(exact, grade01=None, selected=None, regalloc=None):
         exact = list(exact)
         grade01 = list(exact if grade01 is None else grade01)
@@ -1504,13 +1576,19 @@ def ratchet_self_test():
                 RATCHET_SELECTED_EXACT_SYMBOLS: selected,
                 RATCHET_EXACT_SYMBOLS: exact}
 
-    def entry(symbol, metric="exact", to="REGALLOC", body=None,
+    def entry(symbol, metric="exact", to="REGALLOC", body=None, selected=None,
               evidence="tools/ci/displaced.json", phase="order",
               cause="reviewed", recovery="re-measure after the cause settles"):
-        return {"symbol": symbol, "metric": metric, "from": "EXACT", "to": to,
-                "body_sha256": body if body is not None else digest(symbol),
+        item = {"symbol": symbol, "metric": metric, "from": "EXACT", "to": to,
                 "phase": phase, "cause": cause, "evidence": evidence,
                 "recovery": recovery}
+        if metric in ("exact", "both"):
+            item["body_sha256"] = (body if body is not None
+                                   else digest(symbol))
+        if metric in ("selected", "both"):
+            item["selected_body_sha256"] = (selected if selected is not None
+                                            else selected_digest(symbol))
+        return item
 
     checks = []
 
@@ -1596,16 +1674,18 @@ def ratchet_self_test():
     check("stale ledger entry fails",
           any("stale ledger entry" in f for f in failures))
 
+    selected_was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
     selected_lost = row(["a", "b"], ["a", "b"], ["b"], [])
     failures, allowed = ratchet_displacement(
-        row(["a", "b"], ["a", "b"], ["a", "b"], []), selected_lost,
-        [entry("a", metric="selected", to="BYTES")], digest, set())
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=selected_digest)
     check("selected loss with an entry passes without the grade-1 rule",
           not failures and allowed == [("selected", "a")])
 
     failures, _ = ratchet_displacement(
-        row(["a", "b"], ["a", "b"], ["a", "b"], []), selected_lost,
-        [], digest, set())
+        selected_was, selected_lost, [], digest, set(),
+        selected_digest=selected_digest)
     check("selected loss without an entry fails",
           any("link-selected EXACT loss a" in f for f in failures))
 
@@ -1617,6 +1697,74 @@ def ratchet_self_test():
         was, regressed, [entry("a"), entry("a", metric="both")], digest,
         {"a"})
     check("ambiguous duplicate ledger entries fail", bool(failures))
+
+    # --- the selected pin must be the SELECTED body -----------------------
+    # Worst body unchanged (digest), selected body changed (selected_digest
+    # differs from the entry) MUST fail.  The old single-callback design
+    # accepted this because it only ever hashed the worst twin.
+    failures, allowed = ratchet_displacement(
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES",
+               selected="0" * 64)], digest, set(),
+        selected_digest=selected_digest)
+    check("changed selected body with unchanged worst fails for selected",
+          any("selected body hash mismatch" in f for f in failures)
+          and not allowed)
+
+    changed_selected = row(["a", "b"], ["a", "b"], ["b"], [])
+    failures, allowed = ratchet_displacement(
+        selected_was, changed_selected,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=lambda symbol: "0" * 64)
+    check("unchanged worst cannot excuse a changed selected body",
+          any("selected body hash mismatch" in f for f in failures)
+          and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed,
+        [entry("a", metric="both", body="0" * 64,
+               selected=selected_digest("a"))], digest,
+        {"a"}, selected_digest=selected_digest)
+    check("changed worst body with unchanged selected fails for exact",
+          any("body hash mismatch" in f for f in failures) and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [entry("a")], digest, {"a"},
+        selected_digest=selected_digest)
+    check("recomputed worst body still passes exact", not failures
+          and allowed == [("exact", "a")])
+
+    failures, allowed = ratchet_displacement(
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=selected_digest)
+    check("recomputed selected body still passes selected", not failures
+          and allowed == [("selected", "a")])
+
+    failures, allowed = ratchet_displacement(
+        was, regressed,
+        [entry("a", metric="selected", to="BYTES")], digest, {"a"},
+        selected_digest=selected_digest)
+    check("selected-only entry never excuses an EXACT loss",
+          any("no reviewed displacement entry (exact)" in f
+              for f in failures) and not allowed)
+
+    # `both` must carry both pins.  The structural validator is the authority
+    # here; the decision calls it for every entry it actually uses.
+    both = entry("a", metric="both")
+    both["selected_body_sha256"] = selected_digest("a")
+    check("both with both pins is structurally valid",
+          ledger_entry_problem(both) is None)
+    missing = entry("a", metric="both")
+    del missing["body_sha256"]
+    check("both without body_sha256 is rejected",
+          "body_sha256" in (ledger_entry_problem(missing) or ""))
+    missing = entry("a", metric="both")
+    del missing["selected_body_sha256"]
+    check("both without selected_body_sha256 is rejected",
+          "selected_body_sha256" in (ledger_entry_problem(missing) or ""))
+    check("selected-only entry does not need body_sha256",
+          ledger_entry_problem(entry("a", metric="selected")) is None)
 
     # --- phase-2 set construction ----------------------------------------
     report = {"duplicates": [
@@ -2094,10 +2242,18 @@ def main():
         except ValueError as e:
             sys.exit("byteident.py: invalid ratchet baseline %s: %s"
                      % (RATCHET, e))
+        # THE SELECTED PIN COMES FROM THE SAME AUDIT the census used, and is
+        # available only because --ratchet refused above without the link
+        # artifacts.  It hashes the input copy linkedcopies proves matches
+        # the linked body, not the worst per-TU twin.
+        manifest_path, _ = _link_selected_paths(a.link_manifest, a.linked)
+        selected_body = _selected_body_digest(
+            link_report, os.path.dirname(os.path.abspath(manifest_path)))
         failures, allowed = ratchet_displacement(
             was, now, displaced,
             lambda symbol: _current_body_digest(ours, symbol),
-            set(k for _, _, k in buckets["REGALLOC"]))
+            set(k for _, _, k in buckets["REGALLOC"]),
+            selected_digest=selected_body)
         if failures:
             print("\nRATCHET FAILED -- a banked symbol left the three-phase "
                   "floor and the\nevidence does not justify it.  `make period` "

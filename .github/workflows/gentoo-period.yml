@@ -125,6 +125,7 @@ jobs:
             --head "$RUNNER_TEMP/head-metrics.json" \
             --base-sha "$BASE_SHA" --head-objects build/tc_out \
             --reviewed-losses tools/ci/period_reviewed_losses.json \
+            --displaced tools/ci/displaced.json \
             --check > "$RUNNER_TEMP/metrics.md"
           status=$?
           cat "$RUNNER_TEMP/metrics.md" >> "$GITHUB_STEP_SUMMARY"

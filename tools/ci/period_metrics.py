@@ -96,6 +96,70 @@ def review_losses(lost, reviews, base_sha, digest):
     return accepted, rejected
 
 
+def _byteident():
+    """The ledger schema has ONE owner: tools/toolchain/byteident.py."""
+    sys.path.insert(0, str(ROOT / "tools/toolchain"))
+    import byteident
+    return byteident
+
+
+def validate_displacements(data):
+    """Validate tools/ci/displaced.json with byteident's own schema rules."""
+    return _byteident().validate_displaced(data, root=str(ROOT))
+
+
+def load_displacements(path):
+    try:
+        with open(path) as source:
+            data = json.load(source)
+    except (OSError, ValueError) as exc:
+        raise ValueError("cannot read displacement ledger: %s" % exc)
+    return validate_displacements(data)
+
+
+def displacement_losses(lost, displaced, digest, root=ROOT):
+    """Accepted exact-loss displacements, and why the rest are rejected.
+
+    A SELECTED-only entry never reaches this function's acceptance path: an
+    exact loss is about the worst per-TU body, so only `metric=exact|both`
+    may excuse it.  `metric=both` is accepted only when its `body_sha256`
+    matches the same head-object digest the reviewed-loss path uses.
+    """
+    accepted, rejected = {}, {}
+    ledger = _byteident()
+    for symbol in lost:
+        entries = [entry for entry in displaced
+                   if isinstance(entry, dict)
+                   and entry.get("symbol") == symbol]
+        exact = [entry for entry in entries
+                 if entry.get("metric") in ("exact", "both")]
+        if not exact:
+            selected_only = any(entry.get("metric") == "selected"
+                                for entry in entries)
+            rejected[symbol] = (
+                "selected-only displacement does not excuse an EXACT loss"
+                if selected_only else "no reviewed displacement")
+            continue
+        if len(exact) > 1:
+            rejected[symbol] = "ambiguous displacement entries"
+            continue
+        entry = exact[0]
+        problem = ledger.ledger_entry_problem(entry, root=root)
+        if problem is not None:
+            rejected[symbol] = problem
+            continue
+        try:
+            actual = digest(symbol)
+        except ValueError as exc:
+            rejected[symbol] = str(exc)
+            continue
+        if actual != entry.get("body_sha256"):
+            rejected[symbol] = "displacement body hash does not match head"
+            continue
+        accepted[symbol] = entry
+    return accepted, rejected
+
+
 def load(path):
     try:
         with open(path) as f:
@@ -161,11 +225,14 @@ def byte_coverage(metrics):
                                   metrics["compared_bytes"])
 
 
-def render(base, head, reviewed=None, rejected=None):
+def render(base, head, reviewed=None, rejected=None, displaced=None):
     """Render the base-versus-head markdown table and return (lines, lost).
 
-    `lost` always includes every loss, including explicitly reviewed losses.
-    The caller rejects any loss without matching base/body review evidence.
+    `lost` always includes every loss, including explicitly reviewed losses
+    and reviewed displacements.  The caller rejects any loss without matching
+    base/body review evidence or a hash-pinned displacement.  The two
+    acceptance paths are reported separately: a displacement is a bounded
+    layout/TU decision, not a claim that the old body was reviewed.
     """
     exact_delta = head["exact"] - base["exact"]
     lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
@@ -211,8 +278,15 @@ def render(base, head, reviewed=None, rejected=None):
         lines.append("**New byte-identical functions:** " +
                      ", ".join("`%s`" % symbol for symbol in gained))
     if reviewed is not None:
-        lines.append("**Loss review:** %d reviewed, %d unreviewed / %d lost functions." %
-                     (len(reviewed), len(lost) - len(reviewed), len(lost)))
+        if displaced is None:
+            lines.append("**Loss review:** %d reviewed, %d unreviewed / %d lost functions." %
+                         (len(reviewed), len(lost) - len(reviewed), len(lost)))
+        else:
+            lines.append("**Loss review:** %d reviewed, %d displaced, %d "
+                         "unreviewed / %d lost functions." %
+                         (len(reviewed), len(displaced),
+                          len(lost) - len(reviewed) - len(displaced),
+                          len(lost)))
         for symbol, review in sorted(reviewed.items()):
             lines.append("- Reviewed loss `%s`: base `%s`, body SHA256 `%s`; "
                          "[evidence](%s), accepted source `%s`." %
@@ -220,12 +294,22 @@ def render(base, head, reviewed=None, rejected=None):
                           "https://github.com/philpem/slmodem_dsp_re/blob/" +
                           review["evidence_commit"] + "/" + review["evidence"],
                           review["accepted_commit"]))
+        for symbol, entry in sorted((displaced or {}).items()):
+            lines.append("- Reviewed displacement `%s`: metric `%s`, to `%s`, "
+                         "phase `%s`, body SHA256 `%s`; evidence `%s`; "
+                         "cause: %s; recovery: %s." %
+                         (symbol, entry["metric"], entry["to"],
+                          entry["phase"], entry["body_sha256"],
+                          entry["evidence"], entry["cause"],
+                          entry["recovery"]))
         for symbol, reason in sorted((rejected or {}).items()):
             lines.append("- Unreviewed loss `%s`: %s." % (symbol, reason))
     lines.append("Unreviewed byte-identical function losses fail this codegen "
                  "regression check. Explicitly reviewed losses retain their "
                  "numerical regression above; matching base SHA and current "
-                 "body/relocation evidence is required. Period differential "
+                 "body/relocation evidence is required. A reviewed displacement "
+                 "in tools/ci/displaced.json is a separate, body-pinned "
+                 "acceptance and is labelled as such. Period differential "
                  "failures remain hard failures. \"Same code\" permits "
                  "only consistent register renaming; constants, memory "
                  "operands, call/data targets, branches and operand order must "
@@ -301,6 +385,58 @@ def self_test():
     check("unchanged size is no change",
           ":white_circle: no change" in row(lines, "Could not be disassembled"))
 
+    # --- displacement ledger: accepted, stale, and wrong-metric controls ----
+    def head_body(symbol):
+        return hashlib.sha256(("head:" + symbol).encode()).hexdigest()
+
+    def displacement(symbol, metric="exact", body_hash=None,
+                     selected_hash=None,
+                     evidence="tools/ci/displaced.json"):
+        entry = {"symbol": symbol, "metric": metric, "from": "EXACT",
+                 "to": "REGALLOC", "phase": "order", "cause": "reviewed",
+                 "evidence": evidence,
+                 "recovery": "re-measure after the cause settles"}
+        if metric in ("exact", "both"):
+            entry["body_sha256"] = (body_hash if body_hash is not None
+                                    else head_body(symbol))
+        if metric in ("selected", "both"):
+            entry["selected_body_sha256"] = (
+                selected_hash if selected_hash is not None
+                else head_body("selected:" + symbol))
+        return entry
+
+    matching = displacement("lost")
+    accepted, rejected = displacement_losses(["lost"], [matching], head_body)
+    check("matching displaced entry accepts",
+          accepted == {"lost": matching} and not rejected)
+
+    accepted, rejected = displacement_losses(
+        ["lost"], [displacement("lost", body_hash="0" * 64)], head_body)
+    check("wrong displacement body hash rejects",
+          not accepted and "body hash does not match" in rejected["lost"])
+
+    accepted, rejected = displacement_losses(
+        ["lost"], [displacement("lost", metric="selected")], head_body)
+    check("selected-only entry does not excuse an exact loss",
+          not accepted and "selected-only" in rejected["lost"])
+
+    accepted, rejected = displacement_losses(
+        ["lost"], [displacement("lost",
+                                evidence="tools/ci/does-not-exist.json")],
+        head_body)
+    check("missing displacement evidence rejects",
+          not accepted and "evidence path does not exist" in rejected["lost"])
+
+    accepted, rejected = displacement_losses(["lost"], [], head_body)
+    check("an unreviewed loss still fails",
+          not accepted and rejected["lost"] == "no reviewed displacement")
+
+    accepted, rejected = displacement_losses(
+        ["lost"], [displacement("lost", metric="both")], head_body)
+    check("both entry with both pins accepts an exact loss",
+          accepted == {"lost": displacement("lost", metric="both")}
+          and not rejected)
+
     total = checks[0]
     print("period_metrics self-test: %d checks, %d failed" %
           (total, bad[0]))
@@ -314,6 +450,8 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="fail on any unreviewed byte-identical function loss")
     ap.add_argument("--reviewed-losses", help="explicit base/body-pinned review JSON")
+    ap.add_argument("--displaced",
+                    help="body-pinned displacement ledger (tools/ci/displaced.json)")
     ap.add_argument("--base-sha", help="full measured PR base revision")
     ap.add_argument("--head-objects", help="measured head's period object directory")
     ap.add_argument("--fingerprint", metavar="SYMBOL",
@@ -339,17 +477,33 @@ def main():
         base = load(args.base)
         head = load(args.head)
         reviews = load_reviews(args.reviewed_losses) if args.reviewed_losses else []
+        displacements = load_displacements(args.displaced) if args.displaced else None
         if args.reviewed_losses and (not args.head_objects or
                 not re.fullmatch(r"[0-9a-f]{40}", args.base_sha or "")):
             raise ValueError("--reviewed-losses requires --head-objects and full --base-sha")
+        if args.displaced and not args.head_objects:
+            raise ValueError("--displaced requires --head-objects")
     except ValueError as exc:
         ap.error(str(exc))
 
     lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
-    accepted, rejected = review_losses(
-        lost, reviews, args.base_sha,
-        lambda symbol: function_digest(args.head_objects, symbol))
-    lines, lost = render(base, head, accepted, rejected)
+    digest = lambda symbol: function_digest(args.head_objects, symbol)
+    accepted, rejected = review_losses(lost, reviews, args.base_sha, digest)
+    displaced = None
+    if displacements is not None:
+        displaced, unreviewed = displacement_losses(lost, displacements, digest)
+        for symbol in lost:
+            if symbol in accepted:
+                # A full base/body review is the stronger record; keep the
+                # two acceptance paths disjoint so the label is unambiguous.
+                displaced.pop(symbol, None)
+                continue
+            if symbol in displaced:
+                rejected.pop(symbol, None)
+            else:
+                rejected[symbol] = unreviewed.get(
+                    symbol, "no review or displacement")
+    lines, lost = render(base, head, accepted, rejected, displaced)
     print("\n".join(lines))
     return 1 if args.check and rejected else 0
 

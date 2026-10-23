@@ -118,6 +118,21 @@ jobs:
             "$RUNNER_TEMP/link-selected-report.txt" \
             --summary "$RUNNER_TEMP/link-selected-census.txt"
 
+      # THE PHASED FLOOR MUST BE ENFORCED HERE, where the fresh tc_repro tree
+      # and the recovered-order link already exist.  On a master push BASE_SHA
+      # is github.sha, so the base/head comparison in gentoo-period.yml is the
+      # head against itself and cannot catch a historical loss; this stored
+      # floor is what catches one there.  The ratchet reads build/tc_out (the
+      # NON-reproduce-bugs tree the floor was recorded on), which is why `make
+      # tc` runs after the partial-link build, and the default manifest/linked
+      # artifact paths sit beside TC_OUT so the phase-2 metric is available.
+      - name: Enforce phased byte-identity floor
+        run: |
+          python3 tools/toolchain/byteident.py --ratchet-self-test
+          make tc J=4
+          TC_OUT=build/tc_out python3 tools/toolchain/byteident.py \
+            --ratchet --summary
+
       - name: Compare and ratchet partial-link metrics
         id: metrics
         run: |
