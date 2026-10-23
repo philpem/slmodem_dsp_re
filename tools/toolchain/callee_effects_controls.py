@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""Gentoo assembly controls for machine-derived leaf effects and call binding."""
+"""Gentoo assembly controls for machine-derived leaf effects and call binding.
+
+Run from a tree with the blob, the period objects and the recovered-order
+partial link (`make tc && make partial-link`): the last controls prove the real
+`v22_local_loop` caller on the per-TU object through the link, and keep the
+blob's own defined callee on its per-TU path.
+"""
 import argparse
+import hashlib
 import json
 import subprocess
 from pathlib import Path
 import callee_effects as c
+import jumptable as j
 
 ROOT = Path(__file__).resolve().parents[2]
 IMAGE = 'ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest'
@@ -97,9 +105,26 @@ def main():
         'undefined-target':SOURCE.replace('.globl sample\n.type sample,@function\nsample:', '.globl implementation\n.type implementation,@function\nimplementation:').replace('.size sample,.-sample','.size implementation,.-implementation'),
     }
     all_sources={**positive,**negative}
+    callee=SOURCE[:SOURCE.index('.globl caller')]
+    caller_only=('.text\n.globl caller\n.type caller,@function\ncaller:\n'
+                 'call sample\nret\n.size caller,.-caller\n'
+                 '.section .note.GNU-stack,"",@progbits\n')
+    cross_sources={
+        'x-good-callee':callee,
+        'x-bad-callee':callee.replace('mov %dl,1(%ecx)','mov %dl,8(%ecx)'),
+        'x-caller':caller_only,
+        'x-defined-caller':callee+caller_only,
+    }
     for label,source in all_sources.items(): (out/(label+'.s')).write_text(source)
-    script='set -eu\nas --version\n'+'\n'.join(
-        f'as --32 -o /work/{relative}/{label}.o /work/{relative}/{label}.s' for label in all_sources)
+    for label,source in cross_sources.items(): (out/(label+'.s')).write_text(source)
+    commands=[f'as --32 -o /work/{relative}/{label}.o /work/{relative}/{label}.s'
+              for label in list(all_sources)+list(cross_sources)]
+    commands += [
+        f'ld -r -o /work/{relative}/x-link-good.o /work/{relative}/x-good-callee.o /work/{relative}/x-caller.o',
+        f'ld -r -o /work/{relative}/x-link-caller-only.o /work/{relative}/x-caller.o',
+        f'ld -r -o /work/{relative}/x-link-bad.o /work/{relative}/x-bad-callee.o /work/{relative}/x-caller.o',
+    ]
+    script='set -eu\nas --version\n'+'\n'.join(commands)
     command=['docker','run','--rm','-v',str(ROOT)+':/work',IMAGE,'/bin/sh','-c',script]
     assembled=subprocess.run(command,check=True,capture_output=True,text=True)
     results={}
@@ -124,17 +149,75 @@ def main():
         try: c.prove(str(path),'sample',1,8)
         except c.Refused as error: cache_controls[label]=str(error)
         else: raise AssertionError(('stale cached proof accepted',label))
+    def digest(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    def call_site(path):
+        _,_,_,fn,_,_,_=c.artifact(str(path),'caller',check_entry=False)
+        return fn['st_value']
+    cross_controls={}
+    def cross_case(label,caller,linked,objects,capacity=8,expect=True):
+        manifest=out/(label+'.manifest')
+        manifest.write_text(''.join(f'{obj} {obj[:-2]}.s\n' for obj in objects))
+        try:
+            proof=c.prove_call(str(out/caller),'caller',call_site(out/caller),1,capacity,
+                               link=str(out/linked),manifest=str(manifest))
+            accepted=True; reason=None
+        except c.Refused as error:
+            accepted=False; reason=str(error); proof=None
+        assert accepted==expect,(label,accepted,reason)
+        cross_controls[label]={'accepted':accepted,'reason':reason,'proof':proof}
+        return proof
+    linked_positive=cross_case('linked-positive','x-caller.o','x-link-good.o',
+                               ['x-good-callee.o','x-caller.o'])
+    assert linked_positive['call']['resolution']=='recovered-order-link'
+    assert linked_positive['artifact_sha256']==digest(out/'x-link-good.o')
+    assert linked_positive['binding']=='STB_GLOBAL'
+    cross_case('linked-missing','x-caller.o','x-link-caller-only.o',['x-caller.o'],expect=False)
+    cross_case('linked-capacity','x-caller.o','x-link-bad.o',
+               ['x-bad-callee.o','x-caller.o'],expect=False)
+    assert 'capacity' in cross_controls['linked-capacity']['reason']
+    cross_case('linked-mismatch','x-caller.o','x-link-bad.o',
+               ['x-good-callee.o','x-caller.o'],expect=False)
+    assert 'manifest-selected copy' in cross_controls['linked-mismatch']['reason']
+    local=cross_case('per-object-defined','x-defined-caller.o','x-link-bad.o',
+                     ['x-bad-callee.o','x-caller.o'])
+    assert local['call']['resolution']=='per-tu'
+    assert local['artifact_sha256']==digest(out/'x-defined-caller.o')
     native=c.prove_call(str(ROOT/'ref/slmodemd/dsplibs.o'),'v22_local_loop',0x8a94f,1,44)
+    assert native['call']['resolution']=='per-tu'
     assert native['instructions']==94 and native['paths']==4 and native['store_instructions']==17
     assert native['record_write_masks']=={str(x):255 for x in list(range(12))+list(range(16,22))}
     c.require_initialized(native,21,1)
     try: c.require_initialized(native,21,2)
     except c.Refused: pass
     else: raise AssertionError('native preserved bit incorrectly declared initialized')
-    payload={'controls':results,'cache_controls':cache_controls,'native':native,'command':command,'assembler':assembled.stdout,
-             'positive':len(positive),'negative':len(negative)}
+    tc=ROOT/'build/tc_out/src_pump_v22_v22mod.c.o'
+    linked=ROOT/'build/partial/dsplibs.o'
+    manifest=ROOT/'build/tc_repro/tc_link_manifest.txt'
+    if not (tc.is_file() and linked.is_file() and manifest.is_file()):
+        raise AssertionError('real v22 cross-TU control needs build/tc_out, '
+                             'build/partial/dsplibs.o and build/tc_repro/'
+                             'tc_link_manifest.txt; run make tc && make partial-link')
+    reconstructed=c.prove_call(str(tc),'v22_local_loop',0x21bf,1,44,
+                               link=str(linked),manifest=str(manifest))
+    assert reconstructed['call']['resolution']=='recovered-order-link'
+    assert reconstructed['size']==315 and reconstructed['paths']==32
+    assert reconstructed['store_instructions']==17
+    assert reconstructed['artifact_sha256']==digest(linked)
+    framed=j.prove(str(tc),'v22_local_loop',link=str(linked),manifest=str(manifest))
+    record=framed['fixed_stack_frame']['private_record']
+    assert framed['count']==14 and record['capacity']==44
+    assert record['callee']['size']==315 and record['callee']['paths']==32
+    payload={'controls':results,'cache_controls':cache_controls,
+             'cross_tu_controls':cross_controls,'native':native,
+             'reconstructed_v22':{'callee':reconstructed,'frame':framed},
+             'command':command,'assembler':assembled.stdout,
+             'positive':len(positive),'negative':len(negative),
+             'cross_positive':1,'cross_negative':3,'cross_per_object':1}
     (out/'results.json').write_text(json.dumps(payload,indent=2)+'\n')
-    print(f'{len(positive)} positive leaf/call controls; {len(negative)} adversarial refusals; native 94 instructions / 17 stores / 4 paths; preserved-bit and 2 stale-cache negatives passed')
+    print(f'{len(positive)} positive leaf/call controls; {len(negative)} adversarial refusals; '
+          f'5 cross-TU controls (1 positive, 3 refusals, 1 per-object); '
+          f'native 94 instructions / 17 stores / 4 paths; reconstructed 315-byte callee / '
+          f'32 paths / 44-byte envelope; preserved-bit and 2 stale-cache negatives passed')
 
 
 if __name__=='__main__': main()

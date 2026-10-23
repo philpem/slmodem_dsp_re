@@ -195,7 +195,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
             else: edges=[address+len(raw)]
             require(all(edge in by_address for edge in edges),'private-frame successor extent')
             graph[address]=edges
-        private=private_frame_effects(context[0],context[1],rows,frame,slots,outgoing,calls,graph,context[2])
+        private=private_frame_effects(context[0],context[1],rows,frame,slots,outgoing,calls,graph,context[2],context[3],context[4])
     pending = [(first[0], (False, frozenset(), frozenset()))]; seen = {}
     returns = 0
     while pending:
@@ -398,12 +398,16 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
 
 
 
-def prove(path, name):
+def prove(path, name, link=None, manifest=None):
     """Return one fully proved table's ordered destinations and provenance.
 
     The ABI boundary is entry at the unique sized function symbol. Arbitrary
     jumps from unrelated code into its interior are outside this proof. Known
     direct/table edges and ELF relocations into the guarded sequence refuse it.
+
+    `link` and `manifest` are the recovered-order partial link and its ordered
+    input manifest. They are consulted only when this ELF leaves the private-
+    frame callee undefined; a defined callee is always proved from this ELF.
     """
     elf = ELFFile(io.BytesIO(Path(path).read_bytes()))
     require(elf.elfclass == 32 and elf.little_endian and
@@ -656,7 +660,8 @@ def prove(path, name):
     else:
         stack_proof = prove_fixed_stack_frame(rows, jump[0],
                                               [start+d for d in destinations], calls, (str(path),name,
-                                              [(table_id,o) for o in range(table_start,table_end,4)])) if stack_writes else None
+                                              [(table_id,o) for o in range(table_start,table_end,4)],
+                                              link, manifest)) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]

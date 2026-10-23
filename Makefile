@@ -1378,10 +1378,15 @@ tc-repro:
 		TC_OUT='$(abspath $(BUILD)/tc_repro)' \
 		TC_EXTRA='-DDSPLIB_REPRODUCE_BUGS'
 
-byteident: tc
+# The census resolves an UNDEFINED private-frame callee through the
+# recovered-order partial link, so that artifact is part of this target.  It
+# never resolves a callee DEFINED in the per-TU object, and a tree without the
+# link keeps the older refusal (the grade stays UNRESOLVED) rather than
+# borrowing a body from the blob.
+byteident: tc partial-link
 	@$(PYTHON) tools/toolchain/byteident.py
 
-byteident-ratchet: tc
+byteident-ratchet: tc partial-link
 	@$(PYTHON) tools/toolchain/byteident.py --ratchet
 
 similarity: tc

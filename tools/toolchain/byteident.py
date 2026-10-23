@@ -90,6 +90,19 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 RATCHET = os.path.join(HERE, "byteident_ratchet.json")
 RATCHET_EXACT_SYMBOLS = "exact_symbols"
 
+# The recovered-order partial link used to resolve an UNDEFINED private-frame
+# callee. `--link-selected` may name a pair explicitly; otherwise it is the
+# `make partial-link` artifact beside the census object tree. A body defined in
+# the supplied ELF is never looked up here.
+LINK_RESOLUTION = None
+
+
+def _link_resolution_paths():
+    if LINK_RESOLUTION is not None:
+        return LINK_RESOLUTION
+    manifest, linked = _link_selected_paths(None, None)
+    return linked, manifest
+
 
 def _default_blob():
     d = subprocess.run(["git", "rev-parse", "--git-common-dir"],
@@ -346,8 +359,12 @@ def body(path, sym):
     if b"\xff\x24" in raw and any(kind == "R_386_32" and target[0] == "section"
                                   for kind, target in relocs.values()):
         import jumptable
+        linked, manifest = _link_resolution_paths()
+        if os.path.realpath(str(path)) == os.path.realpath(str(linked)):
+            # A body in the link itself has already been resolved by the link.
+            linked = manifest = None
         try:
-            proof = jumptable.prove(path, sym)
+            proof = jumptable.prove(path, sym, link=linked, manifest=manifest)
         except jumptable.Refused:
             import induction_jumptable
             try:
@@ -1409,7 +1426,9 @@ def main():
     # spends minutes producing a denominator it cannot annotate.
     #
     if a.link_selected:
-        _link_selected_inputs(a.link_manifest, a.linked)
+        manifest, linked = _link_selected_inputs(a.link_manifest, a.linked)
+        global LINK_RESOLUTION
+        LINK_RESOLUTION = (linked, manifest)
 
     blob = sizes(BLOB)
     if not blob:
