@@ -431,7 +431,6 @@ cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, unsigned char *w
 	short cnt = 0;
 	unsigned short result = (unsigned short)*rx_count;
 	int status;
-	int over;
 
 	(void)word3;
 	(void)word4;
@@ -443,16 +442,14 @@ cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, unsigned char *w
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
 				&cnt, &result);
 
-	if (status & FAXVMI_RESULT_BIT_2000)
-		over = ctx->countdown > 15;
-	else
-		over = ctx->countdown > 2;
-
-	if (over) {
-		if (dsplibs_debug_level > 1)
+	if ((status & FAXVMI_RESULT_BIT_2000)
+		    ? ctx->countdown > 15
+		    : ctx->countdown > 2) {
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] End of off state, COUNTER %d\n",
 			    ctx->clock_sec, ctx->clock_frac, ctx->countdown);
+		}
 		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
