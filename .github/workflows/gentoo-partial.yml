@@ -26,6 +26,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # byteident's link-selected view reads ELF symbol tables through
+      # pyelftools; the partial-metric tools themselves did not need it.
+      - name: Set up host analysis Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/ci/requirements.txt
+
+      - name: Install host analysis dependencies
+        run: python3 -m pip install -r tools/ci/requirements.txt
+
       - name: Self-test partial metric logic
         run: |
           python3 tools/ci/partial_metrics.py --self-test
@@ -91,7 +103,10 @@ jobs:
           TC_OUT=build/tc_repro python3 tools/toolchain/byteident.py \
             --link-selected \
             > "$RUNNER_TEMP/link-selected-census.txt" \
-            2> "$RUNNER_TEMP/link-selected-report.txt"
+            2> "$RUNNER_TEMP/link-selected-report.txt" || {
+              cat "$RUNNER_TEMP/link-selected-report.txt"
+              exit 1
+            }
           cat "$RUNNER_TEMP/link-selected-report.txt"
           python3 tools/ci/link_selected_check.py \
             "$RUNNER_TEMP/link-selected-report.txt"
