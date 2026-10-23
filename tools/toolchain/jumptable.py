@@ -70,7 +70,7 @@ def section_direct_edges(path, section):
     return edges
 
 
-def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
+def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), context=None):
     """Track one entry-allocated frame and untouched callee-save slots in CFG.
 
     This accepts ordinary register saves, not arbitrary stack writes. All
@@ -112,7 +112,13 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(address in calls, 'unproved fixed-frame ABI call')
             stack_ops[address] = ('call',)
             continue
-        require(mnemonic in supported or mnemonic.startswith('j'),
+        setcc = mnemonic.startswith('set')
+        if setcc:
+            byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
+            require(len(raw)==3 and raw[0]==0x0f and 0x90<=raw[1]<=0x9f and
+                    raw[2]&0xf8==0xc0 and operands=='%'+byte_registers[raw[2]&7],
+                    'unsupported fixed-frame SETcc encoding/destination')
+        require(mnemonic in supported or mnemonic.startswith('j') or setcc,
                 'unsupported fixed-frame instruction')
         require(re.search(r'%sp\b', operands) is None, 'partial stack-pointer access')
         if '%esp' not in operands:
@@ -126,6 +132,11 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(mnemonic != 'sub' or address == first[0],
                     'reallocated fixed frame')
             stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
+            continue
+        if context is not None and (mnemonic=='lea' or original_mnemonic=='testb'):
+            # Exact decoding, bounds, dominance and capability cleanup are
+            # checked by private_frame_effects before this frame can pass.
+            stack_ops[address] = ('private',)
             continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
         if store and address < dispatch:
@@ -161,6 +172,22 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     require(not outgoing.intersection(slots), 'fixed-frame outgoing/save overlap')
     require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
+    private = None
+    if any(op[0]=='private' for op in stack_ops.values()):
+        from callee_effects import private_frame_effects
+        graph = {}
+        for i,(address,raw,mnemonic,operands) in enumerate(rows):
+            if mnemonic=='ret': edges=[]
+            elif mnemonic=='jmp' and operands.startswith('*'): edges=list(destinations)
+            elif mnemonic.startswith('j'):
+                target=re.match(r'^([0-9a-f]+)\s',operands)
+                require(target is not None,'private-frame branch decoding')
+                edges=[int(target[1],16)]
+                if mnemonic!='jmp': edges.append(address+len(raw))
+            else: edges=[address+len(raw)]
+            require(all(edge in by_address for edge in edges),'private-frame successor extent')
+            graph[address]=edges
+        private=private_frame_effects(context[0],context[1],rows,frame,slots,outgoing,calls,graph,context[2])
     pending = [(first[0], (False, frozenset(), frozenset()))]; seen = {}
     returns = 0
     while pending:
@@ -214,7 +241,8 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     require(returns > 0, 'fixed frame without reachable return')
     return {'bytes': frame, 'saved_slots': sorted(slots.items()),
             'reachable_instructions': len(seen), 'returns': returns,
-            'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing)}
+            'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing),
+            'private_record': private}
 
 
 def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
@@ -619,7 +647,8 @@ def prove(path, name):
         stack_proof = prove_pushed_abi_frame(rows, jump[0], [start+d for d in destinations], calls)
     else:
         stack_proof = prove_fixed_stack_frame(rows, jump[0],
-                                              [start+d for d in destinations], calls) if stack_writes else None
+                                              [start+d for d in destinations], calls, (str(path),name,
+                                              [(table_id,o) for o in range(table_start,table_end,4)])) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]
