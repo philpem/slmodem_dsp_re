@@ -4,8 +4,10 @@
 Supported dispatches use CMP/JA fallthrough or a uniquely guarded taken JBE
 edge, with an unmodified 32-bit index. One narrowly decoded flag-preserving
 MOV may intervene. A 16-bit CMP/JA followed by an exact same-register MOVZX
-also bounds the resulting 32-bit index. Refusal is an unsupported proof,
-not unequal code.
+also bounds the resulting 32-bit index. SETcc is admitted only in its exact
+unprefixed register-byte encoding, in both frame models, because it reads the
+flags and writes one byte register; memory and prefixed forms still need an
+alias proof. Refusal is an unsupported proof, not unequal code.
 """
 import argparse
 import io
@@ -112,7 +114,19 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(address in calls, 'unproved fixed-frame ABI call')
             stack_ops[address] = ('call',)
             continue
-        require(mnemonic in supported or mnemonic.startswith('j'),
+        # SETcc has no implicit register or flag write: it READS the flags and
+        # writes one byte register.  Admit only the exact unprefixed i386
+        # register-byte encoding, as the pushed-ABI prover already does; the
+        # ModRM /0 form excludes the memory and prefixed encodings, which need
+        # an alias/stack-extent proof this model does not carry.
+        setcc = mnemonic.startswith('set')
+        if setcc:
+            byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
+            require(len(raw) == 3 and raw[0] == 0x0f and
+                    0x90 <= raw[1] <= 0x9f and raw[2] & 0xf8 == 0xc0 and
+                    operands == '%' + byte_registers[raw[2] & 7],
+                    'unsupported fixed-frame SETcc destination/encoding')
+        require(mnemonic in supported or mnemonic.startswith('j') or setcc,
                 'unsupported fixed-frame instruction')
         require(re.search(r'%sp\b', operands) is None, 'partial stack-pointer access')
         if '%esp' not in operands:
