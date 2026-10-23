@@ -251,34 +251,27 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx = tx->hdx;
-	unsigned short req = (unsigned short)*budget;
 	unsigned short taken;
 	unsigned short nbits;
 	short nsamples;
 
 	taken = (unsigned short)
 		FIFO_read(hdx->fifo,
-			  in, req);
+			  in, (unsigned short)*budget);
 
-	if (req <= taken) {
+	if ((unsigned short)*budget <= taken) {
 		nbits = taken;
-		nsamples = (short)ModDataV21(modem, in, out, nbits);
-		*budget = (short)((unsigned short)*budget - nbits);
-		tx->result.byte.status = V21TX_STATUS_DATA;
-		return nsamples;
-	}
-
-	if (hdx->int_0004 != 0) {
-		nbits = taken;
-		nsamples = (short)ModDataV21(modem, in, out, nbits);
+	} else if (hdx->int_0004 != 0) {
 		*budget = (short)((unsigned short)*budget - taken);
+		nsamples = (short)ModDataV21(modem, in, out, taken);
 		TxNextStateV21(modem);
 		return nsamples;
+	} else {
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
+		nbits = (unsigned short)*budget;
+		tx->result.byte.status = V21TX_STATUS_UNDERRUN;
 	}
 
-	tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
-	nbits = req;
-	tx->result.byte.status = V21TX_STATUS_UNDERRUN;
 	nsamples = (short)ModDataV21(modem, in, out, nbits);
 	*budget = (short)((unsigned short)*budget - nbits);
 	tx->result.byte.status = V21TX_STATUS_DATA;
