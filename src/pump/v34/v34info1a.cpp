@@ -209,6 +209,8 @@ extern "C" int
 V34SetINFO1aBits(void *objp, short *bits)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	const unsigned char *pcm = (const unsigned char *)obj->pac18;
 	int r;
@@ -220,8 +222,11 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * test and then re-reading `k56flex_receiver`, which nothing between
 	 * has touched.
 	 */
-	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0)
-		put_rev7_high(bits, bitreverse((unsigned short)obj->short_35a4, 7));
+	if (e->v90_receiver == 0 && e->k56flex_receiver == 0) {
+		short sv = obj->short_35a4;
+
+		put_rev7_high(bits, bitreverse((unsigned short)sv, 7));
+	}
 
 	/*
 	 * K56FLEX, AND THE ROLE FLAG SPLITS IT.  `role == 0x65` is the
@@ -236,7 +241,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * is in the object -- `cmpl $0x1` against `test` -- and finding F130 is
 	 * the standing warning about factoring two blocks that look alike.
 	 */
-	if (obj->k56flex_receiver != 0) {
+	if (e->k56flex_receiver != 0) {
 		/*
 		 * READ HERE AND NOT AT ENTRY.  The object loads the POINTER
 		 * in the prologue and spills it, but dereferences +0xc at
@@ -249,19 +254,25 @@ V34SetINFO1aBits(void *objp, short *bits)
 		 * v34info.c reads the same field from inside its own K56Flex
 		 * branch for the same reason.
 		 */
-		int law = *(const int *)(pcm + PCM_LAW);
-
 		if (obj->role == 0x65) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"V34SetINFO1aBits: Setting INFO1c for " "K56Flex (Caller-Analog)...\r\n");
 
-			put_rev7_high(bits,
-				      bitreverse((unsigned short)obj->short_35a4,
-						 7));
+			{
+				short sv = obj->short_35a4;
 
-			bits[8] = (short)(((unsigned short)bits[8] & ~0xeu)
-					  | (law == 1 ? 0x13u : 0x11u));
+				put_rev7_high(bits,
+					      bitreverse((unsigned short)sv,
+							 7));
+			}
+
+			{
+				int law = *(const int *)(pcm + PCM_LAW);
+
+				bits[8] = (short)(((unsigned short)bits[8] & ~0xeu)
+						  | (law == 1 ? 0x13u : 0x11u));
+			}
 			bits[9] = (short)((unsigned short)bits[9] & 0x3ff);
 		} else {
 			if (DSPLIB_DEBUG_ON())
@@ -269,13 +280,17 @@ V34SetINFO1aBits(void *objp, short *bits)
 					"V34SetINFO1aBits: Setting INFO1a for "
 					"K56Flex (Answer-Digital)...\r\n");
 
-			bits[3] = (short)(((unsigned short)bits[3] & ~6u)
-					  | (law != 0 ? 9u : 0xbu));
+			{
+				int law = *(const int *)(pcm + PCM_LAW);
+
+				bits[3] = (short)(((unsigned short)bits[3] & ~6u)
+						  | (law != 0 ? 9u : 0xbu));
+			}
 		}
 	}
 
 	/* Everything below needs a V.90 receiver. */
-	if (obj->v90_receiver == 0)
+	if (e->v90_receiver == 0)
 		return 0;
 
 	/*
@@ -293,7 +308,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		else
 			bits[7] = (short)(bits[7] & 0xdf);
 
-		obj->v90_receiver = 2;
+		e->v90_receiver = 2;
 		return 0;
 	}
 
@@ -307,16 +322,14 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * reduction V34hshak.c computes; this clears it.
 	 */
 	if (obj->is_short != 0) {
-		struct v34_ratecfg *cfg = &obj->ratecfg;
-
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"VPcmV34Main: Short phase2 (Hard Coded) !!!\r\n");
 
 		sess->pcmSessionType = 0;
-		cfg->baud = SHORT_PHASE2_BAUD;
-		cfg->carrier = SHORT_PHASE2_CARRIER;
-		cfg->preemp = 0;
+		obj->ratecfg.baud = SHORT_PHASE2_BAUD;
+		obj->ratecfg.carrier = SHORT_PHASE2_CARRIER;
+		obj->ratecfg.preemp = 0;
 		obj->tx.tx_pwr_reduction = 0;
 	}
 
@@ -327,7 +340,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 */
 	uinfo = (short)sess->getUinfoValue(obj->is_short);
 	if (uinfo == 0) {
-		obj->v90_receiver = 0;
+		e->v90_receiver = 0;
 		return 0;
 	}
 
@@ -380,7 +393,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		bits[3] = (short)((((short)r << 4) & 0x70)
 				  | (unsigned short)bits[3] | 0xf);
 
-		obj->v90_receiver = 2;
+		e->v90_receiver = 2;
 		return 0;
 	}
 
@@ -397,7 +410,11 @@ V34SetINFO1aBits(void *objp, short *bits)
 		int baud = obj->is_short != 0 ? INFO1A_BAUD_SHORT
 					      : recover_baud(bits);
 
-		r = bitreverse((unsigned short)obj->short_35a4, 7);
+		{
+			short sv = obj->short_35a4;
+
+			r = bitreverse((unsigned short)sv, 7);
+		}
 		bits[1] = (short)(((short)r << 3) & 0xf8);
 		bits[0] = (short)(((short)r >> 5) & 3);
 
@@ -430,7 +447,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		dsplibs_debug_printf("VPcmV34Main: It is ===== V90 receiver "
 				     "==== from Now on\n");
 
-	obj->v90_receiver = 2;
+	e->v90_receiver = 2;
 	return 0;
 }
 
