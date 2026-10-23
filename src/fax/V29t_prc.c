@@ -392,24 +392,27 @@ short
 TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	unsigned short taken;
-	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 0;
 
 	if (((struct v29_tx_root *)modem)->params->countdown != 0) {
-		short which = ((struct v29_tx_root *)modem)->params->rate;
+		int which = ((struct v29_tx_root *)modem)->params->rate;
 
 		((struct v29_tx_root *)modem)->params->countdown = 0;
 
-		if (which == V29_RATE_7200)
+		switch (which) {
+		case V29_RATE_7200:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_7200;
-		else if (which == V29_RATE_9600)
+			break;
+		case V29_RATE_9600:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_9600;
-		else
+			break;
+		default:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DEFAULT;
+		}
 	}
 
 	taken = (unsigned short)
@@ -418,26 +421,30 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	if ((unsigned short)*budget > taken) {
 		if (((struct v29_tx_root *)modem)->params->int_0008 != 0) {
+			unsigned short nsamples;
+
 			*budget = (short)
 				((unsigned short)*budget - taken);
 			ScrambleDataV29(modem, in, taken);
-			nsamples = (short)
-				ModDataV29(modem, in, out, taken);
+			nsamples = ModDataV29(modem, in, out, taken);
 			TxNextStateV29(modem);
 			return nsamples;
 		}
+		taken = (unsigned short)*budget;
 		((struct v29_tx_root *)modem)->result.byte.flags |=
 			V29TX_RESULT_B1_BIT1;
 		((struct v29_tx_root *)modem)->result.byte.status =
 			V29TX_STATUS_UNDERRUN;
-		taken = (unsigned short)*budget;
 	}
 
 	ScrambleDataV29(modem, in, taken);
-	nsamples = (short)ModDataV29(modem, in, out, taken);
-	*budget = (short)((unsigned short)*budget - taken);
+	{
+		short nsamples = (short)
+			ModDataV29(modem, in, out, taken);
 
-	return nsamples;
+		*budget = (short)((unsigned short)*budget - taken);
+		return nsamples;
+	}
 }
 
 /*

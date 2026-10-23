@@ -443,7 +443,6 @@ short
 TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	unsigned short taken;
-	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_DATA;
 
@@ -480,25 +479,29 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 
 	if ((unsigned short)*budget > taken) {
 		if (TXP(modem)->r08 != 0) {
+			unsigned short nsamples;
+
 			*budget = (short)
 				((unsigned short)*budget - taken);
 			ScrambleDataV17(modem, in, taken);
-			nsamples = (short)
-				ModDataV17(modem, in, out, taken);
+			nsamples = ModDataV17(modem, in, out, taken);
 			TxNextStateV17(modem);
 			return nsamples;
 		}
+		taken = (unsigned short)*budget;
 		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
 		TXROOT(modem)->result.byte.status =
 			V17TX_STATUS_UNDERRUN;
-		taken = (unsigned short)*budget;
 	}
 
 	ScrambleDataV17(modem, in, taken);
-	nsamples = (short)ModDataV17(modem, in, out, taken);
-	*budget = (short)((unsigned short)*budget - taken);
+	{
+		short nsamples = (short)
+			ModDataV17(modem, in, out, taken);
 
-	return nsamples;
+		*budget = (short)((unsigned short)*budget - taken);
+		return nsamples;
+	}
 }
 
 /*

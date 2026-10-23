@@ -442,9 +442,9 @@ cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, unsigned char *w
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
 				&cnt, &result);
 
-	if ((status & FAXVMI_RESULT_BIT_2000)
-		    ? ctx->countdown > 15
-		    : ctx->countdown > 2) {
+	if (!(status & FAXVMI_RESULT_BIT_2000)
+		    ? (unsigned int)ctx->countdown > 2
+		    : (unsigned int)ctx->countdown > 15) {
 		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] End of off state, COUNTER %d\n",
