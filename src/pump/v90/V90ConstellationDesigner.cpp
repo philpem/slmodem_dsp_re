@@ -1474,10 +1474,9 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 				unsigned int i;
 
 				count = 1;
-				mappingParams->constellation[k][0] = c;
-				FORCERATE_ENCODE(k, 0);
-
 				if (dmin[k] != 0) {
+					mappingParams->constellation[k][0] = c;
+					FORCERATE_ENCODE(k, 0);
 					thresh = (short)
 					    ((alt[k][c] - (short)phaseDmin[k])
 					     <= (ucode[k][c]
@@ -1513,6 +1512,8 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 						       - (short)phaseDmin[k]);
 					}
 				} else {
+					mappingParams->constellation[k][0] = c;
+					FORCERATE_ENCODE(k, 0);
 					thresh = (short)(ucode[k][c]
 						  - (short)phaseDmin[k]);
 					for (i = (unsigned int)(c - 1);
