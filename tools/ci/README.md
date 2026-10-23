@@ -2,8 +2,17 @@
 
 The period workflow compares the PR's base and head measurements and reports
 both lost and gained exact symbols. Numerical regressions remain visible.
-`period_metrics.py --check` fails every loss that lacks matching review evidence.
-Period differential failures remain hard failures.
+`period_metrics.py --check` fails every loss that lacks matching review evidence
+or a reviewed displacement. Period differential failures remain hard failures.
+
+`tools/ci/displaced.json` is the bounded-layout ledger shared with
+`byteident.py --ratchet`. It does not replace a loss review and is reported
+separately. An exact loss is accepted only by an entry whose `metric` is
+`exact` or `both` and whose `body_sha256` still matches the worst per-TU head
+body. A link-selected loss uses `selected_body_sha256`, the body the
+recovered-order link selects; `metric=both` requires both hashes. A
+`selected`-only entry can never excuse an exact loss. The ledger is validated
+by `byteident.validate_displaced`, so both tools use one schema.
 
 After reviewing a structural recovery against original instructions, complete-TU
 collateral and the period differential gate, record an accepted codegen loss in

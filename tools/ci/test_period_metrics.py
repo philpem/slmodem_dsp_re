@@ -34,7 +34,8 @@ class ReviewedLossControls(unittest.TestCase):
         self.base = m.metrics(2, ["keep", "lost"], 1, 0, 0, 0, 0, 0, 3, 100)
         self.head = m.metrics(2, ["keep", "gain"], 1, 0, 0, 0, 0, 0, 3, 90)
 
-    def run_cli(self, reviews=None, base_sha=BASE, digest=DIGEST):
+    def run_cli(self, reviews=None, base_sha=BASE, digest=DIGEST,
+                displaced=None):
         for name, value in (("base", self.base), ("head", self.head)):
             (self.root / (name + ".json")).write_text(json.dumps(value))
         args = ["period_metrics.py", "--base", str(self.root / "base.json"),
@@ -43,6 +44,11 @@ class ReviewedLossControls(unittest.TestCase):
             (self.root / "reviews.json").write_text(json.dumps(dict(version=1, reviews=reviews)))
             args += ["--reviewed-losses", str(self.root / "reviews.json"),
                      "--base-sha", base_sha, "--head-objects", str(self.root)]
+        if displaced is not None:
+            (self.root / "displaced.json").write_text(
+                json.dumps(dict(version=1, displaced=displaced)))
+            args += ["--displaced", str(self.root / "displaced.json"),
+                     "--head-objects", str(self.root)]
         out = io.StringIO()
         with (patch.object(sys, "argv", args),
               patch.object(m, "function_digest", return_value=digest),
@@ -155,6 +161,53 @@ class ReviewedLossControls(unittest.TestCase):
         path.write_text(json.dumps(dict(version=1, reviews=[item])))
         with self.assertRaisesRegex(ValueError, "full evidence_commit"):
             m.load_reviews(path)
+
+    def displacement(self, metric="exact", symbol="lost", body=DIGEST,
+                     selected="a" * 64,
+                     evidence="docs/method/refinement.md"):
+        entry = {"symbol": symbol, "metric": metric, "from": "EXACT",
+                 "to": "REGALLOC", "phase": "order", "cause": "reviewed",
+                 "evidence": evidence,
+                 "recovery": "re-measure after the cause settles"}
+        if metric in ("exact", "both"):
+            entry["body_sha256"] = body
+        if metric in ("selected", "both"):
+            entry["selected_body_sha256"] = selected
+        return entry
+
+    def test_matching_displacement_passes_and_is_labelled(self):
+        status, text = self.run_cli(displaced=[self.displacement()])
+        self.assertEqual(status, 0)
+        self.assertIn("0 reviewed, 1 displaced, 0 unreviewed / 1 lost", text)
+        self.assertIn("Reviewed displacement `lost`", text)
+        self.assertNotIn("Reviewed loss `lost`", text)
+
+    def test_changed_displacement_body_fails(self):
+        changed = m.body_digest(RAW[:-1] + b"\x90", RELOCS)
+        status, text = self.run_cli(
+            displaced=[self.displacement(body=changed)], digest=DIGEST)
+        self.assertEqual(status, 1)
+        self.assertIn("displacement body hash does not match head", text)
+
+    def test_selected_only_displacement_does_not_excuse_exact_loss(self):
+        status, text = self.run_cli(
+            displaced=[self.displacement(metric="selected")])
+        self.assertEqual(status, 1)
+        self.assertIn("selected-only displacement does not excuse an EXACT "
+                      "loss", text)
+
+    def test_unreviewed_loss_still_fails_with_a_ledger(self):
+        status, text = self.run_cli(
+            displaced=[self.displacement(symbol="other")])
+        self.assertEqual(status, 1)
+        self.assertIn("Unreviewed loss `lost`: no reviewed displacement", text)
+
+    def test_review_and_displacement_are_separate_labels(self):
+        status, text = self.run_cli([review()],
+                                    displaced=[self.displacement(symbol="x")])
+        self.assertEqual(status, 0)
+        self.assertIn("1 reviewed, 0 displaced, 0 unreviewed / 1 lost", text)
+        self.assertIn("Reviewed loss `lost`", text)
 
 
 if __name__ == "__main__":
