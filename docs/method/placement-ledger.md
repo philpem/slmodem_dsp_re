@@ -95,8 +95,8 @@ After that the next drift is inside an already-shifted region:
 candidate order is `vpcm_run, vpcm_create, ...` and the blob order is
 `vpcm_create, vpcm_delete, vpcm_run, ...`; the reorder contributes 235
 sequence-misaligned names and 366 category-(b) steps. `blob-only .text` is 0;
-the 23 candidate-only names are reconstructed helper bodies with no blob
-symbol.
+the 23 candidate-only names are reconstructed local helper/state bodies with
+no blob symbol (including the deliberate `probe_preemp_shape` divergence).
 
 ## Witness: `CID_process`
 
