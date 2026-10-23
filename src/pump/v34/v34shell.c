@@ -1140,10 +1140,19 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 void
 getFrame(void *objp)
 {
-	struct v34_shell *s =
-	    (struct v34_shell *)((char *)objp + V34_SHELL_TX);
-	v34_scramble_fn scramble = s->scramble;
-	int w = s->idx_width;
+	/*
+	 * THE OBJECT NEVER MATERIALISES `objp + V34_SHELL_TX`.  Every field of
+	 * the transmit context is addressed at its object-absolute
+	 * displacement from `objp` itself -- 0x25e0 for `span`, 0x2a64 for
+	 * `bitpos` -- and `objp` is still live for the callback.  Hoisting a
+	 * `struct v34_shell *` local makes the compiler form 0x1be0 and then
+	 * reach each field at an 0xa00-relative displacement, which is one
+	 * `add` and a different operand set from the object's; deriving the
+	 * pointer per use folds the constant into the displacement instead.
+	 */
+#define TX ((struct v34_shell *)((char *)objp + V34_SHELL_TX))
+	v34_scramble_fn scramble = TX->scramble;
+	int w = TX->idx_width;
 	int small = 2;
 	int small_last = 2;
 	int sum;
@@ -1151,17 +1160,17 @@ getFrame(void *objp)
 	int pos;
 	unsigned bitbuf;
 
-	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
+	sum = (unsigned short)TX->wide_accum + (unsigned short)TX->remainder;
 
-	if ((unsigned short)s->span > (unsigned short)sum) {
-		s->wide_accum = (short)sum;
-		nb = s->wide_bits_alt;
+	if ((unsigned short)TX->span > (unsigned short)sum) {
+		TX->wide_accum = (short)sum;
+		nb = TX->wide_bits_alt;
 	} else {
-		s->wide_accum = (short)(sum - s->span);
-		nb = s->wide_bits;
+		TX->wide_accum = (short)(sum - TX->span);
+		nb = TX->wide_bits;
 	}
 
-	pos = (unsigned short)s->bitpos;
+	pos = (unsigned short)TX->bitpos;
 
 	/*
 	 * Refill before reading, and keep refilling while short.  The position
@@ -1170,7 +1179,7 @@ getFrame(void *objp)
 	 */
 	while (pos > 15) {
 		pos = scramble(objp, (short)pos);
-		s->bitpos = (short)pos;
+		TX->bitpos = (short)pos;
 	}
 
 	if (nb > 16) {
@@ -1190,16 +1199,16 @@ getFrame(void *objp)
 		 * Found by modulatevector, whose fixture is the first thing in
 		 * this tree to drive `nb` above 16.  Finding F185.
 		 */
-		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
+		TX->frame[0] = (short)((unsigned)TX->bitbuf >> (short)pos);
 		(void)scramble(objp, 0);
-		pos = (unsigned short)s->bitpos;
-		s->frame[1] = (short)(((unsigned)s->bitbuf >> (pos & 31))
+		pos = (unsigned short)TX->bitpos;
+		TX->frame[1] = (short)(((unsigned)TX->bitbuf >> (short)pos)
 				      & lsbMask[nb & 15]);
 		pos += nb & 15;
-		s->bitpos = (short)pos;
+		TX->bitpos = (short)pos;
 	} else if (nb > 0) {
-		s->frame_wide =
-		    (int)(((unsigned)s->bitbuf >> (pos & 31))
+		TX->frame_wide =
+		    (int)(((unsigned)TX->bitbuf >> (short)pos)
 			  & lsbMask[nb]);
 		pos += nb;
 	} else {
@@ -1209,22 +1218,22 @@ getFrame(void *objp)
 		 * putFrame simply emits nothing here, so the zeroing has no
 		 * counterpart on that side and is easy to miss.
 		 */
-		s->frame_wide = 0;
-		small = 2 - ((unsigned short)s->group_count < 9 ? 1 : 0);
+		TX->frame_wide = 0;
+		small = 2 - ((unsigned short)TX->group_count < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
 
 	{
-		short *p = &s->frame[2];
+		short *p = &TX->frame[2];
 		int sw = small;
 		unsigned v;
 
 		if (pos > 15)
 			pos = scramble(objp, (short)pos);
 
-		s->bitpos = (short)pos;
-		bitbuf = (unsigned)s->bitbuf;
-		v = bitbuf >> (pos & 31);
+		TX->bitpos = (short)pos;
+		bitbuf = (unsigned)TX->bitbuf;
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1238,27 +1247,27 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[6];
+		short *p = &TX->frame[6];
 		int sw = small;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1272,27 +1281,27 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[10];
+		short *p = &TX->frame[10];
 		int sw = small;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1306,27 +1315,27 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[14];
+		short *p = &TX->frame[14];
 		int sw = small_last;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1340,14 +1349,15 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
+#undef TX
 }
 
 
@@ -1582,12 +1592,18 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	unsigned span, q, m, u, idx, w;
 	unsigned i, j, k, n, top, cursor, len;
 
-	if (rate > 0xaf0)
-		span = (unsigned short)(16 - (rate != 0xc80));
-	else if (rate == 0xaf0)
-		span = 14;
-	else
+	/*
+	 * The object lays the COMMON case -- 12, the two rates below 2800 --
+	 * on the fall-through path and branches out for both exceptions, so
+	 * the source tests for the common case first.
+	 */
+	if (rate <= 0xaf0) {
 		span = 12;
+		if (rate == 0xaf0)
+			span = 14;
+	} else {
+		span = (unsigned short)(16 - (rate != 0xc80));
+	}
 
 	s->span = (short)span;
 	s->subframe_limit = (short)(2 * span);
@@ -1634,17 +1650,22 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	 * steps it took.  The two early exits are the same test unrolled: no
 	 * steps needed at all, then one subtraction's worth.
 	 */
-	if ((unsigned short)u <= 12) {
-		idx = 0;
-	} else if ((unsigned short)(u - 12) <= 0x1f) {
-		idx = u - 12;
-	} else {
-		j = 0;
-		do {
-			j++;
-			idx = u - 8 * (unsigned short)j - 12;
-		} while ((unsigned short)idx > 0x1f);
-		s->idx_width = (short)j;
+	/*
+	 * `idx` and `idx_width` are cleared BEFORE the test: the object's
+	 * `xor` and `movw $0,0x14` both precede the branch.
+	 */
+	idx = 0;
+	if ((unsigned short)u > 12) {
+		if ((unsigned short)(u - 12) <= 0x1f) {
+			idx = u - 12;
+		} else {
+			j = 0;
+			do {
+				j++;
+				idx = u - 8 * (unsigned short)j - 12;
+			} while ((unsigned short)idx > 0x1f);
+			s->idx_width = (short)j;
+		}
 	}
 
 	s->wide_bits = (short)idx;
@@ -1693,13 +1714,18 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	 * and takes the 7 the search would have returned.
 	 */
 	s->divisor = divisor;
+	/*
+	 * The search shifts by `w` itself (the object has no mask on the
+	 * count) and compares the ZERO-EXTENDED divisor as a signed int, which
+	 * is what makes the object's `movzwl`/`cmp $0x80` a 32-bit compare.
+	 */
 	s->cost_shift = 7;
-	if ((int)(unsigned)(unsigned short)divisor > 0x80) {
+	if ((unsigned short)divisor > 0x80) {
 		w = 7;
 		do {
 			w++;
-		} while ((int)(1u << (w & 31))
-			 < (int)(unsigned)(unsigned short)divisor);
+		} while ((int)(1u << w)
+			 < (int)(unsigned short)divisor);
 		s->cost_shift = (short)w;
 	}
 	s->cost_shift = (short)((unsigned short)s->cost_shift + 1);
