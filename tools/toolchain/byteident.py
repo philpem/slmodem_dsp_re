@@ -50,16 +50,45 @@ from `recoverorder.py`, and `build/partial/dsplibs.o` from `partiallink.sh`) and
 reports the selected body with `linkedcopies.py`.  It refuses rather than
 reporting a clean zero when those inputs are absent.  The report is written to
 stderr so the default census on stdout is byte-identical with and without it.
+
+THE THREE PHASES (the owner-approved metric, and what the ratchet enforces)
+
+  1. FUNCTIONS RIGHT -- per-TU grade 0 OR grade 1 (EXACT / UNRESOLVED /
+     REGALLOC).  This is the HARD FLOOR: it must never fall, because a fall
+     means the function itself got worse.  No review ledger can excuse it.
+  2. RIGHT FILE / RIGHT PLACE -- TU attribution, emission order, symbol
+     binding, and the body the recovered-order link keeps.  The metric is
+     link-selected EXACT: the per-TU EXACT set, corrected by the body the
+     partial link actually selects for every multiply-defined name.
+  3. REPRODUCE THE BLOB -- positional byte identity of the LINKED object.
+     The end target is `make partial-compare-exact`
+     (`partialcmp --require-exact --require-raw-exact`).  The per-TU census
+     below is progress toward it, not the goal itself.
+
+`--summary` prints one line per phase to stdout.  It is opt-in and
+diagnostic; if the partial-link artifacts are absent it reports the
+link-selected metric as unavailable rather than failing.
+
+THE DISPLACEMENT LEDGER (`tools/ci/displaced.json`) is the only way an EXACT
+or link-selected-EXACT loss can pass the ratchet.  Each reviewed entry pins
+the CURRENT head body (raw bytes plus canonical relocation identity, the same
+SHA-256 `tools/ci/period_metrics.py` uses), the phase that caused it, where
+the evidence is, and how re-measurement should recover it.  A loss moves
+metric only when an entry matches the loss, the evidence path exists, and the
+hash still describes the current body.  Stale entries fail: an unreviewed
+drift must not be inherited as permission.
 """
 
 import argparse
 import functools
 import glob
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -75,20 +104,173 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 # while `make period` stays green throughout, because a differential test
 # proves behavioural equivalence, not code-generation equivalence, and this
 # tree's own history (findings F2155, F612, F616, 7796, 7800, 7770) is a
-# record of exactly that gap.  Only EXACT ratchets, for the reason
-# `compare.py`'s own comment gives for its `identical`: REGALLOC (grade 1)
-# falls when a function GRADUATES to EXACT, so gating on it fails on
-# progress.  REGALLOC is reported with its direction and is informational.
+# record of exactly that gap.
 #
-# The floor is the exact SYMBOL SET, not only its cardinality.  An aggregate
-# count lets one function quietly fall out of EXACT while another enters it:
-# the headline remains unchanged and the regression is certified.  That is
-# precisely backwards for a ratchet -- every symbol it has banked must remain
-# banked.  Keep the counts as redundant, human-readable integrity checks and
-# for the existing REGALLOC note, but decide grade 0 from membership.
+# The floor is a SYMBOL SET, not a cardinality, and there are three of them:
+#
+#   grade01_symbols          HARD floor.  EXACT ∪ UNRESOLVED ∪ REGALLOC.  A
+#                            fall means the function itself got worse, and no
+#                            displacement review can excuse it.
+#   exact_symbols            phase 0's set.  A loss may be displaced only while
+#                            the symbol is still grade 1 (REGALLOC) and a
+#                            reviewed ledger entry pins the current body hash.
+#   selected_exact_symbols   phase 2's set: per-TU EXACT corrected by the body
+#                            the recovered-order link selects.  A loss may be
+#                            displaced by an entry without the grade-1 rule,
+#                            because the worst per-TU copy can legitimately be
+#                            BYTES while the selected body was EXACT.
+#
+# An aggregate count lets one function quietly fall out of a bucket while
+# another enters it: the headline remains unchanged and the regression is
+# certified.  That is precisely backwards for a ratchet -- every symbol it has
+# banked must remain banked.  Keep the counts as redundant, human-readable
+# integrity checks, but decide every phase from membership.
 #
 RATCHET = os.path.join(HERE, "byteident_ratchet.json")
 RATCHET_EXACT_SYMBOLS = "exact_symbols"
+#
+# THE THREE-PHASE FLOOR.  `grade01_symbols` is the hard one: a symbol that
+# falls out of EXACT ∪ UNRESOLVED ∪ REGALLOC has lost the function itself, and
+# unlike an EXACT loss there is no legitimate "the code is still equivalent"
+# displacement for it.  `selected_exact_symbols` is phase 2's set: the per-TU
+# EXACT set corrected by the body the recovered-order link keeps.
+#
+RATCHET_GRADE01_SYMBOLS = "grade01_symbols"
+RATCHET_SELECTED_EXACT_SYMBOLS = "selected_exact_symbols"
+
+DISPLACED = os.path.join(ROOT, "tools", "ci", "displaced.json")
+DISPLACED_METRICS = ("exact", "selected", "both")
+DISPLACED_PHASES = ("order", "tu-split", "neighbour-codegen")
+DISPLACED_TARGETS = ("REGALLOC", "BYTES", "RELOC", "UNRESOLVED")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+def _evidence_path(evidence, root=ROOT):
+    """Resolve a ledger evidence path, refusing anything outside the repo."""
+    if not isinstance(evidence, str) or not evidence.strip():
+        return None
+    path = Path(evidence.split("#", 1)[0])
+    if not path.is_absolute():
+        path = Path(root) / path
+    try:
+        path = path.resolve()
+        path.relative_to(Path(root).resolve())
+    except (OSError, ValueError):
+        return None
+    return path if path.is_file() else None
+
+
+def ledger_entry_problem(entry, root=ROOT):
+    """Structural and evidence checks shared by the loader and the ratchet.
+
+    Kept here rather than in the loader because the ratchet decision must
+    still reject a hand-built or stale entry when the tests call it without a
+    file.  Returns a reason string, or None when the entry is well formed.
+    """
+    if not isinstance(entry, dict):
+        return "entry is not an object"
+    symbol = entry.get("symbol")
+    if not isinstance(symbol, str) or not symbol.strip():
+        return "missing symbol"
+    if entry.get("metric") not in DISPLACED_METRICS:
+        return "%s: metric must be one of %s" % (
+            symbol, "/".join(DISPLACED_METRICS))
+    if entry.get("from") != "EXACT":
+        return "%s: from must be EXACT" % symbol
+    if entry.get("to") not in DISPLACED_TARGETS:
+        return "%s: to must be one of %s" % (
+            symbol, "/".join(DISPLACED_TARGETS))
+    if not isinstance(entry.get("body_sha256"), str) or not \
+            SHA256.fullmatch(entry.get("body_sha256", "")):
+        return "%s: body_sha256 must be a full 64-hex SHA-256" % symbol
+    if entry.get("phase") not in DISPLACED_PHASES:
+        return "%s: phase must be one of %s" % (
+            symbol, "/".join(DISPLACED_PHASES))
+    for field in ("cause", "recovery", "evidence"):
+        value = entry.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return "%s: missing %s" % (symbol, field)
+    if _evidence_path(entry["evidence"], root) is None:
+        return "%s: evidence path does not exist inside the repository: %s" % (
+            symbol, entry["evidence"])
+    return None
+
+
+def validate_displaced(data, root=ROOT):
+    """Validate the displacement ledger strictly; return its entries."""
+    if not isinstance(data, dict) or data.get("version") != 1 or \
+            not isinstance(data.get("displaced"), list):
+        raise ValueError(
+            "%s requires version 1 and a displaced list" % DISPLACED)
+    seen = set()
+    for entry in data["displaced"]:
+        problem = ledger_entry_problem(entry, root)
+        if problem is not None:
+            raise ValueError("%s: %s" % (DISPLACED, problem))
+        key = (entry["symbol"], entry["metric"])
+        if key in seen:
+            raise ValueError("%s: duplicate entry for %s (%s)"
+                             % (DISPLACED, key[0], key[1]))
+        seen.add(key)
+    return data["displaced"]
+
+
+def load_displaced(path=DISPLACED, root=ROOT):
+    try:
+        with open(path) as stream:
+            data = json.load(stream)
+    except OSError as error:
+        raise ValueError("cannot read %s: %s" % (path, error))
+    except ValueError as error:
+        raise ValueError("cannot read %s: %s" % (path, error))
+    return validate_displaced(data, root)
+
+
+def selected_exact_set(exact_symbols, report):
+    """Phase 2's symbol set from the link-selected audit.
+
+    Start from the per-TU EXACT set, then let the body the recovered-order
+    link actually keeps decide every multiply-defined name: add it when that
+    body is EXACT, remove it when it is not.  Names the audit could not
+    compare have no `linked` verdict and are left as the census graded them.
+    """
+    selected = set(exact_symbols)
+    for row in report.get("duplicates", []):
+        linked = row.get("linked")
+        if not isinstance(linked, dict) or "grade" not in linked:
+            continue
+        if linked["grade"] == "EXACT":
+            selected.add(row["symbol"])
+        else:
+            selected.discard(row["symbol"])
+    return selected
+
+
+def body_digest(raw, relocs):
+    """Current head body identity, reusing period_metrics' exact payload.
+
+    Imported lazily: `period_metrics` imports this module inside its own
+    helper, so a top-level import here is a cycle.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "tools", "ci"))
+    import period_metrics
+    return period_metrics.body_digest(raw, relocs)
+
+
+def _current_body_digest(object_for_symbol, symbol):
+    """Hash the body the census scored for `symbol`: the HEAD's own body.
+
+    The worst copy is the one the metric degraded from, so it -- not a lucky
+    COMDAT twin -- is the body a displacement entry must pin.
+    """
+    path = object_for_symbol.get(symbol)
+    if path is None:
+        raise ValueError("%s has no measured head object" % symbol)
+    raw, relocs = body(path, symbol)
+    if raw is None or relocs is None:
+        raise ValueError("%s has no measurable head body" % symbol)
+    return body_digest(raw, relocs)
+
 
 # The recovered-order partial link used to resolve an UNDEFINED private-frame
 # callee. `--link-selected` may name a pair explicitly; otherwise it is the
@@ -1140,9 +1322,10 @@ def _ratchet_membership(was, now):
 
     Older ratchets stored only an aggregate `exact` count.  They cannot tell
     whether a replacement symbol concealed a regression, so accepting one
-    would weaken this check exactly where it is meant to be strict.  Refuse
-    it with a re-blessing instruction rather than silently retaining the old
-    count-only behaviour.
+    would weaken this check exactly where it is meant to be strict.  The
+    three-phase baseline adds two more symbol sets, and a baseline without
+    them is exactly the same hazard one phase further on: refuse it with a
+    re-blessing instruction rather than silently measuring only phase 0.
     """
     if not isinstance(was, dict):
         raise ValueError("baseline is not a JSON object")
@@ -1150,59 +1333,304 @@ def _ratchet_membership(was, now):
         raise ValueError(
             "baseline is legacy aggregate-only data (no %r); run --update "
             "to record the current exact-symbol set" % RATCHET_EXACT_SYMBOLS)
+    missing = [key for key in (RATCHET_GRADE01_SYMBOLS,
+                               RATCHET_SELECTED_EXACT_SYMBOLS)
+               if key not in was]
+    if missing:
+        raise ValueError(
+            "baseline is legacy data without %s; re-bless with --update to "
+            "record the grade-0/1 and link-selected symbol sets"
+            % ", ".join(repr(key) for key in missing))
+    sets = (RATCHET_EXACT_SYMBOLS, RATCHET_GRADE01_SYMBOLS,
+            RATCHET_SELECTED_EXACT_SYMBOLS)
     for label, row in (("baseline", was), ("current result", now)):
-        symbols = row.get(RATCHET_EXACT_SYMBOLS)
-        if (not isinstance(symbols, list) or
-                any(not isinstance(k, str) for k in symbols)):
-            raise ValueError("%s %r must be a list of symbol names"
-                             % (label, RATCHET_EXACT_SYMBOLS))
-        if len(set(symbols)) != len(symbols):
-            raise ValueError("%s %r contains duplicate symbol names"
-                             % (label, RATCHET_EXACT_SYMBOLS))
-        for field in ("exact", "regalloc", "compared"):
+        for key in sets:
+            symbols = row.get(key)
+            if (not isinstance(symbols, list) or
+                    any(not isinstance(k, str) for k in symbols)):
+                raise ValueError("%s %r must be a list of symbol names"
+                                 % (label, key))
+            if len(set(symbols)) != len(symbols):
+                raise ValueError("%s %r contains duplicate symbol names"
+                                 % (label, key))
+        for field in ("exact", "grade01", "selected_exact", "regalloc",
+                      "compared"):
             value = row.get(field)
             if type(value) is not int or value < 0:
                 raise ValueError("%s %r must be a non-negative integer"
                                  % (label, field))
-        if row["exact"] != len(symbols):
-            raise ValueError("%s exact count (%d) disagrees with its %r (%d)"
-                             % (label, row["exact"], RATCHET_EXACT_SYMBOLS,
-                                len(symbols)))
+        for count, key in (("exact", RATCHET_EXACT_SYMBOLS),
+                           ("grade01", RATCHET_GRADE01_SYMBOLS),
+                           ("selected_exact",
+                            RATCHET_SELECTED_EXACT_SYMBOLS)):
+            if row[count] != len(row[key]):
+                raise ValueError("%s %s count (%d) disagrees with its %r (%d)"
+                                 % (label, count, row[count], key,
+                                    len(row[key])))
+        if not set(row[RATCHET_EXACT_SYMBOLS]) <= set(
+                row[RATCHET_GRADE01_SYMBOLS]):
+            raise ValueError("%s grade-0/1 set does not contain its EXACT set"
+                             % label)
     return (sorted(set(was[RATCHET_EXACT_SYMBOLS]) -
                    set(now[RATCHET_EXACT_SYMBOLS])),
             sorted(set(now[RATCHET_EXACT_SYMBOLS]) -
                    set(was[RATCHET_EXACT_SYMBOLS])))
 
 
-def ratchet_self_test():
-    """Exercise the strict direction: equal counts must not hide a loss."""
-    def row(symbols):
-        return {"exact": len(symbols), "regalloc": 53, "compared": 1852,
-                RATCHET_EXACT_SYMBOLS: symbols}
+def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
+                         root=ROOT):
+    """The three-phase ratchet decision, as a pure function.
 
-    cases = [
-        ("a replacement cannot conceal an exact-symbol loss", row(["a", "b"]),
-         row(["b", "c"]), (["a"], ["c"])),
+    Returns `(failures, allowed)`.  `failures` is a list of human-readable
+    reasons the ratchet must fail; `allowed` is a list of
+    `(metric, symbol)` pairs a reviewed, hash-pinned ledger entry displaced.
+
+      * A grade-0/1 loss ALWAYS fails.  It means the function itself got
+        worse, and no ledger entry can make a different function acceptable.
+      * A conservative EXACT loss may be displaced only while the function is
+        still grade 1 (REGALLOC) and the ledger entry's body hash still
+        describes the current head body.
+      * A link-selected EXACT loss may be displaced by a ledger entry without
+        the grade-1 requirement: the worst per-TU copy can legitimately be
+        BYTES while the selected body was EXACT.
+      * An entry that matches no current loss is stale and fails.
+    """
+    failures, allowed = [], []
+    exact_now = set(now.get(RATCHET_EXACT_SYMBOLS, []))
+    grade01_now = set(now.get(RATCHET_GRADE01_SYMBOLS, []))
+    selected_now = now.get(RATCHET_SELECTED_EXACT_SYMBOLS)
+    selected_now = set(selected_now) if isinstance(selected_now, list) else None
+
+    for symbol in sorted(set(was.get(RATCHET_GRADE01_SYMBOLS, [])) -
+                         grade01_now):
+        failures.append(
+            "grade 0/1 lost: %s -- the function itself got worse; no ledger "
+            "entry can excuse this" % symbol)
+
+    by_symbol = {}
+    for entry in displaced:
+        if isinstance(entry, dict):
+            by_symbol.setdefault(entry.get("symbol"), []).append(entry)
+    used = set()
+
+    def candidates(symbol, metric):
+        return [entry for entry in by_symbol.get(symbol, [])
+                if entry.get("metric") in (metric, "both")]
+
+    def mark_used(symbol, metric):
+        for entry in candidates(symbol, metric):
+            used.add(id(entry))
+
+    def consume(symbol, metric, require_regalloc):
+        matches = candidates(symbol, metric)
+        if not matches:
+            return ("no reviewed displacement entry (%s); this loss is "
+                    "unexplained" % metric)
+        if len(matches) > 1:
+            return ("%d ledger entries match (%s), so the review is "
+                    "ambiguous" % (len(matches), metric))
+        entry = matches[0]
+        problem = ledger_entry_problem(entry, root)
+        if problem is not None:
+            return problem
+        if require_regalloc:
+            if entry.get("to") != "REGALLOC":
+                return ("entry says to=%s, but an EXACT loss is only "
+                        "displaceable while the function is grade 1 "
+                        "(REGALLOC)" % entry.get("to"))
+            if symbol not in set(grade1_symbols):
+                return ("the symbol is not grade 1 (REGALLOC) in the current "
+                        "census, so this EXACT loss cannot be displaced")
+        try:
+            actual = digest(symbol)
+        except ValueError as error:
+            return "cannot measure the current head body: %s" % error
+        if actual != entry.get("body_sha256"):
+            return ("body hash mismatch: entry pins %s, the current head "
+                    "body is %s" % (entry.get("body_sha256"), actual))
+        used.add(id(entry))
+        return None
+
+    for symbol in sorted(set(was.get(RATCHET_EXACT_SYMBOLS, [])) - exact_now):
+        if symbol not in grade01_now:
+            # Already a hard grade-0/1 failure.  The entry still describes a
+            # real loss, so do not also call it stale.
+            mark_used(symbol, "exact")
+            continue
+        problem = consume(symbol, "exact", True)
+        if problem is None:
+            allowed.append(("exact", symbol))
+        else:
+            failures.append("EXACT loss %s: %s" % (symbol, problem))
+
+    if selected_now is not None:
+        for symbol in sorted(
+                set(was.get(RATCHET_SELECTED_EXACT_SYMBOLS, [])) -
+                selected_now):
+            problem = consume(symbol, "selected", False)
+            if problem is None:
+                allowed.append(("selected", symbol))
+            else:
+                failures.append("link-selected EXACT loss %s: %s"
+                                % (symbol, problem))
+
+    for entry in displaced:
+        if isinstance(entry, dict) and id(entry) not in used:
+            failures.append(
+                "stale ledger entry: %s (%s) matches no current loss; "
+                "remove it" % (entry.get("symbol"), entry.get("metric")))
+    return failures, allowed
+
+
+def ratchet_self_test():
+    """Exercise every direction: each rule must accept AND reject.
+
+    Pure functions only: no objects, no partial link, no ledger file.  A
+    detector that cannot fail is the dead-detector defect, so each new rule
+    below carries a mutation that it must catch.
+    """
+    def digest(symbol):
+        return hashlib.sha256(("body:" + symbol).encode()).hexdigest()
+
+    def row(exact, grade01=None, selected=None, regalloc=None):
+        exact = list(exact)
+        grade01 = list(exact if grade01 is None else grade01)
+        selected = list(exact if selected is None else selected)
+        regalloc = list(regalloc or [])
+        return {"exact": len(exact), "regalloc": len(regalloc),
+                "unresolved": 0, "compared": 1852,
+                "grade01": len(grade01), RATCHET_GRADE01_SYMBOLS: grade01,
+                "selected_exact": len(selected),
+                RATCHET_SELECTED_EXACT_SYMBOLS: selected,
+                RATCHET_EXACT_SYMBOLS: exact}
+
+    def entry(symbol, metric="exact", to="REGALLOC", body=None,
+              evidence="tools/ci/displaced.json", phase="order",
+              cause="reviewed", recovery="re-measure after the cause settles"):
+        return {"symbol": symbol, "metric": metric, "from": "EXACT", "to": to,
+                "body_sha256": body if body is not None else digest(symbol),
+                "phase": phase, "cause": cause, "evidence": evidence,
+                "recovery": recovery}
+
+    checks = []
+
+    def check(label, condition):
+        checks.append((label, bool(condition)))
+
+    # --- symbol-set membership (phase 0, the original check) ---------------
+    membership = [
+        ("a replacement cannot conceal an exact-symbol loss",
+         row(["a", "b"]), row(["b", "c"]), (["a"], ["c"])),
         ("an exact-set gain loses nothing", row(["a", "b"]),
          row(["a", "b", "c"]), ([], ["c"])),
     ]
-    bad = 0
-    for name, was, now, want in cases:
-        got = _ratchet_membership(was, now)
-        ok = got == want
-        bad += not ok
-        print("  %s  %-56s want=%s got=%s"
-              % ("ok  " if ok else "FAIL", name, want, got))
+    for label, was, now, want in membership:
+        check(label, _ratchet_membership(was, now) == want)
+
     try:
         _ratchet_membership({"exact": 2, "regalloc": 53, "compared": 1852},
                             row(["a", "b"]))
-        ok = False
-    except ValueError as e:
-        ok = "legacy aggregate-only" in str(e)
-    bad += not ok
-    print("  %s  %-56s legacy count-only baseline is rejected"
-          % ("ok  " if ok else "FAIL", ""))
-    print("\n  %d case(s), %d failure(s)" % (len(cases) + 1, bad))
+    except ValueError as error:
+        check("legacy count-only baseline is rejected",
+              "legacy aggregate-only" in str(error))
+    else:
+        check("legacy count-only baseline is rejected", False)
+
+    try:
+        _ratchet_membership({"exact": 1, "regalloc": 0, "compared": 1,
+                             "exact_symbols": ["a"]}, row(["a"]))
+    except ValueError as error:
+        check("baseline without the three-phase keys is rejected",
+              "re-bless with --update" in str(error))
+    else:
+        check("baseline without the three-phase keys is rejected", False)
+
+    # --- displacement decisions ------------------------------------------
+    was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    regressed = row(["b"], ["a", "b"], ["a", "b"], ["a"])
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [], digest, {"a"})
+    check("unexplained EXACT loss fails",
+          any("EXACT loss a" in f for f in failures) and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [entry("a")], digest, {"a"})
+    check("EXACT to REGALLOC with a matching entry passes",
+          not failures and allowed == [("exact", "a")])
+
+    bytewise = row(["b"], ["b"], ["b"], [])
+    failures, _ = ratchet_displacement(
+        was, bytewise, [entry("a", metric="both")], digest, set())
+    check("EXACT to BYTES fails even with an entry",
+          any("grade 0/1 lost: a" in f for f in failures))
+
+    grade_lost = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    was_c = row(["a", "b"], ["a", "b", "c"], ["a", "b"], [])
+    failures, _ = ratchet_displacement(
+        was_c, grade_lost, [entry("c")], digest, set())
+    check("grade 0/1 loss fails even with an entry",
+          any("grade 0/1 lost: c" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed,
+        [entry("a", evidence="tools/ci/does-not-exist.json")], digest, {"a"})
+    check("missing evidence fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", phase="")], digest, {"a"})
+    check("missing phase fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", recovery="")], digest, {"a"})
+    check("missing recovery fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", body="0" * 64)], digest, {"a"})
+    check("body hash mismatch fails",
+          any("body hash mismatch" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        row(["a"], ["a"], ["a"], []), row(["a"], ["a"], ["a"], []),
+        [entry("z")], digest, set())
+    check("stale ledger entry fails",
+          any("stale ledger entry" in f for f in failures))
+
+    selected_lost = row(["a", "b"], ["a", "b"], ["b"], [])
+    failures, allowed = ratchet_displacement(
+        row(["a", "b"], ["a", "b"], ["a", "b"], []), selected_lost,
+        [entry("a", metric="selected", to="BYTES")], digest, set())
+    check("selected loss with an entry passes without the grade-1 rule",
+          not failures and allowed == [("selected", "a")])
+
+    failures, _ = ratchet_displacement(
+        row(["a", "b"], ["a", "b"], ["a", "b"], []), selected_lost,
+        [], digest, set())
+    check("selected loss without an entry fails",
+          any("link-selected EXACT loss a" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", to="BYTES")], digest, {"a"})
+    check("EXACT displacement must target REGALLOC", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a"), entry("a", metric="both")], digest,
+        {"a"})
+    check("ambiguous duplicate ledger entries fail", bool(failures))
+
+    # --- phase-2 set construction ----------------------------------------
+    report = {"duplicates": [
+        {"symbol": "b", "linked": {"grade": "EXACT"}},
+        {"symbol": "a", "linked": {"grade": "REGALLOC"}},
+        {"symbol": "c"},
+    ]}
+    check("selected set adds a linked-EXACT name and removes a non-EXACT one",
+          selected_exact_set(["a", "c"], report) == {"b", "c"})
+
+    bad = sum(not ok for _, ok in checks)
+    for label, ok in checks:
+        print("  %s  %s" % ("ok  " if ok else "FAIL", label))
+    print("\n  %d case(s), %d failure(s)" % (len(checks), bad))
     return 1 if bad else 0
 
 
@@ -1215,6 +1643,34 @@ def _link_selected_paths(manifest, linked):
     build = os.path.dirname(os.path.abspath(OURS))
     return (manifest or os.path.join(build, "tc_repro", "tc_link_manifest.txt"),
             linked or os.path.join(build, "partial", "dsplibs.o"))
+
+
+def _link_selected_present(manifest, linked):
+    """Are the recovered-order artifacts usable?  No message, no exit."""
+    manifest, linked = _link_selected_paths(manifest, linked)
+    if any(not os.path.isfile(os.path.join(HERE, name))
+           for name in LINK_SELECTED_SCRIPTS):
+        return False
+    return all(os.path.isfile(path) and os.path.getsize(path) > 0
+               for path in (manifest, linked))
+
+
+def _link_selected_audit(manifest, linked):
+    """Audit the supplied link once; the caller decides whether to print it."""
+    manifest, linked = _link_selected_inputs(manifest, linked)
+    #
+    # Reuse linkedcopies.audit: it is the established reader of the supplied
+    # link, the ordered manifest and the conservative policy.  Imported late
+    # because linkedcopies imports this module.
+    #
+    import linkedcopies
+    try:
+        return linkedcopies.audit(BLOB, manifest, linked)
+    except (OSError, ValueError) as error:
+        sys.exit("byteident.py --link-selected: cannot read the recovered-order\n"
+                 "  inputs: %s\n"
+                 "  Run `make partial-link`.  Refusing to report a clean zero."
+                 % error)
 
 
 def _link_selected_inputs(manifest, linked):
@@ -1241,7 +1697,7 @@ def _link_selected_inputs(manifest, linked):
     return manifest, linked
 
 
-def link_selected_report(manifest, linked, out=None):
+def link_selected_report(manifest, linked, out=None, report=None):
     """Print the body the recovered-order partial link keeps, beside the worst.
 
     DIAGNOSTIC ONLY.  This consumes the artifacts the existing
@@ -1249,22 +1705,16 @@ def link_selected_report(manifest, linked, out=None):
     second link order, and it never touches the census, buckets, ratchet or
     exit status.  The report goes to stderr so the default census on stdout is
     byte-for-byte unchanged whether or not the flag is present.
+
+    `report` is the audit when the caller already made it (`--summary`,
+    `--ratchet` and `--link-selected` share one): the same run must never
+    audit twice.
     """
     out = out or sys.stderr
     manifest, linked = _link_selected_inputs(manifest, linked)
-    #
-    # Reuse linkedcopies.audit: it is the established reader of the supplied
-    # link, the ordered manifest and the conservative policy.  Imported late
-    # because linkedcopies imports this module.
-    #
+    if report is None:
+        report = _link_selected_audit(manifest, linked)
     import linkedcopies
-    try:
-        report = linkedcopies.audit(BLOB, manifest, linked)
-    except (OSError, ValueError) as error:
-        sys.exit("byteident.py --link-selected: cannot read the recovered-order\n"
-                 "  inputs: %s\n"
-                 "  Run `make partial-link`.  Refusing to report a clean zero."
-                 % error)
     rows = report["duplicates"]
     examined = len(rows)
     records = sum(len(row["copies"]) for row in rows)
@@ -1327,6 +1777,23 @@ def link_selected_report(manifest, linked, out=None):
     return report
 
 
+def print_summary(now, link_available, displaced):
+    """One diagnostic line per owner-approved phase.  Opt-in, stdout."""
+    print("\nphase summary (diagnostic)")
+    print("  functions right   : per-TU grade 0 or 1   %d / %d"
+          % (now["grade01"], now["compared"]))
+    if link_available:
+        print("  right place       : link-selected EXACT   %d"
+              % now["selected_exact"])
+    else:
+        print("  right place       : link-selected EXACT : unavailable "
+              "(run make partial-link)")
+    print("  per-TU bytes      : EXACT                 %d" % now["exact"])
+    print("  displaced         : %d reviewed in tools/ci/displaced.json"
+          % len(displaced))
+    print("  end target        : make partial-compare-exact (not yet reached)")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1337,6 +1804,9 @@ def main():
                     help="report the body the recovered-order partial link keeps, "
                          "beside the worst-copy verdict (diagnostic only; report "
                          "on stderr, census unchanged)")
+    ap.add_argument("--summary", action="store_true",
+                    help="print one diagnostic line per phase (functions right, "
+                         "right place, end target) on stdout")
     ap.add_argument("--link-manifest", metavar="PATH",
                     help="ordered manifest from recoverorder.py (default: "
                          "<build>/tc_repro/tc_link_manifest.txt)")
@@ -1350,7 +1820,8 @@ def main():
     ap.add_argument("--self-test", action="store_true",
                     help="prove alpha_equal and relocation resolution accept and REJECT")
     ap.add_argument("--ratchet-self-test", action="store_true",
-                    help="prove the exact-symbol ratchet rejects a masked loss")
+                    help="prove the three-phase ratchet accepts and REJECTS "
+                         "every rule, purely")
     ap.add_argument("--limit", type=int, default=25)
     ap.add_argument("--ratchet", action="store_true",
                     help="fail if any previously grade-0 EXACT symbol regresses")
@@ -1534,8 +2005,23 @@ def main():
         print("\n  The blob has ONE copy because the linker picked one, and we\n"
               "  cannot know which.  Scoring the best would be scoring the\n"
               "  luckiest, so the worst is scored (F8146).")
+    link_report = None
     if a.link_selected:
-        link_selected_report(a.link_manifest, a.linked)
+        # ONE AUDIT PER RUN: `--link-selected`, `--summary` and `--ratchet`
+        # all read the same report, so the partial link is never audited twice.
+        link_report = _link_selected_audit(a.link_manifest, a.linked)
+        link_selected_report(a.link_manifest, a.linked, report=link_report)
+    elif (a.summary or a.ratchet or a.update) and _link_selected_present(
+            a.link_manifest, a.linked):
+        link_report = _link_selected_audit(a.link_manifest, a.linked)
+    if (a.update or a.ratchet) and link_report is None:
+        sys.exit(
+            "byteident.py: --update/--ratchet need the link-selected metric "
+            "so the\n  three-phase floor is complete, and the partial-link "
+            "artifacts are absent.\n  Run `make partial-link` (needs tc-repro, "
+            "attribution and the binutils\n  2.15 image), or pass "
+            "--link-manifest/--linked.\n  Refusing to ratchet a metric that "
+            "cannot report its phase-2 denominator.")
     print("  grade 0  EXACT      same bytes, same places  : %4d  (%.1f%%)"
           % (ex, 100.0 * ex / n))
     print("           UNRESOLVED as EXACT, but a section  : %4d" % un)
@@ -1557,6 +2043,12 @@ def main():
     compared_bytes = sum(blob[k] for k in common)
     if exact_bytes > compared_bytes:
         raise AssertionError("exact reference bytes exceed compared reference bytes")
+    exact_symbols = sorted(k for _, _, k in buckets["EXACT"])
+    grade01_symbols = sorted(
+        k for bucket in ("EXACT", "UNRESOLVED", "REGALLOC")
+        for _, _, k in buckets[bucket])
+    selected = (None if link_report is None
+                else selected_exact_set(exact_symbols, link_report))
     now = {"exact": ex, "regalloc": ra, "compared": n,
            "reference_functions": len(blob),
            "exact_bytes": exact_bytes, "compared_bytes": compared_bytes,
@@ -1565,7 +2057,20 @@ def main():
            "bytes": len(buckets["BYTES"]),
            "size": len(buckets["SIZE"]),
            "nodata": len(buckets["NODATA"]),
-           RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
+           "grade01": len(grade01_symbols),
+           "selected_exact": None if selected is None else len(selected),
+           RATCHET_EXACT_SYMBOLS: exact_symbols,
+           RATCHET_GRADE01_SYMBOLS: grade01_symbols,
+           RATCHET_SELECTED_EXACT_SYMBOLS: (None if selected is None
+                                            else sorted(selected))}
+    displaced = None
+    if a.summary or a.ratchet:
+        try:
+            displaced = load_displaced()
+        except ValueError as error:
+            sys.exit("byteident.py: %s" % error)
+    if a.summary:
+        print_summary(now, link_report is not None, displaced)
     if a.json_out:
         with open(a.json_out, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
@@ -1574,8 +2079,10 @@ def main():
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
             f.write("\n")
-        print("\nratchet updated: %d exact symbol(s), %d compared, %d regalloc"
-              % (now["exact"], now["compared"], now["regalloc"]))
+        print("\nratchet updated: %d exact symbol(s), %d grade 0-or-1, "
+              "%d link-selected exact; %d compared, %d regalloc"
+              % (now["exact"], now["grade01"], now["selected_exact"],
+                 now["compared"], now["regalloc"]))
         return 0
     if a.ratchet:
         try:
@@ -1587,21 +2094,40 @@ def main():
         except ValueError as e:
             sys.exit("byteident.py: invalid ratchet baseline %s: %s"
                      % (RATCHET, e))
-        if lost:
-            print("\nRATCHET FAILED -- a previously grade-0 EXACT symbol regressed"
-                  "\nwhile another gain could have kept the aggregate count level."
-                  "\n`make period` proves BEHAVIOUR, not CODE GENERATION.")
-            print("    exact  was %d, now %d" % (was["exact"], now["exact"]))
-            print("\n  Lost exact symbol(s):")
-            for k in lost:
-                print("    %s" % k)
-            print("\n  If the change was deliberate (e.g. a genuine behavioural"
-                  "\n  fix that necessarily changes codegen), re-bless with"
-                  "\n  --update and say in the commit message which exact symbols"
-                  "\n  changed and why.  If it was a pure rename or comment change,"
-                  "\n  it should not have moved this set at all -- find out what"
-                  "\n  else changed before re-blessing.")
+        failures, allowed = ratchet_displacement(
+            was, now, displaced,
+            lambda symbol: _current_body_digest(ours, symbol),
+            set(k for _, _, k in buckets["REGALLOC"]))
+        if failures:
+            print("\nRATCHET FAILED -- a banked symbol left the three-phase "
+                  "floor and the\nevidence does not justify it.  `make period` "
+                  "proves BEHAVIOUR, not CODE\nGENERATION, so it cannot see this.")
+            print("    exact %d -> %d, grade 0-or-1 %d -> %d, "
+                  "link-selected exact %d -> %d"
+                  % (was["exact"], now["exact"], was["grade01"],
+                     now["grade01"], was["selected_exact"],
+                     now["selected_exact"]))
+            print("\n  Failure(s):")
+            for failure in failures:
+                print("    %s" % failure)
+            print("\n  A grade-0/1 loss is ALWAYS a failure: the function "
+                  "itself got worse and\n  no entry can excuse it.  An EXACT or "
+                  "link-selected-EXACT loss may only be\n  displaced by a "
+                  "reviewed entry in tools/ci/displaced.json whose body hash\n"
+                  "  still describes the current head body.  A stale entry "
+                  "must be removed;\n  never re-bless a floor to silence a "
+                  "regression.")
             return 1
+        if allowed:
+            print("\n  reviewed displacement(s) -- these losses are evidence-"
+                  "pinned, not silently\n  re-blessed:")
+            for metric, symbol in allowed:
+                print("    %-9s %s" % (metric, symbol))
+        if lost:
+            print("\n  note: %d per-TU EXACT symbol(s) left the bucket; every "
+                  "one is listed above as\n  a reviewed displacement.  A new "
+                  "EXACT gain still counts as progress."
+                  % len(lost))
         if now["regalloc"] < was["regalloc"]:
             print("\n  note: regalloc %d -> %d.  A FALL IS AMBIGUOUS -- a symbol"
                   "\n  leaves that bucket both by GRADUATING to exact and by"
@@ -1609,10 +2135,15 @@ def main():
                   "\n  same period; a fall in regalloc alongside a rise in exact"
                   "\n  is progress, not regression."
                   % (was["regalloc"], now["regalloc"], was["exact"], now["exact"]))
-        gained = bool(gained_symbols) or now["regalloc"] > was["regalloc"]
+        gained = (bool(gained_symbols) or now["regalloc"] > was["regalloc"] or
+                  now["grade01"] > was["grade01"] or
+                  now["selected_exact"] > was["selected_exact"])
         print("\nratchet OK%s" % ("" if not gained else
-              " (exact %d -> %d, regalloc %d -> %d)"
-              % (was["exact"], now["exact"], was["regalloc"], now["regalloc"])))
+              " (exact %d -> %d, grade 0-or-1 %d -> %d, link-selected exact "
+              "%d -> %d, regalloc %d -> %d)"
+              % (was["exact"], now["exact"], was["grade01"], now["grade01"],
+                 was["selected_exact"], now["selected_exact"],
+                 was["regalloc"], now["regalloc"])))
 
     if a.list_exact:
         print("\nEXACT:")

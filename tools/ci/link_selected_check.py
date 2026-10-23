@@ -13,12 +13,20 @@ A new multiply-defined name, a changed definition-record count, a name leaving
 the link-resolved set, or a different selected grade is a change to the
 COMDAT/selection ledger.  It must be a deliberate update to this file in the
 same change that causes it, not silent drift.  The census, buckets, ratchet and
-exit status of byteident are NOT checked here: this tool reads only the
-diagnostic report and never grades a reconstruction.  The negative control
-(`_Z7hanningIfEvPT_j`) is a disagreement whose selected copy is not EXACT; if it
-ever appears in the report the pin no longer describes master.
+exit status of byteident are NOT graded here: this tool reads the diagnostic
+report and the `--summary` block, and never runs the ratchet or changes a
+bucket.  The negative control (`_Z7hanningIfEvPT_j`) is a disagreement whose
+selected copy is not EXACT; if it ever appears in the report the pin no longer
+describes master.
 
-    tools/ci/link_selected_check.py REPORT
+The summary cross-check is what ties phase 2 to phase 0: link-selected EXACT
+must be at least per-TU EXACT, its excess over per-TU EXACT must equal the
+number of names whose SELECTED body is EXACT while the worst per-TU copy is
+not (the "selected-EXACT-only" disagreements), grade 0-or-1 must be at least
+EXACT, and the end-target line must be present.  A genuine change to any of
+those is a deliberate update to this file, not drift.
+
+    tools/ci/link_selected_check.py REPORT --summary SUMMARY
     tools/ci/link_selected_check.py --self-test
 """
 
@@ -42,6 +50,11 @@ EXACT_SELECTED = frozenset({
 
 NEGATIVE_CONTROL = "_Z7hanningIfEvPT_j"
 
+# Phase 2's correction: names whose SELECTED body is EXACT while the worst
+# per-TU copy is not.  Each one is +1 to link-selected EXACT over per-TU
+# EXACT, so the pinned difference and the report must agree.
+EXPECTED_SELECTED_ONLY = 3
+
 DENOMINATOR = re.compile(
     r"denominator\s*:\s*(\d+)\s+multiply-defined name\(s\),\s*"
     r"(\d+)\s+definition record\(s\);")
@@ -51,6 +64,17 @@ DISAGREEMENTS = re.compile(
 ROW = re.compile(r"^\s*(EXACT|UNRESOLVED|REGALLOC|RELOC|BYTES|SIZE|NODATA)"
                  r"\s+(EXACT|UNRESOLVED|REGALLOC|RELOC|BYTES|SIZE|NODATA)"
                  r"\s+(\S+)")
+
+SUMMARY_HEADING = "phase summary (diagnostic)"
+SUMMARY_GRADE01 = re.compile(
+    r"functions right\s*:\s*per-TU grade 0 or 1\s+(\d+)\s*/\s*(\d+)")
+SUMMARY_SELECTED = re.compile(
+    r"right place\s*:\s*link-selected EXACT\s+(\d+)\s*$", re.MULTILINE)
+SUMMARY_EXACT = re.compile(r"per-TU bytes\s*:\s*EXACT\s+(\d+)\s*$",
+                           re.MULTILINE)
+SUMMARY_DISPLACED = re.compile(
+    r"displaced\s*:\s*(\d+)\s+reviewed in tools/ci/displaced\.json")
+SUMMARY_END = "end target        : make partial-compare-exact"
 
 
 class ReportError(ValueError):
@@ -90,7 +114,41 @@ def parse(text):
     return counts, rows
 
 
-def check(text):
+def parse_summary(text):
+    """Read the phase summary.  Every line must be present and numeric."""
+    if text is None or not text.strip():
+        raise ReportError("summary is empty")
+    if SUMMARY_HEADING not in text:
+        raise ReportError("summary has no phase-summary heading")
+    if "link-selected EXACT : unavailable" in text:
+        raise ReportError(
+            "summary reports the link-selected metric as unavailable "
+            "(run make partial-link)")
+    if SUMMARY_END not in text:
+        raise ReportError("summary has no end-target line")
+    summary = {}
+    match = SUMMARY_GRADE01.search(text)
+    if match is None:
+        raise ReportError("summary has no grade-0-or-1 line")
+    summary["grade01"], summary["compared"] = map(int, match.groups())
+    if summary["compared"] == 0:
+        raise ReportError("summary grade-0-or-1 denominator is zero")
+    match = SUMMARY_SELECTED.search(text)
+    if match is None:
+        raise ReportError("summary has no link-selected EXACT count")
+    summary["selected"] = int(match.group(1))
+    match = SUMMARY_EXACT.search(text)
+    if match is None:
+        raise ReportError("summary has no per-TU EXACT count")
+    summary["exact"] = int(match.group(1))
+    match = SUMMARY_DISPLACED.search(text)
+    if match is None:
+        raise ReportError("summary has no displaced-ledger line")
+    summary["displaced"] = int(match.group(1))
+    return summary
+
+
+def check(text, summary_text=None):
     """Return the list of pinned-expectation failures; empty means pass."""
     failures = []
     try:
@@ -133,6 +191,40 @@ def check(text):
         failures.append(
             "%s: negative control must NOT be printed" % NEGATIVE_CONTROL)
 
+    # --- the phase summary -------------------------------------------------
+    try:
+        summary = parse_summary(summary_text)
+    except ReportError as error:
+        failures.append("summary: %s" % error)
+        return failures
+
+    if summary["grade01"] < summary["exact"]:
+        failures.append(
+            "grade-0-or-1 %d is below per-TU EXACT %d"
+            % (summary["grade01"], summary["exact"]))
+    if summary["selected"] < summary["exact"]:
+        failures.append(
+            "link-selected EXACT %d is below per-TU EXACT %d; the selected "
+            "body can add a name, never lose a whole phase-0 symbol"
+            % (summary["selected"], summary["exact"]))
+
+    selected_only = sum(
+        1 for worst, selected in rows.values()
+        if selected == "EXACT" and worst != "EXACT")
+    selected_losses = sum(
+        1 for worst, selected in rows.values()
+        if selected != "EXACT" and worst == "EXACT")
+    difference = summary["selected"] - summary["exact"]
+    if difference != selected_only - selected_losses:
+        failures.append(
+            "link-selected EXACT minus per-TU EXACT is %+d, but the report "
+            "adds %d and removes %d selected-only name(s)"
+            % (difference, selected_only, selected_losses))
+    if selected_only != EXPECTED_SELECTED_ONLY:
+        failures.append(
+            "selected-EXACT-only disagreements: expected %d, found %d"
+            % (EXPECTED_SELECTED_ONLY, selected_only))
+
     return failures
 
 
@@ -151,12 +243,21 @@ FIXTURE = """\
     selected linked bodies matching an input copy: 30/32
 """
 
+SUMMARY_FIXTURE = """\
+phase summary (diagnostic)
+  functions right   : per-TU grade 0 or 1   1182 / 1852
+  right place       : link-selected EXACT   1149
+  per-TU bytes      : EXACT                 1146
+  displaced         : 0 reviewed in tools/ci/displaced.json
+  end target        : make partial-compare-exact (not yet reached)
+"""
+
 
 def self_test():
     checks = []
 
-    def expect(label, text, should_pass):
-        problems = check(text)
+    def expect(label, text, should_pass, summary=SUMMARY_FIXTURE):
+        problems = check(text, summary)
         ok = (not problems) if should_pass else bool(problems)
         checks.append((label, ok))
 
@@ -202,6 +303,35 @@ def self_test():
                "    SIZE        EXACT       _Z7unexpected\n"
                "    selected linked bodies"), False)
 
+    # --- the phase summary and its cross-checks ----------------------------
+    expect("summary missing rejected", FIXTURE, False, None)
+    expect("summary heading missing rejected", FIXTURE, False,
+           SUMMARY_FIXTURE.replace(SUMMARY_HEADING, "something else"))
+    expect("end-target line missing rejected", FIXTURE, False,
+           "\n".join(line for line in SUMMARY_FIXTURE.splitlines()
+                     if "end target" not in line) + "\n")
+    expect("unavailable link-selected metric rejected", FIXTURE, False,
+           SUMMARY_FIXTURE.replace(
+               "link-selected EXACT   1149",
+               "link-selected EXACT : unavailable (run make partial-link)"))
+    expect("grade-0-or-1 below EXACT rejected", FIXTURE, False,
+           SUMMARY_FIXTURE.replace("1182 / 1852", "1145 / 1852"))
+    expect("link-selected EXACT below EXACT rejected", FIXTURE, False,
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
+                                   "link-selected EXACT   1145"))
+    expect("selected/exact difference mismatch rejected", FIXTURE, False,
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
+                                   "link-selected EXACT   1150"))
+    two = FIXTURE.replace(
+        "    BYTES       EXACT       _ZN9ScramblerIhhEC1Ejjj",
+        "    EXACT       EXACT       _ZN9ScramblerIhhEC1Ejjj")
+    expect("selected-only disagreement pin rejected", two, False,
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
+                                   "link-selected EXACT   1148"))
+    expect("displaced ledger line missing rejected", FIXTURE, False,
+           "\n".join(line for line in SUMMARY_FIXTURE.splitlines()
+                     if "displaced" not in line) + "\n")
+
     bad = sum(not ok for _, ok in checks)
     for label, ok in checks:
         print("  %s  %s" % ("ok  " if ok else "FAIL", label))
@@ -214,6 +344,9 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("report", nargs="?",
                     help="stderr report from byteident.py --link-selected")
+    ap.add_argument("--summary", metavar="PATH",
+                    help="stdout file from byteident.py --summary (required "
+                         "outside --self-test)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
 
@@ -221,16 +354,20 @@ def main():
         return self_test()
     if not args.report:
         ap.error("REPORT is required unless --self-test is given")
+    if not args.summary:
+        ap.error("--summary is required unless --self-test is given")
 
     try:
         with open(args.report) as stream:
             text = stream.read()
+        with open(args.summary) as stream:
+            summary_text = stream.read()
     except OSError as error:
-        print("link_selected_check: cannot read report: %s" % error,
+        print("link_selected_check: cannot read input: %s" % error,
               file=sys.stderr)
         return 1
 
-    failures = check(text)
+    failures = check(text, summary_text)
     if failures:
         print("link_selected_check: %d pinned expectation(s) FAILED:"
               % len(failures), file=sys.stderr)
@@ -239,9 +376,14 @@ def main():
         return 1
 
     print("link_selected_check: %d name(s), %d record(s), %d resolved, "
-          "%d disagreement(s); %d exact-selected name(s) as pinned"
+          "%d disagreement(s); %d exact-selected name(s) as pinned; "
+          "grade 0-or-1 %d/%d, link-selected EXACT %d vs per-TU EXACT %d"
           % (EXPECTED["names"], EXPECTED["records"], EXPECTED["resolved"],
-             EXPECTED["disagreements"], len(EXACT_SELECTED)))
+             EXPECTED["disagreements"], len(EXACT_SELECTED),
+             parse_summary(summary_text)["grade01"],
+             parse_summary(summary_text)["compared"],
+             parse_summary(summary_text)["selected"],
+             parse_summary(summary_text)["exact"]))
     return 0
 
 
