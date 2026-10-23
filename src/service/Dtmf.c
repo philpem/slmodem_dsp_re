@@ -57,19 +57,22 @@ typedef char dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1];
  * European plan before this was forced.  Not a tolerance to widen.
  *
  * THIS ONE IS MEASURED AGAINST THE PERIOD COMPILER, not argued from the
- * modern one (finding F1415).  Both forms of this file were built in
+ * modern one (finding F1415).  The forms of this file were built in
  * tools/toolchain's GCC 3.4.2 container:
  *
  *   plain    `x = notch(...)`   call, then straight to the next block --
  *                               no store, so 3.4.2 keeps 80 bits too
- *   volatile                    call; fstps 0x2c(%esp); flds 0x2c(%esp)
- *   the blob                    call; fstps 0x30(%esp); flds 0x30(%esp)
+ *   volatile local              call; fstps 0x2c(%esp); flds 0x2c(%esp);
+ *                               fstps 0x30(%esp)
+ *   volatile store to x         call; fstps 0x30(%esp)          <-- blob
  *
- * so the barrier REPRODUCES a store the object has rather than adding one it
- * lacks -- same two instructions, different slot, and the slot is the
- * compiler's to choose.  The plain form is the one that disagrees with the
- * object under the object's own compiler.  If the tree settles on a different
- * remedy for the general problem, this is a site to convert.
+ * The last form is what the object has.  The barrier is a volatile STORE
+ * through a pointer to `x` itself, so the rounding store lands on x's slot
+ * and the next block reloads it (`flds 0x30(%esp)`), with no intermediate
+ * temporary.  `round32(&x, notch(...))` reproduces that.  The plain form is
+ * the one that disagrees with the object under the object's own compiler.
+ * If the tree settles on a different remedy for the general problem, this is
+ * a site to convert.
  *
  * PROVISIONAL, AND LANDED AGAINST AN INSTRUCTION NOT TO.  The tree is
  * deciding what to do about x87 excess precision in general and the standing
@@ -86,12 +89,10 @@ typedef char dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1];
  * intervening store), so there both sides carry 80 bits and must -- forcing a
  * round there would BREAK the comparison rather than repair it.
  */
-static float
-round32(float v)
+static void
+round32(volatile float *px, float v)
 {
-	volatile float r = v;
-
-	return r;
+	*px = v;
 }
 
 /*
@@ -241,21 +242,23 @@ dtmf_detect(float x, struct dtmf *d, short mode)
 	int result = DTMF_NOT_YET;
 	const float *coef;
 	float *state;
-	short phase;
 	short block;
 	short digit;
 	short i;
 
-	/* 8000 -> 4000: only every second sample goes any further. */
-	phase = (short)(d->phase + 1);
-	if (phase != 2) {
-		d->phase = phase;
+	/*
+	 * 8000 -> 4000: only every second sample goes any further.  The
+	 * increment is on the FIELD, not on a `short phase` local: the object
+	 * reads it with `movzwl`, increments, and compares at 16 bits with no
+	 * sign-extension (blob 0xadc3d-0xadc46), and a local survives as a
+	 * dead `cwtl` that the object does not have.
+	 */
+	if (++d->phase != 2)
 		return result;
-	}
 	d->phase = 0;
 
 	if (mode == DTMF_MODE_EUR)
-		x = round32(notch(x, d->bias_state, biascoef));
+		round32(&x, notch(x, d->bias_state, biascoef));
 
 	d->total = x * x + d->total;
 
