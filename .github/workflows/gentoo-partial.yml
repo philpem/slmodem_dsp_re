@@ -27,7 +27,9 @@ jobs:
           fetch-depth: 0
 
       - name: Self-test partial metric logic
-        run: python3 tools/ci/partial_metrics.py --self-test
+        run: |
+          python3 tools/ci/partial_metrics.py --self-test
+          python3 tools/ci/link_selected_check.py --self-test
 
       - name: Pull recovered Gentoo compiler
         run: docker pull --platform linux/386 "$GENTOO_IMAGE"
@@ -71,6 +73,28 @@ jobs:
           python3 tools/bindcmp.py ref/slmodemd/dsplibs.o \
             build/partial/dsplibs.o --count \
             > "$RUNNER_TEMP/head-partial.bindings"
+
+      - name: Report link-selected COMDAT bodies
+        run: |
+          # REUSE build/tc_repro RATHER THAN PAYING FOR `make tc`.  Measured on
+          # master: the census over build/tc_repro is identical to the census
+          # over build/tc_out except for the "ours :" path line, while
+          # build/tc_repro is already built by `make partial-link` above and
+          # feeds the link-selected report.  The report reads the manifest and
+          # partial object beside it, so TC_OUT selects the same object tree.
+          #
+          # THE EXPECTATION IS PINNED IN tools/ci/link_selected_check.py.  A new
+          # multiply-defined name, a changed record/resolved count or a changed
+          # selected body is a deliberate COMDAT/selection ledger update, not
+          # drift to be accepted because the job is green.  This step is
+          # REPORT-ONLY: it does not alter the metrics or ratchet steps below.
+          TC_OUT=build/tc_repro python3 tools/toolchain/byteident.py \
+            --link-selected \
+            > "$RUNNER_TEMP/link-selected-census.txt" \
+            2> "$RUNNER_TEMP/link-selected-report.txt"
+          cat "$RUNNER_TEMP/link-selected-report.txt"
+          python3 tools/ci/link_selected_check.py \
+            "$RUNNER_TEMP/link-selected-report.txt"
 
       - name: Compare and ratchet partial-link metrics
         id: metrics
