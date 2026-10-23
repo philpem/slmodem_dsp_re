@@ -11,6 +11,15 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+Before reusing a closure, identify the observation it actually establishes.
+Equal projected instruction counts do not establish dataflow equivalence;
+an exact out-of-line body does not fix its frontend inline cost; a refused
+table proof does not establish a source defect; and the worst emitted copy
+is distinct from the body selected in a particular partial link. See the
+[proof-boundary review](../apparatus-unblock-review.md) for measured controls
+and the remaining proof obligations. Keep diagnostic and production flags
+separate when locating the compiler pass responsible for a difference.
+
 ## Screen beyond the historical candidate filter
 
 Inventory every residual function and every defining copy before applying a
@@ -116,9 +125,10 @@ decision. Check the current constructor and type home, not just the comment.
 4. Assert the period layout with checks that GCC 3.4.2 actually sees. Wider
    native pointers are a portability matter, not evidence against the
    original four-byte pointer layout.
-5. Update mutation anchors without dropping their fault cases and run the
-   period differential and structural gates before committing. An incremental
-   prefix view is a migration step, not completion of the owner model.
+5. Run the period differential and structural gates before committing. An
+   incremental prefix view is a migration step, not completion of the owner
+   model. Historical mutation records do not add a mandatory maintenance step;
+   follow the current [mutation policy](mutation-policy.md).
 
 Initializer cleanup is a separate question from arithmetic narrowing. A
 cast on a hexadecimal constant assigned to a `short` array can be redundant
@@ -236,9 +246,10 @@ is four, and neither has been swept across the tree. 17 did convert a SIZE
 function to grade-1 ACCEPT, so it is worth trying first on any small
 pointer-walk loop whose size is short by a few instructions.
 
-**14 now carries a measured bound as well as a success:** a TU split pays only
-when it recovers a call boundary; the `V34.c` merge was a bit-identical NULL.
-Read the lever's second half before planning a TU move.
+**14 carries a measured null as well as a success:** the `V34.c` merge was
+bit-identical and recovered no call boundary. That does not exclude emission
+or data-layout effects in other partitions. Read the complete source and
+linkage evidence before planning a TU move.
 
 **13 has the same caveat as 10 to 12, and it is stated here rather than
 discovered later.** It closed 74 instructions in ONE function (F7940) and has
@@ -253,8 +264,9 @@ read the two together.
 Running the domain to completion is necessary; it is not the whole story. Say
 which of these you have, per function (7789 does it per closure):
 
-- **A unique preimage** — exactly one cell maps onto the object. You have
-  decoded the author's ORDER. `V90MP`: 4! = 24 cells, one zero, nearest
+- **A unique preimage within the declared family** — exactly one cell maps
+  onto the object. That identifies an order under the tested source and
+  compiler controls. `V90MP`: 4! = 24 cells, one zero, nearest
   near-miss at 2.
 - **Several preimages** — more than one cell reaches zero. You have decoded a
   specific FACT, not an order, and the finding must say which fact.
@@ -272,10 +284,10 @@ the total**: count the `mov`-class stores, the x87 ops and the branches
 separately on each side, and if those disagree while the total is zero, lever 2
 does apply and is cancelling with itself.
 
-Where the sub-counts also agree, `+0` does mean operand order, statement order,
-emission order, or width and signedness. The lens is most useful on a **SIZE**
-symbol, where it converts an apparently structural difference into an
-arithmetic one; on a BYTES symbol it is close to redundant with the bucket.
+Where the sub-counts also agree, the bucket projection agrees. The cause is
+still open: different predicates, dependencies or value/member associations
+can have equal counts. Use the lens to nominate operand and control-flow
+comparisons on a **SIZE** symbol, rather than to close its source structure.
 
 **TWO CENSUSES EXIST AND THEY USE DIFFERENT TAXONOMIES; RECONCILE THEM BEFORE
 QUOTING EITHER.** F7986 bucketed 29 rows of the V.90 cluster and found **22
@@ -289,7 +301,8 @@ neither number is the tree's, and the census is worth re-running per worklist
 rather than inherited.
 
 Bucketing measured on one cluster: of 29 reachable `+0` rows, **22 have every
-bucket agreeing** -- genuinely encoding only -- and **7 cancel**. None of the
+bucket agreeing**, historically labelled encoding-only, and **7 cancel**.
+The equal-bucket observation alone does not establish that label. None of the
 seven had an x87 imbalance, which is the bucket that carried F7960's wrong
 field types, so that defect did not repeat there (F7986). Note what that
 leaves: for five of the seven the cancelling was bucketed but not TRACED, so
@@ -306,18 +319,19 @@ differently wrong. Use `--near` to find cheap work, never to decide what a
 symbol's defect can be.
 
 - **No preimage** — **but FIRST ask whether the domain was drawn around the
-  right code.** A no-preimage result licenses the strong conclusion "the
-  difference is not what I thought it was", and that conclusion is only as good
-  as the boundary you enumerated over. `packData`'s sixteen-cell domain covered
+  right code.** A no-preimage result excludes the tested family under its
+  controls; check that the family covers the relevant helpers.
+  `packData`'s sixteen-cell domain covered
   its own four loops and was genuinely exhausted; the CRC lived in a `static`
   helper whose two loops were never in it, and the answer was there (F7940). A
   `static` helper that gets inlined has no symbol of its own, so a per-function
   enumeration cannot see it. **Enumerate over the callee set, not over the
   function that carries the symbol.** Only once the boundary is right does a
-  no-preimage result mean the map is constant or simply misses. The difference is
-  not what you thought it was. Four measured this way in one pass alone
+  no-preimage result exclude the tested source family under that profile.
+  Other source properties and interactions remain open. Four measured this
+  way in one pass alone
   (7795), and `SpectralShaper::reset` at 10 cells with none reaching zero is
-  the cleanest: by lever 1's own rule it is therefore not statement order.
+  the cleanest: those ten statement-order cells do not recover it.
 
 **Enumerate before reading any cell.** Two passes have recorded doing that
 explicitly, because stopping at a tempting near-miss is how an exhausted
@@ -332,8 +346,8 @@ pointer-walk loop is short by a handful of instructions.
 
 When a difference is a statement order, the candidate source spellings form a
 small finite family. **Compile all of them.** If exactly one maps onto the
-object, the object's emission has a unique preimage and you have *decoded* the
-author's order.
+object, the object's emission has a unique preimage within that family. Keep
+the source representation and compiler profile in the claim.
 
     resetBeforRRN     2 orders compiled, 1 matches   -> EXACT   (7770)
     externalReset     all 3! compiled, 6 distinct emissions, unique preimage -> EXACT (7779)
@@ -347,9 +361,9 @@ recoverable, because the domain was exhausted rather than trusted.
 
 **The branch that would kill it, and it must be excluded by measurement:** if
 the compiler emits the same order for *every* source spelling, the map is
-constant, no source produces the object's bytes, and the difference is not a
-store-order difference at all. Nothing before the compile distinguishes that
-case from a bijection.
+constant within that family. If its output differs from the reference, those
+order changes cannot recover it under the fixed controls. This does not
+exclude a source/flag interaction or another source representation.
 
 **Where it stops.** Hill-climbing on byte count is not evidence:
 
@@ -363,18 +377,13 @@ that says "closed by reordering" without saying how many spellings were
 compiled is not reviewable.
 
 
-**OUR SOURCE ORDER IS THE ANSWER SHEET, NOT A CANDIDATE, and this is the
-sentence to read first.** A reconstruction writes the statements down in the
-order the object's stores come out of the disassembly, so **our source order
-already IS the blob's EMISSION order** — it is the first thing anybody
-transcribes. Comparing the two therefore tells you nothing, and a cell that
-reproduces it is not a hit. What an enumeration is searching for is the
-PREIMAGE of that order under GCC 3.4.2's scheduling, which is a different
-object and is usually not an order you can read anywhere. In all four of
-7805's closures our source was already the emitted order and the compiler had
-permuted it. So before enumerating: if our source reads like the disassembly,
-that is the ANSWER and not a guess, and the domain to enumerate is everything
-else.
+If a reconstruction transcribes stores in disassembly order, that order is
+the desired emitted sequence, not evidence of the author's statement order.
+Keep the unchanged source as the baseline control and test complete emitted
+bodies, including operands and relocations. In all four of F7805's closures,
+the source already followed the desired emitted order but the compiler
+permuted it. An enumeration searches for a source preimage under the declared
+controls; matching a handwritten order alone is not a byte-identity result.
 
 **AND THE HARNESS IS WHAT MAKES AN EXHAUSTED DOMAIN AFFORDABLE**, which is
 what turns rule 0 from advice into something a pass can budget for. Compile the
@@ -394,23 +403,6 @@ That one was checked to reproduce our committed object's thirteen instructions
 exactly, from our committed source order, before a single cell of it was read.
 A model nobody has seen agree with the real compiler is `gates.md`'s dead
 detector with 40,320 rows of output.
-
-**The branch that would kill it, and it must be excluded by measurement:** if
-the compiler emits the same order for *every* source spelling, the map is
-constant, no source produces the object's bytes, and the difference is not a
-store-order difference at all. Nothing before the compile distinguishes that
-case from a bijection.
-
-**Where it stops.** Hill-climbing on byte count is not evidence:
-
-    V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
-                                order; best was 27 of 290 -> DECLINED (7771)
-
-Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
-bytes when the space is exhausted and one element maps; decline when you are
-searching. Record which side you are on and what the domain was — a finding
-that says "closed by reordering" without saying how many spellings were
-compiled is not reviewable.
 
 ### Lever 2. Instruction count at EQUAL byte size can expose a missing or extra statement
 
@@ -1721,19 +1713,23 @@ lever before the flags. (Splitting a TU used to require moving its `t_*`
 mutation suite; that system is retired, so there is no anchor bookkeeping to
 do. The same question for the rest of the object is #6/#20.)
 
-**A TU SPLIT IS NOT ITSELF A LEVER -- it pays only when a CALL BOUNDARY is
-recovered. Measured NULL (2026-10-19).** The object records a `V34.c` FILE
+**The tested V.34 TU merge was null (2026-10-19).** The object records a
+`V34.c` FILE
 record that this tree does not have; its `.text` is `0x57860..0x5AF10`, 20
 global functions, which this tree spreads over `v34scram.c` (4), `v34shell.c`
 (13) and `V34RX.c` (3). Renaming the two `.c` files to `.inc` and adding one
 `V34.c` that includes both -- the whole merge, one compile -- left the census
 **bit-identical**: same sizes, same exact set, `diff` of `--list-exact` empty.
-The reason is measurable and general: the object has **no relocations at all**
+The call-boundary observation is measurable: the object has **no relocations at all**
 to `scrambleGPC`/`scrambleGPA`/`descrambleGPC`/`descrambleGPA`/`agcadapt`/
 `decision` (every call site inlined them), so there was no boundary for the
 merge to restore, and the 908-byte deficit sits inside functions that already
-shared a TU. **Before any TU move, count the cross-TU relocations into the
-function set. Zero relocations in, zero recovery out.** The same screen would
+shared a TU. Count cross-TU relocations when testing a call-boundary
+hypothesis. Zero references exclude that particular explanation, not every
+effect of a partition: emission state, constant/data layout and selected
+COMDAT copies have separate observables (Levers 3, 11 and 15). Do not move a
+TU without an ownership witness and a predicted discriminator. The same
+screen would
 have saved the `v8seq.c` question: the source comments annotate seven
 `V8Interface.c` functions with `(v8seq.c)`, but the object has no `v8seq.c`
 FILE record at all.
@@ -1903,14 +1899,24 @@ So a load extension that disagrees with the product's signedness is evidence
 for a narrow unsigned local plus one explicit conversion, not for a field
 retype (compare Lever 8) and not for a stray cast.
 
-### Lever 19. An inlined copy in the OBJECT proves an `inline` declaration
+### Lever 19. Test frontend inline eligibility separately from the native body
 
-`-O3` inlines on two budgets: `max-inline-insns-auto` (130 by default) for an
-ordinary function, and `max-inline-insns-single` (600) for one DECLARED
-`inline`. So when a callee is far above the auto budget and the object still
-contains its body inlined at a call site, the source declared it `inline` --
-the compiler could not have got there any other way. That is a forced fact
-about the source, like a `movswl`, and it is worth acting on.
+The installed Gentoo compiler has defaults of 100 for
+`max-inline-insns-auto` and 500 for `max-inline-insns-single`, decoded from
+its own parameter records. These are frontend cost budgets, not final
+machine-instruction counts. Record the actual profile and the complete
+callgraph decision before testing an `inline` declaration as a hypothesis.
+Native body length alone does not establish the original frontend cost or
+keyword.
+
+PR #333 supplies a counterexample to inferring cost from the standalone
+body. Two ordinary scalar declaration/assignment forms of `inverseMap`
+both emit the exact 440-byte helper, but estimate at 98 and 102. Under the
+same retained profile they respectively inline and retain the original call
+in `process`. The [fresh full-TU replay](../apparatus-unblock-review.md)
+preserves every other function body. No parameter override or artificial
+operation is needed. Multiple spellings recover the cost boundary, so the
+machine code does not identify one original spelling.
 
 Measured on `src/service/ringDetector.c` (2026-10-19). `RingDetector_Reset` is
 449 bytes / 124 instructions and has ONE call site, in `RingDetector_Create`.
@@ -1925,21 +1931,24 @@ declaration is left alone) inlined it:
     Create   41 B / 9 insns  ->  435 B / 121 insns   (object 452 / 125)
     structsim  longest run 0 -> 14,  LCS 0% -> 77.6%
 
-Two checks say the object's copy is the same function and not a copy-paste:
+Two observations support the helper-operation interpretation:
 
 - A `difflib.SequenceMatcher` of the object's `RingDetector_Reset` instruction
   list against the object's `RingDetector_Create` list scores 0.787, and every
   non-equal opcode is the malloc/return prologue, a branch displacement, or a
-  pure register rename (`%ecx` <-> `%edx`, `%esi` vs `%edi`). A hand copy would
-  be textually identical; this differs exactly where inlining reallocates.
+  pure register rename (`%ecx` <-> `%edx`, `%esi` vs `%edi`). This supports
+  shared operations; it does not distinguish an inline call from duplicated
+  source, since the enclosing context can alter register allocation in both.
 - The standalone symbol is still emitted in both, which is what the language
   says should happen: the header declares the function without `inline`, so
   the inline definition is an external definition too.
 
-**The bound.** A callee inside the auto budget proves nothing -- `-O3` may
-inline it whether or not the source said `inline`. This lever only fires when
-the callee is too big for automatic inlining AND the call site is present in
-the object's own TU. It also does not fix the callee: `RingDetector_Create`
+**The bound.** A callee inside the auto budget may inline with or without
+the keyword. A current-source cost above that budget is a useful control,
+not proof of the unknown original source cost. Verify definition visibility,
+other eligibility constraints and the actual decision; compare the complete
+TU before retaining an explicit-inline hypothesis. It also does not fix the
+callee: `RingDetector_Create`
 stayed SIZE because `Reset`'s own body still differs by 4 instructions of
 register allocation (the object spills `c` into a third callee-saved register
 and reloads it), so the inline decision and the body's residual are separate
@@ -2321,14 +2330,16 @@ temporary or return (Lever 20), taking a member's address (Lever 24), and the
 frame a base forces (Lever 22). Those results do not exclude further source
 control-flow, ownership or arithmetic recovery.
 
-### Lever 26. A constant-count repetition is UNROLLED in the SOURCE, not by the compiler
+### Lever 26. Test explicit source repetition against compiler duplication
 
 `V90CP::evaluateInfo` had four arms 1,003 bytes short of the object across a
-1,024-byte gap, with no call on either side and no internal duplication, so
-the deficit was content. The object's arms showed what that content is: at
-these flags GCC does **not** unroll a small constant-count loop that writes
-through an array, but it *does* emit one longhand copy per array element when
-the SOURCE has them.
+1,024-byte gap. The tested loop representation did not recover those
+operations. Under the
+retained flags, the tested loop forms did not emit the native repetitions;
+explicit longhand copies recovered more of the enclosing graph. This is
+per-site source evidence. Repeated final blocks alone do not establish
+source repetition: inlining, unswitching, peeling and late block duplication
+must be distinguished with compiler-stage controls.
 
     state   blob   ours   short by
       7      220     80     140     four 9-bit reads, one per nof_58[k]
