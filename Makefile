@@ -1416,6 +1416,19 @@ structsim: tc
 contentgap: tc
 	@$(PYTHON) tools/toolchain/contentgap.py $(S)
 
+# `inlineedges` screens CALL-EDGE differences that can mean an inline boundary
+# moved.  GCC 3.4.2 decides inlining from a frontend cost estimate (~100
+# instructions), not from a lexeme, so a body-identical spelling can move a
+# call out of line (#333 recovered V92ConvolutionEncoder::process this way).
+# The screen diffs each symbol's direct-call and tail-jump multisets against
+# the object and prints only rows whose differing target is itself grade-0
+# EXACT.  A row is a LEAD, not a verdict: the same edge can differ because the
+# object inlined a helper this tree keeps out of line, because the two files
+# were one input file in the object, or because a statement is missing.
+inlineedges: tc
+	@$(PYTHON) tools/toolchain/byteident.py --list-exact > $(BUILD)/inlineedges-exact.txt
+	@$(PYTHON) tools/toolchain/inlineedges.py --exact-list $(BUILD)/inlineedges-exact.txt $(S)
+
 # `widthaudit` reports every memory access whose WIDTH or EXTENSION disagrees
 # with the object, keyed by owning base and displacement.  A store-width
 # disagreement is a field or local type fact; a load-extension disagreement is
