@@ -442,59 +442,61 @@ TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	struct v17tx_priv *prm = TXPRIV(modem);
-	unsigned short req;
 	unsigned short taken;
 	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_DATA;
 
-	if (prm->countdown != 0) {
-		short mode = prm->mode;
+	if (TXP(modem)->countdown != 0) {
+		int mode = TXP(modem)->mode;
 
-		prm->countdown = 0;
+		TXP(modem)->countdown = 0;
 
-		if (mode == 1)
+		switch (mode) {
+		case 1:
 			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_9600;
-		else if (mode == 0)
+			break;
+		case 0:
 			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_7200;
-		else if (mode == 2)
+			break;
+		case 2:
 			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_12000;
-		else if (mode == 3)
+			break;
+		case 3:
 			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_14400;
-		else
+			break;
+		default:
 			TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
+		}
 	}
 
-	req = (unsigned short)*budget;
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)prm->fifo,
-			  in, req);
+		FIFO_read((struct fax_fifo *)TXP(modem)->fifo,
+			  in, (unsigned short)*budget);
 
-	if (req <= taken) {
-		ScrambleDataV17(modem, in, taken);
-		nsamples = (short)ModDataV17(modem, in, out, taken);
-		*budget = (short)((unsigned short)*budget - taken);
-		return nsamples;
+	if ((unsigned short)*budget > taken) {
+		if (TXP(modem)->r08 != 0) {
+			*budget = (short)
+				((unsigned short)*budget - taken);
+			ScrambleDataV17(modem, in, taken);
+			nsamples = (short)
+				ModDataV17(modem, in, out, taken);
+			TxNextStateV17(modem);
+			return nsamples;
+		}
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
+		TXROOT(modem)->result.byte.status =
+			V17TX_STATUS_UNDERRUN;
+		taken = (unsigned short)*budget;
 	}
 
-	if (prm->r08 != 0) {
-		*budget = (short)(req - taken);
-		ScrambleDataV17(modem, in, taken);
-		nsamples = (short)ModDataV17(modem, in, out, taken);
-		TxNextStateV17(modem);
-		return nsamples;
-	}
-
-	TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
-	TXROOT(modem)->result.byte.status = V17TX_STATUS_UNDERRUN;
-	ScrambleDataV17(modem, in, req);
-	nsamples = (short)ModDataV17(modem, in, out, req);
-	*budget = (short)((unsigned short)*budget - req);
+	ScrambleDataV17(modem, in, taken);
+	nsamples = (short)ModDataV17(modem, in, out, taken);
+	*budget = (short)((unsigned short)*budget - taken);
 
 	return nsamples;
 }
