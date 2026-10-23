@@ -3,7 +3,9 @@
 
 Supported dispatches use CMP/JA fallthrough or a uniquely guarded taken JBE
 edge, with an unmodified 32-bit index. One narrowly decoded flag-preserving
-MOV may intervene. Refusal is an unsupported proof, not unequal code.
+MOV may intervene. A 16-bit CMP/JA followed by an exact same-register MOVZX
+also bounds the resulting 32-bit index. Refusal is an unsupported proof,
+not unequal code.
 """
 import argparse
 import io
@@ -411,11 +413,15 @@ def prove(path, name):
     cmp_row, guard, jump = rows[index - 2:index + 1]
     corridor = None
     taken_guard = False
+    extension = None
     # A JBE taken edge may dispatch across a default/return block. The unique
     # direct edge into the dispatch must be this guard; nothing may enter the
     # comparison/guard interior. This establishes dominance without treating
     # the intervening default block as part of the protected corridor.
-    if guard[2] != 'ja':
+    if (index >= 3 and rows[index - 1][2] == 'movzwl' and
+            rows[index - 2][2] == 'ja'):
+        cmp_row, guard, extension, jump = rows[index - 3:index + 1]
+    elif guard[2] != 'ja':
         candidates = [(i, row) for i, row in enumerate(rows[:index])
                       if row[2] == 'jbe' and
                       re.match(r'^([0-9a-f]+)\s', row[3]) and
@@ -433,10 +439,37 @@ def prove(path, name):
         require(pushed_abi and index >= 3, 'missing adjacent guard')
         corridor = cmp_row
         cmp_row = rows[index - 3]
-    match = re.fullmatch(r'\$0x([0-9a-f]+),%(e(?:ax|bx|cx|dx|si|di|bp|sp))', cmp_row[3])
-    require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
-    count = int(match[1], 16) + 1
-    register = match[2]
+    if extension is not None:
+        # The unsigned 16-bit comparison constrains only the low half. The
+        # exact zero-extension below then erases every untested upper bit.
+        # No intervening instruction or alternate entry may bypass either
+        # operation: the existing protected corridor includes the extension.
+        registers = ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')
+        words = ('ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di')
+        match = re.fullmatch(r'\$0x([0-9a-f]+),%(ax|cx|dx|bx|bp|si|di)', cmp_row[3])
+        require(cmp_row[2] == 'cmp' and match is not None,
+                'unsigned immediate/word-register guard')
+        bound = int(match[1], 16)
+        code = words.index(match[2])
+        register = registers[code]
+        raw = cmp_row[1]
+        short_cmp = (len(raw) == 4 and raw[:3] == bytes((0x66, 0x83, 0xf8 + code))
+                     and raw[3] < 0x80 and raw[3] == bound)
+        word_cmp = (len(raw) == 5 and raw[:3] == bytes((0x66, 0x81, 0xf8 + code))
+                    and int.from_bytes(raw[3:], 'little') == bound)
+        accumulator_cmp = (code == 0 and len(raw) == 4 and raw[:2] == b'\x66\x3d'
+                           and int.from_bytes(raw[2:], 'little') == bound)
+        require(short_cmp or word_cmp or accumulator_cmp,
+                'unsupported word-guard encoding')
+        require(extension[1] == bytes((0x0f, 0xb7, 0xc0 + 9 * code)) and
+                extension[3] == '%' + words[code] + ',%' + register,
+                'word-guard index zero-extension')
+        count = bound + 1
+    else:
+        match = re.fullmatch(r'\$0x([0-9a-f]+),%(e(?:ax|bx|cx|dx|si|di|bp|sp))', cmp_row[3])
+        require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
+        count = int(match[1], 16) + 1
+        register = match[2]
     if corridor is not None:
         raw = corridor[1]
         if taken_guard:

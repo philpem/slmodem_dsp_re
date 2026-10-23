@@ -23,7 +23,7 @@ ja .Ldefault
 jmp *.Ltable(,%eax,4)
 .Lfirst:
 mov %esi,(%esp)
-mov $message,4(%esp)
+movl $message,4(%esp)
 call helper
 cwtl
 movswl table(%eax,%eax,1),%ebx
@@ -72,8 +72,8 @@ def main():
         'outgoing-save-overlap': SOURCE.replace('mov %esi,(%esp)', 'mov %esi,8(%esp)'),
         'outgoing-return-overlap': SOURCE.replace('mov %esi,(%esp)', 'mov %esi,16(%esp)'),
         'outgoing-unaligned': SOURCE.replace('mov %esi,(%esp)', 'mov %esi,1(%esp)'),
-        'partial-outgoing-immediate': SOURCE.replace('mov $message,4(%esp)', 'movw $3,4(%esp)'),
-        'byte-outgoing-immediate': SOURCE.replace('mov $message,4(%esp)', 'movb $3,4(%esp)'),
+        'partial-outgoing-immediate': SOURCE.replace('movl $message,4(%esp)', 'movw $3,4(%esp)'),
+        'byte-outgoing-immediate': SOURCE.replace('movl $message,4(%esp)', 'movb $3,4(%esp)'),
         'outgoing-saved-read': SOURCE.replace('cwtl', 'mov 4(%esp),%eax'),
         'wrong-restoration': SOURCE.replace('mov 8(%esp),%ebx', 'mov 12(%esp),%ebx'),
         'skip-save': SOURCE.replace('mov %ebx,8(%esp)', 'jmp .Lskip\nmov %ebx,8(%esp)\n.Lskip:'),
