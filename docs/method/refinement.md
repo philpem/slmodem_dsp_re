@@ -127,8 +127,7 @@ decision. Check the current constructor and type home, not just the comment.
    original four-byte pointer layout.
 5. Run the period differential and structural gates before committing. An
    incremental prefix view is a migration step, not completion of the owner
-   model. Historical mutation records do not add a mandatory maintenance step;
-   follow the current [mutation policy](mutation-policy.md).
+   model. Historical mutation records do not add a mandatory maintenance step.
 
 Initializer cleanup is a separate question from arithmetic narrowing. A
 cast on a hexadecimal constant assigned to a `short` array can be redundant
