@@ -1364,7 +1364,8 @@ period: $(REF)
 # read by something that did not come through make.
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity structsim contentgap partial-link \
-	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
+	partial-compare partial-compare-exact partial-compare-selftest placement-ledger \
+	placement-ledger-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
 tc:
@@ -1492,6 +1493,15 @@ partial-compare-exact: partial-link
 partial-compare-selftest:
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
 	@$(PYTHON) tools/toolchain/recoverorder.py --self-test
+
+# Causal placement ledger: why each linked function moved, one owner category
+# per delta step.  Reads the artifacts partial-link writes; refuses a missing
+# or empty one rather than printing a clean zero.
+placement-ledger: partial-link
+	@$(PYTHON) tools/toolchain/placementledger.py $(S)
+
+placement-ledger-selftest:
+	@$(PYTHON) tools/toolchain/placementledger.py --self-test
 
 tumap-selftest:
 	@$(PYTHON) tools/tumap.py $(BLOB) --self-test
