@@ -9,6 +9,7 @@ are refusals. No function names or source summaries grant trust.
 import argparse
 import hashlib
 import json
+import os
 from functools import reduce
 from pathlib import Path
 
@@ -212,6 +213,122 @@ def artifact(path, name, check_entry=True):
     return elf, symbols, index, fn, section, relocs, hashlib.sha256(data).hexdigest()
 
 
+def _function_identity(path, name):
+    """Masked body bytes and relocation shape for one sized function.
+
+    A `ld -r` artifact rebases section-relative addends, so the raw four-byte
+    fields are not expected to equal the input object's. Bytes outside those
+    fields must match, the relocation offsets/types/targets must match, and
+    every relocation to one target must move by the same link rebase.
+    """
+    with open(path, 'rb') as stream:
+        elf = ELFFile(stream)
+        require(elf.elfclass == 32 and elf.little_endian and
+                elf['e_type'] == 'ET_REL', 'unsupported cross-TU body ELF/ABI')
+        table = elf.get_section_by_name('.symtab')
+        require(table is not None, 'missing cross-TU body symbol table')
+        matches = [s for s in table.iter_symbols()
+                   if s.name == name and s['st_info']['type'] == 'STT_FUNC' and
+                   isinstance(s['st_shndx'], int) and s['st_size'] > 0]
+        require(len(matches) == 1, 'ambiguous cross-TU body')
+        fn = matches[0]
+        section = elf.get_section(fn['st_shndx'])
+        data = section.data()
+        start, end = fn['st_value'], fn['st_value'] + fn['st_size']
+        require(section['sh_flags'] & 4 and 0 <= start and end <= len(data),
+                'cross-TU body extent')
+        raw = bytearray(data[start:end])
+        relocations = []
+        for sec in elf.iter_sections():
+            if not isinstance(sec, RelocationSection) or sec['sh_info'] != fn['st_shndx']:
+                continue
+            symbols = elf.get_section(sec['sh_link'])
+            require(symbols is not None and symbols['sh_type'] == 'SHT_SYMTAB',
+                    'cross-TU relocation symbol table')
+            for relocation in sec.iter_relocations():
+                if not start <= relocation['r_offset'] < end:
+                    continue
+                require(relocation['r_info_type'] in (1, 2),
+                        'unsupported cross-TU callee relocation')
+                offset = relocation['r_offset'] - start
+                require(offset + 4 <= len(raw), 'cross-TU relocation extent')
+                target = symbols.get_symbol(relocation['r_info_sym'])
+                if (target['st_info']['type'] == 'STT_SECTION' and
+                        isinstance(target['st_shndx'], int)):
+                    key = ('section', elf.get_section(target['st_shndx']).name)
+                else:
+                    key = ('symbol', target.name)
+                addend = int.from_bytes(raw[offset:offset + 4], 'little')
+                relocations.append((offset, relocation['r_info_type'], key, addend))
+                raw[offset:offset + 4] = b'\0\0\0\0'
+        return bytes(raw), tuple(sorted(relocations))
+
+
+def _same_linked_body(source, linked, name):
+    """Is `linked` the same coded body as `source`, rebased by `ld -r`?"""
+    source_raw, source_relocations = _function_identity(source, name)
+    linked_raw, linked_relocations = _function_identity(linked, name)
+    require(len(source_raw) == len(linked_raw),
+            'linked callee body size differs from the manifest-selected copy')
+    require([r[:3] for r in source_relocations] == [r[:3] for r in linked_relocations],
+            'linked callee relocation shape differs from the manifest-selected copy')
+    require(source_raw == linked_raw,
+            'linked callee body bytes differ from the manifest-selected copy')
+    rebase = {}
+    for (_, kind, key, source_addend), (_, other_kind, other_key, linked_addend) in \
+            zip(source_relocations, linked_relocations):
+        require((kind, key) == (other_kind, other_key),
+                'linked callee relocation target differs from the manifest-selected copy')
+        delta = linked_addend - source_addend
+        require(rebase.setdefault((kind, key), delta) == delta,
+                'linked callee relocation is not a uniform section rebase')
+    return True
+
+
+def _selected_manifest_copy(manifest, name):
+    """The unique strong definition of `name` among the link's input objects."""
+    directory = Path(manifest).parent
+    copies = []
+    for number, line in enumerate(Path(manifest).read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        fields = line.split()
+        require(len(fields) == 2, 'recovered-order manifest record')
+        object_path = directory / fields[0]
+        require(object_path.is_file(), 'recovered-order manifest object missing')
+        with open(object_path, 'rb') as stream:
+            elf = ELFFile(stream)
+            table = elf.get_section_by_name('.symtab')
+            require(table is not None, 'manifest object has no symbol table')
+            for symbol in table.iter_symbols():
+                if (symbol.name == name and
+                        symbol['st_info']['type'] == 'STT_FUNC' and
+                        symbol['st_info']['bind'] == 'STB_GLOBAL' and
+                        isinstance(symbol['st_shndx'], int) and
+                        symbol['st_size'] > 0):
+                    copies.append(object_path)
+    copies = list(dict.fromkeys(copies))
+    require(len(copies) == 1,
+            'callee is not a unique strong definition in the recovered-order manifest')
+    return copies[0]
+
+
+def _linked_callee(path, name, link, manifest):
+    """Prove an undefined callee through the recovered-order partial link."""
+    require(link is not None and manifest is not None,
+            'undefined callee requires the recovered-order partial link')
+    require(os.path.realpath(str(link)) != os.path.realpath(str(path)),
+            'recovered-order link cannot resolve itself')
+    require(Path(link).is_file() and Path(link).stat().st_size > 0,
+            'recovered-order link artifact missing')
+    require(Path(manifest).is_file() and Path(manifest).stat().st_size > 0,
+            'recovered-order link manifest missing')
+    source = _selected_manifest_copy(str(manifest), name)
+    require(_same_linked_body(str(source), str(link), name),
+            'linked callee body does not match the manifest-selected copy')
+    return source
+
+
 def prove(path, name, argument=1, capacity=64):
     """All terminating paths of a bounded acyclic leaf, conditional on separation.
 
@@ -394,6 +511,7 @@ def prove(path, name, argument=1, capacity=64):
     reads=sorted(set.union(*(set(s['reads']) for s in finals)))
     writes=sorted(set.union(*(set(s['writes']) for s in finals)))
     return {'function':name, 'artifact_sha256':digest, 'symbol_index':index,
+            'binding':fn['st_info']['bind'], 'visibility':fn['st_other']['visibility'],
             'section':section.name, 'entry':start, 'size':end-start,
             'body_sha256':hashlib.sha256(section.data()[start:end]).hexdigest(),
             'argument':argument, 'capacity':capacity, 'instructions':len(rows),
@@ -411,8 +529,14 @@ def prove(path, name, argument=1, capacity=64):
                            'all non-record reads valid and disjoint from private record']}
 
 
-def prove_call(path, caller, address, argument=1, capacity=64):
-    """Resolve this exact R_386_PC32/-4 CALL in this ELF, then prove its body."""
+def prove_call(path, caller, address, argument=1, capacity=64, link=None, manifest=None):
+    """Resolve this exact R_386_PC32/-4 CALL in this ELF, then prove its body.
+
+    A target defined in this ELF is proved from this ELF. Only an undefined
+    global is resolved through the caller-supplied recovered-order partial
+    link, and only after the linked body matches the unique strong definition
+    in that link's input manifest.
+    """
     elf,symbols,_,fn,section,_,digest=artifact(path,caller,check_entry=False)
     start=fn['st_value']; end=start+fn['st_size']
     rows=instructions(str(path),section.name,start,end)
@@ -428,10 +552,26 @@ def prove_call(path, caller, address, argument=1, capacity=64):
     require(len(matches)==1 and matches[0]['r_offset']==address+1 and
             matches[0]['r_info_type']==2, 'callee call relocation binding')
     target=symbols[matches[0]['r_info_sym']]
-    result=prove(path,target.name,argument,capacity)
-    require(result['symbol_index']==matches[0]['r_info_sym'], 'callee symbol identity mismatch')
+    require(target.name, 'callee call target name')
+    if target['st_shndx'] != 'SHN_UNDEF':
+        result=prove(path,target.name,argument,capacity)
+        require(result['symbol_index']==matches[0]['r_info_sym'], 'callee symbol identity mismatch')
+        resolution='per-tu'
+        selected=None
+    else:
+        require(target['st_info']['bind']=='STB_GLOBAL',
+                'undefined callee is not a global definition')
+        selected=_linked_callee(path,target.name,link,manifest)
+        result=prove(str(link),target.name,argument,capacity)
+        require(result['binding']=='STB_GLOBAL',
+                'linked callee is not a strong global definition')
+        resolution='recovered-order-link'
     result['call']={'caller':caller,'address':address,'relocation_offset':address+1,
-                    'type':'R_386_PC32','addend':-4,'target_symbol_index':result['symbol_index']}
+                    'type':'R_386_PC32','addend':-4,'target_symbol_index':result['symbol_index'],
+                    'caller_target_symbol_index':matches[0]['r_info_sym'],
+                    'resolution':resolution,'caller_artifact_sha256':digest,
+                    'link_manifest':str(manifest) if selected is not None else None,
+                    'selected_object':str(selected) if selected is not None else None}
     return result
 
 
@@ -454,7 +594,7 @@ def require_initialized(contract, offset, mask):
     require(available & mask == mask, 'private record read includes uninitialized bits')
 
 
-def private_frame_effects(path, name, rows, frame, saves, outgoing, calls, successors, table_entries=()):
+def private_frame_effects(path, name, rows, frame, saves, outgoing, calls, successors, table_entries=(), link=None, manifest=None):
     """Prove one record's address corridor and masked reads in an ABI frame.
 
     The enclosing frame prover must validate every other stack access, all
@@ -546,7 +686,7 @@ def private_frame_effects(path, name, rows, frame, saves, outgoing, calls, succe
     require(set(range(argument+1)) <= supplied, 'callee arguments not established in private corridor')
     require(not any(a>argument_store and lo<argument*4+4 and lo+width>argument*4
                     for a,lo,width in stack_writes), 'private pointer argument overwritten before call')
-    contract=prove_call(path,name,call,argument,capacity)
+    contract=prove_call(path,name,call,argument,capacity,link=link,manifest=manifest)
     # Nothing else in the enclosing function may materialize a frame address.
     # Other stores/loads are checked by the ordinary fixed-frame proof. Thus
     # non-stack pointer arguments and the callee's external reads cannot reach

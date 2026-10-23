@@ -1,17 +1,23 @@
 # Checked callee effects for a private frame argument
 
-The jump-table prover now accepts the `v22_local_loop` private-frame argument
-in the native object and in the recovered-order, 300-object partial link.
-Each artifact supplies and independently proves its own `V22_status` body.
-Both callers establish the same ordered 14-slot table identity. The actual
-comparison remains **BYTES, four differing bytes** for `v22_local_loop` and
-**SIZE, five bytes** for `V22_status`; this apparatus change does not make
-those functions exact.
+The jump-table prover accepts the `v22_local_loop` private-frame argument in
+the native object, in the isolated per-TU object, and in the recovered-order,
+300-object partial link. The blob proves its own `V22_status` body. The
+isolated `v22mod.c.o` leaves `V22_status` undefined and now resolves that one
+call through the partial link, whose linked body must match the unique strong
+definition in the link's ordered input manifest before it is proved. All three
+callers establish the same ordered 14-slot table identity.
+
+The raw caller body still differs from the blob in the low half of the table
+relocation's inline addend, which the comparator compares by relocation
+target rather than by value; `V22_status` is still **SIZE, five bytes**. The
+apparatus change moves the caller's grade from UNRESOLVED to EXACT because the
+table identity is now provable per object. It does not make either function
+source-identical, and no reconstruction source, declaration, compiler flag,
+comparator policy or ratchet changes are involved.
 
 This implements the bounded leaf route identified in
 [the apparatus review](apparatus-unblock-review.md#a-bounded-next-lever-callee-effects-on-an-escaped-local-record).
-No reconstruction source, declaration, compiler flag, comparator policy or
-ratchet changes are involved.
 
 ## What the machine proof establishes
 
@@ -26,12 +32,14 @@ encodings; it does not infer semantics from disassembler mnemonics alone.
 
 The call must be an actual five-byte E8 instruction with its own
 `R_386_PC32` relocation and inline addend -4. The target symbol must identify
-the checked strong definition in that same artifact. An undefined per-TU
-symbol cannot borrow a same-named body from another file or from `TC_OUT`.
-Certificates include the artifact and body hashes, symbol index, relocation
-facts and call binding. Fresh ELF bytes are checked against cached decoding;
-incoming-edge scans are fresh. A changed dependency cannot silently reuse a
-path-only cached proof.
+the checked strong definition: in this artifact when the symbol is defined
+there, or in the recovered-order partial link when this artifact leaves it
+undefined. A same-named body is never borrowed from the blob, from another
+per-TU object or from `TC_OUT`. Certificates include the artifact and body
+hashes, symbol index, relocation facts, call binding and, for a linked
+resolution, the manifest-selected source object. Fresh ELF bytes are checked
+against cached decoding; incoming-edge scans are fresh. A changed dependency
+cannot silently reuse a path-only cached proof.
 
 The leaf tracks physical read/write byte masks separately from bit
 dependencies on the record's original contents. Partial register writes,
@@ -100,10 +108,11 @@ saved region `[0x4c,0x5c)`.
 The candidate's independently decoded body has the same masks despite its
 different instruction sequence and path count. Path enumeration is a
 syntactic overapproximation; it does not establish that all paths are
-feasible for valid modem histories. The isolated `v22mod.c.o`
-still refuses because it has no defined `V22_status`. The 300-object link
-supplies the actual definition and binding; linking alone does not certify
-the body.
+feasible for valid modem histories. The isolated `v22mod.c.o` has no defined
+`V22_status`; the 300-object link supplies the definition and binding, and the
+proof is only admitted after that linked body is matched against the unique
+strong definition in the link's ordered input manifest. Linking alone does not
+certify the body, and the enclosed body is proved from the link's own bytes.
 
 ## Validation and limits
 
@@ -125,53 +134,121 @@ including rebased EXACT and changed-target RELOC controls and the real
 59 relocation cases and 3 ratchet cases. All generated assembly used
 `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`.
 
-The final frozen-object census JSON is identical across 1,852 functions:
-1,144 EXACT, 36 REGALLOC, 86 BYTES and 586 SIZE, with identical ordered EXACT
-membership. All 300 canonical object hashes remain unchanged, and the final
+The pre-integration frozen-object census JSON is identical across 1,852
+functions: 1,144 EXACT, 36 REGALLOC, 86 BYTES and 586 SIZE, with identical
+ordered EXACT membership. All 300 canonical object hashes remain unchanged, and the final
 census used the recorded, unchanged tool snapshot. `make refs` also passed
 6 regression tests, 12,966 references and 3,100 finding headings, with no
 unresolved, pending or stale references. No source-runtime differential is claimed for these apparatus
 changes; the meaningful checks are the adversarial ELF controls, actual
 artifact proofs and unchanged comparison census.
 
-**Integration note (`2c72de0e9`).** On the current master the conservative
-census is 1,145 EXACT / 1 UNRESOLVED / 36 REGALLOC / 86 BYTES / 584 SIZE.
-`v22_local_loop` remains the UNRESOLVED symbol when graded per object:
+**Pre-integration note (`2c72de0e9`).** Before cross-TU resolution the
+conservative census was 1,145 EXACT / 1 UNRESOLVED / 36 REGALLOC / 86 BYTES /
+584 SIZE. `v22_local_loop` was the UNRESOLVED symbol when graded per object:
 `V22_status` is defined in the separate `v22stc.c.o`, so
-`private_frame_effects` refuses an undefined strong callee. The same proof
-succeeds against the recovered-order partial link
-(`build/partial/dsplibs.o`), so the remaining gap is cross-TU callee
-resolution in the comparator, not a table or frame fact. These apparatus
-changes move no grade on their own.
+`private_frame_effects` refused an undefined strong callee. The same proof
+already succeeded against the recovered-order partial link
+(`build/partial/dsplibs.o`), so the gap was cross-TU callee resolution in the
+comparator, not a table or frame fact.
+
+## Cross-TU callee resolution
+
+`tools/toolchain/callee_effects.py` resolves an **undefined** global call
+target through the recovered-order partial link only. A target defined in the
+supplied per-TU ELF is still proved from that ELF; the link is never consulted
+in that case, so a same-named linked body cannot displace a local definition.
+
+The resolution refuses unless all of the following hold:
+
+- the per-TU relocation names one undefined `STB_GLOBAL` `STT_FUNC` target and
+  its own `R_386_PC32` addend is still `-4`;
+- `link` and `manifest` are supplied (the defaults are
+  `build/partial/dsplibs.o` and `build/tc_repro/tc_link_manifest.txt`) and the
+  link is not the artifact being proved;
+- the link defines exactly one strong, sized `STT_FUNC` of that name, of
+  `STB_GLOBAL` binding;
+- the manifest names exactly one input object with a strong, sized definition
+  of the name, and the linked body matches that object's body. Matching masks
+  every relocation's four addend bytes, requires the non-relocated bytes to be
+  equal, requires the relocation offsets/types/target sections to be equal,
+  and requires each target section's addend shift to be a single uniform
+  `ld -r` rebase. A missing, ambiguous, differently coded or differently
+  rebound body refuses.
+
+The same `artifact()` and `prove()` code then prove the linked body; nothing
+about the proof's instruction, path, store or mask checks is relaxed. The
+integration point is the existing `byteident.body()` jump-table path, which
+passes the link context into `jumptable.prove()`. The blob and every artifact
+without a link context keep the previous refusal.
+
+Proof parameters for the reconstructed caller: fixed frame 92 bytes,
+private-frame envelope **44 bytes**, 14 table entries, callee **315 bytes**,
+90 decoded / 89 reachable instructions, **32 enumerated paths**, **17 distinct
+non-stack stores**, write union `[0,12)`, `[16,22)`, initialised `[0,12)`,
+`[16,21)`, and byte 21 initialised bit 0 / preserved bits 1–7. The blob's
+per-TU proof remains 310-byte callee, 94 instructions, 4 paths, same masks.
+
+Census after the integration, over 1,852 functions:
+**1,146 EXACT / 0 UNRESOLVED / 36 REGALLOC / 86 BYTES / 584 SIZE**. The ordered
+EXACT-set difference from the pre-integration census is exactly
+`+ v22_local_loop`, with no losses. `byteident --ratchet` passes
+(1,112 → 1,146), and `byteident --link-selected` is unchanged for its three
+disagreeing names and reports 32/32 selected linked bodies matching an input
+copy.
 
 Reproduction from a tree with canonical Gentoo objects:
 
 ```sh
+make tc J=4
+make partial-link J=4
 python3 tools/toolchain/callee_effects_controls.py
 python3 tools/toolchain/callee_frame_controls.py
+python3 tools/toolchain/jumptable_fixed_setcc_controls.py
 python3 tools/toolchain/callee_effects.py ref/slmodemd/dsplibs.o V22_status --capacity 44
 python3 tools/toolchain/jumptable.py ref/slmodemd/dsplibs.o v22_local_loop
+python3 tools/toolchain/byteident.py --ratchet
+python3 tools/toolchain/byteident.py --link-selected
 python3 tools/toolchain/byteident.py --list-exact --json-out scratch/after-census.json
 ```
 
-The existing fixed-frame controls invoke `as`; route that executable through
-the Gentoo image when replaying them. The new control scripts select the
-Gentoo image themselves. Raw generated fixtures and certificates belong in
-`scratch/callee-effects/`, not in the committed source tree.
+`make byteident` and `make byteident-ratchet` depend on `partial-link`, so the
+census resolves the undefined callee; running `byteident.py` directly without
+the link leaves that grade UNRESOLVED by design.
+
+`callee_effects_controls.py` now also assembles and partially links synthetic
+two-TU fixtures (with the Gentoo image's `as` and `ld`) and checks the real
+per-TU `v22_local_loop` artifact. It requires `build/tc_out` and
+`build/partial`; the call instruction is `0x21bf` in `v22mod.c.o` and its
+relocation field is `0x21c0`. The existing fixed-frame controls invoke `as`;
+route that executable through the Gentoo image when replaying them. Raw
+generated fixtures and certificates belong in `scratch/callee-effects/`, not in
+the committed source tree.
+
+Control denominators: 10 positive leaf/call + 44 adversarial + two stale-cache
+negatives + the native preserved-bit negative, plus **5 cross-TU controls** —
+one link-resolved positive, three refusals (missing from the link, a linked
+body writing past the proved 8-byte capacity, a linked body that differs from
+the manifest-selected copy), and one per-object definition that is proved from
+its own ELF while the supplied link holds a different body. The positive also
+asserts the certificate's artifact hash is the link's; the per-object case
+asserts it is the per-TU object's. The frame suite passes 39/39, fixed-SETcc
+135/135, the fixed-ABI suite 35/35 with the real V32 pair EXACT, the base
+jumptable suite 47 synthetic/2 real, induction 20/20,
+`byteident --self-test` 79 checks (20 register, 59 relocation) and
+`byteident --ratchet-self-test` 3/3.
 
 ## Recommendations after the tests
 
-Use the checked partial-link boundary when investigating this caller's four
+Use the checked partial-link boundary when investigating this caller's
 remaining real byte differences. Keep the leaf footprint certificate beside
-the source investigation: matching masks support frame safety, while the
-actual caller and callee bytes remain separate reconstruction obligations.
-
-Keep undefined per-TU calls unresolved. A future cross-object resolver would
-need a closed link manifest, unique strong binding, exact call addends and
-fingerprinted dependencies. A same-name lookup is insufficient.
+the source investigation: matching masks support frame safety, while the actual
+caller and callee bytes remain separate reconstruction obligations.
 
 Extend the leaf domain only for a measured next instruction or caller shape,
 with a negative control for each new assumption. Transitive callees, loops,
 multiple live frame records, arbitrary entry paths and unbounded aliases
 remain explicit refusals. These tests do not justify extending the result to
-those domains.
+those domains. Cross-TU resolution is not a general same-name lookup: it is a
+closed-manifest, unique-strong-binding, body-matched exception for the one
+undefined global leaf call.
