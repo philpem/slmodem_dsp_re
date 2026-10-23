@@ -236,13 +236,17 @@ static int
 agc_rms(const short *buf)
 {
 	int acc = 0;
-	int i;
+	unsigned short i = V34_AGC_RMS_TAPS - 1;
+	const short *p = buf;
 	unsigned shift = 0;
 	unsigned mant;
 	unsigned v;
 
-	for (i = 0; i < V34_AGC_RMS_TAPS; i++)
-		acc += ((buf[i] * V34_AGC_RMS_SCALE) >> 15) * buf[i];
+	do {
+		int x = *p++;
+
+		acc += ((x * V34_AGC_RMS_SCALE) >> 15) * x;
+	} while (i-- != 0);
 
 	if (acc == 0)
 		return 0;
