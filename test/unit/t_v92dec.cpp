@@ -65,6 +65,8 @@
 extern "C" {
 short ref_getV92Decision(void *self, float sample)
 	asm("ref__ZN20V90Phase3Demodulator14getV92DecisionEf");
+int ref_relax_isAltRbs(void *self, short phase, short code, float sample)
+	asm("ref__ZN25V90AutoDigitalImpDetector8isAltRbsEssf");
 
 void ref_p3d_reset(void *self, int pcmType, unsigned char ucode, int state,
 		   unsigned int word2c, void *jd, void *jdV92, void *dil,
@@ -1266,6 +1268,74 @@ run_study_completion_boundary(void)
     return diff_end();
 }
 
+/* Synthetic state-16 boundary, with bounded producer-backed table contents.
+ * Reset supplies the reference level and TRN1d symbol producer. Real detector
+ * methods install the ordinary threshold and form a distinct alternate level.
+ * The state, phase flag and segment-level gate are planted; this does not
+ * establish a modem history reaching error relaxation.
+ */
+static int
+run_relaxation_mapping_boundary(void)
+{
+	int law, phase, negative, alternate;
+	int outcomes[2] = { 0, 0 };
+
+	diff_begin("getV92Decision -- synthetic state-16 valid mapping inputs");
+	set_level(0);
+	for (law = 0; law < 2; law++)
+	for (phase = 0; phase < V90ADID_PHASES; phase++)
+	for (negative = 0; negative < 2; negative++)
+	for (alternate = 0; alternate < 2; alternate++) {
+		struct trial_args t;
+		int side, mainLevel, altLevel, detected;
+		short mine, theirs;
+		float sample;
+		long tag = ((law * 6 + phase) * 2 + negative) * 2 + alternate;
+
+		memset(&t, 0, sizeof(t));
+		t.state = 16;
+		t.word_04 = (unsigned int)phase;
+		t.pcmType = law;
+		t.ucode = 42;
+		t.s2800 = 1;
+		t.usingSeg = 1;
+		t.withJd92 = 1;
+		setup(26000 + (int)tag, &t);
+		mainLevel = adid[0].ucodeLevel;
+		altLevel = mainLevel + 200;
+		for (side = 0; side < 2; side++) {
+			adid[side].resetLinearMapping();
+			adid[side].resetStudyUrefHandler(0);
+			adid[side].calculateLinearMeanAndVarAlt(
+			    (short)altLevel, (unsigned int)phase);
+			adid[side].updateLinMappMeanAndVarAlt(
+			    (short)phase, (short)t.ucode);
+		}
+		sample = (float)(mainLevel + (alternate ? 1000 : 0));
+		if (negative)
+			sample = -sample;
+		detected = ref_relax_isAltRbs(&adid[1], (short)phase,
+			(short)t.ucode, sample);
+		diff_eq_int("reference detector outcome %ld", detected,
+			alternate, tag);
+		outcomes[detected != 0]++;
+
+		mine = slot[0].o.getV92Decision(sample);
+		theirs = ref_getV92Decision(&slot[1].o, sample);
+		diff_eq_int("reference selected level %ld", theirs,
+			(negative ? -1 : 1) * (alternate ? altLevel : mainLevel),
+			tag);
+		diff_eq_int("relaxation decision %ld", mine, theirs, tag);
+		diff_eq_int("reference phase advance %ld", slot[1].o.framePosition,
+			(phase + 1) % V90ADID_PHASES, tag);
+		compare_all("state-16 mapping", tag);
+		teardown();
+	}
+	diff_eq_int("ordinary detector outcomes", outcomes[0], 24, 0);
+	diff_eq_int("alternate detector outcomes", outcomes[1], 24, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1274,6 +1344,7 @@ main(void)
 	bad |= run_states();
 	bad |= run_transcripts();
 	bad |= run_study_completion_boundary();
+	bad |= run_relaxation_mapping_boundary();
 
 	return bad;
 }
