@@ -1996,16 +1996,28 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 			break;
 
 		updateUref();
+		{
+			short tmp[V90ADID_PHASES];
+			short i;
+
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMapp[i][ucode];
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMappAlt[i][ucode];
+		}
 
 		/*
-		 * TWO LOCAL ARRAYS ARE FILLED HERE AND NEVER READ.  The object
-		 * runs two six-iteration loops copying `linMapp[i][ucode]` and
-		 * then `linMappAlt[i][ucode]` into one twelve-byte stack slot
-		 * at 0x50(%esp) -- GCC gave both the same slot because the
-		 * first is dead before the second starts -- and the print below
-		 * reads the tables directly.  All six stores to that slot in
-		 * the whole function are writes and there is not one read, so
-		 * they are omitted; cases 2 and 3 have the same pair and case 5
+		 * A LOCAL ARRAY IS FILLED HERE AND NEVER READ.  The object runs
+		 * two six-iteration loops copying `linMapp[i][ucode]` and then
+		 * `linMappAlt[i][ucode]` into one twelve-byte stack slot at
+		 * 0x50(%esp) -- the same slot in both, because the first value
+		 * is dead before the second starts -- and the print below reads
+		 * the tables directly.  All six stores to that slot in the
+		 * whole function are writes and there is not one read, which
+		 * is why an earlier pass omitted them; they are here because
+		 * the object has them, and the frame is still sixteen bytes
+		 * short of the object's with them.  Cases 2 and 3 have the same
+		 * pair and case 5
 		 * does not.  docs/deviations.md D293.
 		 */
 		edprintf("V90AutoDigitalImpDetector trn1 first update  :  %d  "
@@ -2039,6 +2051,15 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		updateUref();
 		updateUrefAlt();
+		{
+			short tmp[V90ADID_PHASES];
+			short i;
+
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMapp[i][ucode];
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMappAlt[i][ucode];
+		}
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
@@ -2084,6 +2105,15 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		updateUref();
 		updateUrefAlt();
+		{
+			short tmp[V90ADID_PHASES];
+			short i;
+
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMapp[i][ucode];
+			for (i = 0; i < V90ADID_PHASES; i++)
+				tmp[i] = linMappAlt[i][ucode];
+		}
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "

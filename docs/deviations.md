@@ -5687,7 +5687,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 ## D293 🐛 Two local arrays are filled by six loops and read by nothing
 
-*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `reconstructed` -- the loops are written in all three states (audit wave, `studyUrefHandler` run 44 -> 96, LCS 843 -> 883); they are dead stores the period compiler keeps; the frame is still 16 bytes short of the object's with them.*
 
 **Finding F1444.** Dead stores the compiler kept because the locals are arrays.
 
