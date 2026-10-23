@@ -1190,15 +1190,25 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * byte at +0x15 and not the flags byte at +0x14 -- the object
 		 * tests `0x35(%esp)` against a block based at `0x20(%esp)`.
 		 * v22status.h establishes it as `params.flags` bit 10.
+		 *
+		 * THE NEGATED FORM IS THE OBJECT'S BLOCK ORDER, not a
+		 * preference.  -frename-registers runs before -freorder-blocks,
+		 * and its tick[] counter picks the least-recently-used free
+		 * register, so the arm renamed FIRST gets ESI and the next gets
+		 * EDI.  The object has NODE_1 in EDI and NODE_3 in ESI (the two
+		 * `mov 0x50(%ebx)` / `movw $0x1|$0x3,0xc(...)` pairs), which
+		 * means the NODE_3 block was created first even though
+		 * -freorder-blocks later lays it out second.  Writing NODE_3 as
+		 * the `if (!...)` arm is what produces that creation order.
 		 */
-		if (st.flags2 & V22_STATUS2_PARAM_BIT10) {
-			fp->hdx->connect_substate = V22_LOOP_NODE_1;
-		} else {
+		if (!(st.flags2 & V22_STATUS2_PARAM_BIT10)) {
 			fp->hdx->connect_substate = V22_LOOP_NODE_3;
 			fp->flags = (unsigned char)(fp->flags
 						    | V22FP_FLAG_1D_BIT4);
 			SetTxRate(fp, V22_RATE_1200);
 			SetRxRate(fp, V22_RATE_1200);
+		} else {
+			fp->hdx->connect_substate = V22_LOOP_NODE_1;
 		}
 		break;
 
