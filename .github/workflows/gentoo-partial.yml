@@ -98,18 +98,25 @@ jobs:
           # THE EXPECTATION IS PINNED IN tools/ci/link_selected_check.py.  A new
           # multiply-defined name, a changed record/resolved count or a changed
           # selected body is a deliberate COMDAT/selection ledger update, not
-          # drift to be accepted because the job is green.  This step is
-          # REPORT-ONLY: it does not alter the metrics or ratchet steps below.
+          # drift to be accepted because the job is green.  `--summary` adds the
+          # three-phase block to stdout, and the checker cross-checks phase 2
+          # against phase 0 (link-selected EXACT >= per-TU EXACT, the excess
+          # equal to the selected-EXACT-only disagreements, grade 0-or-1 >=
+          # EXACT, and the end-target line present).  This step is REPORT-ONLY:
+          # it does not alter the metrics or ratchet steps below.
+          set -o pipefail
           TC_OUT=build/tc_repro python3 tools/toolchain/byteident.py \
-            --link-selected \
-            > "$RUNNER_TEMP/link-selected-census.txt" \
-            2> "$RUNNER_TEMP/link-selected-report.txt" || {
+            --link-selected --summary \
+            2> "$RUNNER_TEMP/link-selected-report.txt" \
+            | tee "$RUNNER_TEMP/link-selected-census.txt" > /dev/null || {
               cat "$RUNNER_TEMP/link-selected-report.txt"
               exit 1
             }
           cat "$RUNNER_TEMP/link-selected-report.txt"
+          sed -n '/phase summary/,$p' "$RUNNER_TEMP/link-selected-census.txt"
           python3 tools/ci/link_selected_check.py \
-            "$RUNNER_TEMP/link-selected-report.txt"
+            "$RUNNER_TEMP/link-selected-report.txt" \
+            --summary "$RUNNER_TEMP/link-selected-census.txt"
 
       - name: Compare and ratchet partial-link metrics
         id: metrics
