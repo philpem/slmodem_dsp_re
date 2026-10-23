@@ -4107,14 +4107,16 @@ void
 V34XF_IndicateDilReceived(void *objp, unsigned char constel)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *eng = (struct v34_engine *)(void *)&obj->progress;
+	struct v34_tx *txb = &obj->tx;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"V34Main: IndicateDilReceived - constel size = %d\r\n",
 			constel);
 
-	obj->v90_receiver = 6;
-	obj->tx.seg_symcount = 0;
+	eng->v90_receiver = 6;
+	txb->seg_symcount = 0;
 
 	if (constel != 0)
 		obj->receiver.short_382 = (short)0x89b0;
