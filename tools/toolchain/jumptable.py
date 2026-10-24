@@ -469,7 +469,18 @@ def prove(path, name, link=None, manifest=None):
         require(len(candidates) == 1, 'missing unique taken-edge guard')
         guard_index, guard = candidates[0]
         require(guard_index >= 2, 'missing taken-edge comparison')
-        cmp_row, corridor = rows[guard_index - 2:guard_index]
+        if rows[guard_index - 1][2] == 'cmp':
+            # Comparison immediately adjacent to the taken guard. The index
+            # has already been formed before it (a common shape is a SUB that
+            # rebases a switch selector), and the taken edge lands on the
+            # single indirect jump, so no instruction executes between the
+            # comparison and the dispatch and the index cannot be reloaded or
+            # clobbered. The earlier instruction is index formation, not a
+            # corridor, and must not be read as one.
+            cmp_row = rows[guard_index - 1]
+            corridor = None
+        else:
+            cmp_row, corridor = rows[guard_index - 2:guard_index]
         require(rows[0][2] == 'sub' and stack_writes, 'taken-edge fixed frame required')
         require(rows[index - 1][2] in ('ret','jmp') and
                 not rows[index - 1][3].startswith('*'),
