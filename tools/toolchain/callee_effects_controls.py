@@ -117,6 +117,14 @@ def main():
         'movzbl 1(%ecx),%edx',
         'mov table,%edx\nmov table+4,%edx\nmovzbl 1(%ecx),%edx')
         +'.section .rodata\ntable: .long 0\n.long 0\n')
+    neg_callee=(callee.replace(
+        'movzbl 1(%ecx),%edx',
+        'mov table-12,%edx\nmov table+4,%edx\nmovzbl 1(%ecx),%edx')
+        +'.section .rodata\ntable: .long 0\n.long 0\n')
+    pos_callee=(callee.replace(
+        'movzbl 1(%ecx),%edx',
+        'mov table+8,%edx\nmov table+4,%edx\nmovzbl 1(%ecx),%edx')
+        +'.section .rodata\ntable: .long 0\n.long 0\n')
     rodata_pad=('.section .rodata\n.space 16\n.data\n.globl pad_marker\n'
                 'pad_marker: .long 0\n')
     sym_callee=callee.replace('movzbl 1(%ecx),%edx',
@@ -130,6 +138,8 @@ def main():
         'x-caller':caller_only,
         'x-defined-caller':callee+caller_only,
         'x-rel-callee':rel_callee,
+        'x-neg-callee':neg_callee,
+        'x-pos-callee':pos_callee,
         'x-rodata-pad':rodata_pad,
         'x-sym-callee':sym_callee,
         'x-extdata':extdata,
@@ -172,6 +182,8 @@ def main():
         f'ld -r -o /work/{relative}/x-link-bad.o /work/{relative}/x-bad-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-rel.o /work/{relative}/x-rodata-pad.o /work/{relative}/x-rel-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-rel-nopad.o /work/{relative}/x-rel-callee.o /work/{relative}/x-caller.o',
+        f'ld -r -o /work/{relative}/x-link-neg.o /work/{relative}/x-rodata-pad.o /work/{relative}/x-neg-callee.o /work/{relative}/x-caller.o',
+        f'ld -r -o /work/{relative}/x-link-pos.o /work/{relative}/x-rodata-pad.o /work/{relative}/x-pos-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-sym.o /work/{relative}/x-extdata.o /work/{relative}/x-sym-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/comdat-link-good.o /work/{relative}/comdat-b.o /work/{relative}/comdat-caller.o',
         f'ld -r -o /work/{relative}/comdat-link-wrong-order.o /work/{relative}/comdat-caller.o /work/{relative}/comdat-b.o',
@@ -247,6 +259,48 @@ def main():
             if rebase.setdefault((source_record[1],source_record[2]),delta)!=delta:
                 return False
         return True
+    def unsigned_rebase_acceptance(source,linked,name,manifest,source_signed,
+                                   linked_signed):
+        """Replica of a rebase check that reads the addend under a chosen sign.
+
+        The pre-change check read BOTH sides unsigned; a mixed reading takes
+        one side signed and the other unsigned. Neither may accept the
+        negative-addend fixture or the real `GetDialerConfig`, and the replica
+        is what makes the post-change acceptance a measured difference rather
+        than a claim about the old code.
+        """
+        source_raw,source_relocations=c._function_identity(source,name)
+        linked_raw,linked_relocations=c._function_identity(linked,name)
+        if (len(source_raw)!=len(linked_raw) or
+                [r[:3] for r in source_relocations]!=[r[:3] for r in linked_relocations] or
+                source_raw!=linked_raw):
+            return False
+        def widen(value,signed):
+            return value if signed else value & 0xffffffff
+        rebase={}
+        with open(linked,'rb') as stream:
+            linked_elf=ELFFile(stream)
+            placements={}
+            for source_record,linked_record in zip(source_relocations,
+                                                   linked_relocations):
+                if ((source_record[1],source_record[2])!=
+                        (linked_record[1],linked_record[2])):
+                    return False
+                if source_record[2][0]=='section':
+                    section=source_record[2][1]
+                    if section not in placements:
+                        placements[section]=c._section_placement(
+                            manifest,source,section,linked_elf)
+                    expected=placements[section]
+                else:
+                    expected=0
+                delta=(widen(linked_record[3],linked_signed)-
+                       widen(source_record[3],source_signed))
+                if delta!=expected: return False
+                if rebase.setdefault((source_record[1],source_record[2]),
+                                     delta)!=delta:
+                    return False
+        return True
     cross_controls={}
     def cross_case(label,caller,linked,objects,capacity=8,expect=True):
         manifest=out/(label+'.manifest')
@@ -308,6 +362,34 @@ def main():
                rel_objects,expect=False)
     assert ('does not explain linked section' in
             cross_controls['linked-missing-layout']['reason'])
+    neg_objects=['x-rodata-pad.o','x-neg-callee.o','x-caller.o']
+    neg=cross_case('linked-negative-addend','x-caller.o','x-link-neg.o',
+                   neg_objects)
+    assert neg['call']['callee_rebase']=={
+        'section_rebases':{'.rodata':{'placement':16,
+                                      'observed_addend_delta':16}},
+        'symbol_rebases':{}}
+    pos=cross_case('linked-positive-addend','x-caller.o','x-link-pos.o',
+                   ['x-rodata-pad.o','x-pos-callee.o','x-caller.o'])
+    assert pos['call']['callee_rebase']=={
+        'section_rebases':{'.rodata':{'placement':16,
+                                      'observed_addend_delta':16}},
+        'symbol_rebases':{}}
+    patch_section_addends(out/'x-link-neg.o',out/'x-link-neg-wrong.o',[16,32])
+    cross_case('linked-negative-addend-wrong-placement','x-caller.o',
+               'x-link-neg-wrong.o',neg_objects,expect=False)
+    assert ('section placement' in
+            cross_controls['linked-negative-addend-wrong-placement']['reason'])
+    neg_manifest=out/'linked-negative-addend.manifest'
+    for label,linked_fixture,source_signed,linked_signed in (
+            ('negative-addend-pre-change',out/'x-link-neg.o',False,False),
+            ('negative-addend-mixed',out/'x-link-neg.o',False,True)):
+        assert not unsigned_rebase_acceptance(
+            out/'x-neg-callee.o',linked_fixture,'sample',neg_manifest,
+            source_signed,linked_signed),label
+    assert unsigned_rebase_acceptance(
+        out/'x-neg-callee.o',out/'x-link-neg.o','sample',neg_manifest,
+        True,True)
     missing_section={}
     try:
         with open(out/'x-link-rel.o','rb') as stream:
@@ -437,6 +519,20 @@ def main():
     source_rodata=section_data(selected,'.rodata')
     linked_rodata=section_data(linked,'.rodata')
     assert linked_rodata[24948:24948+len(source_rodata)]==source_rodata
+    dialer_source=Path(c._selected_manifest_copy(str(manifest),'GetDialerConfig'))
+    _,dialer_rels=c._function_identity(str(dialer_source),'GetDialerConfig')
+    assert [r[3] for r in dialer_rels if r[2]==('section','.rodata')]==[-12,12]
+    _,linked_dialer_rels=c._function_identity(str(linked),'GetDialerConfig')
+    assert ([r[3] for r in linked_dialer_rels if r[2]==('section','.rodata')]==
+            [18404,18428])
+    for source_signed,linked_signed in ((False,False),(False,True)):
+        assert not unsigned_rebase_acceptance(
+            str(dialer_source),str(linked),'GetDialerConfig',str(manifest),
+            source_signed,linked_signed)
+    dialer=c._same_linked_body(str(dialer_source),str(linked),
+                               'GetDialerConfig',str(manifest))
+    assert dialer['section_rebases']['.rodata']=={
+        'placement':18416,'observed_addend_delta':18416}
     framed=j.prove(str(tc),'v22_local_loop',link=str(linked),manifest=str(manifest))
     record=framed['fixed_stack_frame']['private_record']
     assert framed['count']==14 and record['capacity']==44
@@ -445,15 +541,20 @@ def main():
              'cross_tu_controls':cross_controls,'comdat_controls':comdat,
              'native':native,
              'reconstructed_v22':{'callee':reconstructed,'frame':framed},
+             'negative_addend':{'synthetic_negative':neg,
+                                'synthetic_positive':pos,
+                                'real_GetDialerConfig':dialer},
              'command':command,'assembler':assembled.stdout,
              'positive':len(positive),'negative':len(negative),
-             'cross_positive':3,'cross_negative':6,'cross_per_object':1,
+             'cross_positive':5,'cross_negative':7,'cross_per_object':1,
              'comdat_positive':1,'comdat_negative':6,'comdat_prechange':1,
+             'negative_addend_prechange':2,
              'missing_section_controls':missing_section}
     (out/'results.json').write_text(json.dumps(payload,indent=2)+'\n')
     print(f'{len(positive)} positive leaf/call controls; {len(negative)} adversarial refusals; '
-          f'10 cross-TU controls (3 positive, 6 refusals, 1 per-object) plus '
+          f'13 cross-TU controls (5 positive, 7 refusals, 1 per-object) plus '
           f'1 missing-target-section refusal; '
+          f'2 signed/unsigned pre-change refusals and the real GetDialerConfig positive; '
           f'1 COMDAT positive, 6 COMDAT refusals and 1 pre-change refusal; '
           f'native 94 instructions / 17 stores / 4 paths; reconstructed 315-byte callee / '
           f'32 paths / 44-byte envelope; preserved-bit and 2 stale-cache negatives passed')
