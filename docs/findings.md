@@ -138779,3 +138779,78 @@ bystander trace is equal through flow2 and first differs at peephole2. This fixe
 an observer, without changing native byte grading or inferring original state.
 [Diagnostic](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/gcc3-stage-divergence-diagnostic.md),
 [corrected trace](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/service-constructor-fidelity-results.md).
+
+## F12010. CID_process's frame is recovered; its initialiser's register home is not
+
+`CID_process` is 386 bytes and 99 instructions in the blob. The tree's
+`src/service/cid.c` emits 368 / 102, and the placement ledger already attributes
+the first positional divergence to it: `vce_hook_on` sits -32, of which -18 is
+the body and -14 is the padding that size difference absorbs.
+
+The earlier raw-P-code probe established the storage facts: a memory-resident,
+non-SSA return local at 0x14 written 0 at 0x4e1, -1 at 0x48f and 1 at 0x513;
+one source `if (ret)` duplicated at 0x4a0 and 0x59f; `&n` escaping as the fourth
+argument; `buf` in %ebp; `i` at 0x10. A bounded enumeration with the period
+compiler (GCC 3.4.2-r2, the tree's own flags) now recovers the *source shape*:
+
+- the `res` arms test zero first -- `if (res != 0) { if (res == 1) ... else ... }`
+  (equivalently, an empty `res == 0` arm). This emits `test res; je continue;
+  dec; jne failure`, where the current `if (res == 1) ... else if (res != 0)`
+  emits the `cmp $1`-first form with `dec %ax`.
+- the loop is `for (;;) { if (count <= 0) break; ... }`, not `while (count > 0)`.
+  The infinite-loop form gives the blob's single shared count test and one
+  epilogue; the `while` form rotates the loop and duplicates the epilogue.
+- `ret` must be observed through a forced memory read (`*(volatile int *)&ret`,
+  or an equivalent saved pointer). That keeps it memory-resident and stops the
+  success path specialising; a plain `int ret` is folded away.
+
+That shape reproduces the whole frame and allocation: a 0x1c frame, `i` at
+0x10, `ret` at 0x14, `n` at 0x1a, `buf` in %ebp, and `i` spilled and incremented
+in memory (`incl 0x10(%esp)`). The "dead res at 0x18" recorded by the probe is
+not a variable: `n` is allocated first at 0x1a because its address escapes, and
+a 4-byte `ret` can no longer use 0x18-0x1b, so 0x18-0x19 is alignment. `res`
+lives in EAX.
+
+Measured with the period compiler (bytes from `nm`, stripped instruction count
+and run/LCS from `structsim`, referenced slots from `objdump`):
+
+| shape | bytes | insns | run | LCS | slots | buf | i |
+|---|---:|---:|---:|---:|---|---|---|
+| blob | 386 | 99 | 99 | 99 | 10/14/1a | %ebp | 0x10 |
+| current source | 368 | 102 | 10 | 73 | 14/1a | %edi | %esi |
+| volatile test, `res == 1` first, `while` | 441 | 113 | 16 | 83 | 10/14/1a | 0x10 | %ebp |
+| zero-first, `for (;;)`, `int ret = 0` | 386 | 101 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| zero-first, `for (;;)`, `int ret;` | 386 | 99 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| `int ret;`, early `return ret`, final `return 0` | 396 | 106 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| plain `int ret` (not addressable) | 335 | 104 | 10 | 69 | 14/1a | %edi | %esi |
+| `volatile int ret` (declared volatile) | 386 | 99 | 34 | 90 | 10/16/18 | %ebp | 0x10 |
+| local struct state (i/ret/res/n) | 389 | 103 | 17 | 71 | 10/14/18/1a, 40/44/48 | %ebp | 0x40 |
+
+The residual is one allocation decision, not a missing statement. The blob
+keeps the initialiser's SSA version of `ret` in EAX (`xor %eax,%eax` at entry,
+no store) and reuses each test's reload as the return value (two loads, both
+%eax, no epilogue load). Every evidence-implied spelling that makes the test a
+forced memory read and initialises `ret` makes GCC 3.4.2 store the initialiser
+(`xor %ebx,%ebx; mov %ebx,0x14`), costing two instructions. Removing the
+initialiser reaches the blob's 99 instructions and 386 bytes, but the zero is
+then emitted in the epilogue and the return reloads `ret` (three loads, two of
+them %ecx): the mnemonic multiset is the blob's with one `xor` displaced from
+entry to epilogue. `-fno-rename-registers` moves the test reloads to %eax, so
+the register split is the `-frename-registers` cursor, which also swaps
+count/chunk (%edi/%esi here against %esi/%edi in the blob). Declaration order
+and scope, initialiser placement (declaration, `for` init, assignment), `while`
+/ `for` / `do` / `goto`, `res` type (`short` or `int`), initialisers on `n`, `i`
+and `p`, `i <= 3` versus `i < 4`, and a local struct grouping do not move it.
+
+No source change was made. The closest 99-instruction shapes are not the blob's
+bytes (LCS 97 of 99) and the semantically valid ones either store the
+initialiser or reload in the epilogue. A source form that keeps an addressable
+`ret`'s initialiser in EAX was not produced by any tested evidence-implied
+spelling. A 386-byte near-miss would move `vce_hook_on` by +32 but is a fitted
+body, so it is declined under the fit-versus-recovery rule.
+
+Gate on the unchanged tree: `make period J=3` 394 passed, 0 failed. Census
+1,145 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK
+(1,145 / 1,182 / 1,148, one displaced entry). Partial compare: 72,849 / 943,398
+positioned reference bytes (7.7%); ledger blob `vce_hook_on` start 1,536,
+candidate 1,504.
