@@ -233,15 +233,15 @@ FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
 
 	switch (cmd) {
 	case FAXC1_FTS:
+		inner_cmd = FAX_CLASS1_TS_COMMAND;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FTS, %x\n", rate);
-		inner_cmd = FAX_CLASS1_TS_COMMAND;
 		break;
 
 	case FAXC1_FRS:
+		inner_cmd = FAX_CLASS1_RS_COMMAND;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FRS, %x\n", rate);
-		inner_cmd = FAX_CLASS1_RS_COMMAND;
 		break;
 
 	case FAXC1_FTM:
@@ -276,7 +276,7 @@ FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
 		inner_cmd = FAX_CLASS1_TH_COMMAND;
 		break;
 
-	default:	/* FAXC1_FRH */
+	case FAXC1_FRH:
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FRH %x\n", rate);
 		if (rate != 3)
