@@ -139057,13 +139057,13 @@ recorded as a measured compiler-block-ordering blocker (same class as the
 No source change for this symbol; no linked-position effect. Gate and
 census for the wave are those in F12012.
 
-**Superseded by F12043.** The enumerated domain above varies the switch
+**Superseded by F12044.** The enumerated domain above varies the switch
 *text* while every case body stays shared; the member it does not contain is
 body duplication. Splitting the two 1000-valued cases (4 and 12) into two
 source blocks is a source fact that changes the pre-merge table-edge count and
 hence the reorder frequencies, and it reproduces the object's 1000, 650, 850
 at the same 293 bytes and 77 instructions. The mechanism (`-freorder-blocks`
-STC), not the switch text, still selects the layout; F12043 measures what the
+STC), not the switch text, still selects the layout; F12044 measures what the
 pass is responding to.
 
 ## F12015. `V21RX_control`'s HDX flag assignment is a `> 0` comparison, not `!= 0`; the fold chooses shift-and for one and setcc for the other
@@ -139789,8 +139789,96 @@ source was changed.
 exact 1,146 -> 1,147, grade 0-or-1 1,182 -> 1,184, link-selected 1,149 ->
 1,150, with no lost exact or grade-0/1 symbol). No flags, padding,
 attributes or fixture edit.
+## F12043. `receiver`'s predictor output pointers were taken as addresses the object does not form; the frame goes `0xcc -> 0xbc`, and the remaining `0x20` is two allocator homes the object keeps in registers
 
-## F12043. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
+*2026-10-24.* Baseline `2df773bea` (PR #374 merged), Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. Every receiver `%esp`
+slot was mapped in both bodies and the two inlined predictor instances were
+compared instruction for instruction. The result is one source-form fact and
+a bounded negative on the AGC expression.
+
+| `receiver` | blob | before (#374) | after |
+|---|---:|---:|---:|
+| bytes | 4,326 | 4,397 | **4,349** |
+| instructions | 994 | 1,007 | **993** |
+| frame | `0x9c` | `0xcc` | **`0xbc`** |
+| LCS | -- | 525 | **538** |
+| longest run | -- | 17 | 17 |
+| grade | -- | SIZE | SIZE (23 bytes) |
+
+**The frame gap the capture change opened.** #374's product-before-shift loops
+made the second predictor's accumulator and both shift counters stack-homed:
+`0x18` (`mov $0x2000`, `sarl $0xe` at `0x1f5c`), `0x14`/`0x1c` (counters) and
+the first instance's `0x50`/`0x4c`/`0x54`. Those are the same spills the
+object has (`0x18` at `0x5c699`, `0x44` at `0x5c199`, `0x40`/`0x48` at
+`0x5c1f8`/`0x5c1b0`), so the change moved the spill set TOWARDS the object
+while the frame grew `0xbc -> 0xcc`.
+
+**What remained was the predictor's output pointers.** A `static` function
+taking `unsigned short *px, unsigned short *py` inlines to four `lea` bases --
+`0x208`/`0x20a` (precode call) and `0x214`/`0x216` (decision-error call) --
+each spilled to its own home (`0x94`/`0x98`, `0xa4`/`0xa8` in the #374 body),
+and the tail addresses through `(%reg)` at displacement zero. The object forms
+no base for either pair: `0x5c235`/`0x5c240` read `0x208`/`0x20a` directly and
+`0x5c745`/`0x5c74c` read `0x214`/`0x216` directly, after the same four
+15-instruction native shift loops at `0x5c1c0`, `0x5c200`, `0x5c6c0`,
+`0x5c710` that #374 matched. This is refinement.md Lever 24's fingerprint.
+Writing the predictor as a `do { } while (0)` macro so the call sites
+substitute the field pairs textually removes all four bases and moves
+`0xcc -> 0xbc`; the four native shift-loop graphs still match under register
+renaming. The tested domain was `{static, static inline, __inline__, macro}`;
+only the macro removes the `lea` bases. No type, owner, attribute or flag
+change is involved.
+
+**The remaining `0x20`, slot by slot.** Both bodies now home the same 29
+values except two. The object keeps `rx->flags` in `%edi` across the retrain
+block (`movzwl 0x122(%ebp),%edi` at `0x5c02a`, tested again at `0x5c100`) and
+keeps `f208` in `%edx` after storing it (`0x5c03f..0x5c04e`, reused at
+`0x5c093`, reloaded only for `eq_out_i2` at `0x5c0bb`). Ours spills them: the
+halfword flags CSE to `0x70` and `f208` to `0x9c`. Those two homes (8 bytes)
+plus the 12-byte inter-group packing and the 12-byte tail alignment are the
+whole `0xbc` against `0x9c`. They are live-range outcomes, not source values,
+and no tested source form moved them.
+
+**AGC: the shared energy expression still cannot satisfy both callers.** The
+object's `V34agc` stores the sum to `0x12c` at `0x5b8ae` and shifts the same
+register at `0x5b8b4`; `V34demodulate` stores at `0x5b0de` and shifts at
+`0x5b0e4`, with the other native stores at `0x5b1bb` and `0x5b25a`. Measured
+domain over `agcadapt`'s input, all on the period compiler:
+
+| form | `V34agc` LCS | `V34demodulate` LCS | demod `0x12c` stores | `shr $0x10` | reload `0x12e` |
+|---|---:|---:|---:|---:|---:|
+| union `energy.h.agc_input` (kept) | 209 | **199** | **3** | 0 | 1 |
+| `(unsigned)energy.sum >> 16` | **211** | 198 | 2 | 1 | 0 |
+| `(unsigned)(energy.sum >> 16)` | 210 | 197 | 2 | 0 | 0 |
+| signed `energy.sum >> 16` | 210 | 197 | 2 | 0 | 0 |
+| local `int e` then `(unsigned)e >> 16` | 211 | 198 | 2 | 1 | 0 |
+| helper `agc_energy_input()` | 211 | 198 | 2 | 1 | 0 |
+| halfword pointer casts (3 spellings) | 209 | 199 | 3 | 0 | 1 |
+| unconditional store, then shift form | -- | 189 | 3 | 0 | 1 |
+
+The `>>16` family restores AGC's register forwarding but lets DSE delete the
+demodulator's pre-adaptation store; the union and pointer forms preserve all
+three stores but reload the high half. The object has both behaviours because
+its 16-bit union load is forwarded late while DSE has already seen it as a
+use; our surrounding receiver/demodulator RTL does not trigger that combine.
+No contract in the domain satisfies both, so the union is retained (it keeps
+the stronger evidence, the native store). This is a measured negative, not a
+claim that no source form exists.
+
+**`V34demodulate` unchanged.** No new witness emerged; the third `shr $0x19`
+at `0x5b1fe` remains the `q_next` wrap-branch target, as recorded before.
+
+Validation: `make period J=3` **394 passed, 0 failed**; census unchanged at
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected **1,150**, ratchet OK with the existing
+displacement. Positioned reference bytes moved 76,081 -> **75,942** of
+943,398 on the merged base (#376 included) on the same host: the -48-byte
+symbol pulls 139 downstream positions out of coincidence. That diagnostic is
+not the basis for retaining source; the graded sets and the gate are.
+
+
+## F12044. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
 
 F12013 enumerated the switch *text* with shared case bodies and concluded
 that no source spelling moves the physical arm order. That domain was one
@@ -139875,7 +139963,7 @@ facts), first positional divergence remains `RD_create`, cumulative delta
 -16 (predecessor `FAX_process` 1809 -> 1799, padding 15 -> 9), because the
 change moves no bytes' length; what changes is that the first divergent body
 is now 1 byte from the object instead of 12. Positioned reference bytes
-76,081 / 943,398 (8.1%), candidate delta -15,696.
+75,942 / 943,398 (8.0%), candidate delta -15,744.
 
 No flags, no attributes, no fixtures. Only `rd.c`'s switch text changed, so
 the ordered EXACT set is untouched: the single move is RD_create BYTES ->
