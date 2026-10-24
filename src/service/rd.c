@@ -62,6 +62,8 @@ RD_create(void *modem, unsigned int rate)
 
 	switch ((int)modem_get_param(modem, MDMPRM_CODECTYPE)) {
 	case 4:
+		cfg.threshold = 1000;
+		break;
 	case 12:
 		cfg.threshold = 1000;
 		break;
