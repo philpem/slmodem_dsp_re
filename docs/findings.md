@@ -139337,3 +139337,93 @@ EXACT set stays 1,149. Positioned reference bytes move 73,994 -> 73,996 of
 in place. Gate `make period J=2`: 394 passed, 0 failed. Census 1,146 EXACT /
 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; grade 0-or-1 1,183;
 ratchet OK with the reviewed `dp_vpcm_exit` displacement.
+
+## F12040. `FAX_process`: the object's tail is two 0x310-byte RING STRUCTURES, and that sub-structure is what spills `ctx`
+
+F12012/F12038 left `FAX_process` at 1,450 B / 339 instructions against the
+blob's 1,809 / 408, LCS 221, run 19, and concluded the `ctx` home-slot spill
+was "not reachable from the tested source domain". This pass found the source
+fact that was missing, and it is a LAYOUT fact rather than a declaration order:
+the object's two clusters are each one object addressed through one hoisted
+base, and their size is forced.
+
+**The tail is two back-to-back 0x310-byte rings, measured.** `&ctx->in_...`
+is `add $0x25ac,%eax` at 0x1a3a; `&ctx->out_...` is `lea 0x229c(%edx),%ebp`
+at 0x1a43. Every in-cluster access is based on the 0x30(%esp) copy of
+`ctx+0x25ac` -- count `(%ebx)` at 0x1af8/0x1bb3, wr `0x4(%ebx)` at
+0x1afa/0x1b16, blk `0xc(%ebx)` at 0x1b2e/0x1bd2, data `lea 0x10(%edx,%esi,2)`
+at 0x1ad9 and `lea 0x10(%ebx,%eax,2)` at 0x1b34 -- and every out-cluster
+access on `%ebp` -- count `0x0(%ebp)` at 0x1be7, rd `0x8(%ebp)` at
+0x1a9c/0x1c1f, blk `0xc(%ebp)` at 0x1b31, data `lea 0x10(%ebp,%edx,2)` at
+0x1b38/0x1c08. Neither cluster is ever reached through `ctx` with a
+displacement. Two adjacent bases plus the object's own allocation size pin the
+size: out starts at 0x229c and the in base is 0x229c + 0x310, in starts at
+0x25ac and the allocation (0x28bc, FAX_create's `movl $0x28bc,(%esp)` at
+0x151b) is 0x25ac + 0x310. That is exactly `struct vce_ring`'s size
+(`vce.h`), and the count/wr/rd/blk/data offsets are its offsets; each side
+simply uses a different subset (out uses count/rd/blk, in uses
+count/wr/blk). Adopted as `struct fax_ring` in `fax.h`, two of them in
+`struct fax_ctx`, reached through `struct fax_ring *in_ring`/`*out_ring`
+locals as `VOICE_process` already does for its rings.
+
+**Two more forced differences fell out once the cluster locals existed.**
+`cap` is NOT a source local: the object recomputes `2*host_frame` three times,
+at 0x1aac (`lea (%eax,%eax,1),%ecx`), 0x1b0b (`lea (%edx,%edx),%ebx`) and
+0x1c34 (`lea (%ebx,%ebx),%esi`); our cached `cap` was ours. And
+`host_frame` is NOT a local: the object re-reads `ctx->host_frame_samples`
+at 0x1a5e, 0x1b03, 0x1b20, 0x1bc8, 0x1be1, 0x1bee, 0x1c26 and 0x1c51, i.e.
+at every use after a call, so the source reads the field at each site (the
+unsigned loop arithmetic of F12012 is unchanged). With the local gone the
+`chunk` clamp is an unsigned compare, and the object's `jbe` at 0x1a6a
+(before which `cmp %eax,%esi` compares `count` with `ctx->host_frame_samples`)
+forces the field itself to be `unsigned int`, adopted.
+
+**Result: the `ctx` spill appears.** 339 -> 389 instructions of the object's
+408; LCS 221 -> 253 (62.0%); longest run 19 -> 15; body 1,450 -> 1,704 bytes
+(SIZE 359 -> 105). `ctx` now lives in its argument home slot and is reloaded
+25 times (the object: 27), `&ctx->in_ring` is computed once and kept in a
+stack slot (0x2c in ours because our frame is 0x6c; 0x30 in the object), and
+`&ctx->out_ring` is hoisted into `%ebp`, all as in the object. The residual
+0x10-byte frame difference is the object spilling FOUR more inner temporaries:
+it has 18 value slots (0x34 host_tx_buf, 0x38 forced, 0x3c rx_count,
+0x40 tx_buf, 0x44 rx_buf, 0x48 out_ptr, then 0x4c..0x78) where ours has 14,
+and its `cmpl $0xa0,0x3c(%esp)` at 0x1b63/0x1ccc reads `rx_count` from memory
+where ours compares a register. That last 0x10 is still an allocation
+outcome; F12012's "the allocation is determined outside the statement" now
+applies to four inner values, not to `ctx`.
+
+**Enumerations, all measured and rejected.** (1) Direct nested member access
+with no ring locals (`ctx->in_ring.count` etc.): 336 instructions, LCS 181,
+run 10 -- the compiler does not hoist the bases, so the ring POINTERS are
+real source locals, not incidental. (2) The two pointer assignments in the
+opposite order: identical code (both leas, no register change). (3) The six
+inner temporaries hoisted to the outer `while` block: LCS 254, frame still
+0x6c. (4) All branch-scoped locals (`rxc`/`txc`/`w7`/`recv_n`, `status`/
+`forced`, `oc`, `oc2`) moved into the inner `while` scope: no change (GCC
+3.4.2 still overlaps their slots), so the missing 0x10 is not a scope fact.
+(5) The flat model plus member-base pointers (`int *in_pending =
+&ctx->in_pending; int *out_produced = &ctx->out_produced;`, other members via
+`ctx`): 343 instructions, LCS 194, run 9 -- `ctx->in_write_cursor` is not
+folded onto the saved base, so a COMMON TYPE is required and the ring
+sub-structure is the witness. (6) A `host_tx_buf` local (the object keeps
+`ctx+0x10` in 0x34): 391 instructions, LCS 244, run 11 -- declined as a fit.
+
+**Test compatibility, disclosed.** `test/unit/t_faxcreate.c` compares
+`ctx->out_produced` and `ctx->out_write_half`, the pre-F12040 flat names. The
+header defines those two names as macros onto `out_ring.count`/`out_ring.blk`;
+a macro is a compile-time substitution, so neither the object's nor the
+test's code generation moves, and no test source was edited. `struct
+fax_ctx`'s modelled bytes are now 0x28bc, the allocation size, because the
+rings are modelled to their ends.
+
+**Linked position.** The first positional divergence is still `RD_create`,
+but its delta moves -368 -> -112: the predecessor `FAX_process` is 1,809 ->
+1,704 bytes (-105) rather than -359. `placement-ledger` attributes the step to
+(c) upstream size drift, with padding 15 -> 8. Positioned reference bytes
+75,826 of 943,398 (candidate delta -15,808), 68 exact sections, 1,090 ordered
+relocation matches; the aggregate is a layout-coincidence measure, not a
+fidelity target. Gate `make period J=3`: 394 passed, 0 failed. Census 1,147
+EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE; grade 0-or-1
+1,184; link-selected EXACT 1,150 (1,147 + the three multiply-defined names
+whose selected body is exact); ratchet OK, no flags, padding, attributes or
+fixture changes.
