@@ -382,7 +382,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 	ret = 0;
 	while (count > 0) {
-		int host_frame, chunk, remaining;
+		unsigned int host_frame, chunk, remaining;
 		int out_read_cursor_snap;
 		const unsigned char *in_cur;
 		unsigned char *out_cur;
@@ -398,7 +398,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 		out_read_cursor_snap = ctx->out_read_cursor;
 
 		while (remaining > 0) {
-			int cap, copy, room;
+			unsigned int cap, copy, room;
 			short *in_ptr, *out_ptr;
 			short *rx_buf, *tx_buf;
 			int rx_count;
@@ -459,7 +459,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 					if (ctx->host_rx_enable != 0 &&
 					    ctx->host_rx_want != 0) {
-						int want = ctx->host_rx_want;
+						unsigned int want = ctx->host_rx_want;
 
 						if (want > 0x1000)
 							want = 0x1000;
