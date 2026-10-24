@@ -227,6 +227,12 @@ def _function_identity(path, name):
     every relocation to one target must move by the same link rebase. Each
     record also carries the target's section and symbol value so the caller can
     compare that rebase with the actual section placement.
+
+    The four-byte i386 addend is a two's-complement value, not an unsigned
+    offset: an indexed table can legitimately address `table-12`, which `ld -r`
+    rewrites to `placement-12`. Reading it unsigned turns that correct rebase
+    into a delta off by 2**32, so the field is sign-extended here and every
+    comparison below is made between signed addends.
     """
     with open(path, 'rb') as stream:
         elf = ELFFile(stream)
@@ -268,7 +274,8 @@ def _function_identity(path, name):
                     key = ('symbol', target.name)
                     target_section = (elf.get_section(target['st_shndx']).name
                                       if isinstance(target['st_shndx'], int) else None)
-                addend = int.from_bytes(raw[offset:offset + 4], 'little')
+                addend = int.from_bytes(raw[offset:offset + 4], 'little',
+                                        signed=True)
                 relocations.append((offset, relocation['r_info_type'], key, addend,
                                     target['st_value'], target_section))
                 raw[offset:offset + 4] = b'\0\0\0\0'
@@ -443,10 +450,12 @@ def _same_linked_body(source, linked, name, manifest):
     """Is `linked` the same coded body as `source`, rebased by `ld -r`?
 
     The masked body and relocation shape must match. Each relocation's addend
-    delta must equal the rebase implied by the actual output section placement:
-    a section-symbol target moves by the input section's placement offset, and
-    a named-symbol target keeps its addend while the symbol itself moves by
-    that offset. A uniform but stale delta is therefore a refusal.
+    is signed, and its expected linked value is implied by the actual output
+    section placement: a section-symbol target's addend becomes
+    `placement + source_addend` (so a negative table base stays negative
+    relative to its section), while a named-symbol target keeps its addend
+    while the symbol itself moves by that offset. A uniform but stale delta is
+    therefore a refusal.
     """
     source_raw, source_relocations = _function_identity(source, name)
     linked_raw, linked_relocations = _function_identity(linked, name)
@@ -479,16 +488,17 @@ def _same_linked_body(source, linked, name, manifest):
                 require(source_section == linked_section == key[1],
                         'linked callee section target differs from the '
                         'manifest-selected copy')
-                expected = placement(key[1])
+                offset = placement(key[1])
+                expected_addend = offset + source_addend
                 section_rebases[key[1]] = {
-                    'placement': expected,
+                    'placement': offset,
                     'observed_addend_delta': linked_addend - source_addend}
             else:
                 # A named-symbol relocation keeps its addend: `ld -r` rebases
                 # the symbol, not the four-byte field. An undefined reference
                 # in the input may simply become defined in the link, which is
                 # symbol resolution and not a section rebase.
-                expected = 0
+                expected_addend = source_addend
                 if source_section is not None:
                     require(linked_section == source_section,
                             'linked callee symbol target section differs from '
@@ -504,9 +514,9 @@ def _same_linked_body(source, linked, name, manifest):
                                              if source_section is not None else None),
                     'observed_addend_delta': linked_addend - source_addend}
             delta = linked_addend - source_addend
-            require(delta == expected,
-                    'linked callee relocation delta does not match section '
-                    'placement')
+            require(linked_addend == expected_addend,
+                    'linked callee relocation addend does not match its '
+                    'section placement')
             require(rebase.setdefault((kind, key), delta) == delta,
                     'linked callee relocation is not a uniform section rebase')
     return {'section_rebases': section_rebases, 'symbol_rebases': symbol_rebases}

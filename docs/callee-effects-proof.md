@@ -276,9 +276,9 @@ COMDAT section, not section-symbol relocations to one; all **319** references
 to linkonce-defined targets in the 300-input tree are named-symbol references.
 The 65th is `GetDialerConfig`: an `R_386_32` against ordinary `.rodata` whose
 source addend is `-12`, a section-relative base for an indexed table. Its
-observed linked addend is placement minus 12, but the existing check reads the
-addend unsigned and compares the resulting non-modular delta. That ordinary
-case is **not** modelled here and stays refused; it is independent of COMDAT.
+observed linked addend is placement minus 12, but the existing check read the
+addend unsigned and compared the resulting non-modular delta. That ordinary
+case is independent of COMDAT and is resolved by the signed addend path below.
 
 ### Kept-copy evidence
 
@@ -335,8 +335,40 @@ name; and a missing linked group. A replica of the old concatenation predicate
 (sum every contributor; require the sum to equal the linked size) refuses the
 positive, which is the measured pre-change behaviour.
 
-The 65 refusals reduce to 64 COMDAT cases resolved and the one ordinary
-negative-addend case left refused; the pre-change code refused all 65.
+The 65 refusals reduce to 64 COMDAT cases resolved here and the one ordinary
+negative-addend case resolved by the signed addend path below; the pre-change
+code refused all 65.
+
+## Signed section-relative addends
+
+The i386 relocation addend is two's-complement, not an unsigned offset. The
+source `GetDialerConfig` carries `.rodata` relocations with addends `-12` and
+`+12`, and `ld -r` writes the linked fields as `placement-12` and
+`placement+12`. `_function_identity()` now sign-extends the four-byte field,
+and `_same_linked_body()` compares the linked addend with the expected signed
+value: `placement + source_addend` for a section-symbol target, or the
+unchanged `source_addend` for a named symbol. Reading either side unsigned
+changes the value by `2**32` and made the correct negative-addend case refuse.
+The named-symbol and COMDAT rules are unchanged, and a genuinely wrong
+placement still refuses.
+
+For the real case, the manifest-selected
+`build/tc_repro/src_dialer_DialerConfig.c.o` has `.rodata` addends
+`[-12, 12]`; the linked fields are `[18404, 18428]`, and the ordered manifest
+places that input's `.rodata` at `18416 (0x47f0)`, so
+`18416-12 = 18404` and `18416+12 = 18428`. The positive now proves, and the
+supplementary scan over all 1,726 names with exactly one strong, sized
+`STT_FUNC` definition passes **1,726/1,726**: the COMDAT model accounts for the
+previous 64 refusals and this for the 65th.
+
+Controls add two synthetic Gentoo-assembled positives (`table-12` and
+`table+8` with a 16-byte placement) and one refusal, a patched linked addend
+whose uniform delta 28 disagrees with the placement 16. Two replicas of the
+pre-change reading -- both addends unsigned, and the source-unsigned /
+linked-signed mix -- refuse the correct negative-addend fixture and the real
+`GetDialerConfig`, while the consistent signed reading accepts both. This
+makes the acceptance a measured difference from the old code rather than a
+claim about it.
 
 The frame suite passes 39/39, fixed-SETcc 135/135, the fixed-ABI suite 35/35
 with the real V32 pair EXACT, the base jumptable suite 47 synthetic/2 real,
