@@ -138854,3 +138854,46 @@ Gate on the unchanged tree: `make period J=3` 394 passed, 0 failed. Census
 (1,145 / 1,182 / 1,148, one displaced entry). Partial compare: 72,849 / 943,398
 positioned reference bytes (7.7%); ledger blob `vce_hook_on` start 1,536,
 candidate 1,504.
+
+## F12011. V.34 wave 12: the AGC rail arms are separate constant stores; receiver's HImode flags and demodulate's third gain check are not source facts
+
+`V34agc` (blob 0x5b680): the object stores both rails directly to
+memory -- `movw $0x7f00,(%ebx)` at 0x5b775 and `movw $0x8100,(%ebx)` at
+0x5b968 -- and the negative arm jumps to the shared `add $0x2,%ebx` at
+0x5b77a. Our ternary `over > 0 ? 0x7f00 : (short)0x8100` materialised the
+constant in a register first (`mov $0x7f00,%ecx; ...; mov %cx,(%edx)`).
+Spellings measured: the ternary (baseline), `short`/`unsigned short`
+temporaries assigned from a ternary or from if/else (branchless
+`setle/dec/and/add` and SIZE 10, not the object's stores), explicit casts
+on either arm, `(short)(over > 0 ? ... : ...)`, and `(short)-0x7f00`.
+Only two separate `*p++ = constant` arms reproduce the object's direct
+immediate stores; both arms then match instruction for instruction.
+LCS 206 -> 209, longest run 36 -> 42, instructions 221 -> 219, symbol size
+unchanged at 0x33b (same as the object), positional differing bytes 617 ->
+616. Adopted; no other symbol in the TU changes (object byte diff confined
+to `V34agc`'s body and its call-site relocation addends).
+
+`receiver`: the cached local is 16-bit in the object (`mov %cx,0x30(%esp)`
+at 0x5c307, `testw $0x400,0x30(%esp)` at 0x5c3fb) beside the `int` at
+0x2c; here it is SImode in two SSA-promoted spill slots (`mov %ebx,0x28`
+and the earlier 0x78, `testl` at 0x1db3/0x219d). GCC 3.4.2 promotes a
+non-addressable, non-volatile short local; measured negatives: `short`
+(LCS 470), `unsigned short` (475), `int`, `register` short/unsigned short
+(470/475), `volatile unsigned short` (517, but it reloads the field at
+every assignment and removes the register caching the object shows between
+0x5c02a and 0x5c100), `(void)&flags` address-taken (436, extra stores and
+reloads) and an inline `unsigned short *` flag-setter (436). No measured
+source form both keeps the local HImode and preserves the object's
+register/memory mix; the frame/width residual stays open (SIZE 86).
+
+`V34demodulate`: the object has three `shr $0x19` (0x5af78, 0x5afb8,
+0x5b1fe); 0x5b1fe is the target of the `q_next` wrap branch at 0x5af35,
+not a third gain range check. The -O3 tracer duplicated the rms-store plus
+gain block on that path; our build joins it at 0x930. An if/else spelling
+of the `rms_idx` update is byte-identical to the baseline, and an explicit
+`q_next` pointer form gives LCS 199 -> 201 but still two checks. No source
+statement is missing; declined (SIZE 54, LCS 199, run 36).
+
+Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK. No padding,
+flags, attributes, fixtures or ratchet policy changed.

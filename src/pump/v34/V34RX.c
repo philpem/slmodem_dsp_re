@@ -473,7 +473,10 @@ V34agc(struct v34_receiver *rx)
 			/* The saturated sample is visible before the diagnostic
 			 * call, as at 0x5b775..0x5b791 in the object.
 			 */
-			*p++ = over > 0 ? 0x7f00 : (short)0x8100;
+			if (over > 0)
+				*p++ = 0x7f00;
+			else
+				*p++ = (short)0x8100;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V34AGC, overflow = 0x%x,\n",
 						     over);
