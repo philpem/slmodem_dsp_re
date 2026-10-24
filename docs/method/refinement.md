@@ -9213,3 +9213,31 @@ there too, and demonstrate rejection without the review and acceptance with
 it. PR293's V32 unsigned-count correction initially missed this second record;
 its existing period and peephole evidence justified the record without changing
 source or weakening the comparator. Revalidate these pins when rebasing.
+
+## Lever 27. A bit-test predicate's COMPARISON OPERATOR is a forced fact: `!= 0` folds to shift-and, `> 0` if-converts to setcc
+
+An unsigned single-bit test assigned to an integer looks like it has one
+spelling. GCC 3.4.2 does not agree. `(x & C) != 0` is canonicalised at the
+tree level to `(x >> log2 C) & 1`, so the object gets a shift and a mask;
+the ORDERING comparison `(x & C) > 0` is left as a compare against zero and
+if-converts to `xor`/`test`/`setne`. Both are 16-bit-bounded values here
+(`x` an `unsigned char`, `C` a single positive bit), so the two predicates
+are semantically identical and the one the object emits is the one the
+author wrote.
+
+Measured on `V21RX_control` (F12015): of nine equivalent spellings --
+`!= 0`, `? 1 : 0`, `!!`, an `int` or `unsigned char` local holding the
+comparison, the shift-and written out, `== mask`, `== 0x10`, and `> 0` --
+only `> 0` reproduces the object's `xor %eax,%eax ; test $0x10,%dl ;
+setne %al ; mov %eax,(%ecx)`. The others emit `mov %edx,%eax ; shr $0x4 ;
+and $0x1` (or stay at the wrong length when the form hoists a local) and
+were all rejected with measurements.
+
+**When to reach for it.** A `BYTES` row whose first rejection is `xor vs
+mov` (or a missing zeroing `xor`) on an assignment from a masked value is
+the fingerprint. Enumerate the comparison operators and the local-variable
+forms; do not accept the tidier `!= 0` because it reads better, and do not
+infer the operator from final assembly alone -- the fold, not the source
+spelling you started from, is what produced ours. Keep both predicates
+semantically identical at the value's real width before calling a mapping
+a recovery.

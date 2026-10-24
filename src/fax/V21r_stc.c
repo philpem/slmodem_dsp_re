@@ -51,7 +51,7 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
 	flags = arg->flags;
 
 	rx->hdx->int_0000 =
-		(flags & V21RXCTL_SET_HDX_INT0000) != 0;
+		(flags & V21RXCTL_SET_HDX_INT0000) > 0;
 
 	if (flags & V21RXCTL_REINIT)
 		V21RX_create(modem, (const struct v21rx_cfg *)modem);
