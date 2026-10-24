@@ -103,6 +103,293 @@ extern int VPcmV34Create(void *obj, int side, int max_frag, void *dpRuntime,
 
 /*
  * ---------------------------------------------------------------------------
+ * Layout, pinned.  Every one of these is an offset `vpcm_run` or
+ * `vpcm_create` addresses literally in the disassembly, and the whole point
+ * of the struct is that they land where the blob's do.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define VPCM_ASSERT(name, field, off) \
+	typedef char vpcm_off_##name[ \
+		((int)__builtin_offsetof(struct vpcm_root, field) == (off)) \
+		? 1 : -1]
+
+VPCM_ASSERT(id,	    dp.id,	0x00000);	/* 0x4422 movl $0x22,(%ebx) */
+VPCM_ASSERT(modem,  dp.modem,	0x00004);	/* 0x4439 mov 0x4(%ebx)     */
+VPCM_ASSERT(data,   dp.dp_data,	0x00010);	/* 0x3e55 mov 0x10(%esi)    */
+VPCM_ASSERT(status, status,	0x00014);	/* 0x415b cmp 0x14(%ebx)    */
+VPCM_ASSERT(mode,   mode,	0x00018);	/* 0x3edb mov 0x18(%ebx)    */
+VPCM_ASSERT(nbits,  nbits,	0x0001c);	/* 0x3fbd mov 0x1c(%ebx)    */
+VPCM_ASSERT(stall,  stall,	0x00020);	/* 0x4270 mov 0x20(%ebx)    */
+VPCM_ASSERT(info,   info,	0x00024);	/* 0x3abf mov %eax,0x24     */
+VPCM_ASSERT(params, params,	0x00028);	/* 0x41a6 mov 0x28(%ebx)    */
+VPCM_ASSERT(v34,    v34,	0x0002c);	/* 0x403b lea 0x2c(%ebx)    */
+VPCM_ASSERT(fin,    fin,	0x0ac78);	/* 0x400f fstps 0xac78      */
+VPCM_ASSERT(fout,   fout,	0x0aef8);	/* 0x40d0 flds  0xaef8      */
+VPCM_ASSERT(txbits, txbits,	0x0b178);	/* 0x3ffa mov ...,0xb178    */
+VPCM_ASSERT(rxbits, rxbits,	0x0c178);	/* 0x4120 movzbl 0xc178     */
+VPCM_ASSERT(outq,   outq,	0x0d178);	/* 0x3eba mov 0xd178(%ebx)  */
+VPCM_ASSERT(inq,    inq,	0x0d1e4);	/* 0x3e68 mov 0xd1e4(%ebx)  */
+VPCM_ASSERT(mute,   mute,	0x0d250);	/* 0x3ed5 mov 0xd250(%ebx)  */
+VPCM_ASSERT(deladd, extradelay,	0x0d254);	/* 0x419c mov 0xd254(%ebx)  */
+
+/* `movl $0xd258,(%esp)` at 0x3a42, the whole allocation. */
+typedef char vpcm_root_size[(sizeof(struct vpcm_root) == 0xd258) ? 1 : -1];
+
+/*
+ * The queues' capacity is what is left between them and what follows, so it
+ * is a consequence of the offsets above rather than an independent claim --
+ * asserted anyway, because a `short buf[48]` would fit every test in this
+ * tree and still be wrong.
+ */
+typedef char vpcm_queue_size[(sizeof(struct vpcm_queue) == 0x6c) ? 1 : -1];
+
+/* Both bit arrays are exactly the clamp, 1024 entries of four bytes. */
+typedef char vpcm_bits_size[
+	(sizeof(((struct vpcm_root *)0)->txbits) == VPCM_MAX_BITS * 4
+	 && sizeof(((struct vpcm_root *)0)->rxbits) == VPCM_MAX_BITS * 4)
+	? 1 : -1];
+
+#endif /* 32-bit */
+
+/*
+ * ===========================================================================
+ * `vpcm_create` -- 0x3a00, 0x3c9 = 969 bytes.
+ * ===========================================================================
+ *
+ * THREE GUARDS, ONE ALLOCATION AND ONE CLEANUP LADDER.  The guards return
+ * NULL through the same epilogue -- 0x3c7f is reached from the `srate`
+ * mismatch, the `max_frag` cap and the failed `sysdep_malloc` alike, with
+ * `%ecx` zeroed before each jump -- so the three are one `return 0` in the
+ * source and not three.
+ *
+ * `srate` MUST BE EXACTLY 9600 (`cmp $0x2580,%esi; jne`) and `max_frag` must
+ * be at most 48 (`cmpl $0x30; jg`).  48 is `MODEM_FRAG`, so the guard value
+ * is the host's real value and not a bound (docs/configuration.md).
+ *
+ * THE ROOT IS ITS OWN `struct dp` and stores its own address at +0x10; see
+ * vpcm.h.  It is memset to zero over its whole 0xd258 before any field is
+ * written, which is why the three explicit `= 0`s below are worth keeping:
+ * they are separate stores in the object at 0x3a9c, 0x3aa3 and 0x3aaa, after
+ * the memset, so they are in the source too.
+ *
+ * `VPcmV34Create` RETURNS ZERO ON EVERY PATH, so the ladder's last rung is
+ * dead code in the shipped object -- deviation D149, already recorded.  It is
+ * written anyway because the object has it and because the deadness is a
+ * property of the callee and not of this function.
+ *
+ * ---------------------------------------------------------------------------
+ * THE MUTE COUNTER'S TEST IS INVERTED FROM WHAT IT LOOKS LIKE
+ *
+ *     0x3bd4  cmp $0x1,%ecx
+ *     0x3bd7  sbb %edi,%edi
+ *     0x3bd9  and $0x210,%edi
+ *
+ * `sbb %edi,%edi` leaves -1 when the carry is set and 0 when it is not, and
+ * `cmp $1` sets the carry when the value is BELOW one.  So the mask survives
+ * when the V.92 bit is CLEAR and is discarded when it is set: a modem that is
+ * NOT doing V.92 mutes its first 528 samples, and one that is does not.  The
+ * reading that the shape suggests -- mute when the bit is set -- is the wrong
+ * way round, and a test that swept only one value of that bit would not tell
+ * the two apart.
+ *
+ * ---------------------------------------------------------------------------
+ * THE DELAY ARITHMETIC
+ *
+ * `modem_get_param(modem, MDMPRM_IODELAY) + 4` is the hardware delay; the DMA
+ * delay is that less 0x30, plus whatever `extradelay` holds.  If the hardware
+ * delay EXCEEDS 0xf4 the function first tells the host so
+ * (`modem_set_param(modem, 13, 0xf4 - d)`), clamps `extradelay` to at least
+ * 0x180 -- `neg` then `cmp $0x180; jge` on the NEGATED difference, so the
+ * stored value is a positive number of samples -- and then redoes the
+ * arithmetic with 0xf4 in place of the measured delay.  The re-entry at
+ * 0x3c03 with `%edx` = 0xf4 is what says the second pass uses the cap and not
+ * the original.
+ */
+static struct dp *
+vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
+	    struct dp_operations *op)
+{
+	struct vpcm_root *s;
+	unsigned int qcFlags;
+	int side, nsamples, minRate, maxRate, sessionType, hwDelay;
+
+	side = (caller == 0);
+
+	if (srate != VPCM_SRATE)
+		return 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "vpcm: create: dp %d, caller %d, frag %d (size %d).\n",
+		    id, caller, max_frag, (int)sizeof(struct vpcm_root));
+
+	if (max_frag > VPCM_MAX_FRAG)
+		return 0;
+
+	s = sysdep_malloc(sizeof(struct vpcm_root));
+	if (s == 0)
+		return 0;
+
+	sysdep_memset(s, 0, sizeof(struct vpcm_root));
+
+	s->dp.dp_data = s;
+	s->outq.count = 4;
+	s->dp.modem = modem;
+	s->dp.id = id;
+	s->dp.op = op;
+	s->status = 0;
+	s->mode = VPCM_MODE_IDLE;
+	s->stall = 0;
+
+	s->info = (struct dsp_info *)modem_get_param(modem, MDMPRM_DSPINFO);
+	s->params = (struct _tagModemParameters *)dp_param_get(modem);
+	s->params->paramFile = 0;
+
+	/*
+	 * Milliseconds, and `VPCMXF_Create` turns it back into samples with
+	 * the OTHER rate when it is told to.  48 samples at 9600 is 5 ms.
+	 */
+	nsamples = (max_frag * 1000) / srate;
+
+	s->v34.xf = VPCMXF_Create(0, &s->v34, s->params, (unsigned int)nsamples,
+				  0);
+	if (s->v34.xf == 0) {
+		sysdep_free(s);
+		return 0;
+	}
+
+	s->v34.k56 = K56FLEX_Create(0, &s->v34, s->params, nsamples);
+	if (s->v34.k56 == 0) {
+		VPCMXF_Delete(s->v34.xf);
+		sysdep_free(s);
+		return 0;
+	}
+
+	minRate = modem_get_param(modem, MDMPRM_MIN_RATE);
+	maxRate = modem_get_param(modem, MDMPRM_MAX_RATE);
+	if ((unsigned int)maxRate > VPCM_MAX_RATE_CAP)
+		maxRate = (int)VPCM_MAX_RATE_CAP;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("vpcm: VPCM rate limits: %d-%d\n",
+				     minRate, maxRate);
+
+	s->params->vpcmRateLimitLow = (unsigned int)minRate;
+	s->params->vpcmRateLimitHigh = (unsigned int)maxRate;
+	s->params->minRate = VPCM_PARAM_MIN_RATE;
+	s->params->maxRate = VPCM_PARAM_MAX_RATE;
+
+	/*
+	 * The V.92 bit of `qcFlags` survives only when the caller asked for
+	 * the V.92 datapump; every other id clears it.  Then bit 5 is cleared
+	 * unconditionally.  Two read-modify-writes of the same byte, in that
+	 * order, both re-loading it.
+	 */
+	if (id == VPCM_DP_V92)
+		qcFlags = (s->params->qcFlags >> 4) & 1;
+	else
+		qcFlags = 0;
+
+	s->params->qcFlags = (unsigned char)
+	    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));
+	s->params->qcFlags &= (unsigned char)0xdf;
+
+	/* See the file comment: the mask survives when the bit is CLEAR. */
+	s->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;
+
+	hwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 4;
+	if (VPCM_DELAY_CAP - hwDelay < 0) {
+		int excess;
+
+		modem_set_param(modem, MDMPRM_UPDATE_DELAY,
+				VPCM_DELAY_CAP - hwDelay);
+		excess = -(VPCM_DELAY_CAP - hwDelay);
+		if (excess < VPCM_EXTRADELAY_MIN)
+			excess = VPCM_EXTRADELAY_MIN;
+		s->extradelay = excess;
+		hwDelay = VPCM_DELAY_CAP;
+	}
+
+	/*
+	 * THE DMA DELAY IS STORED TWICE, and the first store is not dead:
+	 * 0x3c09 writes `hwDelay - 0x30` into +0x68, 0x3c0c writes `hwDelay`
+	 * into +0x64, and 0x3c1e writes +0x68 again with `%eax` -- the same
+	 * register, not a reload -- plus `extradelay`.  A compiler that had
+	 * been given one expression would emit one store; a `+=` whose left
+	 * side it has just written keeps the value in a register and emits
+	 * two.  So the three statements below are the source's three.
+	 */
+	s->params->dmaDelay = hwDelay - 0x30;
+	s->params->hwDelay = hwDelay;
+	s->params->dmaDelay += s->extradelay;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("vpcm: Delays: HW %d, DMA %d\n",
+				     s->params->hwDelay, s->params->dmaDelay);
+
+	s->params->addedDelay = 0;
+
+	if (id == VPCM_DP_V92)
+		sessionType = 2;
+	else
+		sessionType = (id == VPCM_DP_V90);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "vpcm: initial dp V.%d, session type %d.\n",
+		    id, sessionType);
+
+	/* D149: this returns 0 on every path, so the arm below is dead. */
+	if (VPcmV34Create(&s->v34, side, max_frag, s->params, sessionType)
+	    != 0) {
+		VPCMXF_Delete(s->v34.xf);
+		K56FLEX_Delete(s->v34.k56);
+		sysdep_free(s);
+		return 0;
+	}
+
+	return &s->dp;
+}
+
+/*
+ * ===========================================================================
+ * `vpcm_delete` -- 0x3dd0, 0x6e = 110 bytes.
+ * ===========================================================================
+ *
+ * TWO WORDS COPIED OUT THROUGH `dsp_info`, AND THEY ARE THE ONLY THING THIS
+ * FUNCTION PRODUCES BESIDES FREED MEMORY.  `connectionType` (+0x48) and
+ * `clockDeviation` (+0x4c) of the runtime block go to the host's record at
+ * its +0x00 and +0x04, in that order in the source and the reverse in the
+ * object -- 0x3dea reads +0x4c and stores it at +0x04 first, then 0x3df0
+ * reads +0x48 for +0x00.  Two independent stores, so the order between them
+ * is the compiler's.
+ *
+ * NO NULL TESTS ANYWHERE.  `dp`, `dp->dp_data`, `params` and `info` are all
+ * dereferenced unguarded, which is why a harness that leaves `MDMPRM_DSPINFO`
+ * at a default faults here and not in `vpcm_create` (docs/configuration.md).
+ */
+static int
+vpcm_delete(struct dp *dp)
+{
+	struct vpcm_root *s = (struct vpcm_root *)dp->dp_data;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("vpcm: delete...\n");
+
+	s->info->clock_deviation = s->params->clockDeviation;
+	s->info->connection_type = (unsigned int)s->params->connectionType;
+
+	VPCMXF_SessionTermination(s->v34.xf);
+	VPCMXF_Delete(s->v34.xf);
+	K56FLEX_Delete(s->v34.k56);
+	sysdep_free(s);
+
+	return 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * One buffer through the V.PCM datapump.
  */
 static int
@@ -449,293 +736,6 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 	s->outq.count = s->outq.count + nproc - count;
 
 	return status;
-}
-
-/*
- * ---------------------------------------------------------------------------
- * Layout, pinned.  Every one of these is an offset `vpcm_run` or
- * `vpcm_create` addresses literally in the disassembly, and the whole point
- * of the struct is that they land where the blob's do.
- */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-
-#define VPCM_ASSERT(name, field, off) \
-	typedef char vpcm_off_##name[ \
-		((int)__builtin_offsetof(struct vpcm_root, field) == (off)) \
-		? 1 : -1]
-
-VPCM_ASSERT(id,	    dp.id,	0x00000);	/* 0x4422 movl $0x22,(%ebx) */
-VPCM_ASSERT(modem,  dp.modem,	0x00004);	/* 0x4439 mov 0x4(%ebx)     */
-VPCM_ASSERT(data,   dp.dp_data,	0x00010);	/* 0x3e55 mov 0x10(%esi)    */
-VPCM_ASSERT(status, status,	0x00014);	/* 0x415b cmp 0x14(%ebx)    */
-VPCM_ASSERT(mode,   mode,	0x00018);	/* 0x3edb mov 0x18(%ebx)    */
-VPCM_ASSERT(nbits,  nbits,	0x0001c);	/* 0x3fbd mov 0x1c(%ebx)    */
-VPCM_ASSERT(stall,  stall,	0x00020);	/* 0x4270 mov 0x20(%ebx)    */
-VPCM_ASSERT(info,   info,	0x00024);	/* 0x3abf mov %eax,0x24     */
-VPCM_ASSERT(params, params,	0x00028);	/* 0x41a6 mov 0x28(%ebx)    */
-VPCM_ASSERT(v34,    v34,	0x0002c);	/* 0x403b lea 0x2c(%ebx)    */
-VPCM_ASSERT(fin,    fin,	0x0ac78);	/* 0x400f fstps 0xac78      */
-VPCM_ASSERT(fout,   fout,	0x0aef8);	/* 0x40d0 flds  0xaef8      */
-VPCM_ASSERT(txbits, txbits,	0x0b178);	/* 0x3ffa mov ...,0xb178    */
-VPCM_ASSERT(rxbits, rxbits,	0x0c178);	/* 0x4120 movzbl 0xc178     */
-VPCM_ASSERT(outq,   outq,	0x0d178);	/* 0x3eba mov 0xd178(%ebx)  */
-VPCM_ASSERT(inq,    inq,	0x0d1e4);	/* 0x3e68 mov 0xd1e4(%ebx)  */
-VPCM_ASSERT(mute,   mute,	0x0d250);	/* 0x3ed5 mov 0xd250(%ebx)  */
-VPCM_ASSERT(deladd, extradelay,	0x0d254);	/* 0x419c mov 0xd254(%ebx)  */
-
-/* `movl $0xd258,(%esp)` at 0x3a42, the whole allocation. */
-typedef char vpcm_root_size[(sizeof(struct vpcm_root) == 0xd258) ? 1 : -1];
-
-/*
- * The queues' capacity is what is left between them and what follows, so it
- * is a consequence of the offsets above rather than an independent claim --
- * asserted anyway, because a `short buf[48]` would fit every test in this
- * tree and still be wrong.
- */
-typedef char vpcm_queue_size[(sizeof(struct vpcm_queue) == 0x6c) ? 1 : -1];
-
-/* Both bit arrays are exactly the clamp, 1024 entries of four bytes. */
-typedef char vpcm_bits_size[
-	(sizeof(((struct vpcm_root *)0)->txbits) == VPCM_MAX_BITS * 4
-	 && sizeof(((struct vpcm_root *)0)->rxbits) == VPCM_MAX_BITS * 4)
-	? 1 : -1];
-
-#endif /* 32-bit */
-
-/*
- * ===========================================================================
- * `vpcm_create` -- 0x3a00, 0x3c9 = 969 bytes.
- * ===========================================================================
- *
- * THREE GUARDS, ONE ALLOCATION AND ONE CLEANUP LADDER.  The guards return
- * NULL through the same epilogue -- 0x3c7f is reached from the `srate`
- * mismatch, the `max_frag` cap and the failed `sysdep_malloc` alike, with
- * `%ecx` zeroed before each jump -- so the three are one `return 0` in the
- * source and not three.
- *
- * `srate` MUST BE EXACTLY 9600 (`cmp $0x2580,%esi; jne`) and `max_frag` must
- * be at most 48 (`cmpl $0x30; jg`).  48 is `MODEM_FRAG`, so the guard value
- * is the host's real value and not a bound (docs/configuration.md).
- *
- * THE ROOT IS ITS OWN `struct dp` and stores its own address at +0x10; see
- * vpcm.h.  It is memset to zero over its whole 0xd258 before any field is
- * written, which is why the three explicit `= 0`s below are worth keeping:
- * they are separate stores in the object at 0x3a9c, 0x3aa3 and 0x3aaa, after
- * the memset, so they are in the source too.
- *
- * `VPcmV34Create` RETURNS ZERO ON EVERY PATH, so the ladder's last rung is
- * dead code in the shipped object -- deviation D149, already recorded.  It is
- * written anyway because the object has it and because the deadness is a
- * property of the callee and not of this function.
- *
- * ---------------------------------------------------------------------------
- * THE MUTE COUNTER'S TEST IS INVERTED FROM WHAT IT LOOKS LIKE
- *
- *     0x3bd4  cmp $0x1,%ecx
- *     0x3bd7  sbb %edi,%edi
- *     0x3bd9  and $0x210,%edi
- *
- * `sbb %edi,%edi` leaves -1 when the carry is set and 0 when it is not, and
- * `cmp $1` sets the carry when the value is BELOW one.  So the mask survives
- * when the V.92 bit is CLEAR and is discarded when it is set: a modem that is
- * NOT doing V.92 mutes its first 528 samples, and one that is does not.  The
- * reading that the shape suggests -- mute when the bit is set -- is the wrong
- * way round, and a test that swept only one value of that bit would not tell
- * the two apart.
- *
- * ---------------------------------------------------------------------------
- * THE DELAY ARITHMETIC
- *
- * `modem_get_param(modem, MDMPRM_IODELAY) + 4` is the hardware delay; the DMA
- * delay is that less 0x30, plus whatever `extradelay` holds.  If the hardware
- * delay EXCEEDS 0xf4 the function first tells the host so
- * (`modem_set_param(modem, 13, 0xf4 - d)`), clamps `extradelay` to at least
- * 0x180 -- `neg` then `cmp $0x180; jge` on the NEGATED difference, so the
- * stored value is a positive number of samples -- and then redoes the
- * arithmetic with 0xf4 in place of the measured delay.  The re-entry at
- * 0x3c03 with `%edx` = 0xf4 is what says the second pass uses the cap and not
- * the original.
- */
-static struct dp *
-vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
-	    struct dp_operations *op)
-{
-	struct vpcm_root *s;
-	unsigned int qcFlags;
-	int side, nsamples, minRate, maxRate, sessionType, hwDelay;
-
-	side = (caller == 0);
-
-	if (srate != VPCM_SRATE)
-		return 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "vpcm: create: dp %d, caller %d, frag %d (size %d).\n",
-		    id, caller, max_frag, (int)sizeof(struct vpcm_root));
-
-	if (max_frag > VPCM_MAX_FRAG)
-		return 0;
-
-	s = sysdep_malloc(sizeof(struct vpcm_root));
-	if (s == 0)
-		return 0;
-
-	sysdep_memset(s, 0, sizeof(struct vpcm_root));
-
-	s->dp.dp_data = s;
-	s->outq.count = 4;
-	s->dp.modem = modem;
-	s->dp.id = id;
-	s->dp.op = op;
-	s->status = 0;
-	s->mode = VPCM_MODE_IDLE;
-	s->stall = 0;
-
-	s->info = (struct dsp_info *)modem_get_param(modem, MDMPRM_DSPINFO);
-	s->params = (struct _tagModemParameters *)dp_param_get(modem);
-	s->params->paramFile = 0;
-
-	/*
-	 * Milliseconds, and `VPCMXF_Create` turns it back into samples with
-	 * the OTHER rate when it is told to.  48 samples at 9600 is 5 ms.
-	 */
-	nsamples = (max_frag * 1000) / srate;
-
-	s->v34.xf = VPCMXF_Create(0, &s->v34, s->params, (unsigned int)nsamples,
-				  0);
-	if (s->v34.xf == 0) {
-		sysdep_free(s);
-		return 0;
-	}
-
-	s->v34.k56 = K56FLEX_Create(0, &s->v34, s->params, nsamples);
-	if (s->v34.k56 == 0) {
-		VPCMXF_Delete(s->v34.xf);
-		sysdep_free(s);
-		return 0;
-	}
-
-	minRate = modem_get_param(modem, MDMPRM_MIN_RATE);
-	maxRate = modem_get_param(modem, MDMPRM_MAX_RATE);
-	if ((unsigned int)maxRate > VPCM_MAX_RATE_CAP)
-		maxRate = (int)VPCM_MAX_RATE_CAP;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("vpcm: VPCM rate limits: %d-%d\n",
-				     minRate, maxRate);
-
-	s->params->vpcmRateLimitLow = (unsigned int)minRate;
-	s->params->vpcmRateLimitHigh = (unsigned int)maxRate;
-	s->params->minRate = VPCM_PARAM_MIN_RATE;
-	s->params->maxRate = VPCM_PARAM_MAX_RATE;
-
-	/*
-	 * The V.92 bit of `qcFlags` survives only when the caller asked for
-	 * the V.92 datapump; every other id clears it.  Then bit 5 is cleared
-	 * unconditionally.  Two read-modify-writes of the same byte, in that
-	 * order, both re-loading it.
-	 */
-	if (id == VPCM_DP_V92)
-		qcFlags = (s->params->qcFlags >> 4) & 1;
-	else
-		qcFlags = 0;
-
-	s->params->qcFlags = (unsigned char)
-	    ((s->params->qcFlags & 0xef) | ((qcFlags & 1) << 4));
-	s->params->qcFlags &= (unsigned char)0xdf;
-
-	/* See the file comment: the mask survives when the bit is CLEAR. */
-	s->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;
-
-	hwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 4;
-	if (VPCM_DELAY_CAP - hwDelay < 0) {
-		int excess;
-
-		modem_set_param(modem, MDMPRM_UPDATE_DELAY,
-				VPCM_DELAY_CAP - hwDelay);
-		excess = -(VPCM_DELAY_CAP - hwDelay);
-		if (excess < VPCM_EXTRADELAY_MIN)
-			excess = VPCM_EXTRADELAY_MIN;
-		s->extradelay = excess;
-		hwDelay = VPCM_DELAY_CAP;
-	}
-
-	/*
-	 * THE DMA DELAY IS STORED TWICE, and the first store is not dead:
-	 * 0x3c09 writes `hwDelay - 0x30` into +0x68, 0x3c0c writes `hwDelay`
-	 * into +0x64, and 0x3c1e writes +0x68 again with `%eax` -- the same
-	 * register, not a reload -- plus `extradelay`.  A compiler that had
-	 * been given one expression would emit one store; a `+=` whose left
-	 * side it has just written keeps the value in a register and emits
-	 * two.  So the three statements below are the source's three.
-	 */
-	s->params->dmaDelay = hwDelay - 0x30;
-	s->params->hwDelay = hwDelay;
-	s->params->dmaDelay += s->extradelay;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("vpcm: Delays: HW %d, DMA %d\n",
-				     s->params->hwDelay, s->params->dmaDelay);
-
-	s->params->addedDelay = 0;
-
-	if (id == VPCM_DP_V92)
-		sessionType = 2;
-	else
-		sessionType = (id == VPCM_DP_V90);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "vpcm: initial dp V.%d, session type %d.\n",
-		    id, sessionType);
-
-	/* D149: this returns 0 on every path, so the arm below is dead. */
-	if (VPcmV34Create(&s->v34, side, max_frag, s->params, sessionType)
-	    != 0) {
-		VPCMXF_Delete(s->v34.xf);
-		K56FLEX_Delete(s->v34.k56);
-		sysdep_free(s);
-		return 0;
-	}
-
-	return &s->dp;
-}
-
-/*
- * ===========================================================================
- * `vpcm_delete` -- 0x3dd0, 0x6e = 110 bytes.
- * ===========================================================================
- *
- * TWO WORDS COPIED OUT THROUGH `dsp_info`, AND THEY ARE THE ONLY THING THIS
- * FUNCTION PRODUCES BESIDES FREED MEMORY.  `connectionType` (+0x48) and
- * `clockDeviation` (+0x4c) of the runtime block go to the host's record at
- * its +0x00 and +0x04, in that order in the source and the reverse in the
- * object -- 0x3dea reads +0x4c and stores it at +0x04 first, then 0x3df0
- * reads +0x48 for +0x00.  Two independent stores, so the order between them
- * is the compiler's.
- *
- * NO NULL TESTS ANYWHERE.  `dp`, `dp->dp_data`, `params` and `info` are all
- * dereferenced unguarded, which is why a harness that leaves `MDMPRM_DSPINFO`
- * at a default faults here and not in `vpcm_create` (docs/configuration.md).
- */
-static int
-vpcm_delete(struct dp *dp)
-{
-	struct vpcm_root *s = (struct vpcm_root *)dp->dp_data;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("vpcm: delete...\n");
-
-	s->info->clock_deviation = s->params->clockDeviation;
-	s->info->connection_type = (unsigned int)s->params->connectionType;
-
-	VPCMXF_SessionTermination(s->v34.xf);
-	VPCMXF_Delete(s->v34.xf);
-	K56FLEX_Delete(s->v34.k56);
-	sysdep_free(s);
-
-	return 0;
 }
 
 /*
