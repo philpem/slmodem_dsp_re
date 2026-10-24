@@ -144,8 +144,8 @@ FAX_create(void *modem, int originate, unsigned int rate)
 
 	ctx->host_frame_samples =
 	    (int)((rate * (unsigned int)CLASS1_BLOCK_SAMPLES) / 8000U);
-	ctx->out_produced = ctx->host_frame_samples;
-	ctx->out_write_half = ctx->host_frame_samples;
+	ctx->out_ring.count = ctx->host_frame_samples;
+	ctx->out_ring.blk = ctx->host_frame_samples;
 
 	sysdep_memset(&local, 0, sizeof(local));
 	s7 = modem_get_sreg(modem, 7);
@@ -382,65 +382,63 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 	ret = 0;
 	while (count > 0) {
-		unsigned int host_frame, chunk;
+		unsigned int chunk;
 		const unsigned char *in_cur;
 		unsigned char *out_cur;
 		unsigned int remaining;
-		int *in_pending;
+		struct fax_ring *in_ring, *out_ring;
 		int last_status;
 
-		host_frame = ctx->host_frame_samples;
-		chunk = (count < host_frame) ? count : host_frame;
+		chunk = (count < ctx->host_frame_samples) ? count : ctx->host_frame_samples;
 
 		in_cur = (const unsigned char *)in;
 		out_cur = (unsigned char *)out;
 		remaining = chunk;
 		last_status = 0;
-		in_pending = &ctx->in_pending;
+		in_ring = &ctx->in_ring;
+		out_ring = &ctx->out_ring;
 
 		while (remaining > 0) {
-			unsigned int cap, copy, room;
+			unsigned int copy, room;
 			short *in_ptr, *out_ptr;
 			short *rx_buf, *tx_buf;
 			int rx_count;
 			int ebx;
 
-			cap = 2 * host_frame;
-
-			copy = host_frame;
+			copy = ctx->host_frame_samples;
 			if (copy > remaining)
 				copy = remaining;
-			room = cap - ctx->in_write_cursor;
+			room = 2 * ctx->host_frame_samples - in_ring->wr;
 			if (copy > room)
 				copy = room;
-			room = cap - ctx->out_read_cursor;
+			room = 2 * ctx->host_frame_samples - out_ring->rd;
 			if (copy > room)
 				copy = room;
 
-			sysdep_memcpy(&ctx->in_ring[ctx->in_write_cursor],
+			sysdep_memcpy(&in_ring->data[in_ring->wr],
 			    in_cur, copy * (int)sizeof(short));
 			in_cur += copy * (int)sizeof(short);
 
-			*in_pending += copy;
-			ctx->in_write_cursor =
-			    (ctx->in_write_cursor + copy) % cap;
+			in_ring->count += copy;
+			in_ring->wr =
+			    (in_ring->wr + copy) % (2 * ctx->host_frame_samples);
 
-			if (*in_pending >= host_frame) {
-				in_ptr = &ctx->in_ring[ctx->in_read_half];
-				out_ptr = &ctx->out_ring[ctx->out_write_half];
+			if (in_ring->count >= ctx->host_frame_samples) {
+				in_ptr = &in_ring->data[in_ring->blk];
+				out_ptr = &out_ring->data[out_ring->blk];
 
 				if (ctx->rc_a != NULL) {
 					int oc = 0xa0;
 
 					RcFixed_Resample(ctx->rc_a, in_ptr,
-					    host_frame, ctx->rx_resampled,
+					    ctx->host_frame_samples, ctx->rx_resampled,
 					    &oc);
 					rx_buf = ctx->rx_resampled;
 					rx_count = oc;
 					tx_buf = ctx->tx_pump_rate;
 				} else {
 					rx_buf = in_ptr;
-					rx_count = host_frame;
+					rx_count = ctx->host_frame_samples;
 					tx_buf = out_ptr;
 				}
 
@@ -579,29 +577,29 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 					int oc2 = 0xa0;
 
 					RcFixed_Resample(ctx->rc_b,
-					    ctx->tx_pump_rate, host_frame,
+					    ctx->tx_pump_rate, ctx->host_frame_samples,
 					    out_ptr, &oc2);
 				}
 
 				if (ebx != 0)
 					last_status = ebx;
 
-				*in_pending -= host_frame;
-				ctx->in_read_half =
-				    (ctx->in_read_half != 0) ? 0 : host_frame;
-				ctx->out_produced += host_frame;
-				ctx->out_write_half =
-				    (ctx->out_write_half != 0) ? 0 :
-				    host_frame;
+				in_ring->count -= ctx->host_frame_samples;
+				in_ring->blk =
+				    (in_ring->blk != 0) ? 0 : ctx->host_frame_samples;
+				out_ring->count += ctx->host_frame_samples;
+				out_ring->blk =
+				    (out_ring->blk != 0) ? 0 :
+				    ctx->host_frame_samples;
 			}
 
 			sysdep_memcpy(out_cur,
-			    &ctx->out_ring[ctx->out_read_cursor],
+			    &out_ring->data[out_ring->rd],
 			    copy * (int)sizeof(short));
 			out_cur += copy * (int)sizeof(short);
-			ctx->out_produced -= copy;
-			ctx->out_read_cursor =
-			    (ctx->out_read_cursor + copy) % cap;
+			out_ring->count -= copy;
+			out_ring->rd =
+			    (out_ring->rd + copy) % (2 * ctx->host_frame_samples);
 
 			remaining -= copy;
 		}
