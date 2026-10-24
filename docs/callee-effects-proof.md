@@ -265,10 +265,88 @@ placement. The missing-layout fixture is likewise accepted by the old
 predicate and refused because the manifest layout cannot explain the linked
 section's size.
 
+## COMDAT section targets
+
+#357's supplementary scan proved `_same_linked_body` for all 1,726 names with
+exactly one strong, sized `STT_FUNC` definition among the manifest inputs. It
+passed 1,661 and refused 65. The measured composition is **64 COMDAT refusals
+in 19 distinct `.gnu.linkonce.t.*` groups plus one ordinary-section refusal**.
+The 64 are named-symbol relocations whose target function is defined in a
+COMDAT section, not section-symbol relocations to one; all **319** references
+to linkonce-defined targets in the 300-input tree are named-symbol references.
+The 65th is `GetDialerConfig`: an `R_386_32` against ordinary `.rodata` whose
+source addend is `-12`, a section-relative base for an indexed table. Its
+observed linked addend is placement minus 12, but the existing check reads the
+addend unsigned and compares the resulting non-modular delta. That ordinary
+case is **not** modelled here and stays refused; it is independent of COMDAT.
+
+### Kept-copy evidence
+
+The 300 manifest inputs contain **119 `.gnu.linkonce.t.*` section occurrences
+forming 85 distinct names**; 32 names have more than one contributing object.
+The partial link contains 85 unique `.gnu.linkonce.t.*` sections, so `ld -r`
+deduplicated the groups rather than concatenating them. For every one of the
+85 groups the linked section's masked bytes, relocation shape, size and
+alignment equal the **first contributor in the manifest's order**. That is an
+observation, not an assumption: four groups have copies that differ outside
+relocated fields (different register allocation), and for those the linked
+bytes match the first copy and differ from the later one. The blob is the
+independent control: it is a deduplicated ET_REL artifact with 79 unique
+`.gnu.linkonce.t.*` and 4 unique `.gnu.linkonce.r.*` sections and no duplicate
+name.
+
+### Model and refusals
+
+`_section_placement()` now routes a `.gnu.linkonce.t.*` name to
+`_comdat_section_placement()`. Name-based COMDAT keeps the first contributing
+section, so the kept group occupies offset **0** of its own linked output
+section. Before returning that placement the resolver requires:
+
+- the manifest-selected copy contributes the named section;
+- every contributor agrees on section size and alignment (otherwise the group
+  is ambiguous);
+- the linked object contains exactly one section of that name, of the first
+  contributor's size and alignment;
+- the linked section's masked bytes and relocation shape equal the **first**
+  contributor's.
+
+A missing group, an ambiguous or duplicate linked section, disagreeing
+contributor sizes/alignments, or linked bytes that are not the first copy all
+refuse. Later copies are deliberately not required to be byte-identical:
+register allocation can differ between translation units, and the linker keeps
+the first regardless. The existing named-symbol check still requires the linked
+symbol value to move by this placement, so a symbol at a different offset in
+the kept copy is refused. Ordinary section names and the other `.gnu.linkonce.*`
+kinds keep the previous concatenation path unchanged.
+
+### Controls
+
+`callee_effects_controls.py` adds synthetic Gentoo-assembled COMDAT fixtures:
+**1 positive and 6 refusals**, plus **1 pre-change refusal**. The positive has
+two contributors to `.gnu.linkonce.t.comdat_probe` and proves the *discarded*
+source copy; the link keeps the first, and the certificate reports
+`symbol_rebases['comdat_probe']` with the group as both source and resolved
+section, value delta 0 and addend delta 0. The linked group bytes are asserted
+equal to the first copy and different from the source copy. The refusals are:
+the link keeps the second copy while the manifest names the first; a changed
+byte in the linked group; contributors that disagree on size; a linked size
+that disagrees with the manifest's first copy; a duplicated linked section
+name; and a missing linked group. A replica of the old concatenation predicate
+(sum every contributor; require the sum to equal the linked size) refuses the
+positive, which is the measured pre-change behaviour.
+
+The 65 refusals reduce to 64 COMDAT cases resolved and the one ordinary
+negative-addend case left refused; the pre-change code refused all 65.
+
 The frame suite passes 39/39, fixed-SETcc 135/135, the fixed-ABI suite 35/35
 with the real V32 pair EXACT, the base jumptable suite 47 synthetic/2 real,
 induction 20/20, `byteident --self-test` 79 checks (20 register, 59 relocation)
-and `byteident --ratchet-self-test` 28/28.
+and `byteident --ratchet-self-test` 28/28. The census is unchanged at
+**1,146 EXACT / 0 UNRESOLVED / 36 REGALLOC / 87 BYTES / 583 SIZE** (grade 0 or
+1: 1,182; the base at `366eb7f0d` measures the same 87 BYTES), the ratchet
+passes, link-selected EXACT remains **1,149** with 32/32 selected bodies
+matching an input copy, and the blob sha256 remains
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
 
 ## Recommendations after the tests
 

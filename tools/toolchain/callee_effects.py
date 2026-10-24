@@ -296,6 +296,103 @@ def _unique_section(elf, name, what):
     return sections[0]
 
 
+def _elf_section_identity(elf, section_name):
+    """Masked bytes and relocation shape of one named section.
+
+    `ld -r` rewrites a relocation's four-byte addend field and leaves the rest
+    of a section unchanged. Masking those fields makes a COMDAT input copy
+    directly comparable with the linked output section, so the resolver can
+    observe which input copy the linker kept instead of assuming one.
+    """
+    require(elf.elfclass == 32 and elf.little_endian and
+            elf['e_type'] == 'ET_REL', 'unsupported COMDAT section ELF/ABI')
+    section = _unique_section(elf, section_name, 'COMDAT')
+    index = elf.get_section_index(section_name)
+    raw = bytearray(section.data())
+    relocations = []
+    for sec in elf.iter_sections():
+        if not isinstance(sec, RelocationSection) or sec['sh_info'] != index:
+            continue
+        table = elf.get_section(sec['sh_link'])
+        require(table is not None and table['sh_type'] == 'SHT_SYMTAB',
+                'COMDAT relocation symbol table')
+        for relocation in sec.iter_relocations():
+            require(relocation['r_info_type'] in (1, 2),
+                    'unsupported COMDAT relocation')
+            offset = relocation['r_offset']
+            require(0 <= offset and offset + 4 <= len(raw),
+                    'cross-boundary COMDAT relocation')
+            target = table.get_symbol(relocation['r_info_sym'])
+            if (target['st_info']['type'] == 'STT_SECTION' and
+                    isinstance(target['st_shndx'], int)):
+                key = ('section', elf.get_section(target['st_shndx']).name)
+            else:
+                key = ('symbol', target.name,
+                       elf.get_section(target['st_shndx']).name
+                       if isinstance(target['st_shndx'], int)
+                       else str(target['st_shndx']))
+            relocations.append((offset, relocation['r_info_type'], key))
+            raw[offset:offset + 4] = b'\0\0\0\0'
+    return (bytes(raw), tuple(sorted(relocations)),
+            section['sh_size'], section['sh_addralign'])
+
+
+def _section_identity(path, section_name):
+    with open(path, 'rb') as stream:
+        return _elf_section_identity(ELFFile(stream), section_name)
+
+
+def _comdat_section_placement(inputs, selected, section_name, linked_elf):
+    """Placement of the kept name-based COMDAT group in its linked section.
+
+    GNU `ld -r` keeps the first `.gnu.linkonce.*` section of a given name in
+    input order and discards every later copy. The output section therefore
+    contains the kept copy alone at offset 0. The kept copy is not guessed: the
+    manifest's first contributor is compared with the linked section's masked
+    bytes and relocation shape, and any disagreement refuses. Copies may
+    legitimately differ outside relocated fields (different register
+    allocation), so only the first contributor's identity is required; every
+    contributor must still agree on size and alignment, otherwise the group is
+    ambiguous.
+    """
+    contributors = []
+    kept_size = kept_align = None
+    for index, path in enumerate(inputs):
+        with open(path, 'rb') as stream:
+            elf = ELFFile(stream)
+            require(elf.elfclass == 32 and elf.little_endian and
+                    elf['e_type'] == 'ET_REL',
+                    'unsupported manifest object ELF/ABI')
+            matching = [s for s in elf.iter_sections() if s.name == section_name]
+        require(len(matching) <= 1, 'ambiguous input section: ' + section_name)
+        if not matching:
+            continue
+        section = matching[0]
+        if kept_size is None:
+            kept_size = section['sh_size']
+            kept_align = section['sh_addralign']
+        else:
+            require(section['sh_size'] == kept_size and
+                    section['sh_addralign'] == kept_align,
+                    'COMDAT group copies disagree on size/alignment: ' + section_name)
+        contributors.append((index, path))
+    require(contributors,
+            'manifest-selected copy has no target section: ' + section_name)
+    require(any(index == selected for index, _ in contributors),
+            'manifest-selected copy has no target section: ' + section_name)
+    kept = _section_identity(str(contributors[0][1]), section_name)
+    linked_section = _unique_section(linked_elf, section_name, 'linked')
+    require(linked_section['sh_size'] == kept[2] and
+            linked_section['sh_addralign'] == kept[3],
+            'linked COMDAT section size/alignment differs from the kept group: '
+            + section_name)
+    linked = _elf_section_identity(linked_elf, section_name)
+    require(linked[:2] == kept[:2],
+            'linked COMDAT section is not the first contributing input: '
+            + section_name)
+    return 0
+
+
 def _section_placement(manifest, source, section_name, linked_elf):
     """Where `source`'s named input section landed in the linked output section.
 
@@ -304,6 +401,10 @@ def _section_placement(manifest, source, section_name, linked_elf):
     from the manifest's section headers and requiring it to explain the linked
     section's whole size turns the expected relocation delta into an observed
     placement rather than a guess.
+
+    A `.gnu.linkonce.t.*` name is name-based COMDAT rather than a concatenated
+    section, so it takes the kept-group path above. Every other section name
+    keeps the ordinary concatenation checks unchanged.
     """
     inputs = _manifest_inputs(manifest)
     source = os.path.realpath(str(source))
@@ -312,6 +413,9 @@ def _section_placement(manifest, source, section_name, linked_elf):
     require(len(indices) == 1,
             'manifest-selected copy is not a unique ordered link input')
     selected = indices[0]
+    if section_name.startswith('.gnu.linkonce.t.'):
+        return _comdat_section_placement(inputs, selected, section_name,
+                                         linked_elf)
     cursor = 0
     placement = None
     for index, path in enumerate(inputs):

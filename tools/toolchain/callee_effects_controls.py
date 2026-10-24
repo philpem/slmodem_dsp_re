@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import subprocess
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
@@ -133,10 +134,38 @@ def main():
         'x-sym-callee':sym_callee,
         'x-extdata':extdata,
     }
+    comdat_group='.gnu.linkonce.t.comdat_probe'
+    comdat_b=('.section .gnu.linkonce.t.comdat_probe,"ax",@progbits\n'
+              '.globl comdat_probe\n.type comdat_probe,@function\n'
+              'comdat_probe:\nmov $2,%eax\nret\n'
+              '.size comdat_probe,.-comdat_probe\n'
+              '.section .co_duplicate_marker,"a",@progbits\n.byte 0\n'
+              '.section .note.GNU-stack,"",@progbits\n')
+    comdat_short=('.section .gnu.linkonce.t.comdat_probe,"ax",@progbits\n'
+                  '.globl comdat_probe\n.type comdat_probe,@function\n'
+                  'comdat_probe:\nxor %eax,%eax\nret\n'
+                  '.size comdat_probe,.-comdat_probe\n'
+                  '.section .note.GNU-stack,"",@progbits\n')
+    comdat_caller=('.text\n.globl unique_callee\n.type unique_callee,@function\n'
+                   'unique_callee:\ncall comdat_probe\nret\n'
+                   '.size unique_callee,.-unique_callee\n'
+                   '.section .gnu.linkonce.t.comdat_probe,"ax",@progbits\n'
+                   '.globl comdat_probe\n.type comdat_probe,@function\n'
+                   'comdat_probe:\nmov $1,%eax\nret\n'
+                   '.size comdat_probe,.-comdat_probe\n'
+                   '.section .note.GNU-stack,"",@progbits\n')
+    comdat_unique_only=('.text\n.globl unique_callee\n.type unique_callee,@function\n'
+                        'unique_callee:\ncall comdat_probe\nret\n'
+                        '.size unique_callee,.-unique_callee\n'
+                        '.section .note.GNU-stack,"",@progbits\n')
+    comdat_sources={'comdat-b':comdat_b,'comdat-short':comdat_short,
+                    'comdat-caller':comdat_caller,
+                    'comdat-unique-only':comdat_unique_only}
     for label,source in all_sources.items(): (out/(label+'.s')).write_text(source)
     for label,source in cross_sources.items(): (out/(label+'.s')).write_text(source)
+    for label,source in comdat_sources.items(): (out/(label+'.s')).write_text(source)
     commands=[f'as --32 -o /work/{relative}/{label}.o /work/{relative}/{label}.s'
-              for label in list(all_sources)+list(cross_sources)]
+              for label in list(all_sources)+list(cross_sources)+list(comdat_sources)]
     commands += [
         f'ld -r -o /work/{relative}/x-link-good.o /work/{relative}/x-good-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-caller-only.o /work/{relative}/x-caller.o',
@@ -144,6 +173,12 @@ def main():
         f'ld -r -o /work/{relative}/x-link-rel.o /work/{relative}/x-rodata-pad.o /work/{relative}/x-rel-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-rel-nopad.o /work/{relative}/x-rel-callee.o /work/{relative}/x-caller.o',
         f'ld -r -o /work/{relative}/x-link-sym.o /work/{relative}/x-extdata.o /work/{relative}/x-sym-callee.o /work/{relative}/x-caller.o',
+        f'ld -r -o /work/{relative}/comdat-link-good.o /work/{relative}/comdat-b.o /work/{relative}/comdat-caller.o',
+        f'ld -r -o /work/{relative}/comdat-link-wrong-order.o /work/{relative}/comdat-caller.o /work/{relative}/comdat-b.o',
+        f'ld -r -o /work/{relative}/comdat-link-short.o /work/{relative}/comdat-short.o /work/{relative}/comdat-caller.o',
+        f'ld -r -o /work/{relative}/comdat-link-nogroup.o /work/{relative}/comdat-unique-only.o',
+        f'objcopy --rename-section .co_duplicate_marker={comdat_group} '
+        f'/work/{relative}/comdat-link-good.o /work/{relative}/comdat-link-duplicate.o',
     ]
     script='set -eu\nas --version\n'+'\n'.join(commands)
     command=['docker','run','--rm','-v',str(ROOT)+':/work',IMAGE,'/bin/sh','-c',script]
@@ -283,6 +318,96 @@ def main():
     else:
         raise AssertionError('missing target section accepted')
     assert 'no target section' in missing_section['absent-target-section']
+    def patch_section_byte(source,target,name,offset,value):
+        data=bytearray(Path(source).read_bytes()); elf=ELFFile(io.BytesIO(data))
+        section=elf.get_section_by_name(name)
+        data[section['sh_offset']+offset]=value
+        Path(target).write_bytes(bytes(data))
+    def pre_change_comdat_placement(source,linked,name,manifest):
+        """The pre-change check: concatenate every COMDAT contributor."""
+        inputs=c._manifest_inputs(manifest)
+        source=os.path.realpath(str(source))
+        selected=[i for i,path in enumerate(inputs)
+                  if os.path.realpath(str(path))==source]
+        if len(selected)!=1: return False
+        cursor=0; placement=None
+        for index,path in enumerate(inputs):
+            with open(path,'rb') as stream:
+                elf=ELFFile(stream)
+                matching=[s for s in elf.iter_sections() if s.name==name]
+            if len(matching)>1: return False
+            if matching:
+                section=matching[0]
+                cursor=c._align_up(cursor,section['sh_addralign'])
+                if index==selected[0]: placement=cursor
+                cursor+=section['sh_size']
+        if placement is None: return False
+        try:
+            with open(linked,'rb') as stream:
+                linked_section=c._unique_section(ELFFile(stream),name,'linked')
+        except c.Refused:
+            return False
+        return cursor==linked_section['sh_size']
+    comdat={}
+    def comdat_case(label,linked,objects,expect=True):
+        local_manifest=out/(label+'.manifest')
+        local_manifest.write_text(''.join(f'{obj} {obj[:-2]}.s\n' for obj in objects))
+        try:
+            rebase=c._same_linked_body(str(out/'comdat-caller.o'),str(out/linked),
+                                       'unique_callee',str(local_manifest))
+            accepted=True; reason=None
+        except c.Refused as error:
+            accepted=False; reason=str(error); rebase=None
+        assert accepted==expect,(label,accepted,reason)
+        comdat[label]={'accepted':accepted,'reason':reason,'rebase':rebase}
+        return rebase
+    good=comdat_case('comdat-linked-positive','comdat-link-good.o',
+                     ['comdat-b.o','comdat-caller.o'])
+    assert good['section_rebases']=={}
+    assert good['symbol_rebases']['comdat_probe']=={
+        'section':comdat_group,'resolved_section':comdat_group,
+        'observed_value_delta':0,'observed_addend_delta':0}
+    assert (section_data(out/'comdat-link-good.o',comdat_group)==
+            section_data(out/'comdat-b.o',comdat_group))
+    assert (section_data(out/'comdat-link-good.o',comdat_group)!=
+            section_data(out/'comdat-caller.o',comdat_group))
+    comdat_case('comdat-wrong-kept-copy','comdat-link-wrong-order.o',
+                ['comdat-b.o','comdat-caller.o'],expect=False)
+    assert ('not the first contributing input' in
+            comdat['comdat-wrong-kept-copy']['reason'])
+    patch_section_byte(out/'comdat-link-good.o',out/'comdat-link-changed.o',
+                       comdat_group,1,3)
+    comdat_case('comdat-changed-group','comdat-link-changed.o',
+                ['comdat-b.o','comdat-caller.o'],expect=False)
+    assert ('not the first contributing input' in
+            comdat['comdat-changed-group']['reason'])
+    comdat_case('comdat-copies-disagree','comdat-link-short.o',
+                ['comdat-short.o','comdat-caller.o'],expect=False)
+    assert ('disagree on size/alignment' in
+            comdat['comdat-copies-disagree']['reason'])
+    comdat_case('comdat-linked-size-disagrees','comdat-link-short.o',
+                ['comdat-b.o','comdat-caller.o'],expect=False)
+    assert ('size/alignment differs from the kept group' in
+            comdat['comdat-linked-size-disagrees']['reason'])
+    comdat_case('comdat-duplicate-group','comdat-link-duplicate.o',
+                ['comdat-b.o','comdat-caller.o'],expect=False)
+    assert ('missing or ambiguous' in
+            comdat['comdat-duplicate-group']['reason'])
+    missing_group=out/'comdat-missing-group.manifest'
+    missing_group.write_text('comdat-b.o comdat-b.s\n'
+                             'comdat-caller.o comdat-caller.s\n')
+    try:
+        with open(out/'comdat-link-nogroup.o','rb') as stream:
+            c._section_placement(str(missing_group),str(out/'comdat-caller.o'),
+                                 comdat_group,ELFFile(stream))
+    except c.Refused as error:
+        comdat['comdat-missing-group']={'accepted':False,'reason':str(error)}
+    else:
+        raise AssertionError('missing COMDAT group accepted')
+    assert 'missing or ambiguous' in comdat['comdat-missing-group']['reason']
+    assert not pre_change_comdat_placement(
+        out/'comdat-caller.o',out/'comdat-link-good.o',comdat_group,
+        out/'comdat-linked-positive.manifest')
     native=c.prove_call(str(ROOT/'ref/slmodemd/dsplibs.o'),'v22_local_loop',0x8a94f,1,44)
     assert native['call']['resolution']=='per-tu'
     assert native['instructions']==94 and native['paths']==4 and native['store_instructions']==17
@@ -317,16 +442,19 @@ def main():
     assert framed['count']==14 and record['capacity']==44
     assert record['callee']['size']==315 and record['callee']['paths']==32
     payload={'controls':results,'cache_controls':cache_controls,
-             'cross_tu_controls':cross_controls,'native':native,
+             'cross_tu_controls':cross_controls,'comdat_controls':comdat,
+             'native':native,
              'reconstructed_v22':{'callee':reconstructed,'frame':framed},
              'command':command,'assembler':assembled.stdout,
              'positive':len(positive),'negative':len(negative),
              'cross_positive':3,'cross_negative':6,'cross_per_object':1,
+             'comdat_positive':1,'comdat_negative':6,'comdat_prechange':1,
              'missing_section_controls':missing_section}
     (out/'results.json').write_text(json.dumps(payload,indent=2)+'\n')
     print(f'{len(positive)} positive leaf/call controls; {len(negative)} adversarial refusals; '
           f'10 cross-TU controls (3 positive, 6 refusals, 1 per-object) plus '
           f'1 missing-target-section refusal; '
+          f'1 COMDAT positive, 6 COMDAT refusals and 1 pre-change refusal; '
           f'native 94 instructions / 17 stores / 4 paths; reconstructed 315-byte callee / '
           f'32 paths / 44-byte envelope; preserved-bit and 2 stale-cache negatives passed')
 
