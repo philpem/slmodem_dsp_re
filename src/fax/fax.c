@@ -382,10 +382,11 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 	ret = 0;
 	while (count > 0) {
-		unsigned int host_frame, chunk, remaining;
-		int out_read_cursor_snap;
+		unsigned int host_frame, chunk;
 		const unsigned char *in_cur;
 		unsigned char *out_cur;
+		unsigned int remaining;
+		int *in_pending;
 		int last_status;
 
 		host_frame = ctx->host_frame_samples;
@@ -395,7 +396,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 		out_cur = (unsigned char *)out;
 		remaining = chunk;
 		last_status = 0;
-		out_read_cursor_snap = ctx->out_read_cursor;
+		in_pending = &ctx->in_pending;
 
 		while (remaining > 0) {
 			unsigned int cap, copy, room;
@@ -412,7 +413,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 			room = cap - ctx->in_write_cursor;
 			if (copy > room)
 				copy = room;
-			room = cap - out_read_cursor_snap;
+			room = cap - ctx->out_read_cursor;
 			if (copy > room)
 				copy = room;
 
@@ -420,11 +421,11 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 			    in_cur, copy * (int)sizeof(short));
 			in_cur += copy * (int)sizeof(short);
 
-			ctx->in_pending += copy;
+			*in_pending += copy;
 			ctx->in_write_cursor =
 			    (ctx->in_write_cursor + copy) % cap;
 
-			if (ctx->in_pending >= host_frame) {
+			if (*in_pending >= host_frame) {
 				in_ptr = &ctx->in_ring[ctx->in_read_half];
 				out_ptr = &ctx->out_ring[ctx->out_write_half];
 
@@ -585,7 +586,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 				if (ebx != 0)
 					last_status = ebx;
 
-				ctx->in_pending -= host_frame;
+				*in_pending -= host_frame;
 				ctx->in_read_half =
 				    (ctx->in_read_half != 0) ? 0 : host_frame;
 				ctx->out_produced += host_frame;
