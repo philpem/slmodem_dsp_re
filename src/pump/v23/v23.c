@@ -93,13 +93,6 @@ static struct dp_operations v23_ops = {
 	/* use_count and hangup are zero */
 };
 
-int
-dp_v23_init(void)
-{
-	modem_dp_register(DP_V23, &v23_ops);
-	return 0;
-}
-
 static struct dp *
 v23_create(void *modem, int id, int caller, int srate, int max_frag,
 	   struct dp_operations *op)
@@ -147,11 +140,6 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
 	}
 
 	return &dp->dp;
-}
-void
-dp_v23_exit(void)
-{
-	modem_dp_deregister(DP_V23, &v23_ops);
 }
 
 
@@ -283,6 +271,19 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 		dsplibs_debug_printf("v23: V23STAT: --> %d\n", modem_status);
 	dp->status = (unsigned)status;
 	return status;
+}
+
+int
+dp_v23_init(void)
+{
+	modem_dp_register(DP_V23, &v23_ops);
+	return 0;
+}
+
+void
+dp_v23_exit(void)
+{
+	modem_dp_deregister(DP_V23, &v23_ops);
 }
 
 /*
