@@ -1,4 +1,16 @@
 {
   "version": 1,
-  "displaced": []
+  "displaced": [
+    {
+      "symbol": "dp_vpcm_exit",
+      "metric": "exact",
+      "from": "EXACT",
+      "to": "REGALLOC",
+      "body_sha256": "25cb19f70f421dd65f6001e47b8bfa020d67cd6eaedd86c58591ba8df712051d",
+      "phase": "order",
+      "cause": "vpcm.c definition order corrected to the blob's emission order (create, delete, run); the -frename-registers cursor entering dp_vpcm_init/exit rotates once",
+      "recovery": "closing vpcm_run (10 instructions/5 bytes) and vpcm_create (18 bytes) restores the cursor; re-measure dp_vpcm_exit then",
+      "evidence": "docs/vpcm-emission-order.md"
+    }
+  ]
 }

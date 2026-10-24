@@ -80,7 +80,10 @@ bodies: `body_sha256` pins the WORST per-TU copy the census scored, while
 `metric=exact` requires the former, `metric=selected` the latter, and
 `metric=both` both.  A selected-body pin is read from the input copy that
 `linkedcopies` proves matches the linked body, so unrelated size changes do
-not move it.  A loss moves metric only when an entry matches the loss, the
+not move it.  A name the link defines only ONCE has no independent phase-2
+identity -- the linked body is its only body -- so its selected loss is the
+same event as its per-TU EXACT loss and is covered by the `exact` entry; the
+selected check applies to multiply-defined names.  A loss moves metric only when an entry matches the loss, the
 evidence path exists, and the relevant hash still describes the current body.
 Stale entries fail: an unreviewed drift must not be inherited as permission.
 """
@@ -1434,7 +1437,8 @@ def _ratchet_membership(was, now):
 
 
 def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
-                         root=ROOT, selected_digest=None):
+                         root=ROOT, selected_digest=None,
+                         multiply_defined=None):
     """The three-phase ratchet decision, as a pure function.
 
     Returns `(failures, allowed)`.  `failures` is a list of human-readable
@@ -1451,6 +1455,11 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
         BYTES while the selected body was EXACT.  It is checked against
         `selected_body_sha256`, the body the recovered-order link SELECTS, so
         a changed selected body cannot hide behind an unchanged worst twin.
+      * When `multiply_defined` is supplied, a name absent from it has one
+        definition, so its selected set membership IS its per-TU membership;
+        the selected loop skips it and the exact check above carries the
+        evidence.  Without the parameter every name is checked independently
+        (the pure-function default, used by the self-test).
       * `metric=both` entries carry both pins and each phase checks its own.
       * An entry that matches no current loss is stale and fails.
     """
@@ -1536,6 +1545,11 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
         for symbol in sorted(
                 set(was.get(RATCHET_SELECTED_EXACT_SYMBOLS, [])) -
                 selected_now):
+            if multiply_defined is not None and symbol not in multiply_defined:
+                # One definition: phase 2 is phase 0.  The exact check owns
+                # this loss; requiring a second selected pin would demand
+                # evidence about a body that does not exist separately.
+                continue
             problem = consume(symbol, "selected", False)
             if problem is None:
                 allowed.append(("selected", symbol))
@@ -1687,6 +1701,27 @@ def ratchet_self_test():
         selected_was, selected_lost, [], digest, set(),
         selected_digest=selected_digest)
     check("selected loss without an entry fails",
+          any("link-selected EXACT loss a" in f for f in failures))
+
+    # A name with ONE definition has no independent phase-2 identity.
+    single_was = row(["a"], ["a"], ["a"], [])
+    single_lost = row([], ["a"], [], ["a"])
+    failures, allowed = ratchet_displacement(
+        single_was, single_lost, [entry("a", metric="exact")], digest, {"a"},
+        selected_digest=selected_digest, multiply_defined=set())
+    check("single-definition exact+selected loss displaced by one exact entry",
+          not failures and ("exact", "a") in allowed)
+    failures, _ = ratchet_displacement(
+        single_was, single_lost, [], digest, {"a"},
+        selected_digest=selected_digest, multiply_defined=set())
+    check("single-definition exact loss still needs its entry",
+          any("EXACT loss a" in f for f in failures)
+          and not any("link-selected" in f for f in failures))
+    failures, _ = ratchet_displacement(
+        row(["a"], ["a"], ["a"], []), row(["a"], ["a"], [], ["a"]),
+        [], digest, set(), selected_digest=selected_digest,
+        multiply_defined={"a"})
+    check("multiply-defined selected loss still needs its entry",
           any("link-selected EXACT loss a" in f for f in failures))
 
     failures, _ = ratchet_displacement(
@@ -2253,7 +2288,10 @@ def main():
             was, now, displaced,
             lambda symbol: _current_body_digest(ours, symbol),
             set(k for _, _, k in buckets["REGALLOC"]),
-            selected_digest=selected_body)
+            selected_digest=selected_body,
+            multiply_defined={row.get("symbol") for row in
+                              link_report.get("duplicates", [])
+                              if isinstance(row, dict)})
         if failures:
             print("\nRATCHET FAILED -- a banked symbol left the three-phase "
                   "floor and the\nevidence does not justify it.  `make period` "

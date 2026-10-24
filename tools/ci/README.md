@@ -11,8 +11,11 @@ separately. An exact loss is accepted only by an entry whose `metric` is
 `exact` or `both` and whose `body_sha256` still matches the worst per-TU head
 body. A link-selected loss uses `selected_body_sha256`, the body the
 recovered-order link selects; `metric=both` requires both hashes. A
-`selected`-only entry can never excuse an exact loss. The ledger is validated
-by `byteident.validate_displaced`, so both tools use one schema.
+`selected`-only entry can never excuse an exact loss. A name the link defines
+once has no independent selected identity, so its selected loss is the same
+event as its per-TU loss and the `exact` entry covers it; the selected check
+applies to multiply-defined names. The ledger is validated by
+`byteident.validate_displaced`, so both tools use one schema.
 
 After reviewing a structural recovery against original instructions, complete-TU
 collateral and the period differential gate, record an accepted codegen loss in
