@@ -139056,3 +139056,105 @@ recorded as a measured compiler-block-ordering blocker (same class as the
 
 No source change for this symbol; no linked-position effect. Gate and
 census for the wave are those in F12012.
+
+## F12015. `V21RX_control`'s HDX flag assignment is a `> 0` comparison, not `!= 0`; the fold chooses shift-and for one and setcc for the other
+
+`V21RX_control` (blob 0x0a2410, 75 bytes) was grade 0 BYTES 23 with
+`--why` rejecting on `row 8 MNEMONIC xor vs mov`. The object's block is
+
+    mov    0x4(%edx),%ecx
+    xor    %eax,%eax
+    mov    %ecx,0x8(%ebx)
+    mov    0x4c(%ebx),%ecx
+    movzbl 0xd(%edx),%edx
+    test   $0x10,%dl
+    setne  %al
+    mov    %eax,(%ecx)
+    test   $0x2,%dl
+
+and ours computed the same predicate as `(flags & 0x10) >> 4`, i.e.
+`mov %edx,%eax ; shr $0x4,%eax ; and $0x1,%eax`, with no zeroing `xor`.
+Every other instruction and both fields agree; the symbol is 75 bytes on
+both sides and both `int_0000` (0x4c/%ecx) and `cfg->int_0008` stores are
+present at the same relative offsets.
+
+Nine equivalent predicate spellings were compiled as complete
+`V21r_stc.c` translation units with the period compiler and
+`DSPLIB_REPRODUCE_BUGS`; `flags` is an `unsigned char` local loaded once, so
+`(flags & 0x10)` is an `int` in {0,16} and every cell below is semantically
+identical:
+
+| source spelling | emission | bytes differ |
+|---|---|---|
+| `(flags & V21RXCTL_SET_HDX_INT0000) != 0` (baseline) | `shr $0x4 / and $0x1` | 23 |
+| `... ? 1 : 0` | same as baseline | 23 |
+| `!!(flags & V21RXCTL_SET_HDX_INT0000)` | same as baseline | 23 |
+| `int set = (...) != 0; int_0000 = set;` | still no setcc | 22 |
+| `unsigned char set = (...) != 0;` | still no setcc | 22 |
+| `(flags >> 4) & 1` | shift/and (the value, written out) | 22 |
+| `(...) == V21RXCTL_SET_HDX_INT0000` | same as baseline | 23 |
+| `(flags & 0x10) == 0x10` | same as baseline | 23 |
+| `(flags & V21RXCTL_SET_HDX_INT0000) > 0` | `xor/test/setne`, exactly the object | **EXACT** |
+
+The mechanism is GCC 3.4.2's fold of an unsigned bit test: `(x & C) != 0`
+canonicalises to `(x >> log2 C) & 1`, while the ORDERING comparison `> 0`
+is left as a compare against zero and if-converts to `setne`. Exactly one
+cell maps onto the object, so the source's comparison operator is recovered
+within that declared family rather than chosen by byte count. The recovered
+line is `rx->hdx->int_0000 = (flags & V21RXCTL_SET_HDX_INT0000) > 0;`.
+
+Complete-TU collateral was measured by compiling the baseline and the
+candidate `src_fax_V21r_stc.c.o` separately and dumping
+`V21RX_status` (the TU's only other symbol, 0x50..0xd9) with relocations:
+byte, operand and relocation identical. Census moves **1,144 -> 1,145
+EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 -> 86 BYTES / 583 SIZE** over 1,852
+(the single UNRESOLVED is `v22_local_loop`, resolved through the partial
+link in the CI census). Gate: `make period J=3` **394 passed, 0 failed**
+on the merged base `6ee2bd277`. No exact symbol was lost.
+
+## F12016. Closest-SIZE screen, wave 13: four residuals bounded to their compiler mechanism
+
+A general closest-SIZE screen (`byteident.py --near 60`, then the census's
+BYTES list sorted by differing bytes; 1852 symbols, 707 not exact) was run
+on a fresh `build/tc_out`. Excluding the documented closures (arrangement,
+allocation/scheduling list, compiler-behaviour list, exhausted spelling
+domains, the V90 call-edge rows, the SUV wrapper, `DialerProgress`, the
+datapump order family, V.34 waves 9-11, COMDAT/link-selected bodies), the
+smallest residuals were worked and bounded. Each was compiled as complete
+period translation units with the fixed flags:
+
+- `fComputeRMSValueFloatBuf` (BYTES 5/82). The only difference is the entry
+  order of two independent constants: object `xor %eax,%eax ; fld %st(0)`,
+  ours `fld %st(0) ; xor %eax,%eax`; the other 36 instructions, the x87
+  stack use and both fdiv directions agree (`dis.py` Intel pass checked, no
+  discrepancy flagged). Eight declaration/initialiser cells -- `i = 0`
+  declared first, `i` declared first without initialiser, separate
+  declaration lines, `acc` before `sum`, `sum = 0; acc = 0;` assignments,
+  one merged declaration, and `acc = sum` -- all emitted the identical
+  0x52-byte body with the same row-4 `xor vs fld`. Class: scheduler/RTL
+  placement of two constants, not statement order in the tested family.
+- `TxHdxDataV17` (BYTES 8/349, the wave-2 landing). Three live ranges carry
+  `%eax`/`%ecx` swapped (`0x24(%esi)` then its `0x8` field; the underrun
+  arm's `out` argument load; the final `*budget` subtraction), and
+  `alpha_equal` reports a USE CONFLICT, so it is not a consistent renaming.
+  Nine cells: hoisting `short/unsigned short nsamples` to function scope
+  (SIZE 351/348), `short nsamples` in the underrun arm (SIZE 348), the
+  compound `*budget -= taken;` in both/final sites, and the uncast final
+  subtraction all leave the 8 bytes unchanged or make the length wrong.
+  Class: allocator live-range choice; the block-scoped `unsigned short` is
+  the best measured form.
+- `v90RateReneg` (BYTES 14/555). Two independent stores
+  (`seg_symcount` and `txpoint.word = vect4[3]` at r==11, `vect4[1]` at
+  r==12) are emitted in the opposite order from the object at both second
+  increment sites. Swapping the statements at one or both sites measures
+  55 differing bytes, or a one-byte-short SIZE body; `seg_symcount++` and
+  `seg_symcount + 1` leave the 14 bytes unchanged. Class: store scheduling;
+  the source order already matches the object and the compiler reorders it.
+- `voice_command` (`src/voice/voice.c`, BYTES 18/802). The `--why` row is
+  the jump-table relocation (`.rodata` 0xed80 against 0), but the differing
+  bytes outside relocation fields are register roles in the
+  `VOICE_VLS_COMMAND` arm (`%edx/%esi` against `%ecx/%ebx`); the string
+  addends differ only because the section is laid out differently and are
+  not counted. The table base is the TU's `.rodata` placement, not a
+  statement. Class: TU data placement plus allocation; not a per-function
+  source fact.
