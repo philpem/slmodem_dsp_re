@@ -511,11 +511,11 @@ int
 VOICE_process(void *obj, void *in, void *out, int count)
 {
 	struct vce *v = (struct vce *)obj;
-	struct vce_ring *in_ring = &v->in_ring;
-	struct vce_ring *out_ring = &v->out_ring;
 	int ret = 0;
 
 	while (count > 0) {
+		struct vce_ring *in_ring = &v->in_ring;
+		struct vce_ring *out_ring = &v->out_ring;
 		unsigned char *rx = (unsigned char *)in;
 		unsigned char *tx = (unsigned char *)out;
 		int chunk = count;

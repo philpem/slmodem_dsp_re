@@ -139338,6 +139338,84 @@ in place. Gate `make period J=2`: 394 passed, 0 failed. Census 1,146 EXACT /
 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; grade 0-or-1 1,183;
 ratchet OK with the reviewed `dp_vpcm_exit` displacement.
 
+## F12039. `VOICE_process`'s ring pointers are declared inside the outer loop; the four object spills remain an allocator outcome and the measured source ceiling is 465/2013
+
+*2026-10-24.* Baseline `1b6bc4bdf`, Gentoo GCC 3.4.2-r2. `VOICE_process` is
+2,016 B / 466 instructions in the blob and 2,003 / 464 before this pass;
+F12017 attributed the 0x10 frame difference to four object spills (`rlen`
+0x3c, `block`/`outlen` 0x44, `from_line` 0x38, `to_line` 0x34). This pass
+looked for a source structure that forces them, found one source fact that
+is independent of them, and bounded the rest.
+
+| `VOICE_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 2,016 | 2,003 | 2,003 |
+| instructions | 466 | 464 | 464 |
+| LCS | -- | 321 | **331** |
+| longest run | -- | 69 | 69 |
+
+**Adopted: the ring-pointer initialisers belong inside the outer loop.** The
+object tests `count` at 0xbeb/0xbed (`test %esi,%esi` / `jle 0xf91`) and only
+then materialises the two addresses -- `lea 0x1174(%edi),%eax` at 0xbf3,
+`lea 0xe64(%edi),%edx` at 0xbf9, stored to 0x24/0x2c at 0xbff/0xc03. That is
+the loop preheader: the leas execute only when `count > 0`. A function-scope
+initialiser emits them before the test (ours 0x5eb/0x5f5, test 0x5fb); moving
+both declarations to the top of the `while (count > 0)` body emits them after
+the exit test (0x5f3/0x5f9, test 0x5ed), matching the object. The placement
+domain was enumerated: function scope measures LCS 321, top of the outer loop
+331, and top of the inner loop 331 (GCC hoists it to the same preheader), so
+"inside the outer loop" is the only placement consistent with the object.
+Body size and instruction count are unchanged.
+
+**The four spills are not reachable from the tested source domain.** The
+object's 0x7c frame is our 0x6c plus exactly the four slots 0x34, 0x38, 0x3c
+and 0x44; each is a store and a reload our build keeps in a register.
+
+- `outlen` is a real local. The object reloads 0x44 into `%esi` at 0xed1
+  *after* `voice_modem`, then stores it to 0x64 at 0xee5 and passes `0x64` as
+  the second resampler's `out_count` at 0xed5/0xeed; the value therefore
+  crossed the call. Using `int outlen = (int)v->block;` as the first
+  resampler's input count and as `&outlen` later is the matching spelling:
+  461 B / 461 instructions alone (LCS 323), 465 / 2013 with the two pointer
+  locals (LCS 331).
+- `from_line`/`to_line` are source pointer locals. The object computes
+  `lea 0x960(%edi)` at 0xdc0 and stores 0x38 at 0xdc8, computes
+  `lea 0xbe0(%edi)` at 0xdcf and stores 0x34 at 0xdd5, then reloads them at
+  0xdfe/0xe0a into the `voice_modem` arguments. Declaring the two pointers
+  and assigning them after the first scaling loop reproduces the store/reload
+  pair (ours at 0x3c/0x40); declared at function scope they hoist into the
+  prologue (2,019 B / 468 instructions, LCS 322), which is not the object.
+- What does **not** reproduce is the `rlen` pseudo store (`mov 0x70,%esi`
+  0xd84, `mov %esi,0x3c` 0xd8a) and the `block` store at 0xd2e. Enumerated
+  and declined: `rlen` declared / initialised / assigned at block and
+  function scope; a separate `int len = rlen` copy (471 / 2,038, LCS 316,
+  run 35); a `block` local in signed and unsigned form (2,001 / 464);
+  `outlen` unsigned/int and initialised at block, while and function scope;
+  `hostcount`/`blkcount` and `msg`/`i`/`code` declaration orders. Every
+  placement of the two pointers and `outlen` gives the same codegen. The
+  ceiling is 2,013 B / 465 instructions (one instruction and three bytes
+  short, LCS 331); the LCS maximum 336 is at 1,997 / 461. The object holds
+  `v` in `%edi` with `%esi`/`%ebx`/`%ebp` all contended; ours holds `v` in
+  `%ebp` and has those values free, so these are allocator choices and not a
+  statement.
+
+**Measured but not adopted: the outer-local declaration order.** The object's
+outer slots descend `chunk` 0x58, `tx` 0x54, `rx` 0x50, `remaining` 0x4c,
+`pending` 0x48, which is the order GCC assigns to the declarations; their
+declaration order in the object is therefore `chunk`, `tx`, `rx`,
+`remaining`, `pending`, not our `rx`, `tx`, `chunk`, `pending`, `remaining`.
+With the ring-pointer fact this order reproduces the same relative slot map
+(ours 0x48/0x44/0x40/0x3c/0x38) and measures LCS 331 -> 333 at the same
+2,003 / 464. It is recorded rather than adopted because the 5! order domain
+was not fully enumerated and it does not move the target.
+
+Placement effect, disclosed: positioned reference bytes move 75,008 ->
+75,035 of 943,398; the candidate delta is unchanged at -16,064 and the exact
+sections remain 68. Gate `make period J=3`: **394 passed, 0 failed**. Census
+1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE; grade 0-or-1
+1,184; ratchet OK (link-selected 1,150, the reviewed `dp_vpcm_exit`
+displacement unchanged). No flags, padding, fixtures or tests changed.
+
 ## F12040. `FAX_process`: the object's tail is two 0x310-byte RING STRUCTURES, and that sub-structure is what spills `ctx`
 
 F12012/F12038 left `FAX_process` at 1,450 B / 339 instructions against the
