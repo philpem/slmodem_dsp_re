@@ -19,7 +19,11 @@ def main():
             assert grade == ('EXACT' if record['same_identity'] else 'RELOC'), (label, grade)
         else:
             assert grade != 'EXACT', (label, grade)
-            assert not any(target[0] == 'jump-table' for _, target in candidate[1].values()), label
+            # A deliberate ownership defect can make `body` return nothing at
+            # all. There is then no relocation to inspect, and the non-EXACT
+            # grade already records the refusal.
+            if candidate[1] is not None:
+                assert not any(target[0] == 'jump-table' for _, target in candidate[1].values()), label
         results[label] = grade
         print(label + ': ' + grade)
     duplicate = b.body(str(root / 'duplicate-destinations.o'), 'sample')

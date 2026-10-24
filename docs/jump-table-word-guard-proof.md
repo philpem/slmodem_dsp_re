@@ -49,10 +49,17 @@ insufficient:
   its separation from saved registers. Accepting SETcc alone would not prove
   those obligations.
 - `RD_create` has a taken `jbe` at `0x21de` leading to its dispatch at
-  `0x2210`, with no intervening flag-preserving store of the currently
-  supported taken-edge shape. It also passes a frame-local record beginning
-  at `+0x10` to `RingDetector_Create` (`0x21e9..0x21f0`). Generalising its
-  guard parser alone would leave the frame escape unproved.
+  `0x2210`. Its comparison is immediately adjacent to the branch
+  (`sub $4,%eax; cmp $0xb,%eax; jbe`), a shape the taken-edge parser did not
+  admit because it assumed a flag-preserving store between comparison and
+  branch. The parser now accepts that adjacent comparison. The independent
+  frame obligations remain: the caller stores already-saved EBX/ESI/EDI as
+  outgoing arguments, which the save classifier reads as duplicate saves,
+  and it passes a frame-local record beginning at `+0x10` to
+  `RingDetector_Create` (`0x21e9..0x21f0`), which calls
+  `sysdep_malloc`/`dsplibs_debug_printf` and is not a bounded leaf.
+  Generalising the guard parser alone therefore does not close the function
+  and moves no grade.
 
 These are next proof obligations, not findings that the code is unsafe or
 that a source route is exhausted.
@@ -117,6 +124,20 @@ The existing fixed-frame ABI suite also passes: three positive controls,
 width is absent. The fixture and its two negative-control anchors now use
 explicit `movl`. This is a test-apparatus correction.
 
+`tools/toolchain/jumptable_adjacent_guard_controls.py` measures the
+taken-edge adjacent-comparison form by itself. It passes 9 positives (rebased
+and unrebase indices, three registers, one- and 256-entry tables, a rebased
+table, swapped targets and the existing corridor form) and 14 refusals
+(signed and opposite guards, wrong and truncated extents, an ambiguous guard,
+a clobbered-index corridor, a guard target that is not the dispatch, a guard
+after the dispatch, a non-register comparison, a second indirect jump, wrong
+dispatch register or scale, and named/table guard entries). It also runs the
+prover from the branch point
+(`2a9d62fc5:tools/toolchain/jumptable.py`), which refuses both new positives
+with `unsigned immediate/register guard`; that is the measured pre-change
+behaviour rather than a replica. For `RD_create` the blob and the period
+object both pass the guard now and stop at the frame refusal described above.
+
 The complete comparison census is identical to the frozen baseline across
 1852 functions: **1144 EXACT, 36 REGALLOC, 86 BYTES and 586 SIZE**, with zero
 RELOC, UNRESOLVED or NODATA. The ordered exact-symbol membership and all
@@ -140,6 +161,14 @@ the Gentoo image before running:
 ```sh
 python3 tools/toolchain/jumptable_fixed_abi_controls.py \
   --candidate build/tc_out/src_pump_v32_V32loop.c.o
+```
+
+The adjacent-comparison suite reads `RD_create` from the period tree and the
+pre-change prover from the branch point:
+
+```sh
+python3 tools/toolchain/jumptable_adjacent_guard_controls.py \
+  --candidate build/tc_out/src_service_rd.c.o
 ```
 
 The investigation worktree is `/tmp/slmodem-jumptable-unblock`.
