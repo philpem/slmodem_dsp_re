@@ -138897,3 +138897,62 @@ statement is missing; declined (SIZE 54, LCS 199, run 36).
 Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK. No padding,
 flags, attributes, fixtures or ratchet policy changed.
+
+### F12012. `VOICE_process`'s ring pointers and `VOICE_command`'s DTMF floor are source facts; `RingDetector_Reset` and `VOICE_create` stay allocation-bound
+
+*2026-10-24.* Baseline `a86a15e7a` on Gentoo GCC 3.4.2-r2: `VOICE_create`
+505 B (object 493), `VOICE_command` 530 (548), `VOICE_process` 1932 (2016),
+`RingDetector_Reset` 417 (449). Two of the four are body facts and were
+recovered; the other two are register allocation and are reported, not fitted.
+
+**`VOICE_process` keeps both ring addresses as pointer locals.** The object's
+prologue materialises them once -- `lea 0x1174(%edi),%eax` at 0xbf3 and
+`lea 0xe64(%edi),%edx` at 0xbf9 -- stores them to `0x24(%esp)`/`0x2c(%esp)`,
+and thereafter reloads them there (7 and 8 uses) instead of addressing
+`v->in_ring`/`v->out_ring` each time. Declaring
+`struct vce_ring *in_ring = &v->in_ring;` and `*out_ring = &v->out_ring;` and
+using `in_ring->`/`out_ring->` reproduces that: body 1932 -> 2003 B against
+2016, instructions 439 -> 464 against 466, LCS 300 -> 321, longest run 69
+(unchanged). The 13-byte residue is two instructions.
+
+**`VOICE_command`'s DTMF floor is a conditional expression.** The object
+preloads the fallback (`mov $0x1,%ecx` at 0xa8c) before `mull 0x1c(%ebx)` at
+0xa91, tests with `je` at 0xa99 and conditionally moves (`mov %eax,%ecx` at
+0xa9b) -- the signature of `dur ? dur : 1` -- where the `if (dur == 0) dur = 1;`
+spelling emits `jne` plus `mov $0x1,%eax`. The ternary takes the body 530 ->
+532 B against 548, instructions 120 -> 121 against 123, LCS 90 -> 92, run 52.
+Its remaining two instructions are `mov $1,%eax` (0xb30) and `xor %eax,%eax`
+(0xb46), which the object rematerialises inside the TX and RX cold debug
+stubs; two case-order permutations were compiled and are byte-different but
+measurably identical in size, instructions, LCS and run, so source case order
+does not explain them (GCC rematerialises 0 and 1).
+
+**`RingDetector_Reset` is not a missing clear.** Both sides store the same set
+of `struct ring_detector` offsets (`+0x00/04/08/0c/10/14/18/1c/20/28/2c/2e/30/32/34/36/38/3a/3c/3e/40/42/44/46/48/4a/4c/4e/50`); the gap is a 0x3c
+frame against 0x1c (32 bytes) and four spills the object makes and we do not --
+the `fs/80` divisor at `0x34(%esp)` (0x23b6, reloaded by `idivl` at 0x23be),
+`3*fs` at `0x2c(%esp)` (0x23d3/0x23d7), the threshold sign at `0x20(%esp)`
+(0x2456/0x245a) and `guard_limit` at `0x28(%esp)` (0x23f2). F11351's 116-cell
+store-order domain did not move it; no measured source spelling does.
+
+**`VOICE_create` is allocation-bound too.** `if (!rc_in || !rc_out)` is
+if-converted to `sete/sete/or/test` (7 instructions) where the object has two
+`test`/`je` pairs (4). The two-statement spelling matches that shape (129
+against 127 instructions, LCS 101, run 35) but grows the body 505 -> 513 B
+because the prologue keeps `modem` in `%ebp` (four pushes and a 0x3c frame
+against the object's three and 0x30); it was declined as a size regression,
+not adopted.
+
+**Placement effect, disclosed.** The two recovered bodies are +2 and +71
+bytes: the ledger's cumulative delta at `STRM_VCE_GetFDSPEnvironmentalParams`
+moves -112 -> -32 (the `VOICE_process` term becomes absorbed by alignment),
+and `FAX_class1_command`/`FAX_process` -112 -> -32, `RD_create` -464 -> -384,
+`RingDetector_Create` -496 -> -416. The whole-file positioned reference-byte
+count moves 72,839 -> 72,683 of 943,398 with the exact-section count unchanged
+at 68; that aggregate is a layout coincidence measure, not fidelity, and is
+recorded rather than treated as a target.
+
+Gate `make period J=3`: 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE, grade 0-or-1 1,182; ratchet
+OK (link-selected exact 1,148). No flags, padding, fixtures or ratchet policy
+changed.
