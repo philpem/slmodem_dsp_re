@@ -139057,13 +139057,13 @@ recorded as a measured compiler-block-ordering blocker (same class as the
 No source change for this symbol; no linked-position effect. Gate and
 census for the wave are those in F12012.
 
-**Superseded by F12042.** The enumerated domain above varies the switch
+**Superseded by F12043.** The enumerated domain above varies the switch
 *text* while every case body stays shared; the member it does not contain is
 body duplication. Splitting the two 1000-valued cases (4 and 12) into two
 source blocks is a source fact that changes the pre-merge table-edge count and
 hence the reorder frequencies, and it reproduces the object's 1000, 650, 850
 at the same 293 bytes and 77 instructions. The mechanism (`-freorder-blocks`
-STC), not the switch text, still selects the layout; F12042 measures what the
+STC), not the switch text, still selects the layout; F12043 measures what the
 pass is responding to.
 
 ## F12015. `V21RX_control`'s HDX flag assignment is a `> 0` comparison, not `!= 0`; the fold chooses shift-and for one and setcc for the other
@@ -139650,7 +139650,147 @@ that. `FAX_process`'s own body gains 44 in-place bytes. The aggregate is the
 0-or-1 **1,184**, link-selected EXACT **1,150**, ratchet OK (no displacement,
 no flags, no padding, no attributes, no fixture edit).
 
-## F12042. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
+## F12042. `FAX_process`: the missing `rx_buf` home is a `host_frame` lifetime, and four accompanying source facts close the instruction count; 10 bytes of branch encoding remain
+
+*2026-10-24.* Baseline `2df773bea` (PR #375), Gentoo GCC 3.4.2-r2.
+F12041 left `FAX_process` at 1,769 B / 399 instructions against the blob's
+1,809 / 408, frame `0x7c`, LCS 313, run 24, and one missing home: `rx_buf`
+in `0x44`, which pushed `in_ring` from `0x30` to `0x34` and shifted the
+temp block four bytes. F12041 attributed the whole residual 0x40 bytes /
+nine instructions to that home. The home is real, but closing it exposed
+four further source facts the earlier pass had not separated.
+
+| `FAX_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 1,809 | 1,769 | **1,799** |
+| instructions | 408 | 399 | **408** |
+| frame | `0x7c` | `0x7c` | **`0x7c`** |
+| LCS | -- | 313 | **388 (95.1%)** |
+| longest run | -- | 24 | **130** |
+| `RD_create` delta | 0 | -48 | **-16** |
+
+**The slot map now matches the object end to end.** Blob forcing addresses
+are F12041's table; candidate addresses are this build (`FAX_process` at
+0x5c0, frame `sub $0x7c` at 0x5c4):
+
+| slot | value | blob forcing | candidate forcing |
+|---:|---|---|---|
+| 0x30 | `in_ring` base | 0x1a3f | 0x5ef |
+| 0x34 | `ctx->host_tx_buf` | 0x1db9 | 0x95a |
+| 0x38 | `forced` | 0x1b6f, 0x1cd4, ... | 0x71f, 0x884, ... |
+| 0x3c | `rx_count` | 0x1b55, 0x1cbc | 0x705, 0x872 |
+| 0x40 | `tx_buf` | 0x1b6b, 0x1cc6 | 0x71b, 0x876 |
+| 0x44 | `rx_buf` | 0x1b5d, 0x1cad | **0x70d, 0x85d** |
+| 0x48 | `out_ptr` | 0x1b3c | 0x6ec |
+| 0x4c | `last_status` | 0x1a7d, 0x1ba4, 0x1e66 | 0x62d, 0x754, ... |
+| 0x50 | `remaining` | 0x1a92, 0x1c2e, 0x1c39 | 0x642, ... |
+| 0x54 | `out_cur` | 0x1a8e, 0x1c22, 0x1bfa | 0x63e, ... |
+| 0x58 | `in_cur` | 0x1a8a, 0x1ae9, 0x1ad1 | 0x63a, ... |
+| 0x5c | `chunk` | 0x1a64, 0x1a6c, 0x1a70 | 0x614, 0x61c |
+| 0x60 | `ret` | 0x1a19, 0x1e92 | 0x5c9, 0xa16 |
+| 0x64 | `oc2` (address taken) | 0x1e20 | 0x9d0 |
+| 0x68 | `rxc` | 0x1cf7 | 0x89c |
+| 0x6c | `txc` | 0x1cec | 0x8a7 |
+| 0x70 | `w7` | 0x1cfb | 0x8ab |
+| 0x74 | `recv_n` | 0x1d15, 0x1d54 | 0x8c5, 0x8da |
+| 0x78 | `oc` | 0x1c91 | 0x841 |
+
+**The lifetime fact, and the four facts it exposed.**
+
+1. **`unsigned int host_frame = ctx->host_frame_samples` in the
+   `in_ring->count >= ...` block.** The object loads the field into `%esi`
+   at 0x1b20 and holds it across `RcFixed_Resample`,
+   `modem_recv_from_tty`, `fax_class1_progress` and `modem_send_to_tty`;
+   `%esi` is stored to `rx_count` (0x1b55), passed as the first
+   resampler's `in_count` (0x1ca4) and stored as `oc2` (0x1e20). The field
+   is re-read at every ring-update site outside that block, so the local is
+   block-scoped, not a function-scoped `host_frame`. Once `oc2` is
+   `host_frame`, `%esi` is committed to the local and `rx_buf` takes its
+   object home at 0x44; that alone moves `in_ring` to 0x30 and restores the
+   whole temp block (H1: 1,763 B / 400 instructions, LCS 354, run 107,
+   frame `0x7c`, slots aligned).
+2. **`recv_n` is clamped in place, and zeroed in both skip arms.**
+   The object stores `ctx->host_rx_want` to `0x74` at 0x1d15 before the
+   unsigned `cmp $0x1000`/`jbe` at 0x1d19/0x1d1e, stores `0x1000` back at
+   0x1d2a, and stores zero to `0x74` in *both* failure blocks
+   (0x1ec2 for `host_rx_enable == 0`, 0x1eda for `host_rx_want == 0`).
+   The source is therefore nested `if`s with an `else recv_n = 0` at each
+   level, not one `&&` test with a shared else and not an initialiser
+   before the test. The `want` local was ours.
+3. **`remaining` is `int`, not `unsigned int`.** The object's loop guards
+   are signed `jle` at 0x1a96, 0x1c3f and 0x1e5e (`test` + `jle`), while
+   F12012's unsigned spellings produce `je`. The `div`/`jbe` family
+   F12012 adopted is `chunk`/`copy`/`room`, not `remaining`. Retyping only
+   `remaining` moves 1,799 -> 1,819 bytes and LCS 313 -> 386 before the
+   `chunk` fact below.
+4. **`chunk` is a store-then-clamp, not a ternary.** The object stores
+   `count` to `0x5c` at 0x1a64, compares it with `host_frame` and only then
+   stores `host_frame` (0x1a6c). `chunk = count; if (chunk >
+   ctx->host_frame_samples) chunk = ctx->host_frame_samples;` reproduces
+   that; the ternary emits the opposite initialisation and an extra
+   register move (408 vs 410 instructions, 1,799 vs 1,815 bytes).
+5. **The `rcv` debug prints `modem_send_to_tty`'s return, not `recv_n`.**
+   The object's `fax: rcv: %d (%d)` block loads `%eax` at 0x1efb with no
+   reload from `0x74`; `%eax` is the return of the call at 0x1df8. A named
+   `sent` local reproduces it (0x1efb `mov %eax,0x4(%esp)`), and removes
+   the `0x74` reload (1815 -> 1799 bytes, 410 -> 408 instructions).
+
+**Measured domain, Gentoo period compiler.** H1 (`host_frame` only)
+1,763 B / 400 / frame `0x7c` / run 107 / LCS 354. H1 + in-place `recv_n`
+clamp and two zero arms 1,793 / 404 / 355. Adding `int remaining`
+1,819 / 411 / run 130 / LCS 386. Adding the `chunk` if-form 1,799 / 408 /
+run 130 / LCS 388. Adding `sent` was measured at 1,815 / 410 / LCS 388
+before the `chunk` if-form; the two together are the final row. Reordering
+the switch cases to the object's cold-block order (10 cases), to its
+debug-block order, and to the reverse enumeration each changed the block
+layout but measured 1,808-1,828 bytes and 410 instructions with lower LCS
+(379-383); source case order is not the lever, and none was adopted.
+`int status` at the head of the block and `unsigned int count` casts left
+the final body byte-identical.
+
+**The last 10 bytes are branch encoding, not code.** After the five facts
+the two bodies have the same 408 instructions, the same seven alignment
+rows and the same 25 padding bytes; the instruction multiset differs only
+in compare operand order and in block placement. The 10-byte size gap is
+exactly the object's two near `jmp` (5 B) and one near `ja` (6 B) against
+our two short `jmp` (2 B) and one short `ja` (2 B): `6 + 4 = 10`. They are
+GCC block-placement outcomes on the status dispatch tails, not a missing
+source statement. Matching them would require selecting a case ordering
+for its jump distances, which is the fit F7782 declines; the object's own
+cold-block order does not reproduce the distances.
+
+**Corrections to the two earlier findings.** F12012's "`remaining` is
+unsigned" is wrong for the loop guard only; its `div`/`jbe` evidence
+belongs to `chunk`/`copy`/`room` and is unchanged. F12041's "the whole
+residual 0x40 bytes and nine instructions is the missing `rx_buf` home"
+is too strong: the home is necessary but not sufficient; the `recv_n`,
+`remaining`, `chunk` and `sent` facts each move the body, and 10 bytes of
+branch encoding remain. `FAX_process` itself is still SIZE, not EXACT.
+
+**Linked position.** First positional divergence remains `RD_create`,
+delta **-48 -> -16**: predecessor `FAX_process` 1,809 -> 1,799 (-10) and
+padding 15 -> 9 (-6). `FAX_process`'s own delta is `+0`; the step is
+attributed to (c) upstream size drift. Positioned reference bytes move
+74,668 -> **76,081 / 943,398 (8.1%)** (candidate delta -15,744 ->
+-15,696), 68 exact sections unchanged, exact relocations 1,061 -> 1,076,
+ordered relocation matches 1,090 -> 1,066, symbols 468 -> 465. The
+aggregate is the layout-coincidence measure F12040 names, not a fidelity
+target; the 30-byte body growth shifts everything after `FAX_process`.
+
+**Fixture note, disclosed.** No shipped fixture observes `sent` (the
+debug-only send return) and the clamp's `0x1000` arm is not exercised by
+the fax lifecycle trials. The evidence for all five facts is the object's
+own instructions; the period suite is green before and after. No test
+source was changed.
+
+**Verified.** Gate `make period J=3`: **394 passed, 0 failed**. Census
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected EXACT **1,150**; ratchet OK (floor moved
+exact 1,146 -> 1,147, grade 0-or-1 1,182 -> 1,184, link-selected 1,149 ->
+1,150, with no lost exact or grade-0/1 symbol). No flags, padding,
+attributes or fixture edit.
+
+## F12043. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
 
 F12013 enumerated the switch *text* with shared case bodies and concluded
 that no source spelling moves the physical arm order. That domain was one
@@ -139730,11 +139870,12 @@ blob, 10 in the link; `relocscan` resolves `.text+0x1e1c -> .rodata+0x78`),
 i.e. the open FAX_process SIZE gap, not `RD_create`. The 12 table entries and
 their targets agree once the link's -0x30 `.text` shift is applied.
 
-**Linked position is unchanged.** First positional divergence remains
-`RD_create`, cumulative delta -48 (predecessor `FAX_process` 1809 -> 1769,
-padding 15 -> 7), because the change moves no bytes' length; what changes is
-that the first divergent body is now 1 byte from the object instead of 12.
-Positioned reference bytes 74,682 / 943,398 (7.9%), candidate delta -15,728.
+**Linked position is unchanged.** On the merged base (F12042's FAX_process
+facts), first positional divergence remains `RD_create`, cumulative delta
+-16 (predecessor `FAX_process` 1809 -> 1799, padding 15 -> 9), because the
+change moves no bytes' length; what changes is that the first divergent body
+is now 1 byte from the object instead of 12. Positioned reference bytes
+76,081 / 943,398 (8.1%), candidate delta -15,696.
 
 No flags, no attributes, no fixtures. Only `rd.c`'s switch text changed, so
 the ordered EXACT set is untouched: the single move is RD_create BYTES ->

@@ -385,11 +385,13 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 		unsigned int chunk;
 		const unsigned char *in_cur;
 		unsigned char *out_cur;
-		unsigned int remaining;
+		int remaining;
 		struct fax_ring *in_ring, *out_ring;
 		int last_status;
 
-		chunk = (count < ctx->host_frame_samples) ? count : ctx->host_frame_samples;
+		chunk = count;
+		if (chunk > ctx->host_frame_samples)
+			chunk = ctx->host_frame_samples;
 
 		in_cur = (const unsigned char *)in;
 		out_cur = (unsigned char *)out;
@@ -426,6 +428,8 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 			    (in_ring->wr + copy) % (2 * ctx->host_frame_samples);
 
 			if (in_ring->count >= ctx->host_frame_samples) {
+				unsigned int host_frame = ctx->host_frame_samples;
+
 				in_ptr = &in_ring->data[in_ring->blk];
 				out_ptr = &out_ring->data[out_ring->blk];
 
@@ -433,14 +437,14 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 					int oc = 0xa0;
 
 					RcFixed_Resample(ctx->rc_a, in_ptr,
-					    ctx->host_frame_samples, ctx->rx_resampled,
+					    host_frame, ctx->rx_resampled,
 					    &oc);
 					rx_buf = ctx->rx_resampled;
 					rx_count = oc;
 					tx_buf = ctx->tx_pump_rate;
 				} else {
 					rx_buf = in_ptr;
-					rx_count = ctx->host_frame_samples;
+					rx_count = host_frame;
 					tx_buf = out_ptr;
 				}
 
@@ -457,23 +461,26 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 					rxc = 0xa0;
 					txc = 0xa0;
 					w7 = 0;
-					recv_n = 0;
 
-					if (ctx->host_rx_enable != 0 &&
-					    ctx->host_rx_want != 0) {
-						unsigned int want = ctx->host_rx_want;
-
-						if (want > 0x1000)
-							want = 0x1000;
-						recv_n = modem_recv_from_tty(
-						    ctx->modem,
-						    ctx->host_rx_buf, want);
-						if (recv_n > 0 &&
-						    DSPLIB_DEBUG_ON())
-							dsplibs_debug_printf(
-							    "fax: snd: %d (%d)\n",
-							    recv_n,
-							    ctx->host_rx_want);
+					if (ctx->host_rx_enable != 0) {
+						if (ctx->host_rx_want != 0) {
+							recv_n = ctx->host_rx_want;
+							if ((unsigned int)recv_n > 0x1000)
+								recv_n = 0x1000;
+							recv_n = modem_recv_from_tty(
+							    ctx->modem,
+							    ctx->host_rx_buf, recv_n);
+							if (recv_n > 0 &&
+							    DSPLIB_DEBUG_ON())
+								dsplibs_debug_printf(
+								    "fax: snd: %d (%d)\n",
+								    recv_n,
+								    ctx->host_rx_want);
+						} else {
+							recv_n = 0;
+						}
+					} else {
+						recv_n = 0;
 					}
 
 					int status;
@@ -488,12 +495,14 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 					if (ctx->host_rx_enable != 0 &&
 					    w7 > 0) {
-						modem_send_to_tty(ctx->modem,
-						    host_tx_buf, w7);
+						int sent;
+
+						sent = modem_send_to_tty(
+						    ctx->modem, host_tx_buf, w7);
 						if (DSPLIB_DEBUG_ON())
 							dsplibs_debug_printf(
 							    "fax: rcv: %d (%d)\n",
-							    recv_n, w7);
+							    sent, w7);
 					}
 
 					switch (status) {
@@ -577,7 +586,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 				}
 
 				if (ctx->rc_b != NULL) {
-					int oc2 = ctx->host_frame_samples;
+					int oc2 = host_frame;
 
 					RcFixed_Resample(ctx->rc_b,
 					    ctx->tx_pump_rate, rx_count,
