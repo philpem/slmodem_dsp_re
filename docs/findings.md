@@ -139505,3 +139505,138 @@ EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE; grade 0-or-1
 1,184; link-selected EXACT 1,150 (1,147 + the three multiply-defined names
 whose selected body is exact); ratchet OK, no flags, padding, attributes or
 fixture changes.
+
+## F12041. `FAX_process`: two resample operands and two stack-homed values are source facts; the frame and the persistent slot map now match, and one inner spill (0x40 bytes / 9 instructions) remains
+
+*2026-10-24.* Baseline `ff2c732c2` (PR #373), Gentoo GCC 3.4.2-r2.
+F12040 left `FAX_process` at 1,704 B / 389 instructions against the blob's
+1,809 / 408, frame `0x6c` against `0x7c`, LCS 253, run 15, and attributed the
+residual to "four inner temporaries the object spills and ours keeps in
+registers". This pass mapped every `%esp` slot in both bodies, found that four
+of the six temp slots are reachable from source facts the object states
+directly, and reproduced the frame and every persistent slot.
+
+| `FAX_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 1,809 | 1,704 | **1,769** |
+| instructions | 408 | 389 | **399** |
+| frame | `0x7c` | `0x6c` | **`0x7c`** |
+| LCS | -- | 253 | **313** |
+| longest run | -- | 15 | **24** |
+| `RD_create` delta | 0 | -112 | **-48** |
+
+**The two bodies' slot maps, from the forcing instructions** (blob
+`0x1a10`, candidate `0x5c0`; `in_ring` is `ctx+0x25ac`, `out_ring` is
+`ctx+0x229c` in `%ebp`):
+
+| slot | blob | forcing stores | candidate before | candidate after |
+|---:|---|---|---|---|
+| 0x30 | `in_ring` base | `0x1a3f` | `in_ring` (0x30) | **0x34** |
+| 0x34 | `ctx->host_tx_buf` | `0x1db9`, read `0x1deb` | `rx_buf` | `in_ring` |
+| 0x38 | `forced` | `0x1b6f`,`0x1eac`,`0x1fb7`,`0x1fd6`,`0x1ffc`,`0x2040`,`0x2066`,`0x207d` | `out_ptr` | **`host_tx_buf`** |
+| 0x3c | `rx_count` | `0x1b55`,`0x1cbc` | `last_status` | **`forced`** |
+| 0x40 | `tx_buf` | `0x1b6b`,`0x1cc6`, read `0x1d93` | `remaining` | **`rx_count`** |
+| 0x44 | `rx_buf` | `0x1b5d`,`0x1cad`, read `0x1d9b` | `out_cur` | **`tx_buf`** |
+| 0x48 | `out_ptr` | `0x1b3c`, read `0x1b59`,`0x1e28` | `in_cur` | **`out_ptr`** |
+| 0x4c | `last_status` | `0x1a7d`,`0x1ba4`,`0x1e66` | `chunk` | **`last_status`** |
+| 0x50 | `remaining` | `0x1a92`, `0x1c2e`, `0x1c39` | `ret` | **`remaining`** |
+| 0x54 | `out_cur` | `0x1a8e`,`0x1c22`,`0x1bfa` | `oc2` | **`out_cur`** |
+| 0x58 | `in_cur` | `0x1a8a`,`0x1ae9`,`0x1ad1` | `rxc` | **`in_cur`** |
+| 0x5c | `chunk` | `0x1a64`,`0x1a6c`,`0x1a70` | `txc` | **`chunk`** |
+| 0x60 | `ret` | `0x1a19`,`0x1e92` | `w7` | **`ret`** |
+| 0x64 | `oc2` (address taken, `lea` `0x1e24`) | `0x1e20` | `recv_n` | **`oc2`** |
+| 0x68 | `rxc` (`lea` `0x1d8f`) | `0x1cf7` | `oc` | **`rxc`** |
+| 0x6c | `txc` (`lea` `0x1d87`) | `0x1cec` | -- | **`txc`** |
+| 0x70 | `w7` (`lea` `0x1d83`) | `0x1cfb` | -- | **`w7`** |
+| 0x74 | `recv_n` (`lea` `0x1d74`) | `0x1d15`,`0x1d54` | -- | **`recv_n`** |
+| 0x78 | `oc` (`lea` `0x1c95`) | `0x1c91` | -- | **`oc`** |
+
+Every slot at `0x48` and above, and the `0x7c` frame, now match the object.
+The four values that were register-resident and are now homed are exactly
+`host_tx_buf`, `forced`, `rx_count` and `tx_buf`; all four are live across at
+least one call (`modem_recv_from_tty` at `0x1d4f`, `fax_class1_progress` at
+`0x1dc3`), and no `lea` in the body names `0x34`-`0x48`, so none is
+address-taken. The remaining difference is that the object also homes
+`rx_buf` (`0x44`), which our build keeps in `%edx`/`%esi`; that one missing
+home pushes `in_ring` from the object's `0x30` to our `0x34` and shifts the
+temp block by four bytes, which is the whole residual 0x40 bytes and nine
+instructions.
+
+**Adopted, each with the object's own instruction as the witness.**
+
+1. **The second `RcFixed_Resample` takes `rx_count` as `in_count`.** The
+   object loads `0x3c` (the `rx_count` home) into `%eax` at `0x1e37` and
+   passes it as arg 3 at `0x1e45`; the source said
+   `ctx->host_frame_samples`. These are not equivalent: in the success path
+   `rx_count` is the first resampler's output count (`0xa0`) while
+   `host_frame_samples` is `rate * CLASS1_BLOCK_SAMPLES / 8000`, so at a real
+   ratio the original converts `0xa0` tx samples where we converted the host
+   frame count. Recovered, and the object's `0x1ca4` (arg 3 of the *first*
+   call is `ctx->host_frame_samples`, in `%esi`) shows the asymmetry is
+   deliberate rather than a shared local.
+2. **`oc2`'s outgoing limit is `ctx->host_frame_samples`.** `0x1e20` stores
+   `%esi` into `0x64` before `lea 0x64(%esp),%esi`; `%esi` has held
+   `ctx->host_frame_samples` since `0x1b20` and is callee-saved across the
+   intervening calls. `RcFixed_Resample`'s `out_count` is IN/OUT (a limit,
+   `fixedrc.h`), so `0xa0` and `host_frame_samples` are different requests,
+   not two spellings of the same one. Recovered.
+3. **`forced = 0` is placed before the `rx_count` test.** The object stores
+   `0x38 = 0` at `0x1b6f` (fall-through arm) and `0x1cd4` (resample arm), both
+   *before* the `je 0x1ce0` that tests `rx_count`, and both arms reach it.
+   With the initialisation left inside the `else`, GCC sinks it past the
+   calls and the value never becomes call-crossing; at this position it does.
+4. **`ctx->host_tx_buf` is held in a named local.** Weakest of the four: the
+   object's `0x34` home is shared by a local and by a CSE'd pair of
+   expressions, so the slot alone does not distinguish them (usage
+   inference). It is selected because it is the only member of the tested
+   domain that yields the object's `0x7c` frame together with 1-3; F12040's
+   "declined as a fit" entry measured it *alone* (LCS 244) and stands.
+
+**Measured domain, all on the Gentoo period compiler.** `V0` baseline
+1,704/391 lines/`0x6c`/run 15/LCS 253. H1 alone 1,716/`0x6c`/11/248. H1+H2
+1,718/`0x6c`/11/249. H1+H2+`host_tx_buf` 1,734/`0x6c`/11/247. H1+H2+
+`forced`-move (no local) 1,752/`0x6c`/11/258. `forced`-move alone
+1,752/`0x6c`/11/251. H1+`forced`-move 1,764/`0x6c`/11/250. All four
+1,769/**`0x7c`**/**24**/**313**. Declaring every inner temporary at function
+scope, moving `int status;`, and moving `rxc`/`txc`/`w7`/`recv_n` into the
+inner block each leave the four-fact result byte-identical, so neither the
+declaration positions nor the block scopes are the lever. Only the four-fact
+combination moves the allocation, and it is the unique member of that domain
+that reproduces the frame.
+
+**The last `rx_buf` home is not reachable from the domain tested.** It is
+live from `0x1b5d`/`0x1cad` to `0x1d9b` across the recv call exactly as in
+the object, and the difference is one callee-saved-register home: the object
+spends `%esi` on `ctx->host_frame_samples` (which is why `0x1e20` can store
+it), while ours rematerialises it at the `oc2` initialisation. No tested
+source spelling extends that operand's range without moving its statement.
+Recorded as the next lead, not closed by fit.
+
+**Fixture note, disclosed.** No shipped fixture distinguishes facts 1-2.
+`t_faxprocess.c`'s "real rc_a/rc_b resampler" trials do install mode 3
+(`RcFixed_Check_Combination(9600, 8000)` = 3), but in those trials
+`RcFixed_Resample` emits nothing: the out ring's data is all zero and its
+count is 0 afterwards (measured by a temporary probe: `in_count=0
+out_count=0 data=0,0,0` at every trial), so the second resample's `in_count`
+and limit are never exercised on either side. The gate therefore passes both
+before and after; the object's instructions, not the fixture, are the
+evidence. No test source was changed.
+
+**Linked position, and why the aggregate moved the other way.** First
+positional divergence is still `RD_create`, delta -112 -> **-48** (predecessor
+`FAX_process` 1,809 -> 1,769; padding 15 -> 7), and `FAX_process` itself is at
+delta `+0` in both. Positioned reference bytes move **75,853 -> 74,668**
+(candidate delta -15,808 -> -15,744 over a `.text` of 711,575 -> 711,639), and
+`placement-ledger`'s "matched with a moved start" goes 1,745 -> 1,749
+("unmoved" 28 -> 24). That is the expected artifact of a *correct* body
+change: `FAX_process` is 64 bytes longer, so everything after it shifts +64,
+which moves four functions that the previous size error happened to place
+exactly, and 1,229 of the aggregate's byte coincidences are downstream of
+that. `FAX_process`'s own body gains 44 in-place bytes. The aggregate is the
+"layout coincidence" measure F12040 also calls it, not a fidelity target;
+`byteident`'s floors are untouched (see below).
+
+**Verified.** Gate `make period J=3`: **394 passed, 0 failed**. Census
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected EXACT **1,150**, ratchet OK (no displacement,
+no flags, no padding, no attributes, no fixture edit).
