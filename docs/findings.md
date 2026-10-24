@@ -139057,6 +139057,15 @@ recorded as a measured compiler-block-ordering blocker (same class as the
 No source change for this symbol; no linked-position effect. Gate and
 census for the wave are those in F12012.
 
+**Superseded by F12042.** The enumerated domain above varies the switch
+*text* while every case body stays shared; the member it does not contain is
+body duplication. Splitting the two 1000-valued cases (4 and 12) into two
+source blocks is a source fact that changes the pre-merge table-edge count and
+hence the reorder frequencies, and it reproduces the object's 1000, 650, 850
+at the same 293 bytes and 77 instructions. The mechanism (`-freorder-blocks`
+STC), not the switch text, still selects the layout; F12042 measures what the
+pass is responding to.
+
 ## F12015. `V21RX_control`'s HDX flag assignment is a `> 0` comparison, not `!= 0`; the fold chooses shift-and for one and setcc for the other
 
 `V21RX_control` (blob 0x0a2410, 75 bytes) was grade 0 BYTES 23 with
@@ -139640,3 +139649,97 @@ that. `FAX_process`'s own body gains 44 in-place bytes. The aggregate is the
 **1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
 0-or-1 **1,184**, link-selected EXACT **1,150**, ratchet OK (no displacement,
 no flags, no padding, no attributes, no fixture edit).
+
+## F12042. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
+
+F12013 enumerated the switch *text* with shared case bodies and concluded
+that no source spelling moves the physical arm order. That domain was one
+member short: **body duplication**. `RD_create` (blob 0x2130, 293 B, 77
+insns) puts its three threshold arms at 0x2228 (1000), 0x2233 (650) and
+0x223e (850). Writing cases 4 and 12 as two separate `cfg.threshold = 1000;
+break;` blocks -- instead of one shared label -- reproduces that order with
+the same size and instruction multiset, and the mechanism is measured rather
+than guessed.
+
+**The CFG the reorder pass is handed.** The `.rodata` jump table at 0xa4 has
+12 entries mapping values 4..15 to 1000, default x7, 1000, 650, 850, 650.
+`cfgbuild.c` scans an `ADDR_VEC` from `j = GET_NUM_ELEM(vec)-1` down to 0 and
+`unchecked_make_edge` PREPENDS each edge (`cfg.c:299`), so the tablejump
+block's successor list is *default, 1000, 850, 650* -- the reverse of the
+first-occurrence order in the table. No successor edge of an indirect jump has
+`EDGE_CAN_FALLTHRU`, so `bb-reorder.c`'s trace builder cannot consume an arm
+as a best edge; every arm is a seed.
+
+**What the pass responds to is the edge probability, not the block index.**
+`estimate_bb_frequencies` gives a block whose last insn is not predictable
+(the tablejump) `(REG_BR_PROB_BASE + nedges/2) / nedges` per edge. With the
+shared bodies there are four unique targets, so each edge is 2500 (25%):
+tablejump bb5 has frequency 3743 and each arm 936. That is below round 2's
+`exec_th` (2000), so all three arms are deferred to round 3, where their heap
+keys are identical, `-(100*BB_FREQ_MAX + 100*936 + 936) = -1,094,536`.
+libiberty's `fibheap` breaks the tie by structure: inserted 1000, 850, 650 and
+key-decreased in that order (`replace_key_data` makes an equal-key node the
+minimum), it extracts **650, 850, 1000** -- our order.
+
+**The witness.** Split only the 1000 arm:
+
+    case 4:
+        cfg.threshold = 1000;
+        break;
+    case 12:
+        cfg.threshold = 1000;
+        break;
+
+At probability-estimation time the two labels are two blocks, so the tablejump
+has five unique targets and every edge is `(10000+2)/5 = 2000` (20%). The
+later CFG cleanup folds the pair; the now-parallel edges are merged by
+`redirect_edge_succ_nodup`, which sums their probabilities (`cfg.c:446`),
+leaving the 1000 block at 40%: frequency 1498, key
+`-(1000000 + 100*1497 + 1498) = -1,151,198`, strictly below the 650/850 keys
+`-1,075,649`. It is therefore extracted first; 650 and 850 stay tied and the
+fixed value-ordered successor list resolves them 650 then 850. Final order
+**1000, 650, 850**, the object's.
+
+**Measured domain (Gentoo period compiler, exact flags, `-dB` dump).**
+
+| source shape | physical arm order |
+|---|---|
+| shared 4/12 (baseline, F12013) | 650, 850, 1000 |
+| **split 4/12** | **1000, 650, 850 (blob)** |
+| split 4/12, 12 written first | 1000, 650, 850 |
+| split 4/12, `default` written first | 1000, 650, 850 |
+| split 4/12, 1000 spelled `10 * 100` | 1000, 650, 850 |
+| split 13/15 only (650 duplicated) | 650, 850, 1000 |
+| split both groups (all five labels) | 650, 1000, 850 |
+
+So the discriminating fact is *which* arm is two source blocks, not the text
+order, the `default` position or the constant's spelling; the several
+spellings of the one fact all map onto the object. Splitting the 650 arm
+instead leaves our order, and splitting both gives a third order, which is why
+the domain is not vacuous.
+
+**Before/after.** `structsim RD_create`: longest common run 64 of 77 and LCS
+74 before, **77 of 77, LCS 77 (100%)** after. Per-TU `byteident --why`: BYTES
+11 -> **UNRESOLVED**, 0 non-relocated bytes differ; the remaining row is the
+`.rodata` displacement relocation (addend 0xa4 against 0), which is section
+layout and not a source fact. In the recovered-order partial link the body
+differs in 12 bytes -> **1**: `+0xe3` alone, the table displacement
+(0xa4 against 0xa0). That 4-byte deficit is *before* the RD table and is
+`FAX_process`'s switch-table segment (`.rodata` 0x78..0xa4, 11 entries in the
+blob, 10 in the link; `relocscan` resolves `.text+0x1e1c -> .rodata+0x78`),
+i.e. the open FAX_process SIZE gap, not `RD_create`. The 12 table entries and
+their targets agree once the link's -0x30 `.text` shift is applied.
+
+**Linked position is unchanged.** First positional divergence remains
+`RD_create`, cumulative delta -48 (predecessor `FAX_process` 1809 -> 1769,
+padding 15 -> 7), because the change moves no bytes' length; what changes is
+that the first divergent body is now 1 byte from the object instead of 12.
+Positioned reference bytes 74,682 / 943,398 (7.9%), candidate delta -15,728.
+
+No flags, no attributes, no fixtures. Only `rd.c`'s switch text changed, so
+the ordered EXACT set is untouched: the single move is RD_create BYTES ->
+UNRESOLVED. Gate `make period J=3`: **394 passed, 0 failed**. Census **1,147
+EXACT / 1 UNRESOLVED / 37 REGALLOC / 86 BYTES / 581 SIZE**, grade 0-or-1
+**1,185** (was 1,184). Ratchet OK (floor exact 1,146 -> 1,147, grade 0-or-1
+1,182 -> 1,185, link-selected 1,149 -> 1,150; the `dp_vpcm_exit` displacement
+stays pinned in `tools/ci/displaced.json`).
