@@ -139158,3 +139158,17 @@ period translation units with the fixed flags:
   not counted. The table base is the TU's `.rodata` placement, not a
   statement. Class: TU data placement plus allocation; not a per-function
   source fact.
+
+**Update (wave 13): the initialiser-bearing shape was landed.** The shape
+above with `int ret = 0;` (zero-first `res` arms, `for (;;)` with the count
+test at the top, and the forced memory read at the break test) emits
+**386 bytes / 101 instructions, LCS 97, run 75**, against the previous
+368 / 102 / LCS 73 / run 10. It is byteident **BYTES** (same size, 111 bytes
+differ) rather than SIZE, and it moves the first placement divergence past
+`CID_process`: `vce_hook_on` now reaches the blob's 0x600, the next drift is
+`VOICE_create` (+12), and positioned reference bytes rise 72,841 -> 73,994 of
+943,398. The `int ret;` 99-instruction variant stays declined: it is the same
+near-miss by bytes but leaves the empty-input return uninitialised, which the
+blob's entry `xor %eax,%eax` says is not the source. The remaining two
+instructions are the allocator choice recorded above. Gate 394/0; census
+1,146 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; ratchet OK.

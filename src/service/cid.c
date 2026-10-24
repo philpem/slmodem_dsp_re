@@ -152,41 +152,46 @@ CID_process(void *cidp, void *in, int count)
 	short *buf = in;
 	int ret = 0;
 
-	while (count > 0) {
-		int chunk = count;
+	for (;;) {
+		int chunk;
 		short n;
 		short res;
 
+		if (count <= 0)
+			break;
+		chunk = count;
 		if (chunk > CID_CHUNK)
 			chunk = CID_CHUNK;
 		n = chunk;
 		ret = 0;
 		res = cid_progress(cid->cid, buf, 0, &n);
-		if (res == 1) {
-			char *p;
-			int i;
+		if (res != 0) {
+			if (res == 1) {
+				char *p;
+				int i;
 
-			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("cid: CID Success\n");
-			ret = 1;
-			p = cid_get_strings(cid->cid);
-			for (i = 0; i <= 3; i++) {
-				if (!p || !*p)
-					break;
 				if (dsplibs_debug_level > 1)
-					dsplibs_debug_printf(
-					    "cid: STR: '%s'\n", p);
-				modem_send_to_tty(cid->modem, p,
-						  sysdep_strlen(p));
-				modem_send_to_tty(cid->modem, "\r\n", 2);
-				p += sysdep_strlen(p) + 1;
+					dsplibs_debug_printf("cid: CID Success\n");
+				ret = 1;
+				p = cid_get_strings(cid->cid);
+				for (i = 0; i <= 3; i++) {
+					if (!p || !*p)
+						break;
+					if (dsplibs_debug_level > 1)
+						dsplibs_debug_printf(
+						    "cid: STR: '%s'\n", p);
+					modem_send_to_tty(cid->modem, p,
+							  sysdep_strlen(p));
+					modem_send_to_tty(cid->modem, "\r\n", 2);
+					p += sysdep_strlen(p) + 1;
+				}
+			} else {
+				ret = -1;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf("cid: CID Failure\n");
 			}
-		} else if (res != 0) {
-			ret = -1;
-			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("cid: CID Failure\n");
 		}
-		if (ret)
+		if (*(volatile int *)&ret)
 			break;
 		count -= chunk;
 		buf += chunk;
