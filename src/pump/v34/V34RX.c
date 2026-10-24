@@ -1170,62 +1170,67 @@ rx_phase_error(const struct v34_receiver *rx)
  * `0x28e(%ebp,%ecx,2)`, which the object does not contain here.  `k` is a
  * `short` too -- the object sign-extends the incremented counter (`cwtl`).
  */
-static void
-rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
-{
-	int acc;
-	int outi, outq;
-	short k;
-	short *pa, *pb, *pi, *pq, *pw;
-
-	acc = 0x2000;
-	pa = rx->pred_a;
-	pq = &rx->pred_q[2];
-	for (k = 0; k < 3; k++)
-		acc += *pa++ * *pq--;
-	acc = -acc;
-	pb = rx->pred_b;
-	pi = &rx->pred_i[2];
-	for (k = 0; k < 3; k++)
-		acc += *pb++ * *pi--;
-	outi = (short)(acc >> 14);
-
-	/*
-	 * The shift and the imaginary accumulator are one pass in the object,
-	 * and stay one here. Native 0x5c1c0/0x5c200 and their second copies
-	 * load history and coefficient before storing the shifted history.
-	 * Accumulate first so both operations reuse that history capture;
-	 * shifting first introduces a second history read before the product.
-	 */
-	acc = 0x2000;
-	pa = rx->pred_a;
-	pi = &rx->pred_i[2];
-	pw = &rx->pred_i[3];
-	for (k = 0; k < 3; k++) {
-		acc += *pi * *pa++;
-		*pw-- = *pi;
-		pi--;
-	}
-	pb = rx->pred_b;
-	pq = &rx->pred_q[2];
-	pw = &rx->pred_q[3];
-	for (k = 0; k < 3; k++) {
-		acc += *pq * *pb++;
-		*pw-- = *pq;
-		pq--;
-	}
-	outq = (short)(acc >> 14);
-
-	{
-		unsigned short x = *px;
-		unsigned short y = *py;
-
-		rx->pred_i[0] = x;
-		rx->pred_q[0] = y;
-		*px = (short)(x + outi);
-		*py = (short)(y + outq);
-	}
-}
+/*
+ * A MACRO, NOT A FUNCTION, AND THE OBJECT SAYS SO.  `rx_predict` is called
+ * twice over two different pairs of receiver fields, and the object folds
+ * both pairs to direct displacements -- 0x208/0x20a in the precode instance
+ * (0x5c235/0x5c240) and 0x214/0x216 in the decision-error one
+ * (0x5c745/0x5c74c).  It never forms a base for either pair.  A static
+ * function taking `unsigned short *` inlines to `lea 0x208(%ebp)` plus two
+ * spilled pointer homes (wave 17 measured 0xcc against the object's 0x9c);
+ * textual substitution is what removes the base.  This is refinement.md
+ * Lever 24's fingerprint: a `lea` and a spilled pointer per member, with the
+ * body addressing through `(%reg)` at displacement zero, where the object
+ * uses a full displacement.  The two instances' bodies are identical apart
+ * from those fields, which is why one macro covers both.
+ */
+#define rx_predict(rx, px, py) do {					\
+	int acc;							\
+	int outi, outq;							\
+	short k;							\
+	short *pa, *pb, *pi, *pq, *pw;					\
+									\
+	acc = 0x2000;							\
+	pa = (rx)->pred_a;						\
+	pq = &(rx)->pred_q[2];						\
+	for (k = 0; k < 3; k++)						\
+		acc += *pa++ * *pq--;					\
+	acc = -acc;							\
+	pb = (rx)->pred_b;						\
+	pi = &(rx)->pred_i[2];						\
+	for (k = 0; k < 3; k++)						\
+		acc += *pb++ * *pi--;					\
+	outi = (short)(acc >> 14);					\
+									\
+	acc = 0x2000;							\
+	pa = (rx)->pred_a;						\
+	pi = &(rx)->pred_i[2];						\
+	pw = &(rx)->pred_i[3];						\
+	for (k = 0; k < 3; k++) {					\
+		acc += *pi * *pa++;					\
+		*pw-- = *pi;						\
+		pi--;							\
+	}								\
+	pb = (rx)->pred_b;						\
+	pq = &(rx)->pred_q[2];						\
+	pw = &(rx)->pred_q[3];						\
+	for (k = 0; k < 3; k++) {					\
+		acc += *pq * *pb++;					\
+		*pw-- = *pq;						\
+		pq--;							\
+	}								\
+	outq = (short)(acc >> 14);					\
+									\
+	{								\
+		unsigned short x = *(px);				\
+		unsigned short y = *(py);				\
+									\
+		(rx)->pred_i[0] = (short)x;				\
+		(rx)->pred_q[0] = (short)y;				\
+		*(px) = (short)(x + outi);				\
+		*(py) = (short)(y + outq);				\
+	}								\
+} while (0)
 
 /*
  * ---------------------------------------------------------------------------
