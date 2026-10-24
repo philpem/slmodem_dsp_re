@@ -139957,6 +139957,10 @@ differs in 12 bytes -> **1**: `+0xe3` alone, the table displacement
 blob, 10 in the link; `relocscan` resolves `.text+0x1e1c -> .rodata+0x78`),
 i.e. the open FAX_process SIZE gap, not `RD_create`. The 12 table entries and
 their targets agree once the link's -0x30 `.text` shift is applied.
+**Corrected by F12045:** `FAX_process`'s table has 11 entries in the link too
+(it is at `.rodata+0x74`, not 0x78); the missing 4 bytes are the sixth entry of
+the *preceding* `FAX_class1_command` table at 0x60, whose FRH arm was written
+as `default:` instead of `case FAXC1_FRH:`.
 
 **Linked position is unchanged.** On the merged base (F12042's FAX_process
 facts), first positional divergence remains `RD_create`, cumulative delta
@@ -139971,4 +139975,118 @@ UNRESOLVED. Gate `make period J=3`: **394 passed, 0 failed**. Census **1,147
 EXACT / 1 UNRESOLVED / 37 REGALLOC / 86 BYTES / 581 SIZE**, grade 0-or-1
 **1,185** (was 1,184). Ratchet OK (floor exact 1,146 -> 1,147, grade 0-or-1
 1,182 -> 1,185, link-selected 1,149 -> 1,150; the `dp_vpcm_exit` displacement
+stays pinned in `tools/ci/displaced.json`).1,182 -> 1,185, link-selected 1,149 -> 1,150; the `dp_vpcm_exit` displacement
 stays pinned in `tools/ci/displaced.json`).
+
+## F12045. `FAX_process`'s "missing" 11th `.rodata` entry does not exist: both tables have 11, and the 4-byte deficit is `FAX_class1_command`'s explicit `case FAXC1_FRH`
+
+*2026-10-25.* Baseline `2a9d62fc5`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. `relocscan` resolves the
+FAX switch-table jump at `.text+0x1e1c` to `.rodata+0x78` in the blob. The
+link's jump was at `+0x74`, and F12044 read the four-byte difference as a
+ten-entry `FAX_process` table. It is not. **The `FAX_process` table has eleven
+entries in the blob and eleven in the link**; the missing entry is the sixth
+entry of the *preceding* `FAX_class1_command` table.
+
+**The two dumps, resolved.** Every entry is an `R_386_32` against `.text`; the
+offsets below are relative to the owning function's start.
+
+    blob .rodata 0x60, FAX_class1_command (0x1740), 6 entries:
+        value 0  FTS  0x196d  +0x22d      value 3  FRM  0x1829  +0x0e9
+        value 1  FRS  0x194a  +0x20a      value 4  FTH  0x1812  +0x0d2
+        value 2  FTM  0x18b7  +0x177      value 5  FRH  0x17bb  +0x07b
+
+    blob .rodata 0x78, FAX_process (0x1a10), 11 entries:
+        0 NO_MESSAGE               0x1eb0 +0x4a0
+        1 OK                       0x206f +0x65f
+        2 ERROR                    0x1fea +0x5da
+        3 OK_NO_CARRIER            0x2027 +0x617
+        4 ERROR_NO_CARRIER         0x1fa5 +0x595
+        5 ERROR_ON_HOOK            0x2054 +0x644
+        6 CONNECT                  0x1fbd +0x5ad
+        7 NO_CARRIER               0x2017 +0x607
+        8 NO_CARRIER_NO_MESSAGE    0x1f81 +0x571
+        9 OTHER_CARRIER            0x1f5d +0x54d
+       10 ACCEPT_RATE              0x1f3b +0x52b
+
+    blob .rodata 0xa4, RD_create (0x2130), 12 entries (values 4..15):
+        +0x0f8, +0x0b0 x7, +0x0f8, +0x103, +0x10e, +0x103
+
+The link before this change had only five `FAX_class1_command` entries at
+0x60..0x73, so its `FAX_process` table began at **0x74** (still eleven entries,
+0x74..0x9f) and RD's at 0xa0. The four bytes at blob 0x74 (0x17bb) were being
+read as the FAX_process table's first entry; they are in fact case 5 of the
+preceding switch. After the change the link's 0x60 table is byte-for-byte the
+blob's six entries, the FAX_process table sits at 0x78 with its eleven entries,
+and RD's table sits at 0xa4. `relocscan --at .rodata:0x78` now reports
+`.text+0x1e1c -> .rodata:0x78` in **both** objects (it was `0x74` in ours).
+
+**The source fact is the label set, not a `FAX_process` case.** Our FRH arm was
+spelled `default: /* FAXC1_FRH */`. With the pre-check `(unsigned)cmd > 5`
+admitting only 0..5, GCC emits a five-entry table for cases 0..4 and peels the
+value 5 to the default block (`cmp $0x5; ja precheck; cmp $0x4; ja default;
+jmp *table`). The object has no peel: one `cmp $0x5; ja` and a six-entry
+table, whose entry 5 is the FRH arm at 0x17bb. Making value 5 an explicit
+`case FAXC1_FRH:` and dropping the default reproduces it. Semantics are
+unchanged: the pre-check still returns -1 for every value outside 0..5, so
+the six labels are the complete reachable domain and no behaviour moves.
+
+**Enumerated label domain (period compiler, exact flags).**
+
+| spelling | entries | body bytes | insns | notes |
+|---|---:|---:|---:|---|
+| `default:` (baseline) | 5 | 713 | 198 | F12044's link state |
+| `case FAXC1_FRH:` (A) | **6** | 720 | 196 | entry 5 = FRH |
+| `case` + shared `default:` | 5 | 713 | 198 | two labels, one block: compiler peels 5 again |
+| `default:` then `case` | 5 | 713 | 198 | same |
+| `case` + duplicated default body | 6 | 720 | -- | same size as A; unreachable |
+| `case` + `default: return -1;` | 6 | 720 | -- | same size as A; unreachable block merges with the pre-check |
+
+The last two spellings cannot be distinguished from A by this object: the
+default path is unreachable after the pre-check and GCC merges the bodies. The
+object fixes the *fact* -- value 5 is an explicit case label -- not the text of
+an unreachable default, and A is the minimal spelling.
+
+**The other four instructions were an arm-order fact, not the table.** A alone
+is 720 B / 196 instructions because our FTS and FRS arms print before assigning
+`inner_cmd`, while the blob's two arms hoist the assignment above the debug
+branch (`mov $5,%ebx; jbe` at 0x194d/0x1952 and `mov $4,%ebx; jbe` at
+0x1970/0x1975). Assigning `inner_cmd` first in those two arms and measuring the
+four spellings gives:
+
+| FTS/FRS assignment | bytes | insns |
+|---|---:|---:|
+| after the print (both) | 720 | 196 |
+| **before the print (both)** | **708** | **192** |
+| FRS only | 718 | -- |
+| FTS only | 718 | -- |
+
+708 is the blob's own `nm -S` symbol size for `FAX_class1_command` (0x2c4;
+the 0x2d0 gap to `FAX_process` is padding). With both moved, all six arm
+targets land on the blob's offsets, LCS is 191/192 (99.5%, longest run 153),
+and the only non-relocated difference is six bytes in the FRH arm: the blob
+emits `mov $0x3,%ebx` before `jne`, ours after it. Moving the FRH assignment
+*before* the rate check as well was measured at ten differing bytes, so that
+source order is a measured negative; the residual is instruction scheduling,
+not an absent statement. `FAX_process` itself is untouched: 1,809 B / 408
+instructions in the blob against 1,799 / 408, LCS 388 (95.1%), run 130, the
+F12042 branch-encoding gap.
+
+**Linked result.** `RD_create`'s remaining byte is gone: its table displacement
+is `0xa4` in both objects (it was 0xa0), its 293-byte linked body now has
+**0 non-relocated differing bytes** (it was 1), and the FAX_process table's
+eleven entries sit at the blob's 0x78. The first
+positional divergence is still `RD_create` at delta -16, because `FAX_process`
+is 1,799 against 1,809 (-10) and its trailing padding 15 -> 9 (-6); the change
+moves no `FAX_process` byte. `FAX_class1_command` is at delta +0, step +0
+(0x1740 / 0x2c4 in both), which is the first time its start and size have both
+coincided with the blob.
+
+No flags, no attributes, no padding, no fixtures. Verified: gate `make period
+J=3` **394 passed, 0 failed**; census **1,147 EXACT / 1 UNRESOLVED / 37
+REGALLOC / 87 BYTES / 580 SIZE**, grade 0-or-1 **1,185**, link-selected EXACT
+**1,150**; `byteident --ratchet` OK (the single move is `FAX_class1_command`
+SIZE -> BYTES), `compare.py --ratchet` OK (1,195 identical of 1,852, 76
+same-size). Blob sha256 unchanged at
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+
