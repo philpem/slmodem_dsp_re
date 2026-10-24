@@ -138950,7 +138950,13 @@ and `FAX_class1_command`/`FAX_process` -112 -> -32, `RD_create` -464 -> -384,
 `RingDetector_Create` -496 -> -416. The whole-file positioned reference-byte
 count moves 72,839 -> 72,683 of 943,398 with the exact-section count unchanged
 at 68; that aggregate is a layout coincidence measure, not fidelity, and is
-recorded rather than treated as a target.
+recorded rather than treated as a target. Measured again after merging
+origin/master's `FAX_process` change (f6d5a242), the merged tree is
+72,449/943,398 against master's own 72,322 -- the voice change adds 127
+positioned bytes there and the same ledger rows are unchanged (-112 -> -32 at
+`STRM_VCE_GetFDSPEnvironmentalParams`, `FAX_class1_command`/`FAX_process`
+-32, `RD_create` -400, `RingDetector_Create` -432), which is why the
+aggregate is recorded and not targeted.
 
 Gate `make period J=3`: 394 passed, 0 failed. Census 1,145 EXACT / 0
 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE, grade 0-or-1 1,182; ratchet
