@@ -138898,7 +138898,7 @@ Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK. No padding,
 flags, attributes, fixtures or ratchet policy changed.
 
-### F12012. `VOICE_process`'s ring pointers and `VOICE_command`'s DTMF floor are source facts; `RingDetector_Reset` and `VOICE_create` stay allocation-bound
+### F12014. `VOICE_process`'s ring pointers and `VOICE_command`'s DTMF floor are source facts; `RingDetector_Reset` and `VOICE_create` stay allocation-bound
 
 *2026-10-24.* Baseline `a86a15e7a` on Gentoo GCC 3.4.2-r2: `VOICE_create`
 505 B (object 493), `VOICE_command` 530 (548), `VOICE_process` 1932 (2016),
@@ -138956,3 +138956,97 @@ Gate `make period J=3`: 394 passed, 0 failed. Census 1,145 EXACT / 0
 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE, grade 0-or-1 1,182; ratchet
 OK (link-selected exact 1,148). No flags, padding, fixtures or ratchet policy
 changed.
+## F12012. `FAX_process` is not missing an arm or a helper: its 343-byte gap is a register/address-allocation difference, and only the loop locals' unsignedness is a recoverable source fact
+
+`FAX_process` (blob 0x1a10, 1,809 bytes) was the largest early placement
+drift: 408 instructions against our 340, SIZE 343. The census rule says a
+size gap is either an absence or a factoring difference, so this was
+checked at the instruction level rather than by name.
+
+**Nothing is missing.** The call multiset is identical on both sides:
+14 `dsplibs_debug_printf`, one each of `fax_class1_progress`,
+`modem_recv_from_tty`, `modem_send_to_tty`, two `RcFixed_Resample` and two
+`sysdep_memcpy`. All fourteen debug strings are present in both objects
+(the seven `.rodata.str1.4` ones at 0x350/0x378/0x39c/0x3c0/0x3e0/0x400/
+0x428 and their `.rodata.str1.1` siblings). Every Class 1 arm, the
+out-of-range default, the samples-count mismatch path and the two
+resamplers are emitted. There is no unwritten callee and no inlined helper
+on one side only.
+
+**The gap is the compiler's base-register choice.** `contentgap`'s
+operand-masked surplus is 79 blob / 11 ours, and the surplus is
+addressing, not operations. The object spills `ctx` to `0x90(%esp)` and
+reloads it 26 times (`mov 0x90(%esp),%eax` etc.); it hoists
+`&ctx->in_pending` into `0x30(%esp)` (`add $0x25ac,%eax`) and
+`ctx+0x229c` (`&out_produced` and the `out_ring`/`out_write_half` base)
+into `%ebp` (`lea 0x229c(%edx),%ebp`). Our build keeps `ctx` in `%esi` and
+addresses the same fields by displacement (`mov 0x25ac(%esi),%eax`,
+`lea 0x22ac(%esi,%eax,2)`). The object's extra
+`mov 0x90(R),R`/`mov 0x2298(R),R` reloads are the same difference. No
+source statement is absent; the allocation is determined outside the
+statement, and no tested source spelling reproduces the spill/hoist mix
+(direct `ctx->host_frame_samples` use at every site instead of the cached
+local made it worse: 330 instructions, LCS 186, run 9).
+
+**One forced difference was recoverable: the loop arithmetic is
+unsigned.** The object divides with `div` at 0x1b10 and 0x1c3d and
+compares with `jbe` at 0x1a6a/0x1aa6/0x1abc/0x1ac6, `jb` at 0x1b28 and
+`jbe` at 0x1d1e; our source emitted `cltd`/`idivl` and `jle`/`jl`. Adopted
+the minimal spelling implied by those instructions: `host_frame`, `chunk`,
+`remaining`, `cap`, `copy`, `room` and the clamped `want` are `unsigned
+int`. Retyping the struct fields instead produces identical code (the
+fields are only extended by the unsigned locals), so the header is
+unchanged. Before: 1,466 bytes / 340 instructions, LCS 197, run 15,
+SIZE 343. After: 1,450 bytes / 338 instructions, LCS 197, run 15, SIZE
+359. The byte gap grows because the signed `cltd` pair is gone; the
+forced `div`/`jbe` family now matches, and the ours-only operand-masked
+surplus falls 11 -> 9. The remaining 359 bytes are the allocation
+difference above and stay open.
+
+Linked-position collateral, disclosed: the ordered partial link moves
+72,839 -> 72,322 positioned reference bytes (candidate delta -16,304 ->
+-16,320, the 16-byte body shrink) and 1,005 -> 1,007 exact relocations. It
+is DIFFERENT both before and after; the per-TU exact set is unchanged.
+
+Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK.
+
+## F12013. `RD_create` is byte-identical except the physical order of three identical switch arms; the order is a block-reordering outcome, not a missing or different body
+
+`RD_create` (blob 0x2130) is 293 bytes and 77 instructions on both sides,
+so it is not a size drift. The grade is BYTES 11. The eleven differing
+bytes are exactly the register/immediate bytes of the three threshold
+arms, at relative offsets 0xf8-0xfa, 0xfe, 0x103-0x105, 0x109 and
+0x10e-0x10f/0x114: the object lays the arms out 1000, 650, 850
+(`mov $0x3e8,%edi` at 0x2228, `mov $0x28a,%esi` at 0x2233,
+`mov $0x352,%ecx` at 0x223e), ours lays them out 650, 850, 1000
+(0xf8, 0x103, 0x10e). Every other instruction, including the arm bodies
+and the `RingDetector_Create` tail, is identical; longest common run is 64
+of 77, LCS 74.
+
+It is one function, in the object's own `rd.c` FILE record (F11351), not
+the `ringDetector.c` half; its only call into that TU is the
+`RingDetector_Create` CALL, which both sides emit. The `.rodata` jump table
+maps identically (`param-4` -> 0/8 = 1000, 9/11 = 650, 10 = 850, else the
+default), read from the object's table at `.rodata` 0xa4..0xd0. The
+`--why` row 60 addend (`.rodata` 164 against 0) is the final object's
+section placement, not a source difference; the eight arm-mapping slots
+agree.
+
+The remaining difference is physical basic-block order. Enumerated against
+the period compiler, all in `rd.c` with the fixed flags: the six case-group
+orders (all emit 650, 850, 1000); the two label orders within each group
+(no effect); `default` first, middle and last; no `default` with the
+threshold pre-initialised; the five labels written individually in
+ascending, descending and by-body orders; a `switch` on a local; and an
+`if`/`else if` chain (which loses the jump table). None gives the object's
+1000, 650, 850. `-fno-reorder-blocks` reproduces it exactly, which
+identifies the mechanism and also why no source spelling in this domain
+moves it: the reorder pass, not the switch text, selects the layout. A flag
+change is out of bounds, so no edit is retained. The 11-byte residual is
+recorded as a measured compiler-block-ordering blocker (same class as the
+`CID_process` / `RD_create` arm-order note in
+`docs/method/placement-ledger.md`).
+
+No source change for this symbol; no linked-position effect. Gate and
+census for the wave are those in F12012.
