@@ -139172,3 +139172,103 @@ near-miss by bytes but leaves the empty-input return uninitialised, which the
 blob's entry `xor %eax,%eax` says is not the source. The remaining two
 instructions are the allocator choice recorded above. Gate 394/0; census
 1,146 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; ratchet OK.
+
+## F12017. `VOICE_create` is byte-exact once the ring setup precedes the `cfg` fill and the converter guard reads the stored fields; `RingDetector_Reset`'s frame is forced by a local `fs`; `VOICE_process` is allocation-bound
+
+*2026-10-24.* Baseline 3d18a4a34, Gentoo GCC 3.4.2-r2. The wave-13 state had
+the first placement divergence at `VOICE_delete`, attributed to
+`VOICE_create` (+12). Both were worked at the instruction level; one closed,
+one moved to its forcing source fact, and one is a measured blocker.
+
+| symbol | blob | before | after | insns blob/before/after | LCS before->after | run before->after |
+|---|---:|---:|---:|---|---:|---:|
+| `VOICE_create` | 493 | 505 | **493** | 127 / 132 / 127 | 100 -> **127** | 29 -> **127** |
+| `VOICE_command` | 548 | 532 | **547** | 123 / 121 / 123 | 92 -> 95 | 52 -> 22 |
+| `VOICE_process` | 2016 | 2003 | 2003 | 466 / 464 / 464 | 321 | 69 |
+| `RingDetector_Reset` | 449 | 417 | **424** | 121 / 117 / 116 | 91 -> 98 | 14 -> 18 |
+
+**`VOICE_create` is EXACT, and it is two source facts, not one.** The object's
+prologue has three callee-saved pushes and a `0x30` frame (`0x720-0x726`) --
+`edi` = modem, `ebx` = rate, `esi` = v -- so a fourth long-lived local is
+what grew our frame to `0x3c`. The object stores each converter into
+`v->rc_in`/`v->rc_out` in its ladder (`mov %eax,0x18(%esi)` at `0x78e` and
+`0x8cc`, `mov %edx,0x1c(%esi)` at `0x7ab`) and its guard tests the two
+registers (`test %eax,%eax` `0x7ae`, `test %edx,%edx` `0x7b6`); the
+`0x8e0` arm reloads `0x18(%esi)` into `%eax` at `0x8ee` after the rc_out
+`RcFixed_Create` clobbers it. Writing the field stores in the ladders and
+testing `v->rc_in`/`v->rc_out` in the guard recovers the three-push frame,
+127 instructions and 493 bytes; the earlier `if (!rc_in || !rc_out)`
+declined in F12014 because it kept the locals live across the ladder.
+
+The remaining 71-byte block-order difference closed by moving the
+`v->block`/`out_ring.count`/`out_ring.blk` statements BEFORE the four
+`cfg.*` assignments. The object emits the block ladder at `0x7d5-0x810`
+(`lea (%ebx,%ebx,4)` `0x7d5`, `shl $0x5` `0x7d8`, `mul` `0x7e9`,
+`shr $0x9` `0x801`, the three `0xe60/0xe64/0xe70(%esi)` stores) and only
+then `cfg.modem` (`mov %edi,0x20(%esp)` `0x7db` is scheduled between them);
+the source order that produces it is rings-first, config-second. Exact at
+`127` instructions / `493` bytes, LCS 127, longest run 127.
+
+**`RingDetector_Reset`'s 0x3c frame and three of its four spills are forced
+by one local.** The object loads `c->fs` exactly once, at `0x23a6`
+(`mov (%edi),%ebx`), and uses that value for the `fs/80` divisor
+(`imul %ebx` `0x23a8`), `s->fs` (`0x23c2`) and `3*fs` (`lea (%ebx,%ebx,2)`
+`0x23d0`). Our source read `c->fs` twice (`0x37` and `0x5e`). A local
+`int fs = c->fs;` reproduces the single load AND the object's frame:
+`0x1c` -> `0x3c`, the object's own value, and the spills at `0x38`
+(divisor, object `0x34`), `0x30` (`3*fs`, object `0x2c`) and `0x2c`
+(`guard_limit`, object `0x28`) appear where the object has them. Two of the
+four offsets differ by one slot because the object's debug-argument slots
+and ours are ordered differently around them; the set is the same kind of
+spill, not a missing operation. The threshold-sign spill at `0x20`
+(`0x2456`/`0x245a`) is NOT reproduced: the object keeps the second
+`c->threshold` in `%ecx` (`0x2443`), so `cltd` is unavailable and the sign
+gets a stack slot, while ours keeps it in `%eax` and uses `cltd`
+(`0xf2`-`0xff`). That is register allocation, and it is the remaining
+25-byte / 5-instruction gap. The `fs` local is retained: it is
+evidence-backed and moves LCS 91 -> 98.
+
+**`VOICE_command` improved as TU collateral, and its last difference is not
+source.** `VOICE_create` is emitted before it in the same translation unit,
+and the allocator state the earlier function leaves moved the four
+state-arm materialisations to the object's shape: `547` against `548`
+bytes, `123` instructions on both sides, and the TX/RX cold stubs now
+duplicate `mov $1,%eax` / `xor %eax,%eax` instead of sharing the hot copy.
+The only `--why` row is the switch's jump-table addend: ours
+`*@section .rodata+0`, the blob `+8`. `objdump -s -j .rodata` shows why --
+the final `.rodata` begins with the 8-byte string `2.7.14` from another TU
+and the blob's table therefore starts at `+8`; a per-TU object's table
+starts at `+0`. It is the section-placement artifact F12013 records, not a
+statement, and the 1-byte `st_size` difference is the same per-TU layout.
+
+**`VOICE_process` has no missing operation; it is allocation-bound.** Both
+sides have the same call multiset (20 `dsplibs_debug_printf`, two
+`modem_recv_from_tty`, two `modem_send_to_tty`, two `RcFixed_Resample`,
+two `sysdep_memcpy`, one `VOICE_command`, one `voice_modem`) and every loop
+body, clamp and switch arm is present. The 2-instruction deficit and the
+0x10 frame difference (`0x6c` against `0x7c`) are exactly four object
+spills: `rlen` at `0x3c` (`0xd8a`, reloaded `0xd8e`/`0xdb1`/`0xe8e`/`0xec9`/
+`0xee1`), `block` at `0x44` (`0xd2e`, reloaded `0xd57`/`0xee5`),
+`from_line` at `0x38` (`0xdc8`, reloaded `0xdfe`) and `to_line` at `0x34`
+(`0xdd5`, reloaded `0xe0a`). Each is an address or value the object keeps in
+the frame and ours keeps in a register; `v->block` is still loaded nine times
+on both sides, so it is a CSE spill and not a source local. Two
+evidence-implied spellings were compiled and declined: `float *from_line =
+v->from_line;` / `*to_line = v->to_line;` at function scope measures
+467 insns / 2019 bytes (the leas hoist into the prologue), and the same two
+locals inside the `count >= block` block measure 463 / 2005 (the leas hoist
+to block entry, the object computes them at `0xdc0`/`0xdcf` after the first
+loop). Neither closes; F12014's ring-pointer recovery is retained unchanged.
+
+Placement effect, disclosed: the first positional divergence moves from
+`VOICE_delete` (+12) to `RD_create` (-368), whose predecessor
+`FAX_process` is 1,809 -> 1,450 bytes; `VOICE_create` is no longer a drift
+row. Positioned reference bytes move 73,994 -> 74,726 of 943,398, exact
+sections unchanged at 68. As before, that aggregate is a layout coincidence
+measure, not a fidelity target.
+
+Gate `make phase J=2`: 394 passed, 0 failed; all structural tiers OK.
+Census 1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE;
+grade 0-or-1 1,184; ratchet OK (exact 1,146 -> 1,147, grade 0-or-1 1,182 ->
+1,184, link-selected exact 1,149 -> 1,150). No flags, padding, fixtures,
+tests or ratchet policy changed.
