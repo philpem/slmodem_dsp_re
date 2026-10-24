@@ -139863,6 +139863,7 @@ at `0x5b1fe` remains the `q_next` wrap-branch target, as recorded before.
 Validation: `make period J=3` **394 passed, 0 failed**; census unchanged at
 **1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
 0-or-1 **1,184**, link-selected **1,150**, ratchet OK with the existing
-displacement. Positioned reference bytes moved 74,679 -> **74,790** of
-943,398 on the same host (the -48-byte symbol lets the following linked bytes
-regain 111 positions).
+displacement. Positioned reference bytes moved 76,081 -> **75,942** of
+943,398 on the merged base (#376 included) on the same host: the -48-byte
+symbol pulls 139 downstream positions out of coincidence. That diagnostic is
+not the basis for retaining source; the graded sets and the gate are.
