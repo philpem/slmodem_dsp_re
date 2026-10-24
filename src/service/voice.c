@@ -266,18 +266,13 @@ VOICE_create(void *modem, unsigned int rate)
 			rc_out = RcFixed_Create(VCE_RC_MODE_48000_OUT);
 		v->rc_out = rc_out;
 
-		if (!rc_in || !rc_out)
+		if (!v->rc_in || !v->rc_out)
 			goto fail;
 	}
 
 	v->state = VOICE_STATE_COMMAND;
 	v->info = (struct voice_info *)modem_get_param(modem,
 						       MDMPRM_VOICEINFO);
-
-	cfg.modem = modem;
-	cfg.get_sreg = (unsigned int (*)(void *, int))vce_get_sreg;
-	cfg.hook_on = vce_hook_on;
-	cfg.hook_off = vce_hook_off;
 
 	/*
 	 * The output ring starts a whole block ahead of the input one -- its
@@ -288,6 +283,11 @@ VOICE_create(void *modem, unsigned int rate)
 	v->block = rate * VCE_BLOCK_REF_SAMPLES / VCE_BLOCK_REF_RATE;
 	v->out_ring.count = (int)v->block;
 	v->out_ring.blk = v->block;
+
+	cfg.modem = modem;
+	cfg.get_sreg = (unsigned int (*)(void *, int))vce_get_sreg;
+	cfg.hook_on = vce_hook_on;
+	cfg.hook_off = vce_hook_off;
 
 	v->voice = voice_create(&cfg);
 	if (!v->voice)
