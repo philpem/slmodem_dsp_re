@@ -528,7 +528,7 @@ V34demodulate(struct v34_receiver *rx)
 	int g0, g1;
 	int sum;
 	int cos_v, sin_v;
-	int phase, quarter, step;
+	int phase, quarter;
 
 	/* One int off the ring, so one pair of shorts. */
 	q->count = (short)(q->count - 1);
@@ -586,7 +586,6 @@ V34demodulate(struct v34_receiver *rx)
 	 */
 	phase = (unsigned short)rx->mix_carrier_phase;
 	quarter = (unsigned short)rx->half_len;
-	step = (unsigned short)rx->mix_carrier_step;
 
 	cos_v = rx->carrier[(short)phase];
 	sin_v = rx->carrier[(short)phase + (short)quarter];
@@ -594,7 +593,7 @@ V34demodulate(struct v34_receiver *rx)
 	rx->demod_i = (short)((g0 * sin_v + g1 * cos_v + 0x2000) >> 14);
 	rx->demod_q = (short)((g1 * sin_v - g0 * cos_v + 0x2000) >> 14);
 
-	phase += step;
+	phase += (unsigned short)rx->mix_carrier_step;
 	if ((short)quarter <= (short)phase)
 		phase -= quarter;
 	rx->mix_carrier_phase = (short)phase;
