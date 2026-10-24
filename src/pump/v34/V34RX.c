@@ -1163,8 +1163,8 @@ rx_phase_error(const struct v34_receiver *rx)
  * count of bias and is reproduced rather than corrected.
  *
  * THE FOUR THREE-TAP LOOPS WALK POINTERS, NOT SUBSCRIPTS.  The object carries
- * two descending history pointers (`&pred_i[2]`/`&pred_q[2]`, one element above
- * the write pointer in the shift) and two ascending coefficient pointers, and
+ * two descending history pointers (`&pred_i[2]`/`&pred_q[2]`), with the
+ * shift write one element higher, and two ascending coefficient pointers, and
  * its loop bodies step them by two (`add $0x2`/`sub $0x2`).  An indexed
  * `rx->pred_a[k]` cannot produce that: it compiles to scaled addressing
  * `0x28e(%ebp,%ecx,2)`, which the object does not contain here.  `k` is a
@@ -1192,24 +1192,26 @@ rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
 
 	/*
 	 * The shift and the imaginary accumulator are one pass in the object,
-	 * and have to stay one here: each entry is read for the product and
-	 * then copied up, so splitting them would read the shifted value.
+	 * and stay one here. Native 0x5c1c0/0x5c200 and their second copies
+	 * load history and coefficient before storing the shifted history.
+	 * Accumulate first so both operations reuse that history capture;
+	 * shifting first introduces a second history read before the product.
 	 */
 	acc = 0x2000;
 	pa = rx->pred_a;
 	pi = &rx->pred_i[2];
 	pw = &rx->pred_i[3];
 	for (k = 0; k < 3; k++) {
-		*pw-- = *pi;
 		acc += *pi * *pa++;
+		*pw-- = *pi;
 		pi--;
 	}
 	pb = rx->pred_b;
 	pq = &rx->pred_q[2];
 	pw = &rx->pred_q[3];
 	for (k = 0; k < 3; k++) {
-		*pw-- = *pq;
 		acc += *pq * *pb++;
+		*pw-- = *pq;
 		pq--;
 	}
 	outq = (short)(acc >> 14);
