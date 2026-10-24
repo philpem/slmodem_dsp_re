@@ -140014,9 +140014,9 @@ offsets below are relative to the owning function's start.
 
 The link before this change had only five `FAX_class1_command` entries at
 0x60..0x73, so its `FAX_process` table began at **0x74** (still eleven entries,
-0x74..0x9f) and RD's at 0xa0. The four bytes at blob 0x74 (0x17bb) were being
-read as the FAX_process table's first entry; they are in fact case 5 of the
-preceding switch. After the change the link's 0x60 table is byte-for-byte the
+0x74..0x9f) and RD's at 0xa0 -- four bytes earlier than the blob, whose entry
+at 0x74 (0x17bb) is case 5 of the preceding switch. The link did not gain an
+entry; it was missing one before the FAX_process table, not inside it. After the change the link's 0x60 table is byte-for-byte the
 blob's six entries, the FAX_process table sits at 0x78 with its eleven entries,
 and RD's table sits at 0xa4. `relocscan --at .rodata:0x78` now reports
 `.text+0x1e1c -> .rodata:0x78` in **both** objects (it was `0x74` in ours).
