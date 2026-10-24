@@ -1248,11 +1248,18 @@ rx_predict(struct v34_receiver *rx, unsigned short *px, unsigned short *py)
  *     -symbol structure, and it is why the loop cannot share rxtiming's
  *     shape however similar the arithmetic looks.
  *
- * `flags` IS A CACHED LOCAL, NOT A FIELD.  The object loads +0x122 into a
- * register once and refreshes it only after a call that could have changed
- * it -- decoderv34, V34EqualizerClearCenterTaps, V34scrambler's second path
- * and each debug printf.  Reading the field at every gate instead would be a
- * different function on any path where decoderv34 writes it.
+ * `flags` IS NOT A LOCAL: +0x122 IS READ AT EVERY GATE.  The object loads the
+ * field nineteen times and stores it five, and the halfword stack slot at
+ * 0x30 is one of the compiler's own CSE temporaries -- spilled as
+ * `mov %cx,0x30(%esp)` and tested as `testw`, never as a whole word.  A named
+ * `unsigned short` local cannot stand in for it: under the period flags
+ * (`-mtune=i686`) the i386 PROMOTE_MODE path widens every register-eligible
+ * narrow local to SImode in expand_decl, so the variable gets a 4-byte slot
+ * and the tests become `testl` (wave 14, measured: a local version reads the
+ * field 17 times, LCS 475; this form reads it 19 times, LCS 492).  Direct
+ * reads also give the object's reload after every call that could have
+ * changed the field -- decoderv34, V34EqualizerClearCenterTaps, V34scrambler
+ * and each debug printf.
  */
 void
 receiver(void *objp)
@@ -1262,15 +1269,11 @@ receiver(void *objp)
 	struct v34_engine *engine = (struct v34_engine *)&obj->progress;
 	struct v34_timing *t = &obj->receiver.timing;
 	/*
-	 * 16-bit, as the object has it: the cached value lives in a halfword
-	 * stack slot (`mov %cx,0x30(%esp)`) and every test on it is a `testw`,
-	 * never a `testl`.  The equaliser is reached as `&rx->equalizer` at the
-	 * five call sites that take it (the object emits `lea 0x3cc(%ebp)`,
-	 * a base on the receiver) but as `&obj->receiver.equalizer` at
-	 * V34EqualizerFilter, which the object bases on the object pointer
-	 * (`add $0x630`).
+	 * The equaliser is reached as `&rx->equalizer` at the five call sites
+	 * that take it (the object emits `lea 0x3cc(%ebp)`, a base on the
+	 * receiver) but as `&obj->receiver.equalizer` at V34EqualizerFilter,
+	 * which the object bases on the object pointer (`add $0x630`).
 	 */
-	unsigned short flags;
 	int eq_re, eq_im;
 	int pherr;
 	short i;
@@ -1327,7 +1330,6 @@ receiver(void *objp)
 	TimingV34(obj);
 	V34EqualizerFilter(&obj->receiver.equalizer, &eq_re, &eq_im);
 
-	flags = rx->flags;
 	rx->f208 = (short)((eq_re + 0x2000) >> 14);
 	rx->f20a = (short)((eq_im + 0x2000) >> 14);
 
@@ -1340,7 +1342,7 @@ receiver(void *objp)
 	 * symbols is a retrain request; passing back down through -0x84..
 	 * -0x78 on the way out is a renegotiation request instead.
 	 */
-	if (flags & V34_RX_FLAG_DATA) {
+	if (rx->flags & V34_RX_FLAG_DATA) {
 		int d1, d2;
 
 		d1 = (((short)((unsigned short)rx->f208
@@ -1372,14 +1374,12 @@ receiver(void *objp)
 			if ((short)n <= 0x8c) {
 				rx->rtncount = (short)n;
 			} else {
-				flags |= V34_RX_FLAG_RETRAIN;
+				rx->flags |= V34_RX_FLAG_RETRAIN;
 				rx->rtncount = 0;
-				rx->flags = flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "V34RETRAIN, retrain request " "detected, rtncount = %d \n",
 					    (int)rx->rtncount);
-					flags = rx->flags;
 				}
 			}
 		} else if ((short)((short)d2 - 0x80) <= 0) {
@@ -1388,12 +1388,10 @@ receiver(void *objp)
 			short n = rx->rtncount;
 
 			if (n + 0x78 <= 0 && n + 0x84 > 0) {
-				flags |= V34_RX_FLAG_RENEG;
-				rx->flags = flags;
+				rx->flags |= V34_RX_FLAG_RENEG;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "V34RENEG, RRN request detected," "rtncount = %d\n", (int)n);
-					flags = rx->flags;
 				}
 			}
 			rx->rtncount = 0;
@@ -1405,7 +1403,7 @@ receiver(void *objp)
 	 * history and add the prediction back in, before anything else sees
 	 * it.  Coefficients shared with the adapting copy below.
 	 */
-	if (flags & V34_RX_FLAG_PRECODE)
+	if (rx->flags & V34_RX_FLAG_PRECODE)
 		rx_predict(rx, (unsigned short *)&rx->f208,
 			   (unsigned short *)&rx->f20a);
 
@@ -1429,9 +1427,7 @@ receiver(void *objp)
 			obj->hist1_idx = 0;
 	}
 
-	flags = rx->flags;
-
-	if (flags & V34_RX_FLAG_DATA) {
+	if (rx->flags & V34_RX_FLAG_DATA) {
 		/*
 		 * Data mode.  Which reference the error is measured against
 		 * is a ladder on the symbol count, and 0x8 shifts the whole
@@ -1449,10 +1445,10 @@ receiver(void *objp)
 		}
 
 		n = rx->rx_blocks;
-		if (flags & V34_RX_FLAG_LATE_TRN)
+		if (rx->flags & V34_RX_FLAG_LATE_TRN)
 			n = (short)(n + 0x120);
 
-		if (!(flags & V34_RX_FLAG_LATE_TRN) && n <= 0x132) {
+		if (!(rx->flags & V34_RX_FLAG_LATE_TRN) && n <= 0x132) {
 			/* Phase 3: the PP sequence, known and generated. */
 			int k = (short)rx->vectpp_idx;
 
@@ -1463,7 +1459,6 @@ receiver(void *objp)
 		} else if (n > 0x332) {
 			/* Past TRN: the real decoder. */
 			decoderv34(obj);
-			flags = rx->flags;
 		} else {
 			/*
 			 * TRN's reference is the scrambler output sliced onto rxvect4.
@@ -1480,16 +1475,15 @@ receiver(void *objp)
 			 */
 			short k;
 
-			k = (short)V34scrambler((unsigned *)&rx->trn_ref_sr, (short)(flags & 4),
+			k = (short)V34scrambler((unsigned *)&rx->trn_ref_sr, (short)(rx->flags & 4),
 						3, 2);
 			rx->dp.point = rxvect4[k];
-			flags = rx->flags;
 
-			if (flags & V34_RX_FLAG_TRN_WATCH) {
+			if (rx->flags & V34_RX_FLAG_TRN_WATCH) {
 
 				if ((unsigned short)(n - 0x143) <= 0xf)
 					k = (short)V34scrambler(&rx->scrambler_sr,
-								(short)(flags & 4), 3, 2);
+								(short)(rx->flags & 4), 3, 2);
 
 				if (n == 0x153) {
 					short z;
@@ -1519,7 +1513,6 @@ receiver(void *objp)
 					rx->scrambler_sr = 0;
 				}
 
-				flags = rx->flags;
 			}
 		}
 	} else if (rx->pllcnt > 1) {
@@ -1554,20 +1547,17 @@ receiver(void *objp)
 		err = rx_slice_err(rx);
 		n = rx->rx_blocks;
 
-		if (n == 0x40 && !(flags & V34_RX_FLAG_DET_PENDING)
+		if (n == 0x40 && !(rx->flags & V34_RX_FLAG_DET_PENDING)
 		    && DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 				"V34AGC, abcddetect gain = 0x%x, " "AGC frozen\n", (int)rx->agc_gain);
-			flags = rx->flags;
 		}
 
 		if (n > 0x40) {
-			flags |= V34_RX_FLAG_DET_PENDING;
-			rx->flags = flags;
+			rx->flags |= V34_RX_FLAG_DET_PENDING;
 		}
 		if (n > 0x68) {
-			flags |= V34_RX_FLAG_TRAINED;
-			rx->flags = flags;
+			rx->flags |= V34_RX_FLAG_TRAINED;
 
 			/*
 			 * Trained, and still this far out: the centre taps
@@ -1584,17 +1574,15 @@ receiver(void *objp)
 					    (int)n, (int)rx->pllcnt,
 					    (int)rx->agc_gain);
 				rx->rx_blocks = 0;
-				flags = (rx->flags & ~V34_RX_FLAG_TRAINED)
+				rx->flags = (rx->flags & ~V34_RX_FLAG_TRAINED)
 					| (V34_RX_FLAG_DATA | V34_RX_FLAG_DET_PENDING);
-				rx->flags = flags;
 				V34EqualizerClearCenterTaps(&rx->equalizer);
-				flags = rx->flags;
 			}
 		}
 
 		rx->cloop_phase_err = rx_phase_error(rx);
 
-		if (flags & V34_RX_FLAG_DATA) {
+		if (rx->flags & V34_RX_FLAG_DATA) {
 			/*
 			 * Loss of signal.  A fourth copy of the 36-sample
 			 * RMS, and the only place in the receiver that stops
@@ -1606,14 +1594,13 @@ receiver(void *objp)
 					dsplibs_debug_printf(
 					    "Signal Energy below Threshold " "%d, initiate a disconnection",
 					    engine->rx_energy_floor);
-					flags = rx->flags;
 				}
 				obj->status = 10;
 			}
 		}
 
 		/* The diagnostic call can refresh the decision at +0x66c. */
-		if (flags & V34_RX_FLAG_DATA)
+		if (rx->flags & V34_RX_FLAG_DATA)
 			return;
 		goto carrier_loop;
 	} else {
@@ -1629,7 +1616,7 @@ carrier_loop:
 	 * decision error, adapted by a complex LMS, and with the error energy
 	 * accumulated into `preerr`.
 	 */
-	if (flags & V34_RX_FLAG_PREDICT) {
+	if (rx->flags & V34_RX_FLAG_PREDICT) {
 		int ei, eqv;
 		short k;
 
@@ -1724,7 +1711,7 @@ carrier_loop:
 				   >> 16);
 	}
 
-	if (flags & V34_RX_FLAG_TRAINED)
+	if (rx->flags & V34_RX_FLAG_TRAINED)
 		return;
 
 	/*
@@ -1771,11 +1758,10 @@ carrier_loop:
 				dsplibs_debug_printf(
 					"V34EQU, equerr = %d, preerr = %d,\n",
 					(int)rx->equerr, (int)rx->preerr);
-				flags = rx->flags;
 			}
 		}
 
-		if (flags & V34_RX_FLAG_DATA)
+		if (rx->flags & V34_RX_FLAG_DATA)
 			V34EqualizerAdapt(&rx->equalizer, (short)er, (short)ei);
 		else
 			V34EqualizerCenterAdapt(&rx->equalizer, (short)(er * 2),

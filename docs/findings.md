@@ -139263,12 +139263,77 @@ loop). Neither closes; F12014's ring-pointer recovery is retained unchanged.
 Placement effect, disclosed: the first positional divergence moves from
 `VOICE_delete` (+12) to `RD_create` (-368), whose predecessor
 `FAX_process` is 1,809 -> 1,450 bytes; `VOICE_create` is no longer a drift
-row. Positioned reference bytes move 73,994 -> 74,726 of 943,398, exact
-sections unchanged at 68. As before, that aggregate is a layout coincidence
-measure, not a fidelity target.
+row. On this branch alone positioned reference bytes move 73,994 -> 74,726
+of 943,398; merged with origin/master's `FAX_process`/`V34RX` work (whose
+own tree reads 73,996) the merged tree reads 75,008/943,398, exact sections
+unchanged at 68, and `RD_create` remains the first divergence. As before,
+that aggregate is a layout coincidence measure, not a fidelity target.
 
 Gate `make phase J=2`: 394 passed, 0 failed; all structural tiers OK.
 Census 1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE;
 grade 0-or-1 1,184; ratchet OK (exact 1,146 -> 1,147, grade 0-or-1 1,182 ->
 1,184, link-selected exact 1,149 -> 1,150). No flags, padding, fixtures,
 tests or ratchet policy changed.
+## F12038. `FAX_process`: the object's `&ctx->in_pending` base and live read cursor are source facts; the `ctx` spill itself is not reachable from the tested source domain
+
+F12012 left `FAX_process` at 1,450 B / 338 instructions against the blob's
+1,809 / 408, SIZE 359, with the instruction gap attributed to the object's
+`ctx` stack spill rather than missing code. This pass treated the spill as a
+source/register-pressure question and measured evidence-implied spellings one
+at a time against the Gentoo 3.4.2-r2 period compiler.
+
+**The object's slot map, from the forcing instructions.** `ctx` is the
+incoming argument at `0x90(%esp)` and is reloaded 27 times (`0x1a2c`,
+`0x1a33`, `0x1a50`, `0x1af1`, `0x1b19`, `0x1b40`, `0x1b8b`, `0x1bac`,
+`0x1bd5`, `0x1c18`, `0x1c4a`, ...): the parameter's home slot, not a copied
+local. `&ctx->in_pending` (`ctx+0x25ac`) is computed at `0x1a3a` and stored in
+`0x30(%esp)`; every later `in_pending`/`in_write_cursor`/`in_read_half`/
+`in_ring` access is based on it (`0x1aaf`, `0x1aca`, `0x1aed`, `0x1b12`,
+`0x1b2e`, `0x1ba8`, `0x1bce`). `ctx+0x229c` (`&out_produced`, and the base
+for `out_read_cursor` +8, `out_write_half` +0xc, `out_ring` +0x10) is hoisted
+into `%ebp` at `0x1a43`. `ctx->host_frame_samples` is re-read from memory
+after each call (`0x1a5e`, `0x1b03`, `0x1b20`, `0x1bdc`, `0x1be1`, `0x1c26`,
+`0x1c51`), and `ctx->out_read_cursor` is read *inside* the inner loop at
+`0x1a9c` for the second room clamp. The object's local slots ascend
+`0x40` tx_buf, `0x44` rx_buf, `0x48` out_ptr, `0x4c` last_status, `0x50`
+remaining, `0x54` out_cur, `0x58` in_cur, `0x5c` chunk, `0x60` ret, `0x64`
+oc2, `0x68`/`0x6c`/`0x70`/`0x74` the four progress outs, `0x78` oc.
+
+**Adopted, each independently witnessed.** (1) `int *in_pending =
+&ctx->in_pending`, used for the increment, the full-frame test and the flush
+decrement: this reproduces the object's `0x30` base. (2) The
+`out_read_cursor_snap` local is removed and the second clamp reads
+`ctx->out_read_cursor` live, exactly as `0x1a9c` does; the snapshot was ours,
+not the object's. (3) The outer-loop locals are declared so the stack slots
+come out `remaining` `0x50`, `out_cur` `0x54`, `in_cur` `0x58`, `chunk`
+`0x5c`, matching the object. Result: 338 -> 339 instructions, LCS 197 -> 221,
+longest run 15 -> 19, our body 1,450 bytes both before and after (SIZE stays
+359). Slot `0x30` now holds the `in_pending` base; `0x50`-`0x5c` match the
+object's meanings.
+
+**The spill is still not reproduced.** Every tested spelling that removed a
+local or added a base pointer left `ctx` in `%esi`/`%edi` and did not reduce
+the 69-instruction gap: no `host_frame` local at all (330, LCS 186, run 9),
+no snapshot alone (336, 181, 10), `&out_produced` added (340, 214, 19), both
+clamp bases and both host buffers added (343-345, LCS 190-214, frame still
+`0x6c`), and a local `&ctx->out_produced`-based view of the out cluster
+(340, 202, 10). A diagnostic `volatile` cursor on the parameter reaches
+384 instructions / 50 bytes' size gap, which shows the object's shape is
+essentially "`ctx` in memory with CSE", but it is not a source fact and was
+not retained. The object's choice to spend `%ebp` on `ctx+0x229c` and reload
+`ctx` 26 times is an allocator outcome that no tested source spelling
+constrains; F12012's finding stands.
+
+**Declined as a fit.** Declaring `host_frame` inside the inner loop (read per
+iteration rather than per outer chunk) measures 340 / LCS 229 / run 20 /
+SIZE 352, but the object reloads `host_frame_samples` from `ctx` after every
+call, which a live local cannot do. The eight extra LCS points come from the
+near-match, not from the object's source, so the spelling is not retained.
+
+Linked-position collateral: `FAX_process`'s body size is unchanged (1,450
+candidate bytes), its placement-ledger step stays 0, and the link-selected
+EXACT set stays 1,149. Positioned reference bytes move 73,994 -> 73,996 of
+943,398 (candidate delta -16,208) because two bytes inside the body now match
+in place. Gate `make period J=2`: 394 passed, 0 failed. Census 1,146 EXACT /
+0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; grade 0-or-1 1,183;
+ratchet OK with the reviewed `dp_vpcm_exit` displacement.
