@@ -103,11 +103,17 @@ V17TX_status(void *params, struct v17_status *status)
 	/*
 	 * The first of these two writes to `flags` is dead and is the
 	 * object's; see v17fax.h and D1032.  It stays because the load of
-	 * `p[0x10]` sits between them and may alias.
+	 * `p[0x10]` sits between them and may alias.  `t` puts that load there
+	 * in the source too: the object's order is the +0x14 clear at 0xa1c18,
+	 * the `p[0x10]` load at 0xa1c21, then the +0x15 clear at 0xa1c25.
+	 * Finding F12051.
 	 */
+	unsigned char t;
+
 	status->flags &= (unsigned char)~V17_STATUS_FLAGS_CLEAR;
+	t = p[0x10];
 	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
-	status->flags = (unsigned char)(p[0x10] & V17_STATUS_FLAG_04);
+	status->flags = (unsigned char)(t & V17_STATUS_FLAG_04);
 
 	status->int_18 = TXROOT(params)->cfg.int_0018;
 

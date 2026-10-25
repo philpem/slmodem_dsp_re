@@ -10116,8 +10116,10 @@ setTimingStateParameters(void *objp)
 			rx->dwell_limit = 0x7d0;
 			break;
 		case 7:
-			rx->timing_p_gain = 0x5dc;
+			/* i_gain before p_gain: the object stores +0x236
+			 * at 0x608d3 before +0x234 at 0x608df.  F12051. */
 			rx->timing_i_gain = 0x2;
+			rx->timing_p_gain = 0x5dc;
 			rx->dwell_limit = 0xfa0;
 			break;
 		case 8:
