@@ -140290,3 +140290,79 @@ Positioned reference bytes **77,081 / 943,398 (8.2%)** (76,713 before both
 waves, 76,575 after #385 alone), candidate delta -15,696. Blob sha256
 unchanged at
 `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+## F12048. SIZE band at delta 1-3: a dead-store pair in `VPcmV34SetMohMessageBits` closes EXACT, and `_delete_data_rx_modem`'s receiving local
+
+*2026-10-25, worktree `w18-size`, base `8cf656edd`, rebased onto `97c9b83b7`
+(F12046/F12047).* The brief screened the
+SIZE band the recent waves did not: `byteident.py --near 2000` lists 704
+non-exact symbols, and **206 are SIZE with |instruction delta| 1, 2 or 3**.
+After the brief's exclusions (F12016's four; `receiver`, `V34agc`,
+`V34demodulate`, `agcadapt`; `VOICE_process`, `FAX_process`,
+`FAX_class1_command`, `RD_create`; the v23_create/datapump emission order,
+vpcm order, COMDAT/link-selected rows, V90 call-edge rows, the SUV wrapper,
+`CALLPROG_Progress`, v34handshak/v8handshak) **181 remain**; `structsim` and
+`contentgap` were run over all of them. Two rows carry source facts; the rest
+are allocation, scheduling or block-merge residues.
+
+**`VPcmV34SetMohMessageBits` (350 B) becomes EXACT.** The object stores
+`bits[0] = 0x50` at 0x8842 and `bits[0] = 0x90` at 0x88c1, then overwrites
+both (`0xabe0`-based MHack, and the three `moh_clrd_sel` values); ours omitted
+the two dead base stores, leaving 69 instructions against the object's 71.
+The source comment had reasoned that the object's compiler "would have been
+free to drop them too" -- it did not. Restoring the two statements gives
+**71/71 instructions, grade 0 EXACT**, LCS 100%. Only the final value is
+observable either way.
+
+**`_delete_data_rx_modem` (149 B) gets a receiving local.** The object tests
+the slot with `movzwl 0xe(%edx),%eax; cmp $0xc,%ax` (0x941ae/0x941b2); ours
+folded it into `cmpw $0xc,0xe(%eax)`. An `unsigned short` receiving local
+reproduces the object's zero-extending load and 16-bit register compare. The
+symbol stays SIZE, but 40/38 -> **40/39 instructions**, LCS 37 -> **39**
+(92.5% -> 97.5%), longest run 32 -> **38**. The one remaining instruction is
+the object's duplicated `mov 0x10(%edx)` at 0x94230 before the jump to the
+shared free; ours loads the same field once at the join. That is a block merge
+(`sched2`-class), not an absent statement, and no spelling was found that
+keeps the load duplicated without also duplicating the free.
+
+**Measured blockers on the other worked rows** (`dis.py` addresses; all
+first differences are pre-RTL or block layout, no source fact adopted):
+
+- `TxNextStateV21` (SIZE 26 B) and `RxNextStateV21` (SIZE): the object reads
+  the state field twice (`movswl 0xc/0x8(%edx)`) where ours CSEs a
+  `movzwl` + `movswl` pair, or reloads the pointer. Pristine
+  `TxNextStateV21` is three bytes from the object (one `mov 0x20(%ebx)`, the
+  default arm reading `tx->hdx->state`); switching that read to the cached
+  `hdx->state` removes the pointer load but makes the compiler CSE the field,
+  and using the local `state` removes the default reload. Same CSE boundary in
+  both functions; no source spelling escaped it.
+- `porcessFirstStudy` (98.0% LCS) and `setTimingStateParameters` (93.6%):
+  the object keeps a store in each switch arm (`0x280c(%ebp,%esi,1)`, and
+  `0x236(%ebx)`) where ours merges them into one conditional-value store; the
+  arms reach a common tail through a `continue`/`break`.
+- `V32FP_control`: three independent residues -- a duplicated `and $0xfd`,
+  one `mov R,R`, and `2 - (trellis == 0)` emitted as `setne; inc` rather than
+  `sete; movzbw; sub` -- with the last two equivalent for every input.
+- `setQcLinearMapping`: loop rotation; the phase test sits in the preheader
+  instead of the latch.
+- `FPM_iir_filt`, `detector_create`, `V27TX_modem`, `FloatFIR::process`,
+  `V34EqualizerCenterAdapt`: one `mov R,R` copy, one `flds` reload, or two
+  `mov R,(R)` spills before `imul` -- allocation only.
+- `zfFLTUTL_GetMaxAbsValue`: the object's `sub $0x4,%esp` / `pop %eax` is a
+  dead four-byte slot; reproducing it would be padding.
+- `v17tx_create`/`v17rx_create`: duplicate epilogues tail-merged in ours.
+- `SGD_control`: the `sym_bits` unsigned-short receiving-local / 16-bit
+  product domain already measured in F11350; `setV92CPpckFromParamsInfo`:
+  F11940's declaration/reload domain, remaining graphs.
+- `V90MP::infoToBits` / `V90CP::infoToBits`: the 0x21 vs 0x23 difference is a
+  stack-local slot number, not a field; V90 call-edge domain.
+
+**Verified (rebased).** Gate `make period J=3` **394 passed, 0 failed**.
+Census **1,149 EXACT / 1 UNRESOLVED / 36 REGALLOC / 89 BYTES / 577 SIZE** over
+1,852 (rebased master `97c9b83b7`: 1,148/1/36/89/578); grade 0-or-1 **1,186**
+(was 1,185); link-selected EXACT **1,152** (was 1,151). `byteident --ratchet`
+OK: the only EXACT that left the bucket is the pre-existing evidence-pinned
+`dp_vpcm_exit` displacement; no grade-0/1 loss. Phase 3: positioned reference
+bytes **77,070/943,398 (8.2%)**, unchanged from the rebased master baseline,
+and candidate `.text` 711,559 both before and after -- the inserted bytes fall
+inside section alignment, so the linked picture is unmoved; the first
+divergence is still `RD_create`. No flags, attributes, padding or test edits.
