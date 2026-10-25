@@ -64,6 +64,7 @@
 #include "dsplib/v22.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/v22ans.h"
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
@@ -244,14 +245,29 @@ v22_delete(struct dp *dp)
  * Unlike `b103_process` the rates are reported on EVERY connecting block and
  * not only on the transition into one -- there is no edge test here at all.
  *
- * THE TABLE'S LENGTH IS EVIDENCE AND THE SPELLING BELOW IS NOT.  Seventeen
- * entries and a `cmp $0x10; ja` mean the highest case label the author wrote
- * was 16, twelve of the seventeen landing on the same block as `default`.
- * 16 is `V22_MSG_NO_CARRIER` (finding F8534, corroborated from V.32), so it
- * is spelt as an explicit case falling into the default.  Any other
- * assignment of the twelve dead labels is behaviourally identical and this
- * one is not established -- what the object forces is only that a label at 16
- * exists.
+ * THE LABEL SET IS THE PROTOCOL'S OWN STATUS VOCABULARY (finding F12046).
+ * Seventeen entries and a `cmp $0x10; ja` mean the highest case label is 16,
+ * and the table's five unique targets put 2 and 5..15 on the error block at
+ * .text+0x100.  The statuses that `V22FP_modem` can leave in `fp->status`
+ * and return in the low byte, across 0..16, are exactly
+ *
+ *     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16
+ *
+ * -- 2 is written by `v22_retrain`, 5/7/8/9/10 by `v22_ans_rmloop2`, 6/7 by
+ * `v22_org_rmloop2`, 11 by `connect_2400`, and 16 is `V22_MSG_NO_CARRIER`
+ * (F8534, corroborated from V.32).  No writer anywhere in the V.22 tree
+ * produces 12, 13, 14 or 15, so those are `default` holes.  Each reachable
+ * value is its own `case` with its own `result = DPSTAT_ERROR; break;` --
+ * not one shared fallthrough body -- and that too is a source fact the
+ * object forces: collapsing the error values into a single label group
+ * makes GCC 3.4 emit the decision chain a five-label switch gets, while one
+ * statement per value produces the object's 17-entry table, its five unique
+ * targets in its order, and LCS 124 of 161 instructions.
+ *
+ * THE ONE REMAINING STRUCTURAL DIFFERENCE IS OUTSIDE THE SWITCH.
+ * `modem_put_bits` and the dispatch are tail-duplicated onto both loop
+ * paths here (two calls), where the object has one join; that is the same
+ * duplication the decision-chain spelling had, and it is not the label set.
  */
 static int
 v22_process(void *dp_arg, void *in, void *out, int count)
@@ -337,7 +353,33 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 		modem_set_param(dp->modem, MDMPRM_RX_RATE, V22_LINE_RATE_1200);
 		result = DPSTAT_CONNECT;
 		break;
+	case 2:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_05:
+		result = DPSTAT_ERROR;
+		break;
+	case 6:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_07:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_08:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_RETRAIN_REQ:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_ANS_RMLOOP2:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_RETRAIN:
+		result = DPSTAT_ERROR;
+		break;
 	case V22_MSG_NO_CARRIER:
+		result = DPSTAT_ERROR;
+		break;
 	default:
 		result = DPSTAT_ERROR;
 		break;

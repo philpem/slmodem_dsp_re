@@ -9268,9 +9268,21 @@ capture recovery); when every spelling emits the same canonical order and the
 object differs only at `sched2` -- or at the reload base register -- record
 that first differing stage and stop rather than fitting.
 
-Wave 17 also measured three switch-lowering leads that prove the lever but do
-not recover the original labels: splitting the V8 timeout cases produces a
-14-entry table (base 4) against the object's 18 (base 0), and splitting the
+Wave 17 also measured three switch-lowering leads that prove the lever but did
+not then recover the original labels: splitting the V8 timeout cases produces
+a 14-entry table (base 4) against the object's 18 (base 0), and splitting the
 V22 error-valued cases reproduces the object's exact 17-entry shape and target
-order but the label set is not uniquely determined. Both were declined as
-blanket duplication with an underdetermined domain.
+order but the label set was not uniquely determined by the object. Both were
+declined as blanket duplication with an underdetermined domain.
+
+**The V22 case was resolved from outside the object, and that is the
+generalisable step (F12046).** The label set did not have to come from the
+table: it is the set of values the status producers can actually leave in the
+switch operand. Enumerating every writer of `struct v22fp::status` over the
+object's table domain (0..16) gives exactly 0..11 and 16; no writer produces
+12..15, so those are the default holes. Each value is a separate source label
+with its own (identical) arm -- collapsing them into one fallthrough group
+makes GCC 3.4 drop the table entirely -- and the resulting 17-entry table has
+the blob's five unique targets in its order, LCS 124 against 104 for the
+unjustified 17-label spelling. Search the domain's producers before declaring
+a table's label set underdetermined.

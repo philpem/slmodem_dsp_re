@@ -140090,3 +140090,99 @@ SIZE -> BYTES), `compare.py --ratchet` OK (1,195 identical of 1,852, 76
 same-size). Blob sha256 unchanged at
 `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
 
+
+## F12046. `v22_process`'s 17-entry table is the protocol's status vocabulary: nine error-valued cases are separate source labels, and 12..15 are default holes
+
+*2026-10-25.* Baseline `8cf656edd`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. Wave 17 measured that twelve
+duplicated error bodies give the object's 17-entry table and target order but
+declined the change because the label set was not uniquely determined
+(F12044's boundary). The set is determined, by the producers of
+`struct v22fp::status` rather than by the object alone.
+
+**The blob's table, resolved.** `relocscan`/`dis.py` put the jump at
+`.text+0x5200` (`jmp *0x21c(,%eax,4)`, `R_386_32 .rodata`), so the 17 entries
+start at `.rodata+0x21c`; every entry is an `R_386_32` against `.text` and the
+offsets are relative to `v22_process` (0x5130).
+
+    index  value   target   arm
+      0    393     0x52b9   +0x189   result = DPSTAT_OK
+      1    386     0x52b2   +0x182   tx_bits_wanted = 0; result = DPSTAT_OK
+      2    256     0x5230   +0x100   error
+      3    482     0x5312   +0x1e2   2400: bits = 4, TX/RX rate = 2400
+      4    400     0x52c0   +0x190   1200: bits = 2, TX/RX rate = 1200
+     5..16  256    0x5230   +0x100   error
+
+Five unique targets, in the order the source labels 0, 1, 2, 3, 4 give. The
+shared error body is `mov $0x4,%ebx` at 0x5230 (result = DPSTAT_ERROR) falling
+into the common tail at 0x5235: compare the result with `dp->status`, and if
+they differ and `dsplibs_debug_level > 1`, print `v22: V22STAT: --> %d` with
+the RAW status byte reloaded from the saved result at 0x20(%esp). It then
+stores `dp->status` and returns. The two `DPSTAT_OK` arms jump into that same
+tail, so the error block and the report/store/return tail are shared. Nothing
+in the error arm reads the value it was reached with.
+
+**The label set is the set of values `V22FP_modem` can return.** The switch
+tests `result & 0xff`, and `V22FP_modem` returns the 32-bit word at
+`fp->status`, so the low byte is what every V.22 writer stores. Over 0..16 the
+writers produce exactly
+
+    0   v22_data's local status (v22mod.c:371)
+    1   V22_STATUS_01: v22_data, v22_retrain, connect_1200, v22_answer,
+        v22_originate, and V22FP_create
+    2   v22_retrain (v22mod.c:566)
+    3   V22_MSG_CONNECT_2400: connect_2400 (689, 761), v22_answer (768)
+    4   V22_STATUS_04: connect_1200 (1097, 1128)
+    5   V22_ST_05: v22_ans_rmloop2 (1016)
+    6   v22_org_rmloop2 (896)
+    7   V22_ST_07: v22_org_rmloop2 (900), v22_ans_rmloop2 (984, 1021)
+    8   V22_ST_08: v22_ans_rmloop2 (1044)
+    9   V22_ST_RETRAIN_REQ: v22_ans_rmloop2 (290)
+   10   V22_ST_ANS_RMLOOP2: v22_ans_rmloop2 entry (921)
+   11   V22_ST_RETRAIN: connect_2400 (522), V22FP_modem (313, 329)
+   16   V22_MSG_NO_CARRIER: connect_2400 (535), connect_1200 (1154),
+        v22_data (246, 360)
+
+No writer anywhere in `src/pump/v22/` produces 12, 13, 14 or 15; the values
+above 16 that do exist (17, 19, 20, 21, 22, 23, 24) are outside the table and
+take the `ja` to the same error arm. The nine error-valued labels are
+therefore 2 and 5..11 plus 16, and 12..15 are the object's `default` holes.
+
+**The object also fixes that each value is its own statement.** Collapsing the
+nine values into one fallthrough label group -- the obvious spelling -- makes
+GCC 3.4 emit the decision chain a five-label switch gets, not a table. Measured
+on the period compiler with the exact flags (bytes are `nm -S`; LCS/run are
+`structsim` against the blob's 150 instructions):
+
+| spelling | entries | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|---:|
+| baseline, `case 16` sharing `default` | 0 | 634 | 169 | 113 | 34 |
+| 13 reachable values, one shared body | 0 | 634 | 169 | 113 | 34 |
+| **13 reachable values, one statement each** | **17** | **585** | **161** | **124** | **34** |
+| 17 values including 12..15, one statement each | 17 | 565 | -- | 104 | 34 |
+
+Both table spellings have the blob's five unique targets in the blob's order.
+The 13-value set is the one the vocabulary supports, and it is also the better
+structural match (LCS 124 against 104): the 17-value spelling is smaller only
+because its exhaustiveness over 0..16 changes GCC's tail-duplication decision.
+`contentgap` moves with it: structure surplus 23 -> 11 (4 blob / 15 ours
+unique), blob-only 20 instructions in 8 hunks, ours-only 31 in 9.
+
+**The remaining 28 bytes are outside the switch.** This TU emits two
+`modem_put_bits` call sites and two copies of the dispatch, one on each loop
+path (0x233/0x238 after the clamp, 0x295/0x29a after the narrowing loop),
+where the object has one join at 0x51dc. The same duplication is present in
+the baseline decision-chain build, so it is not caused by the label set; it is
+a tail-duplication difference in the `if (tx_bits_wanted) ... else rx_len = 0`
+plus `for` structure and stays open.
+
+No flags, no attributes, no padding, no fixtures. Verified: gate `make period
+J=3` **394 passed, 0 failed**; census **1,146 EXACT / 2 UNRESOLVED / 37
+REGALLOC / 89 BYTES / 578 SIZE** on 1,852, grade 0-or-1 **1,185**; a
+checked-out baseline built in the same tree measures the same 1,146 / 2, so the
+task's 1,147 / 1 was a COMDAT-accounting difference and no EXACT or grade-0/1
+row moved (`--list-exact` is identical before and after). Link-selected EXACT
+**1,150**; `byteident --ratchet` OK (1146 -> 1147 / 1182 -> 1185 / 1149 ->
+1150 / 36 -> 37); `compare.py --ratchet` OK (1,195 identical of 1,852, 78
+same-size). Blob sha256 unchanged at
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
