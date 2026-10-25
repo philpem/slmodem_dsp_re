@@ -140090,3 +140090,102 @@ SIZE -> BYTES), `compare.py --ratchet` OK (1,195 identical of 1,852, 76
 same-size). Blob sha256 unchanged at
 `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
 
+
+## F12046. `v8_process`'s 18-entry table is proved by four low-valued labels, not by splitting the timeout arms
+
+`v8_process` (blob 0x3770, 590 B, 145 insns) dispatches with
+`cmp $0x11,%eax; ja default; jmp *0x11c(,%eax,4)`: an 18-entry `.rodata` table,
+base 0.  Our baseline produced no table at all -- seven case values in
+4..17 were low enough in density for GCC to prefer a bit-test tree -- and even
+the wave-17 split of the five timeout cases reached only 14 entries, base 4.
+The missing fact is the switch's *lower* end.
+
+**The entry-to-arm map, from the blob's table.**  Offsets are function-relative
+from 0x3770; the class is what the arm body does.
+
+| index (status) | target | offset | class |
+|---|---:|---:|---|
+| 0 (V8_INIT) | 0x37c0 | 80 | default, `xor %edi,%edi` |
+| 1 (ANS_SEND_ANSAM) | 0x37c0 | 80 | default (hole) |
+| 2 (ANS_CM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 3 (ANS_SEND_JM) | 0x37c0 | 80 | default (hole) |
+| 4 (ANS_TO_CM) | 0x381e | 174 | timeout |
+| 5 (ANS_TO_CJ) | 0x381e | 174 | timeout |
+| 6 (ORG_WAITING_ANSAM) | 0x37c0 | 80 | default (hole) |
+| 7 (ORG_ANSAM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 8 (ORG_SEND_CM) | 0x37c0 | 80 | default (hole) |
+| 9 (ORG_JM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 10 (ORG_SEND_CJ) | 0x37c0 | 80 | default (hole) |
+| 11 (ORG_TO_ANSAM) | 0x381e | 174 | timeout |
+| 12 (ORG_TO_JM) | 0x381e | 174 | timeout |
+| 13 (V8_OK) | 0x3832 | 194 | the OK arm |
+| 14 (ORG_SEND_QC) | 0x37c0 | 80 | default (hole) |
+| 15 (ORG_WAITING_QCA1d) | 0x37c0 | 80 | default (hole) |
+| 16 (ORG_BAD_QCA1d) | 0x3895 | 293 | the QCA1d arm |
+| 17 (ORG_TO_QCA1d) | 0x381e | 174 | timeout |
+
+The guard is `cmp $0x11,%eax` -- an unsigned `ja`, so an `int` expression whose
+negative values take the default path.  The state load in the arm that reads it
+is `movzwl` (`rx_state`, `tx_state`, `rx_substate` are 16-bit fields), but the
+guard itself is on the `int` returned by `V8Process`.
+
+**What the table proves about the source.**
+
+- Base 0 requires a case label *distinct from `default`* at value 0.
+  `case V8_INIT: default:` does not work: GCC drops a case that shares the
+  default label from the jump-table range, and the table stays base 4 (measured).
+  Giving `V8_INIT` its own `ret = 0; break;` keeps the range 0..17; the two
+  identical arms are then cross-jumped and entry 0 and the out-of-range branch
+  both land on 0x37c0, which is what the object shows.  This is F12044's
+  pre-merge label multiplicity, applied one level up from arm order.
+- Entries 2, 7 and 9 land on the break label (0x37c2), two bytes after the
+  default's `xor`; a hole would land on 0x37c0.  So those three values are
+  explicit empty `break` arms.  One arm carrying all three is the minimal
+  spelling (the RTL merges it).
+- The default arm assigns 0 explicitly -- the out-of-range `ja` reaches the
+  `xor %edi,%edi`, while the empty arms skip it.
+- The five timeout values share one target, so grouping them in source is
+  faithful; the wave-17 split was a workaround for the missing low labels and
+  is **not** part of the source (it reaches LCS 136 versus 143 for the grouped
+  form).
+
+**Measured domain (Gentoo period compiler, exact flags).**
+
+| source shape | table | LCS / run |
+|---|---|---|
+| baseline (grouped timeouts, no low labels) | none (bit-test tree) | 93 / 20 |
+| split timeouts, no low labels | 14, base 4 | 101 / 34 |
+| split + `case V8_INIT: default:` | 14, base 4 | -- |
+| split + low labels (0 own `ret=0`, 2/7/9 empty, default `ret=0`) | 18, base 0 | 136 / 46 |
+| **grouped + low labels (the committed form)** | **18, base 0** | **143 / 63** |
+| grouped + low labels, default empty | 18, but targets reordered | 102 / -- |
+| grouped + low labels, `V8_INIT` empty | 18, entry 0 on the break label | 136 / 46 |
+| shared tail as `goto` label instead of the post-switch guard | 18, layout reordered | 111 / 46 |
+| tail duplicated in OK and BAD (RTL cross-jumps it) | 18, base 0 | 144 / 135 |
+
+The last row is the only form that removes the residual `if (arg >= 0)` test
+(see below), but it duplicates a straight-line body across two arms and was
+declined; the label-set question does not require it.
+
+**Before/after.** `structsim v8_process`: 145/158 insns, run 20, LCS 93 ->
+145/153, run **63**, LCS **143 (93.5%)**; blob-only 80 -> **2**, ours-only
+91 -> **10**, structure surplus 17 -> **9**.  Seventeen of the eighteen table
+targets now sit at the object's own function-relative offsets (80, 82, 174,
+194); only entry 16 is +18 because our build keeps a runtime `arg >= 0` guard
+the object threaded away -- the object's shared `modem_set_param` tail is
+reached only from the two arms that set `arg`, and our natural post-switch
+guard survives.  `v8_process` stays SIZE (623 B against 590).
+
+**Collateral and gate.** The change is switch text in `src/v8/v8.c` only.  It
+also takes `dp_v8_init` -- the next function in the same TU -- from REGALLOC
+to byte identity: measured by reverting, the per-TU EXACT count is 1,147
+without the change and 1,148 with it, and the REGALLOC count 37 -> 36, with no
+loss.  Gate `make period J=3`: **394 passed, 0
+failed**.  Census **1,148 EXACT / 1 UNRESOLVED / 36 REGALLOC / 89 BYTES / 578
+SIZE**, grade 0-or-1 **1,185**, link-selected EXACT **1,151**; `byteident
+--ratchet` OK (floor exact 1,146 -> 1,148, grade 1,182 -> 1,185, link 1,149 ->
+1,151).  Phase 3: positioned reference bytes 76,713 -> **76,575** of 943,398
+(8.1%), candidate delta -15,744 -> **-15,712**; exact relocations 1,098 ->
+**1,127**, exact symbols 466 -> **469**.  The positional count dips because the
+candidate layout moves; the total displacement and the record counts improve.
+No flags, no attributes, no padding, no fixture.
