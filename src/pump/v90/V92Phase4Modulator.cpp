@@ -913,22 +913,28 @@ void V92Phase4Modulator::recivedCPtag()
 	repeatCpEnable = 0;
 	repeatCpCount = 0;
 
-	if (cpReceived == 0) {
+	if (cpReceived != 0) {
 		if (flag_20 != 0)
 			return;
 
-		cpReceived = 1;
-		cp->byte_04 = 1;
-		cp->byte_00 = 1;
-
 		if (symbolCount % word_1b0 != 0) {
-			state = 8;
+			switch (state) {
+			case V92P4M_STATE_SUV:
+				state = 9;
+				break;
+			case V92P4M_STATE_CPU:
+			case V92P4M_STATE_REPEATED_CPU:
+				state = 11;
+				break;
+			default:
+				return;
+			}
 		} else {
-			state = 10;
+			edprintf("V92Phase4Modulator: enter E2u @ %d\r\n",
+				 symbolCount);
+			state = V92P4M_STATE_E2U;
 			symbolCount = 0;
-			cp->infoToBits();
-			pattern = cp->getBitVector(patternLength);
-			word_1b0 = patternLength / cp->bitsPerSymbol;
+			word_1b8 = (e2uExtended != 0) ? 13 : 12;
 		}
 
 		flag_20 = 1;
@@ -938,23 +944,18 @@ void V92Phase4Modulator::recivedCPtag()
 	if (flag_20 != 0)
 		return;
 
+	cpReceived = 1;
+	cp->byte_04 = 1;
+	cp->byte_00 = 1;
+
 	if (symbolCount % word_1b0 != 0) {
-		switch (state) {
-		case V92P4M_STATE_SUV:
-			state = 9;
-			break;
-		case V92P4M_STATE_CPU:
-		case V92P4M_STATE_REPEATED_CPU:
-			state = 11;
-			break;
-		default:
-			return;
-		}
+		state = 8;
 	} else {
-		edprintf("V92Phase4Modulator: enter E2u @ %d\r\n", symbolCount);
-		state = V92P4M_STATE_E2U;
+		state = 10;
 		symbolCount = 0;
-		word_1b8 = (e2uExtended != 0) ? 13 : 12;
+		cp->infoToBits();
+		pattern = cp->getBitVector(patternLength);
+		word_1b0 = patternLength / cp->bitsPerSymbol;
 	}
 
 	flag_20 = 1;

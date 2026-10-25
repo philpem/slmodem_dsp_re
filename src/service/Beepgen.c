@@ -383,19 +383,17 @@ detector_set_output_in_stream(struct detector *d)
 int
 check_for_valid(unsigned short *w)
 {
-	unsigned short v = w[0];
-
-	if (v != w[1])
+	if (w[0] != w[1])
 		return 0;
-	if (v != w[2])
+	if (w[0] != w[2])
 		return 0;
-	if (v == w[3])
+	if (w[0] == w[3])
 		return 0;
-	if (v == w[4])
+	if (w[0] == w[4])
 		return 0;
-	if (v == w[5])
+	if (w[0] == w[5])
 		return 0;
-	if (v == w[6])
+	if (w[0] == w[6])
 		return 0;
 	return 1;
 }
@@ -404,13 +402,11 @@ check_for_valid(unsigned short *w)
 int
 check_for_valid_easy(unsigned short *w)
 {
-	unsigned short v = w[0];
-
-	if (v != w[1])
+	if (w[0] != w[1])
 		return 0;
-	if (v == w[2])
+	if (w[0] == w[2])
 		return 0;
-	if (v == w[3])
+	if (w[0] == w[3])
 		return 0;
 	return 1;
 }
