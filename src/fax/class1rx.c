@@ -154,6 +154,15 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * knows, so it re-reads both pointers from memory after each one rather than
  * keeping them live across it.  Written the same way here rather than
  * cached in a local that would survive the calls.
+ *
+ * THE CONFIG FREE IS WRITTEN IN EACH ARM, not once after the `if`.  The
+ * object frees `vmi->modem_cfg` from two separate loads (0x0941b8 on the
+ * non-V.17 path and 0x094230 at the end of the V.17 arm) and shares only
+ * the `mov %eax,(%esp)`/`call` tail.  A single shared statement makes GCC
+ * merge the loads as well (40/39 instructions, one `mov 0x10(%edx)` short).
+ * Spelling the free in both arms restores the object byte for byte: the two
+ * calls are identical and the compiler merges those, but the loads stay in
+ * their own arms.  Finding F12050.
  */
 void
 _delete_data_rx_modem(struct fax_class1 *ctx)
@@ -173,9 +182,11 @@ _delete_data_rx_modem(struct fax_class1 *ctx)
 		cfg = vmi->modem_cfg;
 		sysdep_free(cfg->coefsave0);
 		vmi = ctx->modem_vmi;
+		sysdep_free(vmi->modem_cfg);
+	} else {
+		sysdep_free(vmi->modem_cfg);
 	}
 
-	sysdep_free(vmi->modem_cfg);
 	vmi = ctx->modem_vmi;
 	sysdep_free(vmi);
 

@@ -105,8 +105,14 @@ V29RX_status(void *modem, void *status)
 	((struct v29_status_prefix *)status)->tx_bps = 0;
 	((struct v29_status_prefix *)status)->short_04 =
 		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
+	/*
+	 * Ordering, not equality: GCC 3.4.2 folds `(word & 0x8000) == 0` into a
+	 * shift, and the ordering form is what narrows to the object's
+	 * `testb $0x80`/`sete` below.  Same source fact as V21RX_status
+	 * (F12050).
+	 */
 	((struct v29_status_prefix *)status)->quality = (short)
-		((((struct v29_rx *)modem)->result.word & V29_STATUS_LOW_SNR) == 0);
+		((((struct v29_rx *)modem)->result.word & V29_STATUS_LOW_SNR) <= 0);
 	((struct v29_status_prefix *)status)->short_08 = GetSNRV29(modem);
 	((struct v29_status_prefix *)status)->short_0a = 0;
 	((struct v29_status_prefix *)status)->short_0e = 0;
