@@ -188,13 +188,23 @@ def main():
 
     # The real function. The guard form is now accepted; record exactly where
     # the proof continues to refuse rather than claim a grade it does not have.
+    # The candidate defines RingDetector_Create in a different TU, so it is
+    # resolved through the recovered-order partial link exactly as byteident
+    # does; the blob defines it locally.  Both then reach the same residual.
+    linked, manifest = b._link_resolution_paths()
+    link = None
+    if (linked and manifest and Path(linked).is_file() and
+            Path(manifest).is_file()):
+        link = (str(linked), str(manifest))
     real = {}
     for label, path in [('blob', ROOT / 'ref/slmodemd/dsplibs.o'),
                         ('candidate', args.candidate)]:
         pre = subprocess.run([sys.executable, str(legacy), str(path), 'RD_create'],
                              capture_output=True, text=True)
         try:
-            proof = p.prove(str(path), 'RD_create')
+            proof = p.prove(str(path), 'RD_create',
+                            link=link[0] if link else None,
+                            manifest=link[1] if link else None)
             post = {'accepted': True, 'reason': None}
         except p.Refused as error:
             proof = None

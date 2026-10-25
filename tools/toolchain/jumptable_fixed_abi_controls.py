@@ -67,6 +67,12 @@ def main():
         'baseline': SOURCE,
         'rebased': SOURCE.replace('.Ltable:\n', '.space 32\n.Ltable:\n'),
         'swapped-targets': SOURCE.replace('.long .Lfirst,.Lsecond', '.long .Lsecond,.Lfirst'),
+        # A callee-save register that has already been redefined no longer
+        # carries its entry value, so a store of it is a computed-value frame
+        # write and not a second save.  Pre-dispatch here, which is
+        # RD_create's shape (`mov %esi,0x10(%esp)` after `mov 0x44(%esp),%esi`).
+        'redifined-save-store': SOURCE.replace(
+            'mov 20(%esp),%esi\n', 'mov 20(%esp),%esi\nmov %esi,(%esp)\n'),
     }
     negative = {
         'outgoing-save-overlap': SOURCE.replace('mov %esi,(%esp)', 'mov %esi,8(%esp)'),
@@ -79,6 +85,14 @@ def main():
         'skip-save': SOURCE.replace('mov %ebx,8(%esp)', 'jmp .Lskip\nmov %ebx,8(%esp)\n.Lskip:'),
         'skip-restore': SOURCE.replace('mov 8(%esp),%ebx', 'nop'),
         'duplicate-save': SOURCE.replace('mov %ebx,8(%esp)', 'mov %ebx,8(%esp)\nmov %ebx,8(%esp)'),
+        # A second save of the SAME entry value into a different slot stays
+        # refused; only a store of a redefined register leaves the save class.
+        'duplicate-save-other-slot': SOURCE.replace('mov %ebx,8(%esp)',
+            'mov %ebx,8(%esp)\nmov %ebx,0(%esp)'),
+        'redifined-save-store-overlaps-save': SOURCE.replace('mov 20(%esp),%esi\n',
+            'mov 20(%esp),%esi\nmov %esi,12(%esp)\n'),
+        'redifined-save-store-unaligned': SOURCE.replace('mov 20(%esp),%esi\n',
+            'mov 20(%esp),%esi\nmov %esi,2(%esp)\n'),
         'save-after-write': SOURCE.replace('mov %ebx,8(%esp)', 'inc %ebx\nmov %ebx,8(%esp)'),
         'unsaved-callee-write': SOURCE.replace('cwtl', 'xor %edi,%edi'),
         'post-restore-clobber': SOURCE.replace('add $16,%esp', 'mov $2,%bl\nadd $16,%esp'),

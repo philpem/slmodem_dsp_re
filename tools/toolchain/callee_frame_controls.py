@@ -52,8 +52,22 @@ def main():
     ap.add_argument('--out',type=Path,default=ROOT/'scratch/callee-effects/frame-controls')
     args=ap.parse_args(); out=args.out.resolve(); out.mkdir(parents=True,exist_ok=True)
     relative=out.relative_to(ROOT)
+    dead_area = (SOURCE
+        .replace('mov 36(%esp),%ebx\n', 'mov 36(%esp),%ebx\nmov 36(%esp),%edx\n')
+        .replace('.Lfirst:\nlea 16(%esp),%eax\nmov %ebx,(%esp)\nmov %eax,4(%esp)\n',
+                 '.Lfirst:\nmov %edx,8(%esp)\nmov %edx,12(%esp)\nlea 8(%esp),%eax\n'
+                 'mov %ebx,(%esp)\nmov %eax,4(%esp)\n')
+        .replace('testb $1,17(%esp)', 'testb $1,9(%esp)'))
+    post_origin = (SOURCE
+        .replace('mov 36(%esp),%ebx\n', 'mov 36(%esp),%ebx\nmov 36(%esp),%edx\n')
+        .replace('.Lfirst:\nlea 16(%esp),%eax\n',
+                 '.Lfirst:\nlea 12(%esp),%eax\nmov %edx,12(%esp)\n'))
     positive={
         'baseline':SOURCE,
+        # A record written through the frame base BEFORE its address is taken
+        # occupies dead outgoing-area words.  Only stores reachable from the
+        # origin are live at the private call, so they do not bound the record.
+        'dead-outgoing-area-record':dead_area,
         'fixed-frame-setcc':SOURCE.replace('.Lfirst:\n','.Lfirst:\nsete %al\n'),
         'rebased':SOURCE.replace('.text\n','.text\n.space 16,0x90\n',1),
         'larger-safe-write':SOURCE.replace('mov $1,%eax\nret','movb $3,8(%ecx)\nmov $1,%eax\nret'),
@@ -73,6 +87,9 @@ def main():
         'saved-state-alias':SOURCE.replace('lea 16(%esp),%eax','lea 28(%esp),%eax'),
         'return-word-alias':SOURCE.replace('lea 16(%esp),%eax','lea 32(%esp),%eax'),
         'outgoing-alias':SOURCE.replace('lea 16(%esp),%eax','lea 4(%esp),%eax'),
+        # The same alias made by a store reachable from the origin stays
+        # refused: the record start is then inside a live argument word.
+        'post-origin-store-into-record':post_origin,
         'outside-envelope':SOURCE.replace('mov $1,%eax\nret','movb $3,12(%ecx)\nmov $1,%eax\nret'),
         'second-frame-capability':SOURCE.replace('mov %ebx,(%esp)','lea 20(%esp),%edx\nmov %ebx,(%esp)'),
         'pointer-copy':SOURCE.replace('mov %ebx,(%esp)','mov %eax,%edx\nmov %ebx,(%esp)'),

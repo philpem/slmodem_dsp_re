@@ -75,13 +75,17 @@ def section_direct_edges(path, section):
 def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), context=None):
     """Track one entry-allocated frame and untouched callee-save slots in CFG.
 
-    This accepts ordinary register saves, not arbitrary stack writes. All
-    paths start at the sized ABI entry, keep the same frame depth at joins,
-    restore each saved register from its own unchanged slot, and deallocate
-    the frame before RET. Incoming loads cannot alias a saved slot. Outgoing
-    words are disjoint from all saves; direct relocated calls obey the i386
-    callee-save/stack-return ABI, as in the pushed-frame proof. No frame address
-    may escape. CWTL modifies only EAX.
+    This accepts ordinary register saves and bounded in-frame word stores,
+    not arbitrary stack writes. All paths start at the sized ABI entry, keep
+    the same frame depth at joins, restore each saved register from its own
+    unchanged slot, and deallocate the frame before RET. A store of a
+    callee-save register is a SAVE only while that register still holds its
+    entry value; once redefined, the store is a computed-value frame write and
+    cannot become a restore source. Incoming loads cannot alias a saved slot.
+    Frame words outside the save protocol are recorded with the stores that
+    wrote them and may not overlap a save; direct relocated calls obey
+    the i386 callee-save/stack-return ABI, as in the pushed-frame proof. No
+    frame address may escape. CWTL modifies only EAX.
     """
     first = rows[0]
     frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
@@ -106,7 +110,14 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
         return aliases.get(target[1]) if target else None
     def base(mnemonic):
         return mnemonic[:-1] if mnemonic[-1:] in ('b','w','l') and mnemonic[:-1] in supported else mnemonic
-    stack_ops = {}; slots = {}; saved = set(); written = set(); outgoing = set()
+    stack_ops = {}; slots = {}; saved = set(); written = set()
+    # Frame words stored outside the save protocol, keyed by slot with the set
+    # of stores that wrote them.  A store of a callee-save register is a SAVE
+    # only while that register still holds its entry value; once the register
+    # has been redefined, the same store is an ordinary computed-value frame
+    # write (the record initialisation below, or an outgoing argument) and is
+    # not evidence of a second save.
+    outgoing = {}
     for address, raw, mnemonic, operands in rows:
         original_mnemonic = mnemonic
         mnemonic = base(mnemonic)
@@ -147,13 +158,12 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
             stack_ops[address] = ('private',)
             continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
-        if store and address < dispatch:
+        if store and address < dispatch and store[1] not in written:
             offset = int(store[2] or '0', 16); register = store[1]
             require(mnemonic == 'mov' and offset % 4 == 0 and offset + 4 <= frame,
                     'saved slot extent/form')
-            require(address < dispatch and offset not in slots and register not in saved,
+            require(offset not in slots and register not in saved,
                     'saved slot duplicate/clobber')
-            require(register not in written, 'saved register modified before save')
             slots[offset] = register; saved.add(register)
             stack_ops[address] = ('save', offset, register)
             continue
@@ -162,7 +172,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
             offset = int(outgoing_store[1] or '0', 16)
             require(original_mnemonic in ('mov','movl') and offset % 4 == 0 and offset + 4 <= frame,
                     'fixed-frame outgoing extent/form')
-            outgoing.add(offset)
+            outgoing.setdefault(offset, set()).add(address)
             stack_ops[address] = ('outgoing',)
             continue
         load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
@@ -177,7 +187,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
             stack_ops[address] = ('argument', register)
             if register in callee: written.add(register)
     require(saved, 'fixed frame without supported saved registers')
-    require(not outgoing.intersection(slots), 'fixed-frame outgoing/save overlap')
+    require(not set(outgoing).intersection(slots), 'fixed-frame outgoing/save overlap')
     require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
     private = None
