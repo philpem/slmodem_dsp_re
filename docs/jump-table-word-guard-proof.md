@@ -52,14 +52,15 @@ insufficient:
   `0x2210`. Its comparison is immediately adjacent to the branch
   (`sub $4,%eax; cmp $0xb,%eax; jbe`), a shape the taken-edge parser did not
   admit because it assumed a flag-preserving store between comparison and
-  branch. The parser now accepts that adjacent comparison. The independent
-  frame obligations remain: the caller stores already-saved EBX/ESI/EDI as
-  outgoing arguments, which the save classifier reads as duplicate saves,
-  and it passes a frame-local record beginning at `+0x10` to
+  branch. The parser now accepts that adjacent comparison. Two frame
+  obligations followed. The first is now modelled: the caller stores a
+  redefined ESI into its stack record, which the old save classifier read as
+  a duplicate save (see "Frame stores versus saves" below). The second
+  remains, and refuses: the record beginning at `+0x10` is passed to
   `RingDetector_Create` (`0x21e9..0x21f0`), which calls
-  `sysdep_malloc`/`dsplibs_debug_printf` and is not a bounded leaf.
-  Generalising the guard parser alone therefore does not close the function
-  and moves no grade.
+  `sysdep_malloc`/`dsplibs_debug_printf` and is not a bounded leaf. So the
+  guard and the frame classifier are both accepted and the function still
+  moves no grade.
 
 These are next proof obligations, not findings that the code is unsafe or
 that a source route is exhausted.
@@ -136,7 +137,11 @@ prover from the branch point
 (`2a9d62fc5:tools/toolchain/jumptable.py`), which refuses both new positives
 with `unsigned immediate/register guard`; that is the measured pre-change
 behaviour rather than a replica. For `RD_create` the blob and the period
-object both pass the guard now and stop at the frame refusal described above.
+object both pass the guard now and stop at the non-leaf frame refusal
+described below. The suite resolves the period object through the
+recovered-order partial link (as `byteident` does) so both sides report the
+same residual; without the link it records the link-requirement refusal
+instead.
 
 The complete comparison census is identical to the frozen baseline across
 1852 functions: **1144 EXACT, 36 REGALLOC, 86 BYTES and 586 SIZE**, with zero
@@ -145,6 +150,145 @@ other JSON census fields are identical. The 14 same-size pairs contain no
 occurrence of the newly recognised guard pattern; their existing grades
 remain unchanged. The byte comparator also passes its 59 relocation controls
 and three exact-set ratchet controls.
+
+## Frame stores versus saves
+
+The fixed-frame save classifier treated every pre-dispatch
+`mov %reg,off(%esp)` of a callee-save register as a save. `RD_create`
+redefines ESI from its incoming argument (`mov 0x44(%esp),%esi`, blob
+`0x213e`) and then stores that computed value into its stack record
+(`mov %esi,0x10(%esp)`, blob `0x21a9`), well before the taken dispatch at
+`0x2210`. EDI is redefined at `0x2146` and stored the same way as the call's
+argument (`mov %edi,(%esp)`, `0x21d0`), also before the dispatch. The old
+classifier saw second saves of already-saved registers and refused
+`saved slot duplicate/clobber` at the first of them; that was `RD_create`'s
+first refusal in the previous wave.
+
+The rule now:
+
+- A **save** is a pre-dispatch 32-bit `mov` of a callee-save register
+  (EBX/ESI/EDI/EBP) into a 4-byte-aligned word wholly inside the allocated
+  frame, where the register still holds its entry value -- it has not been
+  redefined since entry -- and neither the register nor the slot already has
+  an owner. Uniqueness is per register and per slot: two saves of one
+  register, or two owners of one slot, still refuse
+  `saved slot duplicate/clobber`.
+- Any other store into an in-frame word -- an immediate, a caller-save
+  register, or a callee-save register that has been redefined -- is a
+  **computed-value frame write**. It keeps the outgoing extent rules
+  (`mov`/`movl`, 4-aligned, `offset+4<=frame`) and is still refused if the
+  word it writes belongs to a save (`fixed-frame outgoing/save overlap`). It
+  is not a save and never becomes a restore source.
+
+No new capability is admitted. The computed store was already admitted as an
+outgoing argument whenever the register was not saved -- the outgoing operand
+list includes EBX/ESI/EDI/EBP -- and when the register *was* saved it was
+refused only because the duplicate-save test fired, not because the store was
+unsafe. The saved slot still holds the entry value and is the only restore
+source, the frame is still released before RET, and `written <= saved` still
+binds.
+
+The frame prover now records, per frame word, the set of stores that wrote
+it, and the private-frame model decides liveness from reachability rather
+than from offset alone. A word is protected (it bounds the record and refuses
+an alias) only if one of its stores can execute at or after the private
+record's address is taken; a word whose only stores are unreachable from that
+origin is dead argument space or the record's own initialisation. In
+`RD_create` the six record fields are written through the frame base before
+the `lea 0x10(%esp)` at `0x21e9`, so they no longer bound the record; the
+record's capacity becomes 32 bytes (to the ESI save at `+0x30`) and the
+regions below and above still refuse when they are live. `v22_local_loop`
+keeps capacity 44 because its outgoing stores are re-reachable from the
+origin through the loop's backward edges. See
+[callee-effects-proof.md](callee-effects-proof.md) for the reachability
+controls.
+
+### Controls and measured pre-change refusal
+
+`tools/toolchain/jumptable_fixed_abi_controls.py` grows from 3 positives /
+32 refusals to **4 positives / 35 refusals**:
+
+| control | expected | reason |
+| --- | --- | --- |
+| `redifined-save-store` (new positive) | accept | pre-dispatch store of redefined ESI into a free word |
+| `duplicate-save` | refuse | `saved slot duplicate/clobber` |
+| `duplicate-save-other-slot` | refuse | second save of the entry value into other slot |
+| `redifined-save-store-overlaps-save` | refuse | `fixed-frame outgoing/save overlap` |
+| `redifined-save-store-unaligned` | refuse | `fixed-frame outgoing extent/form` |
+
+`tools/toolchain/callee_frame_controls.py` grows from 5 positives / 34
+refusals to **6 positives / 35 refusals** with `dead-outgoing-area-record`
+(record written before its address is taken, accepted) and
+`post-origin-store-into-record` (the same alias made by a store reachable
+from the origin, still `private record aliases outgoing/save/return slots`).
+Both suites assemble with the Gentoo image's `as`.
+
+The acceptance is a measured change, not a replica. The prover and callee
+model at the base commit refuse both new positives:
+
+```sh
+mkdir -p /tmp/pre
+git show 68d23eb09:tools/toolchain/jumptable.py > /tmp/pre/jumptable.py
+git show 68d23eb09:tools/toolchain/callee_effects.py > /tmp/pre/callee_effects.py
+PYTHONPATH=/tmp/pre python3 /tmp/pre/jumptable.py \
+  build/jumptable-fixed-abi-controls/redifined-save-store.o sample
+# UNPROVED: saved slot duplicate/clobber
+PYTHONPATH=/tmp/pre python3 /tmp/pre/jumptable.py \
+  scratch/callee-effects/frame-controls/dead-outgoing-area-record.o caller
+# UNPROVED: private record aliases outgoing/save/return slots
+```
+
+### `RD_create`'s remaining refusal, and why it stays UNRESOLVED
+
+With the classifier and the origin-relative live set, `RD_create` advances
+through two measured refusals:
+
+| stage | refusal |
+| --- | --- |
+| base | `saved slot duplicate/clobber` (save classifier) |
+| classifier fixed | `private record aliases outgoing/save/return slots` |
+| origin-relative live set | `unsupported callee opcode (including calls/implicit writes)` |
+
+The last one is the non-leaf callee, and it is where the function must stop
+under the present model. The evidence:
+
+- `RingDetector_Create` (blob `0x2550`, per-TU `0x1d0`) contains
+  `call sysdep_malloc` (`0x1e2`) and `call dsplibs_debug_printf` (`0x351`).
+  Both targets are `U` in `ref/slmodemd/dsplibs.o`: there is no body in this
+  object to prove. `callee_effects.decode` refuses a call opcode by design,
+  and `prove()` is documented and bounded as an acyclic leaf proof.
+- The caller-side capability obligation is also unmet. After the call at
+  blob `0x21f0`, EDX (which held the record address) is never written again
+  on any path to RET, and the failure path reaches the `sysdep_free` call at
+  `0x221c` without a kill. The object's bytes are identical
+  (`0x21f5..0x224f`), so this is not a reconstruction difference.
+
+Option (b) as posed -- treat the outgoing pointer slot as clobbered by the
+call and require no read afterwards -- is measurable and true here: the only
+later call is `sysdep_free`, and slot `0` is overwritten at `0x2219` before
+it. But it is necessary and not sufficient. The model also requires the
+register capability to be destroyed, and above all it requires a proved
+callee contract; accepting an unproved callee would relax the leaf invariant
+itself. Option (a) -- modelling `RingDetector_Create`'s effect on the escaped
+record without a full leaf proof -- would need a new transitive
+external-call/escape proof (that neither call's arguments reach the record)
+plus the caller-side liveness change, each with its own adversarial controls.
+Neither is done here, so `RD_create` remains the single UNRESOLVED symbol and
+moves no grade. Its linked body is still byte-identical in the link-selected
+view.
+
+## Current census at this change
+
+Comparison over 1,852 symbols: **1,147 EXACT, 1 UNRESOLVED, 0 RELOC,
+37 REGALLOC, 87 BYTES, 580 SIZE** (grade 0 or 1: 1,185) -- the same buckets as
+the pre-change tree, because `RD_create` stays UNRESOLVED. `make period J=3`
+reports **394 passed, 0 failed**. `byteident --ratchet` is OK (exact
+1146 -> 1147, grade 0-or-1 1182 -> 1185, link-selected exact 1149 -> 1150,
+regalloc 36 -> 37, the single reviewed `dp_vpcm_exit` displacement unchanged);
+link-selected resolves 32 multiply-defined names and 32/32 linked bodies match
+an input copy. `byteident --self-test` passes 20 register and 59 relocation
+cases; `--ratchet-self-test` passes 31 cases with no failure. The blob is
+still `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
 
 ## Reproduction
 

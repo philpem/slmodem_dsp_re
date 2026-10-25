@@ -379,6 +379,67 @@ and `byteident --ratchet-self-test` 28/28. The census is unchanged at
 passes, link-selected EXACT remains **1,149** with 32/32 selected bodies
 matching an input copy, and the blob sha256 remains
 `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+Those are that change's numbers at `366eb7f0d`; the current census is in
+[jump-table-word-guard-proof.md](jump-table-word-guard-proof.md#current-census-at-this-change).
+
+## Origin-relative live frame words
+
+`private_frame_effects` used to treat every frame word written outside the
+save protocol as protected: `protected = saves | outgoing | {frame}`. That is
+right for a record built *above* the outgoing argument area, which is
+`v22_local_loop`'s shape, but it is too strong for a record built *inside*
+that area and then addressed, which is `RD_create`'s: it writes the six
+`struct ring_detector_cfg` fields through the frame base (`0x21a9..0x21e5`)
+and only then takes `lea 0x10(%esp),%edx` (`0x21e9`) and passes that pointer
+to `RingDetector_Create`. The old rule refused every such function with
+`private record aliases outgoing/save/return slots`.
+
+The frame prover now carries, per frame word outside the save protocol, the
+set of store addresses that wrote it. The private model computes the
+addresses reachable from the record origin over the same successor graph it
+already walks, and protects a word only if one of its stores is in that
+reachable set. The distinction is reachability, not static address order: a
+path may re-execute a lower-addressed store after the origin, and
+`v22_local_loop`'s loop does exactly that, so its outgoing words stay
+protected and its capacity stays 44.
+
+Why this is not a relaxation of the leaf or capability invariants:
+
+- Only words no path from the origin can write are dropped. Such a word is
+  dead by the time the record exists, and the fixed-frame prover admits no
+  read of a non-save frame word (`saved slot wrong-owner read`), so nothing
+  can depend on it after the origin.
+- Every word that is reachable from the origin is still protected: the
+  private call's own argument words, the outgoing pointer slot, any later
+  call's arguments, and the record's own post-origin field writes. The record
+  still cannot start inside one, and its capacity still stops at the first
+  one above the origin.
+- Saved slots and the return word are protected unconditionally, before and
+  after the origin.
+- The callee contract is unchanged: a leaf body is still required, its write
+  union still bounds the record, and `require_initialized` still checks the
+  caller's reads against the callee's initialised bits. The frame prover's
+  `outgoing`/save overlap refusal applies to the whole written set, not only
+  the live subset.
+
+Controls in `callee_frame_controls.py` are **6 positives / 35 refusals** (was
+5/34): `dead-outgoing-area-record` writes the record in the outgoing area
+before taking its address and is accepted; `post-origin-store-into-record`
+makes the same alias with a store reachable from the origin and is still
+refused with `private record aliases outgoing/save/return slots`. The
+pre-change model refuses the positive with that same message (measured by
+running the base commit's `jumptable.py` and `callee_effects.py`; the
+commands are in
+[jump-table-word-guard-proof.md](jump-table-word-guard-proof.md)). The real
+`v22_local_loop` proof is unchanged: capacity 44, 32 paths, 17 stores, 315
+bytes.
+
+The classifier change that lets `RD_create` reach this point -- a
+callee-save store of a redefined register is a computed frame write, not a
+second save -- is documented and controlled in the same place. `RD_create`
+still refuses after it, at the non-leaf `RingDetector_Create`; the object and
+the reconstruction are byte-identical there, so the refusal is the model's,
+not a source difference.
 
 ## Recommendations after the tests
 

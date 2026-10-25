@@ -878,7 +878,22 @@ def private_frame_effects(path, name, rows, frame, saves, outgoing, calls, succe
             reads.append((a,offset,mask))
     require(len(origins)==1, 'one private frame address required')
     origin_index,offset,register=origins[0]; origin=rows[origin_index][0]
-    protected=set(saves)|set(outgoing)|{frame}
+    # A frame word stored outside the save protocol is live while the record
+    # is live only if that store can execute at or after the origin.  Stores
+    # that no path from the origin reaches are the record's own initialisation
+    # (written through the frame base before its address was taken) or dead
+    # argument space, so they neither bound the record nor alias it.  A store
+    # that is reachable from the origin -- the call's own argument words, or
+    # any later write -- stays protected.  Static address order alone is not
+    # used: a path may re-execute a lower-addressed store after the origin.
+    after=set(); pending=[origin]
+    while pending:
+        a=pending.pop()
+        if a in after: continue
+        after.add(a); pending.extend(successors.get(a,()))
+    require(origin in after, 'private record origin reachability')
+    protected=set(saves)|{frame}
+    protected |= {slot for slot, sites in outgoing.items() if sites & after}
     require(offset%4==0 and 0 <= offset < frame and
             not any(p <= offset < p+4 for p in protected if p != frame),
             'private record aliases outgoing/save/return slots')
