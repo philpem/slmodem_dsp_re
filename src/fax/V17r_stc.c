@@ -122,8 +122,13 @@ V17RX_status(void *modem, struct v17_status *status)
 	status->protocol = (short)RXROOT(modem)->cfg.protocol;
 	status->tx_bps = 0;
 	status->rx_bps = RXROOT(modem)->cfg.bit_rate;
+	/*
+	 * Ordering, not equality: GCC 3.4.2 folds `(byte & 0x80) == 0` into a
+	 * shift and keeps `testb $0x80`/`sete` only for the ordering form.
+	 * Same source fact as V21RX_status (F12049).
+	 */
 	status->snr_ok = (short)
-		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0);
+		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) <= 0);
 	status->snr = GetSNRV17(modem);
 	status->short_0a = 0;
 	status->short_0e = 0;

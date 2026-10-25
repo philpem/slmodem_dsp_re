@@ -140366,3 +140366,103 @@ bytes **77,070/943,398 (8.2%)**, unchanged from the rebased master baseline,
 and candidate `.text` 711,559 both before and after -- the inserted bytes fall
 inside section alignment, so the linked picture is unmoved; the first
 divergence is still `RD_create`. No flags, attributes, padding or test edits.
+
+## F12049. SIZE band at delta 1-3, wave 19: `_delete_data_rx_modem` closes EXACT from its per-arm free, and the status quality tests are ordering comparisons
+
+*2026-10-25, worktree `w19-size`, base `02ffc9f6b`.* Continued F12048's
+screen. Fresh `make -s tc J=4`: 300/300 objects, denominator **1,852**, and
+the only zero-symbol objects are the nine documented inputs that emit none:
+seven FILE-record placeholders (`V34CONST.c`, `V17txtab.c`, `V32RXTAB.c`,
+`B103.c`, `Tab144.c`, `Tx_rxtab.c`, `MEMORYC.c`), `v34digital.c`'s layout
+checks and `pow.S`'s toolchain-input record. The untouched tree
+measures **1,148 grade-0 EXACT / 2 UNRESOLVED / 36 REGALLOC / 89 BYTES / 577
+SIZE** in the default worst-copy view; the two UNRESOLVED are `RD_create` and
+`v22_local_loop`, both section-relocation-naming limits documented before. The
+`tc_repro` view the ratchet reads reports the handover's **1,149 / 1**
+(`v22_local_loop` resolves there). `byteident.py --near 2000` gives **205**
+SIZE rows at |instruction delta| 1-3 today (206 in F12048; the closed
+`VPcmV34SetMohMessageBits` left the band).
+
+**`_delete_data_rx_modem` becomes EXACT (40/40, LCS 40, run 40).** F12048
+stopped at 40/39 with the object's duplicated `mov 0x10(%edx)` at 0x094230
+unexplained. The object loads `vmi->modem_cfg` twice -- 0x0941b8 on the
+non-V.17 path and 0x094230 at the end of the V.17 arm -- and shares only the
+`mov %eax,(%esp)`/`call sysdep_free` tail at 0x0941bb. A single shared
+`sysdep_free(vmi->modem_cfg)` makes GCC 3.4.2 merge the loads too. The source
+fact is the per-arm free: the V.17 arm frees the config itself after its last
+`vmi = ctx->modem_vmi`, and the non-V.17 path has its own `else` arm. GCC
+cross-jumps the two identical calls and keeps the two loads. Four other
+spellings were measured: the shared statement (40/39, LCS 39, run 38); a
+`cfg` local loaded before the branch (39, LCS 38); the `vmi` reload moved out
+of the arm (39, LCS 39); and an outer `cfg` plus an arm-start reload (39,
+LCS 38, GCC CSEs the duplicate read). Only the per-arm free maps onto the
+object.
+
+**The quality bit in `V21RX_status`, `V17RX_status` and `V29RX_status` is an
+ORDERING comparison.** F12014 recovered `V21RX_control` with
+`(flags & C) > 0`; the complement here is `(flags & C) <= 0`, not `== 0`.
+GCC 3.4.2 rewrites the equality form into a shift-and-complement
+(`movsbw`/`not`/`movzwl`/`shr $0xf`), while the ordering form keeps the
+object's `testb $0x80`/`sete` at 0xa2487/0xa248b (`V21RX_status`),
+0xa0947-ish (`V17RX_status`) and 0xa4627-ish (`V29RX_status`).
+
+| symbol | before | after | LCS | run |
+|---|---|---|---|---|
+| `V21RX_status` | 41 insns | **40** | 34 -> **37** | 12 -> **18** |
+| `V17RX_status` | 65 insns | **64** | 47 -> **49** | 13 -> **19** |
+| `V29RX_status` | 64 insns | **63** | 46 -> **49** | 13 -> **19** |
+
+The cell family measured for `V21RX_status`: `== 0` (34), `!(...)` (34),
+`<= 0` (**37**), `< 1` (**37**), `== 0U` (34), `(unsigned)` cast (34),
+`(short)` cast (34), `(signed char)` cast with `==`/`!` (34). The two
+ordering cells are equal; `<= 0` is adopted as the smaller-distance form
+(the `< 1` spelling is not the author's natural one). The remaining
+`V21RX_status` difference is the strength reduction `2 * f22`: the object
+does `add %ecx,%ecx` in place, ours `lea (%edx,%edx,1),%ecx`, one byte;
+declaration-order and load-order cells (`short` order, `bit_samples` first)
+did not move f22 into `%ecx`.
+
+**Other rows read at operand level and left blocked (addresses are the
+forcing sites):**
+
+- `TxNextStateV21`: nine further cells beyond F12048 -- default printf
+  argument `hdx->state`, `state`, `(short)hdx->state`,
+  `(short)tx->hdx->state`; switch on `hdx->state` or `tx->hdx->state`; `int
+  state`; and three declaration/assignment orders. The object's default arm
+  at 0xa2676 reloads only the field (`movswl 0xc(%edx)`, edx from 0xa25b8);
+  every cell either keeps our `mov 0x20(%ebx)` (65/66, LCS 65) or triggers a
+  `movzwl`/`movswl`/`cwtl` re-materialisation (LCS 63). Still a CSE
+  boundary, not a source fact.
+- `porcessFirstStudy`: the object stores `byte_280c[phase]` in each arm --
+  `mov %bl,0x280c(%ebp,%esi,1)` at 0x413fe after `xor %ebx,%ebx`, and
+  `mov %cl,...` at 0x4140f after `incb 0xa96a(%esi)`; ours if-converts to a
+  selected value and one shared store at 0x11b8. The source already has both
+  stores. Preventing GCC's if-conversion needs a volatile or an artificial
+  read, both fits; declined.
+- `setTimingStateParameters`: the case-7 first-switch tail keeps its own
+  `mov $0x5dc`/`mov $0xfa0` and jumps to 0x60843 where ours falls into the
+  case-8 tail (0x1286c); the per-arm `0x234`/`0x236` stores are present in
+  both. Tail-merge/block-order, no source lever in the tested arms.
+- `K56FLEX_Delete` and `_iir_filter_delete`: the object builds a call frame
+  and calls `sysdep_free` (0x102c0, 0x7ca30) where ours sibling-jumps. Six
+  spellings (braces, early return, a temp local, a trailing `return`, an
+  `else return`, `int` return) all leave the `jmp`; an unprototyped callee
+  or a per-function flag would be apparatus. Left blocked.
+- `V17TX_status`/`V29TX_status`: the object's first `+0x14` clear is
+  `movzbl 0x14(%edx); and $0xfc,%al; mov %al,0x14(%edx)` at 0xa1c18-0xa1c1e
+  while ours emits `andb $0xfc,0x14`; spelling the access through an
+  `unsigned char *` local changes nothing. The sibling `+0x15` clear is an
+  `andb` in the same object, so the two clears differ in source shape and
+  the discriminator is not the pointer type.
+- `FloatFIR::setCoefficients`: 23/24, LCS 21; the object's `mov 0x10(%ebx)`
+  reload and `mov %ecx,%eax` copy are register allocation around
+  `index > room ? room : index`.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Default-view
+census **1,149 EXACT / 2 UNRESOLVED / 36 REGALLOC / 89 BYTES / 576 SIZE**;
+grade 0-or-1 **1,187** (was 1,186); the only EXACT gained is
+`_delete_data_rx_modem`, none lost. `make byteident-ratchet` OK: faithful
+view **1,150 EXACT / 1 UNRESOLVED** (1,146 -> 1,150 over the stale #353
+baseline), link-selected **1,153** (1,149 -> 1,153), regalloc unchanged, and
+the one reviewed `dp_vpcm_exit` displacement is still the only one. No
+flags, attributes, padding, test edits or apparatus changes.

@@ -69,6 +69,12 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
  * zeroes +0x0c, and the flags byte is stored as a literal 0 rather than
  * merged from the handle.
  *
+ * THE QUALITY TEST IS AN ORDERING COMPARISON (`<= 0`), not `== 0`, and that
+ * is load bearing: GCC 3.4.2 rewrites the equality form of an unsigned bit
+ * test into a shift-and-complement, while the ordering form keeps the
+ * object's `testb`/`sete`.  V17RX_status and V29RX_status carry the same
+ * source fact.  Finding F12049.
+ *
  * `short_12` IS THE ONLY ARITHMETIC IN THE FUNCTION and it is a `cltd`/`idiv`
  * over two SIGNED shorts loaded `movswl` (0x0a24b3 and 0x0a24b7), then
  * `imul $0x12c`.  Both operands live in the fsd: +0x76 of the DSP block is
@@ -95,7 +101,7 @@ V21RX_status(void *modem, struct v21_status *st)
 	st->tx_bps = 0;
 	st->rx_bps = V21_STATUS_BPS;
 	st->quality = (short)
-		((rx->status.byte.flags & V21RX_FLAG_LOW_SNR) == 0);
+		((rx->status.byte.flags & V21RX_FLAG_LOW_SNR) <= 0);
 	st->snr = (short)GetSNRV21(modem);
 	st->short_0a = 0;
 	st->short_0e = 0;
