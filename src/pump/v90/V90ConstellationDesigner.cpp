@@ -2674,8 +2674,6 @@ V90ConstellationDesigner::process(unsigned int rate,
 				  unsigned int arg13,
 				  V90SpecialSpectralConditions cond)
 {
-	short pass = 1;
-	short done = 0;
 	int failed = 0;
 	unsigned int currentRate;
 
@@ -2707,6 +2705,9 @@ V90ConstellationDesigner::process(unsigned int rate,
 		maxRate = 56000;
 	if (minRate > maxRate)
 		minRate = maxRate;
+
+	short done = 0;
+	short pass = 1;
 
 	do {
 		unsigned char (*mark)[128];
@@ -2785,8 +2786,9 @@ V90ConstellationDesigner::process(unsigned int rate,
 		scaled = (unsigned char)(42
 					 - (unsigned char)mappingParams->word_0);
 		if (scaled > 4)
-			scaled++;
-		byte_08 = scaled;
+			byte_08 = (unsigned char)(scaled + 1);
+		else
+			byte_08 = scaled;
 
 		if (mappingParams->word_0 <= 20) {
 			edprintf("V90ConstellationDesigner: Connection design "
