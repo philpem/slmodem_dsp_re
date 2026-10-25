@@ -9241,3 +9241,36 @@ infer the operator from final assembly alone -- the fold, not the source
 spelling you started from, is what produced ours. Keep both predicates
 semantically identical at the value's real width before calling a mapping
 a recovery.
+
+
+## Recover pre-merge edge multiplicity before calling a block order final
+
+A block or switch-arm order that survives every case-label permutation can
+still be a source fact, because GCC seeds switch arms from their CFG edge
+frequencies before it reorders blocks. RD_create is the worked case (finding
+F12044): four equal targets put every arm at 25%, below the round-2 threshold,
+so the libiberty fibheap tie-break produced 650, 850, 1000 rather than the
+object's 1000, 650, 850. Splitting the two distinct source cases that return
+1000 gave five targets at 20%; the later edge merge summed the parallel edges
+to 40%, the 1000 arm was seeded first, and the object's order followed.
+Splitting a single straight-line body is not this lever: the split must be
+between distinct source labels or arms that the RTL later merges, and the
+domain must show that no other grouping maps.
+
+Two measured boundaries. First, an arm-order difference with equal body
+content is not automatically this lever: wave 17 found 59 non-exact symbols
+with a table in both builds and an equal entry count, and none had the same
+arm multiset in a different physical order; block-bag scans of 85 same-size
+and 654 non-exact symbols found no reorder candidate, while the RD_create
+control was flagged. Second, for load/store or argument-setup order the test
+is an alias barrier or operand capture before allocation (see the predictor
+capture recovery); when every spelling emits the same canonical order and the
+object differs only at `sched2` -- or at the reload base register -- record
+that first differing stage and stop rather than fitting.
+
+Wave 17 also measured three switch-lowering leads that prove the lever but do
+not recover the original labels: splitting the V8 timeout cases produces a
+14-entry table (base 4) against the object's 18 (base 0), and splitting the
+V22 error-valued cases reproduces the object's exact 17-entry shape and target
+order but the label set is not uniquely determined. Both were declined as
+blanket duplication with an underdetermined domain.
