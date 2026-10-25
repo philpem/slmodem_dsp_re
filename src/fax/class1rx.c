@@ -162,7 +162,7 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * merge the loads as well (40/39 instructions, one `mov 0x10(%edx)` short).
  * Spelling the free in both arms restores the object byte for byte: the two
  * calls are identical and the compiler merges those, but the loads stay in
- * their own arms.  Finding F12049.
+ * their own arms.  Finding F12050.
  */
 void
 _delete_data_rx_modem(struct fax_class1 *ctx)

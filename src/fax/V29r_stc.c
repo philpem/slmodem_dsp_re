@@ -109,7 +109,7 @@ V29RX_status(void *modem, void *status)
 	 * Ordering, not equality: GCC 3.4.2 folds `(word & 0x8000) == 0` into a
 	 * shift, and the ordering form is what narrows to the object's
 	 * `testb $0x80`/`sete` below.  Same source fact as V21RX_status
-	 * (F12049).
+	 * (F12050).
 	 */
 	((struct v29_status_prefix *)status)->quality = (short)
 		((((struct v29_rx *)modem)->result.word & V29_STATUS_LOW_SNR) <= 0);

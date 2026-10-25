@@ -73,7 +73,7 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
  * is load bearing: GCC 3.4.2 rewrites the equality form of an unsigned bit
  * test into a shift-and-complement, while the ordering form keeps the
  * object's `testb`/`sete`.  V17RX_status and V29RX_status carry the same
- * source fact.  Finding F12049.
+ * source fact.  Finding F12050.
  *
  * `short_12` IS THE ONLY ARITHMETIC IN THE FUNCTION and it is a `cltd`/`idiv`
  * over two SIGNED shorts loaded `movswl` (0x0a24b3 and 0x0a24b7), then

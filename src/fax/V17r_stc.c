@@ -125,7 +125,7 @@ V17RX_status(void *modem, struct v17_status *status)
 	/*
 	 * Ordering, not equality: GCC 3.4.2 folds `(byte & 0x80) == 0` into a
 	 * shift and keeps `testb $0x80`/`sete` only for the ordering form.
-	 * Same source fact as V21RX_status (F12049).
+	 * Same source fact as V21RX_status (F12050).
 	 */
 	status->snr_ok = (short)
 		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) <= 0);
