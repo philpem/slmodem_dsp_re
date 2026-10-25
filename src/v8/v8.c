@@ -25,6 +25,15 @@ extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 
 
+/* Keep the mask operation byte-sized before promoting its result.  The
+ * period compiler inlines this contract to immediate byte TESTs for all
+ * three modulation bits, including bit 7. */
+static int
+v8_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 static struct dp *
 v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	  struct dp_operations *op)
@@ -172,11 +181,11 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("v8: process: QC.\n");
 			arg = st->want;
-		} else if (st->cm->b0 & 0x08) {
+		} else if (v8_flag_test(st->cm->b0, 0x08)) {
 			arg = DP_V90;
-		} else if (st->cm->b0 & 0x20) {
+		} else if (v8_flag_test(st->cm->b0, 0x20)) {
 			arg = DP_V34;
-		} else if (st->cm->b0 & 0x80) {
+		} else if (v8_flag_test(st->cm->b0, 0x80)) {
 			arg = DP_V32;
 		} else {
 			ret = DPSTAT_ERROR;

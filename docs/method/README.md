@@ -38,6 +38,7 @@ identifies the evidence and tools that need adapting for another target.
 | `tiers.md` | the current oracles and what each is structurally blind to; archived mutation results are labelled historical |
 | `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
 | `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
+| [Byte bit tests](byte-bit-tests.md) | a measured narrow-operand source form for immediate bit-7 tests, with negative controls and transfer limits |
 | `placement-ledger.md` | causal linked-position ledger: why each function moved, and the first shift |
 | `agents.md` | parallel batches: briefs, shared data, numbering, merging |
 | `tools.md` | which tools are portable, and what each assumes about its host |
