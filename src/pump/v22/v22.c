@@ -264,10 +264,22 @@ v22_delete(struct dp *dp)
  * statement per value produces the object's 17-entry table, its five unique
  * targets in its order, and LCS 124 of 161 instructions.
  *
- * THE ONE REMAINING STRUCTURAL DIFFERENCE IS OUTSIDE THE SWITCH.
- * `modem_put_bits` and the dispatch are tail-duplicated onto both loop
- * paths here (two calls), where the object has one join; that is the same
- * duplication the decision-chain spelling had, and it is not the label set.
+ * THE JOIN AT .text+0xac IS THE CLAMP ARM'S OWN ORDER (finding F12049).
+ * The post-call clamp is written `if (tx_bits_wanted == 0) rx_len = 0; else
+ * if ((unsigned)rx_len > V22_BIT_BUFFER) ...`, and the object forces that
+ * spelling: its `jne 0x5207` sends the NONZERO status to the clamp, leaving
+ * the zero arm in the fallthrough, then both arms enter the one narrowing
+ * loop at 0x51ac and leave through the one join at 0x51dc.  The
+ * complemented arm order is NOT the object's and does not merely reorder:
+ * GCC 3.4 makes the clamp the likely fallthrough, lays it out first, and
+ * tail-duplicates `modem_put_bits` and the dispatch onto both loop exits --
+ * two call sites, 585 B / 161 insns, against the object's 557 / 150.  The
+ * recovered order gives one call and one dispatch (553 B / 149 insns,
+ * LCS 134, run 46).  The remaining four bytes are register allocation: the
+ * object keeps tx_bits in %edi and rx_bits in %esi, so the narrowing store
+ * is `mov %al,(%esi,%edx,1)`, while this build swaps the two registers and
+ * folds the base into the displacement.  Register choice is not statement
+ * structure, so it is not chased here.
  */
 static int
 v22_process(void *dp_arg, void *in, void *out, int count)
@@ -308,17 +320,17 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 	 * UNSIGNED -- `cmp $0x64; jbe` -- so a negative count would be
 	 * clamped too, and the bound is V22_BIT_BUFFER, the length of the
 	 * array about to be written.
+	 *
+	 * The arm order is the object's and is codegen-visible: the test is
+	 * `jne` to the clamp and the zero arm falls through (finding F12049).
 	 */
-	if (self->tx_bits_wanted != 0) {
-		if ((unsigned)rx_len > V22_BIT_BUFFER) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-				    "v22: FATAL: rx_len is huge (%d).\n",
-				    rx_len);
-			rx_len = V22_BIT_BUFFER;
-		}
-	} else {
+	if (self->tx_bits_wanted == 0) {
 		rx_len = 0;
+	} else if ((unsigned)rx_len > V22_BIT_BUFFER) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v22: FATAL: rx_len is huge (%d).\n", rx_len);
+		rx_len = V22_BIT_BUFFER;
 	}
 
 	/* Hand recovered words back, narrowing ints to bytes in place. */
