@@ -245,7 +245,7 @@ v22_delete(struct dp *dp)
  * Unlike `b103_process` the rates are reported on EVERY connecting block and
  * not only on the transition into one -- there is no edge test here at all.
  *
- * THE LABEL SET IS THE PROTOCOL'S OWN STATUS VOCABULARY (finding F12046).
+ * THE LABEL SET IS THE PROTOCOL'S OWN STATUS VOCABULARY (finding F12047).
  * Seventeen entries and a `cmp $0x10; ja` mean the highest case label is 16,
  * and the table's five unique targets put 2 and 5..15 on the error block at
  * .text+0x100.  The statuses that `V22FP_modem` can leave in `fp->status`

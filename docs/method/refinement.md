@@ -9276,7 +9276,7 @@ order but the label set was not uniquely determined by the object. Both were
 declined as blanket duplication with an underdetermined domain.
 
 **The V22 case was resolved from outside the object, and that is the
-generalisable step (F12046).** The label set did not have to come from the
+generalisable step (F12047).** The label set did not have to come from the
 table: it is the set of values the status producers can actually leave in the
 switch operand. Enumerating every writer of `struct v22fp::status` over the
 object's table domain (0..16) gives exactly 0..11 and 16; no writer produces
