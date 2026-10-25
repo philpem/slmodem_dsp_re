@@ -83,6 +83,10 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
  * THE SECOND STORE IS AN ASSIGNMENT AND NOT A MERGE, so every bit the caller
  * had in +0x14 is lost -- including the two the statement above went to the
  * trouble of clearing.  Reproduced; deviation D1035.
+ *
+ * `t` puts the config load between the two clears in the source too: the
+ * object's order is the +0x14 clear, the config load at 0xa5085 and the
+ * +0x15 clear after it.  Finding F12051.
  */
 int
 V29TX_status(void *tx, void *status)
@@ -107,10 +111,12 @@ V29TX_status(void *tx, void *status)
 	((struct v29_status_prefix *)status)->short_10 = ((struct v29_tx_root *)tx)->cfg.bitrate;
 	((struct v29_status_prefix *)status)->short_12 = 0;
 
+	unsigned char t;
+
 	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_FLAGS_LOW2;
+	t = *(unsigned char *)(void *)&((struct v29_tx_root *)tx)->cfg.flags;
 	((struct v29_status_prefix *)status)->flags2 &= (unsigned char)~V29STAT_FLAGS2_BIT0;
-	((struct v29_status_prefix *)status)->flags =
-		(unsigned char)((*(unsigned char *)(void *)&((struct v29_tx_root *)tx)->cfg.flags) & V29TXS_10_BIT2);
+	((struct v29_status_prefix *)status)->flags = (unsigned char)(t & V29TXS_10_BIT2);
 
 	return 1;
 }

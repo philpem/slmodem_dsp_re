@@ -140547,3 +140547,99 @@ view before this branch: 1,149/1/36/89/577, grade 0-or-1 1,186). The
 (1,149 -> 1,153), regalloc unchanged, and the one reviewed `dp_vpcm_exit`
 displacement is still the only one. No flags, attributes, padding, test
 edits or apparatus changes.
+
+## F12051. SIZE band at delta 1-3, wave 20 (cluster A): both delete wrappers close EXACT, and three ordering facts land
+
+*2026-10-25, worktree `w20-sizeA`, base `64c87d44e`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+Five cluster-A rows of F12048/F12050's band, measured with `structsim` before
+and after and every operand traced with `dis.py`.
+
+| symbol | insns blob/ours | LCS | run | verdict |
+|---|---|---|---|---|
+| `K56FLEX_Delete` | 8/5 -> **8/8** | 3 -> **8** | 2 -> **8** | **EXACT (grade 0)** |
+| `_iir_filter_delete` | 8/5 -> **8/8** | 3 -> **8** | 2 -> **8** | **EXACT (grade 0)** |
+| `setTimingStateParameters` | 94/93 | 88 -> **91** | 46 | SIZE |
+| `V17TX_status` | 28/26 | 24 -> **25** | 15 | SIZE |
+| `V29TX_status` | 26/24 | 22 -> **23** | 15 | SIZE |
+
+**THE TWO DELETE WRAPPERS CLOSE ON A DEAD HANDLE CLEAR.** The object builds a
+call frame at 0x102c0 (`sub $0xc` / `mov 0x10(%esp),%eax` / `test` / `mov
+%eax,(%esp)` / `call sysdep_free` / `add $0xc` / ret) and at 0x7ca30
+identically, where the pristine source's `if (p) sysdep_free(p);` is a
+conditional sibling call (`mov 0x4(%esp),%eax` / `test` / `je` / `jmp
+sysdep_free`). The same source shape **does** tail-jump in
+`RingDetector_Delete` (0x2368) and `dcr_delete` (0xc8), so the frame is NOT a
+property of the wrapper idiom or of the compiler; a statement must follow the
+call. Sixteen spellings were compiled: every form that maps onto the eight
+instructions ends in a dead assignment after the free (`p = 0;`, with or
+without braces, and the same through a local copy); every ordinary form keeps
+the `jmp`. The by-value clear is folded away and changes no behaviour, and the
+object's call frame is the evidence that the author's body continued past the
+free. `p = 0;` is adopted; both symbols are grade 0 EXACT (8/8, LCS 8, run 8).
+
+**`setTimingStateParameters`: the non-role switch's case 7 stores `i_gain`
+before `p_gain`.** The object stores +0x236 (`0x2`) at 0x608d3 and +0x234
+(`0x5dc`) at 0x608df; ours emitted them in the other order from the source
+text. Reordering that arm to `timing_i_gain` then `timing_p_gain` gives LCS
+88 -> **91** (93.6% -> 96.8%), blob-only 6 -> 3, ours-only 5 -> 2, with the
+total instruction count unchanged at 93/94. The residual one instruction is
+cross-jump/allocation: the object gives role case 5 its own +0x236 store
+(0x60922) and shares only the dwell/call tail at 0x607f5, where ours shares
+the store at 0x127ce with non-role state 8; and the object has two +0x232
+sites (0x60801, 0x60843) where ours has three (0x127e1, 0x12823, 0x1285c,
+state 2 keeping its own `0x190`). The role-case-5 `i_gain` first cell was
+measured and is **worse** (blob-only 6, ours-only 7); reverted. No statement
+is missing.
+
+**The two TX status functions: the config load belongs between the two flags
+clears in the source.** `V17TX_status`'s object order is +0x14 clear at
+0xa1c18, `p[0x10]` load at 0xa1c21, +0x15 clear at 0xa1c25;
+`V29TX_status` is the same at 0xa507e/0xa5085. Hoisting the load into a
+`unsigned char t` between the clear statements reproduces that order: LCS
+24 -> **25** and 22 -> **23**, blob-only 4 -> 3 and 4 -> 3, ours-only 2 -> 1
+and 2 -> 1, instruction counts 26/28 and 24/26 unchanged. The remaining
+difference is the +0x14 clear's form.
+
+**BLOCKED: the +0x14 clear's register RMW.** The object does `movzbl
+0x14(%edx)` / `and $0xfc,%al` / `mov %al,0x14(%edx)` (0xa1c18-0xa1c1e);
+ours emits `andb $0xfc,0x14(%edx)`. The asymmetry is field-specific and
+tree-wide: the object has **0** `andb ...,0x14` and **7** `andb ...,0x15`
+(the seven status writers). But eight C spellings in scratch TUs -- compound
+vs assignment form, with and without the `unsigned char` cast, a receiving
+local, an `unsigned char *` lvalue, 8-bit signed/unsigned bitfields -- all
+compile to `andb`; only `volatile` produces the load/and/store, and
+`V17RX_status` proves +0x14 is **not** volatile: it reuses a loaded `%al`
+across a store to +0x14 (load 0xa096e, store 0xa0977, `and $0xfc,%al`
+0xa097a), which a volatile access would forbid. So the form is instruction
+selection/scheduling, not yet a source fact; no volatile or artificial read
+was adopted.
+
+**BLOCKED: `porcessFirstStudy`'s per-arm store.** The object stores
+`byte_280c[phase]` in each arm (0x413fe after `xor %ebx,%ebx`, 0x4140f after
+`incb 0xa96a(%esi)`); ours if-converts to one conditional-value store at
+0x11b8. The nested form where the count-and-store body is written in both the
+inner `else` and the outer `else` -- the object's shared count block at
+0x41407 is reached from both the `altRbsFlag` test and the `n > 9` test --
+compiles to **the same code** as the `continue` form (204/203, LCS 200, run
+131, unchanged). No spelling without volatile/artificial reads split the
+stores.
+
+**BLOCKED (confirmed): `TxNextStateV21`'s default-arm CSE.** Spelling the
+debug argument `hdx->state` instead of `tx->hdx->state` is **worse**: LCS
+65 -> 63, two blob-only `movswl 0xc` and ours-only
+`movzwl`/`movswl`/`cwtl`. Reverted; F12050's diagnosis stands.
+
+**Verified (final tree).** `make period J=3` **394 passed, 0 failed**.
+Default-view census **1,151 EXACT / 2 UNRESOLVED / 36 REGALLOC / 89 BYTES /
+574 SIZE** over 1,852; grade 0-or-1 **1,189** (1,187 before, +2, no loss).
+Ratchet view: per-TU EXACT **1,152**, link-selected EXACT **1,155**;
+`byteident --ratchet` OK (1146 -> 1152, 1182 -> 1189, 1149 -> 1155, regalloc
+36 -> 36; the one reviewed `dp_vpcm_exit` displacement is still the only
+one). `compare.py --ratchet` OK (identical 629 -> 1,199 against its stored
+baseline; the two new EXACT rows are this change's). Phase 3 positioned
+reference bytes **77,336/943,398 (8.2%)**, up from 77,325; candidate `.text`
+**711,527** and candidate delta -15,696 unchanged; first divergence still
+`RD_create`. No flags, attributes, padding or test edits; blob sha256
+unchanged (`1f3e56d0...cf0b379`).

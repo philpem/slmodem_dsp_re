@@ -421,11 +421,22 @@ _iir_filter_create(struct iir_filter *f, int n_a, int n_b, const short *a,
 	return f;
 }
 
+/*
+ * THE CLEAR OF THE BY-VALUE HANDLE IS THE OBJECT'S, and it is what keeps the
+ * call a call.  The object builds a frame (0x7ca30: `sub $0xc` / load 0x10 /
+ * test / `mov %eax,(%esp)` / call / `add $0xc` / ret) instead of the
+ * `jmp sysdep_free` a bare `if (f) sysdep_free(f);` produces.  The same shape
+ * DOES tail-jump in RingDetector_Delete (0x2368) and dcr_delete (0xc8), so
+ * the difference is a statement after the call; a clear of the local handle
+ * is folded away but inhibits the sibling call.  Six other spellings were
+ * measured and all left the jmp.  Finding F12051.
+ */
 void
 _iir_filter_delete(struct iir_filter *f)
 {
 	if (f != 0)
 		sysdep_free(f);
+	f = 0;
 }
 
 void
