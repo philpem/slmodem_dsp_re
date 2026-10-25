@@ -11,6 +11,15 @@
  * definition here also restores its natural position before the buffers. */
 int Control_Flag = 0;
 
+/* Both operands stay byte-sized through the mask operation.  With the
+ * period compiler, inlining this contract preserves the original immediate
+ * byte TEST even for bit 7; the int result is the promoted masked value. */
+static int
+v32_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 static unsigned short tx_in_internal[V32_BIT_BUFFER];
 static unsigned short rx_out_internal[V32_BIT_BUFFER];
 
@@ -85,11 +94,11 @@ v32_data(struct v32_modem *modem, unsigned short *txdata, short *txout, short *r
 				      (short *)HDX(modem)->buffer,
 				      txout, (unsigned short)*nsamples);
 
-	if ((st.flags & V32_STFLAG_DESCRAMBLE) != 0)
+	if ((v32_flag_test(st.flags, V32_STFLAG_DESCRAMBLE)) != 0)
 		DescrambleDataV32(modem, (short *)rxout, *rxcount);
-	if ((st.flags & V32_STFLAG_TXCLOCK) != 0)
+	if ((v32_flag_test(st.flags, V32_STFLAG_TXCLOCK)) != 0)
 		TxClockSyncV32(modem);
-	if ((st.flags & V32_STFLAG_RETRAIN_DET) != 0
+	if ((v32_flag_test(st.flags, V32_STFLAG_RETRAIN_DET)) != 0
 	    && RetrainDetectV32(modem) != 0) {
 		modem->flags &= (unsigned char)~V32_FLAG_DATA;
 		ctl = V32_CTL;
