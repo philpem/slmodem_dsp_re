@@ -122,6 +122,20 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	int arg = -1;
 
 	switch (rc) {
+	/*
+	 * These three are arms even though they do nothing.  The object's
+	 * table sends 2, 7 and 9 to the switch's break label (0x37c2),
+	 * while the values with no label at all -- 1, 3, 6, 8, 10, 14 and
+	 * 15 -- go to the default arm two bytes earlier (0x37c0).  The
+	 * entries therefore prove a label at each of 2, 7 and 9; a single
+	 * arm carrying all three is the minimal spelling, since the RTL
+	 * merges them anyway.
+	 */
+	case V8_ANS_CM_DETECTED:
+	case V8_ORG_ANSAM_DETECTED_WAITING_TE:
+	case V8_ORG_JM_DETECTED:
+		break;
+
 	/* Every status whose name ends TIME_OUT_WAITING_FOR_something. */
 	case V8_ANS_TIME_OUT_WAITING_FOR_CM:
 	case V8_ANS_TIME_OUT_WAITING_FOR_CJ:
@@ -191,7 +205,28 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		}
 		break;
 
+	/*
+	 * V8_INIT needs a label of its own even though its body is the
+	 * default's.  GCC drops a case that shares the default label from
+	 * the jump-table range, so `case V8_INIT:` immediately above
+	 * `default:` leaves the table starting at 4; giving it its own
+	 * `ret = 0` keeps the range 0..17, and cross-jumping then folds
+	 * the two identical arms onto one target -- which is what the
+	 * object shows, its entry 0 and its out-of-range branch both
+	 * reaching 0x37c0.  The pre-merge label multiplicity is finding
+	 * F12044's lever.
+	 */
+	case V8_INIT:
+		ret = 0;
+		break;
+
+	/*
+	 * The default arm zeroes `ret` explicitly: it carries a
+	 * `xor %edi,%edi` that the break label above does not, and the
+	 * out-of-range guard `ja` lands here too.
+	 */
 	default:
+		ret = 0;
 		break;
 	}
 
