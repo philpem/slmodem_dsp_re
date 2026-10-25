@@ -140366,3 +140366,76 @@ bytes **77,070/943,398 (8.2%)**, unchanged from the rebased master baseline,
 and candidate `.text` 711,559 both before and after -- the inserted bytes fall
 inside section alignment, so the linked picture is unmoved; the first
 divergence is still `RD_create`. No flags, attributes, padding or test edits.
+
+## F12049. `v22_process`'s duplicated `modem_put_bits`/dispatch is the clamp arm's source order: the object tests `jne` to the clamp and falls through on zero
+
+*2026-10-25, worktree `w19-v22`, base `02ffc9f6b` (F12046/F12047 merged),
+Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386 -mtune=i686`.* The
+brief was the residual F12047 left open: 28 bytes outside the switch, where
+this TU emitted two `modem_put_bits` call sites and two dispatch copies, one
+on each loop exit, against the object's single join.
+
+**The object's CFG.** After the second `tx_bits_wanted` test,
+`51a0 test %eax,%eax / 51a2 jne 5207` sends the NONZERO case to the clamp and
+lets the zero case fall through: `51a4 xor %edi,%edi / 51a6 xor %eax,%eax /
+51a8 mov %edi,0x28(%esp)` sets `rx_len = 0`, then `51ac xor %edx,%edx /
+51ae cmp %eax,%edx / 51b0 jge 51dc` enters the one narrowing loop. The clamp
+arm at `5207` tests `cmp $0x64; jbe 51ac`, and both its normal and its
+debug-clamped exits `jmp 51ac`. The loop body `51c0..51da` falls through to
+the join at `51dc`, which is the single `modem_put_bits` call site
+(`51f1`) and the single `jmp *0x21c(,%eax,4)` dispatch. So the object has
+one loop preheader with two predecessors, one loop, one exit and one join;
+nothing is shared by duplicating a tail.
+
+**What our source did.** The pre-change source wrote the complement,
+`if (tx_bits_wanted != 0) { clamp } else { rx_len = 0; }`, then the loop.
+GCC 3.4 gives a forward conditional branch a not-taken prediction, so it made
+the clamp the fallthrough arm, laid that arm out before the loop, cloned the
+loop header and exit for it, and tail-duplicated the epilogue: `modem_put_bits`
+at `0x233` and again at `0x295`, the dispatch at `0x238` and again at `0x29a`,
+585 B / 161 insns, LCS 124 (77.0%), run 34.
+
+**The recovered spelling and the enumeration.** Three source-ordered
+spellings of the same decision were compiled; the domain is the arm order
+plus the nesting, and nothing else in the function was touched:
+
+| spelling | put_bits sites | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|---:|
+| `if (wanted != 0) { clamp } else { rx_len = 0; }` (pre-change) | 2 | 585 | 161 | 124 | 34 |
+| **`if (wanted == 0) { rx_len = 0; } else if (clamp)`** | **1** | **553** | **149** | **134** | **46** |
+| `if (wanted == 0) { rx_len = 0; } else { if (clamp) }` | 1 | 553 | 149 | 134 | 46 |
+
+The two inverted spellings compile identically, so the mapping is unique over
+the domain and exactly one of the two arm orders reproduces the object: the
+emitted test is `jne` to the clamp with the zero arm in the fallthrough, the
+loop preheader at `0x1fc` takes both entries, and the one join at `0x230` is
+the one `modem_put_bits` (`0x245`) and the one dispatch (`0x254`). Splitting
+the clamp arm's body differently (nesting the `if`) is not a second mapping;
+it is the same statement order.
+
+**The remaining four bytes are allocation, not statements.** `553 + 4 = 557`
+and `149 + 1 = 150`. The object keeps the `tx_bits` base in `%edi` (so the
+widening loop loads `movzbl (%edi,%edx,1)`) and the `rx_bits` base in `%esi`
+(so the narrowing store is `mov %al,(%esi,%edx,1)`), and it rematerializes
+the status byte for the debug print (`movzbl 0x20(%esp),%edi` at `0x5290`).
+This build allocates `tx_bits`/`rx_bits` the other way round, folds the
+narrowing base into `0x1b4(%ebx,%edx,1)`, keeps the status in `%esi` across
+the switch, and prefers `cmp %ebx,0x8(%ebp)` to the object's
+`cmp 0x8(%ebp),%ebx`. Those are register-allocation and rematerialization
+choices; no statement is missing, and the checked instruction sequences
+otherwise agree. Per the standing rule, they are not chased inside the
+function, and the symbol stays SIZE (grade 1 rejects on the 150-vs-149 count
+with `--why`).
+
+**Verified.** Gate `make period J=3` **394 passed, 0 failed**. Census
+unchanged on the 1,852 denominator: **1,149 EXACT / 1 UNRESOLVED /
+36 REGALLOC / 89 BYTES / 577 SIZE**; grade 0-or-1 **1,186**; link-selected
+EXACT **1,152**. `byteident --ratchet` OK (1146 -> 1149 / 1182 -> 1186 /
+1149 -> 1152 / 36 -> 36; only the pre-existing evidence-pinned
+`dp_vpcm_exit` displacement). `compare.py --ratchet` OK (the report's
+cumulative identical 629 -> 1,196 and same-size 52 -> 78 against its stored
+baseline; v22_process moves from 585 to 553 bytes and is not an EXACT row
+before or after, so this change contributes no identical row). Phase 3: positioned reference bytes
+**77,325 / 943,398 (8.2%)**, up from 77,070; candidate `.text` **711,527**
+(from 711,559, the function's -32); candidate delta -15,696. No flags,
+attributes, padding or test edits; blob sha256 unchanged.
