@@ -603,11 +603,11 @@ out:
  * there too; the switch below reaches the same place by enumerating the six
  * and defaulting, which needs no cast to agree.
  *
- * TWO CASES STORE TWICE.  MHack writes 0x50 and then overwrites it with
- * `0x50 + moh_holdtime_code`; MHclrd writes 0x90 and then one of three values.  Both
- * intermediate stores are to the same short and are immediately replaced, so
- * only the final value is written here -- there is no observable difference
- * and the object's own compiler would have been free to drop them too.
+ * TWO CASES STORE TWICE, and the object keeps both stores.  MHack writes
+ * 0x50 and then overwrites it with `0x50 + moh_holdtime_code`; MHclrd writes
+ * 0x90 and then one of three values.  Only the final value is observable, but
+ * the first store is a source statement and it is reproduced here: dropping
+ * it leaves two instructions the object does not.
  */
 void
 VPcmV34SetMohMessageBits(void *objp, short *bits)
@@ -631,6 +631,7 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
 					     "Building MHclrd message...\r\n");
+		bits[0] = (short)0x90;
 		if (obj->moh_clrd_sel == 0)
 			bits[0] = (short)0x95;
 		else if (obj->moh_clrd_sel == 1)
@@ -648,7 +649,9 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
 					     "Building MHack message...\r\n");
-		bits[0] = (short)((unsigned short)obj->moh_holdtime_code + 0x50);
+		bits[0] = 0x50;
+		bits[0] = (short)((unsigned short)obj->moh_holdtime_code
+				  + bits[0]);
 		break;
 	case 5:
 		if (DSPLIB_DEBUG_ON())

@@ -160,8 +160,9 @@ _delete_data_rx_modem(struct fax_class1 *ctx)
 {
 	struct faxvmi_cfg *vmi = ctx->modem_vmi;
 	struct faxvmi *handle;
+	unsigned short slot = (unsigned short)vmi->slot;
 
-	if (vmi->slot == VMI_SLOT_V17RX) {
+	if (slot == VMI_SLOT_V17RX) {
 		struct v17rx_cfg *cfg = vmi->modem_cfg;
 
 		sysdep_free(cfg->ratesave);
