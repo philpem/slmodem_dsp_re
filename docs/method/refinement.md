@@ -9286,3 +9286,77 @@ makes GCC 3.4 drop the table entirely -- and the resulting 17-entry table has
 the blob's five unique targets in its order, LCS 124 against 104 for the
 unjustified 17-label spelling. Search the domain's producers before declaring
 a table's label set underdetermined.
+
+
+## Compare byte-immediate tests by form and mask, not by a summed count
+
+A byte-immediate test has three encodings: `a8 ib` (AL), register `f6 /0`
+with a byte operand, and memory `f6 /0`. Counting masks alone hides a site:
+`initTxSequence`'s memory `0x04` row disappears once its register `0x04` test
+is summed, so a mask-total screen under-reports. Count `(form, mask)` and
+compare each form separately.
+
+The helper that recovered the native register form takes two byte parameters
+and returns `int`:
+
+    static int flag_test(unsigned char value, unsigned char mask)
+    { return value & mask; }
+
+Passing a field directly can still leave `testb $imm,disp(%reg)`; a live byte
+local forces the value into a register and reproduces `test $imm,%al/%dl`. The
+helper inlines in every TU (`nm` shows no standalone symbol). For V92Jd the
+test is on the SHIFTED byte and needs `!= 0` (`sar %cl; test $1,%al; setne`),
+while its `phase` must be unsigned (`shl %cl; test %eax,%edx; setne`). Both
+C1/C2 closed EXACT; V29RX_control is the other closure, and five further TUs
+gained LCS or size.
+
+Two structural facts came from the same screen. `V34descrambler` and
+`decoderv34` have TWO constant-shift loop copies selected by `testb $4`; our
+hoisted `tap` ternary if-converted to `sbb` and blocked loop unswitching.
+Moving the conditional tap into the loop body restored both copies, and
+`decoderv34`'s slice counter is `short`. A memory-form site is not a helper
+site: `V8UpdateModemParameters`'s memory `0x08` recovered the native test but
+lost LCS (174 -> 171), and `V22FP_control` either stays memory or moves 128
+bytes. See [byte/bit tests](byte-bit-tests.md).
+
+
+## Let the caller decide a width; check both extensions before retyping
+
+`widthaudit` keys an access by `(displacement, base register)`. Two different
+owners can share a displacement under different bases, and the tool will pair
+the blob's signed load with our unsigned one as if they were one field.
+`cid_modem +0x15c` was exactly this: `struct cid::pack_len` is loaded both
+`movzwl` and `movswl` in BOTH builds (blob 0x091f42 / 0x092163, ours
+0x4bb / 0x701), so the reported s16/z16 pair was a base-role artefact. Confirm
+ownership and check both extensions before retyping anything.
+
+A real width fact is decided by the CALLER, not by the callee's prologue.
+`TxHdxDataV27` wanted `movzwl %ax,%ebx` plus an unsigned 16-bit `cmp/jbe`;
+every blob caller loads the count zero-extended and passes it unconverted, and
+every sibling scrambler's count parameter is `unsigned short`. The callee's
+own `movswl 0xc(%esp)` is the tail-call widening to `SDMv27_scrambler`, not
+evidence of a signed parameter. The fix was `unsigned short taken` plus an
+`unsigned short` count parameter; the rate chain was a switch
+(`test/je; dec/je`), not an if-chain. Result: 89 -> 83 instructions, LCS
+56 -> 100%, SIZE -> BYTES.
+
+The same trace found a magnitude shape: the blob's gain loop in `cid_modem`
+inlines `static int iabs(int)` (`movswl/lea/movswl/cltd/xor/sub/add`), and
+`sum += iabs((int)buf[i])` matched it (368 -> 365 instructions, LCS
+236 -> 241). Search for `cltd/xor/sub` magnitude loops before writing a
+branch.
+
+
+## Recover a shift loop's two-pointer walk and its single return value
+
+`V90SdDetector::process` moved 66 -> 82 instructions against the blob's 81
+(LCS 70 -> 80, run 29 -> 52, SIZE 2). Three facts: the shift walks two
+decrementing pointers (window end, source and destination, body at the third),
+with `src` declared first and the index assigned after both; the `fldz`/`fld`
+sit AFTER the shift, not before; and the return value is ONE variable live
+across the shift (`xor %ebp,%ebp` before, `mov %ebp,%eax` at each exit).
+Spelling the return per-arm or moving the index assignment deleted the
+prologue zero or reordered the blocks, and every such cell measured worse.
+The TU's emission order also matched the blob's (reset, C2, C1, D2, D1,
+process): check definition order before blaming allocation when a small body
+is close.
