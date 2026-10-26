@@ -140901,3 +140901,113 @@ exact relocations 1,165 -> **1,168**, exact symbols 466 -> **470** (a
 value-relative count: the shrink moves every following symbol). No flags,
 attributes, padding or test edits; blob sha256 unchanged
 (`1f3e56d0...cf0b379`).
+
+## F12054. SIZE band at |instruction delta| 4-8, wave 22: four boolean/statement-order facts close EXACT, and `GetSNRV21`'s conditional is the `abs` expansion
+
+*2026-10-26, worktree `w22-band`, branch `recover/w22-band`, base
+`cf0a652ec`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Finished the band F12052 opened. Fresh `make -s tc J=12`: 300/300 objects.
+`byteident.py --near 2000` gives **55** SIZE rows at |blob - ours| in 4..8;
+`v23FP_rx_progress` (+4) is the v23 emission-order domain, so **54 in scope**.
+(`v8_process` is EXACT now and no longer in the band.) Every row was screened
+with `structsim` and `contentgap`; **15** were read at operand level with
+`dis.py` and a register-canonicalised sequence diff. Five moved:
+
+| symbol | before | after | cause |
+|---|---|---|---|
+| `_ZNK12V90PreFilter13isV90WithEia6Ev` | SIZE 6, 24/28, LCS 21 | **EXACT**, 24/24, LCS 24 | bitwise `\|` normalised by `? 1 : 0`, not `\|\|` |
+| `_cHDLCrx_init_from_idle` | SIZE 16, 53/60, LCS 32 | **EXACT**, 53/53, LCS 53 | declaration/copy/field order; no source-level return |
+| `cHDLCtx_off` | SIZE 8, 55/59, LCS 47 | **EXACT**, 55/55, LCS 55 | `(!(bit) && n>2) \|\| n>15`, not a ternary |
+| `cHDLCtx_off_init` | BYTES 54, 35/35, LCS 18 | **EXACT**, 35/35, LCS 35 | same order facts as `_cHDLCrx_init_from_idle` |
+| `GetSNRV21` | SIZE 20, 31/39, LCS 21 | **BYTES 4**, 31/31, LCS 30 | `__builtin_abs`, not `v < 0 ? -v : v` |
+
+**`isV90WithEia6`: both comparisons are evaluated and the byte is
+zero-extended.** The object at 0x451fd-0x45214 is `dec %eax` / `sete %dl` for
+`cap == 1`, then `sete %cl` for `+0x500 == 6`, `or %dl,%cl`, and
+`movzbl %cl,%eax`. `||` emits a branch (`test`/`xor`/`je`, 28 instructions);
+`|` alone emits `and $1,%eax` (24 instructions but BYTES 7); only
+`((cap == 1) | (params->LOOP_TYPE == 6)) ? 1 : 0` gives `movzbl` and maps.
+Twelve spellings were compiled (`||`, `|`, `|=`, reversed operands, `!= 0`,
+`& 1`, `||` inside the ternary, if/return, a local with `|`, `!!` on each
+side); this one is the unique preimage.
+
+**`_cHDLCrx_init_from_idle`: the stack slots, the store order, and the absent
+return are one fact.** The object (0x9d790) puts `req` at +0x10 and `ctl` at
++0x20 and copies `req` first; ours had `ctl` at +0x10 and `req` at +0x30.
+Declaring `ctl` before `req`, copying `req` first, and writing the four `ctl`
+fields `control_req`, `ptr_0000`, `int_000c`, `short_0010` reproduces the
+slots and the store sequence. All 24 field orders were compiled and only
+`control_req`-first maps. **There is no source-level return:** the object's
+`%eax` is the last call's value -- `FAXVMI_control`'s result on the ordinary
+path, 4 on the `arg2 == 3` path, and the printf's result on the debug path --
+and `return ret;` keeps `ret` live across the printf and emits a `mov` the
+object does not have. A `void` definition and an `int` fall-off compile
+identically here; the header stays `int` because `t_class1txcplinit` compares
+the return value. The differential test exercises the non-debug and `arg2 ==
+3` paths, where our fall-off returns exactly the object's `%eax`.
+
+**`cHDLCtx_off`: the bit test does not short-circuit the 15 test.** The object
+runs `test $0x20,%ah` / `jne` to the 15 test, and the bit-clear, count<=2 path
+lands on `cmp $0xf` too (0x9ea7d `jbe` -> 0x9eaf0). `(!(bit) && n > 2) || n >
+15` produces that; the ternary on the bit branches straight past it. Same
+result for every value.
+
+**`cHDLCtx_off_init` is the same order fact with `req.flags` before the `ctl`
+copy.** Declaring `ctl` then `req`, copying `req`, OR-ing the REINIT bit, then
+copying `ctl`, and writing the fields `control_req` first gives 35/35; the
+`req.flags` position is what moves the one remaining `orb` from after the
+first `ctl` store to before it.
+
+**`GetSNRV21`: `cltd / xor / sub` is the i386 `abs` expansion.** Ours wrote
+`v < 0 ? -v : v`, which compiled to `test`/`jns`/`neg` and duplicated the
+store tail (39 instructions). `__builtin_abs(v)` gives the object's 31 and
+LCS 30. The residual 4 bytes are the loop entry: the object tests `test
+%bx,%bx` / `jle`, ours `cmp %bx,%cx` / `jge`; four loop spellings (`i--`,
+`n > i`, `while`, a guarded `for`) all leave that one encoding difference, so
+it is recorded as BYTES, not hill-climbed. `v` is a promoted short, so no
+INT_MIN case exists; -32768 truncates back through the `(short)` store as the
+object does.
+
+**Read at operand level and left blocked** (all measured, none landed):
+
+- `V8Control` (+5): `int rc = -1;` and the positive-test arms each change
+  21 and 16 bytes respectively and lower LCS; the pristine 5-byte residual is
+  closer than either.
+- `V8SetMessage` (+4): the object folds `if (seq == 0)` into
+  `selected_sequence`'s switch default; the helper form keeps a `test`/`je`
+  (98 instructions), and inlining the default spills all four callee-saved
+  registers (102).
+- `_ZN20V90Phase4Demodulator15trn2dKnownDemodEs` (+8): the object shares the
+  table-read tail between the A-law and mu-law arms; four spellings (if/else,
+  ternary assignment, direct ternary, level-per-arm) all tail-duplicate to
+  67-68, so this is a block-duplication decision, not a statement.
+- `SGD_symbol_gen` (+4): the object rotates the loop to `inc %ax`/`jne`; five
+  loop spellings (`i != -1`, `i >= 0`, `i + 1 != 0`, `while`) all stay at 62.
+- `RxHdxPhsReversal` (+4): block order (the object lays the `int_90 == 0`
+  detector arm as the first test's fallthrough) plus a `movswl`/`movzwl`
+  choice on `symbol_len` that is signed in the header already.
+- `V29RX_epoch_det` (+5), `_rx_look_carrier_state` (+5), `TxNoCarrierV32`
+  (+4), `V21RX_create` (+6), `v22_retrain` (+5): spills, block order and
+  register allocation; the last is 96.5% LCS but every difference is a
+  scratch-register choice.
+- The F12052 rows (`V90MP/CP::calcCRC`, `dftenergy`, `RxHdxWaitV21`,
+  `V90DemodulatorD1/D2`, `FloatARMA::process`, `calcMtoMatchKtargetEff`,
+  `SetRxModeV32`) were not re-opened.
+
+**Ordered-set delta.** The per-TU grade maps of the four affected objects
+(`V90PreFilter.cpp`, `cHDLCrx.c`, `cHDLCtx.c`, `V21r_int.c`) were diffed
+before and after; the ONLY rows that moved are the five above. No neighbour
+lost EXACT or REGALLOC (the #394 lesson). `V90Demodulator.cpp`'s comment
+changed text only.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Ratchet (`make
+byteident-ratchet`, exit 0): **1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89
+BYTES / 569 SIZE** over 1,852 (master 1,154 / 1 / 35 / 89 / 573); grade 0-or-1
+**1,194** (master 1,190); link-selected EXACT **1,161** (master 1,157);
+ratchet OK (stored floor 1,146 -> 1,158, 1,182 -> 1,194, 1,149 -> 1,161,
+regalloc 36 -> 35; the only reviewed displacement is still `dp_vpcm_exit`).
+Blob sha256 unchanged (`1f3e56d0...cf0b379`). No flags, attributes, padding or
+test edits.

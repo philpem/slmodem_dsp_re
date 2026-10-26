@@ -43,38 +43,48 @@ static const unsigned short GAIN_THRESHOLD_TABLE[4] = {
 /*
  * `_cHDLCrx_init_from_idle`, 0x9d790, 226 bytes.  TWO ARGUMENTS -- both
  * callers (`fax_class1_create`, `fax_class1_command`) supply a real second
- * one, and it is read: `arg2 == 3` both sets `state` to
- * `CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE` (4) AND becomes this function's
- * own return value, discarding whatever `FAXVMI_control` returned -- a real
- * property of the object (`mov $0x4,%eax` on that path, untouched before
- * either `ret`), not a guess.  Merges `V21RX_CTL` (REINIT bit OR'd in) into a
- * `FAXVMI_ctl` that ALSO forces a full framer reset (`int_000c = 1`,
- * `short_0010 = 2`) and empties the ring (`ptr_0000 = (void *)1`), unlike the
- * TX-side sibling above, and sends it to `ctx->vmi_a`, the V.21 RX handle.
- * Clears `countdown` and `delayed_status_countdown` unconditionally and logs
+ * one, and it is read: `arg2 == 3` sets `state` to
+ * `CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE` (4) and leaves 4 in `%eax` on the
+ * path that reaches the epilogue.
+ *
+ * THE FUNCTION HAS NO SOURCE-LEVEL RETURN, and that is the object's: `%eax`
+ * is whatever the last call left there -- `FAXVMI_control`'s result on the
+ * ordinary path, 4 on the `arg2 == 3` path, and the printf's result on the
+ * debug path (the object's own bug, reproduced).  A `return ret;` would keep
+ * `ret` live across the printf and emit a `mov` the object does not have.
+ * The declaration order (`ctl`, then `req`), the assignment order (`req`
+ * first) and the four `ctl` fields' order (`control_req` first) are also the
+ * object's: together they decide the two stack slots at +0x10/+0x20 and the
+ * store sequence, and no other order of the four fields maps.
+ *
+ * Merges `V21RX_CTL` (REINIT bit OR'd in) into a `FAXVMI_ctl` that ALSO forces
+ * a full framer reset (`int_000c = 1`, `short_0010 = 2`) and empties the ring
+ * (`ptr_0000 = (void *)1`), unlike the TX-side sibling above, and sends it to
+ * `ctx->vmi_a`, the V.21 RX handle.  Clears `countdown` and
+ * `delayed_status_countdown` unconditionally and logs
  * "At %2d.%02d[sec]  HDLCrx_init_from_idle\n" (double space, the object's
  * own) at debug level > 1.
  */
 int
 _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
 {
-	struct v21rx_ctl req = V21RX_CTL;
-	struct faxvmi_ctl ctl = FAXVMI_CTL;
-	int ret;
+	struct faxvmi_ctl ctl;
+	struct v21rx_ctl req;
+
+	req = V21RX_CTL;
+	ctl = FAXVMI_CTL;
 
 	req.flags |= V21RXCTL_REINIT;
 
+	ctl.control_req = &req;
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
 	ctl.short_0010 = 2;
-	ctl.control_req = &req;
 
-	ret = FAXVMI_control(ctx->vmi_a, &ctl);
+	FAXVMI_control(ctx->vmi_a, &ctl);
 
-	if (arg2 == 3) {
+	if (arg2 == 3)
 		ctx->state = CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE;
-		ret = 4;
-	}
 
 	ctx->countdown = 0;
 	ctx->delayed_status_countdown = 0;
@@ -82,7 +92,6 @@ _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
 		dsplibs_debug_printf(
 		    "At %2d.%02d[sec]  HDLCrx_init_from_idle\n",
 		    ctx->clock_sec, ctx->clock_frac);
-	return ret;
 }
 
 

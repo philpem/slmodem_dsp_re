@@ -384,20 +384,30 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
  * through: the object's `%eax` is never touched between the `call` and the
  * final `ret`.  The only other effect is `ctx->countdown = 0` (`+0x1228`,
  * matching `_cHDLCrx_init_from_idle`'s own clear of the same field).
+ *
+ * THE STATEMENT ORDER IS THE OBJECT'S TOO: `ctl` is declared before `req`,
+ * `req` is copied first, `req.flags` is OR'd before the `ctl` copy, and the
+ * four `ctl` fields are written `control_req`, `ptr_0000`, `int_000c`,
+ * `short_0010`.  That combination puts `req` at +0x10 and `ctl` at +0x20 and
+ * reproduces the store sequence; the other orders were measured and differ.
  */
 int
 cHDLCtx_off_init(struct fax_class1 *ctx)
 {
-	struct v21rx_ctl req = V21RX_CTL;
-	struct faxvmi_ctl ctl = FAXVMI_CTL;
+	struct faxvmi_ctl ctl;
+	struct v21rx_ctl req;
 	int ret;
+
+	req = V21RX_CTL;
 
 	req.flags |= V21RXCTL_REINIT;
 
+	ctl = FAXVMI_CTL;
+
+	ctl.control_req = &req;
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
 	ctl.short_0010 = 2;
-	ctl.control_req = &req;
 
 	ret = FAXVMI_control(ctx->vmi_a, &ctl);
 
@@ -418,6 +428,12 @@ cHDLCtx_off_init(struct fax_class1 *ctx)
  * crossed: log ("End of off state, COUNTER %d\n", `ctx->countdown`),
  * `ctx->status = FAX_CLASS1_OK_NO_CARRIER`, `ctx->state =
  * CLASS1_IDLE_STATE`, `_idle_state_init(ctx)`.  Neither: nothing.
+ *
+ * THE TEST IS AN OR, NOT A TERNARY.  The object evaluates the 15 test even
+ * when the bit is clear and the count is <= 2 (0x9ea7d `jbe` lands on the
+ * 0x9eaf0 `cmp $0xf`), which only `(!(bit) && count > 2) || count > 15`
+ * produces; a `? :` on the bit branches straight past it.  Same result for
+ * every value, different instruction sequence.
  *
  * Tail, unconditional: `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`, `*tx_count
  * = CLASS1_BLOCK_SAMPLES`.
@@ -442,9 +458,9 @@ cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, unsigned char *w
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
 				&cnt, &result);
 
-	if (!(status & FAXVMI_RESULT_BIT_2000)
-		    ? (unsigned int)ctx->countdown > 2
-		    : (unsigned int)ctx->countdown > 15) {
+	if ((!(status & FAXVMI_RESULT_BIT_2000) &&
+	     (unsigned int)ctx->countdown > 2) ||
+	    (unsigned int)ctx->countdown > 15) {
 		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] End of off state, COUNTER %d\n",
