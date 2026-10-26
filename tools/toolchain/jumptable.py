@@ -497,7 +497,7 @@ def prove(path, name, link=None, manifest=None):
                 'taken-edge dispatch has fallthrough predecessor')
         taken_guard = True
     elif cmp_row[2] != 'cmp':
-        require(pushed_abi and index >= 3, 'missing adjacent guard')
+        require(index >= 3, 'missing adjacent guard')
         corridor = cmp_row
         cmp_row = rows[index - 3]
     if extension is not None:
@@ -531,6 +531,7 @@ def prove(path, name, link=None, manifest=None):
         require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
         count = int(match[1], 16) + 1
         register = match[2]
+    dispatch_register = register
     if corridor is not None:
         raw = corridor[1]
         if taken_guard:
@@ -543,16 +544,34 @@ def prove(path, name, link=None, manifest=None):
                     raw[1] & 0xc0 == 0x80 and raw[1] & 7 != 4,
                     'unsupported taken-edge guard corridor')
         else:
-            # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
-            # frame proof below separately owns the incoming-argument offset.
-            operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
-            require(corridor[2] == 'mov' and operand is not None and
-                    operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
-                    raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
-                    'unsupported guard corridor')
+            # One unprefixed MOV r32,r32 that copies the compared index is a
+            # flag-preserving corridor: it alters neither EFLAGS nor the index,
+            # and nothing else may sit between the comparison and the guard.
+            # The dispatch may then use either the compared register or its
+            # exact copy; both hold the same untested index here.
+            copy = re.fullmatch(r'%(e(?:ax|bx|cx|dx|si|di|bp)),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+            if copy is not None:
+                registers = ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')
+                require(not pushed_abi and corridor[2] == 'mov' and
+                        len(raw) == 2 and raw[0] == 0x89 and raw[1] & 0xc0 == 0xc0 and
+                        registers[(raw[1] >> 3) & 7] == copy[1] and
+                        registers[raw[1] & 7] == copy[2],
+                        'unsupported guard corridor encoding')
+                require(copy[1] == register, 'guard corridor copies a different register')
+                require(copy[2] != register, 'guard corridor clobbers the compared register')
+                if re.fullmatch(r'\*0x[0-9a-f]+\(,%' + copy[2] + r',4\)', jump[3]):
+                    dispatch_register = copy[2]
+            else:
+                # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
+                # frame proof below separately owns the incoming-argument offset.
+                operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+                require(corridor[2] == 'mov' and operand is not None and
+                        operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
+                        raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
+                        'unsupported guard corridor')
     require(1 <= count <= 256, 'table entry bound')
     require(guard[2] == ('jbe' if taken_guard else 'ja'), 'unsigned dispatch guard')
-    match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + register + r',4\)', jump[3])
+    match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + dispatch_register + r',4\)', jump[3])
     require(jump[2] == 'jmp' and match is not None, 'absolute index/scale dispatch')
     if taken_guard:
         protected = (set(range(cmp_row[0] + 1, guard[0] + len(guard[1]))) |
@@ -626,8 +645,12 @@ def prove(path, name, link=None, manifest=None):
                 indexed_word_load=(row[2] in ('movswl','movzwl') and len(raw)==8 and
                                    raw[:2] in (b'\x0f\xbf',b'\x0f\xb7') and raw[2]&0xc7==0x84 and
                                    raw[3]&7!=4 and raw[3]>>3&7!=4 and offset==4)
+                indexed_long_load=(row[2]=='mov' and len(raw)==7 and raw[0]==0x8b and
+                                   raw[1]&0xc7==0x04 and raw[2]&7==0x05 and
+                                   raw[2]>>3&7!=4 and offset==len(raw)-4)
                 require(r['r_info_type']==1 and
-                        (immediate_store or absolute_compare or indexed_word_load),
+                        (immediate_store or absolute_compare or indexed_word_load or
+                         indexed_long_load),
                         'unsupported ABI data relocation field')
         require(all(row[0] in calls for row in rows if row[2]=='call'),
                 'unrelocated ABI call')

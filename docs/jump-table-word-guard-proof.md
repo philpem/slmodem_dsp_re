@@ -322,3 +322,35 @@ The investigation worktree is `/tmp/slmodem-jumptable-unblock`.
 results and the exact assembler command. The full native and candidate
 ordered target lists are retained there. These records supplement the native
 addresses and reproduction commands above.
+
+## The fallthrough index-copy corridor (F12054)
+
+A fixed-frame switch may copy the compared selector before an unsigned
+fallthrough guard:
+
+    cmp $0x11,%eax
+    mov %eax,%esi
+    ja  default
+    jmp *table(,%eax,4)
+
+The prover now admits exactly one unprefixed `MOV r32,r32` here when it
+decodes as `0x89 /r`, its source is the compared register, its destination is
+not, and the dispatch uses the compared register or the copy. The copy lies
+inside the existing protected range, so extent, relocation-form,
+protected-corridor and single-indirect-jump checks are unchanged. The ABI
+data-relocation whitelist also decodes the exact 32-bit SIB/disp32 load
+(`8b /r`, base disp32, index not `%esp`) so `v8StatusName`'s relocated field
+in `v8_process` is recognised.
+
+`v8_process` now proves on both the blob and the candidate (18 ordered
+destinations, equal identity) but stays **BYTES (23)**: grade 1 stops earlier
+at the `setne %dl`/`setne %cl` partial-width row, which the deliberate
+`_full_write` rule must reject (finding F7762, and the correction in F12054).
+Proving the table is therefore necessary but not sufficient for that symbol.
+
+Controls: `python3 tools/toolchain/jumptable_copy_corridor_controls.py`
+(8 positives, 14 adversarial refusals; the base-commit prover refuses the four
+new positives with `missing adjacent guard` and still proves the adjacent and
+pushed-corridor forms). Census at this change over 1,852 symbols: **1,154
+EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 573 SIZE**; `make period J=3`
+**394 passed, 0 failed**; `byteident --ratchet` OK; blob sha256 unchanged.
