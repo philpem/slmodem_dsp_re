@@ -19,6 +19,13 @@
 #include "dsplib/v22_fse.h"
 #include "dsplib/v22tab.h"
 
+/* Promote before taking magnitude; the reference uses cwtl/cltd/xor/sub. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * The prototype the datapump hands to `V22_FSE_init`.  Symmetric: entry i and
  * entry 48 - i are equal for every i, which is why the reversal init performs
@@ -284,7 +291,7 @@ V22_FSE_receive(struct v22_fse *state, const short *in, unsigned short *out,
 			if (state->sym_count > V22_FSE_TRAIN) {
 				short e = state->err_avg;
 
-				e = (short)(e < 0 ? -e : e);
+				e = (short)iabs(e);
 				if (e > V22_FSE_ERR_HI)
 					state->pll_sel = 1;
 				if (e <= V22_FSE_ERR_LO)

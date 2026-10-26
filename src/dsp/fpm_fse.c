@@ -21,6 +21,13 @@
 #include "dsplib/fpm_phasor.h"
 #include "dsplib/sysdep.h"
 
+/* Promote before taking magnitude; the reference uses cwtl/cltd/xor/sub. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * Both smoothers' weights, 0.95 and 0.05 in Q15, and the same pair V.22's
  * copy of this block uses.  Each term is shifted down fifteen SEPARATELY and
@@ -353,7 +360,7 @@ FPM_FSE_receive(struct fpm_fse *state, const short *in, unsigned short *out,
 			if (state->sym_count > state->cfg.train_sym) {
 				short e = state->err_avg;
 
-				e = (short)(e < 0 ? -e : e);
+				e = (short)iabs(e);
 				/*
 				 * Both edges are inclusive, and both tests
 				 * run: a magnitude cannot be in both bands
