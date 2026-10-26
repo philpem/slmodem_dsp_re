@@ -140643,3 +140643,131 @@ reference bytes **77,336/943,398 (8.2%)**, up from 77,325; candidate `.text`
 **711,527** and candidate delta -15,696 unchanged; first divergence still
 `RD_create`. No flags, attributes, padding or test edits; blob sha256
 unchanged (`1f3e56d0...cf0b379`).
+
+## F12052. SIZE band at |instruction delta| 4-8, wave 21: `detectRetrainReq`'s phase test compares the incremented value before a per-arm store
+
+*2026-10-25/26, worktree `w21-band`, branch `recover/w21-band`, base
+`2c43c4a96`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Continued the SIZE screen into the next band. Fresh `make -s tc J=4`:
+300/300 objects, denominator **1,852**. `byteident.py --near 2000` reports
+**57** SIZE rows at |blob - ours instruction count| in **4..8** (23 at +4,
+14 at +5, 7 at +6, 7 at +7, 6 at +8; none at -4..-8). The brief's exclusions
+remove two of them from consideration, leaving **55**:
+
+- `v8_process` (+7) -- another wave owns it;
+- `v23FP_rx_progress` (+4) -- the v23 emission-order domain.
+
+`--comdat` names only the three `Scrambler` bodies, so no band row is a
+COMDAT/link-selected duplicate; `V90DemodulatorD1Ev/D2Ev` are real symbols.
+The several `+0` SIZE rows in the near list (`V90Phase4Modulator::
+generateV92Symbol`, `FAX_process`, ...) are below this band and were not
+screened. Rows were ranked by LCS (`structsim`) and the top ones read at
+operand level with `structsim`, `contentgap`, `bbalign --anchors`,
+`tools/dis.py` and a register-canonicalised sequence diff.
+
+| symbol | insns blob/ours | LCS | run | verdict |
+|---|---|---|---|---|
+| `detectRetrainReq` | 92/96 -> **92/93** | 87 (90.6%) -> **89 (95.7%)** | 30 -> 28 | SIZE (+1) |
+| `V34XF_IndicateTrn2dReceived` | 29/33 -> **29/29** | 21 (63.6%) -> **23 (79.3%)** | 7 -> 8 | not landed (see below) |
+
+**`detectRetrainReq`: the phase counter's increment is compared as a
+computed value and stored only on the unequal arm.** The object at
+0x5e92b-0x5e93b is
+
+```
+0x5e92b  mov 0xa24c(%edi),%eax     ; retrain_phase
+0x5e931  add $0x4,%eax
+0x5e934  cmp $0x80,%eax
+0x5e939  je  0x5e955               ; the ==0x80 arm
+0x5e93b  mov %eax,0xa24c(%edi)     ; the !=0x80 arm stores
+```
+
+and the equal arm stores zero at 0x5e95c. The recovered source is a local
+carrying `obj->retrain_phase + 4` into both arms:
+
+```c
+int phase = obj->retrain_phase + 4;
+
+if (phase != 0x80) {
+        obj->retrain_phase = phase;
+        return 0;
+}
+obj->retrain_phase = 0;
+```
+
+Five spellings were compiled; only this one maps onto the object's
+add-then-compare-then-per-arm-store shape:
+
+| spelling | insns | LCS | notes |
+|---|---:|---:|---|
+| `+= 4;` then `!= 0x80` early return | 96 | 87 (90.6%) | store before test, `add $-0x80` compare |
+| `+= 4;` then `== 0x80`/`else` | 96 | 80 (83.3%) | worse layout |
+| `+= 4;` then `if (==0x80) x=0; else return 0;` | 96 | 87 (90.6%) | store still before test |
+| `if ((x += 4) != 0x80) return 0;` | 96 | 87 (90.6%) | GCC does not sink the store |
+| `if (x + 4 != 0x80) { x += 4; return 0; }` | 93 | 87 (93.5%) | GCC folds to `cmp $0x7c` on the old value |
+| **local `phase` + per-arm store** | **93** | **89 (95.7%)** | add/cmp/je, store only on the unequal arm |
+
+The residual +1 is allocation: the object places the default arm's zero in
+the shared return-0 block (`xor %edx,%edx` at 0x5e941, copied to `%eax` at
+0x5e947), while this build hoists a `xor %eax,%eax` for the `default:
+return 0;` ahead of `cmp $2` at 0x1118. The phase region itself is now
+instruction-for-instruction.
+
+**Other band rows read at operand level and left blocked:**
+
+- `V90MP::calcCRC` / `V90CP::calcCRC` (+4 each, LCS 87.5%/87.2%): the
+  object narrows the two `crc[4]+a` / `crc[11]+a` additions to 8-bit
+  (`add %al,%bl; and $1,%bl` at 0x1f2ae and `add %al,%cl` at 0x1f2e7),
+  while ours zero-extends `a` (`movzbl %al,%ebp`) and adds 32-bit
+  (`add %ebp,%ecx`). Removing the four `(unsigned char)` casts, and
+  spelling `a` as `int`, compile identically; the trigger is register
+  pressure and the byte of `a` being copied to a second register, not the
+  casts. No source lever among the tested forms.
+- `dftenergy` (+5): the object keeps the loop index in `(%esp)` and tests
+  `cmp %ax,(%esp)`; ours uses 0x4/0x8(%esp) and a separate scale slot. Stack
+  slot assignment, no statement difference.
+- `RxHdxWaitV21` (+4): the `!CarrierDetectV21` early-return spelling puts the
+  error arm inline and the carrier arm out of line; flipping to the positive
+  `if (CarrierDetectV21(...))` form moves neither count nor LCS (89 -> 88)
+  and was reverted. The four-instruction difference is the four `movswl
+  0x8` state loads against our `movzwl`/`movswl` pair plus debug-site
+  placement.
+- `V90DemodulatorD1Ev/D2Ev` (+8, LCS 91.4%): a 143/151-instruction inlined
+  destructor; `bbalign` matches all 27 anchors and every difference is
+  register choice or `if (p) free(p)` block placement.
+- `FloatARMA::process` (+4), `_ZN24V90ConstellationDesigner19calcMto
+  MatchKtargetEff` (+4), `SetRxModeV32` (+6): x87 stack/loop allocation, a
+  missing `flds` of the second `log10l` operand (constant-folded), and a
+  `VTBv32_init` call-edge difference (blob 1 shared call at 0x81930 from
+  four trellis arms; ours 3 sites). Reordering `shift = N;` before the call
+  merges two of ours but lowers LCS 74.0 -> 71.7; making all four calls
+  `&DEC(fp)->vtb` leaves 3 sites at LCS 74.2. Not landed.
+
+**`V34XF_IndicateTrn2dReceived` was recovered but NOT landed, because it
+costs a neighbour EXACT.** The object forms a base at `obj+4`
+(`add $0x4,%edx; mov 0x248(%edx)` at 0xa397/0xa39a, object +0x24c) and has
+ONE debug test at 0xa3aa and ONE print call at 0xa3f1 reached by the first
+arm's fallthrough and the third arm's jump from 0xa40d; only the stores are
+per arm (0xa3b1, 0xa3d1, 0xa3f4). Reconstructing that -- engine view base
+plus per-arm store and a shared print tail -- takes it 33 -> 29 instructions
+(the object's count), LCS 21 -> 23 (63.6% -> 79.3%), run 7 -> 8. But the
+same TU's `V34XF_IndicateK56FlexRateDetermined` leaves grade 0 (EXACT ->
+BYTES, 4 bytes, `mov $5` in `%eax` becomes `%edx`) as a
+neighbour-codegen effect of the preceding function's changed body; it stays
+grade 1 but the ordered EXACT set must not shrink, so the variant was
+measured, recorded here, and reverted. Three spellings of the same fact
+(engine `struct v34_engine *`, flat `struct v34_object *`, and an `unsigned
+char *m + OB4_V90_RECEIVER` pointer) all perturbed the neighbour; the
+recovery waits for a later structural change to settle the cursor.
+
+**Verified (landed tree).** `make period J=3` **394 passed, 0 failed**.
+Ratchet view (`make byteident-ratchet`, exit 0): **1,152 EXACT / 1
+UNRESOLVED / 36 REGALLOC / 89 BYTES / 574 SIZE** over 1,852; grade 0-or-1
+**1,189**; link-selected EXACT **1,155**; ratchet OK (1146 -> 1152,
+1182 -> 1189, 1149 -> 1155, regalloc 36 -> 36; only the pre-existing
+`dp_vpcm_exit` displacement). No EXACT or grade-0/1 symbol was lost. Blob
+sha256 unchanged (`1f3e56d0...cf0b379`). No flags, attributes, padding,
+volatile or test edits.
