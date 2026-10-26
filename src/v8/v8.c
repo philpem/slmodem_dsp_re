@@ -132,7 +132,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	 * `arg` carries the datapump to switch to, from the arm that decided
 	 * it to the `modem_set_param` in that same arm.  It has NO INITIAL
 	 * VALUE and no arm reads it before writing it; the object has no
-	 * sentinel store either (finding F12052).
+	 * sentinel store either (finding F12053).
 	 */
 	int arg;
 
@@ -218,7 +218,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		 * is about to pass -- the QCA1d arm writes 0x38c2 and falls
 		 * into 0x38c6, and this arm writes 0x388f and jumps there --
 		 * and the `st->cm` stack home that test forced is gone with
-		 * it.  Finding F12052.
+		 * it.  Finding F12053.
 		 */
 		modem_set_param(dp->modem, 9, arg);
 		ret = DPSTAT_CHANGEDP;
@@ -249,7 +249,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 			 * arm for the same reason: this is the second of the
 			 * object's two argument stores (0x38c2), and the body
 			 * it falls into at 0x38c6 is the one the OK arm jumps
-			 * to.  Finding F12052.
+			 * to.  Finding F12053.
 			 */
 			modem_set_param(dp->modem, 9, arg);
 			ret = DPSTAT_CHANGEDP;
@@ -291,7 +291,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	 * previous status in `last_status` and REPORT it only when it
 	 * changes.  The store is not under that test: the object's `je` at
 	 * 0x37c5 lands ON the store at 0x37d0 rather than past it, so an
-	 * unchanged status is written back too.  Finding F12052.
+	 * unchanged status is written back too.  Finding F12053.
 	 */
 	if (st->last_status != rc) {
 		if (DSPLIB_DEBUG_ON())
