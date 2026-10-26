@@ -21,6 +21,12 @@
 #include "dsplib/v22ctl.h"
 #include "dsplib/v22fp.h"
 
+static int
+v22_flag_test_ctl(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /*
  * LOCAL in the object, so `static` here.  Seven entries, indexed by
  * `hdx->protocol` with no bounds check; see the header on what the values are not
@@ -57,9 +63,14 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 		fp->hdx->connect_substate = 0;
 	}
 
-	fp->dsp->r20 = (ctl->flags_0c >> 2) & 1;
-	/* Inverted; see V22_CTL_FREEZE_ADAPT. */
-	fp->dsp->agc.f18 = (ctl->flags_0c & V22_CTL_FREEZE_ADAPT) == 0;
+	{
+		unsigned char f0c = ctl->flags_0c;
+
+		fp->dsp->r20 = (f0c >> 2) & 1;
+		/* Inverted; see V22_CTL_FREEZE_ADAPT. */
+		fp->dsp->agc.f18 =
+		    v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
+	}
 
 	/*
 	 * Bit 7 into `params.flags` bit 9.

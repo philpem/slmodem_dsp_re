@@ -216,3 +216,38 @@ SIZE** over 1,852, grade 0-or-1 **1,190**, link-selected EXACT **1,157**;
 `byteident --ratchet` is OK at the same floor. No EXACT or grade-0/1 symbol
 moved in either direction. Blob sha256 unchanged
 (`1f3e56d0...cf0b379`).
+
+## Wave 23: the form-sensitive screen, and the one cell that keeps a byte local live
+
+The wave-22 census compared the count of each mask over the function. That is
+the wrong denominator for a native-form question: `initTxSequence` has a
+`mem 0x04` test in the object and three register `0x04` tests in ours, so the
+mask totals agree while the forms do not. Counting `(form, mask)` pairs is
+what reproduces the 20-function / 31-row residual; the pre-change tree then
+measures **21 / 33** and the two rows below take it to **20 / 31**.
+
+`V8UpdateModemParameters` is a shifted-value site: the object tests
+`(w >> 1) & 2` as `test $0x2,%dl`, our direct `f & 2` folds to
+`test $0x4,%al`. The byte/byte/int helper on `(unsigned char)f` restores the
+shifted test and removes two instructions.
+
+`V22FP_control` shows the **live** qualifier in the operand contract. A byte
+local that is used only as the helper's argument is folded straight back to
+the field and leaves the memory carrier. The object's `test $0x8,%dl` needs
+the byte to survive another use, which is exactly what its single post-branch
+load does for `r20`:
+
+```c
+{
+    unsigned char f0c = ctl->flags_0c;
+
+    fp->dsp->r20 = (f0c >> 2) & 1;
+    fp->dsp->agc.f18 =
+        v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
+}
+```
+
+That cell is LCS 31 -> 37 and five differing bytes against six before; the
+same local extended through the 32-bit `params.flags` read-modify-write moves
+128 bytes and reads BYTES. Neither function becomes EXACT, and the ordered
+EXACT and grade-0/1 sets are unchanged.
