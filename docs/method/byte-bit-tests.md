@@ -251,3 +251,38 @@ That cell is LCS 31 -> 37 and five differing bytes against six before; the
 same local extended through the 32-bit `params.flags` read-modify-write moves
 128 bytes and reads BYTES. Neither function becomes EXACT, and the ordered
 EXACT and grade-0/1 sets are unchanged.
+
+## Wave 24: the third pass, and the two cells that close `V92Jd`
+
+The form-sensitive census over the same 1,852 symbols still reports **20
+functions / 31 `(form, mask)` rows** at the wave-23 head. Eighteen remain
+after this wave; the two removed are `V92Jd`'s C1/C2 constructors.
+
+`V92Jd`'s rate-mask loops are the helper cell, one level out from the mask
+itself. The object emits `sar %cl,%eax; test $0x1,%al; setne disp`; a plain
+`(unsigned char)((mask >> i) & 1)` emits `sar; and $1`, and adding `!= 0`
+does not change that. The byte/byte/int helper applied to the **shifted
+byte** does:
+
+```c
+bits[V90JD_GROUP1 + 1 + i] =
+    (unsigned char)(v92jd_flag_test((unsigned char)(mask >> i), 1) != 0);
+```
+
+The phase loop is not a helper site: the object's `mov $1; shl %cl; test
+%eax,%edx; setne` is what an **unsigned** `phase` produces; our signed
+`int` gave `sar; and`. The lookahead pair needs a live `unsigned char`
+local for the one `movzbl` the object has, and the source order
+`bits[49]` then `bits[50]` is what makes GCC 3.4.2 pick the object's two
+registers and store the pair in the object's order. Both constructors are
+**EXACT** (66/66 instructions, LCS/run 100%); ordered EXACT and grade-0/1
+sets gain two and lose none.
+
+Rejected on this pass: `DataCarrierDetectV17/V27/V29`'s `(x & 1)` is a
+duplicated cold tail (the helper changes nothing on the hot path);
+`DILdescriptorPacker`'s `crcAt & 1` and `V92ModulusEncoder::reset`'s sign
+bit are 32-bit values the helper cannot narrow in place; `initdigital`'s
+`0x20` is the high byte of a `0x2000` word, `modem_serrint`'s `%ah` is
+`& 0x800`; `VPcmV34Create`, `txmitquadbit`, `v34handshak`, `receiver` and
+`V34demodulate` are boolean-stack or inlined-body values. The wave-22/23
+negatives above are unchanged.
