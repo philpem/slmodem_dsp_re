@@ -141341,7 +141341,96 @@ setPhaseIIinfo`), block-duplication/tail-placement decisions
 (`V92Phase4Modulator::generateSymbol`, `V34GiveINFO0dBits`'s debug gates),
 and deep FPM bit-manipulation bodies where no single statement was found.
 
-## F12059. SIZE band at |instruction delta| >= 9, wave 24: `V90SdDetector::process`'s shift walks two pointers, and the return value is live across it
+## F12059. The two wave-23 signedness leads: `TxHdxDataV27`'s shared value and `ScrambleDataV27`'s count are `unsigned short`, and `cid_modem`'s `abs` is the tree's `iabs`
+
+*2026-10-26, worktree `w24-sign`, branch `recover/w24-sign`, base
+`origin/master = a8ea916ca`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`.*
+
+### `TxHdxDataV27`: the width is `unsigned short` at the read *and* in the callee's declaration
+
+Before: SIZE, blob 83 / ours 89 instructions, LCS 56 (62.9%), run 8. After:
+**83/83, LCS 83 (100%), run 83**, grade **BYTES (8 bytes)** over 314
+reference bytes. The 8 bytes are one temp-register choice in the
+underrun-with-`int_0008` budget subtraction (blob `mov %edx,%ecx; sub
+%ebx,%ecx`, ours `%eax`); `byteident --why` reports it as the consequent
+grade-1 USE CONFLICT, so it is allocation and was not chased.
+
+**The forcing instructions.** Blob `0x0a39e8` `movzwl %ax,%ebx` (the FIFO
+read result), `0x0a39e5` `movzwl (%edi),%edx` (`*budget`), and
+`0x0a39eb` `cmp %bx,%dx; jbe` -- a 16-bit *unsigned* compare -- are the
+width and signedness facts. Both operands are zero-extended and the
+condition is unsigned, so the shared value is an `unsigned short`, not the
+old `short got`.
+
+**The callee declaration was the missing half.** `ScrambleDataV27` was
+declared `short count`, the only scrambler in the tree that was: V17, V22,
+V29 and V32 all take `unsigned short count`. Its blob body begins
+`movswl 0xc(%esp),%ecx` (`0x0a5e70`), which reads as signed but is the
+*widening of its own `short`-parameter tail call* to `SDMv27_scrambler`
+(also `short`), not evidence about the declaration. The callers decide it:
+every blob call site loads the count zero-extended and passes it without a
+conversion -- `TxHdxDataV27` `0xa39e8` into `0xa3a10`/`0xa3a72`,
+`GenEQTrnSequenceV27` `0xa33fc` (`movzwl 0x28(%esp),%ebx`) into
+`0xa3413`, `TxHdxSCR1V27` `0xa3af6` into `0xa3b1f`, and
+`TxHdxEQCondV27` `0xa3bba` into `0xa3be4`. With `unsigned short` the body
+of `ScrambleDataV27` is unchanged (its own `movswl` remains the tail-call
+widening) and stays EXACT.
+
+**The control shape is a `switch`, and the source re-reads `->source`.**
+The rate chain is `test; je` (`0x0a39b7/0x0a39b9`), `dec; je`
+(`0x0a39bf/0x0a39c0`), then the `default` store (`0x0a39c6`) -- the shape
+`TxHdxDataV17` and `TxHdxDataV29` already use, not an `else if` chain
+(which the compiler if-converts to `setne`/`dec`/`and`/`add`). The underrun
+path reloads the source pointer at `0x0a39f0` (`mov 0x24(%esi),%eax`)
+instead of reusing a cached local. Restoring both, plus the single shared
+`taken` and the `> taken` underrun test of `TxHdxDataV29`'s own body,
+leaves only the allocation row.
+
+**Rejected enumerations:** `short got` with casts at the compare (88
+instructions, LCS 56); `unsigned short got` alone with an `else if` chain
+(107, LCS 56; tail-duplicates the FIFO block); `unsigned short taken` with
+a cached `prm` local (87, LCS 68); `iabs`-style double casts with a `short`
+`taken` (87, LCS 66, and `movswl` returns at the read). Only the V29 shape
+with `unsigned short taken` and `unsigned short` `ScrambleDataV27` maps.
+
+### `cid_modem`: the `+0x15c` hit is a base-name collision; the real delta was the abs idiom
+
+`widthaudit --strong` reports `cid_modem` `load disp 0x15c blob s16 ours
+z16`, because it keys a load by `(displacement, base register)`. The
+logical field is `struct cid::pack_len` (`short`, `+0x15c`), and **both
+sites already match**: blob `0x091f42 movzwl 0x15c(%ebp),%edx` is ours
+`0x4bb movzwl 0x15c(%ebx),%edx` (the `> 2` message-length test), and blob
+`0x092163 movswl 0x15c(%ebx),%eax` is ours `0x701 movswl 0x15c(%edx),%edx`
+(the `idx = pack_len; pack_len = idx + 1` arm). Blob's `%ebx` at the
+signed site and ours' `%ebx` at the unsigned site are two different
+objects, exactly the limitation `widthaudit.py`'s own header records. No
+retype is warranted; the field is loaded with both extensions at two
+genuinely different uses in both builds.
+
+The `cwtl` delta it also printed (`6/7`) was real. The gain-adaptation
+loop's magnitude in the blob (`0x091e72`-`0x091e89`) is `movswl; lea;
+movswl; cltd; xor; sub; add` -- the inlined `static int iabs(int v) {
+return v < 0 ? -v : v; }` that `fpm_sre.c`, `toneiir.c` and `v22prc.c`
+already carry. Our spelling `buf[i] < 0 ? -(int)buf[i] : (int)buf[i]`
+emits `movzwl; test %ax,%ax; jns; cwtl; add` / `cwtl; sub`, a branch.
+Writing `sum += iabs((int)buf[i])` makes the loop instruction-identical;
+`cid_modem` goes 368 -> **365** instructions, LCS 236 -> **241**, `cwtl`
+6/7 -> **6/6**, still SIZE (blob 360). The local `int a` and
+`__builtin_abs` spellings were measured: 366/LCS 235 and 365/LCS 241
+respectively -- `__builtin_abs` is the same code, the `int a` spelling
+does not reproduce the loop.
+
+### Gate and ordered set
+
+`make period J=3` -> **394 passed, 0 failed**. `make byteident-ratchet` ->
+**1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC**, grade 0-or-1 **1,194**,
+link-selected **1,161**, ratchet OK (floor 1,146). The ordered `--list-exact`
+diff against the base is the count lines only: **BYTES 90 -> 91, SIZE 568 ->
+567**; no EXACT symbol was traded, and no grade-0/1 function regressed.
+
+## F12060. SIZE band at |instruction delta| >= 9, wave 24: `V90SdDetector::process`'s shift walks two pointers, and the return value is live across it
 
 *2026-10-26, worktree `w24-band9`, branch `recover/w24-band9`, base
 `origin/master = a8ea916ca`, Gentoo GCC 3.4.2-r2,
