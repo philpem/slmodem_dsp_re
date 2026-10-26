@@ -141167,3 +141167,89 @@ OK (exact 1146 -> 1154, grade 0-or-1 1182 -> 1190, link-selected exact
 `--self-test` and `--ratchet-self-test` clean. Apparatus only; no `src/`
 change, and the blob is still
 `1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+
+## F12057. Byte-immediate mask sweep, wave 23: the register carrier for `V22FP_control`'s freeze bit, and `V8UpdateModemParameters`' shifted two-bit test
+
+*2026-10-26, worktree `w23-mask`, branch `recover/w23-mask`, base
+`09493bc13`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Finished the native-form sweep F12054 opened. A fresh per-function census over
+the same **1,852** symbols counted `a8 ib`, `f6 c0..c3 ib` and the memory form
+`f6 /0` (mod != 3), comparing the `(form, mask)` count rather than the mask
+total. **The mask-total view F12054 used under-counts**: `initTxSequence`'s
+`mem 0x04` row is invisible when register and memory `0x04` tests are summed,
+and the form-sensitive screen is what reproduces F12054's own **20 functions /
+31 rows** denominator. On the pre-change tree it reports **21 functions / 33
+rows**; after this wave, **20 / 31**.
+
+Two rows moved, both register-form sites:
+
+| Function | mask, native form | LCS/run before | LCS/run after | ours insns (blob) before -> after | bytes differing before -> after | grade |
+| --- | --- | ---: | ---: | --- | ---: | --- |
+| `V8UpdateModemParameters` | 0x02, `test $0x2,%dl` | 174/14 | 174/14 | 293 (292) -> 291 (292) | 49 -> 33 | SIZE |
+| `V22FP_control` | 0x08, `test $0x8,%dl` | 31/10 | 37/10 | 45 (46) -> 47 (46) | 6 -> 5 | SIZE |
+
+**`V8UpdateModemParameters`: the object tests the shifted value.** At
+`0x74b77` the object has `f6 c2 02` on `%dl`, where `%dl` already holds
+`f = (w & 0xf) >> 1`. Our source wrote `(f & 2) == 0`, which GCC folded back
+to `test $0x4,%al` on the unshifted low nibble (one extra mask row in ours,
+`0x04:1`). `v8if_flag_test((unsigned char)f, 0x02) == 0` restores the shifted
+byte test; the function loses two instructions and sixteen differing bytes and
+keeps the same LCS. Its remaining `mem 0x08` row is the `out->b0 & 8` value
+fold, left alone: the helper reproduces the native `testb $0x8,(%edi)` but
+costs three LCS points (174 -> 171), exactly the F12054 rejection.
+
+**`V22FP_control`: the freeze bit needs a live byte local, not a helper on the
+field.** The object's second `flags_0c` load at `0x8c3f3` feeds three uses:
+`r20` (bit 2), `agc.f18` (`test $0x8,%dl; sete`) and `params.flags` bit 9
+(bit 7). Our source read the field three times and wrote `f18` as
+`(flags & 8) == 0`, which GCC expanded to `shr $3; xor $1; and $1`. A helper
+on the field alone still leaves `testb $0x8,0xc(%reg)`; a local used only by
+the helper is folded back to the same memory test. The cell that works keeps
+the byte local live across `r20` and the helper:
+
+    {
+        unsigned char f0c = ctl->flags_0c;
+
+        fp->dsp->r20 = (f0c >> 2) & 1;
+        fp->dsp->agc.f18 =
+            v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
+    }
+
+It reproduces `f6 c2 08` and raises LCS 31 -> 37; it adds one instruction over
+the old source (the object shares that one load with bit 7, which our 32-bit
+`params.flags` read-modify-write cannot). **Rejected cells:** helper on the
+field (`SIZE 2`, LCS 32, memory `testb $0x8,0xc(%reg)`); helper on a local
+used only for `f18` (same memory test); the same local extended through the
+bit-9 RMW (`BYTES 128`, the F12054 rejection shape). Keeping the local to
+`r20` + `f18` is the only one of the four that recovers the register carrier
+without a 100-byte move.
+
+**Not taken, and why.** The remaining 20 functions / 31 rows are the F12054
+residual. The register rows are the shifted/bool sites (`DataCarrierDetect
+V17/V27/V29`, `V34demodulate`, `V92ModulusEncoder::reset`, both `V92Jd`
+constructors, `DILdescriptorPacker`'s `%ebp` allocation), the high-byte or
+structural sites (`modem_serrint`'s `%ah`, `receiver`'s `%dl` 0x08/0x10,
+`rebuildJMSequence`'s repeated `cm->b0`/`b2` tests) and the `v34handshak`
+inlining artefact. The memory rows are wave-22's carrier route, out of this
+register-form sweep: `evaluateRxJMSequence` (`mem 0x80`) was retried and again
+gained the native test with LCS unchanged at 127/11; `initTxSequence`
+(`mem 0x04`), `V8UpdateModemParameters` (`mem 0x08`), `txmitquadbit`,
+`VPcmV34Create`, `initdigital`, `v8handshakinit` and `probeselect`'s three
+register-carried bins are unchanged.
+
+**Ordered-set delta: none.** The per-TU `--list-exact` set and the full
+grade-0/1 map over all 1,852 symbols are identical before and after; no
+same-TU neighbour moved. `V22FP_control` and `V8UpdateModemParameters` both
+stay SIZE.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census unchanged:
+**1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 569 SIZE**;
+grade 0-or-1 **1,194**, link-selected EXACT **1,161**. `byteident
+--ratchet` OK at the same floor (exact 1146 -> 1158, grade 0-or-1 1182 ->
+1194, link-selected 1149 -> 1161, regalloc 36 -> 35), with the reviewed
+`dp_vpcm_exit` displacement still the only one. No flags, attributes, padding
+or test edits; blob sha256 unchanged
+(`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
