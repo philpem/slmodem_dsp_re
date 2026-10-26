@@ -20,6 +20,13 @@
 #include "dsplib/v34shell.h"
 #include "dsplib/v34pcmif.h"
 
+/* Keep the mask operation byte-sized before promoting its result. */
+static int
+v34rx_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /*
  * Advance a ring cursor, wrapping at `end` back to the first entry.
  *
@@ -96,8 +103,6 @@ V34descrambler(struct v34_receiver *s, short bits, short nbits)
 	unsigned mask = 1;
 	int out = 0;
 	short i;
-	int tap = (s->flags & V34_SCR_ANSWERER) ? 18 : 5;
-
 	if (nbits <= 0)
 		return 0;
 
@@ -106,7 +111,10 @@ V34descrambler(struct v34_receiver *s, short bits, short nbits)
 		unsigned bit;
 
 		bit = ((sr >> 23) & 1) ^ in;
-		bit ^= (sr >> tap) & 1;
+		if (v34rx_flag_test((unsigned char)s->flags, V34_SCR_ANSWERER))
+			bit ^= (sr >> 18) & 1;
+		else
+			bit ^= (sr >> 5) & 1;
 
 		/*
 		 * The register takes the input bit at position 0 and is then
@@ -1083,7 +1091,7 @@ decoderv34(void *objp)
 		int bestidx = 0;
 		int tx = (unsigned short)rx->target_re;
 		int ty = (unsigned short)rx->target_im;
-		int i;
+		short i;
 		int diff;
 
 		for (i = 0; i < 4; i++) {
