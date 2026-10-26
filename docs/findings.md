@@ -141514,4 +141514,6 @@ statements.
 (1158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE). No same-TU
 neighbour moved. `make period J=3`: **394 passed, 0 failed**. Blob sha256
 unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
-No flags, attributes, padding or test edits.
+No flags, attributes, padding or test edits. The merged head also carries
+F12059's `TxHdxDataV27` gain, so its census reads BYTES 91 / SIZE 567; the
+before/after figures above are this change's own delta.
