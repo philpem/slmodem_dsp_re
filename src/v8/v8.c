@@ -128,7 +128,13 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;
 	int rc = V8Process(st->v8, in, out, count);
 	int ret = 0;
-	int arg = -1;
+	/*
+	 * `arg` carries the datapump to switch to, from the arm that decided
+	 * it to the `modem_set_param` in that same arm.  It has NO INITIAL
+	 * VALUE and no arm reads it before writing it; the object has no
+	 * sentinel store either (finding F12052).
+	 */
+	int arg;
 
 	switch (rc) {
 	/*
@@ -195,6 +201,32 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		/* Common to all four: what was agreed goes to the modem. */
 		st->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;
 		st->dspinfo->qc_index = st->cm->menu;
+
+		/*
+		 * THE CHANGE IS ASKED FOR IN THIS ARM, not once after the
+		 * switch behind a test on `arg`.  The object files the third
+		 * argument of `modem_set_param` from BOTH arms -- 0x388f
+		 * here, after the two `qc_` stores, and 0x38c2 in the QCA1d
+		 * arm -- and only then enters one shared body at 0x38c6,
+		 * which it reaches by a jump from here and by fallthrough
+		 * from there.  Identical statements in each arm are what
+		 * produces that: GCC cross-jumps the shared `mov $0x9`/
+		 * `dp->modem`/call/`modem_get_param`/print tail and leaves
+		 * each arm's own argument store in place (the same lever as
+		 * `_delete_data_rx_modem`, finding F12048).  It also removes
+		 * the residual `arg >= 0`: neither join tests the value it
+		 * is about to pass -- the QCA1d arm writes 0x38c2 and falls
+		 * into 0x38c6, and this arm writes 0x388f and jumps there --
+		 * and the `st->cm` stack home that test forced is gone with
+		 * it.  Finding F12052.
+		 */
+		modem_set_param(dp->modem, 9, arg);
+		ret = DPSTAT_CHANGEDP;
+		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v8: Link established. Idle timer %d.\n",
+			    st->idle_timer);
 		break;
 
 	case V8_ORG_BAD_QCA1d_MESSAGE:
@@ -209,8 +241,23 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;
 		} else if (st->idle_timer == 0) {
-			st->dspinfo->qc_lapm &= 1;
 			arg = 92;
+			st->dspinfo->qc_lapm &= 1;
+
+			/*
+			 * The same change as the V8_OK arm's, written in this
+			 * arm for the same reason: this is the second of the
+			 * object's two argument stores (0x38c2), and the body
+			 * it falls into at 0x38c6 is the one the OK arm jumps
+			 * to.  Finding F12052.
+			 */
+			modem_set_param(dp->modem, 9, arg);
+			ret = DPSTAT_CHANGEDP;
+			st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "v8: Link established. Idle timer %d.\n",
+				    st->idle_timer);
 		}
 		break;
 
@@ -239,26 +286,19 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		break;
 	}
 
-	if (arg >= 0) {
-		modem_set_param(dp->modem, 9, arg);
-		ret = DPSTAT_CHANGEDP;
-		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "v8: Link established. Idle timer %d.\n",
-			    st->idle_timer);
-	}
-
 	/*
 	 * The same change detector as V8Process's, one layer up: keep the
-	 * previous status in `last_status` and act only when it changes.
+	 * previous status in `last_status` and REPORT it only when it
+	 * changes.  The store is not under that test: the object's `je` at
+	 * 0x37c5 lands ON the store at 0x37d0 rather than past it, so an
+	 * unchanged status is written back too.  Finding F12052.
 	 */
 	if (st->last_status != rc) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("v8: status (%d) %s\n", rc,
 					     v8StatusName[rc]);
-		st->last_status = rc;
 	}
+	st->last_status = rc;
 
 	if (st->idle_timer > 0) {
 		st->idle_timer -= count;

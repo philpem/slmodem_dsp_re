@@ -140643,3 +140643,131 @@ reference bytes **77,336/943,398 (8.2%)**, up from 77,325; candidate `.text`
 **711,527** and candidate delta -15,696 unchanged; first divergence still
 `RD_create`. No flags, attributes, padding or test edits; blob sha256
 unchanged (`1f3e56d0...cf0b379`).
+
+## F12052. `v8_process`'s `arg >= 0` guard was never in the source: the change block lives in each arm, and the object's two argument stores prove it
+
+*2026-10-26, worktree `w21-v8`, base `2c43c4a96`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+#385 and #391 left `v8_process` at **620 B / 152 instructions** against the
+object's **590 / 145**, `structsim` LCS 144, longest run 63. The residual was
+one cause with two symptoms: a post-switch `if (arg >= 0)` the object does not
+contain, and the `st->cm` stack home (`mov %edx,0x18(%esp)` plus three
+reloads) that the test forced, because `arg` had to survive into the join as
+a live value while `cm` was still needed. F12046 had already measured an
+arm-duplicated tail (593 B, LCS 144, run 135) and declined it as a fit: the
+label-set question did not require it. Two facts in the object do, and a third
+-- the `last_status` store -- was found beside them. Together they give
+**590 B / 145 instructions, LCS 145 (100%), longest run 145**: the function is
+one contiguous identical instruction run, and only 23 register bytes differ.
+
+**Fact 1 -- the change block is arm-local, not post-switch.** The object
+writes `modem_set_param`'s third argument into the outgoing slot **twice**:
+at 0x388f, at the end of the V8_OK arm after the two `qc_` stores and just
+before `jmp 0x38c6`, and at 0x38c2, in the QCA1d arm after `andl
+$0x1,0x8(%ecx)`. Only then does 0x38c6 begin the shared body (`mov $0x9,%eax`
+/ `mov %eax,0x4(%esp)` / `mov 0x4(%ebp),%edi` / ...) which the OK arm reaches
+by that jump and the QCA1d arm by fallthrough. A single post-switch statement
+cannot produce two stores: the store is part of that statement's own argument
+setup, so one copy puts it *inside* the shared block. Two copies do not merge,
+which is the same cross-jump boundary F12048 recorded for
+`_delete_data_rx_modem`'s per-arm `free` -- the identical tail merges, the
+per-arm argument stores stay where they were written.
+
+There is also no test of any value between either arm's tail and the call.
+The QCA1d arm's `mov 0x18(%ebx),%eax` (0x3895) is followed by `cmp $0x5c` /
+`setne %dl` / `cmp $0x5a` / `setne %cl` / a `test` of the two predicates
+(0x38a9 `jne` to the error arm at 0x382b), then `mov 0x20(%ebx),%edx` /
+`test` / `jne 0x37c2`, and the surviving path writes its argument at 0x38c2
+and falls into the shared body. The OK arm's four arg-producing leaves all
+`jne 0x3879` (0x3994, 0x39a1, 0x39ae; the QC leaf falls through from 0x3876),
+where the two `qc_` stores run and 0x388f writes the argument before
+`jmp 0x38c6`. **Neither join tests the value it is about to pass.** Removing
+our guard also removes `cm`'s home: the object keeps `st->cm` in `%ecx` from
+0x385c (`mov 0x28(%ebx),%ecx`) all the way to the `qc_index` store at 0x388c,
+reloading it only through the "QC." printf tail (`mov 0x28(%ebx),%ecx` at
+0x3971), where ours spilled it to `0x18(%esp)` and reloaded it three times.
+
+**Fact 2 -- `last_status` is stored unconditionally.** `cmp %esi,0x2c(%ebx)`
+at 0x37c2 is followed by `je 0x37d0`, and **0x37d0 is the store itself**
+(`mov %esi,0x2c(%ebx)`); the debug-report block at 0x3801 jumps back to it as
+well. Our source had the store inside the test, so our `je` skipped it (`je`
+lands one byte past the `mov`, on the following `mov 0x20(%ebx),%eax`) and the
+object's `je` lands on it. Moving the store out of the `if` changes that one
+byte and nothing else: measured alone it takes the pristine build from 355 to
+354 differing bytes with size, instruction count and LCS unchanged.
+
+**Measured domain** (Gentoo GCC 3.4.2-r2, exact flags; bytes from
+`objcopy`/`nm` with relocation fields masked, `structsim` for the shape):
+
+| spelling | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|
+| post-switch `if (arg >= 0)` (pristine) | 620 | 152 | 144 | 63 |
+| pristine + unconditional `last_status` store | 620 | 152 | 144 | 63 |
+| change block in each arm, store still under the guard | 590 | 145 | 145 | 145 |
+| **change block in each arm + store moved out** | **590** | **145** | **145** | **145** |
+| ... with the QCA1d arm's `qc_lapm &= 1;` before `arg = 92;` | 590 | 145 | 145 | 145 |
+| ... with `ret = DPSTAT_CHANGEDP` before the call | 615 | 153 | 135 | 68 |
+| one `change:` label, `goto` from the QCA1d arm | 586 | 146 | 142 | 75 |
+| `static int v8_change(...)` called from both arms | 596 | 150 | 141 | 96 |
+
+Only the arm-duplicated family maps. The `goto` form is **smaller** than the
+object (586 against 590) and still wrong, which is the other half of the
+point: size is not the target. The helper form refuses too, and settling it
+refutes the assumption that an inlined helper is codegen-identical to the
+duplication -- it is not, the inliner produced a different 150-instruction
+shape. The two statement orders inside the QCA1d arm are indistinguishable
+(the object's `mov $0x5c,%edi` at 0x38b9 preceding `andl` at 0x38be is
+scheduling, not source order), so what the object determines is "the change
+block is written in each arm"; the order of those three statements inside the
+arm is not determined by it and was not claimed.
+
+**The residual is allocation, and grade 1 is unreachable for this symbol.**
+The 23 differing bytes in 23 rows are every one a register encoding, in six
+groups: the status-name load `mov 0x0(,%esi,4),%ecx` (0x3805, `%ecx` against
+our `%edx`); the `V8UpdateModemParameters(st->v8, st->cm)` argument temps
+(0x384a-0x3854, `%edi`/`%edx` swapped); the QCA1d predicate 0x3895-0x38a7
+(`%eax`/`%edx`/`%ecx` rotated); its `idle_timer` test and `qc_lapm &= 1`
+(0x38ab-0x38be); the shared body's `modem_get_param(dp->modem, 5)` temps
+(0x38df-0x38eb); and the idle-expiry `modem_set_param(dp->modem, 9, 0)` temps
+(0x3926/0x393b). They are the allocator's choice of scratch for argument
+setup, which no statement in this function selects and which AGENTS.md puts
+outside a per-function hunt; nothing in the object evidences a different
+spelling for any of them.
+
+Grade 1 cannot be awarded on either side regardless of source.
+`byteident` proves an anonymous jump table through `jumptable.prove`, and the
+proof refuses **on the blob itself** here -- `missing adjacent guard`, because
+the object has `mov %eax,%esi` at 0x37b2 between `cmp $0x11,%eax` (0x37af)
+and `ja 0x37c0` (0x37b4). Both sides therefore keep the raw
+`('section','.rodata',addend)` target (0x11c against 0x0) and `alpha_equal`
+rejects that row. The addend is a per-TU section offset inside a relocated
+field, so it is masked out of the grade-0 byte count: the row reads BYTES on
+the register bytes alone, and had they all matched it would read UNRESOLVED,
+not EXACT. Ten EXACT symbols in the tree do carry a jump table (e.g.
+`RxNextStateV17`, 0xc2d0 against 0x0), so the proof, not the addend, is what
+decides whether such a row can be graded.
+
+**Collateral, and one bystander gain.** The change is switch text in
+`src/v8/v8.c` only; `int arg;` loses its `-1` initialiser because the object
+has no sentinel store and every path that reads it writes it first. The
+last function in the same TU, `dp_v8_exit` (28 B), goes REGALLOC -> EXACT as
+a bystander, the emission-order/peephole-cursor carrier of findings
+F7796/F7800 -- measured by reverting: the per-TU EXACT set is
+`after - {dp_v8_exit}` and nothing else moves (`before - after` is empty).
+`v8_create` is SIZE before and after and was not touched.
+
+**Verified (final tree).** `make period J=3` **394 passed, 0 failed**.
+Default-view census over 1,852: **1,152 EXACT / 1 UNRESOLVED / 36 REGALLOC /
+89 BYTES / 574 SIZE -> 1,153 EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES /
+573 SIZE**. Grade 0-or-1 **1,189 -> 1,189** (v8_process moves SIZE -> BYTES,
+which is in neither set; `dp_v8_exit` moves REGALLOC -> EXACT inside it).
+`byteident --ratchet` OK (exact 1146 -> 1153, grade 0-or-1 1182 -> 1189,
+link-selected exact 1149 -> **1156**, regalloc 36 -> 35; the reviewed
+`dp_vpcm_exit` displacement is still the only one). Phase 3: positioned
+reference bytes **77,333 -> 77,499 of 943,398 (8.2%)**, candidate `.text`
+711,527 -> **711,495**, candidate delta -15,696 -> **-15,728**, exact
+relocations 1,161 -> **1,171**, exact symbols 466 -> **470** (a value-
+relative count: the 30-byte shrink moves every following symbol). No flags,
+attributes, padding or test edits; blob sha256 unchanged
+(`1f3e56d0...cf0b379`).
