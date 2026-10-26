@@ -5,13 +5,15 @@
  * Reconstructed from dsplibs.o Rxcid.c, and written in the object's own
  * emission order:
  *
+ *   reset_cid       .text 0x0918b0   517
  *   create_cid      .text 0x091ac0   183
  *   pack_next_bit   .text 0x091b80   301
  *   cid_modem       .text 0x091cb0  1487
  *
- * `reset_cid` and its file-static V23_MRF_FILT table live in Dtmf_Rx.c:
- * the object relocates create_cid's call to reset_cid, and reset_cid follows
- * dtmf_modem in the object's emission order (see Dtmf_Rx.c).
+ * The LOCAL V23_MRF_FILT table follows FILE Rxcid.c in the symbol table.
+ * reset_cid's absolute relocation into that table witnesses its TU owner.
+ * A relocation on create_cid's call to a GLOBAL function does not imply a
+ * separate TU; the reset's conditional calls also prevent its expansion.
  *
  * HOW THE FOUR FIT TOGETHER.  `create_cid` allocates and seeds the three
  * caller-visible settings; `reset_cid` clears the rest and configures the 9:10
@@ -33,6 +35,152 @@
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/sysdep.h"
+
+/*
+ * The 9:10 interpolating prototype that takes the 8000 Hz line to the 7200 Hz
+ * CID_FSD_demodulate wants -- ninety taps read as nine polyphase phases of ten
+ * by FPM_MRF_filter's stride, so the array itself is a plain linear-phase FIR
+ * and is symmetric about its centre.
+ *
+ * FILE-STATIC IN THE OBJECT (`r V23_MRF_FILT`, .rodata 0x9240) and static
+ * here, so a test cannot name it; t_rxcid compares it through the `coeff`
+ * pointer reset_cid leaves in the object, which reaches the blob's copy on one
+ * side and this one on the other.
+ *
+ * NOT the same table as the GLOBAL `_V23_MRF_FILT` (48 shorts, .rodata
+ * 0x81c0), which is src/pump/v23/V23filt.c's -- see the name-collision note in
+ * include/dsplib/v23fp.h.
+ */
+static const short V23_MRF_FILT[90] = {
+	  -633,   -811,   -938,  -1005,  -1002,   -927,
+	  -781,   -572,   -309,    -10,    308,    622,
+	   911,   1152,   1325,   1414,   1406,   1296,
+	  1083,    774,    383,    -69,   -556,  -1047,
+	 -1510,  -1908,  -2208,  -2379,  -2394,  -2231,
+	 -1879,  -1332,   -597,    311,   1368,   2542,
+	  3792,   5074,   6340,   7540,   8627,   9556,
+	 10289,  10795,  11054,  11054,  10795,  10289,
+	  9556,   8627,   7540,   6340,   5074,   3792,
+	  2542,   1368,    311,   -597,  -1332,  -1879,
+	 -2231,  -2394,  -2379,  -2208,  -1908,  -1510,
+	 -1047,   -556,    -69,    383,    774,   1083,
+	  1296,   1406,   1414,   1325,   1152,    911,
+	   622,    308,    -10,   -309,   -572,   -781,
+	  -927,  -1002,  -1005,   -938,   -811,   -633
+};
+
+/*
+ * Put the receiver back to the state a new one is in.
+ *
+ * Everything the DSP accumulates is cleared and the resampler is
+ * (re-)configured; the three settings `create_cid` and the CID service
+ * write -- `rate`, `threshold` and `mark_conf_step` -- survive, which is
+ * what makes this usable as `cid_reset`'s reset as well as part of
+ * construction.
+ *
+ * THE `fresh` ARGUMENT IS THE HISTORY POINTER ITSELF.  FPM_MRF_init allocates
+ * unconditionally when `fresh` is set and leaks whatever was there, so the
+ * object asks for that only when `mrf.history` is still NULL -- which is the
+ * state `create_cid` leaves it in and nothing else ever restores.  Reading
+ * +0x24 as a flag of `struct cid` rather than as `mrf.history` is the trap
+ * here, and the two are the same four bytes.
+ */
+void
+reset_cid(struct cid *cid)
+{
+	struct fpm_mrf_cfg cfg;
+	short *p;
+	short i;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("FSK CID Reset !\n");
+
+	cid->short_004 = 0;
+	cid->short_008 = 0;
+	cid->dc = 0;
+	cid->gain = 0;
+
+	/*
+	 * The library default patched in four places.  `branches` and
+	 * `decimate` are re-set to the values FPM_MRF_CFG already carries and
+	 * `coeff` is the only field of the copy the object does not emit,
+	 * because the store below kills it -- both of which fall out of a
+	 * struct assignment followed by field stores, and neither of which
+	 * falls out of designated initialisers.
+	 */
+	cfg = FPM_MRF_CFG;
+	cfg.branches = 9;
+	cfg.decimate = 10;
+	cfg.coeff = V23_MRF_FILT;
+	cfg.taps = 90;
+	/* reset_cid+0x6d sends NULL to the cold literal-1 arm. */
+	if (cid->mrf.history != NULL)
+		FPM_MRF_init(&cid->mrf, &cfg, 0);
+	else
+		FPM_MRF_init(&cid->mrf, &cfg, 1);
+
+	cid->ac_idx = 0;
+	cid->last_bit = 0;
+	cid->lpf_idx = 0;
+
+	/*
+	 * FIFTY shorts from +0x030, which is `lpf_hist` and everything after
+	 * it as far as +0x092 -- two shorts INTO the bit buffer at +0x090.
+	 * Over-broad, and the two loops after it then clear parts of the same
+	 * span again.  Reproduced as found; deviation D974.  Written through a
+	 * pointer because no field of `struct cid` spans it, and off
+	 * `lpf_hist` rather than a numeric offset so it stays ABI-independent.
+	 */
+	p = cid->lpf_hist;
+	for (i = 0; i <= 49; i++)
+		p[i] = 0;
+
+	for (i = 0; i <= 4; i++)
+		cid->ac_hist[i] = 0;
+
+	for (i = 0; i <= 16; i++)
+		cid->lpf_hist[i] = 0;
+
+	cid->high_count = 0;
+
+	/*
+	 * The rest of the state, ascending by offset.  The object's emission
+	 * order interleaves these -- 0x80, 0x84, 0x82, 0x88 ... and 0x76
+	 * before 0x74 -- which is the i686 scheduler pairing independent
+	 * stores, so the source order is NOT recovered here the way
+	 * reset_dtmf's was.  Nothing was enumerated; see finding F8711.
+	 */
+	cid->low_count = 0;
+	cid->thresh = 0;
+	cid->high_level = 0;
+	cid->low_sum = 0;
+	cid->high_sum = 0;
+	cid->short_074 = 0;
+	cid->short_076 = 0;
+	cid->run = 0;
+	cid->opp = 0;
+	cid->dead = 0;
+	cid->mtd1_state[0] = 0;
+	cid->mtd1_state[1] = 0;
+	cid->mtd2_state[0] = 0;
+	cid->mtd2_state[1] = 0;
+	cid->short_086 = 0;
+	cid->short_088 = 0;
+	cid->short_08a = 0;
+	cid->short_08c = 0;
+	cid->mark_conf = 0;
+	cid->short_150 = 0;
+	cid->short_152 = 0;
+	cid->mark_bal = 0;
+	cid->pack_state = 0;
+	cid->pack_acc = 0;
+	cid->pack_pos = 0;
+	cid->pack_len = 0;
+
+	/* 120 bytes, which is what pins `data`'s length. */
+	for (i = 0; i <= 119; i++)
+		cid->data[i] = 0;
+}
 
 /*
  * Construct one.  A NULL argument allocates; anything else is the caller's
