@@ -141429,3 +141429,92 @@ does not reproduce the loop.
 link-selected **1,161**, ratchet OK (floor 1,146). The ordered `--list-exact`
 diff against the base is the count lines only: **BYTES 90 -> 91, SIZE 568 ->
 567**; no EXACT symbol was traded, and no grade-0/1 function regressed.
+
+## F12060. Byte-immediate mask sweep, wave 24: `V92Jd`'s rate-mask loops and phase word go EXACT
+
+*2026-10-26, worktree `w24-mask`, branch `recover/w24-mask`, base
+`a8ea916ca`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Third pass over the byte-immediate mask residual. A fresh `make tc` built
+all 300 objects (0 failed) and the form-sensitive census over the same
+**1,852** symbols counted register `a8 ib` / register `f6 /0` and memory
+`f6 /0`, comparing `(register, mask)` and `(memory, mask)` counts. It
+reproduces the wave-23 denominator exactly: **20 functions / 31 rows**
+before this change, **18 / 29** after it. The two removed rows and the two
+new EXACT symbols are the `V92Jd` constructors.
+
+| Function | site (blob) | before insns / LCS / run / grade | after | 
+| --- | --- | --- | --- |
+| `_ZN5V92JdC1EP13V90Parameters` | 0x11df4, 0x11e17, 0x11dc6 | 63 / 50 (75.8%) / 11 / SIZE (2 B) | 66 / **66 (100%)** / 66 / **EXACT** |
+| `_ZN5V92JdC2EP13V90Parameters` | 0x11d14, 0x11d37, 0x11ce6 | 63 / 50 (75.8%) / 11 / SIZE (2 B) | 66 / **66 (100%)** / 66 / **EXACT** |
+
+LCS/run are mnemonic longest-common-subsequence and longest contiguous run
+with alignment padding stripped.
+
+**The two rate-mask loops are helper cells.** The object computes each bit
+with `sar %cl,%eax; test $0x1,%al; setne disp` (`a8 01`, 0x11df4 and
+0x11e17), while our `(unsigned char)((mask >> i) & 1)` compiled to
+`sar; and $1`. Adding a `!= 0` comparison alone does not change that; the
+byte/byte/int helper from `docs/method/byte-bit-tests.md` on the shifted
+byte does:
+
+    bits[V90JD_GROUP1 + 1 + i] =
+        (unsigned char)(v92jd_flag_test((unsigned char)(mask >> i), 1) != 0);
+
+Only this cell emits the object's byte TEST followed by `setne`; the helper
+is TU-local and inlines (no symbol added).
+
+**The phase loop is a signedness fact, not a mask cell.** The object computes
+`(phase & (1 << u)) != 0` as `mov $1; shl %cl; test %eax,%edx; setne`
+(0x11dc0-0x11dc6). Our `int phase` compiled the same comparison as
+`sar %cl; and $1`, a different value carrier. Declaring `phase` **unsigned**
+(and casting `scaled` the same way) restores the object's shift-and-test
+form. `phase` is the Q16 phase word and every value is non-negative, so the
+declaration is the object's own reading.
+
+**The lookahead pair needs the byte local, and its source order is the
+object's.** The object loads `0x40(%edi)` once with `movzbl`, copies the low
+byte to a second register, shifts one and masks both. A `unsigned char
+lookahead` local used by both stores reproduces the single byte load; with
+`bits[49]` written before `bits[50]` in the source, GCC 3.4.2 emits the
+object's register assignment and store order (0x34 then 0x33) exactly. The
+other three statement orders tested are byte-identical to this one in value
+but place the shifted value in the other register and fail grade 1; the
+two-store order recovered above is the unique map.
+
+**Rejected or left alone, by class.** (a) the object's byte test is in a hot
+path we already match and a duplicated cold tail: `DataCarrierDetectV17`
+(`0xa54e0`), and the same `(cd & 1)` shape in V27 (`0xa5ca8`) and V29
+(`0xa6388`); the byte/byte/int helper on `(unsigned char)r` measurably
+changes nothing (hot path remains `and $1`), so this is block duplication,
+not an operand form. (c) genuinely 32-bit: `DILdescriptorPacker`'s
+`crcAt & 1` (`0x4dda9`, helper on the byte cast: no change),
+`V92ModulusEncoder::reset`'s sign bit (`0x555d9`), `initdigital`'s
+`0xaa0d` byte is the high half of a `0x2000` word (`0x59b2e`), and
+`modem_serrint`'s `%ah` tests are `& 0x800` (`0x5d08a`). (d) inlined,
+duplicated or boolean-stack values: `VPcmV34Create` (`0xb069`, a `sete`
+bool), `txmitquadbit` (`0x5e511`, inlined scrambler bit on a stack
+argument), `v34handshak` (inlining boundary), `receiver` and
+`V34demodulate` (inlined bodies). The previously measured negatives stand:
+`V8UpdateModemParameters`' memory `0x08` (LCS 174 -> 171),
+`evaluateRxJMSequence` (native test, LCS unchanged), `DILdescriptorPacker`
+(helper folds back), `V22FP_control` (128-byte move). `probeselect`'s three
+`0xa97e` bins stay register-carried; `rebuildJMSequence`'s repeated
+`cm->b0`/`b2` tests and `initTxSequence`'s `mem 0x04` remain structural.
+
+**Ordered-set delta: gains only.** `byteident --json-out` over all 1,852
+symbols: exact set +2 (`V92Jd` C1/C2) and grade-0/1 set +2, with **no
+losses** and no same-TU neighbour movement. (`v22_local_loop` resolves to
+EXACT once `make partial-link` artifacts exist; that is the phase-2 artifact,
+not this change.)
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census **1,160
+EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 566 SIZE** over 1,852;
+grade 0-or-1 **1,196**; link-selected EXACT **1,163**. `byteident
+--ratchet` (with `make partial-link` artifacts) exit 0: `ratchet OK
+(exact 1146 -> 1160, grade 0-or-1 1182 -> 1196, link-selected exact 1149
+-> 1163, regalloc 36 -> 35)`, with the reviewed `dp_vpcm_exit` displacement
+still the only one. No flags, attributes, padding or test edits; blob sha256
+unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
