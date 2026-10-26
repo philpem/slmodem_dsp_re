@@ -18,6 +18,12 @@
 #include "dsplib/V92Jd.h"
 #include "dsplib/V90Parameters.h"	/* the constructor's three fields */
 
+static int
+v92jd_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /* Hold the compiler to the header's map; offcheck.py cannot see a class. */
 #define V92JD_OFF(field, off, tag) \
 	typedef char v92jd_off_##tag[ \
@@ -158,7 +164,7 @@ V92Jd::setConstelSize(unsigned char first, unsigned char second)
 V92Jd::V92Jd(V90Parameters *params)
 {
 	long long scaled;
-	int phase;
+	unsigned phase;
 	int mask;
 	unsigned u;
 	int i;
@@ -171,23 +177,28 @@ V92Jd::V92Jd(V90Parameters *params)
 	unpackPhaseWord = 0;
 
 	scaled = (long long)(65536.0f * params->V92_JD_PHASE);
-	phase = (int)scaled;
+	phase = (unsigned)scaled;
 	for (u = 0; u <= 15; u++)
 		phaseBits[V90JD_GROUP1 + 1 + u] =
 		    (unsigned char)((phase & (1 << u)) != 0);
 
 	/* The maximum lookahead, two bits, high one stored first. */
-	bits[50] = (unsigned char)
-	    ((params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);
-	bits[49] = (unsigned char)
-	    (params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);
+	{
+		unsigned char lookahead =
+		    (unsigned char)params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD;
+
+		bits[49] = (unsigned char)(lookahead & 1);
+		bits[50] = (unsigned char)((lookahead >> 1) & 1);
+	}
 
 	mask = params->V92_DIGITAL_RATE_MASK;
 	for (i = 0; i <= 15; i++)
-		bits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);
+		bits[V90JD_GROUP1 + 1 + i] =
+		    (unsigned char)(v92jd_flag_test((unsigned char)(mask >> i), 1) != 0);
 	for (i = 0; i <= 10; i++)
 		bits[V90JD_GROUP2 + 1 + i] =
-		    (unsigned char)((mask >> (i + 16)) & 1);
+		    (unsigned char)(v92jd_flag_test(
+			(unsigned char)(mask >> (i + 16)), 1) != 0);
 
 	phaseBits[48] = 0;
 	phaseBits[49] = 0;
