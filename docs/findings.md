@@ -140997,11 +140997,11 @@ with `structsim` and `contentgap`; **15** were read at operand level with
 
 | symbol | before | after | cause |
 |---|---|---|---|
-| `_ZNK12V90PreFilter13isV90WithEia6Ev` | SIZE 6, 24/28, LCS 21 | **EXACT**, 24/24, LCS 24 | bitwise `\|` normalised by `? 1 : 0`, not `\|\|` |
-| `_cHDLCrx_init_from_idle` | SIZE 16, 53/60, LCS 32 | **EXACT**, 53/53, LCS 53 | declaration/copy/field order; no source-level return |
-| `cHDLCtx_off` | SIZE 8, 55/59, LCS 47 | **EXACT**, 55/55, LCS 55 | `(!(bit) && n>2) \|\| n>15`, not a ternary |
-| `cHDLCtx_off_init` | BYTES 54, 35/35, LCS 18 | **EXACT**, 35/35, LCS 35 | same order facts as `_cHDLCrx_init_from_idle` |
-| `GetSNRV21` | SIZE 20, 31/39, LCS 21 | **BYTES 4**, 31/31, LCS 30 | `__builtin_abs`, not `v < 0 ? -v : v` |
+| `_ZNK12V90PreFilter13isV90WithEia6Ev` | SIZE 6, 24/28, LCS 19, run 15 | **EXACT**, 24/24, LCS 24, run 24 | bitwise `\|` normalised by `? 1 : 0`, not `\|\|` |
+| `_cHDLCrx_init_from_idle` | SIZE 16, 53/60, LCS 32, run 8 | **EXACT**, 53/53, LCS 53, run 53 | declaration/copy/field order; no source-level return |
+| `cHDLCtx_off` | SIZE 8, 55/59, LCS 52, run 44 | **EXACT**, 55/55, LCS 55, run 55 | `(!(bit) && n>2) \|\| n>15`, not a ternary |
+| `cHDLCtx_off_init` | BYTES 54, 35/35, LCS 21, run 7 | **EXACT**, 35/35, LCS 35, run 35 | same order facts as `_cHDLCrx_init_from_idle` |
+| `GetSNRV21` | SIZE 20, 31/39, LCS 24, run 13 | **BYTES 4**, 31/31, LCS 30, run 21 | `__builtin_abs`, not `v < 0 ? -v : v` |
 
 **`isV90WithEia6`: both comparisons are evaluated and the byte is
 zero-extended.** The object at 0x451fd-0x45214 is `dec %eax` / `sete %dl` for
