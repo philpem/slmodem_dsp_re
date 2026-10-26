@@ -36,6 +36,13 @@
 #include "dsplib/v34rx.h"
 #include "dsplib/v34shell.h"	/* modulatevector, for datapumpv34 below */
 
+/* Keep the mask operation byte-sized before promoting its result. */
+static int
+v34hshak_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /*
  * ---------------------------------------------------------------------------
  * The rate tables.
@@ -661,7 +668,7 @@ setfinalrate(void *objp)
 	} else if (code == 3) {
 		obj->ratecfg.rx_baud = 3000;
 		obj->ratecfg.rx_divtab = scale3000;
-		if (m[0xa9b6] & 0x80) {
+		if (v34hshak_flag_test(m[0xa9b6], 0x80)) {
 			obj->ratecfg.rx_carrier = 2000;
 			obj->det_coefs = c2000;
 		} else {
@@ -2287,17 +2294,19 @@ probeselect(void *objp)
 			dsplibs_debug_printf("Sensitive RX Power Reduction "
 					     "mechanism enabled!\r\n");
 
-		if ((unsigned)snr_l1 <= 0x1f3 && (m[0xa97e] & 0x80)) {
+		if ((unsigned)snr_l1 <= 0x1f3
+		    && v34hshak_flag_test(m[0xa97e], 0x80)) {
 			probe_ask(rx, msg, 7, 2, 9);
 			goto not_asking;
 		}
-		if ((unsigned)snr_l1 <= 0x3e7 && (m[0xa97e] & 0x80)) {
+		if ((unsigned)snr_l1 <= 0x3e7
+		    && v34hshak_flag_test(m[0xa97e], 0x80)) {
 			probe_ask(rx, msg, 7, -1, 7);
 			goto not_asking;
 		}
 	}
 
-	if ((m[0xa97e] & 0x80) == 0)
+	if (v34hshak_flag_test(m[0xa97e], 0x80) == 0)
 		goto not_asking;
 	if (!(rx->agc_gain <= 0xfff && req != 0))
 		goto not_asking;
@@ -2538,10 +2547,12 @@ rate_3000_body:
 			      bitreverse((unsigned short)idx, 4) << 3);
 		goto rate_2800;
 	}
-	if ((m[0xa9e6] & 7) != 0 || (m[0xa9e8] & 0x80) != 0) {
+	if ((m[0xa9e6] & 7) != 0
+	    || v34hshak_flag_test(m[0xa9e8], 0x80) != 0) {
 		*tx_baud = 0xbb8;
 		*tx_scale = scale3000;
-		*tx_carrier = (short)((m[0xa9e6] & 0x80) ? 0x7d0 : 0x708);
+		*tx_carrier = (short)(v34hshak_flag_test(m[0xa9e6], 0x80)
+				     ? 0x7d0 : 0x708);
 		*tx_preemp = (short)
 			bitreverse((unsigned short)
 				   ((*(unsigned short *)(m + 0xa9e6) >> 3)

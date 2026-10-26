@@ -140902,7 +140902,86 @@ value-relative count: the shrink moves every following symbol). No flags,
 attributes, padding or test edits; blob sha256 unchanged
 (`1f3e56d0...cf0b379`).
 
-## F12054. SIZE band at |instruction delta| 4-8, wave 22: four boolean/statement-order facts close EXACT, and `GetSNRV21`'s conditional is the `abs` expansion
+## F12054. Byte-immediate mask sweep, wave 22: memory carriers, two unswitched loops, and the sites that do not qualify
+
+*2026-10-26, worktree `w22-mask`, branch `recover/w22-mask`, base
+`cf0a652ec`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Wave 21 screened only the register forms (`a8 ib`, `f6 c0..c3 ib`). A fresh
+per-function screen over the same **1,852** symbols, counting the memory form
+(`f6 /0`, mod != 3) as well, found **25** functions with at least one mask
+under-represented in ours; after this wave the screen reports **20** over
+**31** rows. Five functions took the byte/byte/int helper and three of the
+five are structural findings rather than operand substitutions.
+
+**Direct memory carriers.** `v22_data` and `setfinalrate` already wrote
+`field & 0x80`, but the direct expression folded to a signed byte compare
+(`cmpb $0x0,mem; jns`). The helper on the unsigned-byte field restores the
+object's `testb $0x80,disp`: `0x88af3` (`0x34(%esp)`) in `v22_data`, and
+`0x5efd3` (`0xa9b6`) in `setfinalrate`. `v22_data` gains one LCS (160 -> 161,
+run 43) with the SIZE 10 gap unchanged; `setfinalrate` gains eight
+(143 -> 151, run 22) and its gap falls 18 -> 16 bytes. Both keep the same
+grade (SIZE).
+
+**`V34descrambler` and its inlined copy in `decoderv34`: loop unswitching.**
+The object has **two copies** of the descrambler loop, with `shr $0x5` and
+`shr $0x12`, selected by `testb $0x4,0x122(%eax)` at `0x5bb03`; the copy
+inlined into `decoderv34` selects the same way at `0x5bc9e`
+(`testb $0x4,0x20(%esp)`). Our source had hoisted
+`int tap = (s->flags & V34_SCR_ANSWERER) ? 18 : 5;` above the loop, which GCC
+if-converted to `sbb` arithmetic and therefore could not unswitch. Writing the
+conditional tap **inside the loop body**, as
+`v34rx_flag_test((unsigned char)s->flags, V34_SCR_ANSWERER) ? 18 : 5`, lets
+the compiler restore the two constant-shift loops. `decoderv34`'s four-point
+slice counter is also `short`, not `int` (the object emits `movswl; cmp
+$0x4`). Results: `V34descrambler` 67 -> 81 instructions, LCS 29 -> 60
+(36.7% -> 74.1%), run 5 -> 9, bytes 232 against 236 (SIZE 24 -> SIZE 4);
+`decoderv34` 185 -> 201 instructions, LCS 122 -> 182 (59.8% -> 89.2%), run
+12 -> 68, bytes 713 against 714 (**SIZE 28 -> SIZE 1**). Neither becomes
+EXACT; both recover the native byte test and most of the body.
+
+**`probeselect`: five `m[...] & 0x80` conditions.** The two at `0xa9e8`
+(`0x616be`) and `0xa9e6` (`0x61831`) reproduce the object's memory `testb`.
+The three at `0xa97e` (`0x60eaf`, `0x60eca`, `0x60ede`) come out
+register-carried (`test $0x80,%al`) because the value is live in a register
+there; the mask and branch are recovered, the operand carrier is not. LCS
+599 -> 640 (42.3% -> 45.2%), run 54, ours 1417 -> 1415 instructions, bytes
+6678 against 6173 (SIZE 517 -> SIZE 505). An LCS acceptance, not an exact
+claim.
+
+**Rejected, and why.** `V22FP_control` (mask 0x8, object `0x8c407
+test $0x8,%dl`): baseline SIZE 6, LCS/run 31/10, 45 instructions. Direct
+helper -> SIZE 2, LCS 32, but the test is memory (`testb $0x8,0xc(%reg)`);
+byte-local -> LCS 32, 44 instructions but 128 differing bytes (BYTES);
+local plus mask constant -> LCS 30 and no test. Left unchanged.
+`evaluateRxJMSequence` reproduced `testb $0x80,0x1(%rbx)` but LCS/run stayed
+127/11; reverted. `V8UpdateModemParameters`'s helper came out
+register-carried where the object tests memory, and LCS fell 174 -> 171;
+reverted. Inlining `rebuildJMSequence`'s `all_flags` expression grew the body
+by 34 instructions for one LCS point (298 -> 299; 787 against 752);
+reverted. `B103FP_modem` is the only B.103 difference and it carries extra
+tests in ours, so the **B.103** TU has no under-represented mask; the **V.22**
+TU has only `V22FP_control` left.
+
+Still excluded after inspection: `DataCarrierDetectV17/V27/V29`,
+`V34demodulate`, `V92ModulusEncoder::reset` and the two `V92Jd` constructors
+test shifted values; `initTxSequence` (0x80008), `modulatevector` and the
+`v34handshak` rows are 32-bit; `initdigital`'s 0x20 is the high byte of a
+16-bit `0x2000`; `VPcmV34Create`'s 0x1 is a boolean stack local;
+`modem_serrint`, `receiver`, `rebuildJMSequence` (0x8/0x1) and
+`v8handshakinit` need a structural recovery beyond the operand change.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census over 1,852
+unchanged: **1,154 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 573 SIZE**;
+grade 0-or-1 **1,190**, link-selected EXACT **1,157**. The ordered EXACT and
+grade-0/1 sets are identical before and after (no symbol gained or lost).
+`byteident --ratchet` OK at the same floor, with the reviewed `dp_vpcm_exit`
+displacement still the only one. No flags, attributes, padding or test edits;
+blob sha256 unchanged (`1f3e56d0...cf0b379`).
+
+## F12055. SIZE band at |instruction delta| 4-8, wave 22: four boolean/statement-order facts close EXACT, and `GetSNRV21`'s conditional is the `abs` expansion
 
 *2026-10-26, worktree `w22-band`, branch `recover/w22-band`, base
 `cf0a652ec`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
