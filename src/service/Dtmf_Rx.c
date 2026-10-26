@@ -187,6 +187,13 @@ create_cid_dtmf(struct dtmf_rx *rx)
 #define BP_BP_8000	{ -6786, -4799, 16287, 0, 4799 }
 #define BP_BP_9600	{ -8079, -4152, 19423, 0, 4152 }
 
+/* Preserve the promoted magnitude: band_pass uses cltd/xor/sub. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * Filter a block in place and say whether it carries signal.
  *
@@ -253,7 +260,7 @@ band_pass(short *samples, short count, struct dtmf_rx *rx)
 
 	/* 3. coarse gain */
 	for (i = 0; i < count; i++) {
-		int a = samples[i] < 0 ? -(int)samples[i] : (int)samples[i];
+		int a = iabs(samples[i]);
 
 		if (a > 600) {
 			n150++;

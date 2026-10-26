@@ -98,6 +98,13 @@ const short DECv22_IMAP24[16] = {
  */
 #define V22_DEC24_THRESH	2
 
+/* Preserve the int magnitude operations witnessed by cltd/sar/xor/sub. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * The 2400 bit/s slicer: sixteen candidates, but only two of them are ever
  * measured.  Three sign and magnitude comparisons pick the pair; see the
@@ -172,8 +179,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	 * The ring, from the city-block distance of the HALVED coordinates:
 	 * 4096, 8192 or 12288, so one of three entries.
 	 */
-	amp = (ci >> 1) < 0 ? -(ci >> 1) : (ci >> 1);
-	amp += (cq >> 1) < 0 ? -(cq >> 1) : (cq >> 1);
+	amp = iabs(ci >> 1) + iabs(cq >> 1);
 	*mag = DECv22_MAG24[((short)amp >> V22_DEC_LEVEL_SHIFT) - 1];
 
 	for (j = 0; j <= 15; j++) {

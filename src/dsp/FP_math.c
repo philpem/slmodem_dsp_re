@@ -13,6 +13,13 @@
 #include "dsplib/fp_math.h"
 #include "dsplib/dualtone.h"
 
+/* Keep the int magnitude operation: the reference uses sar/xor/sub. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * Maclaurin coefficients for e^x in Q14: entry i is 16384 / (i+1)!.
  *
@@ -108,7 +115,7 @@ FP_Pow(int x)
 			term = scaled * x;
 			result += contribution;
 
-			if ((contribution < 0 ? -contribution : contribution) <= 0)
+			if (iabs(contribution) <= 0)
 				break;
 		}
 	} else {
@@ -123,7 +130,7 @@ FP_Pow(int x)
 			term = (term * x) >> 14;
 			result += contribution;
 
-			if ((contribution < 0 ? -contribution : contribution) <= 0)
+			if (iabs(contribution) <= 0)
 				break;
 		}
 	}
@@ -258,4 +265,3 @@ Get_Detection_Threshold_Table(short level)
 {
 	return ThresholdsTable[(short)(45 - level)];
 }
-

@@ -529,6 +529,13 @@ V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	return 0xffff;
 }
 
+/* The reference takes magnitude in 32 bits after narrowing phase corrections. */
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * The equaliser's TRAINING slicer, and the handover to the running one.
  *
@@ -569,7 +576,7 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	const short *tbl;
 	short step;
 	short diff;
-	short err;
+	int err;
 	short a;
 	short limit;
 	short i;
@@ -591,7 +598,7 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 
 	*mag = V27DEC_MAG;
 
-	err = (short)(diff < 0 ? (short)-diff : diff);
+	err = iabs(diff);
 	if (err > V27DEC_QUARTER_TURN)
 		dec->last =
 			(short)((dec->last + step)

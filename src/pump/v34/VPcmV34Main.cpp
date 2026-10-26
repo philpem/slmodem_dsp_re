@@ -2281,8 +2281,6 @@ int
 interpretMohTimeout(short code)
 {
 	switch (code) {
-	case 0:
-		return 0;
 	case 1:
 		return 10;
 	case 2:
@@ -2309,9 +2307,8 @@ interpretMohTimeout(short code)
 		return 960;
 	case 13:
 		return -1;
-	default:
-		return 0;
 	}
+	return 0;
 }
 
 void

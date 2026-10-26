@@ -9434,3 +9434,56 @@ split: check local-data ownership and the callee's native call/control shape
 together. Retain an independently witnessed boundary correction with its
 explicit collateral ledger; keep the non-exact neighbour open for subsequent
 structural recovery.
+
+## Close inherited experiments with their native operation widths
+
+The unfinished wave-25 work contained two useful source shapes. In
+`interpretMohTimeout`, the native jump table has fourteen entries: zero
+targets the shared out-of-range return, and codes 1–13 target their literal
+returns. Removing the explicit zero case and placing `return 0` after the
+switch recovers all 102 bytes, including the resolved fourteen-entry table.
+The previous source emitted 136 bytes. This is one exact preimage in the
+inherited two-spelling domain, not a uniqueness claim across arbitrary C.
+
+Six magnitude sites provide a separate operation-width witness. The reference
+uses `cltd` or a sign shift followed by XOR/subtraction, with sign extension
+before the operation where the input is a short. A local `int iabs(int)`
+helper retains this promoted magnitude operation under the period compiler.
+The helper name and original spelling remain inferred. In `V27RX_eq_train`,
+the phase corrections still narrow to short, but magnitude and the subsequent
+`cmp $0x2000` use 32 bits; keep `err` as int at that boundary.
+
+| Function | Before bytes | Retained bytes | Reference bytes |
+| --- | ---: | ---: | ---: |
+| `FP_Pow` | 152 | 145 | 143 |
+| `FPM_FSE_receive` | 2157 | 2132 | 2131 |
+| `V27RX_eq_train` | 264 | 255 | 255 |
+| `FSEv22_decision24` | 431 | 414 | 467 |
+| `V22_FSE_receive` | 1722 | 1704 | 1885 |
+| `band_pass` | 1258 | 1232 | 1187 |
+
+Only the timeout function becomes exact. The V27 function enters BYTES;
+the other five remain SIZE. The larger V22 size gaps are retained for the
+independently witnessed magnitude graph, not selected by proximity. Do not
+use these results to infer the rest of those functions or compensate for
+their remaining allocation and control-flow differences.
+
+The inherited screen compiled sixteen complete objects and recorded 180
+function verdicts. Its unrelated V29 countdown signedness edits were not
+retained: the proposed field retyping still needs the all-loads/both-extension
+audit. Final controls against master `75c3447b1` compiled fourteen complete
+objects and recorded 158 function verdicts. Seven of 79 bodies change, exactly
+the seven edited functions; no symbol, binding or section membership changes.
+Non-code payloads remain unchanged in six TUs. The timeout TU changes its
+relocated `.rodata` table, whose fourteen resolved targets match the reference.
+
+`make phase` passes 394 period binaries with zero failures. Across 1852 names,
+grade 0-or-1 rises from 1196 to 1197 with no losses: 1161 EXACT, one UNRESOLVED,
+35 REGALLOC, 93 BYTES and 562 SIZE. The partial object remains different:
+76787/943398 positioned reference bytes versus 77225 before the batch, and
+1160/18317 exact-position relocation matches versus 1157. Position counts are
+layout-sensitive; neither count establishes whole-object identity. Preserve
+these costs alongside the exact-function gain and the operation-width evidence.
+
+The [proposed follow-on waves](../source-recovery-waves-after-wave25.md) start
+with the parked signedness audit and relocated-data ownership inventory.
