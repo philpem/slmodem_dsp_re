@@ -57,6 +57,13 @@
 #include "dsplib/v22tab.h"
 #include "dsplib/v22txtab.h"
 
+/* Keep the mask operation byte-sized before promoting its result. */
+static int
+v22_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /*
  * `.bss` + 0x380, two bytes, LOCAL, and referenced by `v22_answer` alone --
  * node 1 clears it, node 14 increments it and compares it with four.  Read
@@ -298,7 +305,8 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 		}
 
 		/* The retrain-level timer, at 2400 and with bit 9 set only. */
-		if (fp->dsp->r2a == 1 && (st.flags & V22_STATUS_PARAM_BIT9)) {
+		if (fp->dsp->r2a == 1
+		    && v22_flag_test(st.flags, V22_STATUS_PARAM_BIT9)) {
 			if (GetSignalQuality(fp) > V22_DATA_RETRAIN_LEVEL) {
 				fp->hdx->r08 = 0;
 			} else {

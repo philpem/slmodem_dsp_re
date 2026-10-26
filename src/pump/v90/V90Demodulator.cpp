@@ -10,7 +10,7 @@
  *
  * `V90PreFilter::isV90WithEia6()` IS CALLED TWICE, and the second call is
  * kept because the blob makes it -- NOT because the answer can change.  It
- * cannot: `isV90WithEia6` is `(cap == 1) || (params->LOOP_TYPE == 6)`, and
+ * cannot: `isV90WithEia6` is `((cap == 1) | (params->LOOP_TYPE == 6)) ? 1 : 0`, and
  * between the two calls the object runs `setParamEia6`, which writes thirty
  * words of the parameter block and none of them is +0x500, and
  * `displayParamEia6`, which is one `ret`.  Neither touches `refLoop` or

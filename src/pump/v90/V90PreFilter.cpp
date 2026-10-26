@@ -102,6 +102,11 @@ V90PreFilter::displayParamEia6()
  * block's +0x500 says 6.  With no loop selected the first is simply false --
  * the object computes 0, decrements it and tests for zero, which is `== 1` on
  * a value that is already 0 or 1.
+ *
+ * THE COMBINATION IS A BITWISE `|` NORMALISED BY `? 1 : 0`, NOT `||`: the
+ * object evaluates BOTH comparisons (two `setcc` and an `or`) and zero-extends
+ * the result with `movzbl`, where `||` emits a branch and `|` alone leaves
+ * `and $1,%eax`.  Twelve boolean spellings were compiled; only this one maps.
  */
 int
 V90PreFilter::isV90WithEia6() const
@@ -111,7 +116,7 @@ V90PreFilter::isV90WithEia6() const
 	if (refLoop >= 0)
 		cap = (dataBase[codecType].loops[refLoop].capability == 2);
 
-	return (cap == 1) || (params->LOOP_TYPE == 6);
+	return ((cap == 1) | (params->LOOP_TYPE == 6)) ? 1 : 0;
 }
 
 /*

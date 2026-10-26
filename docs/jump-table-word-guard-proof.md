@@ -323,7 +323,7 @@ results and the exact assembler command. The full native and candidate
 ordered target lists are retained there. These records supplement the native
 addresses and reproduction commands above.
 
-## The fallthrough index-copy corridor (F12054)
+## The fallthrough index-copy corridor (F12056)
 
 A fixed-frame switch may copy the compared selector before an unsigned
 fallthrough guard:
@@ -345,7 +345,7 @@ in `v8_process` is recognised.
 `v8_process` now proves on both the blob and the candidate (18 ordered
 destinations, equal identity) but stays **BYTES (23)**: grade 1 stops earlier
 at the `setne %dl`/`setne %cl` partial-width row, which the deliberate
-`_full_write` rule must reject (finding F7762, and the correction in F12054).
+`_full_write` rule must reject (finding F7762, and the correction in F12056).
 Proving the table is therefore necessary but not sufficient for that symbol.
 
 Controls: `python3 tools/toolchain/jumptable_copy_corridor_controls.py`

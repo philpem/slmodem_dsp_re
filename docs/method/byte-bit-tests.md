@@ -142,3 +142,77 @@ Wave 21 passed `make period J=3`: 394 differential tests, zero failures, all
 structural checks. `make byteident-ratchet` is OK at 1,153 EXACT, 1,190 grade
 0-or-1 and 1,156 link-selected EXACT over 1,852 symbols, with the existing
 `dp_vpcm_exit` displacement unchanged.
+
+## Wave 22: memory carriers, the full native-form screen, and two unswitched loops
+
+Wave 21 counted only register-form immediate tests (`a8 ib`, `f6 c0..c3 ib`).
+This wave counted the memory form too (`f6 /0` with a mod != 3 ModRM): a fresh
+screen over the same 1,852 symbols found **25** functions with at least one
+mask under-represented in ours. Five TUs took the helper. The table's "native"
+column is the object's own form at the named mask; `bytes` are ours against
+the blob's.
+
+| Function | mask, native form | LCS/run before | LCS/run after | ours bytes (blob) | grade before -> after |
+| --- | --- | ---: | ---: | ---: | --- |
+| `v22_data` | 0x80, `testb mem` | 160/43 | 161/43 | 956 (946) | SIZE 10 -> SIZE 10 |
+| `setfinalrate` | 0x80, `testb mem` | 143/22 | 151/22 | 921 (905) | SIZE 18 -> SIZE 16 |
+| `V34descrambler` | 0x04, `testb mem` | 29/5 | 60/9 | 232 (236) | SIZE 24 -> SIZE 4 |
+| `decoderv34` | 0x04, `testb mem` | 122/12 | 182/68 | 713 (714) | SIZE 28 -> SIZE 1 |
+| `probeselect` | 0x80 x5, `testb mem` | 599/54 | 640/54 | 6678 (6173) | SIZE 517 -> SIZE 505 |
+
+**`v22_data`, `setfinalrate`: the signed-byte fold, once more.** Both sources
+already wrote `field & 0x80`, but GCC folded the direct expression into a
+signed byte compare (`cmpb $0x0,mem; jns`). Passing the unsigned-byte field
+straight to the helper restores the object's memory `testb $0x80,disp`: the
+object's tests are at `0x88af3` in `v22_data` and `0x5efd3` in `setfinalrate`.
+No byte local is wanted here; the operand contract is the opposite of the
+wave-21 register sites.
+
+**`V34descrambler`/`decoderv34`: the conditional tap belongs inside the loop.**
+The object does not compute `tap` once and shift by it. It has **two copies of
+the descrambler loop**, one with `shr $0x5` and one with `shr $0x12`, selected
+by `testb $0x4,0x122` (`0x5bb03` in the standalone body and `0x5bc9e` in the
+copy inlined into `decoderv34`). Our source had hoisted
+`int tap = (s->flags & V34_SCR_ANSWERER) ? 18 : 5;` above the loop, so GCC
+if-converted the ternary to `sbb` arithmetic and could not unswitch. Writing
+the conditional tap **in the loop body**, with the helper on the byte cast,
+lets the period compiler unswitch it back into the object's two constant-shift
+loops. `decoderv34`'s four-point slice counter is also `short`, not `int`:
+the object emits `movswl; cmp $0x4`, and that one type change takes the
+function from SIZE 28 to **SIZE 1** (713 against 714 bytes).
+
+**`probeselect`: five `m[...] & 0x80` tests.** Two become the object's native
+memory `testb` (`0x616be` at `0xa9e8`, `0x61831` at `0xa9e6`). The three at
+`0xa97e` come out register-carried (`test $0x80,%al`) because the value is
+live in a register there; the mask and the branch are recovered but the
+operand carrier differs. LCS rises by 41 and the body shrinks by two
+instructions. That is an LCS acceptance, not an exact claim.
+
+**Rejected or left alone.** `V22FP_control` was retried with its bounded cell
+set and left unchanged: baseline SIZE 6, LCS/run 31/10, 45 instructions;
+direct helper SIZE 2 and LCS 32 but `testb $0x8,0xc(%reg)` where the object
+has `test $0x8,%dl`; byte-local carrier LCS 32 but 44 instructions and 128
+differing bytes (BYTES); local plus mask constant LCS 30 and no test at all.
+`evaluateRxJMSequence` gained the native `testb $0x80,0x1(%rbx)` but its
+LCS/run stayed 127/11, so it was reverted. `V8UpdateModemParameters`' helper
+came out register-carried where the object's test is memory and LCS fell
+174 -> 171; reverted. Inlining `rebuildJMSequence`'s `all_flags` expression
+added 34 instructions for one LCS point (298 -> 299, ours 787 against 752);
+reverted. The **B.103** TU has no under-represented mask: `B103FP_modem` is
+the only difference and it carries *extra* 0x20/0xdf tests in ours. The **V.22**
+TU has only `V22FP_control` left.
+
+Still excluded after inspection: `DataCarrierDetectV17/V27/V29`,
+`V34demodulate`, `V92ModulusEncoder::reset` and the `V92Jd` constructors test
+shifted values; `initTxSequence` (0x80008), `modulatevector` and the
+`v34handshak` rows are 32-bit tests; `initdigital`'s 0x20 is the high byte of a
+16-bit `0x2000` word; `VPcmV34Create`'s 0x1 is a boolean stack local;
+`modem_serrint`, `receiver`, `rebuildJMSequence` (0x8/0x1) and
+`v8handshakinit` need a structural recovery larger than the operand change.
+
+Wave 22 passed `make period J=3`: **394 passed, 0 failed**. The grade census
+is unchanged at **1,154 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 573
+SIZE** over 1,852, grade 0-or-1 **1,190**, link-selected EXACT **1,157**;
+`byteident --ratchet` is OK at the same floor. No EXACT or grade-0/1 symbol
+moved in either direction. Blob sha256 unchanged
+(`1f3e56d0...cf0b379`).
