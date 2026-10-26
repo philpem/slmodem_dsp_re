@@ -159,6 +159,12 @@ pack_next_bit(short bit, struct cid *cid)
 	}
 }
 
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * One block of line samples through the FSK receiver.
  *
@@ -272,7 +278,7 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 		    cid->mark_conf > (m * 12 >> 8)) {
 			sum = 0;
 			for (i = 0; i < nsamp; i++)
-				sum += buf[i] < 0 ? -(int)buf[i] : (int)buf[i];
+				sum += iabs((int)buf[i]);
 			if (sum == 0)
 				sum = 1;
 			FPM_div_32((unsigned int)sum, &recip, &shift);

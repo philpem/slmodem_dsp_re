@@ -418,59 +418,60 @@ TxHdxIdleV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
-	short taken;
-	short got;
-	short r;
+	unsigned short taken;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DATA;
 
-	if (prm->countdown != 0) {
-		short rate = prm->rate;
+	if (((struct v27_tx *)modem)->source->countdown != 0) {
+		short rate = ((struct v27_tx *)modem)->source->rate;
 
-		prm->countdown = 0;
+		((struct v27_tx *)modem)->source->countdown = 0;
 
-		if (rate == 0)
+		switch (rate) {
+		case 0:
 			((struct v27_tx *)modem)->result.byte.status =
 				V27TX_STATUS_ENTER_DATA_2400;
-		else if (rate == 1)
+			break;
+		case 1:
 			((struct v27_tx *)modem)->result.byte.status =
 				V27TX_STATUS_ENTER_DATA_4800;
-		else
+			break;
+		default:
 			((struct v27_tx *)modem)->result.byte.status =
 				V27TX_STATUS_DEFAULT;
+		}
 	}
 
-	taken = *budget;
-	got = (short)FIFO_read((struct fax_fifo *)
-					prm->fifo,
-			       in, (unsigned short)taken);
+	taken = (unsigned short)
+		FIFO_read((struct fax_fifo *)((struct v27_tx *)modem)->source->fifo,
+			  in, (unsigned short)*budget);
 
-	if (*budget <= got) {
-		ScrambleDataV27(modem, in, got);
-		r = (short)ModDataV27(modem, in, out, (unsigned short)got);
-		*budget = (short)(*budget - got);
-		return r;
+	if ((unsigned short)*budget > taken) {
+		if (((struct v27_tx *)modem)->source->int_0008 != 0) {
+			unsigned short nsamples;
+
+			*budget = (short)
+				((unsigned short)*budget - taken);
+			ScrambleDataV27(modem, in, taken);
+			nsamples = ModDataV27(modem, in, out, taken);
+			TxNextStateV27(modem);
+			return nsamples;
+		}
+		taken = (unsigned short)*budget;
+		((struct v27_tx *)modem)->result.byte.flags |=
+			V27TX_RESULT_B1_BIT1;
+		((struct v27_tx *)modem)->result.byte.status =
+			V27TX_STATUS_UNDERRUN;
 	}
 
-	/* Underrun: FIFO_read returned fewer than asked for. */
-	if (prm->int_0008 != 0) {
-		short remaining = (short)(*budget - got);
-
-		*budget = remaining;
-		ScrambleDataV27(modem, in, got);
-		r = (short)ModDataV27(modem, in, out, (unsigned short)got);
-		TxNextStateV27(modem);
-		return r;
-	}
-
-	((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT1;
-	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_UNDERRUN;
-	taken = *budget;
 	ScrambleDataV27(modem, in, taken);
-	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
-	*budget = (short)(*budget - taken);
-	return r;
+	{
+		short nsamples = (short)
+			ModDataV27(modem, in, out, taken);
+
+		*budget = (short)((unsigned short)*budget - taken);
+		return nsamples;
+	}
 }
 
 /*
