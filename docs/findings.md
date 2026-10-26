@@ -140884,17 +140884,20 @@ F7796/F7800 -- measured by reverting: the per-TU EXACT set is
 `after - {dp_v8_exit}` and nothing else moves (`before - after` is empty).
 `v8_create` is SIZE before and after and was not touched.
 
-**Verified (final tree).** `make period J=3` **394 passed, 0 failed**.
-Default-view census over 1,852: **1,152 EXACT / 1 UNRESOLVED / 36 REGALLOC /
-89 BYTES / 574 SIZE -> 1,153 EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES /
-573 SIZE**. Grade 0-or-1 **1,189 -> 1,189** (v8_process moves SIZE -> BYTES,
-which is in neither set; `dp_v8_exit` moves REGALLOC -> EXACT inside it).
-`byteident --ratchet` OK (exact 1146 -> 1153, grade 0-or-1 1182 -> 1189,
-link-selected exact 1149 -> **1156**, regalloc 36 -> 35; the reviewed
-`dp_vpcm_exit` displacement is still the only one). Phase 3: positioned
-reference bytes **77,333 -> 77,499 of 943,398 (8.2%)**, candidate `.text`
-711,527 -> **711,495**, candidate delta -15,696 -> **-15,728**, exact
-relocations 1,161 -> **1,171**, exact symbols 466 -> **470** (a value-
-relative count: the 30-byte shrink moves every following symbol). No flags,
+**Verified on the merged base (`ab38d0abf`, PR #395).** `make period J=3`
+**394 passed, 0 failed**. Default-view census over 1,852: **1,153 EXACT / 1
+UNRESOLVED / 36 REGALLOC / 88 BYTES / 574 SIZE -> 1,154 EXACT / 1 UNRESOLVED
+/ 35 REGALLOC / 89 BYTES / 573 SIZE**. Grade 0-or-1 **1,190 -> 1,190**
+(`dp_v8_exit` moves REGALLOC -> EXACT inside it; `v8_process` moves SIZE ->
+BYTES, which is in neither set). `byteident --ratchet` OK (exact 1146 ->
+**1154**, grade 0-or-1 1182 -> **1190**, link-selected exact 1149 -> **1157**,
+regalloc 36 -> 35; the reviewed `dp_vpcm_exit` displacement is still the only
+one). Phase 3: positioned reference bytes **77,348 -> 77,226 of 943,398**, and
+that DIP is the layout moving, not a regression -- the candidate `.text` is 30
+bytes shorter (711,495 -> **711,463**), so the 30 bytes of reference content
+after `v8_process` lose their alignment and stop being "positioned". What
+improves is the substantive measure: candidate delta -15,728 -> **-15,760**,
+exact relocations 1,165 -> **1,168**, exact symbols 466 -> **470** (a
+value-relative count: the shrink moves every following symbol). No flags,
 attributes, padding or test edits; blob sha256 unchanged
 (`1f3e56d0...cf0b379`).

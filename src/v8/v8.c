@@ -129,10 +129,10 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	int rc = V8Process(st->v8, in, out, count);
 	int ret = 0;
 	/*
-	 * `arg` carries the datapump to switch to, from the arm that decided
-	 * it to the `modem_set_param` in that same arm.  It has NO INITIAL
-	 * VALUE and no arm reads it before writing it; the object has no
-	 * sentinel store either (finding F12053).
+	 * The datapump to switch to, from the arm that decided it to the
+	 * `modem_set_param` in that same arm.  There is no sentinel: the
+	 * object has no initial store and no `arg >= 0` test anywhere, and
+	 * every read below is preceded by a write.  Finding F12053.
 	 */
 	int arg;
 
