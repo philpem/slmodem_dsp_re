@@ -1118,9 +1118,23 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
 	 * the object is written on the assumption that it does not, and the
 	 * receive queue is drained four at a time everywhere.
 	 */
-	obj->retrain_phase += 4;
-	if (obj->retrain_phase != 0x80)
-		return 0;
+	/*
+	 * The increment is compared BEFORE the store and stored in the
+	 * per-arm form the object uses: 0x5e92b loads the counter, adds 4,
+	 * compares with 0x80 and jumps to the equal arm at 0x5e955; only
+	 * the unequal arm stores the incremented value at 0x5e93b.  A
+	 * `+= 4` followed by a field test stores on both paths and compares
+	 * with an `add $-0x80`, which is not the object's shape; the local
+	 * carries the computed value into both arms instead.
+	 */
+	{
+		int phase = obj->retrain_phase + 4;
+
+		if (phase != 0x80) {
+			obj->retrain_phase = phase;
+			return 0;
+		}
+	}
 	obj->retrain_phase = 0;
 
 	dftenergy(bins, nbins, 5);
