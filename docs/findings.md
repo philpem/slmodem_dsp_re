@@ -141325,11 +141325,12 @@ before and after (`byteident --json-out`): the exact set and the grade-0/1
 set are **identical** (no gains, no losses), and the only census movement is
 SIZE 569 -> 568 / BYTES 89 -> 90. No same-TU neighbour moved.
 
-**Verified.** `make period J=3` **394 passed, 0 failed**.
-`make byteident-ratchet J=3` exit 0: **1,158 EXACT / 1 UNRESOLVED /
-35 REGALLOC / 89 BYTES / 569 SIZE** over 1,852 (unchanged floor), grade 0-or-1
-**1,194**, link-selected EXACT **1,161**; the symbol now appears in the
-BYTES list at `4 of 351`. Blob sha256 unchanged
+**Verified.** `make period J=3` **394 passed, 0 failed** (also on the merged
+head `76a743f13`). `make byteident-ratchet J=3` exit 0: **1,158 EXACT /
+1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE** over 1,852 (the stored
+floor, 1,158 / 1,194 / 1,161, is unchanged), grade 0-or-1 **1,194**,
+link-selected EXACT **1,161**; the symbol now appears in the BYTES list at
+`4 of 351`. Blob sha256 unchanged
 (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
 No flags, attributes, padding or test edits.
 
