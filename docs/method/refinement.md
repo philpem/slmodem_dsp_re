@@ -9360,3 +9360,77 @@ prologue zero or reordered the blocks, and every such cell measured worse.
 The TU's emission order also matched the blob's (reset, C2, C1, D2, D1,
 process): check definition order before blaming allocation when a small body
 is close.
+
+
+## Recover ownership before compensating for inlining
+
+Issue [#25](https://github.com/philpem/slmodem_dsp_re/issues/25) supplies a
+same-TU control for a misleading exact match. PR #311 had moved `reset_cid`
+and its static `V23_MRF_FILT` from `Rxcid.c` to `Dtmf_Rx.c` to retain exact
+`create_cid`. Its attribution used GLOBAL call relocations and adjacent text.
+Neither establishes that split. In the reference, FILE symbol 495 is
+`Rxcid.c`, LOCAL OBJECT 496 is `V23_MRF_FILT` (.rodata +0x9240, 180 bytes),
+and `reset_cid+0x43` has an absolute `R_386_32` into that local object.
+`tools/local_data_ownership.py` reports the unique owner from that witness.
+This also agrees with the earlier F1410 attribution. A symbol-name/size/
+section audit alone missed the incorrect owner.
+
+The retained recovery puts the table and reset back before `create_cid` in
+`Rxcid.c`, matching their relative text order. It spells the reset's call as
+`if (history != NULL) FPM_MRF_init(..., 0); else FPM_MRF_init(..., 1);`.
+The reference's `test/je` at reset +0x6d sends NULL to the cold literal-1
+arm; non-NULL falls through to literal 0. Passing `history == NULL` as one
+argument instead lets the period compiler expand reset inside the constructor.
+Two explicit call arms retain the constructor's existing exact 183 bytes.
+This establishes the measured call/control shape within the tested family;
+it does not recover unique original C syntax.
+
+The bounded domain was seven cells: unchanged split baseline, then reset
+before/after the constructor group crossed with boolean argument, NULL-first
+explicit calls and non-NULL-first explicit calls. All 14 complete objects and
+56 function verdicts used Gentoo GCC 3.4.2-r2, the retained flags and
+`DSPLIB_REPRODUCE_BUGS`. The unchanged split control reproduced all eight
+production bodies. Reproduce it with:
+
+    python3 tools/cid_ownership_reproduce.py --out /path/to/scratch/cid --dumps
+
+The tool pins source inputs to `286d7126d791addb4b1d503a723a006679297e5b`,
+prints the header checkout, complete commands and executed compiler/assembler
+identities, and retains sources, objects, hashes and the result ledger.
+`--dumps` also retains RTL and assembly; its 56 bodies were checked against
+the non-`-save-temps` run and were unchanged.
+
+Full-TU collateral is part of this decision. All four DTMF bodies remain
+unchanged. `create_cid` remains exact; `cid_modem` has identical instructions
+and relocation targets, with only the raw addend locating its moved mergeable
+diagnostic string changing. `reset_cid` moves from 487-byte SIZE to 517-byte
+BYTES against the reference's 517, still with 63 differing bytes and a
+grade-1 rejection. Its first rejected aligned rows are the two argument-address
+setup instructions in opposite order; the remaining gap is open.
+
+Unedited `pack_next_bit` grows from 303 to 319 bytes against the reference's
+301. In paired dumps, bijective alias-set renumbering (preserving universal
+set zero and class equality) leaves its instruction patterns and UID order
+identical through `27.flow2`. The first difference is `28.peephole2`: UID 233
+clears AX in the split control and SI after co-location. Later if-conversion
+and block layout diverge. This localises the collateral to a late compiler
+choice; it does not independently prove the persistent scratch-cursor cause.
+No padding or scratch consumer was added to compensate for it. `cid_modem`'s
+29 stage pairs agree after also resolving `.LC` labels to their actual strings.
+
+The measured acceptance is structural recovery with no grade-0-or-1 set
+gain or loss: 1,196/1,852, with 1,163 link-selected exact functions. Period
+differential passed 394/394 and `make phase` passed. The partial object remains
+different: 77,225/943,398 positioned reference bytes against baseline 77,179;
+exact-position relocation matches are 1,157/18,317 against 1,161, with the
+candidate relocation denominator unchanged at 18,301. These are position
+counts, not added/deleted relocation counts or an identity claim. The
+initialised-data screen resolves the one wrong LOCAL-owner key: 662 matching
+non-relocated payloads, 100 relocated payloads excluded, over 762 reference
+and 765 candidate data keys. The three apparatus extras remain.
+
+Use this lever when an exact constructor seems to require an unsupported TU
+split: check local-data ownership and the callee's native call/control shape
+together. Retain an independently witnessed boundary correction with its
+explicit collateral ledger; keep the non-exact neighbour open for subsequent
+structural recovery.
