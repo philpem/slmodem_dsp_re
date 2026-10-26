@@ -141090,3 +141090,80 @@ ratchet OK (stored floor 1,146 -> 1,158, 1,182 -> 1,194, 1,149 -> 1,161,
 regalloc 36 -> 35; the only reviewed displacement is still `dp_vpcm_exit`).
 Blob sha256 unchanged (`1f3e56d0...cf0b379`). No flags, attributes, padding or
 test edits.
+
+## F12056. The fallthrough guard corridor admits a flag-preserving index copy, and makes v8_process prove -- but grade 1 still cannot be awarded, for a reason F12053 named wrongly
+
+`v8_process` has the object's 145-instruction stream but reads BYTES (23
+register-encoding bytes) and `jumptable.prove` refused **on the blob itself**
+with `missing adjacent guard`. F12053 recorded that refusal and concluded that
+the table proof was why grade 1 could not be awarded. This measurement extends
+the prover and then shows the second half of that conclusion is not what the
+tool actually does.
+
+**Why it refused.** The prover required the two rows before the single
+indirect jump to be `CMP; Jcc`, or the pushed-ABI `CMP; MOV disp(%esp),reg;
+Jcc`. The object has four rows:
+
+    37af: 83 f8 11   cmp  $0x11,%eax
+    37b2: 89 c6      mov  %eax,%esi     ; flag-preserving copy of the index
+    37b4: 77 0a      ja   37c0          ; taken out of range
+    37b6: ff 24 85   jmp  *0x11c(,%eax,4)
+
+The parser took `rows[index-2:index+1]`, so `cmp_row` was the MOV, not the CMP,
+and with a fixed frame (not `push`) there was no corridor arm to fall into.
+
+**The rule added.** A single unprefixed `MOV r32,r32` may sit between the
+comparison and the unsigned fallthrough guard when it decodes exactly as
+`0x89 /r` with `mod=11`, its source is the register the CMP compared, and its
+destination is not that register. The dispatch may use the compared register
+or the copied destination (both hold the same untested index there). The
+existing protected-corridor set, extent, relocation-form and
+single-indirect-jump checks are unchanged, and the copy is inside the
+protected range, so no entry may bypass it. Separately, the ABI
+data-relocation whitelist gained the exact 32-bit SIB/disp32 load
+(`8b /r`, base disp32, index not `%esp`, relocation at `len-4`), because the
+object's `mov 0x0(,%esi,4),%ecx` against `v8StatusName` is a relocated field
+that the whitelist only decoded in its 16-bit `movzwl`/`movswl` forms. That is
+a new exact decode, not a relaxed check.
+
+**Measured effect.** Both objects prove, with the same 18 ordered
+destinations, and `body` resolves the dispatch to the shared `jump-table`
+identity. `v8_process` nevertheless stays **BYTES (23)**. Grade 0 is expected:
+the 23 unmasked bytes are register allocations, unrelated to the table. But
+grade 1 does not follow either. `alpha_equal` stops at the status predicate,
+not at the dispatch row:
+
+    row 79 USE CONFLICT  edx wants ecx, already bound to ecx
+            blob %dl
+            ours %cl
+
+`setne %dl` is a *use* under the deliberate partial-write rule (F7762): an
+8-bit definition does not end the 32-bit live range, and the object later
+tests full `%edx`. Treating it as a definition would licence exactly the false
+accept that rule prevents, so the prover fix cannot promote the symbol. F12053's
+attribution -- "the proof ... is what decides whether such a row can be
+graded", extended to "grade 1 cannot be awarded ... because the proof refuses"
+-- is therefore corrected: after the proof succeeds, the remaining blocker is
+the partial-width/use rule on an allocation the object does not evidence a
+source spelling for. Grade 1 remains unreachable for `v8_process`, but the
+reason is now measured rather than inherited.
+
+**Controls.** `tools/toolchain/jumptable_copy_corridor_controls.py` passes
+**8 positives** (EAX->ESI, EAX->EDX, ECX->EDX, dispatch on the copy, the
+adjacent no-copy form, the pushed stack-load corridor, rebased table and
+swapped targets) and **14 adversarial refusals** (copy from a different
+register, a copy that clobbers the compared register, a flags-writing corridor,
+an index-writing corridor, a dispatch on the wrong register or scale, an extra
+or second corridor instruction, opposite and signed guards, a truncated
+extent, a second indirect jump, and named corridor/guard bypass entries). The
+prover from base `cf0a652ec` refuses the four new positives with
+`missing adjacent guard` and still proves the two existing forms. Blob and
+candidate prove `v8_process` with equal identity; the pair grade stays BYTES.
+
+**Census.** 1,852 symbols: **1,154 EXACT / 1 UNRESOLVED / 35 REGALLOC /
+89 BYTES / 573 SIZE**, unchanged from the merged base. `byteident --ratchet`
+OK (exact 1146 -> 1154, grade 0-or-1 1182 -> 1190, link-selected exact
+1149 -> 1157, regalloc 36 -> 35). `make period J=3` **394 passed, 0 failed**;
+`--self-test` and `--ratchet-self-test` clean. Apparatus only; no `src/`
+change, and the blob is still
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
