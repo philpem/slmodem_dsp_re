@@ -141253,3 +141253,90 @@ grade 0-or-1 **1,194**, link-selected EXACT **1,161**. `byteident
 `dp_vpcm_exit` displacement still the only one. No flags, attributes, padding
 or test edits; blob sha256 unchanged
 (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+
+## F12058. SIZE band at |instruction delta| >= 9, wave 23: `V92Phase3Modulator::reset`'s floor is a store in each arm, and the band screens 143 rows
+
+*Renumbered from F12057 when the wave-23 byte-mask sweep took that number; that finding is F12057 above.*
+
+*2026-10-26, worktree `w23-delta9`, branch `recover/w23-delta9`, base
+`origin/master = 09493bc13`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`,
+`-DDSPLIB_REPRODUCE_BUGS` for the ratchet view.*
+
+Opened the SIZE band the delta-1-3 and delta-4-8 waves left. A fresh
+`make -s tc J=12` builds 300/300 objects. `byteident.py --near 2000` lists
+**693** non-exact symbols, of which **143 are SIZE at |instruction delta| >= 9**
+(115 negative, 28 positive) and **139** remain after the brief's exclusions.
+Every row was scored with `structsim`; the top fifteen were read at operand
+level with `dis.py` and a register-canonicalised sequence diff.
+
+**Ranking (LCS, then change blocks).** Only three rows are at LCS >= 85%:
+`V92setParamsInfoFromCPUnPck` 94.1% (24 blocks, -14), the landed
+`V92Phase3Modulator::reset` 85.6% (5 blocks, -9), and
+`VPcmV34GetVisualDiagnostics` 85.1% (22 blocks, -14). Below them the band is
+dominated by argument-setup and block-layout differences:
+`V34GiveINFO0dBits` 80.9%, `V92Phase4Modulator::generateSymbol` 80.3%,
+`VPcmV34InitiateRetrain` 79.9%, `B103FP_modem` 75.8% (and ours is *larger*),
+`VPcmFloModem::setPhaseIIinfo` 73.8%, `V90ConnectionEvaluator::
+evaluateConnection` 73.7%, `TxNextStateV17`/`TxNextStateV29` 73.5%/73.2%
+(different frame sizes), `_tx_data_state` 73.3%, `Detect_v22` 73.2%,
+`initdigital` 72.6%. `V92setParamsInfoFromCPUnPck`'s residues are x87
+comparison scheduling (`fxch`/`fcompp`/`fnstsw`/`sahf` placement) plus
+`fmulp %st` versus `fmuls`; no single statement explains them.
+
+**The landed row: `V92Phase3Modulator::reset` (351 B).** Before: SIZE,
+blob 90 / ours 81 instructions, LCS 77 (85.6%), run 33. After: **90/90,
+LCS 90 (100%), run 90**, grade **BYTES (4 bytes)** over 351 reference bytes.
+The four remaining bytes are one register swap in the `jaArg` copy
+(`mov (%ebx),%eax`/`lea 0x4(%ebx),%edx` at 0x16c41/0x16c43 in the blob versus
+`%edx`/`%eax` in ours); grade 1 stops on the consequent USE CONFLICT, so this
+is allocation and is not chased.
+
+**The object writes the 8160 floor through the field, in each arm.** The
+comparison at 0x16c07 (`cmp $0x1fdf,%eax` after `lea 0x0(,%edx,4),%eax`) sends
+the unclamped value to a cold arm at 0x16ca2. Both arms contain the whole
+remainder -- `edprintf`, `eventCode = 0` (`0x16c2c` / `0x16cb8`),
+`movw $0xfa0,0x4(%esi)` (`codeLevel = 4000`), and the `jaArg` test -- and each
+stores its own value to `trn1uLength` and reloads it for the print:
+
+    16c12  movl $0x1fe0,0x10(%esi)   ; clamp arm: constant straight to the field
+    16c19  mov 0x10(%esi),%ecx       ; reload for edprintf
+    16ca2  mov %eax,0x10(%esi)       ; other arm: the computed value
+    16ca5  mov 0x10(%esi),%ecx       ; reload for the second edprintf
+
+So the source stores `trn1uLength` inside each arm and the print reads the
+member, not a local. **The enumeration:** the ternary
+`trn1uLength = length < 8160u ? 8160u : length;` gives 81 instructions,
+LCS 77 (85.6%), run 33 -- identical to the old local clamp; the join guard
+(`if (length < 8160u) length = 8160u; trn1uLength = length;`) gives 81/78
+(86.7%), run 33; only the per-arm store maps, with or without braces
+(90/90, 100%, run 90). Separately, `rtd = roundTripDelay` must precede
+`symbolCount = 0`: 0x16bc3 loads the argument (`mov 0x38(%esp),%ecx`) before
+0x16bc7 clears the counter (`movl $0x0,0xc(%esi)`). All six orders of
+`symbolCount = 0; rtd = roundTripDelay; state = stateArg;` were compiled:
+the two with `rtd` first give 90/90 (100%, run 90), the others 87-89
+(96.7-98.9%). The relative order of the other two is not distinguished
+(the object's stores are symbolCount, rtd, state), so the original relative
+order is kept.
+
+**Ordered-set delta.** The per-TU grade maps of the whole tree were captured
+before and after (`byteident --json-out`): the exact set and the grade-0/1
+set are **identical** (no gains, no losses), and the only census movement is
+SIZE 569 -> 568 / BYTES 89 -> 90. No same-TU neighbour moved.
+
+**Verified.** `make period J=3` **394 passed, 0 failed** (also on the merged
+head `76a743f13`). `make byteident-ratchet J=3` exit 0: **1,158 EXACT /
+1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE** over 1,852 (the stored
+floor, 1,158 / 1,194 / 1,161, is unchanged), grade 0-or-1 **1,194**,
+link-selected EXACT **1,161**; the symbol now appears in the BYTES list at
+`4 of 351`. Blob sha256 unchanged
+(`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+No flags, attributes, padding or test edits.
+
+**What remains in the band.** 138 of the 139 in-scope rows are still SIZE;
+the shape classes are x87/FPM arithmetic association, stack-frame size and
+argument-setup differences (`TxNextStateV17`/`V29`, `VPcmFloModem::
+setPhaseIIinfo`), block-duplication/tail-placement decisions
+(`V92Phase4Modulator::generateSymbol`, `V34GiveINFO0dBits`'s debug gates),
+and deep FPM bit-manipulation bodies where no single statement was found.

@@ -479,6 +479,15 @@ V92Phase3Modulator::generateSymbol()
  * only a signed divide needs, while +0x16c07 compares the product with `ja`.
  * The two readings part company as soon as `a + b + 12` is negative, which is
  * what the test drives.
+ *
+ * THE FLOOR IS A STORE IN EACH ARM, not a local clamp.  0x16c12 is
+ * `movl $0x1fe0,0x10(%esi)` -- the constant written straight to
+ * `trn1uLength` -- and 0x16ca2 is `mov %eax,0x10(%esi)` on the other arm;
+ * each is followed by `mov 0x10(%esi),%ecx`, the reload that feeds
+ * `edprintf`.  Clamping a local and copying it at the join merges the two
+ * stores and the compiler then emits one print.  `rtd = roundTripDelay`
+ * likewise precedes `symbolCount = 0`: 0x16bc3 loads the argument before
+ * 0x16bc7 clears the counter.
  * ===========================================================================
  */
 void
@@ -498,16 +507,18 @@ V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
 	(void)levelArg;
 
 	scrambler.reset(0);
-	symbolCount = 0;
+	/* rtd first: 0x16bc3 before the 0x16bc7 `symbolCount` clear. */
 	rtd = roundTripDelay;
+	symbolCount = 0;
 	state = stateArg;
 
 	length = (unsigned int)(12 *
 	    ((params->V92_ECHO_FAST_UPDATE_DURATION +
 	      params->V92_ECHO_SLOW_UPDATE_DURATION + 12) / 12));
 	if (length < 8160u)
-		length = 8160u;
-	trn1uLength = length;
+		trn1uLength = 8160u;
+	else
+		trn1uLength = length;
 	edprintf("V92Phase3Modulator: TRN1u state length set to %d\r\n",
 	    trn1uLength);
 
