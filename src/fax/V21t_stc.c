@@ -16,6 +16,13 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v21fax.h"
 
+/* Keep the mask operation byte-sized before promoting its result. */
+static int
+v21tx_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /*
  * V21TX_control -- .text 0x0a2ba0, 94 bytes.
  *
@@ -37,6 +44,7 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21tx_cfg *cfg = &tx->cfg;
 	struct v21_tx_hdx *hdx = tx->hdx;
+	unsigned char flags;
 
 	if (arg == NULL)
 		return 0;
@@ -48,10 +56,11 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 		((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS] |=
 			V21TXCTL_SET_TXFLAGS_BIT2;
 
+	flags = arg->flags;
 	hdx->int_0004 =
-		(arg->flags & V21TXCTL_SET_PARAMS_INT0004) != 0;
+		v21tx_flag_test(flags, V21TXCTL_SET_PARAMS_INT0004) != 0;
 
-	if (arg->flags & V21TXCTL_REINIT)
+	if (v21tx_flag_test(flags, V21TXCTL_REINIT))
 		V21TX_create(modem, (const struct v21tx_cfg *)modem);
 
 	return 1;

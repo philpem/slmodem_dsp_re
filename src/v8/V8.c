@@ -33,6 +33,15 @@ static const short c2100[8] = {
 	     0,      0,      0,      0,  -6608,  15416,  -5792,  15416
 };
 
+/* Keep the mask operation byte-sized before promoting its result.  The
+ * period compiler inlines this contract to an immediate byte TEST, which
+ * is how the object tests bit 7 of the call-menu bytes. */
+static int
+v8_seq_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /* The two configured timeouts are in units of a quarter of a 9600 Hz second. */
 static int
 deadline(int units)
@@ -182,7 +191,7 @@ initTxSequence(struct v8 *v)
 		seq->word[n++] = V8_SEQ_FN_DEFAULT;
 	} else if (cm->b2 & 0x01) {
 		seq->word[n++] = V8_SEQ_FN_B0;
-	} else if (cm->b1 & 0x80) {
+	} else if (v8_seq_flag_test(cm->b1, 0x80)) {
 		seq->word[n++] = V8_SEQ_FN_B1_80;
 	} else if (cm->b2 & 0x02) {
 		seq->word[n++] = V8_SEQ_FN_B2;
@@ -340,7 +349,7 @@ rebuildJMSequence(struct v8 *v)
 				dsplibs_debug_printf(
 				    "V8: call function FAX TX from caller " "indication...\r\n");
 			accept = 1;
-		} else if (w == 0x10b && (cm->b1 & 0x80)) {
+		} else if (w == 0x10b && v8_seq_flag_test(cm->b1, 0x80)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V8: call function FAX RX to caller " "indication...\r\n");
@@ -385,7 +394,7 @@ rebuildJMSequence(struct v8 *v)
 			jm->word[n++] = 0x107;
 		} else if (cm->b2 & 0x01) {
 			jm->word[n++] = 0x103;
-		} else if (cm->b1 & 0x80) {
+		} else if (v8_seq_flag_test(cm->b1, 0x80)) {
 			jm->word[n++] = 0x10b;
 		} else if (cm->b2 & 0x02) {
 			jm->word[n++] = 0x109;

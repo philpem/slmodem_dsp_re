@@ -87,9 +87,9 @@ No field type, address, read boundary, compiler flag or fixture changes.
 
 A disassembly census of the reference `.text` found two `a8 80` instructions,
 in these two functions. The same byte-immediate operation occurs in DL in
-`initTxSequence` and CL in `rebuildJMSequence`. Their existing reconstruction
-does not reproduce it; these are independent transfer candidates, not gains
-claimed by this change. Do not infer a whole-object ceiling from this census.
+`initTxSequence` and CL in `rebuildJMSequence`; those were independent transfer
+candidates at the time, and wave 21 applied them below. Do not infer a
+whole-object ceiling from this census.
 
 Both separate source changes passed `make phase J=3`: 394 differential tests,
 zero failures, and all structural checks. Each changes one of 300 canonical
@@ -102,3 +102,43 @@ ordinary unsigned-byte condition, integer operand, and integer mask parameter.
 Only the byte/byte/int helper chain produces all three immediate AL tests
 without an extra register extension. No modern compiler is part of this
 investigation.
+
+## Wave 21: the remaining `0x80` sites, and a wider byte-test screen
+
+A per-function screen of all 1,852 blob symbols found 98 functions carrying a
+byte-immediate TEST (`a8 ib` or `f6 c0..c3 ib`), 18 of which had at least one
+mask whose count in our object was lower. All four `0x80` sites are now
+recovered: the two in this document, plus `initTxSequence` DL and
+`rebuildJMSequence` CL.
+
+The operand is the part that had to be controlled. Passing `req->ctl1` or
+`arg->flags` straight to the helper leaves a memory `testb $imm,disp(%reg)`
+on the period compiler; loading the byte into a local first puts the value in
+a register and reproduces `test $imm,%al`/`%dl`. `V29RX_control` then becomes
+byte-exact, and `V29TX_control`/`V21TX_control` recover both immediate tests.
+
+| Function | LCS/run before | LCS/run after | Ours bytes (blob) before -> after | Grade 0 before -> after |
+| --- | ---: | ---: | ---: | --- |
+| `V29RX_control` | 33/20 | 37/37 | 110 (110) -> 110 (110) | BYTES 24 -> EXACT |
+| `V29TX_control` | 34/14 | 38/24 | 129 (126) -> 128 (126) | SIZE 3 -> SIZE 2 |
+| `V21TX_control` | 26/10 | 30/14 | 94 (94) -> 94 (94) | BYTES 60 -> BYTES 61 |
+| `initTxSequence` | 141/20 | 142/20 | 894 (1001) -> 879 (1001) | SIZE 107 -> SIZE 122 |
+| `rebuildJMSequence` | 297/16 | 298/16 | 3132 (3134) -> 3126 (3134) | SIZE 2 -> SIZE 8 |
+
+The two V.8 builders gain the native test and one LCS instruction, but their
+remaining residuals still dominate; the helper also shortens each body, so the
+size gap widened rather than closed. That is an LCS acceptance, not an exact
+claim. The three control functions are shorter and closer.
+
+The screen's other candidates did not qualify as genuine byte-valued sites:
+`DataCarrierDetectV17/V27/V29`, `MTK_phasor`, `V34demodulate`,
+`DILdescriptorPacker`, the `V92Jd` constructors and `V92ModulusEncoder::reset`
+test shifted or 32-bit values, and `v34handshak` is the known inlining-boundary
+artefact. `V22FP_control` was tried and dropped: the register-carrier form
+moved 128 bytes at grade 0 where the baseline had a six-byte size gap, so the
+direct form's one-instruction LCS gain did not justify it.
+
+Wave 21 passed `make period J=3`: 394 differential tests, zero failures, all
+structural checks. `make byteident-ratchet` is OK at 1,153 EXACT, 1,190 grade
+0-or-1 and 1,156 link-selected EXACT over 1,852 symbols, with the existing
+`dp_vpcm_exit` displacement unchanged.
