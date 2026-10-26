@@ -20,6 +20,32 @@ import jumptable as j
 
 ROOT = Path(__file__).resolve().parents[2]
 IMAGE = 'ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest'
+
+
+def independent_rodata_placement(manifest, selected):
+    """Reconstruct the selected input's .rodata placement from the manifest.
+
+    A control must not pin a layout number: every legitimate source growth
+    upstream moves the merged section. This is a deliberately separate
+    implementation of `ld -r`'s section concatenation, so the resolver's
+    placement is still checked against something it did not produce.
+    """
+    directory = Path(manifest).parent
+    offset = 0
+    for line in Path(manifest).read_text().splitlines():
+        if not line.strip():
+            continue
+        path = directory / line.split()[0]
+        if path.resolve() == Path(selected).resolve():
+            return offset
+        with open(path, 'rb') as handle:
+            sections = [section for section in ELFFile(handle).iter_sections()
+                        if section.name == '.rodata']
+        if sections:
+            section = sections[0]
+            align = max(1, section['sh_addralign'])
+            offset = (offset + align - 1) // align * align + section['sh_size']
+    raise AssertionError('selected object is not in the manifest: %s' % selected)
 SOURCE = '''.text
 .globl sample
 .type sample,@function
@@ -511,20 +537,22 @@ def main():
     assert reconstructed['size']==315 and reconstructed['paths']==32
     assert reconstructed['store_instructions']==17
     assert reconstructed['artifact_sha256']==digest(linked)
-    assert reconstructed['call']['callee_rebase']=={
-        'section_rebases':{'.rodata':{'placement':24948,
-                                      'observed_addend_delta':24948}},
-        'symbol_rebases':{}}
     selected=Path(reconstructed['call']['selected_object'])
+    placement=independent_rodata_placement(manifest,selected)
+    assert reconstructed['call']['callee_rebase']=={
+        'section_rebases':{'.rodata':{'placement':placement,
+                                      'observed_addend_delta':placement}},
+        'symbol_rebases':{}}
     source_rodata=section_data(selected,'.rodata')
     linked_rodata=section_data(linked,'.rodata')
-    assert linked_rodata[24948:24948+len(source_rodata)]==source_rodata
+    assert linked_rodata[placement:placement+len(source_rodata)]==source_rodata
     dialer_source=Path(c._selected_manifest_copy(str(manifest),'GetDialerConfig'))
+    dialer_placement=independent_rodata_placement(manifest,dialer_source)
     _,dialer_rels=c._function_identity(str(dialer_source),'GetDialerConfig')
     assert [r[3] for r in dialer_rels if r[2]==('section','.rodata')]==[-12,12]
     _,linked_dialer_rels=c._function_identity(str(linked),'GetDialerConfig')
     assert ([r[3] for r in linked_dialer_rels if r[2]==('section','.rodata')]==
-            [18404,18428])
+            [dialer_placement-12,dialer_placement+12])
     for source_signed,linked_signed in ((False,False),(False,True)):
         assert not unsigned_rebase_acceptance(
             str(dialer_source),str(linked),'GetDialerConfig',str(manifest),
@@ -532,7 +560,7 @@ def main():
     dialer=c._same_linked_body(str(dialer_source),str(linked),
                                'GetDialerConfig',str(manifest))
     assert dialer['section_rebases']['.rodata']=={
-        'placement':18416,'observed_addend_delta':18416}
+        'placement':dialer_placement,'observed_addend_delta':dialer_placement}
     framed=j.prove(str(tc),'v22_local_loop',link=str(linked),manifest=str(manifest))
     record=framed['fixed_stack_frame']['private_record']
     assert framed['count']==14 and record['capacity']==44
