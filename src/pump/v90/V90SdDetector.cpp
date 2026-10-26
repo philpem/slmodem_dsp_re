@@ -68,6 +68,17 @@ V90SD_OFF(historyLength, 0x18, historylength);
 typedef char v90sd_size[(sizeof(V90SdDetector) == 0x1c) ? 1 : -1];
 #endif
 
+void
+V90SdDetector::reset()
+{
+	unsigned int i;
+
+	for (i = 0; i < historyLength; i++)
+		history[i] = 0.0f;
+
+	count = 0;
+}
+
 /*
  * THE FOUR ARGUMENTS GO TO FOUR WORDS AND NOTHING IS COMPUTED FROM THEM.
  * Each is a 32-bit `mov` from the incoming stack slot into the object -- no
@@ -118,17 +129,6 @@ V90SdDetector::~V90SdDetector()
 	delete[] history;
 }
 
-void
-V90SdDetector::reset()
-{
-	unsigned int i;
-
-	for (i = 0; i < historyLength; i++)
-		history[i] = 0.0f;
-
-	count = 0;
-}
-
 /*
  * One sample in, one of three verdicts out.  The header names the fields;
  * what this function adds is what the numbers ARE and where the decisions sit.
@@ -139,6 +139,15 @@ V90SdDetector::reset()
  * way and the constructor's 12 means nothing ever reaches it; a `for` would be
  * a different function on an input the object cannot receive, so the object's
  * shape is kept and the test drives the length the constructor sets.
+ *
+ * THE SHIFT WALKS TWO POINTERS, NOT AN INDEX.  The object keeps the source
+ * and destination in `%ebx` and `%ecx` and decrements both (`mov (%ebx),%eax;
+ * sub $0x4,%ebx; mov %eax,(%ecx); sub $0x4,%ecx` at 0x3bd90), with the trip
+ * count in `%edx`.  Declaring `src`/`dst` as `&history[historyLength - 2]`
+ * and `&history[historyLength - 1]`, source first, is the only spelling of
+ * the family that emits that shape: an indexed `history[i] = history[i - 1]`
+ * gives one base pointer and an index, and computing `dst` from `i` before
+ * `src` swaps the two registers.
  *
  * SIX LAGS AND SIX PRODUCTS, not `historyLength` of them.  The correlation
  * loop's bound is the immediate 5 (`cmp $0x5,%eax; jbe`), so it runs for
@@ -173,27 +182,45 @@ V90SdDetector::reset()
 int
 V90SdDetector::process(float sample)
 {
+	unsigned int i;
+
 	/*
-	 * `correlation` IS DECLARED FIRST, and that is not a tidiness -- it is
-	 * what puts the two accumulators in the object's x87 stack slots.  GCC
-	 * 3.4's reg-stack pass follows the declaration order here, and with
-	 * `energy` first the whole floating-point skeleton comes out shifted:
-	 * `fxch %st(3)` where the object has `fxch %st(2)`, `faddp %st,%st(2)`
-	 * where it has `faddp %st,%st(1)`, and -- the part that is not
-	 * cosmetic -- the middle compare with its operands the other way round
-	 * and `jbe` for the object's `jae`.  Swapping these two lines makes
-	 * every x87 instruction and every branch in the function the object's.
+	 * THE RETURN VALUE IS ONE VARIABLE LIVE ACROSS THE SHIFT.  `result` is
+	 * cleared in the object's prologue (`xor %ebp,%ebp` at 0x3bd71) and
+	 * every exit returns it (`mov %ebp,%eax`), including the -1 arm.
+	 * Initialising it before the shift is what keeps it in callee-saved
+	 * `%ebp`; declared after the loop it lands in `%edx` and the counting
+	 * arm needs an extra copy.
+	 */
+	int result = 0;
+
+	{
+		float *src = &history[historyLength - 2];
+		float *dst = &history[historyLength - 1];
+
+		i = historyLength - 1;
+		do {
+			*dst-- = *src--;
+		} while (--i != 0);
+	}
+
+	/*
+	 * THE ACCUMULATORS ARE DECLARED AFTER THE SHIFT, AND IN THIS ORDER.
+	 * `correlation` must precede `energy`: GCC 3.4's reg-stack pass follows
+	 * the declaration order, and with `energy` first the whole
+	 * floating-point skeleton comes out shifted -- `fxch %st(3)` where the
+	 * object has `fxch %st(2)`, `faddp %st,%st(2)` where it has
+	 * `faddp %st,%st(1)`, and the middle compare with its operands the
+	 * other way round.  Their POSITION matters too: the object's `fldz`
+	 * and `fld %st(0)` sit at 0x3bda1, after the shift loop at 0x3bd90, so
+	 * the declarations are written after the shift block.  Declared at the
+	 * top, the same two instructions are hoisted before the prologue.
 	 * Finding F2301.
 	 */
-	unsigned int i = historyLength - 1;
 	long double correlation = 0.0L;
 	long double energy = 0.0L;
 	long double ratio;
 	unsigned int run;
-
-	do {
-		history[i] = history[i - 1];
-	} while (--i != 0);
 
 	history[0] = sample;
 
@@ -206,7 +233,7 @@ V90SdDetector::process(float sample)
 
 	if (thresh_08 > energy) {
 		count = 0;
-		return 0;
+		return result;
 	}
 
 	ratio = correlation / energy;
@@ -229,12 +256,14 @@ V90SdDetector::process(float sample)
 	if (!(thresh_0c >= ratio)) {
 		run = count + 1;
 		count = run;
-		return run < limit ? 0 : 1;
+		if (run >= limit)
+			result = 1;
+		return result;
 	}
 
 	if (value_10 > ratio)
 		return -1;
 
 	count = 0;
-	return 0;
+	return result;
 }

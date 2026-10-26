@@ -141518,3 +141518,91 @@ grade 0-or-1 **1,196**; link-selected EXACT **1,163**. `byteident
 -> 1163, regalloc 36 -> 35)`, with the reviewed `dp_vpcm_exit` displacement
 still the only one. No flags, attributes, padding or test edits; blob sha256
 unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+
+## F12061. SIZE band at |instruction delta| >= 9, wave 24: `V90SdDetector::process`'s shift walks two pointers, and the return value is live across it
+
+*2026-10-26, worktree `w24-band9`, branch `recover/w24-band9`, base
+`origin/master = a8ea916ca`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`.*
+
+Continued the delta-9+ band wave 23 opened (`F12058`). A fresh `make -s tc
+J=12` builds 300/300 objects; `byteident.py --near 2000` lists **693**
+non-exact symbols, **143** at |instruction delta| >= 9, **139** after the
+brief's exclusions. Every in-scope row was scored with `structsim`, and the
+highest-LCS unread rows with `contentgap`. This wave read **seven new rows at
+operand level** -- `V90SdDetector::process`,
+`V90AutoDigitalImpDetector::reset`, `SetTxModeV32`,
+`_hdlc_emulate_receive_state`, `Detect_Retrain`,
+`V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset` and `TxHdxEQCondV27` --
+and did not re-sweep wave 23's fifteen. Every unread residue is block
+reordering, stack-frame/argument setup, or x87 scheduling; no second row
+produced a unique source mapping.
+
+**The landed row is `V90SdDetector::process` (232 B), and it is a
+source-fidelity recovery, not a grade closure.** Before: 66 instructions
+against the blob's 81, LCS 70 (86.4% of the longer), longest run 29, SIZE.
+After: **82/81, LCS 80 (97.6%), run 52**, still SIZE with 2 bytes differing.
+The remaining difference is a `cmp` operand reversal and one coalescing copy
+(see below); both are allocation/if-conversion, not source.
+
+**THE SHIFT WALKS TWO POINTERS.** The object computes the one-past-end address
+(`lea (%esi,%edx,4),%eax` at 0x3bd80 using the length before it decrements),
+then the source and destination addresses (`lea -0x8(%eax),%ebx` and
+`lea -0x4(%eax),%ecx` at 0x3bd83/0x3bd86) and decrements BOTH in the body
+(`mov (%ebx),%eax; sub $0x4,%ebx; mov %eax,(%ecx); sub $0x4,%ecx` at
+0x3bd90). The current source wrote an indexed `history[i] = history[i - 1]`;
+GCC kept one base and an index. Declaring
+
+    float *src = &history[historyLength - 2];
+    float *dst = &history[historyLength - 1];
+
+in that order, assigning `i = historyLength - 1` after both, and looping
+`*dst-- = *src--` maps onto the object exactly. The enumeration: the indexed
+do-while gives 66/LCS 70; computing `dst` from `i` gives 82/LCS 68 (run 28);
+`dst` declared first gives 77/LCS 69; `src` first with `i` assigned first
+gives 77/LCS 70; only `src` first *and* `i` assigned after the pointers gives
+the object's two-pointer loop (LCS 80, run 52).
+
+**THE ACCUMULATORS ARE DECLARED AFTER THE SHIFT.** The object's `fldz` and
+`fld %st(0)` are at 0x3bda1/0x3bda5, AFTER the shift loop ends at 0x3bd9b.
+With `correlation` and `energy` declared before the shift block, the same two
+instructions are hoisted in front of the prologue; declared after it they sit
+where the object has them. Their order is unchanged and still
+`correlation` before `energy` (F2301).
+
+**THE RETURN VALUE IS ONE VARIABLE LIVE ACROSS THE SHIFT.** The object clears
+it in the prologue (`xor %ebp,%ebp` at 0x3bd71) and every exit moves it to
+`%eax` (`mov %ebp,%eax` at 0x3bdf7, 0x3be09 and 0x3be20), including the -1
+arm. A local `int result = 0` initialised BEFORE the shift block keeps the
+value in callee-saved `%ebp`; declared after the loop it lands in `%edx` and
+the counting arm grows a copy.
+
+**THE EMISSION ORDER MATCHED TOO.** The blob's `V90SdDetector` symbols run
+reset 0x3bc30, C2 0x3bc70, C1 0x3bcd0, D2 0x3bd30, D1 0x3bd50, process
+0x3bd70. The file defined the constructor and destructor first and `reset`
+after them; moving `reset` ahead of the constructor reproduces the blob's
+order. All six symbols keep their grades (five EXACT, `process` non-exact).
+
+**The residual.** In the counting arm the object tests `cmp 0x4(%edi),%ecx`
+(run minus limit) and branches `jb` at 0x3bdea/0x3bdef; ours emits
+`cmp %ecx,0x4(%edi)`, `ja` -- the same unsigned decision with the operands
+reversed and the predicate inverted -- and the counting arm's result is
+copied through `%edx` instead of returned directly from `%ebp`. The
+enumerated spellings that would remove the copy all change the block layout
+or lose the prologue's `xor %ebp,%ebp` (`result` declared after the loop:
+78 instructions, LCS 74; all returns through `result` with the -1 arm folded
+into it: 80, LCS 78; `result = -1` before the test with a negated guard: 82,
+LCS 64). Those were declined: the object's block order is the one the landed
+form emits, and the last two are fits to the register rather than recovered
+statements.
+
+**Ordered-set delta.** Whole-tree grade maps were captured before and after
+(`byteident --json-out`): the EXACT set and the grade-0-or-1 set are
+**identical** (1158 / 1194, no gains or losses); the census is unchanged
+(1158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE). No same-TU
+neighbour moved. `make period J=3`: **394 passed, 0 failed**. Blob sha256
+unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+No flags, attributes, padding or test edits. The merged head also carries
+the parallel signedness and mask waves (F12059, F12060); the before/after
+figures above are this change's own delta, not the merged head's census.
