@@ -1924,7 +1924,7 @@ unsigned short ModDataV27(void *modem, const unsigned short *bits,
  * @param data   Data words, scrambled in place.
  * @param count  Number of words.
  */
-void ScrambleDataV27(void *modem, unsigned short *data, short count);
+void ScrambleDataV27(void *modem, unsigned short *data, unsigned short count);
 /**
  * @brief Descramble `count` data words in place through the receive
  *        descrambler, by one indirection.
