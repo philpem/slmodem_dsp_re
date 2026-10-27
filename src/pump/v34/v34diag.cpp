@@ -531,6 +531,8 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 		} else if (obj->status == V34DIAG_STATUS_K56FLEX &&
 			   obj->role == VDIAG_ROLE_CALL) {
 			n = (unsigned long)k56->getDFE(points, maxCount);
+		} else {
+			n = 0;
 		}
 		/* V.34 has no decision-feedback filter to report. */
 		break;
