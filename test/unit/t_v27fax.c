@@ -6561,6 +6561,254 @@ run_create(void)
 	return diff_end();
 }
 
+/* Constructor-to-training history, issue #410.
+ *
+ * This is the DECISION COMPONENT boundary: the caller supplies the current
+ * equaliser output I/Q slot and the measured angle/magnitude. It does not run
+ * FPM_FSE_receive, the AGC, or a public modem call. No decoder history, counters,
+ * taps, enables or live callbacks are planted. Each side starts with its own
+ * V27RX_create and calls only the callback currently installed by that side.
+ *
+ * Config provenance: V27RX_CFG, changing only the two supported bit rates and
+ * the documented short_train selector (the same four valid constructor cases
+ * as run_create). Epoch inputs are 48 points (1000,0), then (16000,0), angle
+ * zero and matching magnitude. Training angles are even values in [0,32766]:
+ * FPM_FSE_receive doubles its reduced half-angle before the callback, so odd
+ * neighbours of a threshold are not receive-produced inputs. Magnitude is
+ * 16000. These are valid
+ * component inputs, not a claim that this exact sequence comes from a waveform.
+ *
+ * dis.py: 0x9a0c7..0x9a0e9 installs training and resets its counter; training
+ * 0x9a148..0x9a183 narrows/folds phase before 32-bit absolute magnitude and the
+ * strict 0x2000 test; 0x9a1c8..0x9a1f4 installs the running decision. In this
+ * constructor history last can only be 0 or half the constellation, so a valid
+ * non-negative angle cannot give raw diff < -16384. Report that absent bin;
+ * the old synthetic probes remain the evidence for wider input domains.
+ */
+struct history_phase {
+	int raw, folded, error, bin, high, low;
+};
+
+static struct history_phase
+history_phase(short angle, short prev)
+{
+	struct history_phase p;
+
+	p.raw = (short)(angle - prev);
+	p.folded = p.raw;
+	p.high = p.folded > 16384;
+	if (p.high)
+		p.folded = (short)(p.folded + 32768);
+	p.low = p.folded < -16384;
+	if (p.low)
+		p.folded = (short)(p.folded - 32768);
+	p.error = p.folded < 0 ? -p.folded : p.folded;
+	p.bin = p.error < 8192 ? 0 : p.error == 8192 ? 1 : 2;
+	return p;
+}
+
+static int
+history_stage(struct fpm_fse *f, int ref)
+{
+	if (f->cfg.decision == (ref ? ref_V27RX_epoch_det : V27RX_epoch_det))
+		return 0;
+	if (f->cfg.decision == (ref ? ref_V27RX_eq_train : V27RX_eq_train))
+		return 1;
+	if (f->cfg.decision == (ref ? ref_V27RX_decision : V27RX_decision))
+		return 2;
+	return -1;
+}
+
+static int
+run_constructor_history(void)
+{
+	static const short inputs[] = {
+		0, 8190, 8192, 8194, 16382, 16384, 16386, 32766
+	};
+	/* Independent known-answer control, including a low-fold input outside
+	 * the history's non-negative angle domain. Changing either fold or the
+	 * bin boundary must fail these assertions before a clean report is used. */
+	static const struct {
+		short angle, prev;
+		int raw, folded, error, bin, high, low;
+	} controls[] = {
+		{8191, 0, 8191, 8191, 8191, 0, 0, 0},
+		{8192, 0, 8192, 8192, 8192, 1, 0, 0},
+		{8193, 0, 8193, 8193, 8193, 2, 0, 0},
+		{16384, 0, 16384, 16384, 16384, 2, 0, 0},
+		{16385, 0, 16385, -16383, 16383, 2, 1, 0},
+		{0, 16384, -16384, -16384, 16384, 2, 0, 0},
+		{-1, 16384, -16385, 16383, 16383, 2, 0, 1}
+	};
+	int rate, short_train, c;
+
+	diff_begin("V27 constructor history detector known-angle control");
+	for (c = 0; c < (int)(sizeof controls / sizeof controls[0]); c++) {
+		struct history_phase p = history_phase(controls[c].angle,
+						     controls[c].prev);
+		diff_eq_int("history detector raw (%ld)", p.raw, controls[c].raw, c);
+		diff_eq_int("history detector fold (%ld)", p.folded,
+			    controls[c].folded, c);
+		diff_eq_int("history detector magnitude (%ld)", p.error,
+			    controls[c].error, c);
+		diff_eq_int("history detector bin (%ld)", p.bin, controls[c].bin, c);
+		diff_eq_int("history detector high (%ld)", p.high, controls[c].high, c);
+		diff_eq_int("history detector low (%ld)", p.low, controls[c].low, c);
+	}
+	if (diff_end())
+		return 1;
+
+	diff_begin("V27 constructor-to-training decision-component history");
+	for (rate = 2400; rate <= 4800; rate += 2400) {
+		for (short_train = 0; short_train <= 1; short_train++) {
+			struct v27rx_cfg cfg = V27RX_CFG;
+			struct v27_rx *a, *b;
+			struct fpm_fse *fa, *fb;
+			int k, epoch = 0, train = 0, running = 0;
+			int transition = -1, done = -1;
+			int bins[3] = {0, 0, 0}, high = 0, low = 0;
+			int neighbours[3] = {0, 0, 0};
+			int plus_half = 0, minus_half = 0;
+			long tag = rate + short_train;
+
+			cfg.bit_rate = (short)rate;
+			cfg.short_train = short_train;
+			a = ref_V27RX_create(0, &cfg);
+			b = V27RX_create(0, &cfg);
+			fa = &a->rx->fse;
+			fb = &b->rx->fse;
+			diff_eq_int("history initial reference callback (%ld)",
+				    history_stage(fa, 1), 0, tag);
+			diff_eq_int("history initial native callback (%ld)",
+				    history_stage(fb, 0), 0, tag);
+			for (k = 0; k < 1100; k++) {
+				int stage = history_stage(fa, 1), next;
+				short ar, an, mr, mn, input = 0;
+				short last_before = a->rx->dec.last;
+				unsigned short rr, rn;
+				struct v27_rx_decoder da, db;
+				struct history_phase p;
+				long step = tag * 10000 + k;
+
+				diff_eq_int("history before callback (%ld)",
+					    history_stage(fb, 0), stage, step);
+				if (stage < 0 || history_stage(fb, 0) != stage)
+					break; /* do not call an unknown callback */
+				if (stage == 0) {
+					/* Only the current component input slot is written. */
+					fa->out_i[fa->n_out] = fb->out_i[fb->n_out] =
+						(short)(epoch < 48 ? 1000 : 16000);
+					fa->out_q[fa->n_out] = fb->out_q[fb->n_out] = 0;
+					epoch++;
+				} else {
+					/* Anchors force previous decision 0/16384 through
+					 * real decisions, never by assigning angle_prev. */
+					int n = stage == 1 ? train : running;
+					input = n % 4 == 0 ? 0 : n % 4 == 2 ? 16384
+						: inputs[(n / 4) % 8];
+					if (stage == 1) {
+						p = history_phase(input, a->rx->dec.angle_prev);
+						bins[p.bin]++;
+						for (c = 0; c < 3; c++)
+							neighbours[c] += p.error == 8190 + 2 * c;
+						high += p.high;
+						low += p.low;
+						plus_half += p.raw == 16384;
+						minus_half += p.raw == -16384;
+						train++;
+					} else
+						running++;
+				}
+				ar = an = input;
+				mr = mn = (short)(stage == 0 && epoch <= 48 ? 1000 : 16000);
+				rr = fa->cfg.decision(fa, &ar, &mr);
+				rn = fb->cfg.decision(fb, &an, &mn);
+				diff_eq_int("history return (%ld)", rn, rr, step);
+				diff_eq_int("history angle (%ld)", an, ar, step);
+				diff_eq_int("history magnitude (%ld)", mn, mr, step);
+				next = history_stage(fa, 1);
+				diff_eq_int("history after callback (%ld)",
+					    history_stage(fb, 0), next, step);
+				diff_eq_int("history mu (%ld)", fb->mu_sel, fa->mu_sel, step);
+				diff_eq_int("history LMS (%ld)", fb->lms_force, fa->lms_force, step);
+				diff_eq_int("history owners (%ld)",
+					    fa->cfg.owner == &a->rx->dec &&
+					    fb->cfg.owner == &b->rx->dec, 1, step);
+				da = a->rx->dec;
+				db = b->rx->dec;
+				diff_eq_int("history tables (%ld)",
+					    da.angles == ref_V27RX_DEC_LAST_PHASE[rate == 4800] &&
+					    db.angles == V27RX_DEC_LAST_PHASE[rate == 4800] &&
+					    da.pmap == ref_V27RX_DEC_PMAP[rate == 4800] &&
+					    db.pmap == V27RX_DEC_PMAP[rate == 4800], 1, step);
+				/* Normalize copies only; live callbacks/pointers survive. */
+				da.angles = db.angles = 0;
+				da.pmap = db.pmap = 0;
+				diff_eq_obj("history decoder", struct v27_rx_decoder,
+					    &db, &da, step);
+				if (stage == 0 && next == 1) {
+					transition = epoch;
+					diff_eq_int("history training starts at zero (%ld)",
+						    a->rx->dec.train_count, 0, step);
+					diff_eq_int("history epoch enables forced LMS (%ld)",
+						    fa->lms_force, 1, step);
+				}
+				if (stage == 1) {
+					int last = p.error > 8192
+						? (last_before + (rate == 4800 ? 4 : 2))
+						  & da.phase_mask : last_before;
+					diff_eq_int("history observed phase advance (%ld)",
+						    da.last, last, step);
+					diff_eq_int("history selected angle (%ld)", ar,
+						    a->rx->dec.angles[last], step);
+					diff_eq_int("history saved angle (%ld)",
+						    da.angle_prev, ar, step);
+					diff_eq_int("history training magnitude constant (%ld)",
+						    mr, 0x3299, step);
+					if (rate == 2400 && short_train && train <= 32)
+						printf("V27 history angle trial=%d input=%d raw=%d "
+						       "folded=%d error=%d bin=%d output=%d mag=%d\n",
+						       train, input, p.raw, p.folded, p.error,
+						       p.bin, ar, mr);
+				}
+				if (stage == 1 && next == 2) {
+					done = train;
+					diff_eq_int("history completion releases forced LMS (%ld)",
+						    fa->lms_force, 0, step);
+					diff_eq_int("history completion selects tracking mu (%ld)",
+						    fa->mu_sel, 1, step);
+				}
+				if (running == 8)
+					break;
+			}
+			diff_eq_int("history epoch transition (%ld)", transition, 49, tag);
+			diff_eq_int("history training completion (%ld)", done,
+				    short_train ? 50 : 1000, tag);
+			diff_eq_int("history running decisions (%ld)", running, 8, tag);
+			for (c = 0; c < 3; c++) {
+				diff_eq_int("history error bin observed (%ld)", bins[c] > 0, 1,
+					    tag * 10 + c);
+				diff_eq_int("history exact error neighbour observed (%ld)",
+					    neighbours[c] > 0, 1, tag * 10 + c);
+			}
+			diff_eq_int("history high fold observed (%ld)", high > 0, 1, tag);
+			diff_eq_int("history +half observed (%ld)", plus_half > 0, 1, tag);
+			diff_eq_int("history -half observed (%ld)", minus_half > 0, 1, tag);
+			diff_eq_int("history low fold absent in this domain (%ld)", low, 0, tag);
+			printf("V27 history rate=%d short=%d epoch=%d train=%d running=%d "
+			       "error[<,=,>8192]=%d,%d,%d high-fold=%d low-fold=%d "
+			       "raw[+,-16384]=%d,%d\n", rate, short_train, epoch, train,
+			       running, bins[0], bins[1], bins[2], high, low,
+			       plus_half, minus_half);
+			printf("V27 history rate=%d short=%d error[8190,8192,8194]=%d,%d,%d\n",
+			       rate, short_train, neighbours[0], neighbours[1], neighbours[2]);
+			ref_V27RX_delete(a);
+			V27RX_delete(b);
+		}
+	}
+	return diff_end();
+}
+
 /* --------------------------------------------------------------------- */
 
 static int
@@ -6888,6 +7136,7 @@ main(void)
 	rc |= run_hdx();
 	rc |= run_smh();
 	rc |= run_create();
+	rc |= run_constructor_history();
 	rc |= sep_report();
 
 	return rc;

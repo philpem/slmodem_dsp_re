@@ -9535,3 +9535,29 @@ points through owner/type/alias evidence or period RTL, rather than add volatile
 accesses or repeat nearby syntax. Executed component histories and planted
 boundary probes likewise need separate claims; the first fixture audit records
 the outstanding V27 constructor-to-training callback history.
+
+## Test an alias-analysis discriminator before repeating live-read syntax
+
+The follow-up to the two closed INFO0 families crosses captured versus live
+source with retained aliasing versus `-fno-strict-aliasing`: four full objects,
+28 function verdicts, unchanged control identical across all seven production
+bodies. The live source's final session read exists in `07.addressof` but global
+CSE replaces it with register reuse in `08.gcse`. With aliasing withdrawn it
+survives to assembly, after the short `is_short` store, matching the reference's
+observation point. This localises a compiler mechanism in our candidate; it does
+not identify the original source alias representation or original flag profile.
+The candidate becomes 774 bytes against 758 and four TU bodies change. No flag
+or source is adopted. Use this discriminator to investigate independently
+witnessed alias/owner structure or broader profile controls, not to select a
+near-fit or manufacture a reload with volatile.
+
+**Constructor-derived callback histories can close a specific fixture gap.** The
+V27 follow-up starts from the real constructors and invokes the installed
+epoch/training/running decision chain without planting history or replacing live
+callbacks. It observes phase-error neighbours 8190/8192/8194 in all four supported
+rate/training configurations, but no low-fold branch in its non-negative angle
+domain. State the decision-component boundary: this is not an FPM/AGC/waveform
+history. Fixed-answer detector controls and deliberate bin/fold perturbations
+demonstrate sensitivity separately from differential agreement. Preserve the
+wider seeded probes and their labels. See [waves 30–31](../recovery-waves-30-31.md)
+for native addresses, denominators and limits.
