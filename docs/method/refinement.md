@@ -9585,3 +9585,29 @@ the same body when alias analysis is withdrawn. The union is a diagnostic model,
 not an independently recovered original declaration, and the non-exact candidate
 is not adopted for its nearer byte count. Original ownership/interface/type
 evidence is the next discriminator. See [waves 32–33](../recovery-waves-32-33.md).
+
+## Retain witnessed partial boundaries without selecting a near-match
+
+When an independent owner/interface inventory supplies no new declaration
+witness, record that negative and move to another measured residue. Separate
+allocation history and mangled neighbouring interfaces do not recover an
+unmangled caller's optimiser-visible alias declarations. The bounded INFO0
+owner pass found no such witness and did not reopen its syntax families.
+
+Visual diagnostics supplies a positive partial example. A declared 2×3×2
+family plus unchanged control compiles 13 objects/39 function verdicts. Original
+instructions independently require a selector-8 range exclusion, three echo
+load/advance sequences before output stores, and two direct receiver-relative
+equaliser loads. The retained source restores those boundary classes; 31 period
+layout assertions and changed-use owner/offset/width checks prove address
+preservation. The control object is byte-identical to production, both neighbours
+remain unchanged, and exact/grade-0-or-1 gain/loss sets are empty.
+
+The partial is 1006 bytes against native 1023 (previously 987), with no exact candidate
+in the declared domain. Two source forms emit identically, so the retained
+capture spelling is not uniquely recovered. Retention rests on the independent
+boundary witnesses, not the size gap. The partial-link positioned-match count
+decreases by 12 bytes; its DIFFERENT/raw-different status remains explicit. Block/tail,
+subowner and resampler-base residuals remain in the ledger, without scratch
+compensation or unsupported compiler-stage attribution. Focused period and the
+394/0 full phase gate pass. See [waves 34–35](../recovery-waves-34-35.md).

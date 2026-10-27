@@ -510,17 +510,15 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			n = (unsigned long)k56->getLinearEqualizer(points,
 								   maxCount);
 		} else {
-			const struct v34_equalizer *q =
-			    (const struct v34_equalizer *)
-			    ((const unsigned char *)rx + V34_RX_EQ_OFFSET);
-
 			n = maxCount;
 			if (n > V34_EQ_TAPS)
 				n = V34_EQ_TAPS;
 
 			for (i = 0; i < n; i++) {
-				points[i].re = VDIAG_V34_POINT_SCALE * q->re[i];
-				points[i].im = VDIAG_V34_POINT_SCALE * q->im[i];
+				points[i].re = VDIAG_V34_POINT_SCALE *
+				    rx->equalizer.re[i];
+				points[i].im = VDIAG_V34_POINT_SCALE *
+				    rx->equalizer.im[i];
 			}
 		}
 		break;
@@ -584,8 +582,9 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			coefs = xf->echoCanceller.echoCoeff;
 
 			for (i = 0; i < n; i++) {
+				float value = *coefs++;
 				points[i].re = 0;
-				points[i].im = (int)(coefs[i] *
+				points[i].im = (int)(value *
 						     VDIAG_ECHO_SCALE);
 			}
 		} else {
@@ -597,8 +596,9 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			coefs = obj->echo0.coeff;
 
 			for (i = 0; i < n; i++) {
+				short value = *coefs++;
 				points[i].re = 0;
-				points[i].im = coefs[i];
+				points[i].im = value;
 			}
 		}
 		break;
@@ -618,8 +618,9 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			coefs = obj->echo1.coeff;
 
 			for (i = 0; i < n; i++) {
+				short value = *coefs++;
 				points[i].re = 0;
-				points[i].im = coefs[i];
+				points[i].im = value;
 			}
 		}
 		break;
@@ -630,11 +631,15 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 		 * RANGE test rather than by two equalities:
 		 * `lea -0x1(%edx),%eax; cmp $0x1,%eax; jbe` at 0x72ba.
 		 */
-		if ((unsigned int)(obj->status - 1) > 1u &&
-		    obj->status == V34DIAG_STATUS_K56FLEX &&
-		    obj->role == VDIAG_ROLE_CALL)
+		if ((unsigned int)(obj->status - 1) <= 1u) {
+			n = 0;
+		} else if (obj->status == V34DIAG_STATUS_K56FLEX &&
+			   obj->role == VDIAG_ROLE_CALL) {
 			n = (unsigned long)k56->getDecisionErrors(points,
 								  maxCount);
+		} else {
+			n = 0;
+		}
 		break;
 
 	default:
