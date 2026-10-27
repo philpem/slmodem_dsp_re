@@ -9561,3 +9561,27 @@ history. Fixed-answer detector controls and deliberate bin/fold perturbations
 demonstrate sensitivity separately from differential agreement. Preserve the
 wider seeded probes and their labels. See [waves 30–31](../recovery-waves-30-31.md)
 for native addresses, denominators and limits.
+
+## Cross alias representation before selecting a global profile
+
+A load restored by `-fno-strict-aliasing` does not uniquely identify an original
+compiler option. Cross independent complete TUs and a justified diagnostic source
+representation before interpreting it. Keep raw data, bindings, relocation records
+and every emitted local body in the ledger, not just reference-shared functions.
+
+The INFO0 follow-up compiles eight objects across three TUs: 156 emitted-body
+verdicts, 110 reference-shared and 46 local-helper verdicts. All 71 distinct unchanged
+retained bodies reproduce production. Withdrawing alias analysis leaves the RX
+energy-union bodies unchanged and loses `ApplyBulkDelay`'s grade-1 match. Native
+debug-level register reuse after a short store contrasts with the withdrawn
+candidate's memory comparison. This is evidence against selecting the option on
+the current source, not a global exclusion over other original declarations.
+
+A separate four-cell union-view/int-pointer cross supplies a source-representation
+explanation: alias-set-0 union reads retain INFO0's fourth session read through
+global CSE under retained flags. Only INFO0's body changes; the other six bodies,
+bindings and non-text payloads remain unchanged. Both read representations emit
+the same body when alias analysis is withdrawn. The union is a diagnostic model,
+not an independently recovered original declaration, and the non-exact candidate
+is not adopted for its nearer byte count. Original ownership/interface/type
+evidence is the next discriminator. See [waves 32–33](../recovery-waves-32-33.md).
