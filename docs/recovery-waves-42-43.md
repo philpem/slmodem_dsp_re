@@ -108,8 +108,8 @@ structural checks passing. No new binary is registered. Period flags include
 `DSPLIB_REPRODUCE_BUGS`; no global flag, tolerance or comparator change is made.
 
 1. Continue this exact INFO0 history only to the first caller
-   `RX_PHASE1_CALL→TX_PHASE1_CALL` edge. Observe the native counter>95 and received
-   halfword==1 predicates and peer tone progression before proposing another
+   `RX_PHASE1_CALL→TX_PHASE1_CALL` edge. Observe the native counter>95 and complete
+   received-register==1 predicates and peer tone progression before proposing another
    fixture extension. Do not jump directly to status 2/3 or plant progression.
 2. For V8's remaining helper-null join, trace the candidate expansion/threading
    limitation against native selector rejection before another source control.
