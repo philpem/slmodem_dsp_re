@@ -92,6 +92,11 @@
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/VPcmFloModem.h"
+#include "dsplib/dp.h"
+extern "C" {
+#include "dsplib/dp_param.h"
+}
+#include "dsplib/modem_params.h"
 
 extern "C" {
 
@@ -104,6 +109,19 @@ unsigned long ref_VPcmV34GetVisualDiagnostics(void *obj, int what,
     asm("ref_VPcmV34GetVisualDiagnostics");
 
 extern unsigned int ref_dsplibs_debug_level;
+
+void dp_vpcm_init(void);
+void ref_dp_vpcm_init(void);
+void *ref_dp_runtime_create(void *modem);
+void ref_dp_runtime_delete(void *runtime);
+void ref_V34EchoCleanUp(struct v34_echo *e);
+void ref_V34EchoUpdateDelayLine(struct v34_echo *e, short sample);
+int ref_V34EchoFilter(struct v34_echo *e, short lag);
+void ref_V34EchoAdapt(struct v34_echo *e, short err);
+void ref_V34EqualizerCleanUp(struct v34_equalizer *q);
+void ref_V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re,
+                                    short im);
+void ref_V34EqualizerAdapt(struct v34_equalizer *q, short re, short im);
 
 /*
  * THE ELEVEN ACCESSORS, CALLED BY NAME RATHER THAN THROUGH THE DISPATCHER.
@@ -1439,6 +1457,262 @@ run_members(void)
 	return diff_end();
 }
 
+/*
+ * Native-constructed owners, then an explicit DSP-component boundary.
+ *
+ * This is separate from setup_visual's synthetic grid. Both registered create
+ * operations really construct their own graphs (9600 Hz, 48-sample fragment,
+ * V.34 id, caller). The host supplies a zero dsp_info, codec 4, rates 300..56000
+ * and zero I/O delay through the existing parameter apparatus. No callback or
+ * live object is fabricated/copied. vpcm_create's root+0x2c and Create's status
+ * 0 / role 0x65 stores are independent native anchors, not inferred from the
+ * diagnostic's output. Pointers are translated only in comparison snapshots.
+ *
+ * The narrower boundary is intentional: the caller supplies short echo-history
+ * samples, lag 0 and a short adaptation error through the exported echo APIs;
+ * likewise complex short samples/errors through the equalizer APIs. This proves
+ * component input histories, NOT that a modem handshake generated these errors.
+ * All samples lie within the native transmit caller's half-short range. One
+ * complete delay-line fill makes lag 0's read initialized and in bounds. Reset
+ * clears the histories/taps before use; no count, pointer or coefficient store
+ * is planted. Zero/one are output capacities, never forged filter lengths.
+ *
+ * Native anchors: init 0x71d70 sets taps 144/dlen 1656 and the five pointers;
+ * EchoFilter 0x71ec0 shifts history and appends cursor+lag+taps-1; EchoAdapt
+ * 0x71f50 adds hist*err to split 32-bit taps. Thus after one Filter/Adapt the
+ * last near/far taps are +4/-8 and all earlier taps remain zero. Equalizer
+ * cleanup 0x727e0 clears 0x3cc bytes and writes unity 4096 at +0x190. Adapt
+ * 0x729a0 on 80 copies of (1024,-1024), error (256,128), subtracts 2 from
+ * every real tap and 6 from every imaginary tap. These integer known answers
+ * are independent of the visual implementation. Visual 0x7364 reads signed
+ * shorts at owner+0x770/+0x810 and doubles them; echo arms use signed shorts
+ * from the separately installed banks. Separate output storage cannot alias.
+ *
+ * PCM status 2 and selector 8's nontrivial status/role paths are NOT covered.
+ */
+static void
+history_owners(struct v34_object *a, struct v34_object *b, long tag)
+{
+	int bank, side;
+	struct v34_object *o[2] = { a, b };
+	static unsigned char s[2][0x1080];
+	static const unsigned int off[2][5] = {
+		{ 0x81f8, 0x81f8, 0x9018, 0x80d8, 0x8ee8 },
+		{ 0x9278, 0x9278, 0xa098, 0x9158, 0x9f68 }
+	};
+
+	for (bank = 0; bank < 2; bank++) {
+		for (side = 0; side < 2; side++) {
+			struct v34_echo *e = bank ? &o[side]->echo1 :
+						    &o[side]->echo0;
+			unsigned int k;
+
+			memcpy(s[side], e, sizeof s[side]);
+			for (k = 0; k < 5; k++) {
+				unsigned int p;
+
+				memcpy(&p, s[side] + 4 * k, 4);
+				p -= (unsigned int)(size_t)o[side];
+				diff_eq_int("history: echo pointer owner (%ld)",
+					    p, off[bank][k],
+					    tag * 100 + side * 10 + bank);
+				memcpy(s[side] + 4 * k, &p, 4);
+			}
+			diff_eq_int("history: native tap count (%ld)",
+				    e->taps, 144, tag);
+			diff_eq_int("history: native delay length (%ld)",
+				    e->dlen, 1656, tag);
+		}
+		diff_eq_obj_(__FILE__, __LINE__, "history echo owner",
+			     "0x1080 bytes", s[0], s[1], sizeof s[0],
+			     tag * 10 + bank);
+	}
+	diff_eq_obj("history equalizer owner", struct v34_equalizer,
+		    &a->receiver.equalizer, &b->receiver.equalizer, tag);
+}
+
+static int
+run_visual_history(void)
+{
+	struct dp_operations *ops[2] = { 0, 0 };
+	struct dp *root[2] = { 0, 0 };
+	void *runtime[2] = { 0, 0 };
+	struct v34_object *o[2];
+	struct dsp_info info[2];
+	static unsigned char before[2][0xd258];
+	static const int selector[] = { 1, 5, 6 };
+	static const unsigned long capacity[] = { 0, 1, 7, 192 };
+	static struct int_complex expected[PTS_SLOT];
+	int side, i, stage, sel, cap, calls = 0;
+	int producer_calls = 0;
+
+	diff_begin("visual lifecycle: V.34 constructed owner / DSP component inputs");
+	set_level(0);
+	harness_reg_reset();
+	dp_vpcm_init();
+	ref_dp_vpcm_init();
+	for (i = 0; i < harness_reg_ours.count; i++)
+		if (harness_reg_ours.id[i] == 34)
+			ops[0] = (struct dp_operations *)harness_reg_ours.ops[i];
+	for (i = 0; i < harness_reg_ref.count; i++)
+		if (harness_reg_ref.id[i] == 34)
+			ops[1] = (struct dp_operations *)harness_reg_ref.ops[i];
+	diff_eq_int("history: both native operation tables registered",
+		    ops[0] != 0 && ops[1] != 0, 1, 0);
+	if (!ops[0] || !ops[1])
+		return diff_end();
+
+	for (side = 0; side < 2; side++) {
+		harness_param_reset();
+		memset(&info[side], 0, sizeof info[side]);
+		harness_param_set(MDMPRM_DSPINFO, (long)(size_t)&info[side]);
+		harness_param_set(MDMPRM_CODECTYPE, 4);
+		runtime[side] = side ? ref_dp_runtime_create(&info[side]) :
+				      dp_runtime_create(&info[side]);
+		diff_eq_int("history: runtime constructed (%ld)",
+			    runtime[side] != 0, 1, side);
+		if (!runtime[side])
+			break;
+		harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime[side]);
+		harness_param_set(MDMPRM_MIN_RATE, 300);
+		harness_param_set(MDMPRM_MAX_RATE, 56000);
+		harness_param_set(MDMPRM_IODELAY, 0);
+		root[side] = ops[side]->create(&info[side], 34, 1, 9600, 48,
+					     ops[side]);
+		diff_eq_int("history: graph constructed (%ld)",
+			    root[side] != 0, 1, side);
+		if (!root[side])
+			break;
+		diff_eq_int("history: native root extent (%ld)",
+			    harness_alloc_reqsize(root[side]), 0xd258, side);
+		o[side] = (struct v34_object *)
+			  ((unsigned char *)root[side] + 0x2c);
+		diff_eq_int("history: Create established V.34 status (%ld)",
+			    o[side]->status, 0, side);
+		diff_eq_int("history: Create established caller role (%ld)",
+			    o[side]->role, 0x65, side);
+	}
+	if (root[0] && root[1]) {
+		history_owners(o[0], o[1], -1);
+		for (stage = 0; stage < 2; stage++) {
+			for (side = 0; side < 2; side++) {
+				struct v34_equalizer *q = &o[side]->receiver.equalizer;
+
+				if (stage == 0) {
+					if (side) {
+						ref_V34EchoCleanUp(&o[side]->echo0);
+						ref_V34EchoCleanUp(&o[side]->echo1);
+						ref_V34EqualizerCleanUp(q);
+					} else {
+						V34EchoCleanUp(&o[side]->echo0);
+						V34EchoCleanUp(&o[side]->echo1);
+						V34EqualizerCleanUp(q);
+					}
+					producer_calls += 3;
+				} else {
+					/* Real producers; no internal field writes. */
+					for (i = 0; i < 1656; i++) {
+						if (side) {
+							ref_V34EchoUpdateDelayLine(&o[side]->echo0, 1024);
+							ref_V34EchoUpdateDelayLine(&o[side]->echo1, -2048);
+						} else {
+							V34EchoUpdateDelayLine(&o[side]->echo0, 1024);
+							V34EchoUpdateDelayLine(&o[side]->echo1, -2048);
+						}
+					}
+					if (side) {
+						diff_eq_int("history: first near filter is zero",
+							    ref_V34EchoFilter(&o[side]->echo0, 0), 0, side);
+						diff_eq_int("history: first far filter is zero",
+							    ref_V34EchoFilter(&o[side]->echo1, 0), 0, side);
+						ref_V34EchoAdapt(&o[side]->echo0, 256);
+						ref_V34EchoAdapt(&o[side]->echo1, 256);
+					} else {
+						diff_eq_int("history: first near filter is zero",
+							    V34EchoFilter(&o[side]->echo0, 0), 0, side);
+						diff_eq_int("history: first far filter is zero",
+							    V34EchoFilter(&o[side]->echo1, 0), 0, side);
+						V34EchoAdapt(&o[side]->echo0, 256);
+						V34EchoAdapt(&o[side]->echo1, 256);
+					}
+					for (i = 0; i < 80; i++) {
+						if (side)
+							ref_V34EqualizerUpdateDelayLine(q, 1024, -1024);
+						else
+							V34EqualizerUpdateDelayLine(q, 1024, -1024);
+					}
+					if (side)
+						ref_V34EqualizerAdapt(q, 256, 128);
+					else
+						V34EqualizerAdapt(q, 256, 128);
+					producer_calls += 3312 + 4 + 80 + 1;
+				}
+			}
+			history_owners(o[0], o[1], stage);
+			for (sel = 0; sel < 3; sel++)
+			for (cap = 0; cap < 4; cap++) {
+				unsigned long got[2], k, n = capacity[cap];
+				unsigned long bound = sel == 0 ? 80 : 144;
+				long tag = stage * 100 + selector[sel] * 10 + cap;
+
+				if (n > bound)
+					n = bound;
+				memset(expected, 0x5a, sizeof expected);
+				memcpy(pts[0], expected, sizeof expected);
+				memcpy(pts[1], expected, sizeof expected);
+				for (k = 0; k < n; k++) {
+					if (sel == 0) {
+						expected[k].re = (k == 40 ? 8192 : 0) - stage * 4;
+						expected[k].im = -stage * 12;
+					} else {
+						expected[k].re = 0;
+						expected[k].im = stage && k == 143 ?
+								 (sel == 1 ? 4 : -8) : 0;
+					}
+				}
+				for (side = 0; side < 2; side++)
+					memcpy(before[side], root[side], sizeof before[side]);
+				got[0] = VPcmV34GetVisualDiagnostics(o[0], selector[sel],
+							   pts[0], capacity[cap]);
+				got[1] = ref_VPcmV34GetVisualDiagnostics(o[1], selector[sel],
+							       pts[1], capacity[cap]);
+				calls += 2;
+				for (side = 0; side < 2; side++) {
+					diff_eq_int("history: anchored count (%ld)",
+						    got[side], n, tag * 2 + side);
+					diff_eq_obj_(__FILE__, __LINE__, "history output + guard",
+						     "native integer known answer", pts[side],
+						     expected, sizeof expected, tag * 2 + side);
+					diff_eq_obj_(__FILE__, __LINE__, "history: root unchanged",
+						     "0xd258 bytes, pointers intact", root[side],
+						     before[side], sizeof before[side], tag * 2 + side);
+				}
+				diff_eq_obj_(__FILE__, __LINE__, "history differential output",
+					     "points + guard", pts[0], pts[1], sizeof pts[0], tag);
+			}
+		}
+	}
+	for (side = 0; side < 2; side++) {
+		if (root[side])
+			ops[side]->destroy(root[side]);
+		if (runtime[side]) {
+			if (side)
+				ref_dp_runtime_delete(runtime[side]);
+			else
+				dp_runtime_delete(runtime[side]);
+		}
+	}
+	harness_param_reset();
+	diff_eq_int("history: executed diagnostic calls (both implementations)",
+		    calls, 48, 0);
+	diff_eq_int("history: explicit component init/input calls (both implementations)",
+		    producer_calls, 6800, 0);
+	printf("visual lifecycle denominator: 2 constructed graphs, 3 selectors, "
+	       "2 stages, 4 capacities; %d diagnostic calls, %d component calls\n",
+	       calls, producer_calls);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1450,6 +1724,7 @@ main(void)
 	bad |= run_visual();
 	bad |= run_visual_separation();
 	bad |= run_members();
+	bad |= run_visual_history();
 
 	return bad;
 }
