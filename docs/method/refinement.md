@@ -9635,3 +9635,24 @@ supplied component inputs does not establish modem-generated adaptation historie
 PCM/status-2 and selector-8 states remain unproved by this fixture. Keep those
 boundaries explicit. Final period/structural gate passes 394/0. See
 [waves 36–37](../recovery-waves-36-37.md).
+
+## Follow both layout invocations and distinguish status from progress
+
+Candidate `.31.bbro` first reorders visual selector bodies, but cleanup and a
+second STC reorder inside `.34.stack` choose the final DFE-first layout. Native
+final topology is near-echo-first; original RTL is unavailable. A predeclared
+`-fno-reorder-blocks` control preserves source-arm order, merges the return and
+loses exact SNR without recovering native topology. The two-object/six-verdict
+domain closes as a mechanism diagnostic, not a flag/source recovery. Diagnostic
+normalisation must retain UIDs, operands and edges; identical preprocessed input
+alone does not validate a dump normaliser.
+
+A constructor session argument is not live status, and owner+4 progress is not
+owner+0 status. Real V.92 construction here enters quick-connect status 4/role `0x66`;
+exported retrain clears status 0. Required negotiated phase-2 history for visual
+status 2/3 was not established. An observer-only wrong-owner control fails 6/61,
+distinguishing owners without planting state. Valid PCM echo allocations still
+do not license the status guard. Selector 8's native zero-return stub makes
+output-only coverage blind: a valid future fixture needs call-target observation.
+Preserve these negatives rather than adding a seeded stand-in. See
+[waves 38–39](../recovery-waves-38-39.md) for denominators and next controls.
