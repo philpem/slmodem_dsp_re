@@ -9656,3 +9656,24 @@ do not license the status guard. Selector 8's native zero-return stub makes
 output-only coverage blind: a valid future fixture needs call-target observation.
 Preserve these negatives rather than adding a seeded stand-in. See
 [waves 38–39](../recovery-waves-38-39.md) for denominators and next controls.
+
+## Trace result-value joins before compensating for block order
+
+Native visual DFE guard failures join an explicit zero definition; the previous
+candidate carries its entry-zero result directly to an epilogue. This difference
+exists before block reordering. A baseline-plus-explicit-fallback experiment
+restores the zero definition, native five-class join and near-echo-first selector
+order: two full-TU objects/six verdicts, without case permutations or scratch.
+
+A diagnostic build from the recovered Gentoo recipe and one unchanged replay
+reproduce production raw bytes while exposing predecessor traversal. Probability,
+trace length and first-encountered ties explain the unchanged candidate's two STC
+decisions. These are candidate observations, not original RTL/source uniqueness;
+the alternative's ordinary dumps do not inherit baseline instrumentation claims.
+
+Retain the independently witnessed value boundary, not a presumed layout cause.
+The two-line fallback is 1007 versus native 1023 bytes, still non-exact; neighbours
+and exact/grade-0-or-1 membership remain unchanged. Review changed jump-table
+addends, raw relocations and symbol order explicitly. Focused period and full
+phase 394/0 pass. See [waves 40–41](../recovery-waves-40-41.md) for controls,
+compiler provenance, partial-link result and unestablished status-event histories.
