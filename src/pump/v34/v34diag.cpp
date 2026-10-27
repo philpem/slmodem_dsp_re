@@ -547,7 +547,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerPhase(points, maxCount);
 			else
-				points[0].re = rx->timing_frac;
+				points[0].re = obj->receiver.timing_frac;
 		}
 		points[0].im = 0;
 		n = 1;
@@ -561,7 +561,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerOffset(points, maxCount);
 			else
-				points[0].re = rx->timing_ppm;
+				points[0].re = obj->receiver.timing_ppm;
 		}
 		points[0].im = 0;
 		n = 1;
@@ -574,12 +574,13 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			 * rather than in the V.34 object, so the taps come
 			 * out of the embedded V92EchoCanceller as floats.
 			 */
+			const V92EchoCanceller *echo = &xf->echoCanceller;
 			const float *coefs;
 
-			n = xf->echoCanceller.filterLength;
+			n = echo->filterLength;
 			if (n > maxCount)
 				n = maxCount;
-			coefs = xf->echoCanceller.echoCoeff;
+			coefs = echo->echoCoeff;
 
 			for (i = 0; i < n; i++) {
 				float value = *coefs++;

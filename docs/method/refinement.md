@@ -9611,3 +9611,27 @@ decreases by 12 bytes; its DIFFERENT/raw-different status remains explicit. Bloc
 subowner and resampler-base residuals remain in the ledger, without scratch
 compensation or unsupported compiler-stage attribution. Focused period and the
 394/0 full phase gate pass. See [waves 34–35](../recovery-waves-34-35.md).
+
+## Cross equivalent owner bases once, then strengthen the input history
+
+The visual-diagnostics follow-up crosses explicit PCM subowner formation with
+owner-rooted resampler reads: four objects/12 function verdicts, 23 layout
+assertions per object, and a full-object byte-identical unchanged control.
+Native session `+0x6bd0` then `+0x14/+0x20` supports naming the existing echo
+subowner. Native owner `+0x43c/+0x434` supports the two fallback load encodings;
+complete addresses remain equal to receiver `+0x1d8/+0x1d0`. Preserve owner,
+offset and width at each changed use before interpreting the base choice.
+
+The retained partial changes only three instruction regions; neighbours, all
+40 relocation records and non-text payloads remain identical. Target size stays
+1006/native 1023 and positioned matches decrease one byte. This is bounded native
+base recovery, not unique source syntax or a reason to expand cast spellings.
+
+A separate fixture constructs the actual owner and drives exported echo and
+equaliser component APIs: 24 paired trials, 278 new assertions and independent
+integer known answers. A wrong-owner near-to-far control fails 2/278 assertions.
+It supplements the unchanged synthetic grid. Constructor provenance plus caller-
+supplied component inputs does not establish modem-generated adaptation histories;
+PCM/status-2 and selector-8 states remain unproved by this fixture. Keep those
+boundaries explicit. Final period/structural gate passes 394/0. See
+[waves 36–37](../recovery-waves-36-37.md).
