@@ -9487,3 +9487,51 @@ these costs alongside the exact-function gain and the operation-width evidence.
 
 The [proposed follow-on waves](../source-recovery-waves-after-wave25.md) start
 with the parked signedness audit and relocated-data ownership inventory.
+
+## Resolve data targets and observation lifetimes before refining syntax
+
+The [waves 26–29 first pass](../recovery-waves-26-29.md) adds a relocation-aware
+data inventory and closes bounded source families without adopting near fits.
+
+**Compare pointer initialisers by their relocation targets.** A changed named
+target can leave every raw byte of a pointer table unchanged: the addend is
+still zero and the target identity lives in the relocation record. Conversely,
+repacking a LOCAL object or mergeable string changes raw addends without
+changing the initialiser's resolved descriptor. `tools/toolchain/datareloc.py`
+compares ordinary bytes plus field positions and target identities/offsets,
+retaining unique LOCAL FILE ownership. It reports unsupported and ambiguous
+records explicitly. Mergeable string contents are a narrower comparison than
+pointer identity; GLOBAL/WEAK names establish no TU owner. Keep strict
+partial-object comparison separate.
+
+The calibrated inventory resolves 96 of 100 relocated keys (659 of 677 relocations
+per side). Four COMDAT/linkonce vtables containing 18 relocations stay unsupported.
+Together with 662 non-relocated matches this is 758 matched / 4 unsupported over 762
+reference keys, with 765 candidate keys and three apparatus extras. The controls
+pass 22 assertions over 21 real ELF32 objects, including the identical-raw-bytes
+wrong-target negative. A clean supported subset is not a whole-object result.
+
+**A zero-extending load alone does not recover a field declaration.** The four
+V29 countdown handlers sign-test the low half and sign-extend a register for a
+later full-width comparison. Six paired field-only signedness controls leave
+all 84 paired function bodies unchanged. Two complete families (42 objects,
+196 function verdicts, including both controls) yield no exact target and do
+not explain the native reload before subtraction. Leave the field neutral
+rather than selecting a same-sized but different instruction graph. Preserve
+the owner when inventorying raw offsets: the constructor's later `+0x16` clear
+belongs to a different object reached through parent `+0x24`.
+
+**Track when a value is observed, not only which field supplies it.** Native
+`V34GiveINFO0dBits` reads the session variant at distinct diagnostic/selection
+points and delays a decoded-word read until earlier conjunction terms pass.
+The reconstruction captures scalars early. Two declared families compile 14
+complete objects / 98 function verdicts and produce no exact target; a 755/758-byte
+near-fit still has the wrong load/boolean graph, while a 758-byte body differs
+in 118 bytes and changes two neighbours. None is retained.
+
+Writing a live member expression repeatedly does not force repeated machine
+loads: GCC can reuse it. A future recovery must explain the original observation
+points through owner/type/alias evidence or period RTL, rather than add volatile
+accesses or repeat nearby syntax. Executed component histories and planted
+boundary probes likewise need separate claims; the first fixture audit records
+the outstanding V27 constructor-to-training callback history.
