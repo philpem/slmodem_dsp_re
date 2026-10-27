@@ -6,6 +6,13 @@ names: 1161 EXACT, one UNRESOLVED, 35 REGALLOC, 93 BYTES and 562 SIZE;
 grade 0-or-1 is 1197. Period differential passes 394 binaries with no failures.
 These are proposal baselines, not permanent counts.
 
+The [first bounded pass](recovery-waves-26-29.md) completes the V29 declaration
+audit and two negative source families, adds a calibrated relocation-aware data
+inventory, refreshes the structural queues, closes two INFO0 timing families,
+and audits the six magnitude fixtures. No reconstruction source change is
+retained from that pass. The V27 lifecycle follow-up is
+[issue #410](https://github.com/philpem/slmodem_dsp_re/issues/410).
+
 ## Wave 26: finish the width audit before changing field types
 
 Start with the parked V29 countdown experiment: `TxHdxSCR1V29`,
