@@ -234,7 +234,7 @@ const char *const v8SequenceName[4] = {
 static struct v8_tx_sequence *
 selected_sequence(struct v8 *v, int which)
 {
-	switch (which) {
+	switch ((unsigned int)which) {
 	case V8_SET_CM:	return &v->seq[0];
 	case V8_SET_JM:	return &v->seq[2];
 	case V8_SET_CJ:	return &v->seq[1];
