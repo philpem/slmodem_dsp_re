@@ -9677,3 +9677,27 @@ and exact/grade-0-or-1 membership remain unchanged. Review changed jump-table
 addends, raw relocations and symbol order explicitly. Focused period and full
 phase 394/0 pass. See [waves 40–41](../recovery-waves-40-41.md) for controls,
 compiler provenance, partial-link result and unestablished status-event histories.
+
+## Require compiler causality before a new source control
+
+A four-target residue investigation traces expansion, if-conversion, reload and
+tail duplication rather than trying alternate structures. Nine unchanged raw
+full-TU replays establish the diagnostic path. Live-set checks explain blocked
+pointer motion and its later LEA-enabled legality; `stmt.c` explains unsigned
+partitioning and bounded-zero omission. These are candidate compiler causes,
+not evidence of original helper factoring or source spelling.
+
+Only one native-backed source prediction follows: an unsigned switch-expression
+cast in V8SetMessage's selector helper. Two cells reproduce the predicted first
+RTL and final branch prefix, while six neighbours and data remain unchanged.
+The public/helper argument stays int; helper-null join remains unresolved. The
+partial remains 403/native 392, with no exact gain. Do not expand this into helper,
+case-order or code-structure palettes; trace the remaining compiler unknown first.
+
+Generated INFO0 peer history illustrates the corresponding fixture discipline:
+observe native bits and state progression, independently compute CRC, and make
+external CRC corruption a passing rejection case. A copied-observer negative
+control demonstrates sensitivity separately. The maintained 7808 assertions extend
+only the INFO0 prefix, not later negotiation or status reachability. Full phase
+394/0 passes. See [waves 42–43](../recovery-waves-42-43.md) for denominators,
+collateral, invalid-run exclusions and bounded next steps.

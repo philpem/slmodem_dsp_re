@@ -1713,6 +1713,380 @@ run_visual_history(void)
 	return diff_end();
 }
 
+/*
+ * INFO0 at the registered sample-buffer boundary (wave43, contract 6451157725).
+ *
+ * Each endpoint has its own real runtime and id-34 constructed graph. Caller
+ * inputs are the peer's actual short outputs through a 288-sample delay, with
+ * codec 4, rates 2400..33600, I/O delay 216, 9600 Hz and max fragment 48. Four
+ * samples per process call are a legal subdivision of that fragment. No state,
+ * callback, message, receiver count or history is planted or copied into an
+ * owner. Existing visual fixtures above retain their separate input domains.
+ *
+ * Native TX54 counts to ten (0x6410b..0x6411e), selects TX24 and calls
+ * V34SetINFO0aBits on O+0xa94c (0x685b8..0x685d1). The record has words ff,84,0,
+ * length17, CRC ffff and lead-in ff72. Native FSK supplies the recovered bits;
+ * 0x66944..0x66950 requires length+16 before the halfword CRC comparison at
+ * 0x6bda4. The polynomial is 1021, MSB first (0x66907/0x66922). Acceptance at
+ * step445 moves the caller microstate44->58, with both transmitters already
+ * 24->60. The received payload is ff,84,0 (17 bits), CRC 8fd9. Received word2
+ * also contains CRC bits, so it must not be treated as a third payload byte.
+ *
+ * The second case erases only external caller input at steps390..410, after
+ * payload completion at382. It preserves the payload and reaches count33, but
+ * native CRC rejection at442 resets the register before observation. The last
+ * invalid-frame bit is therefore UNKNOWN; either completion of its observed
+ * fifteen-bit CRC prefix must disagree. Rejection/restart is a passing case.
+ *
+ * This proves one INFO0 component recipe and one channel-error case. It does
+ * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
+ * interoperability. The positive history stops before the next process call.
+ */
+enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
+	INFO0_BITS = 33 };
+
+/* Pointer-free observations. Pointers are normalised only in these copies. */
+struct info0_projection {
+	int rc, status, progress, role, micro, rx, tx;
+	int count, pending, sr, rx_record, rx_length, rx_crc;
+	int tx_record, tx_length, tx_pos, tx_crc, tx_avail, tx_repeats;
+	int tx_word[3], rx_word[3];
+	unsigned tx_acc;
+};
+
+struct info0_events {
+	int sync_step, tx_start_step[2], tx_done_step[2];
+	int terminal_step, accepts, rejects, consumed, observed;
+	int bit[INFO0_BITS], bit_step[INFO0_BITS];
+	unsigned payload, computed_crc, received_crc, crc_prefix;
+	int payload_step, payload_crc, unexpected_returns, nonzero_status_progress;
+};
+
+static void
+info0_project(struct info0_projection *p, struct v34_object *o, int rc)
+{
+	const struct v34_bitsource *r =
+		(const struct v34_bitsource *)o->paa70;
+	const struct v34_bitsource *t =
+		(const struct v34_bitsource *)o->paa6c;
+	int i;
+
+	memset(p, 0, sizeof *p);
+	p->rc = rc;
+	p->status = o->status;                 /* O+0, not E+0 */
+	p->progress = o->progress;             /* E=O+4 */
+	p->role = o->role;
+	p->micro = o->microstate;
+	p->rx = o->rxstate;
+	p->tx = o->txstate;
+	p->count = o->short_aa78;
+	p->pending = o->fsk.nbits;
+	p->sr = o->fsk.sr;
+	p->rx_record = r ? (int)((size_t)r - (size_t)o) : -1;
+	p->tx_record = t ? (int)((size_t)t - (size_t)o) : -1;
+	/* Read only the native-owned records, even on a failing pointer check. */
+	if (r == &o->msgrec[1]) {
+		p->rx_length = r->nbits;
+		p->rx_crc = (unsigned short)r->crc;
+		for (i = 0; i < 3; i++)
+			p->rx_word[i] = (unsigned short)r->word[i];
+	}
+	if (t == &o->msgrec[0]) {
+		p->tx_length = t->nbits;
+		p->tx_pos = t->pos;
+		p->tx_crc = (unsigned short)t->crc;
+		p->tx_avail = t->avail;
+		p->tx_repeats = t->repeats;
+		p->tx_acc = (unsigned)t->acc;
+		for (i = 0; i < 3; i++)
+			p->tx_word[i] = (unsigned short)t->word[i];
+	}
+}
+
+static unsigned
+info0_crc_bit(unsigned crc, unsigned bit)
+{
+	unsigned feedback = (crc >> 15) ^ bit;
+
+	crc = (crc << 1) & 0xffff;
+	return feedback ? crc ^ 0x1021 : crc;
+}
+
+static void
+info0_observe(struct info0_events *e, const struct info0_projection *p,
+	      const struct info0_projection *prev, const char *text,
+	      int step, int ep, int side)
+{
+	long tag = side * 10000 + ep * 1000 + step;
+	int n = 0, bit = p->sr & 1;
+
+	e->unexpected_returns += p->rc != DPSTAT_OK;
+	e->nonzero_status_progress += p->status != 0 || p->progress != 0;
+	if (prev->tx == 54 && p->tx == 24 && e->tx_start_step[ep] < 0)
+		e->tx_start_step[ep] = step;
+	if (prev->tx == 24 && p->tx == 60 && e->tx_done_step[ep] < 0)
+		e->tx_done_step[ep] = step;
+	if (step == 145) {
+		static const int words[3] = { 0xff, 0x84, 0 };
+
+		diff_eq_int("INFO0: generated record owner (%ld)", p->tx_record,
+			    0xa94c, tag);
+		diff_eq_obj("INFO0 generated words", int[3], p->tx_word, words, tag);
+		diff_eq_int("INFO0: generated length (%ld)", p->tx_length, 17, tag);
+		diff_eq_int("INFO0: initial producer CRC (%ld)", p->tx_crc, 0xffff, tag);
+		diff_eq_int("INFO0: lead-in accumulator (%ld)", p->tx_acc, 0xff72, tag);
+		diff_eq_int("INFO0: lead-in bit count (%ld)", p->tx_avail, 16, tag);
+		diff_eq_int("INFO0: initial producer position (%ld)", p->tx_pos, 0, tag);
+	}
+	if (ep != 0)
+		return;                         /* primary receive role: caller */
+	if (prev->micro == 41 && p->micro == 44 && e->sync_step < 0) {
+		e->sync_step = step;
+		diff_eq_int("INFO0: receive record owner (%ld)", p->rx_record,
+			    0xa97c, tag);
+		diff_eq_int("INFO0: receive length (%ld)", p->rx_length, 17, tag);
+		diff_eq_int("INFO0: receive CRC starts at ffff (%ld)",
+			    p->rx_crc, 0xffff, tag);
+		diff_eq_int("INFO0: receive count starts at zero (%ld)", p->count, 0, tag);
+	}
+	if (prev->micro == 44 && p->micro != 44) {
+		/* Acceptance clears the counter; rejection clears CRC and sr. */
+		n = prev->count + 1;
+		e->terminal_step = step;
+		e->accepts += strstr(text, "info0 received in DET_INFO") != 0;
+		e->rejects += strstr(text, "info0 CRC not received properly in DET_INFO") != 0;
+		if (p->micro == 41)
+			bit = -1;
+		else
+			e->received_crc = p->sr; /* read-only caller acceptance observer */
+	} else if (prev->micro == 44 && p->count != prev->count) {
+		diff_eq_int("INFO0: one recovered bit per consumption (%ld)",
+			    p->count, prev->count + 1, tag);
+		n = p->count;
+	}
+	if (n == 0)
+		return;
+	diff_eq_int("INFO0: contiguous consumed count (%ld)", n, e->consumed + 1, tag);
+	diff_eq_int("INFO0: consumed count in message bound (%ld)",
+		    n >= 1 && n <= INFO0_BITS, 1, tag);
+	if (n < 1 || n > INFO0_BITS)
+		return;
+	e->consumed = n;
+	e->bit[n - 1] = bit;
+	e->bit_step[n - 1] = step;
+	e->observed += bit >= 0;
+	if (n <= INFO0_PAYLOAD && bit >= 0) {
+		e->payload = (e->payload << 1) | (unsigned)bit;
+		e->computed_crc = info0_crc_bit(e->computed_crc, (unsigned)bit);
+		diff_eq_int("INFO0: native payload CRC clock (%ld)", p->rx_crc,
+			    e->computed_crc, tag);
+		if (n == INFO0_PAYLOAD) {
+			e->payload_step = step;
+			e->payload_crc = p->rx_crc;
+		}
+	} else if (n < INFO0_BITS && bit >= 0) {
+		/* Fifteen CRC bits remain observable even on native rejection. */
+		e->crc_prefix = (e->crc_prefix << 1) | (unsigned)bit;
+	}
+}
+
+static int
+run_info0_history(void)
+{
+	struct dp_operations *ops[2] = { 0, 0 };
+	int erased_case, side, ep, i, step;
+	int calls = 0, graphs = 0, runtimes = 0, destroys = 0, deletes = 0;
+
+	diff_begin("INFO0 lifecycle: generated frame / external CRC-window erasure");
+	set_level(0);
+	harness_reg_reset();
+	dp_vpcm_init();
+	ref_dp_vpcm_init();
+	for (i = 0; i < harness_reg_ours.count; i++)
+		if (harness_reg_ours.id[i] == 34)
+			ops[0] = (struct dp_operations *)harness_reg_ours.ops[i];
+	for (i = 0; i < harness_reg_ref.count; i++)
+		if (harness_reg_ref.id[i] == 34)
+			ops[1] = (struct dp_operations *)harness_reg_ref.ops[i];
+	diff_eq_int("INFO0: both registered tables", ops[0] != 0 && ops[1] != 0, 1, 0);
+	if (!ops[0] || !ops[1])
+		return diff_end();
+
+	for (erased_case = 0; erased_case < 2; erased_case++) {
+		struct dsp_info info[2][2];
+		struct dp *root[2][2] = { { 0, 0 }, { 0, 0 } };
+		void *runtime[2][2] = { { 0, 0 }, { 0, 0 } };
+		struct v34_object *o[2][2];
+		struct info0_projection p[2][2], prev[2][2];
+		struct info0_events event[2];
+		short wire[2][2][INFO0_DELAY], in[2][2][4], out[2][2][4];
+		int built = 0, wp = 0, erased = 0;
+		int steps = erased_case ? 443 : INFO0_STEPS;
+
+		memset(info, 0, sizeof info);
+		memset(wire, 0, sizeof wire);
+		memset(event, 0, sizeof event);
+		for (side = 0; side < 2; side++) {
+			event[side].sync_step = event[side].terminal_step = -1;
+			event[side].computed_crc = 0xffff;
+			for (i = 0; i < INFO0_BITS; i++)
+				event[side].bit[i] = event[side].bit_step[i] = -1;
+			for (ep = 0; ep < 2; ep++) {
+				event[side].tx_start_step[ep] = event[side].tx_done_step[ep] = -1;
+				harness_param_reset();
+				harness_param_set(MDMPRM_DSPINFO, (long)(size_t)&info[side][ep]);
+				harness_param_set(MDMPRM_CODECTYPE, 4);
+				runtime[side][ep] = side ? ref_dp_runtime_create(&info[side][ep]) :
+							 dp_runtime_create(&info[side][ep]);
+				diff_eq_int("INFO0: real runtime (%ld)", runtime[side][ep] != 0,
+					    1, side * 2 + ep);
+				if (!runtime[side][ep])
+					continue;
+				runtimes++;
+				harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime[side][ep]);
+				harness_param_set(MDMPRM_MIN_RATE, 2400);
+				harness_param_set(MDMPRM_MAX_RATE, 33600);
+				harness_param_set(MDMPRM_IODELAY, 216);
+				root[side][ep] = ops[side]->create(&info[side][ep], 34, ep == 0,
+								9600, 48, ops[side]);
+				diff_eq_int("INFO0: real graph (%ld)", root[side][ep] != 0,
+					    1, side * 2 + ep);
+				if (!root[side][ep])
+					continue;
+				graphs++;
+				built++;
+				o[side][ep] = (struct v34_object *)((unsigned char *)root[side][ep] + 0x2c);
+				diff_eq_int("INFO0: root extent (%ld)", harness_alloc_reqsize(root[side][ep]),
+					    0xd258, side * 2 + ep);
+				diff_eq_int("INFO0: constructed role (%ld)", o[side][ep]->role,
+					    ep ? 0x66 : 0x65, side * 2 + ep);
+				info0_project(&prev[side][ep], o[side][ep], 0);
+				diff_eq_int("INFO0: constructed microstate (%ld)", prev[side][ep].micro, 41, ep);
+				diff_eq_int("INFO0: constructed RX (%ld)", prev[side][ep].rx, 43, ep);
+				diff_eq_int("INFO0: constructed TX (%ld)", prev[side][ep].tx, 54, ep);
+			}
+		}
+		if (built == 4) {
+			dsplib_debug_capture_on = 1;
+			set_level(2);
+			for (step = 0; step < steps; step++) {
+				for (side = 0; side < 2; side++)
+				for (ep = 0; ep < 2; ep++)
+				for (i = 0; i < 4; i++)
+					in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+				if (erased_case && step >= 390 && step <= 410) {
+					for (side = 0; side < 2; side++)
+						memset(in[side][0], 0, sizeof in[side][0]);
+					erased += 4; /* per caller, not summed across implementations */
+				}
+				for (ep = 0; ep < 2; ep++) {
+					for (side = 0; side < 2; side++) {
+						int rc;
+						long tag = erased_case * 10000 + ep * 1000 + step;
+
+						dsplib_debug_capture_reset();
+						rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+						calls++;
+						info0_project(&p[side][ep], o[side][ep], rc);
+						diff_eq_int("INFO0: debug capture complete (%ld)",
+							    dsplib_debug_capture_complete(side), 1, tag * 2 + side);
+						info0_observe(&event[side], &p[side][ep], &prev[side][ep],
+							      dsplib_debug_capture_text(side), step, ep, side);
+						prev[side][ep] = p[side][ep];
+					}
+					diff_eq_obj("INFO0 process return/state projection", struct info0_projection,
+						    &p[0][ep], &p[1][ep], erased_case * 10000 + ep * 1000 + step);
+					diff_eq_obj("INFO0 process output", short[4], out[0][ep], out[1][ep],
+						    erased_case * 10000 + ep * 1000 + step);
+				}
+				for (side = 0; side < 2; side++)
+				for (ep = 0; ep < 2; ep++)
+				for (i = 0; i < 4; i++)
+					wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+				wp = (wp + 4) % INFO0_DELAY;
+			}
+			set_level(0);
+			dsplib_debug_capture_on = 0;
+			for (side = 0; side < 2; side++) {
+				const struct info0_events *e = &event[side];
+				const struct info0_projection *last = &p[side][0];
+				long tag = erased_case * 2 + side;
+
+				diff_eq_int("INFO0: sync acquired (%ld)", e->sync_step, 314, tag);
+				for (ep = 0; ep < 2; ep++) {
+					diff_eq_int("INFO0: matched TX record production (%ld)", e->tx_start_step[ep], 145, tag * 2 + ep);
+					diff_eq_int("INFO0: matched TX completion (%ld)", e->tx_done_step[ep], 358, tag * 2 + ep);
+				}
+				diff_eq_int("INFO0: terminal process step (%ld)", e->terminal_step, steps - 1, tag);
+				diff_eq_int("INFO0: all 17+16 bits consumed (%ld)", e->consumed, INFO0_BITS, tag);
+				diff_eq_int("INFO0: observed bit values (%ld)", e->observed, erased_case ? 32 : 33, tag);
+				diff_eq_int("INFO0: generated payload known answer (%ld)", e->payload, 0x1ff08, tag);
+				diff_eq_int("INFO0: independently calculated CRC (%ld)", e->computed_crc, 0x8fd9, tag);
+				diff_eq_int("INFO0: payload completed before erasure (%ld)", e->payload_step, 382, tag);
+				diff_eq_int("INFO0: native payload CRC known answer (%ld)", e->payload_crc, 0x8fd9, tag);
+				diff_eq_int("INFO0: expected acceptance count (%ld)", e->accepts, !erased_case, tag);
+				diff_eq_int("INFO0: expected rejection count (%ld)", e->rejects, erased_case, tag);
+				diff_eq_int("INFO0: final caller microstate (%ld)", last->micro, erased_case ? 41 : 58, tag);
+				diff_eq_int("INFO0: final caller RX (%ld)", last->rx, 43, tag);
+				diff_eq_int("INFO0: final caller TX (%ld)", last->tx, erased_case ? 24 : 60, tag);
+				diff_eq_int("INFO0: final caller counter (%ld)", last->count, erased_case ? 33 : 0, tag);
+				diff_eq_int("INFO0: all process returns OK (%ld)", e->unexpected_returns, 0, tag);
+				diff_eq_int("INFO0: live status and engine progress stay zero (%ld)", e->nonzero_status_progress, 0, tag);
+				if (erased_case) {
+					diff_eq_int("INFO0: invalid last bit remains unknown (%ld)", e->bit[32], -1, tag);
+					diff_eq_int("INFO0: either CRC completion is rejected (%ld)",
+						    e->crc_prefix * 2 != e->computed_crc &&
+						    e->crc_prefix * 2 + 1 != e->computed_crc, 1, tag);
+					diff_eq_int("INFO0: CRC failure reset register (%ld)", last->sr, 0xffff, tag);
+					diff_eq_int("INFO0: CRC failure reset accumulator (%ld)", last->rx_crc, 0xffff, tag);
+				} else {
+					diff_eq_int("INFO0: received CRC matches native known answer (%ld)", e->received_crc, 0x8fd9, tag);
+					diff_eq_int("INFO0: observed CRC equals independent payload CRC (%ld)", e->received_crc, e->computed_crc, tag);
+					diff_eq_int("INFO0: all sixteen CRC bits match received register (%ld)",
+						    e->crc_prefix * 2 + (unsigned)e->bit[32], e->received_crc, tag);
+					diff_eq_int("INFO0: native accepted CRC is retained (%ld)", last->rx_crc, 0x8fd9, tag);
+					diff_eq_int("INFO0: matching peer microstate (%ld)", p[side][1].micro, 46, tag);
+				}
+				printf("INFO0 case=%s side=%s calls=%d payload_bits=%d CRC=%04x "
+				       "observed_bits=%d terminal=%d accepts=%d rejects=%d erased=%d\n",
+				       erased_case ? "CRC-window erasure" : "generated",
+				       side ? "blob" : "ours", steps * 2, INFO0_PAYLOAD,
+				       e->computed_crc, e->observed, e->terminal_step,
+				       e->accepts, e->rejects, erased);
+			}
+			diff_eq_obj("INFO0 caller event transcript", struct info0_events,
+				    &event[0], &event[1], erased_case);
+			diff_eq_int("INFO0: external erased sample count", erased, erased_case ? 84 : 0, erased_case);
+		}
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++) {
+			if (root[side][ep]) {
+				ops[side]->destroy(root[side][ep]);
+				destroys++;
+			}
+			if (runtime[side][ep]) {
+				if (side)
+					ref_dp_runtime_delete(runtime[side][ep]);
+				else
+					dp_runtime_delete(runtime[side][ep]);
+				deletes++;
+			}
+		}
+	}
+	harness_param_reset();
+	diff_eq_int("INFO0: process-call denominator", calls, 3556, 0);
+	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
+	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
+	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
+	diff_eq_int("INFO0: runtime deletion denominator", deletes, 8, 0);
+	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
+	       "2 external input cases x 2 implementations x 2 endpoints; "
+	       "%d process calls, %d real graphs, %d real runtimes; "
+	       "INFO0 prefix only, no INFO1/progress1/2/status2/3 claim\n",
+	       calls, graphs, runtimes);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1725,6 +2099,7 @@ main(void)
 	bad |= run_visual_separation();
 	bad |= run_members();
 	bad |= run_visual_history();
+	bad |= run_info0_history();
 
 	return bad;
 }
