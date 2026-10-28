@@ -1740,7 +1740,8 @@ run_visual_history(void)
  *
  * This proves one INFO0 component recipe and one channel-error case. It does
  * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
- * interoperability. The positive history stops before the next process call.
+ * interoperability. The positive history continues only to its first caller
+ * RX_PHASE1_CALL->TX_PHASE1_CALL edge; the CRC rejection prefix is unchanged.
  */
 enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
 	INFO0_BITS = 33 };
@@ -1888,6 +1889,148 @@ info0_observe(struct info0_events *e, const struct info0_projection *p,
 		/* Fifteen CRC bits remain observable even on native rejection. */
 		e->crc_prefix = (e->crc_prefix << 1) | (unsigned)bit;
 	}
+}
+
+static int
+info0_phase1_history(struct dp_operations **ops, struct dp *root[2][2],
+		     struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		     short wire[2][2][INFO0_DELAY], int wp)
+{
+	/* Native 0x66027 gates on incremented signed counter >95; 0x6604c
+	 * requires the COMPLETE received register ==1, not a masked suffix.
+	 * Bound at 1201 further calls (native >1200 timeout, 0x6608b), stopping
+	 * at the first caller departure. The fixed peer recipe witnesses step954.
+	 * Native peer 0x6b4c9/0x6b515 toggles O+358c after counter399; TX60
+	 * uses its low bit to select vect4 at 0x62d48..0x62d62.
+	 */
+	struct phase1_projection {
+		struct info0_projection state;
+		int polarity, substate, filtdelay;
+	} p[2][2];
+	struct phase1_events {
+		int threshold_step, waiting, edge_step, edge_count, edge_sr;
+		int edge_diagnostic, reload, substate, peer_step, peer_polarity;
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, calls = 0;
+	int previous_polarity[2] = { 0, 0 };
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].threshold_step = event[side].edge_step = -1;
+		event[side].peer_step = -1;
+		diff_eq_int("phase1: initial peer tone polarity (%ld)",
+			    o[side][1]->short_358c, 0, side);
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = INFO0_STEPS; step < INFO0_STEPS + 1201; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct phase1_projection *q = &p[side][ep];
+				struct phase1_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				memset(q, 0, sizeof *q);
+				info0_project(&q->state, o[side][ep], rc);
+				q->polarity = o[side][ep]->short_358c;
+				q->substate = o[side][ep]->short_358a;
+				q->filtdelay = o[side][ep]->filtdelay;
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("phase1: debug capture complete (%ld)",
+					    dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("phase1: process return OK (%ld)", q->state.rc, DPSTAT_OK, tag);
+				diff_eq_int("phase1: live status stays zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("phase1: engine progress stays zero (%ld)", q->state.progress, 0, tag);
+				if (ep == 0) {
+					int n = before->count + 1;
+
+					diff_eq_int("phase1: caller entered from RX_PHASE1_CALL (%ld)", before->micro, 58, tag);
+					if (q->state.micro == 58) {
+						diff_eq_int("phase1: native counter increment (%ld)", q->state.count, n, tag);
+						if (n > 95) {
+							if (e->threshold_step < 0)
+								e->threshold_step = step;
+							e->waiting++;
+							diff_eq_int("phase1: complete register blocks eligible caller (%ld)", q->state.sr != 1, 1, tag);
+						}
+					} else {
+						e->edge_step = step;
+						e->edge_count = n;
+						e->edge_sr = q->state.sr; /* read-only complete-register observer */
+						e->reload = q->state.count;
+						e->substate = q->substate;
+						e->edge_diagnostic = strstr(text,
+							"RX_PHASE1_CALL received, count2=509,") != 0;
+						diff_eq_int("phase1: first departure selects TX_PHASE1_CALL (%ld)", q->state.micro, 55, tag);
+						diff_eq_int("phase1: native edge counter predicate (%ld)", n > 95, 1, tag);
+						diff_eq_int("phase1: counter reload is native filtdelay (%ld)", q->state.count, q->filtdelay, tag);
+					}
+				} else {
+					if (before->micro == 46 && q->state.micro == 49) {
+						e->peer_step = step;
+						e->peer_polarity = q->polarity;
+						diff_eq_int("phase1: peer tone count before reversal (%ld)", before->count, 399, tag);
+						diff_eq_int("phase1: peer complete received register zero (%ld)", q->state.sr, 0, tag);
+						diff_eq_int("phase1: peer tone counter resets (%ld)", q->state.count, 0, tag);
+						diff_eq_int("phase1: peer tone polarity toggles (%ld)", q->polarity, previous_polarity[side] ^ 1, tag);
+						diff_eq_int("phase1: peer reversal diagnostic (%ld)", strstr(text,
+							"TX_PHASE1_ANS=>RX_PHASE1_ANS") != 0, 1, tag);
+					}
+					previous_polarity[side] = q->polarity;
+				}
+				diff_eq_int("phase1: native transmitter remains TONE_AB (%ld)", q->state.tx, 60, tag);
+				diff_eq_int("phase1: native receiver remains RX_DPSK (%ld)", q->state.rx, 43, tag);
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("phase1 selected pointer-free projection", struct phase1_projection,
+				    &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("phase1 four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][0].state.micro != 58 || p[1][0].state.micro != 58)
+			break;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0);
+	dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct phase1_events *e = &event[side];
+
+		diff_eq_int("phase1: first counter eligibility step (%ld)", e->threshold_step, 541, side);
+		diff_eq_int("phase1: eligible calls blocked by register (%ld)", e->waiting, 413, side);
+		diff_eq_int("phase1: first caller edge step (%ld)", e->edge_step, 954, side);
+		diff_eq_int("phase1: observed pre-reload counter (%ld)", e->edge_count, 509, side);
+		diff_eq_int("phase1: COMPLETE edge register equals one (%ld)", e->edge_sr, 1, side);
+		diff_eq_int("phase1: witnessed native edge diagnostic (%ld)", e->edge_diagnostic, 1, side);
+		diff_eq_int("phase1: witnessed counter reload (%ld)", e->reload, 89, side);
+		diff_eq_int("phase1: witnessed edge substate (%ld)", e->substate, 2, side);
+		diff_eq_int("phase1: peer tone reversal step (%ld)", e->peer_step, 845, side);
+		diff_eq_int("phase1: peer tone reversal polarity (%ld)", e->peer_polarity, 1, side);
+		printf("phase1 side=%s threshold=%d blocked=%d peer_reversal=%d polarity=%d "
+		       "edge=%d counter=%d complete_sr=%04x reload=%d substate=%d\n",
+		       side ? "blob" : "ours", e->threshold_step, e->waiting, e->peer_step,
+		       e->peer_polarity, e->edge_step, e->edge_count, e->edge_sr, e->reload, e->substate);
+	}
+	diff_eq_obj("phase1 caller/peer event transcript", struct phase1_events, &event[0], &event[1], 0);
+	diff_eq_int("phase1: continuation process-call denominator", calls, 2036, 0);
+	printf("phase1 continuation denominator: 1 unchanged peer recipe x 2 implementations x "
+	       "2 endpoints; 509 four-sample steps after INFO0, %d process calls, "
+	       "1018 paired projections and 1018 paired output buffers; first caller edge only\n", calls);
+	return calls;
 }
 
 static int
@@ -2057,6 +2200,8 @@ run_info0_history(void)
 			diff_eq_obj("INFO0 caller event transcript", struct info0_events,
 				    &event[0], &event[1], erased_case);
 			diff_eq_int("INFO0: external erased sample count", erased, erased_case ? 84 : 0, erased_case);
+			if (!erased_case)
+				calls += info0_phase1_history(ops, root, o, prev, wire, wp);
 		}
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++) {
@@ -2074,7 +2219,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 3556, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 5592, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -2082,7 +2227,8 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "INFO0 prefix only, no INFO1/progress1/2/status2/3 claim\n",
+	       "positive through first caller phase1 edge, CRC rejection prefix; "
+	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
 }
