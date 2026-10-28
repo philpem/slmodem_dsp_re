@@ -1740,8 +1740,8 @@ run_visual_history(void)
  *
  * This proves one INFO0 component recipe and one channel-error case. It does
  * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
- * interoperability. The positive history continues through the first caller
- * TX_PHASE1_CALL->RX_PHASE2_CALL tone reversal; the CRC rejection prefix is unchanged.
+ * interoperability. The positive history continues through generated caller
+ * reversal samples and the first peer RX_PHASE1_ANS departure; CRC rejection is unchanged.
  */
 enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
 	INFO0_BITS = 33 };
@@ -1889,6 +1889,219 @@ info0_observe(struct info0_events *e, const struct info0_projection *p,
 		/* Fifteen CRC bits remain observable even on native rejection. */
 		e->crc_prefix = (e->crc_prefix << 1) | (unsigned)bit;
 	}
+}
+
+static int
+info0_wire_receipt(struct dp_operations **ops, struct dp *root[2][2],
+		   struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		   short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
+{
+	/* Native TX60 selects vect4[2] at62d48 and txmit appends modulated samples
+	 * at5d810..5d853. Point generation, external samples and demodulation are
+	 * separate clocks. Preserve the four measured pre-reversal sample phases.
+	 * The fixed channel adds288 samples=72 calls; shadow copies retain actual
+	 * emitted frames and their origins, never writing into a live DSP owner.
+	 * Native peer49 needs count>filtdelay+80 and sr&1 (66a6c/66a8c), then
+	 * derives bulk delay=(count-filtdelay)*4-396 and reloads filtdelay (66b13).
+	 * Bound172 calls: peer guard opening54 + native caller tone dwell42 +
+	 * channel72 + one FSK bit4. Stop at the first peer departure, not the bound.
+	 */
+	static const short steady[4][4] = {
+		{ 0, 2987, 4224, 2987 }, { 0, -2988, -4226, -2989 },
+		{ 0, 2988, 4227, 2989 }, { 0, -2989, -4227, -2988 }
+	};
+	struct wire_projection {
+		struct info0_projection state;
+		int point, polarity, txq, filtdelay, rtd, is_short, reset_flags;
+		int bit_lo, bit_hi, phase, next, sign, input_origin;
+		short input[4];
+	} p[2][2];
+	struct wire_events {
+		int point_step, changed_output, antiphase_output, changed_input, antiphase_input;
+		int eligible_step, waiting, edge_step, edge_increment, edge_sr, edge_bits;
+		int edge_bulk, edge_reload, edge_phase, edge_next, edge_sign, diagnostic;
+	} event[2];
+	short in[2][2][4], out[2][2][4], sent[2][INFO0_DELAY / 4][4];
+	int origin[INFO0_DELAY / 4], step, side, ep, i, j, slot, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].point_step = event[side].changed_output = event[side].antiphase_output = -1;
+		event[side].changed_input = event[side].antiphase_input = -1;
+		event[side].eligible_step = event[side].edge_step = -1;
+		for (j = 0; j < 4; j++) {
+			short frame[4];
+			for (i = 0; i < 4; i++)
+				frame[i] = j == 3 ? last_out[side][0][i] :
+					wire[side][1][(wp + INFO0_DELAY - 12 + j * 4 + i) % INFO0_DELAY];
+			diff_eq_obj("wire receipt pre-reversal sample phase", short[4], frame, steady[(958 + j) % 4], side * 4 + j);
+		}
+	}
+	/* The preceding loop stopped before publishing frame961. */
+	for (side = 0; side < 2; side++)
+	for (ep = 0; ep < 2; ep++)
+	for (i = 0; i < 4; i++)
+		wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	wp = (wp + 4) % INFO0_DELAY;
+	for (j = 0; j < INFO0_DELAY / 4; j++) {
+		slot = (wp / 4 + j) % (INFO0_DELAY / 4);
+		origin[slot] = 962 - INFO0_DELAY / 4 + j;
+		for (side = 0; side < 2; side++)
+		for (i = 0; i < 4; i++)
+			sent[side][slot][i] = wire[side][1][slot * 4 + i];
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = 962; step <= 1133; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct wire_projection *q = &p[side][ep];
+				struct wire_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				int phase = o[side][ep]->fsk.phase, next = o[side][ep]->fsk.next;
+				int sign = o[side][ep]->fsk.prev, rc, changed = 0, antiphase = 1;
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+
+				memset(q, 0, sizeof *q);
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				q->input_origin = origin[slot];
+				if (ep == 1) {
+					diff_eq_int("wire receipt: exact source frame index (%ld)", origin[slot], step - 72, tag);
+					diff_eq_obj("wire receipt actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+					for (i = 0; i < 4; i++) {
+						changed |= q->input[i] != steady[(step - 72) % 4][i];
+						antiphase &= q->input[i] == -steady[(step - 72) % 4][i];
+					}
+					if (changed && e->changed_input < 0)
+						e->changed_input = step; /* read-only delayed-sample timing observer */
+					if (antiphase && e->antiphase_input < 0)
+						e->antiphase_input = step;
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->point = o[side][ep]->tx.txpoint.word;
+				q->polarity = o[side][ep]->short_358c;
+				q->txq = o[side][ep]->tx.txq.count;
+				q->filtdelay = o[side][ep]->filtdelay;
+				q->rtd = o[side][ep]->rtd;
+				q->is_short = o[side][ep]->is_short;
+				q->reset_flags = o[side][ep]->short_3588;
+				q->bit_lo = o[side][ep]->fsk.bit_lo;
+				q->bit_hi = o[side][ep]->fsk.bit_hi;
+				q->phase = o[side][ep]->fsk.phase;
+				q->next = o[side][ep]->fsk.next;
+				q->sign = o[side][ep]->fsk.prev;
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("wire receipt: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("wire receipt: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("wire receipt: live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("wire receipt: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("wire receipt: filter delay unchanged (%ld)", q->filtdelay, 89, tag);
+				diff_eq_int("wire receipt: polarity retained (%ld)", q->polarity, 1, tag);
+				if (ep == 0) {
+					changed = 0; antiphase = 1;
+					for (i = 0; i < 4; i++) {
+						changed |= out[side][ep][i] != steady[step % 4][i];
+						antiphase &= out[side][ep][i] == -steady[step % 4][i];
+					}
+					if (changed && e->changed_output < 0) e->changed_output = step;
+					if (antiphase && e->antiphase_output < 0) e->antiphase_output = step;
+					if (q->point == -300028387 && e->point_step < 0) e->point_step = step;
+					diff_eq_int("wire receipt: reversed original vect4 point (%ld)", q->point, -300028387, tag);
+					diff_eq_int("wire receipt: caller remains micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("wire receipt: caller native counter (%ld)", q->state.count, step - 961, tag);
+					diff_eq_int("wire receipt: caller tone then native silence (%ld)", q->state.tx, step < 1003 ? 60 : 5, tag);
+					diff_eq_int("wire receipt: caller repeated-INFO0 guard false (%ld)", (q->state.sr & 7) == 7, 0, tag);
+				} else {
+					int n = before->count + 1;
+					diff_eq_int("wire receipt: peer starts in micro49 (%ld)", before->micro, 49, tag);
+					diff_eq_int("wire receipt: peer bit mapping low (%ld)", q->bit_lo, 1, tag);
+					diff_eq_int("wire receipt: peer bit mapping high (%ld)", q->bit_hi, 0, tag);
+					diff_eq_int("wire receipt: peer repeated INFO0 pattern absent (%ld)", (q->state.sr & 0x3ff) == 0x372, 0, tag);
+					if (n > q->filtdelay + 80 && e->eligible_step < 0) e->eligible_step = step;
+					if (q->state.micro == 49) {
+						diff_eq_int("wire receipt: peer counter increment (%ld)", q->state.count, n, tag);
+						diff_eq_int("wire receipt: peer full register still zero (%ld)", q->state.sr, 0, tag);
+						if (n > q->filtdelay + 80) e->waiting++;
+					} else {
+						int bulk = (n - q->filtdelay) * 4 - 396;
+						e->edge_step = step; e->edge_increment = n;
+						e->edge_sr = q->state.sr; e->edge_bits = q->state.pending;
+						e->edge_bulk = q->rtd; e->edge_reload = q->state.count;
+						e->edge_phase = phase; e->edge_next = next; e->edge_sign = sign;
+						e->diagnostic = strstr(text, "RX_PHASE1_ANS=>TX_PHASE2_ANS") != 0 &&
+							strstr(text, "bulkDelay=148, filtDelay=89") != 0;
+						diff_eq_int("wire receipt: peer counter guard opens (%ld)", n > q->filtdelay + 80, 1, tag);
+						diff_eq_int("wire receipt: native low-bit predicate (%ld)", q->state.sr & 1, 1, tag);
+						diff_eq_int("wire receipt: native first-phase sample eligible (%ld)", phase >= next, 1, tag);
+						diff_eq_int("wire receipt: native sampled prior sign (%ld)", sign <= 0, 1, tag);
+						diff_eq_int("wire receipt: actual register shift at edge (%ld)", q->state.sr, before->sr * 2 + q->bit_lo, tag);
+						diff_eq_int("wire receipt: actual recovered bit count (%ld)", q->state.pending, before->pending + 1, tag);
+						diff_eq_int("wire receipt: native peer transition (%ld)", q->state.micro, 47, tag);
+						diff_eq_int("wire receipt: full-session delay arm (%ld)", q->is_short, 0, tag);
+						diff_eq_int("wire receipt: native bulk formula (%ld)", q->rtd, bulk > 0 ? bulk : 1, tag);
+						diff_eq_int("wire receipt: native counter reload (%ld)", q->state.count, q->filtdelay, tag);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("wire receipt selected pointer-free projection", struct wire_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("wire receipt four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][1].state.micro != 49 || p[1][1].state.micro != 49 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step;
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct wire_events *e = &event[side];
+		diff_eq_int("wire receipt: first generated reversed point (%ld)", e->point_step, 962, side);
+		diff_eq_int("wire receipt: first changed output frame (%ld)", e->changed_output, 968, side);
+		diff_eq_int("wire receipt: first exact antiphase output (%ld)", e->antiphase_output, 997, side);
+		diff_eq_int("wire receipt: first changed peer input (%ld)", e->changed_input, 1040, side);
+		diff_eq_int("wire receipt: changed-frame transport latency (%ld)", e->changed_input - e->changed_output, 72, side);
+		diff_eq_int("wire receipt: first exact antiphase peer input (%ld)", e->antiphase_input, 1069, side);
+		diff_eq_int("wire receipt: antiphase-frame transport latency (%ld)", e->antiphase_input - e->antiphase_output, 72, side);
+		diff_eq_int("wire receipt: native peer eligibility step (%ld)", e->eligible_step, 1015, side);
+		diff_eq_int("wire receipt: eligible waiting calls (%ld)", e->waiting, 55, side);
+		diff_eq_int("wire receipt: first peer departure (%ld)", e->edge_step, 1070, side);
+		diff_eq_int("wire receipt: pre-reload native count (%ld)", e->edge_increment, 225, side);
+		diff_eq_int("wire receipt: complete received register (%ld)", e->edge_sr, 1, side);
+		diff_eq_int("wire receipt: recovered bit count (%ld)", e->edge_bits, 156, side);
+		diff_eq_int("wire receipt: bulk delay known answer (%ld)", e->edge_bulk, 148, side);
+		diff_eq_int("wire receipt: reloaded counter (%ld)", e->edge_reload, 89, side);
+		diff_eq_int("wire receipt: observed sampling phase (%ld)", e->edge_phase, 6, side);
+		diff_eq_int("wire receipt: observed sampling instant (%ld)", e->edge_next, 6, side);
+		diff_eq_int("wire receipt: observed prior discriminator (%ld)", e->edge_sign, -2094, side);
+		diff_eq_int("wire receipt: native transition and delay diagnostic (%ld)", e->diagnostic, 1, side);
+		printf("wire receipt side=%s point=%d changed_out=%d antiphase_out=%d changed_in=%d "
+		       "antiphase_in=%d eligible=%d waiting=%d edge=%d count=%d sr=%04x bits=%d "
+		       "bulk=%d reload=%d phase/next=%d/%d prior_sign=%d\n", side ? "blob" : "ours",
+		       e->point_step, e->changed_output, e->antiphase_output, e->changed_input,
+		       e->antiphase_input, e->eligible_step, e->waiting, e->edge_step, e->edge_increment,
+		       e->edge_sr, e->edge_bits, e->edge_bulk, e->edge_reload, e->edge_phase, e->edge_next, e->edge_sign);
+	}
+	diff_eq_obj("wire receipt generation/transport/native events", struct wire_events, &event[0], &event[1], 0);
+	diff_eq_int("wire receipt: process-call denominator", calls, 436, 0);
+	printf("wire receipt denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first peer49 departure only\n", calls / 4, calls, calls / 2, calls / 2);
+	return calls;
 }
 
 static int
@@ -2040,6 +2253,8 @@ info0_tone_reversal(struct dp_operations **ops, struct dp *root[2][2],
 	       "%d further four-sample steps, %d process calls, %d paired projections and "
 	       "%d paired output buffers; caller55->59 only, peer49 receive guard blocked\n",
 	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].edge_step == 961 && event[1].edge_step == 961)
+		calls += info0_wire_receipt(ops, root, o, prev, wire, wp, out);
 	return calls;
 }
 
@@ -2382,7 +2597,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 5620, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6056, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -2390,7 +2605,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through caller55->59 tone reversal, CRC rejection prefix; "
+	       "positive through first peer49->47 receipt, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
