@@ -10,6 +10,100 @@ is about *how to work here* rather than what the work is.
 progress belonging to a different effort. To you it does not exist. Scope any
 subagent prompt to exclude it.
 
+## Start source recovery from a short request
+
+`AGENTS.md` is a symlink to this file. These instructions apply to both entry
+points. A request to work on source recovery means: analyse the current evidence,
+recommend bounded waves, start the justified work, validate it, then report results
+and next steps. Do not stop at a plan or require an issue number, another worker,
+a handover document or a detailed new prompt before beginning.
+
+Source coverage is complete; current recovery work concerns original source,
+types, ownership, TU boundaries, generated code and grounded differential
+histories. Historical counts and scheduling examples below are not today's queue.
+Measure current denominators rather than copying them into a new plan.
+
+1. **Establish ownership and baseline.** Inspect `git status`, branch/revision and
+   `git worktree list`. Preserve unfamiliar changes. Work in an owned worktree;
+   create one from current `origin/master` if needed. Read `README.md`,
+   `docs/method/README.md`, the relevant Playbook section in
+   `docs/method/refinement.md`, and `docs/method/experiment-design.md`.
+2. **Resume from evidence.** Search Hindsight narrowly for current conclusions,
+   closed domains, blockers and next discriminators. Verify relevant claims
+   against committed source, original ELF/instructions and actual artifacts.
+   Memory and old reports are leads, not measurements of the current tree. If
+   memory is unavailable, use committed method/findings and fresh evidence;
+   report the missing context without inventing a new issue-based work queue.
+3. **Choose and start bounded waves.** Recommend a small prioritised set, normally
+   one source/compiler inquiry and one valid-history inquiry where useful. Give
+   each a native witness or precise question, baseline, prediction, falsifier,
+   explicit scope/cell or event horizon, controls and stopping rule. Start the
+   highest-value independent work without waiting for another worker. Delegate
+   only clearly owned, non-overlapping work; do not run concurrent full gates.
+4. **Resolve causes before changing source.** Locate the first relevant compiler
+   transformation or input difference. Analyse matching Gentoo GCC source, RTL,
+   dataflow, legality checks, alias facts, live sets and actual decision rules
+   when the emitter is unknown. A diagnostic compiler/replay must reproduce the
+   unchanged baseline before its observations are trusted. Do not substitute
+   structure/reorder/cast palettes, scratch consumers or near-match selection for
+   an explanation. A finite source family is justified only by an independent
+   native witness and a causally testable prediction. Distinguish a measured
+   current-compiler mechanism from an unknown original source/input graph.
+5. **Review the whole change.** Check changed-use owner/offset/width and complete
+   TU collateral: all bodies, calls, data, relocations, exports and exact-name
+   gains/losses. Obtain independent evidence review for a positive candidate.
+   Fixtures need a valid stated boundary and a negative control; constructed
+   component histories do not establish arbitrary internal-state or waveform
+   reachability. Preserve useful synthetic probes with their narrower labels.
+6. **Validate and deliver.** Run focused period tests and `make phase` for retained
+   reconstruction/fixture changes; report actual denominators. Measure codegen
+   and partial-link before/after when source changes warrant them; keep DIFFERENT
+   results explicit. Use relevant consistency/link checks for documentation-only
+   changes. Commit, push and submit/merge PRs when the user has authorised that
+   delivery, after required checks pass. Otherwise leave validated changes and
+   report their state. Finish with successes, negatives, limits and recommended
+   next steps. Do not claim an exact recovery from a mechanism or partial result.
+
+**Astra is not the routine GCC tracing worker.** Continue ordinary compiler
+analysis for concrete unknown decisions. If a strategic ambiguity warrants Astra,
+present a compact evidence packet, review question, tool/token budget and stopping
+rule before invoking it, unless that bounded review is already authorised. A
+stalled inquiry is not permission for an unbounded paid review or more variants.
+
+## Progress, memory and documentation
+
+**Use Hindsight for recovery progress and durable investigation knowledge.**
+Batch verified conclusions, failed/closed domains, controls and denominators,
+compiler causes, artifact/revision references, blockers and next discriminators.
+Keep requests targeted: Luna/token cost is real. Prefer one concise incremental
+update per completed batch over repeatedly ingesting full transcripts or reports.
+Conversation capture is automatic; deliberate ingestion is for durable external
+notes/findings. Correct verified stale memory explicitly.
+
+Keep scratch evidence reproducible, but do not create a permanent wave report,
+handover or progress diary for every batch. Maintained documentation is for stable
+methods, reusable tools, findings and decisions needed alongside the code. Existing
+reports and issue links remain historical provenance, not instructions to resume
+their old queues. If a worker disappears, use Hindsight and committed evidence;
+do not make their return a prerequisite. GitHub issue use is restricted to the
+post-reconstruction DSP bugs described below; PRs still carry code-review and
+validation evidence. Do not post routine results to old umbrella issues.
+
+### Prompts the owner can use
+
+A short prompt such as **"Work on source recovery"** is sufficient to start the
+workflow above. More explicit options are:
+
+> Continue source recovery. Analyse the current evidence, recommend the next
+> bounded waves and start them. Trace GCC causes before trying source variants.
+> Validate retained changes, update Hindsight, and summarise results and next steps.
+
+Add **"Submit and merge ready PRs after their checks pass"** to authorise delivery.
+For analysis without implementation:
+
+> Review current source-recovery blockers and recommend bounded next waves. Do not
+> change code or run new experiments. If Astra would help, present its review plan.
+
 ## Experiments and temporary files
 
 Use `scratch/<investigation>/` in the current worktree for one-off scripts,
@@ -18,13 +112,21 @@ The repository-root `scratch/` directory is gitignored. Keep each investigation
 in its own directory; use it instead of `/tmp` or adding temporary scripts to
 `tools/`. Standard build outputs still belong in `build/`.
 
-Record durable conclusions in the relevant documentation, with reproduction
-commands, revisions and artifact hashes where needed. A useful finding does
-not make its temporary scripts maintained tools. Add a tracked utility only
+Batch durable investigation conclusions into Hindsight with reproduction commands,
+revisions and artifact hashes where needed. Update maintained documentation for
+stable methods rather than ephemeral WIP. A useful finding does not make its
+temporary scripts maintained tools. Add a tracked utility only
 when it has definite ongoing value: a reusable workflow, a documented entry
 point and maintained validation. See [tools guidance](tools/README.md).
 
-## Scope: which services are open, and the one that is not
+## Service scope and historical reconstruction context
+
+The services below already have source implementations. Their former scheduling
+order and unfinished-byte counts are historical context, not a current worklist.
+Use the startup workflow above for fidelity and valid-history work; do not reopen
+the completed missing-function reconstruction from these old priorities.
+
+### Historical service scheduling
 
 This was a conversational rule for a long time and had no home in the tree,
 which is why it was hand-copied into every agent brief and drifted. It lives
@@ -345,18 +447,18 @@ in the 2026-08-30 leaf wave (findings F8410-F8497, `docs/remaining.md`):
   WRONG, and that session believed it for several turns. **Attribute a verdict
   to a compiler by running that compiler alone.**
 
-**Compiler-portability failures get their own GitHub issue as standard
-procedure.** When the deciding period differential passes but a modern
-compiler fails, check existing issues and create or update a dedicated
-follow-up linked to the reconstruction issue. Record the branch/commit,
+**Compiler-portability failures are recorded in Hindsight and the relevant PR,
+not new GitHub progress/follow-up issues.** When the deciding period differential
+passes but a modern compiler fails, record the branch/commit,
 compiler versions and complete flags, reproduction commands, failing checks
 and denominators, tested controls, and closure criteria. Distinguish measured
 compiler behavior from an unproven root cause. Do not hold a period-validated
 reconstruction commit open solely to finish that separate investigation;
-record and link the failed portability gate when committing. Keep the modern
+record the failed portability gate when committing. Keep the modern
 failure visible: no tolerance widening, source workaround, or declaration
-change merely to make the gate green. Issue #19's GCC 14 follow-up, #30, is
-the precedent. Shared working-instruction changes belong on master; carry
+change merely to make the gate green. Historical issues #19/#30 retain their
+measured evidence, not a mandate to open more issues. Shared working-instruction
+changes belong on master; carry
 this procedure forward when the investigation branch is integrated.
 
 **THE MODERN TIER IS A PORTABILITY CHECK, NOT THE AUTHORITY, AND THE PROJECT
@@ -551,7 +653,7 @@ set gains 15 while losing 4 rather than swapping. 616 measured at 92 of 365,
 where `-finline-functions` had almost nothing to inline across. `make period`
 is green at both, and there is no divergence to declare. Finding F2155.
 
-**Issue #22 keeps the original profile open.** Source/inline choices and
+**The original profile remains open.** Source/inline choices and
 individual options can reproduce matches under more than one optimization
 level. Compare complete translation units, including non-exact bodies and
 symbol binding; an exact-set gain alone does not establish the original
@@ -563,8 +665,9 @@ experiments, bounded domains, explicit stopping/reframing, and full-TU review
 including non-exact bodies and exports. Current exact matches are evidence,
 not a reason to freeze potentially compensating source/flag choices. Do not
 require monotonic improvement during exploration or adopt a candidate merely
-for a net score gain. Record the next discriminating test in the issue before
-repeating a stalled line of inquiry.
+for a net score gain. Record the next discriminating test in the bounded scratch
+contract before execution, then batch its conclusion into Hindsight. Do not use
+an issue comment as the investigation log.
 
 **A ratchet is a regression detector, not the reconstruction authority.** Do
 not reject or abandon an independently witnessed structural/source recovery
@@ -940,16 +1043,36 @@ comparison decide their respective byte-identity claims. Ghidra does not reveal
 the unavailable original GCC RTL or replace GCC dumps when tracing allocation,
 spills, scheduling and x87 stack conversion.
 
+## GitHub issues: post-reconstruction DSP bugs only
+
+Create or update an issue only for a demonstrated bug in the original DSP found
+during reconstruction that needs a post-reconstruction repair. Check for a
+duplicate first. Include the symbol/native addresses, valid input boundary,
+original instruction/runtime evidence, observed consequence, reproduction and
+repair acceptance criteria. Distinguish a blob defect from our reconstruction
+mismatch, an invalid fixture or compiler/apparatus behaviour.
+
+Do not use issues for recovery plans, waves, TODOs, open hypotheses, compiler or
+harness investigations, progress messages or routine experiment results. Keep
+those in Hindsight and reproducible scratch evidence. Historical issue references
+elsewhere in the method record provenance; they do not override this policy.
+
+Preserve **bug-for-bug accuracy** during recovery. A deferred repair must keep
+the blob-compatible arm under `#ifdef DSPLIB_REPRODUCE_BUGS` and the corrected
+behaviour in the established normal-build `#else` arm. Do not invent another gate,
+silently repair the reproduction arm or change it to satisfy a bad fixture.
+When the repair is separately authorised, prove the reproduction arm against
+the blob with the period compiler and prove the repaired arm with meaningful
+boundary/known-answer tests. A normal-build fix does not excuse a period failure.
+Link the verified defect issue to that repair; discovering a bug does not itself
+authorise its repair during source recovery.
+
 ## Findings and numbering
 
-**Track outstanding work in GitHub issues.** Tasks, defects to investigate,
-and open lines of inquiry belong in issues, linked to their parent milestone
-where appropriate. Check existing issues before creating another; update
-them with evidence, next actions and completion criteria as work progresses.
-The findings and deviations logs remain the record of measured conclusions
-and original-binary behavior; they are not the task queue. Link between the
-issue and the relevant finding rather than treating either as a substitute
-for the other.
+Findings/deviations remain measured records, not progress queues. Use Hindsight
+for current work and stable documentation for conclusions that need to live
+alongside the source. Link a verified DSP-bug finding and its deferred-repair issue
+where appropriate; no ordinary recovery issue is required.
 
 Shared tool improvements and these working instructions belong on `master`.
 Keep active investigation branches current by merging or rebasing `master`
