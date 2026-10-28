@@ -1740,8 +1740,8 @@ run_visual_history(void)
  *
  * This proves one INFO0 component recipe and one channel-error case. It does
  * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
- * interoperability. The positive history continues only to its first caller
- * RX_PHASE1_CALL->TX_PHASE1_CALL edge; the CRC rejection prefix is unchanged.
+ * interoperability. The positive history continues through the first caller
+ * TX_PHASE1_CALL->RX_PHASE2_CALL tone reversal; the CRC rejection prefix is unchanged.
  */
 enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
 	INFO0_BITS = 33 };
@@ -1892,6 +1892,158 @@ info0_observe(struct info0_events *e, const struct info0_projection *p,
 }
 
 static int
+info0_tone_reversal(struct dp_operations **ops, struct dp *root[2][2],
+		    struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		    short wire[2][2][INFO0_DELAY], int wp)
+{
+	/* Native caller55 increments O+aa78 and tests signed >95 at65ba4.
+	 * Starting at89, seven further calls reach96:65bbe clears the counter,
+	 * 65bcc toggles O+358c,65bf3 selects59. Stop on that first departure.
+	 * Native TX60 loads vect4[2*(polarity&1)] at62d48..62d62; original
+	 * .rodata+5370/+5378 give the two signed word known answers below.
+	 * TX generation precedes receive/microstate processing (62933..62a0c).
+	 * The post-microstate TX60 dispatch goes to644c9, not the point producer,
+	 * so the last generated point still uses the ENTRY polarity at this edge.
+	 * Peer49 needs count>filtdelay+80 at66a6c, impossible within this bound
+	 * from109 with filtdelay89. No later receive edge is claimed.
+	 */
+	struct tone_projection {
+		struct info0_projection state;
+		int polarity, reset_flags, substate, filtdelay, point, producer_polarity;
+	} p[2][2];
+	struct tone_events {
+		int bit_step, bit_updates, edge_step, edge_increment, edge_counter;
+		int edge_sr, edge_bits, edge_polarity, edge_point, diagnostic, peer_counter;
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].bit_step = event[side].edge_step = -1;
+		diff_eq_int("tone edge: initial caller microstate (%ld)", prev[side][0].micro, 55, side);
+		diff_eq_int("tone edge: initial caller counter (%ld)", prev[side][0].count, 89, side);
+		diff_eq_int("tone edge: initial peer counter (%ld)", prev[side][1].count, 109, side);
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = 955; step <= 961; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct tone_projection *q = &p[side][ep];
+				struct tone_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc, new_bit, producer_polarity = o[side][ep]->short_358c;
+
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				memset(q, 0, sizeof *q);
+				info0_project(&q->state, o[side][ep], rc);
+				q->polarity = o[side][ep]->short_358c;
+				q->reset_flags = o[side][ep]->short_3588;
+				q->substate = o[side][ep]->short_358a;
+				q->filtdelay = o[side][ep]->filtdelay;
+				q->producer_polarity = producer_polarity;
+				q->point = o[side][ep]->tx.txpoint.word; /* read-only native tone producer */
+				text = dsplib_debug_capture_text(side);
+				new_bit = q->state.pending != before->pending;
+				diff_eq_int("tone edge: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("tone edge: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("tone edge: live status stays zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("tone edge: engine progress stays zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("tone edge: TX remains TONE_AB (%ld)", q->state.tx, 60, tag);
+				diff_eq_int("tone edge: RX remains RX_DPSK (%ld)", q->state.rx, 43, tag);
+				diff_eq_int("tone edge: reset flags stay clear (%ld)", q->reset_flags, 0, tag);
+				diff_eq_int("tone edge: substate remains two (%ld)", q->substate, 2, tag);
+				diff_eq_int("tone edge: native filter delay (%ld)", q->filtdelay, 89, tag);
+				diff_eq_int("tone edge: native vect4 producer known answer (%ld)", q->point,
+					    q->producer_polarity ? -300028387 : 300093923, tag);
+				diff_eq_int("tone edge: received bit count (%ld)", q->state.pending, step < 958 ? 127 : 128, tag);
+				diff_eq_int("tone edge: complete received register (%ld)", q->state.sr, ep ? 0 : (step < 958 ? 1 : 2), tag);
+				if (new_bit) {
+					diff_eq_int("tone edge: one native received bit (%ld)", q->state.pending, before->pending + 1, tag);
+					diff_eq_int("tone edge: native received zero shifts register (%ld)", q->state.sr, (before->sr * 2) & 0xffff, tag);
+				}
+				if (ep == 0) {
+					diff_eq_int("tone edge: repeated INFO0 guard remains false (%ld)", new_bit && (q->state.sr & 7) == 7, 0, tag);
+					diff_eq_int("tone edge: packed late-reset guard remains false (%ld)",
+						    q->reset_flags == 2 && q->substate == 2 && (q->state.sr & 0x3ff) == 0x372, 0, tag);
+					diff_eq_int("tone edge: caller counter before reset (%ld)", before->count, step - 866, tag);
+					diff_eq_int("tone edge: caller bounded microstate (%ld)", q->state.micro, step == 961 ? 59 : 55, tag);
+					diff_eq_int("tone edge: caller counter/reset (%ld)", q->state.count, step == 961 ? 0 : before->count + 1, tag);
+					diff_eq_int("tone edge: caller polarity (%ld)", q->polarity, step == 961, tag);
+					if (new_bit) {
+						e->bit_step = step;
+						e->bit_updates++;
+					}
+					if (q->state.micro != 55) {
+						e->edge_step = step;
+						e->edge_increment = before->count + 1;
+						e->edge_counter = q->state.count;
+						e->edge_sr = q->state.sr;
+						e->edge_bits = q->state.pending;
+						e->edge_polarity = q->polarity;
+						e->edge_point = q->point;
+						e->diagnostic = strstr(text, "TX_PHASE1_CALL=>RX_PHASE2_CALL") != 0;
+					}
+				} else {
+					diff_eq_int("tone edge: peer repeated INFO0 pattern absent (%ld)", q->state.sr & 0x3ff, 0, tag);
+					diff_eq_int("tone edge: peer receive counter guard blocked (%ld)", q->state.count > q->filtdelay + 80, 0, tag);
+					diff_eq_int("tone edge: peer remains RX_PHASE1_ANS (%ld)", q->state.micro, 49, tag);
+					diff_eq_int("tone edge: peer counter increment (%ld)", q->state.count, before->count + 1, tag);
+					diff_eq_int("tone edge: peer polarity retained (%ld)", q->polarity, 1, tag);
+					e->peer_counter = q->state.count;
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("tone edge pointer-free projection", struct tone_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("tone edge four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][0].state.micro != 55 || p[1][0].state.micro != 55 ||
+		    p[0][1].state.micro != 49 || p[1][1].state.micro != 49)
+			break;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0);
+	dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct tone_events *e = &event[side];
+
+		diff_eq_int("tone edge: native receive-bit step (%ld)", e->bit_step, 958, side);
+		diff_eq_int("tone edge: native receive-bit updates (%ld)", e->bit_updates, 1, side);
+		diff_eq_int("tone edge: first caller departure (%ld)", e->edge_step, 961, side);
+		diff_eq_int("tone edge: incremented native threshold (%ld)", e->edge_increment, 96, side);
+		diff_eq_int("tone edge: native counter reset (%ld)", e->edge_counter, 0, side);
+		diff_eq_int("tone edge: native departure diagnostic (%ld)", e->diagnostic, 1, side);
+		diff_eq_int("tone edge: native polarity reversal (%ld)", e->edge_polarity, 1, side);
+		diff_eq_int("tone edge: peer terminal counter (%ld)", e->peer_counter, 116, side);
+		printf("tone edge side=%s bit_step=%d bit_updates=%d edge=%d increment=%d "
+		       "counter=%d sr=%04x bits=%d polarity=%d point=%d peer_counter=%d\n",
+		       side ? "blob" : "ours", e->bit_step, e->bit_updates, e->edge_step,
+		       e->edge_increment, e->edge_counter, e->edge_sr, e->edge_bits,
+		       e->edge_polarity, e->edge_point, e->peer_counter);
+	}
+	diff_eq_obj("tone edge native event transcript", struct tone_events, &event[0], &event[1], 0);
+	diff_eq_int("tone edge: process-call denominator", calls, 28, 0);
+	printf("tone edge denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; caller55->59 only, peer49 receive guard blocked\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	return calls;
+}
+
+static int
 info0_phase1_history(struct dp_operations **ops, struct dp *root[2][2],
 		     struct v34_object *o[2][2], struct info0_projection prev[2][2],
 		     short wire[2][2][INFO0_DELAY], int wp)
@@ -2030,6 +2182,17 @@ info0_phase1_history(struct dp_operations **ops, struct dp *root[2][2],
 	printf("phase1 continuation denominator: 1 unchanged peer recipe x 2 implementations x "
 	       "2 endpoints; 509 four-sample steps after INFO0, %d process calls, "
 	       "1018 paired projections and 1018 paired output buffers; first caller edge only\n", calls);
+	if (event[0].edge_step == 954 && event[1].edge_step == 954) {
+		/* Publish the last frame before continuing the SAME channel history.
+		 * The phase1 loop stops before its ordinary channel-buffer update.
+		 */
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+		calls += info0_tone_reversal(ops, root, o, prev, wire, wp);
+	}
 	return calls;
 }
 
@@ -2219,7 +2382,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 5592, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 5620, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -2227,7 +2390,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through first caller phase1 edge, CRC rejection prefix; "
+	       "positive through caller55->59 tone reversal, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
