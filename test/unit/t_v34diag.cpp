@@ -1740,8 +1740,8 @@ run_visual_history(void)
  *
  * This proves one INFO0 component recipe and one channel-error case. It does
  * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
- * interoperability. The positive history continues through the first native
- * raw L1 queue block, before external L1 output; CRC rejection is unchanged.
+ * interoperability. The positive history continues through the first saved
+ * L1 block returned after its native output FIFO; CRC rejection is unchanged.
  */
 enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
 	INFO0_BITS = 33 };
@@ -1897,6 +1897,203 @@ info0_tx_ring_index(const struct v34_object *o, const void *p)
 	long offset = (long)((size_t)p - (size_t)o) - 0x2228;
 	return offset >= 0 && offset < V34_TXQ_RING * 4 && (offset & 3) == 0 ?
 		(int)(offset / 4) : -1;
+}
+
+static int
+info0_l1_output(struct dp_operations **ops, struct dp *root[2][2],
+		struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
+		short sent[2][INFO0_DELAY / 4][4], int origin[INFO0_DELAY / 4],
+		const int saved_index[2], const unsigned saved[2][4], const int produced_step[2])
+{
+	/* Native5cfd2 reads OLD rd low16,5cfda stores tx_sample;bd67 FILDs that
+	 * signed short and bd74 stores float before refill. The wrapper appends at
+	 * FIFO+4+2*old_count (3eca), returns oldest samples (3f77), then shifts the
+	 * retained tail (3f98). In this recipe four FIFO samples survive each call.
+	 * Thus saved block pops1126 but returns1127. The initial empty-FIFO timing
+	 * hypothesis was falsified in scratch; this bound includes the observed FIFO.
+	 */
+	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
+	struct output_projection {
+		struct info0_projection state;
+		int private_self, rd_before, rd, wr, queue_count, cursor, tx_sample;
+		int fifo_before, fifo_after, remainder_before, remainder_after, input_origin;
+		unsigned head[4], saved[4];
+		float floating[4];
+		short popped[4], fifo_head_before[4], fifo_head_after[4], returned[4], input[4];
+	} p[2][2];
+	struct output_events {
+		int producer_step, saved_index, pop_step, float_step, fifo_step, return_step;
+		int pop_rd_before, pop_rd_after, return_rd_before, return_rd_after;
+		int fifo_count, fifo_delay, return_tx_sample;
+		short popped[4], returned[4];
+	} event[2];
+	short in[2][2][4], out[2][2][4], previous_fifo[2][2][4];
+	int step, side, ep, i, slot = wp / 4, calls = 0;
+
+	memset(event, 0, sizeof event);
+	memset(previous_fifo, 0, sizeof previous_fifo);
+	for (side = 0; side < 2; side++) {
+		event[side].producer_step = produced_step[side];
+		event[side].saved_index = saved_index[side];
+		event[side].pop_step = event[side].float_step = event[side].fifo_step = -1;
+		event[side].return_step = -1;
+		diff_eq_int("L1 output: saved producer epoch (%ld)", produced_step[side], 1122, side);
+		diff_eq_int("L1 output: saved ring origin (%ld)", saved_index[side], 66, side);
+		memcpy(sent[side][slot], last_out[side][0], sizeof sent[side][slot]);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	origin[slot] = 1122; wp = (wp + 4) % INFO0_DELAY;
+	dsplib_debug_capture_on = 1; set_level(2);
+	for (step = 1123; step <= 1127; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct output_projection *q = &p[side][ep];
+				struct output_events *e = &event[side];
+				float expected_float[4];
+				long tag = step * 4 + ep * 2 + side;
+				int rc, returned_saved = 1;
+
+				memset(q, 0, sizeof *q);
+				q->private_self = root[side][ep]->dp_data == root[side][ep];
+				q->rd_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->input_origin = origin[slot];
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (q->private_self) {
+					memcpy(&q->fifo_before, (unsigned char *)root[side][ep] + 0xd178, 4);
+					memcpy(&q->remainder_before, (unsigned char *)root[side][ep] + 0xd1e4, 4);
+					memcpy(q->fifo_head_before, (unsigned char *)root[side][ep] + 0xd17c, sizeof q->fifo_head_before);
+				}
+				if (q->rd_before >= 0)
+				for (i = 0; i < 4; i++) {
+					memcpy(&q->head[i], (unsigned char *)o[side][ep] + 0x2228 +
+					       ((q->rd_before + i) % V34_TXQ_RING) * 4, 4);
+					q->popped[i] = (short)q->head[i];
+				}
+				for (i = 0; i < 4; i++) expected_float[i] = (float)q->popped[i];
+				if (ep == 1) {
+					diff_eq_int("L1 output: actual source input frame (%ld)", q->input_origin, step - 72, tag);
+					diff_eq_obj("L1 output actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+					if (saved_index[side] >= 0 && saved_index[side] < V34_TXQ_RING)
+					for (i = 0; i < 4; i++)
+						memcpy(&q->saved[i], (unsigned char *)o[side][ep] + 0x2228 +
+						       ((saved_index[side] + i) % V34_TXQ_RING) * 4, 4);
+					diff_eq_obj("L1 output saved raw block remains intact", unsigned[4], q->saved, saved[side], tag);
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->rd = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->queue_count = o[side][ep]->tx.txq.count;
+				q->cursor = o[side][ep]->vect_idx;
+				q->tx_sample = o[side][ep]->tx_sample;
+				memcpy(q->returned, out[side][ep], sizeof q->returned); /* read-only returned-sample mapping observer */
+				if (q->private_self) {
+					memcpy(&q->fifo_after, (unsigned char *)root[side][ep] + 0xd178, 4);
+					memcpy(&q->remainder_after, (unsigned char *)root[side][ep] + 0xd1e4, 4);
+					memcpy(q->fifo_head_after, (unsigned char *)root[side][ep] + 0xd17c, sizeof q->fifo_head_after);
+					memcpy(q->floating, (unsigned char *)root[side][ep] + 0xaef8, sizeof q->floating);
+				}
+				diff_eq_int("L1 output: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("L1 output: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("L1 output: status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 output: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 output: wrapper private owner is root (%ld)", q->private_self, 1, tag);
+				diff_eq_int("L1 output: queue pointers owned (%ld)", q->rd_before >= 0 && q->rd >= 0 && q->wr >= 0, 1, tag);
+				diff_eq_int("L1 output: four queue entries dequeued (%ld)", (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+				diff_eq_int("L1 output: input remainder before (%ld)", q->remainder_before, 0, tag);
+				diff_eq_int("L1 output: input remainder after (%ld)", q->remainder_after, 0, tag);
+				diff_eq_int("L1 output: retained FIFO before (%ld)", q->fifo_before, 4, tag);
+				diff_eq_int("L1 output: retained FIFO after (%ld)", q->fifo_after, 4, tag);
+				diff_eq_obj("L1 output signed queue pops to exact float stage", float[4], q->floating, expected_float, tag);
+				diff_eq_obj("L1 output current pops become next FIFO head", short[4], q->fifo_head_after, q->popped, tag);
+				diff_eq_obj("L1 output returned samples map previous FIFO head", short[4], q->returned, q->fifo_head_before, tag);
+				diff_eq_int("L1 output: tx_sample retains last signed queue pop (%ld)", q->tx_sample, q->popped[3], tag);
+				if (step > 1123)
+					diff_eq_obj("L1 output retained FIFO continuity", short[4], q->fifo_head_before, previous_fifo[side][ep], tag);
+				memcpy(previous_fifo[side][ep], q->fifo_head_after, sizeof q->fifo_head_after);
+				if (ep == 0) {
+					diff_eq_int("L1 output: caller stays micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("L1 output: caller stays TX silence (%ld)", q->state.tx, 5, tag);
+					diff_eq_int("L1 output: caller counter (%ld)", q->state.count, step - 961, tag);
+				} else {
+					diff_eq_int("L1 output: peer stays micro51 (%ld)", q->state.micro, 51, tag);
+					diff_eq_int("L1 output: peer remains TX51 (%ld)", q->state.tx, 51, tag);
+					diff_eq_int("L1 output: peer remains RX53 (%ld)", q->state.rx, 53, tag);
+					diff_eq_int("L1 output: RX53 bypass holds count42 (%ld)", q->state.count, 42, tag);
+					diff_eq_int("L1 output: raw producer cursor (%ld)", q->cursor, (step - 1121) * 4, tag);
+					diff_eq_int("L1 output: read trajectory (%ld)", q->rd_before, (saved_index[side] - 12 + (step - 1123) * 4 + V34_TXQ_RING) % V34_TXQ_RING, tag);
+					if (q->rd_before == saved_index[side]) {
+						e->pop_step = e->float_step = e->fifo_step = step;
+						e->pop_rd_before = q->rd_before; e->pop_rd_after = q->rd;
+						memcpy(e->popped, q->popped, sizeof e->popped);
+						diff_eq_obj("L1 output saved producer block is actually dequeued", unsigned[4], q->head, saved[side], tag);
+						diff_eq_obj("L1 output original signed saved block dequeued", short[4], q->popped, first_block, tag);
+					}
+					for (i = 0; i < 4; i++) returned_saved &= out[side][ep][i] == first_block[i];
+					if (returned_saved && e->return_step < 0) {
+						e->return_step = step; e->return_rd_before = q->rd_before; e->return_rd_after = q->rd;
+						e->fifo_count = q->fifo_before; e->fifo_delay = step - e->pop_step;
+						e->return_tx_sample = q->tx_sample;
+						memcpy(e->returned, q->returned, sizeof e->returned);
+						diff_eq_obj("L1 output actual returned original-probe signed block", short[4], out[side][ep], first_block, tag);
+						diff_eq_obj("L1 output copied returned signed known answer", short[4], q->returned, first_block, tag);
+						diff_eq_int("L1 output: return belongs to prior queue-pop frame (%ld)", step - e->pop_step, 1, tag);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 output selected pointer-free projection", struct output_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 output actual four-sample return", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (event[0].return_step >= 0 || event[1].return_step >= 0 ||
+		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step; wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct output_events *e = &event[side];
+		diff_eq_int("L1 output: first saved dequeue step (%ld)", e->pop_step, 1126, side);
+		diff_eq_int("L1 output: float staging step (%ld)", e->float_step, 1126, side);
+		diff_eq_int("L1 output: saved block at FIFO head after (%ld)", e->fifo_step, 1126, side);
+		diff_eq_int("L1 output: first complete returned block (%ld)", e->return_step, 1127, side);
+		diff_eq_int("L1 output: queue-pop read origin (%ld)", e->pop_rd_before, 66, side);
+		diff_eq_int("L1 output: queue-pop read result (%ld)", e->pop_rd_after, 70, side);
+		diff_eq_int("L1 output: return-frame read origin (%ld)", e->return_rd_before, 70, side);
+		diff_eq_int("L1 output: return-frame read result (%ld)", e->return_rd_after, 74, side);
+		diff_eq_int("L1 output: observed FIFO delay (%ld)", e->fifo_delay, 1, side);
+		diff_eq_int("L1 output: observed retained FIFO samples (%ld)", e->fifo_count, 4, side);
+		printf("L1 output side=%s produced=%d ring=%d pop=%d float=%d fifo_head_after=%d "
+		       "returned=%d pop_rd=%d->%d return_rd=%d->%d fifo=%d delay=%d "
+		       "samples=%d,%d,%d,%d return_frame_tx_sample=%d\n", side ? "blob" : "ours",
+		       e->producer_step, e->saved_index, e->pop_step, e->float_step, e->fifo_step,
+		       e->return_step, e->pop_rd_before, e->pop_rd_after, e->return_rd_before,
+		       e->return_rd_after, e->fifo_count, e->fifo_delay,
+		       e->returned[0], e->returned[1], e->returned[2], e->returned[3], e->return_tx_sample);
+	}
+	diff_eq_obj("L1 output producer pop FIFO and returned epochs", struct output_events, &event[0], &event[1], 0);
+	diff_eq_int("L1 output: process-call denominator", calls, 20, 0);
+	printf("L1 output denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first saved block returned only, no peer-arrival claim\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	return calls;
 }
 
 static int
@@ -2101,6 +2298,16 @@ info0_l1_producer(struct dp_operations **ops, struct dp *root[2][2],
 	       "%d further four-sample steps, %d process calls, %d paired projections and "
 	       "%d paired output buffers; first raw L1 queue block only, external L1 not claimed\n",
 	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].producer_step == 1122 && event[1].producer_step == 1122) {
+		int index[2], produced_step[2];
+		unsigned saved[2][4];
+		for (side = 0; side < 2; side++) {
+			index[side] = p[side][1].wr_before;
+			produced_step[side] = event[side].producer_step;
+			memcpy(saved[side], event[side].produced, sizeof saved[side]);
+		}
+		calls += info0_l1_output(ops, root, o, prev, wire, wp, out, sent, origin, index, saved, produced_step);
+	}
 	return calls;
 }
 
@@ -2997,7 +3204,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6264, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6284, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3005,7 +3212,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through first raw peer L1 queue block, CRC rejection prefix; "
+	       "positive through first saved peer L1 block returned, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
