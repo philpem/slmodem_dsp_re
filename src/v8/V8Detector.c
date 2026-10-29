@@ -199,14 +199,16 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 		d->acc_a[0] = (short)((short)acc >> 4);
 		d->acc_b[0] = (short)stage1;
 
-		stage2 = (short)stage1 >> 4;
+		/* The second section narrows after shifting the full accumulator
+		 * (native 0x78762/0x78765), unlike the first section's input. */
+		stage2 = (short)(stage1 >> 4);
 		for (i = 0; i < 2; i++) {
 			stage2 += v8_mpyint(d->acc_a[2 + i], t[2 + i]);
 			stage2 -= v8_mpyint(d->acc_b[2 + i], t[6 + i]);
 		}
 		d->acc_a[3] = d->acc_a[2];
 		d->acc_b[3] = d->acc_b[2];
-		d->acc_a[2] = (short)((short)stage1 >> 4);
+		d->acc_a[2] = (short)(stage1 >> 4);
 		d->acc_b[2] = (short)stage2;
 
 		d->integrator = (short)(v8_absfn((short)((short)stage2 >> 4))
