@@ -1914,7 +1914,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Bound80 further calls, stopping at arrival or either microstate edge.
+	 * Continue through first RX72 correlation at native counter65 (step1243);
+	 * stop there or on either microstate edge, at most43 calls after1200.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later probe/negotiation completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
@@ -1930,6 +1931,16 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		int rms_before, rms_after;
 		short echo_before, echo_after, pairs[4][2], rms[4], hilbert[5];
 	} pipe[2];
+	struct correlation_bin {
+		short phase, inc;
+		int acc_re, acc_im;
+		double sum_re, sum_im;
+	};
+	struct correlation_projection {
+		int counter, nsamples;
+		short samples[4];
+		struct correlation_bin bank[2][4];
+	} correlation[2];
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
 
@@ -1941,7 +1952,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
 	}
 	wp = (wp + 4) % INFO0_DELAY;
-	for (step = 1128; step <= 1207; step++) {
+	for (step = 1128; step <= 1243; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -1952,7 +1963,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				long tag = step * 4 + ep * 2 + side;
 				int rc;
 				memset(q, 0, sizeof *q);
-				if (ep == 0 && step >= 1199) {
+				if (ep == 0 && step >= 1199 && step <= 1200) {
 					struct v34_receiver *rx = &o[side][ep]->receiver;
 					struct pipeline_projection *z = &pipe[side];
 					memset(z, 0, sizeof *z);
@@ -1987,7 +1998,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				}
 				calls++;
 				info0_project(&q->state, o[side][ep], rc);
-				if (ep == 0 && step >= 1199) {
+				if (ep == 0 && step >= 1199 && step <= 1200) {
 					/* Native bd43/bd50 passes each signed input to modem_serrint;
 					 * 5d3d4 Hilbert output becomes a complex queue pair.
 					 * RX72 calls rxtiming (65524); its private EAX-argument
@@ -2043,6 +2054,66 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 						diff_eq_obj("L1 pipeline consumed real halves reach ungained RMS", short[4], z->rms, expected_rms, tag);
 					}
 				}
+				if (ep == 0 && step >= 1201) {
+					/* RX72 increments +aa78 once per observed call. Native
+					 * count64 arms two four-bin nonlinear banks; count65
+					 * calls dftupdate twice on burst+370 with four samples.
+					 * The signal bank overlays probe_bins[0..3]; this is
+					 * not the later 25-bin line-probe accumulation. */
+					static const struct correlation_bin initialized[2][4] = {
+					{
+						{ 0, 1792, 0, 0, 0.0, 0.0 },
+						{ 0, 2304, 0, 0, 0.0, 0.0 },
+						{ 0, 3328, 0, 0, 0.0, 0.0 },
+						{ 0, 4352, 0, 0, 0.0, 0.0 }
+					},
+					{
+						{ 0, 1536, 0, 0, 0.0, 0.0 },
+						{ 0, 2048, 0, 0, 0.0, 0.0 },
+						{ 0, 3072, 0, 0, 0.0, 0.0 },
+						{ 0, 4096, 0, 0, 0.0, 0.0 }
+					}
+					};
+					static const struct correlation_bin accumulated[2][4] = {
+					{
+						{ 7168, 1792, 1659913, -1437048, 106234526.0, -91970891.0 },
+						{ 9216, 2304, 1009754, -2197729, 64624406.0, -140654509.0 },
+						{ 13312, 3328, -1210598, -2097597, -77478133.0, -134246084.0 },
+						{ 1024, 4352, -1846470, 51065, -118173964.0, 3268331.0 }
+					},
+					{
+						{ 6144, 1536, 1770548, -1013828, 113315167.0, -64884879.0 },
+						{ 8192, 2048, 1405140, -1850295, 89929085.0, -118418748.0 },
+						{ 12288, 3072, -672448, -2386677, -43036624.0, -152747254.0 },
+						{ 0, 4096, -1968840, -515529, -126005718.0, -32993822.0 }
+					}
+					};
+					static const short known_samples[4] = { 3554, 3626, 1540, -4065 };
+					struct correlation_projection *c = &correlation[side];
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					int bank, bin;
+					memset(c, 0, sizeof *c);
+					c->counter = o[side][ep]->short_aa78;
+					c->nsamples = (int)(rx->rx_samples - rx->burst);
+					memcpy(c->samples, rx->burst, sizeof c->samples);
+					for (bank = 0; bank < 2; bank++)
+					for (bin = 0; bin < 4; bin++) {
+						const struct v34_dftbin *b = bank ? &o[side][ep]->nl_noise_bins[bin] : &o[side][ep]->probe_bins[bin];
+						struct correlation_bin *d = &c->bank[bank][bin];
+						d->phase = b->phase; d->inc = b->inc;
+						d->acc_re = b->acc_re; d->acc_im = b->acc_im;
+						d->sum_re = b->sum_re; d->sum_im = b->sum_im;
+					}
+					diff_eq_int("RX72 correlation native counter trajectory (%ld)", c->counter, step - 1178, tag);
+					diff_eq_int("RX72 correlation live receive state (%ld)", q->state.rx, 72, tag);
+					if (c->counter == 64)
+						diff_eq_obj("RX72 correlation first four-bin bank initialization", struct correlation_bin[2][4], c->bank, initialized, tag);
+					if (c->counter == 65) {
+						diff_eq_int("RX72 correlation actual nonempty sample count (%ld)", c->nsamples, 4, tag);
+						diff_eq_obj("RX72 correlation actual timing burst known answer", short[4], c->samples, known_samples, tag);
+						diff_eq_obj("RX72 correlation first accumulation known answer", struct correlation_bin[2][4], c->bank, accumulated, tag);
+					}
+				}
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
 				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
 				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
@@ -2051,9 +2122,11 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
-		if (step >= 1199)
+		if (step >= 1201)
+			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
+		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 1200) ||
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 65) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51) break;
 		for (side = 0; side < 2; side++)
@@ -2064,10 +2137,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	}
 	for (side = 0; side < 2; side++)
 		diff_eq_int("L1 arrival first saved peer frame input step (%ld)", arrival[side], 1199, side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 292, 0);
+	diff_eq_int("L1 arrival process-call denominator", calls, 464, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "saved derived pairs consumed by RX72 demodulation one call later; no later probe/negotiation claim\n", calls / 4, calls);
+	       "derived pairs consumed by RX72 then first four-bin nonlinear correlation observed; no 25-bin probe/negotiation claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3378,7 +3451,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6576, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6748, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3386,7 +3459,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through saved peer L1 derived queue-pair consumption by RX72, CRC rejection prefix; "
+	       "positive through first RX72 four-bin nonlinear correlation, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
