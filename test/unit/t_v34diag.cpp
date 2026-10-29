@@ -1914,11 +1914,11 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through RX72 measurements384/768 and first25-bin update769, validating
+	 * Continue through RX72 measurements384/768 and terminal reduction1089, validating
 	 * peer micro52 undoubled production after the terminal edge, then
-	 * stopping at counter769 or another unexplained RX/microstate edge.
+	 * stopping at counter1089 or another unexplained RX/microstate edge.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
-	 * This does not establish later probe/negotiation completion. */
+	 * This does not establish later negotiation/protocol completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
 	int eligible_detector_frames[2] = { 0, 0 };
 	struct arrival_projection {
@@ -1967,6 +1967,11 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		struct nl_measure_bin bins[25], noise_bins[4];
 		short thresholds[25][2];
 	} probe[2][2];
+	struct probe_done_projection {
+		int counter,micro,rx,tx,role,flags,gain,saved_gain,timing,rtd_scaled;
+		short count,phase,increment,wrap,period,sr,nbits;
+		struct nl_measure_bin bins[25];
+	} done[2][2];
 	int terminal_step[2] = { -1, -1 };
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
@@ -1979,7 +1984,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
 	}
 	wp = (wp + 4) % INFO0_DELAY;
-	for (step = 1128; step <= 1948; step++) {
+	for (step = 1128; step <= 2268; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -2384,6 +2389,77 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					diff_eq_int("RX53 eligible actual detector sample count (%ld)",(int)(rx->rx_samples-rx->burst),4,tag);
 					diff_eq_obj("RX53 eligible native detector zero burst",short[4],rx->burst,silence,tag);
 				}
+
+				if(ep==0 && (step==2266 || step==2267)) {
+					/* The next counter is1089: original69611 reduces all25
+					 * actual accumulated bins and selectsTX60. Stop on that
+					 * process return; generated-tone provenance remains a new boundary. */
+					static const struct nl_measure_bin native_terminal[25] = {
+						{ 0, 256, -11605320, 31191660, 62, 11, -742700700.0, 1996304180.0, 4.5368347088659625e+18 },
+						{ 0, 512, 74919400, -17183120, 335, 8, 4794873780.0, -1099683420.0, 2.4200118190354383e+19 },
+						{ 0, 768, -47149520, -63856340, 358, 8, -3017531000.0, -4086769840.0, 2.5807181061094625e+19 },
+						{ 0, 1024, 44623220, -68274340, 378, 8, 2855914460.0, -4369533160.0, 2.7249067439176675e+19 },
+						{ 0, 1280, 78728740, 19846260, 374, 8, 5038678720.0, 1270195900.0, 2.700168086775765e+19 },
+						{ 0, 1536, 11960, -13480, 0, 20, 802740.0, -830180.0, 1333590340000.0 },
+						{ 0, 1792, -75722960, 30822900, 379, 8, -4846233680.0, 1972703140.0, 2.7377538559732204e+19 },
+						{ 0, 2048, 16740, 8380, 0, 20, 1097180.0, 561180.0, 1518726944800.0 },
+						{ 0, 2304, 44268180, -69064660, 382, 8, 2833203360.0, -4420101440.0, 2.7564338019005362e+19 },
+						{ 0, 2560, 79510660, 21693060, 385, 8, 5088721220.0, 1388389740.0, 2.7822709725015556e+19 },
+						{ 0, 2816, -2938380, -82167180, 384, 8, -188021560.0, -5258662960.0, 2.7688888233900794e+19 },
+						{ 0, 3072, 1600, -13260, 0, 20, 128940.0, -818220.0, 686109492000.0 },
+						{ 0, 3328, -48972440, -66217100, 385, 8, -3134199080.0, -4237855100.0, 2.7782619721668858e+19 },
+						{ 0, 3584, 48847020, -66335280, 385, 8, 3126242100.0, -4245422180.0, 2.7796999154248364e+19 },
+						{ 0, 3840, -77918700, -27199420, 387, 8, -4986758220.0, -1740723760.0, 2.7897876753366106e+19 },
+						{ 0, 4096, 4980, -20640, 0, 20, 327660.0, -1310680.0, 1825243138000.0 },
+						{ 0, 4352, -79882520, 21273160, 388, 8, -5112445980.0, 1361515820.0, 2.7990829226528432e+19 },
+						{ 0, 4608, 43538680, 69702400, 383, 8, 2786509180.0, 4460992260.0, 2.766508535400418e+19 },
+						{ 0, 4864, 54259660, -62491700, 389, 8, 3472649760.0, -3999431040.0, 2.805474499934354e+19 },
+						{ 0, 5120, -75016300, -33305800, 383, 8, -4801015220.0, -2131538280.0, 2.7593202581777007e+19 },
+						{ 0, 5376, 9996380, -82339860, 391, 8, 639803120.0, -5269716620.0, 2.817926128746596e+19 },
+						{ 0, 5632, 80555160, -14353360, 380, 8, 5155563940.0, -918581620.0, 2.742363173203015e+19 },
+						{ 0, 5888, 37933720, 74096800, 393, 8, 2427793280.0, 4742235660.0, 2.8382979265388794e+19 },
+						{ 0, 6144, 58492040, -56688760, 377, 8, 3743515580.0, -3628056400.0, 2.7176702139283698e+19 },
+						{ 0, 6400, 72454700, 39993200, 389, 8, 4637137440.0, 2559601880.0, 2.805460542154929e+19 }
+					};
+					struct probe_done_projection *d=&done[side][step-2266];
+					struct v34_object *v=o[side][ep];
+					struct v34_receiver *rx=&v->receiver;
+					int bin;
+					memset(d,0,sizeof *d);
+					d->counter=v->short_aa78;d->micro=v->microstate;d->rx=v->rxstate;d->tx=v->txstate;d->role=v->role;
+					d->flags=rx->flags;d->gain=rx->agc_gain;d->saved_gain=rx->short_264;d->timing=rx->timing_offset;d->rtd_scaled=v->rtd_scaled;
+					d->count=rx->out_count;d->phase=rx->phase_frac;d->increment=rx->phase_inc;d->wrap=rx->phase_wrap;d->period=rx->symbol_period;
+					d->sr=v->fsk.sr;d->nbits=v->fsk.nbits;
+					for(bin=0;bin<25;bin++) {
+						const struct v34_dftbin *n=&v->probe_bins[bin];struct nl_measure_bin *q=&d->bins[bin];
+						q->phase=n->phase;q->inc=n->inc;q->acc_re=n->acc_re;q->acc_im=n->acc_im;q->energy=n->energy;q->shift=n->shift;q->sum_re=n->sum_re;q->sum_im=n->sum_im;q->denergy=n->denergy;
+					}
+					diff_eq_int("probe terminal native counter trajectory (%ld)",d->counter,step-1178,tag);
+					diff_eq_int("probe terminal originating role (%ld)",d->role,0x65,tag);
+					diff_eq_int("probe terminal native TX selection (%ld)",d->tx,step==2266?5:60,tag);
+					diff_eq_int("probe terminal native flag transition (%ld)",d->flags,step==2266?0x1200:0x1a00,tag);
+					diff_eq_int("probe terminal native gain transition (%ld)",d->gain,step==2266?537:1079,tag);
+					if(step==2267) {
+						diff_eq_int("probe terminal native micro retained (%ld)",d->micro,59,tag);
+						diff_eq_int("probe terminal native RX retained (%ld)",d->rx,72,tag);
+						diff_eq_int("probe terminal saved gain restored (%ld)",d->gain,d->saved_gain,tag);
+						diff_eq_int("probe terminal copied timing offset (%ld)",d->rtd_scaled,d->timing,tag);
+						diff_eq_int("probe terminal demod count (%ld)",d->count,4,tag);
+						diff_eq_int("probe terminal demod phase (%ld)",d->phase,8000,tag);
+						diff_eq_int("probe terminal demod increment (%ld)",d->increment,16000,tag);
+						diff_eq_int("probe terminal demod wrap (%ld)",d->wrap,16000,tag);
+						diff_eq_int("probe terminal symbol period (%ld)",d->period,16000,tag);
+						diff_eq_int("probe terminal FSK shift-register reset (%ld)",d->sr,-1,tag);
+						diff_eq_int("probe terminal FSK bitcount reset (%ld)",d->nbits,0,tag);
+						diff_eq_obj("probe terminal all25 native reduced bins",struct nl_measure_bin[25],d->bins,native_terminal,tag);
+						for(bin=0;bin<25;bin++) {
+							struct nl_measure_bin *p=&done[side][0].bins[bin],*q=&d->bins[bin];
+							diff_eq_int("probe terminal actual prior accumulation nonzero (%ld)",p->acc_re!=0||p->acc_im!=0,1,tag+bin);
+							diff_eq_int("probe terminal preserves integer real accumulator (%ld)",q->acc_re,p->acc_re,tag+bin);
+							diff_eq_int("probe terminal preserves integer imag accumulator (%ld)",q->acc_im,p->acc_im,tag+bin);
+						}
+					}
+				}
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
 				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
 				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
@@ -2392,6 +2468,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
+		if(step==2266 || step==2267)
+			diff_eq_obj("probe terminal pointer-free projection",struct probe_done_projection,&done[0][step-2266],&done[1][step-2266],step);
 		if (step == 1946 || step == 1947)
 			diff_eq_obj("probe full25 pointer-free native projection",struct pb_projection,&probe[0][step-1946],&probe[1][step-1946],step);
 		if (step == 1506)
@@ -2406,7 +2484,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 769) ||
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 1089) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != (step < 1505 ? 51 : 52) || p[1][1].state.micro != (step < 1505 ? 51 : 52) ||
 		    (step > 1505 && (p[0][1].state.rx != 53 || p[1][1].state.rx != 53))) break;
@@ -2422,10 +2500,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		diff_eq_int("peer terminal first micro51-to52 edge step (%ld)", terminal_step[side], 1505, side);
 	for (side = 0; side < 2; side++)
 		diff_eq_int("RX53 eligible native-witness detector prefix denominator (%ld)",eligible_detector_frames[side],67,side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 3280, 0);
+	diff_eq_int("L1 arrival process-call denominator", calls, 4560, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "peer micro52 undoubled producer, NL/PB measurements384/768, first full25-bin accumulation769; no probe-completion/negotiation claim\n", calls / 4, calls);
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection; no negotiation-completion claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3736,7 +3814,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 9564, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 10844, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3744,7 +3822,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through first full25-bin accumulation, CRC rejection prefix; "
+	       "positive through full25-bin terminal reduction/TX60 selection, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
