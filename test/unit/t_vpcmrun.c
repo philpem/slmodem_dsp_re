@@ -106,13 +106,10 @@ extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
  * is that strong -- traced under callgrind, the call entered exactly one
  * unwritten symbol and it was `VPcmV34Progress`.
  *
- * CONSTRUCTION IS STILL BORROWED, AND DELIBERATELY.  Both endpoints are built
- * by `ref_dp_vpcm_init` and so by the blob's `ref_vpcm_create`, which is
- * findings F800-806's golden-object oracle rather than an omission: a
- * blob-constructed V.34 object is a valid differential fixture, and using it
- * is what lets the run path be compared at all.  `t_vpcmctor` and
- * `t_vpcmxfcreate` are where OUR construction is tested.  So the honest claim
- * for this file is about `.process`, not about the datapump's whole life.
+ * The original four processing runs retain reference construction.  A separate
+ * lifecycle cohort below uses matched create/process/destroy implementations
+ * at each endpoint.  Both cohorts borrow the reference V.8 transfer snapshot;
+ * neither establishes a wholly source-owned V.8-to-connect history.
  *
  * `VPcmV34Progress` also puts OUR `V90Demodulator::getBitRate`,
  * `GenericIIR<float,double>::process` and `V90Parameters::init` on the path of
@@ -435,6 +432,14 @@ static struct v34res v34res[NRUN][NEP];
  */
 static unsigned blkdig[NRUN][NEP][V34_BLOCKS];
 
+/* Fixed public-output oracle, captured only from the original blob/blob run.
+ * Samples are compared directly; no digest stands in for sample equality. */
+struct lifecycle_block {
+	short samples[FRAG];
+	int result, progress, mode;
+};
+static struct lifecycle_block lifecycle_oracle[NEP][V34_BLOCKS];
+
 static unsigned
 digest(int rc, const short *p, int n)
 {
@@ -611,6 +616,13 @@ run_v34(struct dp_operations *ops, int run)
 			alarm(0);
 
 			blkdig[run][ep][blk] = digest(rc, out[ep], FRAG);
+			if (!queue_chunks && run == 0) {
+				struct lifecycle_block *b = &lifecycle_oracle[ep][blk];
+				memcpy(b->samples, out[ep], sizeof(b->samples));
+				b->result = rc;
+				b->progress = ((struct vpcm_root *)root[ep])->status;
+				b->mode = ((struct vpcm_root *)root[ep])->mode;
+			}
 
 			code = ((struct vpcm_root *)root[ep])->status;
 			if (code >= 0 && code < 32)
@@ -867,6 +879,173 @@ run_queue_calls(struct dp_operations *ops)
 	diff_eq_int("active queue calls exercised", queue_active > 0, 1, 0);
 	rc = diff_end();
 	return rc;
+}
+
+/* Matched ownership at the public V.PCM boundary.  No callbacks, queues or
+ * modem states are planted.  The borrowed V.8 snapshot, channel and horizon
+ * are exactly those of the original processing cohort. */
+extern void scrambleGPA(void), scrambleGPC(void);
+extern void descrambleGPA(void), descrambleGPC(void);
+extern void ref_scrambleGPA(void), ref_scrambleGPC(void);
+extern void ref_descrambleGPA(void), ref_descrambleGPC(void);
+
+static int
+lifecycle_callbacks(struct vpcm_root *s, int ours, int ep, long tag)
+{
+	/* v34handshakinit's role-selected code pointers, independently named in
+	 * t_vpcmcreate.  Different image addresses have the same canonical role. */
+	const void *tx[2][NEP] = {
+		{ ref_scrambleGPC, ref_scrambleGPA },
+		{ scrambleGPC, scrambleGPA }
+	};
+	const void *rx[2][NEP] = {
+		{ ref_descrambleGPA, ref_descrambleGPC },
+		{ descrambleGPA, descrambleGPC }
+	};
+	void *actual_tx, *actual_rx;
+	int before = diff_failures;
+	memcpy(&actual_tx, (char *)&s->v34 + 0x2a28, sizeof(actual_tx));
+	memcpy(&actual_rx, (char *)&s->v34 + 0x0e48, sizeof(actual_rx));
+	diff_eq_int("lifecycle transmit callback role/image", actual_tx == tx[ours][ep], 1, tag);
+	diff_eq_int("lifecycle receive callback role/image", actual_rx == rx[ours][ep], 1, tag);
+	return diff_failures == before;
+}
+
+static int
+run_lifecycles(struct dp_operations *reference)
+{
+	int run, ep, blk, calls = 0, destroyed = 0, bits[NEP] = { 0, 0 };
+	int completed = 0, created = 0, source_created = 0, reference_created = 0;
+	int copied_control = getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
+	int stop = 0;
+	void (*prev)(int) = signal(SIGALRM, call_alarm);
+
+	diff_begin("V.PCM matched source-constructor connecting lifecycles");
+	diff_eq_int("lifecycle reference create identity", reference->create == ref_vpcm_create, 1, 0);
+	diff_eq_int("lifecycle reference table identity", reference == &ref_vpcm_op, 1, 0);
+	/* Source entries are file-static. Their canonical identity is the
+	 * table registered by dp_vpcm_init, not a fabricated exported alias. */
+	diff_eq_int("lifecycle registered source owner", our_ops_for(34) == g_our34, 1, 0);
+	diff_eq_int("lifecycle source table present", g_our34->create && g_our34->process && g_our34->destroy, 1, 0);
+	diff_eq_int("lifecycle process images differ", g_our34->process != reference->process, 1, 0);
+	diff_eq_int("lifecycle create images differ", g_our34->create != reference->create, 1, 0);
+	diff_eq_int("lifecycle destroy images differ", g_our34->destroy != reference->destroy, 1, 0);
+	if (diff_failures) stop = 1;
+	for (run = 1; run < NRUN && !stop; run++) {
+		struct dp *dp[NEP] = { 0, 0 };
+		struct dp_operations *owner[NEP];
+		int connected[NEP] = { -1, -1 }, nconnect[NEP] = { 0, 0 };
+		int baseline_live = harness_alloc.live, baseline_bad = harness_alloc.bad_free;
+		int baseline_balance = harness_alloc.allocs - harness_alloc.frees;
+		int before = diff_failures;
+		short in[NEP][FRAG], out[NEP][FRAG];
+
+		cur_run = NRUN + run;
+		memcpy(rt_buf, rt_snap, sizeof(rt_buf));
+		memcpy(info_buf, info_snap, sizeof(info_buf));
+		routes_reset();
+		for (ep = 0; ep < NEP; ep++) {
+			int ours = (run >> ep) & 1;
+			long tag = run * NEP + ep;
+			struct vpcm_root *s;
+			owner[ep] = ours ? g_our34 : reference;
+			params_for(ep);
+			dp[ep] = owner[ep]->create(ep_modem[ep], 34, ep_caller[ep], SRATE, FRAG, owner[ep]);
+			diff_eq_int("lifecycle allocation", dp[ep] != 0, 1, tag);
+			if (!dp[ep]) { stop = 1; break; }
+			created++;
+			if (ours) source_created++; else reference_created++;
+			s = (struct vpcm_root *)dp[ep];
+			diff_eq_int("lifecycle operations owner", dp[ep]->op == owner[ep], 1, tag);
+			diff_eq_int("lifecycle root ownership", dp[ep]->dp_data == dp[ep], 1, tag);
+			diff_eq_int("lifecycle modem ownership", dp[ep]->modem == ep_modem[ep], 1, tag);
+			diff_eq_int("lifecycle runtime ownership", (void *)s->params == (void *)rt_buf[ep], 1, tag);
+			diff_eq_int("lifecycle info ownership", (void *)s->info == (void *)info_buf[ep], 1, tag);
+			diff_eq_int("lifecycle graph allocated", harness_alloc_ordinal(dp[ep]) != 0, 1, tag);
+			if (!lifecycle_callbacks(s, ours, ep, tag) || diff_failures != before) {
+				stop = 1; break;
+			}
+		}
+		wire_reset();
+		for (blk = 0; blk < V34_BLOCKS && !stop; blk++) {
+			cur_block = blk;
+			wire_take(in);
+			for (ep = 0; ep < NEP; ep++) {
+				struct vpcm_root *s = (struct vpcm_root *)dp[ep];
+				struct lifecycle_block observed;
+				long tag = (run * NEP + ep) * V34_BLOCKS + blk;
+				cur_ep = ep;
+				memset(out[ep], 0, sizeof(out[ep]));
+				memset(&observed, 0, sizeof(observed));
+				alarm(30);
+				observed.result = owner[ep]->process(dp[ep], in[ep], out[ep], FRAG);
+				alarm(0);
+				calls++;
+				memcpy(observed.samples, out[ep], sizeof(observed.samples));
+				observed.progress = s->status;
+				observed.mode = s->mode;
+				/* Negative calibration changes a copied observation only. */
+				if (copied_control && run == 1 && ep == 0 && blk == 1600)
+					observed.samples[0] ^= 1;
+				diff_eq_obj("lifecycle exact samples/return/status", struct lifecycle_block,
+				            &observed, &lifecycle_oracle[ep][blk], tag);
+				if (diff_failures != before) { stop = 1; break; }
+				if (observed.result == DPSTAT_CONNECT) {
+					connected[ep] = blk;
+					nconnect[ep]++;
+				}
+			}
+			if (!stop) wire_put(out);
+		}
+		if (!stop) for (ep = 0; ep < NEP; ep++) {
+			struct modem_shim *s = shim_for_ep(run, ep);
+			struct modem_shim *unused = ((run >> ep) & 1)
+				? &harness_modem_route_ref[ep_route[ep]]
+				: &harness_modem_route_ours[ep_route[ep]];
+			int lag, counted, errors;
+			long tag = run * NEP + ep;
+			root[ep] = (char *)dp[ep]; obj[ep] = root[ep] + ROOT_V34;
+			diff_eq_int("lifecycle connect block", connected[ep], v34res[0][ep].connect_rc_blk, tag);
+			diff_eq_int("lifecycle connect event count", nconnect[ep], 1, tag);
+			diff_eq_int("lifecycle transmit rate", peek16(ep, O_TXRATE), RATE_33600, tag);
+			diff_eq_int("lifecycle receive rate", peek16(ep, O_RXRATE), RATE_33600, tag);
+			diff_eq_int("lifecycle bit source active", s->gets > 0, 1, tag);
+			diff_eq_int("lifecycle bit sink active", s->puts > 0, 1, tag);
+			diff_eq_int("lifecycle other image bit source unused", unused->gets, 0, tag);
+			diff_eq_int("lifecycle other image bit sink unused", unused->puts, 0, tag);
+			errors = align_errors(s->rx, s->rx_len, pattern[ep ^ 1], PAT_LEN, &lag, &counted);
+			diff_eq_int("lifecycle independently aligned payload", counted >= 2048, 1, tag);
+			diff_eq_int("lifecycle payload BER zero", errors, 0, tag);
+			bits[ep] += counted;
+			printf("  lifecycle %s %s: connect %d; payload %d bits, errors %d\n",
+			       run_name[run], ep_name[ep], connected[ep], counted, errors);
+		}
+		for (ep = 0; ep < NEP; ep++) if (dp[ep]) {
+			diff_eq_int("lifecycle owning destructor result", owner[ep]->destroy(dp[ep]), 0, run * NEP + ep);
+			destroyed++;
+		}
+		diff_eq_int("lifecycle allocations restored", harness_alloc.live, baseline_live, run);
+		diff_eq_int("lifecycle allocation/free balance", harness_alloc.allocs - harness_alloc.frees, baseline_balance, run);
+		diff_eq_int("lifecycle no invalid destruction", harness_alloc.bad_free, baseline_bad, run);
+		diff_eq_int("lifecycle allocation accounting valid", harness_alloc.overflow, 0, run);
+		if (diff_failures != before) stop = 1;
+		else completed++;
+	}
+	diff_eq_int("lifecycle completed cases", completed, 3, 0);
+	diff_eq_int("lifecycle created endpoint owners", created, 6, 0);
+	diff_eq_int("lifecycle source endpoint owners", source_created, 4, 0);
+	diff_eq_int("lifecycle reference endpoint owners", reference_created, 2, 0);
+	diff_eq_int("lifecycle owning destructors executed", destroyed, 6, 0);
+	diff_eq_int("lifecycle endpoint calls executed", calls, 3 * NEP * V34_BLOCKS, 0);
+	diff_eq_int("lifecycle output sample positions compared", calls * FRAG, 3 * NEP * V34_BLOCKS * FRAG, 0);
+	for (ep = 0; ep < NEP; ep++)
+		diff_eq_int("lifecycle aggregate aligned directional payload", bits[ep] >= 3 * 2048, 1, ep);
+	alarm(0);
+	signal(SIGALRM, prev);
+	printf("  lifecycle: %d/3 cases; %d/%d endpoint calls, %d/%d output samples, %d/6 owning destructors; payload orig/answer %d/%d bits\n",
+	       completed, calls, 3 * NEP * V34_BLOCKS, calls * FRAG, 3 * NEP * V34_BLOCKS * FRAG,
+	       destroyed, bits[0], bits[1]);
+	return diff_end();
 }
 
 /* --- main ----------------------------------------------------------------- */
@@ -1305,6 +1484,8 @@ main(void)
 				       v34res[run][ep].codemask,
 				       v34res[run][ep].codeseq);
 
+	rc |= run_lifecycles(ops34);
+	if (rc) return rc;
 	rc |= run_stall();
 	rc |= run_queue_calls(ops34);
 
