@@ -1945,6 +1945,20 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				if (ep == 0 && step == 1199)
 					diff_eq_obj("L1 arrival channel-delay provenance", short[4], q->input, emitted[side], tag);
 				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				if (ep == 0 && step == 1199) {
+					/* Native400c FILD signed input;400f FSTP root+ac78.
+					 * 4031/4048 pass that float stage to VPcmV34Progress.
+					 * Observe the real wrapper stage after the same call;
+					 * this does not establish downstream queue/detector use. */
+					float staged[4], expected[4];
+					int remainder;
+					for (i = 0; i < 4; i++) expected[i] = (float)emitted[side][i];
+					memcpy(staged, (unsigned char *)root[side][ep] + 0xac78, sizeof staged);
+					memcpy(&remainder, (unsigned char *)root[side][ep] + 0xd1e4, sizeof remainder);
+					diff_eq_int("L1 arrival wrapper private owner (%ld)", root[side][ep]->dp_data == root[side][ep], 1, tag);
+					diff_eq_int("L1 arrival no retained input remainder (%ld)", remainder, 0, tag);
+					diff_eq_obj("L1 arrival signed input reaches real float stage", float[4], staged, expected, tag);
+				}
 				calls++;
 				info0_project(&q->state, o[side][ep], rc);
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
@@ -1969,7 +1983,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	diff_eq_int("L1 arrival process-call denominator", calls, 288, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "no detector-consumption or later negotiation claim\n", calls / 4, calls);
+	       "actual signed-to-float wrapper stage checked at arrival; no detector-consumption or later negotiation claim\n", calls / 4, calls);
 	return calls;
 }
 
