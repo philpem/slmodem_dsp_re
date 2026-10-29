@@ -595,7 +595,8 @@ V90CP::evaluateInfo()
 		 */
 		if (nof_buf[0] != 0) {
 			dst = buf[0];
-			for (j = 0; j < nof_buf[0]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -605,12 +606,13 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[0]);
 		}
 
 		if (nof_buf[1] != 0) {
 			dst = buf[1];
-			for (j = 0; j < nof_buf[1]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -620,12 +622,13 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[1]);
 		}
 
 		if (nof_buf[2] != 0) {
 			dst = buf[2];
-			for (j = 0; j < nof_buf[2]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -635,12 +638,13 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[2]);
 		}
 
 		if (nof_buf[3] != 0) {
 			dst = buf[3];
-			for (j = 0; j < nof_buf[3]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -650,12 +654,13 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[3]);
 		}
 
 		if (nof_buf[4] != 0) {
 			dst = buf[4];
-			for (j = 0; j < nof_buf[4]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -665,12 +670,13 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[4]);
 		}
 
 		if (nof_buf[5] != 0) {
 			dst = buf[5];
-			for (j = 0; j < nof_buf[5]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
@@ -680,7 +686,7 @@ V90CP::evaluateInfo()
 					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[5]);
 		}
 
 		break;
