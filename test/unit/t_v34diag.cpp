@@ -1900,6 +1900,14 @@ info0_tx_ring_index(const struct v34_object *o, const void *p)
 }
 
 static int
+info0_rx_ring_index(const struct v34_object *o, const void *p)
+{
+	long offset = (long)((size_t)p - (size_t)&o->receiver) - 0x0c;
+	return offset >= 0 && offset < V34_RXQ_RING * 4 && (offset & 3) == 0 ?
+		(int)(offset / 4) : -1;
+}
+
+static int
 info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
                  struct v34_object *o[2][2], struct info0_projection prev[2][2],
                  short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
@@ -1907,13 +1915,21 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
 	 * Bound80 further calls, stopping at arrival or either microstate edge.
-	 * This observes process input, not detector consumption or negotiation. */
+	 * The saved complex pairs enter RX72 demodulation one call after arrival.
+	 * This does not establish later probe/negotiation completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
 	struct arrival_projection {
 		struct info0_projection state;
 		short input[4];
 	} p[2][2];
 	short in[2][2][4], out[2][2][4], emitted[2][4];
+	short saved_pairs[2][4][2];
+	int saved_origin[2] = { -1, -1 };
+	struct pipeline_projection {
+		int rd_before, rd_after, wr_before, wr_after, count_before, count_after;
+		int rms_before, rms_after;
+		short echo_before, echo_after, pairs[4][2], rms[4], hilbert[5];
+	} pipe[2];
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
 
@@ -1936,6 +1952,16 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				long tag = step * 4 + ep * 2 + side;
 				int rc;
 				memset(q, 0, sizeof *q);
+				if (ep == 0 && step >= 1199) {
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					struct pipeline_projection *z = &pipe[side];
+					memset(z, 0, sizeof *z);
+					z->rd_before = info0_rx_ring_index(o[side][ep], rx->rxq.rd);
+					z->wr_before = info0_rx_ring_index(o[side][ep], rx->rxq.wr);
+					z->count_before = rx->rxq.count;
+					z->rms_before = rx->rms_idx;
+					z->echo_before = o[side][ep]->echo_correction;
+				}
 				memcpy(q->input, in[side][ep], sizeof q->input);
 				if (ep == 0 && arrival[side] < 0 &&
 				    memcmp(q->input, emitted[side], sizeof q->input) == 0) {
@@ -1961,6 +1987,62 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				}
 				calls++;
 				info0_project(&q->state, o[side][ep], rc);
+				if (ep == 0 && step >= 1199) {
+					/* Native bd43/bd50 passes each signed input to modem_serrint;
+					 * 5d3d4 Hilbert output becomes a complex queue pair.
+					 * RX72 calls rxtiming (65524); its private EAX-argument
+					 * V34demodulate reads OLD rd (5af19/5af26), recording
+					 * the ungained real half at rms_idx (5af3b onward).
+					 * Native instruction probes witness the four pairs written
+					 * at 1199 being read at 1200, after four older pairs. */
+					static const short known_pairs[4][2] = {
+						{ 14, 45 }, { -32, 94 }, { -50, 63 }, { -71, 81 }
+					};
+					static const short known_hilbert[5] = { 0, -7693, 3482, 8381, 8982 };
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					struct pipeline_projection *z = &pipe[side];
+					int origin = step == 1199 ? z->wr_before : saved_origin[side];
+					z->rd_after = info0_rx_ring_index(o[side][ep], rx->rxq.rd);
+					z->wr_after = info0_rx_ring_index(o[side][ep], rx->rxq.wr);
+					z->count_after = rx->rxq.count;
+					z->rms_after = rx->rms_idx;
+					z->echo_after = o[side][ep]->echo_correction;
+					memcpy(z->hilbert, o[side][ep]->hilbert, sizeof z->hilbert);
+					diff_eq_int("L1 pipeline owned queue origin (%ld)", origin >= 0, 1, tag);
+					if (origin >= 0)
+					for (i = 0; i < 4; i++)
+						memcpy(z->pairs[i], (unsigned char *)rx + 0x0c +
+						       ((origin + i) % V34_RXQ_RING) * 4, 4);
+					for (i = 0; i < 4; i++) z->rms[i] = rx->rms_buf[(z->rms_before + i) % 36];
+					diff_eq_int("L1 pipeline stays RX72 (%ld)", q->state.rx, 72, tag);
+					diff_eq_int("L1 pipeline four writes (%ld)", (z->wr_after-z->wr_before+V34_RXQ_RING)%V34_RXQ_RING, 4, tag);
+					diff_eq_int("L1 pipeline four reads (%ld)", (z->rd_after-z->rd_before+V34_RXQ_RING)%V34_RXQ_RING, 4, tag);
+					diff_eq_int("L1 pipeline four RMS records (%ld)", (z->rms_after-z->rms_before+36)%36, 4, tag);
+					diff_eq_int("L1 pipeline retained queue depth (%ld)", z->count_after, 4, tag);
+					if (step == 1199) {
+						short corrected[4], expected_head[5] = { 0, 0, 0, 0, 0 };
+						short correction = z->echo_before;
+						for (i = 0; i < 4; i++) {
+							corrected[i] = (short)((unsigned short)emitted[side][i] + (unsigned short)correction);
+							correction = (short)(((int)corrected[i] * 0xed8 - (int)emitted[side][i] * 4096) >> 12);
+							expected_head[4-i] = corrected[i];
+						}
+						diff_eq_int("L1 pipeline echo feed disabled (%ld)", o[side][ep]->tx.tx_flags & V34_EC_FEED, 0, tag);
+						diff_eq_int("L1 pipeline entrance filter disabled (%ld)", ((VPcmFloModem *)o[side][ep]->p3548)->entranceFilterApplied, 0, tag);
+						diff_eq_int("L1 pipeline residual recurrence (%ld)", z->echo_after, correction, tag);
+						diff_eq_obj("L1 pipeline actual arrived samples enter Hilbert history", short[5], z->hilbert, expected_head, tag);
+						diff_eq_obj("L1 pipeline native residual known answer", short[5], z->hilbert, known_hilbert, tag);
+						diff_eq_obj("L1 pipeline native complex output known answer", short[4][2], z->pairs, known_pairs, tag);
+						saved_origin[side] = origin;
+						memcpy(saved_pairs[side], z->pairs, sizeof z->pairs);
+					} else {
+						short expected_rms[4];
+						for (i = 0; i < 4; i++) expected_rms[i] = saved_pairs[side][i][0];
+						diff_eq_int("L1 pipeline saved write origin becomes read origin (%ld)", z->rd_before, saved_origin[side], tag);
+						diff_eq_obj("L1 pipeline saved pairs remain at consumed origin", short[4][2], z->pairs, saved_pairs[side], tag);
+						diff_eq_obj("L1 pipeline consumed real halves reach ungained RMS", short[4], z->rms, expected_rms, tag);
+					}
+				}
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
 				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
 				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
@@ -1969,7 +2051,9 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
-		if (arrival[0] >= 0 || arrival[1] >= 0 ||
+		if (step >= 1199)
+			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 1200) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51) break;
 		for (side = 0; side < 2; side++)
@@ -1980,10 +2064,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	}
 	for (side = 0; side < 2; side++)
 		diff_eq_int("L1 arrival first saved peer frame input step (%ld)", arrival[side], 1199, side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 288, 0);
+	diff_eq_int("L1 arrival process-call denominator", calls, 292, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "actual signed-to-float wrapper stage checked at arrival; no detector-consumption or later negotiation claim\n", calls / 4, calls);
+	       "saved derived pairs consumed by RX72 demodulation one call later; no later probe/negotiation claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3294,7 +3378,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6572, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6576, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3302,7 +3386,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through saved peer L1 block arrival at caller input, CRC rejection prefix; "
+	       "positive through saved peer L1 derived queue-pair consumption by RX72, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
