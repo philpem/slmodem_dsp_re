@@ -1914,9 +1914,9 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through RX72 measurements384/768 and terminal reduction1089, validating
+	 * Continue through RX72 measurements384/768 and firstTX60 detector-input2346, validating
 	 * peer micro52 undoubled production after the terminal edge, then
-	 * stopping at counter1089 or another unexplained RX/microstate edge.
+	 * stopping at first nonzero RX53 detector input2346 or another unexplained RX/microstate edge.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later negotiation/protocol completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
@@ -1972,6 +1972,12 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		short count,phase,increment,wrap,period,sr,nbits;
 		struct nl_measure_bin bins[25];
 	} done[2][2];
+	struct tone_route_projection {
+		int wr_before,wr_after,rd_before,rd_after,count_before,count_after,rx_origin,rx_rd;
+		unsigned words[16];
+		short returned[4],arrived[4],pairs[4][2],gained[4];
+		float floating[4],fifo[4];
+	} route[2];
 	int terminal_step[2] = { -1, -1 };
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
@@ -1984,7 +1990,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
 	}
 	wp = (wp + 4) % INFO0_DELAY;
-	for (step = 1128; step <= 2268; step++) {
+	memset(route,0,sizeof route);
+	for (step = 1128; step <= 2347; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -2026,6 +2033,24 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					t->rd_before = info0_tx_ring_index(v, v->tx.txq.rd);
 					t->count_before = v->tx.txq.count;
 				}
+
+				if(ep==0 && step==2268) {
+					struct tone_route_projection *r=&route[side];
+					r->wr_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.wr);
+					r->rd_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd);
+					r->count_before=o[side][ep]->tx.txq.count;
+				}
+				if(ep==0 && step==2272) {
+					struct tone_route_projection *r=&route[side];
+					diff_eq_int("TX60 saved queue origin firstpop (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),r->wr_before,tag);
+					for(i=0;i<4;i++)diff_eq_int("TX60 saved queue words before firstpop (%ld)",o[side][ep]->tx.txq.rd[i],r->words[i],tag+i);
+				}
+				if(ep==1 && step==2345) {
+					struct tone_route_projection *r=&route[side];
+					r->rx_origin=info0_rx_ring_index(o[side][ep],o[side][ep]->receiver.rxq.wr);
+					memcpy(r->arrived,in[side][ep],sizeof r->arrived);
+					diff_eq_obj("TX60 saved returned frame arrives through actual channel",short[4],r->arrived,r->returned,tag);
+				}
 				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
 				if (ep == 0 && step == 1199) {
 					/* Native400c FILD signed input;400f FSTP root+ac78.
@@ -2040,6 +2065,53 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					diff_eq_int("L1 arrival wrapper private owner (%ld)", root[side][ep]->dp_data == root[side][ep], 1, tag);
 					diff_eq_int("L1 arrival no retained input remainder (%ld)", remainder, 0, tag);
 					diff_eq_obj("L1 arrival signed input reaches real float stage", float[4], staged, expected, tag);
+				}
+
+				if(ep==0 && step==2268) {
+					static const unsigned native_words[16]={0,2989,4227,2988,0,62549,61312,62549,0,2988,4226,2989,0,62548,61309,62547};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];
+					r->wr_after=info0_tx_ring_index(v,v->tx.txq.wr);r->rd_after=info0_tx_ring_index(v,v->tx.txq.rd);r->count_after=v->tx.txq.count;
+					for(i=0;i<16;i++)memcpy(&r->words[i],(char *)v+0x2228+4*((r->wr_before+i)%V34_TXQ_RING),4);
+					diff_eq_int("TX60 native first16-sample producer epoch (%ld)",v->txstate,60,tag);
+					diff_eq_int("TX60 native16 queued samples (%ld)",(r->wr_after-r->wr_before+V34_TXQ_RING)%V34_TXQ_RING,16,tag);
+					diff_eq_int("TX60 actual four pops in producer call (%ld)",(r->rd_after-r->rd_before+V34_TXQ_RING)%V34_TXQ_RING,4,tag);
+					diff_eq_int("TX60 queue count conserves16produced4popped (%ld)",r->count_after-r->count_before,12,tag);
+					diff_eq_obj("TX60 native first16 queued samples",unsigned[16],r->words,native_words,tag);
+				}
+				if(ep==0 && step==2272) {
+					struct tone_route_projection *r=&route[side];float expected[4];
+					for(i=0;i<4;i++)expected[i]=(float)(short)r->words[i];
+					memcpy(r->floating,(char *)root[side][ep]+0xaef8,sizeof r->floating);
+					/* FIFO stores shorts. Copy and widen into pointer-free projection. */
+					for(i=0;i<4;i++){short v;memcpy(&v,(char *)root[side][ep]+0xd17c+2*i,2);r->fifo[i]=v;}
+					diff_eq_int("TX60 origin queue four slots actually consumed (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),(r->wr_before+4)%V34_TXQ_RING,tag);
+					diff_eq_obj("TX60 saved origin dequeues to float stage",float[4],r->floating,expected,tag);
+					diff_eq_obj("TX60 saved origin reaches retained FIFO",float[4],r->fifo,expected,tag);
+				}
+				if(ep==0 && step==2273) {
+					struct tone_route_projection *r=&route[side];short expected[4];
+					for(i=0;i<4;i++)expected[i]=(short)r->words[i];
+					memcpy(r->returned,out[side][ep],sizeof r->returned);
+					diff_eq_obj("TX60 saved origin actual public returned frame",short[4],r->returned,expected,tag);
+				}
+				if(ep==1 && step==2345) {
+					static const short known_pairs[4][2]={{0,0},{-2,0},{-9,0},{-20,0}};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];float actual[4],expected[4];
+					for(i=0;i<4;i++){int idx=(r->rx_origin+i)%V34_RXQ_RING;memcpy(r->pairs[i],(char *)v+0x270+4*idx,4);expected[i]=r->arrived[i];}
+					memcpy(actual,(char *)root[side][ep]+0xac78,sizeof actual);
+					diff_eq_obj("TX60 arrived signed frame reaches native float stage",float[4],actual,expected,tag);
+					diff_eq_obj("TX60 arrived native residual/FIR queue projection",short[4][2],r->pairs,known_pairs,tag);
+					diff_eq_int("TX60 arrived queue origin remains next AGC input (%ld)",info0_rx_ring_index(v,v->receiver.rxq.rd),r->rx_origin,tag);
+				}
+				if(ep==1 && step==2346) {
+					static const short known_gained[4]={0,-3,-10,-22};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];
+					r->rx_rd=info0_rx_ring_index(v,v->receiver.rxq.rd);
+					memcpy(r->gained,v->receiver.burst,sizeof r->gained);
+					diff_eq_int("TX60 actual arrived quartet consumed by RX53 AGC (%ld)",r->rx_rd,(r->rx_origin+4)%V34_RXQ_RING,tag);
+					diff_eq_int("TX60 native AGC nonempty detector span (%ld)",(int)(v->receiver.rx_samples-v->receiver.burst),4,tag);
+					diff_eq_obj("TX60 native first nonzero RX53 detector input",short[4],r->gained,known_gained,tag);
+					for(i=0;i<4;i++)diff_eq_int("TX60 native AGC consumes saved FIR samples (%ld)",r->gained[i],(1079*(int)r->pairs[i][0])>>10,tag+i);
 				}
 				calls++;
 				info0_project(&q->state, o[side][ep], rc);
@@ -2468,6 +2540,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
+		if(step==2346)
+			diff_eq_obj("TX60 source-to-detector pointer-free provenance",struct tone_route_projection,&route[0],&route[1],step);
 		if(step==2266 || step==2267)
 			diff_eq_obj("probe terminal pointer-free projection",struct probe_done_projection,&done[0][step-2266],&done[1][step-2266],step);
 		if (step == 1946 || step == 1947)
@@ -2484,7 +2558,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 1089) ||
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2346) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != (step < 1505 ? 51 : 52) || p[1][1].state.micro != (step < 1505 ? 51 : 52) ||
 		    (step > 1505 && (p[0][1].state.rx != 53 || p[1][1].state.rx != 53))) break;
@@ -2500,10 +2574,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		diff_eq_int("peer terminal first micro51-to52 edge step (%ld)", terminal_step[side], 1505, side);
 	for (side = 0; side < 2; side++)
 		diff_eq_int("RX53 eligible native-witness detector prefix denominator (%ld)",eligible_detector_frames[side],67,side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 4560, 0);
+	diff_eq_int("L1 arrival process-call denominator", calls, 4876, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection; no negotiation-completion claim\n", calls / 4, calls);
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery to RX53 detector input; no negotiation-completion claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3814,7 +3888,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 10844, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 11160, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3822,7 +3896,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through full25-bin terminal reduction/TX60 selection, CRC rejection prefix; "
+	       "positive through TX60 generated frame delivery to RX53 detector input, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
