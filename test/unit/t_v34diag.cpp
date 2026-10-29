@@ -1912,15 +1912,20 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
                  struct v34_object *o[2][2], struct info0_projection prev[2][2],
                  short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
 {
-	/* Continue the same channel after return1127. Its 288 samples / four
-	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through RX72 measurements384/768 and caller low-bit-set micro56 boundary2692, validating
-	 * peer micro52 undoubled production after the terminal edge, then
-	 * stopping at caller low-bit-set micro56 boundary or an unexplained state edge.
+	/* Continue the same constructed channel after return1127. Its288
+	 * samples delay the saved peer frame72 calls to1199. Preserve the
+	 * measured RX72/tone-response prefix through2692, then compare process
+	 * returns/outputs and direct V34 status/progress projections until the
+	 * native wrapper's call-count deadline3132 or an earlier difference.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later negotiation/protocol completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
 	int eligible_detector_frames[2] = { 0, 0 };
+	int public_pairs=0,public_calls=0,public_samples=0,public_stop=0,public_step=-1,public_ep=-1;
+	struct deadline_projection {
+		int before_stall,stall,mode,status,nbits,inq,outq,mute,rc;
+		short before_fifo[4],returned[4],after_fifo[4];
+	} deadline[2][2];
 	int detector_edge[2] = { -1, -1 };
 	struct arrival_projection {
 		struct info0_projection state;
@@ -2027,12 +2032,63 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	memset(waiting,0,sizeof waiting);
 	memset(finish,0,sizeof finish);
 	memset(response,0,sizeof response);
+	memset(deadline,0,sizeof deadline);
 	memset(peer_wait,0,sizeof peer_wait);
-	for (step = 1128; step <= 2699; step++) {
+	for (step = 1128; step <= 3133; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
 			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+
+		if(step>2692) {
+			/* Continue the unchanged constructor/channel recipe with public
+			 * process returns/outputs and direct V34 status/progress projections only. Native
+			 * vpcm_run reaches its call-count deadline at3132; it still
+			 * writes four fresh output samples before returning literal-1. */
+			for(ep=0;ep<2;ep++) {
+				int rc[2],fail_before;short observed[4];
+				for(side=0;side<2;side++) {
+					struct deadline_projection *d=0;
+					if(ep==0 && (step==3131 || step==3132)) {
+						d=&deadline[side][step-3131];
+						memcpy(&d->before_stall,(char *)root[side][ep]+0x20,4);
+						memcpy(d->before_fifo,(char *)root[side][ep]+0xd17c,sizeof d->before_fifo);
+					}
+					rc[side]=ops[side]->process(root[side][ep],in[side][ep],out[side][ep],4);calls++;public_calls++;
+					info0_project(&p[side][ep].state,o[side][ep],rc[side]);prev[side][ep]=p[side][ep].state;
+					if(d) {
+						/* All accesses belong to the actual vpcm root, not
+						 * its embedded V.34 owner at root+0x2c. Widths4/2. */
+						memcpy(&d->stall,(char *)root[side][ep]+0x20,4);memcpy(&d->mode,(char *)root[side][ep]+0x18,4);
+						memcpy(&d->status,(char *)root[side][ep]+0x14,4);memcpy(&d->nbits,(char *)root[side][ep]+0x1c,4);
+						memcpy(&d->inq,(char *)root[side][ep]+0xd1e4,4);memcpy(&d->outq,(char *)root[side][ep]+0xd178,4);
+						memcpy(&d->mute,(char *)root[side][ep]+0xd250,4);d->rc=rc[side];
+						memcpy(d->returned,out[side][ep],sizeof d->returned);memcpy(d->after_fifo,(char *)root[side][ep]+0xd17c,sizeof d->after_fifo);
+					}
+				}
+				memcpy(observed,out[0][ep],sizeof observed);
+				fail_before=diff_failures;public_pairs++;public_samples+=4;public_step=step;public_ep=ep;
+				diff_eq_int("reciprocal history process return",rc[0],rc[1],step*2+ep);
+				diff_eq_int("reciprocal history V34 status projection",p[0][ep].state.status,p[1][ep].state.status,step*2+ep);
+				diff_eq_int("reciprocal history V34 progress projection",p[0][ep].state.progress,p[1][ep].state.progress,step*2+ep);
+				diff_eq_obj("reciprocal history process output including native error tail",short[4],observed,out[1][ep],step*2+ep);
+				public_stop=diff_failures!=fail_before || rc[0]!=DPSTAT_OK || rc[1]!=DPSTAT_OK || p[0][ep].state.status || p[1][ep].state.status || p[0][ep].state.progress || p[1][ep].state.progress;
+				if(ep==0 && (step==3131 || step==3132)) {
+					static const struct deadline_projection native_boundary[2]={
+						{2999,3000,0,0,0,0,4,0,0,{3145,177,-8888,2633},{3145,177,-8888,2633},{-2028,-5955,4968,9261}},
+						{3000,3001,-1,0,0,0,4,0,-1,{-2028,-5955,4968,9261},{-2028,-5955,4968,9261},{4606,4630,2484,-2978}}
+					};
+					for(side=0;side<2;side++)
+						diff_eq_obj("native real-history wrapper deadline and fresh-output known answer",struct deadline_projection,&deadline[side][step-3131],&native_boundary[step-3131],step*2+side);
+					diff_eq_obj("wrapper deadline pointer-free root projection",struct deadline_projection,&deadline[0][step-3131],&deadline[1][step-3131],step);
+				}
+				if(public_stop)break;
+			}
+			if(public_stop)break; /* no peer3132 call and no call after API error */
+			for(side=0;side<2;side++)for(ep=0;ep<2;ep++)for(i=0;i<4;i++)wire[side][ep][(wp+i)%INFO0_DELAY]=out[side][1-ep][i];
+			wp=(wp+4)%INFO0_DELAY;
+			continue;
+		}
 		for (ep = 0; ep < 2; ep++) {
 			for (side = 0; side < 2; side++) {
 				struct arrival_projection *q = &p[side][ep];
@@ -2866,12 +2922,14 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
+		if(step<2692) {
 		if(step>=2464 && (p[0][0].state.rx!=(step>=2602?43:72) || p[1][0].state.rx!=(step>=2602?43:72) ||
 		    p[0][0].state.tx!=60 || p[1][0].state.tx!=60 || p[0][1].state.tx!=(step>=2625?5:60) || p[1][1].state.tx!=(step>=2625?5:60)))break;
 		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2698) ||
 		    p[0][0].state.micro != (step<2602?59:62) || p[1][0].state.micro != (step<2602?59:62) ||
 		    p[0][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) || p[1][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) ||
 		    (step > 1505 && (p[0][1].state.rx != (step < 2463 ? 53 : 43) || p[1][1].state.rx != (step < 2463 ? 53 : 43)))) break;
+		}
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -2898,10 +2956,22 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		diff_eq_int("peer first actual counter162 state edge reached (%ld)",peer162_edge[side],2625,side);
 	for(side=0;side<2;side++)
 		diff_eq_int("caller first actual low-bit-set state edge reached (%ld)",caller_bit_edge[side],2692,side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 6260, 0);
+	diff_eq_int("reciprocal history first return/projection boundary step",public_step,3132,0);
+	diff_eq_int("reciprocal history stops on caller endpoint",public_ep,0,0);
+	diff_eq_int("reciprocal history paired process-call denominator",public_pairs,879,0);
+	diff_eq_int("reciprocal history process-call denominator",public_calls,1758,0);
+	diff_eq_int("reciprocal history fresh-output sample denominator",public_samples,3516,0);
+	for(side=0;side<2;side++) {
+		int peer_stall,peer_mode;
+		memcpy(&peer_stall,(char *)root[side][1]+0x20,4);memcpy(&peer_mode,(char *)root[side][1]+0x18,4);
+		diff_eq_int("reciprocal history uncalled terminal peer stall",peer_stall,3000,side);
+		diff_eq_int("reciprocal history uncalled terminal peer mode",peer_mode,0,side);
+	}
+	printf("reciprocal process/projection denominator:2693..3132,439 complete frames and terminal caller pair; 879 process-call pairs,1758 invocations,3516 fresh samples,3516 return/output/V34-projection checks; native wrapper deadline, no call after literal-1\n");
+	diff_eq_int("L1 arrival process-call denominator", calls, 8018, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
-	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive boundary, peer counter120 polarity edge and caller FSK-positive selector edge and peer counter162 terminal and actual caller low-bit-set/micro56 response; no negotiation-completion claim\n", calls / 4, calls);
+	       "%d further four-sample frame windows (terminal caller only), %d process calls; saved returned peer frame reaches caller input; "
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive boundary, peer counter120 polarity edge and caller FSK-positive selector edge and peer counter162 terminal and actual caller low-bit-set/micro56 response; no negotiation-completion claim\n", (calls + 3) / 4, calls);
 	return calls;
 }
 
@@ -4212,7 +4282,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 12544, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 14302, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -4220,7 +4290,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through caller FSK low-bit-set/micro56 response, CRC rejection prefix; "
+	       "generated path through native real-history wrapper deadline, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
