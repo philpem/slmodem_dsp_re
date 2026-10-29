@@ -1740,8 +1740,8 @@ run_visual_history(void)
  *
  * This proves one INFO0 component recipe and one channel-error case. It does
  * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
- * interoperability. The positive history continues through peer47->51 control
- * entry, before generated L1; the CRC rejection prefix is unchanged.
+ * interoperability. The positive history continues through the first native
+ * raw L1 queue block, before external L1 output; CRC rejection is unchanged.
  */
 enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
 	INFO0_BITS = 33 };
@@ -1889,6 +1889,219 @@ info0_observe(struct info0_events *e, const struct info0_projection *p,
 		/* Fifteen CRC bits remain observable even on native rejection. */
 		e->crc_prefix = (e->crc_prefix << 1) | (unsigned)bit;
 	}
+}
+
+static int
+info0_tx_ring_index(const struct v34_object *o, const void *p)
+{
+	long offset = (long)((size_t)p - (size_t)o) - 0x2228;
+	return offset >= 0 && offset < V34_TXQ_RING * 4 && (offset & 3) == 0 ?
+		(int)(offset / 4) : -1;
+}
+
+static int
+info0_l1_producer(struct dp_operations **ops, struct dp *root[2][2],
+		  struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		  short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
+		  short sent[2][INFO0_DELAY / 4][4], int origin[INFO0_DELAY / 4])
+{
+	/* Native65c56 selects setup at count42;6b5e7 is_short==0 selects TX51,
+	 * RX53 and c1200_ detectorinit. Post-microstate TX51 dispatch exits at
+	 * 644c9: setup is not production. Initial TX51 dispatch62c69/65290
+	 * doubles signed probe samples, scales/SAR14, then txwritequeue stores
+	 * four low halfwords with zero upper halves. Original ELF known answers
+	 * below are probe[0..3], c1200_, and the resulting words at scale5793.
+	 * Bound42 setup calls plus4 refill calls; stop at the first raw producer.
+	 */
+	static const short probe_prefix[4] = { 13027, 13097, 7026, -8421 };
+	static const short coeff[8] = { 0, 0, 0, 0, -22892, 15993, -22892, 15993 };
+	/* Detector halfwords after its pointer: polarity,armed,count,limit,state,
+	 * hi,lo,level,x[4],y[4]. The pointer is excluded from the projection. */
+	static const short detector_init[16] = { 0, 0, -50, 100, 1, 0, 2048, 0,
+		0, 0, 0, 0, 0, 0, 0, 0 };
+	static const unsigned raw_words[4] = { 9212, 9261, 4968, 59581 };
+	struct producer_projection {
+		struct info0_projection state;
+		int point, polarity, cursor, cursor_before, scale, target, queue_before, queue_after;
+		int rd_before, wr_before, rd, wr, is_short, gain, rxflags, coeff_present, input_origin;
+		short detector[16], coeff[8], input[4];
+		unsigned produced[4];
+	} p[2][2];
+	struct producer_events {
+		int setup_step, setup_count, setup_tx, setup_rx, setup_cursor;
+		int producer_step, producers, cursor, wr_advance, rd_advance, old_ahead;
+		int queue_before, queue_after, detector_limit, detector_lo, setup_diagnostic;
+		unsigned produced[4];
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, slot = wp / 4, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].setup_step = event[side].producer_step = -1;
+		diff_eq_int("L1 producer: initial peer micro51 (%ld)", prev[side][1].micro, 51, side);
+		diff_eq_int("L1 producer: initial peer count0 (%ld)", prev[side][1].count, 0, side);
+		memcpy(sent[side][slot], last_out[side][0], sizeof sent[side][slot]);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	origin[slot] = 1077; wp = (wp + 4) % INFO0_DELAY;
+	dsplib_debug_capture_on = 1; set_level(2);
+	for (step = 1078; step <= 1123; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct producer_projection *q = &p[side][ep];
+				struct producer_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				struct v34_detector *d = &o[side][ep]->detector;
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+
+				memset(q, 0, sizeof *q);
+				q->cursor_before = o[side][ep]->vect_idx;
+				q->queue_before = o[side][ep]->tx.txq.count;
+				q->rd_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->input_origin = origin[slot];
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (ep == 1) {
+					diff_eq_int("L1 producer: actual source frame index (%ld)", q->input_origin, step - 72, tag);
+					diff_eq_obj("L1 producer actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->point = o[side][ep]->tx.txpoint.word;
+				q->polarity = o[side][ep]->short_358c;
+				q->cursor = o[side][ep]->vect_idx;
+				q->scale = o[side][ep]->tx.tx_scale;
+				q->target = o[side][ep]->tx_fill_target;
+				q->queue_after = o[side][ep]->tx.txq.count;
+				q->rd = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->is_short = o[side][ep]->is_short;
+				q->gain = o[side][ep]->receiver.agc_gain;
+				q->rxflags = (unsigned short)o[side][ep]->receiver.flags;
+				q->coeff_present = d->coeff != 0;
+				if (d->coeff) memcpy(q->coeff, d->coeff, sizeof q->coeff);
+				memcpy(q->detector, &d->polarity, sizeof q->detector);
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("L1 producer: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("L1 producer: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("L1 producer: live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 producer: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 producer: queue pointers belong to owner (%ld)",
+					    q->rd_before >= 0 && q->wr_before >= 0 && q->rd >= 0 && q->wr >= 0, 1, tag);
+				diff_eq_int("L1 producer: four actual queue samples consumed (%ld)",
+					    (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+				if (ep == 0) {
+					diff_eq_int("L1 producer: caller stays micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("L1 producer: caller stays TX silence (%ld)", q->state.tx, 5, tag);
+					diff_eq_int("L1 producer: caller counter (%ld)", q->state.count, step - 961, tag);
+				} else {
+					diff_eq_int("L1 producer: peer stays micro51 (%ld)", q->state.micro, 51, tag);
+					diff_eq_int("L1 producer: full-session native branch (%ld)", q->is_short, 0, tag);
+					diff_eq_int("L1 producer: setup timing TX (%ld)", q->state.tx, step < 1119 ? 60 : 51, tag);
+					diff_eq_int("L1 producer: setup timing RX (%ld)", q->state.rx, step < 1119 ? 43 : 53, tag);
+					diff_eq_int("L1 producer: native counter then RX53 bypass (%ld)", q->state.count, step < 1119 ? step - 1077 : 42, tag);
+					diff_eq_int("L1 producer: cursor only advances at producer (%ld)", q->cursor, step < 1122 ? 0 : 4, tag);
+					diff_eq_int("L1 producer: original recipe scale (%ld)", q->scale, 5793, tag);
+					diff_eq_int("L1 producer: native queue refill target (%ld)", q->target, 16, tag);
+					diff_eq_int("L1 producer: old complex point is still TONE_AB (%ld)", q->point, 300093923, tag);
+					diff_eq_int("L1 producer: native live polarity retained (%ld)", q->polarity, 0, tag);
+					if (step >= 1119) {
+						diff_eq_int("L1 producer: detector coefficient pointer present (%ld)", q->coeff_present, 1, tag);
+						diff_eq_obj("L1 producer original c1200 coefficients", short[8], q->coeff, coeff, tag);
+						diff_eq_obj("L1 producer native detector setup", short[16], q->detector, detector_init, tag);
+						diff_eq_int("L1 producer: DET_PENDING flag set (%ld)", (q->rxflags & 0x200) != 0, 1, tag);
+						diff_eq_int("L1 producer: native low-gain arm retains gain (%ld)", q->gain, 1079, tag);
+					}
+					if (before->tx == 60 && q->state.tx == 51) {
+						e->setup_step = step; e->setup_count = q->state.count;
+						e->setup_tx = q->state.tx; e->setup_rx = q->state.rx; e->setup_cursor = q->cursor;
+						e->detector_limit = q->detector[3]; e->detector_lo = q->detector[6];
+						e->setup_diagnostic = strstr(text, "TONE_AB=>TX_L1") != 0 &&
+							strstr(text, "RX_DPSK=>DET_AB") != 0 && strstr(text, "starting DET_AB") != 0;
+						diff_eq_int("L1 producer: setup selected at increment42 (%ld)", before->count + 1, 42, tag);
+					}
+					if (q->state.tx == 51 && q->cursor != q->cursor_before) {
+						unsigned expected[4];
+						int ahead = (q->wr_before - q->rd + V34_TXQ_RING) % V34_TXQ_RING;
+						if (q->wr_before >= 0)
+						for (i = 0; i < 4; i++)
+							memcpy(&q->produced[i], (const unsigned char *)o[side][ep] + 0x2228 +
+							       ((q->wr_before + i) % V34_TXQ_RING) * 4, 4);
+						for (i = 0; i < 4; i++)
+							expected[i] = (unsigned short)(((short)(2 * probe_prefix[i]) * q->scale) >> 14);
+						diff_eq_obj("L1 producer independent formula known answer", unsigned[4], expected, raw_words, tag);
+						diff_eq_obj("L1 producer original probe scaled queue words", unsigned[4], q->produced, expected, tag);
+						diff_eq_int("L1 producer: cursor before first raw block (%ld)", q->cursor_before, 0, tag);
+						diff_eq_int("L1 producer: four raw samples generated (%ld)", q->cursor - q->cursor_before, 4, tag);
+						diff_eq_int("L1 producer: write pointer advances four entries (%ld)",
+							    (q->wr - q->wr_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+						diff_eq_int("L1 producer: older queue samples still ahead (%ld)", ahead, 12, tag);
+						diff_eq_int("L1 producer: all new samples remain queued (%ld)", q->queue_after, ahead + 4, tag);
+						e->producer_step = step; e->producers++; e->cursor = q->cursor;
+						e->wr_advance = (q->wr - q->wr_before + V34_TXQ_RING) % V34_TXQ_RING;
+						e->rd_advance = (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING;
+						e->old_ahead = ahead; e->queue_before = q->queue_before; e->queue_after = q->queue_after;
+						memcpy(e->produced, q->produced, sizeof e->produced);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 producer selected pointer-free projection", struct producer_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 producer actual four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (event[0].producer_step >= 0 || event[1].producer_step >= 0 ||
+		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step; wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct producer_events *e = &event[side];
+		diff_eq_int("L1 producer: native setup step (%ld)", e->setup_step, 1119, side);
+		diff_eq_int("L1 producer: native setup count (%ld)", e->setup_count, 42, side);
+		diff_eq_int("L1 producer: native setup TX (%ld)", e->setup_tx, 51, side);
+		diff_eq_int("L1 producer: native setup RX (%ld)", e->setup_rx, 53, side);
+		diff_eq_int("L1 producer: native setup cursor (%ld)", e->setup_cursor, 0, side);
+		diff_eq_int("L1 producer: detector limit (%ld)", e->detector_limit, 100, side);
+		diff_eq_int("L1 producer: detector lower threshold (%ld)", e->detector_lo, 2048, side);
+		diff_eq_int("L1 producer: native setup diagnostics (%ld)", e->setup_diagnostic, 1, side);
+		diff_eq_int("L1 producer: first actual raw producer step (%ld)", e->producer_step, 1122, side);
+		diff_eq_int("L1 producer: actual raw producer blocks (%ld)", e->producers, 1, side);
+		diff_eq_int("L1 producer: first block cursor (%ld)", e->cursor, 4, side);
+		diff_eq_int("L1 producer: producer/output separation (%ld)", e->old_ahead, 12, side);
+		printf("L1 producer side=%s setup=%d count=%d TX/RX=%d/%d cursor=%d detector=%d/%d "
+		       "producer=%d blocks=%d new_cursor=%d wr/rd_advance=%d/%d old_ahead=%d "
+		       "queue=%d->%d words=%u,%u,%u,%u\n", side ? "blob" : "ours", e->setup_step,
+		       e->setup_count, e->setup_tx, e->setup_rx, e->setup_cursor, e->detector_limit,
+		       e->detector_lo, e->producer_step, e->producers, e->cursor, e->wr_advance,
+		       e->rd_advance, e->old_ahead, e->queue_before, e->queue_after,
+		       e->produced[0], e->produced[1], e->produced[2], e->produced[3]);
+	}
+	diff_eq_obj("L1 producer setup and raw-production events", struct producer_events, &event[0], &event[1], 0);
+	diff_eq_int("L1 producer: process-call denominator", calls, 180, 0);
+	printf("L1 producer denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first raw L1 queue block only, external L1 not claimed\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	return calls;
 }
 
 static int
@@ -2071,6 +2284,8 @@ info0_peer_l1_entry(struct dp_operations **ops, struct dp *root[2][2],
 	printf("peer L1 entry denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls, %d paired projections and "
 	       "%d paired output buffers; micro51 entry only, no generated L1 claim\n", calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].edge_step == 1077 && event[1].edge_step == 1077)
+		calls += info0_l1_producer(ops, root, o, prev, wire, wp, out, sent, origin);
 	return calls;
 }
 
@@ -2782,7 +2997,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6084, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6264, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -2790,7 +3005,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through peer47->51 control edge, CRC rejection prefix; "
+	       "positive through first raw peer L1 queue block, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
