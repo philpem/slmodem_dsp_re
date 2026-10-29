@@ -1914,9 +1914,9 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through RX72 measurements384/768 and peer micro48 terminal counter162 boundary2625, validating
+	 * Continue through RX72 measurements384/768 and caller low-bit-set micro56 boundary2692, validating
 	 * peer micro52 undoubled production after the terminal edge, then
-	 * stopping at peer micro48 terminal boundary or an unexplained state edge.
+	 * stopping at caller low-bit-set micro56 boundary or an unexplained state edge.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later negotiation/protocol completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
@@ -2001,6 +2001,13 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	struct peer_finish_projection {
 		int before,counter,micro,rx,tx,selector,sr,nbits,phase,next;
 	} finish[2];
+	struct bit_response_projection {
+		int before_counter,before_sr,before_nbits,before_phase,before_next,before_previous;
+		int micro,rx,tx,counter,filtdelay,sr,nbits,phase,next,previous,flags,gate,nsamples;
+		short samples[4];
+	} response[2];
+	struct peer_wait_projection {int micro,rx,tx,counter,sr,nbits,phase,next;} peer_wait[2];
+	int caller_bit_edge[2]={-1,-1};
 	int terminal_step[2] = { -1, -1 };
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
@@ -2019,7 +2026,9 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	memset(caller_fsk,0,sizeof caller_fsk);
 	memset(waiting,0,sizeof waiting);
 	memset(finish,0,sizeof finish);
-	for (step = 1128; step <= 2627; step++) {
+	memset(response,0,sizeof response);
+	memset(peer_wait,0,sizeof peer_wait);
+	for (step = 1128; step <= 2699; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -2104,7 +2113,18 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					diff_eq_int("peer TX60 original returned frame channel slot (%ld)",wp/4,episode[side].channel_slot[0],tag);
 					diff_eq_obj("peer TX60 own initial frame actually arrives at caller",short[4],r->arrived,r->returned,tag);
 				}
-				if(ep==1 && step>2602)finish[side].before=o[side][ep]->short_aa78;
+				if(ep==1 && step>2602 && step<=2625)finish[side].before=o[side][ep]->short_aa78;
+
+				if(ep==0 && step>2625 && step<=2692) {
+					struct bit_response_projection *r=&response[side];struct v34_object *v=o[side][ep];
+					memset(r,0,sizeof *r);r->before_counter=v->short_aa78;r->before_sr=v->fsk.sr;r->before_nbits=v->fsk.nbits;
+					r->before_phase=v->fsk.phase;r->before_next=v->fsk.next;r->before_previous=v->fsk.prev;
+				}
+				if(ep==0 && step==2661) {
+					struct tone_route_projection *r=&episode[side].route[1];memcpy(r->arrived,in[side][ep],sizeof r->arrived);
+					diff_eq_int("peer postflip2589 actual arrival2661 channel epoch (%ld)",wp/4,episode[side].channel_slot[1],tag);
+					diff_eq_obj("peer postflip2589 returned quartet actually arrives2661",short[4],r->arrived,r->returned,tag);
+				}
 				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
 				if (ep == 0 && step == 1199) {
 					/* Native400c FILD signed input;400f FSTP root+ac78.
@@ -2718,7 +2738,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					}
 				}
 
-				if(ep==0 && step>2602) {
+				if(ep==0 && step>2602 && step<=2625) {
 					/* Original65c81's byte-bit0 guard remains false while
 					 * the caller waits; micro62 preserves its shared counter. */
 					struct caller_wait_projection *w=&waiting[side];struct v34_object *v=o[side][ep];int d=step-2602;
@@ -2738,7 +2758,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					diff_eq_int("caller micro62 actual resync instant (%ld)",w->resync,6,tag);
 					diff_eq_int("caller micro62 native pending counter reload (%ld)",w->filtdelay,89,tag);
 				}
-				if(ep==1 && step>2602) {
+				if(ep==1 && step>2602 && step<=2625) {
 					struct peer_finish_projection *f=&finish[side];struct v34_object *v=o[side][ep];
 					f->counter=v->short_aa78;f->micro=v->microstate;f->rx=v->rxstate;f->tx=v->txstate;f->selector=v->short_358c;
 					f->sr=v->fsk.sr;f->nbits=v->fsk.nbits;f->phase=v->fsk.phase;f->next=v->fsk.next;
@@ -2758,6 +2778,50 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 						diff_eq_obj("peer native counter162 selected states and reset known answer",struct peer_finish_projection,f,&native_terminal,tag);
 					}
 				}
+
+				if(ep==0 && step==2661) {
+					float staged[4],expected[4];for(i=0;i<4;i++)expected[i]=episode[side].route[1].arrived[i];
+					memcpy(staged,(char *)root[side][ep]+0xac78,sizeof staged);
+					diff_eq_obj("peer postflip actual caller float input2661",float[4],staged,expected,tag);
+				}
+				if(ep==0 && step>2625 && step<=2692) {
+					struct bit_response_projection *r=&response[side];struct v34_object *v=o[side][ep];
+					r->micro=v->microstate;r->rx=v->rxstate;r->tx=v->txstate;r->counter=v->short_aa78;r->filtdelay=v->filtdelay;
+					r->sr=v->fsk.sr;r->nbits=v->fsk.nbits;r->phase=v->fsk.phase;r->next=v->fsk.next;r->previous=v->fsk.prev;
+					r->flags=v->receiver.flags;r->gate=v->receiver.retrain_gate;r->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);memcpy(r->samples,v->receiver.burst,sizeof r->samples);
+					if(r->micro!=62 && caller_bit_edge[side]<0)caller_bit_edge[side]=step;
+					diff_eq_int("caller actual FSK low-bit-set trajectory (%ld)",r->sr&1,step==2692,tag);
+					diff_eq_int("caller actual FSK nonempty four-sample input (%ld)",r->nsamples,4,tag);
+					diff_eq_int("caller actual FSK processing gate open (%ld)",r->gate,0,tag);
+					diff_eq_int("caller actual retained receive selector (%ld)",r->rx,43,tag);
+					diff_eq_int("caller actual retained transmit selector (%ld)",r->tx,60,tag);
+					if(step<2692) {
+						diff_eq_int("caller native micro62 wait retained (%ld)",r->micro,62,tag);
+						diff_eq_int("caller native micro62 counter remains frozen (%ld)",r->counter,1424,tag);
+					} else {
+						/* Nativefskdetect consumes the actual four samples and
+						 * returns {-767,-661,-513}; fskdemodulate consumes
+						 * previous=-819 at phase6,next6, emitting bit_lo1.
+						 * Original65c81 then takes its byte-bit0 branch and
+						 * 65d2b selects micro56 after reloading filtdelay89. */
+						static const struct bit_response_projection native_terminal={1424,0,104,6,6,-819,56,43,60,89,89,1,105,9,18,-513,0x1a00,0,4,{-4506,167,4519,-169}};
+						diff_eq_obj("caller native first low-bit-set and micro56 reload known answer",struct bit_response_projection,r,&native_terminal,tag);
+						diff_eq_int("caller native FSK decoded one actual new bit (%ld)",r->nbits,r->before_nbits+1,tag);
+						diff_eq_int("caller native micro56 counter reload uses actual filtdelay (%ld)",r->counter,r->filtdelay,tag);
+					}
+				}
+				if(ep==1 && step>2625 && step<=2692) {
+					struct peer_wait_projection *w=&peer_wait[side];struct v34_object *v=o[side][ep];
+					w->micro=v->microstate;w->rx=v->rxstate;w->tx=v->txstate;w->counter=v->short_aa78;w->sr=v->fsk.sr;w->nbits=v->fsk.nbits;w->phase=v->fsk.phase;w->next=v->fsk.next;
+					diff_eq_int("peer actual micro50 retained while caller responds (%ld)",w->micro,50,tag);
+					diff_eq_int("peer actual RX43 retained while caller responds (%ld)",w->rx,43,tag);
+					diff_eq_int("peer actual TX5 retained while caller responds (%ld)",w->tx,5,tag);
+					diff_eq_int("peer actual micro50 counter trajectory (%ld)",w->counter,step-2625,tag);
+					if(step==2692) {
+						static const struct peer_wait_projection native_terminal={50,43,5,67,0,57,671,678};
+						diff_eq_obj("peer actual full terminal frame2692 known answer",struct peer_wait_projection,w,&native_terminal,tag);
+					}
+				}
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
 				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
 				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
@@ -2766,9 +2830,15 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
-		if(step>2602)
+		if(step==2661)
+			diff_eq_obj("peer postflip actual arrived quartet pointer-free projection",short[4],episode[0].route[1].arrived,episode[1].route[1].arrived,step);
+		if(step>2625 && step<=2692) {
+			diff_eq_obj("caller actual FSK bit response pointer-free projection",struct bit_response_projection,&response[0],&response[1],step);
+			diff_eq_obj("peer actual micro50 wait pointer-free projection",struct peer_wait_projection,&peer_wait[0],&peer_wait[1],step);
+		}
+		if(step>2602 && step<=2625)
 			diff_eq_obj("peer native counter162 episode pointer-free projection",struct peer_finish_projection,&finish[0],&finish[1],step);
-		if(step>2602)
+		if(step>2602 && step<=2625)
 			diff_eq_obj("caller micro62 native wait pointer-free projection",struct caller_wait_projection,&waiting[0],&waiting[1],step);
 		if(step>=2464 && step<=2602)
 			diff_eq_obj("peer micro48 producer/channel/polarity pointer-free projection",struct peer_episode_projection,&episode[0],&episode[1],step);
@@ -2797,10 +2867,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
 		if(step>=2464 && (p[0][0].state.rx!=(step>=2602?43:72) || p[1][0].state.rx!=(step>=2602?43:72) ||
-		    p[0][0].state.tx!=60 || p[1][0].state.tx!=60 || p[0][1].state.tx!=(step==2625?5:60) || p[1][1].state.tx!=(step==2625?5:60)))break;
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2626) ||
+		    p[0][0].state.tx!=60 || p[1][0].state.tx!=60 || p[0][1].state.tx!=(step>=2625?5:60) || p[1][1].state.tx!=(step>=2625?5:60)))break;
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2698) ||
 		    p[0][0].state.micro != (step<2602?59:62) || p[1][0].state.micro != (step<2602?59:62) ||
-		    p[0][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : 48)) || p[1][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : 48)) ||
+		    p[0][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) || p[1][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) ||
 		    (step > 1505 && (p[0][1].state.rx != (step < 2463 ? 53 : 43) || p[1][1].state.rx != (step < 2463 ? 53 : 43)))) break;
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
@@ -2826,10 +2896,12 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	}
 	for(side=0;side<2;side++)
 		diff_eq_int("peer first actual counter162 state edge reached (%ld)",peer162_edge[side],2625,side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 5992, 0);
+	for(side=0;side<2;side++)
+		diff_eq_int("caller first actual low-bit-set state edge reached (%ld)",caller_bit_edge[side],2692,side);
+	diff_eq_int("L1 arrival process-call denominator", calls, 6260, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive boundary, peer counter120 polarity edge and caller FSK-positive selector edge and peer counter162 terminal; no negotiation-completion claim\n", calls / 4, calls);
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive boundary, peer counter120 polarity edge and caller FSK-positive selector edge and peer counter162 terminal and actual caller low-bit-set/micro56 response; no negotiation-completion claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -4140,7 +4212,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 12276, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 12544, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -4148,7 +4220,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through peer counter162/TX5/micro50 boundary, CRC rejection prefix; "
+	       "positive through caller FSK low-bit-set/micro56 response, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
