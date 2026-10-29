@@ -111,8 +111,11 @@ extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
  *
  * The original four processing runs retain reference construction.  A separate
  * lifecycle cohort below uses matched create/process/destroy implementations
- * at each endpoint.  Both cohorts borrow the reference V.8 transfer snapshot;
- * neither establishes a wholly source-owned V.8-to-connect history.
+ * at each endpoint. Those cohorts and the visual cohort borrow reference V.8
+ * state. The handoff cohort follows source V.8 publication and destruction
+ * into reference/source V.34 owners using the same host buffers. All retain
+ * the existing wire reset at the sequential API boundary; this does not test
+ * a continuous-wire modem replacement scheduler.
  *
  * `VPcmV34Progress` also puts OUR `V90Demodulator::getBitRate`,
  * `GenericIIR<float,double>::process` and `V90Parameters::init` on the path of
@@ -277,6 +280,7 @@ our_ops_for(int id)
 	return 0;
 }
 
+static struct dp_operations *g_our8;
 static struct dp_operations *g_our34;	/* ours, for run_v34 and run_stall */
 
 static int ep_route[NEP];
@@ -310,6 +314,39 @@ shim_for_ep(int run, int ep)
 
 /* --- V.8 ------------------------------------------------------------------ */
 
+struct v8_block {
+	short samples[FRAG];
+	int result, idle_timer, last_status, nparams, parameter, request, other_params;
+	struct v8_cm menu;
+	struct dsp_info info;
+};
+static struct v8_block v8_oracle[NEP][V8_MAX_BLOCKS];
+static int v8_active[NEP][V8_MAX_BLOCKS], v8_calls[NEP];
+static long v8_rt_before_destroy[NEP][CFG_BUFWORDS];
+static long v8_info_before_destroy[NEP][CFG_BUFWORDS];
+
+static void
+capture_v8(struct v8_block *record, struct dp *dp, int ep, int ours, int result, const short *out)
+{
+	struct v8_dp *v = (struct v8_dp *)dp;
+	struct modem_shim *used = ours ? &harness_modem_route_ours[ep_route[ep]] : &harness_modem_route_ref[ep_route[ep]];
+	struct modem_shim *other = ours ? &harness_modem_route_ref[ep_route[ep]] : &harness_modem_route_ours[ep_route[ep]];
+	memset(record, 0, sizeof(*record));
+	memcpy(record->samples, out, sizeof(record->samples));
+	record->result = result;
+	record->idle_timer = v->idle_timer;
+	record->last_status = v->last_status;
+	record->nparams = used->nparams;
+	record->other_params = other->nparams;
+	record->parameter = record->request = -1;
+	if (used->nparams) {
+		record->parameter = used->param_name[used->nparams - 1];
+		record->request = used->param_value[used->nparams - 1];
+	}
+	memcpy(&record->menu, v->cm, sizeof(record->menu));
+	memcpy(&record->info, v->dspinfo, sizeof(record->info));
+}
+
 static int v8_ok;
 
 static void
@@ -339,13 +376,20 @@ run_v8(struct dp_operations *ops)
 			memset(out[ep], 0, sizeof(out[ep]));
 			if (done[ep])
 				continue;
-			if (ops->process(dp[ep], in[ep], out[ep], FRAG)
-			    != DPSTAT_OK)
-				done[ep] = 1;
+			{
+				int result = ops->process(dp[ep], in[ep], out[ep], FRAG);
+				capture_v8(&v8_oracle[ep][blk], dp[ep], ep, 0, result, out[ep]);
+				v8_active[ep][blk] = 1;
+				v8_calls[ep]++;
+				if (result != DPSTAT_OK)
+					done[ep] = 1;
+			}
 		}
 		wire_put(out);
 	}
 	v8_ok = done[0] && done[1];
+	memcpy(v8_rt_before_destroy, rt_buf, sizeof(rt_buf));
+	memcpy(v8_info_before_destroy, info_buf, sizeof(info_buf));
 
 	for (ep = 0; ep < NEP; ep++)
 		ops->destroy(dp[ep]);
@@ -1114,19 +1158,203 @@ visual_finish(void)
 	       visual_fault_fired);
 }
 
+/* This is a sequential API chain under the existing phase-boundary resets,
+ * not a continuous-wire replacement scheduler or telephone interoperability.
+ * Connection alone is insufficient: V.34 does not consume every negotiated
+ * menu byte. Publication and producer/consumer ownership have separate checks. */
+static int handoff_v8_created, handoff_v8_destroyed, handoff_v8_calls;
+static int handoff_v8_completed, handoff_admissions, handoff_copy_rejected;
+
+static int
+handoff_v8_ownership(struct v8_dp *v, struct dp_operations *owner, int ep, long tag)
+{
+	int before = diff_failures;
+	diff_eq_int("handoff V8 self owner", v->self == v, 1, tag);
+	diff_eq_int("handoff V8 operations owner", v->op == owner, 1, tag);
+	diff_eq_int("handoff V8 modem owner", v->modem == ep_modem[ep], 1, tag);
+	diff_eq_int("handoff V8 requested constructor id", v->want, DP_V34, tag);
+	diff_eq_int("handoff V8 registered id", v->id, DP_V8, tag);
+	diff_eq_int("handoff V8 runtime/menu owner", (void *)v->cm == (void *)rt_buf[ep], 1, tag);
+	diff_eq_int("handoff V8 DSPINFO owner", (void *)v->dspinfo == (void *)info_buf[ep], 1, tag);
+	diff_eq_int("handoff V8 handshake present", v->v8 != 0, 1, tag);
+	if (v->v8)
+		diff_eq_int("handoff V8 handshake menu owner", v->v8->cm == v->cm, 1, tag);
+	return diff_failures == before;
+}
+
+static int
+source_v8_handoff(int trial, int request[NEP])
+{
+	struct dp *dp[NEP] = { 0, 0 };
+	int done[NEP] = { 0, 0 }, calls[NEP] = { 0, 0 };
+	int stop = 0, ep, block, before = diff_failures;
+	int baseline_live = harness_alloc.live, baseline_bad = harness_alloc.bad_free;
+	int baseline_balance = harness_alloc.allocs - harness_alloc.frees;
+	short in[NEP][FRAG], out[NEP][FRAG];
+
+	routes_reset();
+	for (ep = 0; ep < NEP; ep++) {
+		long tag = trial * NEP + ep;
+		memset(rt_buf[ep], 0, sizeof(rt_buf[ep]));
+		memset(info_buf[ep], 0, sizeof(info_buf[ep]));
+		request[ep] = -1;
+		params_for(ep);
+		/* The registered V8 table is id 8; its create argument asks for 34. */
+		dp[ep] = g_our8->create(ep_modem[ep], DP_V34, ep_caller[ep], SRATE, FRAG, g_our8);
+		diff_eq_int("handoff source V8 created", dp[ep] != 0, 1, tag);
+		if (!dp[ep]) { stop = 1; break; }
+		handoff_v8_created++;
+		diff_eq_int("handoff V8 wrapper allocation admitted", harness_alloc_ordinal(dp[ep]) != 0, 1, tag);
+		if (diff_failures != before) { stop = 1; break; }
+		diff_eq_int("handoff V8 constructor handshake present", ((struct v8_dp *)dp[ep])->v8 != 0, 1, tag);
+		if (((struct v8_dp *)dp[ep])->v8)
+			diff_eq_int("handoff V8 handshake allocation admitted", harness_alloc_ordinal(((struct v8_dp *)dp[ep])->v8) != 0, 1, tag);
+		if (diff_failures != before) { stop = 1; break; }
+		if (!handoff_v8_ownership((struct v8_dp *)dp[ep], g_our8, ep, tag)) {
+			stop = 1;
+			break;
+		}
+	}
+	wire_reset();
+	for (block = 0; block < V8_MAX_BLOCKS && !(done[0] && done[1]) && !stop; block++) {
+		cur_run = 8 + trial;
+		cur_block = block;
+		wire_take(in);
+		for (ep = 0; ep < NEP; ep++) {
+			struct v8_block observed;
+			int result;
+			long tag = (trial * NEP + ep) * V8_MAX_BLOCKS + block;
+			memset(out[ep], 0, sizeof(out[ep]));
+			if (done[ep])
+				continue;
+			cur_ep = ep;
+			alarm(30);
+			result = g_our8->process(dp[ep], in[ep], out[ep], FRAG);
+			alarm(0);
+			calls[ep]++;
+			handoff_v8_calls++;
+			capture_v8(&observed, dp[ep], ep, 1, result, out[ep]);
+			diff_eq_int("handoff native V8 block was active", v8_active[ep][block], 1, tag);
+			diff_eq_obj("handoff V8 exact samples/return/publication", struct v8_block,
+				    &observed, &v8_oracle[ep][block], tag);
+			if (!handoff_v8_ownership((struct v8_dp *)dp[ep], g_our8, ep, tag) || diff_failures != before) {
+				stop = 1;
+				break;
+			}
+			if (result != DPSTAT_OK) {
+				diff_eq_int("handoff V8 transition result", result, DPSTAT_CHANGEDP, tag);
+				diff_eq_int("handoff V8 transition request count", observed.nparams, 1, tag);
+				diff_eq_int("handoff V8 transition parameter", observed.parameter, MDMPRM_DP_REQUESTED, tag);
+				diff_eq_int("handoff V8 transition request", observed.request, DP_V34, tag);
+				diff_eq_int("handoff V8 other image callback unused", observed.other_params, 0, tag);
+				diff_eq_int("handoff V8 published LAPM", observed.info.qc_lapm, (observed.menu.b2 >> 6) & 1, tag);
+				diff_eq_int("handoff V8 published index", observed.info.qc_index, observed.menu.menu, tag);
+				if (diff_failures != before) { stop = 1; break; }
+				request[ep] = observed.request;
+				done[ep] = 1;
+				printf("  handoff V8 trial %d %s block %d: result %d request %d menu %02x/%02x/%02x QC %u/%u\n",
+				       trial, ep_name[ep], block, result, request[ep], observed.menu.b0,
+				       observed.menu.b1, observed.menu.b2, observed.info.qc_lapm, observed.info.qc_index);
+			}
+		}
+		if (!stop)
+			wire_put(out);
+	}
+	if (!stop) {
+		for (ep = 0; ep < NEP; ep++) {
+			diff_eq_int("handoff V8 endpoint completed within horizon", done[ep], 1, trial * NEP + ep);
+			diff_eq_int("handoff V8 active call denominator", calls[ep], v8_calls[ep], trial * NEP + ep);
+		}
+		diff_eq_obj("handoff full runtime before V8 destroy", long[NEP][CFG_BUFWORDS], rt_buf, v8_rt_before_destroy, trial);
+		diff_eq_obj("handoff full info before V8 destroy", long[NEP][CFG_BUFWORDS], info_buf, v8_info_before_destroy, trial);
+		if (diff_failures != before)
+			stop = 1;
+	}
+	for (ep = 0; ep < NEP; ep++) if (dp[ep]) {
+		diff_eq_int("handoff owning V8 destructor", g_our8->destroy(dp[ep]), 0, trial * NEP + ep);
+		handoff_v8_destroyed++;
+	}
+	diff_eq_int("handoff V8 allocations restored", harness_alloc.live, baseline_live, trial);
+	diff_eq_int("handoff V8 allocation/free balance", harness_alloc.allocs - harness_alloc.frees, baseline_balance, trial);
+	diff_eq_int("handoff V8 no invalid destruction", harness_alloc.bad_free, baseline_bad, trial);
+	diff_eq_int("handoff V8 allocation accounting valid", harness_alloc.overflow, 0, trial);
+	if (!stop && diff_failures == before) {
+		int observed_request[NEP];
+		diff_eq_obj("handoff full runtime after V8 destroy", long[NEP][CFG_BUFWORDS], rt_buf, rt_snap, trial);
+		diff_eq_obj("handoff full info after V8 destroy", long[NEP][CFG_BUFWORDS], info_buf, info_snap, trial);
+		if (diff_failures == before)
+			handoff_v8_completed++;
+		memcpy(observed_request, request, sizeof(observed_request));
+		/* Reject a copied observation before any new DP is created. The
+		 * actual callback records, runtime, info and wire remain unchanged. */
+		if (getenv("VPCM_HANDOFF_COPY_FAULT") && trial == 0)
+			observed_request[0] = 23;
+		for (ep = 0; ep < NEP; ep++)
+			diff_eq_int("handoff copied request admission", observed_request[ep], DP_V34, trial * NEP + ep);
+		if (diff_failures != before && getenv("VPCM_HANDOFF_COPY_FAULT")) {
+			handoff_copy_rejected++;
+			diff_eq_int("handoff rejects before downstream create", handoff_admissions, 0, trial);
+		}
+	}
+	if (diff_failures != before)
+		stop = 1;
+	return !stop;
+}
+
+static int
+handoff_control(struct dp_operations *reference)
+{
+	int ep, k, rc;
+	diff_begin("V8 handoff reference control and source driver admission");
+	diff_eq_int("handoff source V8 operations registered", g_our8 != 0, 1, 0);
+	if (!g_our8)
+		return diff_end();
+	diff_eq_int("handoff source V8 registered identity", our_ops_for(DP_V8) == g_our8, 1, 0);
+	diff_eq_int("handoff source V8 table name", g_our8->name && strcmp(g_our8->name, "V8") == 0, 1, 0);
+	diff_eq_int("handoff source V8 entries present", g_our8->create && g_our8->process && g_our8->destroy, 1, 0);
+	diff_eq_int("handoff source V8 create image", g_our8->create != reference->create, 1, 0);
+	diff_eq_int("handoff source V8 process image", g_our8->process != reference->process, 1, 0);
+	diff_eq_int("handoff source V8 destroy image", g_our8->destroy != reference->destroy, 1, 0);
+	for (ep = 0; ep < NEP; ep++) {
+		const struct v8_block *last;
+		diff_eq_int("handoff reference V8 calls nonempty", v8_calls[ep] > 0, 1, ep);
+		diff_eq_int("handoff reference V8 within horizon", v8_calls[ep] <= V8_MAX_BLOCKS, 1, ep);
+		if (!v8_calls[ep] || v8_calls[ep] > V8_MAX_BLOCKS)
+			continue;
+		last = &v8_oracle[ep][v8_calls[ep] - 1];
+		diff_eq_int("handoff reference transition result", last->result, DPSTAT_CHANGEDP, ep);
+		diff_eq_int("handoff reference transition request", last->request, DP_V34, ep);
+		diff_eq_int("handoff reference request parameter", last->parameter, MDMPRM_DP_REQUESTED, ep);
+		diff_eq_int("handoff reference exactly one callback", last->nparams, 1, ep);
+		diff_eq_int("handoff reference other image unused", last->other_params, 0, ep);
+		diff_eq_int("handoff reference menu b0", last->menu.b0, 0xa1, ep);
+		diff_eq_int("handoff reference menu b1", last->menu.b1, 0x40, ep);
+		diff_eq_int("handoff reference menu b2", last->menu.b2, 0, ep);
+		for (k = 0; k < v8_calls[ep] - 1; k++)
+			diff_eq_int("handoff reference active prefix return", v8_oracle[ep][k].result, DPSTAT_OK, ep * V8_MAX_BLOCKS + k);
+	}
+	rc = diff_end();
+	return rc;
+}
+
 struct lifecycle_plan {
 	const char *name;
 	int cases;
 	int run[3];
 	int source_owners;
 	int observe_visual;
+	int source_v8;
 };
 
 static const struct lifecycle_plan unobserved_lifecycles = {
-	"V.PCM matched source-constructor connecting lifecycles", 3, { 1, 2, 3 }, 4, 0
+	"V.PCM matched source-constructor connecting lifecycles", 3, { 1, 2, 3 }, 4, 0, 0
 };
 static const struct lifecycle_plan observed_lifecycles = {
-	"V.PCM visual diagnostics on an adapted connecting lifecycle", 2, { 0, 3 }, 2, 1
+	"V.PCM visual diagnostics on an adapted connecting lifecycle", 2, { 0, 3 }, 2, 1, 0
+};
+
+static const struct lifecycle_plan handoff_lifecycles = {
+	"source V8 publication through a sequential V34 API lifecycle", 2, { 0, 3 }, 2, 0, 1
 };
 
 static int
@@ -1134,7 +1362,7 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 {
 	int trial, run, ep, blk, calls = 0, destroyed = 0, bits[NEP] = { 0, 0 };
 	int completed = 0, created = 0, source_created = 0, reference_created = 0;
-	int copied_control = !plan->observe_visual && getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
+	int copied_control = !plan->observe_visual && !plan->source_v8 && getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
 	int stop = 0;
 	void (*prev)(int) = signal(SIGALRM, call_alarm);
 
@@ -1157,19 +1385,36 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 		int baseline_balance = harness_alloc.allocs - harness_alloc.frees;
 		int before = diff_failures;
 		short in[NEP][FRAG], out[NEP][FRAG];
+		int request[NEP] = { DP_V34, DP_V34 };
 
 		run = plan->run[trial];
 		cur_run = NRUN + run;
-		memcpy(rt_buf, rt_snap, sizeof(rt_buf));
-		memcpy(info_buf, info_snap, sizeof(info_buf));
+		if (plan->source_v8) {
+			if (!source_v8_handoff(trial, request)) { stop = 1; break; }
+		} else {
+			memcpy(rt_buf, rt_snap, sizeof(rt_buf));
+			memcpy(info_buf, info_snap, sizeof(info_buf));
+		}
+		/* Producer processing uses its own alarm tag; restore the consumer. */
+		cur_run = NRUN + run;
+		/* Existing phase boundary: reset the wire and per-phase route log. */
 		routes_reset();
 		for (ep = 0; ep < NEP; ep++) {
 			int ours = (run >> ep) & 1;
 			long tag = run * NEP + ep;
 			struct vpcm_root *s;
 			owner[ep] = ours ? g_our34 : reference;
+			if (plan->source_v8) {
+				owner[ep] = ours ? our_ops_for(request[ep]) : ops_for(request[ep]);
+				diff_eq_int("handoff requested consumer operations found", owner[ep] != 0, 1, tag);
+				diff_eq_int("handoff requested consumer identity", owner[ep] == (ours ? g_our34 : reference), 1, tag);
+				if (diff_failures != before) { stop = 1; break; }
+				printf("  handoff admission trial %d %s request %d owner %s/%s\n",
+				       trial, ep_name[ep], request[ep], ours ? "source" : "reference", owner[ep]->name);
+			}
 			params_for(ep);
-			dp[ep] = owner[ep]->create(ep_modem[ep], 34, ep_caller[ep], SRATE, FRAG, owner[ep]);
+			if (plan->source_v8) handoff_admissions++;
+			dp[ep] = owner[ep]->create(ep_modem[ep], request[ep], ep_caller[ep], SRATE, FRAG, owner[ep]);
 			diff_eq_int("lifecycle allocation", dp[ep] != 0, 1, tag);
 			if (!dp[ep]) { stop = 1; break; }
 			created++;
@@ -1265,6 +1510,18 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 		diff_eq_int("lifecycle aggregate aligned directional payload", bits[ep] >= plan->cases * 2048, 1, ep);
 	if (plan->observe_visual)
 		visual_finish();
+	if (plan->source_v8) {
+		diff_eq_int("handoff source V8 pairs completed", handoff_v8_completed, 2, 0);
+		diff_eq_int("handoff V8 owners created", handoff_v8_created, 4, 0);
+		diff_eq_int("handoff V8 owners destroyed", handoff_v8_destroyed, 4, 0);
+		diff_eq_int("handoff V8 active calls executed", handoff_v8_calls, 2 * (v8_calls[0] + v8_calls[1]), 0);
+		diff_eq_int("handoff V8 output sample denominator", handoff_v8_calls * FRAG, 2 * (v8_calls[0] + v8_calls[1]) * FRAG, 0);
+		diff_eq_int("handoff downstream create admissions", handoff_admissions, 4, 0);
+		printf("  handoff: V8 pairs %d/2, owners %d/%d, calls %d/%d, samples %d/%d, downstream admissions %d/4, copied rejects %d\n",
+		       handoff_v8_completed, handoff_v8_created, handoff_v8_destroyed, handoff_v8_calls,
+		       2 * (v8_calls[0] + v8_calls[1]), handoff_v8_calls * FRAG,
+		       2 * (v8_calls[0] + v8_calls[1]) * FRAG, handoff_admissions, handoff_copy_rejected);
+	}
 	alarm(0);
 	signal(SIGALRM, prev);
 	printf("  lifecycle: %d/%d cases; %d/%d endpoint calls, %d/%d output samples, %d/%d owning destructors; payload orig/answer %d/%d bits\n",
@@ -1292,6 +1549,8 @@ main(void)
 	ref_dp_v8_init();
 	ref_dp_vpcm_init();
 	dp_vpcm_init();
+	dp_v8_init();
+	g_our8 = our_ops_for(DP_V8);
 	ops8 = ops_for(DP_V8);
 	ops34 = ops_for(34);
 	g_our34 = our_ops_for(34);
@@ -1714,6 +1973,10 @@ main(void)
 	rc |= run_lifecycles(ops34, &observed_lifecycles);
 	if (rc)
 		return rc;
+	rc |= handoff_control(ops8);
+	if (rc) return rc;
+	rc |= run_lifecycles(ops34, &handoff_lifecycles);
+	if (rc) return rc;
 	rc |= run_stall();
 	rc |= run_queue_calls(ops34);
 
