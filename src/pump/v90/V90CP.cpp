@@ -589,89 +589,104 @@ V90CP::evaluateInfo()
 		 * rather than through a register, because the store into
 		 * `dst[j]` may alias it -- that is the object's own reading
 		 * and it is why this arm reloads where the others do not.
+		 * Capture each bit result before publishing the decremented cursor,
+		 * then store the result: native 0x51b34 precedes 0x51b3f, and the
+		 * same order is present in all six buffer blocks.
 		 */
 		if (nof_buf[0] != 0) {
 			dst = buf[0];
-			for (j = 0; j < nof_buf[0]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[0]);
 		}
 
 		if (nof_buf[1] != 0) {
 			dst = buf[1];
-			for (j = 0; j < nof_buf[1]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[1]);
 		}
 
 		if (nof_buf[2] != 0) {
 			dst = buf[2];
-			for (j = 0; j < nof_buf[2]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[2]);
 		}
 
 		if (nof_buf[3] != 0) {
 			dst = buf[3];
-			for (j = 0; j < nof_buf[3]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[3]);
 		}
 
 		if (nof_buf[4] != 0) {
 			dst = buf[4];
-			for (j = 0; j < nof_buf[4]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[4]);
 		}
 
 		if (nof_buf[5] != 0) {
 			dst = buf[5];
-			for (j = 0; j < nof_buf[5]; j++) {
+			j = 0;
+			do {
 				word_cb4 += 0x11;
 				dst[j] = 0;
 				for (i = 0; i <= 0xf; i++) {
-					dst[j] = (dst[j] << 1) |
-						 (bits[word_cb4] & 1);
+					int value = (dst[j] << 1) |
+						    (bits[word_cb4] & 1);
 					word_cb4--;
+					dst[j] = value;
 				}
 				word_cb4 += 0x10;
-			}
+			} while (++j < nof_buf[5]);
 		}
 
 		break;
