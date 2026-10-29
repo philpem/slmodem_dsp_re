@@ -1914,13 +1914,14 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through RX72 measurements384/768 and firstTX60 detector-input2346, validating
+	 * Continue through RX72 measurements384/768 and first RX53 detector-positive peer boundary2463, validating
 	 * peer micro52 undoubled production after the terminal edge, then
-	 * stopping at first nonzero RX53 detector input2346 or another unexplained RX/microstate edge.
+	 * stopping at first RX53 detector-positive peer boundary or an unexplained state edge.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later negotiation/protocol completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
 	int eligible_detector_frames[2] = { 0, 0 };
+	int detector_edge[2] = { -1, -1 };
 	struct arrival_projection {
 		struct info0_projection state;
 		short input[4];
@@ -1978,6 +1979,12 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		short returned[4],arrived[4],pairs[4][2],gained[4];
 		float floating[4],fifo[4];
 	} route[2];
+	struct detector_decision_projection {
+		int before_count,before_armed,before_level;
+		int polarity,armed,count,limit,state,low,high,level,flags,nsamples;
+		int micro,rx,tx,cursor,counter,gain,saved_gain,sr,nbits,phase,next;
+		short samples[4];
+	} decision[2];
 	int terminal_step[2] = { -1, -1 };
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
@@ -1991,7 +1998,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	}
 	wp = (wp + 4) % INFO0_DELAY;
 	memset(route,0,sizeof route);
-	for (step = 1128; step <= 2347; step++) {
+	memset(decision,0,sizeof decision);
+	for (step = 1128; step <= 2475; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -2050,6 +2058,10 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 					r->rx_origin=info0_rx_ring_index(o[side][ep],o[side][ep]->receiver.rxq.wr);
 					memcpy(r->arrived,in[side][ep],sizeof r->arrived);
 					diff_eq_obj("TX60 saved returned frame arrives through actual channel",short[4],r->arrived,r->returned,tag);
+				}
+				if(ep==1 && step>=2346 && step<=2463) {
+					struct detector_decision_projection *d=&decision[side];struct v34_object *v=o[side][ep];
+					memset(d,0,sizeof *d);d->before_count=v->detector.count;d->before_armed=v->detector.armed;d->before_level=v->detector.level;
 				}
 				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
 				if (ep == 0 && step == 1199) {
@@ -2532,6 +2544,67 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 						}
 					}
 				}
+
+				if(ep==1 && step>=2346 && step<=2463) {
+					/* Native presence detector arms2357, first qualifies2363,
+					 * and returns1 at2463 when100 becomes101. Original69888
+					 * then selects micro48/RX43/TX60, followed by69989's
+					 * FSK rearm. Stop on that first peer state boundary. */
+					static const short native_levels[118]={
+						1,0,0,1,0,0,1,8,31,88,187,341,
+						551,824,1152,1542,1987,2488,3038,3638,4278,4961,5675,6424,
+						7198,8000,8820,9661,10513,11379,12250,13131,14012,14899,15783,16668,
+						17547,18421,19285,20145,20994,21835,22662,23480,23871,23704,24058,23847,
+						24182,23942,24268,24004,24325,24044,24364,24585,24873,24419,24738,24307,
+						24646,24233,24587,24183,24549,24572,24928,24401,24784,24289,24688,24213,
+						24622,24163,24579,24486,24901,24336,24770,24238,24685,24176,24629,24136,
+						24590,24426,24880,24293,24762,24206,24681,24148,24627,24112,24589,24380,
+						24864,24260,24755,24183,24680,24131,24627,24098,24591,24350,24851,24237,
+						24747,24164,24676,24118,24628,24089,24593,24333,24846,24225
+					};
+					struct detector_decision_projection *d=&decision[side];struct v34_object *v=o[side][ep];
+					d->polarity=v->detector.polarity;d->armed=v->detector.armed;d->count=v->detector.count;d->limit=v->detector.limit;
+					d->state=v->detector.state;d->low=v->detector.thresh_lo;d->high=v->detector.thresh_hi;d->level=v->detector.level;
+					d->flags=v->receiver.flags;d->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);memcpy(d->samples,v->receiver.burst,sizeof d->samples);
+					d->micro=v->microstate;d->rx=v->rxstate;d->tx=v->txstate;d->cursor=v->vect_idx;d->counter=v->short_aa78;
+					if(d->micro!=52 && detector_edge[side]<0)detector_edge[side]=step;
+					d->gain=v->receiver.agc_gain;d->saved_gain=v->receiver.short_264;
+					d->sr=v->fsk.sr;d->nbits=v->fsk.nbits;d->phase=v->fsk.phase;d->next=v->fsk.next;
+					diff_eq_int("RX53 actual presence polarity (%ld)",d->polarity,0,tag);
+					diff_eq_int("RX53 actual presence low threshold (%ld)",d->low,2048,tag);
+					diff_eq_int("RX53 actual presence high threshold (%ld)",d->high,0,tag);
+					diff_eq_int("RX53 actual presence count limit (%ld)",d->limit,100,tag);
+					diff_eq_int("RX53 actual detector running state (%ld)",d->state,2,tag);
+					diff_eq_int("RX53 actual detector nonempty input (%ld)",d->nsamples,4,tag);
+					diff_eq_int("RX53 native first arming trajectory (%ld)",d->armed,step>=2357,tag);
+					diff_eq_int("RX53 native qualifying count trajectory (%ld)",d->count,step>=2363?step-2362:0,tag);
+					diff_eq_int("RX53 native integrated level trajectory (%ld)",d->level,native_levels[step-2346],tag);
+					if(step==2357) {
+						diff_eq_int("RX53 native before arming not armed (%ld)",d->before_armed,0,tag);
+						diff_eq_int("RX53 native arming starts below floor (%ld)",d->before_level,187,tag);
+						diff_eq_int("RX53 native arming crosses floor (%ld)",d->level,341,tag);
+						diff_eq_int("RX53 arming call resets count (%ld)",d->count,0,tag);
+					}
+					if(step>=2363) {
+						diff_eq_int("RX53 native qualifying level above low (%ld)",d->level>d->low,1,tag);
+						diff_eq_int("RX53 qualified call increments once (%ld)",d->count,d->before_count+1,tag);
+					}
+					if(step==2463) {
+						diff_eq_int("RX53 native before first positive is exactly limit (%ld)",d->before_count,100,tag);
+						diff_eq_int("RX53 native first count over limit (%ld)",d->count,101,tag);
+						diff_eq_int("RX53 native terminal micro48 selection (%ld)",d->micro,48,tag);
+						diff_eq_int("RX53 native terminal RX43 selection (%ld)",d->rx,43,tag);
+						diff_eq_int("RX53 native terminal TX60 selection (%ld)",d->tx,60,tag);
+						diff_eq_int("RX53 native terminal cursor clear (%ld)",d->cursor,0,tag);
+						diff_eq_int("RX53 native terminal shared counter clear (%ld)",d->counter,0,tag);
+						diff_eq_int("RX53 native terminal pending flag rearmed (%ld)",d->flags,0x1a04,tag);
+						diff_eq_int("RX53 native terminal saved gain restored (%ld)",d->gain,d->saved_gain,tag);
+						diff_eq_int("RX53 native FSK shift register clear (%ld)",d->sr,0,tag);
+						diff_eq_int("RX53 native FSK bit count clear (%ld)",d->nbits,0,tag);
+						diff_eq_int("RX53 native FSK phase clear (%ld)",d->phase,0,tag);
+						diff_eq_int("RX53 native FSK next rearm (%ld)",d->next,6,tag);
+					}
+				}
 				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
 				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
 				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
@@ -2540,6 +2613,8 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
+		if(step>=2346 && step<=2463)
+			diff_eq_obj("RX53 actual detector decision pointer-free projection",struct detector_decision_projection,&decision[0],&decision[1],step);
 		if(step==2346)
 			diff_eq_obj("TX60 source-to-detector pointer-free provenance",struct tone_route_projection,&route[0],&route[1],step);
 		if(step==2266 || step==2267)
@@ -2558,7 +2633,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2346) ||
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2474) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != (step < 1505 ? 51 : 52) || p[1][1].state.micro != (step < 1505 ? 51 : 52) ||
 		    (step > 1505 && (p[0][1].state.rx != 53 || p[1][1].state.rx != 53))) break;
@@ -2574,10 +2649,15 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		diff_eq_int("peer terminal first micro51-to52 edge step (%ld)", terminal_step[side], 1505, side);
 	for (side = 0; side < 2; side++)
 		diff_eq_int("RX53 eligible native-witness detector prefix denominator (%ld)",eligible_detector_frames[side],67,side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 4876, 0);
+	for(side=0;side<2;side++) {
+		diff_eq_int("RX53 first actual peer state edge reached (%ld)",detector_edge[side],2463,side);
+		diff_eq_int("RX53 actual terminal selected micro reached (%ld)",decision[side].micro,48,side);
+		diff_eq_int("RX53 actual terminal qualified count reached (%ld)",decision[side].count,101,side);
+	}
+	diff_eq_int("L1 arrival process-call denominator", calls, 5344, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery to RX53 detector input; no negotiation-completion claim\n", calls / 4, calls);
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive detector/state boundary; no negotiation-completion claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3888,7 +3968,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 11160, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 11628, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3896,7 +3976,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through TX60 generated frame delivery to RX53 detector input, CRC rejection prefix; "
+	       "positive through RX53 detector-positive peer state boundary, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
