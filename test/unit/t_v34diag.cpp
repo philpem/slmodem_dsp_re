@@ -1914,8 +1914,9 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 {
 	/* Continue the same channel after return1127. Its 288 samples / four
 	 * samples per call delay the saved peer frame by 72 calls to1199.
-	 * Continue through first RX72 correlation at native counter65 (step1243);
-	 * stop there or on either microstate edge, at most43 calls after1200.
+	 * Continue toward RX72 nonlinear measurement at counter384, stopping
+	 * at the earlier peer microstate edge: native last-L1 producer at1505.
+	 * This adds262 calls after1243 and does not reach the caller measurement.
 	 * The saved complex pairs enter RX72 demodulation one call after arrival.
 	 * This does not establish later probe/negotiation completion. */
 	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
@@ -1941,6 +1942,14 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 		short samples[4];
 		struct correlation_bin bank[2][4];
 	} correlation[2];
+	struct terminal_projection {
+		int cursor_before, cursor_after, micro_before, micro_after;
+		int rx_before, rx_after, tx_before, tx_after, counter_before, counter_after;
+		int wr_before, wr_after, rd_before, rd_after, count_before, count_after;
+		int scale, caller_counter;
+		unsigned words[4];
+	} terminal[2];
+	int terminal_step[2] = { -1, -1 };
 	int arrival[2] = { -1, -1 };
 	int step, side, ep, i, calls = 0;
 
@@ -1952,7 +1961,7 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
 	}
 	wp = (wp + 4) % INFO0_DELAY;
-	for (step = 1128; step <= 1243; step++) {
+	for (step = 1128; step <= 1505; step++) {
 		for (side = 0; side < 2; side++)
 		for (ep = 0; ep < 2; ep++)
 		for (i = 0; i < 4; i++)
@@ -1981,6 +1990,18 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				}
 				if (ep == 0 && step == 1199)
 					diff_eq_obj("L1 arrival channel-delay provenance", short[4], q->input, emitted[side], tag);
+				if (ep == 1 && step == 1505) {
+					struct terminal_projection *t = &terminal[side];
+					struct v34_object *v = o[side][ep];
+					memset(t, 0, sizeof *t);
+					t->cursor_before = v->vect_idx;
+					t->micro_before = v->microstate; t->rx_before = v->rxstate; t->tx_before = v->txstate;
+					t->counter_before = v->short_aa78;
+					t->scale = v->tx.tx_scale;
+					t->wr_before = info0_tx_ring_index(v, v->tx.txq.wr);
+					t->rd_before = info0_tx_ring_index(v, v->tx.txq.rd);
+					t->count_before = v->tx.txq.count;
+				}
 				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
 				if (ep == 0 && step == 1199) {
 					/* Native400c FILD signed input;400f FSTP root+ac78.
@@ -1998,6 +2019,50 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 				}
 				calls++;
 				info0_project(&q->state, o[side][ep], rc);
+				if (ep == 1 && prev[side][ep].micro == 51 && q->state.micro == 52 && terminal_step[side] < 0)
+					terminal_step[side] = step;
+				if (ep == 1 && step == 1505) {
+					/* Native TX51 writes four samples at62ce9, then requires
+					 * microstate51 and terminal cursor1536 at62cf5/62d03.
+					 * 62d2b writes micro52;62d34 clears cursor. RX53 and
+					 * TX51 remain unchanged: this is not L2 production. */
+					static const short last_probe[4] = { -2867, -8421, 7026, 13097 };
+					static const unsigned known_words[4] = { 63508, 59581, 4968, 9261 };
+					unsigned expected_words[4];
+					struct terminal_projection *t = &terminal[side];
+					struct v34_object *v = o[side][ep];
+					t->cursor_after = v->vect_idx;
+					t->micro_after = v->microstate; t->rx_after = v->rxstate; t->tx_after = v->txstate;
+					t->counter_after = v->short_aa78;
+					t->wr_after = info0_tx_ring_index(v, v->tx.txq.wr);
+					t->rd_after = info0_tx_ring_index(v, v->tx.txq.rd);
+					t->count_after = v->tx.txq.count;
+					t->caller_counter = o[side][0]->short_aa78;
+					for (i = 0; i < 4; i++) expected_words[i] = (unsigned short)((((int)last_probe[i] * 2) * t->scale) >> 14);
+					diff_eq_int("peer terminal owned write origin (%ld)", t->wr_before >= 0, 1, tag);
+					if (t->wr_before >= 0)
+					for (i = 0; i < 4; i++)
+						memcpy(&t->words[i], (unsigned char *)v + 0x2228 + ((t->wr_before+i)%V34_TXQ_RING)*4, 4);
+					diff_eq_int("peer terminal producer enters micro51 (%ld)", t->micro_before, 51, tag);
+					diff_eq_int("peer terminal pre-increment cursor (%ld)", t->cursor_before, 1532, tag);
+					diff_eq_int("peer terminal four increments satisfy native equality (%ld)", t->cursor_before + 4, 1536, tag);
+					diff_eq_int("peer terminal cursor reset (%ld)", t->cursor_after, 0, tag);
+					diff_eq_int("peer terminal microstate becomes52 (%ld)", t->micro_after, 52, tag);
+					diff_eq_int("peer terminal receive state retained (%ld)", t->rx_after, t->rx_before, tag);
+					diff_eq_int("peer terminal receive state53 (%ld)", t->rx_after, 53, tag);
+					diff_eq_int("peer terminal transmit selector retained (%ld)", t->tx_after, t->tx_before, tag);
+					diff_eq_int("peer terminal transmit selector still51 (%ld)", t->tx_after, 51, tag);
+					diff_eq_int("peer terminal shared counter retained (%ld)", t->counter_after, t->counter_before, tag);
+					diff_eq_int("peer terminal shared counter42 (%ld)", t->counter_after, 42, tag);
+					diff_eq_int("peer terminal scale known answer (%ld)", t->scale, 5793, tag);
+					diff_eq_int("peer terminal four samples enqueued (%ld)", (t->wr_after-t->wr_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("peer terminal four samples dequeued (%ld)", (t->rd_after-t->rd_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("peer terminal queue depth retained (%ld)", t->count_after, t->count_before, tag);
+					diff_eq_obj("peer terminal actual final doubled probe words", unsigned[4], t->words, expected_words, tag);
+					diff_eq_obj("peer terminal native final producer known answer", unsigned[4], t->words, known_words, tag);
+					diff_eq_int("peer terminal earlier caller RX72 count327 (%ld)", t->caller_counter, 327, tag);
+				}
+
 				if (ep == 0 && step >= 1199 && step <= 1200) {
 					/* Native bd43/bd50 passes each signed input to modem_serrint;
 					 * 5d3d4 Hilbert output becomes a complex queue pair.
@@ -2122,11 +2187,13 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
 			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
 		}
+		if (step == 1505)
+			diff_eq_obj("peer terminal pointer-free queue and microstate projection", struct terminal_projection, &terminal[0], &terminal[1], step);
 		if (step >= 1201)
 			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
 		if (step >= 1199 && step <= 1200)
 			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
-		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 65) ||
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && o[0][0]->short_aa78 >= 384) ||
 		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
 		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51) break;
 		for (side = 0; side < 2; side++)
@@ -2137,10 +2204,12 @@ info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
 	}
 	for (side = 0; side < 2; side++)
 		diff_eq_int("L1 arrival first saved peer frame input step (%ld)", arrival[side], 1199, side);
-	diff_eq_int("L1 arrival process-call denominator", calls, 464, 0);
+	for (side = 0; side < 2; side++)
+		diff_eq_int("peer terminal first micro51-to52 edge step (%ld)", terminal_step[side], 1505, side);
+	diff_eq_int("L1 arrival process-call denominator", calls, 1512, 0);
 	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
 	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
-	       "derived pairs consumed by RX72 then first four-bin nonlinear correlation observed; no 25-bin probe/negotiation claim\n", calls / 4, calls);
+	       "peer first terminal L1 producer microedge at1505; caller nonlinear measurement count384 not reached; no L2-production/25-bin-probe/negotiation claim\n", calls / 4, calls);
 	return calls;
 }
 
@@ -3451,7 +3520,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6748, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 7796, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3459,7 +3528,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through first RX72 four-bin nonlinear correlation, CRC rejection prefix; "
+	       "positive through peer terminal TX_L1 microstate edge, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
