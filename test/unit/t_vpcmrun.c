@@ -50,6 +50,9 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/v8dp.h"
 #include "dsplib/vpcm.h"
+#include "dsplib/v34fsk.h"
+#include "dsplib/int_complex.h"
+#include "dsplib/v34pcmif.h"
 
 extern void ref_dp_v8_init(void);
 extern void ref_dp_vpcm_init(void);
@@ -911,16 +914,231 @@ lifecycle_callbacks(struct vpcm_root *s, int ours, int ep, long tag)
 	return diff_failures == before;
 }
 
-static int
-run_lifecycles(struct dp_operations *reference)
+/* Observe real V.34 receiver histories without changing the channel recipe.
+ * Selector 0 drains its ring: both images use the same checkpoint schedule.
+ * This cohort covers status 0 only; PCM and K56 dispatch remain uncovered. */
+extern unsigned long ref_VPcmV34GetVisualDiagnostics(void *obj, int what,
+				struct int_complex *points, unsigned long maxCount);
+
+#define VISUAL_POINTS 8
+#define VISUAL_SELECTORS 6
+#define VISUAL_CHECKPOINTS 5
+
+struct visual_checkpoint {
+	int block;
+	unsigned long capacity;
+};
+
+static const struct visual_checkpoint visual_schedule[VISUAL_CHECKPOINTS] = {
+	{ 1000, 1 }, { 1500, 2 }, { 1600, 4 }, { 2500, 8 }, { 3999, 8 }
+};
+static const int visual_selectors[VISUAL_SELECTORS] = { 0, 1, 3, 4, 5, 6 };
+
+struct visual_result {
+	unsigned guard[2];
+	struct int_complex points[VISUAL_POINTS + 2];
+	unsigned long count;
+};
+
+static struct visual_result visual_native[NEP][VISUAL_CHECKPOINTS][VISUAL_SELECTORS];
+static int visual_queries, visual_nonempty[VISUAL_SELECTORS];
+static int visual_nonzero[VISUAL_SELECTORS];
+static int visual_distinct_echo_queries, visual_distinct_echo_witnesses;
+static int visual_fault_fired;
+
+/* Native-address known answers are separate from the two-image comparison.
+ * Explicit widths matter: phase is int; offset and coefficient values are short.
+ * Pointer identities below establish storage ownership, not unequal values. */
+static void
+visual_known_answer(struct v34_object *v, int selector, unsigned long capacity,
+		    struct visual_result *expected, long tag)
 {
-	int run, ep, blk, calls = 0, destroyed = 0, bits[NEP] = { 0, 0 };
+	unsigned long n = 0, i;
+
+	if (selector == 0) {
+		n = (unsigned int)v->hist1_idx;
+		if (n > capacity)
+			n = capacity;
+		for (i = 0; i < n; i++) {
+			short raw[2];
+			memcpy(raw, (char *)v + 0x2aa8 + 4 * i, sizeof(raw));
+			expected->points[i].re = 2 * (int)raw[0];
+			expected->points[i].im = 2 * (int)raw[1];
+		}
+	} else if (selector == 1) {
+		n = capacity; /* Every scheduled capacity is below the native cap 80. */
+		for (i = 0; i < n; i++) {
+			short re, im;
+			memcpy(&re, (char *)v + 0x264 + 0x50c + 2 * i, sizeof(re));
+			memcpy(&im, (char *)v + 0x264 + 0x5ac + 2 * i, sizeof(im));
+			diff_eq_int("visual raw EQ real provenance", re, v->receiver.equalizer.re[i], tag);
+			diff_eq_int("visual raw EQ imag provenance", im, v->receiver.equalizer.im[i], tag);
+			expected->points[i].re = 2 * (int)re;
+			expected->points[i].im = 2 * (int)im;
+		}
+	} else if (selector == 3 || selector == 4) {
+		int phase;
+		short offset;
+		n = 1; /* Native selectors 3/4 always write one point, even at cap 0. */
+		memcpy(&phase, (char *)v + 0x43c, sizeof(phase));
+		memcpy(&offset, (char *)v + 0x434, sizeof(offset));
+		diff_eq_int("visual raw phase provenance", phase, v->receiver.timing_frac, tag);
+		diff_eq_int("visual raw offset provenance", offset, v->receiver.timing_ppm, tag);
+		expected->points[0].re = selector == 3 ? phase : offset;
+		expected->points[0].im = 0;
+	} else {
+		struct v34_echo *echo = selector == 5 ? &v->echo0 : &v->echo1;
+		unsigned owner_offset = selector == 5 ? 0x80b8 : 0x9138;
+		short *raw_coeff;
+		unsigned raw_taps;
+		memcpy(&raw_coeff, (char *)v + owner_offset + 8, sizeof(raw_coeff));
+		memcpy(&raw_taps, (char *)v + owner_offset + 0x1c, sizeof(raw_taps));
+		diff_eq_int("visual raw echo coefficient owner", raw_coeff == echo->coeff, 1, tag);
+		diff_eq_int("visual inline echo coefficient storage",
+			    echo->coeff == (selector == 5 ? v->echo0_coeff : v->echo1_coeff), 1, tag);
+		diff_eq_int("visual raw echo tap count provenance", raw_taps, echo->taps, tag);
+		n = raw_taps;
+		if (n > capacity)
+			n = capacity;
+		for (i = 0; i < n; i++) {
+			expected->points[i].re = 0;
+			expected->points[i].im = raw_coeff[i];
+		}
+	}
+	expected->count = n;
+}
+
+static int
+visual_after_block(struct vpcm_root *rootp, int run, int ep, int block)
+{
+	struct v34_object *v = (struct v34_object *)&rootp->v34;
+	static struct vpcm_root root_before, root_expected;
+	int checkpoint, k, before = diff_failures;
+
+	for (checkpoint = 0; checkpoint < VISUAL_CHECKPOINTS; checkpoint++)
+		if (visual_schedule[checkpoint].block == block)
+			break;
+	if (checkpoint == VISUAL_CHECKPOINTS)
+		return 1;
+	for (k = 0; k < VISUAL_SELECTORS; k++) {
+		struct visual_result observed, expected;
+		unsigned long capacity = visual_schedule[checkpoint].capacity, i;
+		int selector = visual_selectors[k], nonzero = 0, distinct_echo = 0;
+		int raw_status;
+		short raw_cursor;
+		long tag = ((run * NEP + ep) * VISUAL_CHECKPOINTS + checkpoint) * 10 + selector;
+
+		memset(&observed, 0xa5, sizeof(observed));
+		memcpy(&expected, &observed, sizeof(expected));
+		memcpy(&raw_status, v, sizeof(raw_status));
+		memcpy(&raw_cursor, (char *)v + 0x2aa4, sizeof(raw_cursor));
+		diff_eq_int("visual live status 0", v->status, 0, tag);
+		diff_eq_int("visual live role", v->role, ep_role[ep], tag);
+		diff_eq_int("visual public root owner", rootp->dp.dp_data == rootp, 1, tag);
+		diff_eq_int("visual raw status owner+0", raw_status, v->status, tag);
+		diff_eq_int("visual raw signed history cursor", raw_cursor, v->hist1_idx, tag);
+		if (diff_failures != before)
+			return 0;
+		visual_known_answer(v, selector, capacity, &expected, tag);
+		if (diff_failures != before)
+			return 0;
+		/* Include padding in the root-byte mutation observation. External
+		 * allocations are outside this claim; public behavior is checked too. */
+		memcpy(&root_before, rootp, sizeof(root_before));
+		memcpy(&root_expected, &root_before, sizeof(root_expected));
+		if (selector == 0) {
+			short zero = 0;
+			memcpy((char *)&root_expected.v34 + 0x2aa4, &zero, sizeof(zero));
+		}
+		if (run == 0)
+			observed.count = ref_VPcmV34GetVisualDiagnostics(v, selector, observed.points, capacity);
+		else
+			observed.count = VPcmV34GetVisualDiagnostics(v, selector, observed.points, capacity);
+		visual_queries++;
+		/* Change a copied diagnostic only; the modem and wire stay intact. */
+		if (getenv("VPCM_VISUAL_COPY_FAULT") && run == 3 && checkpoint == 2 && ep == 0 && selector == 1 && observed.count) {
+			observed.points[0].re ^= 1;
+			visual_fault_fired++;
+		}
+		diff_eq_obj("visual raw-field known answer/full guarded buffer", struct visual_result,
+			    &observed, &expected, tag);
+		diff_eq_obj("visual only permitted root-byte mutation", struct vpcm_root,
+			    rootp, &root_expected, tag);
+		if (run == 0)
+			memcpy(&visual_native[ep][checkpoint][k], &observed, sizeof(observed));
+		else
+			diff_eq_obj("visual exact native count/full guarded buffer", struct visual_result,
+				    &observed, &visual_native[ep][checkpoint][k], tag);
+		if (diff_failures != before)
+			return 0;
+		if (observed.count)
+			visual_nonempty[k]++;
+		for (i = 0; i < observed.count; i++)
+			if (observed.points[i].re || observed.points[i].im)
+				nonzero++;
+		if (nonzero)
+			visual_nonzero[k]++;
+		if (selector == 5 || selector == 6) {
+			for (i = 0; i < observed.count && i < v->echo0.taps && i < v->echo1.taps; i++)
+				if (v->echo0.coeff[i] != v->echo1.coeff[i])
+					distinct_echo++;
+			if (distinct_echo) {
+				visual_distinct_echo_queries++;
+				if (selector == 5)
+					visual_distinct_echo_witnesses++;
+			}
+		}
+		printf("  visual %s %s block %d status %d role %#x selector %d capacity %lu count %lu nonzero %d history %d near/far %u/%u distinct %d first %d/%d\n",
+		       run_name[run], ep_name[ep], block, v->status, v->role, selector, capacity,
+		       observed.count, nonzero, raw_cursor, v->echo0.taps, v->echo1.taps, distinct_echo,
+		       observed.count ? observed.points[0].re : 0, observed.count ? observed.points[0].im : 0);
+	}
+	return 1;
+}
+
+static void
+visual_finish(void)
+{
+	int k;
+	diff_eq_int("visual query denominator", visual_queries, 2 * NEP * VISUAL_CHECKPOINTS * VISUAL_SELECTORS, 0);
+	for (k = 0; k < VISUAL_SELECTORS; k++) {
+		diff_eq_int("visual nonempty queries per selector", visual_nonempty[k], 2 * NEP * VISUAL_CHECKPOINTS, k);
+		diff_eq_int("visual nonzero adapted observations per selector", visual_nonzero[k] > 0, 1, k);
+	}
+	diff_eq_int("visual naturally distinct near/far value witnesses", visual_distinct_echo_witnesses > 0, 1, 0);
+	printf("  visual: %d/120 queries; nonempty %d/%d/%d/%d/%d/%d; nonzero %d/%d/%d/%d/%d/%d; distinct near/far %d/20 value witnesses, %d selector observations; copied faults %d\n",
+	       visual_queries, visual_nonempty[0], visual_nonempty[1], visual_nonempty[2],
+	       visual_nonempty[3], visual_nonempty[4], visual_nonempty[5], visual_nonzero[0],
+	       visual_nonzero[1], visual_nonzero[2], visual_nonzero[3], visual_nonzero[4],
+	       visual_nonzero[5], visual_distinct_echo_witnesses, visual_distinct_echo_queries,
+	       visual_fault_fired);
+}
+
+struct lifecycle_plan {
+	const char *name;
+	int cases;
+	int run[3];
+	int source_owners;
+	int observe_visual;
+};
+
+static const struct lifecycle_plan unobserved_lifecycles = {
+	"V.PCM matched source-constructor connecting lifecycles", 3, { 1, 2, 3 }, 4, 0
+};
+static const struct lifecycle_plan observed_lifecycles = {
+	"V.PCM visual diagnostics on an adapted connecting lifecycle", 2, { 0, 3 }, 2, 1
+};
+
+static int
+run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *plan)
+{
+	int trial, run, ep, blk, calls = 0, destroyed = 0, bits[NEP] = { 0, 0 };
 	int completed = 0, created = 0, source_created = 0, reference_created = 0;
-	int copied_control = getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
+	int copied_control = !plan->observe_visual && getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
 	int stop = 0;
 	void (*prev)(int) = signal(SIGALRM, call_alarm);
 
-	diff_begin("V.PCM matched source-constructor connecting lifecycles");
+	diff_begin(plan->name);
 	diff_eq_int("lifecycle reference create identity", reference->create == ref_vpcm_create, 1, 0);
 	diff_eq_int("lifecycle reference table identity", reference == &ref_vpcm_op, 1, 0);
 	/* Source entries are file-static. Their canonical identity is the
@@ -931,7 +1149,7 @@ run_lifecycles(struct dp_operations *reference)
 	diff_eq_int("lifecycle create images differ", g_our34->create != reference->create, 1, 0);
 	diff_eq_int("lifecycle destroy images differ", g_our34->destroy != reference->destroy, 1, 0);
 	if (diff_failures) stop = 1;
-	for (run = 1; run < NRUN && !stop; run++) {
+	for (trial = 0; trial < plan->cases && !stop; trial++) {
 		struct dp *dp[NEP] = { 0, 0 };
 		struct dp_operations *owner[NEP];
 		int connected[NEP] = { -1, -1 }, nconnect[NEP] = { 0, 0 };
@@ -940,6 +1158,7 @@ run_lifecycles(struct dp_operations *reference)
 		int before = diff_failures;
 		short in[NEP][FRAG], out[NEP][FRAG];
 
+		run = plan->run[trial];
 		cur_run = NRUN + run;
 		memcpy(rt_buf, rt_snap, sizeof(rt_buf));
 		memcpy(info_buf, info_snap, sizeof(info_buf));
@@ -990,6 +1209,10 @@ run_lifecycles(struct dp_operations *reference)
 				diff_eq_obj("lifecycle exact samples/return/status", struct lifecycle_block,
 				            &observed, &lifecycle_oracle[ep][blk], tag);
 				if (diff_failures != before) { stop = 1; break; }
+				if (plan->observe_visual && !visual_after_block(s, run, ep, blk)) {
+					stop = 1;
+					break;
+				}
 				if (observed.result == DPSTAT_CONNECT) {
 					connected[ep] = blk;
 					nconnect[ep]++;
@@ -1031,20 +1254,22 @@ run_lifecycles(struct dp_operations *reference)
 		if (diff_failures != before) stop = 1;
 		else completed++;
 	}
-	diff_eq_int("lifecycle completed cases", completed, 3, 0);
-	diff_eq_int("lifecycle created endpoint owners", created, 6, 0);
-	diff_eq_int("lifecycle source endpoint owners", source_created, 4, 0);
-	diff_eq_int("lifecycle reference endpoint owners", reference_created, 2, 0);
-	diff_eq_int("lifecycle owning destructors executed", destroyed, 6, 0);
-	diff_eq_int("lifecycle endpoint calls executed", calls, 3 * NEP * V34_BLOCKS, 0);
-	diff_eq_int("lifecycle output sample positions compared", calls * FRAG, 3 * NEP * V34_BLOCKS * FRAG, 0);
+	diff_eq_int("lifecycle completed cases", completed, plan->cases, 0);
+	diff_eq_int("lifecycle created endpoint owners", created, plan->cases * NEP, 0);
+	diff_eq_int("lifecycle source endpoint owners", source_created, plan->source_owners, 0);
+	diff_eq_int("lifecycle reference endpoint owners", reference_created, plan->cases * NEP - plan->source_owners, 0);
+	diff_eq_int("lifecycle owning destructors executed", destroyed, plan->cases * NEP, 0);
+	diff_eq_int("lifecycle endpoint calls executed", calls, plan->cases * NEP * V34_BLOCKS, 0);
+	diff_eq_int("lifecycle output sample positions compared", calls * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG, 0);
 	for (ep = 0; ep < NEP; ep++)
-		diff_eq_int("lifecycle aggregate aligned directional payload", bits[ep] >= 3 * 2048, 1, ep);
+		diff_eq_int("lifecycle aggregate aligned directional payload", bits[ep] >= plan->cases * 2048, 1, ep);
+	if (plan->observe_visual)
+		visual_finish();
 	alarm(0);
 	signal(SIGALRM, prev);
-	printf("  lifecycle: %d/3 cases; %d/%d endpoint calls, %d/%d output samples, %d/6 owning destructors; payload orig/answer %d/%d bits\n",
-	       completed, calls, 3 * NEP * V34_BLOCKS, calls * FRAG, 3 * NEP * V34_BLOCKS * FRAG,
-	       destroyed, bits[0], bits[1]);
+	printf("  lifecycle: %d/%d cases; %d/%d endpoint calls, %d/%d output samples, %d/%d owning destructors; payload orig/answer %d/%d bits\n",
+	       completed, plan->cases, calls, plan->cases * NEP * V34_BLOCKS, calls * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG,
+	       destroyed, plan->cases * NEP, bits[0], bits[1]);
 	return diff_end();
 }
 
@@ -1484,8 +1709,11 @@ main(void)
 				       v34res[run][ep].codemask,
 				       v34res[run][ep].codeseq);
 
-	rc |= run_lifecycles(ops34);
+	rc |= run_lifecycles(ops34, &unobserved_lifecycles);
 	if (rc) return rc;
+	rc |= run_lifecycles(ops34, &observed_lifecycles);
+	if (rc)
+		return rc;
 	rc |= run_stall();
 	rc |= run_queue_calls(ops34);
 
