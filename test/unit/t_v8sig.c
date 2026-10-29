@@ -892,6 +892,39 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* Caller-configured detector component history, not negotiation coverage.
+	 * Deliberately high-gain API-supplied coefficients expose the first section's
+	 * shift/narrow boundary. Histories start only through detectorinit. */
+	diff_begin("v8_tone_detect shift boundary component history");
+	{
+		static const short coefficients[8] = {
+			32767, 32767, 0, 0, -32768, -32768, 0, 0
+		};
+		unsigned noise = 17;
+		memset(&obj_a, 0, sizeof(obj_a));
+		memset(&obj_b, 0, sizeof(obj_b));
+		ref_v8_detectorinit(&obj_a, &obj_a.detector, coefficients,
+				    0, 100, 50, 1500, 0);
+		v8_detectorinit(&obj_b, &obj_b.detector, coefficients,
+				0, 100, 50, 1500, 0);
+		for (i = 0; i < 128; i++) {
+			short a, b;
+			int ra, rb;
+			noise = noise * 1664525u + 1013904223u;
+			a = (short)(noise >> 16);
+			b = a;
+			obj_a.rx.buf = &a + 1;
+			obj_b.rx.buf = &b + 1;
+			ra = ref_v8_tone_detect(&obj_a, &obj_a.detector, &a);
+			rb = v8_tone_detect(&obj_b, &obj_b.detector, &b);
+			diff_eq_int("verdict %ld", rb, ra, i);
+			diff_eq_int("filtered %ld", b, a, i);
+			diff_eq_obj("detector history", struct v8_detector,
+				    &obj_b.detector, &obj_a.detector, i);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("v8_tone_detect");
 	{
 		static short air_a[512], air_b[512];

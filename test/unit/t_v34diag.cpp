@@ -1900,6 +1900,80 @@ info0_tx_ring_index(const struct v34_object *o, const void *p)
 }
 
 static int
+info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
+                 struct v34_object *o[2][2], struct info0_projection prev[2][2],
+                 short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
+{
+	/* Continue the same channel after return1127. Its 288 samples / four
+	 * samples per call delay the saved peer frame by 72 calls to1199.
+	 * Bound80 further calls, stopping at arrival or either microstate edge.
+	 * This observes process input, not detector consumption or negotiation. */
+	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
+	struct arrival_projection {
+		struct info0_projection state;
+		short input[4];
+	} p[2][2];
+	short in[2][2][4], out[2][2][4], emitted[2][4];
+	int arrival[2] = { -1, -1 };
+	int step, side, ep, i, calls = 0;
+
+	for (side = 0; side < 2; side++) {
+		memcpy(emitted[side], last_out[side][1], sizeof emitted[side]);
+		diff_eq_obj("L1 arrival saved emitted peer frame", short[4], last_out[side][1], first_block, side);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	wp = (wp + 4) % INFO0_DELAY;
+	for (step = 1128; step <= 1207; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct arrival_projection *q = &p[side][ep];
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+				memset(q, 0, sizeof *q);
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (ep == 0 && arrival[side] < 0 &&
+				    memcmp(q->input, emitted[side], sizeof q->input) == 0) {
+					arrival[side] = step;
+					diff_eq_obj("L1 arrival saved peer block at caller process input", short[4], q->input, first_block, tag);
+				}
+				if (ep == 0 && step == 1199)
+					diff_eq_obj("L1 arrival channel-delay provenance", short[4], q->input, emitted[side], tag);
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (arrival[0] >= 0 || arrival[1] >= 0 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59 ||
+		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51) break;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	for (side = 0; side < 2; side++)
+		diff_eq_int("L1 arrival first saved peer frame input step (%ld)", arrival[side], 1199, side);
+	diff_eq_int("L1 arrival process-call denominator", calls, 288, 0);
+	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls; saved returned peer frame reaches caller input; "
+	       "no detector-consumption or later negotiation claim\n", calls / 4, calls);
+	return calls;
+}
+
+static int
 info0_l1_output(struct dp_operations **ops, struct dp *root[2][2],
 		struct v34_object *o[2][2], struct info0_projection prev[2][2],
 		short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
@@ -2093,6 +2167,8 @@ info0_l1_output(struct dp_operations **ops, struct dp *root[2][2],
 	       "%d further four-sample steps, %d process calls, %d paired projections and "
 	       "%d paired output buffers; first saved block returned only, no peer-arrival claim\n",
 	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].return_step == 1127 && event[1].return_step == 1127)
+		calls += info0_l1_arrival(ops, root, o, prev, wire, wp, out);
 	return calls;
 }
 
@@ -3204,7 +3280,7 @@ run_info0_history(void)
 		}
 	}
 	harness_param_reset();
-	diff_eq_int("INFO0: process-call denominator", calls, 6284, 0);
+	diff_eq_int("INFO0: process-call denominator", calls, 6572, 0);
 	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
 	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
 	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
@@ -3212,7 +3288,7 @@ run_info0_history(void)
 	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
 	       "2 external input cases x 2 implementations x 2 endpoints; "
 	       "%d process calls, %d real graphs, %d real runtimes; "
-	       "positive through first saved peer L1 block returned, CRC rejection prefix; "
+	       "positive through saved peer L1 block arrival at caller input, CRC rejection prefix; "
 	       "no INFO1/progress1/2/status2/3 claim\n",
 	       calls, graphs, runtimes);
 	return diff_end();
