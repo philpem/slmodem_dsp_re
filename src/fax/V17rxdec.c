@@ -347,7 +347,7 @@ unsigned short
 FAX_FSE_decision_64pt(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v17_dec *m;
-	int i, q;
+	short i, q;
 	short k, base, best = 0;
 	short min, sym;
 

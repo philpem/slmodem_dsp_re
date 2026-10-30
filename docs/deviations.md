@@ -7436,11 +7436,23 @@ case.
 same stale register, since `%edx` is not touched between outer iterations
 either.
 
-**Not reproduced, and not behind `DSPLIB_REPRODUCE_BUGS`** — there is nothing
-to reproduce. The object's value on that path is a property of its caller's
-register state, not of its own code, so there is no behaviour a differential
-test could compare against. `src/dsp/fpm_iir.c` writes the sample back
-unchanged, which is what the source plainly said before the compiler lost it.
+**Fixed-build guard, with the original source path retained under
+`DSPLIB_REPRODUCE_BUGS`.** The normal scalar helper returns its input when
+`sections <= 0`; its block caller consequently leaves those samples unchanged
+and does not access coefficients or history. This also prevents a negative
+short section count from wrapping through a large number of sections.
+
+The reconstruction build retains the distinct output carrier, assigned only
+inside the section loop, and the original short countdown. Its zero-section
+result remains dependent on uninitialised state: recovering the instruction
+structure does not provide a defined value for that path. The earlier claim
+that this absence of a differential oracle ruled out a build guard was too
+strong. The normal-build contract is checked separately by
+`make check-iir-sections`, including zero and negative section counts, untouched
+block samples and a positive-section history update. Negative section counts
+are defensive input handling; no reachable modem history is established for
+them. The period differential fixture continues to exclude the original's
+undefined zero-section result.
 
 **And `t_fpm_iir` deliberately does not drive `sections == 0`.** Comparing two
 arbitrary choices would be a check that passes or fails on register weather.

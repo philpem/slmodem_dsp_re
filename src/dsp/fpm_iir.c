@@ -28,6 +28,12 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 	/* The return carrier is assigned only inside the section loop. */
 	short output;
 
+#ifndef DSPLIB_REPRODUCE_BUGS
+	/* An empty or invalid cascade leaves the input unchanged. */
+	if (sections <= 0)
+		return x;
+#endif
+
 	while (sections--) {
 		int w1 = state[0];
 		int w2;
@@ -88,12 +94,13 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
  * the object re-narrows it with `cwtl` after each increment and compares 16
  * bits against `count`.
  *
- * NOTHING HERE IS TESTED AT `sections == 0`, on purpose.  The object's write-
+ * THE REPRODUCTION DIFFERENTIAL DOES NOT DRIVE `sections == 0`. The write-
  * back at 0x0a8c19 stores `%dx`, which on that path is never assigned -- the
  * inner loop is guarded by `cmpw $0xffff` at 0x0a8b66 and the register carries
  * in whatever the caller left.  Any value our compiler puts there is as
  * defensible as the object's, so a differential check on that input would be
- * comparing two arbitrary choices.  Deviation D393.
+ * comparing two arbitrary choices. Normal-build contract tests separately
+ * check that the guarded repair leaves samples unchanged. Deviation D393.
  */
 void
 FPM_iir_filt_block(short *samples, const short *coeff, short *state,

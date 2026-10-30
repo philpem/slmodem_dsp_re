@@ -46,19 +46,21 @@ and the separate 8 kHz retarget.
 
 ## Bug compatibility
 
-The reconstruction fixes a defect found in the original **only** where leaving
-it in would break a working modem, and every such fix sits behind
-`DSPLIB_REPRODUCE_BUGS` so bit-exactness stays provable:
+The normal build includes documented repairs and defensive guards. Each
+changed path is guarded by `DSPLIB_REPRODUCE_BUGS`, so reconstruction builds
+retain the original source behaviour and bit-exactness stays provable:
 
 ```sh
 make phase     # period differential and structural reconstruction gate
 make interop   # without it: proves the fixed build is a working modem
 ```
 
-There is currently one, **D4** — `FPM_div` reading one past its table and
-handing the AGC a zero gain, which silences a block and drops a Bell 103 call
-on 6.6% of blocks. Everything else the original gets wrong is reproduced
-faithfully and recorded in [docs/deviations.md](docs/deviations.md).
+For example, **D4** repairs `FPM_div` reading past its table and handing the
+AGC a zero gain, which silences a block and drops a Bell 103 call on 6.6% of
+blocks. **D393** keeps empty or invalid IIR cascades from processing samples
+in the normal build, while reconstruction mode retains the original output
+carrier and countdown. The repairs, reproduction paths and input-domain
+limits are recorded in [docs/deviations.md](docs/deviations.md).
 
 ### Fixing the blob itself
 
