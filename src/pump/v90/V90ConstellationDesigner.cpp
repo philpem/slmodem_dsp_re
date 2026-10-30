@@ -2371,27 +2371,29 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 		while (rrn > currentK) {
 			unsigned char u;
 			unsigned char companded;
+			unsigned char searchRow;
 
 			minIndex = findMinValueIndex(mappingParams);
+			searchRow = (unsigned char)minIndex;
 			mappingParams->constellationSize[minIndex]++;
 
-			u = mappingParams->constellation[minIndex][0];
+			u = mappingParams->constellation[searchRow][0];
 
-			if (dmin[minIndex] == 0) {
-				int lim = ucode[minIndex][u] + dMin;
+			if (dmin[searchRow] == 0) {
+				int lim = ucode[searchRow][u] + dMin;
 
 				while (u < 128) {
-					if (ucode[minIndex][u] >= lim)
+					if (ucode[searchRow][u] >= lim)
 						break;
 					u++;
 				}
 			} else {
-				int lo = ucode[minIndex][u] + short_10;
-				int hi = alt[minIndex][u] + short_10;
+				int lo = ucode[searchRow][u] + short_10;
+				int hi = alt[searchRow][u] + short_10;
 
 				while (u <= 0x71) {
-					if (ucode[minIndex][u] >= lo
-					    && ucode[minIndex][u] >= hi)
+					if (ucode[searchRow][u] >= lo
+					    && ucode[searchRow][u] >= hi)
 						break;
 					u++;
 				}
@@ -2400,11 +2402,11 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 			if (compandingLaw != 0)
 				companded = (unsigned char)
 				    (linear2alaw(__builtin_abs(
-					(int)ucode[minIndex][u])) ^ 0xd5);
+					(int)ucode[searchRow][u])) ^ 0xd5);
 			else
 				companded = (unsigned char)
 				    ~linear2ulaw(__builtin_abs(
-					(int)ucode[minIndex][u]));
+					(int)ucode[searchRow][u]));
 
 			if (u >= 128
 			    || mappingParams->constellationSize[minIndex]
