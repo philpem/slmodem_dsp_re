@@ -226,7 +226,7 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 		 int *nbits)
 {
 	int signal;
-	int i;
+	short i;
 
 	*nbits = 0;
 

@@ -168,7 +168,8 @@ txmit(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_queue *txq = &obj->tx.txq;
 	short local[38];
-	int sym, n, i;
+	int sym;
+	short n, i;
 
 	sym = (int)(((unsigned)(unsigned short)obj->tx.txpoint.c[1] << 16)
 		    | (unsigned short)obj->tx.txpoint.c[0]);

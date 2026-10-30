@@ -388,7 +388,7 @@ dpskinit(void *objp, short mode, short high)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
 	short carrier = (mode == 0) ? 1200 : 2400;
-	int i;
+	short i;
 
 	fsk_clear(obj);
 

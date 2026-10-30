@@ -137,7 +137,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	short rate;
 	int owned;
 	int ctl_fresh;
-	int i;
+	short i;
 
 	owned = 0;
 
