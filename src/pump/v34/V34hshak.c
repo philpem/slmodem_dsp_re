@@ -443,10 +443,10 @@ dpskinit(void *objp, short mode, short high)
 /*
  * Set the whole V.34 object up for phase 2.
  *
- * Long and almost entirely straight-line: three probe records, thirty-odd
- * scalars, two calls into the modulator, and then the SAME BODY TWICE with
- * four values changed.  `role == 0x65` -- the originate/answer flag
- * `preinitdigital` also reads (finding F177) -- picks between them:
+ * Probe records and scalar state are followed by data-mode setup and
+ * role-specific phase-2 initialization.  `role == 0x65` -- the
+ * originate/answer flag `preinitdigital` also reads (finding F177) --
+ * picks between these values:
  *
  *                        originate (0x65)      answer
  *      +0x25c2                   4                 5
@@ -455,13 +455,13 @@ dpskinit(void *objp, short mode, short high)
  *      receive band-pass  bpv22high          bpv22low
  *      detector coeff        c2400_            c1200_
  *
- * and nothing else differs between the two, which is why the tail below is
- * written once.  The object duplicates all of it; that is the compiler
- * having no reason not to.
+ * The native branch at 0x5f756 keeps the role-specific initialization in
+ * two arms.  They join at 0x5f892 before the RMS-index clears,
+ * `preinitdigital` and `txinit`.  The detector coefficient is selected by
+ * a fresh role read after those calls.
  *
- * THE FSK BLOCK IS `dpskinit`'S, INLINED.  Both arms clear the same hundred
- * shorts and write the same eleven fields, so they call the same two helpers
- * this file already has rather than a third and fourth copy.
+ * The FSK sequences match `dpskinit`'s inline expansion.  Each role arm
+ * clears the hundred shorts and initializes the same FSK fields.
  *
  * The modulator is set up TWICE: once at 2400 baud with `reset` clear, then
  * again at 600 with it set.  The first leaves the shaping tables loaded for
@@ -477,7 +477,6 @@ v34modeminit(void *objp)
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_modulator *mod =
 		v34_object_modulator(obj);
-	int originate;
 	short i;
 
 	/*
@@ -544,27 +543,46 @@ v34modeminit(void *objp)
 	rx->half_len = 0x10;
 	rx->carrier = hsine1800;
 
-	originate = (obj->role == 0x65);
+	if (obj->role != 0x65) {
+		obj->tx.tx_flags = (V34_EC_FROZEN | V34_TXFLAG_CALLER);
+		rx->flags = V34_SCR_ANSWERER;
 
-	obj->tx.tx_flags = (short)(originate ? V34_EC_FROZEN
-					   : (V34_EC_FROZEN | V34_TXFLAG_CALLER));
-	rx->flags = (unsigned short)(originate ? 0 : V34_SCR_ANSWERER);
+		fsk_clear(obj);
+		V34SetupModulator(mod, 600, 2400, 0, 0, 1);
+		rx->fir_coeff = bpv22low;
+		fsk_state_init(obj);
 
-	fsk_clear(obj);
-	V34SetupModulator(mod, 600, (short)(originate ? 1200 : 2400), 0, 0, 1);
-	rx->fir_coeff = originate ? bpv22high : bpv22low;
-	fsk_state_init(obj);
+		rx->agc_step = 0x199a;
+		rx->flags = (unsigned short)(rx->flags
+					     | (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
+		rx->agc_gain = rx->agc_start_gain;
 
-	rx->agc_step = 0x199a;
-	rx->flags = (unsigned short)(rx->flags
-				     | (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
-	rx->agc_gain = rx->agc_start_gain;
+		{
+			short *w = (short *)((char *)rx + 0x13c);
 
-	{
-		short *w = (short *)((char *)rx + 0x13c);
+			for (i = 0; i <= 0x2f; i++)
+				w[i] = 0;
+		}
+	} else {
+		obj->tx.tx_flags = V34_EC_FROZEN;
+		rx->flags = 0;
 
-		for (i = 0; i <= 0x2f; i++)
-			w[i] = 0;
+		fsk_clear(obj);
+		V34SetupModulator(mod, 600, 1200, 0, 0, 1);
+		rx->fir_coeff = bpv22high;
+		fsk_state_init(obj);
+
+		rx->agc_step = 0x199a;
+		rx->flags = (unsigned short)(rx->flags
+					     | (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
+		rx->agc_gain = rx->agc_start_gain;
+
+		{
+			short *w = (short *)((char *)rx + 0x13c);
+
+			for (i = 0; i <= 0x2f; i++)
+				w[i] = 0;
+		}
 	}
 	rx->rms_idx = 0;
 	rx->retrain_gate = 0;
@@ -572,8 +590,12 @@ v34modeminit(void *objp)
 	preinitdigital(obj);
 	txinit(obj);
 
-	detectorinit(&obj->detector,
-		     (obj->role == 0x65) ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
+	/* Native 0x5f8b4 selects complete argument sets; their join at
+	 * 0x5f8f2 precedes the single detector call at 0x5f8fb. */
+	if (obj->role != 0x65)
+		detectorinit(&obj->detector, c1200_, 0, 0xc8, 0x32, 0x600, 0);
+	else
+		detectorinit(&obj->detector, c2400_, 0, 0xc8, 0x32, 0x600, 0);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 }
