@@ -573,7 +573,7 @@ v34modeminit(void *objp)
 	txinit(obj);
 
 	detectorinit(&obj->detector,
-		     originate ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
+		     (obj->role == 0x65) ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 }
