@@ -474,10 +474,10 @@ v34modeminit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_dftbin *bins = obj->retrain_bins;
+	struct v34_tx *tx = &obj->tx;
 	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
-	struct v34_modulator *mod =
-		v34_object_modulator(obj);
+	struct v34_modulator *mod;
 	short i;
 
 	/*
@@ -508,16 +508,16 @@ v34modeminit(void *objp)
 	rx->rrn_local_dir = 0;
 	rx->baud_copy = 0;
 	obj->is_short = 0;
-	obj->tx.tx_flags = V34_EC_FROZEN;
+	tx->tx_flags = V34_EC_FROZEN;
 	obj->echo_calls = 0;
 	obj->short_3588 = 0;
 	obj->short_358a = 0;
 	obj->short_aa78 = 0;
 	obj->tx_fill_target = 6;
 	obj->vect_idx = 0;
-	*(short *)(m + 0x25d6) = (short)0x8990;
-	*(short *)(m + 0x25d8) = 0;
-	*(short *)(m + 0x25da) = 0;
+	*(short *)((unsigned char *)tx + 0x3ba) = (short)0x8990;
+	*(short *)((unsigned char *)tx + 0x3bc) = 0;
+	*(short *)((unsigned char *)tx + 0x3be) = 0;
 
 	/* Twelve shorts each, in two unrelated places. */
 	for (i = 0; i <= 0xb; i++) {
@@ -526,6 +526,7 @@ v34modeminit(void *objp)
 	}
 
 	VPcmV34SetTxScale(obj);
+	mod = v34_object_modulator(obj);
 
 	/* Data-mode rate, and NOT a reset. */
 	V34SetupModulator(mod, 2400, 1800, 0, 0, 0);
@@ -545,7 +546,7 @@ v34modeminit(void *objp)
 	rx->carrier = hsine1800;
 
 	if (obj->role != 0x65) {
-		obj->tx.tx_flags = (V34_EC_FROZEN | V34_TXFLAG_CALLER);
+		tx->tx_flags = (V34_EC_FROZEN | V34_TXFLAG_CALLER);
 		rx->flags = V34_SCR_ANSWERER;
 
 		fsk_clear(obj);
@@ -565,7 +566,7 @@ v34modeminit(void *objp)
 				w[i] = 0;
 		}
 	} else {
-		obj->tx.tx_flags = V34_EC_FROZEN;
+		tx->tx_flags = V34_EC_FROZEN;
 		rx->flags = 0;
 
 		fsk_clear(obj);
