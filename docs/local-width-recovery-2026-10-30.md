@@ -4,24 +4,35 @@ Base: `fea708d11f4495b452115dde8ebf650346560f48` (PR #446).
 Compiler: Gentoo GCC 3.4.2-r2, the recovered production flags, with
 `DSPLIB_REPRODUCE_BUGS`. Object alignment and partial-link placement are deferred.
 
-Eight function bodies recover native source boundaries. One reaches EXACT;
-one moves from SIZE to BYTES. The other six remain SIZE and are retained for
-independently observed instruction/type boundaries, rather than byte proximity.
+This round gains **one EXACT function and no REGALLOC functions**. Two
+non-matching functions gain a longer contiguous instruction run. Five other
+partials recover independently witnessed type boundaries, but their longest
+runs do not improve. They are retained source recoveries, not additional
+whole-function fidelity gains.
 
-| Function | Reference bytes | Before → after bytes | Grade after | Canonical instruction LCS before → after |
-| --- | ---: | ---: | --- | ---: |
-| `V92Jd::setJdPhase` | 87 | 86 → 87 | EXACT | 18 → 28, of 28 |
-| `Descrambler<int,int>` constructor | 107 | 110 → 107 | BYTES | 25 → 27, of 30 |
-| `V32FP_recreate` | 3733 | 3740 → 3741 | SIZE | 524 → 528, of 779 |
-| `V17RX_create` | 3201 | 3075 → 3075 | SIZE | 408 → 412, of 634 |
-| `FPM_TONE_create` | 753 | 663 → 692 | SIZE | 94 → 98, of 188 |
-| `dpskinit` | 347 | 357 → 359 | SIZE | 64 → 65, of 81 |
-| `txmit` | 392 | 360 → 376 | SIZE | 70 → 74, of 105 |
-| `BwChDem_Progress` | 710 | 723 → 748 | SIZE | 110 → 112, of 184 |
+| Function | Whole-function result | Longest instruction run, before → after / reference | Instruction LCS, before → after | Bytes, before → after / reference |
+| --- | --- | ---: | ---: | ---: |
+| `V92Jd::setJdPhase` | EXACT | 9 → 28 / 28 | 18 → 28 | 86 → 87 / 87 |
+| `Descrambler<int,int>` constructor | Non-matching | 12 → 22 / 30 | 25 → 27 | 110 → 107 / 107 |
+| `txmit` | Non-matching | 9 → 12 / 105 | 70 → 74 | 360 → 376 / 392 |
+| `V32FP_recreate` | Non-matching | 44 → 44 / 779 | 524 → 528 | 3740 → 3741 / 3733 |
+| `V17RX_create` | Non-matching | 26 → 26 / 634 | 408 → 412 | 3075 → 3075 / 3201 |
+| `FPM_TONE_create` | Non-matching | 12 → 12 / 188 | 94 → 98 | 663 → 692 / 753 |
+| `dpskinit` | Non-matching | 25 → 25 / 81 | 64 → 65 | 357 → 359 / 347 |
+| `BwChDem_Progress` | Non-matching | 15 → 15 / 184 | 110 → 112 | 723 → 748 / 710 |
 
-LCS uses `structsim.py`'s register-agnostic instructions and operands. It is
-supporting evidence, not a REGALLOC proof. Byte counts include emitted alignment
-inside each symbol's extent. No padding or placement changes are proposed.
+Runs and LCS use `structsim.py`'s register-agnostic instructions and operands,
+with alignment padding stripped. Branch classes/displacements and section
+addends are abstracted by that tool, so a matching canonical run is supporting
+evidence, not an EXACT or REGALLOC proof. LCS permits gaps; the run does not.
+The final run covers 100% of the setter, 73.3% of the Descrambler constructor,
+and 11.4% of `txmit`.
+
+The existing SIZE and BYTES tool buckets distinguish only whether mismatching
+functions have different or equal extents. Moving between them is not a fidelity
+gain. Byte counts below remain diagnostic and include alignment within symbol
+extents. No padding or placement change is proposed. The comparison tool's
+classification is unchanged in this reconstruction PR.
 
 ## Native witnesses and bounded controls
 
