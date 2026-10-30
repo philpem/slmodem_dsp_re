@@ -646,13 +646,10 @@ FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
 	    short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
 	int n = *countp;
-	int i;
 
 	(void)hostcount;
-	for (i = 0; i < n; i++)
-		rx_flt[i] = (float)rx_lin[i] * (1.0f / 32000.0f);
-	for (i = 0; i < n; i++)
-		tx_lin[i] = (short)(tx_flt[i] * 32000.0f);
+	zFLTUTL_Linear2Float(rx_lin, rx_flt, n, 1.0f / 32000.0f);
+	zFLTUTL_Float2Linear(tx_flt, tx_lin, n, 32000.0f);
 	*status = 2;
 	return 1;
 }

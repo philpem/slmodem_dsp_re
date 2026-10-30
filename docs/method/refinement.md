@@ -5988,9 +5988,13 @@ IIR engine must still be audited across the complete translation unit.
 
 An uninitialised output must not be inferred from the undefined zero-section
 path alone. Here the positive path independently establishes the two
-carriers. The zero-section result remains unconstrained; deviation D393 and
-its fixture exclusion remain in force. Register-renaming identity does not
-establish a unique original local-variable spelling.
+carriers. Under `DSPLIB_REPRODUCE_BUGS`, the zero-section result remains
+unconstrained and its D393 differential-fixture exclusion stays in force.
+The normal build separately returns the input for a nonpositive section count;
+`make check-iir-sections` verifies that repair without treating the blob's
+undefined result as an oracle. The reconstruction-mode object must remain
+unchanged by this guarded repair. Register-renaming identity does not establish
+a unique original local-variable spelling.
 
 ### Recover conversion boundaries at the use that establishes them
 

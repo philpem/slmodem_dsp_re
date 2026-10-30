@@ -577,6 +577,16 @@ $(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 # Safety checks exercise deliberately fixed paths without defining
 # DSPLIB_REPRODUCE_BUGS. Their expected values are source contracts,
 # not differential claims.
+$(BUILD)/safety/t_iir_sections: test/safety/t_iir_sections.c $(BUILD)/src/dsp/fpm_iir.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -o $@ $^
+
+.PHONY: check-iir-sections
+check-iir-sections: $(BUILD)/safety/t_iir_sections
+	@./$(BUILD)/safety/t_iir_sections
+
+safety: check-iir-sections
+
 $(BUILD)/safety/t_alloc_sizes: test/safety/t_alloc_sizes.c $(OBJ) $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
