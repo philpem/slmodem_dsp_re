@@ -473,6 +473,7 @@ void
 v34modeminit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_dftbin *bins = obj->retrain_bins;
 	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_modulator *mod =
@@ -485,7 +486,7 @@ v34modeminit(void *objp)
 	 * two constants and its own value at +2: 0x600, 0x800, 0xa00.
 	 */
 	for (i = 0; i < 3; i++) {
-		struct v34_dftbin *r = &obj->retrain_bins[i];
+		struct v34_dftbin *r = &bins[i];
 
 		r->thresh_lo = 0x50;
 		r->thresh_hi = 3000;
@@ -493,9 +494,9 @@ v34modeminit(void *objp)
 		r->acc_re = 0;
 		r->acc_im = 0;
 	}
-	obj->retrain_bins[0].inc = 0x600;
-	obj->retrain_bins[1].inc = 0x800;
-	obj->retrain_bins[2].inc = 0xa00;
+	bins[0].inc = 0x600;
+	bins[1].inc = 0x800;
+	bins[2].inc = 0xa00;
 
 	obj->retrain_state = 1;
 	obj->retrain_phase = 0;
