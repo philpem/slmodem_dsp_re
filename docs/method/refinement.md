@@ -5976,8 +5976,21 @@ Combine removes the intermediate return conversion, and the copy survives
 allocation and scheduling. The scalar size gap moves from one to two bytes,
 while the inlined block caller also changes and the other IIR function stays
 byte-identical. The original return operation supports this partial recovery;
-no claim of whole-function identity follows from it. Do not invent an
-uninitialised output to match the undefined zero-section path.
+no claim of whole-function identity follows from that control.
+
+The positive-iteration path supplies a further witness: at `0xa8af5` the
+original sign-extends the section output into EDX, copies it to feedback ECX
+at `0xa8af8`, then returns EDX at `0xa8b09`. Keeping a separate short output,
+assigning it to the next section's input and returning it recovers that
+output/feedback boundary. The complete scalar function reaches REGALLOC with
+59 matched instructions. The inlined block caller and the untouched second
+IIR engine must still be audited across the complete translation unit.
+
+An uninitialised output must not be inferred from the undefined zero-section
+path alone. Here the positive path independently establishes the two
+carriers. The zero-section result remains unconstrained; deviation D393 and
+its fixture exclusion remain in force. Register-renaming identity does not
+establish a unique original local-variable spelling.
 
 ### Recover conversion boundaries at the use that establishes them
 
@@ -9701,3 +9714,21 @@ control demonstrates sensitivity separately. The maintained 7808 assertions exte
 only the INFO0 prefix, not later negotiation or status reachability. Full phase
 394/0 passes. See [waves 42–43](../recovery-waves-42-43.md) for denominators,
 collateral, invalid-run exclusions and bounded next steps.
+
+
+### Recover narrow induction and promoted dispatch independently
+
+`VTBv32_init` normalises its induction value with `CWTL` after each increment
+in both loops. The reconstruction's `int` with casts only at the comparisons
+omitted those operations. A short counter restores them; the two loops reach
+128 and eight respectively, within its range.
+
+The same function's native mode dispatch sign-extends the short argument and
+uses a signed 32-bit decision tree. A `switch` applies the required integer
+promotion, whereas the previous `if` chain compiled to halfword comparisons.
+A four-cell full-translation-unit comparison isolates the two boundaries:
+short induction alone and promoted dispatch alone remain SIZE; together they
+recover all 355 bytes and relocation targets, reaching EXACT at 75 instructions.
+Keep the existing case order and all branch bodies fixed. The inlined copy in
+`V32FP_recreate` also changes and remains SIZE, so it needs its own component
+validation and collateral audit.

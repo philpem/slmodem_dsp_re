@@ -25,6 +25,8 @@ short
 FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 {
 	short acc_in = x;
+	/* The return carrier is assigned only inside the section loop. */
+	short output;
 
 	while (sections--) {
 		int w1 = state[0];
@@ -54,11 +56,12 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 		*state++ = (short)w;
 
 		/* The section output becomes the next section's input. */
-		acc_in = (short)((short)ff + ((*coeff++ * w) >> 14));
+		output = (short)((short)ff + ((*coeff++ * w) >> 14));
+		acc_in = output;
 
 	}
 
-	return (short)acc_in;
+	return output;
 }
 
 /*
