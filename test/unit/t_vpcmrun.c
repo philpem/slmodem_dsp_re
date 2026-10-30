@@ -486,6 +486,7 @@ struct lifecycle_block {
 	int result, progress, mode;
 };
 static struct lifecycle_block lifecycle_oracle[NEP][V34_BLOCKS];
+static struct lifecycle_block chunked_lifecycle_oracle[NEP][V34_BLOCKS];
 
 static unsigned
 digest(int rc, const short *p, int n)
@@ -548,7 +549,7 @@ align_errors(const unsigned char *rx, int n, const unsigned char *pat,
 /* The second pass partitions each host block without changing the wire.
  * Every run has its own construction, runtime snapshot and writable samples.
  * No queue, modem or handshake state is planted. */
-static int queue_chunks;
+static int queue_chunks, queue_chunk_calls, queue_copy_control;
 static int queue_pending[4], queue_no_process, queue_muted, queue_active;
 struct queue_observation {
 	short output[FRAG], pending[3], tail[4];
@@ -566,6 +567,7 @@ process_chunks(struct dp *dp, short *input, short *output,
 	for (k = 0; k < 4; k++) {
 		struct queue_observation obs;
 		int count = chunks[k], pending = s->inq.count;
+		int before = diff_failures;
 		int nproc = ((pending + count) / 4) * 4;
 		int muted = s->mute > 0;
 		int rc;
@@ -574,6 +576,7 @@ process_chunks(struct dp *dp, short *input, short *output,
 			rc = g_our34->process(dp, input + off, output + off, count);
 		else
 			rc = ref_vpcm_run(dp, input + off, output + off, count);
+		queue_chunk_calls++;
 		if (rc != DPSTAT_OK)
 			status = rc;
 		queue_pending[pending]++;
@@ -591,11 +594,18 @@ process_chunks(struct dp *dp, short *input, short *output,
 		obs.status = rc; obs.in_count = s->inq.count;
 		obs.out_count = s->outq.count; obs.progress = s->status;
 		obs.mode = s->mode; obs.nbits = s->nbits; obs.mute = s->mute;
+		/* Calibrate only a copied observation, never live queue state. */
+		if (queue_copy_control && run == 3 && ep == 0 && blk == 1600 && k == 1) {
+			if (queue_copy_control == 1) obs.output[0] ^= 1;
+			if (queue_copy_control == 2) obs.in_count ^= 1;
+			if (queue_copy_control == 3) obs.status ^= 1;
+		}
 		if (run == 0)
 			queue_oracle[ep][blk][k] = obs;
 		else diff_eq_obj("chunk status/samples/queues", struct queue_observation,
 		                &obs, &queue_oracle[ep][blk][k], tag);
 		off += count;
+		if (diff_failures != before) break;
 	}
 	return status;
 }
@@ -883,6 +893,8 @@ run_queue_calls(struct dp_operations *ops)
 	int run, ep, rc, captured_bits = 0;
 	diff_begin("V.PCM chunked connecting lifecycle: 1/2/3/42 samples");
 	queue_chunks = 1;
+	queue_chunk_calls = queue_no_process = queue_muted = queue_active = 0;
+	memset(queue_pending, 0, sizeof(queue_pending));
 	for (run = 0; run < NRUN; run++) {
 		run_v34(ops, run);
 		for (ep = 0; ep < NEP; ep++) {
@@ -1344,17 +1356,26 @@ struct lifecycle_plan {
 	int source_owners;
 	int observe_visual;
 	int source_v8;
+	int chunks;
 };
 
 static const struct lifecycle_plan unobserved_lifecycles = {
-	"V.PCM matched source-constructor connecting lifecycles", 3, { 1, 2, 3 }, 4, 0, 0
+	"V.PCM matched source-constructor connecting lifecycles", 3, { 1, 2, 3 }, 4, 0, 0, 0
 };
 static const struct lifecycle_plan observed_lifecycles = {
-	"V.PCM visual diagnostics on an adapted connecting lifecycle", 2, { 0, 3 }, 2, 1, 0
+	"V.PCM visual diagnostics on an adapted connecting lifecycle", 2, { 0, 3 }, 2, 1, 0, 0
 };
 
 static const struct lifecycle_plan handoff_lifecycles = {
-	"source V8 publication through a sequential V34 API lifecycle", 2, { 0, 3 }, 2, 0, 1
+	"source V8 publication through a sequential V34 API lifecycle", 2, { 0, 3 }, 2, 0, 1, 0
+};
+
+/* Cross matched source ownership with the existing queue partition. The
+ * first independently constructed V34 reference pair records each chunk;
+ * both pairs also compare complete blocks with the original unsplit oracle.
+ * V8 still processes full blocks and publishes the actual consumer buffers. */
+static const struct lifecycle_plan chunked_handoff_lifecycles = {
+	"source V8 publication through fragmented source V34 lifecycles", 2, { 0, 3 }, 2, 0, 1, 1
 };
 
 static int
@@ -1362,11 +1383,23 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 {
 	int trial, run, ep, blk, calls = 0, destroyed = 0, bits[NEP] = { 0, 0 };
 	int completed = 0, created = 0, source_created = 0, reference_created = 0;
+	int blocks = 0, calls_per_block = plan->chunks ? 4 : 1;
 	int copied_control = !plan->observe_visual && !plan->source_v8 && getenv("VPCMRUN_LIFECYCLE_COPY_FAULT") != 0;
 	int stop = 0;
 	void (*prev)(int) = signal(SIGALRM, call_alarm);
 
 	diff_begin(plan->name);
+	if (plan->source_v8) {
+		handoff_v8_created = handoff_v8_destroyed = handoff_v8_calls = 0;
+		handoff_v8_completed = handoff_admissions = handoff_copy_rejected = 0;
+	}
+	if (plan->chunks) {
+		const char *fault = getenv("VPCM_CHUNK_COPY_FAULT");
+		queue_chunk_calls = queue_no_process = queue_muted = queue_active = 0;
+		memset(queue_pending, 0, sizeof(queue_pending));
+		queue_copy_control = fault ? (strcmp(fault, "queue") == 0 ? 2 :
+		                            strcmp(fault, "result") == 0 ? 3 : 1) : 0;
+	}
 	diff_eq_int("lifecycle reference create identity", reference->create == ref_vpcm_create, 1, 0);
 	diff_eq_int("lifecycle reference table identity", reference == &ref_vpcm_op, 1, 0);
 	/* Source entries are file-static. Their canonical identity is the
@@ -1442,17 +1475,34 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 				memset(out[ep], 0, sizeof(out[ep]));
 				memset(&observed, 0, sizeof(observed));
 				alarm(30);
-				observed.result = owner[ep]->process(dp[ep], in[ep], out[ep], FRAG);
+				if (plan->chunks) {
+					int prior_calls = queue_chunk_calls;
+					observed.result = process_chunks(dp[ep], in[ep], out[ep], run, ep, blk);
+					calls += queue_chunk_calls - prior_calls;
+				} else {
+					observed.result = owner[ep]->process(dp[ep], in[ep], out[ep], FRAG);
+					calls++;
+				}
 				alarm(0);
-				calls++;
+				if (diff_failures != before) { stop = 1; break; }
+				blocks++;
 				memcpy(observed.samples, out[ep], sizeof(observed.samples));
 				observed.progress = s->status;
 				observed.mode = s->mode;
 				/* Negative calibration changes a copied observation only. */
 				if (copied_control && run == 1 && ep == 0 && blk == 1600)
 					observed.samples[0] ^= 1;
-				diff_eq_obj("lifecycle exact samples/return/status", struct lifecycle_block,
-				            &observed, &lifecycle_oracle[ep][blk], tag);
+				if (plan->chunks) {
+					/* Progress codes are per process call: 4+44 and 48
+					 * need not finish with the same transient code. Keep
+					 * their exact comparison at the matched boundary. */
+					diff_eq_obj("fragmented lifecycle exact unsplit samples", short[FRAG],
+					            observed.samples, lifecycle_oracle[ep][blk].samples, tag);
+					if (run == 0) chunked_lifecycle_oracle[ep][blk] = observed;
+					else diff_eq_obj("fragmented lifecycle exact samples/return/status", struct lifecycle_block,
+					                 &observed, &chunked_lifecycle_oracle[ep][blk], tag);
+				} else diff_eq_obj("lifecycle exact samples/return/status", struct lifecycle_block,
+				                   &observed, &lifecycle_oracle[ep][blk], tag);
 				if (diff_failures != before) { stop = 1; break; }
 				if (plan->observe_visual && !visual_after_block(s, run, ep, blk)) {
 					stop = 1;
@@ -1504,10 +1554,22 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 	diff_eq_int("lifecycle source endpoint owners", source_created, plan->source_owners, 0);
 	diff_eq_int("lifecycle reference endpoint owners", reference_created, plan->cases * NEP - plan->source_owners, 0);
 	diff_eq_int("lifecycle owning destructors executed", destroyed, plan->cases * NEP, 0);
-	diff_eq_int("lifecycle endpoint calls executed", calls, plan->cases * NEP * V34_BLOCKS, 0);
-	diff_eq_int("lifecycle output sample positions compared", calls * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG, 0);
+	diff_eq_int("lifecycle endpoint calls executed", calls, plan->cases * NEP * V34_BLOCKS * calls_per_block, 0);
+	diff_eq_int("lifecycle output sample positions compared", blocks * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG, 0);
 	for (ep = 0; ep < NEP; ep++)
 		diff_eq_int("lifecycle aggregate aligned directional payload", bits[ep] >= plan->cases * 2048, 1, ep);
+	if (plan->chunks) {
+		for (ep = 0; ep < 4; ep++)
+			diff_eq_int("source lifecycle chunk pending occupancy denominator", queue_pending[ep], plan->cases * NEP * V34_BLOCKS, ep);
+		diff_eq_int("source lifecycle zero-process chunk denominator", queue_no_process, plan->cases * NEP * V34_BLOCKS * 2, 0);
+		diff_eq_int("source lifecycle muted chunks exercised", queue_muted > 0, 1, 0);
+		diff_eq_int("source lifecycle active chunks exercised", queue_active > 0, 1, 0);
+		printf("  source chunks: calls %d/%d; pending 0/1/2/3 %d/%d/%d/%d; no-process/muted/active %d/%d/%d\n",
+		       queue_chunk_calls, plan->cases * NEP * V34_BLOCKS * 4,
+		       queue_pending[0], queue_pending[1], queue_pending[2], queue_pending[3],
+		       queue_no_process, queue_muted, queue_active);
+		queue_copy_control = 0;
+	}
 	if (plan->observe_visual)
 		visual_finish();
 	if (plan->source_v8) {
@@ -1525,7 +1587,7 @@ run_lifecycles(struct dp_operations *reference, const struct lifecycle_plan *pla
 	alarm(0);
 	signal(SIGALRM, prev);
 	printf("  lifecycle: %d/%d cases; %d/%d endpoint calls, %d/%d output samples, %d/%d owning destructors; payload orig/answer %d/%d bits\n",
-	       completed, plan->cases, calls, plan->cases * NEP * V34_BLOCKS, calls * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG,
+	       completed, plan->cases, calls, plan->cases * NEP * V34_BLOCKS * calls_per_block, blocks * FRAG, plan->cases * NEP * V34_BLOCKS * FRAG,
 	       destroyed, plan->cases * NEP, bits[0], bits[1]);
 	return diff_end();
 }
@@ -1976,6 +2038,8 @@ main(void)
 	rc |= handoff_control(ops8);
 	if (rc) return rc;
 	rc |= run_lifecycles(ops34, &handoff_lifecycles);
+	if (rc) return rc;
+	rc |= run_lifecycles(ops34, &chunked_handoff_lifecycles);
 	if (rc) return rc;
 	rc |= run_stall();
 	rc |= run_queue_calls(ops34);
