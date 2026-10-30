@@ -478,7 +478,7 @@ v34modeminit(void *objp)
 	struct v34_modulator *mod =
 		v34_object_modulator(obj);
 	int originate;
-	int i;
+	short i;
 
 	/*
 	 * Three records of 44 bytes at +0xa81c, ending exactly where the
