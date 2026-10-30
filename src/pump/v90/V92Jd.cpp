@@ -62,18 +62,18 @@ typedef char v92jd_size[(sizeof(V92Jd) == 0xdc) ? 1 : -1];
 /*
  * 0x11b90, 87 bytes.  The constructor's phase conversion, verbatim: Q16
  * through a `long long` (`fistpll` -- a 32-bit conversion would be `fistpl`),
- * truncated to `int`, low sixteen bits into `phaseBits[18..33]`.  The loop
- * counter is UNSIGNED (`cmp $0xf; jbe`), as in the constructor.
+ * retained as an unsigned word, low sixteen bits into `phaseBits[18..33]`.
+ * The loop counter is UNSIGNED (`cmp $0xf; jbe`), as in the constructor.
  */
 void
 V92Jd::setJdPhase(float jdPhase)
 {
 	long long scaled;
-	int q;
+	unsigned q;
 	unsigned k;
 
 	scaled = (long long)(65536.0f * jdPhase);
-	q = (int)scaled;
+	q = (unsigned)scaled;
 	for (k = 0; k <= 15; k++)
 		phaseBits[V90JD_GROUP1 + 1 + k] =
 		    (unsigned char)((q & (1 << k)) != 0);

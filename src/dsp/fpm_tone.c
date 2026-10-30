@@ -90,8 +90,8 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	int owned = 0;
 	int increment;
 	int damp;
-	int len;
-	int i;
+	short len;
+	short i;
 
 	if (state == NULL) {
 		/*
@@ -158,22 +158,18 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * Clear the running state: the notch's history, both energy
 	 * estimates, and the whole of the phase-reversal search's working set.
 	 *
-	 * The original does this as two loops, 0x40..0x50 and 0x52..0xf0,
-	 * split around the hist_idx write between them.  Those bounds are what
-	 * says where `rev_hist` begins and ends -- the first loop stops on
-	 * `rev_energy` and the second is exactly the eighty words of the delay
-	 * line -- so the field split in fpm_tone.h is the object's own and not
-	 * an inference from FPM_TONE_find_rev.
-	 *
-	 * CORRECTION: an earlier version of this stopped at 0xf0 and claimed
-	 * the last word of the region was deliberately left alone.  It is
-	 * not -- there is a separate store of zero to +0xf2 immediately after
-	 * the loop, outside it.  The mistake was invisible for as long as the
-	 * test harness handed out zeroed memory; it showed up the moment
-	 * fresh allocations were filled with a non-zero pattern.
+	 * The object clears the four IIR-history words at +0x40..+0x46
+	 * with direct stores, and the eighty reversal-history words at
+	 * +0x52..+0xf0 with a short-counter loop.  Energy and control fields
+	 * around them are cleared separately.  A further store clears
+	 * +0xf2 after the loop, so stopping the whole clear at +0xf0 would
+	 * leave one word untouched.  Non-zero allocation fills exposed that
+	 * earlier reconstruction error.
 	 */
-	for (i = 0; i < (int)NELEMS(state->iir_state); i++)
-		state->iir_state[i] = 0;
+	state->iir_state[0] = 0;
+	state->iir_state[1] = 0;
+	state->iir_state[2] = 0;
+	state->iir_state[3] = 0;
 	state->e_tone = 0;
 	state->e_total = 0;
 	state->rev_age = 0;

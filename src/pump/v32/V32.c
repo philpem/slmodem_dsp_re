@@ -421,7 +421,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	int delay;
 	int shift;
 	int fresh;
-	int i;
+	short i;
 
 	(void)arg2;
 
