@@ -144,7 +144,7 @@ void
 FPM_iir_filt_II(short *samples, const short *coeff, short *state,
 		short sections, short count)
 {
-	int i;
+	short i;
 
 	for (i = 0; i < count; i++) {
 		const short *c = coeff;
