@@ -29,6 +29,8 @@ destinations. A 100% reference run can still have extra candidate instructions.
 
 The legacy grade01 ratchet membership includes UNRESOLVED and remains unchanged.
 The headline matched count is EXACT + REGALLOC and excludes UNRESOLVED.
+New floors also bank matched_symbols: each named function must retain an EXACT
+or REGALLOC proof, independently of any reviewed EXACT displacement.
 
 RELOCATED FIELDS ARE COMPARED BY TARGET, NOT BY VALUE, and that is not a
 loosening -- it is the only correct comparison.  A four-byte field under an
@@ -156,6 +158,8 @@ RATCHET_EXACT_SYMBOLS = "exact_symbols"
 #
 RATCHET_GRADE01_SYMBOLS = "grade01_symbols"
 RATCHET_SELECTED_EXACT_SYMBOLS = "selected_exact_symbols"
+# Optional in historical floors; unlike grade01, this excludes UNRESOLVED.
+RATCHET_MATCHED_SYMBOLS = "matched_symbols"
 
 DISPLACED = os.path.join(ROOT, "tools", "ci", "displaced.json")
 DISPLACED_METRICS = ("exact", "selected", "both")
@@ -1458,6 +1462,29 @@ def _ratchet_membership(was, now):
                 row[RATCHET_GRADE01_SYMBOLS]):
             raise ValueError("%s grade-0/1 set does not contain its EXACT set"
                              % label)
+        if "matched" in row or RATCHET_MATCHED_SYMBOLS in row:
+            symbols = row.get(RATCHET_MATCHED_SYMBOLS)
+            if (not isinstance(symbols, list) or
+                    any(not isinstance(k, str) or not k.strip()
+                        for k in symbols)):
+                raise ValueError("%s %r must be a list of nonempty symbol names"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            if len(set(symbols)) != len(symbols):
+                raise ValueError("%s %r contains duplicate symbol names"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            count = row.get("matched")
+            if type(count) is not int or count < 0:
+                raise ValueError("%s 'matched' must be a non-negative integer"
+                                 % label)
+            if count != len(symbols):
+                raise ValueError("%s matched count disagrees with its %r"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            if not set(row[RATCHET_EXACT_SYMBOLS]) <= set(symbols):
+                raise ValueError("%s matched set does not contain its EXACT set"
+                                 % label)
+            if not set(symbols) <= set(row[RATCHET_GRADE01_SYMBOLS]):
+                raise ValueError("%s grade-0/1 set does not contain its matched set"
+                                 % label)
     return (sorted(set(was[RATCHET_EXACT_SYMBOLS]) -
                    set(now[RATCHET_EXACT_SYMBOLS])),
             sorted(set(now[RATCHET_EXACT_SYMBOLS]) -
@@ -1475,6 +1502,9 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
 
       * A grade-0/1 loss ALWAYS fails.  It means the function itself got
         worse, and no ledger entry can make a different function acceptable.
+      * A named matched-floor loss ALWAYS fails against actual EXACT and
+        REGALLOC membership, even if UNRESOLVED keeps it in grade 0/1.
+        Floors predating matched_symbols retain their legacy protection.
       * A conservative EXACT loss may be displaced only while the function is
         still grade 1 (REGALLOC) and the entry's `body_sha256` still describes
         the WORST per-TU head body the census scored.
@@ -1502,6 +1532,14 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
         failures.append(
             "grade 0/1 lost: %s -- the function itself got worse; no ledger "
             "entry can excuse this" % symbol)
+
+    # Use the actual scored REGALLOC names, not the legacy grade01 set or
+    # a claimed current matched list: UNRESOLVED is not a matching proof.
+    for symbol in sorted(set(was.get(RATCHET_MATCHED_SYMBOLS, [])) -
+                         (exact_now | set(grade1_symbols))):
+        failures.append(
+            "matched lost: %s -- no EXACT or REGALLOC proof remains; no "
+            "ledger entry can excuse this" % symbol)
 
     by_symbol = {}
     for entry in displaced:
@@ -1664,6 +1702,75 @@ def ratchet_self_test():
               "re-bless with --update" in str(error))
     else:
         check("baseline without the three-phase keys is rejected", False)
+
+    # --- optional EXACT/REGALLOC floor, excluding unresolved evidence -----
+    def matched(row_, names):
+        return dict(row_, matched=len(names), matched_symbols=list(names))
+
+    matched_was = matched(row(["a"], ["a", "r"], ["a"], ["r"]),
+                          ["a", "r"])
+    for label, current in (
+            ("UNRESOLVED", row(["a"], ["a", "r"], ["a"])),
+            ("NONMATCH", row(["a"], ["a"], ["a"])),
+            ("missing", row(["a"], ["a"], ["a"]))):
+        failures, _ = ratchet_displacement(
+            matched_was, current, [], digest, set())
+        check("matched REGALLOC to %s fails" % label,
+              any("matched lost: r" in f for f in failures))
+    failures, _ = ratchet_displacement(
+        matched_was, matched(row(["a", "r"]), ["a", "r"]),
+        [], digest, set())
+    check("matched REGALLOC to EXACT passes", not failures)
+    failures, _ = ratchet_displacement(
+        matched_was, matched_was, [], digest, {"r"})
+    check("unchanged matched floor passes", not failures)
+    legacy = row(["a"], ["a", "r"], ["a"], ["r"])
+    unresolved = row(["a"], ["a", "r"], ["a"])
+    failures, _ = ratchet_displacement(legacy, unresolved, [], digest, set())
+    check("old floor retains legacy unresolved compatibility", not failures)
+    failures, _ = ratchet_displacement(
+        matched_was, matched(unresolved, ["a", "r"]),
+        [entry("r")], digest, set())
+    check("claimed matched list and ledger cannot excuse actual matched loss",
+          any("matched lost: r" in f for f in failures))
+
+    # A valid reviewed dp-style EXACT displacement stays inside matched.
+    failures, allowed = ratchet_displacement(
+        matched(row(["dp"]), ["dp"]),
+        matched(row([], ["dp"], [], ["dp"]), ["dp"]),
+        [entry("dp")], digest, {"dp"}, multiply_defined=set())
+    check("matched floor preserves pinned single-definition displacement",
+          not failures and allowed == [("exact", "dp")])
+
+    invalid_matched = [
+        ("missing names", {"matched": 2}),
+        ("missing count", {"matched_symbols": ["a", "r"]}),
+        ("wrong count", {"matched": 3, "matched_symbols": ["a", "r"]}),
+        ("negative count", {"matched": -1, "matched_symbols": []}),
+        ("boolean count", {"matched": True, "matched_symbols": ["a"]}),
+        ("non-list names", {"matched": 1, "matched_symbols": "a"}),
+        ("non-string name", {"matched": 2, "matched_symbols": ["a", 1]}),
+        ("empty name", {"matched": 2, "matched_symbols": ["a", ""]}),
+        ("blank name", {"matched": 2, "matched_symbols": ["a", " "]}),
+        ("duplicate name", {"matched": 2, "matched_symbols": ["a", "a"]}),
+        ("EXACT outside matched", {"matched": 1, "matched_symbols": ["r"]}),
+        ("matched outside legacy set", {"matched": 2,
+                                         "matched_symbols": ["a", "z"]}),
+    ]
+    for label, fields in invalid_matched:
+        malformed = dict(legacy, **fields)
+        for position in ("baseline", "current"):
+            try:
+                _ratchet_membership(
+                    malformed if position == "baseline" else matched_was,
+                    malformed if position == "current" else matched_was)
+            except ValueError:
+                rejected = True
+            else:
+                rejected = False
+            check("%s rejects matched %s" % (position, label), rejected)
+    check("legacy baseline accepts new current matched fields",
+          _ratchet_membership(legacy, matched_was) == ([], []))
 
     # --- displacement decisions ------------------------------------------
     was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
@@ -2285,6 +2392,8 @@ def main():
     if exact_bytes > compared_bytes:
         raise AssertionError("exact reference bytes exceed compared reference bytes")
     exact_symbols = sorted(k for _, _, k in buckets["EXACT"])
+    matched_symbols = sorted(k for bucket in ("EXACT", "REGALLOC")
+                             for _, _, k in buckets[bucket])
     grade01_symbols = sorted(
         k for bucket in ("EXACT", "UNRESOLVED", "REGALLOC")
         for _, _, k in buckets[bucket])
@@ -2302,8 +2411,10 @@ def main():
            "function_fidelity": functions,
            "instruction_runs": runs,
            "grade01": len(grade01_symbols),
+           "matched": len(matched_symbols),
            "selected_exact": None if selected is None else len(selected),
            RATCHET_EXACT_SYMBOLS: exact_symbols,
+           RATCHET_MATCHED_SYMBOLS: matched_symbols,
            RATCHET_GRADE01_SYMBOLS: grade01_symbols,
            RATCHET_SELECTED_EXACT_SYMBOLS: (None if selected is None
                                             else sorted(selected))}
@@ -2323,9 +2434,9 @@ def main():
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
             f.write("\n")
-        print("\nratchet updated: %d exact symbol(s), %d legacy protected, "
+        print("\nratchet updated: %d exact symbol(s), %d matched, %d legacy protected, "
               "%d link-selected exact; %d compared, %d regalloc"
-              % (now["exact"], now["grade01"], now["selected_exact"],
+              % (now["exact"], now["matched"], now["grade01"], now["selected_exact"],
                  now["compared"], now["regalloc"]))
         return 0
     if a.ratchet:
@@ -2365,7 +2476,7 @@ def main():
             print("\n  Failure(s):")
             for failure in failures:
                 print("    %s" % failure)
-            print("\n  A grade-0/1 loss is ALWAYS a failure: the function "
+            print("\n  A matched or grade-0/1 loss is ALWAYS a failure: the function "
                   "itself got worse and\n  no entry can excuse it.  An EXACT or "
                   "link-selected-EXACT loss may only be\n  displaced by a "
                   "reviewed entry in tools/ci/displaced.json whose body hash\n"

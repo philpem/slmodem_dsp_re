@@ -122,6 +122,24 @@ remain unchanged. They support existing diagnostics and consumers. In
 particular, legacy `grade01` includes UNRESOLVED; the public matched total
 explicitly uses EXACT + REGALLOC and does not inherit that accounting.
 
+Fresh PR comparisons protect named EXACT/REGALLOC membership, not just its
+count. `period_metrics.py --check` rejects a lost member even when another
+function replaces it. REGALLOC to EXACT preserves membership; EXACT to
+REGALLOC still requires the separate EXACT-loss review. Legacy reports remain
+readable, but a count-only report containing REGALLOC cannot certify this check.
+
+New stored floors also record `matched` and `matched_symbols`. Every named
+member must remain EXACT or REGALLOC; UNRESOLVED does not qualify, and a
+displacement cannot excuse that loss. Historical floors without these fields
+retain their legacy semantics. This protects against classifier changes that
+affect both sides of a fresh comparison identically.
+
+Advance a membership bank by union when it includes a historical, body-pinned
+recovery target. Retain that target and its displacement rather than replacing
+the bank with a current snapshot. Banked target counts can therefore differ
+from current measurements; use the current `--json-out` report for the latter.
+Do not use `--update` to erase a pinned loss.
+
 On 2026-10-31, the unchanged-object comparison over 1852 symbols preserves **every legacy JSON
 field**, including all three protected symbol sets. All 1852 functions have run
 measurements, with none unavailable in that measurement. This is a tooling
