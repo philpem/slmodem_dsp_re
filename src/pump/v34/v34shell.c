@@ -2123,13 +2123,21 @@ initdigital(void *obj)
  * byte -- sign-extended by an explicit test of bit 7 rather than by a shift,
  * which is the same thing -- in the high half.
  */
+#define QUARTER_LOW_BYTE_SIGN 0x80
+
 static unsigned
 quarter_pair(int sub, unsigned shift, short field)
 {
 	int q = quarter[(sub << (shift & 31)) + (unsigned short)field];
 
-	return ((unsigned)(signed char)(q & 0xff) << 16)
-	       | (unsigned short)(q >> 8);
+	int low;
+
+	if (q & QUARTER_LOW_BYTE_SIGN)
+		low = q | (int)0xffffff00;
+	else
+		low = q & 0xff;
+
+	return ((unsigned)low << 16) | (unsigned short)(q >> 8);
 }
 
 /*
