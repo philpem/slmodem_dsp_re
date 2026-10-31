@@ -108,10 +108,10 @@ V22_FSE_getdiag(struct v22_fse *state)
  *
  * WHAT IS DELIBERATELY NOT TIDIED HERE:
  *
- *   - the object walks the history window with the whole FIR duplicated, one
- *     copy per side of the `hist_n > 48` test, and reads the window base out
- *     of the same stack slot in the LMS loop afterwards.  One pointer and one
- *     pair of loops is the same arithmetic in every case;
+ *   - the object has a separate I/Q FIR pair on each side of `hist_n > 48`.
+ *     The low arm reads the captured history directly; both arms save their
+ *     selected window for the later LMS loop.  The Q gain and polar conversion
+ *     remain common after the two pairs;
  *   - the phase accumulator is stored twice, once unwrapped and once wrapped.
  *     Written as the object's two statements, since the first store is only
  *     dead if the second is reached and the reading is the same either way;
@@ -216,19 +216,29 @@ V22_FSE_receive(struct v22_fse *state, const short *in, unsigned short *out,
 		 * are not yet 49 of them.  The same window drives the LMS
 		 * update at the end of the symbol.
 		 */
-		if (hist_n > V22_FSE_TAPS - 1)
+		if (hist_n > V22_FSE_TAPS - 1) {
 			win = &hist[hist_n - V22_FSE_TAPS];
-		else
+
+			acc = 0;
+			for (k = 0; k <= V22_FSE_TAPS - 1; k++)
+				acc += icoeff[k] * win[k];
+			i_val = (short)(((short)(acc >> 15) * V22_FSE_FIR_GAIN) >> 14);
+
+			acc = 0;
+			for (k = 0; k <= V22_FSE_TAPS - 1; k++)
+				acc += qcoeff[k] * win[k];
+		} else {
 			win = hist;
 
-		acc = 0;
-		for (k = 0; k <= V22_FSE_TAPS - 1; k++)
-			acc += icoeff[k] * win[k];
-		i_val = (short)(((short)(acc >> 15) * V22_FSE_FIR_GAIN) >> 14);
+			acc = 0;
+			for (k = 0; k <= V22_FSE_TAPS - 1; k++)
+				acc += icoeff[k] * hist[k];
+			i_val = (short)(((short)(acc >> 15) * V22_FSE_FIR_GAIN) >> 14);
 
-		acc = 0;
-		for (k = 0; k <= V22_FSE_TAPS - 1; k++)
-			acc += qcoeff[k] * win[k];
+			acc = 0;
+			for (k = 0; k <= V22_FSE_TAPS - 1; k++)
+				acc += qcoeff[k] * hist[k];
+		}
 		q_val = (short)(((short)(acc >> 15) * V22_FSE_FIR_GAIN) >> 14);
 
 		/*
