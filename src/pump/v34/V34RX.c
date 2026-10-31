@@ -704,7 +704,6 @@ rxtiming(void *objp)
 		int wa = (unsigned short)rx->phase_frac;
 		int wb = (short)((unsigned short)rx->phase_wrap
 				 - (unsigned short)rx->phase_frac);
-		int wrap = (short)rx->phase_wrap;
 		int I, Q, m, pos;
 
 		/* Linear interpolation between the two symbols, both axes. */
@@ -713,6 +712,8 @@ rxtiming(void *objp)
 		m = (short)((I * I + Q * Q + 0x2000) >> 14);
 
 		rx->timing_out[i] = (short)V34TimingHPFilter(t, (short)m);
+
+		int wrap = (short)rx->phase_wrap;
 
 		pos = (unsigned short)rx->phase_frac + (unsigned short)rx->phase_inc;
 
