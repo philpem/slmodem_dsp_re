@@ -960,6 +960,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	short code[8];
 	short cost[8];
 	short best[16];
+	short *par;
 	int st = s->state_idx;
 	int i, j;
 
@@ -971,19 +972,20 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	}
 
 	s->state[st].pair[1] = *(int *)ap;
+	par = s->state[s->state_idx].par;
 
 	/* 1. Two parameter pairs, each producing four candidates in order. */
 	for (i = 0; i < 2; i++) {
-		demap_candidates(s->state[st].par[i * 2], div,
+		demap_candidates(par[i * 2], div,
 				 &cand[i * 4], &cand[i * 4 + 1]);
-		demap_candidates(s->state[st].par[i * 2 + 1], div,
+		demap_candidates(par[i * 2 + 1], div,
 				 &cand[i * 4 + 2], &cand[i * 4 + 3]);
 	}
 
 	/* 2. Squared distances, four combinations per parameter pair. */
 	for (i = 0; i < 2; i++) {
-		int p0 = s->state[st].par[i * 2];
-		int p1 = s->state[st].par[i * 2 + 1];
+		int p0 = par[i * 2];
+		int p1 = par[i * 2 + 1];
 		int sh = s->cost_shift & 31;
 		int d0 = ((p0 - cand[i * 4 + 0]) * (p0 - cand[i * 4 + 0])) >> sh;
 		int d1 = ((p0 - cand[i * 4 + 1]) * (p0 - cand[i * 4 + 1])) >> sh;
