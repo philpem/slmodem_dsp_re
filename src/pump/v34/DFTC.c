@@ -233,10 +233,11 @@ dftenergy(struct v34_dftbin *bins, short nbins, short scale)
 
 			if ((a ^ b) & (1u << 12)) {
 				bins->shift = (short)(k + 1);
-				break;
+				goto next_bin;
 			}
 		}
-		if (k > 0x12)
-			bins->shift = 0x14;
+		bins->shift = 0x14;
+next_bin:
+		;
 	}
 }
