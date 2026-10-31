@@ -328,6 +328,9 @@ TONE_filter(struct fdsp_tone *t, float *buf, short n)
 	i = n;
 	while (i--) {
 		const float *c = coef;
+		#ifdef DSPLIB_REPRODUCE_BUGS
+		float *p;
+		#endif
 		float acc = 0.0f;
 		int j;
 
@@ -335,10 +338,20 @@ TONE_filter(struct fdsp_tone *t, float *buf, short n)
 		if (idx >= len)
 			idx = 0;
 		dly[idx] = *buf;
+		/* The native cursor forms dly - 1 between the two loops. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+		p = dly + idx;
+		for (j = idx; j >= 0; j--)
+			acc += *c++ * *p--;
+		p += len;
+		for (j = len - 1; j > idx; j--)
+			acc += *c++ * *p--;
+#else
 		for (j = idx; j >= 0; j--)
 			acc += *c++ * dly[j];
 		for (j = len - 1; j > idx; j--)
 			acc += *c++ * dly[j];
+#endif
 		*buf++ = acc;
 	}
 	t->fir_idx = idx;
