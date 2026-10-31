@@ -8254,9 +8254,10 @@ v34handshak(void *vobj)
 	 * Most transmit arms share their definitions through v34hstx1_arms.h.
 	 * TX_DPSK and XMITMP belong directly to this switch: the reference
 	 * expands their first reader calls and retains only getbit's recursive
-	 * restarts. SBARSEG, PPSEG and EXMIT also stay in this switch. Their
-	 * former helper return values all rejoined this loop; the baud switch
-	 * inside PPSEG keeps its own distinct breaks.
+	 * restarts. SBARSEG, PPSEG, EXMIT and the two training arms also stay
+	 * in this switch, including TRNSEG4A's snapshot and rate publication.
+	 * Their former helper returns rejoin this loop; inner baud-switch and
+	 * rate-ladder breaks retain their own scope.
 	 */
 	while (frame.txb->txq.count < obj->tx_fill_target) {
 		switch ((int)obj->txstate) {
@@ -8417,8 +8418,135 @@ v34handshak(void *vobj)
 			break;			/* 0x6431f */
 		}
 		case V34HS_TRNSEG4:		/* 21 0x64339 */
-			v34tx1_trnseg4(obj);
-			break;
+		{
+
+			struct v34_ratecfg *cfg = &obj->ratecfg;
+			short q;
+			int n, span, baud;
+
+			/* 0x64339: the scrambler, the quadrant and one sample. */
+			q = tx1_scramble2(obj);
+			obj->tx.cur_quadrant = q;
+			tx1_put_point(obj, vect4[q]);
+			txmit(obj);
+
+			/* 0x643dc */
+			obj->tx.seg_symcount = (short)((unsigned short)obj->tx.seg_symcount + 1);
+
+			if (obj->short_aa78 == obj->tx.seg_symcount) {
+				/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
+				obj->echo_calls = 0;
+				obj->tx.tx_flags = (short)((unsigned short)obj->tx.tx_flags & ~V34_EC_FROZEN);
+				obj->echo_alpha = 0;
+				obj->far_echo_alpha = 0;
+				obj->echo_energy = 0;
+				VPcmV34ReportStartOfEchoAdapt(obj);
+			}
+
+			/* 0x643f8 */
+			if (((unsigned short)obj->tx.tx_flags & 0x100u) == 0
+			    && obj->tx.seg_symcount >= obj->ratecfg.period)
+				obj->tx.tx_flags = (short)((unsigned short)obj->tx.tx_flags | 0x100u);
+
+			/* 0x64ae4 */
+			n = obj->tx.seg_symcount;
+			span = obj->phase3_hd_length;
+
+			if (n == (span >> 1)) {
+				VPcmV34ReportMiddleOfEchoAdapt(obj);	/* 0x67734 */
+				break;			/* 0x640a1 */
+			}
+
+			baud = cfg->baud;
+			if (n == baud + (baud >> 1)) {
+				/* 0x67278 */
+				obj->tx.tx_flags = (short)(((unsigned short)obj->tx.tx_flags & ~V34_TXFLAG_PPSEG)
+						   | 0x400u);
+				break;			/* 0x63da2 */
+			}
+
+			if (n != span)
+				break;			/* 0x629c8 */
+
+			/* 0x64b24: the segment is over. */
+			hs_set_txstate(obj, V34HS_JTXMIT);
+
+			if (obj->rtd <= 2) {
+				/* 0x6801e */
+				v34FreezeEcho(obj);
+				obj->short_aa78 = 0;
+			} else {
+				if (obj->v90_receiver != 0 || obj->k56flex_receiver != 0) {
+					/* 0x68ad0 and 0x69de7, two copies of one store */
+					obj->short_aa78 = obj->rtd;
+				} else {
+					/* 0x64b96 */
+					obj->short_aa78 = (short)(obj->rtd >> 1);
+				}
+
+				/*
+				 * 0x64ba9, and the nesting is what the object says: BOTH
+				 * stores jump here (0x68ade and 0x69df5) and the `rtd <= 2`
+				 * arm does not -- it reports the freeze instead.  An
+				 * else-if chain cannot express a guard shared by two of its
+				 * three arms.
+				 */
+				if (dsplibs_debug_level > 1)		/* 0x6917e */
+					dsplibs_debug_printf(
+						"V34Hshak: On J TX start, would freeze EC" " after bulk delay (%d samples,"
+						" bulk=%d)\r\n",
+						obj->short_aa78, obj->rtd);
+			}
+
+			/* 0x64bb2 */
+			tx1_put(obj, TX1_F25D6, (short)0x8990);
+			obj->tx.prev_quadrant = obj->tx.cur_quadrant;
+			hs_set_rxstate(obj, V34HS_RECEIVE);
+			setupreceiver(obj);				/* 0x64c04 */
+
+			/* 0x64d37: the +0xaa0c record, in the object's order */
+			{
+				unsigned char *r = (unsigned char *)obj + TX1_INFOREC;
+
+				*(int *)(r + 0x24) = 0;
+				*(int *)(r + 0x2c) = 0;
+				*(short *)(r + 0x14) = -1;
+				*(short *)(r + 0x1a) = 0;
+				*(short *)(r + 0x1e) = 0;
+				*(short *)(r + 0x22) = 0;
+				*(short *)(r + 0x18) = 0;
+				*(short *)(r + 0x1c) = 0;
+				*(short *)(r + 0x16) = 0;
+				*(short *)(r + 0x28) = 0;
+				*(short *)(r + 0x2a) = 0;
+				*(short *)(r + 0x20) = 0;
+			}
+
+			/* 0x64d8d */
+			hs_set_microstate(obj, V34HS_DET_SYNC);
+
+			/* 0x64dba */
+			obj->vect_idx = 0;
+			obj->rate_change_pending = 1;
+
+			if ((unsigned)obj->v90_receiver > 1u) {
+				/* 0x64de7 */
+				hs_set_txstate(obj, V34HS_JaTXMIT);
+				hs_set_rxstate(obj, V34HS_WAIT);
+				indicateJaTransmission(obj);
+				break;			/* 0x629c8 */
+			}
+
+			if ((unsigned)obj->k56flex_receiver > 1u) {
+				/* 0x67f91 */
+				hs_set_txstate(obj, V34HS_K56JaTXMIT);
+				hs_set_rxstate(obj, V34HS_WAIT);
+				indicateJaTransmission(obj);
+				break;			/* 0x63948 */
+			}
+
+			break;				/* 0x63da2 */
+		}
 		case V34HS_TX_DPSK:		/* 24 0x62b96 */
 		{
 			short bit;
@@ -8614,8 +8742,375 @@ v34handshak(void *vobj)
 			v34tx1_xmit0(obj);
 			break;
 		case V34HS_TRNSEG4A:		/* 66 0x62e28 */
-			v34tx1_trnseg4a(obj);
-			break;
+		{
+
+			struct v34_receiver *rx = &obj->receiver;
+			struct v34_ratecfg *cfg = &obj->ratecfg;
+			int n, lim, baud, period;
+			short *rec;
+
+			if ((unsigned short)obj->receiver.short_382 == 0x89b0u) {
+				/* 0x66e59 */
+				short k = tx1_scramble2(obj);
+				short q;
+
+				obj->tx.cur_quadrant = k;
+				q = tx1_scramble2(obj);
+				tx1_put_point(obj, vect16[q + 4 * k]);
+			} else {
+				/* 0x62e3b */
+				short q = tx1_scramble2(obj);
+
+				obj->tx.cur_quadrant = q;
+				tx1_put_point(obj, vect4[q]);
+			}
+
+			/* 0x62ecd */
+			txmit(obj);
+
+			/* 0x62edc */
+			obj->tx.seg_symcount = (short)((unsigned short)obj->tx.seg_symcount + 1);
+			n = obj->tx.seg_symcount;
+			baud = cfg->baud;
+			period = cfg->period;
+			lim = baud + (baud >> 1) + period;
+
+			if (n != lim) {
+				if ((unsigned)obj->hs_mode <= 3u)
+					break;		/* 0x63941 */
+				if (n < lim) {
+					/* 0x6559c */
+					if (n < baud + period)
+						break;	/* 0x6409a */
+					if ((int)rx->equerr > (int)obj->receiver.short_4b4 + 10)
+						break;	/* 0x6431f */
+				}
+			}
+
+			/* 0x62f22 */
+			rec = (short *)((char *)obj + TX1_FAA3C);
+			obj->tx.prev_quadrant = (short)(unsigned short)obj->tx.cur_quadrant;
+			obj->paa6c = rec;
+
+			if (rx->flags & V34_RX_FLAG_RENEG) {
+				/* 0x62f5f */
+				rec[2] = 0;
+				rec[0] = 0;
+				obj->receiver.short_4b4 = rx->equerr;
+			} else {
+				{
+			short *co = (short *)((char *)obj + TX1_RXCOEFF);
+			int sum = 0, t;
+			short i;
+
+			rec[0] = (short)0x8000;
+			for (i = 0; i <= 5; i++) {
+				int v = tx1_get(rx, TX1_RX_PRED + 2u * (unsigned)i) >> 2;
+
+				sum += (v < 0) ? -v : v;
+			}
+
+			t = (short)((unsigned short)rx->equerr - (unsigned short)rx->preerr);
+			if (t <= 0)
+				t = rx->preerr;				/* 0x6874c */
+			t = (short)(t - (rx->equerr >> 2));
+			if (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)
+				sum = 0x5000;
+
+			if (obj->force_low_baud == 0 && rx->equerr <= 0x1ff
+			    && rx->preerr < rx->equerr && sum <= 0x3fff) {
+				/* 0x6738c */
+				if (dsplibs_debug_level > 1)		/* 0x6adf6 */
+					dsplibs_debug_printf(
+						"V34DATARATE, precoefs [%d,%d,%d][%d,%d,%d]\n",
+						tx1_get(rx, TX1_RX_PRED + 0),
+						tx1_get(rx, TX1_RX_PRED + 2),
+						tx1_get(rx, TX1_RX_PRED + 4),
+						tx1_get(rx, TX1_RX_PRED + 6),
+						tx1_get(rx, TX1_RX_PRED + 8),
+						tx1_get(rx, TX1_RX_PRED + 10));
+
+				rec[2] = rx->pred_b[2];
+				rec[3] = rx->pred_a[2];
+				rec[4] = rx->pred_b[1];
+				rec[5] = rx->pred_a[1];
+				rec[6] = rx->pred_b[0];
+				rec[7] = rx->pred_a[0];
+
+				co[7] = rec[2];
+				co[0] = rec[2];
+				co[1] = (short)-rec[3];
+				co[6] = rec[3];
+				co[9] = rec[4];
+				co[2] = rec[4];
+				co[3] = (short)-rec[5];
+				co[8] = rec[5];
+				co[11] = rec[6];
+				co[4] = rec[6];
+				co[5] = (short)-rec[7];
+				co[10] = rec[7];
+
+				for (i = 0; i <= 5; i++)
+					rec[2 + i] = (short)bitreverse(
+							(unsigned short)rec[2 + i], 0x10);
+
+				rx->flags = (unsigned short)(rx->flags | 0x4000u);
+				sysdep_memset(&rx->pred_i[0], 0, 0x10);
+				obj->receiver.short_4b4 = rx->preerr;
+			} else {
+				/* 0x674e5 */
+				if (dsplibs_debug_level > 1)		/* 0x683b2 */
+					dsplibs_debug_printf(
+						"V34DATARATE, precoefs=0, 0, 0, 0, 0, 0\n");
+
+				/*
+				 * Rolled, this is:
+				 *     for (i = 2; i <= 7; i++)
+				 *             rec[i] = 0;
+				 * -- the six zeros the debug line above names as precoefs.
+				 */
+				rec[2] = 0;
+				rec[3] = 0;
+				rec[4] = 0;
+				rec[5] = 0;
+				rec[6] = 0;
+				rec[7] = 0;
+				obj->receiver.short_4b4 = rx->equerr;
+			}
+
+			/* 0x674c8 */
+			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_PREDICT);
+
+			}
+			}
+
+			{
+			int rate = 0, ratemin = 0, term = 0, cap, v, mask, k;
+			short baud;
+
+			/* 0x62f82 */
+			cfg->rx_use_max = 1;
+			baud = cfg->rx_baud;
+			switch ((unsigned short)baud) {
+			case 0x960: ratemin = 1; rate = 9;  break;
+			case 0xaf0: ratemin = 2; rate = 11; break;
+			case 0xbb8: ratemin = 2; rate = 12; break;
+			case 0xc80: ratemin = 2; rate = 13; break;
+			case 0xd65: ratemin = 2; rate = 14; break;
+			}
+
+			/* 0x62fce */
+			if (cfg->rx_use_max != 0)
+				rec[0] = (short)((unsigned short)rec[0] | 2u);
+
+			if ((*((unsigned char *)obj + TX1_FA97E) & 4) == 0) {
+				/* 0x62ff8 */
+				if (baud == 0x0c80 || baud == 0x0d65)
+					rate = 0xc;
+				else if (baud == 0x0bb8 || baud == 0x0af0)
+					rate = (short)(rate - 1);	/* 0x67984 */
+
+				/*
+				 * 0x63025, and NOT part of the 3200/3429 arm: 0x6797e and
+				 * 0x67994 both jump back to the guard, so every baud that
+				 * reaches this block reports, including the ones that changed
+				 * nothing.  Placing it inside the `rate = 0xc` branch left
+				 * four cases short -- 2400, 2800, 3000 and the ladder's
+				 * floor -- which is how the difference was found.
+				 */
+				if (dsplibs_debug_level > 1)		/* 0x6834b */
+					dsplibs_debug_printf(
+						"V34INFO, V.34bis is not possible \n");
+			}
+
+			/* 0x6302e */
+			cfg->txbits = (short)rate;
+			while ((short)rate > (short)ratemin) {
+				term = tx1_ts_scale(cfg, rate, -1);
+				if (dsplibs_debug_level > 1)		/* 0x66b61 */
+					dsplibs_debug_printf(
+						"V34DATARATE,threshold for data rate" " %d = %d\n", rate, term);
+				if (obj->receiver.short_4b4 < (short)term)
+					break;
+				rate = (short)(rate - 1);
+			}
+
+			/* 0x630e9 */
+			if (rx->rrn_local_dir > 1) {
+				int d = rx->baud_copy;
+
+				if (rx->rrn_local_dir == 2 && rate > d - 1) {
+					rate = (short)(d - 1);		/* 0x68308 */
+					if (dsplibs_debug_level > 1)	/* 0x68334 */
+						dsplibs_debug_printf(
+							" TRNSEG4A : returning from local rrn" " down => forcing rate down\n");
+				} else if (rate < d + 1) {
+					rate = (short)(d + 1);		/* 0x63120 */
+					if (dsplibs_debug_level > 1)	/* 0x69100 */
+						dsplibs_debug_printf(
+							" TRNSEG4A : returning from local rrn" " up => forcing rate up\n");
+				}
+				term = tx1_ts_scale(cfg, rate, -1);	/* 0x63134 */
+			}
+
+			/* 0x63198 */
+			if (dsplibs_debug_level > 1)			/* 0x6759e */
+				dsplibs_debug_printf(
+					"V34DATARATE, ethresh data rate = %d,ethreh=%d," "rate2 = 0x%x,data=%d\n",
+					rate, obj->receiver.short_4b4,
+					(unsigned short)obj->receiver.short_382, term);
+			if (dsplibs_debug_level > 1)			/* 0x675e6 */
+				dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
+						     rx->equerr, rx->preerr);
+
+			rx->bad_thresh = (short)(2 * term);
+			if ((short)rate > (short)ratemin) {
+				rx->bad_long_thresh = tx1_ts_scale(cfg, rate, -2);
+				rx->bad_long_thresh = (short)((rx->bad_long_thresh + term) >> 1);
+			} else {
+				/* 0x672ad */
+				rx->bad_long_thresh = (short)(obj->receiver.short_4b4 << 3);
+			}
+
+			/* 0x63234 */
+			if ((short)cfg->txbits > (short)rate)
+				rx->good_thresh = tx1_ts_scale(cfg, rate, 0);
+			else
+				rx->good_thresh = 0;				/* 0x6729b */
+
+			/* 0x63299 */
+			rx->bad_long_run = 0;
+			rx->good_run = 0;
+			rx->bad_run = 0;
+			rec[1] = (short)0xfffd;
+			if ((unsigned)obj->sample_count
+			    < (unsigned)(obj->int_0248 + 0x17700)
+			    && (unsigned)obj->hs_mode <= 3u) {
+				rate = (short)(rate - 2);
+				if ((short)rate < (short)ratemin)
+					rate = ratemin;
+				cfg->txbits = (short)rate;
+				rec[1] = (short)((unsigned short)rec[1] & ~1u);
+			}
+
+			/* 0x6332c */
+			cfg->rxbits = (short)rate;
+			if (dsplibs_debug_level > 1)			/* 0x67741 */
+				dsplibs_debug_printf(
+					"V34DATARATE, automatic: %d, min %d, max %d\n",
+					0x960 * rate, 0x960 * obj->rate_min,
+					0x960 * obj->rate_max);
+
+			/* 0x6334a */
+			v = cfg->rxbits;
+			if (v < obj->rate_min) {
+				cfg->rxbits = (short)obj->rate_min;
+				v = (short)obj->rate_min;
+			}
+			if (v > obj->rate_max)
+				cfg->rxbits = (short)obj->rate_max;
+			if (obj->rate_want >= 0 && obj->rate_want != obj->rate_now)
+				cfg->rxbits = (short)obj->rate_want;
+
+			/*
+			 * Bench-only rate cap.  This is deliberately a compile-time switch: the
+			 * normal reconstruction, including the differential build, retains the
+			 * blob's exact outgoing-MP choice.  It lets the interop harness distinguish
+			 * an early data-phase failure caused by the rate proposed to the peer from
+			 * one which occurs independently of that proposal.
+			 */
+		#ifdef DSPLIB_V34_TEST_TX_RATE_CAP
+			if (cfg->txbits > DSPLIB_V34_TEST_TX_RATE_CAP)
+				cfg->txbits = DSPLIB_V34_TEST_TX_RATE_CAP;
+		#endif
+
+			/* 0x633b5 */
+			rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
+			obj->short_358c =
+				(short)bitreverse((unsigned short)cfg->txbits, 4);
+			if (dsplibs_debug_level > 1)			/* 0x676f3 */
+				dsplibs_debug_printf(
+					"V34DATARATE, Final choice data rate = %d,"
+					" retrainThresh = %d, renegDownthresh = %d," " renegUpthresh = %d\n",
+					cfg->rxbits, rx->bad_thresh, rx->bad_long_thresh, rx->good_thresh);
+
+			/* 0x6340f */
+			if (obj->role == 0x65)
+				rec[0] = (short)((unsigned)(unsigned short)rec[0]
+						 | ((unsigned)obj->short_358c << 10)
+						 | ((unsigned)rate << 6));
+			else {
+				rec[0] = (short)((unsigned)(unsigned short)rec[0]
+						 | ((unsigned)rate << 10));
+				rec[0] = (short)((unsigned)(unsigned short)rec[0]
+						 | ((unsigned)obj->short_358c << 6));
+			}
+
+			/* 0x63453 */
+			cap = VPcmV34GetMaxUpstreamRateIndex(obj);
+			if (obj->role == 0x65) {
+				/* 0x677a8 */
+				v = ((((((unsigned)(unsigned short)rec[0] >> 10) & 1) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 11) & 1)) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 12) & 1)) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 13) & 1));
+				mask = ~0x400;
+			} else {
+				/* 0x6346b */
+				v = ((((((unsigned)(unsigned short)rec[0] >> 6) & 1) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 7) & 1)) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 8) & 1)) * 2
+				      + (((unsigned)(unsigned short)rec[0] >> 9) & 1));
+				mask = ~0x40;
+			}
+			if (v * 0x960 > cap) {
+				/* 0x6768b */
+				int rev = (short)bitreverse((unsigned short)((cap * 7) >> 14),
+							    4);
+
+				for (k = 0; k <= 3; k++) {
+					unsigned short w = (unsigned short)rec[0];
+
+					if ((rev >> k) & 1)
+						w = (unsigned short)(w | (unsigned)~mask);
+					else
+						w = (unsigned short)(w & (unsigned)mask);
+					rec[0] = (short)w;
+					mask = (short)(mask * 2 + 1);
+				}
+			}
+
+			/* 0x634a6 */
+			rec[8] = 0;					/* +0xaa4c */
+			hs_set_txstate(obj, V34HS_XMITMP);
+			obj->vect_idx = 0;
+			obj->short_3598 = 0;
+			obj->short_359e = 0;
+			if (dsplibs_debug_level > 1)			/* 0x67653 */
+				dsplibs_debug_printf(
+					"V34DATARATE, txmp bits 0x%x,0x%x,0x%x,0x%x,0x%x\n",
+					(unsigned short)rec[0], (unsigned short)rec[1],
+					(unsigned short)rec[2], (unsigned short)rec[3],
+					(unsigned short)rec[4]);
+
+			/* 0x63510 */
+			obj->msg_acc = 0x3fffe;
+			obj->msg_acc0 = 0x3fffe;
+			rec[10] = -1;					/* +0xaa50 */
+			rec[13] = 0;					/* +0xaa56 */
+			rec[15] = 0;					/* +0xaa5a */
+			rec[17] = 0;					/* +0xaa5e */
+			rec[14] = 0x10;					/* +0xaa58 */
+			rec[12] = (short)((rx->flags & V34_RX_FLAG_RENEG) ? 0x30 : 0x90);
+			rec[11] = 1;					/* +0xaa52 */
+			rec[20] = 0x12;					/* +0xaa64 */
+			rec[21] = 0x12;					/* +0xaa66 */
+			rec[16] = 0;					/* +0xaa5c */
+			obj->short_3590 = 0x22;
+			break;				/* 0x62d70 */
+
+			}
+		}
 		case V34HS_XMITMP:		/* 67 0x6399b */
 		{
 			struct v34_receiver *rx = &obj->receiver;
