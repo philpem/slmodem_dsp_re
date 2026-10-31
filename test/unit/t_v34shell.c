@@ -486,6 +486,110 @@ static int limit_case(int synthetic)
 }
 
 
+/*
+ * Instrumented component protocol: actual reset/configuration and two frame
+ * reads, with a passive wrapper around the installed scrambler.  The wrapper
+ * observes the callback-entry field then delegates the real algorithm; this
+ * does not claim a negotiated/waveform history or a default payload bug.
+ */
+static struct v34_object publication_owner_a,publication_owner_b,publication_snap_a[2],publication_snap_b[2],publication_norm_a,publication_norm_b;
+static const short publication_coeff[12]={0};
+static v34_scramble_fn publication_delegate_a,publication_delegate_b;
+struct publication_observation { short field,arg,result; int root_ok; };
+static struct publication_observation publication_trace_a[16],publication_trace_b[16];
+static int publication_trace_n_a,publication_trace_n_b,publication_observing;
+static struct v34_shell *publication_tx(void *o) { return (struct v34_shell *)((char *)o+V34_SHELL_TX); }
+static short publication_tap_a(void *o,short n)
+{
+ int k=publication_trace_n_a++; short r;
+ if(k<16) {publication_trace_a[k].field=((struct v34_object *)o)->scrambler.nbits;publication_trace_a[k].arg=n;publication_trace_a[k].root_ok=o==&publication_owner_a;}
+ r=publication_delegate_a(o,n); if(k<16)publication_trace_a[k].result=r;return r;
+}
+static short publication_tap_b(void *o,short n)
+{
+ int k=publication_trace_n_b++; short r;
+ if(k<16) {publication_trace_b[k].field=((struct v34_object *)o)->scrambler.nbits;publication_trace_b[k].arg=n;publication_trace_b[k].root_ok=o==&publication_owner_b;}
+ r=publication_delegate_b(o,n); if(k<16)publication_trace_b[k].result=r;return r;
+}
+static void publication_setup(void)
+{
+ memset(&publication_owner_a,0,sizeof(publication_owner_a));memset(&publication_owner_b,0,sizeof(publication_owner_b));publication_owner_a.role=publication_owner_b.role=0x65;
+ preinitdigital(&publication_owner_a);ref_preinitdigital(&publication_owner_b);
+ initV34((char *)publication_tx(&publication_owner_a)+V34_SHELL_FIELDS,2800,9600,1,0,publication_coeff,128);
+ ref_initV34((char *)publication_tx(&publication_owner_b)+V34_SHELL_FIELDS,2800,9600,1,0,publication_coeff,128);
+}
+static void publication_normalise(struct v34_object *out,const struct v34_object *in)
+{
+ const struct v34_shell *rin=(const struct v34_shell *)in;
+ const struct v34_shell *tin=(const struct v34_shell *)((const char *)in+V34_SHELL_TX);
+ int ref=in==&publication_owner_b;struct v34_shell *rx,*t;
+ v34_scramble_fn expected=publication_observing?(ref?publication_tap_b:publication_tap_a):(ref?ref_scrambleGPC:scrambleGPC);
+ diff_eq_int("snapshot RX table identity",rin->conv==(ref?ref_Convolve16:Convolve16),1,ref);
+ diff_eq_int("snapshot RX callback identity",rin->put_bits==(v34_putbits_fn)(ref?ref_descrambleGPA:descrambleGPA),1,ref);
+ diff_eq_int("snapshot TX table identity",tin->conv==(ref?ref_Convolve16:Convolve16),1,ref);
+ diff_eq_int("snapshot TX callback identity",tin->scramble==expected,1,ref);
+ diff_eq_int("snapshot coefficient identity",tin->coeff==publication_coeff,1,ref);
+ *out=*in;rx=(struct v34_shell *)out;t=publication_tx(out);
+ rx->conv=0;rx->put_bits=0;t->conv=0;t->scramble=0;
+}
+static int publication_unwrapped(void)
+{
+ int i;publication_observing=0;diff_begin("getFrame publication: real-callback baseline");publication_setup();
+ diff_eq_int("complete owner",sizeof(publication_owner_a),0xac4c,0);
+ diff_eq_int("scrambler position offset",(char *)&publication_owner_a.scrambler.nbits-(char *)&publication_owner_a,0x2a64,0);
+ diff_eq_int("TX position offset",(char *)&publication_tx(&publication_owner_a)->bitpos-(char *)&publication_owner_a,0x2a64,0);
+ diff_eq_int("position width",sizeof(publication_owner_a.scrambler.nbits),2,0);
+ diff_eq_int("installed source callback",publication_tx(&publication_owner_a)->scramble==scrambleGPC,1,0);
+ diff_eq_int("installed reference callback",publication_tx(&publication_owner_b)->scramble==ref_scrambleGPC,1,0);
+ diff_eq_int("source coefficient owner",publication_tx(&publication_owner_a)->coeff==publication_coeff,1,0);
+ diff_eq_int("reference coefficient owner",publication_tx(&publication_owner_b)->coeff==publication_coeff,1,0);
+ diff_eq_int("source convolution table",publication_tx(&publication_owner_a)->conv==Convolve16,1,0);
+ diff_eq_int("reference convolution table",publication_tx(&publication_owner_b)->conv==ref_Convolve16,1,0);
+ diff_eq_int("idle source input",publication_owner_a.data_enable,0,0);diff_eq_int("idle reference input",publication_owner_b.data_enable,0,0);
+ diff_eq_int("initial position",publication_owner_b.scrambler.nbits,32,0);
+ diff_eq_int("initial span",publication_tx(&publication_owner_b)->span,14,0);diff_eq_int("initial remainder",publication_tx(&publication_owner_b)->remainder,6,0);
+ diff_eq_int("initial repeated width",publication_tx(&publication_owner_b)->idx_width,0,0);diff_eq_int("initial wide width",publication_tx(&publication_owner_b)->wide_bits,16,0);
+ diff_eq_int("initial alternate width",publication_tx(&publication_owner_b)->wide_bits_alt,15,0);
+ for(i=0;i<2;i++) {
+  getFrame(&publication_owner_a);ref_getFrame(&publication_owner_b);
+  diff_eq_int("native position transition",publication_owner_b.scrambler.nbits,i?6:11,i);
+  diff_eq_int("source position transition",publication_owner_a.scrambler.nbits,i?6:11,i);
+  diff_eq_int("native accumulator transition",publication_tx(&publication_owner_b)->wide_accum,i?12:6,i);
+  diff_eq_int("source accumulator transition",publication_tx(&publication_owner_a)->wide_accum,i?12:6,i);
+  publication_normalise(&publication_snap_a[i],&publication_owner_a);publication_normalise(&publication_snap_b[i],&publication_owner_b);
+  diff_eq_obj("unwrapped complete owner",struct v34_object,&publication_snap_a[i],&publication_snap_b[i],i);
+ }
+ return diff_end();
+}
+static int publication_observed(void)
+{
+ static const short args[5]={32,16,18,26,16};static const short results[5]={16,0,2,10,0};int i;
+ diff_begin("getFrame publication: passive callback observer");publication_setup();publication_observing=1;
+ publication_delegate_a=publication_tx(&publication_owner_a)->scramble;publication_delegate_b=publication_tx(&publication_owner_b)->scramble;
+ diff_eq_int("source delegate identity",publication_delegate_a==scrambleGPC,1,0);
+ diff_eq_int("reference delegate identity",publication_delegate_b==ref_scrambleGPC,1,0);
+ publication_trace_n_a=publication_trace_n_b=0;memset(publication_trace_a,0,sizeof(publication_trace_a));memset(publication_trace_b,0,sizeof(publication_trace_b));
+ publication_tx(&publication_owner_a)->scramble=publication_tap_a;publication_tx(&publication_owner_b)->scramble=publication_tap_b;
+ for(i=0;i<2;i++) {
+  getFrame(&publication_owner_a);ref_getFrame(&publication_owner_b);publication_normalise(&publication_norm_a,&publication_owner_a);publication_normalise(&publication_norm_b,&publication_owner_b);
+  diff_eq_obj("observer source noninterference",struct v34_object,&publication_norm_a,&publication_snap_a[i],i);
+  diff_eq_obj("observer reference noninterference",struct v34_object,&publication_norm_b,&publication_snap_b[i],i);
+  diff_eq_obj("publication_observed complete owner",struct v34_object,&publication_norm_a,&publication_norm_b,i);
+  diff_eq_int("publication_observed source callback retained",publication_tx(&publication_owner_a)->scramble==publication_tap_a,1,i);
+  diff_eq_int("publication_observed reference callback retained",publication_tx(&publication_owner_b)->scramble==publication_tap_b,1,i);
+ }
+ diff_eq_int("source callback count",publication_trace_n_a,5,0);diff_eq_int("reference callback count",publication_trace_n_b,5,0);
+ for(i=0;i<5;i++) {
+  diff_eq_int("source callback root",publication_trace_a[i].root_ok,1,i);diff_eq_int("reference callback root",publication_trace_b[i].root_ok,1,i);
+  diff_eq_int("source callback argument",publication_trace_a[i].arg,args[i],i);diff_eq_int("reference callback argument",publication_trace_b[i].arg,args[i],i);
+  diff_eq_int("source delegated return",publication_trace_a[i].result,results[i],i);diff_eq_int("reference delegated return",publication_trace_b[i].result,results[i],i);
+  diff_eq_int("native entry publication",publication_trace_b[i].field,args[i],i);
+  diff_eq_int("callback entry field matches native",publication_trace_a[i].field,publication_trace_b[i].field,i);
+  printf("CALLBACK %d arg=%d/%d field=%d/%d return=%d/%d\n",i,publication_trace_a[i].arg,publication_trace_b[i].arg,publication_trace_a[i].field,publication_trace_b[i].field,publication_trace_a[i].result,publication_trace_b[i].result);
+ }
+ return diff_end();
+}
+
 int
 main(void)
 {
@@ -941,6 +1045,8 @@ main(void)
 	rc |= shell_branch_carry_probe();
 	rc |= limit_case(0);
 	rc |= limit_case(1);
+	rc |= publication_unwrapped();
+	rc |= publication_observed();
 
 	diff_begin("v34 lsbMask");
 	{
