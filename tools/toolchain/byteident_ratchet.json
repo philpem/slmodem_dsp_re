@@ -2,7 +2,7 @@
   "bytes": 86,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1172,
+  "exact": 1173,
   "exact_bytes": 135944,
   "exact_symbols": [
     "B103FP_delete",
@@ -228,6 +228,7 @@
     "V21TX_delete",
     "V21TX_modem",
     "V22FP_GetDiagnostics",
+    "V22FP_delete",
     "V22IIRFilterInit",
     "V22_FSE_free",
     "V22_FSE_getdiag",
@@ -1178,7 +1179,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "grade01": 1210,
+  "grade01": 1211,
   "grade01_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -1408,6 +1409,7 @@
     "V21TX_delete",
     "V21TX_modem",
     "V22FP_GetDiagnostics",
+    "V22FP_delete",
     "V22IIRFilterInit",
     "V22_FSE_free",
     "V22_FSE_getdiag",
@@ -2391,7 +2393,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "matched": 1210,
+  "matched": 1211,
   "matched_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -2621,6 +2623,7 @@
     "V21TX_delete",
     "V21TX_modem",
     "V22FP_GetDiagnostics",
+    "V22FP_delete",
     "V22IIRFilterInit",
     "V22_FSE_free",
     "V22_FSE_getdiag",
@@ -3608,7 +3611,7 @@
   "reference_functions": 1852,
   "regalloc": 38,
   "reloc": 0,
-  "selected_exact": 1175,
+  "selected_exact": 1176,
   "selected_exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -3833,6 +3836,7 @@
     "V21TX_delete",
     "V21TX_modem",
     "V22FP_GetDiagnostics",
+    "V22FP_delete",
     "V22IIRFilterInit",
     "V22_FSE_free",
     "V22_FSE_getdiag",
