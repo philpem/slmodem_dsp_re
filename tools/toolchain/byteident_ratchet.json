@@ -2,7 +2,7 @@
   "bytes": 86,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1173,
+  "exact": 1174,
   "exact_bytes": 135944,
   "exact_symbols": [
     "B103FP_delete",
@@ -496,6 +496,7 @@
     "_ZN14ModulusEncoderC2Ejjjjjjj",
     "_ZN14ModulusEncoderC2Ev",
     "_ZN14V90Demodulator11enterPhase4Ev",
+    "_ZN14V90Demodulator14enterDataPhaseEv",
     "_ZN14V90Demodulator14setSessionFlagEj",
     "_ZN14V90Demodulator24enterChannelVerificationEss",
     "_ZN14V90Demodulator6reInitEv",
@@ -1179,7 +1180,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "grade01": 1211,
+  "grade01": 1212,
   "grade01_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -1681,6 +1682,7 @@
     "_ZN14ModulusEncoderC2Ejjjjjjj",
     "_ZN14ModulusEncoderC2Ev",
     "_ZN14V90Demodulator11enterPhase4Ev",
+    "_ZN14V90Demodulator14enterDataPhaseEv",
     "_ZN14V90Demodulator14setSessionFlagEj",
     "_ZN14V90Demodulator24enterChannelVerificationEss",
     "_ZN14V90Demodulator6reInitEv",
@@ -2393,7 +2395,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "matched": 1211,
+  "matched": 1212,
   "matched_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -2895,6 +2897,7 @@
     "_ZN14ModulusEncoderC2Ejjjjjjj",
     "_ZN14ModulusEncoderC2Ev",
     "_ZN14V90Demodulator11enterPhase4Ev",
+    "_ZN14V90Demodulator14enterDataPhaseEv",
     "_ZN14V90Demodulator14setSessionFlagEj",
     "_ZN14V90Demodulator24enterChannelVerificationEss",
     "_ZN14V90Demodulator6reInitEv",
@@ -3611,7 +3614,7 @@
   "reference_functions": 1852,
   "regalloc": 38,
   "reloc": 0,
-  "selected_exact": 1176,
+  "selected_exact": 1177,
   "selected_exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -4104,6 +4107,7 @@
     "_ZN14ModulusEncoderC2Ejjjjjjj",
     "_ZN14ModulusEncoderC2Ev",
     "_ZN14V90Demodulator11enterPhase4Ev",
+    "_ZN14V90Demodulator14enterDataPhaseEv",
     "_ZN14V90Demodulator14setSessionFlagEj",
     "_ZN14V90Demodulator24enterChannelVerificationEss",
     "_ZN14V90Demodulator6reInitEv",
