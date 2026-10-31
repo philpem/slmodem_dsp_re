@@ -320,13 +320,14 @@ void
 TONE_filter(struct fdsp_tone *t, float *buf, short n)
 {
 	float *dly = t->fir_dly;
+	const float *coef = t->fir_coef;
 	short len = t->fir_len;
 	short idx = t->fir_idx;
 	short i;
 
 	i = n;
 	while (i--) {
-		const float *c = t->fir_coef;
+		const float *c = coef;
 		float acc = 0.0f;
 		int j;
 
