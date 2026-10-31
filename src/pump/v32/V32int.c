@@ -356,8 +356,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		dec->short_04 = 2;
 		FSE(fp)->cfg.decision = FSE_decision_32pt;
 		fp->short_2e = 1;
-		VTBv32_init(&dec->vtb, 2, 0);
 		shift = 4;
+		VTBv32_init(&DEC(fp)->vtb, 2, 0);
 		break;
 
 	case V32_MODE_16T:
@@ -365,8 +365,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 3;
 		FSE(fp)->cfg.decision = FSE_decision_16Tpt;
 		fp->short_2e = 3;
-		VTBv32_init(&DEC(fp)->vtb, 3, 0);
 		shift = 3;
+		VTBv32_init(&DEC(fp)->vtb, 3, 0);
 		break;
 
 	case V32_MODE_64T:
@@ -374,8 +374,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 5;
 		FSE(fp)->cfg.decision = FSE_decision_64pt;
 		fp->short_2e = 4;
-		VTBv32_init(&DEC(fp)->vtb, 4, 0);
 		shift = 5;
+		VTBv32_init(&DEC(fp)->vtb, 4, 0);
 		break;
 
 	case V32_MODE_128T:
@@ -383,8 +383,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 6;
 		FSE(fp)->cfg.decision = FSE_decision_128pt;
 		fp->short_2e = 5;
-		VTBv32_init(&DEC(fp)->vtb, 5, 0);
 		shift = 3;		/* see SetTxModeV32 */
+		VTBv32_init(&DEC(fp)->vtb, 5, 0);
 		break;
 
 	default:
