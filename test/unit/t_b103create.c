@@ -240,19 +240,26 @@ int
 main(void)
 {
 	static const struct {
-		int call_type, v21, high;
+		int call_type, v21, high, f10;
 		const char *name;
 	} cases[] = {
-		{ B103_CALL_ORIGINATE, 0, 0, "originate" },
-		{ B103_CALL_ORIGINATE, 1, 0, "originate v21" },
-		{ B103_CALL_ANSWER,    0, 0, "answer" },
-		{ B103_CALL_ANSWER,    1, 0, "answer v21" },
-		{ B103_CALL_LOOPBACK,  0, 0, "loopback" },
-		{ B103_CALL_LOOPBACK,  0, 1, "loopback high" },
-		{ 99,                  0, 0, "out of range" }
+		{ B103_CALL_ORIGINATE, 0, 0, 1, "originate" },
+		{ B103_CALL_ORIGINATE, 1, 0, 1, "originate v21" },
+		{ B103_CALL_ANSWER,    0, 0, 1, "answer" },
+		{ B103_CALL_ANSWER,    1, 0, 1, "answer v21" },
+		{ B103_CALL_LOOPBACK,  0, 0, 1, "loopback" },
+		{ B103_CALL_LOOPBACK,  0, 1, 1, "loopback high" },
+		{ 99,                  0, 0, 1, "out of range" },
+		{ B103_CALL_ORIGINATE, 0, 0, 0, "originate f10=0" },
+		{ B103_CALL_ORIGINATE, 1, 0, 0, "originate v21 f10=0" },
+		{ B103_CALL_ANSWER,    0, 0, 0, "answer f10=0" },
+		{ B103_CALL_ANSWER,    1, 0, 0, "answer v21 f10=0" }
 	};
 	int rc = 0;
 	unsigned k;
+
+	printf("constructor configuration grid: %lu cases, both ownership paths\n",
+	       (unsigned long)(sizeof(cases) / sizeof(cases[0])));
 
 	diff_begin("B103FP_create, self-allocating");
 	for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
@@ -262,6 +269,7 @@ main(void)
 		cfg.call_type = cases[k].call_type;
 		cfg.v21 = cases[k].v21;
 		cfg.loop_high_channel = cases[k].high;
+		cfg.f10 = cases[k].f10;
 
 		b = ref_B103FP_create(0, &cfg);
 		a = B103FP_create(0, &cfg);
@@ -291,6 +299,7 @@ main(void)
 		cfg.call_type = cases[k].call_type;
 		cfg.v21 = cases[k].v21;
 		cfg.loop_high_channel = cases[k].high;
+		cfg.f10 = cases[k].f10;
 
 		memset(&sa, 0, sizeof(sa));
 		memset(&sb, 0, sizeof(sb));
@@ -317,6 +326,7 @@ main(void)
 		cfg.call_type = cases[k].call_type;
 		cfg.v21 = cases[k].v21;
 		cfg.loop_high_channel = cases[k].high;
+		cfg.f10 = cases[k].f10;
 
 		harness_alloc_reset();
 		fp = ref_B103FP_create(0, &cfg);

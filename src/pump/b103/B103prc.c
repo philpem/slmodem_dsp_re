@@ -800,6 +800,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	/* The receive local oscillator: default frequency, then overridden. */
 	tone = FPM_TONE_CFG;
 	hdx->tone_lo = FPM_TONE_create(NULL, &tone);
+	hdx = fp->hdx;
 	hdx->tone_lo->inc = 0x159a;		/* 1350.1 Hz */
 	hdx->tone_lo->phase = 0;
 
@@ -809,32 +810,60 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	 * radius replaced -- the tone it listens for is the MARK of the pair
 	 * this station receives.
 	 */
-	tone = FPM_TONE_CFG;
-	tone.ratio = 0x55c3;
-	tone.min_level = 6;
-	tone.damp = 0x7c00;
-
 	switch (fp->cfg.call_type) {
 	case B103_CALL_ORIGINATE:
 		hdx->mode = 1;
-		tone.freq = fp->cfg.v21 ? 1650 : 2225;
-		hdx->tone_detect = FPM_TONE_create(NULL, &tone);
-		if (fp->cfg.f10 == 0) {
-			hdx->tx_blocks = 40;
-			hdx->tx = TxHdxMarksB103;
-			hdx->rx = RxHdxDataB103;
-			hdx->substate = B103_STATE_WAIT2;
-			fp->status = 4;
-			fp->flags = (unsigned char)((fp->flags & ~0x40) | 0x34);
+		tone = FPM_TONE_CFG;
+		tone.ratio = 0x55c3;
+		tone.min_level = 6;
+		tone.damp = 0x7c00;
+		if (fp->cfg.v21) {
+			tone.freq = 1650;
+			hdx->tone_detect = FPM_TONE_create(NULL, &tone);
+			if (fp->cfg.f10 == 0) {
+				hdx = fp->hdx;
+				hdx->tx_blocks = 40;
+				hdx->tx = TxHdxMarksB103;
+				hdx->rx = RxHdxDataB103;
+				hdx->substate = B103_STATE_WAIT2;
+				fp->status = 4;
+				fp->flags = (unsigned char)((fp->flags & ~0x40) | 0x34);
+			} else {
+				int v21 = fp->cfg.v21;
+
+				hdx = fp->hdx;
+				hdx->r18 = 1;
+				if (v21)
+					hdx->tone_lo->inc = 0xf9a;	/* 975.1 Hz */
+			}
 		} else {
-			hdx->r18 = 1;
-			if (fp->cfg.v21)
-				hdx->tone_lo->inc = 0xf9a;	/* 975.1 Hz */
+			tone.freq = 2225;
+			hdx->tone_detect = FPM_TONE_create(NULL, &tone);
+			if (fp->cfg.f10 == 0) {
+				hdx = fp->hdx;
+				hdx->tx_blocks = 40;
+				hdx->tx = TxHdxMarksB103;
+				hdx->rx = RxHdxDataB103;
+				hdx->substate = B103_STATE_WAIT2;
+				fp->status = 4;
+				fp->flags = (unsigned char)((fp->flags & ~0x40) | 0x34);
+			} else {
+				int v21 = fp->cfg.v21;
+
+				hdx = fp->hdx;
+				hdx->r18 = 1;
+				if (v21)
+					hdx->tone_lo->inc = 0xf9a;	/* 975.1 Hz */
+			}
 		}
 		break;
 
 	case B103_CALL_ANSWER:
 		hdx->mode = 2;
+		tone = FPM_TONE_CFG;
+		tone.ratio = 0x55c3;
+		tone.min_level = 6;
+		tone.damp = 0x7c00;
 		hdx->r18 = 1;
 		if (fp->cfg.v21) {
 			tone.freq = 1180;
