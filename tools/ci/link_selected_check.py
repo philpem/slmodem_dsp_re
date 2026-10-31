@@ -67,7 +67,7 @@ ROW = re.compile(r"^\s*(EXACT|UNRESOLVED|REGALLOC|RELOC|BYTES|SIZE|NODATA)"
 
 SUMMARY_HEADING = "phase summary (diagnostic)"
 SUMMARY_GRADE01 = re.compile(
-    r"functions right\s*:\s*per-TU grade 0 or 1\s+(\d+)\s*/\s*(\d+)")
+    r"(?:legacy protected|functions right)\s*:\s*per-TU grade 0 or 1\s+(\d+)\s*/\s*(\d+)")
 SUMMARY_SELECTED = re.compile(
     r"right place\s*:\s*link-selected EXACT\s+(\d+)\s*$", re.MULTILINE)
 SUMMARY_EXACT = re.compile(r"per-TU bytes\s*:\s*EXACT\s+(\d+)\s*$",
@@ -262,6 +262,16 @@ def self_test():
         checks.append((label, ok))
 
     expect("known-good fixture passes", FIXTURE, True)
+    new_summary = SUMMARY_FIXTURE.replace(
+        "functions right   : per-TU grade 0 or 1   1182 / 1852",
+        "functions right   : EXACT + REGALLOC   1181 / 1852\n"
+        "  legacy protected  : per-TU grade 0 or 1   1182 / 1852")
+    expect("new reporting format retains the legacy floor", FIXTURE, True, new_summary)
+    checks.append(("new matched total does not replace legacy protected membership",
+                   parse_summary(new_summary)["grade01"] == 1182))
+    expect("matched headline alone cannot stand in for the protected floor", FIXTURE, False,
+           "\n".join(line for line in new_summary.splitlines()
+                     if "legacy protected" not in line))
     expect("empty report rejected", "", False)
     expect("heading missing rejected", FIXTURE.replace("link-selected view",
                                                        "something else"), False)
@@ -377,7 +387,7 @@ def main():
 
     print("link_selected_check: %d name(s), %d record(s), %d resolved, "
           "%d disagreement(s); %d exact-selected name(s) as pinned; "
-          "grade 0-or-1 %d/%d, link-selected EXACT %d vs per-TU EXACT %d"
+          "legacy protected %d/%d, link-selected EXACT %d vs per-TU EXACT %d"
           % (EXPECTED["names"], EXPECTED["records"], EXPECTED["resolved"],
              EXPECTED["disagreements"], len(EXACT_SELECTED),
              parse_summary(summary_text)["grade01"],

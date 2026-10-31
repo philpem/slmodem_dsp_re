@@ -17,8 +17,18 @@ all (finding F616).  It is a rough gauge of completion and nothing else, and it
 has already misled once: the MP CRC work found a source form whose BYTE COUNT
 was closer while its instruction sequence was further away.
 
-So this tool reports one number per function and one count over the tree:
-**exact, or not.**
+The headline reports EXACT, REGALLOC and NONMATCH, with unresolved or missing
+evidence separate. NONMATCH combines mismatching bytes, extents and relocation
+targets: equal size is not fidelity. Low-level verdicts and legacy JSON counters
+remain diagnostic/compatibility records, not independent fidelity grades.
+
+Per-function longest contiguous instruction runs are diagnostic: see fidelity.py
+for normalization. They preserve widths, condition mnemonics, constants, memory
+operands and canonical targets, but do not prove register relationships or branch
+destinations. A 100% reference run can still have extra candidate instructions.
+
+The legacy grade01 ratchet membership includes UNRESOLVED and remains unchanged.
+The headline matched count is EXACT + REGALLOC and excludes UNRESOLVED.
 
 RELOCATED FIELDS ARE COMPARED BY TARGET, NOT BY VALUE, and that is not a
 loosening -- it is the only correct comparison.  A four-byte field under an
@@ -1960,10 +1970,40 @@ def link_selected_report(manifest, linked, out=None, report=None):
     return report
 
 
+def byte_extent(raw, declared):
+    """A refused body still has a declared symbol extent, not measured bytes."""
+    return declared if raw is None else len(raw)
+
+
+def function_fidelity(symbol, scored, candidate_sizes, read_insns, verdict_label):
+    """Diagnostic run over every defining copy; grading is unchanged."""
+    import fidelity
+    records = []
+    for (diagnostic, _), obj in scored:
+        row = {"fidelity": fidelity.category(verdict_label),
+               "diagnostic": diagnostic, "object": os.path.basename(obj),
+               "defining_copies": len(scored),
+               "reference_bytes": candidate_sizes[None],
+               "candidate_bytes": candidate_sizes[obj],
+               "byte_delta": candidate_sizes[obj] - candidate_sizes[None]}
+        try:
+            if diagnostic == "NODATA":
+                raise ValueError("missing or rejected function body; byte diagnostics use declared extent")
+            reference = read_insns(BLOB, symbol)
+            candidate = reference if diagnostic == "EXACT" else read_insns(obj, symbol)
+            row["instructions"] = fidelity.measure(reference, candidate, _padding)
+        except ValueError as error:
+            row.update(instructions=None, run_unavailable=str(error))
+        records.append(row)
+    return fidelity.conservative(records)
+
+
 def print_summary(now, link_available, displaced):
     """One diagnostic line per owner-approved phase.  Opt-in, stdout."""
     print("\nphase summary (diagnostic)")
-    print("  functions right   : per-TU grade 0 or 1   %d / %d"
+    print("  functions right   : EXACT + REGALLOC   %d / %d"
+          % (now["exact"] + now["regalloc"], now["compared"]))
+    print("  legacy protected  : per-TU grade 0 or 1   %d / %d"
           % (now["grade01"], now["compared"]))
     if link_available:
         print("  right place       : link-selected EXACT   %d"
@@ -1996,8 +2036,8 @@ def main():
     ap.add_argument("--linked", metavar="PATH",
                     help="partial-link artifact (default: <build>/partial/dsplibs.o)")
     ap.add_argument("--near", type=int, metavar="N", default=0,
-                    help="list the N symbols closest to closing, by |instruction "
-                         "delta| with alignment padding stripped")
+                    help="list N NONMATCH functions by longest contiguous "
+                         "instruction run / reference, padding stripped")
     ap.add_argument("--why", metavar="SYMBOL",
                     help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
@@ -2011,7 +2051,8 @@ def main():
     ap.add_argument("--update", action="store_true",
                     help="record the current exact-symbol set as the new floor")
     ap.add_argument("--json-out", metavar="PATH",
-                    help="write the final exact/regalloc counts as JSON")
+                    help="write counts, per-function fidelity, instruction runs "
+                         "and byte diagnostics as JSON (legacy keys retained)")
     a = ap.parse_args()
 
     if a.self_test:
@@ -2019,60 +2060,49 @@ def main():
     if a.ratchet_self_test:
         return ratchet_self_test()
 
-    if a.near:
-        #
-        # SORT BY DELTA, NOT BY SIZE.  A brief that picked targets by BLOB SIZE
-        # sent an agent at symbols whose deltas were -99, +16, -40, +20 and -32
-        # while calling them "the closest to reach"; the real near misses were
-        # plus or minus one to three and none of them was on the list (7865).
-        # Size is how big the function is.  Delta is how far away we are.
-        #
-        blob = sizes(BLOB)
-        ours = {}
-        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
-            for s in sizes(o):
-                ours.setdefault(s, o)
-        rows = []
-        for k in sorted(x for x in ours if x in blob):
-            ab, ar = body(BLOB, k)
-            bb, br = body(ours[k], k)
-            v, nd = verdict(ab, ar, bb, br)
-            if v in ("EXACT", "UNRESOLVED", "NODATA"):
-                continue
-            try:
-                ia = [r for r in insns(BLOB, k) if not _padding(*r)]
-                ib = [r for r in insns(ours[k], k) if not _padding(*r)]
-            except Exception:
-                continue
-            rows.append((abs(len(ia) - len(ib)), len(ib) - len(ia), v, blob[k], k))
-        rows.sort(key=lambda r: (r[0], -r[3]))
-        print("  %d symbol(s) not yet exact, nearest first by |instruction delta|"
-              "\n  (delta is OURS minus BLOB, padding stripped)\n" % len(rows))
-        print("  %-6s %-9s %8s   %s" % ("delta", "grade", "blob B", "symbol"))
-        for _, d, v, sz, k in rows[:a.near]:
-            print("  %+6d %-9s %8d   %s" % (d, v, sz, k[:70]))
-        return 0
-
     if a.why:
+        import fidelity
         k = a.why
-        ours = {}
-        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
-            for s in sizes(o):
-                ours.setdefault(s, o)
-        if k not in ours:
-            sys.exit("byteident.py: %s is not defined by any object in %s"
-                     % (k, OURS))
-        if k not in sizes(BLOB):
+        definitions = [(obj, sizes(obj)) for obj in sorted(glob.glob(os.path.join(OURS, "*.o")))]
+        definitions = [(obj, declared[k]) for obj, declared in definitions if k in declared]
+        blob = sizes(BLOB)
+        if not definitions:
+            sys.exit("byteident.py: %s is not defined by any object in %s" % (k, OURS))
+        if k not in blob:
             sys.exit("byteident.py: the blob does not define %s" % k)
-        ab, ar = body(BLOB, k)
-        bb, br = body(ours[k], k)
-        v, nd = verdict(ab, ar, bb, br)
-        print("  %s\n  grade 0 verdict: %s%s"
-              % (k, v, "" if not nd else "  (%d byte(s) differ)" % nd))
-        why = alpha_why(insns(BLOB, k), insns(ours[k], k))
-        print("  grade 1 verdict: %s" % ("ACCEPT" if why is None else "REJECT"))
-        if why is not None:
-            print("    %s" % why)
+        reference_body, reference_relocs = body(BLOB, k)
+        print("  %s: %d defining copies; every copy shown" % (k, len(definitions)))
+        records = []
+        for obj, declared in definitions:
+            own, own_relocs = body(obj, k)
+            verdict_label, differences = verdict(reference_body, reference_relocs, own, own_relocs)
+            why = None
+            if verdict_label not in ("EXACT", "UNRESOLVED", "NODATA", "RELOC"):
+                why = alpha_why(insns(BLOB, k), insns(obj, k))
+                if why is None:
+                    verdict_label = "REGALLOC"
+            scored = [((verdict_label, differences), obj)]
+            row = function_fidelity(k, scored,
+                    {None: byte_extent(reference_body, blob[k]), obj: byte_extent(own, declared)},
+                    insns, verdict_label)
+            records.append(row)
+            print("  %s: fidelity %s" % (obj, row["fidelity"]))
+            print("    byte diagnostic: reference %d, candidate %d, delta %+d" %
+                  (row["reference_bytes"], row["candidate_bytes"], row["byte_delta"]))
+            if row["instructions"] is None:
+                print("    instruction run unavailable: %s" % row["run_unavailable"])
+            else:
+                run = row["instructions"]
+                print("    longest contiguous instruction run: %d / %d (%.1f%% of reference); candidate %d instructions" %
+                      (run["longest_run"], run["reference_instructions"], run["reference_percent"],
+                       run["candidate_instructions"]))
+            if why is not None:
+                print("    register-renaming rejection: %s" % why)
+        worst = fidelity.conservative(records)
+        run = worst["instructions"]
+        print("  Conservative run across %d copies: %s" %
+              (len(records), "unavailable" if run is None else "%d / %d (%.1f%%)" %
+               (run["longest_run"], run["reference_instructions"], run["reference_percent"])))
         return 0
 
     #
@@ -2137,13 +2167,25 @@ def main():
     #
     RANK = {"EXACT": 0, "UNRESOLVED": 1, "REGALLOC": 2, "RELOC": 3,
             "BYTES": 4, "SIZE": 5, "NODATA": 6}
+    import fidelity
+    instruction_cache = {}
+
+    def read_insns(path, symbol):
+        key = (path, symbol)
+        if key not in instruction_cache:
+            instruction_cache[key] = insns(path, symbol)
+        return instruction_cache[key]
+
+    functions = {}
     comdat_split = []
     for k in common:
         ab, ar = body(BLOB, k)
         objs = allobjs.get(k, [ours[k]])
         scored = []
+        candidate_sizes = {None: byte_extent(ab, blob[k])}
         for o in objs:
             bb2, br2 = body(o, k)
+            candidate_sizes[o] = byte_extent(bb2, sizes(o).get(k, 0)) if bb2 is None else len(bb2)
             scored.append((verdict(ab, ar, bb2, br2), o))
         if len({s[0][0] for s in scored}) > 1:
             comdat_split.append((k, sorted({s[0][0] for s in scored})))
@@ -2161,9 +2203,10 @@ def main():
         # promoted two destructors that call a different symbol.
         #
         if v not in ("EXACT", "UNRESOLVED", "NODATA", "RELOC"):
-            if alpha_equal(insns(BLOB, k), insns(ours[k], k)):
+            if alpha_equal(read_insns(BLOB, k), read_insns(ours[k], k)):
                 v, n = "REGALLOC", 0
         buckets[v].append((n, blob[k], k))
+        functions[k] = function_fidelity(k, scored, candidate_sizes, read_insns, v)
 
     n = len(common)
     print("  blob    : %s" % BLOB)
@@ -2205,22 +2248,19 @@ def main():
             "attribution and the binutils\n  2.15 image), or pass "
             "--link-manifest/--linked.\n  Refusing to ratchet a metric that "
             "cannot report its phase-2 denominator.")
-    print("  grade 0  EXACT      same bytes, same places  : %4d  (%.1f%%)"
-          % (ex, 100.0 * ex / n))
-    print("           UNRESOLVED as EXACT, but a section  : %4d" % un)
-    print("                      relocation cannot be")
-    print("                      compared by name (604)")
-    print("  grade 1  REGALLOC   same instructions and    : %4d" % ra)
-    print("                      operands, renamed per")
-    print("                      live range")
-    print("           ------------------------------------------")
-    print("           grade 0 or 1                        : %4d  (%.1f%%)"
-          % (ex + un + ra, 100.0 * (ex + un + ra) / n))
-    print("  RELOC   -- bytes agree, a target differs : %4d" % len(buckets["RELOC"]))
-    print("  BYTES   -- same size, bytes differ       : %4d" % len(buckets["BYTES"]))
-    print("  SIZE    -- different size                : %4d" % len(buckets["SIZE"]))
-    if buckets["NODATA"]:
-        print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
+    nonmatch = sum(len(buckets[name]) for name in ("BYTES", "SIZE", "RELOC"))
+    print("  EXACT      same bytes and relocation targets : %4d  (%.1f%%)" % (ex, 100.0 * ex / n))
+    print("  REGALLOC   instruction/operand renaming proof: %4d  (%.1f%%)" % (ra, 100.0 * ra / n))
+    print("  Matched    EXACT + REGALLOC                  : %4d / %d (%.1f%%)" %
+          (ex + ra, n, 100.0 * (ex + ra) / n))
+    print("  NONMATCH   function does not match           : %4d" % nonmatch)
+    print("  UNRESOLVED relocation evidence incomplete    : %4d" % un)
+    print("  NODATA     could not be disassembled         : %4d" % len(buckets["NODATA"]))
+    runs = fidelity.summary(functions)
+    print("  Instruction runs measured: %d / %d functions; %d unavailable" %
+          (runs["measured_functions"], n, runs["unavailable_functions"]))
+    print("  Runs abstract GP register identities and local layout; widths, conditions,")
+    print("  constants and canonical relocation targets remain. Diagnostic, not a proof.")
 
     exact_bytes = sum(blob[k] for _, _, k in buckets["EXACT"])
     compared_bytes = sum(blob[k] for k in common)
@@ -2240,6 +2280,9 @@ def main():
            "bytes": len(buckets["BYTES"]),
            "size": len(buckets["SIZE"]),
            "nodata": len(buckets["NODATA"]),
+           "nonmatch": nonmatch,
+           "function_fidelity": functions,
+           "instruction_runs": runs,
            "grade01": len(grade01_symbols),
            "selected_exact": None if selected is None else len(selected),
            RATCHET_EXACT_SYMBOLS: exact_symbols,
@@ -2262,7 +2305,7 @@ def main():
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
             f.write("\n")
-        print("\nratchet updated: %d exact symbol(s), %d grade 0-or-1, "
+        print("\nratchet updated: %d exact symbol(s), %d legacy protected, "
               "%d link-selected exact; %d compared, %d regalloc"
               % (now["exact"], now["grade01"], now["selected_exact"],
                  now["compared"], now["regalloc"]))
@@ -2296,7 +2339,7 @@ def main():
             print("\nRATCHET FAILED -- a banked symbol left the three-phase "
                   "floor and the\nevidence does not justify it.  `make period` "
                   "proves BEHAVIOUR, not CODE\nGENERATION, so it cannot see this.")
-            print("    exact %d -> %d, grade 0-or-1 %d -> %d, "
+            print("    exact %d -> %d, legacy protected %d -> %d, "
                   "link-selected exact %d -> %d"
                   % (was["exact"], now["exact"], was["grade01"],
                      now["grade01"], was["selected_exact"],
@@ -2333,7 +2376,7 @@ def main():
                   now["grade01"] > was["grade01"] or
                   now["selected_exact"] > was["selected_exact"])
         print("\nratchet OK%s" % ("" if not gained else
-              " (exact %d -> %d, grade 0-or-1 %d -> %d, link-selected exact "
+              " (exact %d -> %d, legacy protected %d -> %d, link-selected exact "
               "%d -> %d, regalloc %d -> %d)"
               % (was["exact"], now["exact"], was["grade01"], now["grade01"],
                  was["selected_exact"], now["selected_exact"],
@@ -2345,13 +2388,8 @@ def main():
             print("  %6d  %s" % (sz, k))
         return 0
 
-    for name, label in (("RELOC", "differing relocation target(s)"),
-                        ("BYTES", "differing byte(s)")):
-        rows = sorted(buckets[name], key=lambda r: r[0])[:a.limit]
-        if rows:
-            print("\n%s, closest first -- %s:" % (name, label))
-            for d, sz, k in rows:
-                print("  %5d of %5d  %s" % (d, sz, k))
+    fidelity.print_rows(functions, a.near or a.limit)
+
     return 0
 
 

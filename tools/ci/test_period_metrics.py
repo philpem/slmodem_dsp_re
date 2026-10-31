@@ -85,7 +85,7 @@ class ReviewedLossControls(unittest.TestCase):
         self.head = m.metrics(1, ["keep"], 2, 0, 0, 0, 0, 0, 3, 50)
         status, text = self.run_cli([review()])
         self.assertEqual(status, 0)
-        self.assertIn("| Byte-identical functions | 2 | 1 | -1 | **:red_circle: regression**", text)
+        self.assertIn("| EXACT functions | 2 | 1 | -1 | **:red_circle: regression**", text)
         self.assertIn("1 reviewed, 0 unreviewed / 1 lost", text)
 
     def test_stale_base_fails(self):
@@ -208,6 +208,124 @@ class ReviewedLossControls(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("1 reviewed, 0 displaced, 0 unreviewed / 1 lost", text)
         self.assertIn("Reviewed loss `lost`", text)
+
+
+class FidelityReportControls(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "metrics.json"
+        sys.path.insert(0, str(m.ROOT / "tools/toolchain"))
+        import fidelity
+        self.fidelity = fidelity
+
+    def sample(self, unavailable=False):
+        data = m.metrics(0, [], 0, 0, 0, 1, 0, 0, 1, 0)
+        row = dict(fidelity="NONMATCH", reference_bytes=12, candidate_bytes=12,
+                   byte_delta=0, instructions=None)
+        if unavailable:
+            row["run_unavailable"] = "empty instruction stream"
+        else:
+            row["instructions"] = dict(reference_instructions=4, candidate_instructions=4,
+                                       longest_run=2, reference_percent=50.0)
+        data.update(nonmatch=1, function_fidelity={"example": row})
+        data["instruction_runs"] = self.fidelity.summary(data["function_fidelity"])
+        return data
+
+    def load(self, data):
+        self.path.write_text(json.dumps(data))
+        return m.load(self.path)
+
+    def test_new_report_loads_and_prints_counts_percentages(self):
+        base, head = self.sample(), self.sample()
+        head["function_fidelity"]["example"]["instructions"].update(longest_run=3, reference_percent=75.0)
+        head["instruction_runs"] = self.fidelity.summary(head["function_fidelity"])
+        self.assertEqual(self.load(head), head)
+        text = "\n".join(m.render(base, head)[0])
+        self.assertIn("2 / 4 (50.0%)", text)
+        self.assertIn("3 / 4 (75.0%)", text)
+        self.assertIn("1 changed / 1 common functions", text)
+
+    def test_legacy_counts_remain_readable_and_unknown_runs_are_not_zero(self):
+        data = m.metrics(0, [], 0, 0, 0, 1, 0, 0, 1, 0)
+        self.assertEqual(self.load(data), data)
+        text = "\n".join(m.render(data, self.sample())[0])
+        self.assertIn("Base: unavailable (legacy report)", text)
+        self.assertIn("Per-function run changes unavailable", text)
+
+    def test_invalid_new_reports_are_refused(self):
+        import copy
+        valid = self.sample()
+        mutations = [
+            ("wrong nonmatch", lambda x: x.update(nonmatch=0)),
+            ("missing function", lambda x: x["function_fidelity"].clear()),
+            ("missing summary", lambda x: x.pop("instruction_runs")),
+            ("bad summary", lambda x: x["instruction_runs"].update(measured_functions=0)),
+            ("unknown normalization", lambda x: x["instruction_runs"].update(normalization="unknown")),
+            ("false match", lambda x: x["function_fidelity"]["example"].update(fidelity="EXACT")),
+            ("negative bytes", lambda x: x["function_fidelity"]["example"].update(candidate_bytes=-1)),
+            ("wrong byte delta", lambda x: x["function_fidelity"]["example"].update(byte_delta=1)),
+            ("longer than reference", lambda x: x["function_fidelity"]["example"]["instructions"].update(longest_run=5)),
+            ("nonfinite percentage", lambda x: x["function_fidelity"]["example"]["instructions"].update(reference_percent=float("nan"))),
+            ("wrong percentage", lambda x: x["function_fidelity"]["example"]["instructions"].update(reference_percent=75.0)),
+            ("empty reference", lambda x: x["function_fidelity"]["example"]["instructions"].update(reference_instructions=0)),
+            ("unexplained unavailable", lambda x: x["function_fidelity"]["example"].update(instructions=None)),
+        ]
+        for name, change in mutations:
+            with self.subTest(corruption=name):
+                bad = copy.deepcopy(valid)
+                change(bad)
+                with self.assertRaises(ValueError):
+                    self.load(bad)
+        self.assertEqual(self.load(valid), valid)
+
+    def test_unavailable_is_reported_outside_measured_denominator(self):
+        data = self.sample(unavailable=True)
+        self.assertEqual(self.load(data), data)
+        text = "\n".join(m.render(data, data)[0])
+        self.assertIn("measured **0 / 1 functions**, 1 unavailable", text)
+        self.assertNotIn("(0.0%)", text[text.index("### Contiguous"):])
+
+    def test_no_changes_is_an_explicit_measured_result(self):
+        data = self.sample()
+        text = "\n".join(m.render(data, data)[0])
+        self.assertIn("0 changed / 1 common functions", text)
+
+    def test_size_bucket_transfer_does_not_report_fidelity_progress(self):
+        base = m.metrics(0, [], 0, 0, 0, 1, 0, 0, 1, 0)
+        head = m.metrics(0, [], 0, 0, 0, 0, 1, 0, 1, 0)
+        text = "\n".join(m.render(base, head)[0])
+        self.assertIn("| NONMATCH functions | 1 | 1 | +0 | :white_circle: no change", text)
+        self.assertNotIn("| Different size |", text)
+        self.assertNotIn("| Different bytes, same size |", text)
+
+    def test_nonmatch_to_regalloc_is_progress_not_red_regalloc(self):
+        base = m.metrics(0, [], 0, 0, 0, 1, 0, 0, 1, 0)
+        head = m.metrics(0, [], 1, 0, 0, 0, 0, 0, 1, 0)
+        text = "\n".join(m.render(base, head)[0])
+        self.assertIn("| REGALLOC functions | 0 | 1 | +1 | :white_circle: informational", text)
+        self.assertIn("| EXACT + REGALLOC functions | 0 | 1 | +1 | :green_circle: better", text)
+
+    def test_unresolved_is_not_credited_as_matched(self):
+        data = m.metrics(0, [], 0, 0, 1, 0, 0, 0, 1, 0)
+        data["grade01"] = 1  # Legacy accounting must not leak into the headline.
+        text = "\n".join(m.render(data, data)[0])
+        self.assertIn("| EXACT + REGALLOC functions | 0 | 0 |", text)
+        self.assertIn("| UNRESOLVED functions (not certified) | 1 | 1 |", text)
+
+
+    def test_per_function_exact_names_must_match_protected_names(self):
+        data = self.sample()
+        data.update(exact=1, exact_symbols=["different-symbol"], bytes=0, nonmatch=0)
+        data["function_fidelity"]["example"]["fidelity"] = "EXACT"
+        with self.assertRaisesRegex(ValueError, "EXACT membership"):
+            self.load(data)
+
+    def test_legacy_protected_membership_cannot_be_reassigned(self):
+        data = self.sample()
+        data["grade01_symbols"] = ["example"]
+        with self.assertRaisesRegex(ValueError, "protected membership"):
+            self.load(data)
 
 
 if __name__ == "__main__":
