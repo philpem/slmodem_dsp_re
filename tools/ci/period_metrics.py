@@ -290,6 +290,25 @@ def nonmatch(metrics):
     return sum(metrics[name] for name in ("bytes", "size", "reloc"))
 
 
+def matched_symbols(metrics):
+    """Named EXACT/REGALLOC membership, excluding uncertified relocations.
+
+    Legacy count-only reports remain readable, but cannot identify REGALLOC
+    members. With no REGALLOC functions their exact-symbol set is sufficient.
+    Never substitute grade01_symbols: that legacy set includes UNRESOLVED.
+    """
+    functions = metrics.get("function_fidelity")
+    if functions is not None:
+        return {symbol for symbol, row in functions.items()
+                if row["fidelity"] in ("EXACT", "REGALLOC")}
+    return set(metrics["exact_symbols"]) if metrics["regalloc"] == 0 else None
+
+
+def matched_losses(base, head):
+    before, after = matched_symbols(base), matched_symbols(head)
+    return None if before is None or after is None else sorted(before - after)
+
+
 def run_cell(row):
     run = row["instructions"]
     return ("unavailable" if run is None else "%d / %d (%.1f%%)" %
@@ -354,8 +373,9 @@ def render_runs(base, head, limit=25):
 def render(base, head, reviewed=None, rejected=None, displaced=None):
     """Render the base-versus-head markdown table and return (lines, lost).
 
-    `lost` always includes every loss, including explicitly reviewed losses
-    and reviewed displacements.  The caller rejects any loss without matching
+    `lost` includes every EXACT loss, including explicitly reviewed losses
+    and reviewed displacements. Matched-name losses are checked independently.
+    The caller rejects any EXACT loss without matching
     base/body review evidence or a hash-pinned displacement.  The two
     acceptance paths are reported separately: a displacement is a bounded
     layout/TU decision, not a claim that the old body was reviewed.
@@ -363,6 +383,7 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
     exact_delta = head["exact"] - base["exact"]
     lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
     gained = sorted(set(head["exact_symbols"]) - set(base["exact_symbols"]))
+    lost_matched = matched_losses(base, head)
     exact_status = ("**:red_circle: regression**" if lost else
                     "**:green_circle: pass**")
 
@@ -383,6 +404,8 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
         change = after - before
         status = (status_cell(change, direction) if direction is not None else
                   ":white_circle: informational" if change else ":white_circle: no change")
+        if label == "EXACT + REGALLOC functions" and lost_matched:
+            status = "**:red_circle: regression**"
         lines.append("| %s | %d | %d | %s | %s |" %
                      (label, before, after, delta(change), status))
     exact_byte_delta = head["exact_bytes"] - base["exact_bytes"]
@@ -400,6 +423,17 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
     if gained:
         lines.append("**New byte-identical functions:** " +
                      ", ".join("`%s`" % symbol for symbol in gained))
+    if lost_matched is None:
+        lines.append("Matched membership is unavailable in a legacy report "
+                     "with REGALLOC functions; --check requires fresh "
+                     "per-function codegen data.")
+    else:
+        lines.append("**EXACT/REGALLOC membership:** %d lost / %d previously "
+                     "matched functions." %
+                     (len(lost_matched), len(matched_symbols(base))))
+        if lost_matched:
+            lines.append("**Lost matched functions:** " +
+                         ", ".join("`%s`" % symbol for symbol in lost_matched))
     if reviewed is not None:
         if displaced is None:
             lines.append("**Loss review:** %d reviewed, %d unreviewed / %d lost functions." %
@@ -440,8 +474,10 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
                  "relocation-target mismatches; equal size is not fidelity. "
                  "REGALLOC counts alone have no preferred direction: both a "
                  "NONMATCH→REGALLOC transition and a REGALLOC→EXACT transition "
-                 "improve fidelity. Legacy grade01 accounting and all loss gates "
-                 "are unchanged; the headline matched total excludes UNRESOLVED.")
+                 "improve fidelity. EXACT/REGALLOC membership losses fail even "
+                 "when another function replaces them or an exact-loss review "
+                 "is present. REGALLOC→EXACT preserves matched membership. "
+                 "Legacy grade01 accounting is separate; UNRESOLVED is not matched.")
     lines += render_runs(base, head)
     return lines, lost
 
@@ -514,6 +550,35 @@ def self_test():
     check("SIZE and BYTES are absent as separate headline rows",
           row(lines, "Different size") is None and row(lines, "Different bytes, same size") is None)
 
+    def named(grades):
+        return dict(function_fidelity={name: {"fidelity": grade}
+                                       for name, grade in grades.items()},
+                    exact_symbols=[name for name, grade in grades.items()
+                                   if grade == "EXACT"],
+                    regalloc=sum(grade == "REGALLOC" for grade in grades.values()))
+
+    matched = named({"crc": "REGALLOC", "keep": "EXACT"})
+    check("matched excludes unresolved", matched_symbols(named(
+        {"crc": "REGALLOC", "pending": "UNRESOLVED"})) == {"crc"})
+    check("REGALLOC to EXACT retains its name", matched_losses(
+        matched, named({"crc": "EXACT", "keep": "EXACT"})) == [])
+    for grade in ("NONMATCH", "UNRESOLVED"):
+        check("REGALLOC to %s loses membership" % grade, matched_losses(
+            matched, named({"crc": grade, "keep": "EXACT"})) == ["crc"])
+    downgraded = named({"crc": "REGALLOC", "keep": "REGALLOC"})
+    check("EXACT to REGALLOC retains matched membership",
+          matched_losses(matched, downgraded) == [])
+    check("EXACT to REGALLOC retains its separate exact loss",
+          set(matched["exact_symbols"]) - set(downgraded["exact_symbols"]) == {"keep"})
+    check("an equal gain cannot conceal a lost name", matched_losses(
+        matched, named({"replacement": "REGALLOC", "keep": "EXACT"})) == ["crc"])
+    check("a missing symbol is a membership loss", matched_losses(
+        matched, named({"keep": "EXACT"})) == ["crc"])
+    check("legacy REGALLOC counts cannot establish membership",
+          matched_symbols(dict(exact_symbols=[], regalloc=1)) is None)
+    check("legacy without REGALLOC has known membership",
+          matched_symbols(dict(exact_symbols=["keep"], regalloc=0)) == {"keep"})
+
     # --- displacement ledger: accepted, stale, and wrong-metric controls ----
     def head_body(symbol):
         return hashlib.sha256(("head:" + symbol).encode()).hexdigest()
@@ -577,7 +642,8 @@ def main():
     ap.add_argument("--base", help="base metrics JSON")
     ap.add_argument("--head", help="head metrics JSON")
     ap.add_argument("--check", action="store_true",
-                    help="fail on any unreviewed byte-identical function loss")
+                    help="fail on unreviewed EXACT losses or any "
+                         "EXACT/REGALLOC membership loss")
     ap.add_argument("--reviewed-losses", help="explicit base/body-pinned review JSON")
     ap.add_argument("--displaced",
                     help="body-pinned displacement ledger (tools/ci/displaced.json)")
@@ -605,6 +671,10 @@ def main():
     try:
         base = load(args.base)
         head = load(args.head)
+        lost_matched = matched_losses(base, head)
+        if args.check and lost_matched is None:
+            raise ValueError("REGALLOC membership is unavailable; regenerate "
+                             "both reports with byteident.py --json-out")
         reviews = load_reviews(args.reviewed_losses) if args.reviewed_losses else []
         displacements = load_displacements(args.displaced) if args.displaced else None
         if args.reviewed_losses and (not args.head_objects or
@@ -634,7 +704,7 @@ def main():
                     symbol, "no review or displacement")
     lines, lost = render(base, head, accepted, rejected, displaced)
     print("\n".join(lines))
-    return 1 if args.check and rejected else 0
+    return 1 if args.check and (rejected or lost_matched) else 0
 
 
 if __name__ == "__main__":

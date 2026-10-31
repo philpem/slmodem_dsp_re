@@ -19,6 +19,28 @@ RELOCS = {1: ("R_386_32", ("symbol", "owner", 0))}
 DIGEST = m.body_digest(RAW, RELOCS)
 
 
+def report(grades, exact_bytes=None):
+    """Named per-function measurements, as emitted by current byteident."""
+    sys.path.insert(0, str(m.ROOT / "tools/toolchain"))
+    import fidelity
+    exact = sorted(name for name, grade in grades.items() if grade == "EXACT")
+    data = m.metrics(len(exact), exact,
+                     sum(grade == "REGALLOC" for grade in grades.values()), 0,
+                     sum(grade == "UNRESOLVED" for grade in grades.values()),
+                     sum(grade == "NONMATCH" for grade in grades.values()), 0,
+                     sum(grade == "NODATA" for grade in grades.values()),
+                     len(grades), len(exact) * 10 if exact_bytes is None else exact_bytes)
+    data["function_fidelity"] = {
+        name: dict(fidelity=grade, reference_bytes=10, candidate_bytes=10,
+                   byte_delta=0, instructions=None,
+                   run_unavailable="control has no instruction stream")
+        for name, grade in grades.items()}
+    data["instruction_runs"] = fidelity.summary(data["function_fidelity"])
+    data["grade01_symbols"] = sorted(name for name, grade in grades.items()
+                                      if grade in ("EXACT", "REGALLOC", "UNRESOLVED"))
+    return data
+
+
 def review():
     return dict(base_sha=BASE, symbol="lost", head_body_sha256=DIGEST,
                 accepted_commit="2" * 40,
@@ -31,8 +53,9 @@ class ReviewedLossControls(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.base = m.metrics(2, ["keep", "lost"], 1, 0, 0, 0, 0, 0, 3, 100)
-        self.head = m.metrics(2, ["keep", "gain"], 1, 0, 0, 0, 0, 0, 3, 90)
+        self.base = report({"keep": "EXACT", "lost": "EXACT", "reg": "REGALLOC"}, 100)
+        self.head = report({"keep": "EXACT", "gain": "EXACT",
+                            "lost": "REGALLOC", "reg": "REGALLOC"}, 90)
 
     def run_cli(self, reviews=None, base_sha=BASE, digest=DIGEST,
                 displaced=None):
@@ -75,14 +98,16 @@ class ReviewedLossControls(unittest.TestCase):
         self.assertIn("-10 bytes", text)
 
     def test_additional_loss_is_not_covered(self):
-        self.head = m.metrics(1, ["gain"], 2, 0, 0, 0, 0, 0, 3, 50)
+        self.head = report({"gain": "EXACT", "keep": "REGALLOC",
+                            "lost": "REGALLOC", "reg": "REGALLOC"}, 50)
         status, text = self.run_cli([review()])
         self.assertEqual(status, 1)
         self.assertIn("1 reviewed, 1 unreviewed / 2 lost", text)
         self.assertIn("Unreviewed loss `keep`: no review", text)
 
     def test_review_does_not_hide_lower_exact_count(self):
-        self.head = m.metrics(1, ["keep"], 2, 0, 0, 0, 0, 0, 3, 50)
+        self.head = report({"keep": "EXACT", "lost": "REGALLOC",
+                            "reg": "REGALLOC"}, 50)
         status, text = self.run_cli([review()])
         self.assertEqual(status, 0)
         self.assertIn("| EXACT functions | 2 | 1 | -1 | **:red_circle: regression**", text)
@@ -208,6 +233,96 @@ class ReviewedLossControls(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn("1 reviewed, 0 displaced, 0 unreviewed / 1 lost", text)
         self.assertIn("Reviewed loss `lost`", text)
+
+
+class MatchedMembershipControls(unittest.TestCase):
+    run_cli = ReviewedLossControls.run_cli
+    displacement = ReviewedLossControls.displacement
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.base = report({"keep": "EXACT", "crc": "REGALLOC"})
+        self.head = report({"keep": "EXACT", "crc": "REGALLOC"})
+
+    def test_regalloc_to_exact_preserves_membership(self):
+        self.head = report({"keep": "EXACT", "crc": "EXACT"})
+        status, text = self.run_cli()
+        self.assertEqual(status, 0)
+        self.assertIn("0 lost / 2 previously matched", text)
+        self.assertIn("**New byte-identical functions:** `crc`", text)
+
+    def test_regalloc_losses_fail_including_unresolved_and_missing_symbols(self):
+        for grade in ("NONMATCH", "UNRESOLVED", "NODATA", None):
+            with self.subTest(head_fidelity=grade):
+                grades = {"keep": "EXACT"}
+                if grade is not None:
+                    grades["crc"] = grade
+                self.head = report(grades)
+                if grade == "UNRESOLVED":
+                    self.assertIn("crc", self.head["grade01_symbols"])
+                status, text = self.run_cli()
+                self.assertEqual(status, 1)
+                self.assertIn("**Lost matched functions:** `crc`", text)
+
+    def test_an_equal_or_larger_gain_cannot_replace_a_matched_symbol(self):
+        for additions in (1, 2):
+            with self.subTest(new_regalloc_functions=additions):
+                grades = {"keep": "EXACT", "crc": "NONMATCH"}
+                grades.update(("new%d" % i, "REGALLOC") for i in range(additions))
+                self.head = report(grades)
+                status, text = self.run_cli()
+                self.assertEqual(status, 1)
+                self.assertIn("**Lost matched functions:** `crc`", text)
+                matched_row = next(line for line in text.splitlines()
+                                   if line.startswith("| EXACT + REGALLOC functions |"))
+                self.assertIn("**:red_circle: regression**", matched_row)
+
+    def test_exact_to_regalloc_still_requires_its_separate_exact_review(self):
+        self.base = report({"lost": "EXACT"})
+        self.head = report({"lost": "REGALLOC"})
+        status, text = self.run_cli()
+        self.assertEqual(status, 1)
+        self.assertIn("0 lost / 1 previously matched", text)
+        self.assertIn("Unreviewed loss `lost`", text)
+        self.assertEqual(self.run_cli([review()])[0], 0)
+
+    def test_exact_review_or_displacement_cannot_excuse_unmatched_membership(self):
+        self.base = report({"lost": "EXACT"})
+        for grade in ("NONMATCH", "UNRESOLVED"):
+            for evidence in ("review", "displacement"):
+                with self.subTest(head_fidelity=grade, evidence=evidence):
+                    self.head = report({"lost": grade})
+                    kwargs = ({"reviews": [review()]} if evidence == "review" else
+                              {"displaced": [self.displacement()]})
+                    status, text = self.run_cli(**kwargs)
+                    self.assertEqual(status, 1)
+                    self.assertIn("**Lost matched functions:** `lost`", text)
+
+    def test_nonmatch_and_unresolved_are_not_previously_matched(self):
+        for before in ("NONMATCH", "UNRESOLVED"):
+            for after in ("NONMATCH", "REGALLOC", "EXACT"):
+                with self.subTest(base_fidelity=before, head_fidelity=after):
+                    self.base = report({"candidate": before})
+                    self.head = report({"candidate": after})
+                    self.assertEqual(self.run_cli()[0], 0)
+
+    def test_legacy_regalloc_counts_are_readable_but_cannot_certify_membership(self):
+        self.base = self.head = m.metrics(0, [], 1, 0, 0, 0, 0, 0, 1, 0)
+        text = "\n".join(m.render(self.base, self.head)[0])
+        self.assertIn("Matched membership is unavailable", text)
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors), self.assertRaises(SystemExit) as raised:
+            self.run_cli()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("REGALLOC membership is unavailable", errors.getvalue())
+
+    def test_legacy_without_regalloc_has_known_exact_only_membership(self):
+        self.base = self.head = m.metrics(1, ["keep"], 0, 0, 0, 0, 0, 0, 1, 10)
+        status, text = self.run_cli()
+        self.assertEqual(status, 0)
+        self.assertIn("0 lost / 1 previously matched", text)
 
 
 class FidelityReportControls(unittest.TestCase):
