@@ -2366,41 +2366,6 @@ tx1_moh_reinit(struct v34_object *o, const char *msg)
 	o->short_abe6 = 1;
 }
 
-static int
-tx1_moh_hold(struct v34_object *o)
-{
-	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
-		return V34TX1_LOOP;			/* 0x6431f */
-
-	if (o->moh_path_sel != 0) {
-		if (dsplibs_debug_level > 1)		/* 0x6889f */
-			dsplibs_debug_printf(
-				"MOH: Timeout waiting for MH sequence under"
-				" MHreq, disconnecting...\r\n");
-		/* 0x688b4 */
-		tx1_moh_cleardown(o);
-		o->short_abe2 = 1;
-		return V34TX1_LOOP;			/* 0x629cf */
-	}
-
-	if ((unsigned)(o->moh_message - 2) > 1u) {
-		/* 0x6923d */
-		tx1_moh_reinit(o,
-			       "MOH: Timeout waiting for MH sequence under"
-			       " MHreq, initiating retrain\r\n");
-		return V34TX1_LOOP;			/* 0x629cf */
-	}
-
-	if (dsplibs_debug_level > 1)			/* 0x65031 */
-		dsplibs_debug_printf(
-			"MOH: Timeout waiting for MH sequence under"
-			" cleardown, terminating connection without" " acknowledge\r\n");
-
-	/* 0x65046 */
-	tx1_moh_cleardown(o);
-	return V34TX1_LOOP;				/* 0x64326 */
-}
-
 static void
 tx1_moh_on_hold(struct v34_object *o)
 {
