@@ -32,6 +32,7 @@
 
 extern struct faxvmi *ref_FAXVMI_create(struct faxvmi *vmi,
 					const struct faxvmi_cfg *cfg);
+extern void ref_FAXVMI_delete(struct faxvmi *vmi);
 extern int ref_FAXVMI_process(struct faxvmi *vmi, unsigned short *data,
 			      short *pcm, short *count,
 			      unsigned short *result);
@@ -318,6 +319,36 @@ run_create_fresh(void)
 		cmp_link("cfg==NULL link", va->link, vb->link, 100);
 	}
 
+	return diff_end();
+}
+
+/*
+ * Constructor representation/copy control, not a waveform history. The
+ * caller's config bytes +0x00..+0x0f contain no pointers. +0x02 is unnamed
+ * data: the native constructor copies it in the first DWORD but does not
+ * read it to select allocation sizes, framing mode or dispatch slot.
+ * Keep the five existing configuration rows unchanged and give this
+ * otherwise identical null-slot input a distinct +0x02 representation.
+ */
+static int
+run_create_config_copy(void)
+{
+	const struct faxvmi_cfg cfg = {
+		0, 0x1234, 0, 32, 10, 20, 0, NULL, NULL
+	};
+	struct faxvmi *va, *vb;
+
+	diff_begin("FAXVMI_create: configuration representation copy");
+	va = ref_FAXVMI_create(NULL, &cfg);
+	vb = FAXVMI_create(NULL, &cfg);
+	diff_eq_obj("config pointer-free prefix", unsigned char[16], vb, va, 0);
+	diff_eq_obj("config pointer-free prefix matches input", unsigned char[16],
+		    vb, &cfg, 0);
+	cmp_vmi_scalars("config copy", va, vb, 0);
+	cmp_framer("config copy framer", va->framer, vb->framer, 0);
+	cmp_link("config copy link", va->link, vb->link, 0);
+	ref_FAXVMI_delete(va);
+	FAXVMI_delete(vb);
 	return diff_end();
 }
 
@@ -643,5 +674,6 @@ main(void)
 	rc |= run_process();
 	rc |= run_control();
 	rc |= run_create_ring_boundary();
+	rc |= run_create_config_copy();
 	return rc;
 }

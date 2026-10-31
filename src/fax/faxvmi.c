@@ -53,7 +53,9 @@
 		(sizeof(void *) != 4 || (int)__builtin_offsetof(struct faxvmi_link, field) == (off)) \
 			? 1 : -1]
 
+VMI_ASSERT_OFF(cfg, 0x00);
 VMI_ASSERT_OFF(mode, 0x00);
+VMI_ASSERT_OFF(pad_0002, 0x02);
 VMI_ASSERT_OFF(reverse, 0x04);
 VMI_ASSERT_OFF(fifo_size, 0x08);
 VMI_ASSERT_OFF(max_frame, 0x0a);
@@ -62,6 +64,7 @@ VMI_ASSERT_OFF(slot, 0x0e);
 VMI_ASSERT_OFF(modem_cfg, 0x10);
 VMI_ASSERT_OFF(ptr_0014, 0x14);
 VMI_ASSERT_OFF(underrun, 0x18);
+typedef char faxvmi_cfg_extent[(sizeof(void *) != 4 || sizeof(struct faxvmi_cfg) == 0x18) ? 1 : -1];
 VMI_ASSERT_OFF(overflow, 0x1c);
 VMI_ASSERT_OFF(status, 0x20);
 VMI_ASSERT_OFF(framer, 0x24);
@@ -182,10 +185,12 @@ faxvmi_create_fn const vxx_create[13] = {
  *     (0x95165, 0x9521f, 0x95278) to gate every OTHER allocation and nothing
  *     else: the ring/frame-buffer/link-buffer CONTENTS are cleared or
  *     refilled unconditionally either way.
- *   - the six-dword config copy (`src`) is written once because the object's
- *     two source arms -- the caller's `cfg` and the `FAXVMI_CFG` default --
- *     rejoin at the exact same six stores (0x95141..0x95160 / 0x95376..
- *     0x953a6).
+ *   - the caller's cfg and FAXVMI_CFG default arms each copy six DWORDs
+ *     (0x95141..0x95160 / 0x95376..0x953a6), modelled by the existing
+ *     faxvmi_cfg prefix view, including its unnamed halfword at +0x02.
+ *   - dynamic buffer loops extend the incremented index with MOVZWL and
+ *     compare WORDs unsigned; the fixed 50/200-element loops instead use
+ *     CWTL and signed WORD comparisons (0x95297..0x9529c / 0x952b7..0x952bc).
  *   - `fr->unpack_bit = fr->pack_bit; fr->short_002e = fr->pad_001e;` is a
  *     DWORD reload-and-store in the object (0x951d4, 0x95201: the whole
  *     dword at framer+0x1c is read back into a register and stored whole to
@@ -196,13 +201,11 @@ faxvmi_create_fn const vxx_create[13] = {
 struct faxvmi *
 FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 {
-	struct faxvmi_framer *fr;
-	struct faxvmi_link *lk;
-	const struct faxvmi_cfg *src;
 	int created = 0;
 	int need;
 	unsigned short ring;
-	int i;
+	unsigned short i;
+	short j;
 
 	if (vmi == NULL) {
 		vmi = sysdep_malloc(sizeof(*vmi));
@@ -211,74 +214,66 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 		vmi->link = sysdep_malloc(sizeof(*vmi->link));
 	}
 
-	src = (cfg != NULL) ? cfg : &FAXVMI_CFG;
-	vmi->mode = src->mode;
-	vmi->pad_0002 = src->short_0002;
-	vmi->reverse = src->reverse;
-	vmi->fifo_size = src->fifo_size;
-	vmi->max_frame = src->max_frame;
-	vmi->frame_size = src->frame_size;
-	vmi->slot = src->slot;
-	vmi->modem_cfg = src->modem_cfg;
-	vmi->ptr_0014 = src->ptr_0014;
+	if (cfg != NULL)
+		vmi->cfg = *cfg;
+	else
+		vmi->cfg = FAXVMI_CFG;
 
-	fr = vmi->framer;
 
 	if (created) {
 		need = vmi->max_frame + 3;
 		ring = (vmi->fifo_size >= need) ? vmi->fifo_size : (unsigned short)need;
-		fr->fifo = sysdep_malloc((unsigned int)ring * 2);
-		fr->fifo_size = ring;
+		vmi->framer->fifo = sysdep_malloc((unsigned int)ring * 2);
+		vmi->framer->fifo_size = ring;
 	}
-	if (fr->fifo_size != 0) {
-		for (i = 0; i < fr->fifo_size; i++)
-			fr->fifo[i] = 0;
+	if (vmi->framer->fifo_size != 0) {
+		for (i = 0; i < vmi->framer->fifo_size; i++)
+			vmi->framer->fifo[i] = 0;
 	}
-	fr->rd = 0;
-	fr->wr = 0;
-	fr->count = 0;
-	fr->pack_bit = 0;
-	fr->residue = 0;
-	fr->unpack_bit = fr->pack_bit;		/* dword reload, see above */
-	fr->short_002e = fr->pad_001e;
-	fr->pack_mask = 0;
-	fr->pack_word = (unsigned int)-1;
-	fr->pack_acc = (unsigned int)-1;
-	fr->unpack_mask = 0;
-	fr->unpack_word = (unsigned int)-1;
-	fr->unpack_acc = (unsigned int)-1;
-	fr->async_hunt = 1;
-	fr->zero_run_bits = 0;
-	fr->zero_run_send = 0;
-	fr->zero_run_seen = 0;
+	vmi->framer->rd = 0;
+	vmi->framer->wr = 0;
+	vmi->framer->count = 0;
+	vmi->framer->pack_bit = 0;
+	vmi->framer->residue = 0;
+	vmi->framer->unpack_bit = vmi->framer->pack_bit;		/* dword reload, see above */
+	vmi->framer->short_002e = vmi->framer->pad_001e;
+	vmi->framer->pack_mask = 0;
+	vmi->framer->pack_word = (unsigned int)-1;
+	vmi->framer->pack_acc = (unsigned int)-1;
+	vmi->framer->unpack_mask = 0;
+	vmi->framer->unpack_word = (unsigned int)-1;
+	vmi->framer->unpack_acc = (unsigned int)-1;
+	vmi->framer->async_hunt = 1;
+	vmi->framer->zero_run_bits = 0;
+	vmi->framer->zero_run_send = 0;
+	vmi->framer->zero_run_seen = 0;
 
 	if (created) {
-		fr->frame = sysdep_malloc((unsigned int)vmi->frame_size * 2);
-		fr->frame_size = vmi->frame_size;
+		vmi->framer->frame = sysdep_malloc((unsigned int)vmi->frame_size * 2);
+		vmi->framer->frame_size = vmi->frame_size;
 	}
-	if (fr->frame_size != 0) {
-		for (i = 0; i < fr->frame_size; i++)
-			fr->frame[i] = 0;
+	if (vmi->framer->frame_size != 0) {
+		for (i = 0; i < vmi->framer->frame_size; i++)
+			vmi->framer->frame[i] = 0;
 	}
-	fr->pack_frame_left = 0;
-	fr->frame_len = 0;
-	fr->flags_wanted = 2;
-	fr->pack_flagging = 1;
-	fr->ones = 0;
-	fr->in_frame = 0;
+	vmi->framer->pack_frame_left = 0;
+	vmi->framer->frame_len = 0;
+	vmi->framer->flags_wanted = 2;
+	vmi->framer->pack_flagging = 1;
+	vmi->framer->ones = 0;
+	vmi->framer->in_frame = 0;
 
-	lk = vmi->link;
 	if (created) {
-		lk->modem = 0;
-		lk->buf = sysdep_malloc(0x64);
-		lk->ptr_0000 = sysdep_malloc(0x190);
+		vmi->link->modem = 0;
+		vmi->link->buf = sysdep_malloc(0x64);
+		vmi->link->ptr_0000 = sysdep_malloc(0x190);
 	}
-	for (i = 0; i <= 49; i++)
-		lk->buf[i] = 0xffff;
-	for (i = 0; i <= 199; i++)
-		lk->ptr_0000[i] = 0;
+	for (j = 0; j <= 49; j++)
+		vmi->link->buf[j] = 0xffff;
+	for (j = 0; j <= 199; j++)
+		vmi->link->ptr_0000[j] = 0;
 
-	vxx_create[(unsigned short)vmi->slot](lk,
+	vxx_create[(unsigned short)vmi->slot](vmi->link,
 					      vmi->modem_cfg);
 
 	vmi->underrun = 1;
