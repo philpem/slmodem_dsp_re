@@ -219,6 +219,125 @@ check_count_bound(void)
 	return bad;
 }
 
+/*
+ * A reset/configured demapper component history, not a negotiated call or
+ * waveform claim.  The complete owner is zeroed as VPcmV34Create does;
+ * preinitdigital produces the trellis/cost/state/history reset.  Configure
+ * the receive shell with initdigital's 2400-baud, 14400-bps operands.  Its
+ * twelve coefficient shorts at +0xe84 retain v34modeminit's zero values.
+ *
+ * Zero complex input preserves zero state parameters.  For this wrap=1
+ * configuration all sixteen traceback codes map their +/-1 coordinate pairs
+ * through kLookup to grid[264]==0, so every shell sub-index and table index
+ * is zero.  No manually seeded path costs, trellis, parameters or counters
+ * are needed.  The real role-selected descrambler remains installed.
+ */
+extern const short scale2400[28];
+extern const short ref_scale2400[28];
+
+static int
+shell_reset_history(void)
+{
+	static struct {
+		unsigned before;
+		struct v34_object obj;
+		unsigned after;
+	} a, b;
+	static struct v34_shell sa, sb;
+	struct v34_shell *ra = (struct v34_shell *)&a.obj;
+	struct v34_shell *rb = (struct v34_shell *)&b.obj;
+	short divisor_a = (short)(scale2400[19] >> 1);
+	short divisor_b = (short)(ref_scale2400[19] >> 1);
+	int n;
+
+	diff_begin("v34 demap reset/configured history");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.before = b.before = 0x13579bdf;
+	a.after = b.after = 0x2468ace0;
+	a.obj.role = b.obj.role = 0x65;
+	preinitdigital(&a.obj);
+	ref_preinitdigital(&b.obj);
+	initV34((char *)&a.obj + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a.obj + 0xe84), divisor_a);
+	ref_initV34((char *)&b.obj + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b.obj + 0xe84), divisor_b);
+
+	diff_eq_int("component owner extent", sizeof(a.obj), 0xac4c, 0);
+	diff_eq_int("component input owner", (char *)&a.obj.receiver.target_re
+		    - (char *)&a.obj, 0x474, 0);
+	diff_eq_int("component output owner", (char *)&a.obj.receiver.dp.point
+		    - (char *)&a.obj, 0x470, 0);
+	diff_eq_int("component native divisor", divisor_a, 456, 0);
+	diff_eq_int("component reference divisor", divisor_b, 456, 0);
+	diff_eq_int("component reset index", ra->state_idx, 0, 0);
+	diff_eq_int("component configured count", ra->count, 14, 0);
+	diff_eq_int("component configured span", ra->span, 12, 0);
+	diff_eq_int("component configured subframe limit",
+		    ra->subframe_limit, 24, 0);
+	diff_eq_int("component configured frame count", ra->frame_count, 12, 0);
+	diff_eq_int("component configured frame limit", ra->frame_limit, 14, 0);
+	diff_eq_int("component configured index width", ra->idx_width, 1, 0);
+	diff_eq_int("component configured cost shift", ra->cost_shift, 10, 0);
+	diff_eq_int("component reset latch", ra->latched, 0, 0);
+
+	for (n = 0; n < 176; n++) {
+		int x, y;
+
+		/* Native decoderv34 uses these distinct adjacent packed points. */
+		a.obj.receiver.target_re = b.obj.receiver.target_re = 0;
+		a.obj.receiver.target_im = b.obj.receiver.target_im = 0;
+		x = demapFrame(&a.obj, &a.obj.receiver.target_re,
+			       &a.obj.receiver.dp.point, (short)n);
+		y = ref_demapFrame(&b.obj, &b.obj.receiver.target_re,
+				   &b.obj.receiver.dp.point, (short)n);
+		diff_eq_int("component return", x, y, n);
+		diff_eq_int("component parity return", y, n & 1, n);
+		diff_eq_int("component advancing state", ra->state_idx,
+			    ((n + 1) / 2) & 31, n);
+		diff_eq_int("component warmup latch", rb->latched, n >= 167, n);
+		if (n < 71)
+			diff_eq_int("component no early emission",
+				    a.obj.descrambler.count, 0, n);
+		if (n == 71)
+			diff_eq_int("component first emission progressed",
+				    b.obj.descrambler.count > 0, 1, n);
+
+		/* Check each pointer's owner before normalizing its snapshot. */
+		diff_eq_int("component coefficient owner", ra->coeff ==
+			    (const short *)((char *)&a.obj + 0xe84), 1, n);
+		diff_eq_int("component reference coefficient owner", rb->coeff ==
+			    (const short *)((char *)&b.obj + 0xe84), 1, n);
+		diff_eq_int("component code table", ra->conv == Convolve16, 1, n);
+		diff_eq_int("component reference code table",
+			    rb->conv == ref_Convolve16, 1, n);
+		diff_eq_int("component reset callback", ra->scramble ==
+			    (v34_scramble_fn)descrambleGPA, 1, n);
+		diff_eq_int("component reference reset callback", rb->scramble ==
+			    (v34_scramble_fn)ref_descrambleGPA, 1, n);
+		sa = *ra;
+		sb = *rb;
+		sa.coeff = sb.coeff = 0;
+		sa.conv = sb.conv = 0;
+		sa.put_bits = sb.put_bits = 0;
+		diff_eq_obj("component shell after symbol", struct v34_shell,
+			    &sa, &sb, n);
+		diff_eq_int("component head guard", a.before, 0x13579bdf, n);
+		diff_eq_int("component reference head guard", b.before, 0x13579bdf, n);
+		diff_eq_int("component tail guard", a.after, 0x2468ace0, n);
+		diff_eq_int("component reference tail guard", b.after, 0x2468ace0, n);
+	}
+	diff_eq_int("component final state", ra->state_idx, 24, 0);
+	diff_eq_int("component final subframe count", ra->subframe_count, 16, 0);
+	diff_eq_int("component final frame count", ra->frame_count, 1, 0);
+	diff_eq_int("component final latch", ra->latched, 1, 0);
+	diff_eq_int("component final descrambler count",
+		    a.obj.descrambler.count, 16, 0);
+	diff_eq_int("component retains reset data gate", a.obj.data_enable, 0, 0);
+	diff_eq_int("component no data publication", a.obj.rx_n, 0, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -669,6 +788,8 @@ main(void)
 		}
 	}
 	rc |= diff_end();
+
+	rc |= shell_reset_history();
 
 	diff_begin("v34 lsbMask");
 	{
