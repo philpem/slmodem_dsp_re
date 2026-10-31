@@ -82,7 +82,6 @@ V21TX_status(void *modem, struct v21_status *st)
 	if (st == NULL)
 		return 0;
 
-	tx_flags = ((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS];
 	st->protocol = tx->cfg.protocol;
 	st->tx_bps = V21_STATUS_BPS;
 	st->rx_bps = 0;
@@ -93,6 +92,7 @@ V21TX_status(void *modem, struct v21_status *st)
 	st->flags &= (unsigned char)~(V21_STATUS_BIT0 | V21_STATUS_BIT1);
 	st->short_10 = 0;
 	st->short_12 = 0;
+	tx_flags = ((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS];
 	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
 	st->flags = (unsigned char)(tx_flags & V21_STATUS_BIT2);
 
