@@ -1548,7 +1548,7 @@ static int
 v8_hs_cj(struct v8 *v, int ch)
 {
 	int mask = V8_HS_CHAR_TOP;
-	int i;
+	short i;
 
 	for (i = 0; i < V8_HS_CHAR_BITS; i++) {
 		if ((ch & mask) != 0) {
