@@ -640,6 +640,22 @@ def body(path, sym):
             expected = ("R_386_32", ("section", proof['table_section'], proof['table_offset']))
             if relocs.get(off) == expected:
                 relocs[off] = ("R_386_32", proof['identity'])
+    # Exact-only destination identity. Unlike the ABI-aware proofs above,
+    # this does not establish a register-renaming domain. Keep its descriptor
+    # visible to every body consumer, but explicitly prohibit grade 1 below.
+    unresolved = [(off, kind, target) for off, (kind, target) in relocs.items()
+                  if target[0] == 'section']
+    if len(unresolved) == 1 and b'\xff\x24\x85' in raw:
+        import guarded_switch
+        try:
+            proof = guarded_switch.prove(path, sym)
+        except guarded_switch.Refused:
+            proof = None
+        if proof is not None:
+            off = proof['relocation_offset']
+            expected = ('R_386_32', ('section', proof['table_section'], proof['table_offset']))
+            if relocs.get(off) == expected:
+                relocs[off] = ('R_386_32', proof['identity'])
     return raw, relocs
 
 
@@ -845,6 +861,8 @@ def alpha_why(x, y):
     # alignment filler does not were rejected on length, which is a difference
     # in nothing.
     #
+    if any("@R_386_32:('exact-switch-v1'," in operands for _, operands in x + y):
+        return 'anonymous switch destination proved for exact bytes only'
     x = [r for r in x if not _padding(*r)]
     y = [r for r in y if not _padding(*r)]
 
