@@ -312,11 +312,11 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	st->flag_bits.eq_frozen = fp->eq_adapt == 0;
 	st->flag_bits.bit6 = 0;
 	st->flag_bits.bit7 = (((unsigned char *)&modem->params.options)[1] >> 1) & 1;
-	st->r20 = 0;
-	st->r24 = 0;
 	st->flags1 = (unsigned char)((st->flags1 & 0xfe)
 				     | ((((unsigned char *)&modem->params.options)[1]
 					 >> 2) & 1));
+	st->r20 = 0;
+	st->r24 = 0;
 
 	fp = FP(modem);
 	st->r18 = fp->sre.active;
