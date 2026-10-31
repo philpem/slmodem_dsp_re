@@ -1023,10 +1023,10 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	{
 		int overall = 0x7fff;
 		const short *kt = kTable;
+		int bestb = 3;
 
 		for (i = 15; i >= 0; i--) {
 			int bestc = 0x7fff;
-			int bestb = 3;
 			const short *prior = &s->cost[3 - (i >> 2)];
 			int hi;
 
