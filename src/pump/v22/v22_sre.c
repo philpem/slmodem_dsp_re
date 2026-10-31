@@ -489,13 +489,15 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
 						   > 0x62;
 				}
 
-				if (update)
+				if (update) {
+					sre->group = (short)(group + 1);
 					sre_update(sre, (short)yq, (short)xq);
+				}
 
 				/*
-				 * The original also stores group + 1 before
-				 * the update; every path from there reaches
-				 * this line, so that store is dead.
+				 * Publish group + 1 before the update call,
+				 * then clear it at the common group boundary
+				 * below, as the object does.
 				 */
 				sre->group = 0;
 				sre->acc_x = 0;
