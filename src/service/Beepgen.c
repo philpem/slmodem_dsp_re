@@ -383,32 +383,38 @@ detector_set_output_in_stream(struct detector *d)
 int
 check_for_valid(unsigned short *w)
 {
+	int valid = 0;
 	if (w[0] != w[1])
-		return 0;
+		goto done;
 	if (w[0] != w[2])
-		return 0;
+		goto done;
 	if (w[0] == w[3])
-		return 0;
+		goto done;
 	if (w[0] == w[4])
-		return 0;
+		goto done;
 	if (w[0] == w[5])
-		return 0;
+		goto done;
 	if (w[0] == w[6])
-		return 0;
-	return 1;
+		goto done;
+	valid = 1;
+done:
+	return valid;
 }
 
 /* The short window: w[0] == w[1], and w[0] absent from w[2]..w[3]. */
 int
 check_for_valid_easy(unsigned short *w)
 {
+	int valid = 0;
 	if (w[0] != w[1])
-		return 0;
+		goto done;
 	if (w[0] == w[2])
-		return 0;
+		goto done;
 	if (w[0] == w[3])
-		return 0;
-	return 1;
+		goto done;
+	valid = 1;
+done:
+	return valid;
 }
 
 /*
