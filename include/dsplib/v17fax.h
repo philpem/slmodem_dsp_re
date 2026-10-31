@@ -188,11 +188,31 @@ struct v17_status {
 	 * `r12` comes from an unrelated source -- two modules disagree, so
 	 * retained neutral (Batch 28). */
 	short short_12;		/* +0x12 always 0 here                       */
-	unsigned char flags;	/* +0x14 ASSIGNED, not merged; see D1032     */
+	/* Native RX SETE/shift updates use this byte bitfield view. */
+	union {
+		unsigned char flags; /* +0x14 byte view */
+		struct {
+			unsigned char bit0 : 1;
+			unsigned char bit1 : 1;
+			unsigned char bit2 : 1;
+			unsigned char bit3 : 1;
+			unsigned char bit4 : 1;
+			unsigned char bit5 : 1;
+			unsigned char bit6 : 1;
+			unsigned char bit7 : 1;
+		} flag_bits;
+	};
 	unsigned char flags1;	/* +0x15 bit 0 cleared, bits 1..7 preserved  */
 	short short_16;		/* +0x16 NOT WRITTEN                         */
 	int int_18;		/* +0x18 <- params + 0x18                    */
 };
+typedef char v17_status_flags_at_14[
+	__builtin_offsetof(struct v17_status, flags) == 0x14 ? 1 : -1];
+typedef char v17_status_bit_view_at_14[
+	__builtin_offsetof(struct v17_status, flag_bits) == 0x14 ? 1 : -1];
+typedef char v17_status_bit_view_one_byte[
+	sizeof(((struct v17_status *)0)->flag_bits) == 1 ? 1 : -1];
+typedef char v17_status_size_1c[sizeof(struct v17_status) == 0x1c ? 1 : -1];
 
 /*
  * The one bit of `params + 0x10` that reaches `flags`.  Named by its

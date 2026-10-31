@@ -119,7 +119,7 @@ V17RX_status(void *modem, struct v17_status *status)
 	 */
 	rx = (unsigned char *)modem;
 
-	status->protocol = (short)RXROOT(modem)->cfg.protocol;
+	status->protocol = (short)RXROOT(modem)->cfg.protocol_word;
 	status->tx_bps = 0;
 	status->rx_bps = RXROOT(modem)->cfg.bit_rate;
 	/*
@@ -135,22 +135,15 @@ V17RX_status(void *modem, struct v17_status *status)
 	status->short_10 = 0;
 	status->short_12 = RXROOT(modem)->cfg.bit_rate;
 
-	status->flags &= (unsigned char)~V17_STATUS_FLAG_01;
-	status->flags = (unsigned char)
-		((status->flags & ~V17_STATUS_FLAG_02)
-		 | ((RXSTATE(modem)->r1c & V17RXS_001C_BIT0)
-		    << 1));
-	status->flags &= (unsigned char)~V17_STATUS_FLAG_04;
-	status->flags = (unsigned char)
-		((status->flags & ~V17_STATUS_FLAG_08)
-		 | ((RXSTATE(modem)->r00 == 0) << 3));
-	status->flags |= V17_STATUS_FLAG_10;
+	status->flag_bits.bit0 = 0;
+	status->flag_bits.bit1 = RXSTATE(modem)->r1c & V17RXS_001C_BIT0;
+	status->flag_bits.bit2 = 0;
+	status->flag_bits.bit3 = RXSTATE(modem)->r00 == 0;
+	status->flag_bits.bit4 = 1;
+	status->flag_bits.bit5 = RXSTATE(modem)->r10 == 0;
+	status->flag_bits.bit6 = 1;
+	status->flag_bits.bit7 = 0;
 	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
-	status->flags = (unsigned char)
-		((status->flags & ~V17_STATUS_FLAG_20)
-		 | ((RXSTATE(modem)->r10 == 0) << 5));
-	status->flags |= V17_STATUS_FLAG_40;
-	status->flags &= (unsigned char)~V17_STATUS_FLAG_80;
 
 	return 1;
 }
