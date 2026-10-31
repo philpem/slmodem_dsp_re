@@ -275,17 +275,16 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 	short widx = ring->widx;
 	int quad = statep->quad;
 	int trellis = statep->trellis;
-	int prev = statep->prev;
-	unsigned int i;
+	short prev = statep->prev;
 
-	for (i = 0; i < count; i++) {
+	while (count--) {
 		unsigned short word;
 		int rot;
 		int masked;
 
 		/* In place, and the caller sees it. */
-		data[i] = (unsigned short)(data[i] & mask_all);
-		masked = data[i];
+		*data = (unsigned short)(*data & mask_all);
+		masked = *data;
 
 		trellis = TrellisEncodeDifTable[trellis
 						+ ((masked >> nbits) * 4)];
@@ -300,6 +299,7 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 		       >> (quad * 4)) & 7;
 		sym[widx] = (short)(((rot << nbits) + (word & mask_low))
 				    | tag);
+		data++;
 		widx = smc_ring_advance(widx, len);
 	}
 
