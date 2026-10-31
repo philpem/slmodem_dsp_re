@@ -112,7 +112,7 @@ faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 	short written = 0;
 	short i;
 
-	for (i = count; i != 0; i--) {
+	for (i = count; i-- != 0;) {
 		short len = (short)*p;
 		unsigned short fcs;
 		int taken;
@@ -121,22 +121,34 @@ faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 		if ((int)fr->count + (int)len + 3 >= (int)fr->fifo_size)
 			break;
 
-		fr->fifo[fr->wr] = (unsigned short)(len + 2);
-		fr->wr = (unsigned short)(fr->wr + 1);
+		fr->fifo[fr->wr++] = (unsigned short)(len + 2);
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
 		fr->count = (unsigned short)(fr->count + 3);
 		written = (short)(written + 1);
 		p++;
 
-		fcs = (unsigned short)faxvmi_gen_fcs16(p, len);
+		{
+			unsigned short *q = p;
+			short k;
+			fcs = 0xffff;
+			for (k = len; k-- != 0;) {
+				unsigned int octet = *q++;
+				unsigned int t = ((octet << 8) ^ fcs) & 0xf000u;
+				fcs = (unsigned short)((((fcs ^ (t >> 11)) << 4) ^ t));
+				fcs |= t >> 12;
+				t = ((octet << 12) ^ fcs) & 0xf000u;
+				fcs = (unsigned short)((((fcs ^ (t >> 11)) << 4) ^ t));
+				fcs |= t >> 12;
+			}
+			fcs = (unsigned short)~fcs;
+		}
 
 		taken = vmi->underrun;
-		for (j = len; j != 0; j--) {
+		for (j = len; j-- != 0;) {
 			if (fr->count >= fr->fifo_size)
 				goto put_fcs;
-			fr->fifo[fr->wr] = *p++;
-			fr->wr = (unsigned short)(fr->wr + 1);
+			fr->fifo[fr->wr++] = *p++;
 			if (fr->wr >= fr->fifo_size)
 				fr->wr = 0;
 			fr->count = (unsigned short)(fr->count + 1);
@@ -145,12 +157,10 @@ faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 		vmi->underrun = taken;
 
 	put_fcs:
-		fr->fifo[fr->wr] = (unsigned short)(fcs >> 8);
-		fr->wr = (unsigned short)(fr->wr + 1);
+		fr->fifo[fr->wr++] = (unsigned short)(fcs >> 8);
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
-		fr->fifo[fr->wr] = (unsigned short)(fcs & 0xff);
-		fr->wr = (unsigned short)(fr->wr + 1);
+		fr->fifo[fr->wr++] = (unsigned short)(fcs & 0xff);
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
 	}

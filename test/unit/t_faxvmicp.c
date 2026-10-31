@@ -38,6 +38,9 @@ extern int ref_FAXVMI_process(struct faxvmi *vmi, unsigned short *data,
 			      unsigned short *result);
 extern int ref_FAXVMI_control(struct faxvmi *vmi,
 			      const struct faxvmi_ctl *ctl);
+extern int ref_faxvmi_write_frame(struct faxvmi *vmi,
+				 unsigned short **src, short count);
+extern int ref_faxvmi_gen_fcs16(unsigned short *src, short count);
 extern void *ref_vxx_create[13];
 extern void *ref_vxx_process[13];
 extern void *ref_vxx_control[13];
@@ -663,11 +666,77 @@ run_control(void)
 	return diff_end();
 }
 
+/* Constructor-produced empty rings; every input is a complete, bounded
+ * length-prefixed octet frame.  The second write observes the first write's
+ * actual occupancy rather than planting a ring state.  Existing writer tests
+ * separately explore bounded synthetic occupancy and wrap positions. */
+static int
+run_write_frames_created(void)
+{
+	static const struct faxvmi_cfg cfg = { 2, 0, 0, 32, 20, 32, 0, NULL,
+						NULL };
+	unsigned trial, accepted = 0, stopped = 0, empty = 0;
+
+	diff_begin("faxvmi_write_frame: constructor histories");
+	for (trial = 0; trial < 40; trial++) {
+		struct faxvmi *va = ref_FAXVMI_create(NULL, &cfg);
+		struct faxvmi *vb = FAXVMI_create(NULL, &cfg);
+		unsigned short a[66] = { 0 }, b[66] = { 0 }, *pa = a, *pb = b;
+		unsigned frame, n = 0, pass;
+		short requested = (short)(trial % 4);
+		for (frame = 0; frame < 3; frame++) {
+			unsigned j, len = (trial + frame * 7) % 21;
+			a[n++] = (unsigned short)len;
+			for (j = 0; j < len; j++)
+				a[n++] = (unsigned short)((trial * 17 + j * 29) & 255);
+		}
+		memcpy(b, a, n * sizeof(*a));
+		for (pass = 0; pass < 2; pass++) {
+			unsigned short *before = pa;
+			int ra = ref_faxvmi_write_frame(va, &pa, requested);
+			int rb = faxvmi_write_frame(vb, &pb, requested);
+			long tag = (long)(trial * 2 + pass);
+			diff_eq_int("created writer return (%ld)", rb, ra, tag);
+			diff_eq_int("created writer cursor (%ld)", pb - b, pa - a, tag);
+			diff_eq_obj("created writer source", unsigned short[66],
+				    b, a, tag);
+			cmp_vmi_scalars("created writer", va, vb, tag);
+			cmp_framer("created writer framer", va->framer, vb->framer, tag);
+			diff_eq_obj("created writer fifo", unsigned short[32],
+				    vb->framer->fifo, va->framer->fifo, tag);
+			accepted += (ra > 0);
+			stopped += (ra < requested);
+			if (pass == 0 && ra > 0) {
+				unsigned len = before[0];
+				unsigned short fcs = ref_faxvmi_gen_fcs16(before + 1,
+								(short)len);
+				diff_eq_int("created writer FCS high (%ld)",
+					    vb->framer->fifo[len + 1], fcs >> 8, tag);
+				diff_eq_int("created writer FCS low (%ld)",
+					    vb->framer->fifo[len + 2], fcs & 255, tag);
+				empty += (len == 0);
+			}
+			/* Only unconsumed complete frames are offered again. */
+			requested = (short)(requested - ra);
+		}
+		ref_FAXVMI_delete(va);
+		FAXVMI_delete(vb);
+	}
+	diff_eq_int("constructor histories accepted frames (%ld)", accepted > 0, 1,
+		    (long)accepted);
+	diff_eq_int("constructor histories hit capacity (%ld)", stopped > 0, 1,
+		    (long)stopped);
+	diff_eq_int("constructor histories emitted empty frames (%ld)", empty > 0, 1,
+		    (long)empty);
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 
+	rc |= run_write_frames_created();
 	rc |= run_tables();
 	rc |= run_create_fresh();
 	rc |= run_create_reinit();
