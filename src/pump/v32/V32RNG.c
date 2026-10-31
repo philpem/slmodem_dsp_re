@@ -265,12 +265,9 @@ V32RngInitNextState(struct v32_modem *modem)
 		hdx->tx_state = (void *)TxHdxCarrierState;
 		hdx->state_left = 0x38;
 
+		seq = (short)(modem->params.protocol == 0 ? 0 : 3);
 		SetTxModeV32(modem, V32_MODE_ABS4);
-		InitGenSequence(modem,
-				(unsigned short)
-				(modem->params.protocol == 0
-				 ? 0 : 3),
-				4, 2);
+		InitGenSequence(modem, (unsigned short)seq, 4, 2);
 
 		modem->flags = (unsigned char)
 			((modem->flags & ~V32_FLAG_08)
