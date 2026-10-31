@@ -44,6 +44,13 @@
 extern "C" {
 #endif
 
+/* receiver copies this four-byte unit at native 0x5c0ac..0x5c0ca.
+ * Component accesses retain their signed halfword types and flat views. */
+struct v34_rx_sample_pair {
+	short i;
+	short q;
+};
+
 struct v34_receiver {
 	/*
 	 * +0x000 (obj +0x264).  The receive datapump queue, moved here
@@ -327,18 +334,19 @@ struct v34_receiver {
 					  word (was f204) */
 	short           cloop_phase_hi;  /* +0x206   wrapped high word, masked
 					  to 0x1fff (was f206) */
-	short           f208;            /* +0x208 rxtiming IIR state, I(-1) --
-					  * and, in `receiver`'s own separate
-					  * resample loop, this call's raw
-					  * equaliser output.  Two functions,
-					  * two meanings, never live at once
-					  * (`rxtiming` and `receiver` are
-					  * called from different handshake
-					  * states) but genuinely different
-					  * data either way -- left bare rather
-					  * than pick one name and mislead
-					  * about the other (F10123). */
-	short           f20a;            /* +0x20a   Q(-1), same overlay */
+	/*
+	 * +0x208/+0x20a: rxtiming's I(-1)/Q(-1) history, and receiver's raw
+	 * equaliser output. The functions run in different handshake states;
+	 * retain the neutral component names for these distinct uses (F10123).
+	 * receiver copies the complete pair into its retrain history.
+	 */
+	union {
+		struct {
+			short f208;
+			short f20a;
+		};
+		struct v34_rx_sample_pair pair_208;
+	};
 	/*
 	 * +0x20c.  The same trick again, and just as load-bearing: `decision`
 	 * writes the winning constellation point here as one 32-bit word (real
@@ -520,10 +528,20 @@ struct v34_receiver {
 	 * Kept as two pairs so the copy `eq_out_i2/q2 = eq_out_i1/q1` can be
 	 * one 32-bit move, which is how the object does it.
 	 */
-	short           eq_out_i1;       /* +0x268 (was f268) */
-	short           eq_out_q1;       /* +0x26a (was f26a) */
-	short           eq_out_i2;       /* +0x26c (was f26c) */
-	short           eq_out_q2;       /* +0x26e (was f26e) */
+	union {
+		struct {
+			short eq_out_i1; /* +0x268 */
+			short eq_out_q1; /* +0x26a */
+		};
+		struct v34_rx_sample_pair eq_out1;
+	};
+	union {
+		struct {
+			short eq_out_i2; /* +0x26c */
+			short eq_out_q2; /* +0x26e */
+		};
+		struct v34_rx_sample_pair eq_out2;
+	};
 	unsigned char pad_270[0x27a - 0x270];
 	/*
 	 * +0x27a.  Seven entries: `receiver` shows the array ends here and

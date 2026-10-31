@@ -1380,10 +1380,8 @@ receiver(void *objp)
 				   - (unsigned short)rx->eq_out_q2))) >> 14;
 
 		/* Both pairs shift along, as one 32-bit move each. */
-		rx->eq_out_i2 = rx->eq_out_i1;
-		rx->eq_out_q2 = rx->eq_out_q1;
-		rx->eq_out_i1 = rx->f208;
-		rx->eq_out_q1 = rx->f20a;
+		rx->eq_out2 = rx->eq_out1;
+		rx->eq_out1 = rx->pair_208;
 
 		if ((short)((short)d1 - 0x80) <= 0) {
 			int n = (unsigned short)rx->rtncount + 1;
