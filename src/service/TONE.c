@@ -280,7 +280,9 @@ TONE_detect(struct fdsp_tone *t, float *buf, short n)
 		float w, y;
 		int j;
 
-		idx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);
+		idx = (short)(idx + 1);
+		if (idx >= len)
+			idx = 0;
 		dly[idx] = *buf++;
 		for (j = idx; j >= 0; j--)
 			acc += *c++ * dly[j];
