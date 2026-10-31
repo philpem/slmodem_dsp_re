@@ -1616,7 +1616,7 @@ v8_handshak_demod(struct v8 *v)
 	 * hunting for CJ, which is all zeros and would never survive it.
 	 */
 	if ((unsigned short)p->gap_seen != (unsigned short)p->gap_count
-	    && (short)(p->gap_count - 1) > 0 && sub != V8_HS_CJ) {
+	    && p->gap_count > 1 && sub != V8_HS_CJ) {
 		p->bitcount = V8_HS_ZERO_RUN;
 		p->bits = 0;
 		p->gap_seen = (short)(p->gap_seen + 1);
