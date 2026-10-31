@@ -131,7 +131,7 @@ void V22_MRF_free(struct v22_mrf *state);
  * @return The number of outputs written, roughly `count * 9 / 20`.
  */
 /* F11990: full caller slot, signed-word narrowing inside the callee. */
-short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
+unsigned short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
 		     int count);
 
 /*
