@@ -160,6 +160,66 @@ def displacement_losses(lost, displaced, digest, root=ROOT):
     return accepted, rejected
 
 
+def validate_runs(metrics, path):
+    """Legacy snapshots remain readable; new run data must be complete."""
+    import math
+    sys.path.insert(0, str(ROOT / "tools/toolchain"))
+    import fidelity
+
+    expected = nonmatch(metrics)
+    if "nonmatch" in metrics and metrics["nonmatch"] != expected:
+        raise ValueError("%s has inconsistent NONMATCH total" % path)
+    if "function_fidelity" not in metrics and "instruction_runs" not in metrics:
+        return
+    functions = metrics.get("function_fidelity")
+    runs = metrics.get("instruction_runs")
+    if not isinstance(functions, dict) or not isinstance(runs, dict):
+        raise ValueError("%s requires both function fidelity and instruction-run data" % path)
+    if len(functions) != metrics["compared"]:
+        raise ValueError("%s has incomplete function-fidelity coverage" % path)
+    counts = {key: 0 for key in ("EXACT", "REGALLOC", "NONMATCH", "UNRESOLVED", "NODATA")}
+    for symbol, row in functions.items():
+        if not symbol or not isinstance(row, dict) or row.get("fidelity") not in counts:
+            raise ValueError("%s has an invalid function-fidelity record" % path)
+        counts[row["fidelity"]] += 1
+        if any(type(row.get(key)) is not int or row[key] < 0
+               for key in ("reference_bytes", "candidate_bytes")):
+            raise ValueError("%s has invalid per-function byte diagnostics" % path)
+        if type(row.get("byte_delta")) is not int or row["byte_delta"] != row["candidate_bytes"] - row["reference_bytes"]:
+            raise ValueError("%s has inconsistent per-function byte delta" % path)
+        instruction = row.get("instructions")
+        if instruction is None:
+            if not isinstance(row.get("run_unavailable"), str) or not row["run_unavailable"]:
+                raise ValueError("%s has an unexplained unavailable run" % path)
+            continue
+        if (not isinstance(instruction, dict) or
+                any(type(instruction.get(key)) is not int or instruction[key] < 0
+                    for key in ("reference_instructions", "candidate_instructions", "longest_run"))):
+            raise ValueError("%s has invalid instruction counts" % path)
+        reference = instruction["reference_instructions"]
+        candidate = instruction["candidate_instructions"]
+        longest = instruction["longest_run"]
+        percent = instruction.get("reference_percent")
+        if (not reference or not candidate or longest > min(reference, candidate) or
+                type(percent) not in (float, int) or not math.isfinite(percent) or
+                abs(percent - 100.0 * longest / reference) > 1e-9):
+            raise ValueError("%s has inconsistent instruction-run coverage" % path)
+    if counts != {"EXACT": metrics["exact"], "REGALLOC": metrics["regalloc"],
+                  "NONMATCH": expected, "UNRESOLVED": metrics["unresolved"],
+                  "NODATA": metrics["nodata"]}:
+        raise ValueError("%s has inconsistent function-fidelity counts" % path)
+    exact = {symbol for symbol, row in functions.items() if row["fidelity"] == "EXACT"}
+    if exact != set(metrics["exact_symbols"]):
+        raise ValueError("%s has inconsistent per-function EXACT membership" % path)
+    if "grade01_symbols" in metrics:
+        protected = {symbol for symbol, row in functions.items()
+                     if row["fidelity"] in ("EXACT", "REGALLOC", "UNRESOLVED")}
+        if protected != set(metrics["grade01_symbols"]):
+            raise ValueError("%s has inconsistent legacy protected membership" % path)
+    if runs != fidelity.summary(functions):
+        raise ValueError("%s has inconsistent or unsupported instruction-run summary" % path)
+
+
 def load(path):
     try:
         with open(path) as f:
@@ -191,6 +251,7 @@ def load(path):
     if sum(metrics[name] for name in buckets) != metrics["compared"]:
         raise ValueError("%s has a bucket total different from functions compared" %
                          path)
+    validate_runs(metrics, path)
     return metrics
 
 
@@ -225,6 +286,71 @@ def byte_coverage(metrics):
                                   metrics["compared_bytes"])
 
 
+def nonmatch(metrics):
+    return sum(metrics[name] for name in ("bytes", "size", "reloc"))
+
+
+def run_cell(row):
+    run = row["instructions"]
+    return ("unavailable" if run is None else "%d / %d (%.1f%%)" %
+            (run["longest_run"], run["reference_instructions"], run["reference_percent"]) +
+            " · candidate %d instructions" % run["candidate_instructions"])
+
+
+def render_runs(base, head, limit=25):
+    """Measured changes, not a gate; an old report is unknown, never zero."""
+    lines = ["", "### Contiguous instruction runs (diagnostic)", ""]
+    for label, data in (("Base", base), ("Head", head)):
+        runs = data.get("instruction_runs")
+        if runs is None:
+            lines.append("%s: unavailable (legacy report)." % label)
+        else:
+            lines.append("%s: measured **%d / %d functions**, %d unavailable; "
+                         "sum of per-function longest runs **%d / %d reference instructions**." %
+                         (label, runs["measured_functions"], runs["compared_functions"],
+                          runs["unavailable_functions"], runs["longest_run_instructions"],
+                          runs["reference_instructions"]))
+    if "function_fidelity" not in base or "function_fidelity" not in head:
+        lines.append("Per-function run changes unavailable: both reports need instruction-run data.")
+        return lines
+    left, right = base["function_fidelity"], head["function_fidelity"]
+    common = sorted(set(left) & set(right))
+    changed = [symbol for symbol in common
+               if left[symbol]["instructions"] != right[symbol]["instructions"]
+               or left[symbol]["fidelity"] != right[symbol]["fidelity"]]
+    lines.append("**%d changed / %d common functions**; showing %d. "
+                 "%d base-only, %d head-only functions." %
+                 (len(changed), len(common), min(limit, len(changed)),
+                  len(set(left) - set(right)), len(set(right) - set(left))))
+    if changed:
+        lines += ["", "| Function | Fidelity, base → head | Base run / reference | Head run / reference |",
+                  "| --- | --- | ---: | ---: |"]
+        for symbol in changed[:limit]:
+            lines.append("| `%s` | %s → %s | %s | %s |" %
+                         (symbol, left[symbol]["fidelity"], right[symbol]["fidelity"],
+                          run_cell(left[symbol]), run_cell(right[symbol])))
+    diagnostic = [symbol for symbol in common
+                  if left[symbol]["candidate_bytes"] != right[symbol]["candidate_bytes"]]
+    lines += ["", "<details>", "<summary>Byte-size diagnostics: %d changed / %d common functions (not fidelity)</summary>" %
+              (len(diagnostic), len(common)), ""]
+    if diagnostic:
+        lines += ["Showing %d / %d changed functions." % (min(limit, len(diagnostic)), len(diagnostic)), "",
+                  "| Function | Reference bytes | Base bytes | Head bytes | Head − reference |",
+                  "| --- | ---: | ---: | ---: | ---: |"]
+        for symbol in diagnostic[:limit]:
+            a, b = left[symbol], right[symbol]
+            lines.append("| `%s` | %d | %d | %d | %+d |" %
+                         (symbol, b["reference_bytes"], a["candidate_bytes"],
+                          b["candidate_bytes"], b["byte_delta"]))
+    lines += ["", "</details>", "",
+              "Runs abstract GP register identities, local branch byte offsets and section-relative "
+              "relocation addends. Widths, byte lanes, x87 positions, conditions, constants, memory "
+              "operands and canonical call/data targets remain. Register relationships and branch "
+              "destinations are not proved; even 100% reference-run coverage can contain extra "
+              "candidate instructions. Runs never certify EXACT or REGALLOC or excuse a loss."]
+    return lines
+
+
 def render(base, head, reviewed=None, rejected=None, displaced=None):
     """Render the base-versus-head markdown table and return (lines, lost).
 
@@ -243,33 +369,30 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
     lines = [MARKER, "## Reconstruction Metrics (GCC 3.4.2 Gentoo)", "",
              "| Metric | Base | Head | Delta | Status |",
              "| --- | ---: | ---: | ---: | --- |"]
-    lines.append("| Byte-identical functions | %d | %d | %s | %s |" %
-                 (base["exact"], head["exact"], delta(exact_delta),
-                  exact_status))
+    lines.append("| EXACT functions | %d | %d | %s | %s |" %
+                 (base["exact"], head["exact"], delta(exact_delta), exact_status))
+    for data in (base, head):
+        assert nonmatch(data) + data["exact"] + data["regalloc"] + data["unresolved"] + data["nodata"] == data["compared"]
+    for label, before, after, direction in (
+            ("REGALLOC functions", base["regalloc"], head["regalloc"], None),
+            ("EXACT + REGALLOC functions", base["exact"] + base["regalloc"],
+             head["exact"] + head["regalloc"], 1),
+            ("NONMATCH functions", nonmatch(base), nonmatch(head), None),
+            ("UNRESOLVED functions (not certified)", base["unresolved"], head["unresolved"], None),
+            ("NODATA functions", base["nodata"], head["nodata"], None)):
+        change = after - before
+        status = (status_cell(change, direction) if direction is not None else
+                  ":white_circle: informational" if change else ":white_circle: no change")
+        lines.append("| %s | %d | %d | %s | %s |" %
+                     (label, before, after, delta(change), status))
     exact_byte_delta = head["exact_bytes"] - base["exact_bytes"]
     lines.append("| Byte-identical reference code | %s | %s | %s bytes | %s |" %
-                 (byte_coverage(base), byte_coverage(head),
-                  delta(exact_byte_delta), status_cell(exact_byte_delta, 1)))
+                 (byte_coverage(base), byte_coverage(head), delta(exact_byte_delta),
+                  status_cell(exact_byte_delta, 1)))
     compared_delta = head["compared"] - base["compared"]
     lines.append("| Functions compared | %s | %s | %s | %s |" %
                  (coverage(base), coverage(head), delta(compared_delta),
                   status_cell(compared_delta, 1)))
-    not_yet_delta = ((head["compared"] - head["exact"]) -
-                     (base["compared"] - base["exact"]))
-    lines.append("| Not yet byte-identical | %d | %d | %s | %s |" %
-                 (base["compared"] - base["exact"],
-                  head["compared"] - head["exact"],
-                  delta(not_yet_delta), status_cell(not_yet_delta, -1)))
-    for name, label in (("regalloc", "Same code, different register allocation"),
-                        ("reloc", "Bytes match, but call/data target differs"),
-                        ("bytes", "Different bytes, same size"),
-                        ("size", "Different size"),
-                        ("unresolved", "Bytes match, target cannot be checked"),
-                        ("nodata", "Could not be disassembled")):
-        change = head[name] - base[name]
-        lines.append("| %s | %d | %d | %s | %s |" %
-                     (label, base[name], head[name], delta(change),
-                      status_cell(change, -1)))
     lines.append("")
     if lost:
         lines.append("**Lost byte-identical functions:** " +
@@ -313,8 +436,13 @@ def render(base, head, reviewed=None, rejected=None, displaced=None):
                  "failures remain hard failures. \"Same code\" permits "
                  "only consistent register renaming; constants, memory "
                  "operands, call/data targets, branches and operand order must "
-                 "still match. Other rows are informational, with their status "
-                 "showing the direction that improves the metric.")
+                 "still match. NONMATCH combines differing bytes, extents and "
+                 "relocation-target mismatches; equal size is not fidelity. "
+                 "REGALLOC counts alone have no preferred direction: both a "
+                 "NONMATCH→REGALLOC transition and a REGALLOC→EXACT transition "
+                 "improve fidelity. Legacy grade01 accounting and all loss gates "
+                 "are unchanged; the headline matched total excludes UNRESOLVED.")
+    lines += render_runs(base, head)
     return lines, lost
 
 
@@ -357,33 +485,34 @@ def self_test():
     regressed = metrics(1, ["a"], 2, 1, 0, 1, 2, 0, 7, 50)
 
     lines, lost = render(base, improved)
-    check("gain reports pass, bold", row(lines, "Byte-identical functions") and
-          "**:green_circle: pass**" in row(lines, "Byte-identical functions"))
+    check("gain reports pass, bold", row(lines, "EXACT functions") and
+          "**:green_circle: pass**" in row(lines, "EXACT functions"))
     check("gain loses nothing", lost == [])
     check("gain lists the new symbol",
           any("`c`" in line for line in lines))
     check("more exact bytes is better",
           ":green_circle: better" in row(lines, "Byte-identical reference code"))
-    check("fewer non-exact is better",
-          ":green_circle: better" in row(lines, "Not yet byte-identical"))
-    check("fewer regalloc is better",
-          ":green_circle: better" in
-          row(lines, "Same code, different register allocation"))
+    check("REGALLOC to EXACT keeps matched total",
+          ":white_circle: no change" in row(lines, "EXACT + REGALLOC functions"))
+    check("REGALLOC decrease is neutral in isolation",
+          ":white_circle: informational" in row(lines, "REGALLOC functions"))
 
     lines, lost = render(base, regressed)
     check("loss reports regression, bold",
           "**:red_circle: regression**" in
-          row(lines, "Byte-identical functions"))
+          row(lines, "EXACT functions"))
     check("loss names the lost symbol", lost == ["b"] and
           any("**Lost byte-identical functions:**" in line for line in lines))
     check("fewer exact bytes is worse",
           ":red_circle: worse" in row(lines, "Byte-identical reference code"))
     check("more compared is better",
           ":green_circle: better" in row(lines, "Functions compared"))
-    check("more different size is worse",
-          ":red_circle: worse" in row(lines, "Different size"))
-    check("unchanged size is no change",
-          ":white_circle: no change" in row(lines, "Could not be disassembled"))
+    check("NONMATCH count alone is informational",
+          ":white_circle: informational" in row(lines, "NONMATCH functions"))
+    check("unmeasured stays distinct",
+          ":white_circle: no change" in row(lines, "NODATA functions"))
+    check("SIZE and BYTES are absent as separate headline rows",
+          row(lines, "Different size") is None and row(lines, "Different bytes, same size") is None)
 
     # --- displacement ledger: accepted, stale, and wrong-metric controls ----
     def head_body(symbol):

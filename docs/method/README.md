@@ -23,6 +23,9 @@ identifies the evidence and tools that need adapting for another target.
 
 ## Detailed method references
 
+[Function fidelity reporting](fidelity-reporting.md) explains EXACT, REGALLOC,
+NONMATCH, contiguous instruction runs and diagnostic byte-size records.
+
 | file | what it is |
 |---|---|
 | [Recovery timeline](timeline.md) | Dated milestones, scoped progress figures and identifiable agent/tool provenance. |
