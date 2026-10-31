@@ -231,6 +231,60 @@ enum tx1_guard {
 	TX1_GUARD_ONESHOT	/* 24 only: the arm cleared +0xabf8          */
 };
 
+static unsigned parent_queue_rows, parent_state_rows, parent_oneshot_rows;
+static unsigned parent_cold_rows;
+
+/* These five arm bodies now belong to the production dispatcher. Drive
+ * the whole parent at the existing TX queue boundary. Cases that seed
+ * internal fields remain synthetic exploratory component probes; this
+ * migration does not establish modem waveform reachability. */
+static void
+run_parent_case(short txst, const char *what, long tag,
+		const struct tx1_poke *p, int np, int guard)
+{
+	const unsigned char *o;
+	char msg[192];
+	unsigned i, nd = 0;
+
+	if (guard == TX1_GUARD_QUEUE)
+		parent_queue_rows++;
+	else if (guard == TX1_GUARD_STATE)
+		parent_state_rows++;
+	else
+		parent_oneshot_rows++;
+
+	apply(txst, p, np);
+	o = (const unsigned char *)v34hs_object(0);
+	memcpy(before, o, sizeof(before));
+	v34hs_ours(1);
+	v34hs_step();
+	v34hs_ours(0);
+	for (i = 0; i < sizeof(before); i++)
+		if (o[i] != before[i])
+			nd++;
+	snprintf(msg, sizeof(msg), "%s: production parent wrote something", what);
+	diff_eq_int(msg, nd != 0, 1, tag);
+	if (guard == TX1_GUARD_QUEUE) {
+		snprintf(msg, sizeof(msg), "%s: parent advanced queue to limit", what);
+		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXCURSOR)
+			    >= v34hs_peek_short(0, V34HS_TXLIMIT), 1, tag);
+	} else if (guard == TX1_GUARD_STATE) {
+		snprintf(msg, sizeof(msg), "%s: parent moved transmit machine", what);
+		diff_eq_int(msg, v34hs_peek_short(0, V34HS_TXSTATE) != txst, 1, tag);
+	} else {
+		snprintf(msg, sizeof(msg), "%s: parent cleared MOH one-shot", what);
+		diff_eq_int(msg, before[TX1_MOH_MSG_PENDING] != 0
+			    && o[TX1_MOH_MSG_PENDING] == 0, 1, tag);
+	}
+	v34hs_compare(what, tag);
+	if (trace && strcmp(v34hs_text(0), v34hs_text(1)) != 0)
+		printf("=@= %s\n--- ours ---\n%s--- blob ---\n%s",
+		       what, v34hs_text(0), v34hs_text(1));
+	if (dump)
+		printf("  %-38s tx %2d  parent wrote %4u  step wrote %4u\n",
+		       what, txst, nd, v34hs_observed(0)->changed);
+}
+
 static void
 run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 	    long tag, const struct tx1_poke *p, int np, int guard)
@@ -239,6 +293,11 @@ run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 	char msg[192];
 	unsigned i, nd = 0;
 	int rc;
+
+	if (arm == NULL) {
+		run_parent_case(txst, what, tag, p, np, guard);
+		return;
+	}
 
 	apply(txst, p, np);
 	o = (const unsigned char *)v34hs_object(0);
@@ -766,7 +825,7 @@ run_sbarseg(int c0, int c2, int a4, int good_run, const char *what, long tag)
 	sbarseg[SB_C2].val = c2;
 	sbarseg[SB_A4].val = a4;
 	sbarseg[SB_25C].val = good_run;
-	run_case(V34HS_SBARSEG, v34tx1_sbarseg, V34TX1_LOOP, what, tag,
+	run_case(V34HS_SBARSEG, NULL, V34TX1_LOOP, what, tag,
 		 sbarseg, NP(sbarseg));
 }
 
@@ -884,7 +943,7 @@ run_ppseg(int idx, int f358e, int rtd, int baud, int role, int good_run,
 	ppseg[PP_RTD].val = rtd;
 	ppseg[PP_BAUD].val = baud;
 	ppseg[PP_59C].val = role;
-	run_case(V34HS_PPSEG, v34tx1_ppseg, V34TX1_LOOP, what, tag,
+	run_case(V34HS_PPSEG, NULL, V34TX1_LOOP, what, tag,
 		 ppseg, NP(ppseg));
 }
 
@@ -1605,7 +1664,7 @@ run_exmit(int short_382, int c2, int idx, int c6, const char *what, long tag)
 	exmit[EX_C2].val = c2;
 	exmit[EX_IDX].val = idx;
 	exmit[EX_C6].val = c6;
-	run_case(V34HS_EXMIT, v34tx1_exmit, V34TX1_LOOP, what, tag,
+	run_case(V34HS_EXMIT, NULL, V34TX1_LOOP, what, tag,
 		 exmit, NP(exmit));
 }
 
@@ -2202,7 +2261,7 @@ aim_xmitmp_initdigital(void)
 static void
 run_xmitmp(const char *what, long tag)
 {
-	run_case(V34HS_XMITMP, v34tx1_xmitmp, V34TX1_LOOP, what, tag,
+	run_case(V34HS_XMITMP, NULL, V34TX1_LOOP, what, tag,
 		 xmitmp, NP(xmitmp));
 }
 
@@ -2776,7 +2835,7 @@ dp_exhaust(void)
 static void
 run_dpsk(const char *what, long tag)
 {
-	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TX_DPSK, NULL, V34TX1_LOOP, what, tag,
 		 dpsk, NP(dpsk));
 }
 
@@ -2784,7 +2843,7 @@ run_dpsk(const char *what, long tag)
 static void
 run_dpsk_nq(const char *what, long tag)
 {
-	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+	run_case_ex(V34HS_TX_DPSK, NULL, V34TX1_LOOP, what, tag,
 		    dpsk, NP(dpsk), TX1_GUARD_STATE);
 }
 
@@ -2792,7 +2851,7 @@ run_dpsk_nq(const char *what, long tag)
 static void
 run_dpsk_1s(const char *what, long tag)
 {
-	run_case_ex(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP, what, tag,
+	run_case_ex(V34HS_TX_DPSK, NULL, V34TX1_LOOP, what, tag,
 		    dpsk, NP(dpsk), TX1_GUARD_ONESHOT);
 }
 
@@ -2805,9 +2864,9 @@ run_dpsk_1s(const char *what, long tag)
  * Modem-on-Hold flag clear, so there is no `vect_idx` tick; the reader hands
  * back a ZERO bit, so the store into +0x358c writes the value already there
  * and selects the entry 60 selects; and the message is NOT over, so the arm
- * does not move the transmit machine.  The last check runs both arms from the
- * identical cold object -- 60's reads no state word, so it can be dispatched
- * at txstate 24 -- and requires the two objects to agree byte for byte.
+ * does not move the transmit machine. The last check runs both production
+ * dispatch states cold. Only their deliberately distinct transmit-state
+ * words are normalised in a scratch copy before comparing all object bytes.
  *
  * `case_tx_dpsk_entry` is the other half: two entries at two addresses.  A
  * later blob that folded them together, or a fill that moved any of the three
@@ -2819,6 +2878,7 @@ case_dpsk_cold(void)
 	const unsigned char *o;
 	short short_358c;
 	int point;
+	static struct v34_object tone;
 
 	apply(V34HS_TX_DPSK, NULL, 0);
 	o = (const unsigned char *)v34hs_object(0);
@@ -2826,7 +2886,11 @@ case_dpsk_cold(void)
 		    o[TX1_MOH_ACTIVE], 0, 2490);
 	memcpy(&short_358c, o + TX1_F358C, sizeof(short_358c));
 
-	(void)v34tx1_tx_dpsk(v34hs_object(0));
+	v34hs_ours(1);
+	v34hs_step();
+	parent_cold_rows++;
+	v34hs_ours(0);
+	v34hs_compare("24 TX_DPSK cold production parent", 2490);
 	diff_eq_int("24 TX_DPSK cold: the message is not over",
 		    v34hs_peek_short(0, V34HS_TXSTATE), V34HS_TX_DPSK, 2491);
 	diff_eq_int("24 TX_DPSK cold: +0x358c is unchanged, so the bit was zero",
@@ -2836,14 +2900,20 @@ case_dpsk_cold(void)
 		    point, vect4[2 * (short_358c & 1)], 2493);
 	memcpy(before, o, sizeof(before));
 
-	apply(V34HS_TX_DPSK, NULL, 0);
-	(void)v34tx1_tone_ab(v34hs_object(0));
-	diff_eq_obj("24 TX_DPSK and 60 TONE_AB leave the same object cold",
-		    struct v34_object, (const struct v34_object *)before,
-		    (const struct v34_object *)v34hs_object(0), 2494);
+	apply(V34HS_TONE_AB, NULL, 0);
+	v34hs_ours(1);
+	v34hs_step();
+	parent_cold_rows++;
+	v34hs_ours(0);
+	v34hs_compare("60 TONE_AB cold production parent", 2494);
+	memcpy(&tone, v34hs_object(0), sizeof(tone));
+	/* The two legitimate dispatch inputs deliberately differ in this word. */
+	tone.txstate = V34HS_TX_DPSK;
+	diff_eq_obj("cold parent results after normalising dispatch state",
+		    struct v34_object, before, &tone, 2494);
 
 	/* And the same thing against the blob, which is the real check. */
-	run_case(V34HS_TX_DPSK, v34tx1_tx_dpsk, V34TX1_LOOP,
+	run_case(V34HS_TX_DPSK, NULL, V34TX1_LOOP,
 		 "24 TX_DPSK, cold, no pokes at all", 2495, NULL, 0);
 }
 
@@ -4560,5 +4630,9 @@ main(void)
 	case_trnseg4a_entry();
 	case_trnseg4a();
 
+	printf("parent transmit-arm component rows: %u queue, %u state, "
+	       "%u one-shot, %u cold dispatch controls\n",
+	       parent_queue_rows, parent_state_rows, parent_oneshot_rows,
+	       parent_cold_rows);
 	return rc | diff_end();
 }
