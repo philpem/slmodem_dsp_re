@@ -346,8 +346,9 @@ def _selected_body_digest(report, directory):
 
 
 # The recovered-order partial link used to resolve an UNDEFINED private-frame
-# callee. `--link-selected` may name a pair explicitly; otherwise it is the
-# `make partial-link` artifact beside the census object tree. A body defined in
+# callee. Explicit --linked/--link-manifest paths also apply without the
+# diagnostic --link-selected report; otherwise use the `make partial-link`
+# artifact beside the census object tree. A body defined in
 # the supplied ELF is never looked up here.
 LINK_RESOLUTION = None
 
@@ -2185,6 +2186,17 @@ def main():
     if a.ratchet_self_test:
         return ratchet_self_test()
 
+    # Proof inputs are independent of the optional selected-body report.
+    # Bind before --why too: it calls body() and needs the same callee context
+    # as the census. Explicit missing inputs must not fall back silently.
+    global LINK_RESOLUTION
+    LINK_RESOLUTION = None
+    if a.link_manifest == "" or a.linked == "":
+        ap.error("--link-manifest and --linked require non-empty paths")
+    if a.link_selected or a.link_manifest is not None or a.linked is not None:
+        manifest, linked = _link_selected_inputs(a.link_manifest, a.linked)
+        LINK_RESOLUTION = (linked, manifest)
+
     if a.why:
         import fidelity
         k = a.why
@@ -2229,15 +2241,6 @@ def main():
               (len(records), "unavailable" if run is None else "%d / %d (%.1f%%)" %
                (run["longest_run"], run["reference_instructions"], run["reference_percent"])))
         return 0
-
-    #
-    # Fail fast: a missing link artifact must be refused BEFORE the census
-    # spends minutes producing a denominator it cannot annotate.
-    #
-    if a.link_selected:
-        manifest, linked = _link_selected_inputs(a.link_manifest, a.linked)
-        global LINK_RESOLUTION
-        LINK_RESOLUTION = (linked, manifest)
 
     blob = sizes(BLOB)
     if not blob:
