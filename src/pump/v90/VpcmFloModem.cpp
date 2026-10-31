@@ -26,18 +26,11 @@
  *                      enterPhase3 and DILdescriptorPacker over the embedded
  *                      descriptor at +0x004
  *
- * TWO DEAD THINGS ARE DELIBERATELY NOT REPRODUCED, and are recorded here so
- * that nobody "restores" them from the disassembly later:
- *
- *   - `setPhaseIIinfo` contains `inc %eax; cmp $0x3,%eax; jle` at 0xec90,
- *     a four-iteration loop WITH NO BODY.  It computes nothing and touches
- *     no memory.
- *   - `getUinfoValue` keeps a 25-entry float array on its own stack and
- *     stores into it twice per iteration (`fsts 0x30(%esp,%edx,4)`) and
- *     never reads it back.
- *
- * Neither is observable, and a differential test cannot see either, which is
- * exactly why they are written down rather than left to be rediscovered.
+ * The four-iteration empty loop in `setPhaseIIinfo` at 0xec90 remains
+ * absent: it computes nothing and touches no memory.  In `getUinfoValue`,
+ * the private 25-float staging array and both native write epochs are
+ * reconstructed even though the object never reloads that array.  Its final
+ * x87-to-L2 transfer still differs from the source-generated transfer.
  */
 
 #include <math.h>
@@ -2014,6 +2007,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 		1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1,
 		1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1
 	};
+	float probe_levels[VPCM_PROBE_TONES];
 	double *probe;
 	int *info0;
 	short rtd;
@@ -2037,11 +2031,12 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 
 			scaled = (float)((long double)probe[i]
 					 * 6.103515625e-05L);
-			decade = (float)log10l((long double)scaled);
+			probe_levels[i] = scaled;
+			decade = (float)log10l((long double)probe_levels[i]);
 
+			probe_levels[i] = (float)((long double)decade * 10.0L + 60.0L);
 			if (use[i])
-				L2[j++] = (float)((long double)decade * 10.0L
-						  + 60.0L);
+				L2[j++] = probe_levels[i];
 		}
 
 		if (DSPLIB_DEBUG_ON())
