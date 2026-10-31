@@ -99,12 +99,13 @@ decision(struct v34_receiver *d, const int *pts, short npts)
 int
 V34descrambler(struct v34_receiver *s, short bits, short nbits)
 {
-	unsigned sr = s->scrambler_sr;
+	unsigned sr;
 	unsigned mask = 1;
 	int out = 0;
 	short i;
 	if (nbits <= 0)
 		return 0;
+	sr = s->scrambler_sr;
 
 	for (i = 0; i < nbits; i = (short)(i + 1)) {
 		unsigned in = ((unsigned)(unsigned short)bits & mask) ? 1u : 0u;
