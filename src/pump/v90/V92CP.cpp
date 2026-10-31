@@ -292,12 +292,13 @@ V92CP::calcCRC()
 int
 V92CP::evaluateCRC()
 {
-	unsigned char acc = 0;
+	unsigned char acc;
 	int j;
 
 	resetCRC();
 	calcCRC();
 
+	acc = 0;
 	for (j = 0; j < V92CP_CRC; j++) {
 		int d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];
 
