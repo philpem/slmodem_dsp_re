@@ -404,6 +404,88 @@ shell_branch_carry_probe(void)
 	return diff_end();
 }
 
+static int limit_case(int synthetic)
+{
+	static struct v34_object a, b;
+	static struct v34_shell aa, bb;
+	struct v34_shell *sa = (struct v34_shell *)&a;
+	struct v34_shell *sb = (struct v34_shell *)&b;
+	int x, y;
+
+	diff_begin(synthetic ? "v34 limit: synthetic high WORD"
+		   : "v34 limit: initialized control");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.role = b.role = 0x65;
+	preinitdigital(&a);
+	ref_preinitdigital(&b);
+	initV34((char *)&a + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a + 0xe84), scale2400[19] >> 1);
+	ref_initV34((char *)&b + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b + 0xe84), ref_scale2400[19] >> 1);
+	diff_eq_int("limit owner extent", sizeof(a), 0xac4c, synthetic);
+	diff_eq_int("limit field offset", (char *)&sa->subframe_limit - (char *)sa,
+		    0xa02, synthetic);
+	diff_eq_int("limit field width", sizeof(sa->subframe_limit), 2, synthetic);
+	diff_eq_int("frame limit offset", (char *)&sa->frame_limit - (char *)sa,
+		    0xa40, synthetic);
+	diff_eq_int("initialized native limit", sb->subframe_limit, 24, synthetic);
+	diff_eq_int("initialized native frame limit", sb->frame_limit, 14, synthetic);
+	diff_eq_int("initialized native count", sb->subframe_count, 0, synthetic);
+	diff_eq_int("initialized native frame", sb->frame_count, 12, synthetic);
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 0);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 0);
+	diff_eq_int("limit even return", x, y, synthetic);
+	diff_eq_int("limit native even return", y, 0, synthetic);
+
+	/*
+	 * The ONLY planted history in the synthetic case.  No identified
+	 * initializer can produce it: initV34's limits are 24/28/30/32.
+	 * A negotiated-call or waveform history is not claimed.
+	 */
+	if (synthetic)
+		sa->subframe_limit = sb->subframe_limit = (short)0x8000;
+	diff_eq_int("limit physical WORD", (unsigned short)sa->subframe_limit,
+		    synthetic ? 0x8000 : 24, synthetic);
+	diff_eq_int("native limit physical WORD", (unsigned short)sb->subframe_limit,
+		    synthetic ? 0x8000 : 24, synthetic);
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 1);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 1);
+	diff_eq_int("limit odd return", x, y, synthetic);
+	diff_eq_int("limit native odd return", y, 1, synthetic);
+	diff_eq_int("native limit count transition", sb->subframe_count, 1, synthetic);
+	diff_eq_int("native limit frame preserved", sb->frame_count, 12, synthetic);
+	diff_eq_int("limit count matches native", sa->subframe_count,
+		    sb->subframe_count, synthetic);
+	diff_eq_int("limit frame matches native", sa->frame_count,
+		    sb->frame_count, synthetic);
+	diff_eq_int("limit invert matches native", sa->invert, sb->invert, synthetic);
+	diff_eq_int("limit state index matches native", sa->state_idx,
+		    sb->state_idx, synthetic);
+	diff_eq_int("limit coefficient owner", sa->coeff ==
+		    (const short *)((char *)&a + 0xe84), 1, synthetic);
+	diff_eq_int("reference limit coefficient owner", sb->coeff ==
+		    (const short *)((char *)&b + 0xe84), 1, synthetic);
+	diff_eq_int("limit code table", sa->conv == Convolve16, 1, synthetic);
+	diff_eq_int("reference limit code table", sb->conv == ref_Convolve16, 1, synthetic);
+	diff_eq_int("limit callback", sa->scramble ==
+		    (v34_scramble_fn)descrambleGPA, 1, synthetic);
+	diff_eq_int("reference limit callback", sb->scramble ==
+		    (v34_scramble_fn)ref_descrambleGPA, 1, synthetic);
+	aa = *sa;
+	bb = *sb;
+	aa.coeff = bb.coeff = 0;
+	aa.conv = bb.conv = 0;
+	aa.put_bits = bb.put_bits = 0;
+	diff_eq_obj("limit shell after two points", struct v34_shell,
+		    &aa, &bb, synthetic);
+	printf("LIMIT OBSERVATION %s: count=%d/%d frame=%d/%d\n",
+	       synthetic ? "synthetic" : "control", sa->subframe_count,
+	       sb->subframe_count, sa->frame_count, sb->frame_count);
+	return diff_end();
+}
+
+
 int
 main(void)
 {
@@ -857,6 +939,8 @@ main(void)
 
 	rc |= shell_reset_history();
 	rc |= shell_branch_carry_probe();
+	rc |= limit_case(0);
+	rc |= limit_case(1);
 
 	diff_begin("v34 lsbMask");
 	{

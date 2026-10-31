@@ -1404,7 +1404,7 @@ getFrame(void *objp)
  */
 struct v34_shell_fields {
 	short		span;			/* +0x000 */
-	short		subframe_limit;		/* +0x002 */
+	unsigned short	subframe_limit;		/* +0x002 */
 	short		group_count;		/* +0x004 */
 	short		remainder;		/* +0x006 */
 	short		wide_accum;		/* +0x008 */
