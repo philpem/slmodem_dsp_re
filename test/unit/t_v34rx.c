@@ -80,6 +80,89 @@ compare(const char *what, int tag)
 static int saw_sip_said, saw_sip_silent;
 static int saw_tv_said, saw_tv_silent;
 
+/*
+ * Synthetic component fidelity probe, not a modem-generated history.
+ * The normal initializer/setup path establishes the receiver owners and rates;
+ * zero input and zero equalizer taps give point (0,0).  The two planted history
+ * distances have defined signed-32 arithmetic: 23171^2 >> 14 is 32769, whose
+ * signed-word projection is -32767.  Native ADDW/JLE tests that signed value
+ * against 128 without wrapping the subtraction before testing its sign.
+ * The second distance is 549 or the first is 244, isolating each true arm.
+ */
+static int
+receiver_distance_predicates(void)
+{
+	static struct v34_object a, b, ca, cb;
+	static const short history[2][2] = { { -23171, -3000 },
+					    { -2000, -23171 } };
+	static const short expected[2] = { 6, 4 };
+	static const unsigned pointers[][2] = {
+		{ 0x264 + 0x04, 8 }, { 0x264 + 0x130, 4 },
+		{ 0x264 + 0x1b4, 4 }, { 0x264 + 0x2a4, 4 },
+		{ 0x50c + __builtin_offsetof(struct v34_timing,
+					     prefilter_coeff), 8 },
+		{ 0x221c + __builtin_offsetof(struct v34_queue, rd), 8 },
+		{ 0x2074, 4 },
+		{ 0x2078 + __builtin_offsetof(struct v34_echo_prefilter, coeff), 4 },
+		{ 0x80b8, 0x18 }, { 0x9138, 0x18 }
+	};
+	unsigned c, k;
+
+	diff_begin("receiver signed-distance predicates (synthetic component)");
+	for (c = 0; c < 2; c++) {
+		struct v34_receiver *ra = &a.receiver, *rb = &b.receiver;
+		memset(&a, 0, sizeof a);
+		memset(&b, 0, sizeof b);
+		V34InitializeImplementationSpecific(&a);
+		ref_V34InitializeImplementationSpecific(&b);
+		txinit(&a); ref_txinit(&b);
+		rxinit(&a); ref_rxinit(&b);
+		rxtiminginit(&a); ref_rxtiminginit(&b);
+		V34SetupDemodulator(&a, 2400, 1800);
+		ref_V34SetupDemodulator(&b, 2400, 1800);
+		((struct v34_queue *)ra)->count =
+		((struct v34_queue *)rb)->count = V34_RXQ_RING;
+		ra->rms_idx = rb->rms_idx = 0;
+		ra->agc_gain = rb->agc_gain = 0x400;
+		ra->agc_step = rb->agc_step = 0x3333;
+		ra->pllcnt = rb->pllcnt = 4;
+		ra->dwell_limit = rb->dwell_limit = -1;
+		ra->timing_p_gain = rb->timing_p_gain = 0x1000;
+		ra->timing_i_gain = rb->timing_i_gain = 0x800;
+		ra->timing_idx_a = rb->timing_idx_a = 1;
+		ra->timing_idx_b = rb->timing_idx_b = 2;
+		memset(ra->equalizer.re, 0, sizeof ra->equalizer.re);
+		memset(rb->equalizer.re, 0, sizeof rb->equalizer.re);
+		memset(ra->equalizer.im, 0, sizeof ra->equalizer.im);
+		memset(rb->equalizer.im, 0, sizeof rb->equalizer.im);
+		ra->eq_out_i1 = rb->eq_out_i1 = history[c][0];
+		ra->eq_out_i2 = rb->eq_out_i2 = history[c][1];
+		ra->eq_out_q1 = rb->eq_out_q1 = 0;
+		ra->eq_out_q2 = rb->eq_out_q2 = 0;
+		ra->rtncount = rb->rtncount = 5;
+		ra->flags = rb->flags = V34_RX_FLAG_DATA;
+		ra->rx_blocks = rb->rx_blocks = 0;
+		a.rx_energy_floor = b.rx_energy_floor = 900;
+		receiver(&a); ref_receiver(&b);
+		diff_eq_int("source distance counter", ra->rtncount, expected[c], c);
+		diff_eq_int("native distance counter", rb->rtncount, expected[c], c);
+		diff_eq_int("source equalized I", ra->f208, 0, c);
+		diff_eq_int("native equalized I", rb->f208, 0, c);
+		diff_eq_int("source equalized Q", ra->f20a, 0, c);
+		diff_eq_int("native equalized Q", rb->f20a, 0, c);
+		/* Addresses belong to separate objects/providers.  The same pointer
+		 * exclusions are used by the established receiver sweep below. */
+		memcpy(&ca, &a, sizeof ca); memcpy(&cb, &b, sizeof cb);
+		for (k = 0; k < sizeof pointers / sizeof pointers[0]; k++) {
+			memset((char *)&ca + pointers[k][0], 0, pointers[k][1]);
+			memset((char *)&cb + pointers[k][0], 0, pointers[k][1]);
+		}
+		diff_eq_obj("complete receiver consequence", struct v34_object,
+			    &ca, &cb, c);
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2288,6 +2371,8 @@ main(void)
 		}
 	}
 	rc |= diff_end();
+
+	rc |= receiver_distance_predicates();
 
 	/*
 	 * And the seven diagnostic paths, which are seven of this function's

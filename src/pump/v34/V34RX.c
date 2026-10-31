@@ -1383,7 +1383,9 @@ receiver(void *objp)
 		rx->eq_out2 = rx->eq_out1;
 		rx->eq_out1 = rx->pair_208;
 
-		if ((short)((short)d1 - 0x80) <= 0) {
+		/* Native ADDW/JLE keeps overflow in the signed comparison.
+		 * Wrapping d - 128 first would change its low-negative arm. */
+		if ((short)d1 <= 0x80) {
 			int n = (unsigned short)rx->rtncount + 1;
 
 			if ((short)n <= 0x8c) {
@@ -1397,7 +1399,7 @@ receiver(void *objp)
 					    (int)rx->rtncount);
 				}
 			}
-		} else if ((short)((short)d2 - 0x80) <= 0) {
+		} else if ((short)d2 <= 0x80) {
 			rx->rtncount = (short)((unsigned short)rx->rtncount - 1);
 		} else {
 			short n = rx->rtncount;
