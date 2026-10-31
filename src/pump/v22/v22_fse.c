@@ -452,8 +452,9 @@ V22_FSE_init(struct v22_fse *state, const struct v22_fse_cfg *cfg, int fresh)
 }
 
 void
-V22_FSE_free(struct v22_fse *state)
+V22_FSE_free(struct v22_fse *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->out_q);
 	sysdep_free(state->out_i);
 	sysdep_free(state->r48);

@@ -152,7 +152,7 @@ struct v22_sre {
 void V22_SRE_init(struct v22_sre *sre, int fresh);
 
 /** @brief Release the V.22 SRE's three buffers. Does not clear the pointers. @param sre The SRE state to tear down. */
-void V22_SRE_free(struct v22_sre *sre);
+void V22_SRE_free(struct v22_sre *sre, int unused);
 
 /**
  * @brief Recover symbol timing and resample `count` V.22 receive samples.

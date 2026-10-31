@@ -407,10 +407,10 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 void
 V22FP_delete(struct v22fp *fp)
 {
-	V22_PPS_free(&fp->dsp->pps);
-	V22_MRF_free(&fp->dsp->mrf);
-	V22_SRE_free(&fp->dsp->sre);
-	V22_FSE_free(&fp->dsp->fse);
+	V22_PPS_free(&fp->dsp->pps, 1);
+	V22_MRF_free(&fp->dsp->mrf, 1);
+	V22_SRE_free(&fp->dsp->sre, 1);
+	V22_FSE_free(&fp->dsp->fse, 1);
 
 	FPM_TONE_delete(fp->hdx->tone);
 	FPM_MTD_delete(fp->hdx->mtd);

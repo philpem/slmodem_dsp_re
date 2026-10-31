@@ -45,7 +45,7 @@
 
 extern void ref_V22_FSE_init(struct v22_fse *state,
 			     const struct v22_fse_cfg *cfg, int fresh);
-extern void ref_V22_FSE_free(struct v22_fse *state);
+extern void ref_V22_FSE_free(struct v22_fse *state, int unused);
 extern unsigned short ref_V22_FSE_receive(struct v22_fse *state,
 					  const short *in, unsigned short *out,
 					  short count);
@@ -192,8 +192,8 @@ setup_pair(struct v22recv_pair *p, int use24)
 static void
 free_pair(struct v22recv_pair *p)
 {
-	ref_V22_FSE_free(&p->a);
-	V22_FSE_free(&p->b);
+	ref_V22_FSE_free(&p->a, 1);
+	V22_FSE_free(&p->b, 1);
 }
 
 /*

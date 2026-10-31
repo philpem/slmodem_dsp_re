@@ -79,8 +79,9 @@ V22_MRF_init(struct v22_mrf *state, const struct v22_mrf_cfg *cfg, int fresh)
 }
 
 void
-V22_MRF_free(struct v22_mrf *state)
+V22_MRF_free(struct v22_mrf *state, int unused)
 {
+	(void)unused;
 	sysdep_free(state->history);
 }
 
