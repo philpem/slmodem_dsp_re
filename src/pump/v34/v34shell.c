@@ -1068,7 +1068,8 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 		int k = (t >> 1) & 1;
 
 		((short *)bp)[0] = cand[4 + k];
-		k ^= t & 1;
+		/* The first output precedes a fresh index/trellis read. */
+		k ^= (short)s->trellis[(s->state_idx << 4) + seed] & 1;
 		((short *)bp)[1] = cand[6 + k];
 	}
 
