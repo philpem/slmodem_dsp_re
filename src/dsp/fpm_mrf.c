@@ -75,7 +75,11 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 	int phase = state->phase;
 	int widx = state->widx;
 	int need = state->need;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short produced = 0;
+#else
 	int produced = 0;
+#endif
 	/* The blob narrows the incoming slot here, not in every caller. */
 	int remaining = (short)count;
 

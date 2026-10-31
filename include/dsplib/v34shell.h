@@ -126,7 +126,7 @@ extern const signed char MMinTable[32];
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           span;			/* +0xa00 */
-	short           subframe_limit;			/* +0xa02 sub-frame limit  */
+	unsigned short  subframe_limit;			/* +0xa02 sub-frame limit  */
 	short           group_count;			/* +0xa04 */
 	short           remainder;			/* +0xa06 */
 	short           wide_accum;			/* +0xa08 an accumulator putFrame
