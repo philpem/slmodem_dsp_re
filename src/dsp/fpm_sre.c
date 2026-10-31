@@ -66,7 +66,9 @@ sre_ingest(struct fpm_sre *sre, short *hist, short taps, short fill,
 
 	for (i = (short)(n - 1); i != -1; i = (short)(i - 1)) {
 #ifdef DSPLIB_REPRODUCE_BUGS
-		fill = (short)((short)(fill + 1) < taps ? fill + 1 : 0);
+		fill = (short)(fill + 1);
+		if (fill >= taps)
+			fill = 0;
 #else
 		fill = (short)(fill + 1 < taps ? fill + 1 : 0);
 #endif
