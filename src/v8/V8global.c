@@ -538,7 +538,7 @@ v8_copycoeff(short *dst, const short *src, short n)
 int
 v8_txinit(struct v8 *v)
 {
-	int i;
+	short i;
 
 	v->short_014 = 1;
 	v->short_00c = 0;
