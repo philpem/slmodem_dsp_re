@@ -251,9 +251,8 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	fp->decision_error = (short)err;
 
 	if ((short)err != 0) {
-		k = (short)((((unsigned short)
-			      (fp->short_2e - 4) < 2)
-			     ? 0x4000 : 0) + 0x1400 - err);
+		k = ((unsigned short)(fp->short_2e - 4) < 2) ? 0x4000 : 0;
+		k = (short)(k + 0x1400 - err);
 		FPM_div(fp->decision_error, &recip, &shift);
 		m = (k * (int)recip) >> 16;
 		snr = V32_SNR_FLOOR;
@@ -300,27 +299,19 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	 * INVERTED, which is exactly the set `V32FP_control` writes from
 	 * `struct v32fp_ctl::ctl0`.
 	 */
-	st->flags = (unsigned char)((st->flags & 0xfe)
-				    | (((unsigned char *)&fp->int_1c)[0] & 1));
+	st->flag_bits.scrambler = ((unsigned char *)&fp->int_1c)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xfd)
-				    | ((((unsigned char *)&fp->int_20)[0] & 1) << 1));
+	st->flag_bits.descrambler = ((unsigned char *)&fp->int_20)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xfb)
-				    | ((((unsigned char *)&fp->int_24)[0] & 1) << 2));
+	st->flag_bits.bit2 = ((unsigned char *)&fp->int_24)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xf7)
-				    | ((fp->int_00 == 0) << 3));
+	st->flag_bits.bit3 = fp->int_00 == 0;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xef)
-				    | ((fp->int_0c == 0) << 4));
+	st->flag_bits.bit4 = fp->int_0c == 0;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xdf)
-				    | ((fp->eq_adapt == 0) << 5));
-	st->flags = (unsigned char)(st->flags & 0xbf);
-	st->flags = (unsigned char)((st->flags & 0x7f)
-				    | (((((unsigned char *)&modem->params.options)[1]
-					 >> 1) & 1) << 7));
+	st->flag_bits.eq_frozen = fp->eq_adapt == 0;
+	st->flag_bits.bit6 = 0;
+	st->flag_bits.bit7 = (((unsigned char *)&modem->params.options)[1] >> 1) & 1;
 	st->r20 = 0;
 	st->r24 = 0;
 	st->flags1 = (unsigned char)((st->flags1 & 0xfe)
