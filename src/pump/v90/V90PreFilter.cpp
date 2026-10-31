@@ -365,15 +365,15 @@ V90PreFilter::autoSelection()
 		}
 	}
 
-	edprintf("V90PreFilter: loop = %s (%d)\r\n", loops[refLoop].name,
+	edprintf("V90PreFilter: loop = %s (%d)\r\n", dataBase[codecType].loops[refLoop].name,
 		 refLoop);
 	edprintf("V90PreFilter: Pre Filter Coeffs Type array %d, "
-		 "(filter length %d)\r\n", loops[refLoop].coefType,
-		 loops[refLoop].coefType == 3 ? 40 : 20);
+		 "(filter length %d)\r\n", dataBase[codecType].loops[refLoop].coefType,
+		 dataBase[codecType].loops[refLoop].coefType == 3 ? 40 : 20);
 	edprintf("V90PreFilter: HardwareCodecType: %s\r\n",
 		 dataBase[codecType].name);
 
-	return loops[refLoop].gain;
+	return dataBase[codecType].loops[refLoop].gain;
 }
 
 /*

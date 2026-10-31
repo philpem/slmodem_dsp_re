@@ -1242,6 +1242,37 @@ run_ctor(void)
 				saw_default = 1;
 			}
 
+			/* Constructor-to-selection component history.  The L2
+			 * collaborator supplies a finite measurement aimed at a
+			 * real row of the bank selected by the constructor. */
+			{
+				int c = P(1)->codecType;
+				int n = nloops(c);
+				int a, b, selected;
+
+				set_measurement(c, 0, 1.0f, 0.0f);
+				dsplib_debug_capture_reset();
+				a = P(0)->autoSelection();
+				b = ref_autoSelection(slot[1]);
+				selected = P(1)->refLoop;
+				diff_eq_int("constructor search return (%ld)",
+					    a, b, trial);
+				diff_eq_int("constructor search index ours (%ld)",
+					    P(0)->refLoop >= 0 &&
+					    P(0)->refLoop < n, 1, trial);
+				diff_eq_int("constructor search index blob (%ld)",
+					    selected >= 0 && selected < n, 1, trial);
+				diff_eq_int("constructor search chosen gain (%ld)",
+					    b, selected >= 0 && selected < n ?
+					    ref_dataBase[c].loops[selected].gain :
+					    -2147483647, trial);
+				diff_eq_int("constructor search transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1)) == 0,
+					    1, trial);
+				compare("after constructor search", (int)trial);
+			}
+
 			/* And the destructor gives the one block back. */
 			a3 = harness_alloc;
 			if (trial & 1)
