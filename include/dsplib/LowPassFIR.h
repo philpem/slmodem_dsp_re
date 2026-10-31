@@ -193,29 +193,27 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 		 * The association is the object's: (nTaps-1) * (-cutoff)
 		 * first, then * 0.5f.  0.5 is `.rodata.cst4+0x1f0`, a float.
 		 */
-		long double x = (long double)(unsigned long long)(nTaps - 1)
-			      * (long double)(-cutoff)
-			      * (long double)0.5f;
+		T x = (unsigned long long)(nTaps - 1)
+		      * (-cutoff) * 0.5f;
 
 		for (i = 0; i < taps; i++) {
 			/*
 			 * ROUNDED TO float EVERY ITERATION.  `fsts (%esp)`
 			 * puts it in sinc's argument slot and `fstps
 			 * 0x10(%esp)` in the slot the recurrence reloads --
-			 * two 4-byte stores of the same register.  A `long
-			 * double` running total would be a different filter.
+			 * two 4-byte stores of the same register.  The template-T home supplies the value reloaded
+			 * after the call; excess precision stays within each x87 expression.
 			 */
-			T xf = (T)x;
-			long double t;
+			T t;
 
-			t = (long double)sinc(xf) * (long double)cutoff;
+			t = sinc(x) * cutoff;
 
 			/* flds 0x10(%esp) ; fadds cutoff -- from the FLOAT. */
-			x = (long double)xf + (long double)cutoff;
+			x = x + cutoff;
 
 			/* One rounding, here, on (sinc*cutoff)*w[i]. */
 			coefficients[i] =
-			    (T)(t * (long double)coefficients[i]);
+			    (T)(t * coefficients[i]);
 		}
 	}
 
@@ -231,11 +229,11 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 		 * this is gain/0 = inf; the loop then writes 0*inf, the x87
 		 * indefinite, into every tap.  That is what the blob does.
 		 */
-		long double scale = (long double)gain / sum(coefficients, taps);
+		T scale = gain / sum(coefficients, taps);
 
 		for (i = 0; i < taps; i++)
 			coefficients[i] =
-			    (T)((long double)coefficients[i] * scale);
+			    (T)(coefficients[i] * scale);
 	}
 
 	return 0;
