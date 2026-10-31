@@ -1301,7 +1301,7 @@ V90ConnectionEvaluator::evaluateConnection()
 	/* ------------------------------------------------------ 3: rate up */
 
 	if (enableRrnUp != 0 && avePdsnr < threshUp) {
-		rateUpCounter += nofSymbols;
+		rateUpCounter += avePdsnrNofSymbols;
 		if (rateUpCounter >= (unsigned int)rateUpDetectDuration
 		    && dataDurationCounter >= (unsigned int)minDurationInDataBeforeRrnUp) {
 			rateUpCounter = 0;
@@ -1369,13 +1369,13 @@ V90ConnectionEvaluator::evaluateConnection()
 		}
 
 		if (scaled) {
-			if (ce_echo_rate_down(this, nofSymbols, scale))
+			if (ce_echo_rate_down(this, avePdsnrNofSymbols, scale))
 				verdict = V90CE_VERDICT_RRN_DOWN;
-		} else if (ce_plain_rate_down(this, nofSymbols)) {
+		} else if (ce_plain_rate_down(this, avePdsnrNofSymbols)) {
 			verdict = V90CE_VERDICT_RRN_DOWN;
 		}
 	} else if (enableRrnDown != 0) {
-		if (ce_plain_rate_down(this, nofSymbols))
+		if (ce_plain_rate_down(this, avePdsnrNofSymbols))
 			verdict = V90CE_VERDICT_RRN_DOWN;
 	} else {
 		rateDownCounter = 0;
@@ -1384,7 +1384,7 @@ V90ConnectionEvaluator::evaluateConnection()
 	/* ------------------------------------------------------ 4b: retrain */
 
 	if (avePdsnr > threshRetrain) {
-		retrainCounter += nofSymbols;
+		retrainCounter += avePdsnrNofSymbols;
 		if (retrainCounter >= (unsigned int)retrainDetectDuration) {
 			nofV90Retrains++;
 			if (nofV90Retrains
@@ -1494,7 +1494,7 @@ V90ConnectionEvaluator::evaluateConnection()
 	/* ------------------------------------------------ 5: the debug arms */
 
 	if (debugAlternateDebug != 0) {
-		debugPeriodCounter += nofSymbols;
+		debugPeriodCounter += avePdsnrNofSymbols;
 		if (debugPeriodCounter >= debugPeriod) {
 			switch (debugAlternateState) {
 			case 0:
@@ -1523,7 +1523,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			}
 		}
 	} else if (debugFallBack != 0) {
-		debugPeriodCounter += nofSymbols;
+		debugPeriodCounter += avePdsnrNofSymbols;
 		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_FALLBACK_V34;
 			edprintf("V90ConnectionEvaluator: Debug fall back to " "V34\r\n");
@@ -1531,7 +1531,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			silenceRrnRequest = 0;
 		}
 	} else if (debugRetrain != 0) {
-		debugPeriodCounter += nofSymbols;
+		debugPeriodCounter += avePdsnrNofSymbols;
 		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RETRAIN;
 			edprintf("V90ConnectionEvaluator: Debug initiating " "Retrain\r\n");
@@ -1539,7 +1539,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			silenceRrnRequest = 0;
 		}
 	} else if (debugRateUp != 0) {
-		debugPeriodCounter += nofSymbols;
+		debugPeriodCounter += avePdsnrNofSymbols;
 		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_UP;
 			edprintf("V90ConnectionEvaluator: Debug One Rate " "Up\r\n");
@@ -1547,7 +1547,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			silenceRrnRequest = 0;
 		}
 	} else if (debugRateDown != 0) {
-		debugPeriodCounter += nofSymbols;
+		debugPeriodCounter += avePdsnrNofSymbols;
 		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_DOWN;
 			edprintf("V90ConnectionEvaluator: Debug One Rate " "Down\r\n");
