@@ -112,6 +112,7 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 		const short *c;
 #ifdef DSPLIB_REPRODUCE_BUGS
 		short *cursor;
+		short sample;
 #endif
 		int acc = 0;
 		int k;
@@ -165,7 +166,11 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 			c += branches;
 		}
 
+#ifdef DSPLIB_REPRODUCE_BUGS
+		sample = (short)(acc >> 15);
+#else
 		out[produced++] = (short)(acc >> 15);
+#endif
 
 		/* Advance the phase; each wrap past `branches` costs an input. */
 		phase += decimate;
@@ -174,6 +179,9 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 			phase -= branches;
 			need++;
 		}
+#ifdef DSPLIB_REPRODUCE_BUGS
+		out[produced++] = sample;
+#endif
 	}
 
 	state->phase = (short)phase;
