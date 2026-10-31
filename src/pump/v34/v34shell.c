@@ -1064,7 +1064,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 
 	{
 		int seed = s->state[st].seed;
-		int t = (short)s->trellis[(st << 4) + seed];
+		int t = (short)s->trellis[(s->state_idx << 4) + seed];
 		int k = (t >> 1) & 1;
 
 		((short *)bp)[0] = cand[4 + k];
