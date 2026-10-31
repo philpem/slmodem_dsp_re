@@ -52,7 +52,7 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 	rate = prm->rate;
 
 	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->scale_mul;
-	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->scale_mul;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale *= V29TX_PPS_SCALE[rate];
 
 	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
 

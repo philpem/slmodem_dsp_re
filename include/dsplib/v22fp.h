@@ -164,12 +164,20 @@ struct v22fp_params {
 	 * patched from the caller's configuration and bit 11 is read back
 	 * here.  Bits 4 and 6 are set in the template and read by nothing.
 	 *
-	 * The original almost certainly wrote this as bitfields -- the
-	 * accesses are byte-wide with shifts and masks.  It is one `unsigned
-	 * int` here because the bytes are what the object settles and a
-	 * bitfield declaration would additionally claim a packing order.
+	 * Control and status access bits 9 and 10 through byte +0x11.  The
+	 * bitfield view reproduces those accesses with the period GCC/x86
+	 * layout; the word view retains the template and configuration uses.
+	 * Only the two fields used by these byte accesses are split out here.
 	 */
-	unsigned int flags;	/* +0x10 template 0x65b                     */
+	union {
+		unsigned int flags; /* +0x10 whole-word view */
+		struct {
+			unsigned int bits_0_8 : 9;
+			unsigned int bit9 : 1;
+			unsigned int bit10 : 1;
+			unsigned int bits_11_31 : 21;
+		} flag_bits;
+	};
 	unsigned short r14;	/* +0x14 template 1; set to 1 again when the
 				 *       mode is 2, which is invisible      */
 	/*
