@@ -608,11 +608,12 @@ FindCorrelation(short *pattern, short *sig, unsigned int *posp,
 	unsigned int pos = *posp;
 	unsigned int end = len - 1000;
 	unsigned int i, k;
-	int ret = 1;
+	int ret;
 	float corrbuf[20];
 
 	if (end > pos + 20)
 		end = pos + 20;
+	ret = 1;
 	if (pos != end) {
 		ret = 0;
 		k = 0;
