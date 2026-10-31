@@ -826,7 +826,10 @@ V90Demodulator::enterDataPhase()
 		dsplibs_debug_printf("V90Demodulator: enter Data Phase, "
 				     "Rate = %d [bps]\r\n", getBitRate());
 
-	demapper->resetLinearMappStudy(quickConnect != 0 ? 12600u : 30000u);
+	if (quickConnect != 0)
+		demapper->resetLinearMappStudy(12600u);
+	else
+		demapper->resetLinearMappStudy(30000u);
 	demapper->linearMappStudyEnabled = 1;
 
 	if (DSPLIB_DEBUG_ON())
