@@ -84,7 +84,7 @@ V22_MRF_free(struct v22_mrf *state)
 	sysdep_free(state->history);
 }
 
-short
+unsigned short
 V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, int count)
 {
 	short *coeff = state->cfg.coeff;
