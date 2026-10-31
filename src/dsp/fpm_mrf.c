@@ -110,6 +110,9 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 
 	while (remaining != 0) {
 		const short *c;
+#ifdef DSPLIB_REPRODUCE_BUGS
+		short *cursor;
+#endif
 		int acc = 0;
 		int k;
 
@@ -139,12 +142,26 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 		 * The walk wraps from index 0 round to the top of the buffer.
 		 */
 		c = coeff + phase;
+#ifdef DSPLIB_REPRODUCE_BUGS
+		cursor = history + widx;
+#endif
 		for (k = widx; k >= 0; k--) {
+#ifdef DSPLIB_REPRODUCE_BUGS
+			acc += *cursor-- * *c;
+#else
 			acc += history[k] * *c;
+#endif
 			c += branches;
 		}
+#ifdef DSPLIB_REPRODUCE_BUGS
+		cursor += hlen;
+#endif
 		for (k = hlen - 1; k > widx; k--) {
+#ifdef DSPLIB_REPRODUCE_BUGS
+			acc += *cursor-- * *c;
+#else
 			acc += history[k] * *c;
+#endif
 			c += branches;
 		}
 
