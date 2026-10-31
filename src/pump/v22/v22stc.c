@@ -72,21 +72,8 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 		    v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
 	}
 
-	/*
-	 * Bit 7 into `params.flags` bit 9.
-	 *
-	 * THE OBJECT DOES THIS AS A BYTE-WIDE READ-MODIFY-WRITE at +0x11 --
-	 * `movzbl 0x11(%esi)`, `and $0xfd`, `or`, `mov %bl,0x11(%esi)` -- which
-	 * is one of the reasons v22fp.h says the original probably declared
-	 * `flags` as bitfields.  Written here as a 32-bit read-modify-write on
-	 * the `unsigned int` that header settles on.  The two are
-	 * BEHAVIOURALLY IDENTICAL: both preserve every other bit of the word,
-	 * and no test can separate them.  What differs is the codegen tier,
-	 * and the alternative -- indexing byte 1 of an `unsigned int` -- would
-	 * buy that back only by writing endianness into src/.
-	 */
-	fp->params.flags = (fp->params.flags & ~V22_PARAMS_FLAG_BIT9)
-			   | ((unsigned int)((ctl->flags_0c >> 7) & 1) << 9);
+	/* The parameter bitfield preserves the byte-wide update at +0x11. */
+	fp->params.flag_bits.bit9 = ctl->flags_0c >> 7;
 
 	/* A literal on every path, not a status. */
 	return 1;
@@ -99,8 +86,8 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 
 	st->protocol = PROTOCOL[fp->hdx->protocol];
 
-	st->tx_bps = fp->dsp->r28 != 0 ? V22_STATUS_BPS_2400
-				       : V22_STATUS_BPS_1200;
+	st->tx_bps = fp->dsp->r28 == 0 ? V22_STATUS_BPS_1200
+				       : V22_STATUS_BPS_2400;
 
 	/*
 	 * THE SCALE IS APPLIED AT 1200 AND NOT AT 2400, and the two arms share
@@ -109,12 +96,12 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 	 * rather than a conditional inside the expression because that is the
 	 * shape the object has.
 	 */
-	if (fp->dsp->r2a != 0) {
-		st->rx_bps = V22_STATUS_BPS_2400;
-		err = fp->dsp->fse.mse;
-	} else {
+	if (fp->dsp->r2a == 0) {
 		st->rx_bps = V22_STATUS_BPS_1200;
 		err = (fp->dsp->fse.mse * V22_STATUS_QUALITY_SCALE_Q14) >> 14;
+	} else {
+		st->rx_bps = V22_STATUS_BPS_2400;
+		err = fp->dsp->fse.mse;
 	}
 
 	st->short_08 = 0;
@@ -124,28 +111,15 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 	st->short_10 = 0;
 	st->short_12 = 0;
 
-	/* One bit at a time, whole byte stored each time; see the header. */
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_SCRAMBLER)
-				    | (fp->dsp->scrambler_on & 1));
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_DESCRAMBLER)
-				    | ((fp->dsp->descrambler_on & 1) << 1));
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_R20)
-				    | ((fp->dsp->r20 & 1) << 2));
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_R00_OFF)
-				    | ((fp->dsp->r00 == 0) << 3));
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_R0C_OFF)
-				    | ((fp->dsp->r0c == 0) << 4));
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_EQ_FROZEN)
-				    | ((fp->dsp->eq_adapt == 0) << 5));
-	st->flags = (unsigned char)(st->flags | V22_STATUS_ALWAYS);
-	st->flags = (unsigned char)((st->flags & ~V22_STATUS_PARAM_BIT9)
-				    | (((fp->params.flags & V22_PARAMS_BIT9)
-					!= 0) << 7));
-
-	/* Only bit 0; the caller's other seven survive. */
-	st->flags2 = (unsigned char)((st->flags2 & ~V22_STATUS2_PARAM_BIT10)
-				     | ((fp->params.flags & V22_PARAMS_BIT10)
-					!= 0));
+	st->flag_bits.scrambler = fp->dsp->scrambler_on;
+	st->flag_bits.descrambler = fp->dsp->descrambler_on;
+	st->flag_bits.r20 = fp->dsp->r20;
+	st->flag_bits.r00_off = fp->dsp->r00 == 0;
+	st->flag_bits.r0c_off = fp->dsp->r0c == 0;
+	st->flag_bits.eq_frozen = fp->dsp->eq_adapt == 0;
+	st->flag_bits.bit6 = 1;
+	st->flag_bits.param_bit9 = fp->params.flag_bits.bit9;
+	st->flags2_bits.param_bit10 = fp->params.flag_bits.bit10;
 
 	/* A literal on every path, not a status. */
 	return 1;

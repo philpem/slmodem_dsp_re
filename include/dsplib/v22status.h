@@ -49,12 +49,10 @@
  * assignments compiles to, and it is the pattern CLAUDE.md says to settle per
  * site rather than by preference.
  *
- * It is still written here with explicit masks, and the reason is that the
- * masks reproduce the same instruction shape -- an `and $imm8` and an `or` per
- * bit -- WITHOUT claiming a packing order for a struct the host owns.  A
- * bitfield declaration would additionally assert that the author's bit 0 is
- * the byte's least significant bit; that happens to be true for GCC on x86 and
- * it is not something this object can tell us.
+ * The bitfield views reproduce those byte accesses, including the three
+ * SETcc results assigned to bits 3, 4 and 5.  Their allocation is measured
+ * under the period GCC/x86 layout; the byte views retain the report's wire
+ * values and let callers inspect the complete bytes.
  *
  * All eight bits of +0x14 are written, so the caller's value there does not
  * survive.  Only bit 0 of +0x15 is, so the caller's other seven bits DO.
@@ -80,8 +78,26 @@ struct v22_status {
 	unsigned char unmapped_000c[0x10 - 0x0c];
 	short short_10;		/* +0x10 written 0, read by nothing        */
 	short short_12;		/* +0x12 written 0, read by nothing        */
-	unsigned char flags;	/* +0x14 all eight bits written            */
-	unsigned char flags2;	/* +0x15 bit 0 written, the rest preserved */
+	union {
+		unsigned char flags; /* +0x14 byte view */
+		struct {
+			unsigned char scrambler : 1;
+			unsigned char descrambler : 1;
+			unsigned char r20 : 1;
+			unsigned char r00_off : 1;
+			unsigned char r0c_off : 1;
+			unsigned char eq_frozen : 1;
+			unsigned char bit6 : 1;
+			unsigned char param_bit9 : 1;
+		} flag_bits;
+	};
+	union {
+		unsigned char flags2; /* +0x15 bit0 from parameter bit10 */
+		struct {
+			unsigned char param_bit10 : 1;
+			unsigned char bits_1_7 : 7;
+		} flags2_bits;
+	};
 };
 
 /* The two rates the report can carry, in bit/s. */
