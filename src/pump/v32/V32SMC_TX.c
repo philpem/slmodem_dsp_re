@@ -219,18 +219,17 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 	short widx = out->widx;
 	int quad = smc->quad;
 	int trellis = smc->trellis_diff_state;
-	int prev = smc->trellis_state;
-	unsigned int i;
+	short prev = smc->trellis_state;
 
-	for (i = 0; i < count; i++) {
+	while (count--) {
 		unsigned short word;
 		int rot;
 		int masked;
 
 		/* In place, and the caller sees it. */
-		in[i] = (short)((unsigned int)(unsigned short)in[i]
+		*in = (short)((unsigned int)(unsigned short)*in
 				& mask_all);
-		masked = (unsigned short)in[i];
+		masked = (unsigned short)*in;
 
 		trellis = TrellisEncodeDifTable[trellis
 						+ ((masked >> nbits) * 4)];
@@ -245,6 +244,7 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 		       >> (quad * 4)) & 7;
 		buf[widx] = (short)(((rot << nbits) + (word & mask_low))
 				    | tag);
+		in++;
 		widx = ring_advance(widx, limit);
 	}
 
