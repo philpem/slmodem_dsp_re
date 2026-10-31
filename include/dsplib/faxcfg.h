@@ -142,7 +142,10 @@ struct v17rx_cfg {
 	/* +0x00  1.  Rank 2: `V17RX_status` stores it into
 	 * `v17_status::protocol` and `V17RX_OBJ_PROTOCOL` is +0x00
 	 * (Batch 25). */
-	int		protocol;
+	union {
+		int protocol; /* complete caller-supplied config storage */
+		unsigned short protocol_word; /* RX report reads low16 only */
+	};
 	short		bit_rate;	/* +0x04  14400.  Compared against
 					 * 14400/12000/9600 by `v17rx_create`
 					 * -- the rates V.17 defines and
@@ -183,6 +186,17 @@ struct v17rx_cfg {
 					 * word.                      */
 	void	       *ptr_0024;	/* +0x24  init: the 4th argument     */
 };
+typedef char v17rx_cfg_protocol_storage_at_0[
+	__builtin_offsetof(struct v17rx_cfg, protocol) == 0 ? 1 : -1];
+typedef char v17rx_cfg_protocol_word_at_0[
+	__builtin_offsetof(struct v17rx_cfg, protocol_word) == 0 ? 1 : -1];
+typedef char v17rx_cfg_protocol_storage_four_bytes[
+	sizeof(((struct v17rx_cfg *)0)->protocol) == 4 ? 1 : -1];
+typedef char v17rx_cfg_protocol_report_two_bytes[
+	sizeof(((struct v17rx_cfg *)0)->protocol_word) == 2 ? 1 : -1];
+typedef char v17rx_cfg_bit_rate_at_4[
+	__builtin_offsetof(struct v17rx_cfg, bit_rate) == 4 ? 1 : -1];
+
 
 /* V.27ter receive.  28 bytes; the same prefix, four fewer fields.
  *
@@ -209,7 +223,10 @@ struct v27rx_cfg {
  * `v17rx_cfg::protocol` has.  The other five have no reader in the object
  * and are retained neutral. */
 struct v29rx_cfg {
-	int		protocol;	/* +0x00  1; rank-2 rename: `V29RX_status` stores it into `v29_status_prefix::protocol` (Batch 27) */
+	union {
+		int protocol; /* complete caller-supplied config storage */
+		unsigned short protocol_word; /* RX report reads low16 only */
+	};	/* +0x00  1; rank-2 rename: `V29RX_status` stores it into `v29_status_prefix::protocol` (Batch 27) */
 	short		bit_rate;	/* +0x04  9600.  Same evidence as
 					 * v17rx_cfg's own (F9052)           */
 	short		short_0006;	/* +0x06  0; never read -- retained neutral (Batch 27) */
@@ -218,6 +235,17 @@ struct v29rx_cfg {
 	int		int_0010;	/* +0x10  0; never read -- retained neutral (Batch 27) */
 	void	       *ptr_0014;	/* +0x14  init: the 4th argument; no agreed name -- retained neutral (Batch 27) */
 };
+typedef char v29rx_cfg_protocol_storage_at_0[
+	__builtin_offsetof(struct v29rx_cfg, protocol) == 0 ? 1 : -1];
+typedef char v29rx_cfg_protocol_word_at_0[
+	__builtin_offsetof(struct v29rx_cfg, protocol_word) == 0 ? 1 : -1];
+typedef char v29rx_cfg_protocol_storage_four_bytes[
+	sizeof(((struct v29rx_cfg *)0)->protocol) == 4 ? 1 : -1];
+typedef char v29rx_cfg_protocol_report_two_bytes[
+	sizeof(((struct v29rx_cfg *)0)->protocol_word) == 2 ? 1 : -1];
+typedef char v29rx_cfg_bit_rate_at_4[
+	__builtin_offsetof(struct v29rx_cfg, bit_rate) == 4 ? 1 : -1];
+
 
 /*
  * `FAXVMI_CFG` is `R` in the object -- global and in `.rodata` -- and the

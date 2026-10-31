@@ -108,7 +108,7 @@ V29RX_status(void *modem, void *status)
 		return 0;
 
 	((struct v29_status_prefix *)status)->protocol =
-		(short)((unsigned short)((struct v29_rx *)modem)->cfg.protocol);
+		(short)((unsigned short)((struct v29_rx *)modem)->cfg.protocol_word);
 	((struct v29_status_prefix *)status)->tx_bps = 0;
 	((struct v29_status_prefix *)status)->short_04 =
 		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
@@ -127,23 +127,19 @@ V29RX_status(void *modem, void *status)
 	((struct v29_status_prefix *)status)->short_12 =
 		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
 
-	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT0;
-	((struct v29_status_prefix *)status)->flags = (unsigned char)
-		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT1)
-		 | ((((struct v29_rx *)modem)->rx->flags_0018
-		     & V29RX_0018_BIT0) << 1));
-	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT2;
-	((struct v29_status_prefix *)status)->flags = (unsigned char)
-		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT3)
-		 | ((((struct v29_rx *)modem)->rx->int_0000 == 0) << 3));
-	((struct v29_status_prefix *)status)->flags |= V29STAT_BIT4;
+	((struct v29_status_prefix *)status)->flag_bits.bit0 = 0;
+	((struct v29_status_prefix *)status)->flag_bits.bit1 =
+		((struct v29_rx *)modem)->rx->flags_0018 & V29RX_0018_BIT0;
+	((struct v29_status_prefix *)status)->flag_bits.bit2 = 0;
+	((struct v29_status_prefix *)status)->flag_bits.bit3 =
+		((struct v29_rx *)modem)->rx->int_0000 == 0;
+	((struct v29_status_prefix *)status)->flag_bits.bit4 = 1;
+	((struct v29_status_prefix *)status)->flag_bits.bit5 =
+		((struct v29_rx *)modem)->rx->int_0020 == 0;
+	((struct v29_status_prefix *)status)->flag_bits.bit6 = 1;
+	((struct v29_status_prefix *)status)->flag_bits.bit7 = 0;
 	((struct v29_status_prefix *)status)->flags2 &=
 		(unsigned char)~V29STAT_FLAGS2_BIT0;
-	((struct v29_status_prefix *)status)->flags = (unsigned char)
-		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT5)
-		 | ((((struct v29_rx *)modem)->rx->int_0020 == 0) << 5));
-	((struct v29_status_prefix *)status)->flags |= V29STAT_BIT6;
-	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT7;
 
 	return 1;
 }
