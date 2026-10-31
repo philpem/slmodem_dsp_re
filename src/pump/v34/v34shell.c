@@ -1275,6 +1275,7 @@ getFrame(void *objp)
 			bitbuf = (unsigned)TX->bitbuf;
 		}
 
+		TX->bitpos = (short)pos;
 		v = bitbuf >> (short)pos;
 
 		/*
@@ -1309,6 +1310,7 @@ getFrame(void *objp)
 			bitbuf = (unsigned)TX->bitbuf;
 		}
 
+		TX->bitpos = (short)pos;
 		v = bitbuf >> (short)pos;
 
 		/*
@@ -1343,6 +1345,7 @@ getFrame(void *objp)
 			bitbuf = (unsigned)TX->bitbuf;
 		}
 
+		TX->bitpos = (short)pos;
 		v = bitbuf >> (short)pos;
 
 		/*
