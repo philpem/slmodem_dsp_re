@@ -315,7 +315,7 @@ def main():
     rows.sort(key=lambda r: (-r[0], -r[1], r[2]))
     for nc, dc, n, conf, bc, oc in rows[:top]:
         print('%-52s store/load-conflicts %d  cwtl blob/ours %d/%d' % (n, nc, bc, oc))
-        for k, bw, ow in conf[:6]:
+        for k, bw, ow, _strong in conf[:6]:
             print('    %-6s disp %-8s blob %-10s ours %s'
                   % (k[0], hex(k[1]) if k[1] >= 0 else '-' + hex(-k[1]), ','.join(bw), ','.join(ow)))
 
