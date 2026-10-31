@@ -118,6 +118,14 @@ jobs:
             "$RUNNER_TEMP/link-selected-report.txt" \
             --summary "$RUNNER_TEMP/link-selected-census.txt"
 
+      - name: Check explicit byte-identity proof inputs
+        run: |
+          python3 tools/toolchain/byteident_cli_controls.py \
+            --work-dir "$RUNNER_TEMP/byteident-cli-controls" \
+            --tc-out build/tc_repro \
+            --link-manifest build/tc_repro/tc_link_manifest.txt \
+            --linked build/partial/dsplibs.o
+
       # THE PHASED FLOOR MUST BE ENFORCED HERE, where the fresh tc_repro tree
       # and the recovered-order link already exist.  On a master push BASE_SHA
       # is github.sha, so the base/head comparison in gentoo-period.yml is the
