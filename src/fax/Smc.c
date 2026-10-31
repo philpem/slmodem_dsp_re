@@ -279,7 +279,7 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
-		int word;
+		unsigned short word;
 		int rot;
 		int masked;
 
