@@ -962,7 +962,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	short best[16];
 	short *par;
 	int st = s->state_idx;
-	int i, j;
+	short i, j;
 
 	if (!(n & 1)) {
 		/* Even: fill four frame shorts and two sub-indices. */
