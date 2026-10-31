@@ -91,6 +91,15 @@ def section_field(raw, elf, section, field, value):
     raw[off:off + 4] = value.to_bytes(4, 'little')
 
 
+def xbegin(target, word=False):
+    # Encode directly: assembler support for TSX and operand-size prefix
+    # spellings varies. The relative field starts at dot and ends 2/4 bytes
+    # later, so the expression preserves the exact original instruction.
+    if word:
+        return '.byte 0x66,0xc7,0xf8\n.word ' + target + '-.-2'
+    return '.byte 0xc7,0xf8\n.long ' + target + '-.-4'
+
+
 def run(directory, actual=None, blob=None):
     records = {}
     left = assemble(directory, 'left', SOURCE)
@@ -138,19 +147,21 @@ def run(directory, actual=None, blob=None):
     }
     # Copy each unsupported transfer into both ELF sides. Equal function
     # bytes must not turn a missing CFG edge into a destination identity.
+    # Explicit bytes also preserve these controls on assemblers that reject
+    # MPX/CET prefix syntax (including BND in newer Ubuntu binutils).
     for label, transfer in {
-        'notrack-indirect-jump': 'notrack jmp *%edx',
-        'notrack-indirect-call': 'notrack call *%edx',
-        'bnd-indirect-jump': 'bnd jmp *%edx',
-        'bnd-indirect-call': 'bnd call *%edx',
-        'segment-indirect-jump': 'cs jmp *%edx',
-        'bnd-return': 'bnd ret',
-        'rep-return': 'rep ret',
+        'notrack-indirect-jump': '.byte 0x3e,0xff,0xe2',
+        'notrack-indirect-call': '.byte 0x3e,0xff,0xd2',
+        'bnd-indirect-jump': '.byte 0xf2,0xff,0xe2',
+        'bnd-indirect-call': '.byte 0xf2,0xff,0xd2',
+        'segment-indirect-jump': '.byte 0x2e,0xff,0xe2',
+        'bnd-return': '.byte 0xf2,0xc3',
+        'rep-return': '.byte 0xf3,0xc3',
         'notrack-return': '.byte 0x3e,0xc3',
-        'xbegin-dispatch': 'xbegin .Ldispatch',
-        'xbegin16-dispatch': 'data16 xbegin .Ldispatch',
-        'xabort': 'xabort $1',
-        'xend': 'xend',
+        'xbegin-dispatch': xbegin('.Ldispatch'),
+        'xbegin16-dispatch': xbegin('.Ldispatch', word=True),
+        'xabort': '.byte 0xc6,0xf8,0x01',
+        'xend': '.byte 0x0f,0x01,0xd5',
         'jcxz-dispatch': 'jcxz .Ldispatch',
         'loop-dispatch': 'loop .Ldispatch',
         'indirect-jump': 'jmp *%edx',
@@ -174,9 +185,9 @@ def run(directory, actual=None, blob=None):
             negatives['direct-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: jmp ' + target + '\n'
             negatives['relocated-%s-%d' % (label, offset)] = SOURCE + '\n.data\n.long ' + target + '\n'
             negatives['named-%s-%d' % (label, offset)] = SOURCE + '\n.globl alias\n.set alias,' + target + '\n'
-            negatives['external-xbegin-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: xbegin ' + target + '\n'
-            negatives['external-xbegin16-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: data16 xbegin ' + target + '\n'
-            negatives['external-bnd-jump-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: bnd jmp ' + target + '\n'
+            negatives['external-xbegin-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: ' + xbegin(target) + '\n'
+            negatives['external-xbegin16-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: ' + xbegin(target, word=True) + '\n'
+            negatives['external-bnd-jump-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: .byte 0xf2\njmp ' + target + '\n'
             negatives['external-segment-jump-%s-%d' % (label, offset)] = SOURCE + '\n.text\nexternal: .byte 0x3e\njmp ' + target + '\n'
     for label, source in negatives.items():
         paths = [assemble(directory, label + '-' + str(i), source, 16 * i)
