@@ -1160,7 +1160,11 @@ getFrame(void *objp)
 	int small_last = 2;
 	int sum;
 	int nb;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short pos;
+#else
 	int pos;
+#endif
 	unsigned bitbuf;
 
 	sum = (unsigned short)TX->wide_accum + (unsigned short)TX->remainder;
