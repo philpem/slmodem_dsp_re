@@ -338,6 +338,72 @@ shell_reset_history(void)
 	return diff_end();
 }
 
+/*
+ * Synthetic fidelity probe: the prior cost vector below has no proved
+ * producer history.  Reset/configuration and the two input symbols use
+ * actual component methods; this is not a negotiated-call history.
+ */
+static int
+shell_branch_carry_probe(void)
+{
+	static struct v34_object a, b;
+	struct v34_shell *sa = (struct v34_shell *)&a;
+	struct v34_shell *sb = (struct v34_shell *)&b;
+	int i, x, y;
+
+	diff_begin("v34 demap synthetic branch carry");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.role = b.role = 0x65;
+	preinitdigital(&a);
+	ref_preinitdigital(&b);
+	initV34((char *)&a + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a + 0xe84), scale2400[19] >> 1);
+	ref_initV34((char *)&b + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b + 0xe84), ref_scale2400[19] >> 1);
+	diff_eq_int("synthetic native divisor", sb->divisor, 456, 0);
+	diff_eq_int("synthetic native shift", sb->cost_shift, 10, 0);
+	diff_eq_int("synthetic native invert", sb->invert, 1, 0);
+	diff_eq_int("synthetic native reset index", sb->state_idx, 0, 0);
+
+	/* Produce the first parameter pair through the actual even method. */
+	a.receiver.target_re = b.receiver.target_re = 100;
+	a.receiver.target_im = b.receiver.target_im = 200;
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 0);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 0);
+	diff_eq_int("synthetic even return", x, y, 0);
+	diff_eq_int("synthetic native even path", y, 0, 0);
+	diff_eq_int("synthetic first parameter produced", sb->state[0].par[0], 100, 0);
+	diff_eq_int("synthetic second parameter produced", sb->state[0].par[1], 200, 0);
+
+	/*
+	 * Deliberately planted prior costs, not a negotiated/receiver history.
+	 * All sums are below 33871; squares are at most 856 * 856, without overflow.
+	 * First state chooses branch 2; the next has no candidate below 0x7fff.
+	 */
+	for (i = 0; i < 16; i++)
+		sa->cost[i] = sb->cost[i] = 32767;
+	sa->cost[4] = sb->cost[4] = 32267;
+	a.receiver.target_re = b.receiver.target_re = 300;
+	a.receiver.target_im = b.receiver.target_im = 400;
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 1);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 1);
+	diff_eq_int("synthetic odd return", x, y, 1);
+	diff_eq_int("synthetic native odd path", y, 1, 1);
+	diff_eq_int("synthetic native improving state", sb->trellis[0], 0x040c, 0);
+	diff_eq_int("synthetic native carried state", sb->trellis[1], 0x0404, 1);
+	diff_eq_int("synthetic first state agrees", sa->trellis[0], sb->trellis[0], 0);
+	diff_eq_int("synthetic carried branch word", sa->trellis[1], sb->trellis[1], 1);
+	diff_eq_obj("synthetic trellis", unsigned short[512], sa->trellis, sb->trellis, 1);
+	diff_eq_obj("synthetic normalized costs", short[16], sa->cost, sb->cost, 1);
+	diff_eq_int("synthetic winning seed", sa->state[0].seed, sb->state[0].seed, 1);
+	diff_eq_int("synthetic output real", a.receiver.dp.iir2.i, b.receiver.dp.iir2.i, 1);
+	diff_eq_int("synthetic output imaginary", a.receiver.dp.iir2.q, b.receiver.dp.iir2.q, 1);
+	printf("SYNTHETIC OBSERVATION: trellis[0]=%04x/%04x trellis[1]=%04x/%04x\n",
+	       sa->trellis[0], sb->trellis[0], sa->trellis[1], sb->trellis[1]);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -790,6 +856,7 @@ main(void)
 	rc |= diff_end();
 
 	rc |= shell_reset_history();
+	rc |= shell_branch_carry_probe();
 
 	diff_begin("v34 lsbMask");
 	{
