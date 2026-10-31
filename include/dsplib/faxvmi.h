@@ -63,9 +63,10 @@
  * second argument `FAXVMI_create` hands `vxx_create`, which is all this file
  * knew about it, and its `slot` at +0x0e is this file's `slot`.
  *
- * Embedding `struct faxvmi_cfg` as a member here is the obvious tidy-up and
- * is NOT done: it would change every offset comment in this header for no
- * behavioural gain, and both files are correct as they stand.
+ * The cfg union view preserves these flat member types and offsets while
+ * modelling FAXVMI_create's complete 24-byte copy. Both source arms copy
+ * six DWORDs in the object (0x95141..0x95160 and 0x95376..0x953a6), including
+ * the unnamed halfword at +0x02. The view uses faxcfg.h's existing type.
  */
 
 #ifndef DSPLIB_FAXVMI_H
@@ -354,29 +355,34 @@ struct faxvmi_link {
  * 0x9490, 0x18 bytes). +0x18 onwards is runtime state.
  */
 struct faxvmi {
-	unsigned short mode;		/* +0x00 FAXVMI_MODE_*               */
-	unsigned short pad_0002;	/* +0x02                             */
-	int reverse;			/* +0x04 nonzero routes the block
-					 * through `vmi_reverse[mode]` on the
-					 * way in and on the way out.  Named
-					 * from the table it selects         */
-	unsigned short fifo_size;	/* +0x08 the ring capacity asked for */
-	unsigned short max_frame;	/* +0x0a the longest frame, in
-					 * elements.  Four independent
-					 * readings agree (F9011, F9019): the
-					 * ring is sized to hold it plus
-					 * three, the three unpackers stop
-					 * producing at it, and
-					 * FAXVMI_process reports "full" when
-					 * the ring's free space falls below
-					 * it                                */
-	unsigned short frame_size;	/* +0x0c sizes the framer's HDLC
-					 * assembly buffer                   */
-	short slot;			/* +0x0e index into the vxx tables   */
-	const void *modem_cfg;			/* +0x10 handed to vxx_create as its
-					 * second argument                   */
-	void *ptr_0014;			/* +0x14 copied by create, read by
-					 * nothing reconstructed             */
+	union {
+		struct faxvmi_cfg cfg;
+		struct {
+			unsigned short mode;		/* +0x00 FAXVMI_MODE_*               */
+			unsigned short pad_0002;	/* +0x02                             */
+			int reverse;			/* +0x04 nonzero routes the block
+							 * through `vmi_reverse[mode]` on the
+							 * way in and on the way out.  Named
+							 * from the table it selects         */
+			unsigned short fifo_size;	/* +0x08 the ring capacity asked for */
+			unsigned short max_frame;	/* +0x0a the longest frame, in
+							 * elements.  Four independent
+							 * readings agree (F9011, F9019): the
+							 * ring is sized to hold it plus
+							 * three, the three unpackers stop
+							 * producing at it, and
+							 * FAXVMI_process reports "full" when
+							 * the ring's free space falls below
+							 * it                                */
+			unsigned short frame_size;	/* +0x0c sizes the framer's HDLC
+							 * assembly buffer                   */
+			short slot;			/* +0x0e index into the vxx tables   */
+			const void *modem_cfg;			/* +0x10 handed to vxx_create as its
+							 * second argument                   */
+			void *ptr_0014;			/* +0x14 copied by create, read by
+							 * nothing reconstructed             */
+		};
+	};
 	int underrun;			/* +0x18 the transmit ring ran dry.
 					 * All three packers set it to 1 on
 					 * the one arm where the bit engine
