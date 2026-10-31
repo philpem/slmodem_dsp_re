@@ -423,7 +423,6 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 		 * note at the top of this file.  It cannot change an answer
 		 * and it is what the object encodes.
 		 */
-		mode = sre->mode;
 		{
 			unsigned int decay = (unsigned int)(sre->mag_avg * 15)
 					     >> 4;
@@ -466,6 +465,7 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, int count)
 					 * information, so the update is
 					 * skipped rather than fed noise.
 					 */
+					mode = sre->mode;
 					update = mode != 2
 						 || (unsigned short)(xq + 0x31)
 						    > 0x62;
