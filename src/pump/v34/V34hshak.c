@@ -6972,84 +6972,6 @@ t72_update_both(struct v34_object *obj, struct v34_receiver *rx, short n)
  * are written because the reading that explains the codegen is the one that
  * says the source had them.
  */
-static void
-t72_measure(struct v34_object *obj, unsigned noise_off, unsigned signal_off,
-	    unsigned ratio_off)
-{
-	unsigned int noise;
-	unsigned int signal;
-	short i;
-
-	/*
-	 * 0x69cec.  The noise bank is reduced with `scale` 6 and the signal
-	 * bank at 0x69d03 with 2 -- the only argument that differs between the
-	 * two calls, and 0x67da3 reduces the same signal array over
-	 * twenty-five bins with that same scale of 2.
-	 */
-	dftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);	/* 0x69cec */
-	/*
-	 * 0x69d03.  The array 0x67da3 reduces over twenty-five bins, reduced
-	 * here over four and with the same `scale` of 2.
-	 */
-	dftenergy(obj->probe_bins, V34_NL_BINS, 2);	/* 0x69d03 */
-
-	/*
-	 * %esi is zeroed at 0x69cd0, before the second `dftupdate`, and comes
-	 * back through the call because %esi is callee-saved: that is how the
-	 * stores at 0x69d1a and 0x69d22 are known to be zeroes rather than
-	 * leftovers.
-	 */
-	t3c_puti(obj, noise_off, 0);			/* 0x69d1a */
-	t3c_puti(obj, signal_off, 0);			/* 0x69d22, dead */
-
-	/*
-	 * 0x69d28.  The loop reads +0xc of each bank -- 0xa32c and 0xa778 --
-	 * and walks both with one `add $0x2c,%edx`, the bin stride.  `i` is
-	 * narrowed by `movswl %bp,%ebx` every turn and closed by a signed
-	 * sixteen-bit compare against 3, which is what makes it a short.  The
-	 * `shl $0x8` is per bin, before the add.
-	 *
-	 * The block sits above the accumulators rather than tight against the
-	 * `for`, and that placement is forced: a comment CLOSE immediately
-	 * above `for (i = 0; i <= 3; i++) {` is a mutation anchor elsewhere in
-	 * this file, and a second copy of it makes that anchor match twice.
-	 * `anchorcheck.py` catches it; nothing else would.
-	 */
-	noise = 0;
-	signal = 0;
-	for (i = 0; i <= 3; i++) {			/* 0x69d28 */
-		noise += (unsigned short)obj->nl_noise_bins[i].energy;
-		signal += (unsigned int)
-			  (unsigned short)obj->probe_bins[i].energy << 8;
-	}
-
-	/*
-	 * 0x69d55 stores the signal and 0x69d5b the noise -- the reverse of
-	 * the zeroing order above -- and `test %ecx,%ecx` at 0x69d53 is
-	 * scheduled ahead of both, so the guard below reads the register and
-	 * not the field it has just written.
-	 */
-	t3c_puti(obj, signal_off, signal);		/* 0x69d55 */
-	t3c_puti(obj, noise_off, noise);		/* 0x69d5b */
-
-	/*
-	 * The zero-noise arm is out of line in both rungs -- 0x6aa0b writes
-	 * +0xaac8 and 0x6c9aa writes +0xaac4 -- and each `jmp`s back into its
-	 * rung, at 0x69d78 and 0x6a760.  It has to exist because 0x69d70 is a
-	 * hardware `div`, which faults on a zero divisor.
-	 */
-	if (noise == 0)
-		t3c_puti(obj, ratio_off, 0);		/* 0x6aa0b, 0x6c9aa */
-	else
-		/*
-		 * 0x69d69 halves the noise with `shr $1` and 0x69d70 divides
-		 * with `f7 f1` -- DIV, not IDIV -- so both accumulators are
-		 * unsigned, and the halved denominator is the rounding term.
-		 */
-		t3c_puti(obj, ratio_off,		/* 0x69d72, 0x6a75a */
-			 (signal + noise / 2) / noise);
-}
-
 /*
  * What both ends do when the probe is over.
  *
@@ -7106,405 +7028,9 @@ t72_probe_done(struct v34_object *obj, struct v34_receiver *rx)
  * over the whole range.  A counter that has gone negative therefore matches
  * no rung at all and the block is dropped.
  */
-static void
-t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
-{
-	short count;
-	short n;
-
-	/*
-	 * 0x65524.  Everything the ladder below needs is read on the
-	 * instructions that follow the call: 0x65529 takes the counter at
-	 * +0xaa78 and 0x65534 the receiver's +0x130.
-	 */
-	rxtiming(obj);					/* 0x65524 */
-
-	n = t72_nsamples(rx);
-	count = obj->short_aa78;
-
-	if (count > 0x300) {
-		/*
-		 * 0x686ba.  The whole twenty-five-bin probe bank and nothing
-		 * else: this is the probe itself being received.
-		 */
-		dftupdate(obj->probe_bins, V34_PROBE_BINS,
-			  rx->burst, n);
-	} else if (count == 0x300) {
-		/* 0x69c7a.  The probe's own signal-to-noise, and re-arm. */
-		t72_update_both(obj, rx, n);
-		t72_measure(obj, T72_PB_NOISE, T72_PB_SIGNAL, T72_PB_RATIO);
-		/*
-		 * 0x69d78.  The re-arm: ninety-two bytes of `dftfreqinit`
-		 * inlined, twenty-five bins at the probe's own 150 Hz
-		 * spacing, and the only one of the three initialisers that
-		 * clears the double accumulators as well.  0x69d7f and
-		 * 0x69d89 are its first two stores, `movw $0x0,(%edx)` and
-		 * `movl $0x0,0x4(%edx)`.
-		 */
-		dftfreqinit(obj->probe_bins);		/* 0x69d78 */
-	} else if (count >= 0x1c1 && count <= 0x2ff) {
-		/* 0x68dd2.  Accumulate only. */
-		t72_update_both(obj, rx, n);
-	} else if (count == 0x180) {
-		/* 0x6a668.  The nonlinear measurement, and re-arm. */
-		t72_update_both(obj, rx, n);
-		t72_measure(obj, T72_NL_NOISE, T72_NL_SIGNAL, T72_NL_RATIO);
-		/*
-		 * 0x6a760.  Four bins at 1050, 1350, 1950 and 2550 Hz laid
-		 * over `probe_bins[0..3]` -- the four-bin clear at stride
-		 * 0x2c, then `inc` written at +0x2, +0x2e, +0x5a and +0x86.
-		 * Re-arming the signal bank destroys the probe bank's first
-		 * four bins, and finding F739 reads the 0x40 and 0x180 rungs
-		 * as doing that on purpose.
-		 */
-		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a760 */
-		/*
-		 * 0x6a7aa.  Its partner on obj + 0xa76c: 900, 1200, 1800 and
-		 * 2400 Hz, each one 150 Hz step below the signal bin above
-		 * it, which is what makes the pair a distortion measurement
-		 * and 0xa76c the denominator of the ratio just stored.
-		 * Finding F739.
-		 */
-		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a7aa */
-	} else if (count >= 0x41 && count <= 0x17f) {
-		/*
-		 * 0x69995.  The same accumulation as 0x1c1..0x2ff, plus the
-		 * receiver's own block counter -- the ONLY thing that
-		 * separates the two windows.
-		 */
-		t72_update_both(obj, rx, n);
-		/*
-		 * 0x699fd.  `inc %ebp` then `mov %bp,0x124(%ecx)`, and the
-		 * rung ends there: 0x69a04 reloads the txstate from +0x3596
-		 * into %ecx and 0x69a0b jumps to the once-per-block dispatch
-		 * at 0x62af1.
-		 */
-		rx->rx_blocks = (short)(rx->rx_blocks + 1);	/* 0x699fd */
-	} else if (count == 0x40) {
-		/*
-		 * 0x6a4f4.  The gain the AGC settled on becomes the starting
-		 * gain for what follows, doubled -- unless it is out of
-		 * range, when 0x6aec1 substitutes 0x6000 and says so.  That
-		 * path REJOINS at 0x6a52c, so the "beginning of RX_L1"
-		 * message prints on both.
-		 */
-		/*
-		 * 0x6a510, AND THE STORE PRECEDES THE BRANCH: `or
-		 * $0x200,%ecx` at 0x6a506 and `cmp $0x34ff,%ax` at 0x6a50c
-		 * both run before the store, and the `jg 6aec1` that picks
-		 * the substituted gain is at 0x6a517 -- after it.  So the
-		 * flag is raised on the out-of-range path too.
-		 */
-		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);  /* 0x6a510 */
-
-		if (rx->agc_gain > 0x34ff) {		/* 0x6a50c, signed */
-			/*
-			 * 0x71343 is out of line and it comes back: the
-			 * string, `cwtl` so the gain reaches printf
-			 * sign-extended, the call, a reload of
-			 * `dsplibs_debug_level`, then `jmp 6aed0` -- the
-			 * store below.
-			 */
-			if (DSPLIB_DEBUG_ON())		/* 0x71343 */
-				dsplibs_debug_printf(
-				    "V34AGC, -- ERROR-- gainestimate in " "RX_L1,0x%x\n", rx->agc_gain);
-			/*
-			 * 0x6aed9.  The `%edx` that 0x6a52c tests below is
-			 * loaded at 0x6a51d on the in-range path and at
-			 * 0x6aec1 on this one, reloaded at 0x71354 across
-			 * the call -- three loads, and 0x6aec1's serves
-			 * both tests.
-			 */
-			rx->agc_start_gain = 0x6000;		/* 0x6aed9 */
-		} else {
-			/*
-			 * 0x6a525.  `add %eax,%eax` on the same register
-			 * 0x6a50c compared, then a halfword store to
-			 * receiver +0x262 -- so the doubled gain is
-			 * truncated to sixteen bits, not saturated.
-			 */
-			rx->agc_start_gain = (short)(rx->agc_gain * 2);	/* 0x6a525 */
-		}
-
-		/*
-		 * 0x6a531 is the body; the test is `cmp $0x1,%edx; jbe
-		 * 6a54c` at 0x6a52c.  The argument is re-read `movswl
-		 * 0x136(%edi),%esi` -- SIGNED, and forced, because the whole
-		 * 32-bit value goes to a vararg.
-		 */
-		if (DSPLIB_DEBUG_ON())			/* 0x6a531 */
-			dsplibs_debug_printf("V34AGC, rx->gain = 0x%x, at "
-					     "the beginning of RX_L1\n",
-					     rx->agc_gain);
-
-		/*
-		 * 0x6a54c.  The counter only counts up, so this rung runs
-		 * FIRST: it arms both nl banks, 0x41..0x17f accumulates into
-		 * them, 0x180 reduces them and arms them again, 0x300 does
-		 * the same for the probe bank, and everything above 0x300 is
-		 * the probe itself.  Finding F739.
-		 */
-		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a54c */
-		/*
-		 * 0x6a5a1.  The other half, on obj + 0xa76c.  The two banks
-		 * are told apart by their phase steps --
-		 * 0x700/0x900/0xd00/0x1100 for the signal bank and
-		 * 0x600/0x800/0xc00/0x1000 for this one, each 0x100 step
-		 * being 150 Hz.  Finding F739.
-		 */
-		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a5a1 */
-	}
-}
-
 /*
  * The arm.
  */
-static void
-t72_rx_l1(struct v34_object *obj)
-{
-	struct v34_receiver *rx = &obj->receiver;
-
-	/*
-	 * 0x650c6, and THE STORE PRECEDES THE BRANCH: `movzwl`, `inc`,
-	 * `cmp $0x440,%di`, `mov %di,0xaa78`, `jle`.  So everything below
-	 * sees the incremented value, which is what makes the counter
-	 * pokeable in spite of finding F429 -- a poke of n drives the whole
-	 * arm as n + 1.  The compare is signed and sixteen bits.
-	 */
-	obj->short_aa78 = (short)(obj->short_aa78 + 1);
-
-	if (obj->short_aa78 <= 0x440) {
-		t72_ladder(obj, rx);
-		/*
-		 * 0x65597.  The ladder's exit, one of the arm's seventeen
-		 * `jmp 62af1`s: `mov 0xc0(%esp),%edi`, `movzwl
-		 * 0x3596(%edi),%ecx`, jump.  The txstate is reloaded into
-		 * %ecx first because the tail dispatches on whatever the
-		 * jumping arm left there.
-		 */
-		t3c_txblock(obj);			/* 0x65597 */
-		return;
-	}
-
-	/*
-	 * 0x650ee.  The `jle 6551a` at 0x650e1 keeps this off the ladder
-	 * path entirely, so the AGC runs only once the counter is past
-	 * 0x440 -- which on the originating end is every block of the
-	 * tone-A wait below, not one.  Its argument is `0x74(%esp)` --
-	 * the receiver at obj + 0x264 -- pushed with no displacement.
-	 */
-	V34agc(rx);					/* 0x650ee */
-
-	if (obj->role != 0x65) {
-		/*
-		 * 0x67d70 -- the ANSWERING end.  It finishes the probe, arms
-		 * the FSK receiver for INFO1, aims the second record pointer
-		 * at obj + 0xa9dc with INFO1c's length in it, opens the gate
-		 * at +0xa8a0 that diverts 0x64a87, and restarts the counter.
-		 */
-		t72_probe_done(obj, rx);
-
-		/*
-		 * 0x67e1e.  `movzwl 0x3594(%ecx),%edx; cmp $0x2b,%dx; je
-		 * 67e4b` -- and the `je` can never take, because the arm is
-		 * entered with the rxstate at 72 and nothing between 0x650c6
-		 * and here writes +0x3594.  The store and its trace always
-		 * run.
-		 */
-		hs_set_rxstate(obj, V34HS_RX_DPSK);	 /* 0x67e1e */
-		/*
-		 * 0x67e4b.  `cmp $0x3c,%dx`, and it is NOT one of the three
-		 * the head of this section calls unreachable: those three
-		 * compare +0x3594 and this one compares +0x3596.  An end
-		 * already in TONE_AB stores nothing and prints nothing.
-		 */
-		hs_set_txstate(obj, V34HS_TONE_AB);	 /* 0x67e4b */
-		/*
-		 * 0x67e7f.  `cmp $0x29,%dx` on +0x3592: microstate 41, whose
-		 * arm at 0x669a4 is the table-3 case at the bottom of this
-		 * file.  This store is what sends the next block there.
-		 */
-		hs_set_microstate(obj, V34HS_DET_SYNC); /* 0x67e7f */
-
-		/*
-		 * 0x67eb3.  Inlined, and it runs to 0x67f4d: `mov
-		 * %bx,0xaae6(%esi,%eax,2)` at 0x67ebe is the head of the
-		 * hundred-halfword clear, and the two stores at 0x67f46 and
-		 * 0x67f4d -- +0xaae2 to all ones, +0xaae0 to zero -- are the
-		 * last two of `fsk_state_init`'s eleven, not statements of
-		 * this arm.
-		 */
-		dpskDetectInfo1Init(obj);			 /* 0x67eb3 */
-
-		/*
-		 * 0x67f54.  `movw $0x4d,0x18(%ebp)`, and %ebp already holds
-		 * obj + 0xa9dc: the length field is filled in BEFORE 0x67f6e
-		 * publishes the pointer to the record.  Microstate 41 puts
-		 * INFO1a's 0x26 in the same field of the same record at
-		 * 0x6b379 before aiming the same pointer at it -- which
-		 * sequence the end expects is the whole difference.
-		 */
-		obj->msgrec[3].nbits = 0x4d;		 /* 0x67f54 */
-		obj->vect_idx = 0;				 /* 0x67f5a */
-		/*
-		 * 0x67f68.  `mov %ebx,0xa8a0(%esi)`, thirty-two bits.  This
-		 * is the gate 0x64a87 tests, so from the next block on the
-		 * RX_DPSK path polls the retrain detector as well -- and
-		 * falls through to the FSK demodulator either way, which is
-		 * finding F721.
-		 */
-		obj->retrain_poll = 1;				 /* 0x67f68 */
-		obj->paa70 = &obj->msgrec[3];			 /* 0x67f6e */
-		/*
-		 * 0x67f74.  `mov %di,0xaa78(%esi)`, a halfword.  +0xaa78 is
-		 * not this arm's private counter -- six arms bump it and it
-		 * is the `[2]` every state trace prints -- so leaving it at
-		 * 0x441 on the way out would be visible everywhere.
-		 */
-		obj->short_aa78 = 0;					 /* 0x67f74 */
-
-		/*
-		 * 0x67f7b.  The exit, and the %ecx it dispatches on was
-		 * loaded from +0x3596 at 0x67f61 -- scheduled into the middle
-		 * of the store run, three stores before the jump.
-		 */
-		t3c_txblock(obj);				 /* 0x67f7b */
-		return;
-	}
-
-	if (obj->short_aa78 == 0x441) {
-		/*
-		 * 0x69611 -- the ORIGINATING end, on the one block after the
-		 * probe.  Same finish, but it stays in RX_L1 and only clears
-		 * the FSK shift register, because what it is waiting for is
-		 * tone A and that is the test below.
-		 */
-		t72_probe_done(obj, rx);
-
-		/*
-		 * 0x696d0.  `cmp $0x3c,%cx; je 69702`: when the txstate is
-		 * already 60 the store at 0x696f6 and the trace are both
-		 * skipped -- and both paths leave 0x3c in %ecx, which is what
-		 * the exit at 0x6971e dispatches on.
-		 */
-		hs_set_txstate(obj, V34HS_TONE_AB);	/* 0x696d0 */
-
-		/*
-		 * 0x69710.  `mov $0xffffffff,%ebp` and then a halfword store,
-		 * so +0xaae2 gets 0xffff.  It is the shift register's reset
-		 * value and this arm writes it at three sites -- 0x67f46,
-		 * 0x68851 and here.
-		 */
-		obj->fsk.sr = -1;				/* 0x69710 */
-		obj->fsk.nbits = 0;				/* 0x69717 */
-
-		/* 0x6971e, and %ecx still holds TONE_AB from 0x696d0. */
-		t3c_txblock(obj);				/* 0x6971e */
-		return;
-	}
-
-	/*
-	 * 0x65140.  The two guards below read the FSK state after this call:
-	 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
-	 * 0x65153, both sixteen bits.  `fskdemodulate` returns without
-	 * changing either field when `rx->retrain_gate` is nonzero.
-	 * `t_v34hsrx72` uses that inhibit to preserve seeded values for
-	 * exploratory component probes; those seeds do not establish a
-	 * public modem history reaching this state.
-	 */
-	fskdemodulate(obj,					/* 0x65140 */
-		      rx->burst,
-		      &obj->fsk);
-
-	if (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {
-		/*
-		 * 0x6881e.  Not enough bits, or the twelve are not all ZERO:
-		 * no tone A this block, so all that is left is the timeout
-		 * ladder.  The polarity is the object's and is worth stating,
-		 * because this comment used to have it backwards: 0x65153 is
-		 * `testw $0xfff,0xaae2(%esi)` with `jne 6881e`, so it is a
-		 * NON-zero masked register that fails.  The register is reset
-		 * to all ones at all three sites above, so twelve ZEROS
-		 * shifting in is what tone A looks like here.  See the head of this section for why the 32-bit
-		 * arithmetic here cannot be separated from a 16-bit spelling
-		 * by any trial, and what is tested instead.
-		 */
-		int limit = obj->rtd >> 2;
-		int count = obj->short_aa78;
-
-		if (count > 0xf10 + limit) {
-			/*
-			 * 0x68851, AND THE STORE PRECEDES THE BRANCH: it
-			 * sits between `cmp %ebx,%ecx` at 0x6884f and `je
-			 * 6afd7` at 0x68858, so every block past 0xf10 +
-			 * rtd/4 clears the shift register, not only the one
-			 * that matches 0xf14.
-			 */
-			obj->fsk.sr = -1;		/* 0x68851 */
-
-			if (count == 0xf14 + limit) {
-				/*
-				 * 0x6afe8 sits between the debug
-				 * test at 0x6afe1 and its `ja
-				 * 6b120` at 0x6afef -- the toggle
-				 * happens whether or not the
-				 * message prints.
-				 */
-				obj->short_358c ^= 1;	/* 0x6afe8 */
-				/*
-				 * 0x6b120 is out of line and does
-				 * not come back: it prints,
-				 * reloads +0x3596 into %ecx and
-				 * jumps to 0x62af1 itself.
-				 */
-				if (DSPLIB_DEBUG_ON())	/* 0x6b120 */
-					dsplibs_debug_printf(
-					    "V34RETRAIN, waiting for tone A " "at the end of RX_L2\n");
-			} else if (count == 0xf2c + limit) {
-				/* 0x6c9f1: give up and go round again. */
-				/*
-				 * 0x6c9fa zeroes the counter
-				 * before either transition below,
-				 * and 0x6ca01's `cmp $0x2b` is one
-				 * of the three that can never
-				 * match.
-				 */
-				obj->short_aa78 = 0;		/* 0x6c9fa */
-				hs_set_rxstate(obj, V34HS_RX_DPSK);
-				hs_set_microstate(obj, V34HS_TX_L1);
-			}
-		}
-
-		t3c_txblock(obj);
-		return;
-	}
-
-	/*
-	 * 0x65162.  Tone A: hand the receive machine to phase 2's DPSK and
-	 * the microstate to the caller's phase-3 wait.
-	 */
-	/*
-	 * 0x65162.  `cmp $0x2b,%dx` on +0x3594, and the `je 651e9`
-	 * can never take -- the arm is entered with the rxstate at 72
-	 * and nothing on the way here writes it -- so the store and
-	 * its trace always run.
-	 */
-	hs_set_rxstate(obj, V34HS_RX_DPSK);		/* 0x65162 */
-	/*
-	 * 0x651e9.  `cmp $0x3e,%dx` on +0x3592 -- 62 -- and it is
-	 * also 0x6516d's `je` target, so the microstate transition is
-	 * where the rxstate transition's "already there" exit lands.
-	 */
-	hs_set_microstate(obj, V34HS_RX_PHASE3_CALL);	/* 0x651e9 */
-
-	/*
-	 * 0x65289.  The exit, and its %ecx was loaded from +0x3596 at
-	 * 0x6527b -- after the trace call at 0x6526a and one
-	 * instruction before the microstate store at 0x65282.
-	 */
-	t3c_txblock(obj);					/* 0x65289 */
-}
-
 /*
  * The handshake, once per block.
  *
@@ -8896,9 +8422,552 @@ v34handshak(void *vobj)
 			 * `jle 6551a`.
 			 */
 			if (rxst == V34HS_RX_L1) {
-				t72_rx_l1(obj);		/* 0x650c6 */
+				{
+
+					struct v34_receiver *rx = &obj->receiver;
+
+					/*
+					 * 0x650c6, and THE STORE PRECEDES THE BRANCH: `movzwl`, `inc`,
+					 * `cmp $0x440,%di`, `mov %di,0xaa78`, `jle`.  So everything below
+					 * sees the incremented value, which is what makes the counter
+					 * pokeable in spite of finding F429 -- a poke of n drives the whole
+					 * arm as n + 1.  The compare is signed and sixteen bits.
+					 */
+					obj->short_aa78 = (short)(obj->short_aa78 + 1);
+
+					if (obj->short_aa78 <= 0x440) {
+						{
+
+							short count;
+							short n;
+
+							/*
+							 * 0x65524.  Everything the ladder below needs is read on the
+							 * instructions that follow the call: 0x65529 takes the counter at
+							 * +0xaa78 and 0x65534 the receiver's +0x130.
+							 */
+							rxtiming(obj);					/* 0x65524 */
+
+							n = t72_nsamples(rx);
+							count = obj->short_aa78;
+
+							if (count > 0x300) {
+								/*
+								 * 0x686ba.  The whole twenty-five-bin probe bank and nothing
+								 * else: this is the probe itself being received.
+								 */
+								dftupdate(obj->probe_bins, V34_PROBE_BINS,
+								          rx->burst, n);
+							} else if (count == 0x300) {
+								/* 0x69c7a.  The probe's own signal-to-noise, and re-arm. */
+								t72_update_both(obj, rx, n);
+								{
+
+									unsigned int noise;
+									unsigned int signal;
+									short i;
+
+									/*
+									 * 0x69cec.  The noise bank is reduced with `scale` 6 and the signal
+									 * bank at 0x69d03 with 2 -- the only argument that differs between the
+									 * two calls, and 0x67da3 reduces the same signal array over
+									 * twenty-five bins with that same scale of 2.
+									 */
+									dftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);	/* 0x69cec */
+									/*
+									 * 0x69d03.  The array 0x67da3 reduces over twenty-five bins, reduced
+									 * here over four and with the same `scale` of 2.
+									 */
+									dftenergy(obj->probe_bins, V34_NL_BINS, 2);	/* 0x69d03 */
+
+									/*
+									 * %esi is zeroed at 0x69cd0, before the second `dftupdate`, and comes
+									 * back through the call because %esi is callee-saved: that is how the
+									 * stores at 0x69d1a and 0x69d22 are known to be zeroes rather than
+									 * leftovers.
+									 */
+									t3c_puti(obj, T72_PB_NOISE, 0);			/* 0x69d1a */
+									t3c_puti(obj, T72_PB_SIGNAL, 0);			/* 0x69d22, dead */
+
+									/*
+									 * 0x69d28.  The loop reads +0xc of each bank -- 0xa32c and 0xa778 --
+									 * and walks both with one `add $0x2c,%edx`, the bin stride.  `i` is
+									 * narrowed by `movswl %bp,%ebx` every turn and closed by a signed
+									 * sixteen-bit compare against 3, which is what makes it a short.  The
+									 * `shl $0x8` is per bin, before the add.
+									 *
+									 * The block sits above the accumulators rather than tight against the
+									 * `for`, and that placement is forced: a comment CLOSE immediately
+									 * above `for (i = 0; i <= 3; i++) {` is a mutation anchor elsewhere in
+									 * this file, and a second copy of it makes that anchor match twice.
+									 * `anchorcheck.py` catches it; nothing else would.
+									 */
+									noise = 0;
+									signal = 0;
+									for (i = 0; i <= 3; i++) {			/* 0x69d28 */
+										noise += (unsigned short)obj->nl_noise_bins[i].energy;
+										signal += (unsigned int)
+										          (unsigned short)obj->probe_bins[i].energy << 8;
+									}
+
+									/*
+									 * 0x69d55 stores the signal and 0x69d5b the noise -- the reverse of
+									 * the zeroing order above -- and `test %ecx,%ecx` at 0x69d53 is
+									 * scheduled ahead of both, so the guard below reads the register and
+									 * not the field it has just written.
+									 */
+									t3c_puti(obj, T72_PB_SIGNAL, signal);		/* 0x69d55 */
+									t3c_puti(obj, T72_PB_NOISE, noise);		/* 0x69d5b */
+
+									/*
+									 * The zero-noise arm is out of line in both rungs -- 0x6aa0b writes
+									 * +0xaac8 and 0x6c9aa writes +0xaac4 -- and each `jmp`s back into its
+									 * rung, at 0x69d78 and 0x6a760.  It has to exist because 0x69d70 is a
+									 * hardware `div`, which faults on a zero divisor.
+									 */
+									if (noise == 0)
+										t3c_puti(obj, T72_PB_RATIO, 0);		/* 0x6aa0b, 0x6c9aa */
+									else
+										/*
+										 * 0x69d69 halves the noise with `shr $1` and 0x69d70 divides
+										 * with `f7 f1` -- DIV, not IDIV -- so both accumulators are
+										 * unsigned, and the halved denominator is the rounding term.
+										 */
+										t3c_puti(obj, T72_PB_RATIO,		/* 0x69d72, 0x6a75a */
+										         (signal + noise / 2) / noise);
+
+								}
+								/*
+								 * 0x69d78.  The re-arm: ninety-two bytes of `dftfreqinit`
+								 * inlined, twenty-five bins at the probe's own 150 Hz
+								 * spacing, and the only one of the three initialisers that
+								 * clears the double accumulators as well.  0x69d7f and
+								 * 0x69d89 are its first two stores, `movw $0x0,(%edx)` and
+								 * `movl $0x0,0x4(%edx)`.
+								 */
+								dftfreqinit(obj->probe_bins);		/* 0x69d78 */
+							} else if (count >= 0x1c1 && count <= 0x2ff) {
+								/* 0x68dd2.  Accumulate only. */
+								t72_update_both(obj, rx, n);
+							} else if (count == 0x180) {
+								/* 0x6a668.  The nonlinear measurement, and re-arm. */
+								t72_update_both(obj, rx, n);
+								{
+
+									unsigned int noise;
+									unsigned int signal;
+									short i;
+
+									/*
+									 * 0x69cec.  The noise bank is reduced with `scale` 6 and the signal
+									 * bank at 0x69d03 with 2 -- the only argument that differs between the
+									 * two calls, and 0x67da3 reduces the same signal array over
+									 * twenty-five bins with that same scale of 2.
+									 */
+									dftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);	/* 0x69cec */
+									/*
+									 * 0x69d03.  The array 0x67da3 reduces over twenty-five bins, reduced
+									 * here over four and with the same `scale` of 2.
+									 */
+									dftenergy(obj->probe_bins, V34_NL_BINS, 2);	/* 0x69d03 */
+
+									/*
+									 * %esi is zeroed at 0x69cd0, before the second `dftupdate`, and comes
+									 * back through the call because %esi is callee-saved: that is how the
+									 * stores at 0x69d1a and 0x69d22 are known to be zeroes rather than
+									 * leftovers.
+									 */
+									t3c_puti(obj, T72_NL_NOISE, 0);			/* 0x69d1a */
+									t3c_puti(obj, T72_NL_SIGNAL, 0);			/* 0x69d22, dead */
+
+									/*
+									 * 0x69d28.  The loop reads +0xc of each bank -- 0xa32c and 0xa778 --
+									 * and walks both with one `add $0x2c,%edx`, the bin stride.  `i` is
+									 * narrowed by `movswl %bp,%ebx` every turn and closed by a signed
+									 * sixteen-bit compare against 3, which is what makes it a short.  The
+									 * `shl $0x8` is per bin, before the add.
+									 *
+									 * The block sits above the accumulators rather than tight against the
+									 * `for`, and that placement is forced: a comment CLOSE immediately
+									 * above `for (i = 0; i <= 3; i++) {` is a mutation anchor elsewhere in
+									 * this file, and a second copy of it makes that anchor match twice.
+									 * `anchorcheck.py` catches it; nothing else would.
+									 */
+									noise = 0;
+									signal = 0;
+									for (i = 0; i <= 3; i++) {			/* 0x69d28 */
+										noise += (unsigned short)obj->nl_noise_bins[i].energy;
+										signal += (unsigned int)
+										          (unsigned short)obj->probe_bins[i].energy << 8;
+									}
+
+									/*
+									 * 0x69d55 stores the signal and 0x69d5b the noise -- the reverse of
+									 * the zeroing order above -- and `test %ecx,%ecx` at 0x69d53 is
+									 * scheduled ahead of both, so the guard below reads the register and
+									 * not the field it has just written.
+									 */
+									t3c_puti(obj, T72_NL_SIGNAL, signal);		/* 0x69d55 */
+									t3c_puti(obj, T72_NL_NOISE, noise);		/* 0x69d5b */
+
+									/*
+									 * The zero-noise arm is out of line in both rungs -- 0x6aa0b writes
+									 * +0xaac8 and 0x6c9aa writes +0xaac4 -- and each `jmp`s back into its
+									 * rung, at 0x69d78 and 0x6a760.  It has to exist because 0x69d70 is a
+									 * hardware `div`, which faults on a zero divisor.
+									 */
+									if (noise == 0)
+										t3c_puti(obj, T72_NL_RATIO, 0);		/* 0x6aa0b, 0x6c9aa */
+									else
+										/*
+										 * 0x69d69 halves the noise with `shr $1` and 0x69d70 divides
+										 * with `f7 f1` -- DIV, not IDIV -- so both accumulators are
+										 * unsigned, and the halved denominator is the rounding term.
+										 */
+										t3c_puti(obj, T72_NL_RATIO,		/* 0x69d72, 0x6a75a */
+										         (signal + noise / 2) / noise);
+
+								}
+								/*
+								 * 0x6a760.  Four bins at 1050, 1350, 1950 and 2550 Hz laid
+								 * over `probe_bins[0..3]` -- the four-bin clear at stride
+								 * 0x2c, then `inc` written at +0x2, +0x2e, +0x5a and +0x86.
+								 * Re-arming the signal bank destroys the probe bank's first
+								 * four bins, and finding F739 reads the 0x40 and 0x180 rungs
+								 * as doing that on purpose.
+								 */
+								dftnlinitSignalBins(obj->probe_bins);	/* 0x6a760 */
+								/*
+								 * 0x6a7aa.  Its partner on obj + 0xa76c: 900, 1200, 1800 and
+								 * 2400 Hz, each one 150 Hz step below the signal bin above
+								 * it, which is what makes the pair a distortion measurement
+								 * and 0xa76c the denominator of the ratio just stored.
+								 * Finding F739.
+								 */
+								dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a7aa */
+							} else if (count >= 0x41 && count <= 0x17f) {
+								/*
+								 * 0x69995.  The same accumulation as 0x1c1..0x2ff, plus the
+								 * receiver's own block counter -- the ONLY thing that
+								 * separates the two windows.
+								 */
+								t72_update_both(obj, rx, n);
+								/*
+								 * 0x699fd.  `inc %ebp` then `mov %bp,0x124(%ecx)`, and the
+								 * rung ends there: 0x69a04 reloads the txstate from +0x3596
+								 * into %ecx and 0x69a0b jumps to the once-per-block dispatch
+								 * at 0x62af1.
+								 */
+								rx->rx_blocks = (short)(rx->rx_blocks + 1);	/* 0x699fd */
+							} else if (count == 0x40) {
+								/*
+								 * 0x6a4f4.  The gain the AGC settled on becomes the starting
+								 * gain for what follows, doubled -- unless it is out of
+								 * range, when 0x6aec1 substitutes 0x6000 and says so.  That
+								 * path REJOINS at 0x6a52c, so the "beginning of RX_L1"
+								 * message prints on both.
+								 */
+								/*
+								 * 0x6a510, AND THE STORE PRECEDES THE BRANCH: `or
+								 * $0x200,%ecx` at 0x6a506 and `cmp $0x34ff,%ax` at 0x6a50c
+								 * both run before the store, and the `jg 6aec1` that picks
+								 * the substituted gain is at 0x6a517 -- after it.  So the
+								 * flag is raised on the out-of-range path too.
+								 */
+								rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);  /* 0x6a510 */
+
+								if (rx->agc_gain > 0x34ff) {		/* 0x6a50c, signed */
+									/*
+									 * 0x71343 is out of line and it comes back: the
+									 * string, `cwtl` so the gain reaches printf
+									 * sign-extended, the call, a reload of
+									 * `dsplibs_debug_level`, then `jmp 6aed0` -- the
+									 * store below.
+									 */
+									if (DSPLIB_DEBUG_ON())		/* 0x71343 */
+										dsplibs_debug_printf(
+										        "V34AGC, -- ERROR-- gainestimate in " "RX_L1,0x%x\n", rx->agc_gain);
+									/*
+									 * 0x6aed9.  The `%edx` that 0x6a52c tests below is
+									 * loaded at 0x6a51d on the in-range path and at
+									 * 0x6aec1 on this one, reloaded at 0x71354 across
+									 * the call -- three loads, and 0x6aec1's serves
+									 * both tests.
+									 */
+									rx->agc_start_gain = 0x6000;		/* 0x6aed9 */
+								} else {
+									/*
+									 * 0x6a525.  `add %eax,%eax` on the same register
+									 * 0x6a50c compared, then a halfword store to
+									 * receiver +0x262 -- so the doubled gain is
+									 * truncated to sixteen bits, not saturated.
+									 */
+									rx->agc_start_gain = (short)(rx->agc_gain * 2);	/* 0x6a525 */
+								}
+
+								/*
+								 * 0x6a531 is the body; the test is `cmp $0x1,%edx; jbe
+								 * 6a54c` at 0x6a52c.  The argument is re-read `movswl
+								 * 0x136(%edi),%esi` -- SIGNED, and forced, because the whole
+								 * 32-bit value goes to a vararg.
+								 */
+								if (DSPLIB_DEBUG_ON())			/* 0x6a531 */
+									dsplibs_debug_printf("V34AGC, rx->gain = 0x%x, at "
+									                     "the beginning of RX_L1\n",
+									                     rx->agc_gain);
+
+								/*
+								 * 0x6a54c.  The counter only counts up, so this rung runs
+								 * FIRST: it arms both nl banks, 0x41..0x17f accumulates into
+								 * them, 0x180 reduces them and arms them again, 0x300 does
+								 * the same for the probe bank, and everything above 0x300 is
+								 * the probe itself.  Finding F739.
+								 */
+								dftnlinitSignalBins(obj->probe_bins);	/* 0x6a54c */
+								/*
+								 * 0x6a5a1.  The other half, on obj + 0xa76c.  The two banks
+								 * are told apart by their phase steps --
+								 * 0x700/0x900/0xd00/0x1100 for the signal bank and
+								 * 0x600/0x800/0xc00/0x1000 for this one, each 0x100 step
+								 * being 150 Hz.  Finding F739.
+								 */
+								dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a5a1 */
+							}
+
+						}
+						/*
+						 * 0x65597.  The ladder's exit, one of the arm's seventeen
+						 * `jmp 62af1`s: `mov 0xc0(%esp),%edi`, `movzwl
+						 * 0x3596(%edi),%ecx`, jump.  The txstate is reloaded into
+						 * %ecx first because the tail dispatches on whatever the
+						 * jumping arm left there.
+						 */
+						t3c_txblock(obj);			/* 0x65597 */
+						return;
+					}
+
+					/*
+					 * 0x650ee.  The `jle 6551a` at 0x650e1 keeps this off the ladder
+					 * path entirely, so the AGC runs only once the counter is past
+					 * 0x440 -- which on the originating end is every block of the
+					 * tone-A wait below, not one.  Its argument is `0x74(%esp)` --
+					 * the receiver at obj + 0x264 -- pushed with no displacement.
+					 */
+					V34agc(rx);					/* 0x650ee */
+
+					if (obj->role != 0x65) {
+						/*
+						 * 0x67d70 -- the ANSWERING end.  It finishes the probe, arms
+						 * the FSK receiver for INFO1, aims the second record pointer
+						 * at obj + 0xa9dc with INFO1c's length in it, opens the gate
+						 * at +0xa8a0 that diverts 0x64a87, and restarts the counter.
+						 */
+						t72_probe_done(obj, rx);
+
+						/*
+						 * 0x67e1e.  `movzwl 0x3594(%ecx),%edx; cmp $0x2b,%dx; je
+						 * 67e4b` -- and the `je` can never take, because the arm is
+						 * entered with the rxstate at 72 and nothing between 0x650c6
+						 * and here writes +0x3594.  The store and its trace always
+						 * run.
+						 */
+						hs_set_rxstate(obj, V34HS_RX_DPSK);	 /* 0x67e1e */
+						/*
+						 * 0x67e4b.  `cmp $0x3c,%dx`, and it is NOT one of the three
+						 * the head of this section calls unreachable: those three
+						 * compare +0x3594 and this one compares +0x3596.  An end
+						 * already in TONE_AB stores nothing and prints nothing.
+						 */
+						hs_set_txstate(obj, V34HS_TONE_AB);	 /* 0x67e4b */
+						/*
+						 * 0x67e7f.  `cmp $0x29,%dx` on +0x3592: microstate 41, whose
+						 * arm at 0x669a4 is the table-3 case at the bottom of this
+						 * file.  This store is what sends the next block there.
+						 */
+						hs_set_microstate(obj, V34HS_DET_SYNC); /* 0x67e7f */
+
+						/*
+						 * 0x67eb3.  Inlined, and it runs to 0x67f4d: `mov
+						 * %bx,0xaae6(%esi,%eax,2)` at 0x67ebe is the head of the
+						 * hundred-halfword clear, and the two stores at 0x67f46 and
+						 * 0x67f4d -- +0xaae2 to all ones, +0xaae0 to zero -- are the
+						 * last two of `fsk_state_init`'s eleven, not statements of
+						 * this arm.
+						 */
+						dpskDetectInfo1Init(obj);			 /* 0x67eb3 */
+
+						/*
+						 * 0x67f54.  `movw $0x4d,0x18(%ebp)`, and %ebp already holds
+						 * obj + 0xa9dc: the length field is filled in BEFORE 0x67f6e
+						 * publishes the pointer to the record.  Microstate 41 puts
+						 * INFO1a's 0x26 in the same field of the same record at
+						 * 0x6b379 before aiming the same pointer at it -- which
+						 * sequence the end expects is the whole difference.
+						 */
+						obj->msgrec[3].nbits = 0x4d;		 /* 0x67f54 */
+						obj->vect_idx = 0;				 /* 0x67f5a */
+						/*
+						 * 0x67f68.  `mov %ebx,0xa8a0(%esi)`, thirty-two bits.  This
+						 * is the gate 0x64a87 tests, so from the next block on the
+						 * RX_DPSK path polls the retrain detector as well -- and
+						 * falls through to the FSK demodulator either way, which is
+						 * finding F721.
+						 */
+						obj->retrain_poll = 1;				 /* 0x67f68 */
+						obj->paa70 = &obj->msgrec[3];			 /* 0x67f6e */
+						/*
+						 * 0x67f74.  `mov %di,0xaa78(%esi)`, a halfword.  +0xaa78 is
+						 * not this arm's private counter -- six arms bump it and it
+						 * is the `[2]` every state trace prints -- so leaving it at
+						 * 0x441 on the way out would be visible everywhere.
+						 */
+						obj->short_aa78 = 0;					 /* 0x67f74 */
+
+						/*
+						 * 0x67f7b.  The exit, and the %ecx it dispatches on was
+						 * loaded from +0x3596 at 0x67f61 -- scheduled into the middle
+						 * of the store run, three stores before the jump.
+						 */
+						t3c_txblock(obj);				 /* 0x67f7b */
+						return;
+					}
+
+					if (obj->short_aa78 == 0x441) {
+						/*
+						 * 0x69611 -- the ORIGINATING end, on the one block after the
+						 * probe.  Same finish, but it stays in RX_L1 and only clears
+						 * the FSK shift register, because what it is waiting for is
+						 * tone A and that is the test below.
+						 */
+						t72_probe_done(obj, rx);
+
+						/*
+						 * 0x696d0.  `cmp $0x3c,%cx; je 69702`: when the txstate is
+						 * already 60 the store at 0x696f6 and the trace are both
+						 * skipped -- and both paths leave 0x3c in %ecx, which is what
+						 * the exit at 0x6971e dispatches on.
+						 */
+						hs_set_txstate(obj, V34HS_TONE_AB);	/* 0x696d0 */
+
+						/*
+						 * 0x69710.  `mov $0xffffffff,%ebp` and then a halfword store,
+						 * so +0xaae2 gets 0xffff.  It is the shift register's reset
+						 * value and this arm writes it at three sites -- 0x67f46,
+						 * 0x68851 and here.
+						 */
+						obj->fsk.sr = -1;				/* 0x69710 */
+						obj->fsk.nbits = 0;				/* 0x69717 */
+
+						/* 0x6971e, and %ecx still holds TONE_AB from 0x696d0. */
+						t3c_txblock(obj);				/* 0x6971e */
+						return;
+					}
+
+					/*
+					 * 0x65140.  The two guards below read the FSK state after this call:
+					 * `cmpw $0x14,0xaae0` at 0x65145 and `testw $0xfff,0xaae2` at
+					 * 0x65153, both sixteen bits.  `fskdemodulate` returns without
+					 * changing either field when `rx->retrain_gate` is nonzero.
+					 * `t_v34hsrx72` uses that inhibit to preserve seeded values for
+					 * exploratory component probes; those seeds do not establish a
+					 * public modem history reaching this state.
+					 */
+					fskdemodulate(obj,					/* 0x65140 */
+					              rx->burst,
+					              &obj->fsk);
+
+					if (obj->fsk.nbits <= 0x14 || (obj->fsk.sr & 0xfff) != 0) {
+						/*
+						 * 0x6881e.  Not enough bits, or the twelve are not all ZERO:
+						 * no tone A this block, so all that is left is the timeout
+						 * ladder.  The polarity is the object's and is worth stating,
+						 * because this comment used to have it backwards: 0x65153 is
+						 * `testw $0xfff,0xaae2(%esi)` with `jne 6881e`, so it is a
+						 * NON-zero masked register that fails.  The register is reset
+						 * to all ones at all three sites above, so twelve ZEROS
+						 * shifting in is what tone A looks like here.  See the head of this section for why the 32-bit
+						 * arithmetic here cannot be separated from a 16-bit spelling
+						 * by any trial, and what is tested instead.
+						 */
+						int limit = obj->rtd >> 2;
+						int count = obj->short_aa78;
+
+						if (count > 0xf10 + limit) {
+							/*
+							 * 0x68851, AND THE STORE PRECEDES THE BRANCH: it
+							 * sits between `cmp %ebx,%ecx` at 0x6884f and `je
+							 * 6afd7` at 0x68858, so every block past 0xf10 +
+							 * rtd/4 clears the shift register, not only the one
+							 * that matches 0xf14.
+							 */
+							obj->fsk.sr = -1;		/* 0x68851 */
+
+							if (count == 0xf14 + limit) {
+								/*
+								 * 0x6afe8 sits between the debug
+								 * test at 0x6afe1 and its `ja
+								 * 6b120` at 0x6afef -- the toggle
+								 * happens whether or not the
+								 * message prints.
+								 */
+								obj->short_358c ^= 1;	/* 0x6afe8 */
+								/*
+								 * 0x6b120 is out of line and does
+								 * not come back: it prints,
+								 * reloads +0x3596 into %ecx and
+								 * jumps to 0x62af1 itself.
+								 */
+								if (DSPLIB_DEBUG_ON())	/* 0x6b120 */
+									dsplibs_debug_printf(
+									        "V34RETRAIN, waiting for tone A " "at the end of RX_L2\n");
+							} else if (count == 0xf2c + limit) {
+								/* 0x6c9f1: give up and go round again. */
+								/*
+								 * 0x6c9fa zeroes the counter
+								 * before either transition below,
+								 * and 0x6ca01's `cmp $0x2b` is one
+								 * of the three that can never
+								 * match.
+								 */
+								obj->short_aa78 = 0;		/* 0x6c9fa */
+								hs_set_rxstate(obj, V34HS_RX_DPSK);
+								hs_set_microstate(obj, V34HS_TX_L1);
+							}
+						}
+
+						t3c_txblock(obj);
+						return;
+					}
+
+					/*
+					 * 0x65162.  Tone A: hand the receive machine to phase 2's DPSK and
+					 * the microstate to the caller's phase-3 wait.
+					 */
+					/*
+					 * 0x65162.  `cmp $0x2b,%dx` on +0x3594, and the `je 651e9`
+					 * can never take -- the arm is entered with the rxstate at 72
+					 * and nothing on the way here writes it -- so the store and
+					 * its trace always run.
+					 */
+					hs_set_rxstate(obj, V34HS_RX_DPSK);		/* 0x65162 */
+					/*
+					 * 0x651e9.  `cmp $0x3e,%dx` on +0x3592 -- 62 -- and it is
+					 * also 0x6516d's `je` target, so the microstate transition is
+					 * where the rxstate transition's "already there" exit lands.
+					 */
+					hs_set_microstate(obj, V34HS_RX_PHASE3_CALL);	/* 0x651e9 */
+
+					/*
+					 * 0x65289.  The exit, and its %ecx was loaded from +0x3596 at
+					 * 0x6527b -- after the trace call at 0x6526a and one
+					 * instruction before the microstate store at 0x65282.
+					 */
+					t3c_txblock(obj);					/* 0x65289 */
+
+				}		/* 0x650c6 */
 				return;
 			}
+
 			/*
 			 * 0x62b83.  `mov 0xc0(%esp),%esi; movzwl
 			 * 0x3596(%esi),%ecx; jmp 62af1` -- the second
