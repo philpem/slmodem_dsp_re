@@ -599,8 +599,9 @@ V22_SRE_init(struct v22_sre *sre, int fresh)
 }
 
 void
-V22_SRE_free(struct v22_sre *sre)
+V22_SRE_free(struct v22_sre *sre, int unused)
 {
+	(void)unused;
 	/* Reverse allocation order, and the pointers are left dangling. */
 	sysdep_free(sre->clk);
 	sysdep_free(sre->hist);

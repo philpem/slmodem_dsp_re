@@ -44,7 +44,7 @@
 
 extern void ref_V22_FSE_init(struct v22_fse *state,
 			     const struct v22_fse_cfg *cfg, int fresh);
-extern void ref_V22_FSE_free(struct v22_fse *state);
+extern void ref_V22_FSE_free(struct v22_fse *state, int unused);
 extern int ref_V22_FSE_getdiag(struct v22_fse *state);
 
 extern const short ref_FSEv22_COFFS[];
@@ -255,8 +255,8 @@ run_init_fresh(const char *label)
 
 	rc = diff_end();
 
-	ref_V22_FSE_free(&a);
-	V22_FSE_free(&b);
+	ref_V22_FSE_free(&a, 1);
+	V22_FSE_free(&b, 1);
 	return rc;
 }
 
@@ -384,9 +384,9 @@ run_free(const char *label)
 	before_a = a;
 	before_b = b;
 
-	ref_V22_FSE_free(&a);
+	ref_V22_FSE_free(&a, 1);
 	diff_eq_int("ref freed seven (%ld)", harness_alloc.frees, 7, 0);
-	V22_FSE_free(&b);
+	V22_FSE_free(&b, 1);
 	diff_eq_int("frees total (%ld)", harness_alloc.frees, 14, 0);
 	diff_eq_int("nothing left live (%ld)", harness_alloc.live, 0, 0);
 	diff_eq_int("no stray free (%ld)", harness_alloc.bad_free, 0, 0);

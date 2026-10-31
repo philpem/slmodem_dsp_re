@@ -116,7 +116,7 @@ void V22_MRF_init(struct v22_mrf *state, const struct v22_mrf_cfg *cfg,
 		  int fresh);
 
 /** @brief Release the V.22 receive rate converter's history buffer. @param state The converter state to tear down. */
-void V22_MRF_free(struct v22_mrf *state);
+void V22_MRF_free(struct v22_mrf *state, int unused);
 
 /**
  * @brief Resample `count` input samples through the V.22 9:20 polyphase converter.

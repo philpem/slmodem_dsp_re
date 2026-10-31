@@ -27,7 +27,7 @@
 #include "dsplib/v22_mrf.h"
 
 extern void ref_V22_MRF_init(void *state, const void *cfg, int fresh);
-extern void ref_V22_MRF_free(void *state);
+extern void ref_V22_MRF_free(void *state, int unused);
 extern short ref_V22_MRF_filter(void *state, const short *in, short *out,
 				short count);
 extern const short ref_MRFv22_COFFS[];
@@ -151,8 +151,8 @@ setup(void)
 			    a.history[i], i);
 
 	rc = diff_end();
-	ref_V22_MRF_free(&a);
-	V22_MRF_free(&b);
+	ref_V22_MRF_free(&a, 1);
+	V22_MRF_free(&b, 1);
 	return rc;
 }
 
@@ -206,8 +206,8 @@ run(const char *label, const int *chunks, int nchunks)
 	diff_eq_int("total outputs (%ld)", nb, na, 0);
 
 	rc = diff_end();
-	ref_V22_MRF_free(&a);
-	V22_MRF_free(&b);
+	ref_V22_MRF_free(&a, 1);
+	V22_MRF_free(&b, 1);
 	return rc;
 }
 

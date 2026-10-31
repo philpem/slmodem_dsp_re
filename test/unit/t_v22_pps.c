@@ -30,7 +30,7 @@
 #include "dsplib/v22_pps.h"
 
 extern void ref_V22_PPS_init(void *state, const void *cfg, int fresh);
-extern void ref_V22_PPS_free(void *state);
+extern void ref_V22_PPS_free(void *state, int unused);
 extern short ref_V22_PPS_filter(void *state, void *src, short *out,
 				unsigned short count);
 extern const short ref_PPSv22_COFFS[];
@@ -207,8 +207,8 @@ setup(void)
 	compare_state(&b, &a, &sb, &sa, 1);
 
 	rc = diff_end();
-	ref_V22_PPS_free(&a);
-	V22_PPS_free(&b);
+	ref_V22_PPS_free(&a, 1);
+	V22_PPS_free(&b, 1);
 	return rc;
 }
 
@@ -259,8 +259,8 @@ run(const char *label, const int *chunks, int nchunks)
 	diff_eq_int("outputs were produced (%ld)", nb > 0, 1, 0);
 
 	rc = diff_end();
-	ref_V22_PPS_free(&a);
-	V22_PPS_free(&b);
+	ref_V22_PPS_free(&a, 1);
+	V22_PPS_free(&b, 1);
 	return rc;
 }
 

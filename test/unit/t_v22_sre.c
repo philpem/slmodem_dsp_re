@@ -28,7 +28,7 @@
 #include "dsplib/v22_sre.h"
 
 extern void ref_V22_SRE_init(struct v22_sre *sre, int fresh);
-extern void ref_V22_SRE_free(struct v22_sre *sre);
+extern void ref_V22_SRE_free(struct v22_sre *sre, int unused);
 
 extern const short ref_SREv22_COFFS[];
 extern const short ref_SREv22_xCLOCK[];
@@ -155,8 +155,8 @@ run_init_fresh(const char *label)
 
 	rc = diff_end();
 
-	ref_V22_SRE_free(&a);
-	V22_SRE_free(&b);
+	ref_V22_SRE_free(&a, 1);
+	V22_SRE_free(&b, 1);
 	return rc;
 }
 
@@ -252,9 +252,9 @@ run_free(const char *label)
 	before_a = a;
 	before_b = b;
 
-	ref_V22_SRE_free(&a);
+	ref_V22_SRE_free(&a, 1);
 	diff_eq_int("ref freed three (%ld)", harness_alloc.frees, 3, 0);
-	V22_SRE_free(&b);
+	V22_SRE_free(&b, 1);
 	diff_eq_int("frees total (%ld)", harness_alloc.frees, 6, 0);
 	diff_eq_int("nothing left live (%ld)", harness_alloc.live, 0, 0);
 	diff_eq_int("no stray free (%ld)", harness_alloc.bad_free, 0, 0);
@@ -516,8 +516,8 @@ run_stream(const char *label, int wave, int amp, int count, int blocks,
 	}
 	rc = diff_end();
 
-	ref_V22_SRE_free(&a);
-	V22_SRE_free(&b);
+	ref_V22_SRE_free(&a, 1);
+	V22_SRE_free(&b, 1);
 	return rc;
 }
 
