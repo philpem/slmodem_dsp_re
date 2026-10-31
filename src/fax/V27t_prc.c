@@ -548,17 +548,15 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 	ScrambleDataV27(modem, in, taken);
 
 	if (taken != 0) {
-		short rate;
 
 		prm = ((struct v27_tx *)modem)->source;
-		rate = prm->rate;
 
 		for (i = 0; i < taken; i++) {
 			if (in[i + 1] & 0x04)
-				in[i] = (unsigned short)V27TX_PATTERN_ALT[rate];
+				in[i] = (unsigned short)V27TX_PATTERN_ALT[prm->rate];
 			else
 				in[i] = (unsigned short)
-					V27TX_PATTERN_CARR[rate];
+					V27TX_PATTERN_CARR[prm->rate];
 		}
 	}
 
