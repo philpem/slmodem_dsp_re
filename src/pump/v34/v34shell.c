@@ -1218,6 +1218,7 @@ getFrame(void *objp)
 		    (int)(((unsigned)TX->bitbuf >> (short)pos)
 			  & lsbMask[nb]);
 		pos += nb;
+		TX->bitpos = (short)pos;
 	} else {
 		/*
 		 * No wide field: frame[0..1] is EXPLICITLY zeroed, as one
