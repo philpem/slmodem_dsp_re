@@ -1592,7 +1592,7 @@ v8_handshak_demod(struct v8 *v)
 	for (k = 0; k < got; k++) {
 		int shift = got - k - 1;
 
-		if (((unsigned short)p->bits >> shift) & 1) {
+		if ((short)(((int)(unsigned short)p->bits & (1 << shift)) >> shift) == 1) {
 			p->zero_run = 0;
 			p->ones_run = (short)(p->ones_run + 1);
 			p->ones_run_len = p->ones_run;
