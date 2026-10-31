@@ -1768,9 +1768,9 @@ txmitquadbit(void *obj, short bits)
  * transcript tells them apart.
  */
 /*
- * Default 1 for the differential tier, 0 for everyone else.  See the note in
- * probe_preemp() for why this is a flag with a define-set default rather than
- * an #ifndef around the call site.
+ * Normal builds keep a runtime choice between the corrected shape matcher
+ * and the object's counter.  BUG builds always use the counter; the exported
+ * selector and its defaults remain available for ABI compatibility.
  */
 int dsplib_v34_blob_preemp =
 #ifdef DSPLIB_REPRODUCE_BUGS
@@ -1779,6 +1779,7 @@ int dsplib_v34_blob_preemp =
 	0;
 #endif
 
+#ifndef DSPLIB_REPRODUCE_BUGS
 #define PROBE_FIT_MAX		32	/* bins 1..25, comfortably */
 #define PROBE_NOISE_SLOT(i)	((i) == 5 || (i) == 7 || (i) == 11 || (i) == 15)
 
@@ -1997,6 +1998,8 @@ probe_preemp_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
 	return (short)best;
 }
 
+#endif
+
 static short
 probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 {
@@ -2024,27 +2027,15 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * gets the fix.  See docs/deviations.md D53 and `FPM_div`'s table for
 	 * the same shape.
 	 *
-	 * A RUNTIME FLAG WHOSE DEFAULT THE DEFINE SETS, rather than an
-	 * `#ifndef` around the call.  That was tried and is wrong here: this
-	 * tree has ONE compilation rule (`$(BUILD)/%.o`) and it passes
-	 * `$(REPRODUCE)` to everything, so a compile-time exclusion removes
-	 * the arm from the bench hybrid as well as from the differential tier
-	 * -- the binary that most needs it.  It was removed silently and the
-	 * first emulated call after the change ran the object's counter with
-	 * no SHAPE line in the log at all.
+	 * Normal shipping, interop and bench builds retain the runtime flag:
+	 * zero enables SHAPE with counter fallback, and one selects the counter.
+	 * The normal object tree does not define DSPLIB_REPRODUCE_BUGS.
 	 *
-	 * So: `dsplib_v34_blob_preemp` defaults to 1 under
-	 * DSPLIB_REPRODUCE_BUGS and 0 otherwise.  The differential tier builds
-	 * with DSPLIB_REPRODUCE_BUGS, so it keeps the object's counter and
-	 * stays bit-exact; every other build gets the shape matcher.
-	 *
-	 * The bench overrides it at run time from DSPLIB_V34_BLOB_PREEMP, via
-	 * a `tools/benchflags.c` that is linked only into the bench hybrid.
-	 * THAT FILE IS NOT ON master -- it lives on `v34-instrumentation` with
-	 * the rest of the V.34 bench instrumentation, so the override exists
-	 * only in a bench build made from that branch.  The variable is
-	 * declared here rather than there precisely so that removing the bench
-	 * cannot change what this function does.
+	 * The separate reconstruction object tree defines that macro and excludes
+	 * both the SHAPE implementation and this optional call arm.  It always
+	 * uses the object's counter, including when the exported flag is zero.
+	 * Bench comparisons needing SHAPE must link the normal objects.  The
+	 * former single-rule build constraint no longer applies.
 	 */
 	/*
 	 * Bench-only actuator for measuring the FAR transmitter's real Table 3/4
@@ -2064,12 +2055,14 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	return DSPLIB_V34_TEST_PREEMP_INDEX;
 #endif
 
+#ifndef DSPLIB_REPRODUCE_BUGS
 	if (!dsplib_v34_blob_preemp) {
 		short f = probe_preemp_shape(bins, n, baud);
 
 		if (f >= 0)
 			return f;		/* else fall through */
 	}
+#endif
 
 	for (;;) {
 		x = (short)(((int)x * k) >> 14);
