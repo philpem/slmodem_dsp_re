@@ -39,6 +39,9 @@ jobs:
           python3 tools/ci/test_period_metrics.py
           python3 tools/toolchain/test_fidelity.py
 
+      - name: Self-test width audit reporting
+        run: python3 tools/toolchain/test_widthaudit.py
+
       - name: Self-test bounded induction jump-table proof
         run: python3 tools/toolchain/induction_jumptable_controls.py
 
