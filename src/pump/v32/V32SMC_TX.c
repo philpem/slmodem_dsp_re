@@ -223,7 +223,7 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
-		int word;
+		unsigned short word;
 		int rot;
 		int masked;
 
