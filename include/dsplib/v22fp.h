@@ -167,7 +167,7 @@ struct v22fp_params {
 	 * Control and status access bits 9 and 10 through byte +0x11.  The
 	 * bitfield view reproduces those accesses with the period GCC/x86
 	 * layout; the word view retains the template and configuration uses.
-	 * The remaining groups have no recovered meaning.
+	 * Only the two fields used by these byte accesses are split out here.
 	 */
 	union {
 		unsigned int flags; /* +0x10 whole-word view */

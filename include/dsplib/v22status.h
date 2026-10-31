@@ -51,7 +51,7 @@
  *
  * The bitfield views reproduce those byte accesses, including the three
  * SETcc results assigned to bits 3, 4 and 5.  Their allocation is measured
- * under the period GCC/x86 layout; the byte views retain the report's wire
+ * under the period GCC/x86 layout; the byte views retain the report's byte
  * values and let callers inspect the complete bytes.
  *
  * All eight bits of +0x14 are written, so the caller's value there does not
