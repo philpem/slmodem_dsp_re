@@ -11,6 +11,40 @@ Equal byte length does not establish that any instruction has been reproduced.
 - **UNRESOLVED:** the relocation evidence cannot establish a complete comparison.
 - **NODATA:** a body could not be read or accepted for comparison.
 
+Anonymous switch tables can supply an EXACT relocation destination through
+`tools/toolchain/guarded_switch.py`. This narrowly supports an unprefixed
+32-bit EAX `SUB`/`CMP` followed immediately by unsigned `JBE` to an indexed
+`JMP disp32(,EAX,4)`. The ELF32 i386 REL proof requires one bounded, allocated,
+read-only, non-merge table, complete non-overlapping entry relocations, and
+ordered instruction-boundary targets inside the unique owning function.
+Named aliases and known named, direct or relocated bypass entries into any
+byte of the protected instructions refuse the proof. Unsupported relocation
+kinds also refuse it.
+
+The owner decoder accepts an explicit, bounded instruction vocabulary and
+checks the byte encodings of supported control transfers. Prefixes and
+unmodelled transfers such as `XBEGIN` refuse the owner proof. The scan for
+known direct entries also unwraps prefixes and includes `XBEGIN` destinations
+outside the sized owner, including its 16-bit relative form.
+Far jumps and calls anywhere in the scanned code section refuse the proof;
+their segment semantics are outside this decoder's supported domain.
+
+The descriptor retains the owner, dispatch position, entry width and count,
+and every ordered function-relative target. `body()` admits it only for the
+sole remaining unresolved relocation. EXACT still requires all other masked
+body bytes, relocation positions, kinds and canonical destinations to agree.
+Instruction-run measurements remain available, but this descriptor explicitly
+prohibits REGALLOC admission: it supplies no ABI or register-renaming proof.
+An exclusive observed relocation reference establishes the known reference
+set in that ELF; arbitrary pointer arithmetic and unrecorded external jumps
+remain outside the function-entry boundary. Binding, visibility and final
+object identity retain their separate checks.
+
+Run `python3 tools/toolchain/test_guarded_switch.py` for the synthetic ELF
+controls. Optional `--actual OBJECT --blob REFERENCE` also checks the actual
+`RD_create` pair. This is an apparatus recognition improvement; unchanged
+source objects do not constitute a source-recovery gain.
+
 The CLI and CI tables show these outcomes and the EXACT + REGALLOC total.
 REGALLOC and NONMATCH counts have no independent preferred direction. For
 example, NONMATCH → REGALLOC increases REGALLOC, while REGALLOC → EXACT reduces
