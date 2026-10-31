@@ -234,7 +234,7 @@ enum tx1_guard {
 static unsigned parent_queue_rows, parent_state_rows, parent_oneshot_rows;
 static unsigned parent_cold_rows;
 
-/* These five arm bodies now belong to the production dispatcher. Drive
+/* These seven arm bodies now belong to the production dispatcher. Drive
  * the whole parent at the existing TX queue boundary. Cases that seed
  * internal fields remain synthetic exploratory component probes; this
  * migration does not establish modem waveform reachability. */
@@ -3465,7 +3465,7 @@ seed_inforec(void)
 static void
 run_trn(const char *what, long tag)
 {
-	run_case(V34HS_TRNSEG4, v34tx1_trnseg4, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TRNSEG4, NULL, V34TX1_LOOP, what, tag,
 		 trn, NP(trn));
 }
 
@@ -3952,7 +3952,7 @@ static void
 run_trnseg(const char *what, long tag)
 {
 	fixup = aim_case;
-	run_case(V34HS_TRNSEG4A, v34tx1_trnseg4a, V34TX1_LOOP, what, tag,
+	run_case(V34HS_TRNSEG4A, NULL, V34TX1_LOOP, what, tag,
 		 trnseg, NP(trnseg));
 	fixup = NULL;
 }
