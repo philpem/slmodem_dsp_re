@@ -148,9 +148,9 @@ FAX_create(void *modem, int originate, unsigned int rate)
 	ctx->out_ring.blk = ctx->host_frame_samples;
 
 	sysdep_memset(&local, 0, sizeof(local));
-	s7 = modem_get_sreg(modem, 7);
 	local.mode = (originate != 0) ? CLASS1_ANS_ORG_NORMAL
 				      : CLASS1_ANS_ORG_ANSWER;
+	s7 = modem_get_sreg(modem, 7);
 	local.s7_timeout = s7;
 	local.iir_enable = 1;
 
