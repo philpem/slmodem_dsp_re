@@ -87,6 +87,8 @@ struct fpm_tone *
 FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 {
 	struct fpm_phasor p;
+	/* Native +0x10 and +0x08 stack objects have separate lifetimes. */
+	struct fpm_phasor q = { 0 };
 	int owned = 0;
 	int increment;
 	int damp;
@@ -110,10 +112,10 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 		owned = 1;
 	}
 
-	sysdep_memcpy(&state->cfg,
-		      cfg != NULL ? (const void *)cfg
-				  : (const void *)&FPM_TONE_CFG,
-		      sizeof(state->cfg));
+	if (cfg != NULL)
+		state->cfg = *cfg;
+	else
+		state->cfg = FPM_TONE_CFG;
 
 	len = state->cfg.len;
 
@@ -139,7 +141,6 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	/* Explicit int -> unsigned short; the sign conversion is the point. */
 	p.phase = (unsigned short)increment;
 	p.inc = 0;
-	p.cos = p.sin = 0;
 	FPM_phasor(&p);
 
 	state->phase = 0;
@@ -162,7 +163,7 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * with direct stores, and the eighty reversal-history words at
 	 * +0x52..+0xf0 with a short-counter loop.  Energy and control fields
 	 * around them are cleared separately.  A further store clears
-	 * +0xf2 after the loop, so stopping the whole clear at +0xf0 would
+	 * +0xf2 separately, so stopping the whole clear at +0xf0 would
 	 * leave one word untouched.  Non-zero allocation fills exposed that
 	 * earlier reconstruction error.
 	 */
@@ -172,12 +173,6 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	state->iir_state[3] = 0;
 	state->e_tone = 0;
 	state->e_total = 0;
-	state->rev_age = 0;
-	state->rev_corr = 0;
-	state->rev_energy = 0;
-	for (i = 0; i < (int)NELEMS(state->rev_hist); i++)
-		state->rev_hist[i] = 0;
-	state->rev_idx = 0;
 	state->hist_idx = 0;
 
 	/*
@@ -186,17 +181,18 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * what starts that sweep.
 	 */
 	p.inc = p.phase;
-	{
-		const short *src = state->cfg.src;
-		short *ref = state->kernel;
-		short *zero = state->history;
-
-		for (i = 0; i < len; i++) {
-			FPM_phasor(&p);
-			zero[i] = 0;
-			ref[i] = ((2 * src[i] * p.cos) >> 14);
-		}
+	for (i = 0; i < len; i++) {
+		FPM_phasor(&p);
+		state->history[i] = 0;
+		state->kernel[i] = ((2 * state->cfg.src[i] * p.cos) >> 14);
 	}
+
+	state->rev_age = 0;
+	state->rev_corr = 0;
+	state->rev_energy = 0;
+	for (i = 0; i < (int)NELEMS(state->rev_hist); i++)
+		state->rev_hist[i] = 0;
+	state->rev_idx = 0;
 
 	/*
 	 * Damped resonator, r = 0.96.  Evaluated from phase 0 so cos = 1.0;
@@ -208,18 +204,17 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	state->kill_state[2] = 0;
 	state->kill_state[3] = 0;
 
-	p.phase = 0;
-	p.inc = 0;
-	FPM_phasor(&p);
+	q.phase = 0;
+	FPM_phasor(&q);
 	{
 		short *blk = state->rev_block;
 		short *acc = state->rev_acc;
 
 		blk[0] = 0x4000;
 		blk[1] = 0x4000;
-		blk[2] = -(2 * p.cos);
+		blk[2] = -(2 * q.cos);
 		blk[3] = 0x3afb;			/* 0.96^2       */
-		blk[4] = ((p.cos * -31457) >> 14);	/* -2 * 0.96 */
+		blk[4] = ((q.cos * -31457) >> 14);	/* -2 * 0.96 */
 
 		acc[0] = acc[1] = acc[2] = acc[3] = 0;
 	}
