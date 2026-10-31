@@ -174,8 +174,10 @@ main(void)
 	run("2100 Hz, scale 4[%ld]", probe, NBINS, 1000, 40, 4);
 	run("2100 Hz, scale 12[%ld]", probe, NBINS, 1000, 40, 12);
 	/*
-	 * A scale of 256 exercises the byte truncation: it must shift by
-	 * zero, not by 256 and not by 256 & 31.
+	 * A scale of 256 probes the native byte consumer and period x86
+	 * shift semantics.  BUG mode's raw C shift count is out of range;
+	 * this is a machine-fidelity probe, not defined-C or lifecycle
+	 * evidence.  Normal mode explicitly masks its count.
 	 */
 	run("2100 Hz, scale 256[%ld]", probe, NBINS, 1000, 40, 256);
 
