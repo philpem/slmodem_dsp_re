@@ -8251,11 +8251,12 @@ v34handshak(void *vobj)
 	 * SIGALRM so that is a named case rather than a run that never
 	 * returns.
 	 *
-	 * The arms are `src/pump/v34/v34hstx1.cpp`, which is a `.cpp` because
-	 * 78 and 85 tail-call into the V.90/V.92 C++ half (finding F344).
-	 * Calling them from this `.c` is sound: the interop link carries
-	 * `$(CXXOBJ64)` and this file already calls `V34SetINFO1aBits`.
-	 * Finding F711.
+	 * Most transmit arms share their definitions through v34hstx1_arms.h.
+	 * TX_DPSK and XMITMP belong directly to this switch: the reference
+	 * expands their first reader calls and retains only getbit's recursive
+	 * restarts. SBARSEG, PPSEG and EXMIT also stay in this switch. Their
+	 * former helper return values all rejoined this loop; the baud switch
+	 * inside PPSEG keeps its own distinct breaks.
 	 */
 	while (frame.txb->txq.count < obj->tx_fill_target) {
 		switch ((int)obj->txstate) {
@@ -8268,17 +8269,247 @@ v34handshak(void *vobj)
 			v34tx1_sseg(obj);
 			break;
 		case V34HS_SBARSEG:		/* 19 0x6296d */
-			v34tx1_sbarseg(obj);
-			break;
+		{
+
+			unsigned short n;
+
+			tx1_put_point(obj, vect4[2]);
+			txmit(obj);
+			tx1_put_point(obj, vect4[1]);
+			txmit(obj);
+
+			n = (unsigned short)((unsigned short)obj->tx.seg_symcount + 1);
+			if (n != 8) {
+				obj->tx.seg_symcount = (short)n;
+				break;		/* 0x629c8 */
+			}
+
+			/* 0x671f0 */
+			obj->tx.seg_symcount = 0;
+			if ((unsigned short)obj->tx.tx_flags & V34_TXFLAG_SEG4A) {
+				hs_set_txstate(obj, V34HS_TRNSEG4A);
+			} else if (obj->short_35a4 == 0) {
+				/* 0x68375 */
+				hs_set_txstate(obj, V34HS_PPSEG);
+			} else if ((unsigned short)obj->tx.tx_flags & V34_TXFLAG_PPSEG) {
+				/* 0x69eca */
+				obj->tx.seg_symcount = obj->seg_len;
+				hs_set_txstate(obj, V34HS_PPSEG);
+			} else {
+				/* 0x6783e */
+				int span;
+				short q;
+
+				obj->seg_len = (short)((unsigned short)obj->short_35a4 * 0x53);
+				hs_set_txstate(obj, V34HS_TXMD);
+
+				/* 0x67885 */
+				V34SetupModulator(v34_object_modulator(obj),
+						  4800, 2400, 0, 0, 0);
+
+				/*
+				 * `(0x5e8 - good_run) << 14` with the subtraction done in an int.
+				 * Spelled through `unsigned` because the left shift of a
+				 * negative int is undefined in C and the object's `shl` is
+				 * not; the bits are the same either way.
+				 */
+				span = (int)((unsigned)(0x5e8 - obj->dmadelay) << 14);
+				q = (short)(span / 9600);
+				obj->short_aa78 = (short)((((int)q * 0x960) >> 14) + 0x96);
+				if (dsplibs_debug_level > 1)		/* 0x67916 */
+					dsplibs_debug_printf(
+						"Moving to TX MD, would take %d symbols ,"
+						" echo start delay is %d...\r\n",
+						obj->seg_len,
+						obj->short_aa78);
+			}
+
+			/* 0x67236 */
+			obj->vect_idx = 0;
+			obj->short_358e = 0;
+			break;			/* 0x63948 */
+		}
 		case V34HS_PPSEG:		/* 20 0x642bf */
-			v34tx1_ppseg(obj);
-			break;
+		{
+
+			int i = obj->vect_idx;			/* movswl 0x2aa2 */
+			int point;
+
+			memcpy(&point, &vectpp[2 * i], sizeof(point));
+			obj->vect_idx = (short)(i + 1);
+			tx1_put_point(obj, point);
+			txmit(obj);
+
+			if ((unsigned short)obj->vect_idx == (unsigned short)V34_VECTPP_POINTS) {
+				/* 0x66d57 */
+				unsigned short n = (unsigned short)
+					((unsigned short)obj->short_358e + 1);
+
+				if (n != 6) {
+					obj->short_358e = (short)n;
+					obj->vect_idx = 0;
+				} else {
+					/* 0x680ac */
+					struct v34_ratecfg *cfg = &obj->ratecfg;
+					short v = (short)((unsigned short)obj->rtd + 0x90);
+					short baud = cfg->baud;
+					int span, q, acc;
+
+					obj->vect_idx = v;
+					switch ((unsigned short)baud) {
+					case 2400:
+						obj->ratecfg.period = (short)(v >> 2);
+						break;
+					case 2800:
+						obj->ratecfg.period =
+							(short)(((int)v * 0x12ab) >> 14);
+						break;
+					case 3000:
+						obj->ratecfg.period =
+							(short)(((int)v * 0x1400) >> 14);
+						break;
+					case 3200:
+						obj->ratecfg.period =
+							(short)(((int)v * 0x1555) >> 14);
+						break;
+					case 3429:
+						obj->ratecfg.period =
+							(short)(((int)v * 0x16dc) >> 14);
+						break;
+					default:
+						break;
+					}
+
+					/* 0x680fd */
+					obj->short_358e = 0;
+					obj->ratecfg.period =
+						(short)((unsigned short)obj->ratecfg.period
+							+ 0x120);
+					hs_set_txstate(obj, V34HS_TRNSEG4);
+
+					/* 0x68154 */
+					span = (0x5e8 - obj->dmadelay) * (int)baud;
+					q = span / 9600;
+					obj->short_aa78 = (short)q;	/* 0x6818d */
+
+					acc = q + (unsigned short)obj->filtdelay
+						+ (unsigned short)obj->tx.seg_symcount + 1;
+					if (obj->role == 0x65)			/* 0x6926d */
+						acc += (unsigned short)obj->rtd;
+					obj->short_aa78 = (short)acc;
+
+					/* 0x681c6 */
+					obj->ratecfg.period =
+						(short)((unsigned short)obj->ratecfg.period
+							+ (unsigned short)obj->short_aa78);
+					if (dsplibs_debug_level > 1)	/* 0x681ef */
+						dsplibs_debug_printf(
+							"V34Hshak: echo start wait time would" " be: NEC %d symbols, FEC %d"
+							" symbols...\r\n",
+							obj->short_aa78,
+							obj->ratecfg.period);
+					break;		/* 0x63da2 */
+				}
+			}
+
+			/* 0x6430c */
+			obj->tx.seg_symcount = (short)((unsigned short)obj->tx.seg_symcount + 1);
+			break;			/* 0x6431f */
+		}
 		case V34HS_TRNSEG4:		/* 21 0x64339 */
 			v34tx1_trnseg4(obj);
 			break;
 		case V34HS_TX_DPSK:		/* 24 0x62b96 */
-			v34tx1_tx_dpsk(obj);
-			break;
+		{
+			short bit;
+
+			/* 0x62b9d */
+			if (obj->moh_active != 0)
+				obj->vect_idx = (short)((unsigned short)obj->vect_idx + 1);
+
+			/* 0x62bb5, and 0x684bb where it does not inline */
+			bit = getbit(tx1_bitsource(obj));
+			if (bit >= 0) {
+				/* 0x64a13 */
+				tx1_dpsk_tone(obj, bit);
+				txmit(obj);				/* 0x64a42 */
+				break;			/* 0x640a1 */
+			}
+
+			/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
+			if (obj->moh_active == 0) {
+				/*
+				 * 0x654dd.  The compare against TONE_AB cannot be false, for
+				 * finding F342's reason at 65: the arm is reached only through
+				 * table 1 at `txstate == 24` and nothing between the dispatch
+				 * and here writes +0x3596 -- `getbit` does not.  It is
+				 * written as the object writes it.
+				 */
+				hs_set_txstate(obj, V34HS_TONE_AB);
+				break;			/* 0x63948 */
+			}
+
+			if (dsplibs_debug_level > 1)			/* 0x68704 */
+				dsplibs_debug_printf(
+					"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
+					*((signed char *)obj + TX1_MOH_MSG_PENDING), obj->vect_idx,
+					tx1_bitsource(obj)->repeats);
+
+			if (obj->moh_msg_pending == 0) {
+				/*
+				 * 0x67c4e.  The reader is re-armed BY HAND and read again --
+				 * `getbit`'s own restart arm with the `repeat` test taken out,
+				 * so a reader that declines to repeat is restarted anyway.
+				 * The stores are the object's, in the object's order; the
+				 * compiler sank the rest of them into the successors, which is
+				 * why 0x6a855 and 0x6c9c8 store 0xffff into `crc` again.
+				 */
+				struct v34_bitsource *b = tx1_bitsource(obj);
+
+				b->repeats = (short)((unsigned short)b->repeats + 1);
+				b->crc = (short)0xffff;
+				b->pos = 0;
+				b->idx = 0;
+				b->acc = b->acc0;
+				b->avail = b->avail0;
+
+				tx1_dpsk_tone(obj, getbit(b));
+				txmit(obj);				/* 0x67d3e */
+				(void)tx1_moh_hold(obj);
+				break;			/* 0x64fec */
+			}
+
+			/*
+			 * 0x64e91.  Both selectors are read as ints and compared UNSIGNED --
+			 * `cmp $0x1 ; je ; jb` picks zero alone and `cmp $0x3 ; ja` sends a
+			 * negative one to the same place a large one goes.
+			 */
+			if (obj->moh_message == 1) {
+				tx1_moh_on_hold(obj);			/* 0x689f6 */
+			} else if (obj->moh_message == 0) {
+				int got = obj->moh_recvd;			/* 0x6901d */
+
+				if (got == 4)
+					tx1_moh_on_hold(obj);
+				else if ((unsigned)got > 4u) {
+					/* 0x6a3c6 */
+					if (got != 5)
+						tx1_moh_reinit(obj, MOH_ILLEGAL);	/* 0x69041 */
+					else
+						tx1_moh_send(obj);	/* 0x6a3cf */
+				} else if (got == 0)
+					tx1_moh_on_hold(obj);
+				else
+					tx1_moh_reinit(obj, MOH_ILLEGAL);	/* 0x69041 */
+			} else if ((unsigned)obj->moh_message <= 3u) {
+				tx1_moh_cleardown(obj);			/* 0x64eaf */
+			}
+
+			/* 0x64fde */
+			obj->moh_msg_pending = 0;
+			(void)tx1_moh_hold(obj);
+			break;				/* 0x64fec */
+		}
 		case V34HS_TX_L1:		/* 51 0x62c69 */
 			v34tx1_tx_l1(obj);
 			break;
@@ -8386,11 +8617,123 @@ v34handshak(void *vobj)
 			v34tx1_trnseg4a(obj);
 			break;
 		case V34HS_XMITMP:		/* 67 0x6399b */
-			v34tx1_xmitmp(obj);
-			break;
+		{
+			struct v34_receiver *rx = &obj->receiver;
+			int wide = 0;
+			int n = 0;
+
+			obj->tx.cur_quadrant = 0;					/* 0x639ab */
+
+			for (;;) {
+				struct v34_bitsource *b;
+				unsigned short flags;
+				short bit, idx;
+
+				wide = (unsigned short)obj->receiver.short_382 == 0x89b0u;
+				if (n > (wide ? 3 : 1))
+					break;
+
+				/* 0x639db, and 0x6484c where it does not inline */
+				b = tx1_bitsource(obj);
+				bit = getbit(b);
+
+				/*
+				 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
+				 * bit reaches it sign-extended -- so the reader's -1 fills
+				 * `cur_quadrant` from bit `n` up rather than setting one bit.
+				 */
+				obj->tx.cur_quadrant = (short)((unsigned short)obj->tx.cur_quadrant
+						   | (unsigned short)
+						     ((unsigned)(int)bit
+						      << ((unsigned)(unsigned char)n & 31u)));
+
+				/* 0x63ad8 */
+				obj->vect_idx = (short)((unsigned short)obj->vect_idx + 1);
+				idx = obj->vect_idx;
+				flags = rx->flags;
+
+				if (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {
+					/* 0x6459b */
+					b = tx1_bitsource(obj);
+					if (flags & 0x20u) {
+						b->acc = (int)((unsigned)b->acc << 3);
+						b->avail = (short)
+							   ((unsigned short)b->avail + 3);
+					} else {
+						b->acc = (int)((unsigned)b->acc << 1);
+						b->avail = (short)
+							   ((unsigned short)b->avail + 1);
+					}
+				} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {
+					if (tx1_mp_sequence_end(obj, rx)) {
+						/* 0x6490e */
+						wide = (unsigned short)
+						       obj->receiver.short_382 == 0x89b0u;
+						break;
+					}
+				} else if ((unsigned short)obj->vect_idx
+					   == (unsigned short)obj->short_3590) {
+					/* 0x64727 */
+					b = tx1_bitsource(obj);
+					b->acc = (int)((unsigned)b->acc << 1);
+					b->avail = (short)((unsigned short)b->avail + 1);
+					obj->short_3590 =
+						(short)((unsigned short)obj->short_3590 + 0x11);
+				}
+
+				n = (short)(n + 1);			/* 0x63b38 */
+			}
+
+			if (wide)
+				tx1_mp16(obj, obj->tx.cur_quadrant);
+			else
+				tx1_mp4(obj, obj->tx.cur_quadrant);
+
+			txmit(obj);				/* 0x62d5f and 0x64a42 */
+			break;			/* 0x62d70 and 0x640a1 */
+		}
 		case V34HS_EXMIT:		/* 69 0x63858 */
-			v34tx1_exmit(obj);
-			break;
+		{
+
+			short mode = (short)((obj->tx.tx_flags & V34_TXFLAG_CALLER) == 0);
+			short q;
+
+			if ((unsigned short)obj->receiver.short_382 == 0x89b0u) {
+				/* 0x67031 */
+				short k;
+				int point;
+
+				q = (short)V34scrambler((unsigned *)&obj->tx.tx_scr_sr, mode, 0xf, 2);
+				obj->tx.cur_quadrant = (short)((q + (unsigned short)obj->tx.prev_quadrant) & 3);
+
+				q = (short)V34scrambler((unsigned *)&obj->tx.tx_scr_sr, mode, 3, 2);
+				k = obj->tx.cur_quadrant;			/* re-read, 0x67131 */
+				obj->tx.prev_quadrant = k;
+				point = vect16[q + 4 * k];
+				tx1_put_point(obj, point);
+				txmit(obj);
+				obj->vect_idx = (short)((unsigned short)obj->vect_idx + 4);
+			} else {
+				/* 0x6386b */
+				q = (short)V34scrambler((unsigned *)&obj->tx.tx_scr_sr, mode, 3, 2);
+				(void)tx1_dpsk4(obj, q);
+				txmit(obj);
+				obj->vect_idx = (short)((unsigned short)obj->vect_idx + 2);
+			}
+
+			/* 0x6392c */
+			if ((unsigned short)obj->vect_idx == 0x14u) {
+				/* 0x66e01 */
+				short txst = obj->txstate;
+
+				obj->vect_idx = 8;
+				hs_set_txstate(obj, V34HS_DATAXMIT);
+				if (dsplibs_debug_level > 1)		/* 0x66e48 */
+					dsplibs_debug_printf("V34MP- E transmit completed\n");
+				break;			/* 0x6409a, 0x6431f */
+			}
+			break;				/* 0x63941 */
+		}
 		case V34HS_DATAXMIT:		/* 70 0x63ca8 */
 			v34tx1_dataxmit(obj);
 			break;
