@@ -637,7 +637,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 		}
 
 		if (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {
-			retrainCounter += nofSymbols;
+			retrainCounter += avePdsnrNofSymbols;
 			if (retrainCounter >= (unsigned int)retrainDetectDuration) {
 				nofV90Retrains++;
 				if (nofV90Retrains
