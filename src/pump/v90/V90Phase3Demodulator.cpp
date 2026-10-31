@@ -107,8 +107,6 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			    short altRbs, short short414Arg,
 			    float float418Arg, unsigned int word14Arg)
 {
-	unsigned int modulatorWord;
-
 	/*
 	 * The flag is printed BEFORE anything is stored, and it is the
 	 * object's own field rather than an argument -- this method never
@@ -136,12 +134,12 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 	 * The complement-then-decode is the same one V90Phase3Modulator uses
 	 * for its segment and DIL codes, with the same two constants.
 	 */
-	if (pcmTypeArg == PCM_TYPE_MU_LAW)
-		ucodeLevel = (short)ulaw2linear(
-		    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));
-	else
+	if (pcmTypeArg != PCM_TYPE_MU_LAW)
 		ucodeLevel = (short)alaw2linear(
 		    (unsigned char)((ucodeArg & 0x7f) ^ 0xd5));
+	else
+		ucodeLevel = (short)ulaw2linear(
+		    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));
 
 	word_3cc.prev_ = 0;
 	ucode = ucodeArg;
@@ -179,13 +177,16 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 	word_3fc = 0;
 	short_400 = 0;
 
+	/* Keep each opening's modulator arguments before the shared call tail.
+	 * The native reset retains three separate linear-mapping calls. */
 	switch ((int)stateArg) {
 	case P3D_STATE_WAIT_FOR_SD:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to WaitForSd\r\n");
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 
 	case P3D_STATE_TRN1D_KNOWN_DATA:
@@ -193,7 +194,8 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to TRN1dKnownData\r\n");
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = word2cArg;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      word2cArg, NULL, NULL, NULL, 0);
 		break;
 
 	case P3D_STATE_WAIT_FOR_QTS:
@@ -204,7 +206,8 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to WaitForQTS\r\n");
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 
 	default:
@@ -212,17 +215,10 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to IRREGULAR !!!!! " "(%d)\r\n", (int)stateArg);
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 	}
-
-	/*
-	 * The modulator gets the ARGUMENT's pcmType and ucode, not the fields
-	 * just written from them, and null Jd/V92Jd/DIL pointers whatever this
-	 * method was handed.
-	 */
-	phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
-			      modulatorWord, NULL, NULL, NULL, 0);
 
 	word_408 = 0;
 	dilLength = calculateDilLength(dil, pcmType);
@@ -525,33 +521,12 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
 	} while (0)
 
 /*
- * One data bit, and the level that goes with it.  The alternate mapping table
- * is consulted only when the detector's +0xa948 flag is set AND `isAltRbs`
- * agrees, which is the object's `jne`-then-`test %ax,%ax` pair; `isAltRbs` is
- * declared `int` in V90AutoDigitalImpDetector.h and TESTED SIXTEEN BITS WIDE
- * here, so the narrowing is the object's and not decoration.
+ * The nine native two-level demodulation blocks keep `bit` in an addressable
+ * stack slot and publish each decoder result through it.  Calls to the existing
+ * twoLevelDemod(float, int &) reproduce that reference lifetime when GCC 3.4.2
+ * inlines them at -O3.  Expanding the body as statements instead loses the
+ * addressable local.  GLOBAL binding alone does not exclude automatic inlining.
  */
-#define P3D_DEMOD_BIT() \
-	do { \
-		V90AutoDigitalImpDetector *ad_ = autoDigitalImpDetector; \
-		int v_; \
-		\
-		if (ad_->altRbsInUse != 0 && \
-		    (short)ad_->isAltRbs((short)framePosition, ucode, sample) != 0) \
-			v_ = P3D_LINMAPPALT(ad_, ucode); \
-		else \
-			v_ = P3D_LINMAPP(ad_, ucode); \
-		if (sample > 0.0f) { \
-			bit = 1; \
-			level = v_; \
-		} else { \
-			bit = 0; \
-			level = (short)-v_; \
-		} \
-		bit = word_3cc.process(bit); \
-		bit = descrambler.process(bit); \
-		decision = (short)level; \
-	} while (0)
 
 /*
  * ===========================================================================
@@ -572,10 +547,9 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
  * store at the top of its block and reaches one only as the `else` of the
  * `if` that stores 9.
  *
- * FOUR COPIES OF `twoLevelDemod`.  Cases 4, 5, 6 and 9 open with a block that
- * is the body of `V90Phase3Demodulator::twoLevelDemod(float, int &)` -- its
- * own GLOBAL blob symbol at 0x215a0, so not `inline` and so not something GCC
- * 3.4.2 would have inlined at -O2.  The duplication is the author's.
+ * FOUR EXPANSIONS OF `twoLevelDemod`.  Cases 4, 5, 6 and 9 call the existing
+ * helper; the period compiler inlines all four and retains the native bit
+ * reference publications.  Its GLOBAL symbol at 0x215a0 is emitted as well.
  * ===========================================================================
  */
 
@@ -585,7 +559,6 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	short decision;
 	short s;
 	short symbol;
-	short level;
 	int bit;
 
 	s = (short)sample;
@@ -702,24 +675,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	/* ----------------------------------------------- 0x04 TRN1d DD */
 	case 0x04:
 		eventCode = 0;
-		/* twoLevelDemod(sample, bit), copy 1 of 4 */
-		if (autoDigitalImpDetector->altRbsInUse != 0
-		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
-							sample))
-			level = autoDigitalImpDetector
-			    ->linMappAlt[P3D_PHASE][ucode];
-		else
-			level = autoDigitalImpDetector
-			    ->linMapp[P3D_PHASE][ucode];
-		if (sample > 0.0f) {
-			bit = 1;
-		} else {
-			bit = 0;
-			level = (short)-level;
-		}
-		bit = word_3cc.process(bit);
-		bit = descrambler.process(bit);
-		decision = level;
+		decision = (short)twoLevelDemod(sample, bit);
 
 		if (samplesInState == trn1dDdLength) {
 			edprintf("V90Phase3Demodulator: enter study reference "
@@ -738,24 +694,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	/* ------------------------------------ 0x05 study reference Ucode */
 	case 0x05:
 		eventCode = 0;
-		/* twoLevelDemod(sample, bit), copy 2 of 4 */
-		if (autoDigitalImpDetector->altRbsInUse != 0
-		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
-							sample))
-			level = autoDigitalImpDetector
-			    ->linMappAlt[P3D_PHASE][ucode];
-		else
-			level = autoDigitalImpDetector
-			    ->linMapp[P3D_PHASE][ucode];
-		if (sample > 0.0f) {
-			bit = 1;
-		} else {
-			bit = 0;
-			level = (short)-level;
-		}
-		bit = word_3cc.process(bit);
-		bit = descrambler.process(bit);
-		decision = level;
+		decision = (short)twoLevelDemod(sample, bit);
 
 		word_408 = (unsigned int)
 		    autoDigitalImpDetector->studyUrefHandler(sample, framePosition);
@@ -788,24 +727,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	/* ----------------------------------------------- 0x06 WaitForJd */
 	case 0x06:
 		eventCode = 0;
-		/* twoLevelDemod(sample, bit), copy 3 of 4 */
-		if (autoDigitalImpDetector->altRbsInUse != 0
-		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
-							sample))
-			level = autoDigitalImpDetector
-			    ->linMappAlt[P3D_PHASE][ucode];
-		else
-			level = autoDigitalImpDetector
-			    ->linMapp[P3D_PHASE][ucode];
-		if (sample > 0.0f) {
-			bit = 1;
-		} else {
-			bit = 0;
-			level = (short)-level;
-		}
-		bit = word_3cc.process(bit);
-		bit = descrambler.process(bit);
-		decision = level;
+		decision = (short)twoLevelDemod(sample, bit);
 
 		if (++framePosition == 6)
 			framePosition = 0;
@@ -844,24 +766,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	/* ------------------------------------------------- 0x09 JdDemod */
 	case 0x09:
 		eventCode = 0;
-		/* twoLevelDemod(sample, bit), copy 4 of 4 */
-		if (autoDigitalImpDetector->altRbsInUse != 0
-		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
-							sample))
-			level = autoDigitalImpDetector
-			    ->linMappAlt[P3D_PHASE][ucode];
-		else
-			level = autoDigitalImpDetector
-			    ->linMapp[P3D_PHASE][ucode];
-		if (sample > 0.0f) {
-			bit = 1;
-		} else {
-			bit = 0;
-			level = (short)-level;
-		}
-		bit = word_3cc.process(bit);
-		bit = descrambler.process(bit);
-		decision = level;
+		decision = (short)twoLevelDemod(sample, bit);
 
 		if (++framePosition == 6)
 			framePosition = 0;
@@ -901,7 +806,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		decision = s;
 		symbol = (short)phase3Modulator.generateSymbol();
 		if (phase3Modulator.usingSegmentLevel != 0) {
-			if (autoDigitalImpDetector->isAltRbs((short)framePosition,
+			if ((short)autoDigitalImpDetector->isAltRbs((short)framePosition,
 							     ucode, sample))
 				decision = (short)(P3D_SIGN(s)
 				    * autoDigitalImpDetector
@@ -948,7 +853,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 								  framePosition);
 		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS((int)symbol) == ucodeLevel) {
-				if (autoDigitalImpDetector->isAltRbs(
+				if ((short)autoDigitalImpDetector->isAltRbs(
 				    (short)framePosition, ucode, sample))
 					decision = (short)(P3D_SIGN(s)
 					    * autoDigitalImpDetector
@@ -1078,7 +983,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		decision = s;
 		symbol = (short)phase3Modulator.generateSymbol();
 		if (phase3Modulator.usingSegmentLevel != 0) {
-			if (autoDigitalImpDetector->isAltRbs((short)framePosition,
+			if ((short)autoDigitalImpDetector->isAltRbs((short)framePosition,
 							     ucode, sample))
 				decision = (short)(P3D_SIGN(s)
 				    * autoDigitalImpDetector
@@ -1125,7 +1030,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 								  framePosition);
 		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS((int)symbol) == ucodeLevel) {
-				if (autoDigitalImpDetector->isAltRbs(
+				if ((short)autoDigitalImpDetector->isAltRbs(
 				    (short)framePosition, ucode, sample))
 					decision = (short)(P3D_SIGN(s)
 					    * autoDigitalImpDetector
@@ -1243,7 +1148,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			decision = s;
 			if (phase3Modulator.usingSegmentLevel != 0) {
-				if (autoDigitalImpDetector->isAltRbs(
+				if ((short)autoDigitalImpDetector->isAltRbs(
 				    (short)framePosition, ucode, sample))
 					decision = (short)(P3D_SIGN(s)
 					    * autoDigitalImpDetector
@@ -1495,16 +1400,11 @@ V90Phase3Demodulator::getV90Decision(float sample)
  *     26 WaitForQts          27 WaitForQtsNot      28 (enter ANSpcm demod)
  *     29 ANSpcm demod        30/32/33 ANSpcm recovery
  *
- * FOUR IDIOMS CARRY MOST OF THE BYTES and are spelled as macros below so that
- * every arm shows its own shape rather than four hundred lines of repetition.
- * They are macros and not functions on purpose: the object has all of this
- * inlined into one body, and a `static` helper called eleven times is a
- * function GCC 3.4.2 need not inline.
+ * Five arms call the existing twoLevelDemod helper.  Its reference argument
+ * keeps the bit's native stack publication lifetime after automatic inlining.
+ * The remaining shared expressions use macros so that each arm retains its
+ * own control flow:
  *
- *   P3D_DEMOD_BIT      the five arms that recover a data bit -- a table
- *                      lookup for the level, the sign of the sample for the
- *                      bit, then the serial differential decoder at +0x3cc
- *                      and the descrambler at +0x3d0.
  *   P3D_CODE           the companded index of a linear magnitude: A-law
  *                      `^ 0xd5`, mu-law `~`.  `pcmType == 0` selects mu-law,
  *                      which is the same sense `reset` uses.
@@ -1524,7 +1424,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	V90Phase3Modulator *mod;
 	short decision;			/* %edi -- see the note above */
 	int level = (short)sample;	/* %esi, the truncated sample     */
-	int bit = 0;
+	int bit;
 	int sym;
 	int code;
 
@@ -1618,7 +1518,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		break;
 
 	case 4:					/* TRN1dDemod */
-		P3D_DEMOD_BIT();
+		decision = (short)twoLevelDemod(sample, bit);
 		if (samplesInState == trn1dDdLength) {
 			edprintf("V90Phase3Demodulator: enter V92 study "
 				 "reference Ucode state @ %d\r\n", samplesInState);
@@ -1633,7 +1533,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		break;
 
 	case 5:					/* study reference Ucode */
-		P3D_DEMOD_BIT();
+		decision = (short)twoLevelDemod(sample, bit);
 		adid = autoDigitalImpDetector;
 		word_408 = (unsigned int)adid->studyUrefHandler(sample,
 							       framePosition);
@@ -1657,7 +1557,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		break;
 
 	case 7:					/* WaitForV92Jd */
-		P3D_DEMOD_BIT();
+		decision = (short)twoLevelDemod(sample, bit);
 		P3D_BUMP_FRAME();
 		if ((unsigned char)jdV92->unPackJdData(bit) != 0) {
 			if (samplesInState % 6 == 0 || quickConnect != 0) {
@@ -1692,7 +1592,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		break;
 
 	case 8:					/* V92JdPhaseDemod */
-		P3D_DEMOD_BIT();
+		decision = (short)twoLevelDemod(sample, bit);
 		P3D_BUMP_FRAME();
 		if ((unsigned char)jdV92->unPackJdPhaseData(bit) != 0) {
 			if (samplesInState % 6 == 0) {
@@ -1714,7 +1614,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		break;
 
 	case 9:					/* V92JdDemod */
-		P3D_DEMOD_BIT();
+		decision = (short)twoLevelDemod(sample, bit);
 		P3D_BUMP_FRAME();
 		if (bit != 0)
 			jdNotRunLength = 0;
@@ -2460,8 +2360,8 @@ V90Phase3Demodulator::getDecision(float sample)
 }
 
 /*
- * `twoLevelDemod` -- 220 bytes at 0x215a0, and the block `getV90Decision`
- * carries four times over as its own symbol is not `inline`.
+ * `twoLevelDemod` -- 220 bytes at 0x215a0, also expanded into four V.90 and
+ * five V.92 decision arms by the period compiler's automatic inlining.
  *
  * THE NEGATE IS TRUNCATED TO SIXTEEN BITS AND THAT IS THE ONE THING HERE A
  * TEST CAN SEE.  The object spells it `neg %edx ; movswl %dx,%esi`, so a
@@ -2470,8 +2370,8 @@ V90Phase3Demodulator::getDecision(float sample)
  * other value the table can hold.  `t_v90p3ddec.cpp` plants that entry.
  *
  * `isAltRbs` IS TESTED SIXTEEN BITS WIDE (`test %ax,%ax`) although
- * V90AutoDigitalImpDetector.h declares it `int`, which is the same narrowing
- * `P3D_DEMOD_BIT` above records.
+ * V90AutoDigitalImpDetector.h declares it `int`.  The two decision functions
+ * use that same result width at all nineteen of their native call sites.
  *
  * The bit goes out through the reference argument at every step, and the
  * object RE-LOADS it from memory for each -- `mov (%edi),%eax` at 0x215eb --
@@ -2514,5 +2414,4 @@ V90Phase3Demodulator::twoLevelDemod(float sample, int &bit)
 #undef P3D_COPY_440_TO_438
 #undef P3D_BUMP_FRAME
 #undef P3D_CHECK_TERMINATED
-#undef P3D_DEMOD_BIT
 #undef P3D_PHASE
