@@ -539,6 +539,7 @@ int
 v8_txinit(struct v8 *v)
 {
 	short i;
+	short *shape = v->tx_shape;
 
 	v->short_014 = 1;
 	v->short_00c = 0;
@@ -546,7 +547,7 @@ v8_txinit(struct v8 *v)
 	v->int_004 = 0;
 
 	for (i = 0; i < V8_TX_SHAPE; i++)
-		v->tx_shape[i] = 0;
+		*shape++ = 0;
 
 	v->tx_ring_base = v->tx_ring;
 	for (i = 0; i < V8_TX_RING; i++)
