@@ -258,7 +258,7 @@ FSEv22_decision12(struct v22_fse *state, short *angle, short *mag)
 	*state->prev_quad = quad;
 
 	return (unsigned short)
-	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
+	    ((short)SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
 			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
 	     >> V22_SYM_QUAD_SHIFT);
 }
