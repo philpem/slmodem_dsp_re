@@ -56,10 +56,19 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 
 
 /* Branchless circular increment, as the original writes it. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+static short
+advance(short idx, short len)
+#else
 static int
 advance(int idx, int len)
+#endif
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short next = idx + 1;
+#else
 	int next = idx + 1;
+#endif
 
 	return (next < len) ? next : 0;
 }
@@ -67,21 +76,37 @@ advance(int idx, int len)
 unsigned short
 FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
+	const short branches = state->cfg.branches;
+	const short decimate = state->cfg.decimate;
+#else
 	const int branches = state->cfg.branches;
 	const int decimate = state->cfg.decimate;
+#endif
 	const short *coeff = state->cfg.coeff;
 	short *history = state->history;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	const short hlen = state->history_len;
+	short phase = state->phase;
+	short widx = state->widx;
+	short need = state->need;
+#else
 	const int hlen = state->history_len;
 	int phase = state->phase;
 	int widx = state->widx;
 	int need = state->need;
+#endif
 #ifdef DSPLIB_REPRODUCE_BUGS
 	short produced = 0;
 #else
 	int produced = 0;
 #endif
 	/* The blob narrows the incoming slot here, not in every caller. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short remaining = (short)count;
+#else
 	int remaining = (short)count;
+#endif
 
 	while (remaining != 0) {
 		const short *c;
