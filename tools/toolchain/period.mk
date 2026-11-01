@@ -129,6 +129,12 @@ override TC_FLAGS += -DDSPLIB_REPRODUCE_BUGS
 # it is not evidence that the original file used these options.
 TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
+# Shared V.17/V.29 transmitter-processing profile. Native countdown reloads
+# survive here; GCSE PRE removes them under the general profile. Source and
+# profile controls also preserve the native callback owner/budget lifetimes.
+TC_FAX_PROC_SRCS := src/fax/V17t_prc.c src/fax/V29t_prc.c
+TC_FAX_PROC_FLAGS := -fno-gcse
+
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the
 # override semantics above are unchanged.
 # The object's C++ square roots are bare fsqrt, with no errno fallback.
@@ -242,8 +248,9 @@ tc: $(TC_OBJ) $(TC_GCCVER)
 FORCE:
 
 $(TC_STAMP): FORCE | $(TC_OUT) tc-image
-	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\n' \
-	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' > '$@.new'
+	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\n' \
+	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' \
+	        '$(TC_FAX_PROC_FLAGS)' '$(TC_FAX_PROC_SRCS)' > '$@.new'
 	@if cmp -s '$@.new' '$@'; then rm -f '$@.new'; else \
 	   mv '$@.new' '$@'; \
 	   echo "  TC-CFG  $(TC_IMAGE) $(if $(TC_EXTRA),TC_EXTRA=$(TC_EXTRA) ,)-- rebuilding every object"; \
@@ -289,7 +296,7 @@ tc-image:
 define TC_CC_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CC   $(1)'
-	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) $(if $(filter $(TC_FAX_PROC_SRCS),$(1)),$(TC_FAX_PROC_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 

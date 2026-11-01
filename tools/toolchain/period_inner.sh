@@ -45,6 +45,9 @@ ASFLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 # stack-only equivalence claim was not supported by the complete comparison.
 DCR_FLAGS="-O2 -fno-rerun-cse-after-loop"
 
+# Same original processor TUs and PRE profile as TC_FAX_PROC_FLAGS in period.mk.
+FAX_PROC_FLAGS="-fno-gcse"
+
 HARNESS="test/harness/harness.c test/harness/runtime.c
          test/harness/fakedp.c test/harness/v34hsstep.c
          test/harness/unwritten.c"
@@ -149,6 +152,7 @@ compile_one() {
 		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
 	*)	case $f in
 		src/service/dcr.c) cflags="$SOURCE_CFLAGS $DCR_FLAGS" ;;
+		src/fax/V17t_prc.c|src/fax/V29t_prc.c) cflags="$SOURCE_CFLAGS $FAX_PROC_FLAGS" ;;
 		src/*) cflags="$SOURCE_CFLAGS" ;;
 		*) cflags="$CFLAGS" ;;
 		esac
@@ -172,6 +176,7 @@ echo "period: flags $(echo $FLAGS)"
 echo "period: C source flags $(echo $SOURCE_CFLAGS)"
 echo "period: C fixture flags $(echo $CFLAGS)"
 echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
+echo "period: V17t_prc.c/V29t_prc.c source flags $(echo $SOURCE_CFLAGS $FAX_PROC_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 echo "period: fixture dependency apparatus -MMD -MF <object>.d.tmp"

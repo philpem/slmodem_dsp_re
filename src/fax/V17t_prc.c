@@ -48,6 +48,7 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	struct v17tx_priv *prm;
 	unsigned short taken;
 	short budget;
+	short *budget_ptr;
 	short total;
 
 	prm = TXPRIV(modem);
@@ -55,25 +56,29 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	TXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17TX_RESULT_B1_BIT1;
 
-	if (prm->r08 == 0)
+	if (prm->r08 == 0) {
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
 					prm->fifo,
 				in, *count);
-	else
+		prm = TXPRIV(modem);
+	} else
 		taken = *count;
 
 	budget = V17TX_MODEM_BUDGET;
 	total = 0;
+	budget_ptr = &budget;
 	do {
 		short got;
 
-		prm = TXPRIV(modem);
-		got = prm->process(modem, in, out, &budget);
+		got = prm->process(modem, in, out, budget_ptr);
 
 		out += got;
 		total = (short)(total + got);
-	} while (budget > 0);
+		if (budget <= 0)
+			break;
+		prm = TXPRIV(modem);
+	} while (1);
 
 	if (*count != taken) {
 		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
@@ -110,8 +115,8 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
  * THREE OF THE TWELVE ARMS RETURN DIRECTLY RATHER THAN FALLING TO THE SHARED
  * TAIL -- `SCR1`, `DATA` and `SCR1_END` clear `V17TX_OBJ_RESULT_B2`'s bit 0
  * and SET `V17TX_OBJ_RESULT_B1`'s bit 0 (`V17TX_RESULT_B1_BIT0`) with their
- * own inline code and `ret` directly; every other arm clears BOTH bits
- * through the tail every `break` reaches at the bottom of this function.
+ * own inline code and `ret` directly. The default arm also returns directly
+ * after clearing bit 0 itself. The other arms reach the shared clear below.
  * `QUIET_END` is the exception that still `break`s: it explicitly SETS
  * `V17TX_OBJ_RESULT_B2`'s bit and clears `V17TX_OBJ_RESULT_B1`'s -- which the
  * shared tail's own unconditional `&= ~V17TX_RESULT_B1_BIT0` reproduces for
@@ -138,11 +143,16 @@ TxNextStateV17(void *modem)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
 	short state = prm->state;
+	/* All seven requests occupy the same native stack slots. */
+	struct sgd_gen_cfg gen;
+	struct sgd_control_req req;
 
 	switch (state) {
 	case V17TX_STATE_START:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_START\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 0x30;
 		prm->process =
 			TxHdxSilenceV17;
@@ -152,16 +162,15 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_SILENCE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_SILENCE\n");
+			prm = TXPRIV(modem);
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
-
+			req = SGD_CTL;
 			gen.data_word = 0;
 			gen.word_syms = 2;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -176,8 +185,10 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_TEP:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_TEP\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 0x30;
 		prm->process =
 			TxHdxSilenceV17;
@@ -187,16 +198,15 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_QUIET:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_QUIET\n");
+			prm = TXPRIV(modem);
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
-
+			req = SGD_CTL;
 			gen.data_word = 0xe;
 			gen.word_syms = 2;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -211,16 +221,15 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_ALT:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_ALT\n");
+			prm = TXPRIV(modem);
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
-
+			req = SGD_CTL;
 			gen.data_word = 0xf;
 			gen.word_syms = 2;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -237,21 +246,21 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_EQCOND:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_EQCOND\n");
+			prm = TXPRIV(modem);
+		}
 		if (prm->r0c != 0) {
 			short mode = prm->mode;
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
 			SetTxModeV17(modem, mode);
+			req = SGD_CTL;
 
 			prm = TXPRIV(modem);
 			mode = prm->mode;
 			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 
@@ -261,13 +270,11 @@ TxNextStateV17(void *modem)
 			prm->process = TxHdxSCR1V17;
 			prm->state = V17TX_STATE_SCR1;
 		} else {
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = 0x111;
 			gen.word_syms = 8;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 
@@ -282,21 +289,21 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_BRIDGE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_BRIDGE\n");
+			prm = TXPRIV(modem);
+		}
 		{
 			short mode = prm->mode;
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
 			SetTxModeV17(modem, mode);
+			req = SGD_CTL;
 
 			prm = TXPRIV(modem);
 			mode = prm->mode;
 			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -311,8 +318,10 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_SCR1:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_SCR1\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 1;
 		prm->process =
 			TxHdxDataV17;
@@ -323,17 +332,17 @@ TxNextStateV17(void *modem)
 		return;
 
 	case V17TX_STATE_DATA:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_DATA\n");
+			prm = TXPRIV(modem);
+		}
 		{
 			short mode = prm->mode;
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -348,8 +357,10 @@ TxNextStateV17(void *modem)
 		return;
 
 	case V17TX_STATE_SCR1_END:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_SCR1_END\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 0x30;
 		prm->process =
 			TxHdxSilenceV17;
@@ -360,8 +371,10 @@ TxNextStateV17(void *modem)
 		return;
 
 	case V17TX_STATE_QUIET_END:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_QUIET_END\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 0;
 		prm->process =
 			TxHdxIdleV17;
@@ -371,8 +384,10 @@ TxNextStateV17(void *modem)
 		break;
 
 	case V17TX_STATE_IDLE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V17TX_STATE_IDLE\n");
+			prm = TXPRIV(modem);
+		}
 		prm->countdown = 0;
 		prm->process =
 			TxHdxStartV17;
@@ -391,7 +406,7 @@ TxNextStateV17(void *modem)
 			((TXROOT(modem)->result.byte.flags
 			  | V17TX_RESULT_B1_BIT1)
 			 & ~V17TX_RESULT_B1_BIT0);
-		break;
+		return;
 	}
 
 	TXROOT(modem)->result.byte.flags &=
@@ -442,14 +457,15 @@ TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 {
+	struct v17tx_priv *prm = TXPRIV(modem);
 	unsigned short taken;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_DATA;
 
-	if (TXP(modem)->countdown != 0) {
-		int mode = TXP(modem)->mode;
+	if (prm->countdown != 0) {
+		int mode = prm->mode;
 
-		TXP(modem)->countdown = 0;
+		prm->countdown = 0;
 
 		switch (mode) {
 		case 1:
@@ -474,7 +490,7 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 	}
 
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)TXP(modem)->fifo,
+		FIFO_read((struct fax_fifo *)prm->fifo,
 			  in, (unsigned short)*budget);
 
 	if ((unsigned short)*budget > taken) {
@@ -513,21 +529,19 @@ short
 TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
@@ -541,21 +555,19 @@ short
 TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
@@ -583,21 +595,19 @@ short
 TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
@@ -619,21 +629,19 @@ short
 TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
@@ -652,19 +660,17 @@ short
 TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
