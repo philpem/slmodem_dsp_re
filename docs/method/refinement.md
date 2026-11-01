@@ -9795,3 +9795,21 @@ the grader's proof. Retain an independently supported source recovery with its
 honest UNRESOLVED status when the complete review and period gate justify it.
 A separately scoped recogniser extension needs its own positive and negative
 controls; changing source to fit an unsupported proof pattern is not recovery.
+
+
+### Isolate a pass control at its actual input
+
+A diagnostic flag is a single-variable control only when the source, headers
+and other options are identical. Similar final arithmetic does not establish
+that condition. If a historical diagnostic used different expressions, either
+recompile the retained source with only the flag changed or demonstrate that
+the executable RTL and CFG have converged before that pass. Normalise incidental
+UIDs and source locations without discarding operands, edges or probabilities.
+Follow downstream register renaming before interpreting final register choices
+as the input to an earlier tail-merging decision.
+
+Keep this compiler diagnosis distinct from fixture reachability. A constructor
+followed by a real control request may reach states that an older test comment
+calls unreachable. Check setters and installed handlers before accepting that
+claim; extend the component history instead of planting an unproven internal
+state. Report the boundary and retain synthetic probes under their own label.

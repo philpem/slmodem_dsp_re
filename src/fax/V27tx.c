@@ -72,10 +72,9 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		((struct v27_tx *)modem)->source = 0;
 		((struct v27_tx *)modem)->tx = 0;
 		fresh = 1;
-	} else {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("\n");
 	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\n");
 
 	if (params != 0)
 		((struct v27_tx *)modem)->cfg = *params;
