@@ -7015,13 +7015,17 @@ v34handshak(void *vobj)
 									 * this file, and a second copy of it makes that anchor match twice.
 									 * `anchorcheck.py` catches it; nothing else would.
 									 */
-									noise = 0;
-									signal = 0;
-									for (i = 0; i <= 3; i++) {			/* 0x69d28 */
-										noise += (unsigned short)obj->nl_noise_bins[i].energy;
-										signal += (unsigned int)
-										          (unsigned short)obj->probe_bins[i].energy << 8;
+									for (i = 0; i <= 3; i++) { /* 0x69d28 */
+										t3c_puti(obj, T72_PB_NOISE,
+										         (unsigned int)t3c_geti(obj, T72_PB_NOISE)
+										         + (unsigned short)obj->nl_noise_bins[i].energy);
+										t3c_puti(obj, T72_PB_SIGNAL,
+										         (unsigned int)t3c_geti(obj, T72_PB_SIGNAL)
+										         + ((unsigned int)(unsigned short)
+										            obj->probe_bins[i].energy << 8));
 									}
+									noise = (unsigned int)t3c_geti(obj, T72_PB_NOISE);
+									signal = (unsigned int)t3c_geti(obj, T72_PB_SIGNAL);
 
 									/*
 									 * 0x69d55 stores the signal and 0x69d5b the noise -- the reverse of
