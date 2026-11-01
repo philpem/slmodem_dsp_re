@@ -113,13 +113,6 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 	  const struct v34_fsk *cfg)
 {
 	short work[V34_FSK_INTERP];
-	/*
-	 * The delay line is the first echo canceller's fractional coefficient
-	 * array, reached through the canceller's own pointer exactly as the
-	 * original does -- `mov 0x80c4(%edx),%esi`, which is echo0.coeff_frac.
-	 * See finding F100 for why one array serves both.
-	 */
-	struct v34_fskdelay *d = (struct v34_fskdelay *)obj->echo0.coeff_frac;
 	short *hist = obj->fsk_interp;
 	short i, j, k;
 
@@ -162,7 +155,14 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 
 	/* --- 2: delay and multiply --- */
 	{
-		const short *delayed = &d->line[cfg->delay];
+		/*
+		 * Acquire the delay-line owner after interpolation: 0x73bb0
+		 * reads the signed delay, then 0x73bb3 reads root +0x80c4.
+		 * This is echo0.coeff_frac; see F100 for its shared storage.
+		 */
+		short delay = cfg->delay;
+		struct v34_fskdelay *d = (struct v34_fskdelay *)obj->echo0.coeff_frac;
+		const short *delayed = &d->line[delay];
 		for (j = 0; j < V34_FSK_INTERP; j++) {
 			for (k = V34_FSK_DELAY_LINE - 1; k > 0; k--)
 				d->line[k] = d->line[k - 1];
