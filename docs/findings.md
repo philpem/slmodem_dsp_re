@@ -142101,3 +142101,55 @@ stack load and sign extension into MOVSWL. A common-return control still folds
 it and changes mapper forwarding; separate lexical locals remove the native
 mapper WORD store. Each complete-TU control covers 44 emitted functions and
 closes none. Neither supports a return-type, volatile or register-forcing edit.
+
+## F12109. V90 demodulator call recovery does not close its progress body
+
+The native `V90Demodulator::progress` calls `enterRRN` and `enterDataPhase`;
+retained O3 source expanded both. A fresh raw-identical complete-TU control
+measures grown frontend costs 58 and 90, while native-required expansions of
+`enterPhase4`, `enterFPE`, `getBitRate` and `getRbsPattern` cost 32, 31, 7 and 10.
+With GCC's strict automatic-inline admission inequality, the consistent budget
+interval is 33..58. Both endpoints and interiors 50/57 emit the same raw object;
+32 introduces unwanted Phase4 calls and 59 wrongly expands RRN. The additional
+31 control also loses the required FPE expansion. These eight successful
+compilations are scoped controls, not an exhaustive profile search.
+
+Retain the supported interior budget 50 for this reconstructed TU only, in both
+period build paths. This restores two native ABI cutpoints: the `this` argument
+and subsequent fresh `this+0x3c` observation after RRN, and fresh `this+0x25c` /
+`this+0x1e4` observations after data entry. No field store is moved over those
+calls. The complete direct-call/tail target multiset now agrees with native;
+required expansions remain. Original flags, frontend source trees and TU
+boundaries are not uniquely identified by this source/profile hypothesis.
+
+**There is no whole-function promotion.** All 31 compared bodies retain their
+22 EXACT / 9 NONMATCH grades; only `progress` changes. Its ordinary instruction
+count moves from 1,815 to 1,714 against native 1,698, and byte extent from 7,840
+to 7,366 against native 7,276. The maintained longest contiguous run falls from
+46 to 42. Those diagnostics do not establish general convergence. Retention is
+for the independently witnessed calls, arguments and observation epochs.
+
+All 143 symbol identities, bindings, visibility and section ownership survive.
+Allocated noncode is not raw-identical: the same 71-string multiset is reordered,
+and 62 jump-table entries move within `progress`. The four selectors, ranges,
+table extents and relocation records are unchanged. Fifty-nine table entry
+blocks agree under operand normalization; the three inspected exceptions are
+independent argument-store scheduling, the restored data-entry call, and a
+zero-displacement spelling. This is an entry-path/table correspondence audit,
+not a formal proof of whole-CFG equality. Other allocated data is unchanged.
+
+Focused Gentoo differentials pass four executables, 21 sections and 382,419
+checks: `t_v90demprog`, `t_v90dataph`, `t_v90demctor`, `t_v90modemctor`. The actual
+period object is raw-identical to the experimental candidate. Existing planted
+states retain their component/synthetic scope, not modem reachability. The
+recording-compiler test now checks both V90 budgets and their isolation from
+fixtures/neighbouring sources; deleting the demodulator dispatch makes it fail.
+
+The remaining timing diagnostic has a concrete x87 storage discrepancy: native
+narrows the subtraction result through an SF store before scaling, whereas the
+candidate retains it on the x87 stack. Initial RTL already represents both
+operations in SF mode, so another float cast or inline budget is not an admitted
+repair. The call-contract method transfers as structural recovery, not a general
+closure recipe for these remaining source/lifetime graphs. Detailed commands,
+31-body audit, table ledger and independent comparison are under
+`scratch/demod-contract/` and `scratch/demod-contract-parent/`.

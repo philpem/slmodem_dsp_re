@@ -149,6 +149,11 @@ TC_CXXONLY := -fno-exceptions -fno-rtti -fno-math-errno -ffast-math
 TC_V90P4_SRC := src/pump/v90/V90Phase4Modulator.cpp
 TC_V90P4_FLAGS := --param max-inline-insns-auto=80
 
+# Keep native enterRRN/enterDataPhase calls and Phase4/FPE expansions together.
+# A supported interior of the measured 33..58 interval, not unique flags (F12109).
+TC_V90DEMOD_SRC := src/pump/v90/V90Demodulator.cpp
+TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50
+
 #
 # THE SOURCE LIST HAS ONE HOME AND IT IS THE TOP-LEVEL MAKEFILE.  Re-deriving
 # it here with `find` would be a second definition of the same set, which is
@@ -254,10 +259,11 @@ tc: $(TC_OBJ) $(TC_GCCVER)
 FORCE:
 
 $(TC_STAMP): FORCE | $(TC_OUT) tc-image
-	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\nv90p4 %s\nv90p4-source %s\n' \
+	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\nv90p4 %s\nv90p4-source %s\nv90demod %s\nv90demod-source %s\n' \
 	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' \
 	        '$(TC_FAX_PROC_FLAGS)' '$(TC_FAX_PROC_SRCS)' \
-	        '$(TC_V90P4_FLAGS)' '$(TC_V90P4_SRC)' > '$@.new'
+	        '$(TC_V90P4_FLAGS)' '$(TC_V90P4_SRC)' \
+	        '$(TC_V90DEMOD_FLAGS)' '$(TC_V90DEMOD_SRC)' > '$@.new'
 	@if cmp -s '$@.new' '$@'; then rm -f '$@.new'; else \
 	   mv '$@.new' '$@'; \
 	   echo "  TC-CFG  $(TC_IMAGE) $(if $(TC_EXTRA),TC_EXTRA=$(TC_EXTRA) ,)-- rebuilding every object"; \
@@ -310,7 +316,7 @@ endef
 define TC_CXX_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CXX  $(1)'
-	@$$(TC_RUN) g++ -c $$(TC_FLAGS) $$(TC_CXXONLY) $(if $(filter $(TC_V90P4_SRC),$(1)),$(TC_V90P4_FLAGS)) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) g++ -c $$(TC_FLAGS) $$(TC_CXXONLY) $(if $(filter $(TC_V90P4_SRC),$(1)),$(TC_V90P4_FLAGS)) $(if $(filter $(TC_V90DEMOD_SRC),$(1)),$(TC_V90DEMOD_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 

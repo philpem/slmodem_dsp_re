@@ -51,6 +51,9 @@ FAX_PROC_FLAGS="-fno-gcse"
 # Same native call/inline contracts as TC_V90P4_FLAGS in period.mk (F12108).
 V90P4_FLAGS="--param max-inline-insns-auto=80"
 
+# Native demodulator call/expansion contract, matching period.mk (F12109).
+V90DEMOD_FLAGS="--param max-inline-insns-auto=50"
+
 HARNESS="test/harness/harness.c test/harness/runtime.c
          test/harness/fakedp.c test/harness/v34hsstep.c
          test/harness/unwritten.c"
@@ -152,6 +155,7 @@ compile_one() {
 		cxxflags="$SOURCE_CXXFLAGS"
 		case $f in
 		src/pump/v90/V90Phase4Modulator.cpp) cxxflags="$cxxflags $V90P4_FLAGS" ;;
+		src/pump/v90/V90Demodulator.cpp) cxxflags="$cxxflags $V90DEMOD_FLAGS" ;;
 		esac
 		g++ -c $cxxflags -o "$o" "$f" 2>"$o.log" ;;
 	*.cpp)	extra=""; [ -f "${f%.*}.cxxflags" ] && extra=$(cat "${f%.*}.cxxflags")
@@ -187,6 +191,7 @@ echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
 echo "period: V17t_prc.c/V27t_prc.c/V29t_prc.c source flags $(echo $SOURCE_CFLAGS $FAX_PROC_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: V90Phase4Modulator.cpp source flags $(echo $SOURCE_CXXFLAGS $V90P4_FLAGS)"
+echo "period: V90Demodulator.cpp source flags $(echo $SOURCE_CXXFLAGS $V90DEMOD_FLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 echo "period: fixture dependency apparatus -MMD -MF <object>.d.tmp"
 for f in $SRC $CXXSRC $ASRC $HARNESS; do
