@@ -742,14 +742,35 @@ evaluateRxJMSequence(struct v8 *v)
 		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
 			continue;
 
-		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
+		if ((v->cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
 			v->ext2_word = (short)w;
 			v->ext2_matched = 1;
 			continue;
 		}
-		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
-			v->ext2_matched = 1;
-			break;
+		{
+			int k = 0;
+
+			while (v->cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				unsigned short expected = (unsigned short)
+					ext_expected(v->cm->ext2[k]);
+				unsigned short got = (unsigned short)seq->word[i];
+
+				if (got == expected) {
+					v->ext2_word = (short)got;
+					matched = 1;
+					k++;
+					i++;
+					continue;
+				}
+				if (matched)
+					break;
+				k++;
+			}
+			if ((v->cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
+			    && matched) {
+				v->ext2_matched = 1;
+				break;
+			}
 		}
 		v->ext2_word = 0;
 	}
