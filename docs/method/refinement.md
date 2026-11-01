@@ -9857,3 +9857,20 @@ and supported partials before freezing the integration candidate, then batch
 the full gate, global comparisons and PR/CI validation at that checkpoint.
 See [experiment design](experiment-design.md#1-validate-the-experiment-before-interpreting-it)
 for the distinction between diagnostic controls and integration evidence.
+
+### Check both sides of an inline budget against native callers
+
+A profile can gain EXACT bodies and lose no EXACT names while damaging functions
+already classed NONMATCH. In F12108, disabling automatic inlining restores six
+complete native bodies but introduces twenty helper calls across two large
+pumps. The relevant native contract requires both the wrapper call and the
+pumps' inline expansions. Current callee costs separate those outcomes; an
+interior automatic-inline budget restores the six bodies and leaves both pumps
+raw unchanged, with an adjacent budget as a failing boundary control.
+
+Review the complete TU, exports, data and constructor collateral before
+retaining such a profile. Treat it as a qualified source/profile hypothesis;
+exact original flags need not be unique. Conversely, a score gain cannot waive
+a native call boundary. The measured V90 cost interval is local evidence, not a
+budget to copy into unrelated TUs. Check parameter identity before reusing old
+`-finline-limit` results as exclusions for `max-inline-insns-auto`.

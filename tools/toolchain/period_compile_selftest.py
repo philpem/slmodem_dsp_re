@@ -101,6 +101,24 @@ if os.environ.get('COMPILER_FAIL') == args[-1]:
             if source != 'src/service/dcr.c':
                 self.assertNotIn('-fno-rerun-cse-after-loop', argv, source)
 
+    def test_v90_phase4_inline_budget_is_source_local(self):
+        source = 'src/pump/v90/V90Phase4Modulator.cpp'
+        path = self.root/source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('/* recording compiler input */\n')
+        self.env['CXXSRC'] += ' '+source
+        calls = self.by_source()
+        for name, argv in calls.items():
+            if name == source:
+                self.assertIn('--param', argv)
+                index = argv.index('--param')
+                self.assertEqual(argv[index:index+2],
+                                 ['--param', 'max-inline-insns-auto=80'])
+                self.assertIn('-ffast-math', argv)
+            else:
+                self.assertNotIn('--param', argv, name)
+                self.assertNotIn('max-inline-insns-auto=80', argv, name)
+
     def test_cxx_and_assembly_dispatch_unchanged(self):
         calls = self.by_source()
         self.assertIn('-ffast-math', calls['src/dsp/plain.cpp'])
