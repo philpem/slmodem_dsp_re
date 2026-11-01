@@ -142047,3 +142047,57 @@ passes the stronger fixture. Separate apparatus controls corrupt an untouched
 following word or `pending`; each fails 28 of the generator's 85 checks. These
 are detector controls, not valid modem histories or a mutation campaign.
 Artifacts and command/compiler identities are under `scratch/v27gen60/`.
+
+## F12108. A bounded automatic-inline profile satisfies both V90 phase-4 contracts
+
+The historical automatic-inline-off control recovered six EXACT bodies in
+`V90Phase4Modulator.cpp`, but its zero EXACT losses concealed a replacement
+defect: it introduced seven and thirteen same-class calls into the two symbol
+pumps, where the native bodies contain none. A fresh unchanged-source replay
+confirms that collateral. It is not an admissible retained profile.
+
+Current Gentoo callgraph evidence separates the required outcomes. The largest
+ordinary helper expanded in a native pump has frontend cost 65
+(`enterRepeatedCPd`); `recivedSUVtag`, which the native five-byte
+`recivedPartTwoSilenceRrnSUVtag` wrapper calls, costs 82. GCC 3.4.2's
+`cgraph_default_inline_p` uses the strict inequality
+`global.insns < MAX_INLINE_INSNS_AUTO`. Under unchanged O3 source, a budget of
+80 restores the wrapper's tail jump while preserving both complete pump bodies
+byte for byte. The adjacent budget 83 reproduces the baseline bodies. These
+controls test a specific call/inline discriminator, rather than a flag palette.
+The inferred cost-separating interval is 66..82 for these observed helpers;
+80 is a supported interior choice, not uniquely recovered original flags.
+Original frontend trees and exact original TU boundaries are not established
+by this experiment. Scope the qualified profile to the reconstructed V90
+phase-4 translation unit, not the entire object.
+
+Independent review compares all 53 emitted functions, symbol records, bindings,
+allocated noncode bytes, NOBITS, named data and noncode relocations. Six bodies
+become EXACT: `recivedPartTwoSilenceRrnSUVtag` and `setRfSymbols` from NONMATCH;
+`recivedE2u`, `recivedCPtag`, `recivedFirstRrnE2u` and `setRdRtSymbols` from
+REGALLOC. All 39 previously EXACT bodies survive. Two other changed bodies,
+the C1/C2 constructors, remain NONMATCH: their call targets, field offsets and
+constants agree, with changed scratch registers/argument scheduling and an
+existing member-publication-order residual. Both large pumps are unchanged.
+The historical V92 convolution-encoder gain is already retained through its
+source recovery and must not be counted again.
+
+Apply `--param max-inline-insns-auto=80` only to this source in both period build
+paths. The faithful build stamp records the source and flags; the runtime
+compiler script invalidates its cache on script changes. A recording-compiler
+self-test checks that the budget reaches the selected C++ source and reaches
+neither fixtures nor neighbouring sources. Removing that dispatch in a scratch
+script makes the new check fail. No reconstruction source or grader changes.
+
+Focused Gentoo validation passes four executables, 66 sections and 658,844
+checks: `t_v90p4mgen`, `t_v90p4mtab`, `t_v90leaves`, `t_v90modchain`. The actual
+period object is raw-identical to the experimental candidate. Planted internal
+states retain their fixture scope; these counts are not end-to-end modem
+reachability. Independent review and actual commands are under
+`scratch/unblock-review/`.
+
+The alternate V92 narrowing inquiry is negative. Combine folds the ordinary HI
+stack load and sign extension into MOVSWL. A common-return control still folds
+it and changes mapper forwarding; separate lexical locals remove the native
+mapper WORD store. Each complete-TU control covers 44 emitted functions and
+closes none. Neither supports a return-type, volatile or register-forcing edit.
