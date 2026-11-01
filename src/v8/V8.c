@@ -65,12 +65,12 @@ ext_expected(unsigned char c)
  * character advances but the received word does not, so a repeated word
  * still lines up; once something has matched, the first mismatch ends it.
  *
- * `*matched` is the "something has matched" flag, and it belongs to the
- * caller because the two callers give it different lifetimes: the first
- * keeps it in `fn_matched` and clears it before every marker word, the
- * second in a local that is set up once and then carries across markers --
- * so once anything has matched there, a later marker whose very first
- * character is wrong is abandoned instead of scanned through.
+ * `*matched` belongs to the second-extension caller, which initializes
+ * its private local once before scanning marker words. The state
+ * therefore carries across markers rather than resetting on entry to
+ * this helper. After any match, a later marker whose first character
+ * is wrong is abandoned instead of being scanned through. The first
+ * extension uses its separate WORD field state directly in the caller.
  */
 static int
 match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
@@ -671,13 +671,28 @@ evaluateRxJMSequence(struct v8 *v)
 			dsplibs_debug_printf(
 			    "V8: on CALLER: remote call function is: %X\r\n", w);
 
-		if (cm->b2 & V8_CM_EXT1_PRESENT) {
-			matched = 0;
-			if (match_extension(v, cm->ext1, &i, &v->fn_word,
-					    &matched)) {
-				v->fn_matched = 1;
-				break;
+		if (v->cm->b2 & V8_CM_EXT1_PRESENT) {
+			int k = 0;
+
+			while (v->cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				unsigned short expected = (unsigned short)
+					ext_expected(v->cm->ext1[k]);
+				unsigned short got = (unsigned short)seq->word[i];
+
+				if (got == expected) {
+					v->fn_word = (short)got;
+					v->fn_matched = 1;
+					k++;
+					i++;
+					continue;
+				}
+				if (v->fn_matched != 0)
+					break;
+				k++;
 			}
+			if ((v->cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)
+			    && v->fn_matched != 0)
+				break;
 			v->fn_word = 0;
 			v->fn_matched = 0;
 		} else {
