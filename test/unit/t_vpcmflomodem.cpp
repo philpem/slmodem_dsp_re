@@ -31,6 +31,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/VPcmFloModem.h"
+#include "dsplib/V90CPpck.h"
 
 /*
  * `compare_all`'s transcript compare is float-derived text and diverges under
@@ -52,6 +53,19 @@ int ref_getV90CpBits(void *self, short *bits)
 	asm("ref__ZN12VPcmFloModem12getV90CpBitsEPs");
 int ref_getV90JaBits(void *self, short *bits)
 	asm("ref__ZN12VPcmFloModem12getV90JaBitsEPs");
+int ref_component_cp_pack(V90MappingParams *, tagV90AdditionalCPinfo *,
+	short *, int)
+	asm("ref__Z11V90CPPackerP16V90MappingParamsP22tagV90AdditionalCPinfoPsi");
+void ref_component_cp_reset(void *)
+	asm("ref__ZN12VPcmFloModem15resetBitPointerEv");
+void ref_component_cp_min(void *, unsigned short)
+	asm("ref__ZN12VPcmFloModem26setMinNofTransmitSequencesEt");
+void ref_component_cp_phase4(void *, unsigned int)
+	asm("ref__ZN12VPcmFloModem16setNofBitsPhase4Ej");
+void ref_component_cp_flag(void *, unsigned char)
+	asm("ref__ZN12VPcmFloModem18setTerminateCpFlagEh");
+void ref_component_cpnot_flag(void *, unsigned char)
+	asm("ref__ZN12VPcmFloModem21setTerminateCpNotFlagEh");
 void ref_setPcmSessionType(void *self, int sessionType)
 	asm("ref__ZN12VPcmFloModem17setPcmSessionTypeEi");
 }
@@ -536,6 +550,196 @@ run_cpbits(void)
 	return diff_end();
 }
 
+/* A packer-to-transmitter component sequence, not a constructor or negotiated
+ * waveform history.  The packet producer supplies both live lengths and all
+ * binary entries; named setters establish the transmit bookkeeping. */
+static int
+run_cpnot_packed_sequence(void)
+{
+	enum { packet_length = 292 };
+	V90MappingParams maps_before[2][2];
+	tagV90AdditionalCPinfo info_before;
+	short packet[2][packet_length];
+	short expected_copy[1800], input_before[2700];
+	int constel, dbg, side, row, code;
+
+	diff_begin("VPcmFloModem::getV90CpBits, packed component sequence");
+	dsplib_debug_capture_on = 1;
+	diff_eq_int("declared CP vector span", sizeof M(0)->cpBitVector / 2,
+	    1800, 0);
+	diff_eq_int("declared input vector span", sizeof M(0)->bitVector / 2,
+	    2700, 0);
+	for (constel = 0; constel < 2; constel++)
+	  for (dbg = 0; dbg < 2; dbg++) {
+		int bps = constel ? 4 : 2;
+		long tag = 380000 + constel * 1000 + dbg * 500;
+
+		setup((int)tag);
+		set_level(dbg ? 2u : 0u);
+		dsplib_debug_capture_reset();
+		for (side = 0; side < 2; side++) {
+			VPcmFloModem *m = M(side);
+			V90MappingParams *maps[2] = {
+				&m->modem.mappingParams,
+				&m->modem.mappingParamsAlt
+			};
+			int cp_len, cpnot_len, bad;
+
+			((V90ConnectionEvaluator *)seen[side])->delayedRetrainRequest = 1;
+			((V90ConnectionEvaluator *)seen[side])->delayedRetrainArmed = 0;
+			for (int which = 0; which < 2; which++) {
+				memset(maps[which], 0, sizeof *maps[which]);
+				maps[which]->word_0 = 24;
+				for (row = 0; row < 6; row++) {
+					maps[which]->constellationSize[row] = 16;
+					for (code = 0; code < 16; code++) {
+						maps[which]->constellation[row][code] =
+						    (unsigned char)code;
+						maps[which]->codecConstellation[row][code] =
+						    (unsigned char)code;
+					}
+				}
+				memcpy(&maps_before[side][which], maps[which],
+				    sizeof *maps[which]);
+				diff_eq_int("codec extension disabled (%ld)",
+				    maps[which]->word_61c, 0, tag + side * 2 + which);
+			}
+			memset(&m->modem.additionalCPinfo, 0,
+			    sizeof m->modem.additionalCPinfo);
+			memcpy(&info_before, &m->modem.additionalCPinfo,
+			    sizeof info_before);
+			for (code = 0; code < 1800; code++)
+				m->cpBitVector[code] = 1;
+			memset(m->bitVector, 0, sizeof m->bitVector);
+			cp_len = side == 0 ?
+			    V90CPPacker(maps[0], &m->modem.additionalCPinfo,
+				m->cpBitVector, 0) :
+			    ref_component_cp_pack(maps[0], &m->modem.additionalCPinfo,
+				m->cpBitVector, 0);
+			diff_eq_int("packer CP length (%ld)", cp_len, packet_length,
+			    tag + side);
+			diff_eq_obj("packer CP info input", tagV90AdditionalCPinfo,
+			    &m->modem.additionalCPinfo, &info_before, tag + side);
+			if (cp_len != packet_length)
+				return diff_end();
+			m->cpNofBits = (short)cp_len;
+			if (side == 0) {
+				m->resetBitPointer();
+				m->setMinNofTransmitSequences(1);
+				m->setNofBitsPhase4((unsigned)constel);
+			} else {
+				ref_component_cp_reset(m);
+				ref_component_cp_min(m, 1);
+				ref_component_cp_phase4(m, (unsigned)constel);
+			}
+			m->modem.additionalCPinfo.word_00 = 1;
+			memcpy(&info_before, &m->modem.additionalCPinfo,
+			    sizeof info_before);
+			cpnot_len = side == 0 ?
+			    V90CPPacker(maps[1], &m->modem.additionalCPinfo,
+				m->bitVector, 0) :
+			    ref_component_cp_pack(maps[1], &m->modem.additionalCPinfo,
+				m->bitVector, 0);
+			diff_eq_int("packer CPnot length (%ld)", cpnot_len,
+			    packet_length, tag + side);
+			diff_eq_obj("packer CPnot info input", tagV90AdditionalCPinfo,
+			    &m->modem.additionalCPinfo, &info_before, tag + side);
+			if (cpnot_len != packet_length)
+				return diff_end();
+			m->nofBits = (short)cpnot_len;
+			if (side == 0)
+				m->setTerminateCpFlag(1);
+			else
+				ref_component_cp_flag(m, 1);
+			for (int which = 0; which < 2; which++) {
+				const short *v = which ? m->bitVector : m->cpBitVector;
+				bad = -1;
+				for (code = 0; code < packet_length; code++)
+					if (v[code] != 0 && v[code] != 1 && bad < 0)
+						bad = code;
+				diff_eq_int("binary producer entries, first bad (%ld)",
+				    bad, -1, tag + side * 2 + which);
+				if (bad != -1)
+					return diff_end();
+				diff_eq_obj("packer mapping input", V90MappingParams,
+				    maps[which], &maps_before[side][which],
+				    tag + side * 2 + which);
+			}
+		}
+		diff_eq_obj("paired CP producer", short[1800],
+		    M(0)->cpBitVector, M(1)->cpBitVector, tag);
+		diff_eq_obj("paired CPnot producer", short[2700],
+		    M(0)->bitVector, M(1)->bitVector, tag);
+		memcpy(packet[0], M(1)->cpBitVector, sizeof packet[0]);
+		memcpy(packet[1], M(1)->bitVector, sizeof packet[1]);
+		memcpy(expected_copy, M(1)->cpBitVector, sizeof expected_copy);
+		memcpy(expected_copy, packet[1], sizeof packet[1]);
+		memcpy(input_before, M(1)->bitVector, sizeof input_before);
+		for (int frame = 0; frame < 2; frame++) {
+			if (frame != 0) {
+				M(0)->setTerminateCpNotFlag(1);
+				ref_component_cpnot_flag(M(1), 1);
+			}
+			for (int pos = 0; pos < packet_length; pos += bps) {
+				int expected = 0;
+				int last = pos + bps == packet_length;
+				long step = tag + frame * 200 + pos / bps;
+				int result[2];
+				for (int bit = 0; bit < bps; bit++)
+					expected |= packet[frame][pos + bit] << bit;
+				result[0] = M(0)->getV90CpBits(&outbits[0]);
+				result[1] = ref_getV90CpBits(M(1), &outbits[1]);
+				for (side = 0; side < 2; side++) {
+					VPcmFloModem *m = M(side);
+					diff_eq_int("packed component demodulator owner (%ld)",
+					    m->modem.demodulator == (V90Demodulator *)dem[side],
+					    1, step * 2 + side);
+					diff_eq_int("packed component evaluator owner (%ld)",
+					    ((V90Demodulator *)dem[side])->connectionEvaluator
+					    == (V90ConnectionEvaluator *)seen[side], 1,
+					    step * 2 + side);
+					diff_eq_int("packed component result (%ld)", result[side],
+					    frame && last, step * 2 + side);
+					diff_eq_int("packed component output (%ld)", outbits[side],
+					    expected, step * 2 + side);
+					diff_eq_int("packed component pointer (%ld)", m->bitPointer,
+					    last ? 0 : pos + bps, step * 2 + side);
+					diff_eq_int("packed component latch (%ld)", m->cpNotLoaded,
+					    frame || last, step * 2 + side);
+				}
+				compare_all("packed component step", step);
+			}
+			for (side = 0; side < 2; side++) {
+				VPcmFloModem *m = M(side);
+				diff_eq_obj("packed component copy", short[1800],
+				    m->cpBitVector, expected_copy, tag + frame * 2 + side);
+				diff_eq_int("packed component frame length (%ld)",
+				    m->cpNofBits, packet_length, tag + frame * 2 + side);
+				diff_eq_int("packed component source length (%ld)",
+				    m->nofBits, packet_length, tag + frame * 2 + side);
+				diff_eq_int("packed component sequence count (%ld)",
+				    m->nofTransmitSequences, frame, tag + frame * 2 + side);
+				diff_eq_int("packed component armed state (%ld)",
+				    ((V90ConnectionEvaluator *)seen[side])->delayedRetrainArmed,
+				    1, tag + frame * 2 + side);
+			}
+		}
+		for (side = 0; side < 2; side++) {
+			diff_eq_obj("packed component primary mapping", V90MappingParams,
+			    &M(side)->modem.mappingParams, &maps_before[side][0], tag + side);
+			diff_eq_obj("packed component alternate mapping", V90MappingParams,
+			    &M(side)->modem.mappingParamsAlt, &maps_before[side][1], tag + side);
+			diff_eq_obj("packed component source bits", short[2700],
+			    M(side)->bitVector, input_before, tag + side);
+			diff_eq_obj("packed component info", tagV90AdditionalCPinfo,
+			    &M(side)->modem.additionalCPinfo, &info_before, tag + side);
+		}
+	  }
+	dsplib_debug_capture_on = 0;
+	set_level(0);
+	return diff_end();
+}
+
 /*
  * ===========================================================================
  * setPcmSessionType
@@ -842,6 +1046,7 @@ main(void)
 
 	bad |= run_jabits();
 	bad |= run_cpbits();
+	bad |= run_cpnot_packed_sequence();
 	bad |= run_sessiontype();
 	bad |= run_phase2();
 	bad |= run_uinfo();

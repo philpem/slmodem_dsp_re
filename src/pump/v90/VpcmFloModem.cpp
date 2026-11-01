@@ -523,12 +523,13 @@ VPcmFloModem::getV90CpBits(short *bits)
 
 	if (terminateCp != 0 && cpNotLoaded == 0 &&
 	    nofTransmitSequences >= minNofTransmitSequences) {
-		short live = nofBits;
+		short live;
 		int i;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
 
+		live = nofBits;
 		for (i = 0; i < live; i++)
 			cpBitVector[i] = bitVector[i];
 
