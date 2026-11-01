@@ -129,10 +129,10 @@ override TC_FLAGS += -DDSPLIB_REPRODUCE_BUGS
 # it is not evidence that the original file used these options.
 TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
-# Shared V.17/V.29 transmitter-processing profile. Native countdown reloads
+# Shared V.17/V.27ter/V.29 transmitter-processing profile. Native countdown reloads
 # survive here; GCSE PRE removes them under the general profile. Source and
 # profile controls also preserve the native callback owner/budget lifetimes.
-TC_FAX_PROC_SRCS := src/fax/V17t_prc.c src/fax/V29t_prc.c
+TC_FAX_PROC_SRCS := src/fax/V17t_prc.c src/fax/V27t_prc.c src/fax/V29t_prc.c
 TC_FAX_PROC_FLAGS := -fno-gcse
 
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the

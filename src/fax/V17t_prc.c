@@ -698,19 +698,17 @@ short
 TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v17tx_priv *prm = TXPRIV(modem);
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV17(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	nsamples = (short)TxNoCarrierV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);

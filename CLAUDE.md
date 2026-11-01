@@ -49,7 +49,9 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    informative losing controls and test justified combinations. Do not substitute
    blind cast/reorder/structure palettes, artificial scratch consumers, volatile
    barriers, padding, assembly or unsupported attributes for an explanation.
-   Source/profile changes are hypotheses; diagnostic flags are not shipping fixes.
+   A diagnostic flag hit alone is not a retained profile. A supported source/profile
+   combination needs complete-TU native evidence, named collateral review and
+   period/object parity; record its scope and remaining ambiguity.
 5. **Review the whole result.** Account for all affected-TU bodies, calls, data,
    relocations, bindings and named gains/losses. Get independent evidence review
    for a positive candidate. A net score gain can hide a loss. Explained structural
@@ -66,6 +68,8 @@ experiments and the relevant [Playbook](docs/method/refinement.md) section. A
 negative result excludes its tested domain under its controls, not all equivalent
 source. Reopen it only with a named new discriminator. Two batches without a new
 explanatory observation require a hypothesis/scope review, not more synonyms.
+A closed spelling family does not explain an emitter: trace the first pass that
+changes the unexplained operation before declaring that no discriminator remains.
 
 ## Validation and measurement
 
@@ -91,7 +95,11 @@ explanatory observation require a hypothesis/scope review, not more synonyms.
   evidence separate. Equal size is not a grade. Longest runs and mnemonic/opcode
   counts are diagnostic: they do not prove register relationships, branch targets
   or equivalence. Use `tools/toolchain/byteident.py` and the
-  [fidelity definitions](docs/method/fidelity-reporting.md).
+  [fidelity definitions](docs/method/fidelity-reporting.md). For alternate object
+  trees, set `TC_OUT` explicitly and supply fresh selected-partial-link proof
+  context. An unchanged object's hash does not validate independent proof inputs.
+  If fresh context still refuses an unsupported native pattern, retain its
+  unresolved grade and record the refusal; do not alter source to fit a recogniser.
 - Partial-object comparison has its own stronger semantic/raw identity claims.
   Report DIFFERENT honestly. Defer alignment when the owner prioritises functions.
 - Mutation campaigns/snapshot refreshes are optional named investigations, not

@@ -16,6 +16,22 @@ was measured in this tree, so none of it is here.**
 
 ---
 
+## Compact recovery packet
+
+Give an authorised recovery worker the current revision and profile, exact
+function/TU scope, immutable native/current artifacts, prior closed domains and
+one predicted discriminator. Include the baseline command, selected-link proof
+context, protected named sets, candidate limit and gate owner. Keep full logs
+and inventories on disk; request complete-TU result summaries and decisive
+excerpts. Report candidate cells, unchanged controls and distinct emissions
+separately. They bound an experiment; they do not measure paid model usage.
+
+A first pass-control success with a protected loss needs an explicit native
+obligation map, not an automatic rejection or waiver. The parent independently
+checks the frozen candidate, then permits one validation checkpoint. Freeze
+shared documentation before the full gate. Do not turn each informative partial
+into another integration cycle.
+
 ## F1. Scope a batch by what it owns, not by what it is about
 
 Two batches editing the same file is a merge conflict you chose. Two batches

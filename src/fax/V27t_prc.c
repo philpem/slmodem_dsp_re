@@ -41,6 +41,7 @@ V27TX_modem(void *modem, unsigned short *in, short *out,
 	struct v27_tx_source *prm;
 	unsigned short taken;
 	short budget;
+	short *budget_ptr;
 	short total;
 
 	prm = ((struct v27_tx *)modem)->source;
@@ -48,26 +49,30 @@ V27TX_modem(void *modem, unsigned short *in, short *out,
 	((struct v27_tx *)modem)->result.byte.flags &=
 		(unsigned char)~V27TX_RESULT_B1_BIT1;
 
-	if (prm->int_0008 == 0)
+	if (prm->int_0008 == 0) {
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
 					prm->fifo,
 				in, *count);
-	else
+		prm = ((struct v27_tx *)modem)->source;
+	} else
 		taken = *count;
 
 	budget = V27TX_FRMSIZE[prm->rate];
 	total = 0;
+	budget_ptr = &budget;
 	do {
 		short got;
 
-		prm = ((struct v27_tx *)modem)->source;
 		got = prm->handler
-					(modem, in, out, &budget);
+					(modem, in, out, budget_ptr);
 
 		out += got;
 		total = (short)(total + got);
-	} while (budget > 0);
+		if (budget <= 0)
+			break;
+		prm = ((struct v27_tx *)modem)->source;
+	} while (1);
 
 	if (*count != taken) {
 		((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT1;
@@ -418,14 +423,15 @@ TxHdxIdleV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 {
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	unsigned short taken;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DATA;
 
-	if (((struct v27_tx *)modem)->source->countdown != 0) {
-		short rate = ((struct v27_tx *)modem)->source->rate;
+	if (prm->countdown != 0) {
+		short rate = prm->rate;
 
-		((struct v27_tx *)modem)->source->countdown = 0;
+		prm->countdown = 0;
 
 		switch (rate) {
 		case 0:
@@ -443,7 +449,7 @@ TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 	}
 
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)((struct v27_tx *)modem)->source->fifo,
+		FIFO_read((struct fax_fifo *)prm->fifo,
 			  in, (unsigned short)*budget);
 
 	if ((unsigned short)*budget > taken) {
@@ -488,20 +494,19 @@ short
 TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
-	short countdown;
-	short taken;
+	unsigned short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = prm->countdown;
-	if (countdown <= 0) {
+	if ((short)prm->countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
-	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
-	prm->countdown = (short)(countdown - taken);
+	taken = ((short)prm->countdown > (unsigned short)*budget)
+		? (unsigned short)*budget : prm->countdown;
+	prm->countdown = (short)(prm->countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
 	ScrambleDataV27(modem, in, taken);
@@ -587,9 +592,8 @@ TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (unsigned short)
-		(((unsigned short)*budget < (short)prm->countdown)
-		 ? (unsigned short)*budget : prm->countdown);
+	taken = ((short)prm->countdown > (unsigned short)*budget)
+		? (unsigned short)*budget : prm->countdown;
 	prm->countdown = (short)(prm->countdown - taken);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
@@ -620,9 +624,8 @@ TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
 		return 0;
 	}
 
-	taken = (unsigned short)
-		(((short)prm->countdown <= (unsigned short)*budget)
-		 ? prm->countdown : (unsigned short)*budget);
+	taken = ((short)prm->countdown > (unsigned short)*budget)
+		? (unsigned short)*budget : prm->countdown;
 	prm->countdown = (short)(prm->countdown - taken);
 
 	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);

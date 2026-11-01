@@ -152,7 +152,7 @@ compile_one() {
 		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
 	*)	case $f in
 		src/service/dcr.c) cflags="$SOURCE_CFLAGS $DCR_FLAGS" ;;
-		src/fax/V17t_prc.c|src/fax/V29t_prc.c) cflags="$SOURCE_CFLAGS $FAX_PROC_FLAGS" ;;
+		src/fax/V17t_prc.c|src/fax/V27t_prc.c|src/fax/V29t_prc.c) cflags="$SOURCE_CFLAGS $FAX_PROC_FLAGS" ;;
 		src/*) cflags="$SOURCE_CFLAGS" ;;
 		*) cflags="$CFLAGS" ;;
 		esac
@@ -176,7 +176,7 @@ echo "period: flags $(echo $FLAGS)"
 echo "period: C source flags $(echo $SOURCE_CFLAGS)"
 echo "period: C fixture flags $(echo $CFLAGS)"
 echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
-echo "period: V17t_prc.c/V29t_prc.c source flags $(echo $SOURCE_CFLAGS $FAX_PROC_FLAGS)"
+echo "period: V17t_prc.c/V27t_prc.c/V29t_prc.c source flags $(echo $SOURCE_CFLAGS $FAX_PROC_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 echo "period: fixture dependency apparatus -MMD -MF <object>.d.tmp"
