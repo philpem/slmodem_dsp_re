@@ -260,7 +260,7 @@ unsigned short CodeRateSeq(struct v32_modem *modem, short seq);
  * @param seq    The received rate signal.
  * @return The final rate-sequence word to transmit.
  */
-unsigned short CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq);
+unsigned short CodeFinalRateSeq(struct v32_modem *modem, short seq);
 
 /**
  * @brief Encode the negotiated rate decision as the E-sequence word to send back.
