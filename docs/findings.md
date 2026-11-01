@@ -141842,3 +141842,97 @@ Evidence and rejected controls are under `scratch/switch-v27-completion/`,
 including `whole-TU-B-review.json`, `validation-B.json`, `parity-B.json` and
 `census-B.json`. Recovering the dispatcher's remaining original CFG/compiler
 input is an open priority, separate from this validated source checkpoint.
+
+
+## F12104. Direct component counts preserve the receive loop's two value views
+
+`V21RX_modem` and `V27RX_modem` now read the handler-updated component count
+at its uses, retaining the signed old-count snapshot and unsigned new-count
+subtraction. Their loop conditions test `*count` directly. The previous
+unsigned-short carry local was promoted to SI in the reconstructed compiler's
+initial expansion; its subtraction and loop comparison then shared one widened
+carrier. Native code instead keeps the WORD control view and a separate zero
+extension for pointer arithmetic. This identifies a measured current lowering
+event, not the original compilation's first divergent pass.
+
+The V21 source hypothesis predicted the complete V27 graph before either
+candidate was compiled. One direct-count form in each full TU recovers both
+complete 127-byte, 42-instruction bodies as EXACT; both were previously
+123 bytes. Unchanged full-TU dump controls reproduce the baseline objects
+byte for byte. Independent parent comparison confirms the two promotions and
+unchanged verdicts for all thirteen neighbours, including all seven previously
+EXACT bodies. No pointer types, field types, API, helper boundary or compiler
+profile changes.
+
+Whole-TU review finds only the two target bodies changed. Each target's symbol
+size grows from 123 to 127 at the same start; other symbol starts, extents,
+bindings and visibility are unchanged. Data, strings and the V27 table are
+unchanged. The focused period fixtures `t_v21fax` and `t_v27fax` both pass.
+Their scripted component callbacks exercise zero-count dispatch, count updates,
+mixed signed/unsigned pointer arithmetic and wrapped output totals. Hostile
+scripted histories remain component fidelity probes, not modem reachability
+evidence. Shared final validation follows in F12105.
+
+Source checkpoint `b375012a4`; evidence and written withheld prediction:
+`scratch/trial623/stage1-plan.md`, `rx-collateral.json` and
+`parent-rx-review.json`. Direct uses recover the native dependency graph without
+an artificial temporary, forced register or barrier. The same source need not
+be uniquely identifiable as the author's spelling to satisfy that evidence.
+
+
+## F12105. Formatter producer lifetimes improve without closing the whole body
+
+`displaySpectralParams` has four repeated float-formatting groups. Native code
+prepares the magnitude, retains the original value through fractional conversion,
+and computes the sign last. The previous reconstruction computed sign, whole
+and fraction sequentially with an artificial long-double fraction expression.
+Current GCC's `output_fix_trunc` selects FIST or FISTP from the ST0 death note;
+its popping-compare choice likewise depends on live stack operands. These are
+measured current compiler decisions, not recovered original RTL.
+
+A complete-TU training study compared three supported producer graphs after a
+raw-identical baseline control. Direct variadic arguments restore all four
+retained FIST conversions and DF scale materialisations but leave magnitude
+ordering different. A common-double producer contradicts the native graph.
+Explicit magnitude/fraction/sign sequencing recovers the native producer order,
+retained FIST, final popping compare, twelve conversion/control-word boundaries,
+and the final DF stack-scale materialisation across all four groups. The sign
+result stays int and the fractional arithmetic drops the forced XF casts.
+This last graph is retained as a qualified source recovery, not a closure.
+
+The function remains **NONMATCH**: 635 bytes against native 619, previously
+628; 190 ordinary instructions against native 186, unchanged from the previous
+count. Its remaining four MOV/SAR absolute-value implementations differ from
+native CLTD, with register, stack-order and scheduling obligations still open.
+The ten neighbouring bodies, including all four EXACT peers, are unchanged.
+Six print calls, their field-capture ages, format strings and exports are
+preserved. The unused XF scale pool becomes the native DF representation.
+Size or instruction-count proximity did not select this source; the complete
+producer constraints did.
+
+The withheld V92 producer change is a **negative control**: all five function
+bodies and canonical relocations are unchanged from their current baseline.
+That baseline already has retained conversions and the SF scale mode; it still
+uses memory FMULS where native separately loads the scale and multiplies on the
+stack. Therefore no new V92 recovery or successful materialisation transfer is
+claimed. It excludes that tested source change as a discriminator there, not
+all shared formatting mechanisms. No population campaign follows.
+
+F5822 and F5823 remain historical experiment provenance. Native constant-pool
+mode and an isolated comparison spelling do not uniquely determine original C
+types in a complete producer graph; source comments now state that limitation.
+Evidence, controls and the withheld prediction are under `scratch/trial623/`,
+including `stage2-plan.md`, `training-summary.json`,
+`parent-sequenced-review.json` and `withheld-v92-audit.json`.
+
+
+The shared F12104/F12105 integration checkpoint passes `make phase J=8`:
+396 period binaries pass, zero fail, with structural checks green. Focused
+`t_v21fax`, `t_v27fax` and `t_v90cmask` all pass; the formatter alone has
+646 transcript/state checks at finite in-range inputs and four debug levels.
+All 300 actual-period objects match the faithful build byte for byte; exactly
+the three reviewed source objects change and 297 remain unchanged. Fresh
+selected-partial context gives **1,192 EXACT / 39 REGALLOC / 621 NONMATCH /
+0 UNRESOLVED** over 1,852 symbols. Only the two receive wrappers are promoted;
+no previously EXACT or matched name is lost. Whole-object partial comparison
+remains DIFFERENT. No compiler-portability result is claimed.

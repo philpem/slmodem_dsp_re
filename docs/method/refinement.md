@@ -9813,3 +9813,34 @@ followed by a real control request may reach states that an older test comment
 calls unreachable. Check setters and installed handlers before accepting that
 claim; extend the component history instead of planting an unproven internal
 state. Report the boundary and retain synthetic probes under their own label.
+
+
+### Preserve the operand view at its use
+
+An unsigned-short local does not ensure that its uses remain narrow. In
+[F12104](../findings.md#f12104-direct-component-counts-preserve-the-receive-loops-two-value-views),
+initial expansion promoted a carry local and shared its widened value between
+pointer arithmetic and the loop test. Direct reads of the component count
+preserved a WORD control view and the separately extended subtraction value.
+One native-supported explanation predicted a second complete wrapper before
+its candidate was compiled. Keep callback observations, signed old values and
+unsigned new values explicit; do not introduce another carrier to force a
+register. Review all TU peers and preserve the scripted component boundary.
+
+### Recover the complete formatting argument graph
+
+[F12105](../findings.md#f12105-formatter-producer-lifetimes-improve-without-closing-the-whole-body)
+shows why isolated comparison or constant spellings do not establish original
+helper types. Map every argument producer, x87 value lifetime, conversion,
+control-word change, scale materialisation and post-call field age together.
+A popping instruction can reflect a dead value rather than a different scalar
+type. Current dumps and backend rules explain current decisions; original RTL
+remains unavailable.
+
+Use a withheld contrast without tailoring it. An unchanged target body is an
+inert source control, not a recovered graph, even if it already has the desired
+instruction. A partial may still recover independently supported native
+constraints. Select it by the complete observations, preserve its period
+oracle and name its unresolved obligations; neither a smaller instruction count
+nor a closer byte extent determines which source is better supported. Stop
+candidate extension when the whole-body or withheld prediction fails.
