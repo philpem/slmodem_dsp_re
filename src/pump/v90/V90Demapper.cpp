@@ -513,9 +513,9 @@ V90Demapper::hardDecision(short in)
 		 * lower index wins a tie.
 		 */
 		err = (short)__builtin_abs(constellation[rbsFramePosition]
-					   [code] - mag);
+					   [code] - in);
 		alt = (short)__builtin_abs(constellation[rbsFramePosition]
-					   [code + 1] - mag);
+					   [code + 1] - in);
 		if (alt < err) {
 			level = constellation[rbsFramePosition][code + 1];
 			err = alt;
