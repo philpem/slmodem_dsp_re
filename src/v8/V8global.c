@@ -368,7 +368,7 @@ checkSignalStability(struct v8 *v)
 	struct v8_rx *r = &v->rx;
 	int elapsed = (unsigned short)r->refresh_timer + 4;
 	int settled;
-	int delta;
+	short delta;
 
 	if ((short)elapsed > V8_STABLE_PERIOD) {
 		/*

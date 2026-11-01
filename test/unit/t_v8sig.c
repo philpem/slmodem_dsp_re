@@ -511,6 +511,82 @@ t_ansam_standard(void)
 	return rc;
 }
 
+
+/*
+ * Signed-word quotient/negation fidelity at an initialized component boundary.
+ * These are synthetic bounded gain/reference histories, not an AGC-produced or
+ * negotiated modem history. All pre-shift differences are nonnegative (0..4),
+ * the shifted numerator and quotient are at most 65536; divisors are 1, 3, 4 or 5.
+ */
+static int
+t_stability_short_delta(void)
+{
+	static const short gains[] = { 3, 4, 5 };
+	static const short timers[] = { 0, 956 };
+	int g, r, s, flag, cases = 0;
+
+	diff_begin("checkSignalStability: synthetic signed-word projections");
+	for (g = 0; g < 3; g++) {
+		for (r = 0; r < 2; r++) {
+			for (s = 0; s < 2; s++) {
+				for (flag = 0; flag < 2; flag++) {
+					int expected_ref = r ? gains[g] : 1;
+					int expected_refresh = r ? 0 : 4;
+					int expected_timer, expected_flag;
+
+					/*
+					 * Without refresh, gains 3/4/5 yield word
+					 * quotients -32768/-16384/0. Word negation
+					 * leaves -32768, gives 16384, or leaves 0:
+					 * only gain 4 exceeds the native tolerance.
+					 * A refresh first captures gain, so q is 0.
+					 */
+					if (!r && gains[g] == 4) {
+						expected_timer = 0;
+						expected_flag = 0;
+					} else {
+						expected_timer = timers[s] + 4;
+						expected_flag = s ? 1 : flag;
+					}
+					memset(&obj_a, 0, sizeof obj_a);
+					obj_a.rx.gain = gains[g];
+					obj_a.rx.gain_ref = 1;
+					obj_a.rx.refresh_timer = timers[r];
+					obj_a.rx.stable_timer = timers[s];
+					obj_a.rx.stable = (short)flag;
+					memcpy(&obj_b, &obj_a, sizeof obj_a);
+					ref_checkSignalStability(&obj_a);
+					checkSignalStability(&obj_b);
+					diff_eq_int("reference gain", obj_a.rx.gain,
+						    gains[g], cases);
+					diff_eq_int("gain", obj_b.rx.gain, gains[g], cases);
+					diff_eq_int("reference refresh", obj_a.rx.refresh_timer,
+						    expected_refresh, cases);
+					diff_eq_int("refresh", obj_b.rx.refresh_timer,
+						    expected_refresh, cases);
+					diff_eq_int("reference captured gain", obj_a.rx.gain_ref,
+						    expected_ref, cases);
+					diff_eq_int("captured gain", obj_b.rx.gain_ref,
+						    expected_ref, cases);
+					diff_eq_int("reference stable timer", obj_a.rx.stable_timer,
+						    expected_timer, cases);
+					diff_eq_int("stable timer", obj_b.rx.stable_timer,
+						    expected_timer, cases);
+					diff_eq_int("reference stable flag", obj_a.rx.stable,
+						    expected_flag, cases);
+					diff_eq_int("stable flag", obj_b.rx.stable,
+						    expected_flag, cases);
+					diff_eq_obj("signed-word complete owner", struct v8,
+						    &obj_b, &obj_a, cases);
+					cases++;
+				}
+			}
+		}
+	}
+	fprintf(stderr, "t_v8sig: %d synthetic initialized short-delta cases\n", cases);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1244,6 +1320,7 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= t_stability_short_delta();
 	rc |= t_sig_trace();
 	return rc;
 }
