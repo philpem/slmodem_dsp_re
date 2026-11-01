@@ -2,9 +2,20 @@
 
 Every number cites `docs/findings.md` in this tree.
 
-Two budgets, and they are unrelated. Tokens are spent by the agent and the
-limit is a **turn count**. Wall-clock is spent by the machine and the limit is
-**work repeated because nobody wrote the answer down**.
+Budget model usage, local computation and elapsed time separately. In the current
+owner-provided environment, local tools have no usage charge; model input,
+output and reasoning consume the scarce allowance. The historical measurements
+below concern context growth and particular local workloads. They do not measure
+an invoice, prove a universal turn limit or establish savings from delegation.
+
+Return compact evidence from local analysis and preserve full outputs in
+`scratch/<inquiry>/`. A necessary large read can be cheaper than many speculative
+turns, but repeatedly loading large instructions, memory pages or complete logs
+is avoidable. Use fresh compact worker contexts for authorised independent work
+rather than inheriting an entire long conversation. Record exact closures,
+partial recoveries, distinct emissions, controls and available model usage at a
+bounded checkpoint. Candidate counts limit an experiment; they are not a proxy
+for token spend.
 
 ---
 
@@ -39,15 +50,21 @@ Both fit a 1 M window with room to spare. Nor is it tool output: across one
 `objdump`, the CFG splitter, the relocation scanner, `readelf`, the call-graph
 tool — produced **153 KB, 12% of all tool results** (finding F220).
 
-### One remedy changes the exponent; the rest are constant factors
+### Context isolation and usage cost
 
-**Delegate.** A subagent's turns do not accumulate in the parent's window. You
-pay for the prompt and the final report, not the two hundred round trips
-between. This is the only structural fix (finding F220). Delegate anything that
-can run the phase gate and see its own work pass.
+**A separate worker isolates its context from the parent.** Its intermediate
+turns still consume model usage. Finding F220 measured context pressure, not
+billing or a generally optimal worker count. Delegation can reduce repeated
+large-context inputs when the worker receives a compact task and relevant
+artifacts; a full-history fork can repeat the cost. Use it only for clearly
+owned work when authorised, and account for all workers.
 
-Everything below is a constant factor, and constant factors on a 500-turn
-budget are still worth having.
+For a convergence trial, use a whole function or shared-mechanism family as the
+work unit. Retain useful partials on that branch, but report whole-function
+EXACT and NONMATCH-to-REGALLOC promotions separately from partial runs or PR
+counts. Stop or reframe at the agreed boundary. Independent local compilation,
+scoring and duplicate-emission elimination are good uses of free CPU; source
+variants still need native evidence and a stated discriminator.
 
 - **Batch investigation into one script.** One session made **760 Bash calls
   averaging 1.4 KB of output** (finding F220). Ten greps whose answers are

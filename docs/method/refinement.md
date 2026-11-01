@@ -9,7 +9,10 @@ stalled search, first read [experiment-design.md](experiment-design.md).
 This page supplies the individual levers; that workflow prevents a locally
 successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
-possible source/flag combinations have been excluded.
+possible source/flag combinations have been excluded. Unique authorship is not
+an acceptance gate: several natural source spellings can satisfy the same
+complete native constraints. Prefer a clear supported spelling, report the
+ambiguity, and retain the full differential and code-generation obligations.
 
 Before reusing a closure, identify the observation it actually establishes.
 Equal projected instruction counts do not establish dataflow equivalence;
@@ -260,15 +263,19 @@ read the two together.
 
 ### Lever 0. What an enumeration proves depends on how many cells hit zero
 
-Running the domain to completion is necessary; it is not the whole story. Say
-which of these you have, per function (7789 does it per closure):
+Complete a declared finite enumeration before claiming a unique preimage or
+excluding its domain. Full-function acceptance does not require uniqueness
+across equivalent source spellings. Report the tested cells, remaining cells
+and which outcome you have, per function (7789 does it per closure):
 
 - **A unique preimage within the declared family** — exactly one cell maps
   onto the object. That identifies an order under the tested source and
   compiler controls. `V90MP`: 4! = 24 cells, one zero, nearest
   near-miss at 2.
 - **Several preimages** — more than one cell reaches zero. You have decoded a
-  specific FACT, not an order, and the finding must say which fact.
+  shared source properties, and the finding must say which ones. A complete,
+  natural, validated candidate can be retained without claiming its particular
+  order is uniquely original.
   `enterPhase4` decodes only that the clear follows the deadline, because the
   `inPhase3` slot collides; `V90Modem` decodes a zero-test and "`dil` stored
   last"; `resetLinearMapping` decodes only the NEGATIVE, that a signed 16-bit
@@ -369,11 +376,11 @@ exclude a source/flag interaction or another source representation.
     V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
                                 order; best was 27 of 290 -> DECLINED (7771)
 
-Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
-bytes when the space is exhausted and one element maps; decline when you are
-searching. Record which side you are on and what the domain was — a finding
-that says "closed by reordering" without saying how many spellings were
-compiled is not reviewable.
+Closer bytes are not a grade. Finding F7782 rejects near-match selection as
+recovery evidence. A complete supported match can be retained even if several
+natural spellings match; state the shared properties and the limits of any
+original-order claim. Record the domain and actual compilation count. A finding
+that says "closed by reordering" without that evidence is not reviewable.
 
 
 If a reconstruction transcribes stores in disassembly order, that order is
