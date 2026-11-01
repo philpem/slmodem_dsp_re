@@ -57,8 +57,8 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    for a positive candidate. A net score gain can hide a loss. Explained structural
    tradeoffs require explicit review and a recovery plan; never silently lower a
    ratchet. Source changes must preserve the period differential oracle.
-6. **Validate and deliver.** Run focused period checks during development and
-   `make phase` before integrating reconstruction or fixture changes. Report
+6. **Validate and deliver.** Validate retained source with relevant focused period
+   checks, then run `make phase` at the reviewed integration checkpoint. Report
    denominators and the actual command's exit status. Run codegen/partial-link
    checks appropriate to the claim. Submit and merge ready PRs when authorised.
    At the boundary, report closures, partials, negatives, costs and next steps.
@@ -70,6 +70,22 @@ source. Reopen it only with a named new discriminator. Two batches without a new
 explanatory observation require a hypothesis/scope review, not more synonyms.
 A closed spelling family does not explain an emitter: trace the first pass that
 changes the unexplained operation before declaring that no discriminator remains.
+
+### Experimental compiles and integration checks
+
+**Experimental compiles do not require full gates, global censuses or CI.**
+Establish an unchanged full-TU baseline through the experimental build path,
+then use local native comparisons and affected-TU checks to investigate variants.
+Rebuild linked proof inputs only when the local comparison needs them. A failed
+or discarded experiment does not trigger `make phase`, a global `byteident.py`
+census, whole-tree object parity, a full partial link or a remote CI run.
+
+Before committing reconstruction source, require the relevant period differential
+to pass. Review the complete affected TUs and decide which supported partials to
+retain before freezing the integration candidate. Batch `make phase`, the global
+fidelity census, actual/faithful object parity, partial-link checks and PR/CI
+validation at that checkpoint. If retained inputs change afterwards, validate
+the new candidate. Keep diagnostic results distinct from integration evidence.
 
 ## Validation and measurement
 

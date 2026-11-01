@@ -28,6 +28,25 @@ idiomatic source when equally supported spellings produce the same output.
 
 ## 1. Validate the experiment before interpreting it
 
+Experimental compilation uses local controls; full gates, global censuses and CI
+are not prerequisites for running a variant. Establish the unchanged full-TU
+baseline, preserve the compiler/profile and input evidence, then compare the
+affected functions and TU locally. Refresh linked proof inputs only when that
+comparison requires them. Discarded variants do not require a whole-tree gate,
+census, parity run, partial link or CI job.
+
+Use the maintained comparator's per-function APIs or affected-TU helpers; keep
+its proof rules intact. `byteident.py --limit` only limits printed rows and
+does not turn a global census into a local comparison.
+
+Use relevant focused period differentials to validate source selected for
+retention before committing it. Complete independent TU review and settle
+supported partials before the integration freeze. Run the full phase gate,
+global census, object parity, partial-link checks and PR/CI validation once for
+that reviewed candidate. A later retained-source change requires validation of
+the new tree. Experimental controls and final integration evidence serve
+different purposes; record their scopes separately.
+
 Read relevant Hindsight conclusions and the audit section; verify them against
 the current code/artifacts. Identify what is
 still open; do not restart an already exhausted experiment without new evidence.

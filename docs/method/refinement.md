@@ -9844,3 +9844,16 @@ constraints. Select it by the complete observations, preserve its period
 oracle and name its unresolved obligations; neither a smaller instruction count
 nor a closer byte extent determines which source is better supported. Stop
 candidate extension when the whole-body or withheld prediction fails.
+
+## Keep experimental compiles outside integration gates
+
+Run exploratory variants with unchanged full-TU controls and local native/TU
+comparisons. Full phase gates, global fidelity censuses, whole-tree parity,
+full partial links and CI are not prerequisites for experimental compilation.
+Refresh only the proof inputs required by the local comparison.
+
+Validate retained source with focused period checks. Settle independent review
+and supported partials before freezing the integration candidate, then batch
+the full gate, global comparisons and PR/CI validation at that checkpoint.
+See [experiment design](experiment-design.md#1-validate-the-experiment-before-interpreting-it)
+for the distinction between diagnostic controls and integration evidence.
