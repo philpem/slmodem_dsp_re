@@ -1041,45 +1041,58 @@ static int
 test_gen_eq_trn_sequence(void)
 {
 	static const unsigned short counts[] = { 0, 1, 2, 7, 8, 63, 64 };
-	long ci;
-	int rate;
+	static const unsigned short sentinels[] = { 0xa5a1, 0xa5a5 };
+	long ci, trials = 0;
+	int rate, si;
 
 	diff_begin("v27txcreate: GenEQTrnSequenceV27");
 
 	for (rate = 0; rate < 2; rate++) {
-		for (ci = 0; ci < (long)(sizeof(counts) / sizeof(counts[0]));
-		     ci++) {
-			void *a, *b;
-			struct v27tx_cfg ca, cb;
-			unsigned short bufa[66], bufb[66];
-			unsigned short count = counts[ci];
-			long tag = rate * 100 + ci;
+		for (si = 0; si < 2; si++) {
+			for (ci = 0; ci < (long)(sizeof(counts) / sizeof(counts[0]));
+			     ci++) {
+				void *a, *b, *ta, *tb;
+				struct sdmv27 *sa, *sb;
+				struct v27tx_cfg ca, cb;
+				unsigned short bufa[66], bufb[66];
+				unsigned short count = counts[ci];
+				long tag = rate * 100 + si * 10 + ci;
 
-			ca = V27TX_CFG;
-			cb = V27TX_CFG;
-			ca.bitrate = cb.bitrate = (short)(rate == 0 ? 2400 : 4800);
-			a = V27TX_create(0, &ca);
-			b = ref_V27TX_create(0, &cb);
-			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1,
-				    tag);
-			if (a == 0 || b == 0)
-				continue;
+				ca = V27TX_CFG;
+				cb = V27TX_CFG;
+				ca.bitrate = cb.bitrate = (short)(rate == 0 ? 2400 : 4800);
+				a = V27TX_create(0, &ca);
+				b = ref_V27TX_create(0, &cb);
+				diff_eq_int("both built (%ld)", a != 0 && b != 0, 1,
+					    tag);
+				if (a == 0 || b == 0)
+					continue;
 
-			memset(bufa, 0xa5, sizeof bufa);
-			memset(bufb, 0xa5, sizeof bufb);
+				memset(bufa, 0xa5, sizeof bufa);
+				memset(bufb, 0xa5, sizeof bufb);
+				/* The last selection reads this following word. */
+				bufa[count] = bufb[count] = sentinels[si];
 
-			GenEQTrnSequenceV27(a, bufa, count);
-			ref_GenEQTrnSequenceV27(b, bufb, count);
+				GenEQTrnSequenceV27(a, bufa, count);
+				ref_GenEQTrnSequenceV27(b, bufb, count);
 
-			if (count > 0 && count <= 64)
-				cmp_shorts("buf[%ld]", (short *)bufa,
-					   (short *)bufb, (int)count);
+				diff_eq_obj("generator full buffer", unsigned short[66],
+					    bufa, bufb, tag);
+				ta = FIELD_PTR(a, V27_OBJ_TX);
+				tb = FIELD_PTR(b, V27_OBJ_TX);
+				sa = (struct sdmv27 *)(void *)FIELD(ta, V27TX_SDM);
+				sb = (struct sdmv27 *)(void *)FIELD(tb, V27TX_SDM);
+				diff_eq_obj("generator scrambler", struct sdmv27,
+					    sa, sb, tag);
+				trials++;
 
-			V27TX_delete(a);
-			ref_V27TX_delete(b);
+				V27TX_delete(a);
+				ref_V27TX_delete(b);
+			}
 		}
 	}
 
+	diff_eq_int("generator trials (%ld)", trials, 28, trials);
 	return diff_end();
 }
 
