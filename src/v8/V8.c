@@ -679,8 +679,7 @@ evaluateRxJMSequence(struct v8 *v)
 			int k = 0;
 
 			while (v->cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
-				unsigned short expected = (unsigned short)
-					ext_expected(v->cm->ext1[k]);
+				int expected = (charFlip(v->cm->ext1[k]) << 1) | 1;
 				unsigned short got = (unsigned short)seq->word[i];
 
 				if (got == expected) {
@@ -755,8 +754,7 @@ evaluateRxJMSequence(struct v8 *v)
 			int k = 0;
 
 			while (v->cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
-				unsigned short expected = (unsigned short)
-					ext_expected(v->cm->ext2[k]);
+				int expected = (charFlip(v->cm->ext2[k]) << 1) | 1;
 				unsigned short got = (unsigned short)seq->word[i];
 
 				if (got == expected) {
