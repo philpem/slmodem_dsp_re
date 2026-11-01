@@ -365,10 +365,10 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		return NEXT_END;
 
 	for (;;) {
-		unsigned char c;
+		char c;
 
 		d->pos++;
-		c = (unsigned char)d->string[d->pos];
+		c = d->string[d->pos];
 		if (c == '\0')
 			return NEXT_END;
 
@@ -411,13 +411,36 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 				continue;
 			d->row = 3; d->col = 2;
 			return NEXT_DIGIT;
-		case 'A': case 'a': case 'B': case 'b':
-		case 'C': case 'c': case 'D': case 'd':
+		case 'A': case 'a':
 			if (d->cfg.abcd_permitted != 0)
 				continue;
 			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
 				continue;
-			d->row = (c | 0x20) - 'a';
+			d->row = 0;
+			d->col = 3;
+			return NEXT_DIGIT;
+		case 'B': case 'b':
+			if (d->cfg.abcd_permitted != 0)
+				continue;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				continue;
+			d->row = 1;
+			d->col = 3;
+			return NEXT_DIGIT;
+		case 'C': case 'c':
+			if (d->cfg.abcd_permitted != 0)
+				continue;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				continue;
+			d->row = 2;
+			d->col = 3;
+			return NEXT_DIGIT;
+		case 'D': case 'd':
+			if (d->cfg.abcd_permitted != 0)
+				continue;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				continue;
+			d->row = 3;
 			d->col = 3;
 			return NEXT_DIGIT;
 
