@@ -9874,3 +9874,11 @@ exact original flags need not be unique. Conversely, a score gain cannot waive
 a native call boundary. The measured V90 cost interval is local evidence, not a
 budget to copy into unrelated TUs. Check parameter identity before reusing old
 `-finline-limit` results as exclusions for `max-inline-insns-auto`.
+
+F12109 bounds this technique's reach. The demodulator has a consistent interval
+and recovers two native ABI cutpoints with all peers unchanged, but closes no
+function and reduces its longest matching run. Retain such a result only for
+its independently supported structural facts, with its data/layout changes and
+remaining mismatches explicit. Do not extrapolate the phase-4 promotions into a
+profile sweep. A remaining native SF spill, when initial RTL already uses SF,
+requires producer-lifetime/stack-lowering evidence before a type or cast change.

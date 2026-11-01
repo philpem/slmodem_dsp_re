@@ -101,23 +101,27 @@ if os.environ.get('COMPILER_FAIL') == args[-1]:
             if source != 'src/service/dcr.c':
                 self.assertNotIn('-fno-rerun-cse-after-loop', argv, source)
 
-    def test_v90_phase4_inline_budget_is_source_local(self):
-        source = 'src/pump/v90/V90Phase4Modulator.cpp'
-        path = self.root/source
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text('/* recording compiler input */\n')
-        self.env['CXXSRC'] += ' '+source
+    def test_v90_inline_budgets_are_source_local(self):
+        profiles = {'src/pump/v90/V90Phase4Modulator.cpp': 80,
+                    'src/pump/v90/V90Demodulator.cpp': 50}
+        for source in profiles:
+            path = self.root/source
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('/* recording compiler input */\n')
+            self.env['CXXSRC'] += ' '+source
         calls = self.by_source()
         for name, argv in calls.items():
-            if name == source:
+            if name in profiles:
                 self.assertIn('--param', argv)
                 index = argv.index('--param')
                 self.assertEqual(argv[index:index+2],
-                                 ['--param', 'max-inline-insns-auto=80'])
+                                 ['--param', 'max-inline-insns-auto='+str(profiles[name])])
+                self.assertEqual(argv.count('--param'), 1)
                 self.assertIn('-ffast-math', argv)
             else:
                 self.assertNotIn('--param', argv, name)
-                self.assertNotIn('max-inline-insns-auto=80', argv, name)
+                self.assertFalse(any(flag.startswith('max-inline-insns-auto=')
+                                     for flag in argv), name)
 
     def test_cxx_and_assembly_dispatch_unchanged(self):
         calls = self.by_source()
