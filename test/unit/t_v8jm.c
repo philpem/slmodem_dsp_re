@@ -718,6 +718,100 @@ t_generated_first_extension(void)
 	return diff_end();
 }
 
+/* Generated messages checked against accepted or deliberately different local
+ * menus. This is an initialized component sequence, not a modem negotiation. */
+static int
+t_generated_noext(void)
+{
+	static const struct { unsigned short word; unsigned char b1, b2; } functions[] = {
+		{ 0x107, 0x40, 0 }, { 0x103, 0, 0x01 },
+		{ 0x10b, 0x80, 0 }, { 0x109, 0, 0x02 }
+	};
+	static const unsigned short fixed[] = { 0x3ff, 0x00f, 0, 0x141,
+		0x011, 0x011, 0x0a9, 0x161 };
+	unsigned function;
+	int reject, level, j, configurations = 0;
+
+	diff_begin("evaluateRxJMSequence: generated no-extension menus");
+	for (function = 0; function < sizeof(functions)/sizeof(functions[0]); function++)
+	for (reject = 0; reject <= 1; reject++)
+	for (level = 1; level <= 3; level++) {
+		struct v8 aa, bb;
+		long tag = ((long)function * 2 + reject) * 3 + level;
+		memset(&obj_a, 0, sizeof obj_a); memset(&obj_b, 0, sizeof obj_b);
+		memset(&cm_a, 0, sizeof cm_a); memset(&cm_b, 0, sizeof cm_b);
+		cm_a.b1 = cm_b.b1 = functions[function].b1;
+		cm_a.b2 = cm_b.b2 = functions[function].b2;
+		obj_a.cm = &cm_a; obj_b.cm = &cm_b;
+		obj_a.tx_seq = &obj_a.seq[2]; obj_b.tx_seq = &obj_b.seq[2];
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		ref_initTxSequence(&obj_a); initTxSequence(&obj_b);
+		diff_eq_int("reference generated bit count", obj_a.seq[2].nbits, 80, tag);
+		diff_eq_int("generated bit count", obj_b.seq[2].nbits, 80, tag);
+		diff_eq_int("reference generated word width", obj_a.seq[2].wordbits, 10, tag);
+		diff_eq_int("generated word width", obj_b.seq[2].wordbits, 10, tag);
+		diff_eq_int("reference owns menu", obj_a.cm == &cm_a, 1, tag);
+		diff_eq_int("owns menu", obj_b.cm == &cm_b, 1, tag);
+		diff_eq_int("reference owns sequence", obj_a.tx_seq == &obj_a.seq[2], 1, tag);
+		diff_eq_int("owns sequence", obj_b.tx_seq == &obj_b.seq[2], 1, tag);
+		if (obj_a.seq[2].nbits != 80 || obj_b.seq[2].nbits != 80
+		    || obj_a.seq[2].wordbits != 10 || obj_b.seq[2].wordbits != 10
+		    || obj_a.cm != &cm_a || obj_b.cm != &cm_b
+		    || obj_a.tx_seq != &obj_a.seq[2] || obj_b.tx_seq != &obj_b.seq[2])
+			return diff_end();
+		for (j = 0; j < 8; j++) {
+			unsigned expected = j == 2 ? functions[function].word : fixed[j];
+			diff_eq_int("reference generated word", (unsigned short)obj_a.seq[2].word[j], expected, tag * 8 + j);
+			diff_eq_int("generated word", (unsigned short)obj_b.seq[2].word[j], expected, tag * 8 + j);
+		}
+		obj_a.seq[2].wordidx = (short)(obj_a.seq[2].nbits / 10);
+		obj_b.seq[2].wordidx = (short)(obj_b.seq[2].nbits / 10);
+		/* The message is retained; only the selected LOCAL menu flag changes. */
+		if (reject) {
+			cm_a.b1 &= (unsigned char)~functions[function].b1;
+			cm_b.b1 &= (unsigned char)~functions[function].b1;
+			cm_a.b2 &= (unsigned char)~functions[function].b2;
+			cm_b.b2 &= (unsigned char)~functions[function].b2;
+		}
+		dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = ref_dsplibs_debug_level = (unsigned)level;
+		ref_evaluateRxJMSequence(&obj_a); evaluateRxJMSequence(&obj_b);
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+		diff_eq_int("reference function accepted", obj_a.fn_matched, !reject, tag);
+		diff_eq_int("function accepted", obj_b.fn_matched, !reject, tag);
+		diff_eq_int("reference function word", obj_a.fn_word,
+			reject ? 0 : functions[function].word, tag);
+		diff_eq_int("function word", obj_b.fn_word,
+			reject ? 0 : functions[function].word, tag);
+		diff_eq_int("reference protocol filler", obj_a.ext2_word, 0xa9, tag);
+		diff_eq_int("protocol filler", obj_b.ext2_word, 0xa9, tag);
+		diff_eq_int("reference protocol accepted", obj_a.ext2_matched, 1, tag);
+		diff_eq_int("protocol accepted", obj_b.ext2_matched, 1, tag);
+		diff_eq_int("reference retains menu owner", obj_a.cm == &cm_a, 1, tag);
+		diff_eq_int("retains menu owner", obj_b.cm == &cm_b, 1, tag);
+		diff_eq_int("reference retains sequence owner", obj_a.tx_seq == &obj_a.seq[2], 1, tag);
+		diff_eq_int("retains sequence owner", obj_b.tx_seq == &obj_b.seq[2], 1, tag);
+		aa = obj_a; bb = obj_b;
+		aa.cm = bb.cm = 0; aa.tx_seq = bb.tx_seq = 0;
+		diff_eq_obj("all state after evaluator", struct v8, &bb, &aa, tag);
+		diff_eq_obj("menus after evaluator", struct v8_cm, &cm_b, &cm_a, tag);
+		diff_eq_int("diagnostic text agrees", strcmp(dsplib_debug_capture_text(0),
+			dsplib_debug_capture_text(1)), 0, tag);
+		diff_eq_int("diagnostic boundaries agree", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("reference diagnostic calls", dsplib_debug_capture_lines(1),
+			level > 1 ? (reject ? 2 : 3) : 0, tag);
+		diff_eq_int("diagnostic calls", dsplib_debug_capture_lines(0),
+			level > 1 ? (reject ? 2 : 3) : 0, tag);
+		diff_eq_int("reference capture complete", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("capture complete", dsplib_debug_capture_complete(0), 1, tag);
+		configurations++;
+	}
+	diff_eq_int("generated menu configurations", configurations, 24, 0);
+	fprintf(stderr, "t_v8jm: generated no-extension menus: %d configurations\n", configurations);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -960,5 +1054,6 @@ main(void)
 	rc |= t_evaluate_cases();
 	rc |= t_update_trace();
 	rc |= t_generated_first_extension();
+	rc |= t_generated_noext();
 	return rc;
 }

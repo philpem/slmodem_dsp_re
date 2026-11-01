@@ -696,28 +696,29 @@ evaluateRxJMSequence(struct v8 *v)
 			v->fn_word = 0;
 			v->fn_matched = 0;
 		} else {
+			unsigned short currentword = (unsigned short)seq->word[i];
 			/*
 			 * No extension: the function word itself has to be
 			 * one the menu asked for.  Each of the four announces
 			 * itself; V.80 shares the data announcement, which is
 			 * why the object has four tests and three strings.
 			 */
-			if (w == 0x107 && (cm->b1 & 0x40)) {
+			if (currentword == 0x107 && (v->cm->b1 & 0x40)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function DATA " "indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x103 && (cm->b2 & 0x01)) {
+			} else if (currentword == 0x103 && (v->cm->b2 & 0x01)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX TX from " "caller indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x10b && (cm->b1 & 0x80)) {
+			} else if (currentword == 0x10b && (v->cm->b1 & 0x80)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX RX to " "caller indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x109 && (cm->b2 & 0x02)) {
+			} else if (currentword == 0x109 && (v->cm->b2 & 0x02)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function DATA " "indication...\r\n");
@@ -725,7 +726,7 @@ evaluateRxJMSequence(struct v8 *v)
 			}
 
 			if (v->fn_matched != 0)
-				v->fn_word = (short)w;
+				v->fn_word = seq->word[i];
 		}
 	}
 
