@@ -19,13 +19,11 @@
 /*
  * One block of receive.
  *
- * `remaining` is the count the handler is still working through, and it is
- * held UNSIGNED while `before` is a `short`: the object sign-extends the
- * previous count into the subtraction (`movswl %cx,%ebx` at 0x0a1c70) and
- * zero-extends the new one (`movzwl %cx,%edx` at 0x0a1c91).  The second
- * extension feeds a 32-bit subtract, so it is FORCED and not the free kind
- * -- CLAUDE.md's rule for reading a codegen difference, applied the way round
- * it is meant to be.
+ * Read the input budget directly before and after the handler.  The old
+ * count is signed, while the new count is unsigned in the input-pointer
+ * subtraction.  The loop itself tests the WORD in `*count`.  Keeping a
+ * promoted local copy merges those two views and loses the object's
+ * separate zero extension at 0x0a1c91.
  *
  * The loop is a do-while: `*count` of zero on entry still dispatches once.
  *
@@ -37,24 +35,21 @@ int
 V21RX_modem(void *modem, short *in, short *out, short *count)
 {
 	struct v21_rx *rx = (struct v21_rx *)modem;
-	unsigned short remaining;
 	short total = 0;
 	int word;
 
 	rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_ERROR;
 
-	remaining = (unsigned short)*count;
 	do {
-		short before = (short)remaining;
+		short before = (short)*count;
 		short n;
 
 		n = rx->hdx->handler(modem, in, out, count);
-		remaining = (unsigned short)*count;
 
 		out += n;
-		in += before - remaining;
+		in += before - (unsigned short)*count;
 		total = (short)(total + n);
-	} while (remaining != 0);
+	} while (*count != 0);
 
 	*count = total;
 
