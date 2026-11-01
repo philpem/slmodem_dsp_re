@@ -141778,3 +141778,67 @@ Reproduce the proof controls with
 then `make byteident`. Detailed draft/review controls are in
 `scratch/switch-v27-completion/`; they are not maintained dependencies. No
 register-renaming rule, tolerance or reconstruction compiler profile changed.
+
+
+## F12103. V27 transition epochs improve source fidelity without closing the dispatcher
+
+The V27 transition recovery in `1a7db0a74` shares the four request/generator
+objects, captures the detector request before generator writes, refreshes the
+private owner after debug callbacks, and snapshots signed rate/training indices
+before state and handler stores. Native START, CARR, DATA and TURNOFF first store
+countdown one; QUIET first stores ten. Their unsigned compound products preserve
+that store order and QUIET's widened table value and multiply. The out-of-range
+default returns directly. Field definitions and the reconstruction compiler
+profile are unchanged.
+
+The unchanged neighbouring `TxHdxDataV27` becomes EXACT (314 bytes) through
+translation-unit context. All six previously exact neighbours remain exact;
+the ten-function TU now has seven EXACT and three NONMATCH. These are distinct
+results: the transition source is better supported by native operands and store
+epochs, but **`TxNextStateV27` remains NONMATCH**, at 1,105 bytes against native
+1,148. Its previous 1,139-byte size was closer without reproducing those source
+facts. No size-based promotion is claimed.
+
+GCC's flow2 crossjumping merges two table-load/store tails, leaving three
+frame-size reads against the native five. Disabling crossjumping diagnostically
+restores all 189 selected arithmetic/call instruction operands, but the selection
+excludes branches, padding, epilogues and flag clears. Later block reordering
+still duplicates clears and exit code; the resulting 1,191-byte function is not
+an identity result. A countdown-one-to-two native mutation fires the operand
+detector. Neither this diagnostic flag nor the projection is a retained profile
+or a replacement for whole-function grading. Independent review found four
+source-expression differences in the earlier diagnostic cell. A fresh unchanged
+retained-source control reproduces the baseline object, and changing only the
+crossjumping flag reproduces the earlier diagnostic object byte for byte. The
+causal claim rests on that corrected identical-input pair.
+
+The complete TU review records the reordered, otherwise identical 226-byte
+NUL-string multiset and two fewer frame-size relocations from the measured tail
+merges. No symbols, bindings or field types change. Focused period validation
+passes 14 groups and 27,869 checks (including 20,364 in the new lifecycle); `make phase J=8` passes all 396 period binaries
+and structural checks. All 300 actual-period and faithful objects agree byte for
+byte, with only the processor and constructor TUs changed from F12102. The refreshed census is **1,190 EXACT /
+39 REGALLOC / 623 NONMATCH / 0 UNRESOLVED**, over 1,852 symbols, with no protected
+loss. The whole-object partial comparison remains DIFFERENT.
+
+The fixture audit found that existing driven cycles covered QUIET through DATA
+but not the shutdown tail, and ran with debugging disabled. The real
+`V27TX_control` force bit sets the underrun gate; it need not be planted by an
+internal write. A new constructor/control/FIFO/installed-handler history covers
+both rates, both training selectors and debug levels zero/two, including
+TURNOFF, NOENG, IDLE and restart. This is component reachability, not an end-to-end
+modem claim.
+
+Its first run detected eight transcript failures among 19,968 checks: four debug
+rows disagreed both in text and callback boundaries. Native `V27TX_create`
+emits a standalone newline after both fresh allocation and reuse; the source
+incorrectly limited it to reuse. The correction moves the common debug call
+after that choice. No tolerance, transcript filtering or callback replacement
+is used. The constructor logs are included in the comparison. The constructor
+remains NONMATCH (native 1,165 bytes, previous 1,137, corrected 1,135); its exact
+delete neighbour is preserved. No whole-function gain is claimed for this fix.
+
+Evidence and rejected controls are under `scratch/switch-v27-completion/`,
+including `whole-TU-B-review.json`, `validation-B.json`, `parity-B.json` and
+`census-B.json`. Recovering the dispatcher's remaining original CFG/compiler
+input is an open priority, separate from this validated source checkpoint.
