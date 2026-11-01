@@ -563,38 +563,38 @@ short
 TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
-	short countdown;
-	short taken;
+	unsigned short taken;
 	short r;
 	short i;
+	unsigned short select;
+	unsigned short *point;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = prm->countdown;
-	if (countdown <= 0) {
+	if ((short)prm->countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
-	taken = (short)((countdown <= (unsigned short)*budget) ? countdown : *budget);
-	prm->countdown = (short)(countdown - taken);
+	taken = ((short)prm->countdown > (unsigned short)*budget)
+		? (unsigned short)*budget : prm->countdown;
+	prm->countdown = (short)(prm->countdown - taken);
 
+	/* Fill uses a signed index; selection below uses the old WORD count. */
+	point = in;
 	for (i = 0; i < taken; i++)
 		in[i] = 7;
 
 	ScrambleDataV27(modem, in, taken);
 
-	if (taken != 0) {
+	for (select = taken; select-- != 0; ) {
+		unsigned short *slot = point++;
 
 		prm = ((struct v27_tx *)modem)->source;
-
-		for (i = 0; i < taken; i++) {
-			if (in[i + 1] & 0x04)
-				in[i] = (unsigned short)V27TX_PATTERN_ALT[prm->rate];
-			else
-				in[i] = (unsigned short)
-					V27TX_PATTERN_CARR[prm->rate];
-		}
+		if (slot[1] & 0x04)
+			*slot = (unsigned short)V27TX_PATTERN_ALT[prm->rate];
+		else
+			*slot = (unsigned short)V27TX_PATTERN_CARR[prm->rate];
 	}
 
 	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);

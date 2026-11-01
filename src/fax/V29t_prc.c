@@ -501,13 +501,12 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 /*
  * TxHdxEQCondV29 -- .text 0x0a4d30, 237 bytes.
  *
- * THE LFSR RECURRENCE IS GenEQTrnSequenceV29's OWN (v29data.h), WRITTEN OUT
- * AGAIN RATHER THAN CALLED -- no `call` in this whole loop, confirmed with
- * `dis.py`.  GenEQTrnSequenceV29 has no internal referrer anywhere in the
- * object (CLAUDE.md's fax-scope note), so the two are independent copies of
- * one algorithm and not caller and callee.  The register this copy reaches
- * through is V29SCRAM_SR at the SAME offset GenEQTrnSequenceV29's own
- * accessor uses -- V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block, both
+ * The native body emits GenEQTrnSequenceV29's recurrence without a call.
+ * That alone does not distinguish duplication from automatic inlining. Keep
+ * the recurrence local here: inlining the current generator reloads the owner
+ * after publishing countdown, whereas the native handler retains its owner.
+ * Both reach the same signed WORD register at V29SCRAM_SR through the block
+ * at V29TX_OBJ_SCRAM. V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block, both
  * 0x20, confirmed by this function reaching V29SCRAM_SR (0x18) through the
  * SAME pointer TxNextStateV29 reaches V29TXP_STATE (0x14) through.
  *
@@ -518,36 +517,35 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
+	struct v29_tx_params *prm;
 	unsigned short n;
-	short reg;
+	int reg;
 	unsigned short i;
+	unsigned short *point;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
+	prm = ((struct v29_tx_root *)modem)->params;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	reg = prm->scram_sr;
-	for (i = 0; i < n; i++) {
-		unsigned short x = (unsigned short)reg;
-		int bit0 = x & 1;
+	point = in;
+	for (i = n; i-- != 0; ) {
+		int feedback = ((reg << 6) & 0x80) ^ ((reg & 1) << 7);
+		int bit0 = reg & 1;
 
-		x = (unsigned short)((((x << 6) & 0x80) ^ (bit0 << 7)) | x);
-		reg = (short)((x >> 1) & V29_TRAIN_LFSR_MASK);
-
-		in[i] = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
+		reg = (int)(((unsigned)(reg | feedback) >> 1) & V29_TRAIN_LFSR_MASK);
+		*point++ = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
 	}
-	prm->scram_sr = reg;
+	prm->scram_sr = (short)reg;
 
 	nsamples = (short)ModDataV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);

@@ -141936,3 +141936,73 @@ selected-partial context gives **1,192 EXACT / 39 REGALLOC / 621 NONMATCH /
 0 UNRESOLVED** over 1,852 symbols. Only the two receive wrappers are promoted;
 no previously EXACT or matched name is lost. Whole-object partial comparison
 remains DIFFERENT. No compiler-portability result is claimed.
+
+
+## F12106. Complete EQ handlers need coupled count, recurrence and capture graphs
+
+`TxHdxEQCondV29` and `TxHdxEQCondV27` reach EXACT together with their retained
+Gentoo reproduction profiles. The V29 body is 237 bytes and 82 ordinary
+instructions; V27 is 264 bytes and 88. Both ten-body TUs preserve every other
+body and canonical relocation: eighteen neighbours, including sixteen already
+EXACT functions. All ten compared V29 processor functions are now EXACT.
+No field type, compiler option, API or new helper is introduced.
+
+V29 requires three coupled source graphs: direct countdown observations with
+budget-default minimum selection, an unsigned postdecrement pointer loop, and
+a full-width LFSR working carrier with final WORD publication. Its same-TU
+EXACT `GenEQTrnSequenceV29` supplies an independent recurrence/input control.
+The first two manual candidates recover these graphs but leave owner/count
+spill topology different. Capturing the owner after the status store restores
+the native topology; using the generator's feedback expression followed by
+bit-zero capture restores the remaining accumulator encoding. Native machine
+instruction order had not uniquely specified that source producer structure.
+All hypotheses and the crossed controls are recorded before their comparisons.
+
+A separate existing-helper-call control automatically inlines and keeps the
+two native calls, but refreshes the owner after countdown publication where
+native retains it. A typed-owner control preserves pointer32/WORD16 accesses
+at root+0x20 and owner+0x18 and leaves that emission unchanged. Neither is
+retained. The former source comment's inference that an absent CALL proved
+independent source duplication is removed: global out-of-line emission is
+compatible with automatic inlining. These controls exclude their tested inputs,
+not every possible original helper relationship.
+
+V27 transfers only the supported regional explanation. Its fill remains signed
+ascending with CWTL and a DWORD comparison against the unsigned selected count;
+its selection uses an unsigned WORD postdecrement loop. Capture the selection
+pointer at the native post-minimum/pre-fill epoch. Copy the current output slot
+and advance the pointer before selection, preserving the following-element
+bit test and last sentinel. The single loop guard admits the compiler's native
+post-Scramble owner hoist, while branch-local signed rate observations remain.
+The direct count graph, loop input and pointer lifetime jointly recover the
+complete body. V29's earlier spill mismatch did not falsify this distinct V27
+whole-function hypothesis.
+
+Focused period validation passes three executables and 125,658 checks across
+25 sections: `t_v29txcreate`, `t_v29data` and `t_v27txcreate`. These include the
+constructor-driven V29 training history, exact generator controls and V27 real
+control/shutdown/restart histories; synthetic probes retain their stated scope.
+Independent parent comparison confirms both exact bodies and all eighteen
+unchanged peers. Source comments are checked against fresh canonical objects.
+Detailed controls, actual commands, local TU audits and the written predictions
+are under `scratch/eq90/`, including `ADMISSION.md`, `TU-audit.json`,
+`TU-audit-v27.json`, `parent-EQ-review.json` and the focused validation records.
+Experimental compiles ran without full gates, global censuses or CI; final
+integration validation follows after the complete retained set is frozen.
+
+
+Final integration passes `make phase J=8`: 396 period binaries, zero failures,
+plus structural checks. All 300 actual-period objects match the faithful build
+byte for byte; only the V27/V29 processor objects change and 298 are unchanged.
+Fresh selected-partial context gives **1,194 EXACT / 39 REGALLOC / 619 NONMATCH /
+0 UNRESOLVED**, over 1,852 symbols. Exactly the two EQ handlers are promoted;
+no previously EXACT or matched name is lost. Whole-object partial comparison
+remains DIFFERENT.
+
+The optional V32 unchanged-source no-GCSE diagnostic is discarded. It restores
+a mode reread but does not restore the native detector publication/comparison
+sequence and loses the protected `RxHdxTone` and `RxHdxNoSignal` matches.
+The observed PRE/store-motion transformations therefore do not justify that
+profile adoption or a whole-source/profile transfer. No V32 source or profile
+change is retained. Its changed diagnostic-string ordering and unchanged string
+multiset are recorded explicitly, not called data equality.
