@@ -9770,3 +9770,28 @@ review explains the tradeoff; size and local runs do not overrule evidence.
 Batch final validation at the closure checkpoint. Report whole-function gains
 separately from partial recoveries and distinguish measured model usage from
 free local computation.
+
+## Transfer a mechanism without transferring its assumptions
+
+[F12101](../findings.md#f12101-transfer-native-epochs-without-transplanting-field-types-or-proof-claims)
+extends the countdown/owner inquiry across related fax code and a data-mode
+caller. Preserve each site's actual interpretation: an unsigned shared field
+can feed a signed guard through an explicit narrow local or conversion.
+Do not retype the field to copy another module's spelling. Also distinguish a
+reload lost by GCSE PRE from a reload absent because our source caches the value.
+The same final instruction deficit can have different first causes.
+
+Transfer the narrowest explanation supported by the native graph. Moving a
+post-callee owner capture before its condition closes the data-mode example;
+that does not support transferring the fax optimisation profile to it. Audit
+callbacks, outgoing arguments and protected neighbours in the whole TU.
+
+Keep evidence limitations separate from code differences. First refresh the
+selected partial-link context for an alternate object tree. If the official
+recogniser still refuses a native instruction or guard form, record its exact
+reason. Ordered function-relative table targets and instruction boundaries are
+stronger evidence than matching debug strings alone, but do not silently replace
+the grader's proof. Retain an independently supported source recovery with its
+honest UNRESOLVED status when the complete review and period gate justify it.
+A separately scoped recogniser extension needs its own positive and negative
+controls; changing source to fit an unsupported proof pattern is not recovery.

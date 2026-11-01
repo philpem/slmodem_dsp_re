@@ -141672,3 +141672,63 @@ Reproduce with `make phase J=8`, `make byteident` and `make partial-compare`.
 The reproducible investigation packet is in `scratch/closure-trial/LEDGER.json`;
 scratch is not a maintained build dependency. The Phase-II and modulus-decoder
 pilots produced no closures and no retained changes.
+
+## F12101. Transfer native epochs without transplanting field types or proof claims
+
+The follow-up to F12100 closes seven more functions as EXACT:
+`TxHdxSilenceV17`, `TxHdxQuietV29`, `TxHdxAltV27`, `TxHdxQuietV27`,
+`TxHdxSCR1V27`, `V27TX_modem` and `RxHdxTone`. Source/profile commit
+`bacb242d9` passes the Gentoo period gate. The actual census is **1,188 EXACT /
+39 REGALLOC / 624 NONMATCH / 1 UNRESOLVED**, across 1,852 symbols. All 30
+previously exact functions in the four affected TUs remain exact.
+
+The V.17/V.29 countdown transfer works under the already retained profile.
+V.27 requires a crossed source/profile explanation: profile-only and source-only
+controls remain nonmatching; their combination restores three complete handlers.
+Its wrapper additionally needs the native first-owner, FIFO-refresh and loop-back
+budget-pointer lifetimes. V.27's field remains unsigned: the signed countdown
+interpretation is explicit at the native uses, rather than imposed on the shared
+field declaration. GCSE PRE removes the native Alt/Quiet reloads, while SCR1's
+cached source variable is a different input discrepancy. Similar output does
+not establish the same first compiler cause.
+
+The data-mode analogue is narrower. `RxHdxTone` reloads its owner immediately
+after `FPM_TONE_detect` and captures the short result before its condition.
+That source change alone closes the 60-instruction function and preserves the
+other twelve EXACT functions in its TU. It supplies no evidence for copying
+the fax compiler profile into data modes. The retained profile now covers the
+three original transmitter-processing TUs, consistently in both build paths.
+
+The V.29 next-state source recovery is retained but **not graded EXACT**.
+Its 698-byte body agrees outside relocated fields; the other canonical
+relocations agree. Native and candidate have the same ordered table targets,
+function-relative `[106, 153, 263, 310, 441, 486, 527]`, all on the same 156
+decoded instruction boundaries (153 nonpadding display instructions).
+The official proof intentionally refuses `movswl` and does not cover this
+CMP/JA-default/fallthrough-dispatch pattern. Fresh partial-link context does
+not remove that limitation. The anonymous table relocation therefore remains
+UNRESOLVED; independent target evidence supports source retention, not a waiver
+or a classifier promotion. No grading code changed.
+
+The retained V.27 data-owner capture is still NONMATCH: eight register bytes
+differ and the existing consistent-renaming proof refuses them. Shared-request
+V.27 controls were excluded; a smaller frame alone did not close that function.
+Its next inquiry must map early index captures and initial countdown stores
+together, rather than retry independent statement spellings.
+
+Validation: 12 candidate cells and four raw-identical baseline controls; all
+12 candidate emissions distinct. Focused period fixtures pass 4/4 with 72,560
+checks. `make phase J=8` passes 396/396 period binaries and structural checks.
+All 300 actual period objects equal faithful comparison objects; 296 are
+unchanged from the starting snapshot. The full-TU audit covers 45 functions,
+with no missing exports or binding/type/visibility changes. Thirty jump-table
+case identities retain their original meanings, with firing rotated-entry
+negative controls. Independent parent scoring confirms the seven exact gains
+and the V.29 ordered-target evidence. Partial-object comparison remains semantic
+and raw DIFFERENT; portability is not claimed.
+
+The bounded evidence packet is `scratch/transfer-followup/LEDGER.json` and
+`FINAL-METRICS.json`; scratch is not a maintained dependency. Reproduce the
+configured reconstruction with `make phase J=8`, `make byteident` and
+`make partial-compare`. This result concerns source/profile fidelity and the
+stated component boundaries, not whole-modem runtime reachability.

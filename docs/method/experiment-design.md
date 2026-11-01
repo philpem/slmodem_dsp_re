@@ -46,6 +46,13 @@ or STT_FILE changes are not a blanket excuse. Isolate profile outputs; do not
 reuse a source-timestamp-only cache after changing flags. Demonstrate a new
 generator/detector changing a known input, and report its denominator.
 
+An alternate comparison tree also needs the current selected partial-link
+proof context used by the grader. Set `TC_OUT` explicitly, rebuild that context
+and retain the relevant linked inputs. A scratch tree containing byte-identical
+objects can still yield incomplete evidence if those independent proof inputs
+are absent. Preserve such a run as invalid rather than waiving an unresolved
+verdict or changing source to satisfy it.
+
 Control drift, unexplained missing symbols, or empty results stop interpretation.
 Preserve invalid runs as invalid and rerun; do not repair their conclusions
 after the fact. #22 required reruns for omitted register renaming and omitted
@@ -87,6 +94,16 @@ V32 recovered four O2 losses with source static inline. Plain O2 recovered
 14 losses from the bundled O2/no-rerun-CSE profile. PCM needed web, automatic
 inlining **and unswitching** to reproduce its O3 object. A one-axis search
 could miss all three explanations.
+
+A pass control that restores a complete native body is an admission to the
+crossed inquiry. If it loses an existing exact neighbour, map that neighbour's
+native captures, callback epochs and dependencies before rejecting the profile.
+The old exact source may rely on a compensating optimisation. Conversely, an
+exact gain does not waive a neighbour's loss. Resolve or explicitly review every
+named obligation before retention; a diagnostic hit alone does not justify a
+new build exception. Confirm the original TU boundary, profile scope and actual
+period/comparison object parity. A command line need not be uniquely original
+to be a supported, accurately qualified reconstruction hypothesis.
 
 Keep alternative explanatory candidates, including useful losing ones. Prefer
 common-profile explanations, but do not manufacture per-file exceptions to
