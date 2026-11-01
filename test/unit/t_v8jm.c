@@ -614,6 +614,110 @@ t_update_trace(void)
 	return diff_end();
 }
 
+
+/*
+ * An initialized encoder-to-validator component history. The actual producer
+ * builds two raw call-function characters, and each side publishes its own
+ * returned word count at the validator boundary. This is not an on-wire or
+ * negotiated modem history, and no callback or alias observer is installed.
+ */
+static int
+t_generated_first_extension(void)
+{
+	static const short expected[V8_TX_SEQ_WORDS] = {
+		0x3ff, 0x00f, 0x107, 0x105, 0x141, 0x011, 0x011, 0x0a9, 0x161
+	};
+	struct v8 snap_a, snap_b;
+	struct v8_cm menu;
+	unsigned lvl;
+
+	diff_begin("evaluateRxJMSequence: generated first-extension component");
+	for (lvl = 1; lvl <= 3; lvl++) {
+		memset(&obj_a, 0, sizeof obj_a);
+		memset(&obj_b, 0, sizeof obj_b);
+		memset(&menu, 0, sizeof menu);
+		menu.b2 = V8_CM_EXT1_PRESENT;
+		menu.ext1[0] = 0xc1;
+		menu.ext1[1] = 0x41;
+		memcpy(&cm_a, &menu, sizeof cm_a);
+		memcpy(&cm_b, &menu, sizeof cm_b);
+		obj_a.cm = &cm_a; obj_b.cm = &cm_b;
+		obj_a.tx_seq = &obj_a.seq[2];
+		obj_b.tx_seq = &obj_b.seq[2];
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		ref_initTxSequence(&obj_a);
+		initTxSequence(&obj_b);
+		diff_eq_int("reference generated bits", obj_a.seq[2].nbits, 90, lvl);
+		diff_eq_int("generated bits", obj_b.seq[2].nbits, 90, lvl);
+		diff_eq_int("reference word width", obj_a.seq[2].wordbits, 10, lvl);
+		diff_eq_int("word width", obj_b.seq[2].wordbits, 10, lvl);
+		diff_eq_int("reference initial index", obj_a.seq[2].wordidx, 0, lvl);
+		diff_eq_int("initial index", obj_b.seq[2].wordidx, 0, lvl);
+		diff_eq_obj("reference generated storage", short[V8_TX_SEQ_WORDS],
+			    obj_a.seq[2].word, expected, lvl);
+		diff_eq_obj("generated storage", short[V8_TX_SEQ_WORDS],
+			    obj_b.seq[2].word, expected, lvl);
+		diff_eq_int("reference producer menu", obj_a.cm == &cm_a, 1, lvl);
+		diff_eq_int("producer menu", obj_b.cm == &cm_b, 1, lvl);
+		diff_eq_int("reference producer buffer", obj_a.tx_seq == &obj_a.seq[2], 1, lvl);
+		diff_eq_int("producer buffer", obj_b.tx_seq == &obj_b.seq[2], 1, lvl);
+		/* Do not feed an invalid producer geometry into the validator. */
+		if (obj_a.seq[2].nbits != 90 || obj_b.seq[2].nbits != 90
+		    || obj_a.seq[2].wordbits != 10 || obj_b.seq[2].wordbits != 10
+		    || obj_a.seq[2].wordidx != 0 || obj_b.seq[2].wordidx != 0
+		    || obj_a.cm != &cm_a || obj_b.cm != &cm_b
+		    || obj_a.tx_seq != &obj_a.seq[2] || obj_b.tx_seq != &obj_b.seq[2])
+			return diff_end();
+		obj_a.seq[2].wordidx = (short)(obj_a.seq[2].nbits / 10);
+		obj_b.seq[2].wordidx = (short)(obj_b.seq[2].nbits / 10);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
+		ref_evaluateRxJMSequence(&obj_a);
+		evaluateRxJMSequence(&obj_b);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		diff_eq_int("reference first matched", obj_a.fn_matched, 1, lvl);
+		diff_eq_int("first matched", obj_b.fn_matched, 1, lvl);
+		diff_eq_int("reference last first word", obj_a.fn_word, 0x105, lvl);
+		diff_eq_int("last first word", obj_b.fn_word, 0x105, lvl);
+		diff_eq_int("reference ordinary tail matched", obj_a.ext2_matched, 1, lvl);
+		diff_eq_int("ordinary tail matched", obj_b.ext2_matched, 1, lvl);
+		diff_eq_int("reference ordinary tail", obj_a.ext2_word, 0x0a9, lvl);
+		diff_eq_int("ordinary tail", obj_b.ext2_word, 0x0a9, lvl);
+		diff_eq_int("reference received count", obj_a.seq[2].wordidx, 9, lvl);
+		diff_eq_int("received count", obj_b.seq[2].wordidx, 9, lvl);
+		diff_eq_obj("reference receive storage", short[V8_TX_SEQ_WORDS],
+			    obj_a.seq[2].word, expected, lvl);
+		diff_eq_obj("receive storage", short[V8_TX_SEQ_WORDS],
+			    obj_b.seq[2].word, expected, lvl);
+		diff_eq_int("reference consumer menu", obj_a.cm == &cm_a, 1, lvl);
+		diff_eq_int("consumer menu", obj_b.cm == &cm_b, 1, lvl);
+		diff_eq_int("reference consumer buffer", obj_a.tx_seq == &obj_a.seq[2], 1, lvl);
+		diff_eq_int("consumer buffer", obj_b.tx_seq == &obj_b.seq[2], 1, lvl);
+		if (obj_a.cm != &cm_a || obj_b.cm != &cm_b
+		    || obj_a.tx_seq != &obj_a.seq[2] || obj_b.tx_seq != &obj_b.seq[2])
+			return diff_end();
+		diff_eq_obj("reference immutable menu", struct v8_cm, &cm_a, &menu, lvl);
+		diff_eq_obj("immutable menu", struct v8_cm, &cm_b, &menu, lvl);
+		memcpy(&snap_a, &obj_a, sizeof snap_a);
+		memcpy(&snap_b, &obj_b, sizeof snap_b);
+		/* Only the two identity-checked pointer members differ by owner. */
+		snap_a.cm = snap_b.cm = 0;
+		snap_a.tx_seq = snap_b.tx_seq = 0;
+		diff_eq_obj("complete validated receiver", struct v8, &snap_b, &snap_a, lvl);
+		diff_eq_int("rendered evaluation", strcmp(dsplib_debug_capture_text(0),
+			    dsplib_debug_capture_text(1)), 0, lvl);
+		diff_eq_int("evaluation boundaries", dsplib_debug_capture_boundaries_equal(), 1, lvl);
+		diff_eq_int("reference complete capture", dsplib_debug_capture_complete(1), 1, lvl);
+		diff_eq_int("complete capture", dsplib_debug_capture_complete(0), 1, lvl);
+		diff_eq_int("reference evaluation lines", dsplib_debug_capture_lines(1), lvl > 1 ? 2 : 0, lvl);
+		diff_eq_int("evaluation lines", dsplib_debug_capture_lines(0), lvl > 1 ? 2 : 0, lvl);
+	}
+	fprintf(stderr, "t_v8jm: 3 initialized generated first-extension cases, levels1/2/3\n");
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -855,5 +959,6 @@ main(void)
 	rc |= t_rebuild_cases();
 	rc |= t_evaluate_cases();
 	rc |= t_update_trace();
+	rc |= t_generated_first_extension();
 	return rc;
 }
