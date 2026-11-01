@@ -917,6 +917,96 @@ t_generated_second_extension(void)
 	return diff_end();
 }
 
+/* Initialized encoder components, not negotiated modem histories. The first
+ * raw call-function octet selects DATA; later raw extension octets exercise
+ * each bounded prefix. EXT2 is absent and its owned storage remains zero. */
+static int
+t_owned_first_extension(void)
+{
+	static const unsigned char raw[4] = { 0xc1, 0x41, 0x21, 0x11 };
+	static const unsigned short encoded[4] = { 0x107, 0x105, 0x109, 0x111 };
+	int len, pcm, level, configurations = 0;
+
+	diff_begin("initTxSequence: owned first extension prefixes");
+	for (len = 0; len <= 4; len++)
+	for (pcm = 0; pcm <= 1; pcm++)
+	for (level = 1; level <= 3; level++) {
+		struct v8 aa, bb;
+		unsigned short expected[15] = { 0 };
+		char text[256];
+		int i, words = 2, calls = level > 1 ? 1 + (len == 0) : 0;
+		long tag = configurations;
+
+		memset(&obj_a, 0, sizeof obj_a); memset(&obj_b, 0, sizeof obj_b);
+		memset(&cm_a, 0, sizeof cm_a); memset(&cm_b, 0, sizeof cm_b);
+		cm_a.b0 = cm_b.b0 = pcm ? 8 : 0;
+		cm_a.b1 = cm_b.b1 = 0x40;
+		cm_a.b2 = cm_b.b2 = V8_CM_EXT1_PRESENT;
+		for (i = 0; i < len; i++) cm_a.ext1[i] = cm_b.ext1[i] = raw[i];
+		obj_a.cm = &cm_a; obj_b.cm = &cm_b;
+		obj_a.tx_seq = &obj_a.seq[2]; obj_b.tx_seq = &obj_b.seq[2];
+		expected[0] = 0x3ff; expected[1] = 0x00f;
+		for (i = 0; i < len; i++) expected[words++] = encoded[i];
+		if (len == 0) expected[words++] = 0x107;
+		expected[words++] = pcm ? 0x149 : 0x141;
+		expected[words++] = 0x011; expected[words++] = 0x011;
+		if (!pcm) expected[words++] = 0x0a9;
+		expected[words++] = 0x161;
+		if (pcm) { expected[words++] = 0x1c9; expected[words++] = 0x011; }
+		diff_eq_int("owned sequence extent", sizeof obj_a.seq[2].word / sizeof obj_a.seq[2].word[0], 15, tag);
+		diff_eq_int("expected output fits owned sequence", words <= 12, 1, tag);
+		dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = ref_dsplibs_debug_level = (unsigned)level;
+		ref_initTxSequence(&obj_a); initTxSequence(&obj_b);
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+		for (i = 0; i < 15; i++) {
+			diff_eq_int("reference generated word", (unsigned short)obj_a.seq[2].word[i], expected[i], tag * 16 + i);
+			diff_eq_int("generated word", (unsigned short)obj_b.seq[2].word[i], expected[i], tag * 16 + i);
+		}
+		diff_eq_int("reference bit count", obj_a.seq[2].nbits, 10 * words, tag);
+		diff_eq_int("bit count", obj_b.seq[2].nbits, 10 * words, tag);
+		diff_eq_int("reference word width", obj_a.seq[2].wordbits, 10, tag);
+		diff_eq_int("word width", obj_b.seq[2].wordbits, 10, tag);
+		diff_eq_int("reference transmit position", obj_a.seq[2].wordidx, 0, tag);
+		diff_eq_int("transmit position", obj_b.seq[2].wordidx, 0, tag);
+		diff_eq_int("reference first-presence flag", cm_a.b2, len ? 4 : 0, tag);
+		diff_eq_int("first-presence flag", cm_b.b2, len ? 4 : 0, tag);
+		diff_eq_int("reference DATA selection", cm_a.b1, 0x40, tag);
+		diff_eq_int("DATA selection", cm_b.b1, 0x40, tag);
+		diff_eq_int("reference PCM selection", cm_a.b0, pcm ? 8 : 0, tag);
+		diff_eq_int("PCM selection", cm_b.b0, pcm ? 8 : 0, tag);
+		diff_eq_int("reference CRC seed", (unsigned short)obj_a.seq[2].crc, 0xffff, tag);
+		diff_eq_int("CRC seed", (unsigned short)obj_b.seq[2].crc, 0xffff, tag);
+		diff_eq_int("reference repeat", obj_a.seq[2].repeat, 1, tag);
+		diff_eq_int("repeat", obj_b.seq[2].repeat, 1, tag);
+		diff_eq_int("reference retains menu owner", obj_a.cm == &cm_a, 1, tag);
+		diff_eq_int("retains menu owner", obj_b.cm == &cm_b, 1, tag);
+		diff_eq_int("reference retains sequence owner", obj_a.tx_seq == &obj_a.seq[2], 1, tag);
+		diff_eq_int("retains sequence owner", obj_b.tx_seq == &obj_b.seq[2], 1, tag);
+		aa = obj_a; bb = obj_b;
+		aa.cm = bb.cm = 0; aa.tx_seq = bb.tx_seq = 0;
+		diff_eq_obj("whole encoder state", struct v8, &bb, &aa, tag);
+		diff_eq_obj("whole owned menus", struct v8_cm, &cm_b, &cm_a, tag);
+		text[0] = 0;
+		if (level > 1) {
+			if (len == 0) strcat(text, "V8: BUG - raw Call Function selected without valid data !!!\r\n");
+			sprintf(text + strlen(text), "V8: Initial CM message length is %d octets\r\n", words);
+		}
+		diff_eq_int("reference diagnostic text", strcmp(dsplib_debug_capture_text(1), text), 0, tag);
+		diff_eq_int("diagnostic text", strcmp(dsplib_debug_capture_text(0), text), 0, tag);
+		diff_eq_int("diagnostic boundaries agree", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("reference diagnostic calls", dsplib_debug_capture_lines(1), calls, tag);
+		diff_eq_int("diagnostic calls", dsplib_debug_capture_lines(0), calls, tag);
+		diff_eq_int("reference capture complete", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("capture complete", dsplib_debug_capture_complete(0), 1, tag);
+		configurations++;
+	}
+	diff_eq_int("owned first extension configurations", configurations, 30, 0);
+	fprintf(stderr, "t_v8jm: owned first extension: %d configurations\n", configurations);
+	return diff_end();
+}
+
 /* Complete owned menus exercise the native four-byte read boundary. These
  * initialized encoder components do not establish negotiated modem histories. */
 static int
@@ -1241,6 +1331,7 @@ main(void)
 	rc |= t_evaluate_cases();
 	rc |= t_update_trace();
 	rc |= t_generated_first_extension();
+	rc |= t_owned_first_extension();
 	rc |= t_generated_noext();
 	rc |= t_owned_tail_flags();
 	rc |= t_generated_second_extension();

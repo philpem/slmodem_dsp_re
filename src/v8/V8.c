@@ -240,6 +240,9 @@ initTxSequence(struct v8 *v)
 	 * flag bytes, which is the same as testing bit 3 of b0 and bit 3
 	 * of b2.
 	 */
+	seq = v->tx_seq;
+	cm = v->cm;
+
 #ifdef DSPLIB_REPRODUCE_BUGS
 	if ((*(const unsigned int *)cm & 0x80008) == 0)
 #else
