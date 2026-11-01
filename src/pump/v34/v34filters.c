@@ -1946,58 +1946,58 @@ V34ModulatorProcess(struct v34_modulator *m, int symbol, short *out)
 	work[m->wpos] = (short)symbol;
 	work[m->wpos + step] = (short)(symbol >> 16);
 
-	if (row >= m->rows)
-		return 0;
+	/* No output row still consumes the symbol and advances both work halves. */
+	if (row < m->rows) {
+		do {
+			const short *src = &m->shaped[row * V34_MOD_ROW];
+			const short *p_re = &work[m->wpos];
+			const short *p_im = p_re + step;
+			int acc_re = 0x1000;
+			int acc_im = 0x1000;
+			int re, im, mixed, acc;
 
-	do {
-		const short *src = &m->shaped[row * V34_MOD_ROW];
-		const short *p_re = &work[m->wpos];
-		const short *p_im = p_re + step;
-		int acc_re = 0x1000;
-		int acc_im = 0x1000;
-		int re, im, mixed, acc;
+			/* Interpolate: this row of the polyphase bank, both halves. */
+			for (i = 0; i < taps; i++) {
+				int c = src[i];
 
-		/* Interpolate: this row of the polyphase bank, both halves. */
-		for (i = 0; i < taps; i++) {
-			int c = src[i];
+				acc_re += p_re[i] * c;
+				acc_im += p_im[i] * c;
+			}
+			re = acc_re >> 13;
+			im = acc_im >> 13;
 
-			acc_re += p_re[i] * c;
-			acc_im += p_im[i] * c;
-		}
-		re = acc_re >> 13;
-		im = acc_im >> 13;
+			/*
+			 * Up-convert.  The table holds `sine_len` sine values then
+			 * `sine_len` cosine values, so the quadrature partner is
+			 * `slen` entries further on rather than the next one.
+			 */
+			carry = sine[phase];		/* kept; see the shift below */
+			mixed = (short)(((re * sine[phase + slen]) - (im * carry)
+					 + 0x2000) >> 14);
 
-		/*
-		 * Up-convert.  The table holds `sine_len` sine values then
-		 * `sine_len` cosine values, so the quadrature partner is
-		 * `slen` entries further on rather than the next one.
-		 */
-		carry = sine[phase];		/* kept; see the shift below */
-		mixed = (short)(((re * sine[phase + slen]) - (im * carry)
-				 + 0x2000) >> 14);
+			if (++phase >= slen)
+				phase -= slen;
 
-		if (++phase >= slen)
-			phase -= slen;
+			/*
+			 * Pre-emphasis: 16 taps, read-then-overwrite, the same shift
+			 * idiom as the timing high-pass.
+			 */
+			acc = 0;
+			for (i = 0; i < 16; i++) {
+				int old = m->prem_hist[i];
 
-		/*
-		 * Pre-emphasis: 16 taps, read-then-overwrite, the same shift
-		 * idiom as the timing high-pass.
-		 */
-		acc = 0;
-		for (i = 0; i < 16; i++) {
-			int old = m->prem_hist[i];
+				m->prem_hist[i] = (short)mixed;
+				acc += mixed * preemp[i];
+				mixed = old;
+			}
 
-			m->prem_hist[i] = (short)mixed;
-			acc += mixed * preemp[i];
-			mixed = old;
-		}
+			out[nout++] = (short)((acc + 0x2000) >> 14);
 
-		out[nout++] = (short)((acc + 0x2000) >> 14);
+			row += m->f04;
+		} while (row < m->rows);
 
-		row += m->f04;
-	} while (row < m->rows);
-
-	m->phase = phase;
+		m->phase = phase;
+	}
 
 	/*
 	 * Advance the symbol delay line by one, each half separately.

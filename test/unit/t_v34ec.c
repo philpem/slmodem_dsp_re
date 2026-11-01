@@ -552,6 +552,83 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * Initialized synthetic component boundary, not a configured call
+	 * history: normal setup/calls keep row < rows. Plant only row == rows
+	 * to exercise the reference's no-output path. Both symbol stores and
+	 * the two eight-tap shifts remain within the 128-short work buffer.
+	 */
+	diff_begin("v34 modulator: synthetic no-row boundary");
+	{
+		static struct v34_modulator ma, mb;
+		static short sha[4096], shb[4096];
+		short oa[8], ob[8];
+		const short *sine_a, *sine_b, *preemp_a, *preemp_b;
+		const short *ec_prem_a, *ec_prem_b;
+		int phase_a, phase_b;
+		int na, nb;
+
+		memset(&ma, 0, sizeof(ma));
+		memset(&mb, 0, sizeof(mb));
+		memset(sha, 0, sizeof(sha));
+		memset(shb, 0, sizeof(shb));
+		ma.shaped = sha;
+		mb.shaped = shb;
+		V34SetupModulator(&ma, 600, 1200, 0, 0, 1);
+		ref_V34SetupModulator(&mb, 600, 1200, 0, 0, 1);
+		diff_eq_int("configured taps", ma.taps, 8, 0);
+		diff_eq_int("reference configured taps", mb.taps, 8, 0);
+		diff_eq_int("configured work stride", ma.wstep, 64, 0);
+		diff_eq_int("reference work stride", mb.wstep, 64, 0);
+		diff_eq_int("configured work position", ma.wpos, 0, 0);
+		diff_eq_int("reference work position", mb.wpos, 0, 0);
+		sine_a = ma.sine; sine_b = mb.sine;
+		preemp_a = ma.preemp; preemp_b = mb.preemp;
+		ec_prem_a = ma.ec_prem; ec_prem_b = mb.ec_prem;
+		phase_a = ma.phase; phase_b = mb.phase;
+		ma.row = ma.rows;
+		mb.row = mb.rows;
+		for (k = 0; k < 8; k++)
+			oa[k] = ob[k] = 0x5a5a;
+
+		na = V34ModulatorProcess(&ma, 0x00010002, oa);
+		nb = ref_V34ModulatorProcess(&mb, 0x00010002, ob);
+		diff_eq_int("no-row output count", na, 0, 0);
+		diff_eq_int("reference no-row output count", nb, 0, 0);
+		diff_eq_int("no-row row publication", ma.row, 0, 0);
+		diff_eq_int("reference no-row row publication", mb.row, 0, 0);
+		diff_eq_int("no-row phase retained", ma.phase, phase_a, 0);
+		diff_eq_int("reference no-row phase retained", mb.phase, phase_b, 0);
+		diff_eq_int("no-row real seed", ((short *)ma.work_cbc)[0], 0, 0);
+		diff_eq_int("reference no-row real seed", ((short *)mb.work_cbc)[0], 0, 0);
+		diff_eq_int("no-row real symbol shifted", ((short *)ma.work_cbc)[1], 2, 0);
+		diff_eq_int("reference no-row real symbol shifted", ((short *)mb.work_cbc)[1], 2, 0);
+		diff_eq_int("no-row imaginary seed", ((short *)ma.work_cbc)[64], 0, 0);
+		diff_eq_int("reference no-row imaginary seed", ((short *)mb.work_cbc)[64], 0, 0);
+		diff_eq_int("no-row imaginary symbol shifted", ((short *)ma.work_cbc)[65], 1, 0);
+		diff_eq_int("reference no-row imaginary symbol shifted", ((short *)mb.work_cbc)[65], 1, 0);
+		for (k = 0; k < 8; k++) {
+			diff_eq_int("no-row output untouched", oa[k], 0x5a5a, k);
+			diff_eq_int("reference no-row output untouched", ob[k], 0x5a5a, k);
+		}
+		/* Check actual pointer identities before normalizing the snapshot. */
+		diff_eq_int("no-row sine owner retained", ma.sine == sine_a, 1, 0);
+		diff_eq_int("reference no-row sine owner retained", mb.sine == sine_b, 1, 0);
+		diff_eq_int("no-row shaping owner retained", ma.shaped == sha, 1, 0);
+		diff_eq_int("reference no-row shaping owner retained", mb.shaped == shb, 1, 0);
+		diff_eq_int("no-row preemphasis owner retained", ma.preemp == preemp_a, 1, 0);
+		diff_eq_int("reference no-row preemphasis owner retained", mb.preemp == preemp_b, 1, 0);
+		diff_eq_int("no-row echo preemphasis owner retained", ma.ec_prem == ec_prem_a, 1, 0);
+		diff_eq_int("reference no-row echo preemphasis owner retained", mb.ec_prem == ec_prem_b, 1, 0);
+		mb.ec_prem = ma.ec_prem;
+		mb.sine = ma.sine;
+		mb.shaped = ma.shaped;
+		mb.preemp = ma.preemp;
+		diff_eq_obj("no-row modulator after process", struct v34_modulator,
+			    &ma, &mb, 0);
+	}
+	rc |= diff_end();
+
 	diff_begin("v34 echo history backward clean");
 	{
 		static struct v34_object oa, ob;
