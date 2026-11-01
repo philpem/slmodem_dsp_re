@@ -858,7 +858,7 @@ CodeESeq(struct v32_modem *modem, unsigned short seq)
 }
 
 unsigned short
-CodeRateSeq(struct v32_modem *modem, unsigned short seq)
+CodeRateSeq(struct v32_modem *modem, short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;
