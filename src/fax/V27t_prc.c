@@ -97,27 +97,25 @@ void
 GenEQTrnSequenceV27(void *modem, unsigned short *buf, unsigned short count)
 {
 	short i;
+	unsigned short n;
+	unsigned short *p;
 
 	for (i = 0; i < count; i++)
 		buf[i] = 7;
 
 	ScrambleDataV27(modem, buf, (short)count);
 
-	if (count != 0) {
+	p = buf;
+
+	for (n = count; n-- != 0;) {
+		unsigned short *q = p++;
 		struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
-
-		unsigned short n;
-		unsigned short *p = buf;
-
-		for (n = count; n-- != 0;) {
-			unsigned short *q = p++;
-			if (q[1] & 0x04)
-				*q = (unsigned short)
-					V27TX_PATTERN_ALT[prm->rate];
-			else
-				*q = (unsigned short)
-					V27TX_PATTERN_CARR[prm->rate];
-		}
+		if (q[1] & 0x04)
+			*q = (unsigned short)
+				V27TX_PATTERN_ALT[prm->rate];
+		else
+			*q = (unsigned short)
+				V27TX_PATTERN_CARR[prm->rate];
 	}
 }
 

@@ -142006,3 +142006,44 @@ The observed PRE/store-motion transformations therefore do not justify that
 profile adoption or a whole-source/profile transfer. No V32 source or profile
 change is retained. Its changed diagnostic-string ordering and unchanged string
 multiset are recorded explicitly, not called data equality.
+
+## F12107. V27 generator guard recovery leaves a reload-allocation residual
+
+`GenEQTrnSequenceV27` has one unsigned WORD postdecrement entry guard before
+loading the transmitter's source owner. The previous reconstruction tested
+count twice and captured that owner between the tests. The now-EXACT EQ handler
+provides a same-TU source control: body-local owner acquisition is hoisted
+behind the single loop guard. Applying that coupled graph to the generator
+recovers its guard and owner epoch. Preserve the signed ascending fill, the
+Scramble boundary, following-word selection including its final sentinel,
+branch-local signed rate reads and WORD stores.
+
+This is a qualified partial, **not an EXACT or REGALLOC promotion**: native is
+134 bytes/47 ordinary instructions, previous source 152/53, retained source
+142/51. The old guard-only control also produced 142/51 but captured the owner
+before the remaining guard; equal size and instruction counts hid that distinct
+structural defect. Independent full-TU comparison preserves nine other bodies,
+including eight EXACT functions, with no symbol/binding or allocated-data loss.
+Switch-table addends rebase with the preceding function's length; their
+`TxNextStateV27`-relative targets remain unchanged.
+
+Matching GCC dumps show both the generator and exact handler hoist table
+constants during loop optimisation and retain them as pseudos through local
+allocation. Only during global allocation/reload does the handler rematerialise
+them as direct address operands; the generator keeps table bases in registers
+and retains a fourth saved register. GCC's `reload1.c` substitutes a constant
+for an unallocated equivalent pseudo in an address. This explains the current
+mechanism, not the original source input. Owner placement alone does not explain
+the residual; no register-forcing, flag change or further spelling palette is
+retained. One raw-identical baseline and one coupled source candidate were
+compiled; a formatting-only recompilation was raw-identical to the candidate.
+
+The direct component fixture now crosses both constructor-created rates, seven
+counts including zero, and two following-word bit values: 28 trials. It compares
+the complete 66-WORD buffers and all fourteen scrambler-state bytes, rather than
+only output prefixes. The generator section passes 85 checks; its period binary
+passes 27,928 checks across fourteen sections. The original reconstruction also
+passes the stronger fixture. Separate apparatus controls corrupt an untouched
+following word or `pending`; each fails 28 of the generator's 85 checks. These
+are detector controls, not valid modem histories or a mutation campaign.
+Artifacts and command/compiler identities are under `scratch/v27gen60/`.
