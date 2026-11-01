@@ -213,7 +213,7 @@ fskdemodulate(struct v34_object *obj, const short *in, struct v34_fsk *st)
 	int bit_len;
 	int wrap;
 	short prev;
-	int i;
+	short i;
 
 	/* Switched off: not even the detector runs. */
 	if (obj->receiver.retrain_gate != 0)
