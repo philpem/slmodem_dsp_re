@@ -22,8 +22,8 @@
  *      layer drives the installed handler directly rather than through one.
  *
  *   4. THE ARMS LAYER 3 CANNOT REACH RELIABLY: `TxHdxDataV27`'s
- *      underrun-with-`V27TXP_INT_0008`-set arm (nothing reconstructed ever
- *      sets that field non-zero) and `TxNextStateV27`'s out-of-range default
+ *      underrun-with-`V27TXP_INT_0008`-set arm (also exercised below through
+ *      the real force-control bit and installed-handler lifecycle) and `TxNextStateV27`'s out-of-range default
  *      arm.  Both reached by calling the half-duplex functions directly
  *      against a handle `V27TX_create` built, `t_v29txcreate.c`'s own idiom.
  */
@@ -34,6 +34,7 @@
 
 #include "harness.h"
 
+#include "dsplib/debug.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
@@ -70,6 +71,7 @@ extern void ref_SetScramblerV27(void *modem);
 extern void ref_GenEQTrnSequenceV27(void *modem, unsigned short *buf,
 				    unsigned short count);
 extern struct v27tx_cfg ref_V27TX_CFG;
+extern unsigned int ref_dsplibs_debug_level;
 
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
@@ -514,14 +516,10 @@ test_tx_cycle(void)
 	}
 
 	/*
-	 * States 0 (START), 8 (TURNOFF), 9 (NOENG) and 10 (IDLE) are reached
-	 * only via `TxHdxDataV27`'s underrun-bypass arm -- nothing in ordinary
-	 * operation ever transitions the machine OUT of DATA once it arrives
-	 * there, so a driven cycle that never pokes `V27TXP_INT_0008` cannot
-	 * reach them.  `test_data_underrun_bypass_arm` below reaches the one
-	 * transition (DATA -> TURNOFF) that path exercises; the rest of that
-	 * chain is untested, same as V29's own unreachable-without-poking
-	 * corners.  Only 1..7 (QUIET..DATA) are asserted here.
+	 * This run leaves the force-control bit clear and stays in DATA.
+	 * Only 1..7 (QUIET..DATA) are asserted here. The controlled shutdown
+	 * lifecycle below enables the real control bit and drives the installed
+	 * handlers through TURNOFF, NOENG and IDLE back to START.
 	 */
 	for (i = 1; i <= 7; i++)
 		diff_eq_int("state %ld visited during the run", seen_state[i],
@@ -853,6 +851,159 @@ test_tx_control(void)
 	return diff_end();
 }
 
+/* One installed component call, with defined EQ lookahead and output tail. */
+static void
+tx_lifecycle_step(void *a, void *b, long tag)
+{
+	unsigned short ina[64], inb[64];
+	short outa[512], outb[512];
+	short ba = 32, bb = 32;
+	short ra, rb;
+	void *pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+	void *pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+	v27tx_process_fn pfa = *(v27tx_process_fn *)(void *)FIELD(pa, V27TXP_PROCESS);
+	v27tx_process_fn pfb = *(v27tx_process_fn *)(void *)FIELD(pb, V27TXP_PROCESS);
+
+	memset(ina, 0xa5, sizeof ina);
+	memset(inb, 0xa5, sizeof inb);
+	memset(outa, 0x5a, sizeof outa);
+	memset(outb, 0x5a, sizeof outb);
+	diff_eq_int("lifecycle installed handler (%ld)", fn_id((void *)pfa),
+		    fn_id((void *)pfb), tag);
+	diff_eq_int("lifecycle known handlers (%ld)",
+		    fn_id((void *)pfa) >= 0 && fn_id((void *)pfb) >= 0, 1, tag);
+	if (fn_id((void *)pfa) < 0 || fn_id((void *)pfb) < 0)
+		return;
+	ra = pfa(a, ina, outa, &ba);
+	rb = pfb(b, inb, outb, &bb);
+	diff_eq_int("lifecycle samples (%ld)", ra, rb, tag);
+	diff_eq_int("lifecycle budget (%ld)", ba, bb, tag);
+	cmp_shorts("lifecycle output and tail (%ld)", outa, outb, 512);
+	compare_tree("lifecycle", a, b, tag);
+}
+
+/* Constructor/control/FIFO/installed-handler boundary: no state is planted.
+ * FORCE_INT_0008 is the real route out of DATA. An empty FIFO then leads
+ * through TURNOFF, NOENG and IDLE; feeding IDLE restarts START and QUIET.
+ * Debug rows use the normal logger, with no callback replacement. */
+static int
+test_controlled_shutdown_lifecycle(void)
+{
+	unsigned int saved_a = dsplibs_debug_level;
+	unsigned int saved_b = ref_dsplibs_debug_level;
+	int saved_capture = dsplib_debug_capture_on;
+	int rate, train_long, debug;
+
+	diff_begin("v27txcreate: real control shutdown/restart, rates/training/debug");
+	for (rate = 0; rate < 2; rate++) {
+		for (train_long = 0; train_long < 2; train_long++) {
+			for (debug = 0; debug < 2; debug++) {
+				struct v27tx_cfg ca = V27TX_CFG, cb = V27TX_CFG;
+				struct v27tx_ctl ctl_a, ctl_b;
+				void *a, *b, *pa, *pb;
+				struct fax_fifo *fa, *fb;
+				int seen[11], step, i;
+				long row = (rate * 2 + train_long) * 2 + debug;
+				unsigned short word = 1;
+
+				dsplibs_debug_level = ref_dsplibs_debug_level = debug ? 2u : 0u;
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+				ca.bitrate = cb.bitrate = rate ? 4800 : 2400;
+				ca.int_0018 = cb.int_0018 = train_long ? 0 : 1;
+				a = V27TX_create(0, &ca);
+				b = ref_V27TX_create(0, &cb);
+				diff_eq_int("lifecycle constructors (%ld)", a != 0 && b != 0, 1, row);
+				if (!a || !b) {
+					if (a) V27TX_delete(a);
+					if (b) ref_V27TX_delete(b);
+					continue;
+				}
+				pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+				pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+				fa = (struct fax_fifo *)FIELD_PTR(pa, V27TXD_FIFO);
+				fb = (struct fax_fifo *)FIELD_PTR(pb, V27TXD_FIFO);
+				memset(seen, 0, sizeof seen);
+				for (step = 0; step < 256; step++) {
+					int state = AT_S(pa, V27TXP_STATE);
+					if (state >= 0 && state < 11) seen[state] = 1;
+					if (state == V27TX_STATE_DATA) break;
+					tx_lifecycle_step(a, b, row * 1000 + step);
+				}
+				diff_eq_int("lifecycle reached DATA (%ld)", AT_S(pa, V27TXP_STATE),
+					    V27TX_STATE_DATA, row);
+				diff_eq_int("lifecycle reached DATA blob (%ld)", AT_S(pb, V27TXP_STATE),
+					    V27TX_STATE_DATA, row);
+				if (AT_S(pa, V27TXP_STATE) != V27TX_STATE_DATA ||
+				    AT_S(pb, V27TXP_STATE) != V27TX_STATE_DATA)
+					goto lifecycle_row_done;
+				diff_eq_int("lifecycle training selector (%ld)", AT_S(pa, V27TXP_TRAIN_LONG),
+					    train_long, row);
+				diff_eq_int("lifecycle FIFO empty (%ld)", fa->count == 0 && fb->count == 0, 1, row);
+				memset(&ctl_a, 0, sizeof ctl_a);
+				ctl_a.scale_mul = 1;
+				ctl_a.int_0010 = ca.int_0018;
+				ctl_a.flags = V27TXCTL_FLAGS_FORCE_INT_0008;
+				ctl_b = ctl_a;
+				diff_eq_int("lifecycle control ours (%ld)", V27TX_control(a, &ctl_a), 1, row);
+				diff_eq_int("lifecycle control blob (%ld)", ref_V27TX_control(b, &ctl_b), 1, row);
+				diff_eq_int("lifecycle force gate ours (%ld)", AT_I(pa, V27TXP_INT_0008), 1, row);
+				diff_eq_int("lifecycle force gate blob (%ld)", AT_I(pb, V27TXP_INT_0008), 1, row);
+				for (step = 0; step < 16; step++) {
+					int state = AT_S(pa, V27TXP_STATE);
+					if (state >= 0 && state < 11) seen[state] = 1;
+					if (state == V27TX_STATE_IDLE) break;
+					tx_lifecycle_step(a, b, row * 1000 + 300 + step);
+				}
+				diff_eq_int("lifecycle reached IDLE (%ld)", AT_S(pa, V27TXP_STATE),
+					    V27TX_STATE_IDLE, row);
+				diff_eq_int("lifecycle reached IDLE blob (%ld)", AT_S(pb, V27TXP_STATE),
+					    V27TX_STATE_IDLE, row);
+				if (AT_S(pa, V27TXP_STATE) != V27TX_STATE_IDLE ||
+				    AT_S(pb, V27TXP_STATE) != V27TX_STATE_IDLE)
+					goto lifecycle_row_done;
+				tx_lifecycle_step(a, b, row * 1000 + 400);
+				diff_eq_int("lifecycle empty FIFO stays IDLE (%ld)", AT_S(pa, V27TXP_STATE),
+					    V27TX_STATE_IDLE, row);
+				diff_eq_int("lifecycle feed ours (%ld)", FIFO_write(fa, &word, 1), 1, row);
+				diff_eq_int("lifecycle feed blob (%ld)", FIFO_write(fb, &word, 1), 1, row);
+				tx_lifecycle_step(a, b, row * 1000 + 401);
+				diff_eq_int("lifecycle restart START (%ld)", AT_S(pa, V27TXP_STATE),
+					    V27TX_STATE_START, row);
+				diff_eq_int("lifecycle restart START blob (%ld)", AT_S(pb, V27TXP_STATE),
+					    V27TX_STATE_START, row);
+				if (AT_S(pa, V27TXP_STATE) != V27TX_STATE_START ||
+				    AT_S(pb, V27TXP_STATE) != V27TX_STATE_START)
+					goto lifecycle_row_done;
+				tx_lifecycle_step(a, b, row * 1000 + 402);
+				diff_eq_int("lifecycle restart QUIET (%ld)", AT_S(pa, V27TXP_STATE),
+					    V27TX_STATE_QUIET, row);
+				for (i = 0; i < 11; i++)
+					diff_eq_int("lifecycle visited state (%ld)", seen[i], 1, row * 11 + i);
+				diff_eq_int("lifecycle trace complete ours (%ld)", dsplib_debug_capture_complete(0), 1, row);
+				diff_eq_int("lifecycle trace complete blob (%ld)", dsplib_debug_capture_complete(1), 1, row);
+				diff_eq_int("lifecycle trace text (%ld)",
+					    strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, row);
+				diff_eq_int("lifecycle trace calls (%ld)", dsplib_debug_capture_boundaries_equal(), 1, row);
+				diff_eq_int("lifecycle logger enabled (%ld)", dsplib_debug_capture_lines(0) != 0, debug, row);
+				if (debug) {
+					const char *trace = dsplib_debug_capture_text(0);
+					diff_eq_int("lifecycle logged TURNOFF (%ld)", strstr(trace, "V27TX_STATE_TURNOFF\n") != 0, 1, row);
+					diff_eq_int("lifecycle logged NOENG (%ld)", strstr(trace, "V27TX_STATE_NOENG\n") != 0, 1, row);
+					diff_eq_int("lifecycle logged IDLE (%ld)", strstr(trace, "V27TX_STATE_IDLE\n") != 0, 1, row);
+				}
+lifecycle_row_done:
+				V27TX_delete(a);
+				ref_V27TX_delete(b);
+			}
+		}
+	}
+	dsplibs_debug_level = saved_a;
+	ref_dsplibs_debug_level = saved_b;
+	dsplib_debug_capture_on = saved_capture;
+	return diff_end();
+}
+
 static int
 test_tx_control_null_req(void)
 {
@@ -1177,6 +1328,7 @@ main(void)
 	rc |= test_next_state_default_arm();
 	rc |= test_modem_cycle();
 	rc |= test_tx_control();
+	rc |= test_controlled_shutdown_lifecycle();
 	rc |= test_tx_control_null_req();
 	rc |= test_gen_eq_trn_sequence();
 	rc |= test_tx_no_carrier_direct();
