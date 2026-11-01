@@ -95,8 +95,8 @@ explanatory observation require a hypothesis/scope review, not more synonyms.
 - Partial-object comparison has its own stronger semantic/raw identity claims.
   Report DIFFERENT honestly. Defer alignment when the owner prioritises functions.
 - Mutation campaigns/snapshot refreshes are optional named investigations, not
-  implicit commit/merge gates. Follow the
-  [mutation policy](docs/method/mutation-policy.md); keep structural anchors valid.
+  implicit commit/merge gates. Historical verdicts are not current evidence;
+  require a valid green baseline, controls and denominators for a new campaign.
 - Do not edit gate inputs while a gate runs. Preserve the wrapped command's exit
   status; a trailing `echo` or `tail` can report success after a failing gate.
 
