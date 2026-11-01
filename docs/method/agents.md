@@ -4,9 +4,11 @@ Every number cites `docs/findings.md` in this tree.
 
 Parallelism here means **a worktree and a branch per batch**, each batch owning
 a disjoint set of source files, each running the phase gate and seeing its own
-work pass. It is the only structural remedy for the token wall (finding F220,
-and `efficiency.md`), and it costs three things: hand-overs go wrong, shared
-data structures collide, and the merge is where both bills arrive.
+work pass. Separate contexts can reduce pressure on the parent (finding F220
+and `efficiency.md`); every worker still consumes model usage. Prefer a compact
+artifact-backed task to a full-history fork. This is not evidence that parallel
+workers reduce billed cost. Hand-overs can go wrong, shared data structures
+collide, and integration needs its own review.
 
 This file is what was learned paying them. Nothing here is about how many
 agents to run, which model to use, or how to phrase a prompt — **none of that

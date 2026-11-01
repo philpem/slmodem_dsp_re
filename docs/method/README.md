@@ -39,13 +39,17 @@ NONMATCH, contiguous instruction runs and diagnostic byte-size records.
 | [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |
 | `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Adapt after establishing your project's boundary. |
 | `tiers.md` | the current oracles and what each is structurally blind to; archived mutation results are labelled historical |
-| `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
+| [Efficiency](efficiency.md) | Model usage, context isolation, free local computation and elapsed-time budgets. |
 | `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
 | [Byte bit tests](byte-bit-tests.md) | a measured narrow-operand source form for immediate bit-7 tests, with negative controls and transfer limits |
 | `placement-ledger.md` | causal linked-position ledger: why each function moved, and the first shift |
-| `agents.md` | parallel batches: briefs, shared data, numbering, merging |
+| [Agent batches](agents.md) | Owned tasks, compact briefs, context costs, shared data and integration. |
 | `tools.md` | which tools are portable, and what each assumes about its host |
 | `recording.md` | how to write the record: naming, the scope of a quantity, correcting a pushed finding |
+
+The [historical working-instruction snapshot](working-instructions-history.md)
+preserves the examples formerly loaded at every agent startup. Its counts and
+queues are historical; [CLAUDE.md](../../CLAUDE.md) holds the active rules.
 
 ## The rule these were written under
 
