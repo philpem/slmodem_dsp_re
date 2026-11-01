@@ -141732,3 +141732,49 @@ The bounded evidence packet is `scratch/transfer-followup/LEDGER.json` and
 configured reconstruction with `make phase J=8`, `make byteident` and
 `make partial-compare`. This result concerns source/profile fidelity and the
 stated component boundaries, not whole-modem runtime reachability.
+
+## F12102. Certify the existing V29 source through a bounded fallthrough-switch proof
+
+The proof extension in `ddfc41578` admits the actual `TxNextStateV29`
+CMP/EAX, unsigned-JA-to-default, fallthrough indexed dispatch. The existing
+rebased SUB/CMP/JBE grammar remains separate. Both protect every byte of the
+guard and dispatch, require the sole guarded predecessor, and reject observed
+named, direct and relocated bypass entries. Read-only table extent, complete
+entry relocations, unique owner, ordered instruction-boundary targets and
+exclusive observed reference checks are unchanged.
+
+The native and reconstructed bodies were already equal outside relocated
+fields after F12101. Their anonymous tables occupy different section offsets
+but have identical ordered function-relative targets
+`[106, 153, 263, 310, 441, 486, 527]`. They now produce the same exact-only
+identity descriptor. The source census moves from 1,188 EXACT / 39 REGALLOC /
+624 NONMATCH / 1 UNRESOLVED to **1,189 / 39 / 624 / 0**, across 1,852 symbols,
+with no protected loss. This is **certification of existing source**, not an
+additional source-code recovery. All 300 source objects and all source/header
+inputs are unchanged.
+
+The bounded owner vocabulary adds byte-validated MOVSX-word and MOVZX-byte
+forms. ModRM/SIB extent and full-width destination are checked. Native
+word-immediate stores admit only `66 C7 /0 imm16`. Independent review found
+that an initial first-prefix check accepted nested operand-size plus segment
+or address prefixes on MOVW. Those two cases were reproduced before tightening
+the decoder; they now refuse, together with repeat-prefix and C7 nonzero-group
+controls. This records an admission-domain defect in the uncommitted draft,
+not a claimed runtime exploit or a relaxed proof.
+
+Validation includes 147 legacy and 100 new two-sided geometry negative cases,
+16 new synthetic positive ELF pairs (short/near JA and extension address modes),
+actual RD/V29 positives, and eight actual reordered/interior-target controls.
+A smaller bound is explicitly valid geometry but cannot match the larger
+machine; a larger bound without its entry refuses. Parent independently ran
+the maintained suite with the actual V29 pair. Fidelity/linked-copy checks and
+`make phase J=8` pass; period differential is 396/396 plus structural checks.
+The final all-symbol census was refreshed after review fixes. All 300 actual
+period and faithful source objects remain byte-identical. Whole-object partial
+comparison remains DIFFERENT.
+
+Reproduce the proof controls with
+`python3 tools/toolchain/test_guarded_switch.py --actual-v29 build/tc_repro/src_fax_V29t_prc.c.o --blob ref/slmodemd/dsplibs.o`,
+then `make byteident`. Detailed draft/review controls are in
+`scratch/switch-v27-completion/`; they are not maintained dependencies. No
+register-renaming rule, tolerance or reconstruction compiler profile changed.
