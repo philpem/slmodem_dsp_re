@@ -38,10 +38,9 @@
  * + 0x04, + 0x08, 6 and 4; V.17's are + 0x08, + 0x14, 0x30 and 9.  Finding
  * F9253.
  *
- * The parameter block is read ONCE before the gate and re-read at the top of
- * every loop iteration; the object hoists the first iteration's read out of
- * the loop (0x0a46bf and 0x0a475e reach the head at 0x0a46ea, and the back
- * edge at 0x0a46e7 reloads), which is loop rotation of exactly this source.
+ * The first dispatch uses the owner read before the gate, refreshed after
+ * FIFO_write when that arm runs. Later dispatches refresh it on the back
+ * edge. The callback receives one budget pointer captured before the loop.
  */
 int
 V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
@@ -50,6 +49,7 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	int result;
 	unsigned short taken;
 	short budget;
+	short *budget_ptr;
 	short total;
 
 	prm = ((struct v29_tx_root *)modem)->params;
@@ -57,26 +57,30 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	((struct v29_tx_root *)modem)->result.byte.flags &=
 		(unsigned char)~V29TX_RESULT_B1_BIT1;
 
-	if (prm->int_0008 == 0)
+	if (prm->int_0008 == 0) {
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
 					prm->fifo,
 				in, *count);
-	else
+		prm = ((struct v29_tx_root *)modem)->params;
+	} else
 		taken = *count;
 
 	budget = V29TX_MODEM_BUDGET;
 	total = 0;
+	budget_ptr = &budget;
 	do {
 		short got;
 
-		prm = ((struct v29_tx_root *)modem)->params;
 		got = prm->handler
-					(modem, in, out, &budget);
+					(modem, in, out, budget_ptr);
 
 		out += got;
 		total = (short)(total + got);
-	} while (budget > 0);
+		if (budget <= 0)
+			break;
+		prm = ((struct v29_tx_root *)modem)->params;
+	} while (1);
 
 	if (*count != taken) {
 		((struct v29_tx_root *)modem)->result.byte.flags |=
@@ -391,14 +395,15 @@ TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 {
+	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
 	unsigned short taken;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 0;
 
-	if (((struct v29_tx_root *)modem)->params->countdown != 0) {
-		int which = ((struct v29_tx_root *)modem)->params->rate;
+	if (prm->countdown != 0) {
+		int which = prm->rate;
 
-		((struct v29_tx_root *)modem)->params->countdown = 0;
+		prm->countdown = 0;
 
 		switch (which) {
 		case V29_RATE_7200:
@@ -416,7 +421,7 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 	}
 
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)((struct v29_tx_root *)modem)->params->fifo,
+		FIFO_read((struct fax_fifo *)prm->fifo,
 			  in, (unsigned short)*budget);
 
 	if ((unsigned short)*budget > taken) {
@@ -459,21 +464,19 @@ short
 TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV29(modem, in, n);
@@ -554,21 +557,19 @@ short
 TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV29(modem, in, out, n);

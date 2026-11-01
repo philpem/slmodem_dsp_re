@@ -9743,3 +9743,30 @@ recover all 355 bytes and relocation targets, reaching EXACT at 75 instructions.
 Keep the existing case order and all branch bodies fixed. The inlined copy in
 `V32FP_recreate` also changes and remains SIZE, so it needs its own component
 validation and collateral audit.
+
+## Cross source lifetimes with a compiler-pass control
+
+When a native reload disappears, trace the actual transformation before trying
+more type spellings. In [F12100](../findings.md#f12100-native-transmit-lifetimes-and-a-shared-gcse-control),
+a WORD reload survived CSE and disappeared in GCSE PRE. A pass control restored
+a complete training function while losing an already-exact wrapper. Inspecting
+the wrapper's native pointer capture and refresh ages recovered it under both
+profiles. The old exact body had concealed a source/profile compensation.
+
+Treat that loss as a discriminating question. Compare the complete TU, preserve
+useful controls, and cross the native-supported source explanation with the
+option. A flag change alone is not recovered source; an old exact neighbour is
+not proof that its current source is uniquely original. Require the complete
+native constraints, named collateral sets, actual-build differential and object
+parity before adopting the combined explanation. Record the resulting profile's
+scope and ambiguity rather than manufacturing function attributes.
+
+Keep the unit of work large enough to close the dependency graph. Shared
+request lifetimes, callback owner epochs and outgoing arguments can couple
+several functions in one TU. Analyse their constraints together without
+extracting the original state machine into helpers. Retain a native-supported
+capture even when its frame is temporarily less close, provided the complete
+review explains the tradeoff; size and local runs do not overrule evidence.
+Batch final validation at the closure checkpoint. Report whole-function gains
+separately from partial recoveries and distinguish measured model usage from
+free local computation.

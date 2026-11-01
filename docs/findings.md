@@ -141613,3 +141613,62 @@ unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
 No flags, attributes, padding or test edits. The merged head also carries
 the parallel signedness and mask waves (F12059, F12060); the before/after
 figures above are this change's own delta, not the merged head's census.
+
+## F12100. Native transmit lifetimes and a shared GCSE control
+
+At `8500ad8e5466f29383b09224607acfe02349c06b`, the V.17/V.29 processor
+recovery closes eight functions as EXACT: `TxHdxABV17`, `TxHdxABV29`,
+`TxHdxBridgeV17`, `TxHdxDataV17`, `TxHdxEQCondV17`, `TxHdxSCR1V17`,
+`TxHdxSCR1V29` and `TxHdxTEP_V17`. The Gentoo GCC 3.4.2-r2 census moves from
+1,173 EXACT / 39 REGALLOC / 640 NONMATCH to **1,181 / 39 / 632**, across
+1,852 symbols, with zero unresolved symbols or protected losses. Selected-link
+EXACT likewise gains those eight names, from 1,176 to 1,184.
+
+The common source graph reads the WORD countdown directly and starts minimum
+selection from the budget. Under the general profile, the remaining native
+countdown reload survives `.06.cse` but is removed by `.08.gcse` PRE. Disabling
+GCSE restores a complete native function, initially at the cost of an existing
+exact wrapper. That loss did not establish that the alternative profile was
+wrong: the wrapper's source relied on PRE to compensate for different pointer
+capture ages.
+
+Native source constraints restore the private owner after `FIFO_write` and on
+loop continuation, retain the budget pointer, capture the data-state owner
+before the FIFO call, and refresh state-machine owners after debug callbacks.
+V.17's state machine uses shared generator/request objects with the native
+template-read ages. These changes preserve all eight pre-existing EXACT anchors
+across both TUs under the shared `-fno-gcse` profile. The two original TUs are
+confirmed by the ELF's `V17t_prc.c` and `V29t_prc.c` FILE records. The profile is
+a supported source/compiler explanation, **not a uniquely recovered original
+command line**, and is selected only for those two processor TUs in both
+`period.mk` and `period_inner.sh`, with stamp invalidation and logged flags.
+
+The final V.17 template capture also closes `TxHdxDataV17` as a bystander of
+preceding source context. It is retained for its native read-age evidence and
+the complete function match. `TxNextStateV17` remains NONMATCH: its frame is
+0x4c against the native 0x48, despite recovering shared request lifetimes and
+callback boundaries. A smaller frame/size gap in another tested source is not
+sufficient reason to discard the better-supported capture or its exact gain.
+
+Validation: 24 full-TU experiment cells, 19 distinct object emissions, four
+raw-identical unchanged-TU controls and three standalone loop models. The
+focused period fixtures pass 2/2 with 61,369 checks; `make phase J=8` passes
+396/396 period binaries and all structural checks. All 300 actual period source
+objects equal their faithful comparison objects byte for byte; only the two
+intended TUs differ from the starting snapshot. All 21 functions preserve
+native direct-call multiplicities, exports and bindings. Jump-table review
+preserves 12/12 V.17 and 7/7 V.29 case identities; shifted-entry negative controls
+fire for all 19. Independent parent rescoring confirms the eight exact gains
+without changing classification rules.
+
+A scratch census initially omitted the selected partial-link proof context and
+reported an unchanged `v22_local_loop` as unresolved. The same unchanged object
+returns EXACT with the proper context; the final census uses the actual build
+and recovered-order link. This is an apparatus-context correction, not a waived
+loss. Whole-object partial comparison still reports semantic and raw DIFFERENT.
+Portability and unique-source/command-line claims are outside this result.
+
+Reproduce with `make phase J=8`, `make byteident` and `make partial-compare`.
+The reproducible investigation packet is in `scratch/closure-trial/LEDGER.json`;
+scratch is not a maintained build dependency. The Phase-II and modulus-decoder
+pilots produced no closures and no retained changes.
