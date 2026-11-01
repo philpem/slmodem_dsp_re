@@ -870,7 +870,7 @@ CodeRateSeq(struct v32_modem *modem, short seq)
 }
 
 unsigned short
-CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq)
+CodeFinalRateSeq(struct v32_modem *modem, short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;

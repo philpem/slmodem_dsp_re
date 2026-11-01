@@ -36,7 +36,7 @@ extern unsigned short ref_RateToSeq(void *modem, short rate);
 extern int ref_SeqToRate(void *modem, unsigned short seq);
 extern short ref_DecodeRateSeq(void *modem, unsigned short seq);
 extern unsigned short ref_CodeRateSeq(void *modem, short seq);
-extern unsigned short ref_CodeFinalRateSeq(void *modem, unsigned short seq);
+extern unsigned short ref_CodeFinalRateSeq(void *modem, short seq);
 extern unsigned short ref_CodeESeq(void *modem, unsigned short seq);
 extern void ref_InitGenSequence(void *modem, unsigned short pattern,
 				unsigned short total, unsigned short width);
