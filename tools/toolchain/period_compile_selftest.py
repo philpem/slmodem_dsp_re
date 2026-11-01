@@ -22,6 +22,8 @@ class CompileTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.log = self.root/'compiler.jsonl'
+        self.depmap = self.root/'compiler-dependencies.json'
+        self.depmap.write_text('{}')
         self.out = self.root/'out'
         self.script = self.root/'tools/toolchain/period_inner.sh'
         self.script.parent.mkdir(parents=True)
@@ -49,11 +51,21 @@ with open(os.environ['COMPILER_LOG'], 'a') as stream:
 output = pathlib.Path(args[args.index('-o')+1])
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_bytes(b'compiled')
+if '-MF' in args:
+    dependencies = json.loads(pathlib.Path(os.environ['COMPILER_DEPS']).read_text())
+    assert '-MT' not in args, args
+    target = str(output)
+    deps = dependencies.get(args[-1], [args[-1]])
+    separator = ' '+chr(92)+chr(10)+' '
+    pathlib.Path(args[args.index('-MF')+1]).write_text(target+': '+separator.join(deps)+chr(10))
+if os.environ.get('COMPILER_FAIL') == args[-1]:
+    sys.exit(1)
 ''')
         compiler.chmod(0o755)
         (bindir/'g++').symlink_to('gcc')
         self.env = dict(os.environ, PATH=str(bindir)+os.pathsep+os.environ.get('PATH', ''),
-                        COMPILER_LOG=str(self.log), KEEP='1', STAGE='compile', J='1',
+                        COMPILER_LOG=str(self.log), COMPILER_DEPS=str(self.depmap),
+                        KEEP='1', STAGE='compile', J='1',
                         SRC=' '.join(INPUTS[:3]), CXXSRC=' '.join(INPUTS[3:5]), ASRC=INPUTS[5], TESTS='')
 
     def run_stage(self):
@@ -107,7 +119,17 @@ output.write_bytes(b'compiled')
             prefix = 'period: '+label+' flags '
             lines = [line for line in stdout.splitlines() if line.startswith(prefix)]
             self.assertEqual(len(lines), 1, stdout)
-            self.assertEqual(shlex.split(lines[0][len(prefix):]), calls[source][1:-3])
+            actual = calls[source][1:-3]
+            if source.startswith('test/unit/'):
+                # Dependency destinations are per-object apparatus, printed
+                # separately from the common code-generation flags.
+                begin = actual.index('-MMD')
+                obj = self.out/'test_unit_fixture.o'
+                self.assertEqual(actual[begin:begin+3],
+                                 ['-MMD', '-MF', str(obj)+'.d.tmp'])
+                self.assertNotIn('-MT', actual)
+                actual = actual[:begin] + actual[begin+3:]
+            self.assertEqual(shlex.split(lines[0][len(prefix):]), actual)
 
     def test_keep_reuses_unchanged_objects(self):
         self.run_stage()
@@ -147,6 +169,121 @@ output.write_bytes(b'compiled')
         self.env['KEEP'] = ''
         self.run_stage()
         self.assertEqual(len(self.calls()), 2*len(INPUTS))
+
+    def fixture_object(self):
+        return self.out/'test_unit_cppfixture.o'
+
+    def include_dependency(self, name='test/unit/shared.cpp'):
+        path = self.root/name
+        path.write_text('/* included input */\n')
+        os.utime(path, (1_700_000_000, 1_700_000_000))
+        self.depmap.write_text(json.dumps({'test/unit/cppfixture.cpp':
+                                         ['test/unit/cppfixture.cpp', name]}))
+        return path
+
+    def test_included_cpp_edit_rebuilds_only_dependent_fixture(self):
+        shared = self.include_dependency()
+        self.run_stage()
+        self.newer_than_objects(shared)
+        self.run_stage()
+        self.assertEqual(len(self.calls()), len(INPUTS)+1)
+        self.assertEqual(self.calls()[-1]['argv'][-1], 'test/unit/cppfixture.cpp')
+
+    def test_deleted_dependency_rebuilds_dependent_fixture(self):
+        shared = self.include_dependency()
+        self.run_stage()
+        shared.unlink()
+        self.run_stage()
+        self.assertEqual(len(self.calls()), len(INPUTS)+1)
+        self.assertEqual(self.calls()[-1]['argv'][-1], 'test/unit/cppfixture.cpp')
+
+    def test_equal_dependency_timestamp_refuses_cache(self):
+        shared = self.include_dependency()
+        self.run_stage()
+        stamp = self.fixture_object().stat().st_mtime_ns
+        os.utime(shared, ns=(stamp, stamp))
+        self.run_stage()
+        self.assertEqual(len(self.calls()), len(INPUTS)+1)
+
+    def test_dependency_receipt_rejects_dropped_entry(self):
+        self.include_dependency()
+        self.run_stage()
+        dep = Path(str(self.fixture_object())+'.d')
+        dep.write_text(str(self.fixture_object())+': test/unit/cppfixture.cpp\n')
+        self.run_stage()
+        self.assertEqual(len(self.calls()), len(INPUTS)+1)
+
+    def test_dependency_parser_rejects_invalid_rules(self):
+        self.include_dependency()
+        self.run_stage()
+        obj = self.fixture_object()
+        dep = Path(str(obj)+'.d')
+        receipt = Path(str(obj)+'.inputs')
+        for invalid in ('', 'not a rule\n', 'wrong.o: test/unit/cppfixture.cpp\n',
+                        str(obj)+': test/unit/shared.cpp\n',
+                        str(obj)+': test/unit/cppfixture.cpp\nextra: input\n',
+                        str(obj)+': test/unit/cppfixture.cpp \\',
+                        str(obj)+': test/unit/cppfixture.cpp $(untrusted)\n',
+                        str(obj)+': test/unit/cppfixture.cpp test/unit/*.cpp\n',
+                        str(obj)+': test/unit/cppfixture.cpp test/unit/?.cpp\n',
+                        str(obj)+': test/unit/cppfixture.cpp test/unit/[s]*.cpp\n'):
+            with self.subTest(rule=invalid):
+                before = len(self.calls())
+                dep.write_text(invalid)
+                # Seal deliberately malformed input so this exercises the
+                # parser in addition to the separate dropped-entry checksum.
+                checksum = subprocess.check_output(['cksum', str(obj), str(dep)])
+                flags = subprocess.check_output(['cksum', 'test/unit/cppfixture.cxxflags'],
+                                                cwd=self.root)
+                receipt.write_bytes(checksum+flags)
+                self.run_stage()
+                self.assertEqual(len(self.calls()), before+1)
+
+    def test_missing_dependency_file_or_receipt_refuses_cache(self):
+        self.run_stage()
+        for suffix in ('.d', '.inputs'):
+            with self.subTest(suffix=suffix):
+                before = len(self.calls())
+                Path(str(self.fixture_object())+suffix).unlink()
+                self.run_stage()
+                self.assertEqual(len(self.calls()), before+1)
+
+    def test_failed_compile_cannot_reuse_old_dependency_receipt(self):
+        shared = self.include_dependency()
+        self.run_stage()
+        self.newer_than_objects(shared)
+        self.env['COMPILER_FAIL'] = 'test/unit/cppfixture.cpp'
+        result = subprocess.run(['sh', str(self.script)], cwd=self.root, env=self.env,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(Path(str(self.fixture_object())+'.inputs').exists())
+        self.assertFalse(Path(str(self.fixture_object())+'.d').exists())
+        self.env.pop('COMPILER_FAIL')
+        before = len(self.calls())
+        self.run_stage()
+        self.assertEqual(len(self.calls()), before+1)
+        self.run_stage()
+        self.assertEqual(len(self.calls()), before+1)
+
+    def test_removed_cxxflags_refuses_cached_fixture(self):
+        self.run_stage()
+        (self.root/'test/unit/cppfixture.cxxflags').unlink()
+        self.run_stage()
+        self.assertEqual(len(self.calls()), len(INPUTS)+1)
+
+    def test_receipt_publication_failure_is_recorded_with_parallel_jobs(self):
+        wrapper = self.root/'bin/mv'
+        wrapper.write_text('#!/bin/sh\ncase "$2" in\n'
+                           '*test_unit_cppfixture.o.inputs) exit 1 ;;\nesac\n'
+                           'exec /bin/mv "$@"\n')
+        wrapper.chmod(0o755)
+        self.env['J'] = '2'
+        result = subprocess.run(['sh', str(self.script)], cwd=self.root, env=self.env,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual((self.out/'failed').read_text().splitlines(),
+                         ['test/unit/cppfixture.cpp'])
+        self.assertFalse(Path(str(self.fixture_object())+'.inputs').exists())
 
 
 if __name__ == '__main__':

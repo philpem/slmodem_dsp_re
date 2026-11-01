@@ -68,6 +68,53 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # source and this.
 NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
 
+# Several transcript fixtures include another test/unit .cpp. Its mtime is
+# not covered by NEWEST_HDR. Keep compiler-produced dependencies for fixtures
+# only; reconstruction and harness compilation retain their existing flags.
+fixture_receipt() {
+	f=$1; o=$2
+	cksum "$o" "$o.d" || return 1
+	case $f in
+	*.cpp)	if [ -f "${f%.*}.cxxflags" ]; then
+			cksum "${f%.*}.cxxflags" || return 1
+		else
+			printf '%s\n' no-cxxflags
+		fi ;;
+	esac
+}
+
+fixture_current() {
+	f=$1; o=$2
+	[ -s "$o.d" ] && [ -s "$o.inputs" ] || return 1
+	actual=$(fixture_receipt "$f" "$o") || return 1
+	[ "$actual" = "$(cat "$o.inputs")" ] || return 1
+	# No -MP rules or make evaluation. Fold only backslash-newline; reject
+	# unsupported escaping and extra rules rather than accepting partial input.
+	dependencies=$(awk -v target="$o" '
+		{
+			if (done) bad = 1
+			part = $0
+			continued = sub(/\\$/, "", part)
+			text = text part " "
+			if (!continued) done = 1
+		}
+		END {
+			colon = index(text, ":")
+			if (bad || !done || continued || !colon ||
+			    substr(text, 1, colon - 1) != target) exit 1
+			deps = substr(text, colon + 1)
+			if (deps ~ /[\\:$#*?]/ || deps ~ /\[/ || deps ~ /\]/ ||
+			    deps !~ /[^[:space:]]/) exit 1
+			print deps
+		}' "$o.d") || return 1
+	found_source=0
+	for dependency in $dependencies; do
+		[ "$dependency" != "$f" ] || found_source=1
+		[ -f "$dependency" ] && [ "$o" -nt "$dependency" ] || return 1
+	done
+	[ "$found_source" -eq 1 ]
+}
+
 # COMPILE AND LINK ARE SPLIT, because binutils 2.15 (the period linker) has no
 # `objcopy --globalize-symbols`.  The host does that step between the two
 # stages.  `STAGE=all` (the default) keeps the old one-pass behaviour for a
@@ -78,14 +125,26 @@ STAGE=${STAGE:-all}
 : > "$OUT/failed"
 compile_one() {
 	f=$1; o=$(obj "$f")
+	fixture=0
+	case $f in test/unit/*) fixture=1 ;; esac
 	# Flag/dispatch changes in this script invalidate every compiled object.
 	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] && [ "$o" -nt "$0" ] \
 		&& { [ -z "$NEWEST_HDR" ] || [ "$o" -nt "$NEWEST_HDR" ]; } \
+		&& { [ "$fixture" -eq 0 ] || fixture_current "$f" "$o"; } \
 		&& return 0
+	depflags=""
+	if [ "$fixture" -eq 1 ]; then
+		# Remove the old receipt BEFORE compilation. A failed/interrupted
+		# compiler must never pair a newer partial object with old dependencies.
+		rm -f "$o.d" "$o.inputs" "$o.d.tmp" "$o.inputs.tmp"
+		# This driver already derives the target from -o. An explicit -MT
+		# makes GCC 3.4.2 repeat the target in the generated dependency rule.
+		depflags="-MMD -MF $o.d.tmp"
+	fi
 	case $f in
 	src/*.cpp) g++ -c $SOURCE_CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
 	*.cpp)	extra=""; [ -f "${f%.*}.cxxflags" ] && extra=$(cat "${f%.*}.cxxflags")
-		g++ -c $CXXFLAGS $extra -o "$o" "$f" 2>"$o.log" ;;
+		g++ -c $CXXFLAGS $extra $depflags -o "$o" "$f" 2>"$o.log" ;;
 	src/*.S) (cd "$(dirname "$f")" && gcc -c $ASFLAGS \
 		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
 	*)	case $f in
@@ -93,8 +152,18 @@ compile_one() {
 		src/*) cflags="$SOURCE_CFLAGS" ;;
 		*) cflags="$CFLAGS" ;;
 		esac
-		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
-	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
+		gcc -c $cflags $depflags -o "$o" "$f" 2>"$o.log" ;;
+	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; return 0; }
+	if [ "$fixture" -eq 1 ]; then
+		if [ -s "$o.d.tmp" ] && mv "$o.d.tmp" "$o.d" \
+		    && fixture_receipt "$f" "$o" > "$o.inputs.tmp" \
+		    && mv "$o.inputs.tmp" "$o.inputs"; then
+			:
+		else
+			echo "$f" >> "$OUT/failed"
+			echo "period: missing fixture dependency receipt: $f" >&2
+		fi
+	fi
 }
 
 if [ "$STAGE" != "link" ]; then
@@ -105,6 +174,7 @@ echo "period: C fixture flags $(echo $CFLAGS)"
 echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
+echo "period: fixture dependency apparatus -MMD -MF <object>.d.tmp"
 for f in $SRC $CXXSRC $ASRC $HARNESS; do
 	# A serial gate must not depend on jobs output from a command
 	# substitution (the period shell can report an empty job table there).
