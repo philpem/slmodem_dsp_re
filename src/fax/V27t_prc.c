@@ -171,103 +171,123 @@ TxNextStateV27(void *modem)
 {
 	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short state = prm->state;
+	short rate;
+	short train_long;
+	struct sgd_gen_cfg gen;
+	struct sgd_control_req req;
 
 	switch (state) {
 	case V27TX_STATE_START:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_START\n");
-		prm->countdown =
-			V27TX_FRMSIZE[prm->rate];
+			prm = ((struct v27_tx *)modem)->source;
+		}
+
+		rate = prm->rate;
+		prm->countdown = 1;
 		prm->handler =
 			TxHdxQuietV27;
 		prm->state = V27TX_STATE_QUIET;
+		prm->countdown *= (unsigned short)V27TX_FRMSIZE[rate];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_QUIET:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_QUIET\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = V27TX_PATTERN_CARR[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		prm->countdown = (short)
-			(V27TX_FRMSIZE[prm->rate] * 10);
+
+		rate = prm->rate;
+		prm->countdown = 10;
 		prm->handler =
 			TxHdxAltV27;
 		prm->state = V27TX_STATE_CARR;
+		prm->countdown *= (unsigned short)V27TX_FRMSIZE[rate];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_CARR:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_CARR\n");
-		prm->countdown =
-			V27TX_FRMSIZE[prm->rate];
+			prm = ((struct v27_tx *)modem)->source;
+		}
+
+		rate = prm->rate;
+		prm->countdown = 1;
 		prm->handler =
 			TxHdxQuietV27;
 		prm->state = V27TX_STATE_NOCARR;
+		prm->countdown *= (unsigned short)V27TX_FRMSIZE[rate];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_NOCARR:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_NOCARR\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = V27TX_PATTERN_ALT[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		prm->countdown =
-			V27TX_ALT_COUNT[prm->train_long];
+
+		train_long = prm->train_long;
 		prm->handler =
 			TxHdxAltV27;
 		prm->state = V27TX_STATE_ALT;
+		prm->countdown =
+			V27TX_ALT_COUNT[train_long];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_ALT:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_ALT\n");
-		prm->countdown =
-			V27TX_EQCOND_COUNT[prm->train_long];
+			prm = ((struct v27_tx *)modem)->source;
+		}
+
+		train_long = prm->train_long;
 		prm->handler =
 			TxHdxEQCondV27;
 		prm->state = V27TX_STATE_EQCOND;
+		prm->countdown =
+			V27TX_EQCOND_COUNT[train_long];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_EQCOND:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_EQCOND\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -284,8 +304,10 @@ TxNextStateV27(void *modem)
 		return;
 
 	case V27TX_STATE_SCR1:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_SCR1\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		prm->countdown = 1;
 		prm->handler =
 			TxHdxDataV27;
@@ -296,44 +318,52 @@ TxNextStateV27(void *modem)
 		return;
 
 	case V27TX_STATE_DATA:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_DATA\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		prm->countdown =
-			V27TX_FRMSIZE[prm->rate];
+
+		rate = prm->rate;
+		prm->countdown = 1;
 		prm->handler =
 			TxHdxSCR1V27;
 		prm->state = V27TX_STATE_TURNOFF;
+		prm->countdown *= (unsigned short)V27TX_FRMSIZE[rate];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_TURNOFF:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_TURNOFF\n");
-		prm->countdown =
-			V27TX_FRMSIZE[prm->rate];
+			prm = ((struct v27_tx *)modem)->source;
+		}
+
+		rate = prm->rate;
+		prm->countdown = 1;
 		prm->handler =
 			TxHdxQuietV27;
 		prm->state = V27TX_STATE_NOENG;
+		prm->countdown *= (unsigned short)V27TX_FRMSIZE[rate];
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
 
 	case V27TX_STATE_NOENG:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_NOENG\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		prm->countdown = 0;
 		prm->handler =
 			TxHdxIdleV27;
@@ -344,8 +374,10 @@ TxNextStateV27(void *modem)
 		return;
 
 	case V27TX_STATE_IDLE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V27TX_STATE_IDLE\n");
+			prm = ((struct v27_tx *)modem)->source;
+		}
 		prm->countdown = 0;
 		prm->handler =
 			TxHdxStartV27;
@@ -364,7 +396,7 @@ TxNextStateV27(void *modem)
 			((((struct v27_tx *)modem)->result.byte.flags
 			  | V27TX_RESULT_B1_BIT1)
 			 & (unsigned char)~V27TX_RESULT_B1_BIT0);
-		break;
+		return;
 	}
 
 	((struct v27_tx *)modem)->result.byte.flags &=
