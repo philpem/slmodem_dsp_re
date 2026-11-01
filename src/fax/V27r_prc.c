@@ -35,31 +35,28 @@
 int
 V27RX_modem(void *modem, short *in, short *out, unsigned short *count)
 {
-	unsigned short n;
 	short total = 0;
 
 	((struct v27_rx *)modem)->result.byte.flags &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG_ERROR;
 
-	n = *count;
 	do {
-		short before = (short)n;
+		short before = (short)*count;
 		short got;
 
 		got = ((struct v27_rx *)modem)->shared->handler(modem, in, out,
 							       count);
-		n = *count;
 		out += got;
 		/*
-		 * The samples the handler took.  `before` is signed and `n` is
+		 * The samples the handler took.  `before` is signed and the new count is
 		 * not, which the object states by extending the same sixteen
 		 * bits two different ways -- `movswl %cx` at the top of the
 		 * loop and `movzwl %cx` here.  Both are used at full width by
 		 * the subtraction, so neither is free.
 		 */
-		in += before - n;
+		in += before - (unsigned short)*count;
 		total = (short)(total + got);
-	} while (n != 0);
+	} while (*count != 0);
 
 	*count = (unsigned short)total;
 
