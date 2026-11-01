@@ -524,7 +524,7 @@ VPcmFloModem::getV90CpBits(short *bits)
 	if (terminateCp != 0 && cpNotLoaded == 0 &&
 	    nofTransmitSequences >= minNofTransmitSequences) {
 		short live;
-		int i;
+		unsigned short i;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
