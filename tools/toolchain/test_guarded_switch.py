@@ -56,6 +56,123 @@ PREFIX
 '''
 
 
+# Zero-based, signed 16-bit selector widened to the full EAX index before
+# the unsigned bound. The default is a separate in-owner instruction block.
+FALLTHROUGH_SOURCE = SOURCE.replace('mov 8(%esp),%eax\n.Lsub:\nsub $4,%eax',
+                                    'movswl 8(%esp),%eax').replace(
+    'jbe .Ldispatch\npop %ebx\nret\n.Ldispatch:',
+    'ja .Ldefault\n.Ldispatch:').replace(
+    '.Lfirst:', '.Ldefault:\npop %ebx\nret\n.Lfirst:')
+
+
+def run_fallthrough(directory, actual=None, blob=None):
+    records = {}
+    left = assemble(directory, 'fall-left', FALLTHROUGH_SOURCE)
+    right = assemble(directory, 'fall-right', FALLTHROUGH_SOURCE, 16)
+    assert g.prove(left, 'sample')['identity'] == g.prove(right, 'sample')['identity']
+    assert b.verdict(*b.body(left, 'sample'), *b.body(right, 'sample')) == ('EXACT', 0)
+    near = FALLTHROUGH_SOURCE.replace('ja .Ldefault',
+        '.byte 0x0f,0x87\n.long .Ldefault-.-4')
+    near_paths = [assemble(directory, 'near-ja-' + str(i), near, 16 * i) for i in range(2)]
+    assert g.prove(near_paths[0], 'sample')['identity'] == g.prove(near_paths[1], 'sample')['identity']
+    assert b.verdict(*b.body(near_paths[0], 'sample'), *b.body(near_paths[1], 'sample')) == ('EXACT', 0)
+    records['near-ja-positive'] = g.prove(near_paths[0], 'sample')
+    extension_positives = 0
+    for mnemonic, register in (('movswl', '%dx'), ('movzbl', '%dl')):
+        for mode, operand in {
+            'reg':register, 'base':'(%edx)', 'disp8':'127(%edx)',
+            'disp32':'0x12345(%edx)', 'sib':'(%edx,%ecx,2)',
+            'absolute':'0x12345', 'sib-base5':'0x12345(,%ecx,2)',
+        }.items():
+            source = FALLTHROUGH_SOURCE.replace('movswl 8(%esp),%eax', mnemonic + ' ' + operand + ',%eax')
+            paths = [assemble(directory, mnemonic + '-' + mode + str(i), source, 16 * i) for i in range(2)]
+            assert g.prove(paths[0], 'sample')['identity'] == g.prove(paths[1], 'sample')['identity']
+            assert b.verdict(*b.body(paths[0], 'sample'), *b.body(paths[1], 'sample')) == ('EXACT', 0)
+            extension_positives += 1
+    records['extension-addressing-positive-pairs'] = extension_positives
+    # A smaller bound is a valid smaller switch, not invalid geometry. It
+    # still cannot match the original machine's bytes or descriptor.
+    for label, source in {
+        'ordered-targets': FALLTHROUGH_SOURCE.replace('.long .Lfirst,.Lsecond', '.long .Lsecond,.Lfirst'),
+        'smaller-bound': FALLTHROUGH_SOURCE.replace('cmp $1,%eax', 'cmp $0,%eax'),
+    }.items():
+        path = assemble(directory, 'fall-' + label, source, 16)
+        if label == 'smaller-bound':
+            assert g.prove(path, 'sample')['identity'][4] == 1
+        grade = b.verdict(*b.body(left, 'sample'), *b.body(path, 'sample'))[0]
+        assert grade != 'EXACT', (label, grade)
+        records[label] = grade
+    negatives = {
+        'signed': FALLTHROUGH_SOURCE.replace('ja .Ldefault', 'jg .Ldefault'),
+        'off-by-one': FALLTHROUGH_SOURCE.replace('cmp $1,%eax', 'cmp $2,%eax'),
+        'different-comparison': FALLTHROUGH_SOURCE.replace('cmp $1,%eax', 'cmp $1,%edx'),
+        'different-index': FALLTHROUGH_SOURCE.replace('(,%eax,4)', '(,%edx,4)'),
+        'partial-comparison': FALLTHROUGH_SOURCE.replace('cmp $1,%eax', 'cmp $1,%ax'),
+        'default-middle': FALLTHROUGH_SOURCE.replace('ja .Ldefault', 'ja .Lfirst+1'),
+        'default-outside': FALLTHROUGH_SOURCE.replace('ja .Ldefault', 'ja outside') + '\n.text\noutside: ret\n',
+        'default-dispatch': FALLTHROUGH_SOURCE.replace('ja .Ldefault', 'ja .Ldispatch'),
+        'default-cmp': FALLTHROUGH_SOURCE.replace('ja .Ldefault', 'ja .Lcmp'),
+        'target-middle': FALLTHROUGH_SOURCE.replace('.long .Lfirst,.Lsecond', '.long .Lfirst+1,.Lsecond'),
+        'target-outside': FALLTHROUGH_SOURCE.replace('.long .Lfirst,.Lsecond', '.long sample-1,.Lsecond'),
+        'missing-entry': FALLTHROUGH_SOURCE.replace('.long .Lfirst,.Lsecond', '.long .Lfirst,0'),
+    }
+    for where in ('cmp $1,%eax', 'ja .Ldefault'):
+        for name, instruction in {'selector':'mov %edx,%eax', 'flags':'add $1,%edx', 'nop':'nop'}.items():
+            negatives[where[:2] + '-' + name] = FALLTHROUGH_SOURCE.replace(where, where + '\n' + instruction)
+    for prefix in ('0x66', '0x67', '0x2e', '0xf2', '0xf3'):
+        negatives['extension-prefix-' + prefix] = FALLTHROUGH_SOURCE.replace('movswl', '.byte ' + prefix + '\nmovswl')
+    for label, prefix in (('segment', '0x2e'), ('address', '0x67'), ('rep', '0xf3'), ('repeat66', '0x66')):
+        negatives['word-move-prefix-' + label] = FALLTHROUGH_SOURCE.replace(
+            'mov $1,%eax', '.byte 0x66,' + prefix + ',0xc7,0x43,0x02,0x01,0x00')
+    negatives['word-move-C7-not-zero'] = FALLTHROUGH_SOURCE.replace(
+        'mov $1,%eax', '.byte 0x66,0xc7,0xf8,0x01,0x00')
+    for label in ('cmp', 'guard', 'dispatch'):
+        size = {'cmp':3, 'guard':2, 'dispatch':7}[label]
+        for offset in range(size):
+            target = '.L%s+%d' % (label, offset)
+            for name, suffix in {
+                'direct':'\n.text\nexternal: jmp ' + target,
+                'relocated':'\n.data\n.long ' + target,
+                'named':'\n.globl alias\n.set alias,' + target,
+                'xbegin':'\n.text\nexternal: ' + xbegin(target),
+                'xbegin16':'\n.text\nexternal: ' + xbegin(target, word=True),
+                'bnd':'\n.text\nexternal: .byte 0xf2\njmp ' + target,
+            }.items():
+                negatives['%s-%s-%d' % (name, label, offset)] = FALLTHROUGH_SOURCE + suffix + '\n'
+    for label, source in negatives.items():
+        reasons = []
+        for i in range(2):
+            path = assemble(directory, 'fall-' + label + str(i), source, 16 * i)
+            try:
+                g.prove(path, 'sample')
+            except g.Refused as error:
+                reasons.append(str(error))
+            else:
+                raise AssertionError('fallthrough geometry accepted: ' + label)
+            assert not any(t[0] == g.TAG for _, t in (b.body(path, 'sample')[1] or {}).values()), label
+        records[label] = reasons
+    if actual:
+        proofs = [g.prove(path, 'TxNextStateV29') for path in (blob, actual)]
+        assert proofs[0]['identity'] == proofs[1]['identity']
+        assert proofs[0]['identity'][-1] == (106, 153, 263, 310, 441, 486, 527)
+        assert b.verdict(*b.body(blob, 'TxNextStateV29'), *b.body(actual, 'TxNextStateV29')) == ('EXACT', 0)
+        for side, path, proof in zip(('native', 'candidate'), (blob, actual), proofs):
+            for mode in ('swap', 'interior'):
+                def action(raw, elf):
+                    off = elf.get_section_by_name(proof['table_section'])['sh_offset'] + proof['table_offset']
+                    if mode == 'swap':
+                        raw[off:off+4], raw[off+4:off+8] = raw[off+4:off+8], raw[off:off+4]
+                    else:
+                        raw[off:off+4] = (int.from_bytes(raw[off:off+4], 'little') + 1).to_bytes(4, 'little')
+                changed = mutate(directory, 'v29-' + side + '-' + mode, path, action)
+                grade = b.verdict(*b.body(blob, 'TxNextStateV29'), *b.body(changed, 'TxNextStateV29'))[0]
+                assert grade != 'EXACT', (side, mode, grade)
+                records['actual-' + side + '-' + mode] = grade
+        records['actual-proof'] = proofs
+    (directory / 'fallthrough-results.json').write_text(json.dumps(records, indent=2) + '\n')
+    print('fallthrough: 16 positive ELF pairs (short/near JA +14 extension addressing); 2 non-EXACT changed controls; %d two-sided geometry negatives; actual V29=%s' % (len(negatives), bool(actual)))
+
+
 def assemble(directory, label, source, prefix=0):
     asm = directory / (label + '.s')
     obj = directory / (label + '.o')
@@ -100,7 +217,8 @@ def xbegin(target, word=False):
     return '.byte 0xc7,0xf8\n.long ' + target + '-.-4'
 
 
-def run(directory, actual=None, blob=None):
+def run(directory, actual=None, blob=None, actual_v29=None):
+    run_fallthrough(directory, actual_v29, blob)
     records = {}
     left = assemble(directory, 'left', SOURCE)
     right = assemble(directory, 'right', SOURCE, 16)
@@ -297,11 +415,12 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--out', type=Path)
     ap.add_argument('--actual', type=str)
+    ap.add_argument('--actual-v29', type=str)
     ap.add_argument('--blob', default=b.BLOB)
     args = ap.parse_args()
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
-        run(args.out, args.actual, args.blob)
+        run(args.out, args.actual, args.blob, args.actual_v29)
     else:
         with tempfile.TemporaryDirectory(prefix='guarded-switch-') as tmp:
-            run(Path(tmp), args.actual, args.blob)
+            run(Path(tmp), args.actual, args.blob, args.actual_v29)

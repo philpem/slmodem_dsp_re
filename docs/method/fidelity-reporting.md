@@ -12,9 +12,11 @@ Equal byte length does not establish that any instruction has been reproduced.
 - **NODATA:** a body could not be read or accepted for comparison.
 
 Anonymous switch tables can supply an EXACT relocation destination through
-`tools/toolchain/guarded_switch.py`. This narrowly supports an unprefixed
-32-bit EAX `SUB`/`CMP` followed immediately by unsigned `JBE` to an indexed
-`JMP disp32(,EAX,4)`. The ELF32 i386 REL proof requires one bounded, allocated,
+`tools/toolchain/guarded_switch.py`. It admits two bounded forms: unprefixed
+32-bit EAX `SUB`/`CMP` followed immediately by unsigned `JBE` to the indexed
+`JMP disp32(,EAX,4)`, or adjacent full-width `CMP EAX` / unsigned `JA default`
+with fallthrough directly to that dispatch. Bounds use the supported
+nonnegative sign-extended immediate encoding. The ELF32 i386 REL proof requires one bounded, allocated,
 read-only, non-merge table, complete non-overlapping entry relocations, and
 ordered instruction-boundary targets inside the unique owning function.
 Named aliases and known named, direct or relocated bypass entries into any
@@ -22,8 +24,11 @@ byte of the protected instructions refuse the proof. Unsupported relocation
 kinds also refuse it.
 
 The owner decoder accepts an explicit, bounded instruction vocabulary and
-checks the byte encodings of supported control transfers. Prefixes and
-unmodelled transfers such as `XBEGIN` refuse the owner proof. The scan for
+checks the byte encodings of supported control transfers. The added `movswl`
+and `movzbl` forms validate unprefixed opcodes, operand widths and ModRM/SIB
+extent. Word-immediate stores admit only one mandatory `66` followed by
+`C7 /0 imm16`; extra segment/address/repeat prefixes are refused. Unmodelled
+transfers such as `XBEGIN` refuse the owner proof. The scan for
 known direct entries also unwraps prefixes and includes `XBEGIN` destinations
 outside the sized owner, including its 16-bit relative form.
 Far jumps and calls anywhere in the scanned code section refuse the proof;

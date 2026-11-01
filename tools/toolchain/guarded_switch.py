@@ -20,15 +20,54 @@ TAG = 'exact-switch-v1'
 # current domain. Unknown instructions must never acquire a fallthrough edge
 # by default: objdump prints prefixes such as NOTRACK/BND as the mnemonic.
 ORDINARY = frozenset(('add', 'cmp', 'cmpl', 'lea', 'mov', 'movl',
-                      'pop', 'push', 'setne', 'sub', 'test', 'xor'))
+                      'pop', 'push', 'setne', 'sub', 'test', 'xor',
+                      'and', 'andb', 'or', 'orb', 'movb', 'movw'))
 CONDITIONAL = frozenset(('jo', 'jno', 'jb', 'jae', 'je', 'jne', 'jbe', 'ja',
                          'js', 'jns', 'jp', 'jnp', 'jl', 'jge', 'jle', 'jg'))
+
+
+def modrm_end(raw, offset):
+    """End of one unprefixed 32-bit-addressing ModRM/SIB operand."""
+    require(len(raw) > offset, 'missing ModRM')
+    mod, rm = raw[offset] >> 6, raw[offset] & 7
+    length = offset + 1
+    if mod != 3 and rm == 4:
+        require(len(raw) > length, 'missing SIB')
+        base = raw[length] & 7
+        length += 1
+    else:
+        base = rm
+    return length + (4 if mod == 0 and base == 5 else 1 if mod == 1 else 4 if mod == 2 else 0)
 
 
 def control_kind(row):
     """Decode only unprefixed supported transfers; refuse every unknown row."""
     _, raw, mnemonic, operands = row
+    if mnemonic in ('movswl', 'movzbl'):
+        # Only unprefixed MOVSX r/m16,r32 and MOVZX r/m8,r32. Decode
+        # ModRM/SIB displacement extent explicitly; 66/67/segment prefixes
+        # change the widths/addressing contract and remain unsupported.
+        require(raw[:2] == (b'\x0f\xbf' if mnemonic == 'movswl' else b'\x0f\xb6')
+                and len(raw) >= 3, 'unsupported extension encoding')
+        require(len(raw) == modrm_end(raw, 2) and
+                re.search(r',%e(?:ax|cx|dx|bx|sp|bp|si|di)$', operands),
+                'extension operand width/extent')
+        return 'ordinary'
+    if mnemonic == 'movw':
+        # Native witnesses use exactly 66 C7 /0 imm16. No address-size,
+        # segment, repeat or second operand-size prefix is admitted.
+        require(raw[:2] == b'\x66\xc7' and len(raw) >= 5 and
+                raw[2] & 0x38 == 0 and len(raw) == modrm_end(raw, 2) + 2,
+                'unsupported word move encoding')
+        return 'ordinary'
     if mnemonic in ORDINARY:
+        require(raw and raw[0] not in
+                (0xf0, 0xf2, 0xf3, 0x2e, 0x36, 0x3e, 0x26, 0x64, 0x65, 0x67)
+                and raw[0] != 0x66,
+                'unsupported ordinary prefix')
+        return 'ordinary'
+    if mnemonic == 'nop':
+        require(raw == b'\x90' and not operands, 'unsupported nop encoding')
         return 'ordinary'
     if mnemonic == 'ret':
         require(raw == b'\xc3' and not operands, 'unsupported return encoding')
@@ -114,27 +153,41 @@ def prove(path, name):
     # Exact unprefixed JMP disp32(,EAX,4); relocation is precisely disp32.
     require(jump[2] == 'jmp' and len(jump[1]) == 7 and
             jump[1][:3] == b'\xff\x24\x85', 'dispatch encoding')
-    guards = [(i, r) for i, r in enumerate(rows) if r[2] == 'jbe' and
-              direct_target(r) == jump[0]]
-    require(len(guards) == 1 and guards[0][0] >= 2, 'unique unsigned taken guard')
-    gi, guard = guards[0]
-    sub, cmp = rows[gi - 2:gi]
-    require(sub[1][:2] == b'\x83\xe8' and len(sub[1]) == 3 and
-            sub[1][2] < 128, 'full-width adjacent EAX rebase')
+    ji = rows.index(jump)
+    # Two deliberately disjoint grammars: the historical rebased taken-JBE
+    # dispatch, or an adjacent CMP EAX / JA default / fallthrough dispatch.
+    fallthrough = ji >= 2 and rows[ji - 1][2] == 'ja'
+    if fallthrough:
+        cmp, guard = rows[ji - 2:ji]
+        sub = None
+        require((len(guard[1]) == 2 and guard[1][0] == 0x77) or
+                (len(guard[1]) == 6 and guard[1][:2] == b'\x0f\x87'), 'JA encoding')
+        require(guard[0] + len(guard[1]) == jump[0] and
+                direct_target(guard) != jump[0], 'adjacent default guard')
+        sequence = (cmp, guard, jump)
+    else:
+        guards = [(i, r) for i, r in enumerate(rows) if r[2] == 'jbe' and
+                  direct_target(r) == jump[0]]
+        require(len(guards) == 1 and guards[0][0] >= 2, 'unique unsigned taken guard')
+        gi, guard = guards[0]
+        sub, cmp = rows[gi - 2:gi]
+        require(sub[1][:2] == b'\x83\xe8' and len(sub[1]) == 3 and
+                sub[1][2] < 128, 'full-width adjacent EAX rebase')
+        require((len(guard[1]) == 2 and guard[1][0] == 0x76) or
+                (len(guard[1]) == 6 and guard[1][:2] == b'\x0f\x86'), 'JBE encoding')
+        require(sub[0] + len(sub[1]) == cmp[0], 'adjacent rebase')
+        sequence = (sub, cmp, guard, jump)
     require(cmp[1][:2] == b'\x83\xf8' and len(cmp[1]) == 3 and
             cmp[1][2] < 128, 'full-width adjacent EAX bound')
-    require((len(guard[1]) == 2 and guard[1][0] == 0x76) or
-            (len(guard[1]) == 6 and guard[1][:2] == b'\x0f\x86'), 'JBE encoding')
-    require(sub[0] + len(sub[1]) == cmp[0] and
-            cmp[0] + len(cmp[1]) == guard[0], 'immediately consumed flags')
+    require(cmp[0] + len(cmp[1]) == guard[0], 'immediately consumed flags')
     count = cmp[1][2] + 1
     protected = set().union(*(set(range(r[0], r[0] + len(r[1])))
-                              for r in (sub, cmp, guard, jump)))
+                              for r in sequence))
     require(not any(s['st_shndx'] == sid and s['st_info']['type'] not in
                     ('STT_SECTION', 'STT_FILE') and s['st_value'] in protected
                     for s in symbols), 'named protected entry')
-    # Full instruction graph: the dispatch has only the guard's taken edge;
-    # SUB/CMP/JBE are adjacent, and no direct edge may bypass any byte of them.
+    # Full instruction graph: dispatch has only the guard's selected edge
+    # (taken JBE or JA fallthrough). No entry may bypass a protected byte.
     predecessors = {r[0]: set() for r in rows}
     for r in rows:
         at, raw, mnemonic, operands = r
@@ -152,10 +205,10 @@ def prove(path, name):
             predecessors[target].add(at)
     require(predecessors[jump[0]] == {guard[0]} and
             predecessors[guard[0]] == {cmp[0]} and
-            predecessors[cmp[0]] == {sub[0]}, 'sole guarded predecessor')
+            (sub is None or predecessors[cmp[0]] == {sub[0]}), 'sole guarded predecessor')
     for source, target in section_direct_edges(str(path), code.name):
         require(target not in protected or
-                (source == guard[0] and target == jump[0]), 'direct protected entry')
+                (not fallthrough and source == guard[0] and target == jump[0]), 'direct protected entry')
 
     rels = []
     occupied = {}
