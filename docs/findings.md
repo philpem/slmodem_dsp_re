@@ -3895,7 +3895,7 @@ be compared by dereferencing.
 
 ## F66. initTxSequence: where V.8's negotiation becomes bits
 
-> **Deviation D134** (`docs/deviations.md`): `initTxSequence` reads a fourth byte it does not own.
+> **Deviation D134** (`docs/deviations.md`) records the original DWORD flag access. The earlier claim that the fourth byte is outside the owner is unproved.
 
 This is the function the monitoring goal depends on. It reads the call menu
 -- three flag bytes and two optional four-character extension fields -- and
@@ -3933,10 +3933,17 @@ would be a surprise in most code; here it is load-bearing.
 
 ### The tail is chosen by two bits read as one word
 
-The original tests `*(int *)cm & 0x80008` -- a single 32-bit read across the
-flag bytes, which is bit 3 of the first byte or bit 3 of the third. Written
-out as the two byte tests it plainly is, since a 32-bit read of a
-three-byte-plus structure is only correct by accident of layout.
+The object tests the four bytes at `cm + 0` with mask `0x80008`: bit 3 of
+`b0` or bit 3 of `b2`. This establishes the access width and mask, not the
+original pointer-cast syntax. `DSPLIB_REPRODUCE_BUGS` preserves that DWORD
+access; the normal build keeps the two byte tests.
+
+The original bounds interpretation is unproved. The complete model owns
+`b3` at `+3` and fields through `+0x2f`; the runtime menu supplied to
+`V8Create` is inside a `0x88`-byte allocation. Those owners do not establish
+a three-byte allocation boundary at this read. D134 records the distinction.
+The encoder still caches its menu and sequence owners across extension calls;
+restoring the DWORD test does not recover the object's later owner reloads.
 
 ## F67. v8handshakinit: the map before the code
 

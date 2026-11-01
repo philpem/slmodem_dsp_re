@@ -4159,14 +4159,24 @@ not scaled, and for Bell 103 that is any call of 1..17 samples.
 
 ---
 
-## D134 🐛 `initTxSequence` reads a fourth byte it does not own
+## D134 🐛 `initTxSequence` DWORD flag access
 
-*Task #98 sweep, from fix list §7.24. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
+*Task #98 sweep, from fix list §7.24. **Bounds defect: UNPROVED.** The access-width difference is measured.*
 
-**`initTxSequence` reads a fourth byte it does not own (finding F66).** The
-original tests `*(int *)cm & 0x80008` — a single 32-bit read across a
-three-byte flag structure, correct only by accident of layout. The
-reconstruction writes it as the two byte tests it plainly is.
+The object uses `testl $0x80008,(cm)` at `0x759d7`, reading four bytes to test
+`b0` bit 3 and `b2` bit 3. Reproduction mode preserves that DWORD access.
+The normal build retains the two byte tests; no modem behavior change is
+claimed.
+
+F66 originally inferred a three-byte allocation boundary from the three named
+flag bytes. The complete `v8_cm` owns `b3` at `+3` and fields through `+0x2f`.
+`V8Create` takes the configured menu pointer, and the runtime supplies it from
+a `0x88`-byte allocation. These complete owners do not support the earlier
+out-of-bounds claim. A smaller valid owner at this call has not been established.
+
+The DWORD expression records the period compiler's access and alias model;
+it does not prove the original cast spelling or a portable C representation.
+Menu and sequence capture ages remain separate reconstruction residuals.
 
 ---
 
