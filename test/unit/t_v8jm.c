@@ -917,6 +917,88 @@ t_generated_second_extension(void)
 	return diff_end();
 }
 
+/* Complete owned menus exercise the native four-byte read boundary. These
+ * initialized encoder components do not establish negotiated modem histories. */
+static int
+t_owned_tail_flags(void)
+{
+	static const unsigned char b1_values[] = { 0x40, 0xc1 };
+	static const unsigned char b3_values[] = { 0, 8, 0x80, 0xff };
+	int bits, b1, b3, empty, level, configurations = 0;
+
+	diff_begin("initTxSequence: owned tail flag menus");
+	for (bits = 0; bits < 4; bits++)
+	for (b1 = 0; b1 < 2; b1++)
+	for (b3 = 0; b3 < 4; b3++)
+	for (empty = 0; empty < 2; empty++)
+	for (level = 1; level <= 3; level++) {
+		struct v8 aa, bb;
+		int extension = (bits & 2) != 0 && !empty;
+		int filler = (bits & 1) == 0 && !extension;
+		int words = 7 + extension + filler + ((bits & 1) ? 2 : 0);
+		int tail = words - ((bits & 1) ? 3 : 1);
+		int expected_calls = level > 1 ? 1 + ((bits & 2) != 0 && empty) : 0;
+		long tag = configurations;
+
+		memset(&obj_a, 0, sizeof obj_a); memset(&obj_b, 0, sizeof obj_b);
+		memset(&cm_a, 0, sizeof cm_a); memset(&cm_b, 0, sizeof cm_b);
+		cm_a.b0 = cm_b.b0 = (bits & 1) ? 8 : 0;
+		cm_a.b1 = cm_b.b1 = b1_values[b1];
+		cm_a.b2 = cm_b.b2 = (bits & 2) ? 8 : 0;
+		cm_a.b3 = cm_b.b3 = b3_values[b3];
+		cm_a.ext2[0] = cm_b.ext2[0] = empty ? 0 : 0x2a;
+		obj_a.cm = &cm_a; obj_b.cm = &cm_b;
+		obj_a.tx_seq = &obj_a.seq[2]; obj_b.tx_seq = &obj_b.seq[2];
+		diff_eq_int("owned menu covers all four flag bytes", sizeof cm_a >= 4, 1, tag);
+		diff_eq_int("expected words fit sequence", words <= (int)(sizeof obj_a.seq[2].word / sizeof obj_a.seq[2].word[0]), 1, tag);
+		dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = ref_dsplibs_debug_level = (unsigned)level;
+		ref_initTxSequence(&obj_a); initTxSequence(&obj_b);
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+		diff_eq_int("reference bit count", obj_a.seq[2].nbits, words * 10, tag);
+		diff_eq_int("bit count", obj_b.seq[2].nbits, words * 10, tag);
+		diff_eq_int("reference word width", obj_a.seq[2].wordbits, 10, tag);
+		diff_eq_int("word width", obj_b.seq[2].wordbits, 10, tag);
+		diff_eq_int("reference initial transmit index", obj_a.seq[2].wordidx, 0, tag);
+		diff_eq_int("initial transmit index", obj_b.seq[2].wordidx, 0, tag);
+		diff_eq_int("reference protocol flag after encoder", cm_a.b2, extension ? 8 : 0, tag);
+		diff_eq_int("protocol flag after encoder", cm_b.b2, extension ? 8 : 0, tag);
+		diff_eq_int("reference fourth byte retained", cm_a.b3, b3_values[b3], tag);
+		diff_eq_int("fourth byte retained", cm_b.b3, b3_values[b3], tag);
+		diff_eq_int("reference tail B", (unsigned short)obj_a.seq[2].word[tail], V8_SEQ_TAIL_B, tag);
+		diff_eq_int("tail B", (unsigned short)obj_b.seq[2].word[tail], V8_SEQ_TAIL_B, tag);
+		if (filler) {
+			diff_eq_int("reference tail A", (unsigned short)obj_a.seq[2].word[tail - 1], V8_SEQ_TAIL_A, tag);
+			diff_eq_int("tail A", (unsigned short)obj_b.seq[2].word[tail - 1], V8_SEQ_TAIL_A, tag);
+		}
+		if (bits & 1) {
+			diff_eq_int("reference tail C", (unsigned short)obj_a.seq[2].word[tail + 1], V8_SEQ_TAIL_C, tag);
+			diff_eq_int("tail C", (unsigned short)obj_b.seq[2].word[tail + 1], V8_SEQ_TAIL_C, tag);
+			diff_eq_int("reference tail D", (unsigned short)obj_a.seq[2].word[tail + 2], V8_SEQ_TAIL_D, tag);
+			diff_eq_int("tail D", (unsigned short)obj_b.seq[2].word[tail + 2], V8_SEQ_TAIL_D, tag);
+		}
+		diff_eq_int("reference retains menu owner", obj_a.cm == &cm_a, 1, tag);
+		diff_eq_int("retains menu owner", obj_b.cm == &cm_b, 1, tag);
+		diff_eq_int("reference retains sequence owner", obj_a.tx_seq == &obj_a.seq[2], 1, tag);
+		diff_eq_int("retains sequence owner", obj_b.tx_seq == &obj_b.seq[2], 1, tag);
+		aa = obj_a; bb = obj_b;
+		aa.cm = bb.cm = 0; aa.tx_seq = bb.tx_seq = 0;
+		diff_eq_obj("all encoder state", struct v8, &bb, &aa, tag);
+		diff_eq_obj("whole owned menus", struct v8_cm, &cm_b, &cm_a, tag);
+		diff_eq_int("diagnostic text agrees", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)), 0, tag);
+		diff_eq_int("diagnostic boundaries agree", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("reference diagnostic calls", dsplib_debug_capture_lines(1), expected_calls, tag);
+		diff_eq_int("diagnostic calls", dsplib_debug_capture_lines(0), expected_calls, tag);
+		diff_eq_int("reference capture complete", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("capture complete", dsplib_debug_capture_complete(0), 1, tag);
+		configurations++;
+	}
+	diff_eq_int("owned menu configurations", configurations, 192, 0);
+	fprintf(stderr, "t_v8jm: owned tail menus: %d configurations\n", configurations);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1160,6 +1242,7 @@ main(void)
 	rc |= t_update_trace();
 	rc |= t_generated_first_extension();
 	rc |= t_generated_noext();
+	rc |= t_owned_tail_flags();
 	rc |= t_generated_second_extension();
 	return rc;
 }

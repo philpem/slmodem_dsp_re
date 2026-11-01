@@ -240,7 +240,11 @@ initTxSequence(struct v8 *v)
 	 * flag bytes, which is the same as testing bit 3 of b0 and bit 3
 	 * of b2.
 	 */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	if ((*(const unsigned int *)cm & 0x80008) == 0)
+#else
 	if ((cm->b0 & 0x08) == 0 && (cm->b2 & 0x08) == 0)
+#endif
 		seq->word[n++] = V8_SEQ_TAIL_A;
 
 	seq->word[n] = V8_SEQ_TAIL_B;
