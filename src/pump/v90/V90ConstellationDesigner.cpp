@@ -1161,6 +1161,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 			if (compandingLaw == pcmType) {
 				unsigned char c =
 				    mappingParams->constellation[k][i];
+				unsigned char *codec =
+				    &mappingParams->codecConstellation[k][i];
 				unsigned char e;
 
 				if (compandingLaw != 0)
@@ -1177,23 +1179,20 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 					    mappingParams->constellation[k][i];
 
 					if (compandingLaw != 0)
-						mappingParams
-						  ->codecConstellation[k][i] =
+						*codec =
 						    (unsigned char)
 						    (linear2alaw(
 							__builtin_abs(
 							 (int)ucode[k][d]))
 						     ^ 0xd5);
 					else
-						mappingParams
-						  ->codecConstellation[k][i] =
+						*codec =
 						    (unsigned char)
 						    ~linear2ulaw(
 							__builtin_abs(
 							 (int)ucode[k][d]));
 				} else {
-					mappingParams
-					  ->codecConstellation[k][i] =
+					*codec =
 					    mappingParams
 					      ->constellation[k][i];
 				}
