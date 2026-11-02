@@ -142428,3 +142428,44 @@ The focused period gate passes one executable, nine sections and 30,536 checks,
 including 168 direct delay calls per implementation in seeded component frames.
 Eleven independent period layout/width assertions pass. No callback mutation
 or asynchronous writer history is established by those fixtures.
+
+## F12115. Coupled owner and status observations close the V34 hang-up request
+
+`VPcmV34InitiateHangUp` becomes EXACT: 258 bytes and 64 decoded instructions.
+The session pointer is observed before the optional diagnostic call in the
+reference; the old source acquired it later inside the PCM status arm. Moving
+that consumed local restores its native observation age but leaves the complete
+function NONMATCH. The reference also reads status after clearing `rate_want`
+and before clearing `rate_min` and `rate_max`. Capturing that value at the native
+boundary, together with the session lifetime, closes the function. The
+owner-order-only control remains NONMATCH. Types, public API, compiler flags,
+function structure and bug-reproduction behaviour are unchanged.
+
+The bounded wave covers two targets with six candidate full-TU compiles and
+two raw-identical controls. No protected EXACT/REGALLOC function is lost.
+`TxNextStateV21` remains NONMATCH: its default diagnostic uses a retained HDX
+owner in the reference, whereas the source reacquires that owner. Reusing the
+local lets CSE eliminate a state reread the reference retains. A qualified
+diagnostic view and a qualified local owner do not close it, and are not retained.
+
+The positive TU has 56 compared functions. `VPcmV34InitMOH` also changes machine
+scheduling despite unchanged source; it remains NONMATCH and is part of the
+collateral review. The remaining 54 bodies are unchanged. Full-TU bindings,
+calls, noncode data and relocated destinations are reviewed independently;
+anonymous table destinations must be compared with their moved function offsets.
+
+Focused Gentoo validation passes three executables: `t_v34pcmif` has 37 sections
+and 61,492 checks, `t_v34conn` has four sections and 186 checks, and
+`t_v34pcmapi` has nine sections and 30,536 checks. The interface fixture compares
+seeded objects, session chains and diagnostic transcripts; the API fixture
+directly tests the MOH collateral body. These results do not establish a
+diagnostic callback mutating the session owner or whole-modem hang-up reachability.
+The reviewed sources, controls, compiler dumps and final integration records
+are under `scratch/propagation-plan/`.
+
+The selection review contrasts the successful call/owner-boundary transfers with
+the following 37 narrow-predicate/capture compiles, which produced no complete
+promotions. Short bodies and screen tags are navigation, not causal admissions.
+Astra's independent preflight found no fresh short-capture admission; the wave
+kept two demonstrated owner-boundary targets rather than filling a four-target
+ceiling. Compile counts and wall time do not measure model usage or invoice cost.

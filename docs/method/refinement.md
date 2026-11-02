@@ -9958,3 +9958,22 @@ than a shared volatile field. Compare readers and writers and require the whole
 TU result; a reread alone does not prove original qualifiers or asynchronous
 hardware access. This is qualifier recovery, not permission to insert a barrier
 until an instruction matches.
+
+### Transfer demonstrated observation boundaries (F12115)
+
+Choose a transfer candidate from an actual native/source read boundary, then
+check previous experiments before compiling. A short body or a narrow-load
+screening tag alone is insufficient. Keep the target limit as a ceiling rather
+than filling it with weaker or exhausted leads.
+
+`VPcmV34InitiateHangUp` closes only when two consumed captures agree: retain the
+session observed before the diagnostic call, and capture status between the
+first rate clear and the following two. Either isolated owner correction leaves
+the function nonmatching. This is the same kind of observation-boundary inquiry
+as the earlier owner transfers, without copying their compiler flags or types.
+
+Keep negative controls specific. Reusing V21's default-diagnostic owner removes
+an extra root load but allows CSE to remove a native field reread; local volatile
+controls still do not close that body. Preserve the result rather than applying
+the delay reader's qualifier elsewhere by analogy. Review every affected TU:
+the hang-up source change also changes scheduling in the unchanged MOH function.

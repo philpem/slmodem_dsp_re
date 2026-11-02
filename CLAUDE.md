@@ -43,6 +43,9 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    lifetimes. These consumed locals are not dummy register uses. Distinguish an
    opaque API cast from those aliases; infer interchangeable callbacks or C
    polymorphism only from actual use across functions, not from a cast alone.
+   Screening tags and short bodies are navigation, not admissions: identify an
+   actual native/source observation boundary before a transfer experiment.
+   A batch limit is a ceiling; do not fill it with exhausted or weaker leads.
 3. **Resolve the compiler question.** When lowering is unexplained, inspect the
    matching GCC source/dumps and actual inputs, dependencies and decision rules.
    Reproduce the unchanged full-TU object through any experimental compiler path
