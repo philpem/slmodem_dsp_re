@@ -9891,3 +9891,24 @@ boundary. The recovered loops still differ in capture/allocation details, so
 remain NONMATCH and leave that frontier low priority. Search replay tools by
 source family as well as literal symbol: dynamically constructed target names
 can hide relevant old domains. A history index supplies leads, not exclusions.
+
+
+### Treat destructive comparisons as predicates before arithmetic (F12111)
+
+An INC instruction can implement a comparison with -1 when its narrow input
+is dead. It need not represent a source increment. Inspect the period machine
+description and the actual death notes: `RxClampV32` keeps a signed narrow
+counter for the next decrement, while its separately tested producer dies at
+the shared sentinel. That lifetime permits GCC's HI comparison peephole and
+`*addhi_4` emitter, closing all 49 bytes without a flag or register constraint.
+A SI addition followed by a HI zero test cannot reuse the SI zero flag and
+therefore does not reproduce the same instruction.
+
+Keep frontend loop formation separate from the later comparison decision.
+A common loop test may be duplicated before the first optimized jump dump;
+removing that transformation diagnostically did not recover this whole body.
+Trace initial RTL, header copying, value reuse, combine and peephole2, then
+cross the supported source graph and value lifetimes. Preserve wrapping count
+behaviour and final aliased reads. Useful intermediate cells can remain in a
+cumulative scratch investigation; the run's complete promotions and protected
+losses must still be reported separately from partial instruction runs.
