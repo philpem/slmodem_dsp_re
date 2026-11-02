@@ -2321,42 +2321,45 @@ void
 VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
 
-	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
+	if (e->v90_receiver != 0 && sess->info0Layout != 0) {
 		V90Demodulator *demod = sess->modem.demodulator;
+		unsigned int low = obj->pac3c->vpcmRateLimitLow;
+		unsigned int high = obj->pac3c->vpcmRateLimitHigh;
 
-		demod->constellationDesigner->setMinMaxRates(
-			obj->pac3c->vpcmRateLimitLow,
-			obj->pac3c->vpcmRateLimitHigh);
+		demod->constellationDesigner->setMinMaxRates(low, high);
 		return;
 	}
 
-	if (obj->k56flex_receiver != 0
-	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
-		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
+	if (e->k56flex_receiver != 0
+	    && *((const unsigned char *)k56 + 8) != 0) {
+		k56->setMinMaxRates(
 			(int)obj->pac3c->vpcmRateLimitLow,
 			(int)obj->pac3c->vpcmRateLimitHigh);
 		return;
 	}
 
-	obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
+	e->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
 			      / (unsigned)RATE_STEP);
-	obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
+	e->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
 			      / (unsigned)RATE_STEP);
 
-	if (obj->rate_min > 14)
-		obj->rate_min = 14;
+	if (e->rate_min > 14)
+		e->rate_min = 14;
 
-	if (obj->rate_max < obj->rate_min)
-		obj->rate_max = obj->rate_min;
+	if (e->rate_max < e->rate_min)
+		e->rate_max = e->rate_min;
 
-	if (obj->rate_max > 14) {
-		obj->rate_max = 14;
+	if (e->rate_max > 14) {
+		e->rate_max = 14;
 		return;
 	}
 
-	if (obj->rate_max == 1)
+	if (e->rate_max == 1)
 		obj->force_low_baud = 1;
 }
 
