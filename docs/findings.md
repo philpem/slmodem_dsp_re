@@ -142612,3 +142612,54 @@ global census is required for discarded diagnostics. Evidence, controls and
 full limitations are under `scratch/owner-pass/`, including
 `astra-review/review.json`, `profile-review.json`, `termination-results.json`
 and `progress-results.json`. Existing EXACT/REGALLOC totals are unchanged.
+
+## F12119. V90 progress recovers branch-specific evaluator and designer captures
+
+The two constellation-update regions have different evaluator lifetimes.
+Native address order is not source order: the call at 0x1d8a4 belongs to case
+0x2a, and 0x1e3aa to case 0x19. Case 0x2a captures `this+0x20c` after the
+constellation designer returns, uses it for `enableRrnDown`/`enableRrnUp`
+stores at evaluator+0x28/+0x2c, and carries it into the successful update.
+Its retrain branch reloads the evaluator after the callback and state selection.
+Case 0x19 performs diagnostics and phase-change callbacks before the update;
+its evaluator must be read again after those calls.
+
+Both updates capture one designer at `this+0x208` immediately before their
+arguments: signed short `dMin` at +0x0a and float thresholds at +0x18/+0x1c/+0x20.
+The reconstruction read the designer pointer four times. Consumed local pointers
+recover these observations. The evaluator local is refreshed after the retrain
+branch, and case 0x19 retains its direct member read after callbacks. Existing
+prefilter and AGC captures from F12118 are included. No function extraction,
+qualifier, compiler-profile or interface changes are involved.
+
+Seven full-TU diagnostic compiles comprise a raw-identical unchanged control,
+two paired prefilter/AGC controls, and designer-only/paired-capture sources each
+crossed with default/no-GCSE profiles. All compile successfully, with all 31
+grades unchanged. The paired no-GCSE source restores two static update sites
+and 126 calls; the earlier 125-call result shared call code, rather than omitting
+a runtime path. No-GCSE remains diagnostic: its no-debug error paths still
+reload an evaluator native carries, and AGC/pool obligations remain unresolved.
+
+The default-profile source partial is retained. Independent Astra review finds
+only `progress` changed among 31 bodies, with all 126 call targets (44 distinct)
+and 529 relocation target/type entries preserving their contracts. Symbol
+binding/type/visibility/section contracts and non-jump-table data are unchanged.
+Jump-table addresses move with code; all 62 entries retain measured destination
+correspondence, without a full CFG-equivalence claim. The body changes from
+7366 to 7350 bytes versus native 7276; normalized longest run remains 42/1698.
+These diagnostics confer no classification gain.
+
+Validation: the four focused period binaries pass; `make phase J=8` passes
+396/396 period tests and structural checks. Actual/faithful raw objects agree
+300/300, with only the V90 TU changed. Fresh selected-link census remains
+1205 EXACT / 37 REGALLOC / 610 NONMATCH / 0 unresolved, out of 1852. The complete
+partial object remains DIFFERENT. Existing `t_v90demprog` excludes states 0x19
+and 0x2a: its 229622 checks across three sections do not establish execution of
+the changed argument regions. Constructor-based coverage of those states is
+still needed; this partial claims native snapshot recovery and no new-arm or
+modem lifecycle coverage. No differential failure is waived.
+
+Controls, source diffs, compiler dumps, independent review and integration
+records are under `scratch/progress-owner/`. A bounded AGC RTL/native review is
+the next discriminator for the no-GCSE hypothesis; further reset spellings are
+not justified by this result.

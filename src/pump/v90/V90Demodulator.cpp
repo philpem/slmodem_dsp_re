@@ -398,7 +398,8 @@ V90Demodulator::enterPhase3()
 int
 V90Demodulator::sessionTermination()
 {
-	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
+	V90PreFilter *preFilterOwner = &preFilter;
+	if (inPhase3 == 3 && !preFilterOwner->isV90WithEia6()) {
 		if (params->TIMING_HISTORY_EVALUATION_ENABLED != 0) {
 			float mean = resampler.getTimingHistoryMean();
 			float std = resampler.getTimingHistoryStd();
@@ -452,7 +453,7 @@ V90Demodulator::sessionTermination()
 	} else {
 		edprintf("V90Demodulator on sessionTermination: Timing offset "
 			 "NOT saved to registry (isDataState = %d, " "isEia6 = %d)\r\n",
-			 inPhase3 == 3, preFilter.isV90WithEia6());
+			 inPhase3 == 3, preFilterOwner->isV90WithEia6());
 	}
 
 	phase3Demodulator->clearVerificationStatus();
@@ -1176,6 +1177,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	unsigned int prevRate;
 	float cur, avg, pdSnr;
 	int verdict, whole, frac, whole2, frac2;
+	V90ConstellationDesigner *designerOwner;
+	V90ConnectionEvaluator *evaluatorOwner;
 
 	samplesInPhase += nofIn;
 
@@ -1186,7 +1189,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	 * declares no `process` of its own, so this is unambiguous.
 	 */
 	preFilter.process(in, (float *)array_244, nofIn);
-	agc.process((const float *)array_244, (float *)array_244, nofIn);
+	Agc<float> *agcOwner = &agc;
+	agcOwner->process((const float *)array_244, (float *)array_244, nofIn);
 	resampler.resample((const float *)array_244, nofIn,
 			   (float *)array_248, nofResampled);
 	equalizer->process((float *)array_248, nofResampled, (short *)array_250,
@@ -1434,7 +1438,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		    params->AGC_ADAPTATION_DURATION <
 			(int)phase3Demodulator->samplesInState &&
 		    agc.alpha != 1.0f) {
-			agc.freeze();
+			agcOwner->freeze();
 			edprintf("V90Demodulator: Agc Frozen\r\n");
 
 			whole = (int)agc.level;
@@ -1596,12 +1600,13 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					phase4Demodulator->enterWaitForCP();
 				else
 					phase4Demodulator->enterWaitForMP();
+				designerOwner = constellationDesigner;
 				connectionEvaluator->
 				    updateCurrentConstellationData(
-					constellationDesigner->dMin,
-					constellationDesigner->pdSnrThreshForRateUp,
-					constellationDesigner->pdSnrThreshForRateDown,
-					constellationDesigner->pdSnrThreshForRetrain);
+					designerOwner->dMin,
+					designerOwner->pdSnrThreshForRateUp,
+					designerOwner->pdSnrThreshForRateDown,
+					designerOwner->pdSnrThreshForRetrain);
 			} else {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90Demodulator: " "connection design error, "
@@ -1748,9 +1753,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    (V90SpecialSpectralConditions)
 				spectralVerifier.word_28);
 
-			connectionEvaluator->enableRrnDown =
+			evaluatorOwner = connectionEvaluator;
+			evaluatorOwner->enableRrnDown =
 			    params->ENABLE_RRN_DOWN;
-			connectionEvaluator->enableRrnUp = params->ENABLE_RRN_UP;
+			evaluatorOwner->enableRrnUp = params->ENABLE_RRN_UP;
 			rateValid = 1;
 
 			if (verdict == 1) {
@@ -1763,12 +1769,14 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 								    : 0x1f;
 				else
 					word_3c = 0x26;
+				evaluatorOwner = connectionEvaluator;
 			}
-			connectionEvaluator->updateCurrentConstellationData(
-			    constellationDesigner->dMin,
-			    constellationDesigner->pdSnrThreshForRateUp,
-			    constellationDesigner->pdSnrThreshForRateDown,
-			    constellationDesigner->pdSnrThreshForRetrain);
+			designerOwner = constellationDesigner;
+			evaluatorOwner->updateCurrentConstellationData(
+			    designerOwner->dMin,
+			    designerOwner->pdSnrThreshForRateUp,
+			    designerOwner->pdSnrThreshForRateDown,
+			    designerOwner->pdSnrThreshForRetrain);
 			break;
 
 		case 0x31:
