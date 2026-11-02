@@ -2388,30 +2388,35 @@ VPcmV34SetDelays(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	volatile struct _tagModemParameters *params = obj->pac3c;
 
 	{
-		int delay = obj->pac3c->hwDelay;
+		int delay = params->hwDelay;
 		int biased = (int)((unsigned)delay + 2u);
 
 		obj->filtdelay = (short)((biased >> 2) + 0x22);
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V34 filtdelay set to %d "
 					     "(params initial delay = %d)\n",
 					     (int)obj->filtdelay,
 					     delay);
+			params = obj->pac3c;
+		}
 	}
 
 	{
-		int ext = obj->pac3c->dmaDelay;
+		int ext = params->dmaDelay;
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
 					     (int)obj->dmadelay, ext);
+			params = obj->pac3c;
+		}
 	}
 
 	sess->echoCanceller.setEchoDelay(
-		(unsigned)obj->pac3c->dmaDelay + 0x68u);
+		(unsigned)params->dmaDelay + 0x68u);
 }
 
 int

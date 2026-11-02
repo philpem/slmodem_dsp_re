@@ -142379,3 +142379,52 @@ is under `scratch/idiom-transfer-review/`. The first subsection ends here:
 two complete promotions and one rejected function. Remaining queues require
 their own source/native review, and previously closed SMC/FIFO/FDSP domains
 are not reopened by a screening hit alone.
+
+## F12114. A reader-local volatile view closes the V34 delay setter
+
+`VPcmV34SetDelays` becomes EXACT: 259 bytes, 66 decoded instructions including
+padding, 62 without padding. The complete 56-function TU changes only this
+body; all protected peers, 115 symbol records, allocated noncode, bindings
+and other relocation consumers remain unchanged. Four relocation offsets move
+inside the target, with their destinations and kinds preserved.
+
+The first owner-local candidate restored the parameter-pointer epochs but
+allowed the compiler to reuse a DMA value the reference rereads. Restoring a
+direct final owner expression alone also failed. The owner's volatile-access
+suggestion supplies the missing type hypothesis. A volatile `dmaDelay` field
+alone leaves the original source NONMATCH; coupling it with the parameter
+local and post-diagnostic refreshes closes the body. A local
+`volatile struct _tagModemParameters *params` gives the same complete object,
+without changing the shared member declaration. This narrower reader view is
+the retained source. The pointer variable itself is not volatile.
+
+The native has three parameter-root loads: entry and after either diagnostic
+callback. It has four static DMA-field loads across the quiet and debug paths.
+Keep the parameter local across the ordinary output stores, refresh it after
+each diagnostic call, and read the volatile pointee again for the echo delay.
+No value is replaced with a cached earlier `ext`, and no public type, helper,
+compiler profile, arithmetic width or bug-reproduction arm changes.
+
+The writer is an independent scope constraint. Native `vpcm_create` stores
+EAX at parameter+0x68 at 0x3c09, updates EAX at 0x3c15, then stores it again
+at 0x3c1e without a reload. Two unchanged-writer Gentoo controls verify the
+consequence: a globally volatile member adds DMA loads absent from that native
+sequence. A reader-local qualified view preserves the writer's existing code.
+This does not uniquely recover the original declaration or establish DMA,
+interrupt or thread activity. Volatile qualification of `hwDelay` within the
+view is observationally ambiguous here because this reader accesses it once.
+
+The reader inquiry ends at twelve valid full-TU cells, with two separate
+unchanged-writer controls used to test qualifier scope. The globally qualified
+and reader-local winning objects are raw-identical. Independent review checks
+the complete TU, original call contracts, field addresses/widths and the writer
+counterexample. Focused Gentoo validation runs `t_v34pcmapi`, including delay
+range and diagnostic cases; its component-fixture scope is retained rather
+than described as modem end-to-end reachability. Artifacts are under
+`scratch/idiom-transfer/delays/`, `scratch/dma-volatile-parent/` and
+`scratch/idiom-transfer-review/VOLATILE-REVIEW.md`.
+
+The focused period gate passes one executable, nine sections and 30,536 checks,
+including 168 direct delay calls per implementation in seeded component frames.
+Eleven independent period layout/width assertions pass. No callback mutation
+or asynchronous writer history is established by those fixtures.
