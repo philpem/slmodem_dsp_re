@@ -43,20 +43,27 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 {
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21tx_cfg *cfg = &tx->cfg;
-	struct v21_tx_hdx *hdx = tx->hdx;
+	struct v21_tx_hdx *hdx;
 	unsigned char flags;
 
 	if (arg == NULL)
 		return 0;
 
-	tx->dsp->fsm.cfg.scale = (short)arg->scale;
-	cfg->int_0008 = arg->int_0004;
+	{
+		int scale = arg->scale;
+		struct v21_tx_dsp *dsp = tx->dsp;
+		int value = arg->int_0004;
+
+		dsp->fsm.cfg.scale = (short)scale;
+		cfg->int_0008 = value;
+	}
 
 	if (arg->mask & V21TXCTL_SET_TXFLAGS_BIT2)
 		((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS] |=
 			V21TXCTL_SET_TXFLAGS_BIT2;
 
 	flags = arg->flags;
+	hdx = tx->hdx;
 	hdx->int_0004 =
 		v21tx_flag_test(flags, V21TXCTL_SET_PARAMS_INT0004) != 0;
 
