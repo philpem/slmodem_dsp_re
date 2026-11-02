@@ -142209,3 +142209,54 @@ are discovery leads, not evidence that an experiment ran or applies now. Verify
 pinned revisions, domains, flags, input hashes and current grades before reusing
 an exclusion or gain. Detailed source/RTL audits and the index are under
 `scratch/sdm-producer/` and `scratch/sdm-producer-parent/`.
+
+
+## F12111. A dead narrow comparison closes the V32 clamp
+
+`RxClampV32` is now EXACT: all 49 bytes and 16 ordinary instructions match
+its native body. Its complete 24-function V32 interface TU changes only that
+body; the other 23 canonical bodies and all ordered call targets are unchanged.
+Allocated data, NOBITS, nontext relocations, symbol records, bindings and
+canonical relocation consumers agree with a fresh raw-identical baseline.
+
+The member was already signed `short`. Historical conversion-before-subtraction
+and postdecrement controls (F11585) did not explain the missing source graph.
+Initial RTL and the matching compiler source instead locate an early split:
+`copy_loop_headers` duplicates the for-loop's common exit test before the jump
+dump, and GCSE reuses the entry value on the zero-trip return. Suppressing that
+one header duplication in an installed-compiler diagnostic still does not close
+the body. A common test alone is insufficient.
+
+The decisive distinction is the lifetime of the value tested against -1.
+The native signed narrow value survives to compute the next decrement, while
+the tested producer can die at the comparison. Recovering those two values
+and the shared test gives the old compiler that liveness fact. This is a real
+counter producer and consumer, not an added scratch use or register constraint.
+The word-sized narrowing still wraps negative lengths through the sentinel;
+zero writes nothing, output alias effects reach the final length reload, and
+D482 is reproduced without a new repair or compatibility arm.
+
+The observed `INC AX` does not establish a source increment. In the matching
+GCC 3.4.2 i386 machine description, the HI comparison peephole requires the
+input's `REG_DEAD` note and accepts the comparison's condition-code mode. The
+successful dump retains the HI comparison against -1 through combine and
+flow2; peephole2 replaces it with compare/clobber, and the `*addhi_4` emitter
+produces the destructive increment. An earlier explicit SI addition followed
+by a HI zero test needed a separate TEST: the two widths' zero flags are not
+interchangeable. Trace the predicate and its lifetime before inferring an
+arithmetic source operator from this instruction.
+
+Independent review checks all 24 bodies, calls, data and bindings. Focused
+Gentoo period validation passes `t_v32fpctl` and `t_v32rxhdx`: 2 executables,
+97 sections and 10,232 checks, including the documented zero/positive counts,
+negative-count compatibility probe and receive lifecycle histories. The planted
+component states retain their fixture scope; no modem end-to-end claim follows.
+Commands, source/profile hashes, pass extracts and controls are recorded under
+`scratch/closure90-parent/`; `RXCLAMP-REVIEW.json` is the independent audit.
+
+The accompanying FDSP cumulative trial tests 32 source/profile cells without a
+promotion. Keeping intermediate experiments together made their interactions
+measurable, but no partial FDSP source or diagnostic compiler intervention is
+retained. Final register names after renaming do not prove original reload
+choices. Per-function closure, rather than size or matching-run growth, remains
+the outcome reported for this checkpoint.

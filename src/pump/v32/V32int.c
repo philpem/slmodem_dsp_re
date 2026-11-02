@@ -929,9 +929,12 @@ TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
 /*
  * Fill one block's worth of `out` with a clamped word and report the count.
  *
- * The counter is a SHORT and the loop tests it against -1, so a count of zero
- * writes nothing and a NEGATIVE count runs to 65535-ish writes rather than
- * none.  That is the object's loop and it is reproduced; D482 records it.
+ * The next arithmetic value is an int; the current counter narrows to a
+ * short at the shared test.  A zero count writes nothing and a negative
+ * count wraps through the word-sized sentinel rather than stopping early
+ * (D482).  Keep the captured counter separate from the tested next value:
+ * the latter dies at the comparison, allowing the period compiler to use
+ * the object's destructive INCW zero test.  F12111 records the pass evidence.
  *
  * `in` and `count` are never read.  Their types are `RxHdxNull`'s call and no
  * stronger -- the whole Rx state family takes the same four.
@@ -940,13 +943,21 @@ unsigned short
 RxClampV32(struct v32_modem *modem, short *in, short *out, unsigned short count)
 {
 	struct v32_hdx *hdx = HDX(modem);
+	int next;
 	short i;
 
 	(void)in;
 	(void)count;
 
-	for (i = (short)(hdx->symbol_len - 1); i != -1; i--)
-		*out++ = 0xff;
+	next = hdx->symbol_len - 1;
+	goto clamp_test;
+clamp_body:
+	*out++ = 0xff;
+	next = i - 1;
+clamp_test:
+	i = (short)next;
+	if ((short)next != -1)
+		goto clamp_body;
 
 	return hdx->symbol_len;
 }
