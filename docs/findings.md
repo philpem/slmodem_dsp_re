@@ -142535,9 +142535,10 @@ the original names or literal spelling.
 
 The wave stops at twelve source candidates plus two raw controls. Two additional
 GCSE diagnostics test the saved-pass observation that a parameter memory operand
-disappears between `.07.addressof` and `.09.loop`. Disabling GCSE neither closes
-the method nor restores the missing owner read, so that interval does not prove
-GCSE alone caused the discrepancy. Neither flag control is retained. The existing
+disappears between `.07.addressof` and `.09.loop`. The source control with GCSE
+disabled restores the owner read but remains NONMATCH as a complete function.
+The original interpretation confused these two verdicts; F12118 corrects it and
+identifies the PRE transformation. Neither flag control is retained. The existing
 `max-inline-insns-auto=50` TU profile remains unchanged.
 
 The V32 wrapper experiment is parked. Moving FP acquisition to its first use
@@ -142559,3 +142560,55 @@ These are seeded component histories, not every public modem lifecycle.
 
 Sources, compiler traces, review and integration records are retained under
 `scratch/owner-wave3/`. There is no whole-function promotion or relaxed classifier.
+
+## F12118. GCSE PRE removes the owner; NONMATCH did not falsify the reload test
+
+The actual Gentoo `.08.gcse` dump identifies the missing late owner load in
+`V90Demodulator::reset`. UID121 loads `this+44` into pseudo75 for offset
+arithmetic. UID167 independently loads that owner into pseudo87 for the sign
+comparison; UID168 reads the float at owner+132. Both owner instructions survive
+through `.07.addressof`. PRE then reports:
+
+```
+PRE: redundant insn 167 (expression 5) in bb 4, reaching reg is 112
+PRE: bb 2, insn 347, copy expression 5 in insn 121 to reg 112
+LOCAL COPY-PROP: Replacing reg 87 in insn 168 with reg 112
+```
+
+The earlier CSE deletion is a different operation: UID102 shares UID96's owner
+for the second AGC parameter use. Do not identify a lost read by counting every
+textual memory annotation, which can include equivalence notes and other sites.
+
+The saved `no-gcse-source` control retains UID167 through final code generation:
+`mov 0x2c(%esi),%ebx` at 0x1e63, immediately followed by the field comparison
+`fcomps 0x84(%ebx)` at 0x1e66. Its whole-function grade is still NONMATCH.
+F12117's original claim that this control did not restore the reload was wrong:
+the whole grade had been used as the named-feature verdict. This finding and
+the corrected paragraph supersede that interpretation. Source hashes agree and
+the fresh unchanged full-TU control reproduces the production object byte for
+byte. Upstream pipeline source explains the wrapper ordering; the actual Gentoo
+diagnostics establish this transformation without a patched-source identity claim.
+
+Whole-TU review prevents retaining the flag solely for this positive result.
+No-GCSE also restores a late owner reload in `exitPhase3`, but changes five
+bodies without any grade promotion. `sessionTermination` loses a shared prefilter
+address; `progress` loses the AGC owner retained through its later freeze.
+Two native-backed local-owner changes are tested under both profiles, four
+candidate compiles in total. Both named features are restored under no-GCSE,
+with all 31 grades unchanged. These successes are reported independently of the
+grades; neither source change nor profile is retained by this inquiry.
+
+An unresolved `progress` obligation remains. Native and default-profile code have
+126 static calls, including two constellation-data updates; no-GCSE has 125 and
+one update site. The latter joins multiple branches into shared argument/call
+code, rather than dropping an execution path. It reloads the evaluator where
+native carries an earlier owner. Both source endpoints also reload the designer
+four times where native captures one owner for the argument group. A bounded
+follow-up must map those two argument regions, intervening error callbacks and
+the evaluator/designer snapshot lifetimes before changing their expressions.
+
+No production source, test or compiler flag changes. No new differential gate or
+global census is required for discarded diagnostics. Evidence, controls and
+full limitations are under `scratch/owner-pass/`, including
+`astra-review/review.json`, `profile-review.json`, `termination-results.json`
+and `progress-results.json`. Existing EXACT/REGALLOC totals are unchanged.

@@ -10006,6 +10006,23 @@ boundaries before retaining a changed arithmetic producer.
 Distinguish an observed float member from its pointer owner. The V90 partial
 restores the late float-field comparison while still caching an owner the
 reference reloads. A disappearing memory operand between pass dumps narrows the
-search interval; it does not prove a particular pass caused the loss. The GCSE
-negative controls leave that reload absent, so retain no flag explanation from
-the interval alone. Preserve the reviewed partial and its explicit residuals.
+search interval; it does not prove a particular pass caused the loss. F12118
+identifies the actual PRE deletion and corrects the earlier feature verdict:
+the no-GCSE control restores the owner reload, although the function remains
+NONMATCH. Whole-TU obligations still block profile retention.
+
+### Separate feature verdicts from complete-function grades (F12118)
+
+For each hypothesis, record whether its named operation appeared, separately
+from EXACT/REGALLOC/NONMATCH. The V90 control restored the requested reload;
+using its unchanged NONMATCH grade as a negative verdict sent the next inquiry
+in the wrong direction. Track instruction identities, reaching values and the
+emitted instruction pair, with known positive and negative controls. Textual
+memory counts can mix different uses and equivalence annotations.
+
+A feature success admits the whole-TU review; it does not approve a flag. The
+no-GCSE profile improves two late owner observations but exposes missing native
+owner captures elsewhere and merges a call tail. Native-backed source locals
+repair two of those features in crossed controls, while the unresolved argument
+snapshot/call-tail obligations remain explicit. Test those obligations before
+retention rather than widening the source or flag search.
