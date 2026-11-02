@@ -38,6 +38,11 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    competing explanation, prediction, falsifier, candidate domain and limit.
    Keep useful partials together on the closure branch. For convergence work,
    report whole-function promotions separately from partial source recoveries.
+   Consider ordinary C idioms early: a local alias of an argument or nested
+   object, or a captured field value, may explain native load groups and value
+   lifetimes. These consumed locals are not dummy register uses. Distinguish an
+   opaque API cast from those aliases; infer interchangeable callbacks or C
+   polymorphism only from actual use across functions, not from a cast alone.
 3. **Resolve the compiler question.** When lowering is unexplained, inspect the
    matching GCC source/dumps and actual inputs, dependencies and decision rules.
    Reproduce the unchanged full-TU object through any experimental compiler path

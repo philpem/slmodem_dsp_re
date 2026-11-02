@@ -142260,3 +142260,65 @@ measurable, but no partial FDSP source or diagnostic compiler intervention is
 retained. Final register names after renaming do not prove original reload
 choices. Per-function closure, rather than size or matching-run growth, remains
 the outcome reported for this checkpoint.
+
+## F12112. A typed local and real byte captures close V22 control to REGALLOC
+
+`V22FP_control` recovers the complete native instruction graph: REGALLOC,
+145 bytes and 47 decoded instructions including padding. Independent comparison
+finds 11 differing bytes: early DSP/scrambler register assignments and the
+out-of-line ORG_RMLOOP2 HDX temporary. Those temporaries are overwritten before
+the shared late sequence, which is identical. `V22_status` remains EXACT at
+310 bytes. Both functions remain call-free; complete-TU data, bindings,
+nontext relocations and relocation consumers are unchanged.
+
+The owner's opaque-argument suggestion exposed a missing source input.
+`void *modem` immediately cast to a `struct v22fp *fp` local restores two
+DSP-root loads without changing member types or compiler flags. A typed
+argument followed by the same local assignment produces the identical complete
+object on three earlier graphs and the successful candidate. The original
+opaque signature is therefore not uniquely identified. The retained interface
+preserves the existing typed argument and uses a separate typed local. HDX/DSP
+members and the control argument retain their concrete types. There is no
+interchangeable control-callback witness establishing an opaque API here.
+
+Actual Gentoo dumps retain concrete alias sets. Local CSE leaves an early
+load based on the `fp` pseudo and a late one based on `modem`; PRE hashes
+them as distinct expressions. Later copy propagation canonicalises the bases
+after that elimination opportunity. The preceding read-only audit stopped
+too soon by looking for a different type or invalidating store. A missing
+reload need not establish an alias barrier. A concrete cast also need not
+erase a source local's effect on this compiler's intermediate representation.
+
+The pointer local alone does not close the body. Capture the early byte and
+compute the consumed `int scrambler` before the descrambler store, so the byte
+can die before the HDX byte capture. Sample the latter between the two DSP
+stores, refresh it only after the retrain arm's HDX stores, and use the current
+sample for the second predicate. A raw second read cannot be substituted
+freely: the intervening scrambler store may alias that byte. The late byte
+capture feeds both DSP updates and the final parameter bit. Combining these
+real producer/consumer lifetimes closes the graph; without the early int
+producer the capture candidate remained NONMATCH with excess register pressure.
+There is no new helper, dummy use, refactor, layout change, flag or bug repair.
+
+The inquiry compiles 15 complete-TU cells, including two unchanged controls,
+and audits 30 function slots. Only the complete capture and its raw-identical
+opaque counterpart promote the target; every status body remains EXACT.
+Compilation totals about five seconds; integration work is separate. Commands,
+hashes, pass dumps, controls and finite domains are in
+`scratch/v22-opaque-entry/`; independent review is in `scratch/v22-cast-review/`.
+
+Focused Gentoo period checks run `t_v22ctl`, `t_v22status` and `t_v22leaves`:
+three executables, eight sections and 1,083,740 checks. The main control fixture
+uses all 65,536 flag pairs across four constructed configurations with a disjoint
+control object. It does not establish arbitrary overlapping-pointer histories
+or modem end-to-end reachability.
+
+The frozen checkpoint passes `make phase`: 396/396 period tests and structural
+checks. The faithful census is 1,201 EXACT / 36 REGALLOC / 615 NONMATCH /
+0 UNRESOLVED across 1,852 functions, with no protected loss. Actual/faithful
+raw object parity is 300/300; only the reviewed V22 status/control TU changes.
+The complete partial object remains DIFFERENT. Typed and opaque entry/local
+forms have the same reviewed object; the final typed form is revalidated before
+delivery. Ordinary argument/subobject aliases should have been considered
+before the prolonged alias/flag investigation. Opaque callbacks and C-style
+polymorphism require evidence from the surrounding uses, not one matching cast.

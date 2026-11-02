@@ -6,7 +6,7 @@
  * already here.  The emission order is the object's: V22FP_control at
  * 0x08c3b0, then V22_status at 0x08c450.
  *
- * THE INSTANCE POINTER IS READ AGAIN FOR EVERY FIELD, and it is not a style
+ * IN V22_status THE INSTANCE POINTER IS READ AGAIN FOR EVERY FIELD, not a style
  * choice: the object emits `mov 0x54(%esi),%ebx` five separate times inside
  * the flag sequence, with the instance itself live in a callee-saved register
  * throughout.  A local holding the sub-object pointer would have been kept in
@@ -37,16 +37,22 @@ static const short PROTOCOL[7] = {
 };
 
 int
-V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
+V22FP_control(struct v22fp *modem, const struct v22fp_ctl *ctl)
 {
+	struct v22fp *fp = modem;
 	/*
 	 * The two scrambler switches, from the two low bits.  Both are read
 	 * out of one byte load, which is why they are taken in this order --
 	 * the object shifts the loaded byte for bit 1 and masks the original
 	 * for bit 0.
 	 */
-	fp->dsp->descrambler_on = (ctl->flags_0c >> 1) & 1;
-	fp->dsp->scrambler_on = ctl->flags_0c & 1;
+	unsigned char early_flags = ctl->flags_0c;
+	int scrambler = early_flags & 1;
+	unsigned char hdx_flags;
+
+	fp->dsp->descrambler_on = (early_flags >> 1) & 1;
+	hdx_flags = ctl->flags_0d;
+	fp->dsp->scrambler_on = scrambler;
 
 	/*
 	 * The half-duplex pair, twice over.  The flag is tested first and the
@@ -54,11 +60,12 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 * field's values in place; that ordering is the object's and is
 	 * observable, which is why it is not tidied into an if/else.
 	 */
-	if (ctl->flags_0d & V22_CTL_RETRAIN) {
+	if (hdx_flags & V22_CTL_RETRAIN) {
 		fp->hdx->protocol = V22_PROTOCOL_RETRAIN;
 		fp->hdx->connect_substate = 1;
+		hdx_flags = ctl->flags_0d;
 	}
-	if ((ctl->flags_0d >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
+	if ((hdx_flags >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
 		fp->hdx->protocol = V22_PROTOCOL_ORG_RMLOOP2;
 		fp->hdx->connect_substate = 0;
 	}
@@ -70,10 +77,10 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 		/* Inverted; see V22_CTL_FREEZE_ADAPT. */
 		fp->dsp->agc.f18 =
 		    v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
-	}
 
-	/* The parameter bitfield preserves the byte-wide update at +0x11. */
-	fp->params.flag_bits.bit9 = ctl->flags_0c >> 7;
+		/* The parameter bitfield preserves the byte-wide update at +0x11. */
+		fp->params.flag_bits.bit9 = f0c >> 7;
+	}
 
 	/* A literal on every path, not a status. */
 	return 1;
