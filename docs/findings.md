@@ -142513,3 +142513,49 @@ Sources, compiler traces, reviews and integration records are under
 local branch offsets and section addends; even 100% does not prove register
 relationships or branch destinations. Earlier scratch descriptions calling
 these runs operand-exact are corrected. No classifier is relaxed.
+
+## F12117. Recover the V90 reset's value observations without claiming closure
+
+`V90Demodulator::reset` retains a reviewed source-fidelity partial. Its sign
+argument now reads `params->INITIAL_BAUD_OFFSET` directly, restoring the native
+float-field comparison instead of comparing the retained x87 value. The parameter
+pointer itself remains cached: the reference reacquires that owner before the
+comparison. Timer publications and other allocation/scheduling still differ.
+The method remains NONMATCH, at 501 bytes and 126 nonpadding instructions versus
+509 bytes and 129 in the reference.
+
+The source shares the embedded AGC address across descrambler/reset calls and
+parameter publications. A floating absolute-value local is produced before the
+whole/fraction calculation and converted to the integer diagnostic argument later.
+An integer-magnitude control finalises that conversion too early. The unsuffixed
+`1000.0` product restores the separate constant load and multiplication; no spill,
+qualifier, helper or precision-forcing mechanism is introduced. The native
+producer/consumer sequence supports these choices without uniquely identifying
+the original names or literal spelling.
+
+The wave stops at twelve source candidates plus two raw controls. Two additional
+GCSE diagnostics test the saved-pass observation that a parameter memory operand
+disappears between `.07.addressof` and `.09.loop`. Disabling GCSE neither closes
+the method nor restores the missing owner read, so that interval does not prove
+GCSE alone caused the discrepancy. Neither flag control is retained. The existing
+`max-inline-insns-auto=50` TU profile remains unchanged.
+
+The V32 wrapper experiment is parked. Moving FP acquisition to its first use
+recovers branch-local placement, but no mutating call/store separates the old
+and new observation, and its post-copy source refresh emits no additional root
+read on that path. This source-shape result is not retained as an owner recovery.
+
+Independent review checks 31 V90 bodies: only reset changes. Symbol metadata,
+named objects and allocated nontext are unchanged. All nine ordered calls and
+thirteen target relocation destinations agree with the reference, with none
+unresolved. Eight period layout/width assertions verify the owners and fields.
+
+The reset fixture adds six adjacent float values around positive and negative
+0.001. Both unchanged and retained source pass the expanded period fixture.
+Reset trials increase from 576 to 1,728; checks increase from 14,979 to 44,931
+(26 per trial plus three fixed coverage checks). Existing NaN and cursor coverage
+remains. The complete focused executable passes 252,470 checks in eleven sections.
+These are seeded component histories, not every public modem lifecycle.
+
+Sources, compiler traces, review and integration records are retained under
+`scratch/owner-wave3/`. There is no whole-function promotion or relaxed classifier.
