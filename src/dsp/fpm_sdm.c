@@ -35,16 +35,15 @@ FPM_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
 		 * to the word's own bits: the tap terms carry the whole
 		 * register above them.
 		 */
-		unsigned short out = (unsigned short)
-			(((reg >> shift1) ^ *data ^ (reg >> shift2)) & mask);
-
-		*data++ = out;
+		unsigned int tap1 = reg >> shift1;
+		unsigned int tap2 = reg >> shift2;
+		*data = (unsigned short)((tap1 ^ *data ^ tap2) & mask);
 		/*
 		 * Shift the word in.  `& notmask` is redundant -- the shift
 		 * has already zeroed those bits -- and the object does it
 		 * anyway, so it is here.
 		 */
-		reg = ((reg << nbits) & notmask) | out;
+		reg = ((reg << nbits) & notmask) | *data++;
 	}
 
 	sdm->reg = reg;

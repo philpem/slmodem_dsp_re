@@ -142153,3 +142153,59 @@ repair. The call-contract method transfers as structural recovery, not a general
 closure recipe for these remaining source/lifetime graphs. Detailed commands,
 31-body audit, table ledger and independent comparison are under
 `scratch/demod-contract/` and `scratch/demod-contract-parent/`.
+
+## F12110. SDM tap and WORD-feedback boundaries recover the loop, not its allocation
+
+`FPM_SDM_scrambler` and `SDM_scrambler` have identical 146-byte, 53-instruction
+reference bodies. Current source emitted 144 bytes and 51 ordinary instructions,
+keeping the recurrence on the stack and updating it with memory shift/AND/OR.
+Native keeps that recurrence in EBX and spills the second tap result instead.
+Fresh unchanged full-TU Gentoo controls reproduce both retained objects raw.
+
+The initial RTL exposes a source-input distinction: shift one, input load/XOR,
+then shift two. Capturing both unsigned tap contributions before the original
+left-associated WORD expression creates the native producer overlap. Global
+allocation then spills the second tap instead of the recurrence, as predicted.
+This is not the historical feedback-first XOR association control in
+`gcc3_batch100_fax_sdm_feedback.py`, nor the closed wide-output/WORD-use control.
+
+That first candidate still narrows its local output before the store. Native
+publishes AX before zero-extending it for feedback. The single supported
+correction publishes directly through the WORD lvalue and then consumes
+`*data++` in the recurrence. Both native loop operation order and recurrence/tap
+placement follow. Output narrowing, count width, XOR association, masks and
+state publication are preserved; no width, declaration-order or flag palette
+is retained. The fax copy receives the same graph without tuning after a fresh
+raw-identical control, providing a withheld transfer result.
+
+Both functions remain **NONMATCH**, not EXACT or REGALLOC. Their extents and
+instruction counts now equal native, but those are diagnostics only. The
+maintained longest run rises from 5 to 17 instructions in each. Remaining byte
+differences comprise 28 prologue positions and five loop displacement bytes;
+the latter follow one consistent permutation of five private ESP slots. The
+last eleven bytes match literally. This is inspected slot/producer evidence,
+not a formal CFG or private-stack equivalence certificate. Do not spend further
+source cells on allocation or capture-order fitting without new input evidence.
+
+Independent review covers all six functions across both TUs. Only the two
+scramblers change; the four init/descrambler peers preserve their canonical
+bodies and relocations. Symbol inventories, bindings, visibility, types, data
+and relocation tables are preserved. Following functions move by sixteen bytes
+through alignment; that is a layout consequence, not a reconstruction target.
+The actual period objects equal the experimental candidates byte for byte.
+
+Focused period validation passes five executables, 65 sections and 514,455
+checks: `t_fpm_sdm`, `t_faxsdm`, `t_v22data`, `t_v17fax`, `t_v29fax`. Direct tests
+compare state and output per word, bulk/chunk operation and zero count, with
+protocol configurations and explicitly synthetic edges. No new fixture or
+mutation campaign is required for this graph recovery.
+
+The history audit found replay tools that literal function-name searches missed
+because names were constructed dynamically. A scratch AST index scans 1,451
+tracked Python tools with no parse failures, finding candidate source-family
+or literal-symbol leads for 581 of 617 residuals (341 have literal-symbol leads).
+Known positive and unrelated-input negative controls exercise the index. These
+are discovery leads, not evidence that an experiment ran or applies now. Verify
+pinned revisions, domains, flags, input hashes and current grades before reusing
+an exclusion or gain. Detailed source/RTL audits and the index are under
+`scratch/sdm-producer/` and `scratch/sdm-producer-parent/`.

@@ -41,13 +41,12 @@ SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data, unsigned short count)
 	unsigned int reg = sdm->reg;
 
 	while (count--) {
-		unsigned short out = (unsigned short)
-			(((reg >> shift1) ^ *data ^ (reg >> shift2)) & mask);
-
-		*data++ = out;
+		unsigned int tap1 = reg >> shift1;
+		unsigned int tap2 = reg >> shift2;
+		*data = (unsigned short)((tap1 ^ *data ^ tap2) & mask);
 		/* `& notmask` is redundant after the shift and the object
 		 * does it anyway. */
-		reg = ((reg << nbits) & notmask) | out;
+		reg = ((reg << nbits) & notmask) | *data++;
 	}
 
 	sdm->reg = reg;
