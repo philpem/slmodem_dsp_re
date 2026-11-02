@@ -9941,3 +9941,20 @@ alone did not close V22: the early scrambler producer, conditional HDX refresh
 and late parameter-bit capture also had to agree. Trace all remaining regions,
 preserve reads across potentially aliasing stores and review the protected peer.
 This is not a reason for a local-copy or pointer-spelling palette elsewhere.
+
+### Recover volatile access at the supported scope
+
+A reference reread can justify a volatile-access hypothesis, alongside aliasing
+and value-lifetime explanations. Test its scope: a volatile field affects all
+consumers, whereas `volatile T *p` makes this reader's pointee accesses volatile
+without making the pointer variable itself volatile. The latter is different
+from `T * volatile p`.
+
+The V34 delay inquiry first recovered parameter-owner epochs, but the compiler
+then reused a DMA-field value the reference rereads. A reader-local volatile
+view closes the full body. The native writer independently reuses its just-written
+DMA value across a separate compound update, supporting narrower qualification
+than a shared volatile field. Compare readers and writers and require the whole
+TU result; a reread alone does not prove original qualifiers or asynchronous
+hardware access. This is qualifier recovery, not permission to insert a barrier
+until an instruction matches.

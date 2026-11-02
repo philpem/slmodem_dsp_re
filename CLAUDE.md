@@ -54,6 +54,9 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    informative losing controls and test justified combinations. Do not substitute
    blind cast/reorder/structure palettes, artificial scratch consumers, volatile
    barriers, padding, assembly or unsupported attributes for an explanation.
+   Qualifiers are source hypotheses too: distinguish evidence-backed volatile
+   accesses from artificial barriers, and check their scope against native
+   readers and writers before changing a shared declaration.
    A diagnostic flag hit alone is not a retained profile. A supported source/profile
    combination needs complete-TU native evidence, named collateral review and
    period/object parity; record its scope and remaining ambiguity.
