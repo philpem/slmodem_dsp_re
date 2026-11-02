@@ -142322,3 +142322,60 @@ forms have the same reviewed object; the final typed form is revalidated before
 delivery. Ordinary argument/subobject aliases should have been considered
 before the prolonged alias/flag investigation. Opaque callbacks and C-style
 polymorphism require evidence from the surrounding uses, not one matching cast.
+
+## F12113. A sectioned idiom-transfer pass closes two more complete functions
+
+The b91102c9 baseline has 615 NONMATCH functions, 36 REGALLOC and 1,201 EXACT
+across 1,852 compared symbols. All 300 faithful object hashes were checked
+against the validated checkpoint before screening. The pass assigns every
+NONMATCH to an observation queue: 147 potential pointer-owner epoch differences,
+23 narrow-predicate differences, 149 narrow load/value-form differences,
+85 x87 cases, 21 call-count differences and 190 other/mixed cases. These
+fixed-priority queues are navigation, not causal classifications or promises
+of easy promotions. Equal displacements do not prove a shared owner; the
+pointer detector uses a bounded base-register-use window. Two positive and
+two negative pointer controls pass. REGALLOC tuning and alignment are excluded.
+
+The first three-function subsection tests eight valid complete-TU cells:
+
+- `V32FP_GetCleanedSamples`: NONMATCH to EXACT, all 53 bytes/15 instructions.
+  A typed outer argument plus a separately named typed local restores the
+  native owner reload after publishing the count. The native has three static
+  root+0x68 loads after return-tail duplication; the baseline has one. The
+  actual PRE hash table has one shared expression before this change, but
+  distinct local/argument expressions with it. No alias flag is changed.
+  Historical no-strict-aliasing controls recovered the getter but changed two
+  constructors; those constructors remain raw unchanged with this local.
+- `V21TX_control`: NONMATCH to REGALLOC, 94 bytes/34 decoded instructions.
+  The native captures scale and the second input word before the first two
+  stores, and acquires HDX after the optional flag-byte update. The known late
+  HDX control and the new consumed-input/DSP-local captures each remain
+  NONMATCH alone; their combination recovers the complete instruction graph.
+  This is a coupled lifetime recovery, not rediscovery of the old late-child
+  experiment. The existing public API, member types and operations remain.
+- `VPcmV34SetDelays`: no promotion. A typed parameter-owner local with the two
+  native post-diagnostic refreshes recovers owner epochs but does not close the
+  body. It is discarded. Two generator failures are retained as invalid apparatus
+  attempts, one before compilation and one after compiling an unchanged control;
+  no source conclusion is drawn from them.
+
+Independent review checks all eight functions in the two retained TUs, native
+CFG joins and call ABI, data, bindings and relocation consumers. Only the two
+targets change; all protected functions and both constructors are unchanged.
+Thirteen period-compiler layout/width assertions pass, and changed-immediate
+negative controls are rejected. No helper, profile, field type, bug repair or
+state-machine refactor is introduced. Existing component fixture scopes remain
+explicit: V32 includes planted count probes, and V21 controls run on constructed
+instances. These are not new arbitrary-alias or modem end-to-end claims.
+
+Focused Gentoo period validation passes `t_v32fpctl` and `t_v21txcreate`:
+two executables, eleven sections and 7,471 checks. Full phase/codegen checks
+are batched at the retained integration checkpoint rather than run for each
+experimental cell.
+
+The reproducible section queues, all 615 rows, controls, finite source cells
+and compiler dumps are under `scratch/idiom-transfer/`; independent evidence
+is under `scratch/idiom-transfer-review/`. The first subsection ends here:
+two complete promotions and one rejected function. Remaining queues require
+their own source/native review, and previously closed SMC/FIFO/FDSP domains
+are not reopened by a screening hit alone.

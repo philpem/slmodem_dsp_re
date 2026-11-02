@@ -1030,8 +1030,9 @@ V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *o
  * every value that reaches the first branch.
  */
 short *
-V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
+V32FP_GetCleanedSamples(struct v32_modem *arg, int *n)
 {
+	struct v32_modem *modem = arg;
 	unsigned short have;
 
 	have = FP(modem)->clean_n;
