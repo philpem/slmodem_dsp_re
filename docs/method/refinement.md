@@ -9882,3 +9882,12 @@ its independently supported structural facts, with its data/layout changes and
 remaining mismatches explicit. Do not extrapolate the phase-4 promotions into a
 profile sweep. A remaining native SF spill, when initial RTL already uses SF,
 requires producer-lifetime/stack-lowering evidence before a type or cast change.
+
+F12110 separates a tap-producer boundary from a superficially similar XOR
+association experiment. The former changes which value is spilled and transfers
+to the duplicate function; the latter was already tested. Publishing the WORD
+before consuming it for feedback supplies a second, independently observed
+boundary. The recovered loops still differ in capture/allocation details, so
+remain NONMATCH and leave that frontier low priority. Search replay tools by
+source family as well as literal symbol: dynamically constructed target names
+can hide relevant old domains. A history index supplies leads, not exclusions.
