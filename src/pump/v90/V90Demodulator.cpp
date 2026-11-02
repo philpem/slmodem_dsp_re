@@ -1970,7 +1970,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 void
 V90Demodulator::reset(unsigned int quickConnectArg)
 {
-	float offset;
+	float offset, magnitude;
 	int whole, frac, cursor;
 
 	if (DSPLIB_DEBUG_ON())
@@ -1986,20 +1986,22 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 	phase4ElapsedSamples = 0;
 	energyDropDetectorArmed = 0;
 
+	Agc<float> *agcOwner = &agc;
 	descrambler.reset(0);
 
-	agc.reset();
-	agc.blockLen = params->AGC_BLOCK_LEN;
-	agc.ref = params->AGC_NOMINAL_ENERGY;
+	agcOwner->reset();
+	agcOwner->blockLen = params->AGC_BLOCK_LEN;
+	agcOwner->ref = params->AGC_NOMINAL_ENERGY;
 
 	preFilter.reset();
 
 	offset = params->INITIAL_BAUD_OFFSET;
+	magnitude = fabsf(offset);
 	whole = (int)offset;
-	frac = (int)((offset - (float)whole) * 1000.0f);
+	frac = (int)((offset - (float)whole) * 1000.0);
 	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
-		 !(0.0f >= offset) ? '+' : '-',
-		 (int)fabsf(offset),
+		 !(0.0f >= params->INITIAL_BAUD_OFFSET) ? '+' : '-',
+		 (int)magnitude,
 		 (frac < 0) ? -frac : frac);
 
 	resampler.V90Resampler::reset();

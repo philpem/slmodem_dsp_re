@@ -609,7 +609,10 @@ run_reset(void)
 	static const unsigned int off_bits[] = {
 		0x3f800000u,	/*   1.0f          */
 		0xc1480000u,	/* -12.5f          */
-		0x7fc00000u	/* a quiet NaN     */
+		0x7fc00000u,	/* a quiet NaN     */
+		/* Adjacent floats around the +/-0.001 fractional truncation. */
+		0x3a83126eu, 0x3a83126fu, 0x3a831270u,
+		0xba83126eu, 0xba83126fu, 0xba831270u
 	};
 	struct trial_args t;
 	long tag = 90000;
@@ -627,7 +630,8 @@ run_reset(void)
 		    for (ci = 0; ci < 2; ci++)
 			for (cp = 0; cp < 4; cp++)
 			    for (mmx = 0; mmx < 2; mmx++)
-				for (ob = 0; ob < 3; ob++)
+				for (ob = 0; ob < (int)(sizeof(off_bits) /
+							 sizeof(off_bits[0])); ob++)
 				for (q = 0; q < 2; q++) {
 					unsigned int quick =
 					    q ? 0x5a5a1234u : 0u;

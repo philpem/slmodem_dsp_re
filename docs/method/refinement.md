@@ -9993,3 +9993,19 @@ but different register carriers fail the strict consistent-renaming proof.
 Its 81/81 normalised run is diagnostic; the grade stays NONMATCH. Independent
 value-flow review and period checks support retention without changing the
 classifier. Stop allocation-only spelling variants while structural gaps remain.
+
+### Match a floating producer's lifetime, not just its numeric value (F12117)
+
+The reset diagnostic computes an absolute floating value early and converts it
+to an integer argument later. Capturing the integer immediately is numerically
+plausible but gives the wrong x87 lifetime. Retain the ordinary floating local
+and its late conversion; inspect the popping subtraction and constant load as
+well as the final formatted value. Add period inputs around fractional truncation
+boundaries before retaining a changed arithmetic producer.
+
+Distinguish an observed float member from its pointer owner. The V90 partial
+restores the late float-field comparison while still caching an owner the
+reference reloads. A disappearing memory operand between pass dumps narrows the
+search interval; it does not prove a particular pass caused the loss. The GCSE
+negative controls leave that reload absent, so retain no flag explanation from
+the interval alone. Preserve the reviewed partial and its explicit residuals.
