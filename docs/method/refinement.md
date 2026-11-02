@@ -9912,3 +9912,32 @@ cross the supported source graph and value lifetimes. Preserve wrapping count
 behaviour and final aliased reads. Useful intermediate cells can remain in a
 cumulative scratch investigation; the run's complete promotions and protected
 losses must still be reported separately from partial instruction runs.
+
+### Separate access types from pointer identities at each pass (F12112)
+
+Start with ordinary source habits suggested by native access groups. An author
+may write `substruct *p = foo->inner` simply to avoid repeated qualification,
+then use `p` for several stores. Consider real argument/subobject aliases and
+captured fields before a prolonged compiler-flag investigation. They are normal
+source hypotheses, not artificial register uses. An opaque entry followed by
+a concrete cast is a different idiom; infer callback interchangeability or C
+polymorphism only from actual uses across functions. Preserve an existing API
+when the object does not distinguish the alternatives.
+
+A missing native reload need not imply an aliasing write or wrong member type.
+Test a supported opaque argument with its concrete typed local, alongside a
+typed-argument/local control. V22 control produces identical complete objects
+from both forms: the local leaves different early and late base pseudos at PRE,
+and later copy propagation recognises their equality after that opportunity.
+Concrete alias sets and typed members remain unchanged.
+
+Inspect the expressions at the deciding pass. Equal final base registers do
+not prove that PRE saw equal expressions. Distinguish access type, public
+argument type and local value identity; a successful opaque form does not
+uniquely identify the original API when the typed form has the same object.
+
+Keep the explanation cumulative with real value captures. The pointer local
+alone did not close V22: the early scrambler producer, conditional HDX refresh
+and late parameter-bit capture also had to agree. Trace all remaining regions,
+preserve reads across potentially aliasing stores and review the protected peer.
+This is not a reason for a local-copy or pointer-spelling palette elsewhere.
