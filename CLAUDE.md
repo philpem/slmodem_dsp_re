@@ -63,6 +63,9 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    A diagnostic flag hit alone is not a retained profile. A supported source/profile
    combination needs complete-TU native evidence, named collateral review and
    period/object parity; record its scope and remaining ambiguity.
+   Record the named hypothesis feature separately from the whole-function grade.
+   NONMATCH does not show that a requested reload or lifetime failed to appear;
+   inspect the controlled feature before accepting or rejecting its explanation.
 5. **Review the whole result.** Account for all affected-TU bodies, calls, data,
    relocations, bindings and named gains/losses. Get independent evidence review
    for a positive candidate. A net score gain can hide a loss. Explained structural
