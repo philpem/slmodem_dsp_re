@@ -142469,3 +142469,47 @@ promotions. Short bodies and screen tags are navigation, not causal admissions.
 Astra's independent preflight found no fresh short-capture admission; the wave
 kept two demonstrated owner-boundary targets rather than filling a four-target
 ceiling. Compile counts and wall time do not measure model usage or invoice cost.
+
+## F12116. Separate owner identities from rate-value captures in the V34 setter
+
+`VPcmV34SetMinMaxBitRates` becomes EXACT: 348 bytes, 91 decoded instructions,
+89 after padding removal. Retain the engine owner, capture the K56 object before
+the receiver branches, then capture the low and high unsigned rates in the V90
+arm. Types, field definitions, arithmetic, flags and bug reproduction are unchanged.
+
+Owner recovery alone agrees with 85 of 89 literal nonpadding instruction tuples,
+including all eight relative branch destinations. Four rate-load/argument-store
+instructions remain different. The first scalar experiment also adds a parameter
+pointer; both that candidate and its combination with the engine owners remain
+NONMATCH. Capturing only the two values through the existing owner closes the
+function. Separate value captures from added pointer identities experimentally.
+
+The wave also retains a `SetAdaptEcV32` ownership partial. Direct FP-relative ECC
+accesses recover all 81 native operations and all seven branch destinations.
+Fifteen instruction tuples still use different GP registers. Independent review
+checks the zero, one, delay and constant carriers, but the strict consistent-
+renaming proof still refuses the complete mapping: the grade remains NONMATCH.
+The RESET arm refreshes FP after init; `&fp->ecc.cfg` explicitly names the
+configuration at ECC offset zero.
+
+The separate delay-owner source change is rejected: native post-publication
+reads survive through `.05.null` but disappear in `.06.cse`. No qualifier or
+type palette follows. The retained AdaptEc source changes that unchanged
+function's discarded stack-slot pop immediately before restoring the register;
+independent review accepts this allocation collateral.
+
+Review covers 80 functions and 593 resolved relocation consumers. Only the two
+targets and that stack-pop bystander change; all 55 V34 bystander bodies, data,
+bindings and relocated destinations are unchanged. Thirty-one period layout/
+width assertions pass. Focused period validation passes six executables with
+158,698 checks: `t_v32fpsub`, `t_v32fpctl`, `t_v32fpdisp`, `t_v32nsorg`,
+`t_v32nsans` and `t_v34pcmapi`. These component and handshake fixtures do not
+establish every public modem lifecycle history.
+
+The wave uses eight candidate full-TU compiles and two raw-identical controls,
+plus layout apparatus. Only the V34 setter is a whole-function promotion.
+Sources, compiler traces, reviews and integration records are under
+`scratch/owner-wave2/`. Diagnostic `operand-run-v1` runs abstract GP identities,
+local branch offsets and section addends; even 100% does not prove register
+relationships or branch destinations. Earlier scratch descriptions calling
+these runs operand-exact are corrected. No classifier is relaxed.

@@ -612,44 +612,42 @@ void
 SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
 {
 	struct v32_fp *fp;
-	struct fpm_ecc *ecc;
 	short i;
 
 	switch (mode) {
 	case V32_ADAPTEC_OFF:
 		fp = FP(modem);
-		ECC(fp)->adapt_near = 0;
-		ECC(fp)->adapt_far = 0;
+		fp->ecc.adapt_near = 0;
+		fp->ecc.adapt_far = 0;
 		fp->int_14 = 0;
 		fp->int_18 = 0;
 		break;
 
 	case V32_ADAPTEC_ON:
 		fp = FP(modem);
-		ecc = ECC(fp);
-		for (i = 0; i < ecc->line_len; i++)
-			ecc->line[i] = 0;
+		for (i = 0; i < fp->ecc.line_len; i++)
+			fp->ecc.line[i] = 0;
 		fp->int_14 = 1;
-		ecc->unk1a = 0;
-		ecc->adapt_near = 1;
-		ecc->adapt_far = 1;
+		fp->ecc.unk1a = 0;
+		fp->ecc.adapt_near = 1;
+		fp->ecc.adapt_far = 1;
 		fp->int_18 = 1;
 		break;
 
 	case V32_ADAPTEC_SLOW:
-		ecc = ECC(FP(modem));
-		ecc->mu = (short)(ecc->mu / 10);
+		fp = FP(modem);
+		fp->ecc.mu = (short)(fp->ecc.mu / 10);
 		break;
 
 	case V32_ADAPTEC_RESET:
-		ecc = ECC(FP(modem));
-		ecc->near_delay = (short)modem->params.ec_near_delay;
-		ecc->far_delay = 0x30;
-		FPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 0);
-		ecc = ECC(FP(modem));
-		ecc->line_len = 0x30;
-		ecc->near_rd = 0;
-		ecc->far_rd = 0;
+		fp = FP(modem);
+		fp->ecc.near_delay = (short)modem->params.ec_near_delay;
+		fp->ecc.far_delay = 0x30;
+		FPM_ECC_init(&fp->ecc, &fp->ecc.cfg, 0);
+		fp = FP(modem);
+		fp->ecc.line_len = 0x30;
+		fp->ecc.near_rd = 0;
+		fp->ecc.far_rd = 0;
 		break;
 
 	default:

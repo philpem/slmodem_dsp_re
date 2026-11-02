@@ -9977,3 +9977,19 @@ an extra root load but allows CSE to remove a native field reread; local volatil
 controls still do not close that body. Preserve the result rather than applying
 the delay reader's qualifier elsewhere by analogy. Review every affected TU:
 the hang-up source change also changes scheduling in the unchanged MOH function.
+
+### Isolate scalar captures from added pointer carriers (F12116)
+
+Measure value locals and added owner pointers separately. The V34 rate setter's
+engine/K56 owners recover 85 of 89 literal instruction tuples, leaving four
+rate-load/argument-store instructions. Scalar captures with another parameter
+pointer remain NONMATCH; those value captures through the existing owner close
+the function. Preserve the supported owner graph while testing its remaining
+value boundary.
+
+Retain reviewed structural gains separately from classification claims.
+`SetAdaptEcV32` recovers native FP ownership and the complete operation sequence,
+but different register carriers fail the strict consistent-renaming proof.
+Its 81/81 normalised run is diagnostic; the grade stays NONMATCH. Independent
+value-flow review and period checks support retention without changing the
+classifier. Stop allocation-only spelling variants while structural gaps remain.
