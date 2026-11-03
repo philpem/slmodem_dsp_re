@@ -48,18 +48,6 @@
 
 #include <math.h>
 
-/*
- * The period compiler keeps the double expression in its x87 register.
- * -fno-math-errno supplies the bare square root, including the instruction's
- * negative-input NaN.  The caller must not first convert a long-double
- * expression to double: that introduces a narrowing absent from the object.
- * See docs/issue19-inline-asm.md for the crossed full-TU controls.
- */
-static inline double agc_fsqrt(double x)
-{
-	return sqrt(x);
-}
-
 template <class T>
 class Agc {
 public:
@@ -150,10 +138,10 @@ void Agc<T>::freeze()
  *
  * Safe in place -- `V90Demodulator::progress` passes the same buffer for both.
  *
- * EVERY `long double` HERE IS AN x87 REGISTER VALUE the original never rounds,
- * and every assignment to a `T` member is a store the original does round.
- * Rounding the gain terms costs 1,058,034 mismatches, rounding the square root
- * 1,054,601, and keeping `acc` at 80 bits across a block 159,062.
+ * For the float instantiation, GCC 3.4.2 keeps intermediate values in x87
+ * registers until a member/output store rounds them. A float-returning square
+ * root preserves that path; narrowing a double-returning helper result adds
+ * an extra rounding step absent from the reference (F12120).
  */
 template <class T>
 void Agc<T>::process(const T *in, T *out, unsigned nSamples)
@@ -165,20 +153,9 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 
 	c = count;			/* cached in a register for the call */
 
-	/*
-	 * THE FLOOR IS A NAMED LOCAL AND THE OBJECT SAYS SO.  `flds 0x128` at
-	 * 0x1c loads it BEFORE the loop is entered, beside `fld1` and `fldz`,
-	 * and it stays in `%st(4)` for the whole function -- the block update
-	 * compares against it with `fcom %st(4)`.  Written as a literal inside
-	 * the loop, GCC 3.4.2 does not hoist it: it reloads `flds` into
-	 * `%st(0)` at the comparison and then has the CONSTANT as the left
-	 * operand, so it emits the reversed predicate `jb`, and under
-	 * -mno-ieee-fp `jb` is taken for an unordered compare -- a NaN level
-	 * then adapts the gain where the object's `jbe` freezes it.  A local
-	 * initialised here puts `lvl` back in `%st(0)`, `fcom %st(4)`, and the
-	 * object's NaN routing.  Finding F2302.
-	 */
-	long double minLevel = 1e-10f;
+	/* Keep the floor beside zero and unity across the loop. Matching its
+	 * type to lvl avoids a separate widened comparison value (F12120). */
+	T minLevel = T(1e-10f);
 
 	for (;;) {
 		/*
@@ -193,69 +170,61 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 		++out;
 		--nSamples;
 
-		if (--c != 0) {
-			if (nSamples == 0)
-				break;
-			continue;
-		}
+		if (--c == 0) {
 
-		/*
-		 * The block update runs BEFORE `nSamples` is retested, so a
-		 * call that ends exactly on a boundary still performs it.
-		 * Writing the loop the natural way round -- `while (nSamples)`
-		 * with the update at the bottom -- costs 2,670,947.
-		 *
-		 * `count` is reloaded unconditionally, not only when the gain
-		 * is updated: 663,433.
-		 */
-		c = blockLen;
+			/* Update before testing the remaining sample count: a call ending
+			 * on a block boundary must still adapt. Reload the count even
+			 * when the alpha/level tests leave the gain unchanged. */
+			c = blockLen;
 
-		{
-			/*
-			 * RECIPROCAL THEN MULTIPLY, twice, and it is the
-			 * author's rather than the optimiser's: no combination
-			 * of -ffast-math, -funsafe-math-optimizations or
-			 * -freciprocal-math turns `a/b` into `a*(1/b)` here,
-			 * because GCC's reciprocal pass needs several divides
-			 * by the same divisor.  The object says `fld1; fdivp;
-			 * fmuls`, so the source did too.
-			 *
-			 * Both `de` forms read as their own opposite: `de f9`
-			 * is 1.0/blockLen and `de f2` is 1.0/lvl (finding F245).
-			 * Dividing the other way costs 24 and 20 mismatches
-			 * respectively -- tiny, and only reachable by the cases
-			 * built for them, which is the point of finding F608.
-			 */
-			double lvl = (1.0 / blockLen) * acc;
+			{
+				/*
+				 * RECIPROCAL THEN MULTIPLY, twice, and it is the
+				 * author's rather than the optimiser's: no combination
+				 * of -ffast-math, -funsafe-math-optimizations or
+				 * -freciprocal-math turns `a/b` into `a*(1/b)` here,
+				 * because GCC's reciprocal pass needs several divides
+				 * by the same divisor.  The object says `fld1; fdivp;
+				 * fmuls`, so the source did too.
+				 *
+				 * Both `de` forms read as their own opposite: `de f9`
+				 * is 1.0/blockLen and `de f2` is 1.0/lvl (finding F245).
+				 * Dividing the other way costs 24 and 20 mismatches
+				 * respectively -- tiny, and only reachable by the cases
+				 * built for them, which is the point of finding F608.
+				 */
+				T lvl = (T(1) / blockLen) * acc;
 
-			acc = T(0);
-			level = (T)lvl;	/* stored rounded; lvl stays 80-bit */
+				acc = T(0);
+				level = (T)lvl;	/* stored rounded; lvl stays 80-bit */
 
-			/*
-			 * PLAIN `!=`, and the object's one `fcom` is what says
-			 * so.  At 0xa8 it is `fcom %st(3); fnstsw; sahf; jne`
-			 * -- ONE compare, no parity check -- and under
-			 * -mno-ieee-fp that is exactly what GCC emits for
-			 * `alpha != T(1)`, NaN included: FCOM sets C3 for
-			 * unordered as well as for equal, so ZF is set and the
-			 * frozen path is taken.
-			 *
-			 * This used to read `alpha < T(1) || alpha > T(1)`,
-			 * which is TWO compares, and it was a workaround for
-			 * `make period` being built -mieee-fp: there `!=` gets
-			 * a parity test and a NaN adapts.  With the flag the
-			 * object was built with, the naive form is both the
-			 * correct one and the object's.  Finding F2300.
-			 */
-			if (alpha != T(1)) {
-				if (lvl > minLevel) {
-					double t =
-					    agc_fsqrt((1.0 / lvl) * ref);
+				/*
+				 * PLAIN `!=`, and the object's one `fcom` is what says
+				 * so.  At 0xa8 it is `fcom %st(3); fnstsw; sahf; jne`
+				 * -- ONE compare, no parity check -- and under
+				 * -mno-ieee-fp that is exactly what GCC emits for
+				 * `alpha != T(1)`, NaN included: FCOM sets C3 for
+				 * unordered as well as for equal, so ZF is set and the
+				 * frozen path is taken.
+				 *
+				 * This used to read `alpha < T(1) || alpha > T(1)`,
+				 * which is TWO compares, and it was a workaround for
+				 * `make period` being built -mieee-fp: there `!=` gets
+				 * a parity test and a NaN adapts.  With the flag the
+				 * object was built with, the naive form is both the
+				 * correct one and the object's.  Finding F2300.
+				 */
+				if (alpha != T(1)) {
+					if (lvl > minLevel) {
+						T t =
+						    sqrtf((T(1) / lvl) * ref);
 
-					gain = (T)(alpha * gain
-						   + (1.0 - alpha) * t);
+						gain = (T)(alpha * gain
+							   + (T(1) - alpha) * t);
+					}
 				}
 			}
+
 		}
 
 		if (nSamples == 0)
