@@ -10026,3 +10026,17 @@ owner captures elsewhere and merges a call tail. Native-backed source locals
 repair two of those features in crossed controls, while the unresolved argument
 snapshot/call-tail obligations remain explicit. Test those obligations before
 retention rather than widening the source or flag search.
+
+### Trace type bridges and loop legality before retaining a flag (F12120)
+
+A float-returning operation and a float cast of a double-returning operation
+can have different rounding boundaries. Follow the actual RTL modes and stores;
+the AGC negative control demonstrates the distinction rather than relying on
+source type names. Keep a known failing precision control beside the green run.
+
+A flag can restore arithmetic indirectly by changing loop recognition and
+constant placement. AGC's default pipeline rejected a multiple-entry loop;
+combine then folded reciprocal multiplication into division. A shared loop exit
+preserved the original operation order while restoring hoisting under both
+profiles. Inspect actual operation nodes and their instruction identities:
+REG_EQUAL annotations can otherwise look like additional executed arithmetic.

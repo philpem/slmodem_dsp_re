@@ -142663,3 +142663,63 @@ Controls, source diffs, compiler dumps, independent review and integration
 records are under `scratch/progress-owner/`. A bounded AGC RTL/native review is
 the next discriminator for the no-GCSE hypothesis; further reset spellings are
 not justified by this result.
+
+## F12120. AGC type boundaries and a shared loop exit recover native x87 structure
+
+`Agc<float>::process` now uses T-typed arithmetic and floor, a float-returning
+square root, and one shared remaining-sample test. Under the existing compiler
+profile it retains the floor, unity and zero before the loop, avoids the extra
+floor-comparison copy and unused conversion slot, and uses the native-style
+four pushes/pops. The normalized longest instruction run improves from 4/82
+to 19/82. The function remains NONMATCH; no size or complete-equivalence claim
+follows from these structural recoveries.
+
+The type distinctions are observable in actual Gentoo RTL. A double helper
+result assigned to T introduces a real DF-to-SF narrowing, whereas `sqrtf`
+produces SF-mode sqrt directly. In the preceding control, that extra rounding
+fails 7380 of 1848336 period checks. Keeping a double temporary passes the
+oracle but leaves a final gain-conversion scratch allocation. The SF operation
+removes both narrowing nodes; matching the floor to T removes the SF-to-XF
+comparison value that survived allocation as a duplicate x87 stack entry.
+These are source hypotheses for the measured float instantiation, not proof
+of unique original spelling or arbitrary T specialisations.
+
+The first source/profile cross initially passed only with no-GCSE: the default
+profile failed four seeded denormal accumulator/count checks. Those are synthetic
+component fidelity probes, not evidence that a modem lifecycle reaches them.
+The default pipeline declines loop optimisation for multiple entry points.
+Its block-local unity then lets combine replace reciprocal-then-multiply with
+direct division: UID107 first changes in `.20.combine`, after `.19.life` still
+preserves UID105 reciprocal and UID107 multiply. Under no-GCSE, loop optimisation
+hoists unity out of the loop and combine retains the two operations. Apparent
+extra divides in REG_EQUAL notes are annotations, not executed instructions.
+
+A single shared loop exit resolves that compiler precondition without a flag
+change. The unsigned countdown still decrements once; the block update still
+runs iff it reaches zero, including on the final sample; the reload occurs
+before the accumulator clear; input/gain reads remain after the alias-sensitive
+accumulator store. Both profiles now recognise the loop, hoist unity and emit
+identical AGC bodies. Both pass all seven existing component differential
+sections, 1848336 checks, without a tolerance. The unused double helper and stale
+comments about long-double temporaries and loop order are removed.
+
+Independent Astra review checks all 31 TU functions and all 310 call sites.
+Reset and progress retain identical canonical instructions, calls and relocation
+target values; their raw collateral is constant-pool relocation addends only.
+One redundant unity word/reference disappears, leaving 466 function relocations
+and unchanged remaining allocated non-executable sections. Symbol order, names,
+binding, types, visibility and section contracts are preserved. The selected AGC
+body is 192 bytes/81 decoded instructions versus native 206/86, with remaining
+count/value lifetimes, operand order and x87 scheduling differences recorded.
+
+The default-profile source partial passes `make phase J=8`: 396/396 period
+tests and structural checks. Actual/faithful raw parity is 300/300 with only the
+V90 TU changed; fresh census remains 1205 EXACT / 37 REGALLOC / 610 NONMATCH /
+0 unresolved out of 1852, with identical matched membership. The complete partial
+object remains DIFFERENT. No no-GCSE profile is approved by this finding. Eight diagnostic full-TU compiles
+and one cleaned retention compile establish the controls; nine selected-body
+period runs include the two known failing controls. Whole-tree gate, parity and
+census results are recorded at the integration checkpoint under
+`scratch/agc-sf/`, alongside inputs, actual pass dumps, link maps and independent
+reviews. These component oracles do not observe x87 exception timing or establish
+public modem end-to-end equivalence.
