@@ -50,6 +50,31 @@ controls. Optional `--actual OBJECT --blob REFERENCE` also checks the actual
 `RD_create` pair. This is an apparatus recognition improvement; unchanged
 source objects do not constitute a source-recovery gain.
 
+For a narrowly supported frame-free i386 leaf, `framefree.py` can additionally
+prove one fixed permutation of EBX, EBP, ESI and EDI. EAX, ECX, EDX and ESP
+stay pinned. The boundary assumes the flat i386 ABI, where DS and SS have
+the same linear base. The four-register save prefix and reverse restore/return tail
+must match literally. Every reachable use of a changed register requires a
+full-width definition on every incoming CFG path. Only the documented opcode
+vocabulary is admitted; calls, implicit GP operations, stack-address escapes,
+stack stores and inconsistent stack depths refuse. Only full-width GP pushes
+and immediate stack adjustments bounded to 1 MiB are supported; the temporary
+stack depth must stay between the saved-register boundary and that limit. Local branches must name
+decoded instruction boundaries and the same instruction rows; entries into
+the save prefix or the middle of the restoring tail refuse. Targets on stripped
+padding also refuse. Explicit and omitted zero memory displacement are the sole
+additional operand normalization. All other widths, constants, displacements,
+x87 operands and canonical relocation targets remain significant.
+
+Run `python3 tools/toolchain/test_framefree.py` for assembled ELF positive and
+negative controls. Optional `--actual OBJECT` verifies the recovered
+`Agc<float>::process` pair. This certificate is bounded to function entry and
+the supported instruction vocabulary; it does not assert whole-program
+reachability or full partial-link identity. Compare baseline and candidate
+objects with the same recognizer to distinguish recovered instructions from
+apparatus-only promotions. Plain row lists without decoded offset metadata
+cannot use this fallback. The pre-existing matcher remains unchanged.
+
 The CLI and CI tables show these outcomes and the EXACT + REGALLOC total.
 REGALLOC and NONMATCH counts have no independent preferred direction. For
 example, NONMATCH → REGALLOC increases REGALLOC, while REGALLOC → EXACT reduces

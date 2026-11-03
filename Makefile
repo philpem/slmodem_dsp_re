@@ -1501,6 +1501,7 @@ partial-compare-exact: partial-link
 		$(BUILD)/partial/dsplibs.o --require-exact --require-raw-exact
 
 partial-compare-selftest:
+	@$(PYTHON) tools/toolchain/test_framefree.py
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
 	@$(PYTHON) tools/toolchain/recoverorder.py --self-test
 
