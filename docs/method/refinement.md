@@ -10040,3 +10040,18 @@ combine then folded reciprocal multiplication into division. A shared loop exit
 preserved the original operation order while restoring hoisting under both
 profiles. Inspect actual operation nodes and their instruction identities:
 REG_EQUAL annotations can otherwise look like additional executed arithmetic.
+
+### An exit store can be compiler promotion, not a source cache (F12121)
+
+Do not infer a manually cached local from register-held state and one final
+member store. AGC's direct member updates produce the native graph through actual
+GCSE PRE and store motion. Follow the transformation before adding more locals.
+For a spill, inspect the interference point: changing the observation epoch of
+an independently witnessed replacement count removed overlap with a two-register
+conversion, without forcing allocation.
+
+Stop source variants when the complete instruction/branch correspondence differs
+only by an independently checked GP permutation and encoding layout. Report the
+maintained grade and its proof limits separately. A pair-specific checker is not
+a generic recognizer; frame-free EBP use, saved state, definitions dominating
+uses and branch destinations require guarded eligibility and negative controls.

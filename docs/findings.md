@@ -142723,3 +142723,67 @@ census results are recorded at the integration checkpoint under
 `scratch/agc-sf/`, alongside inputs, actual pass dumps, link maps and independent
 reviews. These component oracles do not observe x87 exception timing or establish
 public modem end-to-end equivalence.
+
+## F12121. AGC's countdown cache is compiler promotion, not a necessary source local
+
+Direct updates of the unsigned `count` member reproduce the reference's distinct
+countdown carriers and sole exit store. The reconstruction's manually cached
+local was an assumption: final-store placement alone did not establish it.
+Actual `.08.gcse` PRE forwards expression 11 through a reaching register and
+store motion deletes the two loop stores, inserting one store on the exit edge.
+The promotion occurs there, not in the later loop pass. Pre/post-decrement
+spellings produce identical initial RTL and bodies, closing that discriminator.
+
+The first direct-member candidate spills the output pointer. Actual `.24.lreg`
+and `.25.greg` identify the cause: both promoted countdown values become live
+before the unsigned-to-float conversion consumes its two GP registers. The
+reference consumes the conversion words before capturing the replacement count.
+Moving `count = blockLen` after the block mean calculation, before clearing `acc`,
+removes that unsupported overlap and the spill. Counter/member accesses retain
+owner `this`, offset +0x1c and unsigned 32-bit width; block length remains +0x18.
+The zero-length guard, wrapping decrement and last-sample update are preserved.
+
+A direct gain expression recovers the reference's x87 evaluation order; an
+explicit temporary had placed the square root first. For the sample product,
+`in[0] * gain` matches the reference's gain load followed by input-memory
+multiplication: expansion order affects which load combine folds into memory.
+All arithmetic modes and the shared loop exit from F12120 remain fixed. No
+compiler flags, qualifiers, helper extraction or register directives are added.
+
+The selected body has 82 nonpadding instructions, like the reference. Independent
+Astra review and a saved pair-specific checker find correspondence under the
+fixed interior permutation EBX→EBP, EBP→EDI, EDI→ESI, ESI→EBX, with EAX/EDX/ECX/ESP
+pinned, literal saves/restores, seven corresponding branch destinations and
+identical relocation identity. Omitted and explicit zero memory displacement are
+equivalent for this pair. Eight negative controls reject changed operations,
+widths, constants, fields, x87 operands, saved order and branch destination.
+This is not a tested generic recognizer: the maintained comparator still pins
+EBP and compares local branch byte offsets literally. Official grade remains
+NONMATCH; its normalized longest run improves from 19/82 to 44/82. No grader or
+fidelity definition changes are included. Further source fitting to force that
+register choice is not justified by this result.
+
+The fixture audit found that the old "writing over the object" arm writes at
+object+32, after the live AGC fields. Its section/comment now describe trailing
+slot writes. A new component probe uses 28 single-sample calls over two input
+locations, seven output locations and two countdown boundaries. Each alias stays
+within one named float subobject; the unsigned fields are excluded. Accumulator
+input distinguishes the actual reread result 0.625 from a cached-input 0.5.
+The 4718 new checks comprise 28×168 state/buffer checks, 12 coverage checks and
+two analytical checks. Unchanged and selected sources both pass all 1853054
+checks across eight sections. A cached-input negative passes all old sections
+and fails 17 checks in the new section. These are explicitly configured component
+fidelity inputs, without a public modem lifecycle claim.
+
+Independent retained-TU review finds 30/31 bodies unchanged. Only AGC process
+changes, from 192 to 205 bytes; all 90 undefined names, seven allocated data
+sections, eight relocation tables and the other functions' 310 calls remain
+unchanged. Detailed controls, actual dumps, allocation evidence, the fixed-pair
+checker, reviews and integration records are under `scratch/agc-count/`.
+Integration passes `make phase J=8`: 396/396 period tests and structural checks.
+Actual/faithful raw parity is 300/300, with only the V90 TU changed; fresh census
+remains 1205 EXACT / 37 REGALLOC / 610 NONMATCH / 0 unresolved out of 1852, with
+identical matched membership. The complete partial object remains DIFFERENT.
+A separate comparator task needs guarded frame-free eligibility, CFG dominance
+and branch-address evidence before this pair may receive a maintained REGALLOC
+proof; it must not relax the current model merely to report a hit.
