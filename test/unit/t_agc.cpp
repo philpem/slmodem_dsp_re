@@ -66,7 +66,7 @@ static void cmp_all(long tag)
 		diff_eq_int("out", (long)x, (long)y, tag * 100 + i);
 		memcpy(&x, &ina[i], 4);
 		memcpy(&y, &inb[i], 4);
-		diff_eq_int("in untouched", (long)x, (long)y, tag * 100 + i);
+		diff_eq_int("external input buffer", (long)x, (long)y, tag * 100 + i);
 	}
 }
 
@@ -121,6 +121,79 @@ static void run(unsigned alpha, unsigned ref, unsigned blockLen,
 	our_agc_process(oa, ina, outa, n);
 	ref_agc_process(ob, inb, outb, n);
 	cmp_all(tag + 2);
+}
+
+/* One sample stays within an individual float subobject. The public fields
+ * are configured at this component boundary; no modem history is claimed. */
+static float *live_field(Agc<float> *s, unsigned field)
+{
+	switch (field) {
+	case 0: return &s->alpha;
+	case 1: return &s->savedAlpha;
+	case 2: return &s->gain;
+	case 3: return &s->ref;
+	case 4: return &s->level;
+	default: return &s->acc;
+	}
+}
+
+static int run_live_alias(void)
+{
+	unsigned input, output, boundary, i;
+	unsigned calls = 0, inputs[2] = {0, 0}, outputs[7] = {0, 0, 0, 0, 0, 0, 0};
+	unsigned boundaries[2] = {0, 0};
+	long tag = 600000;
+
+	diff_begin("agc: live float field aliases, one sample");
+	for (input = 0; input < 2; input++)
+	 for (output = 0; output < 7; output++)
+	  for (boundary = 0; boundary < 2; boundary++) {
+		Agc<float> *a = (Agc<float> *)oa;
+		Agc<float> *b = (Agc<float> *)ob;
+		const float *ia, *ib;
+		float *pa, *pb;
+
+		memset(oa, 0x5a, sizeof(oa));
+		memset(ob, 0x5a, sizeof(ob));
+		our_agc_ctor(oa);
+		ref_agc_ctor(ob);
+		a->alpha = b->alpha = 0.5f;
+		a->savedAlpha = b->savedAlpha = -0.125f;
+		a->gain = b->gain = 2.0f;
+		a->ref = b->ref = 1.0f;
+		a->level = b->level = 0.75f;
+		a->acc = b->acc = 0.25f;
+		a->blockLen = b->blockLen = 4;
+		a->count = b->count = boundary ? 1u : 2u;
+		fill(0, 0);
+		memset(outa, 0xa5, sizeof(outa));
+		memset(outb, 0xa5, sizeof(outb));
+		ia = input ? &a->acc : ina;
+		ib = input ? &b->acc : inb;
+		pa = output < 6 ? live_field(a, output) : outa;
+		pb = output < 6 ? live_field(b, output) : outb;
+		our_agc_process(oa, ia, pa, 1);
+		ref_agc_process(ob, ib, pb, 1);
+		cmp_all(tag++);
+		if (input && output == 6 && !boundary) {
+			/* acc becomes 0.25^2 + 0.25 = 0.3125 before input is
+			 * reread; gain 2 gives 0.625, not cached-input 0.5. */
+			diff_eq_float("ours reread accumulator input", outa[0], 0.625f, tag);
+			diff_eq_float("blob reread accumulator input", outb[0], 0.625f, tag);
+		}
+		calls++;
+		inputs[input]++;
+		outputs[output]++;
+		boundaries[boundary]++;
+	  }
+	diff_eq_int("live alias calls", calls, 28, 0);
+	for (i = 0; i < 7; i++)
+		diff_eq_int("live output cases (%ld)", outputs[i], 4, i);
+	for (i = 0; i < 2; i++) {
+		diff_eq_int("live input cases (%ld)", inputs[i], 14, i);
+		diff_eq_int("live boundary cases (%ld)", boundaries[i], 14, i);
+	}
+	return diff_end();
 }
 
 int
@@ -234,12 +307,11 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * IN PLACE, and with the output pointing into the object itself.  The
-	 * loop re-reads `in[0]` and `gain` after storing `acc` precisely
-	 * because that store can alias them, and nothing else in the test can
-	 * tell a cached read from a re-read.
+	 * In-place processing and writes to the oversized slot after the live
+	 * object. run_live_alias separately checks actual float-field overlap
+	 * and the input reread after storing acc.
 	 */
-	diff_begin("agc: in place, and writing over the object");
+	diff_begin("agc: in place and trailing slot writes");
 	for (b = 0; b < 5; b++)
 		for (n = 1; n < sizeof(lens) / sizeof(lens[0]); n++) {
 			unsigned i;
@@ -275,7 +347,7 @@ main(void)
 			}
 			tag++;
 
-			/* out aimed at the object's own tail */
+			/* Output starts after the object's live 32 bytes, in the guard. */
 			fill(2, 0);
 			our_agc_process(oa, ina, (float *)(oa + 32), 4);
 			ref_agc_process(ob, inb, (float *)(ob + 32), 4);
@@ -284,7 +356,7 @@ main(void)
 
 				memcpy(&x, oa + i, 4);
 				memcpy(&y, ob + i, 4);
-				diff_eq_int("object written through",
+				diff_eq_int("trailing slot write",
 					    (long)x, (long)y, tag * 100 + i);
 			}
 			tag++;
@@ -341,5 +413,6 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= run_live_alias();
 	return rc;
 }

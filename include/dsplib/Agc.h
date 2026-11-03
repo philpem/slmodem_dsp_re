@@ -146,12 +146,8 @@ void Agc<T>::freeze()
 template <class T>
 void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 {
-	unsigned c;
-
 	if (nSamples == 0)
 		return;			/* returns without touching `count` */
-
-	c = count;			/* cached in a register for the call */
 
 	/* Keep the floor beside zero and unity across the loop. Matching its
 	 * type to lvl avoids a separate widened comparison value (F12120). */
@@ -165,17 +161,15 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 		 * 42,866.
 		 */
 		acc = in[0] * in[0] + acc;
-		out[0] = gain * in[0];
+		out[0] = in[0] * gain;
 		++in;
 		++out;
 		--nSamples;
 
-		if (--c == 0) {
-
+		if (--count == 0) {
 			/* Update before testing the remaining sample count: a call ending
 			 * on a block boundary must still adapt. Reload the count even
 			 * when the alpha/level tests leave the gain unchanged. */
-			c = blockLen;
 
 			{
 				/*
@@ -194,6 +188,10 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 				 * built for them, which is the point of finding F608.
 				 */
 				T lvl = (T(1) / blockLen) * acc;
+				/* Capture the next countdown after consuming the conversion
+				 * operands. GCSE promotes this member and sinks its store
+				 * to loop exit; a manual cache changes that graph (F12121). */
+				count = blockLen;
 
 				acc = T(0);
 				level = (T)lvl;	/* stored rounded; lvl stays 80-bit */
@@ -216,11 +214,9 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 				 */
 				if (alpha != T(1)) {
 					if (lvl > minLevel) {
-						T t =
-						    sqrtf((T(1) / lvl) * ref);
-
 						gain = (T)(alpha * gain
-							   + (T(1) - alpha) * t);
+						    + (T(1) - alpha)
+						      * sqrtf((T(1) / lvl) * ref));
 					}
 				}
 			}
@@ -230,8 +226,6 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 		if (nSamples == 0)
 			break;
 	}
-
-	count = c;
 }
 
 #endif /* DSPLIB_AGC_H */
