@@ -743,13 +743,21 @@ def _fields(ops):
     return out
 
 
+class InstructionSequence(list):
+    """Decoded rows with function-relative instruction boundary metadata."""
+
+    def __init__(self, rows, offsets):
+        super().__init__(rows)
+        self.offsets = tuple(offsets)
+
+
 def insns(path, sym):
     """[(mnemonic, operand text)] with addresses and symbol comments dropped."""
     _, relocs = body(path, sym)
     out = subprocess.run(
         ["objdump", "-dr", "--disassemble=" + sym, "--no-show-raw-insn", path],
         capture_output=True, text=True).stdout
-    rows, base = [], None
+    rows, offsets, base = [], [], None
     for line in out.splitlines():
         m = re.match(r"^\s*([0-9a-f]+):\t", line)
         if not m:
@@ -806,6 +814,7 @@ def insns(path, sym):
         if re.fullmatch(r"[0-9a-f]+", ops):
             ops = ".%+d" % (int(ops, 16) - base)
         rows.append([parts[0], ops])
+        offsets.append(at - base)
         continue
     #
     # A RELOCATED OPERAND'S PRINTED NUMBER IS A PLACEHOLDER, and the two
@@ -819,10 +828,10 @@ def insns(path, sym):
     # the target: choosing one without decoding its byte field could erase a
     # different immediate.  Zero literals also requires appending the target.
     #
-    return [tuple(r) for r in rows]
+    return InstructionSequence([tuple(r) for r in rows], offsets)
 
 
-def alpha_why(x, y):
+def _alpha_live_why(x, y):
     """Same instructions and operands up to a register renaming, PER LIVE RANGE.
 
     This is grade 1 and it is STRICTER than `compare.py`, which drops operands
@@ -971,6 +980,19 @@ def alpha_why(x, y):
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
             return ("row %d NON-REGISTER OPERAND  %s | %s" % (i, ox, oy))
     return None
+
+
+def framefree_certificate(x, y):
+    from framefree import certificate
+    return certificate(x, y, fields=_fields, regtok=REGTOK, reg32=REG32,
+                       padding=_padding)
+
+
+def alpha_why(x, y):
+    reason = _alpha_live_why(x, y)
+    if reason is not None and framefree_certificate(x, y) is not None:
+        return None
+    return reason
 
 
 def alpha_equal(x, y):
