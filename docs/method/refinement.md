@@ -10242,3 +10242,22 @@ the same nine final bodies. Incoming argument reloads first inserted by global
 allocation do not independently justify new source captures. The six-cell wave
 retains native-backed partial recovery but closes no function: keep that outcome
 separate from instruction totals and local mnemonic-run changes.
+
+### Explain a failed global allocation with its complete blocker set (F12130)
+
+A reload first appearing in `.greg` identifies a stage, not a cause. Read the
+allocation order, the pseudo's initial hard conflicts, its class, local homes
+and the earlier conflicting global assignments. In V.32 `16Tpt`, the root is
+last and all three remaining registers are occupied by identified global
+competitors. The allocator's local-eviction path cannot displace those globals.
+The incoming argument's memory equivalence explains its subsequent reloads;
+a separately logged sample spill must not be mistaken for the root's rejection.
+See the [full audit](../v32-16tpt-allocation-audit.md) for the observed masks,
+source rules, native lifetimes and limits.
+
+Compare native spill and address-producing epochs before proposing a component
+alias. A natural consumed alias can be a valid hypothesis, but changing its
+lifetime merely to perturb an explained priority order supplies no new source
+discriminator. Conversely, allocation-stage divergence does not establish that
+source is correct. Seek a supported live-range, use/dependency or class change;
+the original machine code constrains those inputs without exposing original RTL.
