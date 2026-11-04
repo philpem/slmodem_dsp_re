@@ -143294,3 +143294,39 @@ seventh values -7 and 19 passes 24 checks; the literal-3 control fails 16/24.
 Unbound candidate linkage fails 89,858 FP comparisons because the following
 word differs. No production source, grader or D302 binder changes are made.
 See the [deep dive](fp-pow-deep-dive.md) for constraints, controls and integration.
+
+## F12137. FP_Pow is integrated EXACT with a scoped two-site memory context
+
+F12136's candidate is now retained: its native short post-incremented counter
+and direct BUG-mode coefficient reads compile to the reviewed EXACT object.
+The six-word table and guarded normal fallback remain intact. A separate
+strict FP_Pow test profile binds only its two signed reads to the original
+backing; an isolated seven-word fixture proves sensitivity to the real seventh
+value. The previous literal-3 control fails 16/24 checks, with all eight native
+analytical checks green. D302's four compatibility outputs stay byte-identical.
+
+All 24 binder safety tests pass. Four focused period tests and full phase
+399/399 pass; normal old/new probes each pass 155,755 checks. The fresh census
+is 1,206 EXACT, 39 REGALLOC, 607 NONMATCH, zero unresolved out of 1,852, a
+single promotion with no losses. Period/faithful parity is 300/300. Partial
+link raw/semantic identity remains DIFFERENT. See the
+[integration evidence](fp-pow-deep-dive.md#integrated-recovery-f12137).
+
+## F12138. Separate diagnostic axes; decomp-permuter's i386 score is not an oracle
+
+The reviewed decomp-permuter revision already supports i386 despite its README
+list. Twelve paired controls under two modes produce 24 scoring evaluations.
+Defaults assign zero to five changed-symbol/offset/successor cases; enabling
+relocations loses the destination register of a relocated SIB load. Its finite
+manual enumerator could be useful with unchanged full-TU compilation and this
+project's strict oracle. No port or modem-source permutation was attempted.
+See the [assessment](decomp-permuter-assessment.md) for pinned upstream sources.
+
+A separate tool audit confirms that the whole-object comparator already
+reports a vector, while function tools do not combine independent CFG,
+operand, register and stack axes. Twelve canonicaliser comparisons demonstrate
+which distinctions similarity erases. A proposed diagnostic vector must retain
+strict grades, actual target/operand identities, unmatched sides, ambiguity,
+unknowns and each defining copy. Section extent and placement need separate
+fields. No score or reporting change is implemented. See the
+[metric-vector assessment](metric-vector-assessment.md).

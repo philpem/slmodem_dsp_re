@@ -3,8 +3,9 @@
 The 2026-11-04 deep dive at `2bdd7930e5ec1cc77213e18bbad0762acba5f555`
 finds an **EXACT scratch candidate** for `FP_Pow`: all 55 non-padding native
 instructions, register relationships, branch targets and normalised relocations
-match. Production source remains unchanged and NONMATCH. Integration needs a
-maintained test-memory binding for the original seventh coefficient read.
+match. At that checkpoint production source remained unchanged and NONMATCH. The
+following integration adds a maintained test-memory binding for the original
+seventh coefficient read; see the integration results below.
 
 ## Native constraints and recovered source
 
@@ -123,7 +124,7 @@ are rejected: unsigned load, wrong coefficient, wrong table extent, nonzero
 addend and missing read site. These controls support the investigation but do
 not replace a maintained binder's complete rejection/atomic-publication suite.
 
-## Recommended bounded integration
+## Integration plan from the deep dive
 
 1. Add an explicit FP_Pow test-memory profile: twelve-byte six-coefficient table,
    exactly two signed 16-to-32-bit indexed reads, scale two and zero table-relative
@@ -161,3 +162,52 @@ unchanged. Source SHA-256 is
 `db78ce71e225db0b0274007591595a5aa0f8a8adba169cdffce3ad6902906943`;
 candidate object SHA-256 is
 `8e2e7d1b809b9f64d3f60f45728f4a34cebc68d25afc6f4d97ffa11f3c78698c`.
+
+## Integrated recovery (F12137)
+
+The follow-up starts at merged analysis PR #586, `a7e3934cf`. The original
+short post-incremented counter and direct BUG-mode reads are now integrated.
+The unused BUG helper arm is removed and comments describe the actual guarded
+normal fallback. The resulting complete faithful object is byte-identical to
+the reviewed scratch candidate. Only FP_Pow changes against the earlier
+control; other bodies, data and symbol bindings are preserved.
+
+`tools/test_table_binding.py` adds a separate explicit FP_Pow profile with
+twelve bytes, the six measured coefficients, exactly two signed indexed reads
+and zero table-relative addend. D302 retains its default contract and public
+API. Four signed/unsigned and new/existing-external D302 controls produce
+byte-identical output under the old and new binder. All 24 safety tests pass,
+including malformed widths/sites/addends/tables, failed-validation publication
+controls, stable mtimes and protection against overwriting the native input.
+
+`tools/testtable_context.py fp-pow` verifies the actual reference neighbour and
+binds only the source test-host reads to it. `fp-pow-seventh` validates and
+stages both source/reference transformations before publishing the isolated
+fixture context. Makefile and period build/link paths use these contexts;
+faithful and production object trees remain unbound. The tracked
+`t_fp_pow_seventh` fixture checks -7/19 backing and both signs/arms. The
+maintained binder also admits the previous literal-3 source; that negative
+control fails 16/24 fixture checks while all eight native analytical checks
+pass. No grader or period tolerance changes are made.
+
+Validation at the integration checkpoint:
+
+* Four focused period binaries pass: `t_fp_math`, `t_fp_pow_seventh`,
+  `t_callingtone` and `t_v32d302`.
+* Full `make phase J=12` passes **399/399** period binaries, including the one
+  newly registered fixture, and all structural checks.
+* The fresh faithful census is **1,206 EXACT / 39 REGALLOC / 607 NONMATCH /
+  0 unresolved / 1,852 compared**. FP_Pow is the only new promotion against
+  the 1,205/39/608 baseline. The existing ratchet passes with no losses.
+* All **300/300** deciding period objects are raw-identical to the faithful
+  comparison objects. The fresh recovered-order partial link remains DIFFERENT
+  from the reference, including raw bytes; no placement recovery is claimed.
+* Explicit normal-mode period probes compile without BUG mode or table binding.
+  Both previous and integrated implementations pass all **155,755** existing
+  checks, including **109,293** FP comparisons. This checks the preserved
+  normal fallback separately from reconstruction mode.
+
+Commands, hashes and logs are in `scratch/fp-pow-integration/`. The attempted
+first safety discovery exposed a test-module alias collision; making that
+import temporary restores unittest discovery. The final 24-test result is
+from the actual Makefile-style discovery command.

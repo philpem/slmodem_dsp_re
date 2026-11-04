@@ -43,11 +43,10 @@ iabs(int v)
  * is `cmp $0x5` against the OLD index at 0x07e1f9, so i=5 continues and i=6 is
  * processed; the i=6 load at .rodata 0x06d2e therefore lands past the table,
  * on the next symbol `IIRFilterScales[0]`, whose value is 3 (F11449).  That is
- * a real over-read in the original.  Its RESULT is reproduced below as
- * FP_POW_LAST_COEF rather than by the cross-translation-unit adjacency, which
- * this tree cannot place and which would make the arithmetic depend on link
- * order.  A seventh entry inside Fact_FP would change the symbol to 14 bytes,
- * which the object says is wrong.
+ * a real over-read in the original. BUG mode preserves the direct lookup.
+ * Test-only relocation binding supplies the reference memory environment;
+ * production tables retain their measured six-word extent. Normal mode
+ * retains the guarded fallback value instead of depending on adjacency.
  */
 #define FP_POW_TERMS 7
 #define FP_POW_TABLE 6
@@ -59,11 +58,13 @@ static const short Fact_FP[FP_POW_TABLE] = {
 /* The object's out-of-bounds seventh term: IIRFilterScales[0]. */
 #define FP_POW_LAST_COEF 3
 
+#ifndef DSPLIB_REPRODUCE_BUGS
 static short
 fp_pow_coef(int i)
 {
 	return (i < FP_POW_TABLE) ? Fact_FP[i] : (short)FP_POW_LAST_COEF;
 }
+#endif
 
 
 short
@@ -93,7 +94,7 @@ FP_Pow(int x)
 {
 	int result = 0x4000;		/* 1.0 in Q14 */
 	int term = x;
-	int i;
+	short i;
 
 	/*
 	 * Two paths, chosen by magnitude, and they are NOT the same expression
@@ -104,27 +105,36 @@ FP_Pow(int x)
 	 */
 	if ((unsigned)(x + 0x3fff) > 0x7ffeu) {
 		/*
-		 * Large |x|: shift the term down to an integer first, so the
-		 * product cannot overflow.  The contribution is then already
-		 * at Q14 scale and is added unshifted.
+		 * Large |x|: shift the term down to an integer first. The
+		 * contribution is at Q14 scale and is added unshifted.
 		 */
-		for (i = 0; i < FP_POW_TERMS; i++) {
+		i = 0;
+		do {
 			int scaled = term >> 14;
+#ifdef DSPLIB_REPRODUCE_BUGS
+			int contribution = scaled * Fact_FP[i];
+#else
 			int contribution = scaled * fp_pow_coef(i);
+#endif
 
 			term = scaled * x;
 			result += contribution;
 
 			if (iabs(contribution) <= 0)
 				break;
-		}
+		} while (i++ <= FP_POW_TERMS - 2);
 	} else {
 		/*
 		 * Small |x|: multiply at full precision and shift afterwards,
 		 * which keeps the low bits that the other path discards.
 		 */
-		for (i = 0; i < FP_POW_TERMS; i++) {
+		i = 0;
+		do {
+#ifdef DSPLIB_REPRODUCE_BUGS
+			int product = term * Fact_FP[i];
+#else
 			int product = term * fp_pow_coef(i);
+#endif
 			int contribution = product >> 14;
 
 			term = (term * x) >> 14;
@@ -132,7 +142,7 @@ FP_Pow(int x)
 
 			if (iabs(contribution) <= 0)
 				break;
-		}
+		} while (i++ <= FP_POW_TERMS - 2);
 	}
 
 	return result;

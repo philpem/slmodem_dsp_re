@@ -2,8 +2,8 @@
   "bytes": 86,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1174,
-  "exact_bytes": 135944,
+  "exact": 1175,
+  "exact_bytes": 136087,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -87,6 +87,7 @@
     "FPM_rms",
     "FPM_sqrt",
     "FPM_sqrt_dp",
+    "FP_Pow",
     "GenEQTrnSequenceV29",
     "GenSequence",
     "GenerateAnsTone",
@@ -1180,7 +1181,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "grade01": 1212,
+  "grade01": 1213,
   "grade01_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -1267,6 +1268,7 @@
     "FPM_rms",
     "FPM_sqrt",
     "FPM_sqrt_dp",
+    "FP_Pow",
     "GenEQTrnSequenceV29",
     "GenSequence",
     "GenerateAnsTone",
@@ -2395,7 +2397,7 @@
     "zFLTUTL_FloatMemSet",
     "zFLTUTL_Linear2Float"
   ],
-  "matched": 1212,
+  "matched": 1213,
   "matched_symbols": [
     "ApplyBulkDelay",
     "B103FP_delete",
@@ -2482,6 +2484,7 @@
     "FPM_rms",
     "FPM_sqrt",
     "FPM_sqrt_dp",
+    "FP_Pow",
     "GenEQTrnSequenceV29",
     "GenSequence",
     "GenerateAnsTone",
@@ -3614,7 +3617,7 @@
   "reference_functions": 1852,
   "regalloc": 38,
   "reloc": 0,
-  "selected_exact": 1177,
+  "selected_exact": 1178,
   "selected_exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -3698,6 +3701,7 @@
     "FPM_rms",
     "FPM_sqrt",
     "FPM_sqrt_dp",
+    "FP_Pow",
     "GenEQTrnSequenceV29",
     "GenSequence",
     "GenerateAnsTone",

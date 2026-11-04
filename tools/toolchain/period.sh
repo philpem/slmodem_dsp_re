@@ -233,6 +233,12 @@ if [ -s "$OUT/srcobjs.list" ]; then
                 "$OUT/src_pump_v32_v32dec_tables.o" "$g" > "$g.binding.json"
             rm -f "$g.unbound"
             ;;
+        src_dsp_FP_math.o)
+            objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g.unbound"
+            python3 tools/testtable_context.py fp-pow "$g.unbound" \
+                "$REF" "$g" > "$g.binding.json"
+            rm -f "$g.unbound"
+            ;;
         *)
             objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g"
             touch -r "$OUT/$o" "$g"
@@ -248,6 +254,15 @@ case " $TESTS " in
     python3 tools/testtable_context.py d302 \
         "$OUT/testhost/src_pump_v32_V32dec.o" "$REF" "$OUT/context/d302" \
         > "$OUT/context-d302.json"
+    ;;
+esac
+
+# Synthetic seventh-word fixture supplies an allocated seven-word backing.
+case " $TESTS " in
+*" t_fp_pow_seventh "*)
+    python3 tools/testtable_context.py fp-pow-seventh \
+        "$OUT/testhost/src_dsp_FP_math.o" "$REF" "$OUT/context/fp-pow-seventh" \
+        > "$OUT/context-fp-pow-seventh.json"
     ;;
 esac
 
