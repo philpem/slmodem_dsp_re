@@ -358,6 +358,18 @@ for t in $TESTS; do
 		[ "$replaced" -eq 1 ] || { echo "d302 context source count: $replaced" >&2; exit 1; }
 		LINK_OBJS=$CONTEXT_OBJS; LINK_REF="$OUT/context/d302/ref.o"
 		;;
+	fp-pow-seventh)
+		[ "$LINK_MODE" = individual ] || { echo "FP_Pow context requires individual inputs" >&2; exit 1; }
+		CONTEXT_OBJS=""; replaced=0
+		for o in $LINK_OBJS; do
+			case "$o" in
+			*/src_dsp_FP_math.o) o="$OUT/context/fp-pow-seventh/source.o"; replaced=$((replaced + 1)) ;;
+			esac
+			CONTEXT_OBJS="$CONTEXT_OBJS $o"
+		done
+		[ "$replaced" -eq 1 ] || { echo "FP_Pow context source count: $replaced" >&2; exit 1; }
+		LINK_OBJS=$CONTEXT_OBJS; LINK_REF="$OUT/context/fp-pow-seventh/ref.o"
+		;;
 	*) echo "unknown fixture context: $LD_CONTEXT" >&2; exit 1 ;;
 	esac
 	LINK_NEWEST=$(ls -t $LINK_OBJS "$LINK_REF" 2>/dev/null | head -1)

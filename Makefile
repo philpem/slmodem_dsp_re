@@ -512,6 +512,19 @@ $(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o &: $(BUILD)/testhost/
 	@mkdir -p $(BUILD)/context/d302
 	@$(PYTHON) tools/testtable_context.py d302 $(BUILD)/testhost/pump/v32/V32dec.o $(REF) $(BUILD)/context/d302 > $(BUILD)/context/d302/binding.json
 
+# FP_Pow preserves the original seventh read beyond its six-word table.
+# Only test-host lookup operands share the reference memory environment.
+$(BUILD)/testhost/dsp/FP_math.o: $(BUILD)/repro/dsp/FP_math.o $(REF) $(TESTVISIBLE) $(TESTREDEFINE) tools/testtable_context.py tools/test_table_binding.py Makefile
+	@mkdir -p $(dir $@)
+	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
+	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@.unbound
+	@$(PYTHON) tools/testtable_context.py fp-pow $@.unbound $(REF) $@ > $@.binding.json
+	rm -f $@.redef $@.unbound
+
+$(BUILD)/context/fp-pow-seventh/source.o $(BUILD)/context/fp-pow-seventh/ref.o &: $(BUILD)/testhost/dsp/FP_math.o $(REF) tools/testtable_context.py tools/test_table_binding.py
+	@mkdir -p $(BUILD)/context/fp-pow-seventh
+	@$(PYTHON) tools/testtable_context.py fp-pow-seventh $(BUILD)/testhost/dsp/FP_math.o $(REF) $(BUILD)/context/fp-pow-seventh > $(BUILD)/context/fp-pow-seventh/binding.json
+
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
 # which is just as well, since the 32-bit one is often not installed alongside
@@ -583,6 +596,10 @@ $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)
 # The synthetic D302 fixture supplies its own backing storage. Keep every
 # other test-host object, replacing exactly V32dec and the reference input.
 $(BUILD)/test/t_v32d302: $(BUILD)/test/unit/t_v32d302.o $(filter-out $(BUILD)/testhost/pump/v32/V32dec.o,$(TESTHOST_OBJ)) $(HARNESS_OBJ) $(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
+
+$(BUILD)/test/t_fp_pow_seventh: $(BUILD)/test/unit/t_fp_pow_seventh.o $(filter-out $(BUILD)/testhost/dsp/FP_math.o,$(TESTHOST_OBJ)) $(HARNESS_OBJ) $(BUILD)/context/fp-pow-seventh/source.o $(BUILD)/context/fp-pow-seventh/ref.o
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 

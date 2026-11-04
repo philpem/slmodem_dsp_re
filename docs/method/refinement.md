@@ -10340,3 +10340,19 @@ the original access leaves a measured table extent, provide a separately
 validated test memory context; instruction identity alone cannot establish
 linked runtime fidelity. Keep historical backing and synthetic context probes
 distinct. See the [FP_Pow deep dive](../fp-pow-deep-dive.md).
+
+### Keep diagnostic axes separate from acceptance (F12138)
+
+A first rejection or similarity score does not inventory all residual causes.
+Report extents/placement, relocations, CFG, operations, register/stack evidence
+and strict identity separately, with units, unmatched sides and unknowns.
+Resolve branch destinations under an explicit instruction correspondence; byte
+displacements alone do not show a changed successor. Preserve ambiguous
+correspondence and every defining copy. The existing strict grade remains the
+acceptance authority. See the [vector design](../metric-vector-assessment.md).
+
+Third-party search scores need negative controls. The examined permuter already
+has i386 support but erases real operand/relocation distinctions in zero-score
+cases. Prefer its bounded manual enumeration behind an unchanged full-TU
+compiler wrapper and the existing strict oracle. Do not turn a lower heuristic
+score into source evidence. See the [assessment](../decomp-permuter-assessment.md).

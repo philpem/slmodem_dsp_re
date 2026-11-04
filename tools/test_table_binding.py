@@ -1,4 +1,4 @@
-"""TEST ONLY: bind one scoped 16-bit table read to an external memory fixture.
+"""TEST ONLY: bind strictly profiled 16-bit table reads to an external memory fixture.
 
 No table definition, other consumer, or comparison input is redirected. This
 changes the test memory environment; it does not canonicalize grading inputs.
@@ -21,10 +21,18 @@ sys.path.insert(0, str(ROOT / 'tools/toolchain'))
 from callee_effects import decode
 from jumptable import Refused, require, instructions
 from elftools.elf.elffile import ELFFile
+from elftools.common.exceptions import ELFError
 from elftools.elf.relocation import RelocationSection
 
 
 def _read(path):
+    try:
+        return _read_elf(path)
+    except (ELFError, struct.error, IndexError, KeyError) as error:
+        raise Refused('invalid ELF object: ' + str(error)) from error
+
+
+def _read_elf(path):
     raw = Path(path).read_bytes()
     elf = ELFFile(io.BytesIO(raw))
     require(elf.elfclass == 32 and elf.little_endian and
@@ -44,7 +52,21 @@ def _unique(symbols, name):
     return found[0]
 
 
-def _locate(path, function, old_table, allowed_addends, table_object=None):
+FP_POW_COEFFICIENTS = struct.pack('<6h', 16384, 8192, 2730, 683, 136, 23)
+
+
+def _locate(path, function, old_table, allowed_addends, table_object=None,
+            profile='d302'):
+    require(profile in ('d302', 'fp-pow'), 'unknown table binding profile')
+    fp_pow = profile == 'fp-pow'
+    if fp_pow:
+        require((function, old_table) in (('FP_Pow', 'Fact_FP'),
+                ('FP_Pow', 'ref_Fact_FP'), ('ref_FP_Pow', 'ref_Fact_FP')),
+                'FP_Pow profile requires a named FP_Pow/Fact_FP owner pair')
+        require(tuple(allowed_addends) == (0,), 'FP_Pow allows only table-relative addend zero')
+    table_size = 12 if fp_pow else 6
+    relative_addend = 0 if fp_pow else -2
+    expected_reads = 2 if fp_pow else 1
     raw, elf, tab, symbols = _read(path)
     _, table = _unique(symbols, old_table)
     context = None
@@ -58,16 +80,16 @@ def _locate(path, function, old_table, allowed_addends, table_object=None):
         _, definition = _unique(context_symbols, old_table)
         context = {'path': str(Path(table_object).resolve()),
                    'sha256': hashlib.sha256(context_raw).hexdigest()}
-    require(isinstance(definition['st_shndx'], int) and definition['st_size'] == 6 and
+    require(isinstance(definition['st_shndx'], int) and definition['st_size'] == table_size and
             definition['st_info']['type'] == 'STT_OBJECT' and
             definition['st_info']['bind'] in ('STB_GLOBAL', 'STB_LOCAL'),
-            'old table must have a defined six-byte object')
+            'old table must have a defined %d-byte object' % table_size)
     table_sec = definition_elf.get_section(definition['st_shndx'])
     require(table_sec['sh_type'] != 'SHT_NOBITS' and
-            definition['st_value'] + 6 <= table_sec['sh_size'], 'old table extent')
-    table_bytes = table_sec.data()[definition['st_value']:definition['st_value']+6]
-    require(table_bytes == struct.pack('<3h', 5792, 12953, 17378),
-            'authoritative six-byte table values differ from reference')
+            definition['st_value'] + table_size <= table_sec['sh_size'], 'old table extent')
+    table_bytes = table_sec.data()[definition['st_value']:definition['st_value']+table_size]
+    require(table_bytes == (FP_POW_COEFFICIENTS if fp_pow else struct.pack('<3h', 5792, 12953, 17378)),
+            'authoritative table values differ from profile')
     _, fn = _unique(symbols, function)
     require(isinstance(fn['st_shndx'], int) and fn['st_size'] > 0 and
             fn['st_info']['type'] == 'STT_FUNC' and
@@ -81,6 +103,7 @@ def _locate(path, function, old_table, allowed_addends, table_object=None):
               s['st_value'] < end and s['st_value'] + s['st_size'] > start]
     require(len(owners) == 1, 'ambiguous overlapping function owner')
     matches = []
+    owner_relocations = 0
     for rsec in elf.iter_sections():
         if not isinstance(rsec, RelocationSection) or rsec['sh_info'] != fn['st_shndx']:
             continue
@@ -90,7 +113,9 @@ def _locate(path, function, old_table, allowed_addends, table_object=None):
             offset = rel['r_offset']
             if not start <= offset < end:
                 continue
+            owner_relocations += 1
             require(offset + 4 <= end, 'cross-boundary relocation')
+            require(rel['r_info_sym'] < len(symbols), 'invalid relocation symbol index')
             sym = symbols[rel['r_info_sym']]
             if rel['r_info_type'] != 1:
                 continue
@@ -101,25 +126,37 @@ def _locate(path, function, old_table, allowed_addends, table_object=None):
                 continue
             addend = struct.unpack_from('<i', sec.data(), offset)[0]
             effective = sym['st_value'] + addend
-            if effective == table['st_value'] - 2:
+            if effective == table['st_value'] + relative_addend:
                 matches.append((rsec, index, rel, sym, addend))
-    require(len(matches) == 1, 'requires exactly one matching R_386_32 table read')
-    require(-2 in allowed_addends, 'table-relative addend -2 is not allowed')
-    rsec, index, rel, target, addend = matches[0]
-    rows = instructions(str(Path(path).resolve()), sec.name, start, end)
-    rows = [row for row in rows if row[0] <= rel['r_offset'] < row[0] + len(row[1])]
-    require(len(rows) == 1, 'relocation has no unique instruction')
-    address, code, _, _ = rows[0]
-    kind, args, _ = decode(address, code)
-    require(kind in ('movsx', 'movzx') and len(args) == 2 and args[0][0] == 'm' and
-            ((args[0][1] is None and args[0][2] is not None and args[0][3] == 2) or
-             (args[0][1] is not None and args[0][1] == args[0][2] and args[0][3] == 1)) and
-            args[0][5] == 16 and
-            args[1][0] == 'r' and args[1][2:] == (0, 32) and
-            args[0][6] is not None and address + args[0][6] == rel['r_offset'] and
-            len(code) - args[0][6] == 4 and code[:2] in (b'\x0f\xbf', b'\x0f\xb7'),
-            'requires 16-to-32 MOVSX/MOVZX memory read, SIB effective 2*index, GP destination')
-    return raw, elf, tab, symbols, fn, sec, table, rsec, index, rel, target, addend, address, code, table_bytes, context
+    require(len(matches) == expected_reads,
+            'requires exactly %d matching R_386_32 table reads' % expected_reads)
+    if fp_pow:
+        require(owner_relocations == 2, 'FP_Pow permits only its two table relocations')
+    require(relative_addend in allowed_addends,
+            'table-relative addend %d is not allowed' % relative_addend)
+    # The decoder caches by path. Always decode this invocation's bytes, even
+    # when a malformed replacement was installed at a previously valid path.
+    instructions.cache_clear()
+    decoded = instructions(str(Path(path).resolve()), sec.name, start, end)
+    sites = []
+    for rsec, index, rel, target, addend in matches:
+        rows = [row for row in decoded if row[0] <= rel['r_offset'] < row[0] + len(row[1])]
+        require(len(rows) == 1, 'relocation has no unique instruction')
+        address, code, _, _ = rows[0]
+        kind, args, _ = decode(address, code)
+        require(kind in (('movsx',) if fp_pow else ('movsx', 'movzx')) and
+                len(args) == 2 and args[0][0] == 'm' and
+                ((args[0][1] is None and args[0][2] is not None and args[0][3] == 2) or
+                 (args[0][1] is not None and args[0][1] == args[0][2] and args[0][3] == 1)) and
+                args[0][5] == 16 and args[1][0] == 'r' and args[1][2:] == (0, 32) and
+                args[0][6] is not None and address + args[0][6] == rel['r_offset'] and
+                len(code) - args[0][6] == 4 and
+                code[:2] in ((b'\x0f\xbf',) if fp_pow else (b'\x0f\xbf', b'\x0f\xb7')),
+                ('FP_Pow requires signed 16-to-32 MOVSX' if fp_pow else
+                 'requires 16-to-32 MOVSX/MOVZX') + ' read, SIB effective 2*index, GP destination')
+        sites.append((rsec, index, rel, target, addend, address, code))
+    require(len({s[5] for s in sites}) == expected_reads, 'duplicate read instruction')
+    return raw, elf, tab, symbols, fn, sec, table, sites, table_bytes, context
 
 
 def _snapshot(elf):
@@ -132,9 +169,11 @@ def _snapshot(elf):
 
 
 def bind_table_read(object, function, old_table, new_external_symbol, output,
-                    allowed_addends=(-2,), table_object=None):
-    """Clone and retarget the sole admitted read; return a JSON-ready record.
+                    allowed_addends=(-2,), table_object=None, profile='d302'):
+    """Clone and retarget the profile-admitted reads; return a JSON-ready record.
 
+    D302 is the unchanged default: one six-byte-table read at addend -2.
+    FP_Pow requires exactly two signed reads of its twelve-byte table at zero.
     Actual admitted reads are raw-decoded MOVSX/MOVZX 16-to-32 with SIB
     effective 2*register, either no-base scale2 or base==index scale1.
     Undefined old tables require an explicit defining object. Its six bytes
@@ -145,8 +184,9 @@ def bind_table_read(object, function, old_table, new_external_symbol, output,
     """
     source, output = Path(object).resolve(), Path(output).resolve()
     require(source != output, 'input and output must differ')
-    facts = _locate(source, function, old_table, tuple(allowed_addends), table_object)
-    raw, elf, tab, symbols, fn, sec, table, rsec, ri, rel, target, addend, address, code, table_bytes, context = facts
+    facts = _locate(source, function, old_table, tuple(allowed_addends), table_object, profile)
+    raw, elf, tab, symbols, fn, sec, table, sites, table_bytes, context = facts
+    relative_addend = 0 if profile == 'fp-pow' else -2
     require(new_external_symbol and new_external_symbol != old_table and
             '=' not in new_external_symbol and ',' not in new_external_symbol,
             'invalid external symbol name')
@@ -200,11 +240,12 @@ def bind_table_read(object, function, old_table, new_external_symbol, output,
                       'original symbol/string storage plus appended undefined symbol')
                 metadata.append({'role': 'appended section payload', 'file_offset': payload_offset,
                                  'size': len(payload), 'sha256': hashlib.sha256(payload).hexdigest()})
-        ers = edited.get_section_by_name(rsec.name)
-        ecs = edited.get_section_by_name(sec.name)
-        require(ers is not None and ecs is not None, 'objcopy lost owning section')
-        patch(ers['sh_offset'] + ri*8 + 4, struct.pack('<I', symbol_index << 8 | 1), 'relocation r_info')
-        patch(ecs['sh_offset'] + rel['r_offset'], struct.pack('<i', -2), 'REL in-place addend')
+        for rsec, ri, rel, target, addend, address, code in sites:
+            ers = edited.get_section_by_name(rsec.name)
+            ecs = edited.get_section_by_name(sec.name)
+            require(ers is not None and ecs is not None, 'objcopy lost owning section')
+            patch(ers['sh_offset'] + ri*8 + 4, struct.pack('<I', symbol_index << 8 | 1), 'relocation r_info')
+            patch(ecs['sh_offset'] + rel['r_offset'], struct.pack('<i', relative_addend), 'REL in-place addend')
         allowed_offsets = {i for change in metadata if 'new_hex' in change for i in range(change['file_offset'], change['file_offset'] + len(bytes.fromhex(change['new_hex'])))}
         require(all(a == b or i in allowed_offsets for i, (a, b) in enumerate(zip(raw, mutable))),
                 'unrecorded original-file byte change')
@@ -219,8 +260,9 @@ def bind_table_read(object, function, old_table, new_external_symbol, output,
         require(fsymbols[symbol_index]['st_shndx'] == 'SHN_UNDEF' and
                 fsymbols[symbol_index]['st_value'] == 0, 'external symbol is not undefined zero')
         expected_relocs = {k: [dict(v) for v in vs] for k, vs in before_relocs.items()}
-        expected_relocs[rsec.name][ri]['r_info'] = symbol_index << 8 | 1
-        expected_relocs[rsec.name][ri]['r_info_sym'] = symbol_index
+        for rsec, ri, rel, target, addend, address, code in sites:
+            expected_relocs[rsec.name][ri]['r_info'] = symbol_index << 8 | 1
+            expected_relocs[rsec.name][ri]['r_info_sym'] = symbol_index
         require(after_relocs == expected_relocs, 'unintended relocation change')
         require([s.name for s in elf.iter_sections()] == [s.name for s in final.iter_sections()],
                 'objcopy changed section inventory')
@@ -229,10 +271,11 @@ def bind_table_read(object, function, old_table, new_external_symbol, output,
             if oldsec.name in ('.symtab', elf.get_section(tab['sh_link']).name, '.shstrtab'):
                 continue
             want = bytearray(oldsec.data())
-            if oldsec.name == sec.name:
-                struct.pack_into('<i', want, rel['r_offset'], -2)
-            if oldsec.name == rsec.name:
-                struct.pack_into('<I', want, ri*8+4, symbol_index << 8 | 1)
+            for rsec, ri, rel, target, addend, address, code in sites:
+                if oldsec.name == sec.name:
+                    struct.pack_into('<i', want, rel['r_offset'], relative_addend)
+                if oldsec.name == rsec.name:
+                    struct.pack_into('<I', want, ri*8+4, symbol_index << 8 | 1)
             require(bytes(want) == newsec.data(), 'unintended section bytes: ' + oldsec.name)
             for field in ('sh_type', 'sh_flags', 'sh_addr', 'sh_size', 'sh_link', 'sh_info', 'sh_addralign', 'sh_entsize'):
                 require(oldsec[field] == newsec[field], 'unintended section metadata: ' + oldsec.name)
@@ -242,17 +285,23 @@ def bind_table_read(object, function, old_table, new_external_symbol, output,
                   'output_sha256': hashlib.sha256(mutable).hexdigest(),
                   'owner': function, 'owner_section': sec.name,
                   'owner_start': fn['st_value'], 'owner_size': fn['st_size'],
-                  'read_address': address, 'read_raw_before': code.hex(),
-                  'relocation_offset': rel['r_offset'], 'old_table': old_table,
-                  'old_relocation_symbol': target.name, 'old_addend': addend,
-                  'old_effective_table_addend': -2, 'new_symbol': new_external_symbol,
-                  'new_symbol_index': symbol_index, 'new_addend': -2,
+                  'profile': profile, 'old_table': old_table,
+                  'reads': [{'read_address': address, 'read_raw_before': code.hex(),
+                             'relocation_offset': rel['r_offset'],
+                             'old_relocation_symbol': target.name, 'old_addend': addend,
+                             'old_effective_table_addend': relative_addend,
+                             'new_addend': relative_addend}
+                            for rsec, ri, rel, target, addend, address, code in sites],
+                  'new_symbol': new_external_symbol, 'new_symbol_index': symbol_index,
+                  'new_addend': relative_addend,
                   'old_table_preserved_hex': table_bytes.hex(), 'authoritative_table_context': context,
                   'section_header_changes': {s.name: {k: {'old': s[k], 'new': final.get_section_by_name(s.name)[k]} for k in s.header if s[k] != final.get_section_by_name(s.name)[k]} for s in elf.iter_sections() if s.header != final.get_section_by_name(s.name).header},
                   'elf_header_changes': {k: {'old': elf[k], 'new': final[k]} for k in elf.header if elf[k] != final[k]},
                   'changed_metadata': metadata, 'objcopy_command': command,
                   'objcopy_version': subprocess.check_output(['objcopy','--version'], text=True).splitlines()[0],
                   'verified': 'all old symbols, every other relocation and all unrelated section bytes/metadata unchanged'}
+        if len(sites) == 1:
+            record.update(record['reads'][0])  # Preserve the public D302 record.
         if not output.exists() or output.read_bytes() != mutable:
             clone.replace(output)
         return record
@@ -264,6 +313,7 @@ if __name__ == '__main__':
     for name in ('object', 'function', 'old_table', 'new_external_symbol', 'output'):
         p.add_argument(name)
     p.add_argument('--table-object')
+    p.add_argument('--profile', choices=('d302', 'fp-pow'), default='d302')
     p.add_argument('--allowed-addends', nargs='+', type=int, default=(-2,))
     a = p.parse_args()
     print(json.dumps(bind_table_read(**vars(a)), indent=2))
