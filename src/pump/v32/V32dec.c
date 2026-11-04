@@ -56,39 +56,44 @@
  *
  * `retrain` is written and never read here; it is a request to the datapump.
  */
-static void
+static struct v32_dec *
 fse_quality(struct fpm_fse *state)
 {
-	struct v32_dec *m = (struct v32_dec *)state->cfg.owner;
-	int i = state->out_i[(short)state->n_out];
-	int q = state->out_q[(short)state->n_out];
-	int di = (short)(m->sym_i1 - i);
-	int dq = (short)(m->sym_q1 - q);
-	int energy = (di * di + dq * dq) >> 16;
-	short n;
+	struct v32_dec *m;
+	int qi = state->out_i[(short)state->n_out];
+	int qq = state->out_q[(short)state->n_out];
+	int di, dq;
+	short energy;
+	int count;
 
+	m = (struct v32_dec *)state->cfg.owner;
+	di = (short)(m->sym_i1 - qi);
+	dq = (short)(m->sym_q1 - qq);
+	energy = (di * di + dq * dq) >> 16;
 	m->sym_q1 = m->sym_q;
+	m->sym_q = (short)qq;
 	m->sym_i1 = m->sym_i;
-	m->sym_q = (short)q;
-	m->sym_i = (short)i;
-
+	m->sym_i = (short)qi;
 	m->eqm = (short)(((15 * m->eqm) >> 4) + (energy >> 4));
-
 	if (m->eqm > 0x4ff) {
 		m->count = 0;
-		return;
+		return m;
 	}
-
-	n = (short)(m->count + 1);
-	if (m->eqm < (short)(energy >> 3) && n <= 0x3b && n > 0x14) {
-		m->retrain = 2;
-		m->count = 0;
-		return;
+	count = m->count + 1;
+	if (m->eqm < (short)(energy >> 3)) {
+		if ((short)count <= 0x3b) {
+			if ((short)count > 0x14) {
+				m->retrain = 2;
+				m->count = 0;
+				return m;
+			}
+		}
 	}
-
-	m->count = n;
+	m->count = count;
+	m = (struct v32_dec *)state->cfg.owner;
 	if (m->count == 0x3c)
 		m->retrain = 1;
+	return m;
 }
 
 /*
@@ -139,8 +144,7 @@ FSE_decision_4pt(struct fpm_fse *state, short *angle, short *mag)
 	int rot;
 	short min;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];
@@ -336,42 +340,6 @@ FSE_decision_AB(struct fpm_fse *state, short *angle, short *mag)
 }
 
 /*
- * The differential half again, plus the decided point's own low two bits.
- *
- * DELIBERATELY A SECOND COPY of `fse_differential` rather than a fourth
- * argument on it.  The object INLINES this at all three of its call sites, so
- * there is no shared symbol in the blob to preserve; an out-parameter would
- * take the address of a local in `_4pt` and `_AB`, which GCC 3.4 forces to
- * memory, and would move the code generation of two functions that already
- * match in order to save twelve lines.
- *
- * 9600 bit/s carries four bits and this is where they are assembled: the two
- * the quadrant rotation encodes -- which is the whole of what `_4pt` returns
- * -- OR'd with the two that name the point within its quadrant.  An OR is
- * enough because every `SMCv32_PMAP16` entry (4, 0, 8, 12) has its low two
- * bits clear, and the object encodes it as one: `or %ebx,%ebp` at 0x8104f
- * against `and $0x3,%ebx` at 0x8103b.
- */
-static int
-fse_differential_16(struct v32_dec *m, short ib, short qb)
-{
-	int prev = m->prev_sym[(short)m->chan];
-	int found = 0;
-	int quad;
-	int j;
-
-	for (j = 0; j <= 15; j++)
-		if (SMCv32_IMAP16[j] == ib && SMCv32_QMAP16[j] == qb) {
-			found = j;
-			break;
-		}
-
-	quad = found & 0xc;
-	m->prev_sym[(short)m->chan] = (short)quad;
-	return SMCv32_PMAP16[((quad - prev) & 0xf) >> 2] | (found & 3);
-}
-
-/*
  * 9600 bit/s WITHOUT the trellis: the same sixteen-point constellation
  * `_16Tpt` decides on, but reported as four differentially encoded bits
  * instead of handed to the Viterbi decoder.  It is `FSEv32_decision[1]`
@@ -403,28 +371,24 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v32_dec *m;
 	int i, q, ib, qb;
-	short k, best = 0;
+	int found = 0;
+	short k, best;
 	short min, n;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];
 
+	best = 0;
 	min = 0x7fff;
 	for (k = 0; k <= 15; k++) {
-		int di = (short)(i - DECv32_IMAP16[k]);
-		int dq = (short)(q - DECv32_QMAP16[k]);
-		/*
-		 * The sum is taken unsigned only to keep it defined.  Each
-		 * product fits an `int` on its own; their sum reaches exactly
-		 * 2**31 at di = dq = -32768, which (-28672, -28672) against
-		 * point 9 produces.  The object's `add` wraps, so wrapping is
-		 * the behaviour to keep, and unsigned addition is how C says
-		 * it without leaning on overflow.
-		 */
-		short d = (short)((unsigned)(di * di) + (unsigned)(dq * dq));
+		int di = i - DECv32_IMAP16[k];
+		int dq = q - DECv32_QMAP16[k];
+		/* The native metric keeps full-width differences until the final
+		 * signed-short narrowing.  Cast before each multiplication so
+		 * both products and their sum wrap modulo 2**32 in C. */
+		short d = (short)((unsigned)di * (unsigned)di + (unsigned)dq * (unsigned)dq);
 
 		if (d < min) {
 			best = k;
@@ -434,7 +398,12 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 
 	ib = DECv32_IMAP16[best];
 	qb = DECv32_QMAP16[best];
-	n = (short)((ib < 0 ? -ib : ib) + (qb < 0 ? -qb : qb));
+	{
+		int ai = ib < 0 ? -ib : ib;
+		int aq = qb < 0 ? -qb : qb;
+
+		n = (short)(ai + aq);
+	}
 
 	/* D302: the original shifts by 1 and reads beyond the three-entry
 	 * table. Preserve that operation in reproduction mode; its result
@@ -449,7 +418,21 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 #endif
 	*angle = DECv32_ANGL9600[best];
 
-	return (unsigned short)fse_differential_16(m, (short)ib, (short)qb);
+	{
+		int prev = m->prev_sym[(short)m->chan];
+		int quad;
+		short j;
+
+		for (j = 0; j <= 15; j++)
+			if (SMCv32_IMAP16[j] == (short)ib && SMCv32_QMAP16[j] == (short)qb) {
+				found = j;
+				break;
+			}
+		quad = found & 0xc;
+		m->prev_sym[(short)m->chan] = (short)quad;
+		return (unsigned short)(SMCv32_PMAP16[((quad - prev) & 0xf) >> 2]
+				       | (found & 3));
+	}
 }
 
 /*
@@ -532,15 +515,15 @@ FSE_decision_16Tpt(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v32_dec *m;
 	int i, q, ib, qb, n;
-	short k, best = 0;
+	short k, best;
 	short min, sym;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];
 
+	best = 0;
 	min = 0x7fff;
 	for (k = 0; k <= 15; k++) {
 		int di = (short)(i - DECv32_IMAP16[k]);
@@ -586,8 +569,7 @@ FSE_decision_64pt(struct fpm_fse *state, short *angle, short *mag)
 	short k, base, best = 0;
 	short min, sym;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];
@@ -664,8 +646,7 @@ FSE_decision_32pt(struct fpm_fse *state, short *angle, short *mag)
 	short k, first, count, best = 0;
 	short min, sym, n;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];
@@ -763,8 +744,7 @@ FSE_decision_128pt(struct fpm_fse *state, short *angle, short *mag)
 	short k, base = 0, best = 0;
 	short min, sym, n;
 
-	fse_quality(state);
-	m = (struct v32_dec *)state->cfg.owner;
+	m = fse_quality(state);
 
 	i = state->out_i[(short)state->n_out];
 	q = state->out_q[(short)state->n_out];

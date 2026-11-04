@@ -10210,3 +10210,35 @@ check exact instruction bytes rather than assumed signedness, and invalidate
 cached executables when binding bytes change. These are apparatus changes;
 production source carries the original expression without hooks or padding.
 Equal instruction totals still require the whole-function operand/CFG proof.
+
+### Preserve a shared narrowing boundary through CSE (F12129)
+
+When native code shares a shifted signed energy between later shifts, inspect
+CSE before changing arithmetic or scheduling. In V.32, an `int` intermediate
+lets CSE associate SAR16 then SAR4/SAR3 into SAR20/SAR19. A native-supported
+short intermediate blocks that early association; combine later removes the
+redundant extension without losing the shared producer. Check the complete
+consumer graph and emitted width: a short introduced merely to fit registers
+has no such justification. This mechanism is demonstrated across all six
+quality callers, with full-TU controls and period differential coverage.
+
+Inspect initial RTL for eager predicate folding before blaming allocation.
+Nested retrain predicates preserve the native branch sequence here. Likewise,
+keep a full-width increment when native narrows only its comparisons and store;
+a named short can create an extra shared extension. These are per-site source
+constraints, not global rewriting rules.
+
+Recover initializer and owner lifetimes from consumed native spills and branches.
+The V.32 slicers initialize the nearest index after quality, but initialize the
+consumed differential fallback before it. Their default quality arm refreshes
+the owner after storing count, while early exits retain it. Returning this real
+selected owner from the existing helper expresses the shared graph; it does not
+prove the historical helper declaration. Preserve subsequent sample rereads and
+alias-sensitive output/read order.
+
+Stop a spelling route when later passes erase its distinguishing graph. An
+integer bit-pack temporary survives initial expansion here but combine produces
+the same nine final bodies. Incoming argument reloads first inserted by global
+allocation do not independently justify new source captures. The six-cell wave
+retains native-backed partial recovery but closes no function: keep that outcome
+separate from instruction totals and local mnemonic-run changes.
