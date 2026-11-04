@@ -43,7 +43,7 @@ static void compare_state(V90Equalizer *a,V90Equalizer *b,long tag)
     }
     diff_eq_obj_( __FILE__,__LINE__,"constructed conversion state","V90Equalizer",aa,bb,sizeof(aa),tag);
 #define VIEW(field) diff_eq_obj_( __FILE__,__LINE__,#field,"short[4]",a->field,b->field,4*sizeof(short),tag)
-    VIEW(linearEquMmxCoefsAligned);VIEW(array_d8Aligned);VIEW(array_ecAligned);
+    VIEW(linearEquMmxCoefsHighAligned);VIEW(linearEquMmxCoefsLowAligned);VIEW(array_ecAligned);
     VIEW(dfeMmxCoefsAligned);VIEW(array_118Aligned);VIEW(array_12cAligned);
 #undef VIEW
 }

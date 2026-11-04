@@ -571,8 +571,8 @@ wire(V90Equalizer *o)
 	o->dfeWindow = arena.dfewin;
 	o->dfeCoefs = arena.dfecoefs;
 	o->array_44 = arena.a44;
-	o->linearEquMmxCoefs = arena.lemmx;
-	o->array_d8 = arena.ad8;
+	o->linearEquMmxCoefsHigh = arena.lemmx;
+	o->linearEquMmxCoefsLow = arena.ad8;
 	o->array_ec = arena.aec;
 	o->dfeMmxCoefs = arena.dfemmx;
 	o->array_118 = arena.a118;
@@ -1005,8 +1005,8 @@ static struct equ_block block_v[] = {
 	{ 0x098, "meanErrorEnergy",			0, 0 },
 	{ 0x0b4, "block_b4",			0, 1 },
 	{ 0x0b8, "block_b8",			0, 1 },
-	{ 0x0d4, "linearEquMmxCoefs",		0, 1 },
-	{ 0x0d8, "array_d8",			0, 1 },
+	{ 0x0d4, "linearEquMmxCoefsHigh",		0, 1 },
+	{ 0x0d8, "linearEquMmxCoefsLow",			0, 1 },
 	{ 0x0ec, "array_ec",			0, 1 },
 	{ 0x114, "dfeMmxCoefs",			0, 1 },
 	{ 0x118, "array_118",			0, 1 },
@@ -1607,13 +1607,13 @@ void ref_equ_printEquStuff(void *self)
 static void
 wire_mmx(V90Equalizer *o)
 {
-	o->linearEquMmxCoefsAligned = arena.lemmx + 1;
-	o->array_d8Aligned = arena.ad8 + 1;
+	o->linearEquMmxCoefsHighAligned = arena.lemmx + 1;
+	o->linearEquMmxCoefsLowAligned = arena.ad8 + 1;
 	o->array_ecAligned = arena.aec + 1;
 	o->dfeMmxCoefsAligned = arena.dfemmx + 1;
 	o->array_118Aligned = arena.a118 + 1;
 	o->array_12cAligned = arena.a12c + 1;
-	o->linearEquMmxCoefsSkew = o->array_d8Skew = o->array_ecSkew = 1;
+	o->linearEquMmxCoefsHighSkew = o->linearEquMmxCoefsLowSkew = o->array_ecSkew = 1;
 	o->dfeMmxCoefsSkew = o->array_118Skew = o->array_12cSkew = 1;
 }
 

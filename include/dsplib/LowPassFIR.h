@@ -172,11 +172,12 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 	if (coefficients != 0)
 		sysdep_free(coefficients);
 
+	/* Read the published count at the native points across these calls. */
 	if (window == 0) {
-		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
-		hamming(coefficients, nTaps);
+		coefficients = (T *)sysdep_malloc(taps * sizeof(T));
+		hamming(coefficients, taps);
 	} else if (adopt == 0) {
-		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
+		coefficients = (T *)sysdep_malloc(taps * sizeof(T));
 		for (i = 0; i < taps; i++)
 			coefficients[i] = window[i];
 	} else {
@@ -186,14 +187,14 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 
 	{
 		/*
-		 * x = -(nTaps - 1) * cutoff / 2, at extended precision, and
+		 * x = -(taps - 1) * cutoff / 2, at extended precision, and
 		 * the count comes in through `fildll` with the high word
 		 * zeroed -- x87 has no unsigned integer load.
 		 *
-		 * The association is the object's: (nTaps-1) * (-cutoff)
+		 * The association is the object's: (taps-1) * (-cutoff)
 		 * first, then * 0.5f.  0.5 is `.rodata.cst4+0x1f0`, a float.
 		 */
-		T x = (unsigned long long)(nTaps - 1)
+		T x = (unsigned long long)(taps - 1)
 		      * (-cutoff) * 0.5f;
 
 		for (i = 0; i < taps; i++) {
@@ -204,6 +205,8 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 			 * two 4-byte stores of the same register.  The template-T home supplies the value reloaded
 			 * after the call; excess precision stays within each x87 expression.
 			 */
+			/* Retain this iteration's pointer across sinc. */
+			T *coefs = coefficients;
 			T t;
 
 			t = sinc(x) * cutoff;
@@ -212,8 +215,8 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 			x = x + cutoff;
 
 			/* One rounding, here, on (sinc*cutoff)*w[i]. */
-			coefficients[i] =
-			    (T)(t * coefficients[i]);
+			coefs[i] =
+			    (T)(t * coefs[i]);
 		}
 	}
 

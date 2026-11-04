@@ -144,8 +144,8 @@ wire(V90Equalizer *o)
 	o->dfeWindow = arena.dfewin;
 	o->dfeCoefs = arena.dfecoefs;
 	o->array_44 = arena.a44;
-	o->linearEquMmxCoefs = arena.lemmx;
-	o->array_d8 = arena.ad8;
+	o->linearEquMmxCoefsHigh = arena.lemmx;
+	o->linearEquMmxCoefsLow = arena.ad8;
 	o->array_ec = arena.aec;
 	o->dfeMmxCoefs = arena.dfemmx;
 	o->array_118 = arena.a118;
@@ -159,13 +159,13 @@ wire(V90Equalizer *o)
 static void
 wire_mmx(V90Equalizer *o)
 {
-	o->linearEquMmxCoefsAligned = arena.lemmx + 1;
-	o->array_d8Aligned = arena.ad8 + 1;
+	o->linearEquMmxCoefsHighAligned = arena.lemmx + 1;
+	o->linearEquMmxCoefsLowAligned = arena.ad8 + 1;
 	o->array_ecAligned = arena.aec + 1;
 	o->dfeMmxCoefsAligned = arena.dfemmx + 1;
 	o->array_118Aligned = arena.a118 + 1;
 	o->array_12cAligned = arena.a12c + 1;
-	o->linearEquMmxCoefsSkew = o->array_d8Skew = o->array_ecSkew = 1;
+	o->linearEquMmxCoefsHighSkew = o->linearEquMmxCoefsLowSkew = o->array_ecSkew = 1;
 	o->dfeMmxCoefsSkew = o->array_118Skew = o->array_12cSkew = 1;
 }
 
