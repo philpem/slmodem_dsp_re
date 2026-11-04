@@ -143277,3 +143277,20 @@ binding before retention. The D302 binder admits a different single-read form
 and cannot be reused by weakening its table/extent/addend checks. All cells
 remain scratch-only, with no runtime or whole-function recovery claim. Details
 and control denominators are in the [wave report](read-age-width-wave2.md).
+
+## F12136. FP_Pow reaches EXACT after removing an inlined helper's index lifetime
+
+At `2bdd7930e5`, a scratch candidate combines the native short post-incremented
+counter with direct reproduction-mode coefficient reads. All 55 instructions
+and normalised operands match; only this function changes in its complete TU.
+Gentoo GCC's CSE redirects a late old-index comparison to the earlier inlined
+helper-parameter copy in the losing control. Removing that copy recovers the
+native allocation. F12135's source-search obstacle is resolved; production
+retention still requires a maintained two-site test-memory context.
+
+The original-backed scratch context passes 109,293 FP comparisons (155,755
+checks in the existing binary). An actual seven-word synthetic backing with
+seventh values -7 and 19 passes 24 checks; the literal-3 control fails 16/24.
+Unbound candidate linkage fails 89,858 FP comparisons because the following
+word differs. No production source, grader or D302 binder changes are made.
+See the [deep dive](fp-pow-deep-dive.md) for constraints, controls and integration.
