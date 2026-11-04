@@ -143171,3 +143171,26 @@ unused helper and correcting its metric comment leaves the reviewed candidate's
 raw object unchanged. The final faithful census remains 1,205 EXACT, 39 REGALLOC,
 608 NONMATCH, zero unresolved out of 1,852. Stop this family pending an independent
 missing dependency, conversion boundary or whole-TU-consistent build witness.
+
+## F12130. Explain the 16Tpt root rejection before proposing another source form
+
+The [allocator-causality audit](v32-16tpt-allocation-audit.md) reconstructs the
+current Gentoo dump's complete root-pointer blocker set. State pseudo 59 is
+last of fourteen global allocations. Its initial hard conflicts leave SI/DI/BP;
+owner 74, energy 87 and received-I 63 take those homes first and each conflicts
+with state. Local homes use only AX/DX/CX/BX. Earlier globals also
+occupy those four registers and clear their local-only markers, so the separate
+local-eviction fallback has no eligible victim in any integer register. The incoming `REG_EQUIV` home then supplies
+state reloads; Q's separately logged spill is a different event.
+
+The reference retains state in BP through quality and subsequent sample reads,
+saves selected owner on both quality paths, and reloads that unadjusted owner
+only after the search. The candidate retains owner across the loop instead.
+This explains a specific allocation decision without claiming original RTL or
+source identities. A proposed early Viterbi-member alias is not compiled: its
+new address lifetime has no independent native witness. No source, test, flag
+or grader change follows. One saved-edge positive control and three independently
+removed-edge negative controls validate the blocker-set analysis, not GCC itself.
+Zero new experimental compiles or integration gates are needed for this audit.
+Reopen on a supported live-range, reference-graph, class or whole-TU build
+constraint; merely logging the already observed priority order is insufficient.
