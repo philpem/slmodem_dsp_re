@@ -10324,3 +10324,19 @@ fewer owners than the full TU emits, and executable linkonce sections are code
 even when a local analysis helper puts every non-`.text` section into a data
 bucket. Explain the named section and verify true data/bindings/bystanders;
 do not weaken a production comparator to excuse drift.
+
+### Trace inlined helper parameters before blaming register allocation (F12136)
+
+An inlined reconstruction helper can still alter pseudo identities and live
+ranges. FP_Pow's coefficient helper introduced an early int copy of a short
+index. CSE redirected a late post-increment comparison to that older copy,
+extending its lifetime across the loop. Direct native-supported table access
+removed the copy and produced an EXACT scratch candidate. Compare initial RTL
+and the first CSE output before trying declaration-order or cast palettes.
+A helper introduced for a guarded bug substitution is especially worth checking.
+
+Preserve the normal repair while recovering the reproduction expression. If
+the original access leaves a measured table extent, provide a separately
+validated test memory context; instruction identity alone cannot establish
+linked runtime fidelity. Keep historical backing and synthetic context probes
+distinct. See the [FP_Pow deep dive](../fp-pow-deep-dive.md).
