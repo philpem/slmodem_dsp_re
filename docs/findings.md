@@ -143106,3 +143106,68 @@ closure. A nonreproduction full-TU control is raw identical before and after.
 Four focused period binaries pass, including the original and synthetic fixtures.
 Runtime negatives, complete native/source constraints, apparatus and independent
 reviews are under `scratch/operand-wave/`; final integration is recorded there.
+
+## F12129. Recover the V.32 slicers' shared quality graph before allocation
+
+The 2026-11-04 bounded exploration starts at `57778d1e3` with 1,205 EXACT,
+39 REGALLOC and 608 NONMATCH functions of 1,852. An unchanged full-TU control
+is raw identical under the configured Gentoo GCC 3.4.2-r2, with reproduction
+mode enabled. Six supported source cells follow; none promotes a function.
+
+Independent native review of all six quality callers establishes the same
+sequence: capture samples, capture owner, narrow differences, square and share
+SAR16 energy, publish each axis's old/new history together, then smooth error.
+The three retrain predicates are separate signed branches. High-error and
+retrain-2 arms retain the captured owner. The default arm stores the increment,
+reloads `cfg.owner`, tests its memory count and carries that selected owner
+into the slicer. Samples are reread after quality. The existing private helper
+now returns this meaningful selected owner; its original signature is unproved.
+This retains witnessed dataflow without adding a helper or public ABI.
+
+Period RTL explains two useful source constraints. With `int energy`, `.06.cse`
+associates SAR16 with its SAR4/SAR3 consumers into SAR20/SAR19. A short energy
+boundary prevents that association; `.20.combine` removes its redundant
+extension while retaining the shared shift. Nested predicates avoid eager
+boolean folding already present in `.01.rtl`. A full-width increment with
+short casts at comparisons and a word store avoids a shared sign-extension
+producer introduced by a named short increment. These predictions succeed in
+complete translation units; they do not establish whole-function identity.
+
+The 16-point native metric subtracts at full width, multiplies and adds before
+its final signed-short narrowing. Unsigned operands before each multiplication
+express the wrapping arithmetic. Separate absolute-value intermediates recover
+the native sign/XOR/subtract operations. Native spills also establish a late
+nearest-index initializer in both 16-point slicers, and an early consumed zero
+fallback for the differential search. Its short loop counter and short table
+comparisons are retained. The previous-symbol read remains after output stores.
+The unused private differential helper is removed after its body is brought
+into the owning function to preserve those witnessed lifetimes.
+
+The retained graph remains NONMATCH in all nine TU functions. For `16pt`, the
+longest mnemonic run changes from 12/146 to 25/146; for `16Tpt`, 27/126 becomes
+17/126. Some siblings improve and others decline locally. These are diagnostic
+measurements, not promotions or acceptance criteria. The shared graph is retained
+for its native evidence, subject to period validation. Table data and bindings
+remain unchanged. D302's reproduction lookup and normal repair are preserved.
+
+Remaining root reloads originate in `.25.greg`, rather than duplicate frontend
+reads. An integer staging variable briefly preserves the differential bit-pack
+extension in initial RTL, but combine erases it and all nine final bodies are
+unchanged. Do not repeat that spelling. A branch-cost-1 profile is excluded
+before compiling: GCC's ordinary branchless ABS expansion requires cost >= 2,
+whereas both native slicers use it. This is a contradiction for that source
+model, not permission to invent a bit hack. No flag, grader or return-contract
+change is made. Upstream GCC source explains candidate mechanisms; actual
+patched-compiler dumps establish the observed pass transitions.
+
+Raw controls, six cells, complete pass dumps and independent review are saved
+in `scratch/v32-slicer-wave/`. Focused period validation passes all four selected
+binaries, covering every quality caller and the synthetic D302 memory contract.
+
+Final integration passes `make phase J=8`: 398/398 period differential binaries
+and all structural checks. The actual period and faithful object sets are raw
+equal for 300/300 TUs; only `V32dec.c` differs from the baseline. Removing the
+unused helper and correcting its metric comment leaves the reviewed candidate's
+raw object unchanged. The final faithful census remains 1,205 EXACT, 39 REGALLOC,
+608 NONMATCH, zero unresolved out of 1,852. Stop this family pending an independent
+missing dependency, conversion boundary or whole-TU-consistent build witness.
