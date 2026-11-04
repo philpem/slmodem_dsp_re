@@ -10356,3 +10356,20 @@ has i386 support but erases real operand/relocation distinctions in zero-score
 cases. Prefer its bounded manual enumeration behind an unchanged full-TU
 compiler wrapper and the existing strict oracle. Do not turn a lower heuristic
 score into source evidence. See the [assessment](../decomp-permuter-assessment.md).
+
+### Use a diagnostic vector to select an inquiry, then inspect the proof (F12139)
+
+Run `diffvector.py` on explicit defining copies to separate placement, raw
+encoding, canonical relocation identity, mapped edges and operand observations.
+Keep units, unknown records and the chosen mapping visible. A literal stack
+text difference can be a relocated immediate, not a changed stack slot; a raw
+instruction encoding difference can be only relocation placement. No diagnostic
+axis replaces the existing grade or period differential. The
+[guide](metric-vector.md) includes measured examples and controls.
+
+Test the acceptance checker independently when axes disagree. F12141 finds a
+high/low-byte false acceptance even though current selected REGALLOC rows do
+not show that specific mismatch. Fix that proof boundary before widening search.
+The first actual finite-permuter trial (F12140) was raw-identical: enumeration
+works, but the admitted short-local form is not an allocation lever. Stop there
+instead of filling a palette budget.

@@ -130,6 +130,10 @@ the new candidate. Keep diagnostic results distinct from integration evidence.
   context. An unchanged object's hash does not validate independent proof inputs.
   If fresh context still refuses an unsupported native pattern, retain its
   unresolved grade and record the refusal; do not alter source to fit a recogniser.
+- Use `tools/toolchain/diffvector.py` for independent function diagnostics.
+  Keep its mapping, unknowns and explicit copy scope visible; counts and a
+  successful report exit do not award a grade. See the
+  [vector guide](docs/method/metric-vector.md).
 - Partial-object comparison has its own stronger semantic/raw identity claims.
   Report DIFFERENT honestly. Defer alignment when the owner prioritises functions.
 - Mutation campaigns/snapshot refreshes are optional named investigations, not
