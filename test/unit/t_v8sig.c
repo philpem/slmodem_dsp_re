@@ -968,6 +968,31 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* Initialized component alias history: input is a real short member.
+	 * The API has no disjoint-input contract. This is not modem lifecycle
+	 * coverage. Native code rereads input after updating run; a saved x
+	 * publishes the prior run instead and fails this probe. */
+	diff_begin("v8_phase_rev_detect input alias history");
+	{
+		struct v8_phase_rev pa, pb;
+		memset(&pa, 0, sizeof(pa));
+		memset(&pb, 0, sizeof(pb));
+		ref_v8_phase_rev_init(&pa);
+		v8_phase_rev_init(&pb);
+		for (k = 0; k < 64; k++) {
+			ref_v8_phase_rev_detect(&pa, &pa.run, 1);
+			v8_phase_rev_detect(&pb, &pb.run, 1);
+			diff_eq_int("reference fresh input", pa.window[pa.widx],
+				    pa.run, k);
+			diff_eq_int("reconstruction fresh input", pb.window[pb.widx],
+				    pb.run, k);
+			diff_eq_obj("input alias history", struct v8_phase_rev,
+				    &pb, &pa, k);
+		}
+		diff_eq_int("first-window wrap", pa.widx, 0, 64);
+	}
+	rc |= diff_end();
+
 	/* Caller-configured detector component history, not negotiation coverage.
 	 * Deliberately high-gain API-supplied coefficients expose the first section's
 	 * shift/narrow boundary. Histories start only through detectorinit. */

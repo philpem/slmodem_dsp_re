@@ -289,13 +289,15 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 	int energy = pr->energy;
 	int smoothed = pr->smoothed;
 	short widx = pr->widx;
+	/* Native code keeps this consumed window-base alias across the loop. */
+	short *window = pr->window;
 	int half = pr->half;
 	int full = half * 2;
 	int spacing = 0;
-	short i;
+	int i;
 
 	for (i = 0; i < count; i++) {
-		int back;
+		short back;
 		int x, old, diff;
 		int level;
 
@@ -309,28 +311,24 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 			back = (short)(back + full);
 
 		x = in[i];
-		old = pr->window[widx];
+		old = window[widx];
 		diff = x - old;
 
 		/* The window's energy, one sample in and one sample out. */
 		energy += (x * x + 0x8000) >> 16;
 		energy -= (old * old + 0x8000) >> 16;
 
-		corr += (pr->window[back] * diff + 0x8000) >> 16;
+		corr += (window[back] * diff + 0x8000) >> 16;
 
 		level = smoothed * 0x7fe2 + (energy * 15) * 2;
 		smoothed = level >> 15;
 
-		if (corr * 2 < (level >> 17)) {
-			/* A reversal, if the run since the last one is long
-			 * enough to be one rather than noise. */
-			if ((short)pr->run > (short)(pr->half * 4)) {
-				spacing = ((short)pr->run * 0xd55) >> 15;
-				pr->run = 0;
-				pr->reversals = (short)(pr->reversals + 1);
-			} else {
-				pr->run = (short)(pr->run + 1);
-			}
+		/* Both failed predicates share the native run increment. */
+		if (corr * 2 < (level >> 17)
+		    && (short)pr->run > pr->half * 4) {
+			spacing = ((short)pr->run * 0xd55) >> 15;
+			pr->run = 0;
+			pr->reversals = (short)(pr->reversals + 1);
 		} else {
 			pr->run = (short)(pr->run + 1);
 		}
@@ -347,7 +345,8 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 			pr->detected = 1;
 		}
 
-		pr->window[widx] = (short)x;
+		/* Reread after run/reversal publication and the optional diagnostic. */
+		window[widx] = in[i];
 	}
 
 	pr->widx = widx;

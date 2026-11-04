@@ -143194,3 +143194,41 @@ removed-edge negative controls validate the blocker-set analysis, not GCC itself
 Zero new experimental compiles or integration gates are needed for this audit.
 Reopen on a supported live-range, reference-graph, class or whole-TU build
 constraint; merely logging the already observed priority order is insufficient.
+
+## F12131. Restore V.8 phase detector widths, common action and fresh input
+
+The [boundary-recovery report](v8-prefilter-boundary-recovery.md) records four
+controlled full-TU cells for `v8_phase_rev_detect`. Native code requires an int
+loop index, a short back index before its sign test/address, and a full-width
+promoted half-window threshold. It captures a consumed window-base alias and
+shares the run increment between both failed short-circuit predicates. Most
+significantly, it rereads input after run/reversal publication and the optional
+diagnostic; the previous source stored an earlier captured sample instead.
+
+An initialized component alias history passes input `&pr->run` for 64 one-sample
+calls, covering a window-index wrap. The old source fails 128/193 new checks
+while reference analytical checks and all old sections pass. Fresh-input source
+passes 193/193. Complete objects use `diff_eq_obj`; the fixture claims component
+alias fidelity, not public modem lifecycle reachability. Ordinary disjoint-input
+histories remain covered. This is a reconstruction correction, not a new repair.
+
+All three protected EXACT siblings and table data/bindings remain unchanged.
+The function remains NONMATCH. Shared source actions and typed local aliases are
+admitted from native consumers/edges, not a preference for tidier code. No random
+spelling batch, qualifier, profile, helper or grader change is made.
+
+## F12132. Recover both unsigned prefilter-selection predicates
+
+`V90PreFilter::autoSelection`'s two six-element native loops use JBE, whereas
+`int i` produced JLE. One unsigned-int counter cell restores both predicates;
+initial RTL changes from signed `CCGC/gt` to unsigned `CC/gtu` exits. This
+previously recorded discrepancy had no prior counter cell; the closed
+`selectFilter` domain is a different function. The unchanged experimental
+full-TU control is raw identical to the current faithful object.
+
+The target alone changes among sixteen bodies; eight protected EXACT members,
+data and bindings remain unchanged. Floating precision, SF target stores,
+unordered NaN updates and post-diagnostic database reads are preserved. Fixed
+indices 0..5 make this source/predicate recovery, not a new behavioural defect.
+The target remains NONMATCH. See the [shared report](v8-prefilter-boundary-recovery.md)
+for controls, focused period coverage and bounded conclusions.
