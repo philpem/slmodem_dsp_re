@@ -10120,3 +10120,65 @@ and multiplies are ordered differently within equivalent memory intervals.
 Retain the native-backed observation correction and label its full grade
 honestly. Do not discard a failing valid-input oracle as mere allocation, or
 claim that equal operation counts prove equivalence.
+
+### Validate nonzero word countdowns at a bounded public slot (F12124)
+
+A signed-positive and a nonzero countdown can agree on every small positive
+fixture while disagreeing on a complete bounded input buffer. MRF's public
+int count narrows to a word: positive 65535 becomes -1, and the native
+partial-input loop consumes 65535 samples through its wrapping countdown.
+Constructor-created state and an eight-word ring keep every access valid;
+zero outputs avoid the separate signed-output-index hazard. Compare the
+complete history as well as return/count fields. The earlier source fails
+9/24 checks even though both versions return zero and leave the same need.
+
+Retain the minimal BUG-only predicate correction when the oracle and native
+branch prove it, even if the whole function remains NONMATCH. Preserve normal
+behavior separately; the old and new nonreproduction full objects are raw
+identical here. Do not generalize this fixture into normal modem reachability,
+a uniquely recovered formal type, or permission to test negative history sizes
+and wrapped output stores. Do not replay the old loop/wrap spelling cube.
+
+### Separate extraction width from the carrier across a branch (F12125)
+
+When a native byte extraction supplies full-width array indices across a
+branch, trace the local's mode in initial RTL. An eager `unsigned char k`
+can define QI before the branch and add an SI extension in the successor.
+`int k = (unsigned char)input[index]` preserves byte extraction while carrying
+the full-width result. In PPS, that one predicted change removes the redundant
+successor extension. A byte-typed local elsewhere is insufficient evidence:
+V.22 PPS's corresponding map uses are already in the capture's block.
+
+Require the complete function comparison after recovering the local feature.
+PPS still fails at 230/229 instructions; the remaining extra state-argument
+reload first appears in global allocation despite a shared initial owner
+pseudo. Stop source variants without an independent source-level distinction.
+Do not fit declaration order to physical stack slots. A native discarded read
+also needs a read-footprint detector before runtime output/state tests may be
+credited with observing it; ordinary green differential output cannot do so.
+
+### Keep initial shifts distinct from final reverse copies (F12126)
+
+A historical cursor experiment excludes only the loops it actually changed.
+FDSP's old final-copy cube did not test the two initial delay shifts. Their
+native consumed destination pointers justify one new control, which recovers
+those regions. Composing independently witnessed final-copy constraints still
+requires a whole-function proof: a final control reaches native's 126-instruction
+count while retaining different source-update epochs, branch forms and call
+scheduling. None of these controls closes FDSP.
+
+Trace the first differing graph. Here initial RTL already contains the
+predecrement source cursor and the counter comparison against 159; the loop
+pass preserves them. Do not attribute either to allocation or enumerate
+postdecrement/predicate spellings merely to select an opcode. The next
+admission needs an independent call/alias witness or the relevant expansion
+rule. Keep synthetic fixtures labelled and establish a constructor-to-loop
+component history before retaining a later FDSP change.
+
+For a missing call, inspect actual cgraph decisions and original local-symbol
+ownership before splitting a TU. Native FDSP local anchors place InitObj inside
+the same TU envelope as its validator. The current inliner first reduces the
+callee with four helper inlines, then expands it into that caller. The original
+reason for retaining the call remains open; a source/profile budget diagnosis
+is the next checkpoint. A missing call alone does not justify a TU split or
+an attribute to suppress inlining.
