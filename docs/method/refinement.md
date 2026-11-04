@@ -10055,3 +10055,68 @@ only by an independently checked GP permutation and encoding layout. Report the
 maintained grade and its proof limits separately. A pair-specific checker is not
 a generic recognizer; frame-free EBP use, saved state, definitions dominating
 uses and branch destinations require guarded eligibility and negative controls.
+
+
+### Distinguish a block's consumed cursors from an inlined helper (F12122)
+
+Identical arithmetic does not prove that a block routine called a scalar
+helper in the original source. Inspect which pointers the block consumes,
+which initial values survive each iteration, and where the sample cursor
+advances. These are separate constraints from the inner arithmetic.
+
+`FPM_iir_filt_block` initially called the already-REGALLOC scalar filter through
+indexed samples. Advancing the sample cursor before the inner filter and
+writing through `samples[-1]` recovered the native sample epoch, but left the
+function NONMATCH. The reference also saves the initial coefficient/history
+pointers before the outer guard and restores those snapshots each iteration.
+An explicit block body consuming its parameter cursors, with real saved-pointer
+reset consumers, recovers all 86 instructions under the maintained REGALLOC
+proof. The scalar arithmetic, short count and guarded normal-build repair stay
+unchanged. Do not replace the saved roots with cached coefficient values:
+bounded overlapping sample/coefficient/history arrays distinguish them.
+
+Transfer only the witnessed ownership. `FPM_iir_filt_II` independently has the
+same saved-root pattern but indexes samples. Coupling those roots with its
+native short postdecrement recovers the prologue and 73-instruction count,
+but still fails the operand/order proof. Matching size or instruction count
+does not close the function. The later coefficient-observation repair below
+supplies an independent reason to retain this graph as a partial; its remaining
+instruction ordering still needs a first-pass explanation, not a cursor, width
+or declaration palette.
+
+### Trace tied operands before interpreting an x87 spill
+
+A stack store can originate in register matching rather than a source precision
+boundary. In the Gentoo `GetGain` dumps, CSE shares a coefficient with a later
+product. At `.22.regmove`, the dead integer-conversion temporary is merged into
+the cross-call `base` pseudo. `.25.greg` then spills that conversion before the
+multiplication, whereas the reference stores the multiplied base. The existing
+private-float-result control recovers a separate SF lifetime and does not solve
+this earlier DF spill. A no-regmove diagnostic restores that named feature but
+closes no function and changes nine TU bodies; no profile is retained.
+
+Read the matching constraint and death notes before proposing source variants.
+The i386 commutative `%0` constraint allows both multiplication inputs to match
+the destination. Swapping the written operands does not remove the dead-input
+match. A useful next source hypothesis must explain both that matching input
+and the independently observed coefficient folding; a cast or nearby expression
+spelling alone does neither.
+
+
+### Check memory epochs before dismissing different scheduling (F12123)
+
+Two streams with the same operations can read different values. In
+`FPM_iir_filt_II`, the reference publishes the first history word, reads the
+third coefficient, then publishes the second history word. Reading the
+coefficient after both stores changes the result when that coefficient aliases
+the second history word. A bounded one-array component fixture gives 5096 in
+the reference and 1500 in the earlier reconstruction; all intermediate integer
+arithmetic stays in range.
+
+Capture the consumed coefficient at the witnessed read point. Keep the saved
+cursor roots and short countdown established independently. This repairs the
+component oracle without making the full function REGALLOC: remaining loads
+and multiplies are ordered differently within equivalent memory intervals.
+Retain the native-backed observation correction and label its full grade
+honestly. Do not discard a failing valid-input oracle as mere allocation, or
+claim that equal operation counts prove equivalence.
