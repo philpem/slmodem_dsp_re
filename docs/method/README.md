@@ -25,6 +25,8 @@ identifies the evidence and tools that need adapting for another target.
 
 [Function fidelity reporting](fidelity-reporting.md) explains EXACT, REGALLOC,
 NONMATCH, contiguous instruction runs and diagnostic byte-size records.
+Use [function difference vectors](metric-vector.md) for independent diagnostic
+axes; their counts and heuristic mappings do not award a grade.
 
 | file | what it is |
 |---|---|

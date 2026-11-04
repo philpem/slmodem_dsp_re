@@ -11,6 +11,11 @@ cover reusable tools and their host assumptions.
 
 ## Current tools
 
+[`tools/toolchain/diffvector.py`](metric-vector.md) reports per-function
+difference axes for explicit ELF copies. Its read-only JSON/human output keeps
+unknowns and existing grades separate; `make diffvector-selftest` runs its
+maintained controls.
+
 The mutation runner, snapshot manager, anchor checker and reanchoring tool
 described in older revisions were removed. Their archived measurements are
 retained in the method history, but they are not part of the current workflow.

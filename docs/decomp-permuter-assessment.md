@@ -152,3 +152,34 @@ Stop after the admitted cells or the time limit; a lower heuristic distance
 without strict improvement is an unsuccessful trial, not permission to widen
 the search or weaken the comparator. No port or modem-source permutation was
 attempted in this assessment.
+
+## Bounded trial result (F12140)
+
+The approved follow-up at `d61e5e8c8` screened all 17 C symbols among the 39
+REGALLOC symbols and admitted one native-backed type/lifetime experiment in
+ApplyBulkDelay. The native retained value is narrowed before its clamp and
+later uses. `PERM_GENERAL(int back;,short back;)` generated exactly two finite
+outputs through upstream's `perm_parse` and `RootPerm.evaluate`, with random
+mode explicitly disabled. Only that declaration was spliced into the full TU;
+upstream AST reduction, host preprocessing and scorer were bypassed.
+
+The unchanged full-TU control reproduces the production object byte for byte.
+The short-local candidate also produces that identical object: all 29 functions,
+nontext data, bindings and relocation consumers remain equal. The target stays
+REGALLOC with 103 ordinary instructions per side. The initial RTL differs but
+retains an SI pseudo for the local; no final allocation effect survives. The
+candidate is discarded and this source spelling domain is closed. No original
+type is uniquely established, and there is no source promotion.
+
+Control and candidate compile wall times, including container startup, are
+5.27 and 3.58 seconds. Four comparator controls establish self identity and
+rejection of a changed byte, relocation destination and computed displacement.
+No runtime or broad gate is run for the discarded cell's identical object.
+The reporting/tool integration separately passes `make phase`: 399/399 period
+tests plus structural and 19 vector controls. Commands, image digest, flags,
+hashes and results are in `scratch/diagnostic-vector-permuter/`.
+
+Finite enumeration is operational, but this trial supplies no evidence that
+broader permutation will improve source recovery. The next priority is the
+[diagnostic vector and byte-lane checker finding](method/metric-vector.md),
+rather than extending declaration or register-colour palettes.

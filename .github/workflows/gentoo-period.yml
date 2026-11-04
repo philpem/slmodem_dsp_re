@@ -38,6 +38,7 @@ jobs:
           python3 tools/ci/period_metrics.py --self-test
           python3 tools/ci/test_period_metrics.py
           python3 tools/toolchain/test_fidelity.py
+          python3 -m unittest discover -s test/safety -p test_diffvector.py -v
 
       - name: Self-test width audit reporting
         run: python3 tools/toolchain/test_widthaudit.py

@@ -1156,7 +1156,7 @@ COVCOUNTS  := build-cov/measured.txt
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
-               dis-selftest period-compile-selftest
+               dis-selftest period-compile-selftest diffvector-selftest
 
 PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov native-layout-checks
 
@@ -1168,6 +1168,10 @@ phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
 	@echo
 	@echo "phase boundary: period differential and structural checks all OK"
+
+.PHONY: diffvector-selftest
+diffvector-selftest:
+	@$(PYTHON) -m unittest discover -s test/safety -p test_diffvector.py -v
 
 .PHONY: dis-selftest
 dis-selftest:

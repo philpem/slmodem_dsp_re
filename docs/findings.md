@@ -143330,3 +143330,45 @@ strict grades, actual target/operand identities, unmatched sides, ambiguity,
 unknowns and each defining copy. Section extent and placement need separate
 fields. No score or reporting change is implemented. See the
 [metric-vector assessment](metric-vector-assessment.md).
+
+## F12139. Function difference vectors expose separate axes without changing grades
+
+`tools/toolchain/diffvector.py` reports extent/placement/padding, literal
+encoding, operations, immediates, addressing, registers, stack observations,
+relocations and mapped CFG records separately. Every explicit copy has its own
+report, hashes and unchanged existing grade. One stated heuristic map conditions
+the axes; repeated anchors, unsupported effects and unpaired records remain
+visible. Data, runtime and whole-object/link identity are outside this report.
+
+All 19 maintained controls pass. Seventeen independent ELF pairs pass 539
+assertions; sixteen provide vectors and one parser disagreement is unavailable.
+All 41 defining copies of the preceding census's 39 REGALLOC symbols produce
+vectors. Known mapped edges agree, but thirteen copies retain 33 unknown edge
+records. Full phase passes 399/399 period tests and structural checks. No
+source or grader changes and no new whole-tree census are claimed. See the
+[guide and measured examples](method/metric-vector.md).
+
+## F12140. One finite decomp-permuter source trial produces an identical object
+
+Actual upstream manual enumeration emits exactly control `int back` and one
+admitted `short back` form in ApplyBulkDelay. Pinned full-TU Gentoo BUG-mode
+compiles reproduce the production object in both cells: all 29 functions and
+other data/bindings are unchanged. The target remains REGALLOC. Four strict
+oracle controls pass. The domain is closed; no source change or promotion is
+retained. Total compile wall time is 8.85 seconds. See the
+[trial result](decomp-permuter-assessment.md#bounded-trial-result-f12140).
+
+## F12141. A high/low-byte store counterexample exposes a renaming-check gap
+
+The existing checker accepts `mov %al,(%edx)` versus `mov %ah,(%edx)` as
+REGALLOC. A controlled i386 input EAX=0x1234 and EDX pointing to an allocated
+byte produces 0x34 versus 0x12, so that lane change is observable. This is
+machine-contract evidence, not modem reachability. The new vector flags the
+literal and typed operand difference; the grading implementation is unchanged.
+
+A paired token-lane screen covers all 39 current REGALLOC symbols and finds no
+explicit lane mismatch. Its AL/AH negative and low/low, high/high positives
+validate that narrow detector. This does not establish general ABI/dataflow
+correctness. Harden lane identity in the renaming proof before broader search;
+retain independent controls and check affected certificates without weakening
+any floor. See the [known limits](method/metric-vector.md#controls-and-known-limits).
