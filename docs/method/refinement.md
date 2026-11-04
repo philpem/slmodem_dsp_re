@@ -10294,3 +10294,33 @@ function's floating narrowing, unordered comparisons and diagnostic read ages.
 A successful predicate prediction with an unchanged NONMATCH grade is partial
 source recovery, not a whole-function promotion. Check the complete TU and
 protected siblings before retention.
+
+### Follow captured pointer values through both conversion directions (F12133)
+
+A local pointer copy is a direct source hypothesis when native loads a member
+at entry and consumes the saved value after intervening stores. In equalizer
+edge fading, the same high/low coefficient pointers feed conversion out and
+conversion back; spelling the members anew loses that captured epoch. Verify
+both consumers in initial RTL and final code, rather than assuming that a new
+local survived optimization. Do not invent an owner-alias history merely to
+turn this source constraint into a behavioural-bug claim.
+
+Name packed fields from the actual join/split operations and verify their
+allocation topology. Two independent allocations, two-byte strides and explicit
+high/low concatenation establish separate 16-bit planes; a single logical
+32-bit value does not establish one 32-bit array. Keep raw/aligned/skew names
+consistent, preserve offsets and prove a naming-only compile unchanged.
+
+### Preserve member observations across calls in a template (F12134)
+
+Publishing a member from an argument does not make the two interchangeable
+across later calls. LowPassFIR validates incoming `nTaps`, then observes published
+`taps` across free/allocation/hamming. Each sinc iteration independently captures
+the coefficient pointer before its call. Keep these epochs separate and preserve
+the existing floating recurrence/narrowing and normalization contracts.
+
+Audit all defining copies and actual ELF section flags. A census can select
+fewer owners than the full TU emits, and executable linkonce sections are code
+even when a local analysis helper puts every non-`.text` section into a data
+bucket. Explain the named section and verify true data/bindings/bystanders;
+do not weaken a production comparator to excuse drift.

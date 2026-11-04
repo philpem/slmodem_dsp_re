@@ -194,12 +194,12 @@ V90EQU_OFF(linearEquMmxConversionFactor,	0x0c4, lescale);
 V90EQU_OFF(linearEquMmxOutputConversionFactor,	0x0c8, leoutscale);
 V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
-V90EQU_OFF(linearEquMmxCoefs,		0x0d4, lemmxcoefs);
-V90EQU_OFF(array_d8,			0x0d8, arrayd8);
-V90EQU_OFF(linearEquMmxCoefsAligned,	0x0dc, lemmxalign);
-V90EQU_OFF(array_d8Aligned,		0x0e0, arrayd8align);
-V90EQU_OFF(linearEquMmxCoefsSkew,	0x0e4, lemmxskew);
-V90EQU_OFF(array_d8Skew,		0x0e8, arrayd8skew);
+V90EQU_OFF(linearEquMmxCoefsHigh,		0x0d4, lemmxcoefs);
+V90EQU_OFF(linearEquMmxCoefsLow,			0x0d8, arrayd8);
+V90EQU_OFF(linearEquMmxCoefsHighAligned,	0x0dc, lemmxalign);
+V90EQU_OFF(linearEquMmxCoefsLowAligned,		0x0e0, arrayd8align);
+V90EQU_OFF(linearEquMmxCoefsHighSkew,	0x0e4, lemmxskew);
+V90EQU_OFF(linearEquMmxCoefsLowSkew,		0x0e8, arrayd8skew);
 V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
 V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
@@ -612,8 +612,8 @@ V90Equalizer::~V90Equalizer()
 			sysdep_free(block_b8);
 		if (block_b4 != 0)
 			sysdep_free(block_b4);
-		delete[] linearEquMmxCoefs;
-		delete[] array_d8;
+		delete[] linearEquMmxCoefsHigh;
+		delete[] linearEquMmxCoefsLow;
 		delete[] array_ec;
 		delete[] dfeMmxCoefs;
 		delete[] array_118;
@@ -829,8 +829,8 @@ V90Equalizer::zeroLinearEquCoefs()
 
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength + 8; i++) {
-			linearEquMmxCoefs[i] = 0;
-			array_d8[i] = 0;
+			linearEquMmxCoefsHigh[i] = 0;
+			linearEquMmxCoefsLow[i] = 0;
 		}
 	}
 }
@@ -910,13 +910,14 @@ V90Equalizer::loadCoefsFromFile()
 void
 V90Equalizer::linearEquFadeEdges()
 {
+	short *linearHi = linearEquMmxCoefsHighAligned;
+	short *linearLo = linearEquMmxCoefsLowAligned;
 	unsigned int i;
 
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength; i++)
 			linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
-			    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
-						  array_d8Aligned, i);
+			    * (float)mmx_coef_get(linearHi, linearLo, i);
 
 		for (i = 0; i < dfeLength; i++)
 			dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
@@ -936,8 +937,8 @@ V90Equalizer::linearEquFadeEdges()
 			int v = (int)(linearEquCoefs[i]
 				      * linearEquMmxConversionFactor);
 
-			array_d8Aligned[i] = (short)v;
-			linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+			linearLo[i] = (short)v;
+			linearHi[i] = (short)(v >> 16);
 		}
 	}
 }
@@ -1177,8 +1178,8 @@ V90Equalizer::convertEqualizerToMmx()
 	for (i = 0; i < linearEquLength; i++) {
 		int v = (int)(linearEquCoefs[i] * conv);
 
-		array_d8Aligned[i] = (short)v;
-		linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+		linearEquMmxCoefsLowAligned[i] = (short)v;
+		linearEquMmxCoefsHighAligned[i] = (short)(v >> 16);
 	}
 
 	/*
@@ -1196,7 +1197,7 @@ V90Equalizer::convertEqualizerToMmx()
 	fabsSum = 0.0f;
 
 	for (i = 0; i < linearEquLength; i++) {
-		int hi = linearEquMmxCoefsAligned[i];
+		int hi = linearEquMmxCoefsHighAligned[i];
 		int a = __builtin_abs(hi);
 
 		sumHi += hi;
@@ -1482,8 +1483,8 @@ V90Equalizer::restoreEqualizerToFloat()
 
 	for (i = 0; i < linearEquLength; i++)
 		linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
-		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
-					  array_d8Aligned, i);
+		    * (float)mmx_coef_get(linearEquMmxCoefsHighAligned,
+					  linearEquMmxCoefsLowAligned, i);
 
 	for (i = 0; i < linearEquHistoryLength; i++)
 		array_18[i] = (float)array_ecAligned[i];
@@ -1899,7 +1900,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			dfeSum = mmxDot(dfeMmxCoefsAligned, array_12cAligned,
 					(int)dfeLength);
 			dfeSum /= dfeMmxOutputConversionFactor;
-			leSum = mmxDot(linearEquMmxCoefsAligned, &ec[k],
+			leSum = mmxDot(linearEquMmxCoefsHighAligned, &ec[k],
 				       (int)linearEquLength);
 			leSum /= linearEquMmxOutputConversionFactor;
 			/* `sub` then `cwtl`: an int difference truncated to
@@ -2288,8 +2289,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 								 * not the
 								 * aligned
 								 * views */
-								linearEquMmxCoefs[i] = 0;
-								array_d8[i] = 0;
+								linearEquMmxCoefsHigh[i] = 0;
+								linearEquMmxCoefsLow[i] = 0;
 							}
 						resampler->setBllState(V90_BLL_INITIAL, 1);
 					}
@@ -2474,8 +2475,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				 * errors, one slot apart, that the float arm
 				 * uses.
 				 */
-				hi = linearEquMmxCoefsAligned;
-				lo = array_d8Aligned;
+				hi = linearEquMmxCoefsHighAligned;
+				lo = linearEquMmxCoefsLowAligned;
 				x = &array_ecAligned[historyIndexSaved];
 				beta = -linearEquMmxBeta * diff;
 				for (i = 0; i < (int)linearEquLength; i++) {
@@ -2880,8 +2881,8 @@ V90Equalizer::reset(unsigned int cursor)
 	 */
 	if (mmxArraysPresent) {
 		for (i = 0; i < linearEquLength + 8; i++) {
-			linearEquMmxCoefs[i] = 0;
-			array_d8[i] = 0;
+			linearEquMmxCoefsHigh[i] = 0;
+			linearEquMmxCoefsLow[i] = 0;
 		}
 
 		for (i = 0; i < linearEquHistoryLength + 8; i++)
@@ -3008,9 +3009,9 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		block_b8 = (short *)sysdep_malloc(0x200);
 		block_b4 = (short *)sysdep_malloc(0x400);
 
-		linearEquMmxCoefs = (short *)sysdep_malloc(
+		linearEquMmxCoefsHigh = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));
-		array_d8 = (short *)sysdep_malloc(
+		linearEquMmxCoefsLow = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));
 		array_ec = (short *)sysdep_malloc(
 		    (linearEquHistoryLength + 8) * sizeof(short));
@@ -3021,12 +3022,12 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		array_12c = (short *)sysdep_malloc(
 		    (dfeLength + 8) * sizeof(short));
 
-		linearEquMmxCoefsSkew = mmx_skew(linearEquMmxCoefs);
-		linearEquMmxCoefsAligned = linearEquMmxCoefs +
-		    linearEquMmxCoefsSkew;
+		linearEquMmxCoefsHighSkew = mmx_skew(linearEquMmxCoefsHigh);
+		linearEquMmxCoefsHighAligned = linearEquMmxCoefsHigh +
+		    linearEquMmxCoefsHighSkew;
 
-		array_d8Skew = mmx_skew(array_d8);
-		array_d8Aligned = array_d8 + array_d8Skew;
+		linearEquMmxCoefsLowSkew = mmx_skew(linearEquMmxCoefsLow);
+		linearEquMmxCoefsLowAligned = linearEquMmxCoefsLow + linearEquMmxCoefsLowSkew;
 
 		array_ecSkew = mmx_skew(array_ec);
 		array_ecAligned = array_ec + array_ecSkew;

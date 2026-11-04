@@ -173,8 +173,8 @@ wire(V90Equalizer *o)
 	o->dfeCoefs = arena.dfecoefs;
 	o->array_44 = arena.a44;
 	o->meanErrorEnergy = arena.meanerr;
-	o->linearEquMmxCoefs = arena.lemmx;
-	o->array_d8 = arena.ad8;
+	o->linearEquMmxCoefsHigh = arena.lemmx;
+	o->linearEquMmxCoefsLow = arena.ad8;
 	o->array_ec = arena.aec;
 	o->dfeMmxCoefs = arena.dfemmx;
 	o->array_118 = arena.a118;
@@ -183,13 +183,13 @@ wire(V90Equalizer *o)
 	o->block_b8 = arena.b8;
 	o->params = ARENA_PARAMS;
 	o->resampler = ARENA_RSAMP;
-	o->linearEquMmxCoefsAligned = arena.lemmx + 1;
-	o->array_d8Aligned = arena.ad8 + 1;
+	o->linearEquMmxCoefsHighAligned = arena.lemmx + 1;
+	o->linearEquMmxCoefsLowAligned = arena.ad8 + 1;
 	o->array_ecAligned = arena.aec + 1;
 	o->dfeMmxCoefsAligned = arena.dfemmx + 1;
 	o->array_118Aligned = arena.a118 + 1;
 	o->array_12cAligned = arena.a12c + 1;
-	o->linearEquMmxCoefsSkew = o->array_d8Skew = o->array_ecSkew = 1;
+	o->linearEquMmxCoefsHighSkew = o->linearEquMmxCoefsLowSkew = o->array_ecSkew = 1;
 	o->dfeMmxCoefsSkew = o->array_118Skew = o->array_12cSkew = 1;
 }
 
@@ -1445,7 +1445,7 @@ run_p4_arms(void)
 					 * `V90Demapper`'s divergence to own,
 					 * not this binary's: three trials of
 					 * 720 failed on `blockErrorEnergyRms` and one
-					 * `array_d8` word with the study
+					 * `linearEquMmxCoefsLow` word with the study
 					 * running, and the arm being driven
 					 * here is `process`'s.  `t_v90demap`
 					 * is where the study is adjudicated.
@@ -1970,7 +1970,7 @@ run_data_arm(void)
  * planted three orders of magnitude larger so `y` leaves a short's range, the
  * re-convert fires on symbol ZERO, and `leSum` then reaches the fixed-point
  * tail's `diff = (short)(leSum - decision)` and the linear LMS behind it,
- * which lands in `array_d8` and is compared.
+ * which lands in `linearEquMmxCoefsLow` and is compared.
  *
  * ONE SYMBOL PER CALL, and it is what keeps this group clear of finding
  * F6203.  With `nOut` at 1 the only symbol is the one the re-convert runs on,
@@ -2124,7 +2124,7 @@ run_reconvert_wide(void)
 	diff_eq_int("a linear output past a short's range was produced",
 		    saw_wide, 1, 0);
 	diff_eq_int("and a re-convert ran on it", saw_reconv, 1, 0);
-	diff_eq_int("and the fixed-point LMS moved array_d8", saw_diff, 1, 0);
+	diff_eq_int("and the fixed-point LMS moved linearEquMmxCoefsLow", saw_diff, 1, 0);
 	diff_eq_int("the DFE history was past a short's range too", saw_wided,
 		    1, 0);
 

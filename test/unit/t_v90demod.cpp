@@ -439,8 +439,8 @@ wire_life(int side, unsigned int lelen, unsigned int m, unsigned int dfelen,
 	e->dfeWindow = la.dfewin;
 	e->dfeCoefs = la.dfecoefs;
 	e->array_44 = la.a44;
-	e->linearEquMmxCoefs = la.lemmx;
-	e->array_d8 = la.ad8;
+	e->linearEquMmxCoefsHigh = la.lemmx;
+	e->linearEquMmxCoefsLow = la.ad8;
 	e->array_ec = la.aec;
 	e->dfeMmxCoefs = la.dfemmx;
 	e->array_118 = la.a118;

@@ -817,13 +817,14 @@ public:
 	 * eight-byte target is what an MMX load wants.  Only the raw pointer
 	 * is freed; the other two are interior and are never passed anywhere.
 	 */
-	short *linearEquMmxCoefs;	/* +0xd4 raw    */
-	short *array_d8;		/* +0xd8 raw    */
+	/* Separate allocations: signed high words and low-word bit patterns. */
+	short *linearEquMmxCoefsHigh;	/* +0xd4 raw    */
+	short *linearEquMmxCoefsLow;		/* +0xd8 raw    */
 
-	short *linearEquMmxCoefsAligned;	/* +0xdc */
-	short *array_d8Aligned;			/* +0xe0 */
-	unsigned int linearEquMmxCoefsSkew;	/* +0xe4 */
-	unsigned int array_d8Skew;		/* +0xe8 */
+	short *linearEquMmxCoefsHighAligned;	/* +0xdc */
+	short *linearEquMmxCoefsLowAligned;			/* +0xe0 */
+	unsigned int linearEquMmxCoefsHighSkew;	/* +0xe4 */
+	unsigned int linearEquMmxCoefsLowSkew;		/* +0xe8 */
 
 	/*
 	 * +0xec  `linearEquHistoryLength + 8` shorts, cleared under the same

@@ -143232,3 +143232,48 @@ unordered NaN updates and post-diagnostic database reads are preserved. Fixed
 indices 0..5 make this source/predicate recovery, not a new behavioural defect.
 The target remains NONMATCH. See the [shared report](v8-prefilter-boundary-recovery.md)
 for controls, focused period coverage and bounded conclusions.
+
+## F12133. Name the separate coefficient planes and retain their entry pointers
+
+The [read-age follow-up](read-age-width-wave2.md) identifies V90Equalizer's
+linear coefficient storage as two separately allocated 16-bit planes, joined
+into logical 32-bit values. Native constructor calls at 0x3b7bd/0x3b7d3 each
+request twice the padded coefficient count, store distinct raw pointers and
+align them independently. High/Low names replace the ambiguous linear MMX and
+array_d8 names, including raw pointers and skew fields. Types and offsets are
+unchanged; a naming-only complete-TU object is raw identical to baseline.
+
+`linearEquFadeEdges` captures those two aligned members at entry and reuses the
+captured values after all float stores. Two ordinary local pointer copies now
+express that observation. The native epoch survives initial RTL, global
+allocation and final assembly; no register-use trick, qualifier or helper is
+added. The function remains NONMATCH. Existing component coverage passes;
+production owner-alias reachability is not established or claimed.
+
+## F12134. Recover published counts and a pre-sinc pointer in LowPassFIR
+
+The five-argument design method now reads published `taps` across free,
+allocation and hamming, while preserving incoming-count validation. A per-loop
+coefficient pointer is captured before sinc and reused for the multiply/store,
+as native instructions require. Numerical recurrence, normalization, NaNs,
+window/adoption semantics and call targets remain unchanged. Both experiments
+remain NONMATCH; the cumulative cell extends the longest run to 37/126.
+
+Independent review covers all 60 defining copies across the two retained TUs,
+not merely 53 selected census owners. Only the two intended bodies change;
+37 EXACT copies, actual non-executable data, strings, bindings and resolved
+consumers are preserved. A changed executable linkonce section explains the
+local helper's apparent data inequality; no grading rule changes. Five focused
+period binaries pass. See the [full report](read-age-width-wave2.md) for native
+epochs, numerical obligations and the limits of the component coverage.
+
+## F12135. Park FP_Pow direct-read recovery pending a two-site memory context
+
+Native evidence admits a short counter and unguarded coefficient reads, but
+three full-TU controls do not close the function. The seventh original read
+falls beyond the real twelve-byte table; current source substitutes its value.
+A reproduction-only raw read requires a properly scoped two-site test-memory
+binding before retention. The D302 binder admits a different single-read form
+and cannot be reused by weakening its table/extent/addend checks. All cells
+remain scratch-only, with no runtime or whole-function recovery claim. Details
+and control denominators are in the [wave report](read-age-width-wave2.md).
