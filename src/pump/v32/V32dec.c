@@ -436,74 +436,14 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 	qb = DECv32_QMAP16[best];
 	n = (short)((ib < 0 ? -ib : ib) + (qb < 0 ? -qb : qb));
 
-	/*
-	 * D302 -- THE MAGNITUDE LOOKUP, AND THE ONE NIBBLE THAT BREAKS IT.
-	 *
-	 * THE BUG.  The object has `sar $1,%edi` at 0x80fcb where `sar
-	 * $0xd,%edi` belongs, and then reads `DECv32_MAG9600[edi - 1]`.
-	 * `n` is `|I| + |Q|` for the decided point, and because the sixteen
-	 * points sit at +-4096 and +-12288 it takes exactly three values.
-	 * `>> 13` maps those onto 1, 2, 3 and so onto the table's entries 0,
-	 * 1, 2.  `>> 1` maps them onto 4096, 8192, 12288 and so onto entries
-	 * 4095, 8191, 12287 of a THREE-entry table.
-	 *
-	 * WHAT THE OBJECT ACTUALLY RETURNS, measured in the linked daemon
-	 * `slmodemd/slmodemd`, where `DECv32_MAG9600` is at 0x110878:
-	 *
-	 *   point | |I|+|Q| | index | lands in              | value | correct
-	 *   ------+---------+-------+-----------------------+-------+--------
-	 *   inner |    8192 |  4095 | .data                 |     0 |    5792
-	 *   mid   |   16384 |  8191 | .bss                  |     0 |   12953
-	 *   outer |   24576 | 12287 | past the last section | fault |   17378
-	 *                                              (or arbitrary)
-	 *
-	 * THE EFFECT.  `*mag` is what `FPM_FSE_receive` turns into the
-	 * equaliser's error term -- `err_i = ((cos * mag) >> 14) - i_val` and
-	 * the quadrature twin, at src/dsp/fpm_fse.c:385.  A zero magnitude
-	 * says the decided point is the ORIGIN, so the LMS update adapts on
-	 * the whole received vector instead of on the decision error and the
-	 * taps cannot converge.
-	 *
-	 * HOW WE CONCLUDED 13 IS THE FIX.  Four independent lines, none of
-	 * them a preference:
-	 *
-	 *   1. `>> 13` is the only shift that covers the table exactly.  The
-	 *      three sums are 8192, 16384 and 24576 and the table has three
-	 *      entries; `>> 13` less one is 0, 1, 2.
-	 *   2. The table is right and complete.  { 5792, 12953, 17378 } are
-	 *      the three L2 magnitudes of the constellation to the unit:
-	 *      4096*sqrt(2) = 5792.6, sqrt(12288^2 + 4096^2) = 12952.99,
-	 *      12288*sqrt(2) = 17377.9.  It is an L1 -> L2 conversion table.
-	 *   3. `FSE_decision_16Tpt` (0x80330) computes the same quantity off
-	 *      the same two tables and shifts it `sar $0xd` (0x80472).  Same
-	 *      code, one nibble apart.
-	 *   4. `_4pt` and `_trn` hard-code `*mag = 0x3299` = 12953 =
-	 *      `DECv32_MAG9600[1]`, which corroborates both the table and its
-	 *      scaling from a third place.
-	 *
-	 * WHAT THE REPRODUCE_BUGS ARM RETURNS, AND WHY IT IS A FLAT ZERO.
-	 * Zero is the measured answer for the inner and mid rings above.  It
-	 * is a stated CHOICE for the outer one: there is no value to
-	 * reproduce, because the object's read is past the last section.  An
-	 * out-of-range subscript is not written here at any setting -- it
-	 * would be undefined behaviour in a build that has to stay 64-bit
-	 * clean, and it would read OUR bytes rather than the object's.
-	 *
-	 * ONLY THE INNER RING IS DIFFERENTIALLY COMPARABLE, and that is a
-	 * narrower claim than the daemon table above.  In the differential
-	 * tier the object is linked as `dsplibs_ref.o`, so its read is at
-	 * `ref_DECv32_MAG9600 + 8190/16382/24574`.  The blob's `.data` is
-	 * 0x9594 bytes and the table is at 0x74f8, so only the first of those
-	 * -- .data+0x94f6, 158 bytes short of the end -- stays inside the
-	 * blob's own section and travels with it into any link.  That byte is
-	 * 0.  The other two leave the section and read whatever the LINKER
-	 * put there, which is the argument finding F1603 made about all three.
-	 * `t_v32fse.c` compares `*mag` on the inner ring only and asserts
-	 * that it excluded the other two.
-	 */
+	/* D302: the original shifts by 1 and reads beyond the three-entry
+	 * table. Preserve that operation in reproduction mode; its result
+	 * depends on the linked memory environment. Test-only scoped table
+	 * bindings give both implementations the same backing, without changing
+	 * this expression or padding the production table. The normal build's
+	 * shift by 13 repairs the magnitude conversion. See F12128. */
 #ifdef DSPLIB_REPRODUCE_BUGS
-	(void)n;	/* the index the object computes and then misuses */
-	*mag = 0;
+	*mag = DECv32_MAG9600[(n >> 1) - 1];
 #else
 	*mag = DECv32_MAG9600[(n >> 13) - 1];
 #endif

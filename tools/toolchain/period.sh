@@ -196,8 +196,9 @@ run_stage() {
 # COMPILE, then globalize on the HOST, then LINK.  Two container passes because
 # binutils 2.15 -- the period linker -- predates `objcopy --globalize-symbols`;
 # the modern host objcopy performs that step on the compiled objects, in a copy
-# under $OUT/testhost.  The mtime is preserved so the link stage's incremental
-# check (`KEEP`) still knows what moved.
+# under $OUT/testhost. Ordinary copies retain source mtimes. The V32 table
+# environment copy publishes by bytes and keeps its publication mtime so a
+# changed binding invalidates the executable cache.
 #
 # THE NAME LIST COMES FROM THE PERIOD OBJECTS, NOT THE HOST TREE.  `make period`
 # must not build $(OBJ_REPRO) with the host compiler -- the deciding build is
@@ -225,11 +226,30 @@ if [ -s "$OUT/srcobjs.list" ]; then
         # period compiler, already emits the plain name so the redefine list
         # is empty here and this pass is a no-op.
         objcopy --redefine-syms="$OUT/test_redefine.txt" "$OUT/$o" "$g.redef"
-        objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g"
+        case "$o" in
+        src_pump_v32_V32dec.o)
+            objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g.unbound"
+            python3 tools/testtable_context.py default "$g.unbound" \
+                "$OUT/src_pump_v32_v32dec_tables.o" "$g" > "$g.binding.json"
+            rm -f "$g.unbound"
+            ;;
+        *)
+            objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g"
+            touch -r "$OUT/$o" "$g"
+            ;;
+        esac
         rm -f "$g.redef"
-        touch -r "$OUT/$o" "$g"
     done < "$OUT/srcobjs.list"
 fi
+
+# Isolated D302 fixture replaces only its source TU and reference copy.
+case " $TESTS " in
+*" t_v32d302 "*)
+    python3 tools/testtable_context.py d302 \
+        "$OUT/testhost/src_pump_v32_V32dec.o" "$REF" "$OUT/context/d302" \
+        > "$OUT/context-d302.json"
+    ;;
+esac
 
 PERIOD_BLOB=$(MAKEFLAGS= make -s --no-print-directory print-BLOB | sed 's/^BLOB = //')
 python3 tools/toolchain/period_aggregate.py --out "$OUT" --blob "$PERIOD_BLOB" \

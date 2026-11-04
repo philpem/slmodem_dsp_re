@@ -2383,9 +2383,10 @@ can still be right, but it is not free and it is not silent.
 The worked case is `v90RateRenegSilence` in `VPcmV34Main.cpp`. Writing it with
 the object's three bases took it from 83 differing bytes to 22 (LCS 97.7%), and
 in the same translation unit `V34XF_IndicateJdReceived` fell from byte-identical
-to `BYTES (3)`. The three bytes are ONE register choice in ONE instruction --
-`xor %eax,%eax` in the object against `xor %ebx,%ebx` in ours, with the whole
-instruction sequence still matching (longest run 37 of 37, LCS 100%). Four
+to `BYTES (3)`. The three bytes follow one register choice: `xor %eax,%eax` in the object
+against `xor %ebx,%ebx` in ours, its store operand and the shared tail selected
+by JNE. Mnemonics still match (normalized longest run 37 of 37, LCS 100%),
+but successor rows differ; see F12127. Four
 spellings of the zero failed to move it, so it is allocation rather than source.
 
 That loss is acceptable, and it is *recorded*:
@@ -10182,3 +10183,30 @@ callee with four helper inlines, then expands it into that caller. The original
 reason for retaining the call remains open; a source/profile budget diagnosis
 is the next checkpoint. A missing call alone does not justify a TU split or
 an attribute to suppress inlining.
+
+### Audit return observability before clearing a stale register map (F12127)
+
+A CFG-aware comparison may correctly identify independent returning arms while
+still needing a return-value contract. Do not clear maps at RET or ignore EAX
+merely because the reconstructed header says void. V92 reset's native returns
+leave path-dependent residues and its immediate callers propagate them; only
+known transitive callers discard them. No original declaration is recovered.
+Keep that bounded conclusion distinct from a whole-export proof. Also compare
+actual successor rows: V34's 37/37 normalized run conceals different shared tails.
+
+### Separate original erroneous reads from their linked memory (F12128)
+
+For a layout-dependent original bug, reproduce the operation in BUG mode and
+supply an explicit test memory environment. D302's zero substitution hid its
+native SAR1 and out-of-table read. A scoped test-only relocation binding lets
+source and reference read the same backing while preserving production tables
+and independent data checks. Keep the genuine original-backed comparison and
+label synthetic backing separately; neither proves final-object placement.
+
+Validate the binder structurally and the fixture dynamically. Nonzero distinct
+targets and poisoned neighbours expose flat-zero, repaired-shift and wrong-index
+controls. Report coverage for every selected region. Preserve input boundaries,
+check exact instruction bytes rather than assumed signedness, and invalidate
+cached executables when binding bytes change. These are apparatus changes;
+production source carries the original expression without hooks or padding.
+Equal instruction totals still require the whole-function operand/CFG proof.

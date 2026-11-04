@@ -5791,6 +5791,16 @@ The two functions are otherwise the same shape over the same table, which is wha
 
 ======================================================================
 
+**Reconstruction QA update (F12128).** The earlier BUG-mode flat-zero substitute
+has been removed. Reproduction now emits the original SAR1 and table lookup;
+the normal SAR13 repair remains. Test-only scoped relocation binding supplies
+the same original reference backing without modifying production objects or
+their three-entry tables. A separate synthetic backing fixture tests all three
+addresses and rejects flat-zero, SAR13 and off-by-one controls. Its supplied
+memory values are not historical daemon results or defined ISO C semantics.
+Current period mid/outer addresses may be mapped BSS; historical unmapped-hole
+observations above must not be quoted as current fixture evidence.
+
 ## D301 🐛 `FSE_decision_4pt` weights the in-phase error twice the quadrature one, so it is not a nearest-point decision
 
 **Renumbered from D299.** It was allocated D299 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_PPS_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D299 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.

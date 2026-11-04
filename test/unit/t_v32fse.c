@@ -1,60 +1,23 @@
 /*
- * t_v32fse.c -- differential test of V.32's slicers.
+ * Component differentials for the V.32 FSE decisions.
  *
- * Every slicer is a state machine over the datapump object as well as a
- * decision, so each case drives OUR copy and the BLOB's from the same inputs
- * one symbol at a time and compares the whole object after every call.  A
- * slicer that decided right and shifted its history wrong would pass a
- * return-value check and fail this one.
+ * D302's reproduction arm performs the original out-of-table magnitude read.
+ * A test-only scoped relocation binding gives source and reference the same
+ * original reference backing; their production tables and table comparisons
+ * remain independent. This fixture retains the historical inner-ring oracle.
+ * Middle/outer values depend on linked bytes and stay excluded here. The
+ * separate t_v32d302 context supplies explicit nonzero backing and validates
+ * all three regions with runtime negative controls (F12128).
  *
- * The one thing that cannot be compared directly is `cfg.decision`, since
- * each side installs its own build's successor; it is compared as an
- * identity instead, which is the check that the handover chain
- * AB -> CD -> trn -> 4pt is wired the same way on both sides.
+ * A point is identified by the blob's angle and low decision bits together;
+ * neither alone distinguishes every point. Coverage denominators validate
+ * both the compared inner ring and the two excluded regions. provide_oob_pages
+ * maps only missing pages: already mapped data/BSS is left untouched, so its
+ * contents must not be described as poisoned in an arbitrary current link.
  *
- * ===========================================================================
- * `_16pt` IS THE ODD ONE, AND ITS `*mag` IS GATED
- * ===========================================================================
- *
- * `FSE_decision_16pt` reads `DECv32_MAG9600` 8190, 16382 or 24574 bytes past
- * its base, depending on which ring the decided point is on (D302).  In this
- * binary the object is linked as `dsplibs_ref.o`, so those are reads at
- * `ref_DECv32_MAG9600 + 8190/16382/24574`.  The blob's `.data` is 0x9594
- * bytes and the table sits at 0x74f8, so:
- *
- *   inner ring, |I|+|Q| = 8192  -> .data+0x094f6, INSIDE the blob's own
- *                                  section, 158 bytes short of its end.  That
- *                                  byte is 0 and it travels with the blob
- *                                  into any link, so it is COMPARABLE.
- *   mid ring,   |I|+|Q| = 16384 -> 8034 bytes past the end of it
- *   outer ring, |I|+|Q| = 24576 -> 16226 bytes past the end of it
- *
- * The last two read whatever the LINKER put after the blob's `.data`, which
- * is a property of this binary and not of the code -- exactly finding F1603's
- * argument, now bounded to two rings instead of three.  So `*mag` is compared
- * on the inner ring ONLY, and the suite asserts both that it compared some
- * and that it excluded some of each other ring.  A run that quietly stopped
- * reaching the inner ring would report full coverage and have none.
- *
- * WHICH RING A TRIAL IS ON IS DERIVED FROM THE BLOB'S OWN OUTPUTS, not from
- * our copy of the search.  `*angle` alone cannot do it: `DECv32_ANGL9600` has
- * 12287 at points 0 and 3, 20480 at 5 and 6 and 4095 at 9 and 10, and each of
- * those pairs straddles inner and outer.  The PAIR (`*angle`, decision & 3)
- * is unique over all sixteen points, because the low two bits of the return
- * are the decided point's own index into `SMCv32_{I,Q}MAP16` -- every
- * `SMCv32_PMAP16` entry has its low two bits clear -- and the suite asserts
- * that uniqueness before it relies on it.
- *
- * AND THE SUITE HAS TO PROVIDE THE PAGES THE OBJECT READS, or it does not run
- * at all.  This binary's writable data is two LOAD segments -- `.data`, whose
- * last bytes are the blob's own, and then `.bss`, 64 K-aligned -- and both the
- * mid and the outer read land in the twenty-kilobyte hole between them.  The
- * process dies inside `ref_FSE_decision_16pt` on the first such symbol, before
- * anything at all can be compared, so `provide_oob_pages` maps that span and
- * asserts that it did.  WHAT LANDS THERE IS NEVER COMPARED: an anonymous page
- * reads zero and our reproduce-bugs arm writes zero, so comparing the two
- * would agree for a reason that has nothing to do with either implementation.
- * That is D65's trap and this is its shape here.
+ * These are configured component inputs, not a modem lifecycle claim. D302
+ * intentionally reproduces original period-machine behavior beyond a declared
+ * C array; this is not a defined ISO C behavior claim or final layout proof.
  */
 
 #include <errno.h>
@@ -148,20 +111,9 @@ page_mapped(unsigned long p, unsigned long psz)
 	return errno != ENOMEM;
 }
 
-/*
- * The three reads are at `ref_DECv32_MAG9600 + 8190`, `+ 16382` and `+ 24574`
- * -- see the header.  Map whatever pages of that span this link left out, and
- * return whether the whole span is now readable.
- *
- * THE PAGES WE PROVIDE ARE POISONED, AND THAT IS THE POINT.  A fresh
- * anonymous page reads zero, our reproduce-bugs arm writes zero, and a mid-
- * or outer-ring comparison would therefore PASS -- for a reason that is
- * neither implementation's.  Measured: with the pages left at zero, comparing
- * all three rings is green over 1,016 trials and proves nothing.  Filling
- * them with a value neither side can produce makes the exclusion
- * self-enforcing: anyone who widens the gate gets a loud failure carrying
- * 0x5a5a rather than a quiet pass.  Pages that were ALREADY mapped are never
- * written -- the inner ring's page is one of the blob's own.
+/* Map absent pages read by original D302 and poison only newly mapped pages.
+ * Existing mapped data is preserved. The synthetic t_v32d302 context supplies
+ * the independent sensitivity controls; zero-filled BSS is not such a control.
  */
 static int
 provide_oob_pages(void)
@@ -610,7 +562,7 @@ is_reachable(int k)
 
 /*
  * The standing checks behind the FIXED arm of D302.  The differential tier is
- * built with -DDSPLIB_REPRODUCE_BUGS, so `*mag = DECv32_MAG9600[(n >> 13) -
+ * built with -DDSPLIB_REPRODUCE_BUGS; the normal repair is `*mag = DECv32_MAG9600[(n >> 13) -
  * 1]` is compiled OUT of this binary and no differential test can reach it.
  * These are what stands behind it instead: that the table is the blob's, that
  * its three entries are the constellation's three L2 magnitudes to the unit,
