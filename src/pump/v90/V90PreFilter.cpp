@@ -333,7 +333,7 @@ V90PreFilter::autoSelection()
 	long double best = 1.0e10f;
 	float target[6];
 	unsigned int n, k;
-	int i;
+	unsigned int i;
 
 	for (i = 0; i <= 5; i++)
 		target[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];

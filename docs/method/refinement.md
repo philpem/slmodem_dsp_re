@@ -10261,3 +10261,36 @@ lifetime merely to perturb an explained priority order supplies no new source
 discriminator. Conversely, allocation-stage divergence does not establish that
 source is correct. Seek a supported live-range, use/dependency or class change;
 the original machine code constrains those inputs without exposing original RTL.
+
+### Use initialized input aliases to expose a stale publication (F12131)
+
+A native input reread after state publication can differ from a captured local
+even without an intervening call. When the component declaration permits the
+alias and both pointers name valid storage, use an initialized member that the
+method updates as the input. In V.8, input `&pr->run` exposes the stale stored
+sample: the blob rereads the incremented run, while the old reconstruction
+publishes its previous value. A 64-call history covers the index wrap and checks
+the complete owner; the old-source negative fails 128/193 checks and the recovered
+source passes. Label the component boundary and alias arrangement; do not claim
+normal waveform or modem lifecycle coverage from it. This does not license
+arbitrary overlapping objects or impossible planted histories.
+An ordinary short input may alias a short state member even when the input
+pointer is const-qualified. The native reread needs no volatile qualifier or
+barrier; test the actual alias/read-age explanation before proposing one.
+
+Treat a shared native action as a source-graph constraint. Two failed predicates
+join one V.8 increment, so a short-circuit conjunction with a common else action
+is an admitted source form. Verify initial RTL and final edges: eager predicate
+folding or a changed memory-read epoch would falsify the prediction. A consumed
+member-pointer local can likewise represent an independently observed address
+producer; it is not an artificial register use.
+
+### Recover predicate signedness without reopening unrelated floating code (F12132)
+
+A bounded nonnegative loop still has a measurable source signedness. V.90
+prefilter selection uses unsigned branches in both native six-element loops;
+one unsigned-int index restores both directly from initial RTL. Preserve the
+function's floating narrowing, unordered comparisons and diagnostic read ages.
+A successful predicate prediction with an unchanged NONMATCH grade is partial
+source recovery, not a whole-function promotion. Check the complete TU and
+protected siblings before retention.
