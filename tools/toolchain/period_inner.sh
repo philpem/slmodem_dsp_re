@@ -341,16 +341,36 @@ for t in $TESTS; do
 		;;
 	*) echo "invalid period link mode: $LINK_MODE" >&2; exit 1 ;;
 	esac
-	LINK_NEWEST=$(ls -t $LINK_OBJS "$REF" 2>/dev/null | head -1)
+	LINK_REF=$REF
+	LD_CONTEXT=""
+	[ ! -f "test/unit/$t.ldcontext" ] || LD_CONTEXT=$(cat "test/unit/$t.ldcontext")
+	case "$LD_CONTEXT" in
+	"") ;;
+	d302)
+		[ "$LINK_MODE" = individual ] || { echo "d302 context requires individual inputs" >&2; exit 1; }
+		CONTEXT_OBJS=""; replaced=0
+		for o in $LINK_OBJS; do
+			case "$o" in
+			*/src_pump_v32_V32dec.o) o="$OUT/context/d302/source.o"; replaced=$((replaced + 1)) ;;
+			esac
+			CONTEXT_OBJS="$CONTEXT_OBJS $o"
+		done
+		[ "$replaced" -eq 1 ] || { echo "d302 context source count: $replaced" >&2; exit 1; }
+		LINK_OBJS=$CONTEXT_OBJS; LINK_REF="$OUT/context/d302/ref.o"
+		;;
+	*) echo "unknown fixture context: $LD_CONTEXT" >&2; exit 1 ;;
+	esac
+	LINK_NEWEST=$(ls -t $LINK_OBJS "$LINK_REF" 2>/dev/null | head -1)
 	{
-		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$REF" "$EXTRA_LD"
+		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$LINK_REF" "$EXTRA_LD"
 		cksum tools/toolchain/period_inner.sh
+		printf 'context %s\n' "$LD_CONTEXT"
 	} > "$OUT/$t.link-config.tmp"
 
 	if [ -n "$KEEP" ] && cmp -s "$OUT/$t.link-config.tmp" "$OUT/$t.link-config" && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
 	   && { [ -z "$LINK_NEWEST" ] || [ "$OUT/$t" -nt "$LINK_NEWEST" ]; }; then
 		:					# inputs unmoved; keep the binary
-	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $LINK_OBJS "$REF" \
+	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $LINK_OBJS "$LINK_REF" \
 	     $EXTRA_LD -lm \
 	     > "$OUT/$t.link.log" 2>&1; then
 		echo "  LINK-FAIL    $t"; sed -n '1,3p' "$OUT/$t.link.log"

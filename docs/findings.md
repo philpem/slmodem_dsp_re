@@ -143014,3 +143014,95 @@ there; current code has none. This establishes the immediate compiler action,
 not why the original avoided it. Recover the source/profile and inlining-budget
 constraint before changing the call boundary. Neither a separate file nor a
 noinline attribute follows from the evidence.
+
+
+## F12127. A stale linear map is not an independent void-return contract
+
+The six historical proof-refusal routes at `4465a83e3` are screening labels,
+not six established register permutations. Complete paired bodies show five
+matching direct CFGs, while `V34XF_IndicateJdReceived` has an actual tail-sharing
+difference. Its JNE at ordinary row 23 reaches native row 16 versus current
+row 25. Zeroing EAX versus EBX changes both the store register and the shared
+epilogue selected. A 37/37 normalized instruction run does not prove those
+successors or make a generic branch exemption safe.
+
+`SetAdaptEqV32` has independent returning switch arms: the linear matcher carries
+one arm's register assignment into another. V92 Phase3Modulator reset likewise
+has four allocation-only operand differences whose stale map crosses RET into
+a cold arm reached from an earlier branch. V.22 uses saved EBP as a general
+register; its DEST WIDTH diagnostic does not establish an actual width mismatch.
+Voice has eleven matching table destinations but unsupported local-short frame
+reads, escaping local addresses and several allocation regions. No source defect
+is established by these six rejection diagnostics.
+
+The owner explicitly required independent binary evidence before treating GP
+return residues as unobservable. Reset's ordinary C++ mangling encodes no return
+type. Its native zero-symbol, Ja-present path leaves EAX=bitCount and EDX=Ja+4;
+other paths leave diagnostic or generated-symbol residues. There is no x87
+result. Three direct callers exist: enterPhase3 and constructors C1/C2. All
+physically propagate GP residues through their returns; the known transitive
+phase-reset chain eventually discards them. A scan of 18,317 relocations and
+25,858 direct edges finds no address-taken or interior entry, and fires on a
+V.22 function-pointer positive control. No original typed declaration or debug
+metadata establishes the exact void declaration. This supports bounded known-
+caller reasoning, not an exemption for the whole exported function. Headers
+and naming remain corroborating hypotheses. No source or grader change is made
+for these cases. Full bodies, decoded targets and the return-contract review
+are under `scratch/operand-wave/`.
+
+
+## F12128. Reproduce D302's lookup, and control its test memory environment
+
+`FSE_decision_16pt` previously writes zero in reproduction mode instead of the
+native `DECv32_MAG9600[(n >> 1) - 1]` read. That was a deliberate historical
+portability/layout substitution, not the original operation. The normal shift
+by 13 remains D302's repair. Restoring the original lookup is source recovery;
+the production table remains three shorts and receives no padding.
+
+The original index is 4095, 8191 or 12287. Its machine result depends on the
+linked bytes beyond that table. In the prior period artifact, reconstruction's
+inner-ring address reads 98 while reference's reads zero. Reference mid/outer
+addresses are now mapped in BSS: old fixture comments about an unmapped hole
+are not current evidence. Ordinary independent object placement cannot serve
+as a code-fidelity oracle for this original layout-dependent bug.
+
+The test-only binder changes exactly the owning function's one R_386_32 table
+operand, including its -2 addend, to a shared reference backing. It checks the
+actual ELF32 i386 function/read extent, table definition/context, bytes and
+relocation. The emitted read is MOVZWL with one register as both SIB base and
+index at scale 1, equivalent to twice that register. An earlier assumed MOVSWL
+form was rejected and corrected from the actual bytes. The binder verifies
+that every old symbol, unrelated relocation, data byte and section remains
+unchanged; appended undefined-symbol metadata is recorded. Original source
+table definitions and fixture table-comparison references remain independent.
+Production, faithful and partial-link objects are never transformed.
+
+Default test-host copies bind the reconstructed read to the reference's
+original backing, retaining the genuine inner-ring comparison. A separate
+`t_v32d302` context binds both emitted function reads to an allocated
+12,288-short fixture array. Its three far targets contain 1111, 2222 and 3333;
+other words are poisoned and the first three retain the ordinary magnitudes.
+This is explicitly period-machine fidelity under a supplied memory contract,
+not defined ISO C behavior, historical mid/outer values or modem lifecycle
+reachability. Across 512 paired configured component calls, the reference
+selects 52 inner, 248 middle and 212 outer points. All 4,612 checks pass.
+Flat zero, SAR13 and an off-by-one lookup each reach assertions and fail 512
+checks; reference analytical controls stay green. An initial aligned input
+grid reached only the outer ring and correctly failed two coverage checks;
+its input domain was corrected before interpreting the positive result.
+
+Twelve independent assembler/ELF controls accept four supported forms and reject
+eight bad width, target, addend or context forms. Bound copies publish only
+when bytes change, retaining stable mtimes on repeats and invalidating links
+on a changed binding. Contexts replace exactly one source TU and the reference
+input; aggregate input selection and other fixtures retain their own boundaries.
+The first five existing link-config fields are preserved and context is appended.
+
+The restored full TU changes only `FSE_decision_16pt`; eight siblings, bindings
+and data are unchanged. It remains NONMATCH at 147 ordinary instructions versus
+146: these totals contain 13 excess and 12 missing mnemonics across quality,
+owner reads, ABS and differential-decoder regions. This is not a one-operation
+closure. A nonreproduction full-TU control is raw identical before and after.
+Four focused period binaries pass, including the original and synthetic fixtures.
+Runtime negatives, complete native/source constraints, apparatus and independent
+reviews are under `scratch/operand-wave/`; final integration is recorded there.

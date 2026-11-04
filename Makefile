@@ -498,6 +498,20 @@ $(BUILD)/testhost/%.o: $(BUILD)/repro/%.o $(TESTVISIBLE) $(TESTREDEFINE) Makefil
 	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@
 	rm -f $@.redef
 
+# A D302 lookup can read beyond the named three-short table. Bind only the
+# test-host function's read to the reference memory environment; table exports
+# and fixture table comparisons retain their own ordinary definitions.
+$(BUILD)/testhost/pump/v32/V32dec.o: $(BUILD)/repro/pump/v32/V32dec.o $(BUILD)/repro/pump/v32/v32dec_tables.o $(TESTVISIBLE) $(TESTREDEFINE) tools/testtable_context.py tools/test_table_binding.py Makefile
+	@mkdir -p $(dir $@)
+	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
+	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@.unbound
+	@$(PYTHON) tools/testtable_context.py default $@.unbound $(BUILD)/repro/pump/v32/v32dec_tables.o $@ > $@.binding.json
+	rm -f $@.redef $@.unbound
+
+$(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o &: $(BUILD)/testhost/pump/v32/V32dec.o $(REF) tools/testtable_context.py tools/test_table_binding.py
+	@mkdir -p $(BUILD)/context/d302
+	@$(PYTHON) tools/testtable_context.py d302 $(BUILD)/testhost/pump/v32/V32dec.o $(REF) $(BUILD)/context/d302 > $(BUILD)/context/d302/binding.json
+
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
 # which is just as well, since the 32-bit one is often not installed alongside
@@ -565,6 +579,12 @@ $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
 	@$(PYTHON) tools/linkdiverge.py --test $* -- \
 	    $(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
+
+# The synthetic D302 fixture supplies its own backing storage. Keep every
+# other test-host object, replacing exactly V32dec and the reference input.
+$(BUILD)/test/t_v32d302: $(BUILD)/test/unit/t_v32d302.o $(filter-out $(BUILD)/testhost/pump/v32/V32dec.o,$(TESTHOST_OBJ)) $(HARNESS_OBJ) $(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
@@ -973,6 +993,7 @@ debugcov:
 #     git log --merges -1 --format=%P | tr ' ' '\n' | \
 #         xargs -I{} tools/refcheck.py --since {}
 refs:
+	@$(PYTHON) -m unittest discover -s test/safety -p test_table_binding.py -v
 #
 	@$(PYTHON) tools/ci/test_refcheck.py
 	@$(PYTHON) tools/refcheck.py
