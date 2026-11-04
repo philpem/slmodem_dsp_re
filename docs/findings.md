@@ -142878,3 +142878,87 @@ source fails six of those checks while the analytic reference controls pass.
 The existing 32 sections remain green. Experimental sources, commands,
 disassemblies, analytic probe and independent review are in
 `scratch/residual-exploration/`; final candidate validation is recorded there.
+
+
+## F12124. MRF's partial-input countdown consumes a negative narrowed word
+
+At `c91c90a88`, `FPM_MRF_filter` narrows its public int input slot to a signed
+word but tests `remaining-- > 0` in its partial-input arm. The reference tests
+the old word for nonzero instead: `.text+0xa90bd` sign-extends the current
+word, `0xa90c0` increments the negative countdown and `0xa90c2` branches while
+nonzero. Historical F11669 already identified this instruction shape, but its
+source variants were not retained because none closed the complete function.
+The two predicates have different observable effects at a bounded component
+boundary; a failed whole-function comparison does not settle that question.
+
+A fresh constructor with branches=decimate=1 and eight zero coefficients gives
+need=1, phase=widx=0 and an allocated eight-word zero history. Pass a positive
+int count of 65535 and an initialized 65535-word input buffer, plus an allocated
+one-word output sentinel. Its narrowed count is -1. The reference consumes
+65535 inputs through its wrapping word countdown, produces zero outputs and
+leaves need=2, phase=0, widx=7. History words 0..7 contain input words
+65527..65534. Every read and write is in bounds; no convolution or output store
+occurs. The current API documents narrowing but no positive-input upper bound.
+This establishes initialized component fidelity, without a public modem
+lifecycle claim or a uniquely recovered original formal type.
+
+The new `t_fpm_mrf_input_slot` fixture checks the normalized complete state,
+all eight history words, seven scalar/output controls and the reference's
+independent tail-history prediction: 24 checks. The unchanged source fails
+9/24, including the write index and all eight history comparisons; the native
+analytical controls pass. The minimal correction changes only the BUG-mode
+predicate to `!= 0`. It passes 24/24 and all four focused MRF period binaries.
+An explicit nonreproduction control compiles the old and corrected full TUs
+without the BUG define and proves their objects raw identical.
+
+The corrected filter remains NONMATCH: 168 ordinary instructions against 167,
+with a longest contiguous run of 25/167. Its two EXACT init/free siblings stay
+unchanged. Separate input-loop and full-width wrap-bridge controls recover
+specific native regions but remain NONMATCH at 173 and 171 instructions;
+neither is retained. No inline policy, flag, classifier or object layout is
+changed. Astra independently reviewed the input domain, source guard, native
+countdown and all 24 checks. Controls, commands, dumps and reviews are under
+`scratch/mrf-wave/`; integration evidence is recorded there separately.
+
+
+## F12125. A byte capture crossing a branch can retain a second extension
+
+The complete native `FPM_PPS_filter` reads a symbol byte at `.text+0xa96a3`
+before the mapped/direct branch and uses the full zero-extended register as
+both map indices. The current source reads the symbol inside the mapped arm.
+An eager unsigned-char capture alone retains the native read boundary but
+remains NONMATCH. Its composition with the independently witnessed entry
+pointer captures, narrowed ring increments, int MAC counters and shared
+history-wrap cursor has 231 ordinary instructions against 229. The known
+composition without that new capture has 230 and loses the EXACT initializer;
+the eager-capture composition preserves both EXACT sibling functions.
+
+The actual Gentoo initial RTL explains one extra instruction: the eager local
+is defined as QI before the branch, then zero-extended to SI in the mapped
+block. Combine retains that cross-block split. One evidence-led control uses
+`int k = (unsigned char)sym[ridx]` at the same point. It emits one full-width
+byte extraction before the branch and removes the later register extension,
+as predicted. This distinguishes extraction width from local carrier width;
+it does not uniquely recover the author's declaration.
+
+The function still has 230 instructions and fails REGALLOC. Its remaining
+extra instruction is an entry reload of the state argument: eleven loads
+instead of ten. The relevant scalar/heap reads agree, and initial RTL uses
+one state-owner pseudo for all four state fields. Global allocation emits
+physical argument reloads. This supplies no independent type, alias or
+observation difference to justify further declaration/order variants. None
+of the PPS controls is retained. Existing output/state fixtures do not detect
+a discarded ordinary read, so their green result must not be described as
+proof of the eager read's footprint. The direct V.29 producer allocates the
+symbol ring but does not initialize it; no initialized producer history is
+claimed for that mode.
+
+Six unchanged full-TU controls and seven candidate compiles across MRF/PPS
+produce zero EXACT/REGALLOC promotions. Each unchanged control reproduces its
+current raw object; all candidate siblings and grade losses are recorded.
+A small source transfer screen finds V.22 PPS's byte and both map uses already
+in one block, so the cross-branch extension witness does not transfer there.
+The two V.22 status-byte locals found by the same screen are flag uses, not
+full-width map indices. No transfer compile is admitted merely because a
+local has byte type. Paired dumps, per-TU comparisons and independent compiler
+stage review are under `scratch/mrf-wave/`.

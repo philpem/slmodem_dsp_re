@@ -10120,3 +10120,39 @@ and multiplies are ordered differently within equivalent memory intervals.
 Retain the native-backed observation correction and label its full grade
 honestly. Do not discard a failing valid-input oracle as mere allocation, or
 claim that equal operation counts prove equivalence.
+
+### Validate nonzero word countdowns at a bounded public slot (F12124)
+
+A signed-positive and a nonzero countdown can agree on every small positive
+fixture while disagreeing on a complete bounded input buffer. MRF's public
+int count narrows to a word: positive 65535 becomes -1, and the native
+partial-input loop consumes 65535 samples through its wrapping countdown.
+Constructor-created state and an eight-word ring keep every access valid;
+zero outputs avoid the separate signed-output-index hazard. Compare the
+complete history as well as return/count fields. The earlier source fails
+9/24 checks even though both versions return zero and leave the same need.
+
+Retain the minimal BUG-only predicate correction when the oracle and native
+branch prove it, even if the whole function remains NONMATCH. Preserve normal
+behavior separately; the old and new nonreproduction full objects are raw
+identical here. Do not generalize this fixture into normal modem reachability,
+a uniquely recovered formal type, or permission to test negative history sizes
+and wrapped output stores. Do not replay the old loop/wrap spelling cube.
+
+### Separate extraction width from the carrier across a branch (F12125)
+
+When a native byte extraction supplies full-width array indices across a
+branch, trace the local's mode in initial RTL. An eager `unsigned char k`
+can define QI before the branch and add an SI extension in the successor.
+`int k = (unsigned char)input[index]` preserves byte extraction while carrying
+the full-width result. In PPS, that one predicted change removes the redundant
+successor extension. A byte-typed local elsewhere is insufficient evidence:
+V.22 PPS's corresponding map uses are already in the capture's block.
+
+Require the complete function comparison after recovering the local feature.
+PPS still fails at 230/229 instructions; the remaining extra state-argument
+reload first appears in global allocation despite a shared initial owner
+pseudo. Stop source variants without an independent source-level distinction.
+Do not fit declaration order to physical stack slots. A native discarded read
+also needs a read-footprint detector before runtime output/state tests may be
+credited with observing it; ordinary green differential output cannot do so.

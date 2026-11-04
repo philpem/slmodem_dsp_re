@@ -88,6 +88,9 @@ extern struct fpm_mrf_cfg FPM_MRF_CFG;
  * @param out    Output buffer; receives the produced samples.
  * @param count  Number of input samples to consume; narrowed to signed 16 bits
  *               at use. The exact original formal width is not uniquely known.
+ *               The reproduction-mode partial-input path consumes a negative
+ *               narrowed value as an unsigned 16-bit count through a wrapping
+ *               countdown, producing no output (F12124).
  * @return Number of output samples produced, roughly `count * branches /
  *         decimate`, zero-extended from its low 16 bits. The original
  *         uses a signed 16-bit output index: at most 32768 outputs may be

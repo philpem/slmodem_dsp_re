@@ -124,7 +124,12 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 		 */
 		if (remaining < need) {
 			need -= remaining;
+#ifdef DSPLIB_REPRODUCE_BUGS
+			/* The blob consumes a wrapping word countdown (F12124). */
+			while (remaining-- != 0) {
+#else
 			while (remaining-- > 0) {
+#endif
 				widx = advance(widx, hlen);
 				history[widx] = *in++;
 			}
