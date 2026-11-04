@@ -142787,3 +142787,94 @@ identical matched membership. The complete partial object remains DIFFERENT.
 A separate comparator task needs guarded frame-free eligibility, CFG dominance
 and branch-address evidence before this pair may receive a maintained REGALLOC
 proof; it must not relax the current model merely to report a hit.
+
+
+## F12122. The IIR block owns and resets its parameter cursors
+
+At baseline `7b29d4ea3` the period scalar `FPM_iir_filt` is REGALLOC with
+59 ordinary instructions, but `FPM_iir_filt_block` is NONMATCH with 80 against
+86 reference instructions. The reference block at `.text+0xa8b10` loads a
+sample, advances its pointer before the section loop, and writes through that
+advanced pointer minus two bytes. It also captures the initial coefficient
+and history pointers before the outer guard, stores private snapshots and
+restores them for each sample. An indexed call to the scalar helper shares
+its arithmetic but does not recover that pointer ownership. Arithmetic
+identity alone had been overread as evidence of an original helper call.
+
+One sample-cursor control restores the named sample epoch but remains NONMATCH
+at 82 instructions. The complete source graph saves the two initial roots,
+resets and consumes the block's parameter cursors, and expresses the scalar
+section arithmetic explicitly inside the block. The maintained matcher proves
+REGALLOC for all 86 instructions; both bodies are 287 bytes. Fifteen bytes
+still differ, so this is not EXACT. The scalar function is raw unchanged.
+At that block-only checkpoint, the unchanged source of `FPM_iir_filt_II` has
+a one-byte size reduction from emission collateral and stays NONMATCH; multiple instructions differ. Non-code sections, symbols and bindings agree with control.
+No compiler option, type, field offset or classifier changes are involved.
+
+The explicit block keeps D393's nonpositive-section repair under the existing
+`#ifndef DSPLIB_REPRODUCE_BUGS` guard. Reproduction mode retains the unassigned
+zero-section output and wrapping negative-section countdown. It does not
+claim a defined zero-section differential oracle. Existing component tests
+cover sample/state histories, fragmentation, saturation and zero count. A new
+bounded alias section compares complete short-array objects in 144 trials
+(three section counts, four history offsets, four sample offsets and three
+positive block lengths), plus a denominator check. All pointers stay within
+one declared 64-word array; these are component inputs, not modem lifecycle
+evidence. The expanded period fixture passes 263,198 checks across 32 sections, first
+on unchanged source and then on the retained candidate. A coefficient-value
+cache negative passes all 31 older sections but fails 72 of the new section's
+145 checks. The normal-build section-guard contract passes 123 checks.
+
+The same root-saving hypothesis has a separate native witness in
+`FPM_iir_filt_II`, where sample access remains indexed. One ownership transfer
+and a coupled short-postdecrement control recover its native prologue and
+73-instruction count, but the whole operand/order comparison still fails.
+Neither transfer alone establishes a closure. F12123's independently measured
+coefficient-observation correction subsequently justifies retaining the graph
+as a partial. This bounds the new lever: inspect real cursor ownership first,
+then require the complete function proof; do not infer a closure from the
+recovered region or equal counts.
+
+Astra independently checked the complete source arithmetic, sample addresses,
+normal-mode guard, three-function objects and metadata. Experimental commands,
+paired sources/dumps, controls and review are under
+`scratch/residual-exploration/`; final validation and delivery are recorded
+there separately. Historical IIR cursor/count/width controls changed the scalar
+inner loops, not this block's outer sample cursor and saved-root ownership.
+
+
+## F12123. A coefficient read before history publication is observable
+
+The remaining ordering difference in `FPM_iir_filt_II` contains a real memory
+observation boundary. At reference `.text+0xa8c30`, the section body stores
+`state[0]`, loads signed `coeff[2]`, then stores `state[1]`. The earlier
+reconstruction loads that coefficient after both history stores. This is not
+merely a different choice of registers or independent instruction scheduling.
+
+One declared short array supplies a valid component discriminator: coefficients
+start at word 0, history at word 1 and the input sample at word 16. All words
+are zero except coefficient 0 = 16384, coefficient 2 = 8192 and input = 1000;
+sections and count are both one. The third coefficient and second history
+word are the same object. The reference numerator is
+`16384*1000 + 8192*8192 = 83492864`, yielding 5096 after the 14-bit shift.
+The earlier source first replaces the coefficient with 1000, yielding 1500.
+The denominator is zero. All addresses are inside the array and all signed-int
+intermediates are in range. A Gentoo-period probe confirms those exact values.
+This is component fidelity evidence, not a claimed modem lifecycle.
+
+A consumed `coeff2` local loaded between those history stores restores the
+observation. It is retained with the independently witnessed saved initial
+coefficient/history roots and short postdecrement. The complete function still
+fails REGALLOC: both streams have 73 ordinary instructions, but load/multiply
+ordering differs. Independent review finds the remaining reordered loads
+within the same memory intervals. No classifier, option, tolerance, API or
+object layout changes are made; this corrects reconstruction source rather
+than repairing an original DSP bug.
+
+The regression section uses six inputs including both short extremes. It
+checks the complete array and the reference's analytic result
+`(short)(input + 4096)`, plus the six-trial denominator: 13 checks. Earlier
+source fails six of those checks while the analytic reference controls pass.
+The existing 32 sections remain green. Experimental sources, commands,
+disassemblies, analytic probe and independent review are in
+`scratch/residual-exploration/`; final candidate validation is recorded there.

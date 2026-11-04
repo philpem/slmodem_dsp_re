@@ -259,6 +259,78 @@ run_scalar_aliases(void)
 	return diff_end();
 }
 
+
+/* Each pointer stays within one declared short array. These are component
+ * aliases, including samples that overwrite coefficients/history used later;
+ * they do not assert a modem lifecycle that produces those aliases. */
+struct fpm_iir_block_alias_storage { short data[64]; };
+
+static int
+run_block_aliases(void)
+{
+	static const int state_offsets[] = { 0, 1, 16, 32 };
+	static const int sample_offsets[] = { 0, 1, 24, 40 };
+	static const short counts[] = { 1, 2, 7 };
+	int sections, st, sample, count, i, trial = 0;
+
+	diff_begin("iir block bounded sample/coefficient/history aliases");
+	for (sections = 1; sections <= 3; sections++)
+		for (st = 0; st < 4; st++)
+			for (sample = 0; sample < 4; sample++)
+				for (count = 0; count < 3; count++) {
+					struct fpm_iir_block_alias_storage a, b;
+
+					for (i = 0; i < 64; i++)
+						a.data[i] = (short)((i % 5 == 4)
+							? 16384 : (i * 1301 - 16000));
+					b = a;
+					ref_FPM_iir_filt_block(a.data + sample_offsets[sample],
+						a.data, a.data + state_offsets[st],
+						(short)sections, counts[count]);
+					FPM_iir_filt_block(b.data + sample_offsets[sample],
+						b.data, b.data + state_offsets[st],
+						(short)sections, counts[count]);
+					diff_eq_obj("block alias storage",
+						struct fpm_iir_block_alias_storage, &b, &a, trial);
+					trial++;
+				}
+	diff_eq_int("block alias trials", trial, 144, 0);
+	return diff_end();
+}
+
+
+/* coeff[2] and state[1] are one word. The reference reads that coefficient
+ * after publishing state[0], before replacing state[1] with the input.
+ * With these bounded inputs the numerator is input*16384 + 8192*8192;
+ * the denominator is zero and every signed-int intermediate is in range. */
+struct fpm_iir_ii_alias_storage { short data[32]; };
+
+static int
+run_ii_coefficient_alias(void)
+{
+	static const short inputs[] = { -32768, -1000, -1, 0, 1000, 32767 };
+	unsigned i;
+
+	diff_begin("iir II coefficient capture before history publication");
+	for (i = 0; i < sizeof(inputs) / sizeof(inputs[0]); i++) {
+		struct fpm_iir_ii_alias_storage a, b;
+
+		memset(&a, 0, sizeof(a));
+		a.data[0] = 16384;
+		a.data[2] = 8192;
+		a.data[16] = inputs[i];
+		b = a;
+		ref_FPM_iir_filt_II(a.data + 16, a.data, a.data + 1, 1, 1);
+		FPM_iir_filt_II(b.data + 16, b.data, b.data + 1, 1, 1);
+		diff_eq_obj("II alias storage", struct fpm_iir_ii_alias_storage,
+			&b, &a, i);
+		diff_eq_int("II reference analytic output", a.data[16],
+			(short)(inputs[i] + 4096), i);
+	}
+	diff_eq_int("II alias trials", i, 6, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -266,6 +338,8 @@ main(void)
 	int i;
 
 	rc |= run_scalar_aliases();
+	rc |= run_block_aliases();
+	rc |= run_ii_coefficient_alias();
 
 	/* The real filters, at ordinary signal levels. */
 	rc |= run("iir COEF_DC", ref_COEF_DC, 1, 8000);
