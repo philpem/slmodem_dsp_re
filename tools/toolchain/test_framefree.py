@@ -167,6 +167,62 @@ class FramefreeTests(unittest.TestCase):
         self.assertIsNotNone(self.proof(a, c))
         self.assertIsNone(self.proof(a, self.elf(BODY.replace('(%edi),%eax', '0,%eax'), mapping)))
 
+    def test_gp_shape_descriptor_is_complete(self):
+        self.assertEqual(set(b.GP_REGISTER_SHAPE), set(b.REG32))
+        for name, shape in [('al', (8, 0)), ('ah', (8, 8)), ('ax', (16, 0)),
+                            ('eax', (32, 0)), ('sp', (16, 0)), ('esp', (32, 0))]:
+            self.assertEqual(b.gp_register_shape(name), shape)
+        self.assertIsNone(b.gp_register_shape('st'))
+        self.assertIsNone(b.gp_register_shape('xmm0'))
+
+    def test_register_shape_use_destination_and_rmw_controls(self):
+        positive = [('al', 'cl'), ('ah', 'ch'), ('ax', 'cx'), ('eax', 'ecx')]
+        negative = [('al', 'ah'), ('al', 'ax'), ('ax', 'eax'),
+                    ('al', 'ch'), ('ah', 'cl'), ('ax', 'cl'), ('ah', 'cx')]
+        templates = [('mov', '%{r},(%esi)'), ('mov', '(%esi),%{r}'),
+                     ('add', '$0x1,%{r}')]
+        accepted = refused = 0
+        for want, pairs in ((True, positive), (False, negative)):
+            for left, right in pairs:
+                for mnemonic, operands in templates:
+                    with self.subTest(want=want, left=left, right=right, mnemonic=mnemonic, operands=operands):
+                        a = [(mnemonic, operands.format(r=left))]
+                        c = [(mnemonic, operands.format(r=right))]
+                        reason = b._alpha_live_why(a, c)
+                        self.assertEqual(reason is None, want)
+                        self.assertEqual(b.alpha_equal(a, c), want)
+                        if want:
+                            accepted += 1
+                        else:
+                            self.assertIn('SHAPE', reason)
+                            refused += 1
+        self.assertEqual((accepted, refused), (12, 21))
+        print('GP shape token controls: 12 accepted, 21 refused, 33 total')
+
+    def test_real_elf_shapes_and_saved_frame_fallback(self):
+        # The fixed saves/restores and dominated callee definitions make the
+        # unchanged narrow operand eligible for framefree. Caller byte/word
+        # tokens must still stay literal; no ABI return exception is involved.
+        mapping = dict(zip(CALLEE, CALLEE[1:] + CALLEE[:1]))
+        negative = [('al', 'ah'), ('al', 'ax'), ('ax', 'eax'),
+                    ('al', 'ch'), ('ah', 'cl'), ('ax', 'cl'), ('ah', 'cx')]
+        for token in ('al', 'ah', 'ax', 'eax'):
+            body = BODY.replace('xor %esi,%esi', 'mov %'+token+',(%edi)\nxor %esi,%esi')
+            a, c = self.elf(body), self.elf(body, mapping)
+            self.assertIsNotNone(self.proof(a, c), token)
+            self.assertTrue(b.alpha_equal(a, c), token)
+        for left, right in negative:
+            body = BODY.replace('xor %esi,%esi', 'mov %'+left+',(%edi)\nxor %esi,%esi')
+            changed = body.replace('mov %'+left+',(%edi)', 'mov %'+right+',(%edi)')
+            a = self.elf(body)
+            for allocation in (None, mapping):
+                with self.subTest(left=left, right=right, allocation=allocation):
+                    c = self.elf(changed, allocation)
+                    self.assertIsNotNone(b._alpha_live_why(a, c))
+                    self.assertIsNone(self.proof(a, c))
+                    self.assertIsNotNone(b.alpha_why(a, c))
+                    self.assertFalse(b.alpha_equal(a, c))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

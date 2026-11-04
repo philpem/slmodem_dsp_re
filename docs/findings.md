@@ -143372,3 +143372,71 @@ validate that narrow detector. This does not establish general ABI/dataflow
 correctness. Harden lane identity in the renaming proof before broader search;
 retain independent controls and check affected certificates without weakening
 any floor. See the [known limits](method/metric-vector.md#controls-and-known-limits).
+
+## F12142. Register renaming preserves accessed bit width and bit position
+
+F12141's gap is fixed in `byteident.py`: one complete GP token table supplies
+`(width, bit offset)` to both use and destination comparisons. The former
+name-length test could equate AL, AH and AX, all two-character names. Family
+mapping, full-width-definition/liveness rules, ABI handling and source remain
+unchanged. The existing saved-frame implementation already preserves these
+shapes literally; new controls prove that its fallback cannot rescue mismatches.
+
+All 33 token-shape controls pass (12 accepted, 21 rejected). The old checker
+falsely accepted 18 of those 21 negatives; the hardened checker accepts none.
+Ten frame-control methods exercise 93 certificates (30 accepted, 63 refused).
+Independent real-ELF checks reject five previously accepted width/lane changes
+and preserve four legitimate renamings. Existing 20 alpha and 59 relocation
+self-tests and all 19 vector tests pass. Full phase passes 399/399 period tests
+and structural checks.
+
+The refreshed 1,852-function faithful census has identical classifications and
+EXACT/matched memberships: 1,206 EXACT, 39 REGALLOC, 607 NONMATCH and zero
+unresolved. The existing ratchet passes without a floor edit. No source
+function is promoted or lost. Commands and before/after evidence are under
+`scratch/register-shape-hardening/`; see the [guide](method/metric-vector.md).
+
+## F12143. All residual NONMATCH copies have explicit diagnostic coverage
+
+A frozen batch selects all 607 NONMATCH names and all 611 defining copies from
+the preceding faithful census. All produce vectors in 126.02 seconds, including
+v34handshak; none are unavailable. All maps remain heuristic and ambiguous,
+and every copy has some unknown evidence. This is a diagnostic population,
+not an acceptance census or a proof of semantic differences.
+
+Canonical relocation destinations are observed in 420 copies, absent in 123
+and partial in 68. CFG edges are observed in 118, blocks in 133, and both in
+86; other cases retain unknown records. Typed operations, immediates and
+addressing are partial throughout. Three source inquiry sites are admitted
+across two DATA functions, rather than inventing three function candidates.
+Eleven screens are rejected after context/history review, including closed
+V8 counters and incorrect heuristic pairings. See the
+[full coverage and source plan](nonmatch-vector-triage.md).
+
+## F12144. FSE_decision_4pt recovers its signed-word induction
+
+A single `short k` declaration replaces the reconstructed int search counter.
+The native LEA increment, MOVSWL narrowing, word comparison against 3 and JLE
+latch reappear, with the width boundary present from initial RTL. The counter
+ranges from 0 through 3 with a final increment to 4; table accesses and best
+selection remain unchanged. D301's unequal shifts are preserved.
+
+The complete nine-function TU control is raw-identical to the prior faithful
+object. Only FSE_decision_4pt changes; eight siblings, non-executable data,
+bindings and resolved relocation consumers are unchanged. Control and candidate
+each pass t_v32fse's 35,312 checks, including 4,562 four-point checks, and
+t_fpm_fse's 1,128 checks. The actual period globalisation and D302 test-memory
+binding are preserved in those scratch links.
+
+This is a native-supported type/structure partial, not a promotion: the target
+remains NONMATCH, with 130 ordinary instructions against 133 and longest run
+17 unchanged. No further counter palette is proposed. Evidence is under
+`scratch/register-shape-fse-cell/`; the [residual plan](nonmatch-vector-triage.md)
+prioritises the MOH decoder next.
+
+The integrated object is raw-identical to the reviewed source cell. Three
+focused period binaries pass, including the independent D302 context. Final
+phase passes 399/399, period/faithful parity is 300/300, and the refreshed
+census remains 1,206 EXACT / 39 REGALLOC / 607 NONMATCH / zero unresolved out
+of 1,852. Every classification and protected membership is unchanged. The
+existing ratchet passes with no floor edit.
