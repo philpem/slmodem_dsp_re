@@ -10156,3 +10156,29 @@ pseudo. Stop source variants without an independent source-level distinction.
 Do not fit declaration order to physical stack slots. A native discarded read
 also needs a read-footprint detector before runtime output/state tests may be
 credited with observing it; ordinary green differential output cannot do so.
+
+### Keep initial shifts distinct from final reverse copies (F12126)
+
+A historical cursor experiment excludes only the loops it actually changed.
+FDSP's old final-copy cube did not test the two initial delay shifts. Their
+native consumed destination pointers justify one new control, which recovers
+those regions. Composing independently witnessed final-copy constraints still
+requires a whole-function proof: a final control reaches native's 126-instruction
+count while retaining different source-update epochs, branch forms and call
+scheduling. None of these controls closes FDSP.
+
+Trace the first differing graph. Here initial RTL already contains the
+predecrement source cursor and the counter comparison against 159; the loop
+pass preserves them. Do not attribute either to allocation or enumerate
+postdecrement/predicate spellings merely to select an opcode. The next
+admission needs an independent call/alias witness or the relevant expansion
+rule. Keep synthetic fixtures labelled and establish a constructor-to-loop
+component history before retaining a later FDSP change.
+
+For a missing call, inspect actual cgraph decisions and original local-symbol
+ownership before splitting a TU. Native FDSP local anchors place InitObj inside
+the same TU envelope as its validator. The current inliner first reduces the
+callee with four helper inlines, then expands it into that caller. The original
+reason for retaining the call remains open; a source/profile budget diagnosis
+is the next checkpoint. A missing call alone does not justify a TU split or
+an attribute to suppress inlining.

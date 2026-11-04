@@ -142962,3 +142962,55 @@ The two V.22 status-byte locals found by the same screen are flag uses, not
 full-width map indices. No transfer compile is admitted merely because a
 local has byte type. Paired dumps, per-TU comparisons and independent compiler
 stage review are under `scratch/mrf-wave/`.
+
+
+## F12126. FDSP shift cursors do not settle its complete loop graph
+
+A post-MRF exploration compares the six-symbol `Fdspkrnl.c` TU under the same
+Gentoo period profile. The unchanged control reproduces the current raw object.
+`FDSP_Kernel_Loop` has 119 ordinary instructions against 126. At native
+`.text+0xaed29` and `0xaed4c`, each initial delay shift consumes a destination
+cursor from delay word 1279, reads 160 floats behind it, writes through it and
+decrements it alongside a separate unsigned counter. Current source uses
+indexed addresses. The eight historical `gcc3_batch50_fdsp_loop_reproduce.py`
+cells change final reverse-input loops, not these initial shift cursors.
+
+One consumed-shift-cursor control recovers that address graph and emits 123
+instructions. One composition with the historical final-loop endpoint emits
+120: it restores signed countdowns, destination cursors and pre-loop copy-target
+snapshots, but still indexes each source by the counter. Native final loops
+independently consume a private source cursor derived from the incoming input
+slot plus 636 bytes. One final control derives a one-past pointer and consumes
+it with predecrement, keeping pointer formation inside the array's permitted
+range. It has 126 instructions, equal to native, but remains NONMATCH.
+
+The compiler does not fold that initial predecrement into the endpoint. Initial
+RTL already sets source pseudos to input+640 and decrements before loading;
+the loop pass recognizes three independent induction variables and preserves
+that graph, rejecting the address GIVs as -144 versus 7. Final code retains
+ADD640/SUB4/LOAD where native has ADD636/LOAD/SUB4. Initial shift exits also
+already compare the updated counter with 159 in initial RTL, producing JA159
+instead of native JAE160. These equivalent comparisons do not recover a unique
+source predicate. Call-argument scheduling still differs elsewhere in the
+body; this is not a function differing only in two branch encodings.
+
+All three candidates remain NONMATCH, with zero gains or losses. Five
+neighbouring bodies, non-text data, bindings and resolved relocation consumers
+remain unchanged. No production FDSP source is retained. The existing loop
+fixture uses hand-built state; a future retained change needs constructor-to-loop
+component histories rather than presenting that synthetic probe as lifecycle
+evidence. Actual commands, compiler identity, hashes, full bodies, dumps and
+independent metadata checks are under `scratch/mrf-wave/fdsp-shift/`.
+Stop this source domain: investigate an independently witnessed call/alias
+boundary or actual expansion rule before admitting another source cell.
+
+The next call-boundary audit rules out splitting InitObj into another original
+TU. Native STT_FILE `Fdspkrnl.c` owns the local EchoCanceler and validator
+anchors; the global InitObj body lies inside that local-anchor envelope. The
+fresh control's cgraph dump shows four small memset-helper inlines reducing
+InitObj's estimated cost from 78 to 70, followed by InitObj inlining into the
+validator, whose cost grows from 115 to 175. Native has one InitObj relocation
+there; current code has none. This establishes the immediate compiler action,
+not why the original avoided it. Recover the source/profile and inlining-budget
+constraint before changing the call boundary. Neither a separate file nor a
+noinline attribute follows from the evidence.
