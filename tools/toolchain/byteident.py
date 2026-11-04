@@ -682,6 +682,19 @@ BARE_REG = re.compile(r"%\w+")
 # the direction a loosening tool must never fail in.
 #
 WIDE_REG = frozenset(("eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp"))
+# A token's family does not specify the accessed bits. In particular AL, AH
+# and AX all have two-character names but read different parts of EAX. Keep
+# the shape used by both use and definition checks in one explicit table.
+GP_REGISTER_SHAPE = {name: (32, 0) for name in WIDE_REG}
+GP_REGISTER_SHAPE.update({name: (16, 0) for name in
+                          ("ax", "bx", "cx", "dx", "si", "di", "bp", "sp")})
+GP_REGISTER_SHAPE.update({name: (8, 0) for name in ("al", "bl", "cl", "dl")})
+GP_REGISTER_SHAPE.update({name: (8, 8) for name in ("ah", "bh", "ch", "dh")})
+
+
+def gp_register_shape(name):
+    """Return (access width, family bit offset), or None for non-GP tokens."""
+    return GP_REGISTER_SHAPE.get(name)
 
 
 def _full_write(tok):
@@ -838,7 +851,7 @@ def _alpha_live_why(x, y):
     altogether -- there, `mov $1,%eax` and `mov $2,%ebx` both read as `mov`.
     Here every immediate and displacement must match exactly and only the
     register NAMES may differ (%eax<->%edx implies %al<->%dl, so tokens are
-    folded to their 32-bit family and the width must still agree).  `%esp` and
+    folded to their 32-bit family; access width AND byte lane must agree). `%esp` and
     `%ebp` are pinned to themselves: the frame is not a free choice.
 
     THE RENAMING IS PER LIVE RANGE, NOT PER FUNCTION, because that is what a
@@ -963,8 +976,9 @@ def _alpha_live_why(x, y):
                     return ("row %d NON-REGISTER  %s vs %s  | %s | %s"
                             % (i, u, v, ox, oy))
                 continue
-            if len(u) != len(v):
-                return ("row %d WIDTH  %s vs %s  | %s | %s" % (i, u, v, ox, oy))
+            if gp_register_shape(u) is None or gp_register_shape(u) != gp_register_shape(v):
+                return ("row %d REGISTER SHAPE (width, bit offset)  %s=%s vs %s=%s  | %s | %s"
+                        % (i, u, gp_register_shape(u), v, gp_register_shape(v), ox, oy))
             if not bind(fu, fv):
                 return ("row %d USE CONFLICT  %s wants %s, already bound to %s\n"
                         "        blob %s\n        ours %s"
@@ -975,8 +989,9 @@ def _alpha_live_why(x, y):
             if fu is None or fv is None:
                 if u != v:
                     return ("row %d DEST NON-REGISTER  %s vs %s" % (i, u, v))
-            elif len(u) != len(v) or not rebind(fu, fv):
-                return ("row %d DEST WIDTH  %s vs %s" % (i, u, v))
+            elif gp_register_shape(u) is None or gp_register_shape(u) != gp_register_shape(v) or not rebind(fu, fv):
+                return ("row %d DEST SHAPE/BINDING  %s=%s vs %s=%s"
+                        % (i, u, gp_register_shape(u), v, gp_register_shape(v)))
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
             return ("row %d NON-REGISTER OPERAND  %s | %s" % (i, ox, oy))
     return None

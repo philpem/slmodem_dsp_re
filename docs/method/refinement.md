@@ -10373,3 +10373,34 @@ not show that specific mismatch. Fix that proof boundary before widening search.
 The first actual finite-permuter trial (F12140) was raw-identical: enumeration
 works, but the admitted short-local form is not an allocation lever. Stop there
 instead of filling a palette budget.
+
+### Preserve register bit selection in a renaming proof (F12142)
+
+Register family and spelling length are insufficient: AL and AH select
+different bytes, while AL and AX have different widths despite equal name
+length. Compare an explicit width/bit-position descriptor before binding a
+family. Keep the full-width-write rule separate so partial writes do not kill
+the unknown upper bits of an old live value.
+
+Test both the main comparison and fallback certificates. The saved-frame
+implementation needed no expansion; its literal caller operands and full-width
+callee permutation already refuse the tested changes. Keep known-negative
+before/after controls and real-ELF positives. A checker tightening is not a
+source gain: refresh named membership and report any reclassification explicitly
+rather than changing a floor or source to preserve a former false acceptance.
+
+### Keep a measured type recovery separate from a whole-function gain (F12144)
+
+The 4-point slicer's int counter omitted the native signed-word increment
+conversion and comparison. A short local restores that complete latch from
+initial RTL onward, with an independently bounded 0..3 value domain, unchanged
+siblings/data and passing period component checks. Its longest global run and
+whole grade do not improve. Retain the demonstrated type boundary as a partial;
+do not call a closer byte count or an extra matching row a function promotion.
+
+Use a complete diagnostic census for navigation, then verify the actual site
+and experiment history. F12143's 607-function population yields three inquiry
+sites in two DATA functions, while eleven attractive screens are closed or
+mispaired. All rows retain their mapping/unknown caveats. The
+[next closure](../nonmatch-vector-triage.md#next-bounded-wave) crosses only the
+MOH carrier width and its witnessed ordered reason chain.

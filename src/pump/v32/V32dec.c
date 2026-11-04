@@ -139,7 +139,8 @@ unsigned short
 FSE_decision_4pt(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v32_dec *m;
-	int i, q, k;
+	int i, q;
+	short k;
 	int best = 0;
 	int rot;
 	short min;

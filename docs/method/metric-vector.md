@@ -112,24 +112,29 @@ verdict is retained if independently available. No parser or grading rule is
 relaxed to fill this diagnostic gap. Linked proof artifacts are not borrowed;
 external proof context remains absent and unresolved evidence remains visible.
 
-A separate existing grader defect is exposed by the vector (F12141):
+The vector exposed a grader defect (F12141), since fixed by F12142:
 
 ```asm
 /* reference */  mov %al,(%edx); ret
 /* candidate */  mov %ah,(%edx); ret
 ```
 
-The existing renaming checker labels this pair REGALLOC. With the explicit
+Before hardening, the renaming checker labelled this pair REGALLOC. With the explicit
 machine input EAX=0x1234 and EDX pointing to an allocated byte, the stores
 produce 0x34 and 0x12 respectively. The vector flags the literal and typed lane
-difference without changing the reported existing grade. This is a controlled
+difference independently of the reported grade. The hardened checker now
+rejects the pair. This is a controlled
 machine-contract counterexample, not a claim about reachable modem states.
 A targeted screen of all 39 current REGALLOC symbols finds no explicit paired
 high/low-byte mismatch; its known negative and low/low, high/high positives
 fire as intended. That screen is not a general ABI or dataflow audit.
 
-Harden the renaming check with lane-sensitive controls before expanding
-automated source search. Then use the vectors to triage structural residuals,
+The hardened check compares explicit bit width and bit position; AL/AX width
+changes are rejected too. Same-shape low-byte, high-byte, word and full-register
+renamings remain eligible under the existing family/liveness rules. The saved-
+frame fallback cannot rescue the tested invalid shapes. All 1,852 current
+classifications and protected memberships remain unchanged after hardening.
+Use the vectors to triage structural residuals,
 leaving ambiguous or unsupported mappings in a review queue. No source function
 is promoted by this reporting change. Local evidence is retained under
 `scratch/diagnostic-vector-trial/` in the investigation worktree.
