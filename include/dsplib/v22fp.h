@@ -164,12 +164,19 @@ struct v22fp_params {
 	 * patched from the caller's configuration and bit 11 is read back
 	 * here.  Bits 4 and 6 are set in the template and read by nothing.
 	 *
-	 * The original almost certainly wrote this as bitfields -- the
-	 * accesses are byte-wide with shifts and masks.  It is one `unsigned
-	 * int` here because the bytes are what the object settles and a
-	 * bitfield declaration would additionally claim a packing order.
+	 * Status reads bits 9 and 10 through byte +0x11. The typed view
+	 * reproduces those accesses under the measured period GCC/x86 layout;
+	 * the whole-word view preserves configuration storage and templates.
 	 */
-	unsigned int flags;	/* +0x10 template 0x65b                     */
+	union {
+		unsigned int flags; /* +0x10 whole-word view */
+		struct {
+			unsigned int bits_0_8 : 9;
+			unsigned int bit9 : 1;
+			unsigned int bit10 : 1;
+			unsigned int bits_11_31 : 21;
+		} flag_bits;
+	};
 	unsigned short r14;	/* +0x14 template 1; set to 1 again when the
 				 *       mode is 2, which is invisible      */
 	/*
@@ -188,6 +195,15 @@ struct v22fp_params {
 	short carrier_loss_ms;	/* +0x18 <- (short)cfg.f10; template 0      */
 	short r1a;		/* +0x1a template 0                         */
 };
+typedef char v22fp_params_flags_at_10[
+ __builtin_offsetof(struct v22fp_params, flags) == 0x10 ? 1 : -1];
+typedef char v22fp_params_bits_at_10[
+ __builtin_offsetof(struct v22fp_params, flag_bits) == 0x10 ? 1 : -1];
+typedef char v22fp_params_flags_four_bytes[
+ sizeof(((struct v22fp_params *)0)->flags) == 4 ? 1 : -1];
+typedef char v22fp_params_bits_four_bytes[
+ sizeof(((struct v22fp_params *)0)->flag_bits) == 4 ? 1 : -1];
+
 
 /*
  * ---------------------------------------------------------------------------

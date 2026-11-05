@@ -8859,3 +8859,42 @@ The fifth checkpoint passes `make phase`: 395 period tests, zero failures.
 Fresh production objects reproduce all three reviewed candidates literally.
 Full-TU checks confirm only those three non-exact bodies change, preserving
 exact and REGALLOC membership.
+
+
+## Header alias effects and reset predecessors can recover neighbouring bodies
+
+The sixth overnight checkpoint recovers three exact bodies without changing
+any exact neighbour. `V22_status` becomes exact through the joint recovery of
+native rate-branch orientation and typed flag views. The report has one-byte
+views at offsets `0x14` and `0x15`; parameters retain their four-byte storage
+at `0x10`. Period layout assertions and the measured byte SETcc/shift writers
+support these bitfields specifically, not a general conversion of masks.
+
+The header closure covers seven consumers: 44 functions in six code objects
+and one data-only object. Five objects remain literal matches. Besides status,
+only non-exact `v22_data` changes: its transmit-count store moves before the
+parameter-bit test, matching native order. RTL first changes the memory alias
+set, then scheduling; this is not a scratch-cursor effect. Seven focused
+fixtures pass 2,058,993 checks per form. An additional 20-check synthetic
+aligned-report-overlap probe passes both forms. A final-only publication
+negative control passes the disjoint fixture but fails two overlap checks;
+these count the same wrong byte through two compared objects. The overlap
+probe claims component fidelity, not public modem reachability.
+
+`V90Phase3Demodulator::reset` restores branch-owned modulator calls and the
+native A-law fallthrough. Four argument regions merge into one emitted
+modulator call; three paths retain `resetLinearMapping`, and WaitForQTS skips
+it. The reset size gap falls from 85 to one byte. Its two subsequent constructor
+variants become exact without source changes: their RTL first differs at
+peephole2, where the zero scratch changes to AX. The C1 and C2 symbols are
+separate native bodies at `0x212c0` and `0x21430`, not address aliases.
+All other bodies among 26 retain their grades, data and bindings remain
+unchanged, and focused reset/constructor fixtures pass 72,021 checks per form.
+Ten mutation rows were reanchored with their fault intent retained; no mutants
+were executed and no snapshot was refreshed.
+
+Evidence is in `build/gcc3-wave-v22status`, `build/gcc3-wave-p3d-reset` and
+`build/gcc3-overnight/checkpoint6`. The full phase gate passes 396 period tests
+with zero failures. Production comparison measures 1,127 EXACT and 29 REGALLOC
+of 1,852: three exact gains, no losses. Only the three reviewed production
+objects differ from checkpoint five.

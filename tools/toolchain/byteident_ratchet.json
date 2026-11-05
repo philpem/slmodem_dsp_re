@@ -1,9 +1,9 @@
 {
-  "bytes": 76,
+  "bytes": 74,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1124,
-  "exact_bytes": 129393,
+  "exact": 1127,
+  "exact_bytes": 130433,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -223,6 +223,7 @@
     "V22_PPS_free",
     "V22_SRE_free",
     "V22_iir_filt_demod",
+    "V22_status",
     "V27RX_control",
     "V27RX_delete",
     "V27RX_status",
@@ -669,6 +670,8 @@
     "_ZN20V90Phase3Demodulator22incrementFramePositionEv",
     "_ZN20V90Phase3Demodulator23clearVerificationStatusEv",
     "_ZN20V90Phase3Demodulator24setDigitalImairmentsInfoEv",
+    "_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector",
+    "_ZN20V90Phase3DemodulatorC2EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector",
     "_ZN20V90Phase3DemodulatorD1Ev",
     "_ZN20V90Phase3DemodulatorD2Ev",
     "_ZN20V90Phase4Demodulator11getDecisionEs",
@@ -1134,6 +1137,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 623,
+  "size": 622,
   "unresolved": 0
 }

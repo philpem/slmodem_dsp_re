@@ -106,8 +106,6 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			    short altRbs, short short414Arg,
 			    float float418Arg, unsigned int word14Arg)
 {
-	unsigned int modulatorWord;
-
 	/*
 	 * The flag is printed BEFORE anything is stored, and it is the
 	 * object's own field rather than an argument -- this method never
@@ -135,12 +133,12 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 	 * The complement-then-decode is the same one V90Phase3Modulator uses
 	 * for its segment and DIL codes, with the same two constants.
 	 */
-	if (pcmTypeArg == PCM_TYPE_MU_LAW)
-		ucodeLevel = (short)ulaw2linear(
-		    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));
-	else
+	if (pcmTypeArg != PCM_TYPE_MU_LAW)
 		ucodeLevel = (short)alaw2linear(
 		    (unsigned char)((ucodeArg & 0x7f) ^ 0xd5));
+	else
+		ucodeLevel = (short)ulaw2linear(
+		    (unsigned char)((ucodeArg & 0x7f) ^ 0xff));
 
 	word_3cc.prev_ = 0;
 	ucode = ucodeArg;
@@ -184,7 +182,8 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to WaitForSd\r\n");
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 
 	case P3D_STATE_TRN1D_KNOWN_DATA:
@@ -192,7 +191,8 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to TRN1dKnownData\r\n");
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = word2cArg;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      word2cArg, NULL, NULL, NULL, 0);
 		break;
 
 	case P3D_STATE_WAIT_FOR_QTS:
@@ -203,7 +203,8 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to WaitForQTS\r\n");
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 
 	default:
@@ -211,17 +212,10 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 			dsplibs_debug_printf("V90Phase3Demodulator: initial "
 					     "state set to IRREGULAR !!!!! " "(%d)\r\n", (int)stateArg);
 		autoDigitalImpDetector->resetLinearMapping();
-		modulatorWord = 0;
+		phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
+				      0, NULL, NULL, NULL, 0);
 		break;
 	}
-
-	/*
-	 * The modulator gets the ARGUMENT's pcmType and ucode, not the fields
-	 * just written from them, and null Jd/V92Jd/DIL pointers whatever this
-	 * method was handed.
-	 */
-	phase3Modulator.reset(pcmTypeArg, ucodeArg, P3M_STATE_TRN1D,
-			      modulatorWord, NULL, NULL, NULL, 0);
 
 	word_408 = 0;
 	dilLength = calculateDilLength(dil, pcmType);
