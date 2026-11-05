@@ -1,9 +1,9 @@
 {
-  "bytes": 73,
+  "bytes": 74,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1131,
-  "exact_bytes": 131432,
+  "exact": 1132,
+  "exact_bytes": 131526,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -627,6 +627,7 @@
     "_ZN18V92Phase4Modulator10generateRuEv",
     "_ZN18V92Phase4Modulator10recivedSUVEv",
     "_ZN18V92Phase4Modulator11generateB1uEv",
+    "_ZN18V92Phase4Modulator11generateCPtEv",
     "_ZN18V92Phase4Modulator11generateE1uEv",
     "_ZN18V92Phase4Modulator13generateRuNotEv",
     "_ZN18V92Phase4Modulator13generateTRN2uEv",
@@ -1139,7 +1140,7 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 29,
+  "regalloc": 27,
   "reloc": 0,
   "size": 619,
   "unresolved": 0

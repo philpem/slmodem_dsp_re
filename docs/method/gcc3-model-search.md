@@ -1,5 +1,10 @@
 # Calibrated GCC scratch-register search
 
+For whole-TU candidate recording, value/stage diagnostics, bounded allocator
+observation and the Sol–Astra evaluation, see the [recovery pilot](recovery-pilot.md).
+Its CPt trace demonstrates a source change propagating scratch state into a later
+unchanged function; its ADID cursor intervention is a diagnostic, not a source fix.
+
 The GCC search experiment predicts scratch-register choices from captured
 Gentoo GCC 3.4.2-r2 state, enumerates a declared family of function orders, and
 checks the predictions against fresh full-translation-unit compilations.

@@ -32,6 +32,7 @@ identifies the evidence and tools that need adapting for another target.
 | [Compiler policy](compilers.md) | Period compiler authority, portability and floating-point boundaries. |
 | [Experiment design](experiment-design.md) | Baseline controls, crossed experiments and stopping conditions. |
 | [GCC model search](gcc3-model-search.md) | Calibrated scratch-register predictions, bounded source-order search and full-TU forward verification. |
+| [Recovery tooling pilot](recovery-pilot.md) | Interaction-aware candidate checks, memory records and the Sol–Astra evaluation protocol and status. |
 | [Mutation policy](mutation-policy.md) | Optional targeted investigations; no mandatory snapshot refreshes. |
 | [Evidence](evidence.md) | What each form of evidence establishes. |
 | [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
@@ -67,7 +68,8 @@ of that discipline lives.
 
 ## What is deliberately not here
 
-No evidence exists in this tree for how many batches to run concurrently, which
-model or reasoning effort to give one, how to phrase a brief beyond the
-measured/inherited rule, or how often to review. Those are real questions this
-project never measured, and their absence is not a recommendation either way.
+The [recovery tooling pilot](recovery-pilot.md) is measuring model effectiveness
+on bounded reconstruction tasks. Its initial settings and routing rules are
+provisional. Do not infer an optimal batch size, reasoning effort or review
+frequency from those choices; report the measured workload and limits with
+any conclusion.

@@ -185,6 +185,55 @@ So:
 - **Do not re-read a file you just edited.** Edit fails loudly if it did not
   apply.
 
+## Recovery experiments, memory and model selection
+
+Treat SIZE, BYTES and REGALLOC as measured code-generation categories, not
+diagnoses of reconstruction correctness. REGALLOC does not prove semantic
+equivalence: register lanes, implicit operands, control-flow live ranges and
+ABI outputs require their own evidence. Retain the period differential gate.
+
+Before proposing a recovery experiment, query Hindsight for the symbol, TU and
+mechanism, then check the cited record against current inputs. Record the
+hypothesis, native witness, source/header/compiler hashes, tested combinations,
+fixture domain, whole-TU effects and the condition that would reopen a negative
+result. Memory explains prior decisions; reproducible artifacts establish what
+was measured. Stale evidence remains history, not current validation.
+
+Several source differences can interact. For two independently supported
+changes, test baseline, A, B and A+B before rejecting either because its isolated
+grade did not improve. For larger combinations, use bounded experiments and
+ablations. A failed isolated spelling is not a proof against the source
+property; a closer byte count is not sufficient evidence to adopt it. Check
+original function-order evidence and effects on later functions in the complete
+TU; do not add artificial carriers to fit register choices.
+
+Use GPT-6.1 Sol as the provisional default for reconstruction and tooling work.
+Delegate mechanical work to cheaper models when its validation is well defined.
+Consider Astra for conflicting evidence, interacting changes, allocator
+causality, equivalence-detector changes and high-impact negative conclusions.
+These are escalation candidates, not a claim that Astra is always better.
+Record what an escalation added, including attempts that added nothing, and
+periodically sample completed or negative Sol investigations for missed fixes.
+Keep final decisions tied to independently checked evidence, not model identity.
+
+The [recovery pilot](docs/method/recovery-pilot.md) defines the paired evaluation
+and records its status. Keep comparisons independent: identical frozen evidence,
+fresh contexts, separate outputs, declared limits and no cross-agent result or
+live-memory leakage. Historical controls and new recoveries have separate
+denominators. Report actual usage where available and leave unavailable token
+or billing measurements unknown. Model-routing instructions guide spawning;
+they do not change the model of an existing agent.
+
+The 2026-11-05 [pilot](docs/method/recovery-pilot.md) found complementary
+results: Astra supplied additional classifier repairs, Sol found the adopted
+CPt source recovery, and both independently found the cache race. A negative
+rescue narrowed V90CP to peephole2 without recovering it. Use those measured
+cases to guide escalation, not a blanket claim that one model sees every fix.
+Repeat disagreements on new blind tasks before making category-wide rules.
+For analysis provenance, hash the bytes actually parsed: before/after pathname
+hashes alone miss write-and-restore races. Recheck frozen artifacts when memory
+points at a prior result; retain its date and reopening condition.
+
 ## Comparing objects
 
 Use `diff_eq_obj`, not an open-coded byte loop and not a bare `memcmp`:

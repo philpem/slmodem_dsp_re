@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import threading
 TOOLS = Path(__file__).resolve().parent
 sys.path[:] = [p for p in sys.path if Path(p or '.').resolve() != TOOLS]
 import unittest
@@ -33,6 +34,53 @@ class ComparisonTests(unittest.TestCase):
 
     def baseline(self):
         return self.obj('base', [('f', 'mov $1,%eax\nmov %eax,(%edx)\nret'), ('g', 'ret')])
+
+    def test_rewrite_then_restore_cannot_substitute_unhashed_bytes(self):
+        from unittest import mock
+        base = self.baseline()
+        other = self.obj('other', [('f', 'mov $2,%eax\nmov %eax,(%edx)\nret'), ('g', 'ret')])
+        candidate = self.root / 'candidate.o'
+        original = base.read_bytes()
+        candidate.write_bytes(original)
+        session = report.ComparisonSession(base)
+        ready, switched, restore, restored = [threading.Event() for _ in range(4)]
+        errors = []
+        def writer():
+            try:
+                if not ready.wait(10):
+                    raise RuntimeError('writer not scheduled')
+                candidate.write_bytes(other.read_bytes())
+                switched.set()
+                if not restore.wait(10):
+                    raise RuntimeError('restore not scheduled')
+            except Exception as exc:
+                errors.append(str(exc))
+            finally:
+                candidate.write_bytes(original)
+                restored.set()
+        real_compare = report._compare
+        def during_analysis(*args, **kwargs):
+            ready.set()
+            self.assertTrue(switched.wait(10))
+            try:
+                return real_compare(*args, **kwargs)
+            finally:
+                restore.set()
+                self.assertTrue(restored.wait(10))
+        thread = threading.Thread(target=writer)
+        thread.start()
+        try:
+            with mock.patch.object(report, '_compare', during_analysis):
+                result = session.compare(base, candidate)
+        finally:
+            ready.set()
+            restore.set()
+            thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(result['functions']['f']['candidate']['raw'][0], 'EXACT')
+        self.assertEqual(session.compare(base, candidate)['functions'],
+                         report.ComparisonSession(base).compare(base, candidate)['functions'])
 
     def relocation_obj(self, name, immediate=1, target='f', target_offset=0):
         source = self.root / (name + '.s')

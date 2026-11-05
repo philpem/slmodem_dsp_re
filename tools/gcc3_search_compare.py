@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import tempfile
 import weakref
 
 TOOLS = Path(__file__).resolve().parent
@@ -121,8 +122,9 @@ def _compare(api, baseline, candidate, blob, inventory, input_digests):
 class ComparisonSession:
     """Reuse object analysis safely across a batch of variant comparisons.
 
-    The ELF analyzers cache by pathname. A session hashes every input before
-    analysis and clears all pathname-keyed byteident and jumptable caches if a
+    The ELF analyzers cache by pathname. A session captures each input into
+    private, content-keyed snapshot paths and hashes those same bytes. It also
+    clears all pathname-keyed byteident and jumptable caches if a
     previously seen path changes content. The pathname registry and lock are
     shared across sessions because jumptable caches are module-global. Size
     inventories use content hashes, so identical objects at different paths
@@ -140,6 +142,12 @@ class ComparisonSession:
         sys.path.insert(0, str(TOOLS / 'toolchain'))
         self._api = pilot.load_module('gcc3_compare_byteident', TOOLS / 'toolchain/byteident.py')
         self.blob = str(Path(blob or self._api.BLOB).resolve())
+        # Every analyzer receives stable bytes, including across an ABA rewrite
+        # of an original pathname. Retain content paths to preserve batch reuse.
+        snapshot_root = TOOLS.parent / 'build'
+        snapshot_root.mkdir(exist_ok=True)
+        self._snapshot_directory = tempfile.TemporaryDirectory(prefix='gcc3-compare-', dir=snapshot_root)
+        self._paths_by_content = {}
         self._sizes_by_content = {}
         self._size_hits = 0
         self._size_misses = 0
@@ -166,12 +174,15 @@ class ComparisonSession:
 
     def _snapshot_inputs(self, paths):
         digests = {}
+        contents = {}
         changed = False
         unregistered = False
         for path in paths:
             if not Path(path).is_file():
                 raise ValueError('missing object: ' + path)
-            digest = self._digest(path)
+            content = Path(path).read_bytes()
+            digest = hashlib.sha256(content).hexdigest()
+            contents[digest] = content
             digests[path] = digest
             if path not in _GLOBAL_PATH_DIGESTS:
                 unregistered = True
@@ -184,6 +195,13 @@ class ComparisonSession:
             # this session had a digest for the path. Their age/content is
             # unknowable, so discard only those shared caches on first sight.
             _clear_jumptable_caches()
+        for digest, content in contents.items():
+            if digest not in self._paths_by_content:
+                snapshot = Path(self._snapshot_directory.name) / (digest + '.o')
+                with snapshot.open('xb') as stream:
+                    stream.write(content)
+                snapshot.chmod(0o400)
+                self._paths_by_content[digest] = str(snapshot)
         _GLOBAL_PATH_DIGESTS.update(digests)
         return digests
 
@@ -221,9 +239,19 @@ class ComparisonSession:
                                                 for path in paths if path in _GLOBAL_PATH_DIGESTS})
                 raise
             try:
-                inventory = {key: self._sizes(path, input_digests[path]) for key, path in
+                # Hash and analyze the very same captured bytes. Endpoint hashes
+                # alone cannot detect a concurrent write followed by restoration.
+                snapshot_paths = {path: self._paths_by_content[input_digests[path]]
+                                  for path in paths}
+                snapshot_digests = {snapshot_paths[path]: input_digests[path] for path in paths}
+                inventory = {key: self._sizes(snapshot_paths[path], input_digests[path]) for key, path in
                              [('reference', reference), ('baseline', baseline), ('candidate', candidate)]}
-                result = _compare(self._api, baseline, candidate, reference, inventory, input_digests)
+                result = _compare(self._api, snapshot_paths[baseline], snapshot_paths[candidate],
+                                  snapshot_paths[reference], inventory, snapshot_digests)
+                # Provenance names the caller's paths and the captured content,
+                # rather than implementation-specific temporary snapshot names.
+                result['inputs'] = {key: {'path': path, 'sha256': input_digests[path]} for key, path in
+                                    [('reference', reference), ('baseline', baseline), ('candidate', candidate)]}
             finally:
                 try:
                     self._assert_inputs_stable(input_digests)

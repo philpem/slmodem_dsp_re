@@ -371,6 +371,13 @@ REG32 = {"al": "eax", "ah": "eax", "ax": "eax", "eax": "eax",
          "dl": "edx", "dh": "edx", "dx": "edx", "edx": "edx",
          "si": "esi", "esi": "esi", "di": "edi", "edi": "edi",
          "bp": "ebp", "ebp": "ebp", "sp": "esp", "esp": "esp"}
+# Explicit (bit width, least significant bit) within the 32-bit family.
+# Spelling length cannot distinguish ax/al or al/ah.  Preserve the lane as
+# well as the width: renaming eax to edx maps al to dl and ah to dh.
+REG_SHAPE = {reg: ((32, 0) if reg == family else
+                   (8, 8) if reg in ("ah", "bh", "ch", "dh") else
+                   (8, 0) if reg in ("al", "bl", "cl", "dl") else (16, 0))
+             for reg, family in REG32.items()}
 REGTOK = re.compile(r"%(\w+)")
 BARE_REG = re.compile(r"%\w+")
 #
@@ -530,7 +537,8 @@ def alpha_why(x, y):
     altogether -- there, `mov $1,%eax` and `mov $2,%ebx` both read as `mov`.
     Here every immediate and displacement must match exactly and only the
     register NAMES may differ (%eax<->%edx implies %al<->%dl, so tokens are
-    folded to their 32-bit family and the width must still agree).  `%esp` and
+    folded to their 32-bit family and the bit width and low/high lane must
+    still agree).  `%esp` and
     `%ebp` are pinned to themselves: the frame is not a free choice.
 
     THE RENAMING IS PER LIVE RANGE, NOT PER FUNCTION, because that is what a
@@ -539,13 +547,13 @@ def alpha_why(x, y):
     puts two successive values in %eax while ours puts the second in %edx, and
     a function-wide map cannot express that.  A DESTINATION WRITTEN WITHOUT
     BEING READ ends the range that was in it and the pairing lapses there --
-    `mov`, `lea`, `pop`, the `movzx`/`movsx` family, `set*`, `cmov*` and the
+    `mov`, `lea`, `pop`, the `movzx`/`movsx` family, `set*` and the
     `xor r,r` idiom.  `add %eax,%ebx` reads and writes %ebx and is NOT a
     definition; a memory destination is a store, not a definition.
 
     THIS IS A LOOSENING, so it is the direction that risks calling different
-    code equivalent, and `--self-test` exists for that reason: four of its
-    eight cases are things this must still REJECT.
+    code equivalent, and `--self-test` exercises both accepted renamings and
+    cases this must still REJECT.
     """
     #
     # A LENGTH DIFFERENCE IS A DIAGNOSIS, NOT A TOOL ARTEFACT.  This returned a
@@ -586,12 +594,15 @@ def alpha_why(x, y):
     def rebind(fu, fv):
         if fu in ("esp", "ebp") or fv in ("esp", "ebp"):
             return fu == fv
-        old = fwd.pop(fu, None)
-        if old is not None:
-            rev.pop(old, None)
-        old = rev.pop(fv, None)
-        if old is not None:
-            fwd.pop(old, None)
+        # The opposite-side value survives when its mapped partner is
+        # overwritten. Remember that its correspondence was destroyed;
+        # a later read must not invent a fresh partner for that old value.
+        old = fwd.get(fu)
+        if old is not None and old != fv:
+            rev[old] = None
+        old = rev.get(fv)
+        if old is not None and old != fu:
+            fwd[old] = None
         fwd[fu], rev[fv] = fv, fu
         return True
 
@@ -639,7 +650,8 @@ def alpha_why(x, y):
                  and fx[0].strip() == dx and fy[0].strip() == dy
                  and _full_write(dx) and _full_write(dy))
         isdef = bool(fx) and _full_write(dx) and _full_write(dy) and (
-            mx in DEFS or mx.startswith("set") or mx.startswith("cmov") or idiom)
+            mx in DEFS or mx.startswith("set") or idiom)
+        # CMOV preserves its old destination when the condition is false.
         ux = ([] if idiom else fx[:-1]) if isdef else fx
         uy = ([] if idiom else fy[:-1]) if isdef else fy
         rx = REGTOK.findall(" ".join(ux))
@@ -653,8 +665,9 @@ def alpha_why(x, y):
                     return ("row %d NON-REGISTER  %s vs %s  | %s | %s"
                             % (i, u, v, ox, oy))
                 continue
-            if len(u) != len(v):
-                return ("row %d WIDTH  %s vs %s  | %s | %s" % (i, u, v, ox, oy))
+            if REG_SHAPE[u] != REG_SHAPE[v]:
+                return ("row %d WIDTH/LANE  %s vs %s  | %s | %s"
+                        % (i, u, v, ox, oy))
             if not bind(fu, fv):
                 return ("row %d USE CONFLICT  %s wants %s, already bound to %s\n"
                         "        blob %s\n        ours %s"
@@ -665,7 +678,7 @@ def alpha_why(x, y):
             if fu is None or fv is None:
                 if u != v:
                     return ("row %d DEST NON-REGISTER  %s vs %s" % (i, u, v))
-            elif len(u) != len(v) or not rebind(fu, fv):
+            elif REG_SHAPE[u] != REG_SHAPE[v] or not rebind(fu, fv):
                 return ("row %d DEST WIDTH  %s vs %s" % (i, u, v))
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
             return ("row %d NON-REGISTER OPERAND  %s | %s" % (i, ox, oy))
@@ -715,6 +728,49 @@ def verdict(a, ra, b, rb):
 
 
 SELF_TESTS = [
+    ('positive_cmov_live_destination', True, ['mov $0xb,%eax', 'mov $0x16,%edx', 'cmp $0x0,%edx', 'cmove %edx,%eax', "mov %eax,@R_386_32:('symbol', 'out', 0)", 'ret'], ['mov $0xb,%ecx', 'mov $0x16,%edx', 'cmp $0x0,%edx', 'cmove %edx,%ecx', "mov %ecx,@R_386_32:('symbol', 'out', 0)", 'ret']),
+    ('negative_conditional_definition', False, ['mov $0xb,%eax', 'mov $0x16,%edx', 'xor %ecx,%ecx', 'cmp %ecx,%ecx', 'cmovne %ecx,%eax', "mov %eax,@R_386_32:('symbol', 'out', 0)", 'ret'], ['mov $0xb,%eax', 'mov $0x16,%edx', 'xor %ecx,%ecx', 'cmp %ecx,%ecx', 'cmovne %ecx,%edx', "mov %edx,@R_386_32:('symbol', 'out', 0)", 'ret']),
+    ('negative_orphaned_mapping', False, ['mov $0x1,%eax', 'mov $0x2,%ecx', 'mov $0x5,%edx', 'mov $0x3,%eax', 'mov $0x4,%edx', "mov %ecx,@R_386_32:('symbol', 'out', 0)", 'ret'], ['mov $0x1,%eax', 'mov $0x2,%ecx', 'mov $0x5,%edx', 'mov $0x3,%ecx', 'mov $0x4,%eax', "mov %edx,@R_386_32:('symbol', 'out', 0)", 'ret']),
+
+    ("low-byte renaming preserves its lane", True,
+     ["mov (%esi),%eax", "mov %al,(%edi)"],
+     ["mov (%esi),%edx", "mov %dl,(%edi)"]),
+    ("high-byte renaming preserves its lane", True,
+     ["mov (%esi),%eax", "mov %ah,(%edi)"],
+     ["mov (%esi),%edx", "mov %dh,(%edi)"]),
+    ("word renaming preserves width", True,
+     ["mov (%esi),%eax", "mov %ax,(%edi)"],
+     ["mov (%esi),%edx", "mov %dx,(%edi)"]),
+    ("byte use cannot become a word use", False,
+     ["mov %al,(%esi)"], ["mov %dx,(%esi)"]),
+    ("word use cannot become a byte use", False,
+     ["mov %ax,(%esi)"], ["mov %dl,(%esi)"]),
+    ("low-byte use cannot become a high-byte use", False,
+     ["mov %al,(%esi)"], ["mov %dh,(%esi)"]),
+    ("high-byte use cannot become a low-byte use", False,
+     ["mov %ah,(%esi)"], ["mov %dl,(%esi)"]),
+    ("partial destination cannot change width", False,
+     ["mov $0x1,%al"], ["mov $0x1,%dx"]),
+    ("partial destination cannot change lane", False,
+     ["mov $0x1,%ah"], ["mov $0x1,%dl"]),
+    ("low-byte destination renaming is valid", True,
+     ["mov $0x1,%al", "mov %al,(%esi)"],
+     ["mov $0x1,%dl", "mov %dl,(%esi)"]),
+    ("high-byte destination renaming is valid", True,
+     ["mov $0x1,%ah", "mov %ah,(%esi)"],
+     ["mov $0x1,%dh", "mov %dh,(%esi)"]),
+    ("word destination renaming is valid", True,
+     ["mov $0x1,%ax", "mov %ax,(%esi)"],
+     ["mov $0x1,%dx", "mov %dx,(%esi)"]),
+    ("high-byte write leaves the full family binding live", False,
+     ["mov (%esi),%eax", "mov $0x1,%ah", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "mov $0x1,%dh", "mov %edx,(%edi)"]),
+    ("word write leaves the full family binding live", False,
+     ["mov (%esi),%eax", "mov $0x1,%ax", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "mov $0x1,%dx", "mov %edx,(%edi)"]),
+    ("valid partial write retains its existing family binding", True,
+     ["mov (%esi),%eax", "mov $0x1,%ah", "mov %eax,(%edi)"],
+     ["mov (%esi),%edx", "mov $0x1,%dh", "mov %edx,(%edi)"]),
     ("pure renaming accepted", True,
      ["mov 0x4(%esp),%eax", "add $0x1,%eax", "mov %eax,(%edx)"],
      ["mov 0x4(%esp),%ecx", "add $0x1,%ecx", "mov %ecx,(%edx)"]),

@@ -300,24 +300,34 @@ V92Phase4Modulator::~V92Phase4Modulator()
  * `prevBit` and the same +/- selection, which is what the `jmp 18006` says.
  * MOVZWL, full-width NEG and the common terminal MOVSWL keep the magnitude
  * wide until the signed-short return conversion.
+ * The machine tail is shared, but the source returns stay in each arm: GCC
+ * merges this standalone body while retaining the two signed conversions
+ * seen in generateSymbol's inlined CPt arms (0x180dd and 0x189a9).
  */
 int V92Phase4Modulator::generateCPt()
 {
 	unsigned int bit;
 	unsigned int sym;
 
-	if (symbolCount <= 24)
+	if (symbolCount <= 24) {
 		bit = prevBit ^ 1;
-	else
+		prevBit = bit;
+
+		sym = (unsigned short)amplitude;
+		if (bit != 0)
+			sym = -sym;
+		return (short)sym;
+	} else {
 		bit = (unsigned char)scrambler.process(
 			      pattern[(symbolCount - 25) % patternLength])
 		      ^ prevBit;
-	prevBit = bit;
+		prevBit = bit;
 
-	sym = (unsigned short)amplitude;
-	if (bit != 0)
-		sym = -sym;
-	return (short)sym;
+		sym = (unsigned short)amplitude;
+		if (bit != 0)
+			sym = -sym;
+		return (short)sym;
+	}
 }
 
 /*

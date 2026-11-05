@@ -6,12 +6,46 @@ byte-exact grading is performed.
 """
 import argparse
 import hashlib
+from collections import Counter
+from difflib import SequenceMatcher
 import json
 import re
 from pathlib import Path
 from gcc3_reload_trace import instructions, register
 
 NONSTREAM = {'00.cgraph', '08.gcse'}
+
+
+def cgraph_summary(text):
+    """Extract printed GCC3 callgraph records without inventing ABI clone IDs."""
+    phases, current, record = {}, None, None
+    decisions = []
+    unparsed = []
+    for number, line in enumerate(text.splitlines(), 1):
+        heading = re.fullmatch(r'([A-Za-z ]+ callgraph):', line)
+        function = re.fullmatch(r'(.+): ([0-9]+) insns(.*)', line)
+        if heading:
+            current = heading[1]
+            phases.setdefault(current, [])
+            record = None
+        elif function and current is not None:
+            record = {'printed_name': function[1], 'tree_insns': int(function[2]),
+                      'attributes': function[3].strip(), 'edges': {}}
+            phases[current].append(record)
+        elif record is not None and re.match(r'^  (called by|calls):', line):
+            key, value = line.strip().split(':', 1)
+            record['edges'][key] = value.strip()
+        elif line and not line[0].isspace():
+            record = None
+            if any(word in line.lower() for word in ('inlin', 'growth', 'reclaim')):
+                decisions.append({'line': number, 'text': line})
+            else:
+                unparsed.append({'line': number, 'text': line})
+        elif line.strip():
+            unparsed.append({'line': number, 'text': line})
+    return {'phases': phases, 'function_records': sum(map(len, phases.values())),
+            'decision_lines': decisions, 'unparsed_lines': unparsed,
+            'scope': 'whole-TU printed names and ordered records; ABI clone and RTL correspondence unproven'}
 
 
 def normalize(node):
@@ -44,8 +78,9 @@ def discover(folder, stem=None):
     return prefix, stages, excluded
 
 
-def chunks(path, header):
-    blocks = re.split(r'^;; Function ', path.read_text(), flags=re.M)[1:]
+def chunks(path, header, content=None):
+    text = path.read_bytes().decode() if content is None else content.decode()
+    blocks = re.split(r'^;; Function ', text, flags=re.M)[1:]
     selected = [block for block in blocks if block.splitlines()[0].strip() == header]
     if not selected:
         available = [block.splitlines()[0].strip() for block in blocks]
@@ -54,8 +89,8 @@ def chunks(path, header):
     return selected
 
 
-def selected_streams(path, header, clone=None, all_clones=False):
-    blocks = chunks(path, header)
+def selected_streams(path, header, clone=None, all_clones=False, content=None):
+    blocks = chunks(path, header, content)
     if all_clones:
         indexes = list(range(len(blocks)))
     elif clone is not None:
@@ -79,6 +114,109 @@ def sets(node):
 
 def fingerprint(node):
     return json.dumps(normalize(node), separators=(',', ':'))
+
+
+def shape(node):
+    """Alignment key only. Reports always retain complete operand evidence."""
+    if not isinstance(node, list):
+        return '<atom>'
+    return [node[0]] + [shape(child) for child in node[1:]] if node else []
+
+
+def evidence(node):
+    regs, annotations = [], []
+    def visit(item):
+        if not isinstance(item, list):
+            return
+        reg = register(item)
+        if reg is not None:
+            regs.append({'number': reg, 'kind': 'pseudo' if reg >= 53 else 'hard',
+                         'operand': normalize(item)})
+        if any(isinstance(x, str) and ('[' in x or '<' in x) for x in item):
+            annotations.append(normalize(item))
+        for child in item:
+            visit(child)
+    visit(node)
+    return {'register_operands': regs, 'retained_annotations': annotations}
+
+
+def operand_changes(a, b, path=()):
+    if a == b:
+        return []
+    if isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+        return [change for i, (x, y) in enumerate(zip(a, b))
+                for change in operand_changes(x, y, path + (i,))]
+    return [{'path': list(path), 'left': normalize(a), 'right': normalize(b)}]
+
+
+def structural_alignment(a, b, limit):
+    """Unique monotone exact anchors, then unique shapes inside each gap.
+
+    Never guess an association of repeated shapes, even if position suggests
+    one. No pseudo, label, constant, mode or subreg evidence is normalized away.
+    """
+    au, bu = list(a), list(b)
+    ak, bk = [fingerprint(a[u]) for u in au], [fingerprint(b[u]) for u in bu]
+    ac, bc = Counter(ak), Counter(bk)
+    if ak == bk:
+        return {'status': 'complete', 'equal': True,
+                'aligned_pairs': len(au), 'changed_pair_count': 0,
+                'uid_renumbered_pairs': sum(x != y for x, y in zip(au, bu)),
+                'unmatched_left_uids': [], 'unmatched_right_uids': [],
+                'ambiguities': [], 'examples': [],
+                'scope': 'identical ordered patterns; UIDs excluded, operands retained'}
+    anchors = []
+    for block in SequenceMatcher(None, ak, bk, autojunk=False).get_matching_blocks():
+        for i in range(block.size):
+            x, y = block.a + i, block.b + i
+            if ac[ak[x]] == bc[bk[y]] == 1:
+                anchors.append((x, y))
+    pairs, ambiguous = [], []
+    last_a = last_b = -1
+    for x, y in anchors + [(len(au), len(bu))]:
+        aa, bb = list(range(last_a + 1, x)), list(range(last_b + 1, y))
+        ash = [json.dumps(shape(a[au[i]])) for i in aa]
+        bsh = [json.dumps(shape(b[bu[i]])) for i in bb]
+        ca, cb = Counter(ash), Counter(bsh)
+        proposed = [(i, bb[bsh.index(key)]) for i, key in zip(aa, ash)
+                    if ca[key] == cb[key] == 1]
+        # Crossing matches indicate reordering; preserve as unresolved evidence.
+        if [j for _, j in proposed] == sorted(j for _, j in proposed):
+            pairs.extend((i, j, 'unique-shape-in-gap') for i, j in proposed)
+        elif proposed:
+            ambiguous.append({'reason': 'crossing shape candidates',
+                              'left_uids': [au[i] for i in aa],
+                              'right_uids': [bu[j] for j in bb]})
+        repeated = [key for key in ca.keys() & cb.keys() if ca[key] > 1 or cb[key] > 1]
+        if repeated:
+            ambiguous.append({'reason': 'repeated shapes in unmatched gap',
+                              'left_uids': [au[i] for i in aa],
+                              'right_uids': [bu[j] for j in bb]})
+        if x < len(au):
+            pairs.append((x, y, 'unique-exact-anchor'))
+        last_a, last_b = x, y
+    pairs.sort()
+    aligned_a, aligned_b = {i for i, _, _ in pairs}, {j for _, j, _ in pairs}
+    changed = [(i, j, why) for i, j, why in pairs if ak[i] != bk[j]]
+    unmatched_a = [au[i] for i in range(len(au)) if i not in aligned_a]
+    unmatched_b = [bu[j] for j in range(len(bu)) if j not in aligned_b]
+    complete = not unmatched_a and not unmatched_b and not ambiguous
+    return {'status': 'complete' if complete else 'ambiguous-or-unmatched',
+            'equal': complete and not changed,
+            'aligned_pairs': len(pairs), 'changed_pair_count': len(changed),
+            'uid_renumbered_pairs': sum(au[i] != bu[j] for i, j, _ in pairs),
+            'unmatched_left_uids': unmatched_a, 'unmatched_right_uids': unmatched_b,
+            'ambiguities': ambiguous,
+            'unmatched_examples': {
+                'left': [{'uid': u, 'pattern': normalize(a[u]), 'evidence': evidence(a[u])} for u in unmatched_a[:limit]],
+                'right': [{'uid': u, 'pattern': normalize(b[u]), 'evidence': evidence(b[u])} for u in unmatched_b[:limit]]},
+            'examples': [{'left_uid': au[i], 'right_uid': bu[j], 'basis': why,
+                          'left': normalize(a[au[i]]), 'right': normalize(b[bu[j]]),
+                          'left_evidence': evidence(a[au[i]]),
+                          'right_evidence': evidence(b[bu[j]]),
+                          'operand_changes': operand_changes(normalize(a[au[i]]), normalize(b[bu[j]]))}
+                         for i, j, why in changed[:limit]],
+            'scope': 'instruction patterns only; label refs remain literal; notes/CFG not aligned'}
 
 
 def immediate(node):
@@ -137,8 +275,11 @@ def compare(left, right, header, stem=None, clone=None, all_clones=False,
     match_counts = None
     stream_count = 0
     for stage in sorted(ls):
-        lc, lrows = selected_streams(ls[stage], header, clone, all_clones)
-        rc, rrows = selected_streams(rs[stage], header, clone, all_clones)
+        # Parse and hash the same captured bytes, even if a producer rewrites
+        # the pathname during analysis. This is per-file, not a build snapshot.
+        left_bytes, right_bytes = ls[stage].read_bytes(), rs[stage].read_bytes()
+        lc, lrows = selected_streams(ls[stage], header, clone, all_clones, left_bytes)
+        rc, rrows = selected_streams(rs[stage], header, clone, all_clones, right_bytes)
         if lc != rc or set(lrows) != set(rrows):
             raise ValueError('clone sets differ')
         if match_counts is None:
@@ -148,8 +289,8 @@ def compare(left, right, header, stem=None, clone=None, all_clones=False,
         if stage in (scratch_before, scratch_after):
             stored['left'][stage] = lrows
             stored['right'][stage] = rrows
-        row = {'stage': stage, 'left_sha256': hashlib.sha256(ls[stage].read_bytes()).hexdigest(),
-               'right_sha256': hashlib.sha256(rs[stage].read_bytes()).hexdigest(),
+        row = {'stage': stage, 'left_sha256': hashlib.sha256(left_bytes).hexdigest(),
+               'right_sha256': hashlib.sha256(right_bytes).hexdigest(),
                'clones': []}
         for index in lrows:
             a, b = lrows[index], rrows[index]
@@ -161,6 +302,7 @@ def compare(left, right, header, stem=None, clone=None, all_clones=False,
             row['clones'].append({'index': index, 'left_instructions': len(a),
                                   'right_instructions': len(b),
                                   'equal': not changed and order_equal,
+                                  'structural_alignment': structural_alignment(a, b, limit),
                                   'instruction_uid_order_equal': order_equal,
                                   'changed_uid_count': len(changed),
                                   'changed_uids': changed,
@@ -173,6 +315,23 @@ def compare(left, right, header, stem=None, clone=None, all_clones=False,
                                if not next(c for c in row['clones']
                                            if c['index'] == index)['equal']), None)
              for index in lrows}
+    structural_first = {str(index): next((row['stage'] for row in stages
+        if not next(c for c in row['clones'] if c['index'] == index)['structural_alignment']['equal']), None)
+        for index in lrows}
+    nonstream = []
+    for stage in sorted(set(le) | set(re_)):
+        apath, bpath = left / (lp + '.' + stage), right / (rp + '.' + stage)
+        left_bytes = apath.read_bytes() if apath.exists() else None
+        right_bytes = bpath.read_bytes() if bpath.exists() else None
+        nonstream.append({'stage': stage, 'scope': 'whole dump bytes, no RTL/causal claim',
+            'status': 'raw-equal' if left_bytes is not None and right_bytes is not None and left_bytes == right_bytes else 'different-or-missing; unsupported structural format',
+            'left_sha256': hashlib.sha256(left_bytes).hexdigest() if left_bytes is not None else None,
+            'right_sha256': hashlib.sha256(right_bytes).hexdigest() if right_bytes is not None else None})
+        if stage == '00.cgraph' and left_bytes is not None and right_bytes is not None:
+            left_graph, right_graph = cgraph_summary(left_bytes.decode()), cgraph_summary(right_bytes.decode())
+            nonstream[-1]['callgraph'] = {'left': left_graph, 'right': right_graph,
+                'printed_records_equal': left_graph['phases'] == right_graph['phases'],
+                'nonempty_both': bool(left_graph['function_records'] and right_graph['function_records'])}
     scratch = {}
     for label in ('left', 'right'):
         source = stored[label]
@@ -185,7 +344,10 @@ def compare(left, right, header, stem=None, clone=None, all_clones=False,
             'matched_clones_per_directory': match_counts,
             'selected_clones': list(lrows), 'instruction_streams': stream_count,
             'stage_pairs': len(stages), 'excluded_nonstream_dumps': [le, re_],
-            'first_pattern_or_order_divergence': first, 'stages': stages,
+            'first_pattern_or_order_divergence': first,
+            'first_observed_structural_difference_or_unresolved': structural_first,
+            'interpretation': 'earliest observed dump difference is not allocator causality; original blob RTL unavailable',
+            'nonstream_comparisons': nonstream, 'stages': stages,
             'store_split_window': [scratch_before, scratch_after],
             'observable_store_splits': scratch,
             'store_split_scope': 'unique destination / nearest preceding SET; no CFG or liveness proof',
@@ -218,7 +380,9 @@ def main():
     print('%d stage pairs / %d RTL streams / selected clones %s'
           % (result['stage_pairs'], result['instruction_streams'],
              result['selected_clones']))
-    print('first divergence: ' + json.dumps(result['first_pattern_or_order_divergence']))
+    print('first UID/pattern divergence: ' + json.dumps(result['first_pattern_or_order_divergence']))
+    print('first observed structural difference/unresolved: ' + json.dumps(result['first_observed_structural_difference_or_unresolved']))
+    print('Earliest observed dump difference is not allocator causality.')
     print('observable store splits: ' + json.dumps(
         {side: {index: len(items) for index, items in clones.items()}
          for side, clones in result['observable_store_splits'].items()}))

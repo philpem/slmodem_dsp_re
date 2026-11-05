@@ -7,6 +7,43 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## Use whole-TU evidence and interacting candidates
+
+The [recovery pilot](recovery-pilot.md) adds a practical loop: retrieve prior
+attempts, pin inputs, compare baseline/A/B/A+B, inspect all changed bodies and
+data targets, then run period fixtures at a stated boundary. Use
+`tools/recovery_experiment.py` for the immutable ledger and freshness queries;
+`tools/gcc3_search_compare.py` analyzes stable content snapshots so a concurrent
+write-and-restore cannot silently grade different bytes under the recorded hash.
+A failed A or B alone is not evidence against A+B: CrossDataLinks required both
+conversion helpers for its historical REGALLOC result.
+
+SIZE and BYTES can both hide wrong reconstruction. REGALLOC can also hide
+width/lane and dataflow mistakes; width and bit-position checks now reject
+AX/AL and AH/AL substitutions, but CFG, implicit registers and ABI limitations
+remain. A stricter heuristic demotion does not establish a new source defect.
+Use `tools/gcc3_owner_trace.py` to nominate bounded owner/width cases and read
+its supported/unknown/ambiguous denominator before interpreting silence.
+
+A shared machine tail need not have been shared source. Duplicating CPt's
+unchanged return operations into its two source branches made the standalone
+function exact and retained native redundant conversions in its inline caller.
+It also moved a later, unchanged reset function's registers: the observed
+scratch cursor changed in CPt and persisted across the TU. Reset's dumps first
+differed at peephole2, not initial RTL. Review that collateral explicitly;
+matching local source or unchanged function event counts do not isolate a
+function from earlier allocation history. Do not reorder functions or add
+artificial state carriers merely to obtain a preferred dead register.
+
+Use `tools/gcc3_stage_divergence.py` to find anchored structural/operand changes
+and unresolved alignment, not to erase operands and manufacture equality.
+Its cgraph summary retains printed clone records; it does not prove which
+record maps to a constructor ABI symbol. `tools/gcc3_alloc_trace.py` observes
+local choices and global-pass entry on a pinned captured compiler, verifying
+unchanged assembly/object output. It is instrumentation, not a complete model
+of global allocation or reload. Earliest observed divergence is a location to
+investigate, not automatically the cause.
+
 ## Classify the compiler stage before searching register spellings
 
 The [V.34 small-RTL study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/v34-small-rtl.md) separates several mechanisms
