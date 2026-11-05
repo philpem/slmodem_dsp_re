@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conditional, bounded replay of observed GCC3 SI/general scratch searches.
+"""Conditional, bounded replay of observed GCC3 HI/SI general scratch searches.
 
 This is apparatus, not a model of the compiler's full state. Eligibility,
 allocation order, exclusions and peephole boundaries are frozen per event.
@@ -28,6 +28,15 @@ DEFAULT_LIMIT = 100000
 OUTPUT_CAP = 10000
 INPUT_KEYS = ("function", "constraint", "mode", "from", "to",
               "allocation_order", "excluded", "eligibility")
+# Pinned Gentoo cc1 80a79e52...: ix86_hard_regno_mode_ok at
+# 0x825a894..0x825a8d5 accepts HI=11/SI=12 for hard registers 0..7.
+# Both bypass the QI-only branch. mode_size is 2/4 respectively; the
+# peep2_find_free_register span at 0x81f0b58 is ceil(size/4), hence one
+# live/reserved register in either mode. Pinned cc1plus b778f44b... has the
+# same tests at 0x82a67a8..0x82a67e9 and span at 0x823ca6c, and the same
+# mode values/classes/sizes. This does NOT establish QI, wider
+# modes, or non-GPR eligibility. The same filters and frozen inputs apply.
+GENERAL_REGISTER_MODES = frozenset(("HImode", "SImode"))
 
 
 class ModelError(ValueError):
@@ -65,7 +74,8 @@ def _event(event, where):
              f"{where}: missing event fields: {sorted(set(required) - event.keys())}")
     _require(isinstance(event["function"], str) and event["function"],
              f"{where}: missing function name")
-    _require(event["constraint"] == "r" and event["mode"] == "SImode",
+    _require(event["constraint"] == "r" and isinstance(event["mode"], str)
+             and event["mode"] in GENERAL_REGISTER_MODES,
              f"{where}: unsupported constraint/mode {event['constraint']!r}/{event['mode']!r}")
     for key in ("cursor_before", "cursor_after"):
         _integer(event[key], 0, SLOTS - 1, f"{where}.{key}")
@@ -100,7 +110,7 @@ def _event(event, where):
             continue
         if reg in state["live"] or reg in event["excluded"]:
             continue
-        _require(reg < 8, f"{where}: unsupported SI register-mode eligibility for register {reg}")
+        _require(reg < 8, f"{where}: unsupported {event['mode']} register-mode eligibility for register {reg}")
         eligible.append(reg)
     # Candidate observations are redundant evidence, but corrupt observations
     # must not be silently ignored. No candidate count is assumed by this API.

@@ -2,9 +2,11 @@
 
 The model transferred to three additional translation units and correctly
 predicted a byte-exact `FloatFIR::reset` in three source-order controls. None
-of those controls preserved the original object's function order, so no
-reconstruction source change was retained. The experiment establishes useful
-compiler predictions and identifies the boundary of their recovery value.
+of those controls preserved the original object's emitted function order.
+The body gains and layout differences are separate results; no reconstruction
+source change was retained in this initial study. The experiment establishes
+useful compiler predictions and leaves their adoption for source and layout
+review.
 
 This study follows the toolkit committed as `b93beb9e8`. Inputs are the
 unchanged complete translation units at that revision, compiled with the
@@ -14,6 +16,10 @@ literally. Capture also required ordinary, repeated and observed compiler
 outputs to agree.
 
 ## Baseline coverage
+
+This table records the initial SI-only model. The later
+[HI extension](gcc3-model-search.md#add-another-mechanism) also calibrates the
+complete toneiir stream; it does not change the baseline objects or grades.
 
 | Translation unit | EXACT / shared sized functions | Scratch events | Whole-stream model |
 | --- | --- | --- | --- |
@@ -55,12 +61,15 @@ covered four generated source variants: all three predicted positives and
 one negative, with 28/28 events verified. This is not a claim that all six
 source variants were compiled.
 
-Independent ordering evidence rejects adoption. The baseline emitted order
+Independent ordering evidence identifies a layout tradeoff. The baseline emitted order
 matches the reference's eight sized symbol groups, including constructor and
 destructor variants. All three positive permutations change that order.
 Cells 2 and 3 change only the reset body or its relocations; cell 5 also
-changes the already non-exact scalar process. A local EXACT gain does not
-justify moving the full object away from its recorded layout.
+changes the already non-exact scalar process. These are measured function-body
+gains with a separate placement mismatch, not evidence that the unknown
+original source used a particular definition order. Adoption requires weighing
+both results and period differential validation; emitted order alone is not
+an automatic veto.
 
 Keeping the original order, hypothetical TU-entry cursors 2 through 14 would
 also select EDX (13/53 states). The actual compiler begins at zero and emits
@@ -98,6 +107,45 @@ SIZE(14) residual begins in frame/save construction: the reference uses stores
 within a 12-byte frame where the reconstruction uses pushes and a four-byte
 frame. This difference is already present in the pre-peephole RTL. Predicting
 the scratch choices does not explain or repair that earlier decision.
+
+## Follow-up: source families and earlier compiler decisions
+
+A further FloatFIR experiment compiled 29 cells preserving the original
+emitted order: 27 distinct source programs and 19 distinct raw objects.
+The families tested captured history pointers and index decrements, owner-load
+order, local convolution expansion, and accumulator/operand orientation.
+Across 232 function reviews there were no EXACT gains or losses and no
+REGALLOC gains. Some accumulator-width alternatives lack differential
+validation and remain compile-only controls. A fresh observation of one
+negative repeated all seven baseline scratch decisions.
+
+The reset-first positive was also rebuilt and literally reproduced the earlier
+object. Only reset's canonical body changed, from REGALLOC (raw BYTES4) to
+EXACT; seven other bodies, exports and allocated data were unchanged. Baseline
+and positive each passed `t_floatfir` (47,226 checks) and `t_v90prefilter`
+(125,693 checks), relinked with existing period fixtures and other-TU objects.
+This adds bounded behavioural evidence to the body gain while retaining the
+separate emitted-order mismatch. No source alternative was adopted in this
+wave. Reports are in `build/gcc3-fir-recovery/summary.json` and
+`parent-review.json` in that directory.
+
+V.92 controls using `isFull()` or a local space value reproduce an exact
+85-byte `Queue<float>::write(float)`, but change the previously exact
+`V92Modulator` C2 constructor to BYTES7 and also change `progress`. Three
+full-TU cells, including the unchanged production baseline, provide 90
+function verdicts; exports and allocated data remain unchanged. These are
+diagnostic controls, not retained source edits.
+
+A read-only compiler observation locates the queue frame decision before
+reload. With unchanged active-instruction counts, the baseline's success-path
+frequency is 9833 and its weighted instruction sum is 201683, above the
+200000 threshold. Both controls lower that frequency to 9600 and the sum to
+199984. GCC then selects the reference's move-save prologue instead of push
+saves. The branch-prediction dump attributes the difference to combining the
+opcode-nonequal and negative-return heuristics in the baseline; the controls
+retain only the latter. This establishes a source-to-prologue mechanism worth
+modelling separately from peephole scratch selection. Evidence is under
+`build/gcc3-v92-recovery/`.
 
 ## Reproduction and artifacts
 

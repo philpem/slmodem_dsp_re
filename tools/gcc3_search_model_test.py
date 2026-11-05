@@ -87,7 +87,7 @@ class ScratchModelTest(unittest.TestCase):
             del trace["events"][1][key]
             with self.subTest(key=key), self.assertRaises(model.ModelError):
                 model.calibrate(trace)
-        for key, value in (("mode", "DImode"), ("constraint", "q")):
+        for key, value in (("mode", "QImode"), ("mode", "DImode"), ("constraint", "q")):
             trace = baseline()
             trace["events"][1][key] = value
             with self.subTest(key=key), self.assertRaisesRegex(model.ModelError, "unsupported"):
@@ -109,6 +109,52 @@ class ScratchModelTest(unittest.TestCase):
         trace["events"][1]["cursor_before"] = 0
         with self.assertRaisesRegex(model.ModelError, "discontinuity"):
             model.calibrate(trace)
+
+    def test_hi_uses_one_gpr_with_upper_gprs_live_neighbors_and_wrap(self):
+        # Hand-derived: live/excluded neighbors do not consume a second GPR
+        # for HI. Unlike QI, hard registers 4..7 are in this supported domain.
+        for reg in range(4, 8):
+            row = event("halfword", [reg, (reg + 1) % 8], 52, reg, reg + 1)
+            row["mode"] = "HImode"
+            row["eligibility"]["live"] = [(reg + 1) % 8]
+            with self.subTest(reg=reg):
+                calibrated = model.calibrate(envelope([row]))
+                outcomes = calibrated["blocks"][0]["transitions"]
+                self.assertEqual(len(outcomes), 53)
+                self.assertEqual({t["events"][0]["selected"] for t in outcomes}, {reg})
+                self.assertEqual({t["cursor_after"] for t in outcomes}, {reg + 1})
+        row = event("unsupported-halfword-register", [8], 0, 8, 9)
+        row["mode"] = "HImode"
+        with self.assertRaisesRegex(model.ModelError, "HImode register-mode"):
+            model.calibrate(envelope([row]))
+
+    def test_mixed_modes_reordered_and_changed_eligibility_or_mode_refused(self):
+        trace = baseline()
+        trace["events"][0]["mode"] = "HImode"
+        calibrated = model.calibrate(trace)
+        actual = held_out()
+        actual["events"][1]["mode"] = "HImode"
+        order = ["B#1", "A#1", "C#1"]
+        self.assertEqual(model.verify(calibrated, order, actual)["verified_events"], 3)
+        for changed in ("eligibility", "mode"):
+            bad = copy.deepcopy(actual)
+            if changed == "mode":
+                # The same outcome in another supported mode is still a
+                # changed mechanism input, never a license to relabel it.
+                bad["events"][1]["mode"] = "SImode"
+            else:
+                bad["events"][1]["eligibility"]["ever_live"][7] = 1
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                    model.ModelError, "changed mechanism input " + changed):
+                model.verify(calibrated, order, bad)
+
+    def test_corrupt_hi_decision_and_cursor_refused(self):
+        for key, value in (("selected", 4), ("cursor_after", 2)):
+            trace = baseline()
+            trace["events"][0]["mode"] = "HImode"
+            trace["events"][0][key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(model.ModelError, "selection/cursor"):
+                model.calibrate(trace)
 
     def test_repeated_order_slots_use_slot_position(self):
         order = [0, 0] + list(range(1, 52))

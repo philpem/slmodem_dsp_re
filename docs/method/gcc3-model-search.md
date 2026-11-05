@@ -7,7 +7,8 @@ Generated source and compiler artifacts stay outside `src/`.
 
 This is the first bounded implementation of the Norcroft experiment's method
 for this compiler. Its supported mechanism is `peep2_find_free_register` for
-`SImode` with constraint `r`. The model holds the captured eligibility and
+single-GPR `HImode` and `SImode` with constraint `r`. The model holds the
+captured eligibility and
 event sequence fixed while changing the incoming search cursor. It does not
 predict general allocation, spills, scheduling, inlining or x87 stack choices.
 
@@ -184,7 +185,53 @@ observed events is outside this mechanism's observed coverage, not proven
 insensitive to all source changes. See the [non-exact-TU study](gcc3-model-nonexact-study.md)
 for positive controls and boundaries found by the first wider screen.
 
+### Compare a complete source variant
+
+Use the separate object report to review an experimental TU against its
+unchanged baseline and the reference:
+
+```sh
+python3 tools/gcc3_search_compare_test.py
+python3 tools/gcc3_search_compare.py \
+    --baseline build/baseline.o --candidate build/variant.o \
+    --output build/variant-comparison.json
+```
+
+The report retains raw byte verdicts and applies `byteident.py`'s existing
+register-equivalence check to report `REGALLOC`. It lists grade transitions,
+missing and added functions, changed bodies, exported bindings and raw
+allocated-data differences. It compares emitted address groups within each
+section separately from function grades, without inferring source definition
+order or final linked placement. Aliases share an address group.
+
+The denominator includes functions present in all three objects. Inventory
+differences are reported separately so a removed function cannot silently
+become an apparent gain. Raw data differences need relocation-aware review;
+the report does not classify them as semantic failures. Input and analyser
+hashes identify the comparison, but the caller must establish compiler and
+source provenance and run the period differential gate before adoption.
+
+The initial pilot and screen retain their raw `verdict()` labels. Consequently
+a raw `BYTES` or `SIZE` there can be `REGALLOC` in this fuller report. Regrading
+the four unchanged study TUs finds 51 EXACT, 4 REGALLOC, 2 BYTES and 17 SIZE
+functions out of 74; this is a reporting refinement, not a source gain.
+
 ### Add another mechanism
+
+The HI extension checks the pinned C and C++ compilers' mode eligibility and
+register span: HI and SI accept GPRs 0..7 and consume one hard register. QI
+takes an additional target-dependent path and remains unsupported, as do
+wider modes and eligible non-GPRs. Mode is still a frozen verification input;
+changing HI to SI invalidates a prediction even if its selected register agrees.
+
+The mixed toneiir baseline contains 10 SI and 6 HI searches. A read-only
+observer checked 174 candidate visits and 42 actual mode-check returns without
+changing the emitted object. A prediction saved before a fresh full-TU
+create/reset reordering verified all 16 held-out events, including changed HI
+choices. Its eight shared functions retained 3 EXACT, 1 REGALLOC and 4 SIZE
+grades; exports and allocated data were unchanged. The reordered control is
+model evidence, with no claimed source gain. Artifacts are under
+`build/gcc3-hi-model-20261105/`, including `parent-review.json`.
 
 Add another compiler mechanism only after its unchanged decisions can be
 replayed and checked on held-out source variants. Integer allocation will

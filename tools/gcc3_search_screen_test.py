@@ -108,10 +108,10 @@ class ScreenTest(unittest.TestCase):
 
     def test_unsupported_mode_still_requires_complete_valid_common_observations(self):
         evidence = trace()
-        evidence['events'][0]['mode'] = 'HImode'
+        evidence['events'][0]['mode'] = 'QImode'
         status, calibrated = screen.screen_trace(evidence)
         self.assertIsNone(calibrated)
-        self.assertEqual(status['unsupported_events'][0]['mode'], 'HImode')
+        self.assertEqual(status['unsupported_events'][0]['mode'], 'QImode')
         self.assertEqual(status['locally_checked_supported_decisions'], 2)
         changes = [('cursor_before', lambda row: row.__setitem__('cursor_before', 'bad')),
                    ('eligibility', lambda row: row['eligibility'].__setitem__('fixed', [0])),
@@ -119,15 +119,34 @@ class ScreenTest(unittest.TestCase):
                    ('selected', lambda row: row.__setitem__('selected', 53))]
         for label, change in changes:
             evidence = trace()
-            evidence['events'][0]['mode'] = 'HImode'
+            evidence['events'][0]['mode'] = 'QImode'
             change(evidence['events'][0])
             with self.subTest(label=label), self.assertRaises((screen.ScreenError, screen.model_api.ModelError)):
                 screen.screen_trace(evidence)
 
     def test_supported_corrupt_outcome_is_refused_inside_unsupported_stream(self):
         evidence = trace()
-        evidence['events'][0]['mode'] = 'HImode'
+        evidence['events'][0]['mode'] = 'QImode'
         evidence['events'][1]['selected'] = 4
+        with self.assertRaisesRegex(screen.ScreenError, 'selection/cursor.*local supported'):
+            screen.screen_trace(evidence)
+
+    def test_mixed_hi_si_stream_is_fully_modeled_with_modes_preserved(self):
+        evidence = trace()
+        evidence['events'][0]['mode'] = 'HImode'
+        status, calibrated = screen.screen_trace(evidence)
+        self.assertEqual(status['status'], 'calibrated_whole_stream')
+        self.assertEqual((status['observed_events'], status['modeled_events']), (3, 3))
+        self.assertEqual(status['locally_checked_supported_decisions'], 3)
+        result = screen.classify_functions({'sensitive': ['BYTES', 1]}, evidence['events'], calibrated)
+        self.assertEqual(result['functions'][0]['modes'], {'HImode': 1})
+        self.assertEqual(result['nonexact_cursor_sensitive'], ['sensitive'])
+
+    def test_corrupt_hi_outcome_is_refused_inside_unsupported_stream(self):
+        evidence = trace()
+        evidence['events'][0]['mode'] = 'HImode'
+        evidence['events'][0]['selected'] = 4
+        evidence['events'][2]['mode'] = 'QImode'
         with self.assertRaisesRegex(screen.ScreenError, 'selection/cursor.*local supported'):
             screen.screen_trace(evidence)
 
