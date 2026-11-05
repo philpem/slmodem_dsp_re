@@ -320,10 +320,12 @@ that was the right call.
 
 ## Check the address when replacing a raw access
 
-A raw-offset-to-member conversion must preserve the **owner, byte offset and
-access width at every changed use**. Record the old constant's resolved value
-and the new member's complete nested offset; check them with the period layout
-before interpreting code-generation changes. Correct struct assertions alone
+A change between a raw access, a member and an owner-relative view must
+preserve the **owner, byte offset and access width at every changed use**.
+Record both complete resolved offsets and check them with the period layout
+before interpreting code-generation changes. A member-derived displacement
+can retain named-field evidence when native code uses an interior owner base;
+it does not identify a unique original type. Correct struct assertions alone
 do not prove that a use selected the correct member.
 
 The V.32 status/control audit found five wrong field selections introduced by

@@ -683,6 +683,84 @@ run_created_loop(int middle_ms)
 	return diff_end();
 }
 
+/* Constructor/audio lifecycle at the cadence component boundary. Country
+ * parameters select one-cycle BUSY matching; no filter/history state is planted.
+ * The three-cycle and unrolled cases independently control admission/detection. */
+static int
+run_created_first_cycle(int cycles, int loose)
+{
+	struct cadence_setup sa, sb;
+	struct cadence *a, *b;
+	int segment, sample = 0, completed = 0;
+	int first_calls = -1, first_hits = -1;
+	int call_base_a, call_base_b;
+	char label[100];
+
+	snprintf(label, sizeof label,
+		 "cadence: created first cycle, cycles %d loose %d", cycles, loose);
+	diff_begin(label);
+	harness_param_reset();
+	harness_param_set(GetBusyToneCallProgressFilterIndex, 6);
+	harness_param_set(GetDialToneCallProgressFilterIndex, 6);
+	harness_param_set(GetDialToneDetectionThreshold, 40);
+	harness_param_set(GetBusyDetectionCyclesNumber, cycles);
+	harness_param_set(GetBusyToneLooseDetectionEnabled, loose);
+	harness_param_set(GetBusyToneDiffTime, 6);
+	harness_param_set(GetMaxBusyCadenceOnTime, 200);
+	harness_param_set(GetMinBusyCadenceOnTime, 20);
+	harness_param_set(GetMaxBusyCadenceOffTime, 200);
+	harness_param_set(GetMinBusyCadenceOffTime, 20);
+	memset(&sa, 0, sizeof sa);
+	sa.tone = CADENCE_TONE_BUSY;
+	sb = sa;
+	a = ref_cadence_create(0, &sa, 0, (void *)0xD00Du);
+	b = cadence_create(0, &sb, 0, (void *)0xD00Du);
+	diff_eq_int("both constructed (%ld)", a != 0 && b != 0, 1, 0);
+	if (!a || !b) {
+		if (a) ref_cadence_delete(a);
+		if (b) cadence_delete(b);
+		return diff_end();
+	}
+	diff_eq_int("native configured cycles (%ld)", a->cycles, cycles, 0);
+	diff_eq_int("native configured matcher (%ld)", a->looped_match, loose, 0);
+	call_base_a = harness_param_ref.calls;
+	call_base_b = harness_param_ours.calls;
+	for (segment = 0; segment < 3; segment++) {
+		int i;
+		phase = 0.0;
+		for (i = 0; i < 4000; i++) {
+			short v = segment == 1 ? tone_sample(i, 0, 0,
+				CADENCE_TEST_AMPLITUDE) : 0;
+			int previous_state = a->state;
+			int calls_before = harness_param_ref.calls;
+			int ra = ref_cadence_progress(a, v);
+			int rb = cadence_progress(b, v);
+			diff_eq_int("first-cycle audio return (%ld)", rb, ra, sample);
+			diff_eq_int("first-cycle parameter calls (%ld)",
+				harness_param_ours.calls - call_base_b,
+				harness_param_ref.calls - call_base_a, sample);
+			compare(b, a, sample);
+			if (previous_state == CADENCE_IN_TONE
+			    && a->state == CADENCE_IN_SILENCE) {
+				if (completed == 0) {
+					first_calls = harness_param_ref.calls - calls_before;
+					first_hits = ra == CADENCE_DETECTED;
+				}
+				completed++;
+			}
+			sample++;
+		}
+	}
+	diff_eq_int("native completed one tone (%ld)", completed, 1, sample);
+	diff_eq_int("native first-cycle matcher admission (%ld)",
+		first_calls, cycles == 1, sample);
+	diff_eq_int("native first-cycle cadence verdict (%ld)",
+		first_hits, cycles == 1 && loose, sample);
+	ref_cadence_delete(a);
+	cadence_delete(b);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -780,6 +858,9 @@ main(void)
 
 	rc |= run_reset_and_delete();
 	rc |= run_filter_dispatch();
+	rc |= run_created_first_cycle(1, 1);
+	rc |= run_created_first_cycle(1, 0);
+	rc |= run_created_first_cycle(3, 1);
 	rc |= run_created_loop(500);
 	rc |= run_created_loop(1000);
 	/* Constructor cases for every original bank and its fallback boundary. */

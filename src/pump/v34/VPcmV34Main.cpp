@@ -2320,46 +2320,58 @@ SetUpstreamModulationInfo(struct tagV34Object *objp)
 	(void)objp;
 }
 
+/*
+ * These two rate entry points retain the separately addressed obj + 4 base
+ * seen in the native object.  This is an access view, not evidence for a
+ * distinct original C type.  Resolve every displacement through the complete
+ * owner so the byte offset and 32-bit width remain checked by its layout.
+ */
+#define VPCM_ENGINE_INT(owner, member) \
+	(*(int *)((owner) + (int)__builtin_offsetof(struct v34_object, member) \
+		  - OB4_ANCHOR))
+
 void
 VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *engine = (unsigned char *)obj + 4;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	K56FlexFloModem *earlyK56 = (K56FlexFloModem *)obj->pac18;
 
-	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
+	if (VPCM_ENGINE_INT(engine, v90_receiver) != 0 && sess->info0Layout != 0) {
 		V90Demodulator *demod = sess->modem.demodulator;
+		unsigned low = obj->pac3c->vpcmRateLimitLow;
+		unsigned high = obj->pac3c->vpcmRateLimitHigh;
 
-		demod->constellationDesigner->setMinMaxRates(
-			obj->pac3c->vpcmRateLimitLow,
-			obj->pac3c->vpcmRateLimitHigh);
+		demod->constellationDesigner->setMinMaxRates(low, high);
 		return;
 	}
 
-	if (obj->k56flex_receiver != 0
-	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
-		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
+	if (VPCM_ENGINE_INT(engine, k56flex_receiver) != 0
+	    && *((const unsigned char *)earlyK56 + 8) != 0) {
+		earlyK56->setMinMaxRates(
 			(int)obj->pac3c->vpcmRateLimitLow,
 			(int)obj->pac3c->vpcmRateLimitHigh);
 		return;
 	}
 
-	obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
+	VPCM_ENGINE_INT(engine, rate_min) = (int)(obj->pac3c->vpcmRateLimitLow
 			      / (unsigned)RATE_STEP);
-	obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
+	VPCM_ENGINE_INT(engine, rate_max) = (int)(obj->pac3c->vpcmRateLimitHigh
 			      / (unsigned)RATE_STEP);
 
-	if (obj->rate_min > 14)
-		obj->rate_min = 14;
+	if (VPCM_ENGINE_INT(engine, rate_min) > 14)
+		VPCM_ENGINE_INT(engine, rate_min) = 14;
 
-	if (obj->rate_max < obj->rate_min)
-		obj->rate_max = obj->rate_min;
+	if (VPCM_ENGINE_INT(engine, rate_max) < VPCM_ENGINE_INT(engine, rate_min))
+		VPCM_ENGINE_INT(engine, rate_max) = VPCM_ENGINE_INT(engine, rate_min);
 
-	if (obj->rate_max > 14) {
-		obj->rate_max = 14;
+	if (VPCM_ENGINE_INT(engine, rate_max) > 14) {
+		VPCM_ENGINE_INT(engine, rate_max) = 14;
 		return;
 	}
 
-	if (obj->rate_max == 1)
+	if (VPCM_ENGINE_INT(engine, rate_max) == 1)
 		obj->force_low_baud = 1;
 }
 
@@ -2438,11 +2450,12 @@ void
 VPcmV34InitiateRateRenegotiation(void *objp, int req)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *engine = (unsigned char *)obj + 4;
 	struct v34_receiver *rx = &obj->receiver;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	int want;
 
 	if ((unsigned)(obj->status - 1) <= 1) {
-		VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 		V90Demodulator *demod = sess->modem.demodulator;
 
 		demod->connectionEvaluator->externalDemandCode = req;
@@ -2471,23 +2484,23 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 	case 0:
 	case 2:
 	case 5:
-		want = (int)((unsigned)obj->rate_now - 1u);
-		if (want >= obj->rate_min)
-			obj->rate_want = want;
+		want = (int)((unsigned)VPCM_ENGINE_INT(engine, rate_now) - 1u);
+		if (want >= VPCM_ENGINE_INT(engine, rate_min))
+			VPCM_ENGINE_INT(engine, rate_want) = want;
 		break;
 	case 3:
-		want = (int)((unsigned)obj->rate_now + 1u);
-		if (want <= obj->rate_max)
-			obj->rate_want = want;
+		want = (int)((unsigned)VPCM_ENGINE_INT(engine, rate_now) + 1u);
+		if (want <= VPCM_ENGINE_INT(engine, rate_max))
+			VPCM_ENGINE_INT(engine, rate_want) = want;
 		break;
 	default:
-		obj->rate_want = -1;
+		VPCM_ENGINE_INT(engine, rate_want) = -1;
 		break;
 	}
 
 	v34handshakinit(obj, 2);
 
-	obj->progress = 6;
+	VPCM_ENGINE_INT(engine, progress) = 6;
 
 	rx->bad_run = 0;
 	rx->bad_long_run = 0;

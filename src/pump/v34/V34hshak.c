@@ -770,11 +770,12 @@ setupreceiver(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
-	short baud = obj->ratecfg.rx_baud;
-	short carrier = obj->ratecfg.rx_carrier;
-	const short *cdesc = obj->det_coefs;
+	short baud;
+	short carrier;
 
 	rxinit(obj);
+	baud = obj->ratecfg.rx_baud;
+	carrier = obj->ratecfg.rx_carrier;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -844,7 +845,7 @@ setupreceiver(void *objp)
 							 | V34_RX_FLAG_FIR));
 
 	detectorinit(&obj->detector,
-		     cdesc, 0, 8, 10, 0x600, 0);
+		     obj->det_coefs, 0, 8, 10, 0x600, 0);
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 }

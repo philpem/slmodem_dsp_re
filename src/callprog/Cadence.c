@@ -222,6 +222,12 @@ static int
 match(struct cadence *c, int last)
 {
 	int tol = match_tolerance(c);
+	int k;
+
+	/* Native 0x7cfb9 reloads n after the parameter call, then runs a
+	 * finite empty loop. GCC reverses this ascending loop to DEC/JNE. */
+	for (k = 0; k < c->n; k++)
+		;
 
 	if (c->fixed_pattern != 0)
 		return match_fixed(c, last, tol);
@@ -283,10 +289,9 @@ cadence_progress(struct cadence *c, short sample)
 			c->n = last + 1;
 
 			/*
-			 * A cycle that ends at index zero is the first one
-			 * since a reset, and there is nothing to compare it
-			 * with.  Counted as a failure: enough of them and the
-			 * detector concludes there is no tone here at all.
+			 * The first cycle increments the failure counter, then
+			 * rejoins the ordinary cycle-count guard. A one-cycle
+			 * looped matcher can still recognise that first period.
 			 */
 			if (last == 0) {
 				c->failures++;
@@ -298,7 +303,7 @@ cadence_progress(struct cadence *c, short sample)
 						"CYCLES_COUNTER= %d\n",
 						c->failures);
 			}
-			else if (c->n >= c->cycles)
+			if (c->n >= c->cycles)
 				matched = match(c, c->n - 1);
 
 			if (c->n > CADENCE_MAX_PERIODS - 1)

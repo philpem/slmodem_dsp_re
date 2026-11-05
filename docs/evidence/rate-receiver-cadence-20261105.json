@@ -1,0 +1,425 @@
+{
+  "schema": "rate-receiver-cadence-recovery-v1",
+  "baseline_revision": "322cf66700830a559325379fab370b3ca6799f90",
+  "semantic_proof": false,
+  "census": {
+    "compared": 1852,
+    "exact": 1138,
+    "regalloc": 28,
+    "bytes": 72,
+    "size": 614,
+    "unresolved": 0
+  },
+  "closure": {
+    "objects_compared": 300,
+    "changed": [
+      "src_callprog_Cadence.c.o",
+      "src_pump_v34_V34hshak.c.o",
+      "src_pump_v34_VPcmV34Main.cpp.o"
+    ],
+    "comparisons": {
+      "src_pump_v34_VPcmV34Main.cpp.o": {
+        "sha256": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+        "emitted_functions": 56,
+        "all_changed_bodies": [
+          "_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object",
+          "VPcmV34InitiateRateRenegotiation"
+        ],
+        "shared_functions": 56,
+        "grade_changes": {
+          "EXACT": {
+            "gained": [
+              "_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object"
+            ],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": false
+      },
+      "src_pump_v34_V34hshak.c.o": {
+        "sha256": "f9b4cb38a185be1096195f5fe7f1080be5beac41b63809377a6521b7e10cbb34",
+        "emitted_functions": 53,
+        "all_changed_bodies": [
+          "setupreceiver"
+        ],
+        "shared_functions": 29,
+        "grade_changes": {
+          "EXACT": {
+            "gained": [],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": false
+      },
+      "src_callprog_Cadence.c.o": {
+        "sha256": "ed0ea046de0791beba9688cfd5224921e15df9bb4163f199eb59aec2f692b350",
+        "emitted_functions": 4,
+        "all_changed_bodies": [
+          "cadence_progress"
+        ],
+        "shared_functions": 4,
+        "grade_changes": {
+          "EXACT": {
+            "gained": [],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": false
+      }
+    }
+  },
+  "source_inputs": {
+    "src/pump/v34/VPcmV34Main.cpp": "cfc65c77b068a8f94c22174b3550b5f4095a61f2e14a976026cc148eeb63aa37",
+    "src/pump/v34/V34hshak.c": "d62e228a08b80bf638a7164360d6c395afbec2984a16a8056ac94382e08b2534",
+    "src/callprog/Cadence.c": "6195c0374d0d83079882eda5e6ce14ce7b1732f483c93ba8f3994c371795ec93",
+    "test/unit/t_cadence.c": "c43aca90c7f838bf4e9af07e184cd4ab760837b5153ee3de8d475f3dca820a27"
+  },
+  "focused": {
+    "t_cadence": {
+      "groups": 170,
+      "checks": 45843456
+    },
+    "t_v34pcmapi": {
+      "groups": 9,
+      "checks": 30536
+    },
+    "t_v34pcmif": {
+      "groups": 37,
+      "checks": 61492
+    },
+    "t_v34hshak": {
+      "groups": 43,
+      "checks": 14368945
+    },
+    "t_v34hsrx4": {
+      "groups": 1,
+      "checks": 7826
+    }
+  },
+  "graph": {
+    "graph-before": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/rate-wave/graph-before/corpus.json",
+      "sha256": "2a1ce90f72c898e75b529ca89ac1ee854238cd9daee224a38cc849f2d14893b0",
+      "shared": 89,
+      "inexact_copies": 53,
+      "summary": {
+        "counts": {
+          "owner_refused": 14,
+          "stack_refused": 36,
+          "owner_bounded": 39,
+          "owner_copies_with_matched_anchors": 36,
+          "owner_copies_with_compared_relations": 20,
+          "owner_bounded_without_matched_anchors": 3,
+          "owner_matched_anchors": 150,
+          "owner_relations_compared": 262,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_ambiguous_anchors": 51,
+          "owner_unpaired_anchors": 35,
+          "owner_timing_or_predicate_nominations": 9,
+          "owner_copies_with_timing_nominations": 4,
+          "stack_bounded": 17,
+          "stack_copies_with_matched_anchors": 14,
+          "stack_copies_with_compared_relations": 2,
+          "stack_bounded_without_matched_anchors": 3,
+          "stack_matched_anchors": 31,
+          "stack_relations_compared": 18,
+          "stack_cyclic_relations_excluded": 0,
+          "stack_ambiguous_anchors": 27,
+          "stack_unpaired_anchors": 30,
+          "stack_timing_or_predicate_nominations": 0,
+          "stack_copies_with_timing_nominations": 0
+        },
+        "refusal_reasons": [
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "single entry SUB ESP frame required",
+            "count": 24
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "single entry SUB ESP frame required",
+            "count": 19
+          },
+          {
+            "layer": "owner",
+            "side": "native",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 12
+          },
+          {
+            "layer": "owner",
+            "side": "candidate",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 12
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 6
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "unsupported dispatch guard",
+            "count": 5
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 4
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "unsupported dispatch guard",
+            "count": 4
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "multiple dispatch tables unsupported",
+            "count": 2
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "multiple dispatch tables unsupported",
+            "count": 1
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "dynamic stack/control unsupported",
+            "count": 1
+          }
+        ]
+      }
+    },
+    "graph-after": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/rate-wave/graph-after/corpus.json",
+      "sha256": "bfa021ba3c2721d9449ced18b2eb3d0f6523f30d0730a3ea1196e164bf8bf933",
+      "shared": 89,
+      "inexact_copies": 52,
+      "summary": {
+        "counts": {
+          "owner_refused": 14,
+          "stack_refused": 36,
+          "owner_bounded": 38,
+          "owner_copies_with_matched_anchors": 35,
+          "owner_copies_with_compared_relations": 19,
+          "owner_bounded_without_matched_anchors": 3,
+          "owner_matched_anchors": 143,
+          "owner_relations_compared": 255,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_ambiguous_anchors": 48,
+          "owner_unpaired_anchors": 26,
+          "owner_timing_or_predicate_nominations": 0,
+          "owner_copies_with_timing_nominations": 0,
+          "stack_bounded": 16,
+          "stack_copies_with_matched_anchors": 13,
+          "stack_copies_with_compared_relations": 2,
+          "stack_bounded_without_matched_anchors": 3,
+          "stack_matched_anchors": 32,
+          "stack_relations_compared": 32,
+          "stack_cyclic_relations_excluded": 0,
+          "stack_ambiguous_anchors": 27,
+          "stack_unpaired_anchors": 27,
+          "stack_timing_or_predicate_nominations": 0,
+          "stack_copies_with_timing_nominations": 0
+        },
+        "refusal_reasons": [
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "single entry SUB ESP frame required",
+            "count": 24
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "single entry SUB ESP frame required",
+            "count": 19
+          },
+          {
+            "layer": "owner",
+            "side": "native",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 12
+          },
+          {
+            "layer": "owner",
+            "side": "candidate",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 12
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 6
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "unsupported dispatch guard",
+            "count": 5
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 4
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "unsupported dispatch guard",
+            "count": 4
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "multiple dispatch tables unsupported",
+            "count": 2
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "multiple dispatch tables unsupported",
+            "count": 1
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "dynamic stack/control unsupported",
+            "count": 1
+          }
+        ]
+      }
+    }
+  },
+  "cadence_regression": {
+    "baseline_log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/rate-wave/cadence-baseline-t_cadence.run.log",
+    "baseline_log_sha256": "f4775bb4b7b887e7be28ed541a27ed0fee27aea334b3fd5b1994831caa61d949",
+    "cases": [
+      {
+        "cycles": 1,
+        "looped": true,
+        "failed": 7843,
+        "total": 1560006
+      },
+      {
+        "cycles": 1,
+        "looped": false,
+        "failed": 3841,
+        "total": 1560006
+      },
+      {
+        "cycles": 3,
+        "looped": true,
+        "failed": 0,
+        "total": 1560006
+      }
+    ],
+    "first_divergence_sample": 8159,
+    "native_return": 1,
+    "old_return": 0,
+    "selected_log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/rate-wave/cadence-selected-run.log",
+    "selected_log_sha256": "e13a6559a3ee86f77fecdcf2248394ce60af2728f7e352ea4a2317d4d2063f2c",
+    "boundary": "constructed cadence component; no planted filter or history state; not modem end-to-end proof"
+  },
+  "retirement": {
+    "legacy_gate_removed": true,
+    "legacy_target_removed": true,
+    "ci_mutation_selftests_deleted": [
+      "test/safety/test_mutation_policy.py",
+      "test/safety/test_mutation_subset.py"
+    ],
+    "mutation_manifest_changes": 0,
+    "legacy_records": "retained unmaintained",
+    "controls": {
+      "PHASE_TIERS": "firewall strings offsets refs period params onedef vendor banners partial-compare-selftest tumap-selftest period-selection-selftest dis-selftest period-compile-selftest",
+      "PORTABILITY_TIERS": "test linkexc check64 interop coverage debugcov",
+      "CC": "gcc",
+      "CFLAGS": "-fno-pie -fno-stack-protector -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP",
+      "CXXFLAGS": "-fno-pie -fno-stack-protector -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP -fno-exceptions -fno-rtti -nostdinc++ -Wno-invalid-offsetof -fno-lifetime-dse -fno-sized-deallocation -fno-math-errno",
+      "refs_plan": "python3 tools/ci/test_refcheck.py\npython3 tools/refcheck.py\n",
+      "retired_target_exit": 2,
+      "retired_target_stderr": "make: *** No rule to make target 'mutation-snapshot'.  Stop.\n"
+    }
+  },
+  "frozen_artifacts": {
+    "baseline/manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/baseline/manifest.json",
+      "sha256": "c67151cfa1248fbc6b07fda3ef063642df715bacc4b162d1de70fb9790c4dd7c"
+    },
+    "vpcm/REPORT.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/vpcm/REPORT.json",
+      "sha256": "40dc31a13a743b2bc8db476855e714b15868df544a8565f2ec2324d121924ff2"
+    },
+    "vpcm/selected/access-audit.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/vpcm/selected/access-audit.json",
+      "sha256": "9d61a541adfd8f591ac06c33e6a658b0dfc8a452829021d57a9cb60328e15b84"
+    },
+    "vpcm/compiler-binary-hashes.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/vpcm/compiler-binary-hashes.json",
+      "sha256": "40ff6faaac741a4566ef0a082df1bd419f2a3f42eb7f27c17a3190a79f310eb1"
+    },
+    "setupreceiver/REPORT.md": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/setupreceiver/REPORT.md",
+      "sha256": "544e330de13c07a80ebbd7f4feedd72b848fc27784ef79df1f1cb00647d636d8"
+    },
+    "setupreceiver/build-record.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/setupreceiver/build-record.json",
+      "sha256": "1ebfa624245bf4d5f298d3ccc64d3f880ecaab833c4ac3d24df533521776154a"
+    },
+    "setupreceiver/parsed-manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/setupreceiver/parsed-manifest.json",
+      "sha256": "380301f83a238c495b73f1b0d1c54bae85dc34c8742ff529f46e87345d045ffd"
+    },
+    "cadence/report.md": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/cadence/report.md",
+      "sha256": "b7108c291e57e975bb68857c5de397ffd36ba7db79a53960e6b69d70d20ace22"
+    },
+    "cadence/artifact-manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/cadence/artifact-manifest.json",
+      "sha256": "2a276508b7d387cbd0936e4adc70fbcf1f51c241b231c9fcb2013b38d14a7465"
+    },
+    "cadence/resolved-data-audit.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/cadence/resolved-data-audit.json",
+      "sha256": "f55d7c17e9a163d54894ae7ed0606ea04f27a4228c865e89362bc2e3a4edf3fe"
+    },
+    "cadence/resolved-data-negative-control.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/rate-receiver-cadence-20261105/cadence/resolved-data-negative-control.json",
+      "sha256": "4fd19f1d28d3093a03f98e4e0f6ec4faa47c4c30f9ea799b69df581e742ad821"
+    }
+  },
+  "final_gate": {
+    "command": "make phase J=8",
+    "period_passed": 399,
+    "period_failed": 0,
+    "structural": "passed after mutation-gate retirement",
+    "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/rate-wave/phase-retired.log",
+    "sha256": "8ad107f2716a52ebf851bd4252ab17dd4ccdb34d2ed81636909abdf23b735fa5",
+    "docs_refs_exit": 0
+  }
+}

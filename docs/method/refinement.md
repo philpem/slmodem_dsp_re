@@ -183,9 +183,39 @@ transport and a uniquely recovered interface declaration separate.
 The BackwardClean early-cursor replay removes its old nomination but supplies
 no new source property beyond the closed F11704 family; it is not selected.
 On the next turn, transfer ascending-loop reversal and exact capture-order
-lessons to fresh native-backed leads. Review the remaining VPCM rate-change
-graph nominations before choosing a new family; do not reopen the parked FPM
+lessons to fresh native-backed leads. The following section records the VPCM rate-change
+graph follow-up; do not reopen the parked FPM
 comparison/load-order or V22 quotient/return-type palettes without new evidence.
+
+## VPCM and cadence: owner views and shared rejoins (2026-11-05)
+
+The [rate/receiver/cadence wave](../rate-receiver-cadence-20261105.md) recovers
+VPcmV34SetMinMaxBitRates EXACT348 by crossing native interior-owner access,
+early session/K56 capture and scalar low/high capture. The complete eight-cell
+matrix matters: only the combined cell closes it. A member-derived offset view
+preserves named-field evidence, but every use still needs full-owner offset and
+width checks; it does not establish a unique original engine declaration.
+Initiate reaches native259-byte extent/BYTES39. Its inert absent-clamp control
+and first-RTL/sched2 differences do not justify another predicate palette.
+
+A read-age nomination can instead expose a missing control-flow rejoin.
+Cadence's first-cycle failure arm must still reach the common matcher guard;
+else-if incorrectly skips it. Three constructor/audio histories demonstrate
+native first-cycle detection and parameter reads, with a three-cycle negative
+control. Preserve that admission even when its isolated byte grade worsens.
+The native finite empty loop is a local countdown, not an asynchronous poll;
+ascending source induction recovers its loop-pass reversal.
+
+setupreceiver's post-rxinit rates and detector-call descriptor reads recover
+native observation age at SIZE43. Callee-write auditing establishes no tested
+numerical defect there. Distinguish operation placement, callee effects,
+missing paths and fixture reachability before calling a nomination a bug.
+Changed-TU graph coverage and allocated-data targets remain separately bounded.
+
+Mutation maintenance is retired under the policy above; no reanchoring is
+required for these source changes. Next audit the signed count in null_process
+and the V8SetMessage call/branch lead. Keep the recorded negative domains closed
+until a new native witness changes their source hypothesis.
 
 ## Resolving an owner declaration after an alias-contract recovery
 
