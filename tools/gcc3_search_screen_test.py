@@ -142,6 +142,35 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(result['functions'][0]['modes'], {'HImode': 1})
         self.assertEqual(result['nonexact_cursor_sensitive'], ['sensitive'])
 
+    def test_mixed_qi_q_hi_si_stream_is_fully_modeled(self):
+        evidence = trace()
+        row = evidence['events'][0]
+        row.update(mode='QImode', constraint='q')
+        row['eligibility'].update(class_members=list(range(4)), live=[1, 2])
+        row['eligibility']['class'] = 8
+        evidence['events'][1]['mode'] = 'HImode'
+        status, calibrated = screen.screen_trace(evidence)
+        self.assertEqual(status['status'], 'calibrated_whole_stream')
+        self.assertEqual(status['modeled_events'], 3)
+        result = screen.classify_functions({'sensitive': ['BYTES', 1]}, evidence['events'], calibrated)
+        self.assertEqual(result['functions'][0]['modes'], {'QImode': 1})
+        self.assertEqual(result['nonexact_cursor_sensitive'], ['sensitive'])
+        row['eligibility']['class_members'].append(4)
+        status, calibrated = screen.screen_trace(evidence)
+        self.assertIsNone(calibrated)
+        self.assertEqual(status['modeled_events'], 0)
+        self.assertIn('QImode/q register class', status['unsupported_events'][0]['reason'])
+
+    def test_corrupt_qi_q_choice_is_refused_inside_unsupported_stream(self):
+        evidence = trace()
+        row = evidence['events'][0]
+        row.update(mode='QImode', constraint='q', selected=3)
+        row['eligibility'].update(class_members=list(range(4)), live=[1, 2])
+        row['eligibility']['class'] = 8
+        evidence['events'][2]['mode'] = 'DImode'
+        with self.assertRaisesRegex(screen.ScreenError, 'selection/cursor.*local supported'):
+            screen.screen_trace(evidence)
+
     def test_corrupt_hi_outcome_is_refused_inside_unsupported_stream(self):
         evidence = trace()
         evidence['events'][0]['mode'] = 'HImode'

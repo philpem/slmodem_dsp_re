@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conditional, bounded replay of observed GCC3 HI/SI general scratch searches.
+"""Conditional replay of observed GCC3 HI/SI r and QI q scratch searches.
 
 This is apparatus, not a model of the compiler's full state. Eligibility,
 allocation order, exclusions and peephole boundaries are frozen per event.
@@ -34,9 +34,14 @@ INPUT_KEYS = ("function", "constraint", "mode", "from", "to",
 # peep2_find_free_register span at 0x81f0b58 is ceil(size/4), hence one
 # live/reserved register in either mode. Pinned cc1plus b778f44b... has the
 # same tests at 0x82a67a8..0x82a67e9 and span at 0x823ca6c, and the same
-# mode values/classes/sizes. This does NOT establish QI, wider
-# modes, or non-GPR eligibility. The same filters and frozen inputs apply.
+# mode values/classes/sizes. QI=10 has size 1 and the same one-register span.
+# Both pinned executables define Q_REGS=8 with int_reg_class_contents[8]
+# equal to {0x0f, 0}. ix86_hard_regno_mode_ok accepts QI in registers 0..3
+# before its target-dependent upper-register branch. Restrict QI to that
+# exact q class; QI/r and other modes/classes remain unsupported.
 GENERAL_REGISTER_MODES = frozenset(("HImode", "SImode"))
+LOW_BYTE_REGISTERS = frozenset(range(4))
+LOW_BYTE_CLASS = 8
 
 
 class ModelError(ValueError):
@@ -74,8 +79,10 @@ def _event(event, where):
              f"{where}: missing event fields: {sorted(set(required) - event.keys())}")
     _require(isinstance(event["function"], str) and event["function"],
              f"{where}: missing function name")
-    _require(event["constraint"] == "r" and isinstance(event["mode"], str)
-             and event["mode"] in GENERAL_REGISTER_MODES,
+    general = (event["constraint"] == "r" and isinstance(event["mode"], str)
+               and event["mode"] in GENERAL_REGISTER_MODES)
+    low_byte = event["constraint"] == "q" and event["mode"] == "QImode"
+    _require(general or low_byte,
              f"{where}: unsupported constraint/mode {event['constraint']!r}/{event['mode']!r}")
     for key in ("cursor_before", "cursor_after"):
         _integer(event[key], 0, SLOTS - 1, f"{where}.{key}")
@@ -102,6 +109,10 @@ def _event(event, where):
     for key in ("reload_completed", "frame_pointer_needed"):
         _require(type(state[key]) in (int, bool) and state[key] in (0, 1),
                  f"{where}.eligibility.{key}: expected 0 or 1")
+    if low_byte:
+        _require(state["class"] == LOW_BYTE_CLASS and
+                 set(state["class_members"]) == LOW_BYTE_REGISTERS,
+                 f"{where}: unsupported QImode/q register class or mask")
     eligible = []
     for reg in state["class_members"]:
         if state["fixed"][reg] or not state["call_used"][reg] and not state["ever_live"][reg]:

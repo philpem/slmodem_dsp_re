@@ -30,6 +30,14 @@ def envelope(events):
     return {"events": events, "errors": [], "exit_codes": [0], "pending": 0}
 
 
+def byte_event(name, eligible, before, selected, after, order=None):
+    row = event(name, list(range(4)), before, selected, after, order)
+    row.update(constraint="q", mode="QImode")
+    row["eligibility"]["class"] = 8
+    row["eligibility"]["live"] = sorted(set(range(4)) - set(eligible))
+    return row
+
+
 def baseline():
     # Baseline and held-out values below are deliberately hand-derived.
     return envelope([event("A", [0, 4], 0, 0, 1), event("B", [1, 3], 1, 1, 2),
@@ -152,6 +160,73 @@ class ScratchModelTest(unittest.TestCase):
         for key, value in (("selected", 4), ("cursor_after", 2)):
             trace = baseline()
             trace["events"][0]["mode"] = "HImode"
+            trace["events"][0][key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(model.ModelError, "selection/cursor"):
+                model.calibrate(trace)
+
+    def test_qi_q_uses_one_low_gpr_and_preserves_neighbor_exclusions(self):
+        for reg in range(4):
+            row = byte_event("byte", [reg], 52, reg, reg + 1)
+            row["excluded"] = [(reg + 1) % 4]
+            with self.subTest(reg=reg):
+                calibrated = model.calibrate(envelope([row]))
+                transitions = calibrated["blocks"][0]["transitions"]
+                self.assertEqual(len(transitions), 53)
+                self.assertEqual({t["events"][0]["selected"] for t in transitions}, {reg})
+                self.assertEqual({t["cursor_after"] for t in transitions}, {reg + 1})
+
+    def test_qi_q_repeated_slots_wrap_and_failed_search_reset(self):
+        order = list(range(48)) + [0] * 5
+        row = byte_event("repeated-byte", [0], 52, 0, 0, order)
+        calibrated = model.calibrate(envelope([row]))
+        self.assertEqual(model.predict(calibrated)["cursor_after"], 0)
+        self.assertEqual(model.predict(calibrated, start=48)["cursor_after"], 49)
+        row = byte_event("no-byte", [], 17, None, 0)
+        self.assertEqual(model.predict(model.calibrate(envelope([row])))["cursor_after"], 0)
+
+    def test_qi_q_fixed_live_excluded_and_save_restrictions(self):
+        row = byte_event("byte-filters", [0, 1, 3], 52, None, 0)
+        row["eligibility"]["fixed"][0] = 1
+        row["eligibility"]["call_used"][1] = 0
+        row["excluded"] = [3]
+        model.calibrate(envelope([row]))
+        row["eligibility"]["ever_live"][1] = 1
+        row["selected"], row["cursor_after"] = 1, 2
+        self.assertEqual(model.predict(model.calibrate(envelope([row])))["cursor_after"], 2)
+
+    def test_qi_q_requires_pinned_class_mask_and_keeps_other_pairs_unsupported(self):
+        for members, cls in (([0, 1, 2], 8), ([0, 1, 2, 3, 4], 8), (list(range(4)), 12)):
+            row = byte_event("wrong-byte-class", [0], 0, 0, 1)
+            row["eligibility"].update(class_members=members)
+            row["eligibility"]["class"] = cls
+            with self.subTest(members=members, cls=cls), self.assertRaisesRegex(
+                    model.ModelError, "unsupported QImode/q register class"):
+                model.calibrate(envelope([row]))
+        for mode, constraint in (("QImode", "r"), ("HImode", "q"),
+                                 ("SImode", "q"), ("DImode", "q"), ([], "r")):
+            row = byte_event("unsupported-byte-pair", [0], 0, 0, 1)
+            row.update(mode=mode, constraint=constraint)
+            with self.subTest(mode=mode, constraint=constraint), self.assertRaisesRegex(
+                    model.ModelError, "unsupported constraint/mode"):
+                model.calibrate(envelope([row]))
+
+    def test_mixed_qi_hi_si_held_out_order_and_changed_qi_input_refused(self):
+        trace = envelope([byte_event("A", [0, 3], 0, 0, 1),
+                          event("B", [1, 3], 1, 1, 2), event("C", [2, 5], 2, 2, 3)])
+        trace["events"][2]["mode"] = "HImode"
+        actual = envelope([event("B", [1, 3], 0, 1, 2),
+                           byte_event("A", [0, 3], 2, 3, 4), event("C", [2, 5], 4, 5, 6)])
+        actual["events"][2]["mode"] = "HImode"
+        calibrated = model.calibrate(trace)
+        order = ["B#1", "A#1", "C#1"]
+        self.assertEqual(model.verify(calibrated, order, actual)["verified_events"], 3)
+        actual["events"][1]["eligibility"]["ever_live"][7] = 1
+        with self.assertRaisesRegex(model.ModelError, "changed mechanism input eligibility"):
+            model.verify(calibrated, order, actual)
+
+    def test_corrupt_qi_q_selection_and_cursor_refused(self):
+        for key, value in (("selected", 3), ("cursor_after", 2)):
+            trace = envelope([byte_event("byte", [0, 3], 0, 0, 1)])
             trace["events"][0][key] = value
             with self.subTest(key=key), self.assertRaisesRegex(model.ModelError, "selection/cursor"):
                 model.calibrate(trace)

@@ -7,8 +7,8 @@ Generated source and compiler artifacts stay outside `src/`.
 
 This is the first bounded implementation of the Norcroft experiment's method
 for this compiler. Its supported mechanism is `peep2_find_free_register` for
-single-GPR `HImode` and `SImode` with constraint `r`. The model holds the
-captured eligibility and
+single-GPR `HImode` and `SImode` with constraint `r`, and `QImode` with the
+four-register constraint `q`. The model holds the captured eligibility and
 event sequence fixed while changing the incoming search cursor. It does not
 predict general allocation, spills, scheduling, inlining or x87 stack choices.
 
@@ -219,10 +219,10 @@ functions out of 74; this is a reporting refinement, not a source gain.
 ### Add another mechanism
 
 The HI extension checks the pinned C and C++ compilers' mode eligibility and
-register span: HI and SI accept GPRs 0..7 and consume one hard register. QI
-takes an additional target-dependent path and remains unsupported, as do
-wider modes and eligible non-GPRs. Mode is still a frozen verification input;
-changing HI to SI invalidates a prediction even if its selected register agrees.
+register span: HI and SI accept GPRs 0..7 and consume one hard register.
+Wider modes and eligible non-GPRs remain unsupported. Mode is still a frozen
+verification input; changing HI to SI invalidates a prediction even if its
+selected register agrees.
 
 The mixed toneiir baseline contains 10 SI and 6 HI searches. A read-only
 observer checked 174 candidate visits and 42 actual mode-check returns without
@@ -232,6 +232,32 @@ choices. Its eight shared functions retained 3 EXACT, 1 REGALLOC and 4 SIZE
 grades; exports and allocated data were unchanged. The reordered control is
 model evidence, with no claimed source gain. Artifacts are under
 `build/gcc3-hi-model-20261105/`, including `parent-review.json`.
+
+The QI extension admits only `QImode/q` with the pinned `Q_REGS` class 8 and
+its complete mask `{0,1,2,3}`. Both pinned executables contain that read-only
+mask as `{0x0f,0}`. Their mode table gives QI size 1, so the scratch span is
+one hard register; their mode check accepts registers 0..3 before reaching
+the target-dependent upper-register branch. `QImode/r`, other constraints
+and a changed class or mask remain unsupported. The observer is unchanged.
+
+The V92CP control contains 73 searches: 13 QI/q and 60 SI/r. Its complete
+current-order stream calibrates, and all 73 native-order decisions replay
+with unchanged mechanism inputs. That positive source result had already
+been observed. A further diagnostic swaps the complete `setSUV` and
+`evaluateCRC` definitions; its 73 predictions were saved before its first
+compilation. All 73 fresh decisions agree, including the predicted CX
+scratch in `evaluateCRC`, where the native-order positive uses DX. The
+diagnostic loses that function's byte match as predicted. Each capture
+preserves ordinary, repeated and observed whole objects literally.
+
+These controls explain an inherited register choice without identifying a
+unique original source ordering. Three corrupted real traces are refused:
+a wrong QI result, a changed QI class and an unsupported QI/r pair. The 31
+model tests and 14 screen tests pass normally and under `python3 -O`;
+the separate comparison tool's eight tests also pass. Evidence, frozen
+predictions and the fresh diagnostic verification are retained under
+`build/gcc3-wave-tu/qi-model/`; the sibling `qi-compiler-*-mask.txt` and
+`qi-compiler-*-mode.dis` files record the pinned compiler evidence.
 
 Add another compiler mechanism only after its unchanged decisions can be
 replayed and checked on held-out source variants. Integer allocation will
