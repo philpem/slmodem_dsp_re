@@ -9044,3 +9044,129 @@ structural phase gate. All 285 mutation suites retain valid anchors; no
 mutation execution or snapshot refresh was performed. The campaign retains
 21 additional EXACT symbols and 4,116 additional exact reference bytes from
 its 1,110-symbol baseline, with no exact losses.
+
+
+## Capture the complete wave as reusable method, not only winning counts
+
+The November 5 campaign starts at `212b5df19` with 1,110 EXACT and 31
+REGALLOC symbols. The ninth checkpoint reaches 1,131 EXACT and 28 REGALLOC
+of the same 1,852 symbols, gaining 4,116 exact reference bytes with no exact
+losses. These are relocation-aware function-body grades, not complete-object
+identity. The detailed sections above retain the individual witnesses,
+controls, failed endpoints, fixture domains and data-layout qualifications.
+The following synthesis covers the whole wave, including improvements that
+remain non-exact.
+
+| Reusable pattern | Wave evidence | Evidence needed before transferring it |
+| --- | --- | --- |
+| Recover the predecessor's source graph before chasing a later register | V.8 switch-arm ownership recovers registration wrappers; phase-three reset structure recovers both constructor variants. | A native branch/call/store witness for the predecessor, then full-TU comparison and the first differing compiler stage in each affected neighbour. |
+| Preserve value publication and reload timing | Tone-IIR allocation counts, RxHdxTone's owner reload, V.21/V.29 request snapshots, and V92Jd's lookahead byte. | Track owner, offset, width and intervening calls/stores. An equivalent expression or desired register does not establish a capture point. |
+| Recover a partial store without shrinking its backing storage | V.17/V.27/V.29 VMI FIFO-factor overrides write a word inside a copied dword. | An actual narrow native store, complete nested-offset/layout checks, all header consumers and a discriminating destination value. A narrowed load used only for low bits is insufficient. |
+| Use typed flag views only where the machine gives a witness | Fax and V.22 status use byte SETcc/shift publications and native byte reads. | Measure period packing and access widths per site. Keep whole-word/byte views where callers copy storage; audit changes in alias sets and unrelated header consumers. |
+| Restore constant-index CRC structure | Jd shifts expose sixteen independent words for promotion; related CRC accumulator lifetime/order changes recover V92CP. | Native constant-index operations or promotion/frame evidence, bounded crossed controls, and all inline consumers. A lower size gap alone is not enough. |
+| Recover existing helper boundaries despite automatic inlining | Phase-three `twoLevelDemod` restores eighteen reference publications; FDSP conversion helpers restore loop and gain lifetimes. | Existing helper semantics plus native ownership/publication/loop witnesses. Check the selected linked copy, preserve return narrowing, and separate source recovery from an unresolved dead POP. |
+| Follow an apparently handled option into the callee's request | V.17 short-training codes were recognized and logged but their request flag was omitted. | Observe the destination request/configuration, alternate long and short constructor/control histories, and demonstrate failure before correction. The added lifecycle is not proof of physical modem training. |
+| Model only captured compiler mechanisms | HI/SI general-register and QI/q searches replay; V90MP's native order predicts ESI before compilation. | Pin compiler/image/input, freeze predictions first, verify eligibility/event identity on a fresh trace, and require ordinary/repeated/observed output equality. Unsupported modes/classes fail closed. |
+| Separate data claims that often look alike | P3 tables keep owners but change 41 relative targets; V90MP keeps targets but changes string padding; reset reorders strings. | Report raw bytes, masked payload/layout, code owners, exact relative targets, and string payload/consumer audits separately. Owner equality is not target equality or CFG equivalence. |
+| Preserve a fault's scope when source calls split or merge | V.8's formerly shared diagnostic faults must cover both source arms; reset call anchors move with their branches. | Reanchor the intended fault, not just any unique substring. Report structural anchors separately from optional mutation execution and historical snapshot results. |
+
+Three operational lessons are part of the method. Pure Make variable queries
+must not recursively walk all experiment dependency files; the query guard's
+poison-dependency controls still reject default and mixed build goals. Every
+header change needs a complete consumer closure, including data-only objects,
+and full production hashes expose changes outside the proposed TU. Finally,
+new analysis must fire on known negatives: the data auditor's independent
+review found duplicate local function names, absolute symbols and truncated
+sections that could otherwise produce false equality. These now have explicit
+refusal/unresolved controls, run normally and under `python3 -O`.
+
+The model remains a conditional scratch-search replay, not a model of GCC's
+entire register allocator. Source changes can alter eligibility, aliases,
+scheduling, inlining and event counts before the cursor is consulted. Conversely,
+a target with no scratch event cannot be explained by this cursor model merely
+because its registers differ. Source fidelity outranks a bystander's exactness;
+explain and measure collateral instead of retaining incorrect source or adding
+register carriers to protect a count.
+
+Negative results are bounded. The V.22 control captures recover some request
+value ages but still need native DSP-owner reload structure. The sixteen-cell
+V92Jd phase/rate family gives no exact or REGALLOC gain; its smaller-size
+branches are not retained. FDSP's thirty-global/five-TU attribution bracket
+does not license regrouping Run and Delete by adjacency. Existing SDM, FSE,
+correlation and fixed-point families remain closed to unchanged repetitions.
+None of these observations establishes a global allocator-only wall.
+
+### Complete the deferred V92Jd byte-capture differential
+
+The single byte-capture endpoint is separate from those phase/rate controls.
+Native constructor code reads parameter offset `0x40` once with MOVZBL, copies
+that byte, and splits its two bits. Capturing an `unsigned char` preserves this
+read-before-publication lifetime; the original parameter field retains its
+integer storage. Only the two constructor variants change among 21 TU bodies.
+Both remain SIZE2; all fourteen exact members, exports and allocated data stay
+unchanged. No branch spelling or register-only adjustment is retained.
+
+Baseline and candidate each pass 99,446 checks in `t_v92jd` and 2,441 checks
+in `t_v90modemctor`. The first contains synthetic component state/parameter
+sweeps; the latter also builds parameters and Jd through the enclosing modem
+constructor, with default lookahead three. It is constructor lifecycle coverage,
+not completed modem negotiation. Parent proof verifies eight selected
+constructor bodies across four executables: 1,640 literal bytes and eight
+resolved constant relocations. Private executable copies that clear the high
+lookahead bit fail both suites, including the enclosing lifecycle checks.
+The one transposed-lookahead mutation anchor is updated to the captured value.
+Artifacts: `build/gcc3-wave-jd/constructor-width` and
+`build/gcc3-overnight/checkpoint10`.
+
+The tenth checkpoint passes all 398 period tests and structural checks. Fresh
+production objects reproduce the byte-capture candidate literally; the other
+299 objects are unchanged. The complete byte-identity census, exact-symbol set
+and REGALLOC count are unchanged. Both declared binary corruption controls
+were executed (2/2, no exclusions); their wall/CPU timings and compiler scope
+are retained in `parent-linked-proof.json`.
+
+
+### Look for the wave's mechanisms outside its changed symbols
+
+A separate low-cost agent screened the checkpoint-seven discovery inventory of
+724 non-exact symbols/730 defining copies against current production objects.
+After excluding changed TUs, mangled names and native bodies larger than 300
+bytes, it examined all 190 selected unmangled defining copies in 91 objects.
+All 91 object hashes agree with checkpoint nine. This is the screen's actual
+denominator, not the whole 1,852-symbol census; unmangled functions can still
+come from C++ translation units.
+
+The narrow-store detector finds both original VMI17/VMI29 defects against the
+frozen baseline and clears both corrected objects. An unchanged exact
+`LastPulseDigitDialed` is also clean. It finds no additional immediate narrow
+store/wider-store pairs in the 190-copy domain. This negative is limited to the
+same constant, complete destination spelling and occurrence count, with an
+explicit displacement. Register-produced stores, changed base-register names,
+implicit zero displacements and byte-to-word cases are outside the query.
+No general absence of partial-write defects is claimed.
+
+A separate eight-copy direct-call screen yields two structural follow-ups.
+`bValidateEnergyValue` already calls `FDSP_Kernel_InitObj` in source, but current
+code inlines the helper where native code retains a call. `create_cid` already
+calls `reset_cid`; native code has two call edges while current emission exposes
+its body and `FPM_MRF_init`. These are source-present inline-boundary leads,
+not evidence of omitted behavior. The next discriminators are callee cost,
+definition visibility, branch ownership and native TU attribution. K56 wrapper
+stubs are an explicit implementation/profile boundary, not missing helper calls
+to fix by this analogy. Other call-count nominations remain unpromoted.
+
+One explicit extension covers `CrossDataLinks`, outside the 190-copy screen
+because its TU changed elsewhere in this wave. Native and current bodies are
+both 123 bytes but contain 37 versus 42 non-padding instructions. Native code
+has an indexed input loop, advancing output pointers and gains loaded outside
+their loops. Source still spells two indexed loops. The existing conversion
+helpers used successfully by `FDSP_DP_Run` therefore give a concrete next
+hypothesis. No compilation or differential result is claimed for that helper
+transfer, and its full-TU effect on the newly recovered neighbours must be
+measured before adoption.
+
+The parent reviews the detector's controls and scope and repeats its scanner.
+The reusable scratch script, JSON denominators, native witnesses and triage
+report are under `build/gcc3-pattern-followup/`. This follow-up addresses the
+whole wave's transferability while keeping new hypotheses distinct from the
+validated reconstructions above.

@@ -161,6 +161,7 @@ V92Jd::V92Jd(V90Parameters *params)
 	int mask;
 	unsigned u;
 	int i;
+	unsigned char lookahead;
 
 	unpack[0] = 0;
 	unpack[1] = 0;
@@ -175,11 +176,12 @@ V92Jd::V92Jd(V90Parameters *params)
 		phaseBits[V90JD_GROUP1 + 1 + u] =
 		    (unsigned char)((phase & (1 << u)) != 0);
 
-	/* The maximum lookahead, two bits, high one stored first. */
+	/* Capture the native low byte once; publish bit 1 before bit 0. */
+	lookahead = (unsigned char)params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD;
 	bits[50] = (unsigned char)
-	    ((params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);
+	    ((lookahead >> 1) & 1);
 	bits[49] = (unsigned char)
-	    (params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);
+	    (lookahead & 1);
 
 	mask = params->V92_DIGITAL_RATE_MASK;
 	for (i = 0; i <= 15; i++)
