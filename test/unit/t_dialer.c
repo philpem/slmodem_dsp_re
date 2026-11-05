@@ -97,6 +97,17 @@ one(const char *s, int store, int abcd, int mixed, int validation, int ct)
 	harness_param_set(GetCallingToneFlag, ct);
 	harness_param_set(GetDTMFHighToneLevel, 9);
 	harness_param_set(GetDTMFHighAndLowToneLevelDifference, 2);
+	/* Use ordinary timing values for fields the parser does not inspect;
+	 * the store's derived pulse-gap value would overflow its scaling. */
+	harness_param_set(GetDTMFDialSpeed, 70);
+	harness_param_set(GetPulseDialMakeTime, 33);
+	harness_param_set(GetPulseDialBreakTime, 67);
+	harness_param_set(GetDialPauseTime, 1);
+	harness_param_set(GetHookFlashTime, 50);
+	harness_param_set(GetPulseDialingFlag, 1);
+	harness_param_set(GetComaPauseDurationLimit, 2);
+	harness_param_set(GetPulseDialDigitPattern, 1);
+	harness_param_set(GetPulseBetweenDigitsInterval, 8);
 
 	setup(&a, 0, 0, 0, 0);
 	setup(&b, 0, 0, 0, 0);
@@ -343,6 +354,96 @@ run_create(void)
 }
 
 /*
+ * A real overlength component input reaches FATAL without planting a grade.
+ * The constructor must publish that grade, reject the string and still send
+ * its pulse timings to the supplied self-linked call object.  The old source
+ * is expected to pass: this expands the measured input domain.
+ */
+static int
+run_create_fatal(void)
+{
+	char fatal[DIALER_MAX_STRING + 2];
+	struct dialer a, b;
+	int lvl, ra, rb;
+
+	memset(fatal, '5', sizeof(fatal));
+	fatal[0] = 'T';
+	fatal[sizeof(fatal) - 1] = '\0';
+
+	diff_begin("DialerCreate: FATAL at debug levels 0..3");
+	diff_eq_int("FATAL input length", (long)strlen(fatal),
+		    DIALER_MAX_STRING + 1, 0);
+	for (lvl = 0; lvl <= 3; lvl++) {
+		memset(&call_a, 0, sizeof(call_a));
+		memset(&call_b, 0, sizeof(call_b));
+		call_a.self = &call_a;
+		call_b.self = &call_b;
+		memset(&a, 0xa5, sizeof(a));
+		memset(&b, 0xa5, sizeof(b));
+		harness_param_reset();
+		harness_param_set(GetDialModifierValidation, 1);
+		harness_param_set(GetPulseDialMakeTime, 33);
+		harness_param_set(GetPulseDialBreakTime, 67);
+		harness_param_set(GetDTMFHighToneLevel, 9);
+		harness_param_set(GetDTMFHighAndLowToneLevelDifference, 2);
+		harness_param_set(GetDTMFDialSpeed, 70);
+		harness_param_set(GetDialPauseTime, 1);
+		harness_param_set(GetHookFlashTime, 50);
+		harness_param_set(GetPulseDialingFlag, 1);
+		harness_param_set(GetABCDDialingPermittedFlag, 0);
+		harness_param_set(
+		    GetPulseAndToneDialInSameDialStringPermittedFlag, 0);
+		harness_param_set(GetCallingToneFlag, 1);
+		harness_param_set(GetComaPauseDurationLimit, 2);
+		harness_param_set(GetPulseDialDigitPattern, 1);
+		harness_param_set(GetPulseBetweenDigitsInterval, 8);
+
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = ref_dsplibs_debug_level = (unsigned)lvl;
+		dsplib_debug_capture_on = 1;
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&call_a);
+		ra = ref_DialerCreate(&a, fatal, (void *)0xD1A1u);
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&call_b);
+		rb = DialerCreate(&b, fatal, (void *)0xD1A1u);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("native rejects FATAL (%ld)", ra,
+			    DIALER_CREATE_REJECTED, lvl);
+		diff_eq_int("same FATAL return (%ld)", rb, ra, lvl);
+		diff_eq_int("native publishes FATAL (%ld)", a.grade,
+			    DIALER_FATAL, lvl);
+		diff_eq_obj("FATAL constructor object", struct dialer,
+			    &b, &a, lvl);
+		diff_eq_int("native clears last digit (%ld)", a.last_digit,
+			    -2, lvl);
+		/* Rejected strings are not copied: do not use strcmp on the
+		 * poisoned destination buffer. */
+		diff_eq_int("native leaves rejected buffer alone (%ld)",
+			    (unsigned char)a.string[0], 0xa5, lvl);
+		diff_eq_int("native pulse make was published (%ld)",
+			    call_a.pulse_make, 33, lvl);
+		diff_eq_int("same pulse make (%ld)", call_b.pulse_make,
+			    call_a.pulse_make, lvl);
+		diff_eq_int("native pulse break was published (%ld)",
+			    call_a.pulse_break, 67, lvl);
+		diff_eq_int("same pulse break (%ld)", call_b.pulse_break,
+			    call_a.pulse_break, lvl);
+		diff_eq_int("FATAL constructor transcript (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, lvl);
+		diff_eq_int("same diagnostic call count (%ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), lvl);
+		diff_eq_int("native FATAL diagnostic at threshold (%ld)",
+			    strstr(dsplib_debug_capture_text(1),
+				   "Dial String Syntax is FATAL\n") != 0,
+			    lvl > 1, lvl);
+	}
+	return diff_end();
+}
+
+/*
  * DialerAbort, over every combination of the three fields it looks at.
  * Sixteen states, of which exactly one does anything.
  */
@@ -449,8 +550,16 @@ run_debug(void)
 	};
 	unsigned lvl, k;
 	long lines = 0;
+	char fatal[DIALER_MAX_STRING + 2];
+	int fatal_grade;
+
+	memset(fatal, '5', sizeof(fatal));
+	fatal[0] = 'T';
+	fatal[sizeof(fatal) - 1] = '\0';
 
 	diff_begin("IsDialStringInvalid: transcripts");
+	diff_eq_int("FATAL input length", (long)strlen(fatal),
+		    DIALER_MAX_STRING + 1, 0);
 
 	for (lvl = 1; lvl <= 3; lvl++) {
 		dsplibs_debug_level = ref_dsplibs_debug_level = lvl;
@@ -459,6 +568,9 @@ run_debug(void)
 
 		for (k = 0; k < sizeof(strings) / sizeof(strings[0]); k++)
 			one(strings[k], 0, 0, 0, 1, 1);
+		fatal_grade = one(fatal, 0, 0, 0, 1, 1);
+		diff_eq_int("overlength string is FATAL (%ld)", fatal_grade,
+			    DIALER_FATAL, (long)lvl);
 
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
@@ -479,6 +591,10 @@ run_debug(void)
 			printf("--- ours: %.300s\n", o + j);
 			printf("--- ref : %.300s\n", r + j);
 		}
+		diff_eq_int("native FATAL diagnostic at threshold (%ld)",
+			    strstr(dsplib_debug_capture_text(1),
+				   "Dial String Syntax is FATAL\n") != 0,
+			    lvl > 1, (long)lvl);
 		diff_eq_int("line counts match (level %ld)",
 			    (int)dsplib_debug_capture_lines(0),
 			    (int)dsplib_debug_capture_lines(1), (long)lvl);
@@ -506,6 +622,7 @@ main(void)
 	rc |= run_shapes();
 	rc |= run_length();
 	rc |= run_create();
+	rc |= run_create_fatal();
 	rc |= run_abort();
 	rc |= run_debug();
 

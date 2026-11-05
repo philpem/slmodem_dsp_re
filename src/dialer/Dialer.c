@@ -25,16 +25,6 @@
 #include "dsplib/sysdep.h"
 
 /*
- * Grades, worst to best, and the rule for lowering one.  The scan starts at
- * VALID and only ever comes down.
- */
-static int
-lower(int grade, int to)
-{
-	return grade > to ? to : grade;
-}
-
-/*
  * The grade names, .rodata+0x613c, spelled as the object's debug output
  * spells them.  The lookup is unsigned, so a negative grade would read
  * "ILLEGAL!" too -- nothing produces one, or a grade past VALID.
@@ -54,9 +44,9 @@ dialer_grade_name(int grade)
 }
 
 /*
- * LOCAL (`t`) in the blob, but a `static` copy here is partially inlined by
- * -O3 and the plain name becomes `AnalyseDialString.part.0`, so the record
- * stays external and the differential tests reach it through the header.
+ * File-static in the blob and here.  The period compiler keeps this body
+ * out of line and passes d/s privately in EAX/EDX; store stays on the stack.
+ * Differential harness links globalize the emitted local symbol.
  */
 static int
 AnalyseDialString(struct dialer *d, const char *s, int store)
@@ -64,8 +54,8 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 	int grade = DIALER_VALID;
 	int last_digit = -2;
 	int tone;			/* 1 after T, 0 after P */
-	int i;
-	unsigned char c;
+	int i = 1;
+	signed char c;
 
 	d->last_digit = -2;
 
@@ -104,7 +94,7 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 		 */
 		return s[0] == '\0' ? DIALER_VALID : DIALER_INVALID;
 
-	for (i = 1; (c = (unsigned char)s[i]) != '\0'; i++) {
+	for (; (c = s[i]) != '\0'; i++) {
 		int illegal = 0;
 
 		/*
@@ -188,10 +178,13 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 			 * TOLERABLE, validation CLEAR makes it INVALID.  Twenty
 			 * of the fifty countries set it.
 			 */
-			if (d->cfg.modifier_validation == 0)
-				grade = lower(grade, DIALER_INVALID);
-			else
-				grade = lower(grade, DIALER_TOLERABLE);
+			if (d->cfg.modifier_validation != 0) {
+				if ((unsigned)grade > DIALER_TOLERABLE)
+					grade = DIALER_TOLERABLE;
+			} else {
+				if ((unsigned)grade > DIALER_INVALID)
+					grade = DIALER_INVALID;
+			}
 		}
 	}
 
@@ -204,94 +197,6 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 	}
 
 	return grade;
-}
-
-int
-IsDialStringInvalid(struct dialer *d, const char *s)
-{
-	int grade;
-
-	GetDialerConfig(&d->cfg, d->modem);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("DIALER.C: IsDialStringInvalid(char * "
-				     "dialString )  got: %s\n", s);
-
-	grade = AnalyseDialString(d, s, 0);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Dial String Syntax is %s\n",
-				     dialer_grade_name(grade));
-
-	return grade <= DIALER_INVALID;
-}
-
-/*
- * ---------------------------------------------------------------------------
- * DialerCreate  .text 0x07afd0
- * DialerAbort   .text 0x07bde0
- */
-
-extern void SetPulseMakeTime(void *modem, int ms);
-extern void SetPulseBreakTime(void *modem, int ms);
-extern void LastPulseDigitDialed(void *modem);
-
-int
-DialerCreate(struct dialer *d, const char *s, void *modem)
-{
-	d->modem = modem;
-	GetDialerConfig(&d->cfg, modem);
-
-	d->progress_state = 0;
-	d->col = 0;
-	d->pos = -1;
-	d->row = 0;
-	d->silence = 0;
-	d->pulse_started = 0;
-
-	/*
-	 * The country's pulse timings go straight through to the call object,
-	 * so the pulse dialler is configured before the string is even looked
-	 * at -- and stays configured if the string is then rejected.
-	 */
-	SetPulseMakeTime(modem, d->cfg.pulse_make);
-	SetPulseBreakTime(modem, d->cfg.pulse_break);
-
-	d->pulse_active = 0;
-	d->pulse_released = 0;
-
-	/*
-	 * A null string leaves an empty one and succeeds, which is the same
-	 * judgement AnalyseDialString makes about NULL (D15) arrived at by a
-	 * different route.
-	 */
-	if (s == 0) {
-		d->string[0] = '\0';
-		return 0;
-	}
-
-	/*
-	 * The only call anywhere that asks AnalyseDialString to store the
-	 * position of the last dialable character.
-	 */
-	d->grade = AnalyseDialString(d, s, 1);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Dial String Syntax is %s\n",
-				     dialer_grade_name(d->grade));
-
-	if (d->grade <= DIALER_INVALID)
-		return DIALER_CREATE_REJECTED;
-
-	/*
-	 * Unbounded, into a 100-byte buffer.  What keeps it in bounds is the
-	 * length check inside AnalyseDialString, which grades anything longer
-	 * FATAL and so returns above.  The two are a hundred lines and one
-	 * function call apart.
-	 */
-	sysdep_strcpy(d->string, s);
-
-	return 0;
 }
 
 /*
@@ -365,10 +270,9 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		return NEXT_END;
 
 	for (;;) {
-		unsigned char c;
+		signed char c;
 
-		d->pos++;
-		c = (unsigned char)d->string[d->pos];
+		c = d->string[++d->pos];
 		if (c == '\0')
 			return NEXT_END;
 
@@ -383,6 +287,8 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 			continue;
 
 		switch (c) {
+		case ' ':
+			continue;
 		/* The keypad, as a grid position. */
 		case '1': d->row = 0; d->col = 0; return NEXT_DIGIT;
 		case '2': d->row = 0; d->col = 1; return NEXT_DIGIT;
@@ -403,22 +309,41 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 		 */
 		case '*':
 			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
-				continue;
+				break;
 			d->row = 3; d->col = 0;
 			return NEXT_DIGIT;
 		case '#':
 			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
-				continue;
+				break;
 			d->row = 3; d->col = 2;
 			return NEXT_DIGIT;
-		case 'A': case 'a': case 'B': case 'b':
-		case 'C': case 'c': case 'D': case 'd':
+		case 'A': case 'a':
 			if (d->cfg.abcd_permitted != 0)
-				continue;
+				break;
 			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
-				continue;
-			d->row = (c | 0x20) - 'a';
-			d->col = 3;
+				break;
+			d->row = 0; d->col = 3;
+			return NEXT_DIGIT;
+		case 'B': case 'b':
+			if (d->cfg.abcd_permitted != 0)
+				break;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				break;
+			d->row = 1; d->col = 3;
+			return NEXT_DIGIT;
+		case 'C': case 'c':
+			if (d->cfg.abcd_permitted != 0)
+				break;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				break;
+			d->row = 2; d->col = 3;
+			return NEXT_DIGIT;
+		case 'D': case 'd':
+			if (d->cfg.abcd_permitted != 0)
+				break;
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+				break;
+			d->row = 3; d->col = 3;
 			return NEXT_DIGIT;
 
 		case ',':
@@ -429,7 +354,7 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 			 */
 			if (d->string[d->pos + 1] == ',') {
 				d->repeat++;
-				continue;
+				break;
 			}
 			return NEXT_PAUSE;
 
@@ -442,105 +367,162 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 			/* Only meaningful where a calling tone would be sent. */
 			if (d->cfg.calling_tone == 1 || d->cfg.calling_tone == 3)
 				return NEXT_CALLING_TONE;
-			continue;
+			break;
 
 		case ';':
 			if (d->string[d->pos + 1] == '\0')
 				return NEXT_COMMAND;
-			continue;
+			break;
 
 		/*
 		 * Mode switches.  At the very start they just set the mode;
 		 * later they are a switch, which the country may forbid.
 		 */
 		case 'T': case 't':
-			if (d->pos == 0) {
+		if (d->pos != 0) {
+			if (d->cfg.tone_or_pulse != DIALER_PULSE_DIALING)
+			break;
+			if (d->cfg.mixed_permitted == 0) {
 				d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
-					    "TONE_DIALING\n");
-				continue;
-			}
-			if (d->cfg.tone_or_pulse != DIALER_PULSE_DIALING)
-				continue;
-			if (d->cfg.mixed_permitted != 0) {
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Tone\n");
+			} else {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... " "Not permitted to switch to " "Tone\n");
-				continue;
+				dsplibs_debug_printf(
+				"Dialer.c: GetNextDigit... " "Not permitted to switch to " "Tone\n");
 			}
+		} else {
 			d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Tone\n");
-			continue;
+			dsplibs_debug_printf(
+			"Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
+			"TONE_DIALING\n");
+			break;
+		}
+		break;
 
 		case 'P': case 'p':
-			if (d->pos == 0) {
+		if (d->pos != 0) {
+			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
+			break;
+			if (d->cfg.mixed_permitted == 0) {
 				d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
-					    "PULSE_DIALING\n");
-				continue;
-			}
-			if (d->cfg.tone_or_pulse != DIALER_TONE_DIALING)
-				continue;
-			if (d->cfg.mixed_permitted != 0) {
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Pulse\n");
+			} else {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... " "Not permitted to switch to " "Pulse\n");
-				continue;
+				dsplibs_debug_printf(
+				"Dialer.c: GetNextDigit... " "Not permitted to switch to " "Pulse\n");
 			}
+		} else {
 			d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Pulse\n");
-			continue;
+			dsplibs_debug_printf(
+			"Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
+			"PULSE_DIALING\n");
+			break;
+		}
+		break;
 
 		default:
-			continue;
+			break;
 		}
 	}
 }
 
-void
-DialerAbort(struct dialer *d)
+int
+IsDialStringInvalid(struct dialer *d, const char *s)
 {
-	/*
-	 * The one path that is an error, and the only one that does not reach
-	 * the message below.
-	 */
-	/* The original range check is unsigned (JA at 0x7bdef). */
-	if ((unsigned int)d->progress_state > 10u) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Dialer was aborted - error. \n");
+	int grade;
+	const char *grade_name;
 
-		return;
-	}
+	GetDialerConfig(&d->cfg, d->modem);
 
-	/*
-	 * Written as one condition rather than two early returns, which is
-	 * what it was until the call sites were restored.  Behaviour is
-	 * identical -- both returns did nothing but return -- but the object
-	 * does not return there: 0x7be2c and 0x7bdf9 both fall into the same
-	 * gate at 0x7bdfb, so an abort with nothing to release still says so.
-	 * Three guards that look alike, and one of them is not like the others.
-	 */
-	if (d->pulse_released == 0 && d->pulse_active != 0) {
-		LastPulseDigitDialed(d->modem);
-
-		/* After the call, and before the flag is set (0x7be3c). */
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" **** Dialer.C: " "LastPulseDigitDialed was "
-					     "called\n");
-
-		d->pulse_released = 1;
-	}
-
-	/* A tail call in the object -- `jmp` at 0x7be11, not `call`. */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Dialer was aborted.\n");
+		dsplibs_debug_printf("DIALER.C: IsDialStringInvalid(char * "
+				     "dialString )  got: %s\n", s);
+
+	grade = AnalyseDialString(d, s, 0);
+	grade_name = dialer_grade_name(grade);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Dial String Syntax is %s\n",
+				     grade_name);
+
+	return (unsigned)grade <= DIALER_INVALID;
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * DialerCreate  .text 0x07afd0
+ * DialerAbort   .text 0x07bde0
+ */
+
+extern void SetPulseMakeTime(void *modem, int ms);
+extern void SetPulseBreakTime(void *modem, int ms);
+extern void LastPulseDigitDialed(void *modem);
+
+int
+DialerCreate(struct dialer *d, const char *s, void *modem)
+{
+	const char *grade_name;
+
+	d->modem = modem;
+	GetDialerConfig(&d->cfg, modem);
+
+	d->progress_state = 0;
+	d->col = 0;
+	d->pos = -1;
+	d->row = 0;
+	d->silence = 0;
+	d->pulse_started = 0;
+
+	/*
+	 * The country's pulse timings go straight through to the call object,
+	 * so the pulse dialler is configured before the string is even looked
+	 * at -- and stays configured if the string is then rejected.
+	 */
+	SetPulseMakeTime(d->modem, d->cfg.pulse_make);
+	SetPulseBreakTime(d->modem, d->cfg.pulse_break);
+
+	d->pulse_active = 0;
+	d->pulse_released = 0;
+
+	/*
+	 * A null string leaves an empty one and succeeds, which is the same
+	 * judgement AnalyseDialString makes about NULL (D15) arrived at by a
+	 * different route.
+	 */
+	if (s == 0) {
+		d->string[0] = '\0';
+		return 0;
+	}
+
+	/*
+	 * The only call anywhere that asks AnalyseDialString to store the
+	 * position of the last dialable character.
+	 */
+	d->grade = AnalyseDialString(d, s, 1);
+	grade_name = dialer_grade_name(d->grade);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Dial String Syntax is %s\n",
+				     grade_name);
+
+	if ((unsigned)d->grade <= DIALER_INVALID)
+		return DIALER_CREATE_REJECTED;
+
+	/*
+	 * Unbounded, into a 100-byte buffer.  What keeps it in bounds is the
+	 * length check inside AnalyseDialString, which grades anything longer
+	 * FATAL and so returns above.  The two are a hundred lines and one
+	 * function call apart.
+	 */
+	sysdep_strcpy(d->string, s);
+
+	return 0;
+}
+
 
 /* The country's rule for turning a keypad position into pulses. */
 static int
@@ -997,5 +979,39 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				    "Dialer switch default case\n");
 			return DIALER_BAD_STATE;
 		}
+	}
+}
+
+
+void
+DialerAbort(struct dialer *d)
+{
+	/* Native JA sends an out-of-range state to the diagnostic-only arm. */
+	if ((unsigned int)d->progress_state <= 10u) {
+		/*
+		 * Written as one condition rather than two early returns, which is
+		 * what it was until the call sites were restored.  Behaviour is
+		 * identical -- both returns did nothing but return -- but the object
+		 * does not return there: 0x7be2c and 0x7bdf9 both fall into the same
+		 * gate at 0x7bdfb, so an abort with nothing to release still says so.
+		 * Three guards that look alike, and one of them is not like the others.
+		 */
+		if (d->pulse_released == 0 && d->pulse_active != 0) {
+			LastPulseDigitDialed(d->modem);
+
+			/* After the call, and before the flag is set (0x7be3c). */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(" **** Dialer.C: " "LastPulseDigitDialed was "
+						     "called\n");
+
+			d->pulse_released = 1;
+		}
+
+		/* A tail call in the object -- `jmp` at 0x7be11, not `call`. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Dialer was aborted.\n");
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Dialer was aborted - error. \n");
 	}
 }

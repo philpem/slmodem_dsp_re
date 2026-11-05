@@ -19,7 +19,11 @@ def main():
             assert grade == ('EXACT' if record['same_identity'] else 'RELOC'), (label, grade)
         else:
             assert grade != 'EXACT', (label, grade)
-            assert not any(target[0] == 'jump-table' for _, target in candidate[1].values()), label
+            if candidate[0] is None or candidate[1] is None:
+                assert candidate == (None, None), (label, candidate)
+                assert grade == 'NODATA', (label, grade)
+            else:
+                assert not any(target[0] == 'jump-table' for _, target in candidate[1].values()), label
         results[label] = grade
         print(label + ': ' + grade)
     duplicate = b.body(str(root / 'duplicate-destinations.o'), 'sample')

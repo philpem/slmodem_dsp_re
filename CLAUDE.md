@@ -809,8 +809,9 @@ to other functions, using fresh native evidence. Record failed transfers too;
 do not repeat a closed spelling palette. This is a deep-dive-and-transfer loop,
 not a requirement to continue one function indefinitely.
 
-Small collateral regressions require causal analysis and coupled repair tests
-before rejection. Shared source/declarations can compensate across functions;
+Minor collateral regressions are normal repair work, not a reason to disqualify
+a promising candidate. Trace their causes and test coupled repairs before
+rejecting the completed hypothesis. Shared source/declarations can compensate across functions;
 allow temporary byte regressions and widen to affected callers/callees rather
 than freezing an EXACT neighbor. Judge the completed native-backed combination,
 with full collateral reported and period fidelity intact.

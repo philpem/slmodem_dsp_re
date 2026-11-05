@@ -1,0 +1,6404 @@
+{
+  "allocated_data": {
+    "code_targets": {
+      "AnalyseDialString": {
+        "baseline_entries": 88,
+        "native_entries": 88,
+        "native_targets": [
+          240,
+          359,
+          208,
+          359,
+          240,
+          208,
+          208,
+          208,
+          240,
+          240,
+          359,
+          208,
+          240,
+          240,
+          208,
+          208,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          208,
+          198,
+          208,
+          208,
+          208,
+          208,
+          240,
+          345,
+          345,
+          345,
+          345,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          414,
+          208,
+          208,
+          208,
+          393,
+          208,
+          208,
+          240,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          370,
+          208,
+          208,
+          345,
+          345,
+          345,
+          345,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          414,
+          208,
+          208,
+          208,
+          393,
+          208,
+          208,
+          240
+        ],
+        "ordered_targets_equal_native": true,
+        "selected_entries": 88,
+        "selected_targets": [
+          240,
+          359,
+          208,
+          359,
+          240,
+          208,
+          208,
+          208,
+          240,
+          240,
+          359,
+          208,
+          240,
+          240,
+          208,
+          208,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          359,
+          208,
+          198,
+          208,
+          208,
+          208,
+          208,
+          240,
+          345,
+          345,
+          345,
+          345,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          414,
+          208,
+          208,
+          208,
+          393,
+          208,
+          208,
+          240,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          370,
+          208,
+          208,
+          345,
+          345,
+          345,
+          345,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          208,
+          414,
+          208,
+          208,
+          208,
+          393,
+          208,
+          208,
+          240
+        ]
+      },
+      "DialerProgress": {
+        "baseline_entries": 11,
+        "native_entries": 11,
+        "native_targets": [
+          164,
+          236,
+          455,
+          560,
+          719,
+          861,
+          892,
+          923,
+          954,
+          985,
+          86
+        ],
+        "ordered_targets_equal_native": false,
+        "selected_entries": 11,
+        "selected_targets": [
+          99,
+          156,
+          314,
+          551,
+          450,
+          517,
+          382,
+          416,
+          679,
+          713,
+          49
+        ]
+      },
+      "GetNextDigitAndReturnNextState": {
+        "baseline_entries": 87,
+        "native_entries": 88,
+        "native_targets": [
+          32,
+          120,
+          32,
+          127,
+          102,
+          32,
+          32,
+          32,
+          32,
+          32,
+          146,
+          32,
+          168,
+          32,
+          32,
+          32,
+          196,
+          229,
+          252,
+          262,
+          288,
+          301,
+          308,
+          321,
+          328,
+          338,
+          32,
+          345,
+          32,
+          32,
+          32,
+          32,
+          372,
+          420,
+          451,
+          485,
+          528,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          576,
+          32,
+          32,
+          32,
+          656,
+          32,
+          32,
+          113,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          382,
+          32,
+          32,
+          420,
+          451,
+          485,
+          528,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          576,
+          32,
+          32,
+          32,
+          656,
+          32,
+          32,
+          113
+        ],
+        "ordered_targets_equal_native": false,
+        "selected_entries": 88,
+        "selected_targets": [
+          32,
+          133,
+          32,
+          140,
+          165,
+          32,
+          32,
+          32,
+          32,
+          32,
+          172,
+          32,
+          198,
+          32,
+          32,
+          32,
+          226,
+          259,
+          282,
+          286,
+          312,
+          319,
+          332,
+          339,
+          346,
+          353,
+          32,
+          102,
+          32,
+          32,
+          32,
+          32,
+          360,
+          408,
+          439,
+          480,
+          520,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          579,
+          32,
+          32,
+          32,
+          658,
+          32,
+          32,
+          126,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          370,
+          32,
+          32,
+          408,
+          439,
+          480,
+          520,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          32,
+          579,
+          32,
+          32,
+          32,
+          658,
+          32,
+          32,
+          126
+        ]
+      },
+      "baseline": {
+        "by_owner": {
+          "AnalyseDialString": 88,
+          "DialerProgress": 11,
+          "GetNextDigitAndReturnNextState": 87
+        },
+        "entries": 186
+      },
+      "selected": {
+        "by_owner": {
+          "AnalyseDialString": 88,
+          "DialerProgress": 11,
+          "GetNextDigitAndReturnNextState": 88
+        },
+        "entries": 187
+      }
+    },
+    "control": {
+      "complete_code_targets_audit_rejects": true,
+      "denominator": 1,
+      "misaligned_known_code_target": 1
+    },
+    "data": {
+      "dial_high_freqs": {
+        "baseline": "b9043805c50561060000",
+        "native": "b9043805c50561060000",
+        "selected": "b9043805c50561060000"
+      },
+      "dial_low_freqs": {
+        "baseline": "b90202035403ad030000",
+        "native": "b90202035403ad030000",
+        "selected": "b90202035403ad030000"
+      }
+    },
+    "export_order_equal": false,
+    "exports_set_equal": true,
+    "limits": "Instruction boundaries and owner identities do not establish equivalence for GetNext/Progress target offsets; only Analyse ordered offsets are identical. Strings compared by owner+payload occurrences, not packed layout. No raw file/data identity claim.",
+    "parsed_hashes": {
+      "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/source/baseline/ordinary/candidate.o": "7b564f6acf8a9cfaa832d21c64fbf1a886c988101104b1122b1949f5d8ebc1ff",
+      "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/source/final/ordinary/candidate.o": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+      "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/source/native.o": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379"
+    },
+    "strings": {
+      "baseline": {
+        ".rodata": {
+          "FATAL": 1,
+          "INVALID": 1,
+          "TOLERABLE": 1,
+          "VALID": 1
+        },
+        "AnalyseDialString": {
+          "AnalyzeDialString: LAST_DIALABLE_SYMBOL is %d\n": 1,
+          "AnalyzeDialString: Updated 17 May 1999 00:50\n": 1
+        },
+        "DialerAbort": {
+          " **** Dialer.C: LastPulseDigitDialed was called\n": 1,
+          "Dialer was aborted - error. \n": 1,
+          "Dialer was aborted.\n": 1
+        },
+        "DialerCreate": {
+          "Dial String Syntax is %s\n": 1,
+          "ILLEGAL!": 1
+        },
+        "DialerProgress": {
+          " **** Dialer.C: LastPulseDigitDialed was called\n": 3,
+          "=========> Begin Dialing FLASH.\n": 1,
+          "=========> Calling PULSE_DIAL_DIGIT_PROC with %d.\n": 1,
+          "=========> End dialing Flash.\n": 1,
+          "=========> Waiting to PULSE_IS_DIALER_READY_PROC to become true.\n": 2,
+          "=========>END OF DIAL DIGIT DETECTED.\n": 1,
+          "Consequitive-Commas Dialing; Number of samples is %d.\n": 2,
+          "DIALER_CALLING_TONE_STATE\n": 1,
+          "DIALER_END_PARTIALLY_STATE\n": 1,
+          "DIALER_END_STATE\n": 1,
+          "DIALER_INITIAL_STATE\n": 1,
+          "DIALER_WAIT_FOR_BONGTONE_STATE\n": 1,
+          "DIALER_WAIT_FOR_DIALTONE_STATE\n": 1,
+          "DIALER_WAIT_FOR_SILENCE_STATE\n": 1,
+          "Dialer switch default case\n": 1,
+          "Done Generating Dial-Pause\n": 1,
+          "Done Generating digit\n": 1,
+          "Done Generating flash\n": 1,
+          "Done Generating silence between digits\n": 1,
+          "Original digitToPulseDial %d": 1,
+          "Samples left = %d\n": 2
+        },
+        "GetNextDigitAndReturnNextState": {
+          "Dialer.c: GetNextDigit... Not permitted to switch to Pulse\n": 1,
+          "Dialer.c: GetNextDigit... Not permitted to switch to Tone\n": 1,
+          "Dialer.c: GetNextDigit... Switching to Pulse\n": 1,
+          "Dialer.c: GetNextDigit... Switching to Tone\n": 1,
+          "Dialer.c: GetNextDigit... TONE_OR_PULSE_FLAG became PULSE_DIALING\n": 1,
+          "Dialer.c: GetNextDigit... TONE_OR_PULSE_FLAG became TONE_DIALING\n": 1,
+          "Digit is %c\n": 1
+        },
+        "IsDialStringInvalid": {
+          "DIALER.C: IsDialStringInvalid(char * dialString )  got: %s\n": 1,
+          "Dial String Syntax is %s\n": 1,
+          "ILLEGAL!": 1
+        }
+      },
+      "selected": {
+        ".rodata": {
+          "FATAL": 1,
+          "INVALID": 1,
+          "TOLERABLE": 1,
+          "VALID": 1
+        },
+        "AnalyseDialString": {
+          "AnalyzeDialString: LAST_DIALABLE_SYMBOL is %d\n": 1,
+          "AnalyzeDialString: Updated 17 May 1999 00:50\n": 1
+        },
+        "DialerAbort": {
+          " **** Dialer.C: LastPulseDigitDialed was called\n": 1,
+          "Dialer was aborted - error. \n": 1,
+          "Dialer was aborted.\n": 1
+        },
+        "DialerCreate": {
+          "Dial String Syntax is %s\n": 1,
+          "ILLEGAL!": 1
+        },
+        "DialerProgress": {
+          " **** Dialer.C: LastPulseDigitDialed was called\n": 3,
+          "=========> Begin Dialing FLASH.\n": 1,
+          "=========> Calling PULSE_DIAL_DIGIT_PROC with %d.\n": 1,
+          "=========> End dialing Flash.\n": 1,
+          "=========> Waiting to PULSE_IS_DIALER_READY_PROC to become true.\n": 2,
+          "=========>END OF DIAL DIGIT DETECTED.\n": 1,
+          "Consequitive-Commas Dialing; Number of samples is %d.\n": 2,
+          "DIALER_CALLING_TONE_STATE\n": 1,
+          "DIALER_END_PARTIALLY_STATE\n": 1,
+          "DIALER_END_STATE\n": 1,
+          "DIALER_INITIAL_STATE\n": 1,
+          "DIALER_WAIT_FOR_BONGTONE_STATE\n": 1,
+          "DIALER_WAIT_FOR_DIALTONE_STATE\n": 1,
+          "DIALER_WAIT_FOR_SILENCE_STATE\n": 1,
+          "Dialer switch default case\n": 1,
+          "Done Generating Dial-Pause\n": 1,
+          "Done Generating digit\n": 1,
+          "Done Generating flash\n": 1,
+          "Done Generating silence between digits\n": 1,
+          "Original digitToPulseDial %d": 1,
+          "Samples left = %d\n": 2
+        },
+        "GetNextDigitAndReturnNextState": {
+          "Dialer.c: GetNextDigit... Not permitted to switch to Pulse\n": 1,
+          "Dialer.c: GetNextDigit... Not permitted to switch to Tone\n": 1,
+          "Dialer.c: GetNextDigit... Switching to Pulse\n": 1,
+          "Dialer.c: GetNextDigit... Switching to Tone\n": 1,
+          "Dialer.c: GetNextDigit... TONE_OR_PULSE_FLAG became PULSE_DIALING\n": 1,
+          "Dialer.c: GetNextDigit... TONE_OR_PULSE_FLAG became TONE_DIALING\n": 1,
+          "Digit is %c\n": 1
+        },
+        "IsDialStringInvalid": {
+          "DIALER.C: IsDialStringInvalid(char * dialString )  got: %s\n": 1,
+          "Dial String Syntax is %s\n": 1,
+          "ILLEGAL!": 1
+        }
+      }
+    }
+  },
+  "base_revision": "b49c15b9fe37dea06d91158e440424b71d03fd33",
+  "census": {
+    "classifier_membership_changes": {
+      "exact_symbols": {
+        "gains": [],
+        "losses": []
+      }
+    },
+    "frozen_baseline_note": "All300 historical objects validated against their manifest; freshness check skipped only in a separate historical wrapper, never current-source census.",
+    "new_classifier_baseline": {
+      "bytes": 70,
+      "compared": 1852,
+      "compared_bytes": 720125,
+      "exact": 1144,
+      "exact_bytes": 135246,
+      "nodata": 0,
+      "reference_functions": 1852,
+      "regalloc": 28,
+      "reloc": 0,
+      "size": 610,
+      "unresolved": 0
+    },
+    "old_classifier_baseline": {
+      "bytes": 70,
+      "compared": 1852,
+      "compared_bytes": 720125,
+      "exact": 1144,
+      "exact_bytes": 135246,
+      "nodata": 0,
+      "reference_functions": 1852,
+      "regalloc": 28,
+      "reloc": 0,
+      "size": 610,
+      "unresolved": 0
+    },
+    "selected": {
+      "bytes": 71,
+      "compared": 1852,
+      "compared_bytes": 720125,
+      "exact": 1146,
+      "exact_bytes": 135831,
+      "nodata": 0,
+      "reference_functions": 1852,
+      "regalloc": 28,
+      "reloc": 0,
+      "size": 607,
+      "unresolved": 0
+    },
+    "source_membership_changes": {
+      "exact_symbols": {
+        "gains": [
+          "AnalyseDialString",
+          "IsDialStringInvalid"
+        ],
+        "losses": []
+      }
+    }
+  },
+  "compiler_capture": {
+    "assembly_sha256": "771d0a4dea67d59c67be9f64841f606b11a59717d95174162e2b3181bc895122",
+    "capture_sha256": "01044dfd493dfc5c324c2f4ce117dbc5f65cfa1bb37e15233f0eeaad5e855bac",
+    "checks": {
+      "initial_plain_observed_assembly_equal": true,
+      "observed_object_equal": true,
+      "repeated_object_equal": true
+    },
+    "compiler_kind": "cc1",
+    "compiler_path": "/usr/i386-pc-linux-gnu/gcc-bin/3.4",
+    "compiler_sha256": "80a79e520ca77fb1efa3bbd5ac4d927d075d6c1fdc6dd908fd83b437cc47febc",
+    "config_sha256": "929f2f43cc2149a5f005aadca62b684c9b74c661e32ba26c6d5c1f6c79d223c7",
+    "effective_flags": [
+      "-O3",
+      "-frename-registers",
+      "-march=i386",
+      "-mtune=i686",
+      "-mfpmath=387",
+      "-mno-ieee-fp",
+      "-fomit-frame-pointer",
+      "-maccumulate-outgoing-args",
+      "-Iinclude",
+      "-D__SIZEOF_POINTER__=4",
+      "-include",
+      "tools/toolchain/period_compat.h",
+      "-DDSPLIB_REPRODUCE_BUGS",
+      "-DDSPLIB_REPRODUCE_BUGS",
+      "-v",
+      "-save-temps",
+      "-da",
+      "-DDSPLIB_REPRODUCE_BUGS"
+    ],
+    "events": 95,
+    "functions_with_events": 5,
+    "image_id": "sha256:fe868cc44a48c36d1130862965729d0b384bc9e0a1908d37891aa5ae07352f16",
+    "object_sha256": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+    "observer_sha256": "88e21ec61db74e798ddc225df080a77dc7c23d043172c70092acd689d3566866",
+    "preprocessed_sha256": "c3da0fd090040f34d77060156d72bbac0dc0224948fb74e383567106fe874320",
+    "source_sha256": "85ae975ed99e14833cd92469d3f928eb0740332934164ce07bde57b03993cbd5",
+    "status": "valid"
+  },
+  "final_files": {
+    "src/dialer/Dialer.c": "85ae975ed99e14833cd92469d3f928eb0740332934164ce07bde57b03993cbd5",
+    "test/unit/t_dialer.c": "2860ca96c043309ce7c1ef8283f3c093bce4bfe16e835c5be921fe1ff3f448db",
+    "tools/toolchain/byteident.py": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+    "tools/toolchain/jumptable.py": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+    "tools/toolchain/jumptable_fixed_local_controls.py": "92dc3f0ee6dfa89596e6f584e0c4d51c9b3241e81ba6f8cfb62798c2d52af0ed",
+    "tools/toolchain/jumptable_integration_controls.py": "46429923ec36be73fe780873ef0759ae567c386daeb15ccc08248461a3f83536"
+  },
+  "final_grades": {
+    "native_hash": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+    "parsed_object_hash": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+    "tools": {
+      "tools/toolchain/byteident.py": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+      "tools/toolchain/induction_jumptable.py": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+      "tools/toolchain/jumptable.py": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac"
+    },
+    "verdicts": {
+      "AnalyseDialString": [
+        "EXACT",
+        0
+      ],
+      "DialerAbort": [
+        "SIZE",
+        1
+      ],
+      "DialerCreate": [
+        "BYTES",
+        5
+      ],
+      "DialerProgress": [
+        "SIZE",
+        445
+      ],
+      "GetNextDigitAndReturnNextState": [
+        "SIZE",
+        1
+      ],
+      "IsDialStringInvalid": [
+        "EXACT",
+        0
+      ]
+    }
+  },
+  "fixtures": {
+    "t_callprog_create": {
+      "baseline": {
+        "assertions": 3541,
+        "groups": 14
+      },
+      "selected": {
+        "assertions": 3541,
+        "groups": 14
+      }
+    },
+    "t_dialer": {
+      "baseline": {
+        "assertions": 25680,
+        "groups": 9
+      },
+      "selected": {
+        "assertions": 25680,
+        "groups": 9
+      }
+    },
+    "t_dialerprog": {
+      "baseline": {
+        "assertions": 6172887,
+        "groups": 103
+      },
+      "selected": {
+        "assertions": 6172887,
+        "groups": 103
+      }
+    },
+    "t_dialstring": {
+      "baseline": {
+        "assertions": 4429,
+        "groups": 4
+      },
+      "selected": {
+        "assertions": 4429,
+        "groups": 4
+      }
+    }
+  },
+  "gate": {
+    "command": "make phase J=8",
+    "log_sha256": "9da1afbb29c8584946337041d43a62245f78c6d17729a07dc1dabba44721c9fa",
+    "period_failed": 0,
+    "period_passed": 399,
+    "returncode": 0
+  },
+  "inherited_proof_suites": {
+    "detector_sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+    "failed": 0,
+    "initial_failure_original_detector_reproduced": true,
+    "initial_unmodified_suite_failed": 1,
+    "initial_unmodified_suite_passed": 8,
+    "input_objects": 300,
+    "passed": 9,
+    "path_adjustments": "fully copied scratch project; build/tc_out symlink to copied tc_repro; BLOB/TC_OUT/TMPDIR and candidate arguments point at scratch",
+    "proof_refusal_regressions": 0,
+    "repaired_integration_controls_sha256": "46429923ec36be73fe780873ef0759ae567c386daeb15ccc08248461a3f83536",
+    "repaired_integration_original_and_current_identical_log_sha256": "f7f8adc717342fc6dfc1b78365e2491805751418f8d101a305f879717e8bbdf2",
+    "repaired_integration_original_and_current_pass": true,
+    "rows": [
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_controls.py"
+        ],
+        "denominators": {
+          "accepted_objects": 7,
+          "real_equal_tables": 1,
+          "refused_objects": 40
+        },
+        "log_sha256": "fcd8c84b7a9f0a3d1ad9af08302a508371b4e06ffb0b267004d12ae3288d11b0",
+        "parsed_events": 49,
+        "returncode": 0,
+        "script": "jumptable_controls.py",
+        "script_sha256": "7d77c43657615f1ac91c3d46a673a11d7f838efbc0431505df5a8e1549a9a74e",
+        "tail": [
+          "external-prefixed-direct: REFUSED section direct guard bypass",
+          "external-address-size-direct: REFUSED section direct guard bypass",
+          "47 synthetic ELF objects: 7 accepted (3 equal pairs, 2 distinct identities), 40 refused; 2 real objects/1 equal table identity; strict grade unchanged"
+        ],
+        "wall_seconds": 1.84
+      },
+      {
+        "command": [
+          "python3",
+          "run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_integration_controls.py"
+        ],
+        "denominators": {
+          "complete": true,
+          "distinct_pair_RELOC_checks": 3,
+          "equal_pair_EXACT_checks": 3,
+          "loop_grade_distribution": {
+            "BYTES": 5,
+            "EXACT": 2,
+            "NODATA": 3,
+            "RELOC": 4,
+            "SIZE": 11,
+            "UNRESOLVED": 20
+          },
+          "ordinary_consumer_UNRESOLVED": 1,
+          "real_exact_pairs": 1,
+          "refused_objects_never_EXACT": 40,
+          "synthetic_objects": 48
+        },
+        "initial_log_sha256": "d04d72709799002ea68b07db5b9fd68711a263c0f0108b0508d3e0531b32e26c",
+        "initial_returncode": 1,
+        "log_sha256": "f7f8adc717342fc6dfc1b78365e2491805751418f8d101a305f879717e8bbdf2",
+        "parsed_events": 130,
+        "returncode": 0,
+        "scratch_harness_change": "Absent body must equal (None,None) and have NODATA; other refused bodies must lack canonical jump-table identity.",
+        "script": "jumptable_integration_controls.py",
+        "script_sha256": "46429923ec36be73fe780873ef0759ae567c386daeb15ccc08248461a3f83536",
+        "tail": [
+          "external-prefixed-direct: UNRESOLVED",
+          "external-address-size-direct: UNRESOLVED",
+          "48 synthetic ELF objects: 3 equal-pair EXACT checks, 3 distinct-pair RELOC checks, 40 refusals never EXACT, 1 ordinary-consumer UNRESOLVED; 2 real objects/MakeTxData EXACT"
+        ],
+        "wall_seconds": 2.498
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_batch100_abi_controls.py"
+        ],
+        "denominators": {
+          "accepted_objects": 3,
+          "real_proved_tables": 1,
+          "refused_objects": 32
+        },
+        "log_sha256": "5f54198cfab21cab36e540e11578bab8e98f2a15b9e52e9e567b4a04d25c4dcf",
+        "parsed_events": 103,
+        "returncode": 0,
+        "script": "jumptable_batch100_abi_controls.py",
+        "script_sha256": "dcc54efe9870efe133cdd81d8a4a238bc9551dac40200e3484f28d7fd2ce38a7",
+        "tail": [
+          "35 static ELF controls: 3 accepted,32 refused; rebased identity equal; real5-slot/7-call ordinary ABI table proved; integration1EXACT/1RELOC/32UNRESOLVED"
+        ],
+        "wall_seconds": 1.998
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_batch50_stack_controls.py",
+          "--candidate",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/build/tc_repro/src_pump_v90_V90Phase3Modulator.cpp.o"
+        ],
+        "denominators": {
+          "accepted_objects": 3,
+          "real_exact_pairs": 2,
+          "refused_objects": 25
+        },
+        "log_sha256": "420ed65c7c4a595e2948088c9730242d0f3e4c0882e79a398a6b2bcfcc923b61",
+        "parsed_events": 89,
+        "returncode": 0,
+        "script": "jumptable_batch50_stack_controls.py",
+        "script_sha256": "91d0bb874a5e0d4b9bea82d1267d98acb47b8e16c06f839a940b84c2bbf7e926",
+        "tail": [
+          "frame-return-immediate REFUSED: unsupported return form",
+          "unsupported-implicit-write REFUSED: unsupported fixed-frame instruction",
+          "28 assembled ELF controls: 3 accepted, 25 refused; 2 real blob/candidate exact pairs"
+        ],
+        "wall_seconds": 4.083
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_fixed_abi_controls.py",
+          "--candidate",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/build/tc_repro/src_pump_v32_V32loop.c.o"
+        ],
+        "denominators": {
+          "accepted_objects": 3,
+          "real_exact_pairs": 1,
+          "refused_objects": 32
+        },
+        "log_sha256": "71370a7e9282e44e9715e0aa232e6334ba629cf5fd10b527914f0931cd8d6c7b",
+        "parsed_events": 106,
+        "returncode": 0,
+        "script": "jumptable_fixed_abi_controls.py",
+        "script_sha256": "3a00ed744eb714a87183fa326e804cbeca9933151da8827b977a5b2c8c7a0c95",
+        "tail": [
+          "3 positive fixed-ABI controls; 32 adversarial refusals; rebased EXACT, altered targets RELOC; real 34-slot/17-call pair EXACT"
+        ],
+        "wall_seconds": 3.073
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_setcc_controls.py"
+        ],
+        "denominators": {
+          "accepted_objects": 128,
+          "nested_suite": "batch100 ABI3accepted32refused",
+          "real_exact_pairs": 1,
+          "refused_objects": 14
+        },
+        "log_sha256": "a06cca9111fa91c122a05d767634409b94f09c030ac7e27b905ca7a9322c1e62",
+        "parsed_events": 407,
+        "returncode": 0,
+        "script": "jumptable_setcc_controls.py",
+        "script_sha256": "9610493ed4cd09ad325b9ce66e45ba94000b45b25cfb0bc8fa0549cce0eda276",
+        "tail": [
+          "35 static ELF controls: 3 accepted,32 refused; rebased identity equal; real5-slot/7-call ordinary ABI table proved; integration1EXACT/1RELOC/32UNRESOLVED",
+          "SETcc: 128 register positives EXACT; 14 unsafe/unsupported refusals UNRESOLVED; altered targets RELOC; real RxNextStateV17 pair EXACT; inherited 35 ABI controls passed"
+        ],
+        "wall_seconds": 20.136
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_corridor_controls.py"
+        ],
+        "denominators": {
+          "accepted_objects": 5,
+          "real_exact_pairs": 1,
+          "refused_objects": 27
+        },
+        "log_sha256": "0f9a1e8a68aa5caf6a7eef657693a0cfb115146ccb11b671953d73f86e8bfce4",
+        "parsed_events": 96,
+        "returncode": 0,
+        "script": "jumptable_corridor_controls.py",
+        "script_sha256": "8dcf13287a537922158c2dbda7b0f9c880401eb20c57812929a3996be64254dd",
+        "tail": [
+          "5 corridor/frame positives EXACT; 27 refusals UNRESOLVED; altered targets RELOC; real six-slot push-only pair EXACT"
+        ],
+        "wall_seconds": 2.501
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/jumptable_taken_guard_controls.py",
+          "--candidate",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/build/tc_repro/src_pump_v90_V90Resampler.cpp.o"
+        ],
+        "denominators": {
+          "accepted_objects": 4,
+          "real_exact_pairs": 1,
+          "refused_objects": 30
+        },
+        "log_sha256": "bf0a7a75d21f38e6a3ee34dc98bfe7cd3313e8858f862dada74dbb606313dcdb",
+        "parsed_events": 102,
+        "returncode": 0,
+        "script": "jumptable_taken_guard_controls.py",
+        "script_sha256": "20bdb6456c7ec1fbee8644d13399b20cac1cfd98a70bdf13451eecc5633d40a5",
+        "tail": [
+          "4 positive taken-guard controls; 30 adversarial refusals; rebased EXACT, altered targets RELOC; real 16-slot/16-call pair EXACT"
+        ],
+        "wall_seconds": 2.392
+      },
+      {
+        "command": [
+          "python3",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/run_one.py",
+          "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105/table-proof/inherited-nine/tools/toolchain/induction_jumptable_controls.py"
+        ],
+        "denominators": {
+          "accepted_objects": 2,
+          "different_identities": true,
+          "refused_objects": 18
+        },
+        "log_sha256": "289a0b95694343ca24c43f6bd879e653d5083588c89109b9f965eb68937e662b",
+        "parsed_events": 20,
+        "returncode": 0,
+        "script": "induction_jumptable_controls.py",
+        "script_sha256": "9d6de9756c9bb6bf1599686b5498d04cc2d6e98c93f0341e78ae0259abdedb6a",
+        "tail": [
+          "  }",
+          "}",
+          "20 ELF controls: 2 proved (different identities), 18 refused"
+        ],
+        "wall_seconds": 0.253
+      }
+    ],
+    "suite_count": 9
+  },
+  "inputs": {
+    "config": "929f2f43cc2149a5f005aadca62b684c9b74c661e32ba26c6d5c1f6c79d223c7",
+    "include/dsplib/ANSamToneDetector.h": "8f95bbbf641ce2ab6d58073245720881da9c95ad858b2eb922ca582c090c10fa",
+    "include/dsplib/Agc.h": "b07d9f01ddf14efd2c6f4736fd444f3b7d332d9233a9254afb1a520bbd7f9410",
+    "include/dsplib/DILdescriptorPacker.h": "a2517fdb31225898a0196a262871cc8d82fd0457c3ab8f20fc82be7a409e389f",
+    "include/dsplib/DiffCoder.h": "7d52993bc1b54030c70ee5eb72db600d70182e11587b50644622b6cbb7c11628",
+    "include/dsplib/DspMath.h": "9d51b0110e4941427b9e9490dc71211689b0311e3bf46ef520a885fbcea5afec",
+    "include/dsplib/FloatARMA.h": "bfc68e5b3ec6a9d10e6fa26987cce1fee2bc4585564b726fc2fa6c25b6d5b685",
+    "include/dsplib/FloatFIR.h": "bc93072a007b17abd81b91e7cf42317bee9d525d7df41af6c76cf136a10b85ef",
+    "include/dsplib/FloatIIR.h": "017655b29e8c5ba47f4f4e0122bbc78d7c0ec29e0be18bd9344626507d3b2b49",
+    "include/dsplib/GenericIIR.h": "3113228dc5318c24a98e9d1facaa1e64dccb56ec6cd7e0a6731ad1aaeb4539c4",
+    "include/dsplib/GenericToneDetector.h": "268271b41e836ea7e4aef1045a828bca9e31c06ce89c6070fcf0a8a4855be5ac",
+    "include/dsplib/K56FlexFloModem.h": "65d25284bcc92f9e02209b1061963aeeb234a939e53b4fe107e52293e3959c59",
+    "include/dsplib/LowPassFIR.h": "526fdd02ea0df55ce5758095c14553ccf0137afebe5cd2a5bd3bff8927b02a8e",
+    "include/dsplib/ModulusCoder.h": "378fe485e7b9fc9b5cb26955a9cb5136a5b45a924a4756c74c59a72510a14f6f",
+    "include/dsplib/Psd.h": "fbe185a2606432cd11893c8e94b65f0248715ee45460ad737f369a393d7598b6",
+    "include/dsplib/Queue.h": "ee6be0578ebac903b8d46fc1e0befc719a5924e4c798c85a70985beb753764db",
+    "include/dsplib/Resampler.h": "64eb723a167e123489ca4e9983632c618540bba16b995cb3c6d23b9d76ab356f",
+    "include/dsplib/ResamplerTiming.h": "f53abda5e47014225fc02718b39e198af75650af738c93053bb566a0a482f0e8",
+    "include/dsplib/ResamplerTimingOffset.h": "9e5415f01d9db87f509676e8c70fd5adbe728a7614cf0e6f77c6775143a41e7d",
+    "include/dsplib/Scrambler.h": "ec1e94cea7e8790bd1eea07e8199a587c0d9e1f9b0f4e49238c4b2e5d62f37da",
+    "include/dsplib/SineWave.h": "0a45385318e012a93eb6561586d2e7ee20fa425de62afd8fa1587a581590b073",
+    "include/dsplib/TAG_DiagnosticResults.h": "cef7ce8bc8819876277dc805d6efb01e82645ad204f46d2a4b3b048c7596f831",
+    "include/dsplib/V90AutoDigitalImpDetector.h": "c3e8f8c11fdb3e6d5e5dd374dc51031e32254270b059e7cdf9d06ee09aafff42",
+    "include/dsplib/V90BitsToSymbol.h": "69a3ae66ba05bc68944af5246052098bad6a3c8e789e2497d65514987ffb8f61",
+    "include/dsplib/V90CP.h": "e1c0b5bbd4e31777a6c3d6291ebb482ce01019f259a331c4e9b86e8b98f797b8",
+    "include/dsplib/V90CPUnPck.h": "5b0862ff0da3c76466de22c28049c2f27af93d5e9ec8d717f99650bce8e4a154",
+    "include/dsplib/V90CPpck.h": "ec3ae80e73e196f1bc0f283ff2ca6f6efbc8e09c2cd40719990b140ec0ae7149",
+    "include/dsplib/V90CodecType.h": "b1d1f8983823e2602867caf79c2ba60b3d000cb6b64dec60e8877e49a1419e28",
+    "include/dsplib/V90ConnectionEvaluator.h": "3712b03302ce09b4de8b0bb7f46dcbf6eb4acb1fc6093d39986fe5cf51ce0a33",
+    "include/dsplib/V90ConstellationDesigner.h": "d21f35ba0efaf981562e67db48f004058a5211e5643a1e4b125ca7b05a287c32",
+    "include/dsplib/V90ConstellationPower.h": "ebd0d895a5095f1427273957aef1052fb5b62f5800c14ca9fe6f30a7836504ae",
+    "include/dsplib/V90Demapper.h": "014f536d559c0564b33c905ef0dd846447a37d9a8985d87bdd28664dca226507",
+    "include/dsplib/V90Demodulator.h": "948cae97618050dbd90366a04002ab4baf1285612c661b4150b6ea48a5dff997",
+    "include/dsplib/V90DilDescriptorSettings.h": "4e9f5774c027350982c2e1f546b3eca2c7252b1ccb4210dc1f21a3a20b876384",
+    "include/dsplib/V90Equalizer.h": "21b339e58a636def633e24ab03d74f327e3605ef9320f1ac1a2948433ce4c307",
+    "include/dsplib/V90Jd.h": "a932e4ca6940bfabf0134e0e87d8f686fed3bf1a87e96416d495ff92e53ea276",
+    "include/dsplib/V90MP.h": "e4f3b48b6ff841861babfde81895b61820644474acc8e1c148902ed69858606c",
+    "include/dsplib/V90Mapper.h": "01a58e8e1a868f91b67ebbefa4057c370d13ec9e4e72ae8df745b0f4719a1429",
+    "include/dsplib/V90MappingParams.h": "e62020471778759eaa9c2098b938141b065feae323dd192c0707c42bf62654d3",
+    "include/dsplib/V90Modem.h": "66c268c1ff247deb07f5018310ea700d6f13631c8a32f7eb852cc720ff6e58e7",
+    "include/dsplib/V90Modulator.h": "76b9dbf4449594319bf6f784ddc893989bfbbac21ee452d06fc521d306bedcd1",
+    "include/dsplib/V90Parameters.h": "c7c2a30fceaff800e4866f870e8a3c4682c33c22b79530c205d4462796082ae5",
+    "include/dsplib/V90Phase2Info.h": "1aa2e5d642b440ee4de48ef931bbd0c51fb6f0df3a3a8d7a096369bfea08c950",
+    "include/dsplib/V90Phase3Demodulator.h": "bbde7304cccbac86d8c1cecdff8860583bd0f7cac46b72e7d2bb0cd06b6afb68",
+    "include/dsplib/V90Phase3Modulator.h": "764c0ea9fc8186354d34b953e9b14cb0e073c963fe4e82989d66e75d8d80530b",
+    "include/dsplib/V90Phase4Demodulator.h": "459644cb8aa4fd401934d209a897c5bbca136aef6d224e134f68161ceb8bb878",
+    "include/dsplib/V90Phase4Modulator.h": "4d6c472dec4c7348847d7c6615f9dc78d86eea66228e1698201cb041f1978085",
+    "include/dsplib/V90PreFilter.h": "c0ab0f46e23436c511c98a129a38f4f8daf7dd6bae2fe0b79705286cf170dfc4",
+    "include/dsplib/V90RDetector.h": "6b7601bdcfcf746d1b2bba56e111536f91a2010cf5db70356eaae20a2491c663",
+    "include/dsplib/V90Resampler.h": "984fe777b944e3028e60f702cb664888adcdf2caafbb8e37524d5d6ac32f61a5",
+    "include/dsplib/V90SdDetector.h": "0997b2bcc3b217832988fd4964a22e42f8f5267651af48d32c9c7e9426661a5e",
+    "include/dsplib/V90SessionFlag.h": "6bbfe90f5eea0f504b719100a4c580606e0131ea3b555acfa473374c3135c703",
+    "include/dsplib/V90SignBitsExtractor.h": "43b45ef11600629ca107d7de36314542eb7f000ff648cfbf9faed039987fc992",
+    "include/dsplib/V90SpectralConditions.h": "e0e3db35bbc71b5aad498446430b9f7d6a8c89024e5a93caf1f548d625426579",
+    "include/dsplib/V90SpectralShaper.h": "cc31b37dd94acbbcf8769998f0ce228d25ff8b39c5e362ebf0213067c9ae1070",
+    "include/dsplib/V90SpectralShapingFilter.h": "d8824d17cd38181105ff2fc73cebb4d15d9c8dad4afe5148dc0e5503823ff31f",
+    "include/dsplib/V90SpectralVerifier.h": "6ae2bd13f3bebdafd5db5a7b654bc67eba5d2a9bf3cafa99f5bfac7a73fc6a1c",
+    "include/dsplib/V90TRN2Designer.h": "60d9a950ba1ea7f2f881e930c6e3915870e520793a70bf149c29bedce6ccb34c",
+    "include/dsplib/V92BitsToSymbol.h": "c7c343656ce0c4611eb193903043becde814721486e0fbc7cba35cfa73ea246d",
+    "include/dsplib/V92CP.h": "76853b819172043b4ad2b1196450d67c18d5d0417bd006f205fc94d2ad85fb58",
+    "include/dsplib/V92CPUnPck.h": "ed931c2009ed6445ddce16114725940d668a5368e4b6546292bf4ec953c87a83",
+    "include/dsplib/V92ConvolutionEncoder.h": "5435ea1b46fbf15affac01df74de4efb7a4628cbe9ecd21cb0db61a3dd6cde4e",
+    "include/dsplib/V92DILdescriptorPacker.h": "ffd314b4f0d4eadf58297020d80eb2dcd871993190bf961dfc8c7bc6bbe8a431",
+    "include/dsplib/V92EchoCanceller.h": "c0e807b48c4b06bd25127084ffdbbdd95cd1e06c0989834e6e5b9c652f2630f4",
+    "include/dsplib/V92Ja.h": "9558282c04f7291babf43ede0b031b08bd1eb4d811c11e59bd1697947afe2220",
+    "include/dsplib/V92Jd.h": "7e360f768d7d742d3096f79a97679a009778adc6a894f3f61252a694e427e9cd",
+    "include/dsplib/V92Mapper.h": "0d3ac36f941288b1fef3b7be707fd1bc91151adf0c15a8e3293e484802b5fb9d",
+    "include/dsplib/V92Modem.h": "d596f6341b768079356c4e2a06c881ccb023e798e71a58b38bbac17cbeb57333",
+    "include/dsplib/V92Modulator.h": "86d33eaf2eb33be4416ae6dd2f422014c1a6fefab3c2abbe75ff865202743f2e",
+    "include/dsplib/V92ModulusEncoder.h": "eaeed8a8da646f4f1324a5c6788dccce2234e13b71b373ee0d9698c67bf7f86b",
+    "include/dsplib/V92Parameters.h": "4e597c6edc6124b44350075986f180c3b334253e3c136987286868ff20a862bc",
+    "include/dsplib/V92ParamsInfo.h": "4f3a72c825232ba5bc3d524fe52bce12c39a48f55c93e31db285a7fb48ff2e1e",
+    "include/dsplib/V92Phase2Info.h": "3f238013e5cfbd8ccf7bbd653fc7dca7c5347e81330923a4a34741ef8229f3c6",
+    "include/dsplib/V92Phase3Modulator.h": "6385a8a9f28b14ded2a40dcc8d20250c52de69af0703a1e3eea4f80a989e5f5f",
+    "include/dsplib/V92Phase4Modulator.h": "72cecf180e965c313bcb3f7c9b110872bc6b69c4630018b1bbdab23a43051f4e",
+    "include/dsplib/V92PreFilter.h": "36d9f551d3deaefa2e4d964bf8484271810be2a74352987a01ad27a649e6c36a",
+    "include/dsplib/V92Precoder.h": "cbf6ad1ce38a1a2c05197eb783107c7597399e4f7f890c50e41f16a77cc55982",
+    "include/dsplib/V92Transmitter.h": "8115ecc899c40cf504165092b6d6f3d2ed1f99d62f8109826baed8f55c03805c",
+    "include/dsplib/VPcmFloModem.h": "aef9b01f8e63a6b0cc7f5f4f80f744809b36bd3dd09e8bffe3c857c302a83c81",
+    "include/dsplib/Vparser.h": "a04b60256666c791906a38edfc2d4c4dabe1e3edb450ce79da9a7eae4ac232c6",
+    "include/dsplib/b103.h": "ec227db8be429d6d819571b0738d4ef4a06857ed786e623bd1f52d141b8658a3",
+    "include/dsplib/b103fp.h": "c3d991c615cf9f8ece3003735b02b8f8ea218ec8197d4642173bbdf744c4ecb0",
+    "include/dsplib/beepgen.h": "850029fac11aea03357aee89e49da3be6d09fd20a1d49f4f7ed52afb6b0588ad",
+    "include/dsplib/cadence.h": "9b71f53951fb73dd1364abc4e51e60f68ba842903dea2e4c38db2916bed94798",
+    "include/dsplib/call.h": "1330cf2d5862d5ed6ec6a2acfb1cb6120d56647c32fc94ef178571f333af9e7e",
+    "include/dsplib/callingtone.h": "e89d9338e6f8e31ca084a5b12bcd6ea9d057db1f521a334721b7d6fa975632a0",
+    "include/dsplib/callprog.h": "6c7dfba857e05d31946f108156d985148d6c2876d4f74f268b26afc0c447873f",
+    "include/dsplib/callprog_cfg.h": "4375f45bbcf669dfc994838a49c104c3d3e2bc63ba0d12119d3a5eba931640ee",
+    "include/dsplib/callprog_state.h": "1a66d090c3a2a6a0fb90267eb61938032818ed5a64b246167dc0d701cf24570c",
+    "include/dsplib/cid.h": "9a8cdd91427ce5b77808169c29d9d1098dbb818536a891077b82a670b6bde565",
+    "include/dsplib/cid_modem.h": "b8386e2b362b69208a5bb62945e930e2ee348e39e8a67cd39619824ad6feb8a1",
+    "include/dsplib/class1.h": "f89a62a7f6b9191a30710a76a2c70276ba69cbb1168c1b8eb4d24059826a0905",
+    "include/dsplib/class1rx.h": "8f9f1d0fbe308b00211e3bcbbd47132ec5dc7eab4c0e113d2fc56f97cc75e62e",
+    "include/dsplib/class1tx.h": "1e2bfd8d65f1fa470e64c02b481b0fefd11f13e236b92366b660b35e4ef470b1",
+    "include/dsplib/cpfiltrs.h": "9d2c831d66cd12e8225611bc45de81733666efd6f3fb154654922b157dc11178",
+    "include/dsplib/dcr.h": "c5ec4377391026069d4ea41c8ab08a4dc8bbd955c8be07eb05a0b49874f1ab57",
+    "include/dsplib/debug.h": "b02ffd5f0cea840d5695677176ca6e293a42c79e72f25ac98ad6d490ec98e06d",
+    "include/dsplib/detector.h": "e208f73928042351e43a6facc11e43551463acfe1fccb982e47d7087dd82f53f",
+    "include/dsplib/dialer.h": "5d58fe7c0e50c70604cbae3cadfd0cb05d488f89a985c827724a33a1ea89ab15",
+    "include/dsplib/dialercfg.h": "c70fe25628394bb38b751edf2f1347b5cc063364e63f07a5cbc38cd6fd223e11",
+    "include/dsplib/dp.h": "acc23b284d435a88ee363376e3746248d16cacb720accb25a3ce5256239dc2e5",
+    "include/dsplib/dp_param.h": "93731bd211b4fa33a0e7ca3a9d1ac152f2b640c96cab9120fac671d42f761e5d",
+    "include/dsplib/dp_wrapper.h": "9a39b13321f8ef1ba0b38ba8606185c202e6acecfb9bd3213883cc29e74e146e",
+    "include/dsplib/dtmf.h": "ce5a82c0246c7632b671344434474a4a71cc82a611e0ffd6c984bd95fa1d69cc",
+    "include/dsplib/dtmf_rx.h": "ba8d9d04c8c5c9ad40b5198e288ad77f7683d360accb21fa4308b4bbbe344c5e",
+    "include/dsplib/dualtone.h": "827aabfe6906c7944f4990f26604a277ca4b1b323f94e126da69c5c84e62d18c",
+    "include/dsplib/elliptic.h": "3a690c68587e272d70deb76ed67fcdfdcfb43fec2c8cdf1a477cd846c4b6f65b",
+    "include/dsplib/encode.h": "daec671debd0576555cbc3036c256b8ddffc2d176ea4ba78f9abb95565617806",
+    "include/dsplib/fax.h": "64def24aa7e8e4a574295cf0aa2854859f5c5ec41a38844b55777c31478082ed",
+    "include/dsplib/faxadapt.h": "997df253db0923fc89b2deb57fe1bc5f67473c74443e92b8e5192561c6e3dae7",
+    "include/dsplib/faxcfg.h": "15c5ba4b4121a448eb0c868bc073bf24cf521468bcba46a79a60eed34f7a729b",
+    "include/dsplib/faxfifo.h": "0fc17dbcec21000774e65ab7ea50360f0d7dd9211e1d6bd8601d42fea27c30e6",
+    "include/dsplib/faxvmi.h": "ad10b39a0f8ca43c59484adf9899002ffbd6572d1339ab67aed5a81a2ce2d1fb",
+    "include/dsplib/fdspkrnl.h": "29725dfb74556ac00d51bdebd9c22cfaeef33cb68154b794a134bfa51b38ffee",
+    "include/dsplib/fft.h": "175184aaf1112944640f1e7964127444ae74e5e942fca74dab2ac6ede428b90a",
+    "include/dsplib/fifo8.h": "1089ae62ad280ca41444657bd05b02bb62c022dfe9a8148de8218dafab67e614",
+    "include/dsplib/fixedrc.h": "0ca31f251362fc0120209fffff767bc8ed39f1878f2164f2cad1685728b54339",
+    "include/dsplib/fp_math.h": "d0026da5512a2db63f455b06722e8fd4170f8ff78e4da3d024d071f93c5eff1d",
+    "include/dsplib/fpm.h": "817f88a5156f7936225be857dafcc0ec95df867a29ea272f512dcec0c5575823",
+    "include/dsplib/fpm_agc.h": "eb5913708610d8845e3621ebb02097c3eff559449ac1b741d2e97006e8346e60",
+    "include/dsplib/fpm_ecc.h": "7b951a3335898a8c42f4a8f28de62ac6a4a3e612188dca1b18d8b4712b8df078",
+    "include/dsplib/fpm_fsd.h": "7e78db25edd1542ff9a0070f3d3df366241163d328731e05dedafcaba75678e8",
+    "include/dsplib/fpm_fse.h": "ff7da0b30d58b3aad85655b36faedfec95a53c8d0491857d1655d62a001ad38b",
+    "include/dsplib/fpm_fsm.h": "a1269cbf725fc84bdfb2f027846645f225f9668b6a8372c3527d35ad57214029",
+    "include/dsplib/fpm_iir.h": "68f53246ebb41ba61a2570b7a3b447783cb83ccc2e8377a0648f07599102326c",
+    "include/dsplib/fpm_mrf.h": "25386f8ab624b2155871d322df3002940cba2861815700e6e39b57aa6407200a",
+    "include/dsplib/fpm_mtd.h": "a4d62b7d9b09ac7238a6edd65517ac504a12f81c9f0f6fd7907516924f47d861",
+    "include/dsplib/fpm_phasor.h": "4634ce2546b35b78422b04b606c5d8d9fd8436cef885584c07463d58851b2a3f",
+    "include/dsplib/fpm_pps.h": "849241ef7c12dc70de01401717724a43170d9211532f02a7073ea475467256fd",
+    "include/dsplib/fpm_sdm.h": "c8abe0447c5f2ba4f0611a893b92a7fdf81e0c578c7de63a97523dd0f94c23d8",
+    "include/dsplib/fpm_smc.h": "7717bcf507071812fc6c7ad12a91a95cc64cdce9363e7f2a8f61733f79022806",
+    "include/dsplib/fpm_sre.h": "d20c3e60936933d5d0146ba05cc155a9b61ac3d34c12d570b3debe6c347101a2",
+    "include/dsplib/fpm_tone.h": "d19300cb2794acd7e87cf089b4485a04a1147852f3c28bf3d7181316c618d2a6",
+    "include/dsplib/int_complex.h": "538b9165d85693d5d56d465285db2ddcc20e63cd024e75267ea86b38d4d5e396",
+    "include/dsplib/modem_params.h": "02963b3ef091627f13fc904966c1bb6c72b771c24610c723d67ebc572d5c2138",
+    "include/dsplib/mohdet.h": "dd2df186b259d95efbcd116dd5e2cf3a341cf4ad1f692666f2160edc8a407fcd",
+    "include/dsplib/mtk.h": "1d2086cefc8095e810d427b3782a905255ed70c262e444cbd80ab14c5ffeef9b",
+    "include/dsplib/notch.h": "50078f34c50db50ea38620528ac580abcbbf562b9ebf26b600c235b53f6c59f7",
+    "include/dsplib/nulldp.h": "4070a65a1b68ccd4b42001f71b2e4843b09f958cc6d5f353e5491f1929408e0c",
+    "include/dsplib/pcm.h": "c3593fd0c417429f663e2c9be635a23bc3e89d74c7aa615d0a8ac0a90cfc8087",
+    "include/dsplib/period_byte_layout.h": "580497cb9cece61ff3ededd5add551419b6be58a12958a968213f0801ada7d48",
+    "include/dsplib/pulse.h": "dfc37f8d0dd0b0bab2792124a91c17e56f1a87072a9365983c655715e45adef5",
+    "include/dsplib/ringdet.h": "2ba89953311f05c8f3358a9595c95ca2049b9963c737e04e6995eb8d168a78c8",
+    "include/dsplib/sdm.h": "da676c9c48df10e0fa130e3b81d8ed2d43bd0041a8de363e24b08908ec2cf0c2",
+    "include/dsplib/sdmv27.h": "14890b1d76ef9a1ac5cdcd6d5abd17f8f343f537eee13f8e18d841ecfaaa62a2",
+    "include/dsplib/sgd.h": "2f16289c81428e434624f064b24d64d67a1da80ecb79eab8b1b5a93cffde477d",
+    "include/dsplib/silence.h": "09f360072c1d43204c50cd615d50ae93f69d11bdf87aaf949f82c94131013da1",
+    "include/dsplib/smc.h": "39be65ba950c2f57dd060fbab217426b1ab582818b2d13cfab0a790e0eebb975",
+    "include/dsplib/sysdep.h": "1fc7a1bca190caf7eb03e375a93168da829c18cc7b4d1a67fd48108c79547076",
+    "include/dsplib/t30frame.h": "3b73d4b45fe8f84864e7bec426431af1bec83bcbe780084438798dee3f9bc450",
+    "include/dsplib/tagV90AdditionalCPinfo.h": "99dd9e8090a93c632e136b9a169542c40b7b4baf4f8888d20b9e777cb089dcfb",
+    "include/dsplib/toneiir.h": "176e5031296a26816b77a0eabc1006cf243f0763f76e61971f4bed09f23071a1",
+    "include/dsplib/v17cfg.h": "4da317ae8717d8a7572ce8f4a883e13cf29baecdd7388240bf7d9e8562e7f68f",
+    "include/dsplib/v17data.h": "b2f58164d0b056b649067d43d14808b9920067d7a7e379a5a8a7749e596c6bce",
+    "include/dsplib/v17dec.h": "35d036b815cb1167e5bc2e10fe41417733cf1037cd9cbf1c9c104239541e48d0",
+    "include/dsplib/v17fax.h": "7e371ae2645e0657e8490aa82c73252ab736440aec48195cd5d33ea1678d494c",
+    "include/dsplib/v21cfg.h": "232b3602b5191f2f536e92f0e96ef7c7dd67193a6f0acd70baad16ebcbbcb7f9",
+    "include/dsplib/v21fax.h": "9c802c6ade10013be0845ee41c3686fc925272e8e69a1da83a12fc1b0991171a",
+    "include/dsplib/v22.h": "0d86e6de995c59415666e51b285c988c398d84e6917b09ab1c3f96ffdf793323",
+    "include/dsplib/v22_fse.h": "8894571c7e155dafbefca9dc7193c448e0c36c4f5fe283ef0e0802c4ff9c8621",
+    "include/dsplib/v22_iir.h": "df09b5f900bfd6085b9d436b5d3779fcc82e832c6ae3c9590b5a7a270afb21d0",
+    "include/dsplib/v22_mrf.h": "f609700140dcf531d42a717f73ee59e1eb72c5351044ca23e4fe61afc2f714ab",
+    "include/dsplib/v22_pps.h": "2c97f8d0402eb0eafd8455a0922cd3f85c025dbb401c8fa4b3260b97ad46b2d1",
+    "include/dsplib/v22_sre.h": "ebcc8056d14b14afaaee53cf1ae83c8cb230af8e7c827d455f381ee7f5616030",
+    "include/dsplib/v22ans.h": "0bb503f9571fde8edb717b88dcb1f2bab520456f80716a24f69e4158b5882257",
+    "include/dsplib/v22conn.h": "6207cf80b87a957624b9b4a1b6c72e5ad0c060f8ab6d198f5151d1d54a4d05cf",
+    "include/dsplib/v22ctl.h": "d68399bdcda33c88ac2168d5aca9aab25ac5f5ee634c7c7887cdce670fb0b0ba",
+    "include/dsplib/v22data.h": "cc27bb73e1e739de318219dd6df9a77592196da1125cbd54765f3b0dacc9081f",
+    "include/dsplib/v22dec.h": "1f30a3db341c3a50b37c37f996e95b3f640f40e98b19b5df3551f6a9e6588dc3",
+    "include/dsplib/v22det.h": "7743a17c8da3f2a9beea10e3ac04b0c2f2df7e5fa390fa17237af91d51889af3",
+    "include/dsplib/v22fp.h": "932d309fb47a9851e95d5e754f84c199e917d342fb5a4b9aec82edfb9ec3e971",
+    "include/dsplib/v22hdx.h": "cc70f4a8c379499b5d73f022b98b7eb86034d565f3062efe2b9eba07d36f6385",
+    "include/dsplib/v22loop.h": "690823e016401fa339e1aaa9e4939bc652f53faefbd232b176e045cf359b5404",
+    "include/dsplib/v22org.h": "8533d0ad091d142d8644fe2ef273d46b4a4877c137a6372599f6521b952565f3",
+    "include/dsplib/v22prc.h": "3737ee00653e60a447036f265e4c303428c8acb86c23bbe988c0968832f482ea",
+    "include/dsplib/v22rate.h": "7cff8269579eebe28f095fc849756cf36f70b84f0a440f0bf4ba271a6974d43e",
+    "include/dsplib/v22status.h": "76494d7484719f174343822185b75ae0bff6b4b5472e4fd829dfbb47075abf58",
+    "include/dsplib/v22tab.h": "a310b8e7cb7c5ad662e6f92c05b43f014b2481de3885c90b19d9515aac204fff",
+    "include/dsplib/v22txtab.h": "ad939f87ce11817ba433e5f055f4063f4ed6205b9254c4617441423e84927a48",
+    "include/dsplib/v23.h": "5356d96ce8d56bba533c603f0375582686fa2ed7f9ec5174b1d7317ecb9044e7",
+    "include/dsplib/v23fp.h": "8a8345bbd56a62b4299e44af8a011648c6266d6ac02ea1cfaeaa853442708de9",
+    "include/dsplib/v27cfg.h": "5ec6ea3861ad4bef4777a17af1166595dcd5567d71ef73db190c370aba2e1fe0",
+    "include/dsplib/v27fax.h": "1ef978a288d5c35a8c2fe80d9d593625360e58b023bc0346693464bb0a321a09",
+    "include/dsplib/v29cfg.h": "130301e33780d0e1d8f36489fa5440e886dabec223220066a4eb650c1398131b",
+    "include/dsplib/v29data.h": "eaa56f2d2fc15ba265d9a8b169fad9babd6ddd6b2dd91d6c5682ccd0df9eb7d1",
+    "include/dsplib/v29fax.h": "c874513395f746b0da74fd8deb8705720717a34137845f2c83ae24b2c5d62485",
+    "include/dsplib/v32.h": "1cf357863961f31e8aed1ec60efb6387b4835a8aa9a6cf5ec1ee97fd137b35e4",
+    "include/dsplib/v32anstone.h": "2d4f1e4e0eaddfe38757f659a45e91ad83746d6342004156757026ec21cf3dcf",
+    "include/dsplib/v32cfg.h": "ee6ae37f3c4ee8f92501fb220221fb064d8e884a47ee25c3d04f97362bee6eea",
+    "include/dsplib/v32data.h": "4a9c1ac0783304ff8f6d53aea7327e96121859f98c09c8572c617af0c8e837f2",
+    "include/dsplib/v32dec.h": "165bb8d9ba4c302f88fb6a5694b668780eec8b93b15bc81e77ceca3a8e2d0087",
+    "include/dsplib/v32demod.h": "620f9430a893ef2c3d65118c3eb4a39fb7d50666983c006e7b24f07cee430831",
+    "include/dsplib/v32fp.h": "ae65c220e197f92f34fe221b21c101e4f9694d74121997a93426c143cde7cfac",
+    "include/dsplib/v32fpctl.h": "b65be580c3f8f910656ec1abccbdd3f6ee24c5afdfc7af4e1bcecc77016b9bce",
+    "include/dsplib/v32fpstat.h": "c4c7bd8b39edb4d08a176a9e28c5705164b04c3d0cc5e3c8805824b238fc8b6e",
+    "include/dsplib/v32fse.h": "4dfbd5b22f1ac1a4c79780771efbbbbe7b00b9cd43a4481c2f75d405b213da79",
+    "include/dsplib/v32hdx.h": "64139baa1340ca21acd881eb43e2c6ff1a1baeffadaf61fd542863b2487dcaed",
+    "include/dsplib/v32hdxst.h": "c1ed5133e4eb552b8367ec526cbbbfa5e639364be629940d180cd1d8126f2cfb",
+    "include/dsplib/v32scram.h": "796ff04926c181fdf186be08171eac5d2c1d2246f8271ad8653077a2094d32ab",
+    "include/dsplib/v32seq.h": "205290620e820311ec42312f607cf63239f9f639328ba7fb6e9395242c608340",
+    "include/dsplib/v32smc.h": "44ccddb6f0bb34729f6d5125c2d150423c8e9da553591249625f11384da3358b",
+    "include/dsplib/v32state.h": "36ccc110c6266609e99637f4d5be266eb1d42de6c622c2a9463829fd799d61b2",
+    "include/dsplib/v32struct.h": "45581d02c8b9181130fa405d1fad088a00c402d3ccf01ad6cd9338010aba9be5",
+    "include/dsplib/v34det.h": "b0cebd7674efc156a80dd278e9953b9e01508b849fdaf275423832c2228e6719",
+    "include/dsplib/v34digital.h": "beecb9876220508b577268b692ba2fb95f059af0824e8655e8acfaed5e9cef4a",
+    "include/dsplib/v34filt.h": "7ba91a41b706061384dcb92d0975c7c834f989f0b3dee370ebe20b410db24f63",
+    "include/dsplib/v34fsk.h": "e6683da6a67593e5ccc03464ae1c1368fad278d0f6de92c01ee696aa380f0e78",
+    "include/dsplib/v34hshak.h": "a43b6d5933c7abc7633d4ff63a7b388abfe4270e89e72da1f1c0d21e261369f3",
+    "include/dsplib/v34hstx1.h": "a2dd45e834044c73d052385af7796a670ce4cdecd6d0420f12798bd8c7a2de96",
+    "include/dsplib/v34hstx1_arms.h": "c6e72e1b92aa90cbd42a96ae32ddcb431ac5fe708cb5f5834436c8a368ff9a57",
+    "include/dsplib/v34info.h": "51debdd13bdb1380c9b2dc1bd82f61a7a097366078d9db4adf98447b5a4a14ed",
+    "include/dsplib/v34pcm_tables.h": "eb73491a933e2f5bb9f81657412e71a58eeee3445aa86075a47bb2bc5646c47e",
+    "include/dsplib/v34pcmif.h": "d815df8a5e4fa6c4c9a9c41a761efc7252270b354634f447d37f4dfe4fa4f8f5",
+    "include/dsplib/v34recv.h": "e2abec07d42d67fd85a36165e91072f7b91f59a85483ff31d92a5fd0ddd30b54",
+    "include/dsplib/v34rx.h": "b06d6f5fe2ab3cf03920ea55602c2dfc850cbf1cd8dc1878aa8c49dd3059d9b5",
+    "include/dsplib/v34scram.h": "0e0aa7e3630b7c8710321bab77d26dd147f8b269ec960333895ff191fe83011d",
+    "include/dsplib/v34shell.h": "ee25c1cea0d3653b42956ba16d4e3f4659fbcb756348c0fef46a78d58f983c6d",
+    "include/dsplib/v8.h": "a0bcd3f0a26001a1356fcabdddc0bd1a44027a79892c3f674b8b82b8e9adcd27",
+    "include/dsplib/v8dp.h": "e352e93d2c4da6de1fa2826f4f13fe856aa8813d59fd737293e71d02ab836a4c",
+    "include/dsplib/vce.h": "856721d1f27532725ee360c845ea914b43448e69f5f36bd70972e10fc4d2d2e9",
+    "include/dsplib/voice.h": "5462b68403650cf519a5bcf7dc1fcdd6ef1560b43b9f68f7313e5829edad8dd8",
+    "include/dsplib/voicecmd.h": "aef1d9213d02c6213aa414fe843a72c9a33518465812e8b9b93a34beb7f48cff",
+    "include/dsplib/vpcm.h": "a2eb0586356e91b99763c292d8481bca37d0e7ccd2724842d65c194334495a19",
+    "include/dsplib/vpcm_tables.h": "728b61a59a050bfed55ed56f6c585cf14442f873273841ac35853ef8a9408140",
+    "include/dsplib/vtb.h": "531e504b59d842ee66cb2cbed3510b5c9bb2a0bd1d7bcdc8d053534274847e2c",
+    "native.o": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+    "retained.o": "7b564f6acf8a9cfaa832d21c64fbf1a886c988101104b1122b1949f5d8ebc1ff",
+    "src/dialer/Dialer.c": "14742fbe9ae017198ce1c6f5a6b101a8942b14e67d3bc8743d99d8a0902264d9",
+    "tools/toolchain/period_compat.h": "49e1dbd4585703dc5f59990800133df247d0ceba439f61bfa53596040c08440a"
+  },
+  "join_first_RTL": {
+    "H-mode-allbreak": {
+      "01.rtl": {
+        "addr_vec_entries": 87,
+        "bound86_occurrences": 1,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "6b4257b72e5ee5b1372bf3e07ffaaa8a003493350418a232cd5d72e4004d7404"
+      },
+      "04.jump": {
+        "addr_vec_entries": 87,
+        "bound86_occurrences": 1,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "597e8435d5bba267a5eb3c55c6d1f76ef8e85b6ed59b32d49df8f9593325154e"
+      },
+      "06.cse": {
+        "addr_vec_entries": 87,
+        "bound86_occurrences": 1,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "530ef8db82f2ec5ae0f568071ad8a6fea6284fc31e960a7aceb818272d33443d"
+      },
+      "17.web": {
+        "addr_vec_entries": 87,
+        "bound86_occurrences": 1,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "cccc883795673c44bcccc96615e29693a0633b10917cbedbb31c3f9120a3a724"
+      },
+      "18.cse2": {
+        "addr_vec_entries": 87,
+        "bound86_occurrences": 1,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "f17bf65d9ace9fa76296468ddd4063073ea8dbd08f9c979a3a18f06e4ebab08e"
+      }
+    },
+    "H-spacecontinue": {
+      "01.rtl": {
+        "addr_vec_entries": 88,
+        "bound86_occurrences": 0,
+        "bound87_occurrences": 2,
+        "parsed_dump_sha256": "22051abef3bd2c9f9215cf73ecd87ba7915815193c8c662d8030cee590416140"
+      },
+      "04.jump": {
+        "addr_vec_entries": 88,
+        "bound86_occurrences": 0,
+        "bound87_occurrences": 2,
+        "parsed_dump_sha256": "1028810cdd286cfc4527a5adb80eefe9ddd85777a4305fa228e5d9b991a72e63"
+      },
+      "06.cse": {
+        "addr_vec_entries": 88,
+        "bound86_occurrences": 0,
+        "bound87_occurrences": 2,
+        "parsed_dump_sha256": "7530d4fa183a1cab8ed8506831d2a9038459b97956f5a99203c2d0c10770a37c"
+      },
+      "17.web": {
+        "addr_vec_entries": 88,
+        "bound86_occurrences": 0,
+        "bound87_occurrences": 2,
+        "parsed_dump_sha256": "09f56b70e4f2d37afc21fdd13ad7c893ab66e2acd0ed0fb94005c5d48170edc7"
+      },
+      "18.cse2": {
+        "addr_vec_entries": 88,
+        "bound86_occurrences": 0,
+        "bound87_occurrences": 1,
+        "parsed_dump_sha256": "013056f064f946d5fb0448e2c0fb510a3cc4a7c4a08f901db49ba476bc2ab003"
+      }
+    }
+  },
+  "next_transfer": {
+    "experiment": "cross early session capture with unsigned cap consumption; full TU audit",
+    "fixture": "test/unit/t_v34pcmif.c",
+    "grade": "SIZE5",
+    "native_disassembly_sha256": "f255c45b3141ed8fe0c192ae895589c2b4d95068be5bf6080b5676a2982366b2",
+    "selector_domain": [
+      0,
+      7
+    ],
+    "source_sha256": "cfc65c77b068a8f94c22174b3550b5f4095a61f2e14a976026cc148eeb63aa37",
+    "symbol": "chkForceBaudRate",
+    "witnesses": [
+      "p3548 read at0xa479 before diagnostic",
+      "unsigned JBE/JA at0xa4e7..0xa50b"
+    ]
+  },
+  "object_closure": {
+    "changed": [
+      {
+        "after": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+        "before": "7b564f6acf8a9cfaa832d21c64fbf1a886c988101104b1122b1949f5d8ebc1ff",
+        "name": "src_dialer_Dialer.c.o"
+      }
+    ],
+    "native": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+    "objects": 300,
+    "source": "85ae975ed99e14833cd92469d3f928eb0740332934164ce07bde57b03993cbd5",
+    "unchanged": 299
+  },
+  "retained_artifact_sha256": {
+    "source/REPORT.md": "b41d4048bb73672ac2226c6592d1fb4c2e706b5c6d986fcbbd0784e49da22f1d",
+    "source/capture-final/results.json": "7f176caa2f45cfe1a1af5bdd405c24de08b657f830cca19d7964d0cdfc2b27dc",
+    "source/data-audit-final.json": "c570cf1dba44e0e310b5d94de931702c336c9d0e7b2804248f64c299c412af7f",
+    "source/final/dump/candidate.o": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+    "source/final/ordinary/candidate.o": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+    "source/getnext-I-J-assembly.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source/grader-provenance.json": "0f9fc134cde3907f4be43bf951233eb18d9b205231228e3e13d9861c0f12281d",
+    "source/graph-final-owner.json": "e3eb992cdbc89de3ff0560112707fd7b8bec6a82afebd96fc12da06da4e77d95",
+    "source/graph-final-stack.json": "c383138ff7aba7635ea315261f98aa4aea7d09e554986bc5894b15ff4ada1653",
+    "source/inputs.json": "6562b0071fc0243c8709111c0c69ca8c97a9edb2b8407e950797a4c0e7333e09"
+  },
+  "schema": 1,
+  "scope": "complete six-body Dialer.c TU plus bounded table-proof repair",
+  "scratch_artifact_root": "/mnt/zfs/dev/slmodem/scratch/dialer-wave-20261105",
+  "source_experiment_cells": {
+    "A-unsigned": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          832,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          135,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          560,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1616,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "240923901b124a2707dfd04b750a3b88f8882ab93bedcbfac7a591301fc46a09",
+      "source_sha256": "3a2527d8ffdd932e263de35a6dbe05ad249b9286882ad8a05567c8203b559c43",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "SIZE",
+          14
+        ]
+      }
+    },
+    "AB": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "93ecf13d31469e9333a672c9d2d7416284c873747beea9736536a2fe3d6b1034",
+      "source_sha256": "07e71b9c30562c38efecc2498aa3bdfd40e7f59cc98b2c8ccabaf4624cc6d0da",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-Cl": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "a396eb2db0248efde9795bede088ca89cf39b8d4bb17fbde98a62b8e8c159994",
+      "source_sha256": "a7cccdab402da4dc0ab9fb73970f9853cbf6f0da72b5ff627a42f7decff3a415",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-Co": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "298f5e9881c70f901781e38b18cdb62f7fda00ae7468805f6f534c7d43468e57",
+      "source_sha256": "c695a343ddc1680cb938a052e364ffce4d4bf6d9cb413239d76be2c1c36de511",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-Cu": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "1d2027c33a95617a4e2bbc0ca3472555e07d063553ec4d8a85178ef95699f05b",
+      "source_sha256": "6a985b10ee39c5ef079be90764f22793db5082ea4c71c05d79f03a6667b52913",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-Cul": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "45f95dd9ebf96431b05b57ecd3601878cfc97f694599232f328a17f4be883d71",
+      "source_sha256": "fffba87a7469f19b613b2b9fc6ef74fe37f5505c511c1123bd67d85222e62d7a",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-Culo": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "8797af3792b6f98315db4834715b466933e3feefaf92d082f5a60dbed14d90a9",
+      "source_sha256": "f93b176ae1d1609721a64ed64d1adb6aec43890061ab0e5d3c3d79632450f3fa",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-loweru": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "9cb19900f33efe712049c73cd5ec7e70af2b48d47c6f160c90b6034d8827a9a9",
+      "source_sha256": "abe8d3475760290061a871f5d5e79935449bd4d09fc08b217599342a87af1d30",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-native-order": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1200,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1360,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1632,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4512,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "ab33cf4860949e4415de7b7b8584e8c07bb1f9895e6d87ea450f5368617db955",
+      "source_sha256": "35d6a98633dde842938c10faf98c150a9f676a5ad4230746f8f6b81bf8067ca5",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-producer": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          406,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "5ed102b70ee1f6396c50ca65db98e40603c461374b1c56e89684edc59950b25a",
+      "source_sha256": "eb9314216b4aab0984ad2daf51f9a3f4a44d9f84264a148f425141a86718d2ec",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          30
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "AB-signedswitch": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          406,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "b944b984483ac2c4e466ef89380cc52341a1257cdce8b2f9a1a7aabdac468138",
+      "source_sha256": "69303948f3451c5cb79ae3b171a7e5f0db7b4273b94ca162f7830e18551e5ac9",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          30
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "B-lookup": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1632,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "e318924f1c9b16d091e3aa31888db9a2ccef12a9ae093c05f7177f775e3f9ba9",
+      "source_sha256": "46be291dbf5406fae7f59b2f4e9e7360c5a917c85c30f3a0716f50dc9012d860",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          4
+        ]
+      }
+    },
+    "C-all": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          406,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1328,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1488,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1760,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4640,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "d4a60309ae07d2e46a10ac19786621a1524ef509727289a077b4bef67077e5c6",
+      "source_sha256": "cbd585a3d72308b8edcb5158a9bf3eccc092022b81c920ceecc31ca72d4fa353",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          30
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "C-get": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1760,
+          140,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1904,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "0d0f27d03b437d7d02b882ff8321a6ba7367bd2d17106eee416aea85eb39dd65",
+      "source_sha256": "d71ec9056d740cf8bcde62627e00adf8159a660d287e155ec5e705484b8b7c4f",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "C-get-order": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1328,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1488,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1760,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4640,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "d49c86fab00c5a563414ac1e2ba2f93250b860f4d314a5a056ee6851cbf80081",
+      "source_sha256": "88339cb3fc3f0ca73026f738851732f6abe23dd97e7c3c711970ce4051179e00",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "C-getchar": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          793,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1648,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1808,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "6b0612e042bb62105667eb5450b9fb92210e5cd9f06643fcb3222cb15f8a29a3",
+      "source_sha256": "361f41a81cca5a00d3c4db784b84031091af6365f97fbaedabe3583499b9a9b9",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          102
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "C-getrows": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          848,
+          905,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          576,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1760,
+          140,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1904,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "bb42ac3650ba1b8bb9648ec5bbc56e3f11c3849c4d17859b365e2b92ac9b97e7",
+      "source_sha256": "33a2203ddca37e40a33d2e1f588ebce018dc0ef5c337a8d41ca18d37462c8a1e",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          10
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "C-native-order": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1200,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1360,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1632,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4512,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "44a9472c118271f06145d8c7913636ac7f024eb8415ea254838f09e5d9f75db8",
+      "source_sha256": "1d9788c2aacbfb8125d85e752aafe4b43574f8a1b203e1949e8e556d6a165993",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "C-producer-order": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          406,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1200,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1360,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1632,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4512,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "8e2bf2c895baa8b952633c511ec8e787ecd635d93fed8eecc21a5319b1b5174a",
+      "source_sha256": "cc916f3be56fd0294d3f49863bfcf82266161cb2102ddfe4f4fdcff15afcc1e9",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          30
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          7
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          2
+        ]
+      }
+    },
+    "D-both": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "2704e679183a03b68c864e85e736982ef32f5cad0b45c7cfe71c6cfa3135b94e",
+      "source_sha256": "cf631f8e5909e881d5279f809feca4963c32a5d66647b6709521e5f14d4b4780",
+      "verdicts": {
+        "AnalyseDialString": [
+          "BYTES",
+          5
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "D-branch": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "edd2525cf8b88175df8e9b72d483c76912f1aeaf8841248be6949813860c4a10",
+      "source_sha256": "3358d660480f67acd07ff580ff1839ab304dd5a51e40931e00925ed4673f4c23",
+      "verdicts": {
+        "AnalyseDialString": [
+          "BYTES",
+          89
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "D-earlyi": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          406,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          416,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1328,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1488,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1760,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4640,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "ef7980f6a9e6212f9dca98cdb983239ede57f59d7a589988d0c3998fe7a8109b",
+      "source_sha256": "1c9b6e7ab6a4f828a2fd19aeb9ba9410edb0da44ff9e81837bb0216fa7eddf4d",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          30
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "E-both": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "8b1c22ce6d53a4d5943f3d3fc950d6d0ef7fd249f1430fb88650e90a49ec6f3a",
+      "source_sha256": "6888cc84de59811d864c7edfb693deb7be763c5442c76d5f0d944c1176fd7706",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "E-orientation": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "8b1c22ce6d53a4d5943f3d3fc950d6d0ef7fd249f1430fb88650e90a49ec6f3a",
+      "source_sha256": "0559640270c957001958b6ed3639748be0d7eed8ec43f1af48407e367ea2fb82",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "E-space": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "2704e679183a03b68c864e85e736982ef32f5cad0b45c7cfe71c6cfa3135b94e",
+      "source_sha256": "784f66383ba62b7ac9b07f46ce9ca567f0c6b27a3181bc7ba7e5dff3fd7e724e",
+      "verdicts": {
+        "AnalyseDialString": [
+          "BYTES",
+          5
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "F-both": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          881,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "09cad1e511eb5c46b7f5c7f4b32a0077e428892c3963bb03ef130e86245466e2",
+      "source_sha256": "46c1b89e8b9b445a9fd1e135d9d65cf56dccae3a81abde2ef5516e1b73bc2918",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          14
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "F-capture": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          899,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "19733ff9e69285c6200c909bfea6a1c7ea404350ea720cde12ee283300dd0762",
+      "source_sha256": "0409d8de1a71d77628d0083a5c2f7be12db505f90584c278b7e23b0982dd6a0d",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          4
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "F-spacebreak": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          881,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "52c804533be5d7a87bca4d44334f77780f239c8070a6c051150eb584d65ee070",
+      "source_sha256": "fc7fdfa81a0c70f3f1286d9dba604b14632d1c92eebca919a952ab892f771429",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          14
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "G-mode": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          888,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "cbc2d416cd4edbf63869fec31de93c61fed6c1101df560de48387e18112b817e",
+      "source_sha256": "5c98f4a1febd5de8f9c3a339ff2528b039926ae5583990bc08d2356f6d1f6357",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          7
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "G-mode-preinc": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          888,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "4017d4f4f7731004e4d28c2677c74d203a4d653766193b7078dd9e4794b7bca2",
+      "source_sha256": "1d41c504df1d4f3a792f1ef37e18f1326cb48f1db5300e722884295c7abeb923",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          7
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "G-preinc": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          881,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "52c804533be5d7a87bca4d44334f77780f239c8070a6c051150eb584d65ee070",
+      "source_sha256": "bb2ff8c4c930db4a0b9928ab44f2c6b61142cd0a2a7aac50c4fa8545f82f692d",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          14
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "G-switchbreak": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          914,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1376,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1536,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1808,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4688,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "d04efb2873aebae8df72b32791598eda27b2ebf8dbb698b32157eea2d557c073",
+      "source_sha256": "fc68bad29643604955b6ab71baacb05c6e71c304f5198859e6a03eda9633aaa2",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          19
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "H-mode-allbreak": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          914,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1376,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1536,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1808,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4688,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "3a109628396dc8959fd26df9c5380e9efddd1952cf2562db3ca97049f7bc7390",
+      "source_sha256": "3d0184b14b14c3c7e9da1d34168697b46717fffdb94b83f2b014d3f241f67f0e",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          19
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "H-spacecontinue": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          898,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1360,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1520,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1792,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4672,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "6c7dfa26f4befe96f5692d55dea59ab6a654bbcc581d16297cec0a6fbfe55903",
+      "source_sha256": "bbe50d0c61fc8eb394696d67afd6212bc9dacfd5393560a9671cf7eb1644277c",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          6
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          3
+        ],
+        "IsDialStringInvalid": [
+          "BYTES",
+          1
+        ]
+      }
+    },
+    "I-mixed": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          881,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "c3523b98605e422ec79d3a54d117c4e5a846d4fbf045049838d13b3f98a819f2",
+      "source_sha256": "4b8ebcb442e909ccda81c314fcf596b4b21ea462e21e8be89578a4479a34cea4",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          14
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "I-mixed-allbreak": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          896,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "0232d61dd0c5aeaca717803ad968023030cf9954b913211b21e80328862f28a1",
+      "source_sha256": "f3f943474420dd39391f0aa3cb748802eb1cab94a04ca1b5ee517761ec352f20",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          1
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "J-abortowner": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          896,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          146,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+      "source_sha256": "c7d6ef58b9d7e98aa3187dc96db9dc6640da091188ee14ce0e528ad02de01bd2",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          1
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          1
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "K-abortreturn": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          896,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          146,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+      "source_sha256": "58cb798ba7c8094890543a3047d57d25b2a2691f08510d8156d59dec1b73c621",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          1
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          1
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "baseline": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          413,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          832,
+          777,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          416,
+          135,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          560,
+          261,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          1616,
+          147,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "7b564f6acf8a9cfaa832d21c64fbf1a886c988101104b1122b1949f5d8ebc1ff",
+      "source_sha256": "14742fbe9ae017198ce1c6f5a6b101a8942b14e67d3bc8743d99d8a0902264d9",
+      "verdicts": {
+        "AnalyseDialString": [
+          "SIZE",
+          23
+        ],
+        "DialerAbort": [
+          "SIZE",
+          2
+        ],
+        "DialerCreate": [
+          "SIZE",
+          8
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          118
+        ],
+        "IsDialStringInvalid": [
+          "SIZE",
+          14
+        ]
+      }
+    },
+    "final": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          896,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          146,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+      "source_sha256": "85ae975ed99e14833cd92469d3f928eb0740332934164ce07bde57b03993cbd5",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          1
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          1
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    },
+    "selected": {
+      "functions": [
+        [
+          "AnalyseDialString",
+          0,
+          436,
+          "STB_LOCAL"
+        ],
+        [
+          "GetNextDigitAndReturnNextState",
+          448,
+          896,
+          "STB_LOCAL"
+        ],
+        [
+          "IsDialStringInvalid",
+          1344,
+          149,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerCreate",
+          1504,
+          269,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerProgress",
+          1776,
+          2876,
+          "STB_GLOBAL"
+        ],
+        [
+          "DialerAbort",
+          4656,
+          140,
+          "STB_GLOBAL"
+        ]
+      ],
+      "object_sha256": "0232d61dd0c5aeaca717803ad968023030cf9954b913211b21e80328862f28a1",
+      "source_sha256": "6fd21057dd84239463a5f56f0fcd20b985eb913b4b5ea0071904908c81469dea",
+      "verdicts": {
+        "AnalyseDialString": [
+          "UNRESOLVED",
+          1
+        ],
+        "DialerAbort": [
+          "SIZE",
+          5
+        ],
+        "DialerCreate": [
+          "BYTES",
+          5
+        ],
+        "DialerProgress": [
+          "SIZE",
+          445
+        ],
+        "GetNextDigitAndReturnNextState": [
+          "SIZE",
+          1
+        ],
+        "IsDialStringInvalid": [
+          "EXACT",
+          0
+        ]
+      }
+    }
+  },
+  "syntax_names": {
+    "baseline": {
+      "parsed_sha256": "7b564f6acf8a9cfaa832d21c64fbf1a886c988101104b1122b1949f5d8ebc1ff",
+      "syntax_names": [
+        [
+          0,
+          "FATAL"
+        ],
+        [
+          4,
+          "INVALID"
+        ],
+        [
+          8,
+          "TOLERABLE"
+        ],
+        [
+          12,
+          "VALID"
+        ]
+      ]
+    },
+    "final": {
+      "parsed_sha256": "cc59d8f6e9d52a30ae01055a0f661a7198e230def6638b44bbe5a7fa7e5bf61b",
+      "syntax_names": [
+        [
+          0,
+          "FATAL"
+        ],
+        [
+          4,
+          "INVALID"
+        ],
+        [
+          8,
+          "TOLERABLE"
+        ],
+        [
+          12,
+          "VALID"
+        ]
+      ]
+    },
+    "native": {
+      "parsed_sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+      "syntax_names": [
+        [
+          0,
+          "FATAL"
+        ],
+        [
+          4,
+          "INVALID"
+        ],
+        [
+          8,
+          "TOLERABLE"
+        ],
+        [
+          12,
+          "VALID"
+        ]
+      ]
+    }
+  },
+  "table_proof": {
+    "normal": {
+      "byteident_sha256": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+      "comparisons": {
+        "rebased": "EXACT",
+        "target-swap": "RELOC"
+      },
+      "controls": {
+        "alias-esp-base": {
+          "accepted": false,
+          "object_sha256": "96e781a40bf0233d1217b5d47c431284db74783cf439fd1cc9eab6dd31669e4c",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "alias-frame-address": {
+          "accepted": false,
+          "object_sha256": "af9ac3dfb7170e00dce92dd8a51e6c36bb27e74feb21a2739d6bbbfa1ade39fd",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "alias-indexed-read": {
+          "accepted": false,
+          "object_sha256": "1666b189c4d69d1d8f266ef4b2619f89b898f6fc8739442ae785db79b7ccafaa",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "alias-indexed-store": {
+          "accepted": false,
+          "object_sha256": "d925b23c255baab2d2a162724a1cbf938f0880585c0157354e8cae357dc815bd",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "baseline": {
+          "accepted": true,
+          "object_sha256": "bab28a87058800b47f79b1f9388612aa81b509cb9f59659fa7762a046b2e82d5",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "callee-byte-write-after-restore": {
+          "accepted": false,
+          "object_sha256": "01118da90a59aaf7f89fcae8c44a88550e69611f516b24336563dc6cbf944c97",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "callee-sbb-after-restore": {
+          "accepted": false,
+          "object_sha256": "f4509141584e13445fa20b13c0a8ec60409a91c14d62ba0ca044cb3eebce5521",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "changed-stack-depth": {
+          "accepted": false,
+          "object_sha256": "4968228481bcb38e9adac50eb83491c2f598c8cfb5f19baeb717080f2163fc16",
+          "reason": "unsupported fixed-frame adjustment",
+          "self_grade": "UNRESOLVED"
+        },
+        "different-register-save-overwrite": {
+          "accepted": false,
+          "object_sha256": "410898bd73069b882cde51a4eac6560eabde45b8d47376e0e86fa42d19ce74b3",
+          "reason": "fixed-frame outgoing/save overlap",
+          "self_grade": "UNRESOLVED"
+        },
+        "duplicate-save": {
+          "accepted": false,
+          "object_sha256": "a1a9f6a3568c8ed05d2bc9f5c9b9cfc62755c0d5a0d94364948acd66f58ddc41",
+          "reason": "fixed-frame outgoing/save overlap",
+          "self_grade": "UNRESOLVED"
+        },
+        "early-release": {
+          "accepted": false,
+          "object_sha256": "56fbb84f128e954010a9ad86d1bdefba0445c197cef1319ed845547d3b969c26",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "early-release-return-before-saves": {
+          "accepted": false,
+          "object_sha256": "3301fd118c1fe05877fee9a2f1c50196f95580fdf277671d3d49982b377927dd",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "early-return-before-saves": {
+          "accepted": false,
+          "object_sha256": "13513db392858d41b797870b26a8f509791d48d5d2010b03df654557fcbbc319",
+          "reason": "unbalanced fixed-frame return",
+          "self_grade": "UNRESOLVED"
+        },
+        "extra-allocation": {
+          "accepted": false,
+          "object_sha256": "ab1c16e7d480496a8f1382c0842bdf875cf3663170ee464d1f75b5f4444710c5",
+          "reason": "reallocated fixed frame",
+          "self_grade": "UNRESOLVED"
+        },
+        "guard-bypass": {
+          "accepted": false,
+          "object_sha256": "269e3b573ea6ec092aeb77617f0e738cc89baea908b4564d5c6b7d5b8a49ba6a",
+          "reason": "section direct guard bypass",
+          "self_grade": "UNRESOLVED"
+        },
+        "guard-entry-alias": {
+          "accepted": false,
+          "object_sha256": "ba2b666aab6e853c3fb6c5cc54233030f63de2f77ec7a8fccf8e7da3f81be04f",
+          "reason": "named guard bypass entry",
+          "self_grade": "UNRESOLVED"
+        },
+        "higher-block-argument-clobber-before-first-save": {
+          "accepted": false,
+          "object_sha256": "5a9ccd8058aecdb1d8c14681385f04d4ebaca3eea6fbd33d73691bd7bdfc4032",
+          "reason": "saved register lacks original ABI identity",
+          "self_grade": "UNRESOLVED"
+        },
+        "higher-block-before-save-without-clobber": {
+          "accepted": true,
+          "object_sha256": "d3d601e41fbaee0bed944e566b328accccd963c416e7342ee9f26a779d91dde6",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "higher-block-byte-clobber-before-first-save": {
+          "accepted": false,
+          "object_sha256": "1a7e95e23ab55a3ee94f4d74b8f020a1db1e2c8ed018ff379bb32bad29c77541",
+          "reason": "saved register lacks original ABI identity",
+          "self_grade": "UNRESOLVED"
+        },
+        "higher-block-clobber-before-first-save": {
+          "accepted": false,
+          "object_sha256": "ce3604cef4fc268803a2b0392d4d49f328c9f927dff060d43092343a8063da15",
+          "reason": "saved register lacks original ABI identity",
+          "self_grade": "UNRESOLVED"
+        },
+        "immediate-save-overwrite": {
+          "accepted": false,
+          "object_sha256": "bd410db1dc11de0b00778734583a3a1fa0ee60c69ff47360f7a146de9e4d166a",
+          "reason": "fixed-frame outgoing/save overlap",
+          "self_grade": "UNRESOLVED"
+        },
+        "indirect-call": {
+          "accepted": false,
+          "object_sha256": "b18835ceeef41347056ba6349106e44b70c91f5e4c863456d09a5eb764ea69e8",
+          "reason": "additional or missing indirect control transfer",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-branch-reads-before-init": {
+          "accepted": false,
+          "object_sha256": "aeff3abafad3166713ef046154975ab24b872b91b5569d939217f2affe8b3333",
+          "reason": "inconsistent fixed-frame join",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-byte-read": {
+          "accepted": false,
+          "object_sha256": "fe7a71cced48fcdac71e803e6effe744b26a94262b8056dce3a75b35d91c6333",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-callee-destination": {
+          "accepted": true,
+          "object_sha256": "d5727eb52066db570a016d3c60ed26bfe2b105c0659af1844c4476c31dddbd0a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "local-initialization-bypass": {
+          "accepted": false,
+          "object_sha256": "cbbeff3a467d9617246b049d970ff1964a881ef3294a628017dfe1ac814449ee",
+          "reason": "inconsistent fixed-frame join",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-loop": {
+          "accepted": true,
+          "object_sha256": "5ee486374733797275ff0ffb1b950156b1855d6015d2c965076c75867d45d595",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "local-partial-extension-read": {
+          "accepted": false,
+          "object_sha256": "0d3a8af368760759fadf32cda4d0f3a761e7718954003579b8677958613b2c3a",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-partial-read": {
+          "accepted": false,
+          "object_sha256": "14f1f133457d5ee470f111e8e4922b2a18cb7618a34fa01933b5490770236be2",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-partial-write": {
+          "accepted": false,
+          "object_sha256": "c76d2894f7cc8f4ebd405fd09c8ddabdf7c0bf05f11b7c408448f5b6bcfc5a8e",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-read-before-initialization": {
+          "accepted": false,
+          "object_sha256": "15f4af4a2daa78c6ff62090c8d81d3548cd2e76679a34d075fb80f68941c286c",
+          "reason": "uninitialized fixed-frame local read",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-read-only-postdispatch-write": {
+          "accepted": false,
+          "object_sha256": "c433c1346d93b4739cd19c137af0816ef2ad7646d736c0d67637127d64a2b43b",
+          "reason": "fixed-frame local without predispatch write",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-unaligned-read": {
+          "accepted": false,
+          "object_sha256": "7b0a42e41aefa3c739e0c4e0ac7ec741f50f47699ad9ba403d762569e6d2593c",
+          "reason": "fixed-frame local extent/alignment",
+          "self_grade": "UNRESOLVED"
+        },
+        "local-uninitialized": {
+          "accepted": false,
+          "object_sha256": "d649c5c0e71c4f5a0df5c26354f05221248540b760b43b7c1435d51c5b3a3dc4",
+          "reason": "fixed-frame local without predispatch write",
+          "self_grade": "UNRESOLVED"
+        },
+        "missing-restore": {
+          "accepted": false,
+          "object_sha256": "60fb09cbda74ea739cacc2fca6426721956dabfd67d19069999b201a3e91445e",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "outgoing-save-overwrite": {
+          "accepted": false,
+          "object_sha256": "4761a0a62148d69ac9570a1664bf97a45868577417162a30a10562628b717b19",
+          "reason": "fixed-frame outgoing/save overlap",
+          "self_grade": "UNRESOLVED"
+        },
+        "partial-guard": {
+          "accepted": false,
+          "object_sha256": "ee2e217797c50f9a6f3349d5ee8ce84c239b28de6af8a3bc05a224efa37d26d9",
+          "reason": "unsigned immediate/register guard",
+          "self_grade": "UNRESOLVED"
+        },
+        "partial-save-overwrite": {
+          "accepted": false,
+          "object_sha256": "1f41314836e0d3555b6e631324019be102155e7e49a2996343017ab18e17e2b0",
+          "reason": "unsupported fixed-frame stack access",
+          "self_grade": "UNRESOLVED"
+        },
+        "partial-stack-pointer": {
+          "accepted": false,
+          "object_sha256": "86f8ce39a5b89e47e240edd1cd92b907ce450b5fa2bfd4d01b50d7985b021a40",
+          "reason": "partial stack-pointer access",
+          "self_grade": "UNRESOLVED"
+        },
+        "rebased": {
+          "accepted": true,
+          "object_sha256": "46ee951dcc9ede9d1b0e89b15614625303541341d31b59da635cc3f2711d973a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "return-immediate": {
+          "accepted": false,
+          "object_sha256": "3580cb1468f36c85117fa15ab87e65037eb2d24fb767cf453dd9ca5df20fdce4",
+          "reason": "unsupported return form",
+          "self_grade": "UNRESOLVED"
+        },
+        "return-read": {
+          "accepted": false,
+          "object_sha256": "cb1e7236692767b373a986bf11e9a91485ac4371d06a22fac83b5f25e91e3ee1",
+          "reason": "return address/unaligned argument read",
+          "self_grade": "UNRESOLVED"
+        },
+        "return-write": {
+          "accepted": false,
+          "object_sha256": "bbbe09692189b433e783d341c55659ae7d60117d9e7025ac09327959cf278eac",
+          "reason": "fixed-frame outgoing extent/form",
+          "self_grade": "UNRESOLVED"
+        },
+        "save-after-register-write": {
+          "accepted": false,
+          "object_sha256": "b8b4bc776cc9487a3c3c9b684f63bb46211a0ceaeb741b932eefb94419488985",
+          "reason": "unsaved fixed-frame callee-register write",
+          "self_grade": "UNRESOLVED"
+        },
+        "save-bypass": {
+          "accepted": false,
+          "object_sha256": "b08772778e7df90534395953b09dc0e730588edb13f27d45e8a201c3d39995cc",
+          "reason": "restore without saved slot",
+          "self_grade": "UNRESOLVED"
+        },
+        "save-wrong-owner-read": {
+          "accepted": false,
+          "object_sha256": "060643f054e0265daa2ed9ccdc37e30e11d1b0899f4bf9ebd514c20e11979020",
+          "reason": "saved slot wrong-owner read",
+          "self_grade": "UNRESOLVED"
+        },
+        "scratch-after-restore": {
+          "accepted": false,
+          "object_sha256": "ae2a2e164014c422083494f644c4f9e83668985bbef412e41acd84971a360473",
+          "reason": "frame release before register restoration",
+          "self_grade": "UNRESOLVED"
+        },
+        "scratch-unsaved-destination": {
+          "accepted": false,
+          "object_sha256": "7b647fec3b001bbc6c78faf0e58769fc12d96b3938a5b970dca67ffcff5b5340",
+          "reason": "unsaved fixed-frame callee-register write",
+          "self_grade": "UNRESOLVED"
+        },
+        "selector-clobber": {
+          "accepted": false,
+          "object_sha256": "adc448ee7b12aa3fc54758bc9f9236a59180e47d612a0f8af7e7cf1ccd81985b",
+          "reason": "missing unique taken-edge guard",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-a-ah": {
+          "accepted": true,
+          "object_sha256": "b3186b9a3a250c04aede3fb6911c49ae001b5d7df664b7de51877b3e7d4bb95c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-al": {
+          "accepted": true,
+          "object_sha256": "0b44986b154a8c46fc15e424239fa0401b392c114e229e6fb5dc9970b34e29dc",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-bh": {
+          "accepted": true,
+          "object_sha256": "54e8ed5f38beaa512bf42433a6017c4ba6441ae355a54ceffe70e89129cb2423",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-bl": {
+          "accepted": true,
+          "object_sha256": "f5fa0e895215a2457ad20e46eddb796fe3b2089ae969cbbf971d747f7a336243",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-ch": {
+          "accepted": true,
+          "object_sha256": "acfea491eefffe1fccdc508fbc6b7b923b53ae5b46f1c6ef476c7375447beff5",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-cl": {
+          "accepted": true,
+          "object_sha256": "3d832d121135de0d1936c0d15c78113e3c2a999f7c6cff76b7adc90cc2f8dde7",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-dh": {
+          "accepted": true,
+          "object_sha256": "2367fe03e5a674242f4fb73ff231bdb953aceb450006209d241c98eecdfffb76",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-a-dl": {
+          "accepted": true,
+          "object_sha256": "599c80d58a33d5d0a66ae0e12246d7cdbb30553c3c9ad7bb8b9af86366caaab1",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-address-prefix": {
+          "accepted": false,
+          "object_sha256": "1bde9fe53a8f907e8cce59b957721ebcafc5ea6b3d45143a196309f57371bb04",
+          "reason": "unsupported control/stack instruction",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-ae-ah": {
+          "accepted": true,
+          "object_sha256": "907100113184ad82ab38ef67a93f1cd75148d7e6c389bcead7d86df732974902",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-al": {
+          "accepted": true,
+          "object_sha256": "01b3dd6dc871d86fce09136fca641ef9af573a9c07861d9a7acfa155acf16d0f",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-bh": {
+          "accepted": true,
+          "object_sha256": "ac61d0fdad3b75fd4125c28d95f173416bc6f32e25c2672e5eee562ec4e6046c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-bl": {
+          "accepted": true,
+          "object_sha256": "e35f3784d9ef0ff75d6d0c8603e95204d2eab4066e311b2c43109f1af3224bea",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-ch": {
+          "accepted": true,
+          "object_sha256": "870bd91df520d8e618f099fd2b5093ade73709cc285bce4af97b7616374c6ee1",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-cl": {
+          "accepted": true,
+          "object_sha256": "52c1d71a212adfa1080383b7a7aa033cad0ef2f5aa47803fe0d24f3bab3b37ea",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-dh": {
+          "accepted": true,
+          "object_sha256": "c385cae75322483eb541e29c0c6b3a5f1a31bc31493877807aae185242a30c0f",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ae-dl": {
+          "accepted": true,
+          "object_sha256": "c6cf68399b0763d5cc776230cfa8d2dda189338ce9dabbcae7a185732a15fa7d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-ah": {
+          "accepted": true,
+          "object_sha256": "686cf5c9990bc5cb6097fb611514a4e28cf4256dc278a205299d905945a082b2",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-al": {
+          "accepted": true,
+          "object_sha256": "a4a747ba35df1449d80fe3902d4207d209452c784378622ec19e7511e988aeda",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-bh": {
+          "accepted": true,
+          "object_sha256": "c7359bd44387bbe8e63504e23b9ec832fd5c3d80db93456a2374df204e8d9581",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-bl": {
+          "accepted": true,
+          "object_sha256": "2336bc6c3d4484648bf50316c9419a441690c7e45d0a0a5dd0f640423de0d140",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-ch": {
+          "accepted": true,
+          "object_sha256": "4d766164694f2a0b4ee1fa12bef6f0e7e703010cc02559f17d81a67d2459e09e",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-cl": {
+          "accepted": true,
+          "object_sha256": "f3718d4af08aa845045d25eba767bc4bc2aa4db22b9a289e9cd7ba978cf44e0a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-dh": {
+          "accepted": true,
+          "object_sha256": "e3a5eb06eb425f8eed781b1437554101faaee69fa4b7c0eb7109dac7b1672d54",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-b-dl": {
+          "accepted": true,
+          "object_sha256": "4747dd4d884cc71cb7461a55ab50b3b4e749ee7d509c0c34418fee8549e5c954",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-bad-extension": {
+          "accepted": false,
+          "object_sha256": "d9969d83eac855cf3f527db43f729136c5ac8f5fee4937b9e78b389bc6974bbc",
+          "reason": "unsupported fixed-frame SETcc destination/encoding",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-be-ah": {
+          "accepted": true,
+          "object_sha256": "fdf26a88e1d372815ff9717d1f819c2750629eac99fa9e9fef5b2be692b8f189",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-al": {
+          "accepted": true,
+          "object_sha256": "1ed7d70145697d3206c3747ff9c0e6ebda1c7a5545b09c8e9708e99b316dc6ca",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-bh": {
+          "accepted": true,
+          "object_sha256": "afd025650c8b5ba7a11010bd927a838d17114977da100b0b5a9b72198442163b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-bl": {
+          "accepted": true,
+          "object_sha256": "28c4ff3d5bfb36451474521f75b3fc6fb90b98360a2a67a591ca7bf00f55ec64",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-ch": {
+          "accepted": true,
+          "object_sha256": "de4e4a4c1474c46df036a807194c72e705bdc9a0fe71acc5869595fa2344c534",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-cl": {
+          "accepted": true,
+          "object_sha256": "2c0edfa4e4ec14bf7e2a4a97a6939c55dcd322b46892f322dabab5d19468c605",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-dh": {
+          "accepted": true,
+          "object_sha256": "70256e1086fc3de0d40e0d0d5bc51baf15f39a9a143373a4535e402007449146",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-be-dl": {
+          "accepted": true,
+          "object_sha256": "671aeb8add1f4c9d769e6a24a2505f7b4464a00d530976e4798d463f263c8fde",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-ah": {
+          "accepted": true,
+          "object_sha256": "144efea84894d4996d0575716a973f0af246e27f48c75228aa2dee41cca5fc13",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-al": {
+          "accepted": true,
+          "object_sha256": "bab28a87058800b47f79b1f9388612aa81b509cb9f59659fa7762a046b2e82d5",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-bh": {
+          "accepted": true,
+          "object_sha256": "2e35871799e137ecdcf5074f1eda6388d875c423b5d8cfeb517b827e62a0734b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-bl": {
+          "accepted": true,
+          "object_sha256": "9eb9c0c1003854bb60c2530b94ec314dabd5f7eef4148c15d87ea39550da3fb5",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-ch": {
+          "accepted": true,
+          "object_sha256": "d26683254dad9c13e4b7395b0c38b0847c8b71ee350586595c1e96d424349ff9",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-cl": {
+          "accepted": true,
+          "object_sha256": "b6884c2cc14ee87e48238afd0c2a8e79c7dbc2cf7db795a2051751bc4ef927ef",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-dh": {
+          "accepted": true,
+          "object_sha256": "0e0ec5a1679f39719c03c8e42e6cddb8674426f288871a7e425532fe674e1d1a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-e-dl": {
+          "accepted": true,
+          "object_sha256": "db2f6cc3cc5606eca35d51ed8028636c7895699b509961adeb9bc6c7c72067db",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-ah": {
+          "accepted": true,
+          "object_sha256": "1ab4ef04d3189c87c56b897d1165581e55d4de670bea5c539e730cc8ace5eaa4",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-al": {
+          "accepted": true,
+          "object_sha256": "66b3bd983bbdc9aa8b2cc045a8f8bdd0edf8313da03524937ce52747d66bfa22",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-bh": {
+          "accepted": true,
+          "object_sha256": "4436136b9ccc8c923a47639f44f6c39a0eadf0db1f46f39084c8c09c0dc67aa7",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-bl": {
+          "accepted": true,
+          "object_sha256": "7814dba499cabf5e5479eb11f1a87d960b8cdbcc480e7cf2ef3c6243e027f878",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-ch": {
+          "accepted": true,
+          "object_sha256": "8d08f18b8ae451c61372eb6c89163d8af880ac734265fa0ea5b5fb5c13d37519",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-cl": {
+          "accepted": true,
+          "object_sha256": "fe403c8a0988f4272fad66c642132caaa5563bd06e646998f65f7ac4f7b2bce7",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-dh": {
+          "accepted": true,
+          "object_sha256": "29ec6c102a2fa85aa7623a23eda4db7eaa3bc5092f3136c6caf0bce6c546c80e",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-g-dl": {
+          "accepted": true,
+          "object_sha256": "dc6f562c58acfd9f7d57d7be6511c1281ae61ce11e23edc069a04fb119994482",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-ah": {
+          "accepted": true,
+          "object_sha256": "e68e07d13c74054bda523be375da12e1e1c59551348f94fa1044f6d37450f58a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-al": {
+          "accepted": true,
+          "object_sha256": "ed4f2805761a38eed194d6b307894f092bae139642eac2376c26e325e70db831",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-bh": {
+          "accepted": true,
+          "object_sha256": "0d4ed7d4a3e4300cceab843db578f5afb27e8793f82c60bf2fc4da69693d8f28",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-bl": {
+          "accepted": true,
+          "object_sha256": "6fe3d1453db81b54eb8ed2800aeafb7791ba26dc2ddb0c9328d2542c3b503272",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-ch": {
+          "accepted": true,
+          "object_sha256": "50f8546d2090ac6b58865e64b8d0037e43589be6bd00b08f02f1b6b4549f475c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-cl": {
+          "accepted": true,
+          "object_sha256": "4128f7a95c0f6a04627f213ecb14b59f7102103645a83e93949c12cd8a7d1dca",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-dh": {
+          "accepted": true,
+          "object_sha256": "e209cab9662924835bb3d1d5d5f048e08d070c85dabdcd944b14504ce7df2781",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ge-dl": {
+          "accepted": true,
+          "object_sha256": "b7a16821c6507cb88b249c9e911505b5aeccef15c036c9a9aa79feab3223971e",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-heap-store": {
+          "accepted": false,
+          "object_sha256": "2f9209ae7c00e6f136b2295c43769a20ee196551e6a4011a2d02e0eb4570d259",
+          "reason": "unsupported fixed-frame SETcc destination/encoding",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-l-ah": {
+          "accepted": true,
+          "object_sha256": "32c38f2ce04782b363a8cafeac436beecdb12ed126b82a2ec888d18eb5812fd5",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-al": {
+          "accepted": true,
+          "object_sha256": "8e9baa6caa4b79370af2a747c9855c0a54a733b98efc04b5b0dcb89771317522",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-bh": {
+          "accepted": true,
+          "object_sha256": "c1abde7c7960a6162bd357e1ec8d5be694488777233e083929130d687f63d62d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-bl": {
+          "accepted": true,
+          "object_sha256": "f9db7a9f9b343badeb049aed0c6ac42e45ed98596097beb83b0b70f94820ccc8",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-ch": {
+          "accepted": true,
+          "object_sha256": "8baaf8dda715a861efdc7e45d265aaae1cfcd9d1c4b28f9f594ad201eb1af93d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-cl": {
+          "accepted": true,
+          "object_sha256": "2a6a3141b05ffae79cf52d645e5fe57df428f64013824be89f7d0361fb7eb675",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-dh": {
+          "accepted": true,
+          "object_sha256": "023092022da433c818ba1d6897130f711d809b2e8859d6d015d48e004316356c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-l-dl": {
+          "accepted": true,
+          "object_sha256": "19071e8ec5241664d77e7b00f4a22c77e6dfe26549b3b52308fc4d7644895171",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-ah": {
+          "accepted": true,
+          "object_sha256": "bb5bb9a203138ee6c8fb84851ab274b67af2e765ece76a9901db4432903d313b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-al": {
+          "accepted": true,
+          "object_sha256": "5b88e5108bd94a24338ae75d08f5e8cda331cc6ead4164db323ead29522b7165",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-bh": {
+          "accepted": true,
+          "object_sha256": "e12489b09566a436f6dddadadd0f84dfa6154103c2a4a365fba90359f38a70c9",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-bl": {
+          "accepted": true,
+          "object_sha256": "6085658c003a6b576ef96c455ed6d671437246e5b1b21505e9e8fecf10ba9e0c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-ch": {
+          "accepted": true,
+          "object_sha256": "972d4a62a856fa3eb26a8d49b6c4e816ac425f6b64356670743ecc88e34d3bf0",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-cl": {
+          "accepted": true,
+          "object_sha256": "9ddde73e0e675f7085585687379186655125e535facd084e9742d5f4c52ee46b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-dh": {
+          "accepted": true,
+          "object_sha256": "364dc274bd4d67b5203a1c7f708462fbf29b48e82a9170ce348e645076897d2a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-le-dl": {
+          "accepted": true,
+          "object_sha256": "acdc6b98b44cb454c37bdf7a2679cbcca0165fec71ac5b8ddf18466d2733111f",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-local-store": {
+          "accepted": false,
+          "object_sha256": "811792d1f71bc4e24361525717e51051c5b6fc06583f2507816e144005382158",
+          "reason": "unsupported fixed-frame SETcc destination/encoding",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-ne-ah": {
+          "accepted": true,
+          "object_sha256": "ede4e061d17338ae8539a75b1e72e7c7a957f58a018be521e81b48151ecd197a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-al": {
+          "accepted": true,
+          "object_sha256": "4e67ddc2794dfc4c2121ef8cc0c6295fc3d1dce2c622723dfa7f5243c733d475",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-bh": {
+          "accepted": true,
+          "object_sha256": "fc3d0f4a34aebb0b0ac90829cb6cf37af179df197abc4cb66c3392fced6c55f1",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-bl": {
+          "accepted": true,
+          "object_sha256": "925118e8d221a329a45d0b149c1a020d642841a878c6f08d004a8567346f82fb",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-ch": {
+          "accepted": true,
+          "object_sha256": "25d7e57f2419d85b8424abf31c58ade0d4658387e536a737b24b1b0f00fedce2",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-cl": {
+          "accepted": true,
+          "object_sha256": "b17cd4b41c9f12c76362ac6bb6cdc2b36718f913c4a7a46a0b1476b0cd59f565",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-dh": {
+          "accepted": true,
+          "object_sha256": "ac5192f5084d27ee6f8a6947edfc7a933aacceeeb98bb9786d11d43a9762f0a2",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ne-dl": {
+          "accepted": true,
+          "object_sha256": "c4212b8f0a0736413562ca97fce120defc87a4d2997a505e0d1cf18806653cb0",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-ah": {
+          "accepted": true,
+          "object_sha256": "5df76f2534f6118744b0d3f6b9b30276b24054da7ee1eb6091eb8ac16492d158",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-al": {
+          "accepted": true,
+          "object_sha256": "3d52c9450ccc68521ec28b548bf0d2519204b317aca23940aa9238705203cbad",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-bh": {
+          "accepted": true,
+          "object_sha256": "059a212fc92e5abcecde84b8ead7d3a9c89ca12fbd6e0762eb6ed4d4000628d8",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-bl": {
+          "accepted": true,
+          "object_sha256": "aeb833eb0327304b96cb3e87b50e9b09c77a63fdc6116327f0541bfc5d950935",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-ch": {
+          "accepted": true,
+          "object_sha256": "f7c9c94ad318adecdd7e188fe2333b42cac68ebcdf14219ec2c6ca5f092a06cd",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-cl": {
+          "accepted": true,
+          "object_sha256": "e051355c9a546875c0c5384d6cf1379d085de2666baf2bb278f914afd634ac65",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-dh": {
+          "accepted": true,
+          "object_sha256": "cb28ea41e2afd9ddfe1a7b2ab34fea451e01fcbf6e2d8403a2641239fb38bd3c",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-no-dl": {
+          "accepted": true,
+          "object_sha256": "99b850aea14a6e119092b51583f3a9185e3bb714d052ba4051f319bf79ee4ceb",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-ah": {
+          "accepted": true,
+          "object_sha256": "453ebe149ec95158df28505463f0afb431efd4455c9421e6ac354f2a1be774f6",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-al": {
+          "accepted": true,
+          "object_sha256": "6261174aa974d63ca560ed8ed42e21901a1224a4cd70cd17286ed6591fd7f2d0",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-bh": {
+          "accepted": true,
+          "object_sha256": "c6971814c9a76577fc2c65dfa764f498f1538bc6475f95127fe62537022cc094",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-bl": {
+          "accepted": true,
+          "object_sha256": "a557fe7711014b108c035933fc9f408670c168090dad974da9644baa0b274013",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-ch": {
+          "accepted": true,
+          "object_sha256": "98d3fc4b7099af81e695a283b688dcbf56c47514e587c1849ef9ea55e6351134",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-cl": {
+          "accepted": true,
+          "object_sha256": "165c780e61d9a0c604bd5eb5dff98c95bfbde1c01bf1e7d8f07fa77fe644d229",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-dh": {
+          "accepted": true,
+          "object_sha256": "bcaa3396a13a7754c6712c4f1429f23f45eb2e0e23382c41b551f17c176543f2",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-np-dl": {
+          "accepted": true,
+          "object_sha256": "5ad4700f259dd5b33846487ccb0efb239df6f06c4e473a389a24f6506c545778",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-ah": {
+          "accepted": true,
+          "object_sha256": "fd713d7d977e9e96179a13a41ea0d9c792eb3d7ee17e6fee111e9edcf9272dba",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-al": {
+          "accepted": true,
+          "object_sha256": "097e47e709b3fef7197377923d46fef2c9bf50b878da83107f9b44f2bcdc1f22",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-bh": {
+          "accepted": true,
+          "object_sha256": "19bc45d68a2e91983d6c218f0251172e0a6a52227f94040d793dee58973cebb6",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-bl": {
+          "accepted": true,
+          "object_sha256": "837c54dd00a407c3d54063843f6f68ec81c169ec253bcf5e2e0cd82b72f57a19",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-ch": {
+          "accepted": true,
+          "object_sha256": "3198b60d3b0e6acddd3ee969c2ccdbf94331be18b5d33b4033f36b4ef80846ef",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-cl": {
+          "accepted": true,
+          "object_sha256": "7a40ad5b2de1e0349693a470349d2ba26ca3463cb0407631f6c92789e8122bce",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-dh": {
+          "accepted": true,
+          "object_sha256": "f5ee8c0d9cb330d3682be50ca3a4f286503a660e65ccbf40e3cd310847da158d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-ns-dl": {
+          "accepted": true,
+          "object_sha256": "63da2c07e7a09d11028db4e2ff8953f0b0d70088d0fc60d4cbd9ecaa73e6d007",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-ah": {
+          "accepted": true,
+          "object_sha256": "9052c35139e611212b30f5fb1c3983ed546e073d38ca3425c9a77a5c2abb0c19",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-al": {
+          "accepted": true,
+          "object_sha256": "a9e2ff5b5b922c48aa488a9a25a6938245ad2244af461b6524daf5bdf8eaff36",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-bh": {
+          "accepted": true,
+          "object_sha256": "efe139aaba632c919ec2368c28100b87b9787704942f9cd58d9f3335a20979d8",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-bl": {
+          "accepted": true,
+          "object_sha256": "212d92be12b9d2ad24e4a7986a6c22e7012f1afdeafc5e1abebdf5e1df1e706d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-ch": {
+          "accepted": true,
+          "object_sha256": "97e23b0703547ade11b0349132ddbb7aa9fa49c7ab32fa5310b83a17036bc123",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-cl": {
+          "accepted": true,
+          "object_sha256": "6017758c94b0f8f4f993e2185c36038b9cf502c2e06711c7477e9db80dd737a2",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-dh": {
+          "accepted": true,
+          "object_sha256": "05a9a04e65a71907d389143bdbd737406236803b39364a2f62094bb9a839d623",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-o-dl": {
+          "accepted": true,
+          "object_sha256": "f2bd3a1bcc33d66b2c3ebd6e9e7c2c01a3620bf162440529a71fde1a86d80aab",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-operand-prefix": {
+          "accepted": false,
+          "object_sha256": "24d9f67c5c4630ff3aa091c91ee10e93cef5ead3f77b164c7c6019b55aaa3747",
+          "reason": "unsupported control/stack instruction",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-p-ah": {
+          "accepted": true,
+          "object_sha256": "f8b3e51f121db44f403bf231f7826202de4c70543271b20b954d0d03125d2741",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-al": {
+          "accepted": true,
+          "object_sha256": "1af86319f97d88734771f390e99e3a56753da3f1a95974e93673da83bc5edb6d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-bh": {
+          "accepted": true,
+          "object_sha256": "4b7a5211d4b46c230c2854e4cc27c1dd2bfb9fc9575167ab2ee83781faa56213",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-bl": {
+          "accepted": true,
+          "object_sha256": "58523ea805823478bb5bc7502678ad3fa02929e16fc2b396e137e4bda9d6a338",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-ch": {
+          "accepted": true,
+          "object_sha256": "d1e4fe9e775ce08239d85720b85e87c613eff0907784f63893534c6ca0fbb9a4",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-cl": {
+          "accepted": true,
+          "object_sha256": "97167c927f31dc593d4bf051b5e4c5759792fd6e95ca8c6d6f0ae294e5f4e396",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-dh": {
+          "accepted": true,
+          "object_sha256": "630ce9bae11b466394c1c4764735571db68a31bed9b7f5244726097ec979055a",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-p-dl": {
+          "accepted": true,
+          "object_sha256": "bfe6ea3dd9c576a66a55665ac6aa64ef77d30b3d4e8d44988fda0a8dd4828d56",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-return-store": {
+          "accepted": false,
+          "object_sha256": "8f0500911699ffc77b53489d6ce8ed17dde3d989bfec5e34775e61cc844bb100",
+          "reason": "unsupported fixed-frame SETcc destination/encoding",
+          "self_grade": "UNRESOLVED"
+        },
+        "setcc-s-ah": {
+          "accepted": true,
+          "object_sha256": "7655d9dd3213da4f02e87f69709b663136442c51859e47373a4d7205660aeb00",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-al": {
+          "accepted": true,
+          "object_sha256": "61d3b610f995aa769c47cb533f65dcccf49fc756b2a5083f2648037b7becc150",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-bh": {
+          "accepted": true,
+          "object_sha256": "2b36e3a7cf00011dd367df2a730514aaddcbb43de8b3adae6817245654569f2b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-bl": {
+          "accepted": true,
+          "object_sha256": "8ddc7472fa76cd16af9f3bed3c36a96e39a1c29c34f6a60749fe24f362d8de0b",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-ch": {
+          "accepted": true,
+          "object_sha256": "427b1958495c24552b02637ada686055250624ac51522428eebef2307e2f29b4",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-cl": {
+          "accepted": true,
+          "object_sha256": "cb294a1622fda8285d801c9eb019c1792a8db92fa8492a81363b5b24282e4f1d",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-dh": {
+          "accepted": true,
+          "object_sha256": "16ea49f5ae9de9ea63925f925c2764749e6603472640fce642b37f888d22d9ed",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-s-dl": {
+          "accepted": true,
+          "object_sha256": "a2a2f5b68d9f174ecd832bbab4ccb1c1b26aa621e5ebd4e13c15a575836aba49",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "setcc-save-store": {
+          "accepted": false,
+          "object_sha256": "f2f4b16cbe28d7af690eade26f1b69d0c6347975fec550c818da5120d7f1af59",
+          "reason": "unsupported fixed-frame SETcc destination/encoding",
+          "self_grade": "UNRESOLVED"
+        },
+        "signed-guard": {
+          "accepted": false,
+          "object_sha256": "0ffaa1bf190706a402be5df340c82bea843ee887918ecae6bfa7852d9dce6317",
+          "reason": "missing unique taken-edge guard",
+          "self_grade": "UNRESOLVED"
+        },
+        "target-swap": {
+          "accepted": true,
+          "object_sha256": "d95715e5e9d6c2c60b788e216b593435119b8d3fefcdf499c12a2540f44fc9b0",
+          "reason": null,
+          "self_grade": "EXACT"
+        },
+        "unaligned-partial-overlap": {
+          "accepted": false,
+          "object_sha256": "83e9b975eaf6567126f0ff1bdfb62902c311061e86b53b5e15c8cda00248b77c",
+          "reason": "fixed-frame outgoing extent/form",
+          "self_grade": "UNRESOLVED"
+        },
+        "unsupported-implicit-callee-clobber": {
+          "accepted": false,
+          "object_sha256": "46582cbdf444ef9bc014f7052c5665c4603172dcdd31280fc1ee01024f3ac8f3",
+          "reason": "unsupported fixed-frame instruction",
+          "self_grade": "UNRESOLVED"
+        },
+        "wrong-index": {
+          "accepted": false,
+          "object_sha256": "924beaf122e737a7089036611306fe898d78c9eece639ed82639878fc2d08400",
+          "reason": "absolute index/scale dispatch",
+          "self_grade": "UNRESOLVED"
+        }
+      },
+      "positive_count": 134,
+      "real": {
+        "candidate": {
+          "count": 88,
+          "fixed_stack_frame": {
+            "bytes": 28,
+            "direct_abi_calls": 3,
+            "outgoing_slots": [
+              0,
+              4,
+              8
+            ],
+            "reachable_instructions": 123,
+            "returns": 2,
+            "saved_slots": [
+              [
+                12,
+                "ebx"
+              ],
+              [
+                16,
+                "esi"
+              ],
+              [
+                20,
+                "edi"
+              ],
+              [
+                24,
+                "ebp"
+              ]
+            ],
+            "unknown_local_slots": [
+              8
+            ]
+          },
+          "function": "AnalyseDialString",
+          "guard_offset": 150,
+          "identity": [
+            "jump-table",
+            "R_386_32",
+            88,
+            [
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                198
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                414
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                393
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                370
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                414
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                393
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ]
+            ]
+          ],
+          "index": "eax",
+          "relocation_offset": 158,
+          "table_offset": 20,
+          "table_section": ".rodata",
+          "targets": [
+            240,
+            359,
+            208,
+            359,
+            240,
+            208,
+            208,
+            208,
+            240,
+            240,
+            359,
+            208,
+            240,
+            240,
+            208,
+            208,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            208,
+            198,
+            208,
+            208,
+            208,
+            208,
+            240,
+            345,
+            345,
+            345,
+            345,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            414,
+            208,
+            208,
+            208,
+            393,
+            208,
+            208,
+            240,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            370,
+            208,
+            208,
+            345,
+            345,
+            345,
+            345,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            414,
+            208,
+            208,
+            208,
+            393,
+            208,
+            208,
+            240
+          ]
+        },
+        "native": {
+          "count": 88,
+          "fixed_stack_frame": {
+            "bytes": 28,
+            "direct_abi_calls": 3,
+            "outgoing_slots": [
+              0,
+              4,
+              8
+            ],
+            "reachable_instructions": 123,
+            "returns": 2,
+            "saved_slots": [
+              [
+                12,
+                "ebx"
+              ],
+              [
+                16,
+                "esi"
+              ],
+              [
+                20,
+                "edi"
+              ],
+              [
+                24,
+                "ebp"
+              ]
+            ],
+            "unknown_local_slots": [
+              8
+            ]
+          },
+          "function": "AnalyseDialString",
+          "guard_offset": 150,
+          "identity": [
+            "jump-table",
+            "R_386_32",
+            88,
+            [
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                359
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                198
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                414
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                393
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                370
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                345
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                414
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                393
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                208
+              ],
+              [
+                "AnalyseDialString",
+                240
+              ]
+            ]
+          ],
+          "index": "eax",
+          "relocation_offset": 158,
+          "table_offset": 24188,
+          "table_section": ".rodata",
+          "targets": [
+            240,
+            359,
+            208,
+            359,
+            240,
+            208,
+            208,
+            208,
+            240,
+            240,
+            359,
+            208,
+            240,
+            240,
+            208,
+            208,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            359,
+            208,
+            198,
+            208,
+            208,
+            208,
+            208,
+            240,
+            345,
+            345,
+            345,
+            345,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            414,
+            208,
+            208,
+            208,
+            393,
+            208,
+            208,
+            240,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            370,
+            208,
+            208,
+            345,
+            345,
+            345,
+            345,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            208,
+            414,
+            208,
+            208,
+            208,
+            393,
+            208,
+            208,
+            240
+          ]
+        },
+        "verdict": [
+          "EXACT",
+          0
+        ]
+      },
+      "refusal_count": 55,
+      "tool_sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac"
+    },
+    "optimized": {
+      "comparisons": {
+        "rebased": "EXACT",
+        "target-swap": "RELOC"
+      },
+      "controls_equal_normal": true,
+      "positive_count": 134,
+      "refusal_count": 55
+    },
+    "original_ABI_hole": {
+      "new": {
+        "accepted": false,
+        "parsed_inputs": [
+          {
+            "bytes": 668,
+            "sha256": "6104507c29e63787301900a8921df6ad46904d67fe1807dd446bbac3b27dbdef"
+          }
+        ],
+        "reason": "saved register lacks original ABI identity",
+        "tool_sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac"
+      },
+      "old": {
+        "accepted": true,
+        "parsed_inputs": [
+          {
+            "bytes": 668,
+            "sha256": "6104507c29e63787301900a8921df6ad46904d67fe1807dd446bbac3b27dbdef"
+          }
+        ],
+        "proof": {
+          "count": 2,
+          "fixed_stack_frame": {
+            "bytes": 8,
+            "direct_abi_calls": 0,
+            "outgoing_slots": [],
+            "reachable_instructions": 17,
+            "returns": 1,
+            "saved_slots": [
+              [
+                4,
+                "ebx"
+              ]
+            ]
+          },
+          "function": "sample",
+          "guard_offset": 13,
+          "identity": [
+            "jump-table",
+            "R_386_32",
+            2,
+            [
+              [
+                "sample",
+                25
+              ],
+              [
+                "sample",
+                32
+              ]
+            ]
+          ],
+          "index": "eax",
+          "relocation_offset": 21,
+          "table_offset": 0,
+          "table_section": ".rodata",
+          "targets": [
+            25,
+            32
+          ]
+        },
+        "tool_sha256": "55d4106653c29e1346195414333dbd71955e4c3a1f42c6ae8dfc002341dbccb6"
+      }
+    },
+    "parsed_inputs_ledger_sha256": {
+      "normal": "11b8e215b14fcd1aed6d0582d520f3ea53715baeabd5a0ae026ad004dee0598b",
+      "optimized": "35bb92aae1336db825c9af3d7b5a65fc92a61ac5e733579301837d664f047554"
+    }
+  }
+}

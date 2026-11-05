@@ -447,13 +447,61 @@ owner, width or value-age differences. A finite crossed matrix is not a global
 optimum claim, and final evidence includes every protected neighbour rather
 than only aggregate gains.
 
-Next transfer expression signedness and observation placement to
-IsDialStringInvalid. Native compares the analyser result with1 using unsigned
-SETBE at0x7af89..0x7af8c, while source returns signed grade<=1. Native also
-prepares the grade-name lookup before the second debug guard; source requests
-it only inside the guard. Audit AnalyseDialString's return domain and all grade
-consumers, cross the two native-backed properties, and investigate whole-Dialer
-collateral. No negative-grade behavior bug is established by these witnesses.
+The Dialer transfer below completes this recommendation; its return-domain audit
+finds only grades0..3 and establishes no negative-grade behavior bug.
+
+## Dialer recovery: joins, local calls and original register identity (2026-11-05)
+
+The [Dialer wave](../dialer-recovery-20261105.md) recovers AnalyseDialString
+EXACT436 and IsDialStringInvalid EXACT149. Unsigned consumption alone does not
+improve the wrapper. Preguard grade-name selection alone reaches BYTES4; both
+reach BYTES2. Those last bytes are an unrelocated local-call displacement,
+requiring the producer, GetNext and native function order together. Do not
+normalize a real static-call distance away to manufacture EXACT.
+
+Keep a promising intermediate through collateral repair. An all-break switch
+initially loses the wrapper's EXACT grade. Crossing the native space/default
+continuation graph with successful mixed-mode arm ownership restores EXACT
+and takes GetNext from SIZE118 to SIZE1. Native selector range 32..119 and its
+88-entry table distinguish this from the earlier87-entry source graph. The
+space/default source spelling remains nonunique; supported emitted control
+flow is the evidence, not a claim to know every original break/continue.
+
+Analyse needs the native signed selector, early loop index, direct unsigned
+grade lowering and modifier-validation arm ownership. Its complete 436-byte
+body and all 88 ordered targets match. DialerCreate retains unsigned rejection,
+preguard lookup and two distinct post-call modem-owner reloads, reaching BYTES5.
+The producer returns only 0..3; int storage and unsigned consumption coexist.
+Do not invent a negative-grade bug or change a shared declaration to explain it.
+
+Audit the whole TU even when a local body is unchanged. Progress retains its
+2,876-byte body/instruction sequence; its only nonrelocated differences are
+four local-call distance bytes. A later Abort source correction changes
+GetNext 894 to 896 bytes with literally identical GetNext assembly and normalized
+RTL: assembly relaxation/alignment context is a different boundary from source
+or allocator changes. Both preserve the wrapper span. No padding carrier,
+store-order grid or compiler flag was added.
+
+Table proof must distinguish an original callee-save value from that register's
+later repurposed contents. The analyser saves EBX, redefines it, then publishes
+it as a call argument; that argument is not another ABI save. Aligned fullword
+frame locals can remain unknown if initialized on every admitted path. Neither
+permits assuming their values survive a call. A higher-address clobber followed
+by a backward jump to the first lexical save exposed a pre-existing unsound
+acceptance: CFG identity must accompany save/restore tracking. The retained
+real-ELF controls accept 134 cases and refuse 55; rebasing stays EXACT, swapping
+ordered table targets is RELOC. Normal and -O runs use explicit checks.
+
+Remaining bounded dives are recorded, not silently abandoned: constructor
+constant stores become scratch-register operations first at peephole2; Abort's
+error diagnostic remains a tail call despite an object-identical explicit-return
+control; GetNext still has unmatched case/return-sharing relationships. Reopen
+with independent predecessor, continuation/type or join evidence, not another
+closed spelling palette. Next transfer to chkForceBaudRate (SIZE5): native captures p3548 at0xa479
+before diagnostics and uses unsigned cap predicates at0xa4e7..0xa50b; source
+loads the session afterward and compares signed. Cross those properties and
+audit t_v34pcmif inputs first. The byte-derived selector domain is0..7; no
+negative-selector bug follows. Keep the full VPcmV34Main.cpp closure.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

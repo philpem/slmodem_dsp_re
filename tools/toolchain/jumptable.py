@@ -71,13 +71,17 @@ def section_direct_edges(path, section):
 def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     """Track one entry-allocated frame and untouched callee-save slots in CFG.
 
-    This accepts ordinary register saves, not arbitrary stack writes. All
+    This accepts ordinary register saves and aligned fullword scratch access. All
     paths start at the sized ABI entry, keep the same frame depth at joins,
     restore each saved register from its own unchanged slot, and deallocate
     the frame before RET. Incoming loads cannot alias a saved slot. Outgoing
     words are disjoint from all saves; direct relocated calls obey the i386
     callee-save/stack-return ABI, as in the pushed-frame proof. No frame address
-    may escape. CWTL modifies only EAX.
+    may escape. Scratch reads require a pre-dispatch write and initialization
+    on every CFG path; their values remain unknown, including across calls.
+    The unsigned adjacent dispatch guard independently bounds its selector.
+    Pending save identities are tracked through CFG, not inferred from lexical
+    instruction order. CWTL modifies only EAX.
     """
     first = rows[0]
     frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
@@ -89,7 +93,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     supported = frozenset(('mov', 'movswl', 'movzwl', 'movsbl', 'movzbl',
                            'lea', 'inc', 'dec', 'add', 'sub', 'neg', 'not',
                            'and', 'or', 'xor', 'shl', 'shr', 'sar', 'mul',
-                           'imul', 'cmp', 'test', 'ret', 'nop', 'call', 'cwtl'))
+                           'imul', 'cmp', 'test', 'sbb', 'ret', 'nop', 'call', 'cwtl'))
     aliases = {'ebx':'ebx', 'bx':'ebx', 'bl':'ebx', 'bh':'ebx',
                'esi':'esi', 'si':'esi', 'edi':'edi', 'di':'edi',
                'ebp':'ebp', 'bp':'ebp'}
@@ -103,6 +107,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     def base(mnemonic):
         return mnemonic[:-1] if mnemonic[-1:] in ('b','w','l') and mnemonic[:-1] in supported else mnemonic
     stack_ops = {}; slots = {}; saved = set(); written = set(); outgoing = set()
+    local_reads = set(); predispatch_writes = set()
     for address, raw, mnemonic, operands in rows:
         original_mnemonic = mnemonic
         mnemonic = base(mnemonic)
@@ -110,7 +115,14 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(address in calls, 'unproved fixed-frame ABI call')
             stack_ops[address] = ('call',)
             continue
-        require(mnemonic in supported or mnemonic.startswith('j'),
+        setcc = mnemonic.startswith('set')
+        if setcc:
+            byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
+            require(len(raw) == 3 and raw[0] == 0x0f and
+                    0x90 <= raw[1] <= 0x9f and raw[2] & 0xf8 == 0xc0 and
+                    operands == '%' + byte_registers[raw[2] & 7],
+                    'unsupported fixed-frame SETcc destination/encoding')
+        require(mnemonic in supported or mnemonic.startswith('j') or setcc,
                 'unsupported fixed-frame instruction')
         require(re.search(r'%sp\b', operands) is None, 'partial stack-pointer access')
         if '%esp' not in operands:
@@ -126,7 +138,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
             continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
-        if store and address < dispatch:
+        if store and address < dispatch and store[1] not in saved and store[1] not in written:
             offset = int(store[2] or '0', 16); register = store[1]
             require(mnemonic == 'mov' and offset % 4 == 0 and offset + 4 <= frame,
                     'saved slot extent/form')
@@ -142,14 +154,22 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(original_mnemonic in ('mov','movl') and offset % 4 == 0 and offset + 4 <= frame,
                     'fixed-frame outgoing extent/form')
             outgoing.add(offset)
-            stack_ops[address] = ('outgoing',)
+            if address < dispatch: predispatch_writes.add(offset)
+            stack_ops[address] = ('outgoing', offset)
             continue
         load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
         require(load is not None and mnemonic == 'mov', 'unsupported fixed-frame stack access')
         offset = int(load[1] or '0', 16); register = load[2]
         if offset < frame:
-            require(slots.get(offset) == register, 'saved slot wrong-owner read')
-            stack_ops[address] = ('restore', offset, register)
+            require(offset % 4 == 0 and offset + 4 <= frame,
+                    'fixed-frame local extent/alignment')
+            if offset in slots:
+                require(slots[offset] == register, 'saved slot wrong-owner read')
+                stack_ops[address] = ('restore', offset, register)
+            else:
+                local_reads.add(offset)
+                stack_ops[address] = ('local', offset, register)
+                if register in callee: written.add(register)
         else:
             require(offset >= frame + 4 and offset % 4 == 0,
                     'return address/unaligned argument read')
@@ -157,9 +177,11 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             if register in callee: written.add(register)
     require(saved, 'fixed frame without supported saved registers')
     require(not outgoing.intersection(slots), 'fixed-frame outgoing/save overlap')
+    require(not local_reads.intersection(slots), 'fixed-frame local/save overlap')
+    require(local_reads <= predispatch_writes, 'fixed-frame local without predispatch write')
     require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
-    pending = [(first[0], (False, frozenset(), frozenset()))]; seen = {}
+    pending = [(first[0], (False, frozenset(), frozenset(), frozenset(), frozenset(saved)))]; seen = {}
     returns = 0
     while pending:
         address, state = pending.pop()
@@ -167,9 +189,10 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(seen[address] == state, 'inconsistent fixed-frame join')
             continue
         seen[address] = state
-        allocated, available, restored = state
+        allocated, available, restored, initialized, pristine = state
         i = by_address[address]; _, raw, mnemonic, operands = rows[i]
-        available = set(available); restored = set(restored)
+        available = set(available); restored = set(restored); initialized = set(initialized)
+        pristine = set(pristine)
         operation = stack_ops.get(address)
         if operation:
             kind = operation[0]
@@ -181,14 +204,25 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
                 allocated = False
             else:
                 require(allocated, 'stack access outside allocated frame')
-                if kind == 'save': available.add(operation[1])
+                if kind == 'save':
+                    require(operation[2] in pristine, 'saved register lacks original ABI identity')
+                    pristine.remove(operation[2])
+                    available.add(operation[1])
                 elif kind == 'restore':
                     require(operation[1] in available, 'restore without saved slot')
                     restored.add(operation[2])
-                elif kind == 'argument': restored.discard(operation[1])
+                elif kind == 'argument':
+                    restored.discard(operation[1]); pristine.discard(operation[1])
+                elif kind == 'outgoing':
+                    if operation[1] in local_reads: initialized.add(operation[1])
+                elif kind == 'local':
+                    require(operation[1] in initialized, 'uninitialized fixed-frame local read')
+                    restored.discard(operation[2])
+                    pristine.discard(operation[2])
         else:
             register = written_callee(mnemonic, operands)
-            if register: restored.discard(register)
+            if register:
+                restored.discard(register); pristine.discard(register)
         if mnemonic == 'ret':
             require(not allocated and restored == saved, 'unbalanced fixed-frame return')
             returns += 1
@@ -205,14 +239,15 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
         else:
             require(i + 1 < len(rows), 'fixed-frame fallthrough extent')
             successors = [rows[i + 1][0]]
-        next_state = (allocated, frozenset(available), frozenset(restored))
+        next_state = (allocated, frozenset(available), frozenset(restored), frozenset(initialized), frozenset(pristine))
         for successor in successors:
             require(successor in by_address, 'fixed-frame successor extent')
             pending.append((successor, next_state))
     require(returns > 0, 'fixed frame without reachable return')
     return {'bytes': frame, 'saved_slots': sorted(slots.items()),
             'reachable_instructions': len(seen), 'returns': returns,
-            'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing)}
+            'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing),
+            'unknown_local_slots': sorted(local_reads)}
 
 
 def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
