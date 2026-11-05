@@ -158,6 +158,34 @@ for controls and stopping rules.
 
 ## Extending the model
 
+### Screen a non-exact translation unit
+
+Use the screening tool with a completed capture and a separately built,
+unchanged production object:
+
+```sh
+python3 tools/gcc3_search_screen_test.py
+python3 tools/gcc3_search_screen.py \
+    --capture build/gcc3-search-pilot/baseline \
+    --baseline-object build/gcc3-search-pilot/production/src_pump_v90_V90Phase4Modulator.cpp.o \
+    --output build/gcc3-search-screen.json
+```
+
+The screen checks captured inputs, tool identities and literal baseline object
+identity before using `byteident.py` to grade every shared sized function. It
+joins these verdicts to observed scratch events and reports which non-exact
+functions have cursor-sensitive choices. All 53 incoming cursor states are
+diagnostics with frozen inputs, not demonstrated source alternatives.
+
+An unsupported event prevents whole-stream composition. The report retains
+every unsupported event and marks sensitivity unavailable; it does not present
+an unavailable measurement as zero sensitive functions. A function with no
+observed events is outside this mechanism's observed coverage, not proven
+insensitive to all source changes. See the [non-exact-TU study](gcc3-model-nonexact-study.md)
+for positive controls and boundaries found by the first wider screen.
+
+### Add another mechanism
+
 Add another compiler mechanism only after its unchanged decisions can be
 replayed and checked on held-out source variants. Integer allocation will
 need its own captured constraints, preferences, ordering and spill boundary;
