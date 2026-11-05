@@ -125,13 +125,31 @@ struct v29_status_prefix {
 	 * `V29TX_status` writes 0; `v22_status::short_12` (the same block)
 	 * carries no semantic name -- retained neutral (Batch 27). */
 	short short_0e, short_10, short_12;
-	unsigned char flags, flags2;
+	/* Native RX SETE/shift updates use this byte bitfield view. */
+	union {
+		unsigned char flags; /* +0x14 byte view */
+		struct {
+			unsigned char bit0 : 1;
+			unsigned char bit1 : 1;
+			unsigned char bit2 : 1;
+			unsigned char bit3 : 1;
+			unsigned char bit4 : 1;
+			unsigned char bit5 : 1;
+			unsigned char bit6 : 1;
+			unsigned char bit7 : 1;
+		} flag_bits;
+	};
+	unsigned char flags2;
 };
 /* This bounds the observed report prefix, not the caller's allocation. */
 typedef char v29_status_prefix_flags_at_14[
 	__builtin_offsetof(struct v29_status_prefix, flags) == 0x14 ? 1 : -1];
 typedef char v29_status_prefix_end_16[
 	sizeof(struct v29_status_prefix) == 0x16 ? 1 : -1];
+typedef char v29_status_prefix_bit_view_at_14[
+	__builtin_offsetof(struct v29_status_prefix, flag_bits) == 0x14 ? 1 : -1];
+typedef char v29_status_prefix_bit_view_one_byte[
+	sizeof(((struct v29_status_prefix *)0)->flag_bits) == 1 ? 1 : -1];
 
 struct v29_rx_decoder {
 	short mag_avg_far, mag_avg_near;

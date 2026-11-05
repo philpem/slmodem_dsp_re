@@ -8635,3 +8635,59 @@ the aggregate exact count.
 The combined checkpoint passes `make phase`: 393 period tests, zero failures.
 Fresh production comparison covers all 1,852 functions and moves EXACT from
 1,110 to 1,114, with no exact losses; REGALLOC falls from 31 to 29.
+
+
+## Keep storage width separate from report access width
+
+`V17RX_status` and `V29RX_status` read the low sixteen bits of their
+configuration's protocol word. Their constructors copy all thirty-two bits.
+Representing both operations needs a four-byte storage member and an overlaid
+two-byte report view at offset zero; shrinking the storage member would lose
+caller data. Period layout assertions cover both widths, the following
+bit-rate field, and the unchanged configuration sizes.
+
+The same functions provide positive native evidence for byte bitfields. Their
+flag publications include SETE followed by shifts of three and five, with
+intermediate stores observable through aliases. A one-byte bitfield view at
+report offset `0x14` reproduces those publications, including the adjacent
+byte clear's interleaving. Both status functions become exact at 190 bytes.
+This evidence is specific to these writers; mask-based flag operations
+elsewhere do not acquire a reason to change.
+
+Check the complete header consumer closure. Here, 56 production TUs include
+one of the three changed headers: 54 remain literal object matches, and only
+the two status bodies change in the other two. The closure contains 284 sized
+functions and four data-only TUs. Record the latter's raw object equality
+explicitly rather than dropping them from the denominator. Exported bindings,
+allocated data and function order are unchanged across all 56 consumers.
+
+The new `t_faxstatusprotocol` fixture constructs both receiver types with two
+distinct upper-word patterns and the default low-word protocol. It checks
+complete configuration storage and the low-word status report before deleting
+the receivers. This is a component storage-width regression, not a claim that
+arbitrary upper bits are public modem configurations. Together with the two
+existing receiver fixtures, baseline and candidate each pass 219,379 focused
+checks. Existing alias and planted-state cases remain labelled component
+fidelity probes.
+
+The neighbouring `_delete_data_rx_modem` recovery restores a different native
+boundary: capture the unsigned sixteen-bit slot, and keep the final config
+free in each dispatch arm. The V.17 arm reloads its owner after every opaque
+free; both arms converge at the actual free call. This recovers all 149 bytes
+without changing the other four TU bodies. Baseline and candidate each pass
+563 focused checks, including real receive construction followed by a
+modulation-switch teardown. Two full 300-object partial links retain all
+1,881 other selected bodies. Executable byte/target checks confirm the tested
+functions are the intended implementations; eight deliberate corruptions are
+rejected.
+
+Historical commits `ce8753952c` and `a8ea56c16e` supplied discovery leads.
+The current native instructions, frozen baseline, consumer closure and fresh
+period tests establish these results independently. Reproduction evidence is
+under `build/gcc3-wave-fax`, `build/gcc3-wave-class1rx` and
+`build/gcc3-overnight/checkpoint2`.
+
+The combined second checkpoint passes `make phase`: 394 period tests, zero
+failures, including the new storage-width fixture. Fresh production comparison
+records 1,117 EXACT and 29 REGALLOC of 1,852, with three gains and no losses
+against the first checkpoint.

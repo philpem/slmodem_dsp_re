@@ -2,8 +2,8 @@
   "bytes": 78,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1114,
-  "exact_bytes": 127801,
+  "exact": 1117,
+  "exact_bytes": 128330,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -207,6 +207,7 @@
     "TxNoCarrierV21",
     "V17RX_control",
     "V17RX_delete",
+    "V17RX_status",
     "V17TX_control",
     "V17TX_delete",
     "V17TX_modem",
@@ -228,6 +229,7 @@
     "V27TX_status",
     "V29RX_delete",
     "V29RX_modem",
+    "V29RX_status",
     "V29TX_delete",
     "V29TX_modem",
     "V32FP_GetDiagnostics",
@@ -913,6 +915,7 @@
     "_ZNK3Psd14getFrequenciesEPff",
     "_ZNK9Resampler18getNormalizedPhaseEv",
     "_answer_tone_state",
+    "_delete_data_rx_modem",
     "_delete_data_tx_modem",
     "_handle_hdlc_input_close",
     "_handle_hdlc_input_open",
@@ -1124,6 +1127,6 @@
   "reference_functions": 1852,
   "regalloc": 29,
   "reloc": 0,
-  "size": 631,
+  "size": 628,
   "unresolved": 0
 }
