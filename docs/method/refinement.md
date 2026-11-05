@@ -8888,8 +8888,10 @@ it. The reset size gap falls from 85 to one byte. Its two subsequent constructor
 variants become exact without source changes: their RTL first differs at
 peephole2, where the zero scratch changes to AX. The C1 and C2 symbols are
 separate native bodies at `0x212c0` and `0x21430`, not address aliases.
-All other bodies among 26 retain their grades, data and bindings remain
-unchanged, and focused reset/constructor fixtures pass 72,021 checks per form.
+All other bodies among 26 retain their grades and bindings. Nonstring data
+remains unchanged; the string pool reorders while preserving all 51 payloads
+and 86 per-owner references across six functions. Focused reset/constructor
+fixtures pass 72,021 checks per form.
 Ten mutation rows were reanchored with their fault intent retained; no mutants
 were executed and no snapshot was refreshed.
 
@@ -8986,3 +8988,59 @@ The corrected phase rerun passes all 397 tests and structural checks. The
 census is 1,130 EXACT and 27 REGALLOC of 1,852: two exact gains, no losses.
 Parent review verifies unchanged string-payload and per-function string-consumer
 multisets for the phase-three candidate; raw string ordering remains different.
+
+
+## Follow a measured width correction through its sibling constructors
+
+The V.27 transmitter override has direct V.17 and V.29 counterparts: native
+MOVW stores at `0x948fc` and `0x949fc` overwrite only configuration offset
+`0x14` after complete template copies. Both configurations retain their
+four-byte FIFO factor and gain a two-byte union view. V.29's 241-byte VMI
+constructor becomes exact. V.17 reaches its native 247-byte size but retains
+thirteen differing bytes; recovering its access width is the reason to keep
+it, not the smaller size gap.
+
+The two-header closure covers 38 consumers, 218 shared functions and three
+data-only objects. Thirty-seven objects are literal matches; only the VMI
+constructor object changes. The already exact V.27 constructor remains exact.
+All three relocated code pointers retain their exact function-relative targets;
+masked data payload and layout are equal. Five existing fixtures pass 281,144
+period checks in 61 groups per form. A separate twenty-check synthetic template
+probe fails four checks on the original reconstruction and passes with the
+native partial writes. It restores the writable templates before proceeding
+and never instantiates a pump using the artificial upper word.
+
+`FDSP_DP_Run` now calls its two existing conversion helpers. Their automatic
+inlining restores the indexed input loop, advancing output loop and native
+gain lifetimes. A four-cell input/output cross changes the raw byte gaps from
+108 through 111 and 17 to one. The combined endpoint is REGALLOC: only the
+final dead stack-release POP differs (DX versus native CX). The other 22 TU
+bodies, allocated data and symbol bindings remain unchanged, including the two
+recently exact validity predicates. Focused fixtures pass 181,092 checks in
+21 groups per form. Primary evidence uses eight valid sample counts from zero
+to 200 and transmit values within `[-1,1]`; the supplementary voice fixture's
+planted context and out-of-short-range products remain exploratory evidence.
+Linked-body checks and deliberate status corruptions confirm the intended
+candidate executes. Two scale mutation anchors now target the helper arguments.
+
+A fresh capture verifies all 53 scratch searches. The inherited entry cursor
+49 selects DX; this does not justify rearranging source solely to obtain CX.
+Likewise, `FDSP_DP_Delete` can select native EBX only for incoming cursors
+3..12 under its captured eligibility, but no native predecessor stream is
+established. Native FILE records place Run and its helpers in a thirty-global,
+five-TU attribution bracket. Adjacency to Delete and duplicate constant-pool
+slots do not prove they shared a TU. No speculative regrouping was applied.
+
+Evidence: `build/gcc3-wave-vmi1739`, `build/gcc3-wave-fdsp-state`,
+`build/gcc3-wave-tu/fdsp-helper-review` and
+`build/gcc3-overnight/checkpoint9`. Production matches both reviewed candidate
+objects literally; the other 298 objects remain unchanged. The ninth checkpoint
+census is 1,131 EXACT and 28 REGALLOC of 1,852: one exact and one REGALLOC gain,
+no exact losses. Its first phase run passes all 398 period tests but identifies
+two stale scale anchors; the corrected complete rerun is recorded separately.
+
+The corrected ninth-checkpoint rerun passes all 398 period tests and the
+structural phase gate. All 285 mutation suites retain valid anchors; no
+mutation execution or snapshot refresh was performed. The campaign retains
+21 additional EXACT symbols and 4,116 additional exact reference bytes from
+its 1,110-symbol baseline, with no exact losses.

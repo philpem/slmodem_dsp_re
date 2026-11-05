@@ -2,8 +2,8 @@
   "bytes": 74,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1130,
-  "exact_bytes": 131191,
+  "exact": 1131,
+  "exact_bytes": 131432,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -1016,6 +1016,7 @@
     "init_vmi_v27rx",
     "init_vmi_v27tx",
     "init_vmi_v29rx",
+    "init_vmi_v29tx",
     "linear2alaw",
     "linear2ulaw",
     "notch",
@@ -1138,8 +1139,8 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 27,
+  "regalloc": 28,
   "reloc": 0,
-  "size": 621,
+  "size": 619,
   "unresolved": 0
 }

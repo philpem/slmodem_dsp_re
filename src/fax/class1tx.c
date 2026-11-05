@@ -153,10 +153,9 @@ struct v21tx_ctl V21TX_CTL = {
  * V.27ter's and V.29's tables are also 1 (`tabdump.py` over the blob's own
  * `.data` confirms it, independent of either reconstructed table), so their
  * override to 2 is a real, visible change from the default.
- * V.27ter uses the explicit low-word view below, preserving the copied
- * template's upper word as the native store does. V.17 and V.29 still use
- * whole-word assignments; their default zero upper words make the final
- * values agree, while their access-width differences remain.
+ * Each helper uses an explicit low-word view below, preserving the copied
+ * template's upper word as the native store does. The full four-byte factor
+ * remains available to the pump constructors that size their FIFOs.
  */
 static int
 init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
@@ -172,7 +171,7 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V17TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->fifo_size_factor = 1;
+	cfg->fifo_size_factor_word = 1;
 	cfg->int_0018 = 0;
 	cfg->int_001c = (int)(long)arg_3;
 
@@ -203,7 +202,7 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V29TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->fifo_size_factor = 2;
+	cfg->fifo_size_factor_word = 2;
 	cfg->int_0018 = (int)(long)arg_3;
 
 	*vmi = FAXVMI_CFG;

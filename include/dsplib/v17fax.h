@@ -560,10 +560,19 @@ struct v17tx_cfg {
 					 * V17TX_status's own read and
 					 * V17TX_control's own ctl0 bit 2 --
 					 * the dword V.29's own cfg lacks    */
-	int		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16     */
+	union {
+		int fifo_size_factor; /* full template/configuration storage */
+		unsigned short fifo_size_factor_word; /* VMI low-word override */
+	};
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
 	int		int_001c;	/* +0x1c -> FPM_PPS_CFG.aux          */
 };
+typedef char v17tx_cfg_factor_at_14[__builtin_offsetof(struct v17tx_cfg,fifo_size_factor)==0x14?1:-1];
+typedef char v17tx_cfg_word_at_14[__builtin_offsetof(struct v17tx_cfg,fifo_size_factor_word)==0x14?1:-1];
+typedef char v17tx_cfg_factor_width4[sizeof(((struct v17tx_cfg*)0)->fifo_size_factor)==4?1:-1];
+typedef char v17tx_cfg_word_width2[sizeof(((struct v17tx_cfg*)0)->fifo_size_factor_word)==2?1:-1];
+typedef char v17tx_cfg_size[sizeof(struct v17tx_cfg)==32?1:-1];
+
 
 union v17_result {
 	int word;

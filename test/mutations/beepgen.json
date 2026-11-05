@@ -319,13 +319,13 @@
  },
  {
   "label": "FDSP_DP_Run: the receive scale is 1/32768",
-  "find": "\t\trx_flt[i] = (float)rx_lin[i] * (1.0f / 32000.0f);",
-  "replace": "\t\trx_flt[i] = rx_lin[i] * (1.0f / 32768.0f);"
+  "find": "\tzFLTUTL_Linear2Float(rx_lin, rx_flt, n, 1.0f / 32000.0f);",
+  "replace": "\tzFLTUTL_Linear2Float(rx_lin, rx_flt, n, 1.0f / 32768.0f);"
  },
  {
   "label": "FDSP_DP_Run: the transmit scale is 32768",
-  "find": "\t\ttx_lin[i] = (short)(tx_flt[i] * 32000.0f);",
-  "replace": "\t\ttx_lin[i] = (short)(tx_flt[i] * 32768.0f);"
+  "find": "\tzFLTUTL_Float2Linear(tx_flt, tx_lin, n, 32000.0f);",
+  "replace": "\tzFLTUTL_Float2Linear(tx_flt, tx_lin, n, 32768.0f);"
  },
  {
   "label": "FDSP_DP_Run: the status word is 1",
