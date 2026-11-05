@@ -213,9 +213,61 @@ missing paths and fixture reachability before calling a nomination a bug.
 Changed-TU graph coverage and allocated-data targets remain separately bounded.
 
 Mutation maintenance is retired under the policy above; no reanchoring is
-required for these source changes. Next audit the signed count in null_process
-and the V8SetMessage call/branch lead. Keep the recorded negative domains closed
-until a new native witness changes their source hypothesis.
+required for these source changes. The following section records the completed
+null_process and V8SetMessage follow-up. Keep the recorded negative domains
+closed until a new native witness changes their source hypothesis.
+
+## Signed mutable counts and value-infeasible joins (2026-11-05)
+
+The [null/V8 wave](../null-v8-recovery-20261105.md) recovers null_process
+EXACT59. Its common callback still transports an unsigned-short pointer;
+native CMPW/JLE and CMPW/JG consume the loaded word as signed. Preserve the
+interface and cast at each use, rather than snapshot the bound or retag one
+callback declaration. Native reloads count after each destination store.
+
+Cross that signed-consumption correction with post-guard destination acquisition.
+Baseline is SIZE2, signed consumption alone BYTES14, late destination alone
+SIZE2, and both EXACT. All five neighbouring bodies, exports and allocated data
+remain unchanged. A no-gain isolated owner change was necessary to the combined
+recovery; unsigned transport did not establish unsigned consumption.
+
+The fixture adds ten constructed-link component cases / 190 assertions: five
+with disjoint counts through 32767 and five explicitly synthetic count/dst[0]
+alias probes. Positive aliases discriminate repeated reload from a snapshot;
+high-bit aliases safely expose four old-source failures and pass after recovery.
+Normal VMI destination storage is only 200 words. No high-bit protocol history
+or ordinary FAXVMI alias is established, and the source-reconstruction phase
+remains closed. These are boundary fidelity tests, not new fax reconstruction.
+
+> 🧠 **From Hindsight memory (Residual compiler-stage family batch)** — the
+> unsigned V8 switch-expression recipe and parked helper-null investigation were
+> historical leads, independently replayed here against the current inputs.
+
+V8SetMessage's six-cell selector-signedness × helper-boundary experiment retains
+only the unsigned switch-expression change: SIZE20/412 bytes becomes
+SIZE11/403 against native392. All six neighbouring bodies, exports, five
+allocated-data sections and 34 data relocations remain unchanged. The native-
+sized direct-rejection diagnostic still differs in 104 bytes, moves rc's
+initialization and changes neighbouring scheduling; it is rejected. Both pointer
+forms retain the helper-null join through GCSE and bypass. Reopening requires
+independent helper/return-boundary evidence explaining the native rc boundary,
+not another size match or the same static graph nomination.
+
+The graph lead is a value-infeasible continuation. For an invalid selector,
+current source sets seq=NULL, then necessarily rejects at the shared NULL test.
+The raw graph explores the impossible nonnull continuation and reaches charFlip.
+Both native and current feasible paths reject before encoding. Before calling a
+nomination an operation-age defect, establish selector/iteration identity and
+carry guard facts across the path. Preserve independently witnessed differences
+(the native lacks that pointer-null test) without upgrading them to a behavior
+bug. Zero supported nominations still does not prove equivalence.
+
+The selected pair passes the period and structural gate, with no protected
+grade losses. Next audit the remaining _recieve_silence_state call/read lead:
+check FPM_rms's write footprint and whether a legal alias makes the observed
+read age matter before changing source. Then transfer signed-consumption and
+post-guard acquisition together to fresh small-loop witnesses from the remaining
+inexact corpus; do not reopen the bounded V8 helper palette without new evidence.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

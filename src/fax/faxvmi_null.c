@@ -47,8 +47,9 @@ null_delete(struct faxvmi_link *dp)
 
 /*
  * The loop is the object's rotated `for`: a pre-test skips it entirely for
- * `*count <= 0` (0x09f0ec), matching the tail test that would otherwise stop
- * it after zero iterations.  `i` is 16-bit in the object -- `lea 0x1(%edx),
+ * `(short)*count <= 0` (0x09f0ec).  The shared callback transports an
+ * unsigned word; this leaf consumes it as signed and reloads it after each
+ * store.  Acquire the destination only on the admitted loop path.  `i` is 16-bit in the object -- `lea 0x1(%edx),
  * %eax` then `movswl %ax,%edx` re-narrows and re-sign-extends the index
  * after every increment, which a plain `int` would not need.
  */
@@ -56,13 +57,15 @@ int
 null_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 	    unsigned short *count)
 {
-	unsigned short *dst = dp->ptr_0000;
 	short i;
 
 	(void)result;
 
-	for (i = 0; i < *count; i++)
+	for (i = 0; i < (short)*count; i++) {
+		unsigned short *dst = dp->ptr_0000;
+
 		dst[i] = (unsigned short)in[i];
+	}
 
 	return -1;
 }

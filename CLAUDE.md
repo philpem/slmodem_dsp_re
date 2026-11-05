@@ -188,6 +188,10 @@ Use the [native/reconstruction graph screen](docs/method/native-graph-screen.md)
 on changed translation units during recovery waves, and periodically screen the
 remaining inexact corpus. Audit nominated owner/width/predicate/timing differences
 against native instructions and fixture domains before making source changes.
+Check selector/iteration identity and propagate known guard values across each
+nominated continuation: a raw CFG path through a nullable-result join can be
+value-infeasible. A static reachability difference alone is not an operation-age
+or behavior difference.
 Report compared relations, ambiguous matches and unsupported effects; a bounded
 clean subset does not establish equivalence or justify parking a function.
 

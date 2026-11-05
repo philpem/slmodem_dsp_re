@@ -69,13 +69,15 @@ void null_create(struct faxvmi_link *dp, const void *cfg);
 void null_delete(struct faxvmi_link *dp);
 
 /**
- * @brief Copy `*count` elements from @p in into `dp->ptr_0000`.
+ * @brief Copy words while the signed low-word count admits the loop index.
  *
- * @param dp      Link slot; the copy destination is `dp->ptr_0000`.
- * @param in      Elements to copy, `*count` of them.
- * @param result  Never written.
- * @param count   In: number of elements to copy (a zero or negative count
- *                copies nothing). Not updated on return.
+ * @param dp      Link slot; destination is acquired after the initial guard.
+ * @param in      Input words, with enough storage for the admitted extent.
+ * @param result  Never read or written.
+ * @param count   Unsigned transport, interpreted as `(short)*count` at each
+ *                test. Zero and high-bit initial values copy nothing. The
+ *                leaf makes no direct count store, but destination aliasing
+ *                can change the bound; it is reloaded after every copy.
  * @return Always -1 -- there is no modem to report a real count from.
  */
 int null_process(struct faxvmi_link *dp, short *in, unsigned short *result,
