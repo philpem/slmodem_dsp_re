@@ -54,7 +54,7 @@ pps_rail(const short *hist, const short *coeff, short phases, short phase,
 	const short *h = hist + widx;
 	const short *c = coeff + phase;
 	int acc = 0;
-	short i;
+	int i;
 
 	for (i = widx; i >= 0; i--) {
 		acc += *h * *c;
@@ -62,8 +62,8 @@ pps_rail(const short *hist, const short *coeff, short phases, short phase,
 		c += phases;
 	}
 
-	h = hist + taps - 1;
-	for (i = (short)(taps - 1); i > widx; i--) {
+	h += taps;
+	for (i = taps - 1; i > widx; i--) {
 		acc += *h * *c;
 		h--;
 		c += phases;
@@ -76,6 +76,16 @@ unsigned short
 FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
 	       unsigned short count)
 {
+	const short *coeff_i = state->cfg.coeff_i;
+	const short *coeff_q = state->cfg.coeff_q;
+	short *hist_i = state->hist_i;
+	short *hist_q = state->hist_q;
+	int scale = state->cfg.scale;
+	const short *imap = state->cfg.imap;
+	const short *qmap = state->cfg.qmap;
+	const short *in_i = src->i;
+	const short *in_q = src->q;
+	const short *sym = src->sym;
 	short phases = state->cfg.phases;
 	short step = state->cfg.step;
 	short taps = state->taps;
@@ -95,30 +105,31 @@ FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
 			 * the ring entry's LOW BYTE as a constellation index;
 			 * the direct one reads the ring's own rails.
 			 */
-			if (state->cfg.mapped != 0) {
-				unsigned char k = (unsigned char)src->sym[ridx];
+			unsigned int k = (unsigned char)sym[ridx];
 
-				si = state->cfg.imap[k];
-				sq = state->cfg.qmap[k];
+			if (state->cfg.mapped != 0) {
+
+				si = imap[k];
+				sq = qmap[k];
 			} else {
-				si = src->i[ridx];
-				sq = src->q[ridx];
+				si = in_i[ridx];
+				sq = in_q[ridx];
 			}
 
 			count = (unsigned short)(count - need);
 			ridx = (short)(ridx + 1 < len ? ridx + 1 : 0);
 			widx = (short)(widx + 1 < taps ? widx + 1 : 0);
-			state->hist_i[widx] = si;
-			state->hist_q[widx] = sq;
+			hist_i[widx] = si;
+			hist_q[widx] = sq;
 		}
 
-		yi = pps_rail(state->hist_i, state->cfg.coeff_i, phases, phase,
+		yi = pps_rail(hist_i, coeff_i, phases, phase,
 			      taps, widx);
-		yq = pps_rail(state->hist_q, state->cfg.coeff_q, phases, phase,
+		yq = pps_rail(hist_q, coeff_q, phases, phase,
 			      taps, widx);
 
 		produced = (unsigned short)(produced + 1);
-		*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);
+		*out++ = (short)(((short)(yi - yq) * scale) >> 15);
 
 		/*
 		 * Advance the phase.  A wrap is what consumes the next symbol,

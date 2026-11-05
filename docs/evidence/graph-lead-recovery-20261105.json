@@ -1,0 +1,1166 @@
+{
+  "schema": "native-graph-lead-recovery-v1",
+  "baseline_revision": "a9f9e35a98d184d406b0d0461c9a02c9576e5ad6",
+  "semantic_proof": false,
+  "census": {
+    "compared": 1852,
+    "exact": 1137,
+    "regalloc": 28,
+    "bytes": 71,
+    "size": 616,
+    "unresolved": 0
+  },
+  "closure": {
+    "objects_compared": 300,
+    "changed": [
+      "src_dsp_fpm_pps.c.o",
+      "src_pump_v22_v22mod.c.o",
+      "src_pump_v34_v34filters.c.o"
+    ],
+    "object_sha256": {
+      "src_dsp_fpm_pps.c.o": "1cd5d5647445e08b47e34eb7b6f5edf2f68c822f26248b9e1e8ff344dee95b2c",
+      "src_pump_v22_v22mod.c.o": "8538952a74dbea1968f7b93e6f5d3dcc531dd57ce35b2a322e62ef31ca8b899f",
+      "src_pump_v34_v34filters.c.o": "ffe7bbe3bef769c78cea53c6e3dc81809a5e4cc989de1a021be994a19c49f8a9"
+    },
+    "comparisons": {
+      "src_dsp_fpm_pps.c.o": {
+        "shared_sized_functions": 3,
+        "changed_bodies_or_relocations": [
+          "FPM_PPS_filter"
+        ],
+        "grade_changes": {
+          "EXACT": {
+            "gained": [],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": true
+      },
+      "src_pump_v22_v22mod.c.o": {
+        "shared_sized_functions": 10,
+        "changed_bodies_or_relocations": [
+          "v22_data"
+        ],
+        "grade_changes": {
+          "EXACT": {
+            "gained": [],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": true
+      },
+      "src_pump_v34_v34filters.c.o": {
+        "shared_sized_functions": 26,
+        "changed_bodies_or_relocations": [
+          "V34EchoAdapt",
+          "V34EchoHistoryBackwardClean",
+          "V34TimingFilter"
+        ],
+        "grade_changes": {
+          "EXACT": {
+            "gained": [
+              "V34EchoAdapt"
+            ],
+            "lost": []
+          },
+          "REGALLOC": {
+            "gained": [],
+            "lost": []
+          }
+        },
+        "exports_unchanged": true,
+        "allocated_data_raw_unchanged": true
+      }
+    }
+  },
+  "source_inputs": {
+    "src/dsp/fpm_pps.c": "cfaa6c764de675d027deb1dcb5393bc46ba230d1b15c195b20ef6c62e43a0883",
+    "src/pump/v22/v22mod.c": "e1eb7f654844a040fd660b1d6d41c575527e0ba7f030432afa273e1c13314e22",
+    "src/pump/v34/v34filters.c": "643fa4547302df0335bdae743e89a2d5494feea1daa59e2ba4ade8bcb5b1179c",
+    "include/dsplib/v22ans.h": "0bb503f9571fde8edb717b88dcb1f2bab520456f80716a24f69e4158b5882257"
+  },
+  "reanchors": {
+    "changed": 15,
+    "total": 49,
+    "execution": "not run",
+    "snapshot_refresh": "not run"
+  },
+  "focused": {
+    "t_fpm_pps": {
+      "groups": 12,
+      "checks": 123713,
+      "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/period/t_fpm_pps.run.log",
+      "sha256": "5f17882029612e77f1fac78e9b957745bae7a6bdb0eea9de0be6abb05bb6781d"
+    },
+    "t_v34ec": {
+      "groups": 21,
+      "checks": 13789992,
+      "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/period/t_v34ec.run.log",
+      "sha256": "cf7383722177183c80bcfbb128b94331a62113d2fd81d868b2fa218c19844618"
+    },
+    "t_v22ans": {
+      "groups": 4,
+      "checks": 355946,
+      "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/period/t_v22ans.run.log",
+      "sha256": "43b986be4fde55e04aadb3a74e03d09feab657f6ee26ef76d3c62e087ca1cb30"
+    },
+    "t_v22modem": {
+      "groups": 2,
+      "checks": 16914,
+      "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/period/t_v22modem.run.log",
+      "sha256": "6c3807dc89e303ef824f85b8d796e510d89ff42148646efe22fe9abaafec1db1"
+    },
+    "t_v22dp": {
+      "groups": 6,
+      "checks": 269347,
+      "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/period/t_v22dp.run.log",
+      "sha256": "e369027f7f0f7925c7f0825c78be5369897b2d9b957e773d82614a17ffa2d2fb"
+    }
+  },
+  "graph": {
+    "graph-before": {
+      "report": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/graph-leads/graph-before/corpus.json",
+      "sha256": "0a4319b56ff4d8a2c1dbfbb97f9a7dd8fdaa33fa367a8ac0a8eca00ed7620175",
+      "shared_symbols": 39,
+      "inexact_copies": 21,
+      "summary": {
+        "counts": {
+          "owner_bounded": 15,
+          "owner_copies_with_matched_anchors": 13,
+          "owner_copies_with_compared_relations": 7,
+          "owner_bounded_without_matched_anchors": 2,
+          "owner_matched_anchors": 59,
+          "owner_relations_compared": 44,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_ambiguous_anchors": 14,
+          "owner_unpaired_anchors": 21,
+          "owner_timing_or_predicate_nominations": 9,
+          "owner_copies_with_timing_nominations": 3,
+          "stack_refused": 16,
+          "owner_refused": 6,
+          "stack_bounded": 5,
+          "stack_copies_with_matched_anchors": 5,
+          "stack_copies_with_compared_relations": 5,
+          "stack_bounded_without_matched_anchors": 0,
+          "stack_matched_anchors": 142,
+          "stack_relations_compared": 612,
+          "stack_cyclic_relations_excluded": 0,
+          "stack_ambiguous_anchors": 21,
+          "stack_unpaired_anchors": 0,
+          "stack_timing_or_predicate_nominations": 1,
+          "stack_copies_with_timing_nominations": 1
+        },
+        "refusal_reasons": [
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "single entry SUB ESP frame required",
+            "count": 13
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "single entry SUB ESP frame required",
+            "count": 13
+          },
+          {
+            "layer": "owner",
+            "side": "native",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 6
+          },
+          {
+            "layer": "owner",
+            "side": "candidate",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 6
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 3
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 3
+          }
+        ]
+      },
+      "remaining_nominations": [
+        {
+          "symbol": "FPM_PPS_filter",
+          "object": "src_dsp_fpm_pps.c.o",
+          "layer": "owner",
+          "findings": [
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ],
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    24
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                693863,
+                693745
+              ],
+              "candidate_sites": [
+                107,
+                143
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "je",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "je",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ],
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    28
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                693863,
+                693748
+              ],
+              "candidate_sites": [
+                107,
+                150
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "je",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "je",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ],
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    48
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                693863,
+                693751
+              ],
+              "candidate_sites": [
+                107,
+                125
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "je",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "je",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ],
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    52
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                693863,
+                693754
+              ],
+              "candidate_sites": [
+                107,
+                128
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "je",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "je",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ],
+                    [
+                      "extend",
+                      "movzwl",
+                      [
+                        "argument-value",
+                        4,
+                        0
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    8
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                693863,
+                693707
+              ],
+              "candidate_sites": [
+                107,
+                178
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "je",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "je",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "symbol": "v22_data",
+          "object": "src_pump_v22_v22mod.c.o",
+          "layer": "stack",
+          "findings": [
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "call",
+                  "[\"R_386_PC32\",[\"symbol\",\"V22_status\",4294967292]]",
+                  []
+                ],
+                [
+                  "stack-write",
+                  [
+                    [
+                      "write",
+                      32,
+                      [
+                        "constant",
+                        0
+                      ]
+                    ],
+                    [
+                      "write",
+                      32,
+                      [
+                        "constant",
+                        11
+                      ]
+                    ],
+                    [
+                      "write",
+                      32,
+                      [
+                        "constant",
+                        11
+                      ]
+                    ],
+                    [
+                      "write",
+                      32,
+                      [
+                        "constant",
+                        16
+                      ]
+                    ],
+                    [
+                      "write",
+                      32,
+                      [
+                        "constant",
+                        16
+                      ]
+                    ]
+                  ],
+                  32,
+                  [
+                    "constant",
+                    0
+                  ],
+                  []
+                ]
+              ],
+              "native_sites": [
+                559422,
+                559434
+              ],
+              "candidate_sites": [
+                404,
+                393
+              ],
+              "native_relation": [
+                true,
+                false
+              ],
+              "candidate_relation": [
+                false,
+                true
+              ]
+            }
+          ]
+        },
+        {
+          "symbol": "V34EchoAdapt",
+          "object": "src_pump_v34_v34filters.c.o",
+          "layer": "owner",
+          "findings": [
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "cmp",
+                  32,
+                  [
+                    [
+                      "constant",
+                      0
+                    ],
+                    [
+                      "captured-read",
+                      32,
+                      [
+                        "address",
+                        [
+                          "entry-arg",
+                          1
+                        ],
+                        28
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    12
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                466796,
+                466781
+              ],
+              "candidate_sites": [
+                507,
+                512
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "jbe",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "jbe",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "cmp",
+                  32,
+                  [
+                    [
+                      "constant",
+                      0
+                    ],
+                    [
+                      "captured-read",
+                      32,
+                      [
+                        "address",
+                        [
+                          "entry-arg",
+                          1
+                        ],
+                        28
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    16
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                466796,
+                466787
+              ],
+              "candidate_sites": [
+                507,
+                515
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "jbe",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "jbe",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            },
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "cmp",
+                  32,
+                  [
+                    [
+                      "constant",
+                      0
+                    ],
+                    [
+                      "captured-read",
+                      32,
+                      [
+                        "address",
+                        [
+                          "entry-arg",
+                          1
+                        ],
+                        28
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    8
+                  ],
+                  32
+                ]
+              ],
+              "native_sites": [
+                466796,
+                466784
+              ],
+              "candidate_sites": [
+                507,
+                509
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "jbe",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "jbe",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "symbol": "V34EchoHistoryBackwardClean",
+          "object": "src_pump_v34_v34filters.c.o",
+          "layer": "owner",
+          "findings": [
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "argument-value",
+                      2,
+                      0
+                    ],
+                    [
+                      "argument-value",
+                      2,
+                      0
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    8400
+                  ],
+                  16
+                ]
+              ],
+              "native_sites": [
+                466953,
+                466944
+              ],
+              "candidate_sites": [
+                676,
+                678
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "jle",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "jle",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "graph-after": {
+      "report": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/graph-leads/graph-after/corpus.json",
+      "sha256": "04eaa58f653a8aeac3b1636b5df0e10d7fc2884afae153943e0a416cd6f166f1",
+      "shared_symbols": 39,
+      "inexact_copies": 20,
+      "summary": {
+        "counts": {
+          "owner_bounded": 14,
+          "owner_copies_with_matched_anchors": 12,
+          "owner_copies_with_compared_relations": 6,
+          "owner_bounded_without_matched_anchors": 2,
+          "owner_matched_anchors": 59,
+          "owner_relations_compared": 45,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_ambiguous_anchors": 14,
+          "owner_unpaired_anchors": 16,
+          "owner_timing_or_predicate_nominations": 1,
+          "owner_copies_with_timing_nominations": 1,
+          "stack_refused": 15,
+          "owner_refused": 6,
+          "stack_bounded": 5,
+          "stack_copies_with_matched_anchors": 5,
+          "stack_copies_with_compared_relations": 5,
+          "stack_bounded_without_matched_anchors": 0,
+          "stack_matched_anchors": 142,
+          "stack_relations_compared": 612,
+          "stack_cyclic_relations_excluded": 0,
+          "stack_ambiguous_anchors": 21,
+          "stack_unpaired_anchors": 0,
+          "stack_timing_or_predicate_nominations": 0,
+          "stack_copies_with_timing_nominations": 0
+        },
+        "refusal_reasons": [
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "single entry SUB ESP frame required",
+            "count": 12
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "single entry SUB ESP frame required",
+            "count": 12
+          },
+          {
+            "layer": "owner",
+            "side": "native",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 6
+          },
+          {
+            "layer": "owner",
+            "side": "candidate",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "count": 6
+          },
+          {
+            "layer": "stack",
+            "side": "native",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 3
+          },
+          {
+            "layer": "stack",
+            "side": "candidate",
+            "reason": "relocated direct CFG branch unsupported",
+            "count": 3
+          }
+        ]
+      },
+      "remaining_nominations": [
+        {
+          "symbol": "V34EchoHistoryBackwardClean",
+          "object": "src_pump_v34_v34filters.c.o",
+          "layer": "owner",
+          "findings": [
+            {
+              "kind": "happens_before_or_branch_arm",
+              "anchors": [
+                [
+                  "branch",
+                  "test",
+                  32,
+                  [
+                    [
+                      "argument-value",
+                      2,
+                      0
+                    ],
+                    [
+                      "argument-value",
+                      2,
+                      0
+                    ]
+                  ]
+                ],
+                [
+                  "read",
+                  [
+                    "address",
+                    [
+                      "entry-arg",
+                      1
+                    ],
+                    8400
+                  ],
+                  16
+                ]
+              ],
+              "native_sites": [
+                466953,
+                466944
+              ],
+              "candidate_sites": [
+                660,
+                662
+              ],
+              "native_relation": [
+                false,
+                true,
+                [
+                  "jle",
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              "candidate_relation": [
+                true,
+                false,
+                [
+                  "jle",
+                  [
+                    true,
+                    false
+                  ]
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "frozen_artifacts": {
+    "baseline/manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/baseline/manifest.json",
+      "sha256": "b81342682eb80a6515bd1deae392fb64d77d2f2db7a17cca051a49dccc946f8b"
+    },
+    "fpm-pps/final-manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/fpm-pps/final-manifest.json",
+      "sha256": "8c06078d23326cdfd69034c17dbdee6595f14ad0fcaa3bb3da4452fa78e7d420"
+    },
+    "fpm-pps/summary.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/fpm-pps/summary.json",
+      "sha256": "66232470db5e893918170d76f6fa43c8d5a472ae876a0c731a7765af02c64195"
+    },
+    "fpm-pps/REPORT.md": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/fpm-pps/REPORT.md",
+      "sha256": "2a8d2c45dd246ac35074c986deb8d2e1ee24415308fb2ab7c47e44af7db594eb"
+    },
+    "v34-echo/manifest.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v34-echo/manifest.json",
+      "sha256": "5ac81a012e0cd644d268ae8726345ceec05506b617342f0312edf480e5d9f665"
+    },
+    "v34-echo/final-comparison.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v34-echo/final-comparison.json",
+      "sha256": "ed39af06cc4090e4c0db07ff532ba51564e4ae21027a10d1a0e4a3ad495ff87c"
+    },
+    "v34-echo/final-audit.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v34-echo/final-audit.json",
+      "sha256": "f616eb0682b470f16aa725283f4ed7d1e3d9d97f31852ebcec031593e525fecd"
+    },
+    "v34-echo/REPORT.txt": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v34-echo/REPORT.txt",
+      "sha256": "53b47875f4e894c6b7c513446377e102a5aed40583b69a7bd31d147e0efa2072"
+    },
+    "v22-data/inputs.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v22-data/inputs.json",
+      "sha256": "e960c7d68b129acb51776468183e6bcd2e076978adff02196d1c23b319c11d03"
+    },
+    "v22-data/results.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v22-data/results.json",
+      "sha256": "c0eb1351486ff526177be94019cd04e8bc4a4ce85cdce988c72c9cf436f11b3e"
+    },
+    "v22-data/capture-results.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v22-data/capture-results.json",
+      "sha256": "e11df2d6ba07a91edb80ce7819c358ccb4b6e3b8dec108fef0d8c46e7eab5b46"
+    },
+    "v22-data/branch-results.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v22-data/branch-results.json",
+      "sha256": "a2c6501bf6c0e5df95ecc1c6196bb0260ed97eda27bff20cf76989c4ea527ff3"
+    },
+    "v22-data-review/review-results.json": {
+      "path": "/mnt/zfs/dev/slmodem/scratch/graph-leads-20261105/v22-data-review/review-results.json",
+      "sha256": "798c6e74801b003fe87e6d1805f17ff208a1a4177e9689b7b11b8ad7b32cb532"
+    }
+  },
+  "final_gate": {
+    "command": "make phase J=8",
+    "period_passed": 399,
+    "period_failed": 0,
+    "structural": "passed",
+    "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/graph-leads/phase-reanchored.log",
+    "sha256": "c868c646d60b57b1c2e3977f51ee81d48b43ca908ee552cae4c2addf4cbc84a0",
+    "doc_refs_exit": 0
+  },
+  "first_gate": {
+    "period_passed": 399,
+    "period_failed": 0,
+    "structural": "failed:15 detached FPM anchors, corrected before final gate",
+    "log": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/graph-leads/phase-final.log",
+    "sha256": "d372fe671519e5dc59f2dcaf23d1055dd0bb53be30725f37aa8c912eb031ecff"
+  },
+  "exact_body": {
+    "symbol": "V34EchoAdapt",
+    "size": 79,
+    "native_and_selected_sha256": "32b1a4c73866ae73c7162a0fae43f0acbcf083f44dd59a94c32c1b7fb5710fc0",
+    "relocations": 0
+  }
+}

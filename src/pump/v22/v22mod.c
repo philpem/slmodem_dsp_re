@@ -236,9 +236,10 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 	 * object clears the slot before the first branch and only the three
 	 * message paths write it.
 	 */
-	int status = 0;
+	int status;
 
 	V22_status(fp, &st);
+	status = 0;
 
 	if (st.flags & V22_STATUS_SCRAMBLER)
 		ScrambleDataV22(fp, txsym, *txcount);

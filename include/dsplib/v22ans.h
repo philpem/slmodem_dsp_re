@@ -45,17 +45,17 @@
  * the same kind and the same unit, 60000 ms from `v22_create`.  Again not
  * renamed here.
  *
- * TWO OF THE OBJECT'S TYPES DISAGREE WITH THE HEADERS WE ALREADY HAVE, and
- * both are visible as a dead `cwtl`:
+ * RETURN CONSUMPTION DOES NOT UNIQUELY IDENTIFY THE INTERFACE TYPE.
  *
- *   - `Detect_1s` and `Detect_Retrain` are declared `int` in v22det.h, and
- *     every one of the four call sites here narrows the return to sixteen bits
- *     before using it -- `cwtl` then a 16-bit `test`, or `cwtl` then a store
- *     into an `int` slot.  That is what a `short`-returning callee looks like.
- *     The casts below reproduce it exactly; v22det.h is left alone.
- *   - `ReadGTimer` is declared `int` and both comparisons against it are
- *     `jbe`, i.e. UNSIGNED.  Same treatment: the cast is here, the header is
- *     not touched.
+ * `Detect_1s` and `Detect_Retrain` are declared `int` in v22det.h.  Native
+ * callers consume low words at the tests below; some also contain a dead
+ * `cwtl`.  The casts model that consumed width, but do not reproduce every
+ * dead conversion under the period compiler.  A coherent short-return
+ * Detect_Retrain control leaves the caller object unchanged and changes the
+ * callee's full-EAX return, so that interface change is not retained.
+ *
+ * `ReadGTimer` is declared `int`; its native comparisons are unsigned `jbe`,
+ * which the explicit unsigned casts preserve without changing its interface.
  *
  * `hdx->r08` is `short` in v22fp.h and every read of it in these two functions
  * is `movzwl` feeding an unsigned compare, so the casts below make it read

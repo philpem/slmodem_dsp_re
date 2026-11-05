@@ -136,11 +136,46 @@ The initial 716-symbol/719-copy screen nominates 25 timing/predicate differences
 across 13 copies. Owner relations are compared in 275 copies and local-stack
 relations in 23; these are overlapping subsets. Do not describe 605 admitted
 owner graphs as 605 fully compared functions. The V22 gap positive disappears
-with the retained repair. Next transfer checks are `v22_data`'s local write
-across V22_status, and the FPM PPS/V34 echo entry-read groups. Review scheduling
-and owner identity before interpreting them as defects. The separate
+with the retained repair. The next section records the completed v22_data,
+FPM PPS and V34 echo entry-read follow-up. Review scheduling and owner identity
+before interpreting a nomination as a defect. The separate
 `null_process` signed-word predicate is a concrete native discrepancy whose
 high-bit count domain still needs a fixture audit.
+
+## Graph-lead transfer: induction, capture and observation age (2026-11-05)
+
+The [graph-lead wave](../graph-lead-recovery-20261105.md) recovers
+V34EchoAdapt EXACT79. Early owner captures alone give SIZE7; an ascending
+pointer loop gives BYTES8; native fraction-before-coefficient capture order
+closes the body. `09.loop` explicitly reverses the ascending source loop and
+introduces the native post-guard count copy. A manually written countdown
+misses that copy. Machine DEC/JNE does not establish original source induction.
+Two later nonexact bodies change first at peephole2; record that collateral
+rather than treating their source as changed or their grades as frozen.
+
+FPM's five nominated captures alone remain SIZE12. Broader native root captures
+first give SIZE76. Crossing full-width rail counters and the dependency on the
+consumed history cursor reduces that to SIZE15 and restores the native selector
+observation. Retain this supported operation graph despite the three-byte
+baseline distance regression. The root-owner comparison grows from 14 anchors /
+13 relations to 19 / 18; zero nominations is qualified by unsupported indexed
+and loop effects. Separate PRE-created guarded captures from explicit entry
+captures and sched2 load ordering before proposing another source spelling.
+
+V22 status initialization after V22_status removes its timing nomination at
+unchanged SIZE10. Diagnostic captures get as close as SIZE3 but move a limit
+read ahead of native publication and reverse the native predicate. The
+absent-fallthrough interaction still fails those ages. A coherent short-return
+interface leaves the caller literally unchanged and changes callee EAX values
+for three synthetic high-bit cases. Keep low-word consumption, full-EAX
+transport and a uniquely recovered interface declaration separate.
+
+The BackwardClean early-cursor replay removes its old nomination but supplies
+no new source property beyond the closed F11704 family; it is not selected.
+On the next turn, transfer ascending-loop reversal and exact capture-order
+lessons to fresh native-backed leads. Review the remaining VPCM rate-change
+graph nominations before choosing a new family; do not reopen the parked FPM
+comparison/load-order or V22 quotient/return-type palettes without new evidence.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

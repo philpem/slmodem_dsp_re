@@ -4,18 +4,18 @@
  },
  {
   "label": "the coefficient stride is the tap count rather than the phase count, which is the V.22 block's permuted layout applied to this one",
-  "find": "\t\tc += phases;\n\t}\n\n\th = hist + taps - 1;",
-  "replace": "\t\tc += taps;\n\t}\n\n\th = hist + taps - 1;"
+  "find": "\t\tc += phases;\n\t}\n\n\th += taps;",
+  "replace": "\t\tc += taps;\n\t}\n\n\th += taps;"
  },
  {
   "label": "the second run of the rail includes hist[widx] again instead of stopping above it",
-  "find": "\tfor (i = (short)(taps - 1); i > widx; i--) {",
-  "replace": "\tfor (i = (short)(taps - 1); i >= widx; i--) {"
+  "find": "\tfor (i = taps - 1; i > widx; i--) {",
+  "replace": "\tfor (i = taps - 1; i >= widx; i--) {"
  },
  {
   "label": "the second run starts at the top of the buffer rather than one below it",
-  "find": "\th = hist + taps - 1;",
-  "replace": "\th = hist + taps;"
+  "find": "\th += taps;",
+  "replace": "\th += taps + 1;"
  },
  {
   "label": "the rail's accumulator is shifted down by fourteen instead of fifteen",
@@ -29,23 +29,23 @@
  },
  {
   "label": "the mapped source takes the whole ring entry as an index rather than its low byte",
-  "find": "\t\t\t\tunsigned char k = (unsigned char)src->sym[ridx];",
-  "replace": "\t\t\t\tshort k = src->sym[ridx];"
+  "find": "\t\t\tunsigned int k = (unsigned char)sym[ridx];",
+  "replace": "\t\t\tint k = sym[ridx];"
  },
  {
   "label": "the mapped source reads the map with the write cursor instead of the read cursor",
-  "find": "\t\t\t\tunsigned char k = (unsigned char)src->sym[ridx];",
-  "replace": "\t\t\t\tunsigned char k = (unsigned char)src->sym[src->widx];"
+  "find": "\t\t\tunsigned int k = (unsigned char)sym[ridx];",
+  "replace": "\t\t\tunsigned int k = (unsigned char)sym[src->widx];"
  },
  {
   "label": "the two rails of the direct source are transposed",
-  "find": "\t\t\t\tsi = src->i[ridx];\n\t\t\t\tsq = src->q[ridx];",
-  "replace": "\t\t\t\tsi = src->q[ridx];\n\t\t\t\tsq = src->i[ridx];"
+  "find": "\t\t\t\tsi = in_i[ridx];\n\t\t\t\tsq = in_q[ridx];",
+  "replace": "\t\t\t\tsi = in_q[ridx];\n\t\t\t\tsq = in_i[ridx];"
  },
  {
   "label": "the two constellation maps are transposed",
-  "find": "\t\t\t\tsi = state->cfg.imap[k];\n\t\t\t\tsq = state->cfg.qmap[k];",
-  "replace": "\t\t\t\tsi = state->cfg.qmap[k];\n\t\t\t\tsq = state->cfg.imap[k];"
+  "find": "\t\t\t\tsi = imap[k];\n\t\t\t\tsq = qmap[k];",
+  "replace": "\t\t\t\tsi = qmap[k];\n\t\t\t\tsq = imap[k];"
  },
  {
   "label": "the mapped and direct forms are chosen the other way round",
@@ -64,8 +64,8 @@
  },
  {
   "label": "the symbol is stored before the write cursor advances rather than after",
-  "find": "\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);\n\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;",
-  "replace": "\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;\n\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);"
+  "find": "\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);\n\t\t\thist_i[widx] = si;\n\t\t\thist_q[widx] = sq;",
+  "replace": "\t\t\thist_i[widx] = si;\n\t\t\thist_q[widx] = sq;\n\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);"
  },
  {
   "label": "the count is decremented by one rather than by the debt it just paid",
@@ -74,23 +74,23 @@
  },
  {
   "label": "the two rails are differenced the other way round",
-  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
-  "replace": "\t\t*out++ = (short)(((short)(yq - yi) * state->cfg.scale) >> 15);"
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((short)(yq - yi) * scale) >> 15);"
  },
  {
   "label": "the rails are summed instead of differenced, which drops the carrier's quadrature term",
-  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
-  "replace": "\t\t*out++ = (short)(((short)(yi + yq) * state->cfg.scale) >> 15);"
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((short)(yi + yq) * scale) >> 15);"
  },
  {
   "label": "the difference is not truncated to sixteen bits before the output gain",
-  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
-  "replace": "\t\t*out++ = (short)(((yi - yq) * state->cfg.scale) >> 15);"
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((yi - yq) * scale) >> 15);"
  },
  {
   "label": "the output gain is applied without its shift",
-  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
-  "replace": "\t\t*out++ = (short)((short)(yi - yq) * state->cfg.scale);"
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * scale) >> 15);",
+  "replace": "\t\t*out++ = (short)((short)(yi - yq) * scale);"
  },
  {
   "label": "the phase advances by the nominal step alone, dropping the timing correction",
@@ -129,18 +129,18 @@
  },
  {
   "label": "the two histories are transposed at the store",
-  "find": "\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;",
-  "replace": "\t\t\tstate->hist_i[widx] = sq;\n\t\t\tstate->hist_q[widx] = si;"
+  "find": "\t\t\thist_i[widx] = si;\n\t\t\thist_q[widx] = sq;",
+  "replace": "\t\t\thist_i[widx] = sq;\n\t\t\thist_q[widx] = si;"
  },
  {
   "label": "both rails are filtered with the I coefficients",
-  "find": "\t\tyq = pps_rail(state->hist_q, state->cfg.coeff_q, phases, phase,",
-  "replace": "\t\tyq = pps_rail(state->hist_q, state->cfg.coeff_i, phases, phase,"
+  "find": "\t\tyq = pps_rail(hist_q, coeff_q, phases, phase,",
+  "replace": "\t\tyq = pps_rail(hist_q, coeff_i, phases, phase,"
  },
  {
   "label": "the rails are filtered at the phase the NEXT output will use",
-  "find": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases, phase,\n\t\t\t      taps, widx);",
-  "replace": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases,\n\t\t\t      (short)(phase + step), taps, widx);"
+  "find": "\t\tyi = pps_rail(hist_i, coeff_i, phases, phase,\n\t\t\t      taps, widx);",
+  "replace": "\t\tyi = pps_rail(hist_i, coeff_i, phases,\n\t\t\t      (short)(phase + step), taps, widx);"
  },
  {
   "label": "NOTE: FPM_PPS_init and FPM_PPS_free are allocation and release, so the mutations below are measured with the allocator's books -- counts, request sizes and null releases -- and not by reading freed memory."

@@ -1023,6 +1023,9 @@ void
 V34EchoAdapt(struct v34_echo *e, short err)
 {
 	unsigned k;
+	short *fraction = e->coeff_frac;
+	short *coeff = e->coeff;
+	const short *hist = e->hist;
 
 	/*
 	 * The 32-bit tap is reassembled from its two halves, moved, and split
@@ -1031,13 +1034,13 @@ V34EchoAdapt(struct v34_echo *e, short err)
 	 * rather than two independent numbers.
 	 */
 	for (k = 0; k < e->taps; k++) {
-		int tap = (int)((unsigned)e->coeff[k] << 16)
-			  + (unsigned short)e->coeff_frac[k];
+		int tap = (int)((unsigned)*coeff << 16)
+			  + (unsigned short)*fraction;
 
-		tap = (int)((unsigned)tap + (unsigned)(e->hist[k] * err));
+		tap = (int)((unsigned)tap + (unsigned)(*hist++ * err));
 
-		e->coeff[k] = (short)(tap >> 16);
-		e->coeff_frac[k] = (short)tap;
+		*coeff++ = (short)(tap >> 16);
+		*fraction++ = (short)tap;
 	}
 }
 
