@@ -116,9 +116,11 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  * byte at +0x13 that only this member ever clears, and -1 at +0x3bbc.
  *
  * The five detector stores are `resetDetector`'s whole body -- but the
- * constructor holds no relocation against that symbol, and a call to a GLOBAL
- * in `.text` would carry one (findings F306, F333), so the original repeated
- * the assignments here rather than calling it.  Finding F1237, and it stands.
+ * constructor holds no relocation against that symbol. That excludes an
+ * emitted call, but cannot distinguish repeated assignments from inlining.
+ * The explicit stores below retain the native operations. The 5 November
+ * helper controls in docs/method/refinement.md do not recover the remaining
+ * register choices; F1237's stronger source-spelling inference is retired.
  *
  * WHAT 1237 DID NOT SETTLE WAS THE ORDER, and this batch did.  It used to
  * read +0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0, which is the order the object
@@ -214,9 +216,9 @@ V90CP::getBitVector(unsigned int &length)
  * consistent with the assignments being repeated a third time -- so the
  * question was settled by writing the call and measuring: at `-O3` GCC 3.4.2
  * folds it in and the 73 bytes it emits are the object's, instruction for
- * instruction and operand for operand.  The constructor above does NOT get
- * the same treatment from us, because that is 1237's ruling and this measures
- * nothing about it either way.  Finding F4600.
+ * instruction and operand for operand. The constructor's explicit stores
+ * remain separately measured; absence of a call does not settle whether the
+ * author used this helper there. Finding F4600.
  *
  * WHAT SEPARATES IT FROM THE CONSTRUCTOR is `byte_13`, which the constructor
  * clears and this does not.  That is the only field of the two the object

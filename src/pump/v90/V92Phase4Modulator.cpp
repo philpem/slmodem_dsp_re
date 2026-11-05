@@ -298,11 +298,13 @@ V92Phase4Modulator::~V92Phase4Modulator()
  * scrambled `pattern`, reduced from a base of 25 rather than of zero
  * (`sub $0x19,%eax` at +0x18020).  Both arms converge on the same store to
  * `prevBit` and the same +/- selection, which is what the `jmp 18006` says.
+ * MOVZWL, full-width NEG and the common terminal MOVSWL keep the magnitude
+ * wide until the signed-short return conversion.
  */
 int V92Phase4Modulator::generateCPt()
 {
 	unsigned int bit;
-	short sym;
+	unsigned int sym;
 
 	if (symbolCount <= 24)
 		bit = prevBit ^ 1;
@@ -312,10 +314,10 @@ int V92Phase4Modulator::generateCPt()
 		      ^ prevBit;
 	prevBit = bit;
 
-	sym = amplitude;
+	sym = (unsigned short)amplitude;
 	if (bit != 0)
 		sym = -sym;
-	return sym;
+	return (short)sym;
 }
 
 /*

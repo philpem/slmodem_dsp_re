@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Real ELF positive/negative controls for the variant report; no compiler claims."""
 from pathlib import Path
+import shutil
+import json
 import subprocess
 import sys
 import tempfile
@@ -31,6 +33,17 @@ class ComparisonTests(unittest.TestCase):
 
     def baseline(self):
         return self.obj('base', [('f', 'mov $1,%eax\nmov %eax,(%edx)\nret'), ('g', 'ret')])
+
+    def relocation_obj(self, name, immediate=1, target='f', target_offset=0):
+        source = self.root / (name + '.s')
+        obj = self.root / (name + '.o')
+        text = ('.text\n'
+                '.globl f\n.type f,@function\nf:\nmov $%d,%%eax\nret\n.size f,.-f\n' % immediate +
+                '.globl g\n.type g,@function\ng:\nmov $2,%eax\nret\n.size g,.-g\n'
+                '.data\n.long ' + target + ('+%d' % target_offset) + '\n')
+        source.write_text(text)
+        subprocess.run(['as', '--32', '-o', str(obj), str(source)], check=True, capture_output=True)
+        return obj
 
     def test_register_rename_is_regalloc_and_raw_bytes_remain_visible(self):
         base = self.baseline()
@@ -83,6 +96,22 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(report.main(args), 1)
         self.assertEqual(output.read_text(), text)
 
+    def test_cli_batch_writes_all_reports_without_overwrite(self):
+        base = self.baseline()
+        same = self.obj('same', [('f', 'mov $1,%eax\nmov %eax,(%edx)\nret'), ('g', 'ret')])
+        extra = self.obj('extra', [('f', 'ret')])
+        outdir = self.root / 'batch'
+        args = ['--baseline', str(base), '--blob', str(base),
+                '--candidate', str(same), '--candidate', str(extra), '--output-dir', str(outdir)]
+        self.assertEqual(report.main(args), 0)
+        paths = sorted(outdir.glob('*.json'))
+        self.assertEqual(len(paths), 2)
+        rows = [json.loads(path.read_text()) for path in paths]
+        self.assertEqual([row['shared_sized_functions'] for row in rows], [2, 1])
+        before = {path.name: path.read_text() for path in paths}
+        self.assertEqual(report.main(args), 1)
+        self.assertEqual({path.name: path.read_text() for path in paths}, before)
+
     def test_invalid_elf_reports_failure(self):
         bad = self.root / 'bad.o'
         bad.write_text('not an ELF object')
@@ -99,6 +128,111 @@ class ComparisonTests(unittest.TestCase):
                           'f:\nalias:\nret\n.size f,.-f\n.size alias,.-alias\n')
         subprocess.run(['as', '--32', '-o', str(obj), str(source)], check=True, capture_output=True)
         self.assertEqual(report.layout(str(obj), ['f', 'alias']), {'.text': [['alias', 'f']]})
+
+    def test_session_and_batch_match_fresh_reports_and_reuse_caches(self):
+        base = self.baseline()
+        variant = self.obj('variant', [('f', 'mov $1,%ecx\nmov %ecx,(%edx)\nret'), ('g', 'ret')])
+        fresh = report.compare(base, variant, base)
+        session = report.ComparisonSession(base)
+        first = session.compare(base, variant)
+        before = session.cache_info()['byteident']['body']['hits']
+        second = session.compare(base, variant)
+        after = session.cache_info()['byteident']['body']['hits']
+        self.assertEqual(first, fresh)
+        self.assertEqual(second, fresh)
+        self.assertEqual(session.cache_info()['comparisons'], 2)
+        self.assertGreater(after, before)
+        self.assertEqual(session.cache_info()['size_inventory_misses'], 2)
+        batch = report.compare_many([(base, variant), (base, variant)], base)
+        self.assertEqual(batch, [fresh, fresh])
+
+    def test_same_path_rewrite_invalidates_code_and_data_relocation_caches(self):
+        base = self.relocation_obj('base-reloc', immediate=1, target='f')
+        candidate = self.root / 'candidate-reloc.o'
+        shutil.copyfile(base, candidate)
+        session = report.ComparisonSession(base)
+        session._jumptable.section_direct_edges(str(candidate.resolve()), '.text')
+        self.assertGreater(session.cache_info()['jumptable']['section_direct_edges']['currsize'], 0)
+        before = session.compare(base, candidate)
+        before_targets = before['allocated_data_relocation_audit']['code_targets']
+        self.assertGreater(before_targets['compared'], 0)
+        self.assertEqual(before_targets['changed'], 0)
+        self.assertGreater(session.cache_info()['jumptable']['instructions']['currsize'], 0)
+
+        rewritten = self.relocation_obj('rewritten-reloc', immediate=3, target='g', target_offset=5)
+        shutil.copyfile(rewritten, candidate)
+        other_session = report.ComparisonSession(base)
+        cached_other = other_session.compare(base, candidate)
+        fresh = report.compare(base, candidate, base)
+        fresh_path = self.root / 'fresh-process.json'
+        subprocess.run([sys.executable, str(TOOLS / 'gcc3_search_compare.py'),
+                        '--baseline', str(base), '--candidate', str(candidate),
+                        '--blob', str(base), '--output', str(fresh_path)],
+                       check=True, capture_output=True, text=True)
+        fresh_process = json.loads(fresh_path.read_text())
+        cached = session.compare(base, candidate)
+        self.assertEqual(cached_other, fresh)
+        self.assertEqual(fresh_process, fresh)
+        cached_again = session.compare(base, candidate)
+        self.assertEqual(cached, fresh)
+        self.assertEqual(cached_again, fresh)
+        self.assertEqual(cached['functions']['f']['candidate']['grade'][0], 'BYTES')
+        self.assertEqual(cached['allocated_data_relocation_audit']['code_targets']['changed'], 1)
+        self.assertFalse(cached['allocated_data_raw_unchanged'])
+        self.assertEqual(session.cache_info()['path_content_invalidations'], 1)
+        self.assertEqual(session.cache_info()['jumptable']['section_direct_edges']['currsize'], 0)
+
+        shutil.copyfile(base, candidate)
+        restored = session.compare(base, candidate)
+        fresh_restored = report.compare(base, candidate, base)
+        self.assertEqual(restored, fresh_restored)
+        self.assertEqual(restored['functions']['f']['candidate']['grade'][0], 'EXACT')
+        self.assertEqual(restored['allocated_data_relocation_audit']['code_targets']['changed'], 0)
+        self.assertEqual(session.cache_info()['path_content_invalidations'], 2)
+
+    def test_session_refuses_input_mutation_during_comparison(self):
+        base = self.baseline()
+        candidate = self.obj('candidate', [('f', 'ret')])
+        session = report.ComparisonSession(base)
+        original_bytes = candidate.read_bytes()
+        original = report._compare
+
+        def rewrite_after_analysis(*args, **kwargs):
+            result = original(*args, **kwargs)
+            candidate.write_bytes(candidate.read_bytes() + b'changed')
+            return result
+
+        from unittest import mock
+        with mock.patch.object(report, '_compare', side_effect=rewrite_after_analysis):
+            with self.assertRaisesRegex(ValueError, 'object changed during comparison'):
+                session.compare(base, candidate)
+        self.assertEqual(session.cache_info()['path_content_invalidations'], 1)
+        candidate.write_bytes(original_bytes)
+        reused = session.compare(base, candidate)
+        fresh = report.compare(base, candidate, base)
+        self.assertEqual(reused, fresh)
+
+    def test_session_invalidates_when_input_is_deleted_during_comparison(self):
+        base = self.baseline()
+        candidate = self.obj('candidate', [('f', 'ret')])
+        original_bytes = candidate.read_bytes()
+        session = report.ComparisonSession(base)
+        original = report._compare
+
+        def delete_after_analysis(*args, **kwargs):
+            result = original(*args, **kwargs)
+            candidate.unlink()
+            return result
+
+        from unittest import mock
+        with mock.patch.object(report, '_compare', side_effect=delete_after_analysis):
+            with self.assertRaisesRegex(ValueError, 'object changed during comparison'):
+                session.compare(base, candidate)
+        self.assertEqual(session.cache_info()['path_content_invalidations'], 1)
+        candidate.write_bytes(original_bytes)
+        reused = session.compare(base, candidate)
+        fresh = report.compare(base, candidate, base)
+        self.assertEqual(reused, fresh)
 
 
 if __name__ == '__main__':

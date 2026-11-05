@@ -48,6 +48,19 @@ def validate_trace(trace):
     return events
 
 
+def build_capture_flags(config, source, kind, rtl_dumps=False):
+    flags = shlex.split(config['flags'])
+    if kind == 'cc1plus':
+        flags += shlex.split(config.get('cxx', ''))
+    # DCR is a source-specific production override, selected by its source name.
+    if Path(source).name == 'dcr.c':
+        flags += shlex.split(config.get('dcr', ''))
+    flags += ['-v', '-save-temps']
+    if rtl_dumps:
+        flags.append('-da')
+    return flags
+
+
 class Capture:
     def __init__(self, args):
         self.root = args.root.resolve()
@@ -65,6 +78,7 @@ class Capture:
         self.out.mkdir(parents=True)
         self.result = {'schema': 1, 'status': 'incomplete', 'source': str(self.source),
                        'root': str(self.root), 'config_path': str(self.config), 'commands': [],
+                       'rtl_dumps': bool(args.rtl_dumps),
                        'capture_sha256': sha(Path(__file__).resolve()),
                        'observer_sha256': sha(Path(__file__).with_name('gcc3_search_capture_gdb.py')),
                        'checks': {}, 'timing_scope': 'child CPU is host process and descendants; '
@@ -179,13 +193,7 @@ class Capture:
         require(sha(executable) == SUPPORTED[kind], 'unsupported compiler executable hash; hook not calibrated')
         self.result['hook'] = {'source': '/build/gcc-3.4.2/gcc/recog.c:2984',
                                'validation': 'pinned calibrated executable SHA-256'}
-        flags = shlex.split(config['flags'])
-        if kind == 'cc1plus':
-            flags += shlex.split(config.get('cxx', ''))
-        # DCR is a source-specific production override, selected by its source name.
-        if self.source.name == 'dcr.c':
-            flags += shlex.split(config.get('dcr', ''))
-        flags += ['-v', '-save-temps', '-da']
+        flags = build_capture_flags(config, self.source, kind, self.result['rtl_dumps'])
         self.result['effective_flags'] = tc.add_reproduce_bugs(flags)
         source_path = ('/src/' + self.source.relative_to(self.root).as_posix()
                        if self.source.is_relative_to(self.root) else '/input/' + self.source.name)
@@ -266,13 +274,19 @@ class Capture:
                           'object_sha256': self.result['object_sha256']}, sort_keys=True))
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True, help='complete .c/.cpp TU')
     parser.add_argument('--output', type=Path, required=True, help='fresh artifact directory')
     parser.add_argument('--config', type=Path, help='default: ROOT/build/tc_out/.build-config')
     parser.add_argument('--root', type=Path, default=ROOT)
-    args = parser.parse_args()
+    parser.add_argument('--rtl-dumps', action='store_true',
+                        help='add GCC -da RTL dumps (opt in; some compiler paths can fail)')
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
     capture = None
     try:
         capture = Capture(args)

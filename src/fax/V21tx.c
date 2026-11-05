@@ -110,6 +110,8 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	tx->result.byte.flags1 |= 0x58;
 
 	hdx = tx->hdx;
+	/* Native +0x70 clears the status byte again after setting flags1. */
+	tx->result.byte.status = 0;
 	if (hdx == NULL) {
 		hdx = sysdep_malloc(sizeof(struct v21_tx_hdx));
 		tx->hdx = hdx;

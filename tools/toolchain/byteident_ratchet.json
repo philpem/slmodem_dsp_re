@@ -1,5 +1,5 @@
 {
-  "bytes": 74,
+  "bytes": 73,
   "compared": 1852,
   "compared_bytes": 720125,
   "exact": 1131,
@@ -1139,7 +1139,7 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 28,
+  "regalloc": 29,
   "reloc": 0,
   "size": 619,
   "unresolved": 0

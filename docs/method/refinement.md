@@ -3518,7 +3518,9 @@ and E1u54B (F11807–F11808); fields/return ABI stay unchanged. Explicit post-ca
 capture is raw-inert for Ja. Inspect inline copies: E1u's five-byte removal
 recovers the original88B arm even while the enclosing pump's SIZE gap grows.
 Keep original load, arithmetic and conversion boundaries rather than fitting
-aggregate length. CPt's wide near-hit stays declined.
+aggregate length. CPt's wide near-hit was initially declined; the 5 November
+tooling hour below replays and retains its independently supported conversion
+boundary as a partial recovery, without claiming register closure.
 
 Opcode screening is only a candidate generator (F11809). Require operand/path
 tracing: NEG may build a quality mask or modify a different stored amplitude.
@@ -9150,8 +9152,8 @@ A separate eight-copy direct-call screen yields two structural follow-ups.
 code inlines the helper where native code retains a call. `create_cid` already
 calls `reset_cid`; native code has two call edges while current emission exposes
 its body and `FPM_MRF_init`. These are source-present inline-boundary leads,
-not evidence of omitted behavior. The next discriminators are callee cost,
-definition visibility, branch ownership and native TU attribution. K56 wrapper
+not evidence of omitted behavior. The subsequent tooling hour below tests branch ownership and records callee
+cost and native TU attribution; neither lead yields an accepted source change. K56 wrapper
 stubs are an explicit implementation/profile boundary, not missing helper calls
 to fix by this analogy. Other call-count nominations remain unpromoted.
 
@@ -9161,12 +9163,185 @@ both 123 bytes but contain 37 versus 42 non-padding instructions. Native code
 has an indexed input loop, advancing output pointers and gains loaded outside
 their loops. Source still spells two indexed loops. The existing conversion
 helpers used successfully by `FDSP_DP_Run` therefore give a concrete next
-hypothesis. No compilation or differential result is claimed for that helper
-transfer, and its full-TU effect on the newly recovered neighbours must be
-measured before adoption.
+hypothesis. The initial screen did not compile this helper transfer. The tooling-hour
+follow-up below applies it after full-TU and differential validation, reaching
+REGALLOC without changing the recovered neighbours.
 
 The parent reviews the detector's controls and scope and repeats its scanner.
 The reusable scratch script, JSON denominators, native witnesses and triage
 report are under `build/gcc3-pattern-followup/`. This follow-up addresses the
 whole wave's transferability while keeping new hypotheses distinct from the
 validated reconstructions above.
+
+## Follow source mechanisms through the complete translation unit
+
+The 5 November tooling-first recovery hour starts from 1,131 EXACT and 28
+REGALLOC symbols among 1,852. Its first accepted change follows the earlier
+`CrossDataLinks` nomination: reuse both existing conversion helpers, preserving
+the native indexed input loop, advancing output pointers and fixed gains.
+The four-cell cross distinguishes the mechanisms: input-only gives SIZE16,
+output-only BYTES18, and both give REGALLOC with one raw differing byte.
+The original had BYTES96 at the same 123-byte length. All 22 other shared TU
+functions, exports, allocated data and 72 exact code-table destinations stay
+unchanged. There is no new exact function from this change.
+
+Both endpoint fixtures pass 178,693 checks in 15 groups; replacing the input
+gain with `1/31999` fails the `cross f` assertion. Linked-body review establishes
+the selected 123 bytes and both constant relocations. This is direct component
+API coverage, including empty work and conversion samples; it does not claim a
+modem lifecycle for an exported leaf with no internal caller. The existing
+scale-fault anchor is reattached to the helper call with its scope unchanged.
+The full period/structural gate passes 398 tests, zero failed. Production
+matches the tested object literally; the other 299 production objects stay
+unchanged. The census becomes 1,131 EXACT, 29 REGALLOC, 73 BYTES and 619 SIZE,
+with zero unresolved symbols.
+
+The helper rewrite does not advance a different scratch stream: both captures
+verify 53 events in 12 blocks. `CrossDataLinks` still consumes cursor 52 and
+selects hard register 0 (EAX); native code discards the stack word into EDX
+(hard register 1). Later `FDSP_DP_Run` still selects EDX at cursor 49, while
+native code uses ECX (hard register 2). Preserve that register-number mapping:
+GCC's i386 order is EAX, EDX, ECX, not assembler alphabetical order. These dead
+pop residuals are not permission to add a carrier or permute source blindly.
+
+### Identify the earliest compiler decision before testing source cells
+
+The branch-owned `create_cid` control duplicates its source reset call across
+the debug paths, following the native two-call-edge observation. GCC still
+inlines `reset_cid`, now twice; the native length gap grows from 429 to 929,
+and the local `pack_next_bit` gap grows from two to eleven. The cgraph reports
+98 tree instructions in the helper and estimated growth 176 for the two sites,
+versus 88 for the single-site baseline. Native reset-before-create order already
+matches source. Local-data evidence attributes the reset to Rxcid, but does not
+establish the caller's original TU. No reorder or TU regrouping follows.
+
+For `bValidateEnergyValue`, cgraph marks `FDSP_Kernel_InitObj` as 58 tree
+instructions and chooses inlining with estimated growth 48; the caller grows
+from 115 to 163 tree instructions. The diagnostic object equals ordinary
+production literally. The native caller retains a call, but current evidence
+does not establish their original shared TU. Preserve this as a visibility/cost
+question, not a missing helper or a reason to force `noinline`.
+
+### Screen predecessors, including those that consume no scratch
+
+A frontier over the 28 initial REGALLOC symbols finds both genuine order
+inversions and misleading ones. B103's Rx family already has native order;
+interleaving its Tx family is not an original-TU witness. ADID's 34 strong
+functions already have native order. In both V90 and V92 phase-four modulator
+TUs, the remaining strong-order differences occur after the REGALLOC targets,
+so moving those later definitions cannot repair the earlier incoming cursor.
+
+Two complete-TU controls establish useful negatives. Moving Psd's overlap
+setter and frequency getter to native order changes no function body; neither
+moved definition consumes scratch. All eight predicted events verify, and all
+13 shared bodies keep their grades. A V90CP native-method-order control verifies
+95 predicted events but gains no exact function and loses C2's exact grade;
+C1/C2 emitted order remains a separate mismatch. A VPCM native-order control
+also gains no exact function and changes `dp_vpcm_exit` from EXACT to REGALLOC.
+These controls remain isolated. An exact loss is not itself a veto on an
+independently supported source correction; these experiments establish no
+additional body recovery that warrants adopting their collateral changes.
+
+Artifacts for this hour are under `build/gcc3-hour/`. Reusable apparatus and
+cache/capture controls are described in [the compiler-model guide](gcc3-model-search.md).
+
+### Retain a recovered conversion boundary without claiming register closure
+
+The earlier CPt wide-magnitude control was declined because it remained
+BYTES24 rather than becoming exact. Replaying it on this hour's baseline
+confirms the independent native witness: zero-extend the amplitude word,
+negate the wide unsigned value when required, then sign-extend its low word
+once at return. The field type and exported return ABI stay unchanged.
+`generateCPt` improves BYTES29 to BYTES24; its inlined `generateSymbol` copy
+also changes, and that enclosing function's SIZE distance grows from 52 to 53.
+Recovering the measured conversion boundary takes precedence over that aggregate
+length. Register ownership remains unresolved; no declaration or XOR-order
+palette is reopened.
+
+Only those two bodies change among 44 shared TU functions; no EXACT or REGALLOC
+grade changes. Allocated masked payload/layout and exports stay fixed. Of 30
+code-table destinations, 25 move within the same function owner; all resolve
+to instruction boundaries. This is not strict relocation-target identity or a
+CFG equivalence claim.
+
+Each frozen endpoint passes 4,859,916 checks in 32 groups across `t_v92p4sym`,
+`t_v92p4mod` and `t_vpcmrunpcm`. The direct-member/state grid in `t_v92p4sym`
+is component evidence, including synthetic signed-short amplitude stress;
+the constructor test and enclosing PCM path do not establish that every CPt
+state is protocol-reachable. Normal V92 reset callers pass amplitude 4000.
+Removing the terminal short conversion fails 427 checks in each CPt group,
+including a synthetic amplitude -1000 case, while the other 22 groups pass.
+That negative control establishes sensitivity to the conversion, not reachability
+of the planted state. All eight existing CPt mutation anchors retain their
+original fault scope after the type/conversion update. Production reproduces
+the frozen candidate object literally.
+
+The V90CP constructor also gets two bounded helper controls: its five detector
+stores through `resetDetector()`, or its reset fields through `reset()` followed
+by the constructor-only byte clear. Both complete captures contain 95 events.
+The detector form leaves C1 unchanged and changes the exact C2 and `reset`
+bodies to REGALLOC. The full-reset form changes both constructor copies to
+BYTES9 and does not retain their register-only equivalence. Neither recovers a
+new native body, so neither is adopted. These controls also correct an old
+source comment: absence of an emitted call cannot prove that the author wrote
+manual stores rather than an inlined helper. It rules out an emitted call only.
+
+### Cancel matching store occurrences, then establish their owners
+
+The width follow-up expands the earlier 190-copy domain to all 730 previously
+inexact emitted copies: 490 unmangled and 240 mangled, across 212 objects, with
+no size or changed-TU exclusions. These are historical discovery candidates
+measured against hashed current objects, not a claim that all 730 remain
+inexact. The old detector nominates FAXVMI, V17RX and V21TX constructors.
+
+V17RX exposes a detector defect: both sides already contain matching narrow
+and wide zero stores at the same printed address. Pairing a native narrow store
+with an already-matched wide store manufactures a mismatch. The reusable
+`gcc3_search_width.py` cancels equal width counts first; a real-ELF negative
+control covers exactly that case. The frozen VMI17/VMI29 defects still fire
+once each and both corrected objects are clean.
+
+The corrected 730-copy scan has one nomination, `FAXVMI_create`. Owner tracing
+rejects it: native ESI names the framer at its word-sized `pack_bit` clear,
+whereas current ESI names the root VMI at its long `overflow` clear. Both real
+owner-specific writes exist on both sides, with different register names.
+The resulting count is zero supported narrow-to-wide source defects in this
+query, not absence of other width defects. The V21TX nomination separately
+exposes an extra native byte clear; it is not a replacement for its earlier
+long clear and must be evaluated as its own source-operation question.
+
+The V21TX follow-up retains the redundant typed status initialization. Native
+`V21TX_create+0x70` clears `tx->result.byte.status` at owner-relative +0x1c,
+width one, after the whole result word clear and adjacent flags update. The
+candidate restores that instruction at the same construction boundary. It does
+not preserve previously live upper bytes: the earlier whole-word clear remains.
+Only the constructor changes among two TU functions; its SIZE81 grade remains,
+and deletion stays EXACT. Exports and allocated data stay unchanged.
+
+Both period endpoints pass 789 constructor checks. The primary self-allocating
+path covers default configuration and explicit protocols 0/1; protocol 2/-1
+and poisoned in-place reinitialization remain separately labelled boundary or
+synthetic probes. Changing only the restored status byte to 1 fails 12 of 789
+checks, including protocol 0/1 status results. This supports the fixture's
+sensitivity, not a claim that the formerly missing redundant store caused a
+behavioral defect. The selected object and linked constructor are verified.
+
+Parent linked-byte review also compares all non-relocated bytes in both CPt
+functions across all three focused binaries, plus both V21TX endpoints: 14
+selected bodies in total. The CPt audit separately resolves all 132 typed
+fields in each `generateSymbol` object (95 PC-relative calls and 37 absolute
+fields), including debug wrappers, strings and the linked 30-entry table.
+These linked checks complement, rather than replace, the full-TU data audit.
+
+The final production census remains 1,131 EXACT / 29 REGALLOC / 73 BYTES /
+619 SIZE across 1,852 symbols, with zero unresolved symbols. Three of 300
+production objects change (Beepgen, V92Phase4Modulator and V21tx); all three
+match their frozen, differentially tested candidates. V90CP's comment correction
+leaves its object byte-identical. The final `make phase` passes 398 period tests
+and the structural checks. Optional mutation execution/snapshot refresh is not
+part of this result. Comparison, capture, screen and width controls pass under
+normal Python and `python3 -O`; the width suite has six portable tests plus one
+optional frozen-artifact test. Parent review verifies 25,931 selected linked
+body bytes, and separately resolves 222 absolute fields plus 180 dispatch-table
+entries at their actual linked addresses. The five pre-existing owner-edited
+files retain their recorded contents.

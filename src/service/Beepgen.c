@@ -538,19 +538,15 @@ fComputeRMSValueShortBuf(unsigned int n, short *buf)
 
 /*
  * Both conversions at once at the +/-32000 full scale used across the
- * voice path.  The truncating cast and constant handling match
- * zFLTUTL_Float2Linear's.
+ * voice path.  Inlining the conversion helpers preserves the native indexed
+ * input conversion and advancing-pointer output conversion.
  */
 void
 CrossDataLinks(short *lin_in, float *flt_out, float *flt_in, short *lin_out,
 	       int n)
 {
-	int i;
-
-	for (i = 0; i < n; i++)
-		flt_out[i] = (float)lin_in[i] * (1.0f / 32000.0f);
-	for (i = 0; i < n; i++)
-		lin_out[i] = (short)(flt_in[i] * 32000.0f);
+	zFLTUTL_Linear2Float(lin_in, flt_out, n, 1.0f / 32000.0f);
+	zFLTUTL_Float2Linear(flt_in, lin_out, n, 32000.0f);
 }
 
 /*

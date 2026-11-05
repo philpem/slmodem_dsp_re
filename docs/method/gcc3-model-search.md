@@ -300,3 +300,103 @@ remain unresolved rather than being identified solely by name. They
 also cover changed payloads, symbol addends, unsupported section destinations
 and an explicitly zero relocation denominator. The existing comparison tests
 continue to check that data observations do not alter function grades.
+
+### Reuse analysis across a candidate batch
+
+A comparison session retains the reference and baseline analysis between
+candidates. The command-line batch accepts repeated candidate options:
+
+```sh
+python3 tools/gcc3_search_compare.py \
+    --baseline build/control/candidate.o \
+    --candidate build/cell-a/candidate.o \
+    --candidate build/cell-b/candidate.o \
+    --output-dir build/comparison-batch
+```
+
+Each candidate gets a separate numbered JSON report with its function,
+relocation and data denominators. Existing reports are never overwritten; a
+failed candidate leaves an invalid report and makes the batch exit nonzero.
+The Python API provides `ComparisonSession.compare()` and `compare_many()` for
+batches with different baselines. Single-candidate `--output` remains supported.
+
+A controlled six-candidate pilot batch compares 53 shared functions per cell.
+All six cached reports equal the previous comparator's reports after excluding
+only analysis-script hashes. Fresh analysis takes 15.82 s wall / 9.94 s Python
+CPU; one session takes 6.84 s / 3.00 s. The first comparison is cold parity
+(2.96 versus 2.94 s); the remaining five take 12.86 versus 3.90 s. These are
+measured batch costs, not a compiler or whole-workflow speedup. A separate
+300-object census takes 116.74 s wall, covers 248 shared-function objects and
+1,886 per-TU rows, and agrees with the authoritative 1,852-symbol census when
+aggregated by each symbol's worst copy. Taking the union of exact copies would
+overstate the result.
+
+Reuse must not turn an old result into evidence about a new object. Sessions
+hash inputs, share a process-wide path registry, and invalidate both byteident
+and jump-table caches when a path changes. This includes interleaved sessions;
+the jump-table caches belong to the imported module, not to one session.
+Unregistered paths clear pre-existing jump-table entries. Size inventories are
+keyed by content. Inputs are checked again after analysis; mutation or deletion
+invalidates the affected caches and refuses the result. Analysis source changes
+require a Python restart. These checks do not make concurrent external writes
+safe: compare completed, immutable compiler outputs.
+
+The real-ELF tests include a changed instruction and a different valid code
+address in a data relocation, same-path rewrites across two sessions, fresh
+subprocess equivalence, failure recovery, and output-overwrite refusal. Run:
+
+```sh
+python3 tools/gcc3_search_compare_test.py
+python3 -O tools/gcc3_search_compare_test.py
+```
+
+### Keep RTL dumps optional during scratch capture
+
+Capture defaults to `-v -save-temps`; add `--rtl-dumps` when compiler-pass dumps
+are needed. The observer does not require `-da`. On the full ADID TU, the pinned
+Gentoo compiler crashes with `-da` at source line 3042. Without it, capture
+verifies 137 scratch events and reproduces the production object literally,
+including repeated compilation and observed/unobserved assembly identity.
+This is a failed diagnostic compilation, not evidence that production source
+is invalid. Preserve the failed capture alongside the successful one.
+
+Paired C and C++ controls (`Beepgen.c` and `V90ModulusDecoder.cpp`) produce
+identical objects with and without dumps and verify 53 and six events
+respectively. A TU with no scratch events still fails capture's nonempty-domain
+check; it is not a positive observer control. Flag construction tests also
+check that recorded effective flags equal those passed by the compiler wrapper,
+including the mandatory reconstruction define.
+
+For inlining questions, a narrow `.00.cgraph` dump can settle the first
+compiler decision before an RTL investigation is useful. The measured
+`create_cid` and `bValidateEnergyValue` cases are recorded in the Playbook.
+
+### Screen store widths without pairing already-matched writes
+
+`gcc3_search_width.py` accepts explicit reference and candidate objects. It
+scans C and C++ symbols by default; repeated `--symbol` options and optional
+`--max-bytes` limit the reported denominator.
+
+```sh
+python3 tools/gcc3_search_width.py \
+    --native ref/slmodemd/dsplibs.o \
+    --candidate build/tc_out/src_fax_class1tx.c.o \
+    --symbol init_vmi_v17tx --symbol init_vmi_v29tx \
+    --output build/vmi-width-current.json
+python3 tools/gcc3_search_width_test.py
+```
+
+The report pairs immediate stores only when their numeric constant and complete
+printed destination agree. It cancels same-width multiplicities first, then
+nominates equal residual native byte/word and current long-store counts. Without
+cancellation, identical word and long stores can produce a false width mismatch.
+Inputs and analysis-script hashes are recorded and checked for changes.
+
+Even the corrected screen does not prove owner identity: a register can hold
+different embedded-object pointers at different instructions. Trace the complete
+owner, offset and access width before editing source. Register-produced values,
+implicit zero displacements, byte-to-word changes and unequal residual counts
+are outside this narrow query. A clean report is not a proof that all stores
+have the correct width. The portable real-ELF controls test the detector's own
+boundary; the optional VMI artifact control skips when its frozen inputs are
+absent or fail their recorded hash check.

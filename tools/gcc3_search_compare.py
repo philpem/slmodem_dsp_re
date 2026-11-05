@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import threading
+import weakref
 
 TOOLS = Path(__file__).resolve().parent
 sys.path[:] = [p for p in sys.path if Path(p or '.').resolve() != TOOLS]
@@ -21,6 +23,11 @@ from elftools.common.exceptions import ELFError
 sys.path.insert(0, str(TOOLS))
 import gcc3_search_data as data_audit
 import gcc3_search_pilot as pilot
+
+_GLOBAL_COMPARISON_LOCK = threading.RLock()
+_GLOBAL_PATH_DIGESTS = {}
+_ACTIVE_SESSIONS = weakref.WeakSet()
+_JUMPTABLE_CACHE_CLEARS = 0
 
 
 def grade(api, blob, obj, symbol):
@@ -62,16 +69,7 @@ def identity(path):
     return {'path': path, 'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
 
 
-def compare(baseline, candidate, blob=None):
-    sys.path.insert(0, str(TOOLS / 'toolchain'))
-    api = pilot.load_module('gcc3_compare_byteident', TOOLS / 'toolchain/byteident.py')
-    baseline, candidate = str(Path(baseline).resolve()), str(Path(candidate).resolve())
-    blob = str(Path(blob or api.BLOB).resolve())
-    for path in (blob, baseline, candidate):
-        if not Path(path).is_file():
-            raise ValueError('missing object: ' + path)
-    inventory = {key: api.sizes(path) for key, path in
-                 [('reference', blob), ('baseline', baseline), ('candidate', candidate)]}
+def _compare(api, baseline, candidate, blob, inventory, input_digests):
     names = sorted(set(inventory['reference']) & set(inventory['baseline']) & set(inventory['candidate']))
     if not names:
         raise ValueError('shared sized-function denominator is 0')
@@ -94,8 +92,10 @@ def compare(baseline, candidate, blob=None):
             'analysis_sha256': {p.name: identity(str(p))['sha256'] for p in
                                 (Path(__file__), TOOLS / 'gcc3_search_pilot.py',
                                  TOOLS / 'gcc3_search_data.py', TOOLS / 'toolchain/jumptable.py',
-                                 TOOLS / 'toolchain/byteident.py')},
-            'inputs': {key: identity(path) for key, path in
+                                 TOOLS / 'toolchain/byteident.py',
+                                 TOOLS / 'toolchain/induction_jumptable.py',
+                                 TOOLS / 'toolchain/readonly_copy.py')},
+            'inputs': {key: {'path': path, 'sha256': input_digests[path]} for key, path in
                        [('reference', blob), ('baseline', baseline), ('candidate', candidate)]},
             'shared_sized_functions': len(names), 'functions': rows,
             'grade_transitions': dict(sorted(transitions.items())), 'grade_changes': changes,
@@ -118,23 +118,202 @@ def compare(baseline, candidate, blob=None):
                      'compiler/differential provenance is inferred.'}
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', required=True)
-    parser.add_argument('--candidate', required=True)
-    parser.add_argument('--blob')
-    parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args(argv)
+class ComparisonSession:
+    """Reuse object analysis safely across a batch of variant comparisons.
+
+    The ELF analyzers cache by pathname. A session hashes every input before
+    analysis and clears all pathname-keyed byteident and jumptable caches if a
+    previously seen path changes content. The pathname registry and lock are
+    shared across sessions because jumptable caches are module-global. Size
+    inventories use content hashes, so identical objects at different paths
+    share an ``nm`` result. Restart Python after changing an analysis tool.
+    """
+
+    _TOOL_INPUTS = (
+        Path(__file__), TOOLS / 'gcc3_search_pilot.py',
+        TOOLS / 'gcc3_search_data.py', TOOLS / 'toolchain/jumptable.py',
+        TOOLS / 'toolchain/byteident.py', TOOLS / 'toolchain/induction_jumptable.py',
+        TOOLS / 'toolchain/readonly_copy.py',
+    )
+
+    def __init__(self, blob=None):
+        sys.path.insert(0, str(TOOLS / 'toolchain'))
+        self._api = pilot.load_module('gcc3_compare_byteident', TOOLS / 'toolchain/byteident.py')
+        self.blob = str(Path(blob or self._api.BLOB).resolve())
+        self._sizes_by_content = {}
+        self._size_hits = 0
+        self._size_misses = 0
+        self._invalidations = 0
+        self._comparison_count = 0
+        self._lock = threading.RLock()
+        self._jumptable = data_audit.jumptable
+        self._tool_digests = self._tool_snapshot()
+        if self._tool_digests != _PROCESS_TOOL_DIGESTS:
+            raise ValueError('analysis tool changed since import; restart Python before creating a session')
+        with _GLOBAL_COMPARISON_LOCK:
+            _ACTIVE_SESSIONS.add(self)
+
+    @staticmethod
+    def _digest(path):
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    def _tool_snapshot(self):
+        return {str(Path(path).resolve()): self._digest(path) for path in self._TOOL_INPUTS}
+
+    def _check_tools(self):
+        if self._tool_snapshot() != self._tool_digests:
+            raise ValueError('analysis tool changed during comparison session; restart Python')
+
+    def _snapshot_inputs(self, paths):
+        digests = {}
+        changed = False
+        unregistered = False
+        for path in paths:
+            if not Path(path).is_file():
+                raise ValueError('missing object: ' + path)
+            digest = self._digest(path)
+            digests[path] = digest
+            if path not in _GLOBAL_PATH_DIGESTS:
+                unregistered = True
+            elif _GLOBAL_PATH_DIGESTS[path] != digest:
+                changed = True
+        if changed:
+            _invalidate_all_path_caches()
+        elif unregistered:
+            # A caller may have populated jumptable's module-global LRUs before
+            # this session had a digest for the path. Their age/content is
+            # unknowable, so discard only those shared caches on first sight.
+            _clear_jumptable_caches()
+        _GLOBAL_PATH_DIGESTS.update(digests)
+        return digests
+
+    def _sizes(self, path, digest):
+        if digest in self._sizes_by_content:
+            self._size_hits += 1
+            return self._sizes_by_content[digest]
+        result = self._api.sizes(path)
+        if self._digest(path) != digest:
+            raise ValueError('object changed during comparison: ' + path)
+        self._sizes_by_content[digest] = result
+        self._size_misses += 1
+        return result
+
+    def _assert_inputs_stable(self, digests):
+        for path, before in digests.items():
+            try:
+                after = self._digest(path)
+            except OSError as exc:
+                raise ValueError('object changed during comparison: ' + path) from exc
+            if after != before:
+                raise ValueError('object changed during comparison: ' + path)
+
+    def compare(self, baseline, candidate, blob=None):
+        with _GLOBAL_COMPARISON_LOCK, self._lock:
+            self._check_tools()
+            baseline = str(Path(baseline).resolve())
+            candidate = str(Path(candidate).resolve())
+            reference = str(Path(blob or self.blob).resolve())
+            paths = (reference, baseline, candidate)
+            try:
+                input_digests = self._snapshot_inputs(paths)
+            except (OSError, ValueError):
+                _invalidate_after_input_change({path: _GLOBAL_PATH_DIGESTS[path]
+                                                for path in paths if path in _GLOBAL_PATH_DIGESTS})
+                raise
+            try:
+                inventory = {key: self._sizes(path, input_digests[path]) for key, path in
+                             [('reference', reference), ('baseline', baseline), ('candidate', candidate)]}
+                result = _compare(self._api, baseline, candidate, reference, inventory, input_digests)
+            finally:
+                try:
+                    self._assert_inputs_stable(input_digests)
+                except (OSError, ValueError):
+                    _invalidate_after_input_change(input_digests)
+                    raise
+                self._check_tools()
+            self._comparison_count += 1
+            return result
+
+    def compare_many(self, cases, blob=None):
+        """Compare an iterable of ``(baseline, candidate)`` path pairs."""
+        return [self.compare(baseline, candidate, blob) for baseline, candidate in cases]
+
+    def cache_info(self):
+        with _GLOBAL_COMPARISON_LOCK, self._lock:
+            return {'comparisons': self._comparison_count,
+                    'path_content_invalidations': self._invalidations,
+                    'jumptable_cache_clears': _JUMPTABLE_CACHE_CLEARS,
+                    'size_inventory_hits': self._size_hits,
+                    'size_inventory_misses': self._size_misses,
+                    'byteident': {name: getattr(self._api, name).cache_info()._asdict()
+                                  for name in ('section_symbols', 'function_owners', 'body')},
+                    'jumptable': {name: getattr(self._jumptable, name).cache_info()._asdict()
+                                  for name in ('instructions', 'section_direct_edges')}}
+
+    def _clear_path_caches(self):
+        for name in ('section_symbols', 'function_owners', 'body'):
+            getattr(self._api, name).cache_clear()
+        self._invalidations += 1
+
+    def _discard_size_inventories(self, digests):
+        for digest in digests:
+            self._sizes_by_content.pop(digest, None)
+
+
+_PROCESS_TOOL_DIGESTS = {
+    str(Path(path).resolve()): hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    for path in ComparisonSession._TOOL_INPUTS
+}
+
+
+def _invalidate_all_path_caches():
+    for session in list(_ACTIVE_SESSIONS):
+        session._clear_path_caches()
+    _clear_jumptable_caches()
+
+
+def _clear_jumptable_caches():
+    global _JUMPTABLE_CACHE_CLEARS
+    jumptable = data_audit.jumptable
+    for name in ('instructions', 'section_direct_edges'):
+        getattr(jumptable, name).cache_clear()
+    _JUMPTABLE_CACHE_CLEARS += 1
+
+
+def _invalidate_after_input_change(digests):
+    _invalidate_all_path_caches()
+    for session in list(_ACTIVE_SESSIONS):
+        session._discard_size_inventories(digests.values())
+    for path in digests:
+        _GLOBAL_PATH_DIGESTS.pop(path, None)
+
+
+def compare(baseline, candidate, blob=None, session=None):
+    """Compare one pair, or reuse ``session`` as part of a larger batch."""
+    if session is None:
+        session = ComparisonSession(blob)
+    return session.compare(baseline, candidate, blob)
+
+
+def compare_many(cases, blob=None):
+    """Compare path pairs with one persistent analysis session."""
+    return ComparisonSession(blob).compare_many(cases)
+
+
+def _write_report(session, baseline, candidate, blob, output):
     stream = None
     try:
-        stream = args.output.open('x')
-        report = compare(args.baseline, args.candidate, args.blob)
-        json.dump(report, stream, indent=2, sort_keys=True)
+        stream = output.open('x')
+        result = session.compare(baseline, candidate, blob)
+        json.dump(result, stream, indent=2, sort_keys=True)
         stream.write('\n')
-        print('valid: %d shared functions; EXACT +%d/-%d, REGALLOC +%d/-%d; emitted order matches reference: %s' %
-              (report['shared_sized_functions'], len(report['grade_changes']['EXACT']['gained']),
-               len(report['grade_changes']['EXACT']['lost']), len(report['grade_changes']['REGALLOC']['gained']),
-               len(report['grade_changes']['REGALLOC']['lost']), report['layout']['candidate_matches_reference']))
+        print('valid: %s; %d shared functions; EXACT +%d/-%d, REGALLOC +%d/-%d; emitted order matches reference: %s' %
+              (output, result['shared_sized_functions'],
+               len(result['grade_changes']['EXACT']['gained']),
+               len(result['grade_changes']['EXACT']['lost']),
+               len(result['grade_changes']['REGALLOC']['gained']),
+               len(result['grade_changes']['REGALLOC']['lost']),
+               result['layout']['candidate_matches_reference']))
         return 0
     except (OSError, ValueError, RuntimeError, ELFError, subprocess.SubprocessError) as exc:
         if stream is not None:
@@ -142,11 +321,44 @@ def main(argv=None):
             stream.truncate()
             json.dump({'status': 'invalid', 'shared_sized_functions': None, 'error': str(exc)}, stream)
             stream.write('\n')
-        print('invalid: denominator not established: ' + str(exc), file=sys.stderr)
+        print('invalid: %s; denominator not established: %s' % (output, exc), file=sys.stderr)
         return 1
     finally:
         if stream is not None:
             stream.close()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--baseline', required=True)
+    parser.add_argument('--candidate', action='append', required=True,
+                        help='candidate object; repeat with --output-dir for a cached batch')
+    parser.add_argument('--blob')
+    outputs = parser.add_mutually_exclusive_group(required=True)
+    outputs.add_argument('--output', type=Path, help='single-candidate report; never overwrites')
+    outputs.add_argument('--output-dir', type=Path,
+                         help='batch reports, one file per candidate; existing files are never overwritten')
+    args = parser.parse_args(argv)
+    if args.output is not None and len(args.candidate) != 1:
+        parser.error('--output requires exactly one --candidate')
+    try:
+        session = ComparisonSession(args.blob)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print('invalid: analysis session could not start: ' + str(exc), file=sys.stderr)
+        return 1
+    if args.output is not None:
+        return _write_report(session, args.baseline, args.candidate[0], args.blob, args.output)
+
+    try:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print('invalid: batch output directory: ' + str(exc), file=sys.stderr)
+        return 1
+    status = 0
+    for index, candidate in enumerate(args.candidate, 1):
+        output = args.output_dir / ('%04d-%s.json' % (index, Path(candidate).name))
+        status |= _write_report(session, args.baseline, candidate, args.blob, output)
+    return status
 
 
 if __name__ == '__main__':

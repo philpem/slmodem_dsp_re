@@ -13,43 +13,43 @@
  },
  {
   "label": "generateCPt scrambles from 24 symbols rather than toggling to 24",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount < 24)"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount < 24)"
  },
  {
   "label": "generateCPt toggles prevBit with 2 rather than 1",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 2;"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 2;"
  },
  {
   "label": "generateCPt does not toggle prevBit at all",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit;"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit;"
  },
  {
   "label": "generateCPt's pattern base is 24 rather than 25",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 24) % patternLength])"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 24) % patternLength])"
  },
  {
   "label": "generateCPt does not reduce the pattern index",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % (patternLength + 1)])"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % (patternLength + 1)])"
  },
  {
   "label": "generateCPt does not fold prevBit into the scrambled bit",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ 0;"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ 0;"
  },
  {
   "label": "generateCPt does not carry the bit forward",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\n"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\n"
  },
  {
   "label": "generateCPt negates on a zero bit",
-  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
-  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = (unsigned short)amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tunsigned int sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = (unsigned short)amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
  },
  {
   "label": "generateE1u scrambles a one rather than a zero",
