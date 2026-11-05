@@ -114,7 +114,7 @@ V22_FSE_getdiag(struct v22_fse *state)
  */
 unsigned short
 V22_FSE_receive(struct v22_fse *state, const short *in, unsigned short *out,
-		short count)
+		unsigned short count)
 {
 	struct fpm_phasor ph;
 	short *icoeff = state->icoeff;
@@ -129,7 +129,7 @@ V22_FSE_receive(struct v22_fse *state, const short *in, unsigned short *out,
 	short carrier = 0;
 	short theta = 0;
 
-	state->n_in = count;
+	state->n_in = left;
 	state->n_out = 0;
 
 	/*

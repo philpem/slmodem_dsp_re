@@ -7,7 +7,7 @@
  * 0x08c3b0, then V22_status at 0x08c450.
  *
  * The control body acquires the DSP owner before the first flag pair and
- * again after the HDX updates. The HDX state-word view preserves that native
+ * again after the HDX updates. The DSP-owner view preserves that native
  * alias boundary; each conditional pair captures its HDX owner once.
  */
 
@@ -32,6 +32,7 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 {
 	unsigned char first_flags, late_flags, hdx_flags;
 	int scrambler;
+	struct v22fp_dsp *dsp;
 	/*
 	 * The two scrambler switches, from the two low bits.  Both are read
 	 * out of one byte load, which is why they are taken in this order --
@@ -40,10 +41,11 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 */
 	first_flags = ctl->flags_0c;
 	scrambler = first_flags & 1;
-	fp->dsp->descrambler_on = (first_flags >> 1) & 1;
+	dsp = fp->dsp;
+	dsp->descrambler_on = (first_flags >> 1) & 1;
 	/* Acquire the HDX request before publishing the scrambler result. */
 	hdx_flags = ctl->flags_0d;
-	fp->dsp->scrambler_on = scrambler;
+	dsp->scrambler_on = scrambler;
 
 	/*
 	 * The half-duplex pair, twice over.  The flag is tested first and the
@@ -53,21 +55,22 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 */
 	if (hdx_flags & V22_CTL_RETRAIN) {
 		struct v22fp_hdx *hdx = fp->hdx;
-		hdx->state_bits.protocol = V22_PROTOCOL_RETRAIN;
-		hdx->state_bits.connect_substate = 1;
+		hdx->protocol = V22_PROTOCOL_RETRAIN;
+		hdx->connect_substate = 1;
 		/* Those stores may overlap the request; the other path reuses it. */
 		hdx_flags = ctl->flags_0d;
 	}
 	if ((hdx_flags >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
 		struct v22fp_hdx *hdx = fp->hdx;
-		hdx->state_bits.protocol = V22_PROTOCOL_ORG_RMLOOP2;
-		hdx->state_bits.connect_substate = 0;
+		hdx->protocol = V22_PROTOCOL_ORG_RMLOOP2;
+		hdx->connect_substate = 0;
 	}
 
 	late_flags = ctl->flags_0c;
-	fp->dsp->r20 = (late_flags >> 2) & 1;
+	dsp = fp->dsp;
+	dsp->r20 = (late_flags >> 2) & 1;
 	/* Inverted; see V22_CTL_FREEZE_ADAPT. */
-	fp->dsp->agc.f18 = (late_flags & V22_CTL_FREEZE_ADAPT) ? 0 : 1;
+	dsp->agc.f18 = (late_flags & V22_CTL_FREEZE_ADAPT) ? 0 : 1;
 
 	/* Native byte +0x11 write; the whole-word parameter view is retained. */
 	fp->params.flag_bits.bit9 = late_flags >> 7;
@@ -80,10 +83,12 @@ int
 V22_status(struct v22fp *fp, struct v22_status *st)
 {
 	int err;
+	int protocol = fp->hdx->protocol;
+	struct v22fp_dsp *dsp = fp->dsp;
 
-	st->protocol = PROTOCOL[fp->hdx->protocol];
+	st->protocol = PROTOCOL[protocol];
 
-	st->tx_bps = fp->dsp->r28 == 0 ? V22_STATUS_BPS_1200
+	st->tx_bps = dsp->r28 == 0 ? V22_STATUS_BPS_1200
 				       : V22_STATUS_BPS_2400;
 
 	/*
@@ -93,12 +98,12 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 	 * rather than a conditional inside the expression because that is the
 	 * shape the object has.
 	 */
-	if (fp->dsp->r2a == 0) {
+	if (dsp->r2a == 0) {
 		st->rx_bps = V22_STATUS_BPS_1200;
-		err = (fp->dsp->fse.mse * V22_STATUS_QUALITY_SCALE_Q14) >> 14;
+		err = (dsp->fse.mse * V22_STATUS_QUALITY_SCALE_Q14) >> 14;
 	} else {
 		st->rx_bps = V22_STATUS_BPS_2400;
-		err = fp->dsp->fse.mse;
+		err = dsp->fse.mse;
 	}
 
 	st->short_08 = 0;
@@ -108,7 +113,7 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 	st->short_10 = 0;
 	st->short_12 = 0;
 
-	st->flag_bits.scrambler = fp->dsp->scrambler_on;
+	st->flag_bits.scrambler = dsp->scrambler_on;
 	st->flag_bits.descrambler = fp->dsp->descrambler_on;
 	st->flag_bits.r20 = fp->dsp->r20;
 	st->flag_bits.r00_off = fp->dsp->r00 == 0;

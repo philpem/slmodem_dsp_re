@@ -780,6 +780,20 @@ nine levers, each with the measurement that established it AND the case where
 it failed. Read it before a refinement pass. It is where these entries are
 maintained; this section is the summary.
 
+**Consult the Playbook at the start of every recovery turn. Before parking a
+function, complete a bounded deep dive and record its outcome in the Playbook:**
+mechanism, native witness, controls, collateral, limits and reopening condition.
+On the next recovery turn, review those additions and check whether they apply
+to other functions, using fresh native evidence. Record failed transfers too;
+do not repeat a closed spelling palette. This is a deep-dive-and-transfer loop,
+not a requirement to continue one function indefinitely.
+
+Small collateral regressions require causal analysis and coupled repair tests
+before rejection. Shared source/declarations can compensate across functions;
+allow temporary byte regressions and widen to affected callers/callees rather
+than freezing an EXACT neighbor. Judge the completed native-backed combination,
+with full collateral reported and period fidelity intact.
+
 ### The tools, and their precision
 
 - `byteident.py` (`make byteident`) — **grade 0 and grade 1, and the only

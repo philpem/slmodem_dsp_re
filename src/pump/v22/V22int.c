@@ -234,6 +234,7 @@ unsigned short
 DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	     unsigned short count)
 {
+	struct v22fp_dsp *dsp = fp->dsp;
 	struct v22fp_hdx *hdx = fp->hdx;
 	short *iir = hdx->iir;
 	unsigned short n_rate;	/* samples the resampler produced      */
@@ -247,7 +248,7 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	 * asked for only `count` of them, so a short block leaves the tail of
 	 * the mixer at whatever the stack held.  The object's.
 	 */
-	if (fp->dsp->r2e == V22_FRONTEND_IIR) {
+	if (dsp->r2e == V22_FRONTEND_IIR) {
 		short mix[V22_IIR_BLOCK];
 
 		FPM_TONE_generate_demod(hdx->tone, mix, (short)count);
@@ -255,12 +256,14 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 				   iir + V22_IIR_OFF_B, iir + V22_IIR_OFF_A,
 				   iir + V22_IIR_OFF_X, iir + V22_IIR_OFF_Y,
 				   mix);
+		dsp = fp->dsp;
 	}
 
-	n_rate = (unsigned short)V22_MRF_filter(&fp->dsp->mrf, in,
-						fp->dsp->rx_scratch,
+	n_rate = (unsigned short)V22_MRF_filter(&dsp->mrf, in,
+						dsp->rx_scratch,
 						count);
-	fp->dsp->rx_count = (short)n_rate;
+	dsp = fp->dsp;
+	dsp->rx_count = (short)n_rate;
 
 	/*
 	 * The disconnect check, skipped entirely when hdx->protocol is set.  Note
@@ -268,18 +271,21 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	 * `V22FP_create` loads from V22DiconnectThreshTable regardless of what
 	 * the template held -- see v22fp.h.
 	 */
-	if (fp->hdx->protocol == 0
-	    && fp->params.disconnect_thresh
-	       > FPM_rms(fp->dsp->rx_scratch, n_rate)) {
-		fp->dsp->sre.active = 0;
-		return 0;
+	if (fp->hdx->protocol == 0) {
+		short level = FPM_rms(dsp->rx_scratch, n_rate);
+		if (fp->params.disconnect_thresh > level) {
+			dsp = fp->dsp;
+			dsp->sre.active = 0;
+			return 0;
+		}
+		dsp = fp->dsp;
 	}
 
 	/*
 	 * F11613 retains the observed fourth argument, literal 1, which the
 	 * callee never reads.
 	 */
-	FPM_AGC_agc(&fp->dsp->agc, fp->dsp->rx_scratch, n_rate, 1);
+	FPM_AGC_agc(&dsp->agc, dsp->rx_scratch, n_rate, 1);
 
 	/*
 	 * `agc.f18` is read ONCE and used twice across the clock-recovery
@@ -288,34 +294,37 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	 * nothing in fpm_agc writes it, so what it means here is the caller's
 	 * business and it keeps its neutral name.
 	 */
-	agc_state = fp->dsp->agc.f18;
-	fp->dsp->sre.adapt = fp->dsp->r04 & agc_state;
+	dsp = fp->dsp;
+	agc_state = dsp->agc.f18;
+	dsp->sre.adapt = dsp->r04 & agc_state;
 
-	n_sym = (unsigned short)V22_SRE_recover(&fp->dsp->sre,
-						fp->dsp->rx_scratch, in,
-						(short)n_rate);
+	n_sym = (unsigned short)V22_SRE_recover(&dsp->sre,
+						dsp->rx_scratch, in,
+						n_rate);
 
 	/*
 	 * While the clock loop is still acquiring, the equaliser adapts on
 	 * nothing; once it has settled, bit 0 of the AGC word decides.
 	 */
+	dsp = fp->dsp;
 	adapt = 0;
-	if (fp->dsp->sre.acquiring == 0)
+	if (dsp->sre.acquiring == 0)
 		adapt = agc_state & 1;
 
-	fp->dsp->fse.pll_on = fp->dsp->r08;
-	if (fp->dsp->sre.mode != 0) {
-		fp->dsp->fse.r18 = fp->dsp->r0c & adapt;
-		fp->dsp->fse.lms_on = adapt & fp->dsp->eq_adapt;
+	dsp->fse.pll_on = dsp->r08;
+	if (dsp->sre.mode != 0) {
+		dsp->fse.r18 = dsp->r0c & adapt;
+		dsp->fse.lms_on = adapt & dsp->eq_adapt;
 	} else {
-		fp->dsp->fse.r18 = 0;
-		fp->dsp->fse.lms_on = 0;
+		dsp->fse.r18 = 0;
+		dsp->fse.lms_on = 0;
 	}
 
-	V22_FSE_receive(&fp->dsp->fse, in, sym, (short)n_sym);
+	V22_FSE_receive(&dsp->fse, in, sym, n_sym);
 
 	/* Not V22_FSE_receive's return, which the object throws away. */
-	return (unsigned short)fp->dsp->fse.n_out;
+	dsp = fp->dsp;
+	return (unsigned short)dsp->fse.n_out;
 }
 
 void

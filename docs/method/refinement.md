@@ -7,12 +7,83 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## Consult, investigate, record, transfer
+
+Consult this Playbook at the start of every recovery turn. Read the applicable
+mechanisms, counterexamples and recent additions before choosing experiments.
+Compare historical results with the current source, headers and compiler inputs.
+
+Shared declarations, interfaces and neighboring source can compensate for one
+another. An EXACT neighbor is not frozen. Explore evidence-backed intermediate
+states that make bytes worse, then test the coupled correction. When collateral
+is a small set of functions, trace their native boundaries and first compiler
+divergences before rejecting or parking the proposal. Widen the investigation
+to affected callees, callers and preceding functions where the evidence leads.
+Preserve the baseline and report all gains/losses; the completed candidate still
+requires period fidelity. A finite search does not establish a global optimum.
+
+Before parking a function, complete a bounded deep dive: identify its native
+observation boundaries, trace the first relevant compiler transformation, and
+run a discriminating control. Record the outcome here, including negative
+results, tested combinations, full-TU collateral, fixture domain, unresolved
+questions and the evidence that would reopen it. A smaller byte gap or an
+unexplained compiler-stage label is not a completed investigation. Deep dives
+have declared limits; this rule does not require endless source permutations.
+
+On the next recovery turn, review the additions from the preceding deep dive
+and screen other functions for the same mechanism. Require a fresh native
+witness before transferring a source change. Record where the lesson applies,
+where it fails, and the next discriminating test. Transfer a negative lesson
+as a constraint too; do not repeat the parked function's closed palette.
+
+## V22, V92CP and HDX deep-dive outcomes (2026-11-05)
+
+Local commit `4246de2a4`
+retains V22 control REGALLOC at 145 bytes and V92 `float2Bits` EXACT at 125
+bytes. The coupled HDX/Demod follow-up adds `DemodDataV22` EXACT at 510 bytes
+and restores two HDX byte scores. It passes 399 period tests plus structural
+checks; the final measured census is 1,134 EXACT / 28 REGALLOC / 73 BYTES /
+617 SIZE out of 1,852, with no EXACT/REGALLOC losses. These are dated
+measurements, not permanent counts. The complete
+source and fixture qualifications are in the [V22 report](../v22-control-recovery-20261105.md)
+and [V92 report](../v92cp-inline-recovery-20261105.md).
+
+| Lesson | Measured outcome | Transfer condition or limit |
+| --- | --- | --- |
+| Cross request sampling with the owner alias boundary. | V22 needs the high request before the scrambler store, a conditional reread after RETRAIN, and the late DSP-owner acquisition. The fixed-context alias-view × recapture matrix gives BYTES 54 / 50 / 72 / REGALLOC. | Track owner, offset, width and value age separately. Isolated captures did not establish a negative result for the combined graph. |
+| Preserve consumed coefficient and predicate ownership together. | V92 switch dispatch, one weight per iteration, negated predicate and counter/cursor lifetime recover `float2Bits`; other 14 TU bodies remain unchanged. | Preserve unordered floating-point behavior. The three `bitsToInfo` byte/quantum cells produced no grade gain; do not repeat them without new scalar-home/lifetime evidence. |
+| A matching reload does not identify its alias cause. | An alternative pointer-union view plus explicit native captures reproduces the retained control body and status EXACT with ordinary HDX shorts. | It does not establish original HDX bitfields or an original pointer union. Trace both the publication and the owner acquisition. |
+| Distinguish a pointer union from a plain opaque pointer. | Plain `void *` plus typed casts loses control's late owner read; the union is the active alias mechanism. | Do not infer an original generic-pointer declaration from a union diagnostic. An unused member that changes alias sets needs independent declaration/owner evidence before retention. |
+| Compare the entire header closure, then investigate small collateral sets. | Header alone restores ans_rmloop2 BYTES 18→7 and org_rmloop2 101→90 but gives DemodDataV22 SIZE16. Its coupled interface/lifetime correction makes Demod EXACT510. | Do not reject the isolated regression before tracing and crossing the affected source; all 300 production objects were compared. |
+| Distinguish interface transport from local interpretation. | Native Demod passes zero-extended counts; SRE/FSE consume signed low words. Unsigned-short formals plus signed locals retain both callee objects literally. | A callee sign extension does not uniquely establish its formal parameter type. Check all callers and full callee use; FSE must publish n_in from the existing signed local. |
+| Cross count declarations with RMS-result lifetime. | Counts alone give BYTES29; RMS short capture alone BYTES202; both EXACT510. An int RMS local does not recover it. | Keep signedness, conversion width and value lifetime separate, then test their interaction. |
+| Place owner recaptures on the native CFG edge. | With the alternative, unconditional post-RMS recapture gives BYTES25; recapture only on the surviving RMS path restores EXACT. | Protocol!=0 bypasses the native reload. Blanket freshening can hide a wrong source graph. |
+| Recover status value ages explicitly when testing a broader owner alias. | Native status reads protocol, captures DSP, then retains that owner through the initial report stores and first scrambler read. Capturing protocol before DSP restores status EXACT in both diagnostic owner variants. | Original source spelling remains non-unique. A native capture in one function does not justify a global alias declaration. |
+
+The [HDX report](../v22-hdx-deep-dive-20261105.md) records nine full-stc
+cells and seven paired consumer builds. The [Demod report](../demodv22-recovery-20261105.md)
+adds fifteen full-V22int cells and six callee controls. Only the selected
+coherent source has the 399-test period validation; that verdict does not cover
+every diagnostic cell. The pointer-union view is an explicit alias-contract
+model, not a uniquely recovered original declaration. It replaces the earlier
+HDX state view after the coupled repair and full closure review.
+[Issue #590](https://github.com/philpem/slmodem_dsp_re/issues/590) tracks the
+remaining original-declaration and consumer questions.
+
+For the next recovery turn, transfer the new interface/value-age lesson to
+`Detect_v22`: the alternative exposed owner-related changes there. Map native
+DSP acquisitions around calls and publications before proposing captures.
+Inspect `V22FP_create` if its changed group supplies an independent discriminator.
+Record successful and failed transfers. These are admission checks, not promised
+gains. Keep control's remaining register choices separate from structural work.
+
 ## Use whole-TU evidence and interacting candidates
 
-The [V22 control recovery](../v22-control-recovery-20261105.md) combines
-request-byte ages, conditional recapture and an HDX alias boundary to reach
-REGALLOC. Its shared header also worsens two neighboring BYTES results; keep
-that explicit collateral when evaluating or reopening the recovery.
+The initial [V22 control recovery](../v22-control-recovery-20261105.md)
+combines request-byte ages, conditional recapture and an HDX alias boundary
+to reach REGALLOC. Its two neighboring BYTES regressions are restored by the
+[coupled HDX/Demod recovery](../demodv22-recovery-20261105.md). Keep both the
+original tradeoff and the later interaction when evaluating this mechanism.
 
 The [recovery pilot](recovery-pilot.md) adds a practical loop: retrieve prior
 attempts, pin inputs, compare baseline/A/B/A+B, inspect all changed bodies and
@@ -9132,8 +9203,10 @@ because its registers differ. Source fidelity outranks a bystander's exactness;
 explain and measure collateral instead of retaining incorrect source or adding
 register carriers to protect a count.
 
-Negative results are bounded. The V.22 control captures recover some request
-value ages but still need native DSP-owner reload structure. The sixteen-cell
+Negative results are bounded. In that historical wave, the V.22 control
+captures recovered some request value ages but still needed native DSP-owner
+reload structure. The later V22/HDX deep dive above supersedes that control
+status and records the unresolved alias-cause alternatives. The sixteen-cell
 V92Jd phase/rate family gives no exact or REGALLOC gain; its smaller-size
 branches are not retained. FDSP's thirty-global/five-TU attribution bracket
 does not license regrouping Run and Delete by adjacency. Existing SDM, FSE,

@@ -1,5 +1,11 @@
 # V22 control recovery — 2026-11-05
 
+This records the initial landing in 4246de2a4. The subsequent
+[HDX/Demod recovery](demodv22-recovery-20261105.md) replaces the HDX state
+view with an explicit owner alias-contract model and native captures. It
+retains this control body, restores the two neighboring byte scores and adds
+DemodDataV22 EXACT. The original declaration remains unresolved.
+
 `V22FP_control` advances from SIZE (+6 bytes) to REGALLOC: 145 bytes,
 with 11 byte differences confined to register choices. `V22_status` stays
 EXACT. Together with the V92CP recovery, the measured census is 1,133 EXACT,

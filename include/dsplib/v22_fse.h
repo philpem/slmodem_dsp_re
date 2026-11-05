@@ -352,11 +352,13 @@ int V22_FSE_getdiag(struct v22_fse *state);
  * produced, and the same count applies to @p out, to `state->out_i` and to
  * `state->out_q`.
  *
- * @p count IS SIGNED and a negative one is not the same as zero: zero
- * returns without entering the loop, and a negative count enters it, takes
- * the short-block path and leaves without stashing anything -- so neither
- * produces a symbol, but only the negative one can decrement `need`. It
- * cannot: the stash is guarded by `count > 0`. Reproduced from the
+ * The caller transports @p count as an unsigned word; the receiver consumes
+ * its low 16 bits through the signed local `left`. A negative signed value
+ * enters the loop, takes the short-block path and leaves without stashing.
+ * Zero skips the loop. Neither produces a symbol or changes `need` on that
+ * path: stashing and the corresponding `need` update require `left > 0`.
+ * This preserves the signed low-word control flow, rather than converting
+ * every high-bit count to an ordinary positive length. Reproduced from the
  * object's `test`/`cmpw $0x0` pair rather than tidied into one test.
  *
  * The caller must not ask for more than `V22_FSE_OUT` symbols. `out_i` and
@@ -369,10 +371,10 @@ int V22_FSE_getdiag(struct v22_fse *state);
  * @param state  The equaliser state.
  * @param in     Input samples.
  * @param out    Output for the decoded symbols.
- * @param count  How many input samples; signed, see above.
+ * @param count  Sample-count word, consumed as signed low 16 bits; see above.
  * @return The number of symbols produced (`state->n_out`).
  */
 unsigned short V22_FSE_receive(struct v22_fse *state, const short *in,
-			       unsigned short *out, short count);
+			       unsigned short *out, unsigned short count);
 
 #endif /* DSPLIB_V22_FSE_H */

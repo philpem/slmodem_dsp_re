@@ -167,11 +167,11 @@ void V22_SRE_free(struct v22_sre *sre);
  * @param sre    The SRE state.
  * @param in     Input samples at 3600 Hz.
  * @param out    Output for the recovered symbols.
- * @param count  How many input samples.
+ * @param count  Sample-count word; the local remaining count is signed.
  * @return The number of symbols produced, roughly `count * V22_SRE_BRANCHES / (10 + steer)`.
  */
 short V22_SRE_recover(struct v22_sre *sre, const short *in, short *out,
-		      short count);
+		      unsigned short count);
 
 /*
  * The prototype filter, 271 taps at Q15, symmetric about COFFS[135].  NOT

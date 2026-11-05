@@ -380,7 +380,7 @@ sre_update(struct v22_sre *sre, short yq, short xq)
 }
 
 short
-V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
+V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, unsigned short count)
 {
 	short *hist = sre->hist;
 	short taps = sre->taps;
