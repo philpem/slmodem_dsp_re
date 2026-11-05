@@ -19,6 +19,7 @@ import dis  # keep tools/dis.py from shadowing stdlib
 from elftools.elf.elffile import ELFFile
 from elftools.common.exceptions import ELFError
 sys.path.insert(0, str(TOOLS))
+import gcc3_search_data as data_audit
 import gcc3_search_pilot as pilot
 
 
@@ -92,6 +93,7 @@ def compare(baseline, candidate, blob=None):
     return {'schema': 'gcc3-variant-comparison-v1', 'status': 'valid',
             'analysis_sha256': {p.name: identity(str(p))['sha256'] for p in
                                 (Path(__file__), TOOLS / 'gcc3_search_pilot.py',
+                                 TOOLS / 'gcc3_search_data.py', TOOLS / 'toolchain/jumptable.py',
                                  TOOLS / 'toolchain/byteident.py')},
             'inputs': {key: identity(path) for key, path in
                        [('reference', blob), ('baseline', baseline), ('candidate', candidate)]},
@@ -109,6 +111,7 @@ def compare(baseline, candidate, blob=None):
                        'candidate_matches_baseline': orders['candidate'] == orders['baseline']},
             'exports_unchanged': pilot.exported_bindings(baseline) == pilot.exported_bindings(candidate),
             'allocated_data_raw_unchanged': pilot.allocated_data(baseline) == pilot.allocated_data(candidate),
+            'allocated_data_relocation_audit': data_audit.compare(baseline, candidate),
             'scope': 'Grades cover only functions shared by all three objects. Missing/added functions '
                      'are reported separately. Layout compares relative address groups within sections, '
                      'not absolute placement or source definition order. No adoption decision or '

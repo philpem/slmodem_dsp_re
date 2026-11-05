@@ -265,3 +265,38 @@ need its own captured constraints, preferences, ordering and spill boundary;
 the Norcroft allocation algorithm does not describe GCC's implementation.
 Keep unsupported inputs explicit, pin the compiler identity, and preserve
 forward compilation as the authority for every shortlisted candidate.
+
+
+### Separate data bytes, owners and exact relocation targets
+
+`gcc3_search_compare.py` includes `allocated_data_relocation_audit`. Its masked
+payload/layout comparison retains section size, flags, alignment and entry size.
+It does not normalize string-pool order or padding. Its relocation comparison
+preserves each field's section and offset, relocation type, and resolved
+symbol/addend or function/relative-offset destination. Code targets must have
+one sized function owner and land on a decoded instruction boundary.
+
+The report gives allocated-section and relocation-field denominators, changed
+fields, unresolved fields, and separate counts of changed code targets and
+changed owners. Unsupported relocations, section-relative data destinations,
+ambiguous owners and interior-byte targets remain unresolved. A clean result
+with unresolved fields is `null`, not `true`; an established difference remains
+`false` even if other fields are unresolved. These are data observations, not
+jump-table bounds, CFG equivalence or an adoption decision.
+
+This distinction caught two misleading handoff descriptions during the overnight
+campaign. In the phase-three decision candidate, 41 of 68 table destinations
+move within their existing owners; the diagnostic string pool also changes
+order. In V90MP, all five table destinations retain their relative offsets but
+string-pool padding changes the raw payload. Manual string-payload/consumer
+review is separate from either result.
+
+Run `python3 tools/gcc3_search_data_test.py` and its `python3 -O` counterpart.
+The twelve real ELF controls distinguish a relocated function with an unchanged
+relative target from a different valid case in the same owner, and reject
+interior targets, ambiguous aliases, duplicate local function names, truncated
+section payloads and overlapping relocation fields. Absolute/special symbols
+remain unresolved rather than being identified solely by name. They
+also cover changed payloads, symbol addends, unsupported section destinations
+and an explicitly zero relocation denominator. The existing comparison tests
+continue to check that data observations do not alter function grades.
