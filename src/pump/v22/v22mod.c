@@ -174,12 +174,18 @@ V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 	 * them.
 	 */
 	if (fp->status == 3 || fp->status == 4) {
-		fp->hdx->protocol = 0;
-		fp->hdx->connect_substate = 0;
+		{
+			struct v22fp_hdx *state_hdx = fp->hdx;
+			state_hdx->protocol = 0;
+			state_hdx->connect_substate = 0;
+		}
 	}
 	if (fp->status >= 6 && fp->status <= 8) {
-		fp->hdx->protocol = 0;
-		fp->hdx->connect_substate = 0;
+		{
+			struct v22fp_hdx *state_hdx = fp->hdx;
+			state_hdx->protocol = 0;
+			state_hdx->connect_substate = 0;
+		}
 	}
 
 	/* Widen the recovered symbols back out to int. */
@@ -515,8 +521,11 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * is a retrain, not a connect.
 		 */
 		if (fp->hdx->carrier_loss_blocks != 0) {
-			fp->hdx->protocol = V22_HDX_R0E_RETRAIN;
-			fp->hdx->connect_substate = V22_NODE_RETRAIN;
+			{
+				struct v22fp_hdx *state_hdx = fp->hdx;
+				state_hdx->protocol = V22_HDX_R0E_RETRAIN;
+				state_hdx->connect_substate = V22_NODE_RETRAIN;
+			}
 			SetAdaptEqV22(fp, 1);
 			HDX_R38(fp->hdx) = V22_HDX_R38_RETRAIN;
 			fp->status = V22_STATUS_0B;
@@ -599,8 +608,11 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 			SetTxRate(fp, V22_RATE_2400);
 			SetRxRate(fp, V22_RATE_2400);
 			SetAdaptEqV22(fp, 3);
-			fp->hdx->protocol = 0;
-			fp->hdx->connect_substate = 0;
+			{
+				struct v22fp_hdx *state_hdx = fp->hdx;
+				state_hdx->protocol = 0;
+				state_hdx->connect_substate = 0;
+			}
 		}
 		break;
 
@@ -835,18 +847,22 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->connect_substate = 2;
+			struct v22fp_hdx *state_hdx = fp->hdx;
+			state_hdx->gtimer = 0;
+			state_hdx->r08 = 0;
+			state_hdx->connect_substate = 2;
 			if (ack == 0) {
-				fp->hdx->trained = 1;
+				state_hdx->trained = 1;
 				SetAdaptEqV22(fp, 3);
 			}
 		}
 		if ((unsigned int)ReadGTimer(fp) > V22_RMLOOP2_TIMEOUT_MS) {
 			SetAdaptEqV22(fp, 3);
-			fp->hdx->protocol = 0;
-			fp->hdx->connect_substate = 0;
+			{
+				struct v22fp_hdx *state_hdx = fp->hdx;
+				state_hdx->protocol = 0;
+				state_hdx->connect_substate = 0;
+			}
 		}
 		break;
 
@@ -1446,8 +1462,11 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		if ((unsigned int)ReadGTimer(fp) > V22_ANS_NODE_1_MS) {
-			fp->hdx->connect_substate = V22_ANS_NODE_SILENCE_AFTER_2100;
-			fp->hdx->gtimer = 0;
+			{
+				struct v22fp_hdx *state_hdx = fp->hdx;
+				state_hdx->connect_substate = V22_ANS_NODE_SILENCE_AFTER_2100;
+				state_hdx->gtimer = 0;
+			}
 			iSilenceAfter2100 = 0;
 			fp->flags |= V22FP_FLAG_1D_BIT4;
 			SetTxRate(fp, V22_RATE_1200);
@@ -1712,18 +1731,19 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		}
 
 		if ((unsigned short)fp->hdx->r08 > V22_ORG_NODE_3_RUN_MS) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->connect_substate = V22_ORG_NODE_4;
+			struct v22fp_hdx *state_hdx = fp->hdx;
+			state_hdx->gtimer = 0;
+			state_hdx->r08 = 0;
+			state_hdx->connect_substate = V22_ORG_NODE_4;
 			/*
 			 * The mean level over the blocks counted.  An UNSIGNED
 			 * divide, and by `rms_blocks` -- which is zero until the first
 			 * block with symbols in it.  See v22org.h.
 			 */
-			fp->hdx->rms_accum /= (unsigned short)fp->hdx->rms_blocks;
-			if (fp->hdx->rms_accum
-			    > (unsigned short)fp->hdx->rms_threshold)
-				fp->hdx->rx_shift = 1;
+			state_hdx->rms_accum /= (unsigned short)state_hdx->rms_blocks;
+			if (state_hdx->rms_accum
+			    > (unsigned short)state_hdx->rms_threshold)
+				state_hdx->rx_shift = 1;
 		}
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);

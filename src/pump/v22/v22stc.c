@@ -6,12 +6,9 @@
  * already here.  The emission order is the object's: V22FP_control at
  * 0x08c3b0, then V22_status at 0x08c450.
  *
- * THE INSTANCE POINTER IS READ AGAIN FOR EVERY FIELD, and it is not a style
- * choice: the object emits `mov 0x54(%esi),%ebx` five separate times inside
- * the flag sequence, with the instance itself live in a callee-saved register
- * throughout.  A local holding the sub-object pointer would have been kept in
- * that register instead.  src/pump/v22/v22data.c records the same shape for
- * the same author's neighbouring functions.
+ * The control body acquires the DSP owner before the first flag pair and
+ * again after the HDX updates. The HDX state-word view preserves that native
+ * alias boundary; each conditional pair captures its HDX owner once.
  */
 
 #include "dsplib/v22status.h"
@@ -33,14 +30,20 @@ static const short PROTOCOL[7] = {
 int
 V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 {
+	unsigned char first_flags, late_flags, hdx_flags;
+	int scrambler;
 	/*
 	 * The two scrambler switches, from the two low bits.  Both are read
 	 * out of one byte load, which is why they are taken in this order --
 	 * the object shifts the loaded byte for bit 1 and masks the original
 	 * for bit 0.
 	 */
-	fp->dsp->descrambler_on = (ctl->flags_0c >> 1) & 1;
-	fp->dsp->scrambler_on = ctl->flags_0c & 1;
+	first_flags = ctl->flags_0c;
+	scrambler = first_flags & 1;
+	fp->dsp->descrambler_on = (first_flags >> 1) & 1;
+	/* Acquire the HDX request before publishing the scrambler result. */
+	hdx_flags = ctl->flags_0d;
+	fp->dsp->scrambler_on = scrambler;
 
 	/*
 	 * The half-duplex pair, twice over.  The flag is tested first and the
@@ -48,34 +51,26 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 * field's values in place; that ordering is the object's and is
 	 * observable, which is why it is not tidied into an if/else.
 	 */
-	if (ctl->flags_0d & V22_CTL_RETRAIN) {
-		fp->hdx->protocol = V22_PROTOCOL_RETRAIN;
-		fp->hdx->connect_substate = 1;
+	if (hdx_flags & V22_CTL_RETRAIN) {
+		struct v22fp_hdx *hdx = fp->hdx;
+		hdx->state_bits.protocol = V22_PROTOCOL_RETRAIN;
+		hdx->state_bits.connect_substate = 1;
+		/* Those stores may overlap the request; the other path reuses it. */
+		hdx_flags = ctl->flags_0d;
 	}
-	if ((ctl->flags_0d >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
-		fp->hdx->protocol = V22_PROTOCOL_ORG_RMLOOP2;
-		fp->hdx->connect_substate = 0;
+	if ((hdx_flags >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
+		struct v22fp_hdx *hdx = fp->hdx;
+		hdx->state_bits.protocol = V22_PROTOCOL_ORG_RMLOOP2;
+		hdx->state_bits.connect_substate = 0;
 	}
 
-	fp->dsp->r20 = (ctl->flags_0c >> 2) & 1;
+	late_flags = ctl->flags_0c;
+	fp->dsp->r20 = (late_flags >> 2) & 1;
 	/* Inverted; see V22_CTL_FREEZE_ADAPT. */
-	fp->dsp->agc.f18 = (ctl->flags_0c & V22_CTL_FREEZE_ADAPT) == 0;
+	fp->dsp->agc.f18 = (late_flags & V22_CTL_FREEZE_ADAPT) ? 0 : 1;
 
-	/*
-	 * Bit 7 into `params.flags` bit 9.
-	 *
-	 * THE OBJECT DOES THIS AS A BYTE-WIDE READ-MODIFY-WRITE at +0x11 --
-	 * `movzbl 0x11(%esi)`, `and $0xfd`, `or`, `mov %bl,0x11(%esi)` -- which
-	 * is one of the reasons v22fp.h says the original probably declared
-	 * `flags` as bitfields.  Written here as a 32-bit read-modify-write on
-	 * the `unsigned int` that header settles on.  The two are
-	 * BEHAVIOURALLY IDENTICAL: both preserve every other bit of the word,
-	 * and no test can separate them.  What differs is the codegen tier,
-	 * and the alternative -- indexing byte 1 of an `unsigned int` -- would
-	 * buy that back only by writing endianness into src/.
-	 */
-	fp->params.flags = (fp->params.flags & ~V22_PARAMS_FLAG_BIT9)
-			   | ((unsigned int)((ctl->flags_0c >> 7) & 1) << 9);
+	/* Native byte +0x11 write; the whole-word parameter view is retained. */
+	fp->params.flag_bits.bit9 = late_flags >> 7;
 
 	/* A literal on every path, not a status. */
 	return 1;

@@ -384,6 +384,13 @@ float fltTable_1[7] = {
  * (`de e9`, FSUBP by F245's reading: x -= table[i]).
  * ===========================================================================
  */
+/*
+ * Keep each table coefficient live across the output-byte store: the native
+ * FCOM/FSUBP pair consumes one load. A byte output can alias the writable
+ * tables, so reloading the coefficient after the store changes that boundary.
+ * The mode switch shares the default return; the negated whole predicate
+ * preserves its unordered branch. Initialise the counter before the cursor.
+ */
 void
 float2Bits(float f, unsigned char *bits, int mode)
 {
@@ -391,31 +398,42 @@ float2Bits(float f, unsigned char *bits, int mode)
 	unsigned char *p;
 	int i;
 
-	if (mode == 0) {
+	switch (mode) {
+	case 0: {
+		i = 0;
 		x = (float)fabs(f);
 		p = &bits[15];
-		for (i = 0; i <= 15; i++) {
-			if (fltTable_2[i] > x) {
-				*p = 0;
-			} else {
+		for (; i <= 15; i++) {
+			float weight = fltTable_2[i];
+			if (!(weight > x)) {
 				*p = 1;
-				x -= fltTable_2[i];
+				x -= weight;
+			} else {
+				*p = 0;
 			}
 			p--;
 		}
-	} else if (mode == 1) {
+	}
+		break;
+	case 1: {
 		bits[7] = (unsigned char)(f < 0.0f);
+		i = 0;
 		x = (float)fabs(f);
 		p = &bits[6];
-		for (i = 0; i <= 6; i++) {
-			if (fltTable_1[i] > x) {
-				*p = 0;
-			} else {
+		for (; i <= 6; i++) {
+			float weight = fltTable_1[i];
+			if (!(weight > x)) {
 				*p = 1;
-				x -= fltTable_1[i];
+				x -= weight;
+			} else {
+				*p = 0;
 			}
 			p--;
 		}
+	}
+		break;
+	default:
+		break;
 	}
 }
 

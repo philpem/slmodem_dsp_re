@@ -246,16 +246,31 @@ struct v22fp_hdx {
 	 * and 11, read two independent ways that agree (F8531);
 	 * `V22FP_modem` clears it with the state on any connect code (F8600).
 	 */
-	short connect_substate;	/* +0x0c init 0                             */
 	/*
-	 * +0x0e is the PROTOCOL STATE: the index `V22FP_modem` uses into
-	 * `V22_PROTOCOL`, sign-extended and unchecked, and the index
-	 * `V22_status` uses into its own parallel table.  1, 2 or 3 for modes
-	 * 0, 1 and "anything else", then forced to 0 -- `v22_data` -- if
-	 * `params.flags` bit 11 is set.  Findings F8529 and F8534;
-	 * v22status.h has the whole mapping.
+	 * Preserve the scalar word slots for existing readers. The control writer
+	 * uses a signed 16-bit field view: its native word publications invalidate
+	 * a later DSP-owner acquisition under the period compiler. This models
+	 * the observed width, signedness and alias boundary; it does not establish
+	 * the original declaration's spelling.
 	 */
-	short protocol;		/* +0x0e                                    */
+	union {
+		struct {
+			short connect_substate;	/* +0x0c init 0                             */
+			/*
+			 * +0x0e is the PROTOCOL STATE: the index `V22FP_modem` uses into
+			 * `V22_PROTOCOL`, sign-extended and unchecked, and the index
+			 * `V22_status` uses into its own parallel table.  1, 2 or 3 for modes
+			 * 0, 1 and "anything else", then forced to 0 -- `v22_data` -- if
+			 * `params.flags` bit 11 is set.  Findings F8529 and F8534;
+			 * v22status.h has the whole mapping.
+			 */
+			short protocol;		/* +0x0e                                    */
+		};
+		struct {
+			signed int connect_substate : 16;
+			signed int protocol : 16;
+		} state_bits;
+	};
 	/*
 	 * +0x10 latches `RxTrained1200`/`RxTrained2400`'s verdict and is
 	 * tested `== 1` (finding F8531).
@@ -327,6 +342,11 @@ struct v22fp_hdx {
 	 */
 	int carrier_loss_blocks; /* +0x3c init 0                            */
 };
+typedef char v22_hdx_state_view_at_0c[
+ __builtin_offsetof(struct v22fp_hdx, state_bits) == 0x0c ? 1 : -1];
+typedef char v22_hdx_state_view_four_bytes[
+ sizeof(((struct v22fp_hdx *)0)->state_bits) == 4 ? 1 : -1];
+
 
 /*
  * ---------------------------------------------------------------------------

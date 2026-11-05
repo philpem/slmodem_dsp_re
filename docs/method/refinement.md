@@ -9,6 +9,11 @@ possible source/flag combinations have been excluded.
 
 ## Use whole-TU evidence and interacting candidates
 
+The [V22 control recovery](../v22-control-recovery-20261105.md) combines
+request-byte ages, conditional recapture and an HDX alias boundary to reach
+REGALLOC. Its shared header also worsens two neighboring BYTES results; keep
+that explicit collateral when evaluating or reopening the recovery.
+
 The [recovery pilot](recovery-pilot.md) adds a practical loop: retrieve prior
 attempts, pin inputs, compare baseline/A/B/A+B, inspect all changed bodies and
 data targets, then run period fixtures at a stated boundary. Use
