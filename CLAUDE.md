@@ -210,7 +210,10 @@ grade did not improve. For larger combinations, use bounded experiments and
 ablations. A failed isolated spelling is not a proof against the source
 property; a closer byte count is not sufficient evidence to adopt it. Check
 original function-order evidence and effects on later functions in the complete
-TU; do not add artificial carriers to fit register choices.
+TU; do not add artificial carriers to fit register choices. Before rebuilding a
+repeated native algorithm by hand, compare it with existing helper bodies.
+Recover supported call/inline boundaries and share the implementation where
+appropriate; validate the public out-of-line entry and all affected consumers.
 
 Use GPT-6.1 Sol at High as the provisional default for reconstruction and
 investigation agents. Use Extra High (`xhigh`) for difficult causal inference,

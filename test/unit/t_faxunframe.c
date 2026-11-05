@@ -1137,6 +1137,119 @@ run_write_frame(void)
  * ring, and the last two elements written are compared with the value the
  * already-proved FCS function gives for the same data.
  */
+/*
+ * Synthetic component aliases use a C union-backed owner: rd is the length
+ * header and the following unsigned-short array elements overlap wr/count.
+ * Pointer arithmetic stays within the declared words array, never across
+ * separate scalar members. FIFO storage is a separate real 16-word array.
+ * Empty ring rd==wr==length, one frame of one/two payload words, or zero
+ * requested frames. These are not ordinary FAXVMI allocation histories.
+ */
+union frame_age_owner {
+	struct faxvmi_framer fr;
+	unsigned short words[sizeof(struct faxvmi_framer) / sizeof(unsigned short)];
+};
+struct frame_age_buffer {
+	unsigned short pre[GUARD];
+	unsigned short data[16];
+	unsigned short post[GUARD];
+};
+
+static int
+run_write_frame_age(void)
+{
+	unsigned alias, len, request, i;
+	long cases = 0;
+
+	diff_begin("write_frame: 8 synthetic component alias/control cases");
+	for (alias = 0; alias < 2; ++alias)
+	for (len = 1; len <= 2; ++len)
+	for (request = 0; request < 2; ++request) {
+		struct faxvmi a, b, expected_vmi, state_a, state_b;
+		union frame_age_owner ua, ub, expected_owner, state_ua, state_ub;
+		struct frame_age_buffer da, db, expected_data, sa, sb, before_source;
+		unsigned short *pa, *pb, *base_a, *base_b;
+		unsigned short crc_input[2], fcs;
+		unsigned at = len, header_index = offsetof(struct faxvmi_framer, rd) / sizeof(unsigned short);
+		int ra, rb;
+		long tag = cases++;
+
+		memset(&a, 0, sizeof(a));
+		memset(&b, 0, sizeof(b));
+		memset(&ua, 0, sizeof(ua));
+		ua.fr.fifo_size = 16;
+		ua.fr.rd = ua.fr.wr = (unsigned short)len;
+		memcpy(&ub, &ua, sizeof(ua));
+		memcpy(&expected_owner, &ua, sizeof(ua));
+		memset(&da, 0x5a, sizeof(da));
+		memcpy(&db, &da, sizeof(da));
+		memcpy(&expected_data, &da, sizeof(da));
+		memset(&sa, 0x6b, sizeof(sa));
+		sa.data[0] = (unsigned short)len;
+		sa.data[1] = 0x31;
+		sa.data[2] = 0x32;
+		memcpy(&sb, &sa, sizeof(sa));
+		memcpy(&before_source, &sa, sizeof(sa));
+		ua.fr.fifo = da.data;
+		ub.fr.fifo = db.data;
+		a.framer = &ua.fr;
+		b.framer = &ub.fr;
+		a.underrun = b.underrun = 7;
+		base_a = alias ? &ua.words[header_index] : sa.data;
+		base_b = alias ? &ub.words[header_index] : sb.data;
+		pa = base_a;
+		pb = base_b;
+		ra = ref_faxvmi_write_frame(&a, &pa, (short)request);
+		rb = faxvmi_write_frame(&b, &pb, (short)request);
+		diff_eq_int("frame age: return (%ld)", rb, ra, tag);
+		diff_eq_int("frame age: native frames accepted (%ld)", ra, request, tag);
+		diff_eq_int("frame age: native source advance (%ld)", pa - base_a,
+			    request ? len + 1 : 0, tag);
+		diff_eq_int("frame age: source advance (%ld)", pb - base_b, pa - base_a, tag);
+		diff_eq_int("frame age: native owners retained (%ld)",
+			    a.framer == &ua.fr && ua.fr.fifo == da.data, 1, tag);
+		diff_eq_int("frame age: owners retained (%ld)",
+			    b.framer == &ub.fr && ub.fr.fifo == db.data, 1, tag);
+		memcpy(&state_ua, &ua, sizeof(ua));
+		memcpy(&state_ub, &ub, sizeof(ub));
+		state_ua.fr.fifo = state_ub.fr.fifo = NULL;
+		diff_eq_obj("frame age: owner differential", union frame_age_owner,
+			    &state_ub, &state_ua, tag);
+		memcpy(&state_a, &a, sizeof(a));
+		memcpy(&state_b, &b, sizeof(b));
+		state_a.framer = state_b.framer = NULL;
+		diff_eq_obj("frame age: VMI differential", struct faxvmi, &state_b, &state_a, tag);
+		diff_eq_obj("frame age: ring and guards differential", struct frame_age_buffer,
+			    &db, &da, tag);
+		diff_eq_obj("frame age: source differential", struct frame_age_buffer, &sb, &sa, tag);
+		diff_eq_obj("frame age: native separate source unchanged", struct frame_age_buffer,
+			    &sa, &before_source, tag);
+		if (request) {
+			/* CRC observes payload before its later cursor/count publications. */
+			crc_input[0] = alias ? (unsigned short)(len + 1) : 0x31;
+			crc_input[1] = alias ? 3 : 0x32;
+			fcs = (unsigned short)ref_faxvmi_gen_fcs16(crc_input, (short)len);
+			expected_data.data[at++] = (unsigned short)(len + 2);
+			for (i = 0; i < len; ++i)
+				expected_data.data[at++] = alias ? (i == 0 ? (unsigned short)(len + 2) : 4) : (unsigned short)(0x31 + i);
+			expected_data.data[at++] = (unsigned short)(fcs >> 8);
+			expected_data.data[at++] = fcs & 0xff;
+			expected_owner.fr.wr = (unsigned short)(len + len + 3);
+			expected_owner.fr.count = (unsigned short)(len + 3);
+		}
+		memset(&expected_vmi, 0, sizeof(expected_vmi));
+		expected_vmi.underrun = request ? 0 : 7;
+		diff_eq_obj("frame age: native full owner state", union frame_age_owner,
+			    &state_ua, &expected_owner, tag);
+		diff_eq_obj("frame age: native full VMI state", struct faxvmi,
+			    &state_a, &expected_vmi, tag);
+		diff_eq_obj("frame age: native ring, pre-copy CRC and guards",
+			    struct frame_age_buffer, &da, &expected_data, tag);
+	}
+	diff_eq_int("frame age: eight cases ran (%ld)", cases, 8, cases);
+	return diff_end();
+}
+
 static int
 run_write_frame_fcs(void)
 {
@@ -1200,6 +1313,7 @@ main(void)
 	bad |= run_write_fifo_age();
 	bad |= run_write_frame();
 	bad |= run_write_frame_fcs();
+	bad |= run_write_frame_age();
 
 	dsplibs_debug_level = 2;
 	bad |= run_hdlc_frames();

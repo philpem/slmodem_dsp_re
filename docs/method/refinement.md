@@ -321,11 +321,79 @@ observation or compiler cause. TxNoCarrierV17/V27/V29 counts already agree with
 native unsigned predicates: do not transfer signed consumption to them merely
 because another function uses signed low words.
 
-Next audit faxvmi_write_frame's postdecrement admission and post-header framer
-acquisition, native 0x969a8..0x969c2, against its current entry capture. Trace each
-header/payload cursor publication independently before transferring FIFO's
-repair. Expand the bounded loop inventory only with a fresh native witness;
-keep the IIR and V8 negative domains closed until their reopening condition holds.
+The following section records the completed framed-writer and 251..600-byte
+follow-up. Keep the IIR and V8 negative domains closed until their reopening
+condition holds.
+
+## Recover helper boundaries before duplicating algorithms (2026-11-05)
+
+The [framed-writer/medium-loop wave](../frame-loop-recovery-20261105.md)
+recovers _send_hdlc_buffer_state EXACT282. Native copies the immutable FAXVMI_STS
+template after FAXVMI_process and before FAXVMI_status. Moving the assignment
+from entry restores that placement. No template-mutating fixture or behavior
+bug is inferred from a source-placement correction. Seven neighbours, including
+two REGALLOC bodies, stay unchanged.
+
+faxvmi_write_frame's initial SIZE132 gap includes a missing inline boundary:
+native contains the existing FIFO writer and two-nibble CRC algorithm inline.
+Outer postdecrement alone gives SIZE116; post-header framer source acquisition
+alone SIZE132; both SIZE106. Native-backed store publication and CRC controls
+reach SIZE17; calling the existing exact FIFO helper with ignored return and
+sharing a private CRC implementation reaches SIZE1/543 against native542.
+The public CRC wrapper remains in its original TU, with one implementation in
+a private header used by exactly two TUs. Its SIZE1/107 against native108
+persists; frame_reverse, write_fifo and byte_reverse remain literally EXACT.
+The original inline declaration/visibility is not uniquely recovered.
+
+The large byte gap was not missing algorithmic source. Compare repeated native
+walks with existing helpers before manually rebuilding them. The native frame
+contains the helper's partial/full/countdown/underrun graph, including the
+full-ring return that bypasses normal underrun publication. Reusing that helper
+restores the per-store owner reloads without artificial captures. Validate its
+public entry, all inlined consumers and the complete header closure together.
+
+A one-byte size distance can hide several instruction/observation differences.
+Here .07.addressof retains the second FCS FIFO-pointer load (UID290), but .08.gcse
+reuses the first load (UID270); native reloads after the first FCS store. Current
+pointer/ushort alias sets permit that reuse. A bounded Sol Extra High rescue
+confirmed that direct-postfix controls have the same tail and supplied no new
+source control or gain. Do not infer a particular original union, qualifier or
+alias annotation from the reload. Reopen with independent original access/alias
+visibility evidence or a natural source boundary changing GCSE availability;
+close the CRC type/expression/postfix palettes on this evidence. No compiler
+impossibility or allocator-only conclusion follows.
+
+Eight union-backed frame component probes / 113 assertions expose two old-source
+failures. A declared ushort array overlaps only same-type rd/wr/count fields;
+the destination FIFO is a separate real array. Native CRC observes payload
+before later cursor/count publications, while transmission observes the updated
+values. The probes preserve that distinction, with disjoint and zero-frame
+controls. They establish no ordinary allocation/protocol alias history.
+
+The extended screen covers 300 objects / 1,886 shared defining copies, 316 native
+251..600-byte copies, 223 inexact and 216 with backward jumps. Eight receive
+native/source inspection; 215 remain uninspected. Backward cold rejoins are
+not loops. SIMP/ASYC packers publish rd before loading FIFO[oldrd]; restoring
+this makes SIZE28→11 and SIZE35→9. Sixteen synthetic union-backed component
+cases / 177 assertions expose eight old-source failures and pass after repair.
+The FIFO's declared backing really accommodates capacity16; pointer retention,
+consumed word, cursor/occupancy, output/guards and complete normalized owners
+are checked. Disjoint and zero-output controls stay green.
+
+Mask-width × rd-publication controls give SIMP28/28/11/11 and ASYC35/35/9/9.
+Both mask spellings already expand to SI-mode locals and SHR in initial RTL;
+DWORD instructions do not uniquely justify widening the source local. Keep only
+the independently observed publication repair. Reopen the residual with a new
+consumed-value/owner/helper witness, not another width or expression palette.
+
+Next audit IsPulseDialerReady: native uses unsigned elapsed/break comparisons
+(0x32ef..0x32f1 and 0x3371..0x3373), while current int locals compare signed.
+It also reloads elapsed after modem_set_param at 0x3331, where source retains
+its pre-call value. Check setter/callback contracts, valid histories and the
+complete call.c/header closure before choosing signedness or recapture changes.
+This fresh source question does not reopen the old if-conversion flag controls.
+Then prioritise uninspected medium-screen rows with matched predicate/publication
+witnesses; keep the frame and packer closed palettes recorded above.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

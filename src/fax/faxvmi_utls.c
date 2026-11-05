@@ -16,6 +16,8 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
 
+#include "faxvmi_fcs16.h"
+
 /*
  * The framing layer's three pure buffer walks.
  *
@@ -30,26 +32,10 @@
  * 15..12, so `t >> 11` is the x^5 term, `t >> 12` is the x^0 term, and `t`
  * itself is the x^12 one.  See faxvmi.h for the derivation of 0x1021.
  */
-#define FCS16_NIBBLE(fcs, shifted)					\
-	do {								\
-		unsigned int t_ = ((shifted) ^ (fcs)) & 0xf000u;	\
-		(fcs) = (unsigned short)					\
-			(((((fcs) ^ (t_ >> 11)) << 4) ^ t_) | (t_ >> 12)); \
-	} while (0)
-
 int
 faxvmi_gen_fcs16(unsigned short *buf, short count)
 {
-	unsigned short fcs = 0xffff;
-	short i;
-
-	for (i = count; i != 0; i--) {
-		unsigned int octet = *buf++;
-
-		FCS16_NIBBLE(fcs, octet << 8);
-		FCS16_NIBBLE(fcs, octet << 12);
-	}
-	return (unsigned short)~fcs;
+	return faxvmi_fcs16_inline(buf, count);
 }
 
 void

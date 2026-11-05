@@ -16,6 +16,8 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
 
+#include "faxvmi_fcs16.h"
+
 /*
  * The original FILE split excludes an out-of-TU compiler inline here. Its
  * literal byte loop has the same postdecrement/narrow-before-OR boundaries
@@ -112,50 +114,43 @@ faxvmi_write_fifo(struct faxvmi *vmi, unsigned short **src, short count)
 int
 faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 {
-	struct faxvmi_framer *fr = vmi->framer;
 	unsigned short *p = *src;
 	short written = 0;
 	short i;
 
-	for (i = count; i != 0; i--) {
+	for (i = count; i-- != 0;) {
 		short len = (short)*p;
+		struct faxvmi_framer *fr = vmi->framer;
 		unsigned short fcs;
-		int taken;
-		short j;
 
 		if ((int)fr->count + (int)len + 3 >= (int)fr->fifo_size)
 			break;
 
-		fr->fifo[fr->wr] = (unsigned short)(len + 2);
-		fr->wr = (unsigned short)(fr->wr + 1);
+		{
+			unsigned short wr = fr->wr++;
+			fr->fifo[wr] = (unsigned short)(len + 2);
+		}
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
 		fr->count = (unsigned short)(fr->count + 3);
 		written = (short)(written + 1);
 		p++;
 
-		fcs = (unsigned short)faxvmi_gen_fcs16(p, len);
+		fcs = (unsigned short)faxvmi_fcs16_inline(p, len);
+		/* The native payload is the inlined FIFO writer, including its
+		 * per-element owner acquisition and early cursor publication. */
+		(void)faxvmi_write_fifo(vmi, &p, len);
 
-		taken = vmi->underrun;
-		for (j = len; j != 0; j--) {
-			if (fr->count >= fr->fifo_size)
-				goto put_fcs;
-			fr->fifo[fr->wr] = *p++;
-			fr->wr = (unsigned short)(fr->wr + 1);
-			if (fr->wr >= fr->fifo_size)
-				fr->wr = 0;
-			fr->count = (unsigned short)(fr->count + 1);
-			taken = 0;
+		{
+			unsigned short wr = fr->wr++;
+			fr->fifo[wr] = (unsigned short)(fcs >> 8);
 		}
-		vmi->underrun = taken;
-
-	put_fcs:
-		fr->fifo[fr->wr] = (unsigned short)(fcs >> 8);
-		fr->wr = (unsigned short)(fr->wr + 1);
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
-		fr->fifo[fr->wr] = (unsigned short)(fcs & 0xff);
-		fr->wr = (unsigned short)(fr->wr + 1);
+		{
+			unsigned short wr = fr->wr++;
+			fr->fifo[wr] = (unsigned short)(fcs & 0xff);
+		}
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
 	}

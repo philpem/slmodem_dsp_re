@@ -98,7 +98,7 @@ _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
 {
 	short cnt = 0;
 	unsigned short result = (unsigned short)*tx_count;
-	struct faxvmi_status st = FAXVMI_STS;
+	struct faxvmi_status st;
 
 	(void)rx;
 	(void)word3;
@@ -108,6 +108,7 @@ _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 	FAXVMI_process(ctx->vmi_c, (unsigned short *)(void *)ctx, tx, &cnt,
 		       &result);
+	st = FAXVMI_STS;
 	FAXVMI_status(ctx->vmi_c, &st);
 
 	if (st.underrun == 1) {

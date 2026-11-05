@@ -78,10 +78,9 @@ faxvmi_asyc_pack(struct faxvmi *vmi, unsigned short *src, short count)
 					word = 1;
 				}
 			} else if (fr->count != 0) {
-				unsigned short rd = fr->rd;
+				unsigned short rd = fr->rd++;
 				unsigned int v = fr->fifo[rd];
 
-				fr->rd = (unsigned short)(rd + 1);
 				fr->count = (unsigned short)(fr->count - 1);
 				if (fr->rd >= fr->fifo_size)
 					fr->rd = 0;

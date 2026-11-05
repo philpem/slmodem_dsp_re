@@ -794,11 +794,91 @@ run_t30(void)
 	return diff_end();
 }
 
+/* Synthetic component alias probes. The ring occupies an actual declared
+ * unsigned-short array with at least 16 elements remaining. Its first consumed
+ * element designates framer.rd through the union; it is not an allocation
+ * history produced by FAXVMI_create. Disjoint and zero-work controls use the
+ * same initialized component boundary. */
+union pack_rd_storage {
+	struct faxvmi_framer fr;
+	unsigned short words[128];
+};
+
+static int
+run_rd_publication(void)
+{
+	union pack_rd_storage a, b;
+	struct faxvmi a_vmi, b_vmi;
+	struct faxvmi_link a_link, b_link;
+	int mode, alias, rd, work, cases = 0;
+
+	diff_begin("pack rd publication (synthetic component aliases)");
+	for (mode = 0; mode < 2; mode++)
+	for (alias = 0; alias < 2; alias++)
+	for (rd = 0; rd < 2; rd++)
+	for (work = 0; work < 2; work++) {
+		int ra, rb;
+		unsigned k = offsetof(struct faxvmi_framer, rd) / sizeof(unsigned short);
+		unsigned short expected = (unsigned short)(alias ? rd + 1 : 0x35);
+		long tag = cases++;
+
+		plant(0, 0, (unsigned short)(mode ? 10 : 8),
+		      (short)work, (unsigned short)rd, (unsigned short)(rd + 1), 1, 0, 0);
+		memset(&a, 0xa5, sizeof(a));
+		a.fr = fra;
+		a.fr.fifo_size = 16;
+		if (alias)
+			a.fr.fifo = &a.words[k - (unsigned)rd];
+		else
+			fifoa[rd] = 0x35;
+		memcpy(&b, &a, sizeof(a));
+		if (alias)
+			b.fr.fifo = &b.words[k - (unsigned)rd];
+		else {
+			b.fr.fifo = fifob;
+			fifob[rd] = 0x35;
+		}
+		va.framer = &a.fr;
+		vb.framer = &b.fr;
+		ra = mode ? ref_faxvmi_asyc_pack(&va, srca, 0)
+		          : ref_faxvmi_simp_pack(&va, srca, 0);
+		rb = mode ? faxvmi_asyc_pack(&vb, srcb, 0)
+		          : faxvmi_simp_pack(&vb, srcb, 0);
+		diff_eq_int("rd publication return", rb, ra, tag);
+		diff_eq_int("rd publication native owners retained",
+		            va.framer == &a.fr && va.link == &lka && lka.buf == bufa &&
+		            a.fr.fifo == (alias ? &a.words[k - (unsigned)rd] : fifoa), 1, tag);
+		diff_eq_int("rd publication owners retained",
+		            vb.framer == &b.fr && vb.link == &lkb && lkb.buf == bufb &&
+		            b.fr.fifo == (alias ? &b.words[k - (unsigned)rd] : fifob), 1, tag);
+		diff_eq_int("rd publication native occupancy", a.fr.count, 1 - work, tag);
+		diff_eq_int("rd publication native cursor", a.fr.rd, rd + work, tag);
+		diff_eq_int("reference consumed cursor sample", a.fr.pack_word,
+		            work ? (mode ? (((unsigned)expected << 1) | 1) & 0xfffffdffu
+		                                : expected) : fra.pack_word, tag);
+		diff_eq_obj("rd publication output and guards", unsigned short[PACKMAX + GUARD],
+		            bufb, bufa, tag);
+		diff_eq_obj("rd publication caller input", unsigned short[SRCMAX], srcb, srca, tag);
+		/* Normalize only pointers that necessarily name separate objects. */
+		b.fr.fifo = a.fr.fifo;
+		diff_eq_obj("rd publication framer and backing", union pack_rd_storage, &b, &a, tag);
+		a_vmi = va; b_vmi = vb;
+		b_vmi.framer = a_vmi.framer;
+		b_vmi.link = a_vmi.link;
+		diff_eq_obj("rd publication root", struct faxvmi, &b_vmi, &a_vmi, tag);
+		a_link = lka; b_link = lkb; b_link.buf = a_link.buf;
+		diff_eq_obj("rd publication link", struct faxvmi_link, &b_link, &a_link, tag);
+	}
+	diff_eq_int("rd publication cases", cases, 16, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int bad = 0;
 
+	bad |= run_rd_publication();
 	bad |= run_simp();
 	bad |= run_asyc();
 	bad |= run_multicall();

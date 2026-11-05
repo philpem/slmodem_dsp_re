@@ -60,10 +60,9 @@ faxvmi_simp_pack(struct faxvmi *vmi, unsigned short *src, short count)
 
 		if (mask == 0) {
 			if (fr->count != 0) {
-				unsigned short rd = fr->rd;
+				unsigned short rd = fr->rd++;
 
 				word = fr->fifo[rd];
-				fr->rd = (unsigned short)(rd + 1);
 				fr->count = (unsigned short)(fr->count - 1);
 				if (fr->rd >= fr->fifo_size)
 					fr->rd = 0;
