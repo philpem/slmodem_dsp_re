@@ -31,6 +31,9 @@
 #include "dsplib/debug.h"
 #include "dsplib/faxcfg.h"
 #include "dsplib/faxvmi.h"
+#include "dsplib/v17fax.h"
+
+extern void ref__delete_data_rx_modem(struct fax_class1 *ctx);
 
 extern void ref__init_receiver(struct fax_class1 *ctx, int rate_code);
 extern unsigned int ref_dsplibs_debug_level;
@@ -291,6 +294,54 @@ run_debug_on(void)
 	return rc;
 }
 
+
+/* Constructor/reinit component history. No internal state is planted and no
+ * completed long-training signal history is claimed: these calls exercise
+ * the Class 1 configuration boundary with allocated constructor-owned state. */
+static int
+run_v17_reinit_short_modes(void)
+{
+	static const int long_codes[] = { 0x49, 0x61, 0x79, 0x91 };
+	int group, debug, step;
+
+	diff_begin("_init_receiver: V17 short-training request lifecycle");
+	for (debug = 0; debug <= 2; debug += 2) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = debug;
+		for (group = 0; group < 4; group++) {
+			struct fax_class1 a, b;
+			memset(&a, 0, sizeof(a));
+			memset(&b, 0, sizeof(b));
+			for (step = 0; step < 4; step++) {
+				int short_mode = step & 1;
+				int code = long_codes[group] + short_mode;
+				long tag = debug * 100 + group * 10 + step;
+				struct v17rx *ra, *rb;
+
+				ref__init_receiver(&a, code);
+				_init_receiver(&b, code);
+				ra = (struct v17rx *)(long)a.vmi_b->link->int_0014;
+				rb = (struct v17rx *)(long)b.vmi_b->link->int_0014;
+				diff_eq_int("V17 reinit cfg short mode matches (%ld)",
+				    rb->cfg.short_train, ra->cfg.short_train, tag);
+				diff_eq_int("V17 reinit private short mode matches (%ld)",
+				    rb->ctl->short_train, ra->ctl->short_train, tag);
+				diff_eq_int("V17 blob cfg mode follows request (%ld)",
+				    ra->cfg.short_train, short_mode, tag);
+				diff_eq_int("V17 source cfg mode follows request (%ld)",
+				    rb->cfg.short_train, short_mode, tag);
+				diff_eq_int("V17 blob private mode follows request (%ld)",
+				    ra->ctl->short_train, short_mode, tag);
+				diff_eq_int("V17 source private mode follows request (%ld)",
+				    rb->ctl->short_train, short_mode, tag);
+			}
+			ref__delete_data_rx_modem(&a);
+			_delete_data_rx_modem(&b);
+		}
+	}
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -324,6 +375,7 @@ main(void)
 	rc |= run_switch(0x91, 0x18, 52);	/* V.17 -> V.27ter */
 
 	rc |= run_debug_on();
+	rc |= run_v17_reinit_short_modes();
 
 	return rc;
 }

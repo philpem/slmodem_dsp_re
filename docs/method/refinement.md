@@ -8691,3 +8691,43 @@ The combined second checkpoint passes `make phase`: 394 period tests, zero
 failures, including the new storage-width fixture. Fresh production comparison
 records 1,117 EXACT and 29 REGALLOC of 1,852, with three gains and no losses
 against the first checkpoint.
+
+
+## Follow native values into callees when a green fixture stops too early
+
+The `_init_receiver` instruction review found a missing functional effect.
+The blob captures a short-training flag for V.17 rate codes `0x4a`, `0x62`,
+`0x7a` and `0x92`, then writes that four-byte value into the reinitialisation
+request at offset `0x10` (`.text+0x94771`). The reconstruction recognised the
+same codes only to print a debug message and left the request field zero.
+`V17RX_control` copies it to receiver configuration offset `0x14`, and
+`V17RX_create` propagates it into the private control's offset `0x10`.
+Period layout checks confirm all three owners, offsets and four-byte widths.
+
+The existing 451 checks passed because the reinitialisation fixture compared
+the outer context and a few propagated fields, excluding both short-training
+destinations. Extend the fixture along the existing component lifecycle:
+construct at a long-training rate, request short, long, then short again,
+and tear down. Cross all four legal rate pairs with debug levels zero and two.
+The 32 calls provide 192 new checks without planting internal state. They
+exercise the Class 1 configuration boundary; they do not establish a completed
+physical long-training signal history.
+
+The unchanged source fails 64 of the 192 new checks. Capturing the flag and
+assigning `req.short_train` passes all 643 checks, while preserving the other
+four exact TU bodies, data, exports and function order. Executable provenance
+checks cover both selected source and native implementations and reject four
+deliberate byte/call-target corruptions.
+
+The correct body grows from 1,769 to 1,784 bytes against native 1,583; its SIZE
+gap grows from 186 to 201. Retain the required behaviour and its regression.
+A smaller incorrect implementation is not a reconstruction improvement.
+Keep the separate initializer placement and shared-call-tail investigation
+out of this functional correction. Evidence is under
+`build/gcc3-wave-class1rx/short-train` and
+`build/gcc3-overnight/checkpoint3`.
+
+The functional correction passes the full `make phase` gate: 394 period tests,
+zero failures. The focused test now contains 643 checks. Fresh production
+compilation reproduces the reviewed candidate literally; exact membership
+remains 1,117 of 1,852.

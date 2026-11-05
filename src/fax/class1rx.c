@@ -350,6 +350,7 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 {
 	int mod = 0;
 	int rate = 0;
+	int short_train = 0;
 	int sym;
 	struct faxvmi_cfg *cfg;
 	struct faxvmi_link *link;
@@ -359,9 +360,12 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 			"%2d.%02d[sec] Initializing RX modem receiver, " "MODEM_IDX=%d\n",
 			ctx->clock_sec, ctx->clock_frac, ctx->current_mod);
 
-	if ((rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
-	     rate_code == 0x92) && DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Short train in V.17 mode is selected\n");
+	if (rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
+	    rate_code == 0x92) {
+		short_train = 1;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Short train in V.17 mode is selected\n");
+	}
 
 	/* `_set_modem_rate`'s own shape (class1.c), inlined */
 	if ((unsigned)(rate_code - 0x91) <= 1) {
@@ -474,6 +478,7 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 		if (cfg->slot == VMI_SLOT_V17RX) {
 			struct v17rx_ctl req = V17RX_CTL;
 
+			req.short_train = short_train;
 			*(short *)((char *)&req + 2) = (short)rate;
 			req.flags_0d |= V17RXCTL_REINIT;
 			ctl.int_0014 = (int)(long)&req;
