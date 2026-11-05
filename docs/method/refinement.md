@@ -8898,3 +8898,35 @@ Evidence is in `build/gcc3-wave-v22status`, `build/gcc3-wave-p3d-reset` and
 with zero failures. Production comparison measures 1,127 EXACT and 29 REGALLOC
 of 1,852: three exact gains, no losses. Only the three reviewed production
 objects differ from checkpoint five.
+
+
+## A prospective TU-state prediction closes V90MP evaluateInfo
+
+The new QI/q calibration has a source-recovery use beyond replaying known
+outcomes. V90MP's native strong-definition order puts `evaluateCRC` before
+`getBitVector` and `evaluateInfo`. Freeze that complete order before compiling:
+the six byte-register and eight word-register searches predict that CRC leaves
+the cursor at 13, and `evaluateInfo` selects ESI for its dead stack-release POP.
+The old order enters at three and selects EBX. Independent observation verifies
+all fourteen predictions, including unchanged eligibility, and the 482-byte
+function becomes exact. The residual instruction is at function offset `0x1de`;
+the frozen prediction's prose said `0x1da` in error, without affecting its
+register prediction or event inputs.
+
+All fourteen member definitions retain their bodies. Fifteen of sixteen emitted
+bodies retain their bytes after masking only validated relocation fields and
+retaining canonical targets. Five table entries preserve their function-relative
+offsets. The string pool grows from 373 to 374 bytes through layout padding;
+its payload multiset and all consumers remain equal. Wrong-table-entry and
+changed-string controls both fail. Raw object layout is therefore different,
+and C2/C1 emission order still differs from native. Exact function recovery is
+not a claim of a fully exact object.
+
+The parent independently repeats the body, prediction and allocated-data audits.
+Focused fixtures pass 18,051 checks in 32 groups per form, with the selected
+482-byte body proved present in each executable. Production reproduces the
+reviewed object literally, and the other 299 objects remain unchanged. The
+seventh checkpoint passes all 396 period tests and the structural phase gate.
+The census reaches 1,128 EXACT and 28 REGALLOC of 1,852, one exact gain and
+no loss. Evidence: `build/gcc3-wave-tu/v90mp-review`,
+`build/gcc3-wave-tu/v90mp-order` and `build/gcc3-overnight/checkpoint7`.

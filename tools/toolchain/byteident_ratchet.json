@@ -2,8 +2,8 @@
   "bytes": 74,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1127,
-  "exact_bytes": 130433,
+  "exact": 1128,
+  "exact_bytes": 130915,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -805,6 +805,7 @@
     "_ZN5V90JdC2EP13V90Parameters",
     "_ZN5V90JdD1Ev",
     "_ZN5V90JdD2Ev",
+    "_ZN5V90MP12evaluateInfoEv",
     "_ZN5V90MP12getBitVectorERj",
     "_ZN5V90MP13resetDetectorEv",
     "_ZN5V90MP18calcSequenceLengthEv",
@@ -1135,7 +1136,7 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 29,
+  "regalloc": 28,
   "reloc": 0,
   "size": 622,
   "unresolved": 0
