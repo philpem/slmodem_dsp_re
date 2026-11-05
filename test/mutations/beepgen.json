@@ -19,19 +19,19 @@
  },
  {
   "label": "check_for_valid drops the w[2] repeat requirement",
-  "find": "\tif (v != w[1])\n\t\treturn 0;\n\tif (v != w[2])\n\t\treturn 0;\n\tif (v == w[3])",
-  "replace": "\tif (v != w[1])\n\t\treturn 0;\n\tif (v != w[1])\n\t\treturn 0;\n\tif (v == w[3])"
+  "find": "\tif (w[0] != w[1])\n\t\tgoto done;\n\tif (w[0] != w[2])\n\t\tgoto done;\n\tif (w[0] == w[3])",
+  "replace": "\tif (w[0] != w[1])\n\t\tgoto done;\n\tif (w[0] != w[1])\n\t\tgoto done;\n\tif (w[0] == w[3])"
  },
  {
   "label": "check_for_valid stops scanning at w[5]",
-  "find": "\tif (v == w[6])\n\t\treturn 0;\n\treturn 1;\n}\n\n/* The short window",
-  "replace": "\tif (v == w[5])\n\t\treturn 0;\n\treturn 1;\n}\n\n/* The short window",
+  "find": "\tif (w[0] == w[6])\n\t\tgoto done;\n\tvalid = 1;\ndone:\n\treturn valid;\n}\n\n/* The short window",
+  "replace": "\tif (w[0] == w[5])\n\t\tgoto done;\n\tvalid = 1;\ndone:\n\treturn valid;\n}\n\n/* The short window",
   "note": "w[6] becomes a repeat of the w[5] test; the pattern where only w[6] collides then passes as valid."
  },
  {
   "label": "check_for_valid_easy stops scanning at w[2]",
-  "find": "\tif (v == w[3])\n\t\treturn 0;\n\treturn 1;\n}\n",
-  "replace": "\tif (v == w[2])\n\t\treturn 0;\n\treturn 1;\n}\n",
+  "find": "\tif (w[0] == w[3])\n\t\tgoto done;\n\tvalid = 1;\ndone:\n\treturn valid;\n}\n",
+  "replace": "\tif (w[0] == w[2])\n\t\tgoto done;\n\tvalid = 1;\ndone:\n\treturn valid;\n}\n",
   "note": "same shape one window over: only-w[3]-collides passes as valid."
  },
  {

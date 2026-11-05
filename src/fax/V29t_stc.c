@@ -36,6 +36,7 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 {
 	struct v29_tx_params *prm;
 	short rate;
+	unsigned char flags;
 
 	if (req == 0)
 		return 0;
@@ -44,17 +45,18 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 	rate = prm->rate;
 
 	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->scale_mul;
-	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->scale_mul;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale *= V29TX_PPS_SCALE[rate];
 
 	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
 
 	if (req->ctl0 & V29TXCTL_CTL0_BIT2)
 		(*(unsigned char *)(void *)&((struct v29_tx_root *)fp)->cfg.flags) |= V29TXS_10_BIT2;
 
+	flags = req->ctl1;
 	prm->int_0008 =
-		(req->ctl1 & V29TXCTL_CTL1_BIT4) != 0;
+		(flags & V29TXCTL_CTL1_BIT4) > 0;
 
-	if (req->ctl1 & V29TXCTL_CTL1_BIT1)
+	if (flags & V29TXCTL_CTL1_BIT1)
 		V29TX_create(fp, fp);
 
 	return 1;

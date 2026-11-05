@@ -36,7 +36,8 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 {
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21tx_cfg *cfg = &tx->cfg;
-	struct v21_tx_hdx *hdx = tx->hdx;
+	struct v21_tx_hdx *hdx;
+	unsigned char flags;
 
 	if (arg == NULL)
 		return 0;
@@ -48,10 +49,12 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 		((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS] |=
 			V21TXCTL_SET_TXFLAGS_BIT2;
 
+	flags = arg->flags;
+	hdx = tx->hdx;
 	hdx->int_0004 =
-		(arg->flags & V21TXCTL_SET_PARAMS_INT0004) != 0;
+		(flags & V21TXCTL_SET_PARAMS_INT0004) > 0;
 
-	if (arg->flags & V21TXCTL_REINIT)
+	if (flags & V21TXCTL_REINIT)
 		V21TX_create(modem, (const struct v21tx_cfg *)modem);
 
 	return 1;

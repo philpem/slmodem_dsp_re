@@ -20,6 +20,7 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/V92CP.h"
@@ -34,46 +35,6 @@ V92CP::~V92CP()
 {
 }
 
-/*
- * ===========================================================================
- * V92CP::getBitVector (.text+0x4ebe0, 22 bytes)
- *
- * Six instructions.  The length is reported through the reference and the
- * vector itself is the return value -- `add $0x129,%eax`, which is the
- * accessor that pinned `bits`'s offset in the first place.
- * ===========================================================================
- */
-unsigned char *
-V92CP::getBitVector(unsigned int &length)
-{
-	length = vectorLen;
-
-	return bits;
-}
-
-/*
- * ===========================================================================
- * V92CP::setSUV (.text+0x4e920, 26 bytes)
- *
- * Two stores, the constant first.  What the sixteen counts is not
- * established; `word_104`'s name says so.
- * ===========================================================================
- */
-void
-V92CP::resetCRC()
-{
-	int i;
-
-	for (i = 0; i <= V92CP_CRC - 1; i++)
-		crc[i] = 1;
-}
-
-void
-V92CP::setSUV(unsigned int value)
-{
-	word_104 = 16;
-	suv = value;
-}
 
 /*
  * ===========================================================================
@@ -89,110 +50,15 @@ V92CP::setSUV(unsigned int value)
  * a codegen mismatch in a function that has one to spare.
  * ===========================================================================
  */
-/*
- * ===========================================================================
- * V92CP::resetDetector (.text+0x4e830, 46 bytes)
- *
- * Five stores and nothing else.  The order is the object's: +0x11c first,
- * then +0x120, +0x114, and the two bytes.  It is NOT the constructor's order,
- * which is why the two are written separately rather than one calling the
- * other -- `V92CP::V92CP` clears +0x04 first and this does not touch it at
- * all, which the header records as the whole difference between them.
- * ===========================================================================
- */
 void
-V92CP::resetDetector()
+V92CP::resetCRC()
 {
-	bitIndex = 18;
-	stateBitCount = 0;
-	rxState = 0;
-	onesRun = 0;
-	zerosRun = 0;
+	int i;
+
+	for (i = 0; i <= V92CP_CRC - 1; i++)
+		crc[i] = 1;
 }
 
-/*
- * ===========================================================================
- * V92CP::reset (.text+0x4e860, 57 bytes)
- *
- * `resetDetector` and one more store.  The object holds the five stores
- * inlined -- there is no call and no relocation in the range -- and the extra
- * `movl $0xffffffff` is interleaved with them, which is scheduling.
- *
- * +0x04 IS NOT TOUCHED.  The constructor clears it and nothing else ever
- * writes it, so an object that has been reset is not an object that has been
- * constructed.  Reproduced.
- * ===========================================================================
- */
-void
-V92CP::reset()
-{
-	resetDetector();
-
-	word_914 = -1;
-}
-
-/* Hold the compiler to the map in the header; see V90CP.cpp for why.  This
- * class has no pointer members, so the layout is the same at both widths --
- * the guard is kept for consistency with the sibling classes. */
-#if __SIZEOF_POINTER__ == 4
-#define V92CP_OFF(field, off, tag) \
-	typedef char v92cp_off_##tag[ \
-	    ((int)__builtin_offsetof(V92CP, field) == (off)) ? 1 : -1]
-
-V92CP_OFF(byte_00,	0x000, byte00);
-V92CP_OFF(char_01,	0x001, char01);
-V92CP_OFF(dataBitRate,	0x002, char02);
-V92CP_OFF(byte_03,	0x003, byte03);
-V92CP_OFF(byte_04,	0x004, byte04);
-V92CP_OFF(shaperSR,	0x008, word08);
-V92CP_OFF(shaperId,	0x00c, word0c);
-V92CP_OFF(flt_10,	0x010, flt10);
-V92CP_OFF(shaperA1,	0x014, flt14);
-V92CP_OFF(shaperA2,	0x018, flt18);
-V92CP_OFF(shaperB1,	0x01c, flt1c);
-V92CP_OFF(shaperB2,	0x020, flt20);
-V92CP_OFF(byte_24,	0x024, byte24);
-V92CP_OFF(distinctIndex,	0x028, word28);
-V92CP_OFF(constellationMask,	0x042, short42);
-V92CP_OFF(codecConstellationMask,	0x0a2, shorta2);
-V92CP_OFF(word_104,	0x104, word104);
-V92CP_OFF(suv,		0x108, suv);
-V92CP_OFF(word_10c,	0x10c, word10c);
-V92CP_OFF(word_110,	0x110, word110);
-V92CP_OFF(rxState,	0x114, word114);
-V92CP_OFF(byte_118,	0x118, byte118);
-V92CP_OFF(onesRun,	0x119, byte119);
-V92CP_OFF(zerosRun,	0x11a, byte11a);
-V92CP_OFF(bitIndex,	0x11c, word11c);
-V92CP_OFF(stateBitCount,	0x120, word120);
-V92CP_OFF(word_124,	0x124, word124);
-V92CP_OFF(bitsPerSymbol,	0x128, byte128);
-V92CP_OFF(bits,		0x129, bits);
-V92CP_OFF(crc,		0x8f9, crc);
-V92CP_OFF(vectorLen,	0x90c, vectorlen);
-V92CP_OFF(msgLen,	0x910, msglen);
-V92CP_OFF(word_914,	0x914, word914);
-typedef char v92cp_size[(sizeof(V92CP) == 0x918) ? 1 : -1];
-#endif
-
-V92CP::V92CP()
-{
-	/* The statement order is resetDetector's, with byte_04 after
-	 * zerosRun and word_914 last: the blob's register split for the
-	 * 0x12 constant and the -1 follows from 0x12's live range ending
-	 * before -1 is materialized (finding F11672's decode, F11678's
-	 * cross).  The definition sits after V92CP::reset for the same
-	 * reason -- the blob emits it at 0x4e8a0, between reset
-	 * (0x4e860) and setSUV (0x4e920). */
-	bitIndex = 18;
-	stateBitCount = 0;
-	rxState = 0;
-	onesRun = 0;
-	zerosRun = 0;
-	byte_04 = 0;
-
-	word_914 = -1;
-}
 
 /*
  * ===========================================================================
@@ -269,6 +135,130 @@ V92CP::calcCRC()
 
 /*
  * ===========================================================================
+ * V92CP::resetDetector (.text+0x4e830, 46 bytes)
+ *
+ * Five stores and nothing else.  The order is the object's: +0x11c first,
+ * then +0x120, +0x114, and the two bytes.  It is NOT the constructor's order,
+ * which is why the two are written separately rather than one calling the
+ * other -- `V92CP::V92CP` clears +0x04 first and this does not touch it at
+ * all, which the header records as the whole difference between them.
+ * ===========================================================================
+ */
+void
+V92CP::resetDetector()
+{
+	bitIndex = 18;
+	stateBitCount = 0;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
+}
+
+
+
+/*
+ * ===========================================================================
+ * V92CP::reset (.text+0x4e860, 57 bytes)
+ *
+ * `resetDetector` and one more store.  The object holds the five stores
+ * inlined -- there is no call and no relocation in the range -- and the extra
+ * `movl $0xffffffff` is interleaved with them, which is scheduling.
+ *
+ * +0x04 IS NOT TOUCHED.  The constructor clears it and nothing else ever
+ * writes it, so an object that has been reset is not an object that has been
+ * constructed.  Reproduced.
+ * ===========================================================================
+ */
+void
+V92CP::reset()
+{
+	resetDetector();
+
+	word_914 = -1;
+}
+
+
+V92CP::V92CP()
+{
+	/* The statement order is resetDetector's, with byte_04 after
+	 * zerosRun and word_914 last: the blob's register split for the
+	 * 0x12 constant and the -1 follows from 0x12's live range ending
+	 * before -1 is materialized (finding F11672's decode, F11678's
+	 * cross).  The definition sits after V92CP::reset for the same
+	 * reason -- the blob emits it at 0x4e8a0, between reset
+	 * (0x4e860) and setSUV (0x4e920). */
+	bitIndex = 18;
+	stateBitCount = 0;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
+	byte_04 = 0;
+
+	word_914 = -1;
+}
+
+/* Hold the compiler to the map in the header; see V90CP.cpp for why.  This
+ * class has no pointer members, so the layout is the same at both widths --
+ * the guard is kept for consistency with the sibling classes. */
+#if __SIZEOF_POINTER__ == 4
+#define V92CP_OFF(field, off, tag) \
+	typedef char v92cp_off_##tag[ \
+	    ((int)__builtin_offsetof(V92CP, field) == (off)) ? 1 : -1]
+
+V92CP_OFF(byte_00,	0x000, byte00);
+V92CP_OFF(char_01,	0x001, char01);
+V92CP_OFF(dataBitRate,	0x002, char02);
+V92CP_OFF(byte_03,	0x003, byte03);
+V92CP_OFF(byte_04,	0x004, byte04);
+V92CP_OFF(shaperSR,	0x008, word08);
+V92CP_OFF(shaperId,	0x00c, word0c);
+V92CP_OFF(flt_10,	0x010, flt10);
+V92CP_OFF(shaperA1,	0x014, flt14);
+V92CP_OFF(shaperA2,	0x018, flt18);
+V92CP_OFF(shaperB1,	0x01c, flt1c);
+V92CP_OFF(shaperB2,	0x020, flt20);
+V92CP_OFF(byte_24,	0x024, byte24);
+V92CP_OFF(distinctIndex,	0x028, word28);
+V92CP_OFF(constellationMask,	0x042, short42);
+V92CP_OFF(codecConstellationMask,	0x0a2, shorta2);
+V92CP_OFF(word_104,	0x104, word104);
+V92CP_OFF(suv,		0x108, suv);
+V92CP_OFF(word_10c,	0x10c, word10c);
+V92CP_OFF(word_110,	0x110, word110);
+V92CP_OFF(rxState,	0x114, word114);
+V92CP_OFF(byte_118,	0x118, byte118);
+V92CP_OFF(onesRun,	0x119, byte119);
+V92CP_OFF(zerosRun,	0x11a, byte11a);
+V92CP_OFF(bitIndex,	0x11c, word11c);
+V92CP_OFF(stateBitCount,	0x120, word120);
+V92CP_OFF(word_124,	0x124, word124);
+V92CP_OFF(bitsPerSymbol,	0x128, byte128);
+V92CP_OFF(bits,		0x129, bits);
+V92CP_OFF(crc,		0x8f9, crc);
+V92CP_OFF(vectorLen,	0x90c, vectorlen);
+V92CP_OFF(msgLen,	0x910, msglen);
+V92CP_OFF(word_914,	0x914, word914);
+typedef char v92cp_size[(sizeof(V92CP) == 0x918) ? 1 : -1];
+#endif
+
+/*
+ * ===========================================================================
+ * V92CP::setSUV (.text+0x4e920, 26 bytes)
+ *
+ * Two stores, the constant first.  What the sixteen counts is not
+ * established; `word_104`'s name says so.
+ * ===========================================================================
+ */
+void
+V92CP::setSUV(unsigned int value)
+{
+	word_104 = 16;
+	suv = value;
+}
+
+
+/*
+ * ===========================================================================
  * V92CP::evaluateCRC (.text+0x4e940, 668 bytes)
  *
  * `resetCRC`, `calcCRC`, and then the check -- the first two INLINED, which
@@ -291,19 +281,39 @@ V92CP::calcCRC()
 int
 V92CP::evaluateCRC()
 {
-	unsigned char acc = 0;
+	unsigned char acc;
 	int j;
 
 	resetCRC();
 	calcCRC();
 
+	acc = 0;
+
 	for (j = 0; j < V92CP_CRC; j++) {
 		int d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];
 
-		acc = (unsigned char)(acc + (d < 0 ? -d : d));
+		acc = (unsigned char)(acc + abs(d));
 	}
 
 	return acc == 0;
+}
+
+
+/*
+ * ===========================================================================
+ * V92CP::getBitVector (.text+0x4ebe0, 22 bytes)
+ *
+ * Six instructions.  The length is reported through the reference and the
+ * vector itself is the return value -- `add $0x129,%eax`, which is the
+ * accessor that pinned `bits`'s offset in the first place.
+ * ===========================================================================
+ */
+unsigned char *
+V92CP::getBitVector(unsigned int &length)
+{
+	length = vectorLen;
+
+	return bits;
 }
 
 /*

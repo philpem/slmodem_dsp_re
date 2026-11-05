@@ -42,7 +42,7 @@ V29RX_control(void *modem, const struct v29rx_control_req *req)
 	((struct v29_rx *)modem)->cfg.int_0008 = req->int_0004;
 	ctl1 = req->ctl1;
 	((struct v29_rx *)modem)->det->int_0008 =
-		(ctl1 & V29RXCTL_CTL1_BIT4) != 0;
+		(ctl1 & V29RXCTL_CTL1_BIT4) > 0;
 
 	if (ctl1 & V29RXCTL_CTL1_BIT1)
 		V29RX_create(modem, modem);

@@ -8731,3 +8731,82 @@ The functional correction passes the full `make phase` gate: 394 period tests,
 zero failures. The focused test now contains 643 checks. Fresh production
 compilation reproduces the reviewed candidate literally; exact membership
 remains 1,117 of 1,852.
+
+
+## Cross value lifetime with the native operation and function order
+
+The next GCC campaign batch recovers seven exact bodies and one REGALLOC body
+through small, explicitly crossed source domains:
+
+| Body | Native evidence and retained source | Result |
+| --- | --- | --- |
+| `V21RX_control` | Capture the request flags before the HDX word store; use the equivalent positive-mask predicate for TEST/SETNE. | EXACT, 75 bytes |
+| `V21TX_control` | Capture flags, then load the HDX owner at its native late position; use the positive-mask predicate. | EXACT, 94 bytes |
+| `V29RX_control` | Use the positive-mask predicate on its existing flag snapshot. | EXACT, 110 bytes |
+| `V29TX_control` | Capture flags and multiply the already-published PPS scale, preserving the native single request-scale load. | REGALLOC, 126 bytes |
+| `check_for_valid`, `check_for_valid_easy` | Read `w[0]` directly and share the zero-result return path. | EXACT, 52 and 34 bytes |
+| `dp_v8_init` | Restore its predecessor's native switch structure. | EXACT, 30 bytes |
+| `V92CP::evaluateCRC` | Restore integer `abs`, initialise the byte accumulator after CRC clocking, and restore native strong-definition order. | EXACT, 668 bytes |
+
+The masked predicates have nonnegative results over their complete declared
+input domain, so `!= 0` and `> 0` agree. The compiler nevertheless emits
+different operations. Flag capture is a separate property: the native RX
+control retains the loaded byte across a store that can overwrite an aliased
+request. `t_v21ctlalias` supplies aligned, bounded union storage for that
+synthetic component probe and restores the original heap owner before
+destruction. The old source fails one of ten checks; the candidate passes all
+ten. This is supplementary alias fidelity evidence, not public modem
+reachability. Four ordinary constructor/control fixtures pass 499,498 checks
+per source variant. Their executed implementations are checked against the
+candidate bytes and resolved relocation targets.
+
+The Beepgen two-by-two experiment requires both direct reads and a shared
+return to reproduce the native CMP orientation and terminal MOV. Each change
+alone remains non-exact. Only the two helpers change among 23 bodies; the
+focused fixture passes 178,693 checks, including 256 checks spanning all
+equality combinations of the two window shapes.
+
+V.8 needs explicit empty cases for statuses 2, 7 and 9 plus the default
+zero-result assignment. This restores all eighteen native jump-table target
+classes. An explicit `V8_INIT` label is unnecessary: removing it produces the
+same object, so do not claim it as recovered spelling. The process body stays
+SIZE33, but its full-TU scratch stream changes from 24 to 19 searches. The
+unchanged registration function consequently enters at cursor 52 instead of
+1 and selects the native register. Three period fixtures pass 252,552 checks,
+including real handshake histories; status 7 appears in those histories,
+while 2 and 9 were not observed at that boundary.
+
+V92CP's absolute-difference and late-initialisation cross first reaches
+REGALLOC. Native strong-definition order then changes its QI scratch entry
+cursor from 2 to 3, selecting DX instead of CX and recovering all 668 bytes.
+The first calibrated model supported only HI/SI searches; the QI explanation
+here comes from fresh read-only compiler traces. Do not silently generalise
+the old model to this mode. Four period fixtures pass 38,834 checks, with the
+exact body verified in each executable. The inline consumer `bitsToInfo`
+remains non-exact and its size gap grows from 27 to 33; `float2Bits` retains
+SIZE22 with changed scratch operands. The C2/C1 clone order still differs
+from the reference, so this is function recovery rather than final-layout
+identity.
+
+Evidence is under `build/gcc3-wave-status`, `build/gcc3-wave-beep`,
+`build/gcc3-wave-tu/v8-review`, `build/gcc3-wave-tu/v92crc-review` and
+`build/gcc3-overnight/checkpoint4`.
+
+V92CP's non-text audit has an important limit. Its 68-byte `.rodata` section
+contains seventeen relocated table entries: six `evaluateInfo` targets retain
+their function-relative offsets, while eleven `bitsToInfo` targets move within
+that changed inline consumer. All entries retain their ordered function owner,
+extent and instruction-boundary checks; the other allocated data sections and
+named data records are literal matches. Strict function-plus-offset equality
+is false for the moved eleven entries. The audit rejects a different valid
+case, an interior-byte target and a wrong owner, but does not claim semantic
+CFG equivalence. The generic table prover refuses both builds at an
+unsupported ABI-data relocation. Record this limit alongside the source
+equivalence and period evidence instead of declaring all data unchanged.
+
+The fourth checkpoint passes `make phase`: 395 period tests, zero failures.
+Fresh production comparison records 1,124 EXACT and 29 REGALLOC of 1,852,
+with seven exact gains and no losses. The V.29 TX promotion adds one REGALLOC
+while the V.8 registration promotion removes one. Eight affected mutation
+anchors were updated; all 10,044 anchors across 285 suites remain structurally
+valid. No mutation execution or snapshot refresh was needed.

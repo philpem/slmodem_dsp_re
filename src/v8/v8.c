@@ -122,6 +122,12 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	int arg = -1;
 
 	switch (rc) {
+	case V8_ANS_CM_DETECTED:
+	case V8_ORG_ANSAM_DETECTED_WAITING_TE:
+	case V8_ORG_JM_DETECTED:
+		break;
+
+
 	/* Every status whose name ends TIME_OUT_WAITING_FOR_something. */
 	case V8_ANS_TIME_OUT_WAITING_FOR_CM:
 	case V8_ANS_TIME_OUT_WAITING_FOR_CJ:
@@ -192,6 +198,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		break;
 
 	default:
+		ret = 0;
 		break;
 	}
 

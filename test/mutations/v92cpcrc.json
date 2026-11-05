@@ -135,14 +135,14 @@
   },
   {
     "label": "evaluateCRC does not reset the register first",
-    "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
-    "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();",
+    "find": "\tunsigned char acc;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+    "replace": "\tunsigned char acc;\n\tint j;\n\n\tcalcCRC();",
     "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding F4708's shape a second time."
   },
   {
     "label": "evaluateCRC resets after calculating",
-    "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
-    "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();\n\tresetCRC();",
+    "find": "\tunsigned char acc;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+    "replace": "\tunsigned char acc;\n\tint j;\n\n\tcalcCRC();\n\tresetCRC();",
     "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding F4708's shape a second time."
   },
   {
@@ -157,13 +157,13 @@
   },
   {
     "label": "the difference is signed rather than absolute",
-    "find": "\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));",
+    "find": "\t\tacc = (unsigned char)(acc + abs(d));",
     "replace": "\t\tacc = (unsigned char)(acc + d);"
   },
   {
     "label": "the accumulator is wider than a byte",
-    "find": "\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));\n\t}\n\n\treturn acc == 0;",
-    "replace": "\tunsigned int wide = 0;\n\n\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\twide += (unsigned int)(d < 0 ? -d : d);\n\t}\n\tacc = (unsigned char)wide;\n\n\treturn wide == 0;"
+    "find": "\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\tacc = (unsigned char)(acc + abs(d));\n\t}\n\n\treturn acc == 0;",
+    "replace": "\tunsigned int wide = 0;\n\n\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\twide += (unsigned int)abs(d);\n\t}\n\tacc = (unsigned char)wide;\n\n\treturn wide == 0;"
   },
   {
     "label": "the verdict is inverted",
@@ -177,7 +177,7 @@
   },
   {
     "label": "the differences are OR-ed rather than summed",
-    "find": "\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));",
-    "replace": "\t\tacc = (unsigned char)(acc | (d < 0 ? -d : d));"
+    "find": "\t\tacc = (unsigned char)(acc + abs(d));",
+    "replace": "\t\tacc = (unsigned char)(acc | abs(d));"
   }
 ]
