@@ -1,9 +1,9 @@
 {
-  "bytes": 78,
+  "bytes": 79,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1109,
-  "exact_bytes": 127904,
+  "exact": 1110,
+  "exact_bytes": 127316,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -404,7 +404,6 @@
     "_ZN12V92Modulator6exitJaEv",
     "_ZN12V92Modulator7exitCPtEv",
     "_ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters",
-    "_ZN12V92ModulatorC2EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters",
     "_ZN12V92ModulatorD1Ev",
     "_ZN12V92ModulatorD2Ev",
     "_ZN12V92PreFilter15setCoefficientsEPfS0_jj",
@@ -774,6 +773,7 @@
     "_ZN3PsdD1Ev",
     "_ZN3PsdD2Ev",
     "_ZN5QueueIfE5resetEv",
+    "_ZN5QueueIfE5writeEf",
     "_ZN5QueueIfEC1Ej",
     "_ZN5QueueIfED1Ev",
     "_ZN5V90CP12getBitVectorERj",
@@ -828,6 +828,7 @@
     "_ZN5V92Jd8resetCrcEv",
     "_ZN5V92JdD1Ev",
     "_ZN5V92JdD2Ev",
+    "_ZN8FloatFIR5resetEv",
     "_ZN8FloatFIRC1EjPfj",
     "_ZN8FloatFIRC2EjPfj",
     "_ZN8FloatFIRD1Ev",
@@ -1117,8 +1118,8 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 32,
+  "regalloc": 31,
   "reloc": 0,
-  "size": 633,
+  "size": 632,
   "unresolved": 0
 }

@@ -6786,6 +6786,58 @@ questions concern the original imaginary-history base and arithmetic operand
 ownership. Future losses still fail the ratchet and need their own review;
 this case is not an automatic exception for register differences.
 
+### Queue recovery changes a later constructor's scratch registers
+
+The GCC model follow-up supplies another measured example in
+`V92Modulator.cpp`. Scalar `Queue<float>::write(float)` calling the existing
+`isFull()` predicate reproduces the complete native 85-byte body, including
+its frame stores; the expanded arithmetic test produces 71 bytes. The
+predicate's arithmetic already has independent native evidence in
+`V92Modulator::progress`. The helper-use candidate is retained as recovery of
+that source boundary, without claiming it is the only possible spelling.
+
+The mechanism crosses two compiler decisions. The helper changes branch
+prediction, reducing the weighted instruction count from 201683 to 199984
+across the 200000 prologue threshold. The recovered frame then removes one
+dead-pop scratch search: the TU has 52 searches instead of 53. The persistent
+cursor entering the later C2 constructor changes from 0 to 2. That constructor
+loses its 734-byte EXACT match through seven register bytes in three constant materialisations
+and their stores for `Scrambler(5, 23, 99)`. Values, argument slots and the call
+destination remain the same. Its instruction patterns agree through
+`27.flow2` and first differ in `28.peephole2`.
+
+`progress` also first diverges in peephole2. Its final differences are EBP/EDI
+temporary choices and a block-size load moved across a division, without
+crossing a call or store. The other 27 of 30 shared TU bodies, exports and
+allocated data remain unchanged. Fresh dependency preprocessing of all 299
+C/C++ production TUs finds one Queue-header consumer; the remaining source is
+assembly. Four focused period binaries pass 804321 checks in 27 groups on
+both baseline and candidate. Each linked candidate scalar write is itself
+EXACT, ruling out a baseline weak-template copy masking the edit. These are
+component fixtures, including synthetic V.92 transition rows, not modem
+end-to-end coverage.
+
+Retain the queue recovery and record the constructor's named exact loss;
+do not restore the expanded predicate merely to recover its successor's
+registers. Further constructor work should inspect earlier source structure
+and the full TU search history before changing the constructor's own code.
+An explained cursor effect does not prove every earlier function is correct,
+nor license dummy scratch consumers or compiler-state knobs. The
+[model study](gcc3-model-nonexact-study.md) records the experiment domain and
+the accompanying FloatFIR layout tradeoff. Detailed traces and linked-fixture
+checks are in `build/gcc3-v92-recovery/`.
+
+The fresh 300-object comparison covers 1852 reference functions. Rebase the
+exact-membership floor explicitly from 1109 to 1110 names: gain
+`FloatFIR::reset()` (61 bytes) and `Queue<float>::write(float)` (85 bytes),
+and lose the 734-byte `V92Modulator` C2 constructor. Exact-covered reference
+bytes therefore decrease from 127904 to 127316 despite the net function gain.
+REGALLOC changes from 32 to 31 as reset graduates; SIZE falls from 633 to 632
+and BYTES rises from 78 to 79. No other exact membership changes. The previous
+floor remains in Git history, and future unexpected losses remain alarms.
+The retained source passes `make phase`: 393 period fixtures, zero failures,
+with structural checks green (`build/gcc3-queue-adopt/phase.log`).
+
 ## V92 encoder case ownership and the inline boundary
 
 An initial six-cell visibility cross moved `inverseMap` below `process` under

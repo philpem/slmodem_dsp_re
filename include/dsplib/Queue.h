@@ -162,8 +162,8 @@ public:
 	/**
 	 * @brief Whether the queue holds nothing.
 	 *
-	 * The only call site of either this or isFull() is
-	 * `V92Modulator::progress`'s closing test; both
+	 * `V92Modulator::progress` uses both predicates in its closing test;
+	 * scalar write also uses isFull(). Both
 	 * spellings here are the object's own forced codegen, not a tidier
 	 * equivalent (`rd == wr` rather than `count() == 0`, which would
 	 * emit a division).
@@ -281,7 +281,7 @@ int Queue<T>::write(T *p, unsigned num)
 template <class T>
 int Queue<T>::write(T v)
 {
-	if (size - count() - 1 == 0)
+	if (isFull())
 		return -1;
 
 	*wr = v;

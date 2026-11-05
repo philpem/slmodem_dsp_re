@@ -137,8 +137,9 @@ V.92 controls using `isFull()` or a local space value reproduce an exact
 85-byte `Queue<float>::write(float)`, but change the previously exact
 `V92Modulator` C2 constructor to BYTES7 and also change `progress`. Three
 full-TU cells, including the unchanged production baseline, provide 90
-function verdicts; exports and allocated data remain unchanged. These are
-diagnostic controls, not retained source edits.
+function verdicts; exports and allocated data remain unchanged. Subsequent
+review traced the collateral and retained the `isFull()` helper-use candidate;
+the space-local form remains a diagnostic control.
 
 A read-only compiler observation locates the queue frame decision before
 reload. With unchanged active-instruction counts, the baseline's success-path
@@ -150,6 +151,16 @@ opcode-nonequal and negative-return heuristics in the baseline; the controls
 retain only the latter. This establishes a source-to-prologue mechanism worth
 modelling separately from peephole scratch selection. Evidence is under
 `build/gcc3-v92-recovery/`.
+
+The later constructor and `progress` patterns agree through `27.flow2` and
+first diverge in peephole2. Removing the queue's dead-pop search changes the
+TU's event count from 53 to 52 and the constructor's incoming cursor from 0
+to 2. Its seven changed bytes carry the same constants to the same argument
+slots. This explains the lost match without establishing a constructor-source
+defect. The [Playbook's worked example](refinement.md#queue-recovery-changes-a-later-constructors-scratch-registers)
+records why the queue recovery is retained and the follow-up plan. All four
+focused period binaries pass on both forms (804321 checks in 27 groups), with
+the candidate's linked scalar write independently confirmed EXACT in each.
 
 ## Reproduction and artifacts
 
