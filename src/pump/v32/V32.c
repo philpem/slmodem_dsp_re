@@ -898,14 +898,14 @@ V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
 	params = V32_CFG;
 
 	params.protocol = (short)(cfg->protocol != 0);
-	params.tx_rate = (short)cfg->rate;
-	params.rx_rate = (short)cfg->rate;
-	params.timeout = cfg->timeout;
-	params.options = (params.options & ~0x400u)
-		| (unsigned int)((cfg->r10 & 1) << 10);
 	params.ec_near_delay = (unsigned short)cfg->phys_delay;
-	params.trellis = (cfg->rate > 0x1c1f);
+	((unsigned char *)&params.options)[1] = (((unsigned char *)&params.options)[1] & ~4u)
+		| ((cfg->r10 & 1) << 2);
+	params.timeout = cfg->timeout;
 	params.energy_drop_time = (short)cfg->energy_drop_time;
+	params.rx_rate = (short)cfg->rate;
+	params.tx_rate = (short)cfg->rate;
+	params.trellis = (cfg->rate > 0x1c1f);
 
 	return V32FP_recreate(0, &params, arg1);
 }

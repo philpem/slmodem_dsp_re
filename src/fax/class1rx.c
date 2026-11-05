@@ -472,82 +472,59 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 	cfg = ctx->modem_vmi;
 
 	{
-		struct faxvmi_ctl ctl = FAXVMI_CTL;
+		struct faxvmi_ctl ctl;
+		struct v17rx_ctl req17;
+		struct v29rx_control_req req29;
+		struct v27rx_ctl req27;
 		void *wrapped;
 
 		if (cfg->slot == VMI_SLOT_V17RX) {
-			struct v17rx_ctl req = V17RX_CTL;
+			req17 = V17RX_CTL;
+			ctl = FAXVMI_CTL;
 
-			req.short_train = short_train;
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.flags_0d |= V17RXCTL_REINIT;
-			ctl.int_0014 = (int)(long)&req;
+			req17.short_train = short_train;
+			*(short *)((char *)&req17 + 2) = (short)rate;
+			req17.flags_0d |= V17RXCTL_REINIT;
+			ctl.int_0014 = (int)(long)&req17;
 
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v17rx(ctx, 0);
 		} else if (cfg->slot == VMI_SLOT_V29RX) {
-			struct v29rx_control_req req = V29RX_CTL;
+			req29 = V29RX_CTL;
+			ctl = FAXVMI_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.ctl1 |= V29RXCTL_CTL1_BIT1;
-			ctl.int_0014 = (int)(long)&req;
+			*(short *)((char *)&req29 + 2) = (short)rate;
+			req29.ctl1 |= V29RXCTL_CTL1_BIT1;
+			ctl.int_0014 = (int)(long)&req29;
 
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v29rx(ctx, 0);
 		} else {
-			struct v27rx_ctl req = V27RX_CTL;
+			req27 = V27RX_CTL;
+			ctl = FAXVMI_CTL;
 
-			*(short *)((char *)&req + 2) = (short)rate;
-			req.flags |= V27RXCTL_FLAGS_REINIT;
-			ctl.int_0014 = (int)(long)&req;
+			*(short *)((char *)&req27 + 2) = (short)rate;
+			req27.flags |= V27RXCTL_FLAGS_REINIT;
+			ctl.int_0014 = (int)(long)&req27;
 
-			link = ctx->vmi_b->link;
-			wrapped = (void *)(long)link->int_0014;
-			*(short *)((char *)wrapped + 4) = (short)rate;
-
-			switch (rate) {
-			case 0x960:  sym = 2; break;
-			case 0x12c0: sym = 3; break;
-			case 0x1c20: sym = 3; break;
-			case 0x2580: sym = 4; break;
-			case 0x2ee0: sym = 5; break;
-			case 0x3840: sym = 6; break;
-			default:     sym = 0; break;
-			}
-			link->unpack_width = (unsigned short)sym;
-
-			FAXVMI_control(ctx->vmi_b, &ctl);
-			finish_v27rx(ctx, 0);
 		}
+		link = ctx->vmi_b->link;
+		wrapped = (void *)(long)link->int_0014;
+		*(short *)((char *)wrapped + 4) = (short)rate;
+
+		switch (rate) {
+		case 0x960:  sym = 2; break;
+		case 0x12c0: sym = 3; break;
+		case 0x1c20: sym = 3; break;
+		case 0x2580: sym = 4; break;
+		case 0x2ee0: sym = 5; break;
+		case 0x3840: sym = 6; break;
+		default:     sym = 0; break;
+		}
+		link->unpack_width = (unsigned short)sym;
+
+		FAXVMI_control(ctx->vmi_b, &ctl);
+		if (mod == 2)
+			finish_v17rx(ctx, 0);
+		else if (mod == 1)
+			finish_v29rx(ctx, 0);
+		else if (mod == 0)
+			finish_v27rx(ctx, 0);
 	}
 }

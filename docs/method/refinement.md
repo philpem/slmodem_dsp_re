@@ -8810,3 +8810,52 @@ with seven exact gains and no losses. The V.29 TX promotion adds one REGALLOC
 while the V.8 registration promotion removes one. Eight affected mutation
 anchors were updated; all 10,044 anchors across 285 suites remain structurally
 valid. No mutation execution or snapshot refresh was needed.
+
+
+## Retain supported partial graphs without claiming an exact gain
+
+Three further campaign candidates restore native source properties while
+remaining non-exact. Their adoption is separate from the exact-count batches.
+
+* `V90Jd::unPackData` needs the same fifteen constant-index CRC shifts as the
+  V.92 unpackers. This restores promotion of the sixteen words and the native
+  80-byte frame. Its size gap falls from 354 to 18 bytes; all fourteen other
+  TU bodies remain unchanged. Baseline and candidate each pass 50,583 period
+  checks. The additional machine probes agree on 270 synthetic component
+  cases, and deliberately corrupted table entries fail in 24 cases.
+* `V32FP_create` updates bit ten of its options word through the native byte
+  at parameter offset `0x11`, preserving every other bit, and publishes the
+  independent configuration fields in native order. The source still reads
+  the declared integer `cfg->r10` at offset `0x10`; GCC narrows its low-bit
+  use to the native byte load. The raw byte gap falls from 101 to 13, with
+  the other five bodies unchanged. Both captures contain 73 scratch searches
+  and none in this function, so its residual is outside the cursor model.
+  The constructor-backed fixture passes 106,013 checks, including 24 real
+  configuration combinations. A lower-scoring operand commutation lacked
+  independent evidence and was not adopted.
+* The corrected `_init_receiver` has three request/template initialisation
+  regions feeding one common rate/width/control-call continuation. Declare
+  the three request objects in that continuation's enclosing scope so their
+  lifetimes cover the call. Copy `FAXVMI_CTL` within each branch, after its
+  request template. This restores fifteen native template-word loads and one
+  `FAXVMI_control` call, replacing six loads and three calls. Its 50
+  relocations match the native count; the size gap falls from 201 to nine
+  bytes. Only this body changes among five, and all four exact neighbours
+  remain exact. All four crossed source controls pass the 112-check teardown
+  fixture and the corrected 643-check initialisation fixture.
+
+Keep `_init_receiver`'s existing zero defaults for `mod` and `rate`. A native
+prologue without explicit zeroing does not by itself prove uninitialised
+source locals: caller-domain and optimisation evidence are separate
+obligations. The diagnostic default-removal controls established neither a
+valid input contract nor an exact match and were excluded. The forced
+short-training store and its failing-baseline regression remain intact.
+
+Evidence is under `build/gcc3-wave-jd/v90-constant-shifts`,
+`build/gcc3-wave-fse`, `build/gcc3-wave-class1rx/common-tail` and
+`build/gcc3-overnight/checkpoint5`.
+
+The fifth checkpoint passes `make phase`: 395 period tests, zero failures.
+Fresh production objects reproduce all three reviewed candidates literally.
+Full-TU checks confirm only those three non-exact bodies change, preserving
+exact and REGALLOC membership.
