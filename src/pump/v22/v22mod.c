@@ -154,12 +154,20 @@ V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 	 * signed; the shift count is `movzwl`, so `hdx->rx_shift` is read as an
 	 * unsigned sixteen-bit field.
 	 */
-	for (i = 0; i < *n_rx; i++)
-		rx_in_internal[i] =
-			(short)((int)rx_in[i] >> fp->hdx->rx_shift);
+	{
+		struct v22fp_hdx *input_hdx;
+		if (*n_rx > 0) {
+			input_hdx = fp->hdx;
+			for (i = 0; i < *n_rx; i++)
+				rx_in_internal[i] =
+					(short)((int)rx_in[i] >> input_hdx->rx_shift);
+		} else {
+			input_hdx = fp->hdx;
+		}
 
-	V22_PROTOCOL[fp->hdx->protocol](fp, tx_in_internal, tx_out, rx_in_internal,
-				   rx_out_internal, &tx_syms, &rx_syms);
+		V22_PROTOCOL[input_hdx->protocol](fp, tx_in_internal, tx_out, rx_in_internal,
+					   rx_out_internal, &tx_syms, &rx_syms);
+	}
 
 	*n_rx = rx_syms;
 
@@ -383,13 +391,14 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 	     short *rxin, unsigned short *rxsym,
 	     unsigned short *txcount, unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	unsigned short nsym;
 	unsigned int now;
 	short elapsed;
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case V22_NODE_2400A:
 		/* Training at 1200: send ones, receive, clamp, wait. */
 		MakeTxData((short *)txsym, (const short *)txcount,
@@ -466,8 +475,11 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 					dsplibs_debug_printf(
 					    "V22_MSG_CONNECT_2400 In " "NODE_2400C\n");
 			} else {
-				fp->hdx->gtimer = 0;
-				fp->hdx->connect_substate = V22_NODE_2400D;
+				{
+					struct v22fp_hdx *group_hdx = fp->hdx;
+					group_hdx->gtimer = 0;
+					group_hdx->connect_substate = V22_NODE_2400D;
+				}
 			}
 		}
 		break;
@@ -527,9 +539,12 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 				state_hdx->connect_substate = V22_NODE_RETRAIN;
 			}
 			SetAdaptEqV22(fp, 1);
-			HDX_R38(fp->hdx) = V22_HDX_R38_RETRAIN;
-			fp->status = V22_STATUS_0B;
-			fp->hdx->carrier_loss_blocks = 0;
+			{
+				struct v22fp_hdx *loss_hdx = fp->hdx;
+				HDX_R38(loss_hdx) = V22_HDX_R38_RETRAIN;
+				fp->status = V22_STATUS_0B;
+				loss_hdx->carrier_loss_blocks = 0;
+			}
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "Carrier back during carrier_loss_time "
@@ -538,8 +553,11 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		return;
 	}
 
-	fp->hdx->carrier_loss_blocks++;
-	elapsed = (short)(fp->hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	{
+		struct v22fp_hdx *loss_hdx = fp->hdx;
+		loss_hdx->carrier_loss_blocks++;
+		elapsed = (short)(loss_hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	}
 	if (fp->params.carrier_loss_ms < elapsed) {
 		fp->status = V22_MSG_NO_CARRIER;
 		if (DSPLIB_DEBUG_ON())
@@ -569,12 +587,14 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 	    short *rxin, unsigned short *rxsym, unsigned short *txcount,
 	    unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	short added = 0;
 	short mtd;
+	struct v22fp_hdx *timer_hdx;
 
 	fp->status = 2;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case 0:
 		/*
 		 * Send scrambled ones at whatever rate is current and wait for
@@ -592,14 +612,22 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if (*rxcount != 0) {
 			added = 0;
 			if (mtd == FPM_MTD_ABSENT) {
+				timer_hdx = fp->hdx;
 				added = V22_HDX_TICK_MS;
-				fp->hdx->r08 += V22_HDX_TICK_MS;
+				timer_hdx->r08 += V22_HDX_TICK_MS;
+			} else {
+				timer_hdx = fp->hdx;
 			}
+		} else {
+			timer_hdx = fp->hdx;
 		}
-		if (fp->hdx->r08 != 0 && added == 0) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->connect_substate = 1;
+		if (timer_hdx->r08 != 0 && added == 0) {
+			{
+				struct v22fp_hdx *group_hdx = timer_hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->connect_substate = 1;
+			}
 			SetAdaptEqV22(fp, 2);
 		}
 
@@ -625,10 +653,13 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * detector -- and so is `ReadGTimer`'s, which is a tail call in
 		 * the object.
 		 */
-		fp->hdx->gtimer = 0;
-		fp->hdx->r08 = 0;
-		fp->hdx->ones_detect_ms = 0;
-		fp->hdx->connect_substate = 2;
+		{
+			struct v22fp_hdx *group_hdx = dispatch_hdx;
+			group_hdx->gtimer = 0;
+			group_hdx->r08 = 0;
+			group_hdx->ones_detect_ms = 0;
+			group_hdx->connect_substate = 2;
+		}
 		ResetRx(fp);
 		SetTxRate(fp, V22_RATE_1200);
 		SetRxRate(fp, V22_RATE_1200);
@@ -680,14 +711,22 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if (*rxcount != 0) {
 			added = 0;
 			if (mtd == FPM_MTD_ABSENT) {
+				timer_hdx = fp->hdx;
 				added = V22_HDX_TICK_MS;
-				fp->hdx->r08 += V22_HDX_TICK_MS;
+				timer_hdx->r08 += V22_HDX_TICK_MS;
+			} else {
+				timer_hdx = fp->hdx;
 			}
+		} else {
+			timer_hdx = fp->hdx;
 		}
-		if (fp->hdx->r08 != 0 && added == 0) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->connect_substate = 4;
+		if (timer_hdx->r08 != 0 && added == 0) {
+			{
+				struct v22fp_hdx *group_hdx = timer_hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->connect_substate = 4;
+			}
 			SetAdaptEqV22(fp, 2);
 		}
 
@@ -795,21 +834,25 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		short *rxin, unsigned short *rxsym, unsigned short *txcount,
 		unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	short ack = 0;
 
 	fp->r1e[0] |= 0x02;
 	fp->status = 1;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case 0:
 		/*
 		 * Entry: clear the clock, the pattern timer and the "equaliser
 		 * has been told" flag, stop the equaliser adapting, and send
 		 * one block of unscrambled ones.
 		 */
-		fp->hdx->gtimer = 0;
-		fp->hdx->r08 = 0;
-		fp->hdx->trained = 0;
+		{
+			struct v22fp_hdx *group_hdx = dispatch_hdx;
+			group_hdx->gtimer = 0;
+			group_hdx->r08 = 0;
+			group_hdx->trained = 0;
+		}
 		SetAdaptEqV22(fp, 1);
 
 		MakeTxData((short *)txdata, (const short *)txcount,
@@ -818,10 +861,13 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
-		if (*rxcount != 0)
-			fp->hdx->r08 = (short)(fp->hdx->r08 + Detect_Rmloop2_ACK(
+		if (*rxcount != 0) {
+			int n = Detect_Rmloop2_ACK(
 				rxsym, (const unsigned short *)rxcount,
-				fp->params.bps2));
+				fp->params.bps2);
+			struct v22fp_hdx *ack_hdx = fp->hdx;
+			ack_hdx->r08 = (short)(ack_hdx->r08 + n);
+		}
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		fp->hdx->connect_substate = 1;
@@ -839,10 +885,12 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0) {
-			ack = (short)Detect_Rmloop2_ACK(
+			int n = Detect_Rmloop2_ACK(
 				rxsym, (const unsigned short *)rxcount,
 				fp->params.bps2);
-			fp->hdx->r08 = (short)(fp->hdx->r08 + ack);
+			struct v22fp_hdx *ack_hdx = fp->hdx;
+			ack = (short)n;
+			ack_hdx->r08 = (short)(ack_hdx->r08 + ack);
 		}
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
@@ -903,8 +951,11 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
+			{
+				struct v22fp_hdx *group_hdx = fp->hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+			}
 			SetAdaptEqV22(fp, 3);
 			fp->status = 6;
 		}
@@ -961,10 +1012,11 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0) {
 			/* `bps2`, not `bps` -- see the note at F10194. */
-			detected = (short)Detect_1s(rxsym, rxcount,
+			int n = Detect_1s(rxsym, rxcount,
 						    fp->params.bps2,
 						    V22_DET_THRESH_Q15);
 			hdx = fp->hdx;
+			detected = (short)n;
 			hdx->r08 = (short)((unsigned short)hdx->r08
 					   + detected);
 		}
@@ -1074,13 +1126,14 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 	     short *rxin, unsigned short *rxsym,
 	     unsigned short *txcount, unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	unsigned short nsym;
 	unsigned int now;
 	short elapsed;
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case V22_NODE_1200_12:
 		/*
 		 * The latching node: `r10` takes the first verdict and the
@@ -1109,8 +1162,11 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 				fp->flags |= V22FP_FLAGS_CONNECT;
 				fp->status = V22_STATUS_04;
 			} else {
-				fp->hdx->gtimer = 0;
-				fp->hdx->connect_substate = V22_NODE_1200_13;
+				{
+					struct v22fp_hdx *group_hdx = fp->hdx;
+					group_hdx->gtimer = 0;
+					group_hdx->connect_substate = V22_NODE_1200_13;
+				}
 			}
 		}
 		break;
@@ -1161,8 +1217,11 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 	if (CarrierDetect(fp))
 		return;
 
-	fp->hdx->carrier_loss_blocks++;
-	elapsed = (short)(fp->hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	{
+		struct v22fp_hdx *loss_hdx = fp->hdx;
+		loss_hdx->carrier_loss_blocks++;
+		elapsed = (short)(loss_hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	}
 	if (fp->params.carrier_loss_ms < elapsed) {
 		fp->status = V22_MSG_NO_CARRIER;
 		if (DSPLIB_DEBUG_ON())
@@ -1383,8 +1442,10 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 	   short *rxin, unsigned short *rxsym,
 	   unsigned short *txcount, unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	struct v22_status st;
 	struct fpm_tone *tone;
+	struct v22fp_hdx *tone_hdx;
 	unsigned short nsym;	/* DemodDataV22's symbol count               */
 	short detected;		/* FPM_MTD_detect's verdict for this block   */
 	short ones;		/* Detect_1s's, in milliseconds              */
@@ -1395,17 +1456,23 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 	 * runs on every arm, including the ones with no case at all.
 	 */
 	short gap = 0;
+	struct v22fp_hdx *ones_hdx;
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case V22_ANS_NODE_0:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V22_answer,NODE_0\n");
+			dispatch_hdx = fp->hdx;
+		}
 
-		fp->hdx->gtimer = 0;
-		fp->hdx->r08 = 0;
-		fp->hdx->ones_detect_ms = 0;
+		{
+			struct v22fp_hdx *group_hdx = dispatch_hdx;
+			group_hdx->gtimer = 0;
+			group_hdx->r08 = 0;
+			group_hdx->ones_detect_ms = 0;
+		}
 
 		/*
 		 * The report is taken for ONE BIT of it: +0x15 bit 0, which
@@ -1437,26 +1504,30 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			   V22_TXDATA_ONES_1200);
 		*txcount = ModDataV22(fp, txsym, txout, *txcount);
 
-		/* Dead: nothing above has moved it.  See the file header. */
-		fp->hdx->connect_substate = V22_ANS_NODE_3;
+		/* The native NODE0 tone path retains this owner through the
+		 * substate write and joins after NODE1's owner acquisition. */
+		tone_hdx = fp->hdx;
+		tone_hdx->connect_substate = V22_ANS_NODE_3;
 
-		tone = fp->hdx->tone;
+		tone = tone_hdx->tone;
 		tone->cfg.freq = V22_ANS_TONE_HZ;
 		tone->cfg.scale = (short)((tone->cfg.scale
 					   * V22_ORG_TONE_SCALE_Q15) >> 15);
-		FPM_TONE_create(fp->hdx->tone, &fp->hdx->tone->cfg);
+		FPM_TONE_create(tone_hdx->tone, &tone->cfg);
 		break;
 
 	case V22_ANS_NODE_1:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V22_answer,NODE_1\n");
+			dispatch_hdx = fp->hdx;
+		}
 
 		/*
 		 * The answer tone.  `FPM_TONE_generate` returns its `count`
 		 * in the object; see v22org.h and F10194, which retyped
 		 * fpm_tone.h so this is one statement again.
 		 */
-		*txcount = FPM_TONE_generate(fp->hdx->tone, txout, V22_ORG_BLOCK);
+		*txcount = FPM_TONE_generate(dispatch_hdx->tone, txout, V22_ORG_BLOCK);
 
 		*rxcount = 0;
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
@@ -1472,12 +1543,13 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			SetTxRate(fp, V22_RATE_1200);
 			SetRxRate(fp, V22_RATE_1200);
 
-			tone = fp->hdx->tone;
+			tone_hdx = fp->hdx;
+		tone = tone_hdx->tone;
 			tone->cfg.freq = V22_ANS_TONE_HZ;
 			tone->cfg.scale =
 			    (short)((tone->cfg.scale
 				     * V22_ORG_TONE_SCALE_Q15) >> 15);
-			FPM_TONE_create(fp->hdx->tone, &fp->hdx->tone->cfg);
+			FPM_TONE_create(tone_hdx->tone, &tone->cfg);
 		}
 		break;
 
@@ -1512,8 +1584,9 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		if (*rxcount != 0 && SignalDetect(fp) == 1) {
 			gap = 0;
 			if (detected == 0) {
+				struct v22fp_hdx *gap_hdx = fp->hdx;
 				gap = V22_BLOCK_MS;
-				fp->hdx->r08 = (short)(fp->hdx->r08
+				gap_hdx->r08 = (short)(gap_hdx->r08
 						       + V22_BLOCK_MS);
 			} else if ((unsigned short)fp->hdx->r08
 				    <= V22_ORG_MIN_RUN_MS) {
@@ -1531,17 +1604,19 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 						V22_ORG_DETECT_THRESH);
 			if (ones == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				ones = (short)Detect_1s(rxsym, rxcount,
+				int n = Detect_1s(rxsym, rxcount,
 							V22_ORG_DETECT_BPS,
 							V22_ORG_DETECT_THRESH);
-				fp->hdx->ones_detect_ms = (short)(fp->hdx->ones_detect_ms + ones);
+				ones_hdx = fp->hdx;
+				ones = (short)n;
+				ones_hdx->ones_detect_ms = (short)(ones_hdx->ones_detect_ms + ones);
 				/*
 				 * The reset `v22_originate`'s two copies of
 				 * this block do NOT have.  See v22org.h.
 				 */
-				if (ones == 0 && (unsigned short)fp->hdx->ones_detect_ms
+				if (ones == 0 && (unsigned short)ones_hdx->ones_detect_ms
 						 <= V22_ORG_MIN_RUN_MS)
-					fp->hdx->ones_detect_ms = 0;
+					ones_hdx->ones_detect_ms = 0;
 			}
 		}
 
@@ -1553,20 +1628,26 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "Detected V22bis Carrier\n");
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->ones_detect_ms = 0;
-			fp->hdx->connect_substate = V22_ANS_NODE_4;
+			{
+				struct v22fp_hdx *group_hdx = fp->hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->ones_detect_ms = 0;
+				group_hdx->connect_substate = V22_ANS_NODE_4;
+			}
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned short)fp->hdx->ones_detect_ms > V22_ORG_ONES_MS) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("Detected V22 Carrier\n");
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->ones_detect_ms = 0;
-			fp->hdx->connect_substate = V22_NODE_1200_12;
+			{
+				struct v22fp_hdx *group_hdx = fp->hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->ones_detect_ms = 0;
+				group_hdx->connect_substate = V22_NODE_1200_12;
+			}
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			FPM_AGC_Freeze(&fp->dsp->agc);
@@ -1636,8 +1717,10 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 	      short *rxin, unsigned short *rxsym,
 	      unsigned short *txcount, unsigned short *rxcount)
 {
+	struct v22fp_hdx *dispatch_hdx = fp->hdx;
 	struct v22_status st;
 	struct fpm_tone *tone;
+	struct v22fp_hdx *tone_hdx;
 	unsigned short nsym;
 	short detected;
 	short ones;
@@ -1645,15 +1728,20 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->connect_substate) {
+	switch (dispatch_hdx->connect_substate) {
 	case V22_ORG_NODE_0:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V22_originate,NODE_0\n");
+			dispatch_hdx = fp->hdx;
+		}
 
-		fp->hdx->gtimer = 0;
-		fp->hdx->r08 = 0;
-		fp->hdx->ones_detect_ms = 0;
-		fp->hdx->connect_substate = V22_ORG_NODE_1;
+		{
+			struct v22fp_hdx *group_hdx = dispatch_hdx;
+			group_hdx->gtimer = 0;
+			group_hdx->r08 = 0;
+			group_hdx->ones_detect_ms = 0;
+			group_hdx->connect_substate = V22_ORG_NODE_1;
+		}
 
 		/*
 		 * THE REPORT IS ASKED FOR AND THEN IGNORED.  `v22_answer`'s
@@ -1671,12 +1759,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		SetTxRate(fp, V22_RATE_1200);
 		SetRxRate(fp, V22_RATE_1200);
 
-		tone = fp->hdx->tone;
+		tone_hdx = fp->hdx;
+		tone = tone_hdx->tone;
 		tone->cfg.freq = V22_ORG_TONE_HZ;
 		tone->cfg.rev_period = 0;
 		tone->cfg.scale = (short)((tone->cfg.scale
 					   * V22_ORG_TONE_SCALE_Q15) >> 15);
-		FPM_TONE_create(fp->hdx->tone, &fp->hdx->tone->cfg);
+		FPM_TONE_create(tone_hdx->tone, &tone->cfg);
 		break;
 
 	case V22_ORG_NODE_1:
@@ -1691,9 +1780,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 * two statements later by the unconditional clear
 			 * below.  Both stores are the object's.
 			 */
-			*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
-			fp->hdx->gtimer = 0;
-			fp->hdx->connect_substate = V22_ORG_NODE_3;
+			unsigned short n = DemodDataV22(fp, rxin, rxsym, *rxcount);
+			struct v22fp_hdx *group_hdx = fp->hdx;
+			*rxcount = n;
+			{
+				group_hdx->gtimer = 0;
+				group_hdx->connect_substate = V22_ORG_NODE_3;
+			}
 			fp->flags |= V22FP_FLAG_1D_BIT4;
 		}
 
@@ -1710,11 +1803,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		break;
 
 	case V22_ORG_NODE_3:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V22_originate, NODE_3\n");
+			dispatch_hdx = fp->hdx;
+		}
 
 		/* The received level for this block, kept for the mean. */
-		fp->hdx->rx_rms = FPM_rms(rxin, V22_ORG_BLOCK);
+		dispatch_hdx->rx_rms = FPM_rms(rxin, V22_ORG_BLOCK);
 
 		TxNOP(fp, txsym, txout, (short *)txcount);
 
@@ -1722,12 +1817,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*rxcount = nsym;
 
 		if (nsym != 0) {
-			fp->hdx->rms_accum += (unsigned short)fp->hdx->rx_rms;
-			fp->hdx->r08 = (short)(fp->hdx->r08
-					       + Detect_1s(rxsym, rxcount,
-							   V22_ORG_DETECT_BPS,
-							   V22_ORG_DETECT_THRESH));
-			fp->hdx->rms_blocks++;
+			int n = Detect_1s(rxsym, rxcount,
+					  V22_ORG_DETECT_BPS,
+					  V22_ORG_DETECT_THRESH);
+			struct v22fp_hdx *rms_hdx = fp->hdx;
+			rms_hdx->rms_accum += (unsigned short)rms_hdx->rx_rms;
+			rms_hdx->r08 = (short)(rms_hdx->r08 + n);
+			rms_hdx->rms_blocks++;
 		}
 
 		if ((unsigned short)fp->hdx->r08 > V22_ORG_NODE_3_RUN_MS) {
@@ -1819,11 +1915,12 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 						V22_ORG_DETECT_THRESH);
 			if (ones == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				fp->hdx->ones_detect_ms =
-				    (short)(fp->hdx->ones_detect_ms
-					    + Detect_1s(rxsym, rxcount,
-							V22_ORG_DETECT_BPS,
-							V22_ORG_DETECT_THRESH));
+				int n = Detect_1s(rxsym, rxcount,
+						  V22_ORG_DETECT_BPS,
+						  V22_ORG_DETECT_THRESH);
+				struct v22fp_hdx *ones_hdx = fp->hdx;
+				ones_hdx->ones_detect_ms =
+					(short)(ones_hdx->ones_detect_ms + n);
 			}
 		}
 
@@ -1854,8 +1951,9 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 				    <= V22_ORG_MIN_RUN_MS)
 					fp->hdx->r08 = 0;
 			} else {
+				struct v22fp_hdx *gap_hdx = fp->hdx;
 				gap = V22_BLOCK_MS;
-				fp->hdx->r08 = (short)(fp->hdx->r08
+				gap_hdx->r08 = (short)(gap_hdx->r08
 						       + V22_BLOCK_MS);
 			}
 
@@ -1864,11 +1962,12 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 						V22_ORG_DETECT_THRESH);
 			if (ones == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				fp->hdx->ones_detect_ms =
-				    (short)(fp->hdx->ones_detect_ms
-					    + Detect_1s(rxsym, rxcount,
-							V22_ORG_DETECT_BPS,
-							V22_ORG_DETECT_THRESH));
+				int n = Detect_1s(rxsym, rxcount,
+						  V22_ORG_DETECT_BPS,
+						  V22_ORG_DETECT_THRESH);
+				struct v22fp_hdx *ones_hdx = fp->hdx;
+				ones_hdx->ones_detect_ms =
+					(short)(ones_hdx->ones_detect_ms + n);
 			}
 		}
 
@@ -1881,10 +1980,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 */
 		if ((unsigned short)fp->hdx->r08 > V22_ORG_MIN_RUN_MS
 		    && gap == 0) {
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->ones_detect_ms = 0;
-			fp->hdx->connect_substate = V22_NODE_2400A;
+			{
+				struct v22fp_hdx *group_hdx = fp->hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->ones_detect_ms = 0;
+				group_hdx->connect_substate = V22_NODE_2400A;
+			}
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned short)fp->hdx->ones_detect_ms > V22_ORG_ONES_MS) {
@@ -1893,10 +1995,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 				    "V.22 %d modem det true\n",
 				    V22_ORG_DET_TRUE_ARG);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
-			fp->hdx->gtimer = 0;
-			fp->hdx->r08 = 0;
-			fp->hdx->ones_detect_ms = 0;
-			fp->hdx->connect_substate = V22_NODE_1200_12;
+			{
+				struct v22fp_hdx *group_hdx = fp->hdx;
+				group_hdx->gtimer = 0;
+				group_hdx->r08 = 0;
+				group_hdx->ones_detect_ms = 0;
+				group_hdx->connect_substate = V22_NODE_1200_12;
+			}
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned int)ReadGTimer(fp) > V22_ORG_NODE_6_MS) {

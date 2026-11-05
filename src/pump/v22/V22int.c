@@ -263,6 +263,7 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 						dsp->rx_scratch,
 						count);
 	dsp = fp->dsp;
+	hdx = fp->hdx;
 	dsp->rx_count = (short)n_rate;
 
 	/*
@@ -271,7 +272,7 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	 * `V22FP_create` loads from V22DiconnectThreshTable regardless of what
 	 * the template held -- see v22fp.h.
 	 */
-	if (fp->hdx->protocol == 0) {
+	if (hdx->protocol == 0) {
 		short level = FPM_rms(dsp->rx_scratch, n_rate);
 		if (fp->params.disconnect_thresh > level) {
 			dsp = fp->dsp;

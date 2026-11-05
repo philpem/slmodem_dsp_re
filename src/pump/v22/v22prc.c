@@ -322,9 +322,10 @@ int
 Detect_v22(void *modem, short *data)
 {
 	struct v22fp *v22 = (struct v22fp *)modem;
-	short run_a = 0;	/* consecutive sub-blocks A returned zero on */
-	short run_b = 0;	/* the same for B                            */
+	short run_a;	/* consecutive sub-blocks A returned zero on */
+	short run_b;	/* the same for B                            */
 	short i, j;
+	short subblocks = V22_DETECT_SUBBLOCKS;
 
 	/*
 	 * The whole block through the second AGC. F11613 retains its observed
@@ -332,8 +333,10 @@ Detect_v22(void *modem, short *data)
 	 * discards the result and does not read back the signal field.
 	 */
 	FPM_AGC_agc(&v22->dsp->agc2, data, V22_DETECT_BLOCK, 1);
+	run_a = 0;
+	run_b = 0;
 
-	for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
+	for (i = 0; i < subblocks; i++) {
 		short *chunk = data + (int)i * V22_DETECT_SUBBLOCK;
 		short va, vb;
 
@@ -342,19 +345,22 @@ Detect_v22(void *modem, short *data)
 		vb = FPM_MTD_detect(v22->hdx->mtd2,
 				    chunk, V22_DETECT_SUBBLOCK);
 
-		if (vb != 0)
-			run_b = 0;
-		else
+		if (vb == 0)
 			run_b = (short)(run_b + 1);
+		else
+			run_b = 0;
 
 		if (va != 0)
 			run_a = 0;
 		else
 			run_a = (short)(run_a + 1);
 
-		if (run_a <= V22_DETECT_CLEAR_HOLD)
-			for (j = 0; j <= V22_DETECT_SUBBLOCK - 1; j++)
-				chunk[j] = 0;
+		if (run_a <= V22_DETECT_CLEAR_HOLD) {
+			short *clear = data + (int)i * V22_DETECT_SUBBLOCK;
+			j = V22_DETECT_SUBBLOCK;
+			while (j-- != 0)
+				*clear++ = 0;
+		}
 	}
 
 	/* The author's own words, and gated on the SECOND counter. */

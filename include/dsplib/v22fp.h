@@ -171,10 +171,14 @@ struct v22fp_params {
 	union {
 		unsigned int flags; /* +0x10 whole-word view */
 		struct {
-			unsigned int bits_0_8 : 9;
+			unsigned int scrambler : 1;
+			unsigned int descrambler : 1;
+			unsigned int bit2 : 1;
+			unsigned int bits_3_8 : 6;
 			unsigned int bit9 : 1;
 			unsigned int bit10 : 1;
-			unsigned int bits_11_31 : 21;
+			unsigned int bit11 : 1;
+			unsigned int bits_12_31 : 20;
 		} flag_bits;
 	};
 	unsigned short r14;	/* +0x14 template 1; set to 1 again when the
@@ -475,9 +479,14 @@ struct v22fp {
 	 * times, and all four as one 32-bit word for its return value
 	 * (F8600).  Both readings are the original's.
 	 */
+	union {
+		unsigned int status_flags;
+		struct {
 	unsigned char status;		/* +0x1c set to 1 by create         */
 	unsigned char flags;		/* +0x1d |= 0x40                    */
 	unsigned char r1e[2];		/* +0x1e cleared with the above     */
+		};
+	};
 	short *out_i;			/* +0x20 <- dsp->fse.out_i          */
 	short *out_q;			/* +0x24 <- dsp->fse.out_q          */
 	short *n_out;			/* +0x28 <- &dsp->fse.n_out         */
@@ -493,7 +502,10 @@ struct v22fp {
 	int r48;			/* +0x48 init 0                     */
 	short r4c;			/* +0x4c init 0                     */
 	short pad4e;			/* +0x4e                            */
-	struct v22fp_hdx *hdx;		/* +0x50 V22_OBJ_GTIMER points here */
+	union {
+		struct v22fp_hdx *hdx;
+		void *opaque_hdx;
+	};		/* +0x50 V22_OBJ_GTIMER points here */
 	/* The owner views model the alias boundary observed across control,
 	 * status and demodulation. Native captures delimit each use; the
 	 * original declaration spelling is not uniquely established. */

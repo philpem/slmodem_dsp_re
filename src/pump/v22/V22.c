@@ -90,11 +90,13 @@ static const struct fpm_tone_cfg TONEv22_CFG = {
 struct v22fp *
 V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 {
+	struct v22fp *object = fp;
 	struct v22fp_params p;
-	struct fpm_tone_cfg tone;
 	struct fpm_mtd_cfg mtd;
+	struct fpm_tone_cfg tone;
 	struct fpm_sdm_cfg sdm;
 	struct v22_pps_cfg pps;
+	struct fpm_tone_cfg tone_init;
 	struct v22_mrf_cfg mrf;
 	struct v22_fse_cfg fse;
 	struct fpm_tone *gen;
@@ -104,6 +106,8 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	short sine;
 	int fresh = 0;
 	int i;
+
+	p = V22_CFG;
 
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf("V22FP create, built %s %s\n",
@@ -115,9 +119,8 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * range check and no default arm, which is why `mode` 5 produces an
 	 * object identical to `mode` 1 rather than to `mode` 0.
 	 */
-	p = V22_CFG;
 
-	switch (cfg->mode) {
+	switch ((unsigned int)cfg->mode) {
 	case 0:
 		p.mode = 0;
 		break;
@@ -132,11 +135,13 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 		break;
 	}
 
-	switch (cfg->rate) {
+	switch ((unsigned int)cfg->rate) {
 	case 0:
 		p.bps = 2400;
 		break;
 	case 1:
+		p.bps = 1200;
+		break;
 	case 2:
 		p.bps = 1200;
 		break;
@@ -153,10 +158,9 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * which is visible only in the mask widths; bits 4 and 6 of the
 	 * template survive and are read by nothing.
 	 */
-	p.flags = (p.flags & ~0x0e00u)
-		| (unsigned int)((cfg->f0c & 1) << 10)
-		| (unsigned int)((cfg->f14 & 1) << 11)
-		| (unsigned int)((cfg->f18 & 1) << 9);
+	p.flag_bits.bit10 = cfg->f0c;
+	p.flag_bits.bit11 = cfg->f14;
+	p.flag_bits.bit9 = cfg->f18;
 	p.carrier_loss_ms = (short)cfg->f10;
 
 	if (fp == NULL) {
@@ -166,72 +170,76 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 		 * below use to decide whether to allocate their own buffers,
 		 * so a re-initialisation reuses everything.
 		 */
-		fp = sysdep_malloc(sizeof(*fp));
-		fp->dsp = sysdep_malloc(sizeof(*fp->dsp));
-		fp->hdx = sysdep_malloc(sizeof(*fp->hdx));
+		object = sysdep_malloc(sizeof(*object));
+		object->dsp = sysdep_malloc(sizeof(*object->dsp));
+		object->hdx = sysdep_malloc(sizeof(*object->hdx));
 
-		hdx = fp->hdx;
+			hdx = object->hdx;
 		hdx->tone = NULL;
 		hdx->mtd = NULL;
 		hdx->mtd_s1 = NULL;
 		hdx->mtd2 = NULL;
 		hdx->iir = sysdep_malloc(0x20);
 
-		dsp = fp->dsp;
+		dsp = object->dsp;
 		dsp->rx_scratch = sysdep_malloc(0x154);
+		dsp = object->dsp;
 		dsp->smc_ring.sym = sysdep_malloc(0x18);
+		dsp = object->dsp;
 		dsp->pps_coff_i = sysdep_malloc(V22_PPS_COEFFS * 2);
+		dsp = object->dsp;
 		dsp->pps_coff_q = sysdep_malloc(V22_PPS_COEFFS * 2);
+		dsp = object->dsp;
 		dsp->mrf_coeff = sysdep_malloc(V22_MRF_COEFFS * 2);
+		dsp = object->dsp;
 		dsp->fse_coff_i = sysdep_malloc(V22_FSE_TAPS * 2);
+		dsp = object->dsp;
 		dsp->fse_coff_q = sysdep_malloc(V22_FSE_TAPS * 2);
 
 		fresh = 1;
 	}
 
 	/* The parameter block IS the object's first 28 bytes. */
-	fp->params = p;
-	fp->params.disconnect_thresh = V22DiconnectThreshTable[3];
+	object->params = p;
+	object->params.disconnect_thresh = V22DiconnectThreshTable[3];
 
-	hdx = fp->hdx;
-	dsp = fp->dsp;
+	dsp = object->dsp;
 
+	dsp->scrambler_on = (int)object->params.flag_bits.scrambler;
+	dsp->descrambler_on = (int)object->params.flag_bits.descrambler;
+	dsp->r20 = (int)object->params.flag_bits.bit2;
 	dsp->r00 = 1;
 	dsp->r04 = 1;
 	dsp->r08 = 1;
 	dsp->r0c = 1;
 	dsp->eq_adapt = 1;
 	dsp->r14 = 0;
-	dsp->scrambler_on = (int)(fp->params.flags & 1);
-	dsp->descrambler_on = (int)((fp->params.flags >> 1) & 1);
-	dsp->r20 = (int)((fp->params.flags >> 2) & 1);
 
-	dsp->r28 = (short)(fp->params.bps != 1200);
-	dsp->r2a = (short)(fp->params.bps2 != 1200);
+	dsp->r28 = (short)(object->params.bps != 1200);
+	dsp->r2a = (short)(object->params.bps2 != 1200);
 
-	switch (fp->params.mode) {
-	case 0:
+	if (object->params.mode == 0) {
+		hdx = object->hdx;
 		hdx->protocol = 1;
 		dsp->r2c = 1;
 		dsp->r2e = 2;
-		break;
-	case 1:
+	} else if (object->params.mode == 1) {
+		hdx = object->hdx;
 		hdx->protocol = 2;
 		dsp->r2c = 2;
 		dsp->r2e = 1;
-		break;
-	default:
+	} else {
+		hdx = object->hdx;
 		hdx->protocol = 3;
-		dsp->r2c = (short)fp->params.r14;
-		dsp->r2e = (short)fp->params.r14;
-		break;
+		dsp->r2c = (short)object->params.r14;
+		dsp->r2e = (short)object->params.r14;
 	}
 	/*
 	 * And bit 11 overrides all three.  It is the one caller-supplied flag
 	 * with a second, visible consequence, which is what pins it to this
 	 * bit rather than a neighbour.
 	 */
-	if (fp->params.flags & 0x800)
+	if (object->params.flags & 0x800)
 		hdx->protocol = 0;
 
 	hdx->gtimer = 0;
@@ -242,7 +250,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	hdx->rms_threshold = 0x2454;
 	hdx->rms_blocks = 0;
 	hdx->rx_shift = 0;
-	hdx->node_deadline = fp->params.r08;
+	hdx->node_deadline = object->params.r08;
 	hdx->trained = 0;
 	hdx->rms_accum = 0;
 	hdx->carrier_loss_blocks = 0;
@@ -252,14 +260,14 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * so on a re-initialisation they are reconfigured rather than rebuilt.
 	 *
 	 * `TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical, so which of
-	 * the two feeds `hdx->tone` and which feeds the throwaway generator
+	 * the two feeds `object->hdx->tone` and which feeds the throwaway generator
 	 * below is NOT decidable by any test.  Written as the object writes
 	 * it -- two different symbols -- and recorded here so the choice is
 	 * not mistaken for a measurement.
 	 */
 	tone = TONEv22_CFG;
 	tone.src = FPM_TONE_CFG.src;
-	hdx->tone = FPM_TONE_create(hdx->tone, &tone);
+	object->hdx->tone = FPM_TONE_create(object->hdx->tone, &tone);
 
 	/*
 	 * One of the three MTD configurations is copied to the stack and the
@@ -268,29 +276,34 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * but the copy is in the object and is reproduced.
 	 */
 	mtd = MTDs1_CFG;
-	hdx->mtd_s1 = FPM_MTD_create(hdx->mtd_s1, &mtd);
-	hdx->mtd = FPM_MTD_create(hdx->mtd, &MTDv22_CFG);
-	hdx->mtd2 = FPM_MTD_create(hdx->mtd2, &MTDv22_CFG2);
+	object->hdx->mtd_s1 = FPM_MTD_create(object->hdx->mtd_s1, &mtd);
+	object->hdx->mtd = FPM_MTD_create(object->hdx->mtd, &MTDv22_CFG);
+	object->hdx->mtd2 = FPM_MTD_create(object->hdx->mtd2, &MTDv22_CFG2);
 
-	tone = TONEv22INIT_CFG;
-	tone.src = FPM_TONE_CFG.src;
-	gen = FPM_TONE_create(NULL, &tone);
+	tone_init = TONEv22INIT_CFG;
+	tone_init.src = FPM_TONE_CFG.src;
+	gen = FPM_TONE_create(NULL, &tone_init);
 
 	/* Two bits per symbol at 1200, four at 2400. */
 	sdm = SDMv22_CFG;
+	dsp = object->dsp;
 	sdm.nbits = (short)(dsp->r28 != 0 ? 4 : 2);
+	dsp = object->dsp;
 	FPM_SDM_init(&dsp->sdm, &sdm);
 
+	dsp = object->dsp;
 	FPM_SMC_init(&dsp->smc, &SMCv22_CFG);
 
 	/*
 	 * The pulse shaper's kernel: the stored prototype multiplied by a
 	 * quadrature carrier, one sample of it per tap.  Q14 throughout.
 	 */
+	dsp = object->dsp;
 	gen->inc = (unsigned short)(dsp->r2c == 1 ? 0x666 : 0xccc);
 	gen->cfg.scale = 0x4000;
 	for (i = 0; i < V22_PPS_COEFFS; i++) {
 		FPM_TONE_generate2(gen, &cosine, &sine, 1);
+		dsp = object->dsp;
 		dsp->pps_coff_i[i] =
 			(short)((PPSv22_COFFS[i] * cosine) >> 14);
 		dsp->pps_coff_q[i] =
@@ -298,12 +311,15 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	}
 
 	pps = PPSv22_CFG;
+	dsp = object->dsp;
 	pps.coeff_i = dsp->pps_coff_i;
 	pps.coeff_q = dsp->pps_coff_q;
 	dsp->pps.imap = SMCv22_IMAP_1200BPS;
 	dsp->pps.qmap = SMCv22_QMAP_1200BPS;
+	dsp = object->dsp;
 	V22_PPS_init(&dsp->pps, &pps, fresh);
 
+	dsp = object->dsp;
 	dsp->smc_ring.widx = 0;
 	dsp->smc_ring.ridx = 0;
 	dsp->smc_ring.len = 12;
@@ -313,13 +329,14 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * mode gates: it runs for mode 0 and for nothing else.
 	 */
 	if (dsp->r2e == 2)
-		V22IIRFilterInit(hdx->iir, IIR_b_coeff, IIR_a_coeff);
+		V22IIRFilterInit(object->hdx->iir, IIR_b_coeff, IIR_a_coeff);
 
 	/* The receive rate converter's kernel.  Cosine only, no quadrature. */
 	gen->inc = 0x222;
 	gen->phase = 0;
 	for (i = 0; i < V22_MRF_COEFFS; i++) {
 		FPM_TONE_generate2(gen, &cosine, &sine, 1);
+		dsp = object->dsp;
 		dsp->mrf_coeff[i] = (short)((MRFv22_COFFS[i] * cosine) >> 14);
 	}
 
@@ -330,22 +347,29 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * every call rather than only when allocating.
 	 */
 	mrf = V22_MRF_CFG;
+	dsp = object->dsp;
 	mrf.coeff = dsp->mrf_coeff;
+	dsp = object->dsp;
 	V22_MRF_init(&dsp->mrf, &mrf, fresh);
 
+	dsp = object->dsp;
 	V22_SRE_init(&dsp->sre, fresh);
 
+	dsp = object->dsp;
 	FPM_AGC_init(&dsp->agc, &AGCv22_CFG, fresh);
+	dsp = object->dsp;
 	FPM_AGC_init(&dsp->agc2, &AGCv22_CFG2, fresh);
 
 	/* And the equaliser's initial taps, quadrature again. */
 	gen->inc = 0x2aaa;
 	gen->phase = 0;
 	fse = FSEv22_CFG;
+	dsp = object->dsp;
 	fse.icoff = dsp->fse_coff_i;
 	fse.qcoff = dsp->fse_coff_q;
 	for (i = 0; i < V22_FSE_TAPS; i++) {
 		FPM_TONE_generate2(gen, &cosine, &sine, 1);
+		dsp = object->dsp;
 		dsp->fse_coff_i[i] =
 			(short)((FSEv22_COFFS[i] * cosine) >> 14);
 		dsp->fse_coff_q[i] =
@@ -359,10 +383,13 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * `FSEv22_decision24`.
 	 */
 	dsp->fse.prev_quad = &dsp->prev_quad;
+	dsp = object->dsp;
 	dsp->fse.decision = FSEv22_decision12;
+	dsp = object->dsp;
 	V22_FSE_init(&dsp->fse, &fse, fresh);
 
 	/* The descrambler, from the same configuration as the scrambler. */
+	dsp = object->dsp;
 	FPM_SDM_init(&dsp->sdm2, &sdm);
 
 	FPM_TONE_delete(gen);
@@ -374,28 +401,26 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * bytes are set, so `r1e` is zero and is not left at the allocator's
 	 * fill.
 	 */
-	fp->status = 0;
-	fp->flags = 0;
-	fp->r1e[0] = 0;
-	fp->r1e[1] = 0;
-	fp->flags |= 0x40;
-	fp->status = 1;
+	object->status_flags = 0;
+	dsp = object->dsp;
+	object->flags |= 0x40;
+	object->status = 1;
 
-	fp->out_i = dsp->fse.out_i;
-	fp->out_q = dsp->fse.out_q;
-	fp->n_out = &dsp->fse.n_out;
-	fp->icoeff = dsp->fse.icoeff;
-	fp->qcoeff = dsp->fse.qcoeff;
+	object->out_i = dsp->fse.out_i;
+	object->out_q = dsp->fse.out_q;
+	object->n_out = &dsp->fse.n_out;
+	object->icoeff = dsp->fse.icoeff;
+	object->qcoeff = dsp->fse.qcoeff;
 
-	fp->r34 = 0x31;
-	fp->r38 = 0;
-	fp->r3c = 0;
-	fp->r40 = 0;
-	fp->r44 = 0;
-	fp->r48 = 0;
-	fp->r4c = 0;
+	object->r34 = 0x31;
+	object->r38 = 0;
+	object->r3c = 0;
+	object->r40 = 0;
+	object->r44 = 0;
+	object->r48 = 0;
+	object->r4c = 0;
 
-	return fp;
+	return object;
 }
 
 /*

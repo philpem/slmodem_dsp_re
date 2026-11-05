@@ -78,6 +78,33 @@ Record successful and failed transfers. These are admission checks, not promised
 gains. Keep control's remaining register choices separate from structural work.
 
 
+## V22 transfer: scalar bounds, owner groups and sharing (2026-11-05)
+
+The [V22 transfer wave](../v22-transfer-wave-20261105.md) recovers Detect_v22
+EXACT375 and v22_org_rmloop2 EXACT1050. Constructor improves SIZE40→7 but
+remains non-exact. Final census: 1,136 EXACT / 28 REGALLOC / 71 BYTES /
+617 SIZE over 1,852. Preserve the report's non-exact regressions and fixture
+limits; the count alone does not justify the source.
+
+| Transfer lesson | Positive evidence | Boundary or counterexample |
+| --- | --- | --- |
+| Cross scalar lifetime with branch orientation. | Detector branch alone gives BYTES4, bound alone SIZE8, both EXACT. A consumed short bound propagates after CSE and retains native CMPW4/LT. | This establishes a source family, not the author's unique local declaration. Return-width suspicion was false; the baseline already matched it. |
+| Capture the owner before the native publication. | Demod captures HDX before rx_count; answer captures before gap and retains the owner across its tone-state publication. | Matching static owner-load counts does not establish the right paths or ages. |
+| Analyze newly exposed collateral. | Broader HDX view alone worsens constructor; native groups recover its first destination acquisition. Handler repairs then yield another EXACT function. | The pointer unions model an observed alias contract; original declarations remain unresolved. |
+| Distinguish access evidence from declaration evidence. | Word/byte status view produces native DWORD-clear/ORB/byte-store. | Memset and extra bitfield produce identical objects; no extra bitfield evidence exists. Same SIZE is not raw equality. |
+| Trace sharing into branch-length feedback. | Peephole2 choices feed ce3 crossjumping; a three-byte shift changes a near JE into short JE, adding four bytes to the extent gap. | Do not tune that branch or assume a shared machine tail was a shared source tail. Fixed-input cursor replay is not source recovery. |
+
+All 300 comparison objects were rebuilt for closure. Eleven of 58 table target
+offsets move with unchanged owners; their source-case entry mapping is reviewed,
+not described as unchanged raw data or complete CFG proof. Source/RTL narrative
+claims must be checked against actual object bytes and parsed input hashes.
+Extra High independent review added validation, not a measured efficiency win.
+
+For the next recovery turn, deep-dive v22_originate's predicate producer and
+native byte spill/frame lifetime before touching types. Reopen constructor
+sharing with a new operation/lifetime/eligibility witness, not another spelling
+or incoming-cursor palette. Read this result and its negative controls first.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or
