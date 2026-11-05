@@ -8930,3 +8930,59 @@ seventh checkpoint passes all 396 period tests and the structural phase gate.
 The census reaches 1,128 EXACT and 28 REGALLOC of 1,852, one exact gain and
 no loss. Evidence: `build/gcc3-wave-tu/v90mp-review`,
 `build/gcc3-wave-tu/v90mp-order` and `build/gcc3-overnight/checkpoint7`.
+
+
+## Recover arm ownership, partial writes and reference publications
+
+The eighth checkpoint combines two exact gains with a supported decision-method
+recovery. `init_vmi_v27tx` writes only the low sixteen bits of the copied FIFO
+factor at configuration offset `0x14`. A union retains its four-byte storage
+and exposes the native two-byte override. The 248-byte constructor becomes
+exact. The closure covers seventeen consumers and 103 functions; sixteen
+objects are literal matches and only this constructor changes. Existing period
+fixtures pass 110,373 checks per form. A ten-check synthetic writable-template
+probe preserves a nonzero upper word, failing two checks on the old source and
+passing after correction. It tests the configuration constructor, without
+instantiating a pump from the artificial factor.
+
+`v8_process` restores two arm-owned outgoing argument stores and the shared
+emitted call tail, removing the post-switch sentinel test. Its status store is
+unconditional, as the native unchanged-status branch targets that store. The
+size gap falls from 33 to three bytes; all eighteen dispatch-table entries now
+have the native function-relative targets. Subsequent `dp_v8_exit` becomes
+exact through a changed incoming scratch cursor, while `dp_v8_init` stays
+exact. Six source controls bound the result without establishing a unique
+spelling. Baseline and candidate each pass 252,552 focused checks in fifteen
+groups, with linked body and relocation provenance verified.
+
+Both phase-three decision methods now call the existing `twoLevelDemod`
+helper instead of duplicating its body. Automatic inlining preserves eighteen
+native decoder-result publications through its integer reference argument.
+The remaining native `isAltRbs` tests also narrow to sixteen bits, giving all
+nineteen AX tests. Only these two of 26 bodies change; both constructor
+variants remain exact. Size gaps fall from 241 to 117 bytes and 427 to 238
+bytes. Focused period fixtures pass 3,221,079 checks per form, including
+constructor lifecycle coverage and explicitly synthetic decision-state sweeps.
+The V.92 local bit initializer remains unchanged.
+
+For these decision methods, table ownership is not exact target identity:
+41 of 68 function-relative table offsets change, although all owners remain
+the same. Linked-provenance checks verify each selected object's own table
+entries, not equivalence between different case graphs. The shared CFG/frame
+prover still refuses unsupported instructions; no proof requirement is weakened.
+The string pool also changes ordering, so neither literal nontext equality nor
+strict table-target equality is claimed. Period differential evidence and the
+native publication/width witnesses support this partial recovery.
+
+Four V.8 mutation rows were reanchored: two stale matches and two formerly
+shared-call faults that must now affect both source arms. All 10,044 anchors
+remain valid across 285 suites, without mutation execution or snapshot refresh.
+The first phase run passed all 397 period tests but failed the two stale
+anchors; the corrected complete rerun is recorded with this checkpoint.
+Evidence: `build/gcc3-wave-vmi27`, `build/gcc3-wave-tu/v8-cfg-review`,
+`build/gcc3-wave-p3d-decision` and `build/gcc3-overnight/checkpoint8`.
+
+The corrected phase rerun passes all 397 tests and structural checks. The
+census is 1,130 EXACT and 27 REGALLOC of 1,852: two exact gains, no losses.
+Parent review verifies unchanged string-payload and per-function string-consumer
+multisets for the phase-three candidate; raw string ordering remains different.

@@ -119,7 +119,8 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;
 	int rc = V8Process(st->v8, in, out, count);
 	int ret = 0;
-	int arg = -1;
+	/* Assigned by the arm that requests the datapump change. */
+	int arg;
 
 	switch (rc) {
 	case V8_ANS_CM_DETECTED:
@@ -178,6 +179,16 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		/* Common to all four: what was agreed goes to the modem. */
 		st->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;
 		st->dspinfo->qc_index = st->cm->menu;
+
+		/* Each eligible arm supplies its own outgoing argument store.
+		 * GCC shares the identical call tail after those stores. */
+		modem_set_param(dp->modem, 9, arg);
+		ret = DPSTAT_CHANGEDP;
+		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v8: Link established. Idle timer %d.\n",
+			    st->idle_timer);
 		break;
 
 	case V8_ORG_BAD_QCA1d_MESSAGE:
@@ -192,8 +203,17 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;
 		} else if (st->idle_timer == 0) {
-			st->dspinfo->qc_lapm &= 1;
 			arg = 92;
+			st->dspinfo->qc_lapm &= 1;
+
+			/* The second arm-owned request, with no sentinel test. */
+			modem_set_param(dp->modem, 9, arg);
+			ret = DPSTAT_CHANGEDP;
+			st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "v8: Link established. Idle timer %d.\n",
+				    st->idle_timer);
 		}
 		break;
 
@@ -202,26 +222,17 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		break;
 	}
 
-	if (arg >= 0) {
-		modem_set_param(dp->modem, 9, arg);
-		ret = DPSTAT_CHANGEDP;
-		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "v8: Link established. Idle timer %d.\n",
-			    st->idle_timer);
-	}
-
 	/*
 	 * The same change detector as V8Process's, one layer up: keep the
-	 * previous status in `last_status` and act only when it changes.
+	 * previous status in `last_status` and report only when it changes.
+	 * The unchanged-status branch lands on the store, so it is unconditional.
 	 */
 	if (st->last_status != rc) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("v8: status (%d) %s\n", rc,
 					     v8StatusName[rc]);
-		st->last_status = rc;
 	}
+	st->last_status = rc;
 
 	if (st->idle_timer > 0) {
 		st->idle_timer -= count;

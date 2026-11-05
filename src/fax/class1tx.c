@@ -153,11 +153,10 @@ struct v21tx_ctl V21TX_CTL = {
  * V.27ter's and V.29's tables are also 1 (`tabdump.py` over the blob's own
  * `.data` confirms it, independent of either reconstructed table), so their
  * override to 2 is a real, visible change from the default.
- * `cfg->fifo_size_factor = <value>;` after the table copy reproduces this
- * for all three now -- a plain `int` assignment stores the same final 32
- * bits as the object's narrower `movw`, since the upper 16 bits are already
- * zero from the dword copy, so no encoding trick is needed for behavioural
- * fidelity.
+ * V.27ter uses the explicit low-word view below, preserving the copied
+ * template's upper word as the native store does. V.17 and V.29 still use
+ * whole-word assignments; their default zero upper words make the final
+ * values agree, while their access-width differences remain.
  */
 static int
 init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
@@ -234,7 +233,7 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V27TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->fifo_size_factor = 2;
+	cfg->fifo_size_factor_word = 2;
 	cfg->int_001c = (int)(long)arg_3;
 
 	*vmi = FAXVMI_CFG;

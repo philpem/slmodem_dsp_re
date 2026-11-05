@@ -148,7 +148,10 @@ struct v27tx_cfg {
 					same role as `v27tx_ctl::scale_mul`  */
 	short	flags;		/* +0x10  `V27TX_HANDLE_FLAGS`                */
 	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
-	int	fifo_size_factor; /* +0x14  the transmit FIFO's element count
+	union {
+		int fifo_size_factor; /* full table/configuration storage */
+		unsigned short fifo_size_factor_word; /* VMI low-word override */
+	}; /* +0x14  the transmit FIFO's element count
 					  is this * `V27TX_FRMSIZE[rate]`;
 					  `v17tx_cfg`'s own field, same name */
 	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`,
@@ -160,6 +163,16 @@ struct v27tx_cfg {
 	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
 					`(void *)(long)` idiom D1250 names   */
 };
+typedef char v27tx_cfg_fifo_factor_at_14[
+ __builtin_offsetof(struct v27tx_cfg,fifo_size_factor)==0x14?1:-1];
+typedef char v27tx_cfg_fifo_word_at_14[
+ __builtin_offsetof(struct v27tx_cfg,fifo_size_factor_word)==0x14?1:-1];
+typedef char v27tx_cfg_fifo_factor_four_bytes[
+ sizeof(((struct v27tx_cfg*)0)->fifo_size_factor)==4?1:-1];
+typedef char v27tx_cfg_fifo_override_two_bytes[
+ sizeof(((struct v27tx_cfg*)0)->fifo_size_factor_word)==2?1:-1];
+typedef char v27tx_cfg_size_20[sizeof(struct v27tx_cfg)==0x20?1:-1];
+
 
 union v27_status_word {
 	int word;

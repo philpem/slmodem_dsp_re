@@ -2,8 +2,8 @@
   "bytes": 74,
   "compared": 1852,
   "compared_bytes": 720125,
-  "exact": 1128,
-  "exact_bytes": 130915,
+  "exact": 1130,
+  "exact_bytes": 131191,
   "exact_symbols": [
     "B103FP_delete",
     "B103LocLoopNextState",
@@ -994,6 +994,7 @@
     "dp_v23_init",
     "dp_v32_exit",
     "dp_v32_init",
+    "dp_v8_exit",
     "dp_v8_init",
     "dp_vpcm_exit",
     "dp_wrapper_delete",
@@ -1013,6 +1014,7 @@
     "indicateJaTransmission",
     "init_vmi_v17rx",
     "init_vmi_v27rx",
+    "init_vmi_v27tx",
     "init_vmi_v29rx",
     "linear2alaw",
     "linear2ulaw",
@@ -1136,8 +1138,8 @@
   ],
   "nodata": 0,
   "reference_functions": 1852,
-  "regalloc": 28,
+  "regalloc": 27,
   "reloc": 0,
-  "size": 622,
+  "size": 621,
   "unresolved": 0
 }
