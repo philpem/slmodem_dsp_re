@@ -77,6 +77,28 @@ Inspect `V22FP_create` if its changed group supplies an independent discriminato
 Record successful and failed transfers. These are admission checks, not promised
 gains. Keep control's remaining register choices separate from structural work.
 
+
+## Resolving an owner declaration after an alias-contract recovery
+
+Seek independent original type evidence first: matching original headers or
+source releases, debug types in another object build, type-bearing mangled
+symbols, callback/API contracts, or initialized union/aggregate consumers.
+A plain C symbol name and an instruction displacement do not supply that type.
+The current reference has neither DWARF nor STABS sections.
+
+Then use consumers such as Detect_v22 and V22FP_create to predict a declaration's
+behavior before compiling it. Map owner reads around publications and calls,
+compare candidate RTL alias sets and complete native/TU obligations, and test
+supported combinations across the full header closure. Preserve temporarily
+worse controls. Matching control/status/Demod does not select a unique owner
+view: the two tested models already reproduce the same relevant objects.
+
+If independent evidence never distinguishes the surviving declarations, record
+an observational equivalence class and retain an explicitly qualified alias
+model. Full byte identity can validate emitted code without recovering unique
+source syntax. Do not invent uses for an unused union member to make it appear
+better evidenced. Keep the unresolved declaration separate from measured gains.
+
 ## Use whole-TU evidence and interacting candidates
 
 The initial [V22 control recovery](../v22-control-recovery-20261105.md)

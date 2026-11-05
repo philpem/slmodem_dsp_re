@@ -28,6 +28,23 @@ The pilot has six deliverables:
 6. Publish the measured results and limitations, update working instructions
    and the playbook, and store durable conclusions in Hindsight.
 
+
+## Effort routing after the V22/Demod recovery
+
+Use Sol High for investigation agents and Sol Extra High (`xhigh`) when causal
+inference or interacting source/type evidence warrants deeper reasoning. Keep
+Astra available for independent review and unresolved disagreements. Mechanical
+work can use lower effort when its acceptance checks are well defined.
+
+The original paired pilot already used High for both Sol and Astra. The
+successful DemodDataV22 investigation also used Sol High. No controlled Sol
+Extra High versus Astra efficiency comparison has been completed. A future
+comparison should freeze identical evidence, use fresh independent contexts,
+keep outputs separate, and report validated findings, reviewer corrections,
+wall time and actual token/credit usage where exposed. Include failed attempts
+and review in cost per validated result; leave unavailable billing unknown.
+Do not turn a cheaper token rate into a measured recovery-efficiency claim.
+
 ## Paired model protocol
 
 The initial comparison uses `gpt-6.1-sol` and `gpt-6-astra`, both at `high`

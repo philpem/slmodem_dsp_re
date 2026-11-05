@@ -207,10 +207,17 @@ property; a closer byte count is not sufficient evidence to adopt it. Check
 original function-order evidence and effects on later functions in the complete
 TU; do not add artificial carriers to fit register choices.
 
-Use GPT-6.1 Sol as the provisional default for reconstruction and tooling work.
-Delegate mechanical work to cheaper models when its validation is well defined.
-Consider Astra for conflicting evidence, interacting changes, allocator
-causality, equivalence-detector changes and high-impact negative conclusions.
+Use GPT-6.1 Sol at High as the provisional default for reconstruction and
+investigation agents. Use Extra High (`xhigh`) for difficult causal inference,
+interacting source/type changes or a high-impact negative conclusion when more
+reasoning is justified. Delegate mechanical work to cheaper models when its
+validation is well defined. Consider Astra for independent/adversarial review,
+conflicting evidence, unresolved allocator causality or equivalence-detector
+changes; a Sol Extra High attempt is another escalation option, not a mandatory
+extra run before every independent review. The pilot compared both models at
+High; Sol Extra High versus Astra efficiency remains unmeasured. Record actual
+effort, usage when exposed, and cost per independently validated result rather
+than inferring efficiency from model price or effort labels alone.
 These are escalation candidates, not a claim that Astra is always better.
 Record what an escalation added, including attempts that added nothing, and
 periodically sample completed or negative Sol investigations for missed fixes.
