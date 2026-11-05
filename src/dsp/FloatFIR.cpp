@@ -8,19 +8,18 @@
  * argument -- `mov 0x8(%esp),%ebx` after one push -- not %ecx, so nothing
  * here needs an attribute (finding F215).
  *
- * THE DEFINITION ORDER IS THE OBJECT'S EMISSION ORDER, which is why the block
- * `process` comes first and the scalar one last: `nm -n` on the blob gives
- * process(const float*, float*, unsigned), reset, the constructor pair, the
- * destructor pair, setCoefficients, process(float), and all 8 emitted symbols
- * now sit at the blob's own index -- checked with `nm -n --defined-only` on
- * `build/tc_out/src_dsp_FloatFIR.cpp.o` and on the blob, over the symbols both
- * define.  It was worth trying and it PAID NOTHING --
- * `FloatFIR::reset` is still grade 1, four differing bytes, a clean
- * `%edx`/`%ecx` swap on `taps`, and every other symbol's differing-byte count
- * is unchanged to the byte.  Recorded rather than reverted because an achieved
- * order is the only thing that makes a null result evidence: this file is a
- * measured negative for lever 3, not an untried one.  See
- * docs/method/refinement.md lever 3.
+ * Defining reset before the block process gives its taps temporary the
+ * original EDX allocation under Gentoo GCC 3.4.2-r2. The calibrated scratch
+ * model predicted this result and full-TU compilation confirmed it: reset
+ * becomes byte-exact, while the other seven function bodies and relocations
+ * are unchanged. Both period FloatFIR and V90PreFilter fixtures pass.
+ *
+ * This exchanges the first two emitted functions relative to the blob.
+ * It is a retained function-body recovery with a separate layout mismatch,
+ * not a claim to have recovered the original source definition order.
+ * The initial six-order model family had three exact-reset predictions;
+ * this representative changes only reset's body. See
+ * docs/method/gcc3-model-nonexact-study.md for the domain and full-TU review.
  *
  * THE TWO ACCUMULATORS ARE THE ORIGINAL'S, NOT A CONVENIENCE.  Both
  * `process` overloads run the multiply-accumulate with two independent x87
@@ -126,6 +125,18 @@ floatfir_carry_tail(float *history, unsigned int taps, unsigned int bufferLength
 	} while (--rem != 0);
 }
 
+void
+FloatFIR::reset()
+{
+	unsigned int i;
+
+	if (history != 0)
+		for (i = 0; i < bufferLength; i++)
+			history[i] = 0.0f;
+
+	index = (int)(bufferLength - taps);
+}
+
 /*
  * The block form.  `index` is written ONCE, after the last sample -- the
  * running position lives in a register for the whole run -- and a count of
@@ -164,18 +175,6 @@ FloatFIR::process(const float *in, float *out, unsigned int count)
 	} while (count-- != 0);
 
 	index = next;
-}
-
-void
-FloatFIR::reset()
-{
-	unsigned int i;
-
-	if (history != 0)
-		for (i = 0; i < bufferLength; i++)
-			history[i] = 0.0f;
-
-	index = (int)(bufferLength - taps);
 }
 
 FloatFIR::FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize)

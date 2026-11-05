@@ -125,8 +125,12 @@ EXACT; seven other bodies, exports and allocated data were unchanged. Baseline
 and positive each passed `t_floatfir` (47,226 checks) and `t_v90prefilter`
 (125,693 checks), relinked with existing period fixtures and other-TU objects.
 This adds bounded behavioural evidence to the body gain while retaining the
-separate emitted-order mismatch. No source alternative was adopted in this
-wave. Reports are in `build/gcc3-fir-recovery/summary.json` and
+separate emitted-order mismatch. The reset-first representative was subsequently
+adopted: it recovers the reference's EDX scratch operand without altering any
+algorithm or another function body. This is partial function-body recovery;
+the original source definition order is not established. Final-object layout
+still needs recovery, and later work on block process must recheck both its
+scratch history and reset. Reports are in `build/gcc3-fir-recovery/summary.json` and
 `parent-review.json` in that directory.
 
 V.92 controls using `isFull()` or a local space value reproduce an exact
