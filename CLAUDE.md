@@ -183,6 +183,8 @@ Treat SIZE, BYTES and REGALLOC as measured code-generation categories, not
 diagnoses of reconstruction correctness. REGALLOC does not prove semantic
 equivalence: register lanes, implicit operands, control-flow live ranges and
 ABI outputs require their own evidence. Retain the period differential gate.
+A signed/unsigned branch establishes the consumed comparison semantics, not a
+unique field or formal declaration; check promotions and interpretation at use.
 
 Use the [native/reconstruction graph screen](docs/method/native-graph-screen.md)
 on changed translation units during recovery waves, and periodically screen the
@@ -207,8 +209,10 @@ was measured. Stale evidence remains history, not current validation.
 Several source differences can interact. For two independently supported
 changes, test baseline, A, B and A+B before rejecting either because its isolated
 grade did not improve. For larger combinations, use bounded experiments and
-ablations. A failed isolated spelling is not a proof against the source
-property; a closer byte count is not sufficient evidence to adopt it. Check
+ablations. Preserve and trace intermediate regressions, including affected
+EXACT neighbours, and test the coupled repair before deciding what to retain.
+A failed isolated spelling is not a proof against the source property; a closer
+byte count is not sufficient evidence to adopt it. Check
 original function-order evidence and effects on later functions in the complete
 TU; do not add artificial carriers to fit register choices. Before rebuilding a
 repeated native algorithm by hand, compare it with existing helper bodies.

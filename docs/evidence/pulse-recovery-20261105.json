@@ -1,0 +1,4004 @@
+{
+  "artifacts": {
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/closure.json": "8a32bca0ccb9d51b03dffedac0f87c62b62d1e11254b1ecfc537c623fe09b8e3",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/focused.log": "26a92ab4fb49546b95c2e022384d3e1722282cbf112a956dbbbf64c31dff4945",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/old-source-regression-retained.log": "dc635bfb5991eb247cc1aced3eeb105f170a866865573312d60c4cd8d55c8ebf",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/old-source-t_pulse.run.log": "308e0d1ce2c4cdb0442fe3834dcdecc7234e0f5e07360399d5fdc0c300b72726",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/phase.log": "a0c29a050ab3fb6c573c6ab6413bd0ee7b091756e35c7c586d07d546c1090d05",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/selected-inputs.json": "b4a25d44b84663dc0487388e45b887959707b350e8c7619439ec644c83e52cb4",
+    "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/pulse-wave/selected-t_pulse.run.log": "47a1f390799ba98626c2d2d0b16645c2f25f2a9ff0c031047f46e98c0c561bf3",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/baseline/manifest.json": "8a27a462be47db46108f67224e1fd27292c53b4d6c04aabd49e3bd4bf396bb88",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/fixture/fixture-audit.json": "d9de3e9ab7b4521b254e66e89b730b4c398fddc03fa5386b2fd45a7c38659dcd",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/fixture/parsed-inputs.json": "edb50ae8849ac6b78f03ce8d1d08a8b1ca8d863581ff746d72187308f3a9af98",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/source/artifact-hashes.json": "b5e31a4fb411e1dc8d11d604b7966b4729ddebd78752af361da2a44f60e38288",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/source/frozen-inputs.json": "2457a24e932fbbe340c29179ee2ef52c526960f4e6260b9cd50431408a5dd2fe",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/source/report.txt": "742231d97c9f98aba840b4f805d7b364190c5124dbc2e0aeb46e83a7619b1162",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/source/setbreak-first-stage.diff": "bdcabc8e7b06718d84d8d8c8462b8168efae786b37e14dd3070e966dc162c316",
+    "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/source/whole-tu-audit.json": "3f2d42eed4dae14077ae1eb90a5a20812d99c285f382c7a12de0e232a67db78f"
+  },
+  "census": {
+    "bytes": 70,
+    "compared": 1852,
+    "compared_bytes": 720125,
+    "exact": 1144,
+    "exact_bytes": 135246,
+    "nodata": 0,
+    "reference_functions": 1852,
+    "regalloc": 28,
+    "reloc": 0,
+    "size": 610,
+    "unresolved": 0
+  },
+  "compiler_executable_copies_sha256": {
+    "compiler-as": "3d792aef16d86dd043ae408a81c7d310528e9627af77fd20e612d41f9ff5ccbc",
+    "compiler-cc1": "80a79e520ca77fb1efa3bbd5ac4d927d075d6c1fdc6dd908fd83b437cc47febc",
+    "compiler-gcc": "a352c3e5d58c95b142e505e2be4374f9a620f1151f6e5fa2e9cab849f8ef1777",
+    "compiler-version.txt": "8636726ad3f900d4c14fe288ee904e8913f123450f92ede1c273c2ff1ba555e5"
+  },
+  "config": "image ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest\nflags -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS\ncxx   -fno-exceptions -fno-rtti -fno-math-errno -ffast-math\ndcr   -O2 -fno-rerun-cse-after-loop\n",
+  "date": "2026-11-05",
+  "exact_gained": [
+    "IsPulseDialerReady",
+    "SetPulseBreakTime"
+  ],
+  "exact_lost": [],
+  "experiment_cells": {
+    "A": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 68,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 441
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 19,
+          "grade": "BYTES",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "8fa4816b63991bd42018b94c6b1929f0bd5cb3045e5260c23623bff708ae17ee",
+      "setter": {
+        "distance": 19,
+        "grade": "BYTES",
+        "native_size": 88,
+        "same_baseline": true,
+        "size": 88
+      },
+      "source_sha256": "e4ef92c7b9a11c61ba283e774339ac10b9e2a7eafa4f3f006cb9c009787a4b22",
+      "target": {
+        "distance": 68,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 441
+      }
+    },
+    "AB": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 26,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 399
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "4cddc21b2e31d63d5c2bdb978ff6ef71778fbc788debe5bfeed28ddc77976b40",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "c18d93786050b2f7c6ea288408fa850c16846cf116e4ea7dfca08c976292f3c8",
+      "target": {
+        "distance": 26,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 399
+      }
+    },
+    "ABC-combined": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 17,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 390
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "3628c193f51e4c77929379eb59715fbb6ba7072e95d59159150677af0f085b25",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "8fbf0b33efe59be9a507b2ae090851e6e364036c42233e14ae20138ef699b1d3",
+      "target": {
+        "distance": 17,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 390
+      }
+    },
+    "ABC-combined-return": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 4,
+          "grade": "BYTES",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "89051d779325857f9b4b352ee5821daaf3fd3faada4984aed1e7b0266652a07e",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "ab77c0181aa4b456daee2dce6c096ce33cb43ffff0fca759eba0be83ead9f1a7",
+      "target": {
+        "distance": 4,
+        "grade": "BYTES",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "ABC-common": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 22,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 395
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "796a50f37970aa940ded886d1d03dfbce5404c2541f2b2b2faf1644f38f9c8fd",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "1782bcae9845102b068c2a8560f410cb7943df8b4c25fd81dbce8814a4dd5e6c",
+      "target": {
+        "distance": 22,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 395
+      }
+    },
+    "ABC-common-return": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 145,
+          "grade": "BYTES",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "72b3d7242f8cd503e205789be15b578d35d91ee8f9a22e304333f376ed557e7a",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "7e82c7436765a0194cc059808d34c64b684e62afc0ce318d85ded4718dd112ec",
+      "target": {
+        "distance": 145,
+        "grade": "BYTES",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "B": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 26,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 399
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "edd69a5d3d8246356724614de302d474fc5594ddc342438dd1ae91ad7637fb80",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "d6c2509e504d7be477c0302a1b6ed6977cdefb7408a7a349f156bbaeb25928b1",
+      "target": {
+        "distance": 26,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 399
+      }
+    },
+    "baseline": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 68,
+          "grade": "SIZE",
+          "native_size": 373,
+          "same_baseline": true,
+          "size": 441
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 19,
+          "grade": "BYTES",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "3861fd63671bb01961b7ed3d9b384db2073416478eacd9a577f3824901a0fc3d",
+      "setter": {
+        "distance": 19,
+        "grade": "BYTES",
+        "native_size": 88,
+        "same_baseline": true,
+        "size": 88
+      },
+      "source_sha256": "a1129095956b42b95aeccd330ad73595384feb9c7bee48795d745a328020ca7d",
+      "target": {
+        "distance": 68,
+        "grade": "SIZE",
+        "native_size": 373,
+        "same_baseline": true,
+        "size": 441
+      }
+    },
+    "direct-members": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "93df5687a56953733276ab8778de1616426476613ed0aa79fe4250e0d08b5c61",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "7cac7b6784d50b86494ded4f96cd8068520a6c7157dd0e09a5e926bc438d0289",
+      "target": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "selected": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "93df5687a56953733276ab8778de1616426476613ed0aa79fe4250e0d08b5c61",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "2a3b4b24a2b3a4ff86d33f1f639627043a1788d3e96f47d054db4007f82e9adc",
+      "target": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "selected-dump": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "93df5687a56953733276ab8778de1616426476613ed0aa79fe4250e0d08b5c61",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "2a3b4b24a2b3a4ff86d33f1f639627043a1788d3e96f47d054db4007f82e9adc",
+      "target": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "types-durations": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 4,
+          "grade": "BYTES",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "89051d779325857f9b4b352ee5821daaf3fd3faada4984aed1e7b0266652a07e",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "ab77c0181aa4b456daee2dce6c096ce33cb43ffff0fca759eba0be83ead9f1a7",
+      "target": {
+        "distance": 4,
+        "grade": "BYTES",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "types-elapsed": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 4,
+          "grade": "BYTES",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "89051d779325857f9b4b352ee5821daaf3fd3faada4984aed1e7b0266652a07e",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "ab77c0181aa4b456daee2dce6c096ce33cb43ffff0fca759eba0be83ead9f1a7",
+      "target": {
+        "distance": 4,
+        "grade": "BYTES",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    },
+    "types-timers": {
+      "all_emitted_rows": {
+        "IsPulseDialerReady": {
+          "distance": 4,
+          "grade": "BYTES",
+          "native_size": 373,
+          "same_baseline": false,
+          "size": 373
+        },
+        "LastPulseDigitDialed": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 91,
+          "same_baseline": true,
+          "size": 91
+        },
+        "PulseDialDigit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 146,
+          "same_baseline": true,
+          "size": 146
+        },
+        "SetPulseBreakTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": false,
+          "size": 88
+        },
+        "SetPulseMakeTime": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 88,
+          "same_baseline": true,
+          "size": 88
+        },
+        "call_GetSRegister": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 14,
+          "same_baseline": true,
+          "size": 14
+        },
+        "call_create": {
+          "distance": 2,
+          "grade": "SIZE",
+          "native_size": 610,
+          "same_baseline": true,
+          "size": 612
+        },
+        "call_delete": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 158,
+          "same_baseline": true,
+          "size": 158
+        },
+        "call_run": {
+          "distance": 35,
+          "grade": "SIZE",
+          "native_size": 829,
+          "same_baseline": true,
+          "size": 794
+        },
+        "dp_call_exit": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        },
+        "dp_call_init": {
+          "distance": 0,
+          "grade": "EXACT",
+          "native_size": 28,
+          "same_baseline": true,
+          "size": 28
+        }
+      },
+      "compile_returncode": 0,
+      "object_sha256": "89051d779325857f9b4b352ee5821daaf3fd3faada4984aed1e7b0266652a07e",
+      "setter": {
+        "distance": 0,
+        "grade": "EXACT",
+        "native_size": 88,
+        "same_baseline": false,
+        "size": 88
+      },
+      "source_sha256": "ab77c0181aa4b456daee2dce6c096ce33cb43ffff0fca759eba0be83ead9f1a7",
+      "target": {
+        "distance": 4,
+        "grade": "BYTES",
+        "native_size": 373,
+        "same_baseline": false,
+        "size": 373
+      }
+    }
+  },
+  "fixture_boundary": {
+    "callback": "explicit synthetic host replacement reenters public PulseDialDigit exactly once; inspected production drivers establish no synchronous reentry",
+    "denominator_note": "Cumulative event-prefix pairs can change with source behavior; count mismatch itself fails. Failed assertions include consequences, not independent defects.",
+    "hookflash_ms_ceiling": 2550,
+    "lifecycle": "zeroed component storage -> public setters -> digit load -> bounded polls, not full call_create",
+    "old_run": {
+      "all_checks": 11916,
+      "failed_checks": 330,
+      "failed_groups": 7,
+      "groups": [
+        {
+          "checks": 46,
+          "failed": 0,
+          "label": "pulse: SetPulseMakeTime / SetPulseBreakTime",
+          "status": "PASS"
+        },
+        {
+          "checks": 7,
+          "failed": 0,
+          "label": "pulse: LastPulseDigitDialed",
+          "status": "PASS"
+        },
+        {
+          "checks": 1208,
+          "failed": 0,
+          "label": "pulse: digit 7, 67/33",
+          "status": "PASS"
+        },
+        {
+          "checks": 368,
+          "failed": 0,
+          "label": "pulse: digit 1, 67/33",
+          "status": "PASS"
+        },
+        {
+          "checks": 1808,
+          "failed": 0,
+          "label": "pulse: digit 0 means ten",
+          "status": "PASS"
+        },
+        {
+          "checks": 1808,
+          "failed": 0,
+          "label": "pulse: digit 9, 40/60",
+          "status": "PASS"
+        },
+        {
+          "checks": 1208,
+          "failed": 0,
+          "label": "pulse: make and break equal",
+          "status": "PASS"
+        },
+        {
+          "checks": 368,
+          "failed": 0,
+          "label": "pulse: zero break",
+          "status": "PASS"
+        },
+        {
+          "checks": 728,
+          "failed": 0,
+          "label": "pulse: zero make",
+          "status": "PASS"
+        },
+        {
+          "checks": 248,
+          "failed": 0,
+          "label": "pulse: both zero",
+          "status": "PASS"
+        },
+        {
+          "checks": 248,
+          "failed": 0,
+          "label": "pulse: one-tick times",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, level 1",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 1",
+          "status": "PASS"
+        },
+        {
+          "checks": 5,
+          "failed": 0,
+          "label": "pulse: transcript, level 2",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 2",
+          "status": "PASS"
+        },
+        {
+          "checks": 5,
+          "failed": 0,
+          "label": "pulse: transcript, level 3",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 3",
+          "status": "PASS"
+        },
+        {
+          "checks": 35,
+          "failed": 0,
+          "label": "pulse: idle and detached",
+          "status": "PASS"
+        },
+        {
+          "checks": 549,
+          "failed": 0,
+          "label": "pulse component: ordinary setter/load/poll",
+          "status": "PASS"
+        },
+        {
+          "checks": 549,
+          "failed": 0,
+          "label": "pulse component: disjoint host control",
+          "status": "PASS"
+        },
+        {
+          "checks": 594,
+          "failed": 111,
+          "label": "pulse exploratory: reload on restore, quiet",
+          "status": "FAIL"
+        },
+        {
+          "checks": 594,
+          "failed": 112,
+          "label": "pulse exploratory: reload on restore, debug",
+          "status": "FAIL"
+        },
+        {
+          "checks": 585,
+          "failed": 32,
+          "label": "pulse exploratory: reload on second break, quiet",
+          "status": "FAIL"
+        },
+        {
+          "checks": 585,
+          "failed": 32,
+          "label": "pulse exploratory: reload on second break, debug",
+          "status": "FAIL"
+        },
+        {
+          "checks": 82,
+          "failed": 17,
+          "label": "pulse exploratory: unsigned break duration",
+          "status": "FAIL"
+        },
+        {
+          "checks": 82,
+          "failed": 15,
+          "label": "pulse exploratory: unsigned make duration",
+          "status": "FAIL"
+        },
+        {
+          "checks": 97,
+          "failed": 11,
+          "label": "pulse exploratory: unsigned sum boundary",
+          "status": "FAIL"
+        },
+        {
+          "checks": 97,
+          "failed": 0,
+          "label": "pulse exploratory: modular sum wraps",
+          "status": "PASS"
+        }
+      ],
+      "new_checks": 3814
+    },
+    "ordinary_country_duration_type": "u8",
+    "ordinary_sum_ceiling": 510,
+    "public_setter_transport": "unclamped int",
+    "selected_run": {
+      "all_checks": 11964,
+      "groups": [
+        {
+          "checks": 46,
+          "failed": 0,
+          "label": "pulse: SetPulseMakeTime / SetPulseBreakTime",
+          "status": "PASS"
+        },
+        {
+          "checks": 7,
+          "failed": 0,
+          "label": "pulse: LastPulseDigitDialed",
+          "status": "PASS"
+        },
+        {
+          "checks": 1208,
+          "failed": 0,
+          "label": "pulse: digit 7, 67/33",
+          "status": "PASS"
+        },
+        {
+          "checks": 368,
+          "failed": 0,
+          "label": "pulse: digit 1, 67/33",
+          "status": "PASS"
+        },
+        {
+          "checks": 1808,
+          "failed": 0,
+          "label": "pulse: digit 0 means ten",
+          "status": "PASS"
+        },
+        {
+          "checks": 1808,
+          "failed": 0,
+          "label": "pulse: digit 9, 40/60",
+          "status": "PASS"
+        },
+        {
+          "checks": 1208,
+          "failed": 0,
+          "label": "pulse: make and break equal",
+          "status": "PASS"
+        },
+        {
+          "checks": 368,
+          "failed": 0,
+          "label": "pulse: zero break",
+          "status": "PASS"
+        },
+        {
+          "checks": 728,
+          "failed": 0,
+          "label": "pulse: zero make",
+          "status": "PASS"
+        },
+        {
+          "checks": 248,
+          "failed": 0,
+          "label": "pulse: both zero",
+          "status": "PASS"
+        },
+        {
+          "checks": 248,
+          "failed": 0,
+          "label": "pulse: one-tick times",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, level 1",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 1",
+          "status": "PASS"
+        },
+        {
+          "checks": 5,
+          "failed": 0,
+          "label": "pulse: transcript, level 2",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 2",
+          "status": "PASS"
+        },
+        {
+          "checks": 5,
+          "failed": 0,
+          "label": "pulse: transcript, level 3",
+          "status": "PASS"
+        },
+        {
+          "checks": 3,
+          "failed": 0,
+          "label": "pulse: transcript, zero break, level 3",
+          "status": "PASS"
+        },
+        {
+          "checks": 35,
+          "failed": 0,
+          "label": "pulse: idle and detached",
+          "status": "PASS"
+        },
+        {
+          "checks": 549,
+          "failed": 0,
+          "label": "pulse component: ordinary setter/load/poll",
+          "status": "PASS"
+        },
+        {
+          "checks": 549,
+          "failed": 0,
+          "label": "pulse component: disjoint host control",
+          "status": "PASS"
+        },
+        {
+          "checks": 614,
+          "failed": 0,
+          "label": "pulse exploratory: reload on restore, quiet",
+          "status": "PASS"
+        },
+        {
+          "checks": 614,
+          "failed": 0,
+          "label": "pulse exploratory: reload on restore, debug",
+          "status": "PASS"
+        },
+        {
+          "checks": 585,
+          "failed": 0,
+          "label": "pulse exploratory: reload on second break, quiet",
+          "status": "PASS"
+        },
+        {
+          "checks": 585,
+          "failed": 0,
+          "label": "pulse exploratory: reload on second break, debug",
+          "status": "PASS"
+        },
+        {
+          "checks": 90,
+          "failed": 0,
+          "label": "pulse exploratory: unsigned break duration",
+          "status": "PASS"
+        },
+        {
+          "checks": 82,
+          "failed": 0,
+          "label": "pulse exploratory: unsigned make duration",
+          "status": "PASS"
+        },
+        {
+          "checks": 97,
+          "failed": 0,
+          "label": "pulse exploratory: unsigned sum boundary",
+          "status": "PASS"
+        },
+        {
+          "checks": 97,
+          "failed": 0,
+          "label": "pulse exploratory: modular sum wraps",
+          "status": "PASS"
+        }
+      ],
+      "new_checks": 3862
+    }
+  },
+  "frozen_source_header_inputs": {
+    "include/dsplib/ANSamToneDetector.h": "8f95bbbf641ce2ab6d58073245720881da9c95ad858b2eb922ca582c090c10fa",
+    "include/dsplib/Agc.h": "b07d9f01ddf14efd2c6f4736fd444f3b7d332d9233a9254afb1a520bbd7f9410",
+    "include/dsplib/DILdescriptorPacker.h": "a2517fdb31225898a0196a262871cc8d82fd0457c3ab8f20fc82be7a409e389f",
+    "include/dsplib/DiffCoder.h": "7d52993bc1b54030c70ee5eb72db600d70182e11587b50644622b6cbb7c11628",
+    "include/dsplib/DspMath.h": "9d51b0110e4941427b9e9490dc71211689b0311e3bf46ef520a885fbcea5afec",
+    "include/dsplib/FloatARMA.h": "bfc68e5b3ec6a9d10e6fa26987cce1fee2bc4585564b726fc2fa6c25b6d5b685",
+    "include/dsplib/FloatFIR.h": "bc93072a007b17abd81b91e7cf42317bee9d525d7df41af6c76cf136a10b85ef",
+    "include/dsplib/FloatIIR.h": "017655b29e8c5ba47f4f4e0122bbc78d7c0ec29e0be18bd9344626507d3b2b49",
+    "include/dsplib/GenericIIR.h": "3113228dc5318c24a98e9d1facaa1e64dccb56ec6cd7e0a6731ad1aaeb4539c4",
+    "include/dsplib/GenericToneDetector.h": "268271b41e836ea7e4aef1045a828bca9e31c06ce89c6070fcf0a8a4855be5ac",
+    "include/dsplib/K56FlexFloModem.h": "65d25284bcc92f9e02209b1061963aeeb234a939e53b4fe107e52293e3959c59",
+    "include/dsplib/LowPassFIR.h": "526fdd02ea0df55ce5758095c14553ccf0137afebe5cd2a5bd3bff8927b02a8e",
+    "include/dsplib/ModulusCoder.h": "378fe485e7b9fc9b5cb26955a9cb5136a5b45a924a4756c74c59a72510a14f6f",
+    "include/dsplib/Psd.h": "fbe185a2606432cd11893c8e94b65f0248715ee45460ad737f369a393d7598b6",
+    "include/dsplib/Queue.h": "ee6be0578ebac903b8d46fc1e0befc719a5924e4c798c85a70985beb753764db",
+    "include/dsplib/Resampler.h": "64eb723a167e123489ca4e9983632c618540bba16b995cb3c6d23b9d76ab356f",
+    "include/dsplib/ResamplerTiming.h": "f53abda5e47014225fc02718b39e198af75650af738c93053bb566a0a482f0e8",
+    "include/dsplib/ResamplerTimingOffset.h": "9e5415f01d9db87f509676e8c70fd5adbe728a7614cf0e6f77c6775143a41e7d",
+    "include/dsplib/Scrambler.h": "ec1e94cea7e8790bd1eea07e8199a587c0d9e1f9b0f4e49238c4b2e5d62f37da",
+    "include/dsplib/SineWave.h": "0a45385318e012a93eb6561586d2e7ee20fa425de62afd8fa1587a581590b073",
+    "include/dsplib/TAG_DiagnosticResults.h": "cef7ce8bc8819876277dc805d6efb01e82645ad204f46d2a4b3b048c7596f831",
+    "include/dsplib/V90AutoDigitalImpDetector.h": "c3e8f8c11fdb3e6d5e5dd374dc51031e32254270b059e7cdf9d06ee09aafff42",
+    "include/dsplib/V90BitsToSymbol.h": "69a3ae66ba05bc68944af5246052098bad6a3c8e789e2497d65514987ffb8f61",
+    "include/dsplib/V90CP.h": "e1c0b5bbd4e31777a6c3d6291ebb482ce01019f259a331c4e9b86e8b98f797b8",
+    "include/dsplib/V90CPUnPck.h": "5b0862ff0da3c76466de22c28049c2f27af93d5e9ec8d717f99650bce8e4a154",
+    "include/dsplib/V90CPpck.h": "ec3ae80e73e196f1bc0f283ff2ca6f6efbc8e09c2cd40719990b140ec0ae7149",
+    "include/dsplib/V90CodecType.h": "b1d1f8983823e2602867caf79c2ba60b3d000cb6b64dec60e8877e49a1419e28",
+    "include/dsplib/V90ConnectionEvaluator.h": "3712b03302ce09b4de8b0bb7f46dcbf6eb4acb1fc6093d39986fe5cf51ce0a33",
+    "include/dsplib/V90ConstellationDesigner.h": "d21f35ba0efaf981562e67db48f004058a5211e5643a1e4b125ca7b05a287c32",
+    "include/dsplib/V90ConstellationPower.h": "ebd0d895a5095f1427273957aef1052fb5b62f5800c14ca9fe6f30a7836504ae",
+    "include/dsplib/V90Demapper.h": "014f536d559c0564b33c905ef0dd846447a37d9a8985d87bdd28664dca226507",
+    "include/dsplib/V90Demodulator.h": "948cae97618050dbd90366a04002ab4baf1285612c661b4150b6ea48a5dff997",
+    "include/dsplib/V90DilDescriptorSettings.h": "4e9f5774c027350982c2e1f546b3eca2c7252b1ccb4210dc1f21a3a20b876384",
+    "include/dsplib/V90Equalizer.h": "21b339e58a636def633e24ab03d74f327e3605ef9320f1ac1a2948433ce4c307",
+    "include/dsplib/V90Jd.h": "a932e4ca6940bfabf0134e0e87d8f686fed3bf1a87e96416d495ff92e53ea276",
+    "include/dsplib/V90MP.h": "e4f3b48b6ff841861babfde81895b61820644474acc8e1c148902ed69858606c",
+    "include/dsplib/V90Mapper.h": "01a58e8e1a868f91b67ebbefa4057c370d13ec9e4e72ae8df745b0f4719a1429",
+    "include/dsplib/V90MappingParams.h": "e62020471778759eaa9c2098b938141b065feae323dd192c0707c42bf62654d3",
+    "include/dsplib/V90Modem.h": "66c268c1ff247deb07f5018310ea700d6f13631c8a32f7eb852cc720ff6e58e7",
+    "include/dsplib/V90Modulator.h": "76b9dbf4449594319bf6f784ddc893989bfbbac21ee452d06fc521d306bedcd1",
+    "include/dsplib/V90Parameters.h": "c7c2a30fceaff800e4866f870e8a3c4682c33c22b79530c205d4462796082ae5",
+    "include/dsplib/V90Phase2Info.h": "1aa2e5d642b440ee4de48ef931bbd0c51fb6f0df3a3a8d7a096369bfea08c950",
+    "include/dsplib/V90Phase3Demodulator.h": "bbde7304cccbac86d8c1cecdff8860583bd0f7cac46b72e7d2bb0cd06b6afb68",
+    "include/dsplib/V90Phase3Modulator.h": "764c0ea9fc8186354d34b953e9b14cb0e073c963fe4e82989d66e75d8d80530b",
+    "include/dsplib/V90Phase4Demodulator.h": "459644cb8aa4fd401934d209a897c5bbca136aef6d224e134f68161ceb8bb878",
+    "include/dsplib/V90Phase4Modulator.h": "4d6c472dec4c7348847d7c6615f9dc78d86eea66228e1698201cb041f1978085",
+    "include/dsplib/V90PreFilter.h": "c0ab0f46e23436c511c98a129a38f4f8daf7dd6bae2fe0b79705286cf170dfc4",
+    "include/dsplib/V90RDetector.h": "6b7601bdcfcf746d1b2bba56e111536f91a2010cf5db70356eaae20a2491c663",
+    "include/dsplib/V90Resampler.h": "984fe777b944e3028e60f702cb664888adcdf2caafbb8e37524d5d6ac32f61a5",
+    "include/dsplib/V90SdDetector.h": "0997b2bcc3b217832988fd4964a22e42f8f5267651af48d32c9c7e9426661a5e",
+    "include/dsplib/V90SessionFlag.h": "6bbfe90f5eea0f504b719100a4c580606e0131ea3b555acfa473374c3135c703",
+    "include/dsplib/V90SignBitsExtractor.h": "43b45ef11600629ca107d7de36314542eb7f000ff648cfbf9faed039987fc992",
+    "include/dsplib/V90SpectralConditions.h": "e0e3db35bbc71b5aad498446430b9f7d6a8c89024e5a93caf1f548d625426579",
+    "include/dsplib/V90SpectralShaper.h": "cc31b37dd94acbbcf8769998f0ce228d25ff8b39c5e362ebf0213067c9ae1070",
+    "include/dsplib/V90SpectralShapingFilter.h": "d8824d17cd38181105ff2fc73cebb4d15d9c8dad4afe5148dc0e5503823ff31f",
+    "include/dsplib/V90SpectralVerifier.h": "6ae2bd13f3bebdafd5db5a7b654bc67eba5d2a9bf3cafa99f5bfac7a73fc6a1c",
+    "include/dsplib/V90TRN2Designer.h": "60d9a950ba1ea7f2f881e930c6e3915870e520793a70bf149c29bedce6ccb34c",
+    "include/dsplib/V92BitsToSymbol.h": "c7c343656ce0c4611eb193903043becde814721486e0fbc7cba35cfa73ea246d",
+    "include/dsplib/V92CP.h": "76853b819172043b4ad2b1196450d67c18d5d0417bd006f205fc94d2ad85fb58",
+    "include/dsplib/V92CPUnPck.h": "ed931c2009ed6445ddce16114725940d668a5368e4b6546292bf4ec953c87a83",
+    "include/dsplib/V92ConvolutionEncoder.h": "5435ea1b46fbf15affac01df74de4efb7a4628cbe9ecd21cb0db61a3dd6cde4e",
+    "include/dsplib/V92DILdescriptorPacker.h": "ffd314b4f0d4eadf58297020d80eb2dcd871993190bf961dfc8c7bc6bbe8a431",
+    "include/dsplib/V92EchoCanceller.h": "c0e807b48c4b06bd25127084ffdbbdd95cd1e06c0989834e6e5b9c652f2630f4",
+    "include/dsplib/V92Ja.h": "9558282c04f7291babf43ede0b031b08bd1eb4d811c11e59bd1697947afe2220",
+    "include/dsplib/V92Jd.h": "7e360f768d7d742d3096f79a97679a009778adc6a894f3f61252a694e427e9cd",
+    "include/dsplib/V92Mapper.h": "0d3ac36f941288b1fef3b7be707fd1bc91151adf0c15a8e3293e484802b5fb9d",
+    "include/dsplib/V92Modem.h": "d596f6341b768079356c4e2a06c881ccb023e798e71a58b38bbac17cbeb57333",
+    "include/dsplib/V92Modulator.h": "86d33eaf2eb33be4416ae6dd2f422014c1a6fefab3c2abbe75ff865202743f2e",
+    "include/dsplib/V92ModulusEncoder.h": "eaeed8a8da646f4f1324a5c6788dccce2234e13b71b373ee0d9698c67bf7f86b",
+    "include/dsplib/V92Parameters.h": "4e597c6edc6124b44350075986f180c3b334253e3c136987286868ff20a862bc",
+    "include/dsplib/V92ParamsInfo.h": "4f3a72c825232ba5bc3d524fe52bce12c39a48f55c93e31db285a7fb48ff2e1e",
+    "include/dsplib/V92Phase2Info.h": "3f238013e5cfbd8ccf7bbd653fc7dca7c5347e81330923a4a34741ef8229f3c6",
+    "include/dsplib/V92Phase3Modulator.h": "6385a8a9f28b14ded2a40dcc8d20250c52de69af0703a1e3eea4f80a989e5f5f",
+    "include/dsplib/V92Phase4Modulator.h": "72cecf180e965c313bcb3f7c9b110872bc6b69c4630018b1bbdab23a43051f4e",
+    "include/dsplib/V92PreFilter.h": "36d9f551d3deaefa2e4d964bf8484271810be2a74352987a01ad27a649e6c36a",
+    "include/dsplib/V92Precoder.h": "cbf6ad1ce38a1a2c05197eb783107c7597399e4f7f890c50e41f16a77cc55982",
+    "include/dsplib/V92Transmitter.h": "8115ecc899c40cf504165092b6d6f3d2ed1f99d62f8109826baed8f55c03805c",
+    "include/dsplib/VPcmFloModem.h": "aef9b01f8e63a6b0cc7f5f4f80f744809b36bd3dd09e8bffe3c857c302a83c81",
+    "include/dsplib/Vparser.h": "a04b60256666c791906a38edfc2d4c4dabe1e3edb450ce79da9a7eae4ac232c6",
+    "include/dsplib/b103.h": "ec227db8be429d6d819571b0738d4ef4a06857ed786e623bd1f52d141b8658a3",
+    "include/dsplib/b103fp.h": "c3d991c615cf9f8ece3003735b02b8f8ea218ec8197d4642173bbdf744c4ecb0",
+    "include/dsplib/beepgen.h": "850029fac11aea03357aee89e49da3be6d09fd20a1d49f4f7ed52afb6b0588ad",
+    "include/dsplib/cadence.h": "9b71f53951fb73dd1364abc4e51e60f68ba842903dea2e4c38db2916bed94798",
+    "include/dsplib/call.h": "1330cf2d5862d5ed6ec6a2acfb1cb6120d56647c32fc94ef178571f333af9e7e",
+    "include/dsplib/callingtone.h": "e89d9338e6f8e31ca084a5b12bcd6ea9d057db1f521a334721b7d6fa975632a0",
+    "include/dsplib/callprog.h": "6c7dfba857e05d31946f108156d985148d6c2876d4f74f268b26afc0c447873f",
+    "include/dsplib/callprog_cfg.h": "4375f45bbcf669dfc994838a49c104c3d3e2bc63ba0d12119d3a5eba931640ee",
+    "include/dsplib/callprog_state.h": "1a66d090c3a2a6a0fb90267eb61938032818ed5a64b246167dc0d701cf24570c",
+    "include/dsplib/cid.h": "9a8cdd91427ce5b77808169c29d9d1098dbb818536a891077b82a670b6bde565",
+    "include/dsplib/cid_modem.h": "b8386e2b362b69208a5bb62945e930e2ee348e39e8a67cd39619824ad6feb8a1",
+    "include/dsplib/class1.h": "f89a62a7f6b9191a30710a76a2c70276ba69cbb1168c1b8eb4d24059826a0905",
+    "include/dsplib/class1rx.h": "8f9f1d0fbe308b00211e3bcbbd47132ec5dc7eab4c0e113d2fc56f97cc75e62e",
+    "include/dsplib/class1tx.h": "1e2bfd8d65f1fa470e64c02b481b0fefd11f13e236b92366b660b35e4ef470b1",
+    "include/dsplib/cpfiltrs.h": "9d2c831d66cd12e8225611bc45de81733666efd6f3fb154654922b157dc11178",
+    "include/dsplib/dcr.h": "c5ec4377391026069d4ea41c8ab08a4dc8bbd955c8be07eb05a0b49874f1ab57",
+    "include/dsplib/debug.h": "b02ffd5f0cea840d5695677176ca6e293a42c79e72f25ac98ad6d490ec98e06d",
+    "include/dsplib/detector.h": "e208f73928042351e43a6facc11e43551463acfe1fccb982e47d7087dd82f53f",
+    "include/dsplib/dialer.h": "5d58fe7c0e50c70604cbae3cadfd0cb05d488f89a985c827724a33a1ea89ab15",
+    "include/dsplib/dialercfg.h": "c70fe25628394bb38b751edf2f1347b5cc063364e63f07a5cbc38cd6fd223e11",
+    "include/dsplib/dp.h": "acc23b284d435a88ee363376e3746248d16cacb720accb25a3ce5256239dc2e5",
+    "include/dsplib/dp_param.h": "93731bd211b4fa33a0e7ca3a9d1ac152f2b640c96cab9120fac671d42f761e5d",
+    "include/dsplib/dp_wrapper.h": "9a39b13321f8ef1ba0b38ba8606185c202e6acecfb9bd3213883cc29e74e146e",
+    "include/dsplib/dtmf.h": "ce5a82c0246c7632b671344434474a4a71cc82a611e0ffd6c984bd95fa1d69cc",
+    "include/dsplib/dtmf_rx.h": "ba8d9d04c8c5c9ad40b5198e288ad77f7683d360accb21fa4308b4bbbe344c5e",
+    "include/dsplib/dualtone.h": "827aabfe6906c7944f4990f26604a277ca4b1b323f94e126da69c5c84e62d18c",
+    "include/dsplib/elliptic.h": "3a690c68587e272d70deb76ed67fcdfdcfb43fec2c8cdf1a477cd846c4b6f65b",
+    "include/dsplib/encode.h": "daec671debd0576555cbc3036c256b8ddffc2d176ea4ba78f9abb95565617806",
+    "include/dsplib/fax.h": "64def24aa7e8e4a574295cf0aa2854859f5c5ec41a38844b55777c31478082ed",
+    "include/dsplib/faxadapt.h": "997df253db0923fc89b2deb57fe1bc5f67473c74443e92b8e5192561c6e3dae7",
+    "include/dsplib/faxcfg.h": "15c5ba4b4121a448eb0c868bc073bf24cf521468bcba46a79a60eed34f7a729b",
+    "include/dsplib/faxfifo.h": "0fc17dbcec21000774e65ab7ea50360f0d7dd9211e1d6bd8601d42fea27c30e6",
+    "include/dsplib/faxvmi.h": "ad10b39a0f8ca43c59484adf9899002ffbd6572d1339ab67aed5a81a2ce2d1fb",
+    "include/dsplib/fdspkrnl.h": "29725dfb74556ac00d51bdebd9c22cfaeef33cb68154b794a134bfa51b38ffee",
+    "include/dsplib/fft.h": "175184aaf1112944640f1e7964127444ae74e5e942fca74dab2ac6ede428b90a",
+    "include/dsplib/fifo8.h": "1089ae62ad280ca41444657bd05b02bb62c022dfe9a8148de8218dafab67e614",
+    "include/dsplib/fixedrc.h": "0ca31f251362fc0120209fffff767bc8ed39f1878f2164f2cad1685728b54339",
+    "include/dsplib/fp_math.h": "d0026da5512a2db63f455b06722e8fd4170f8ff78e4da3d024d071f93c5eff1d",
+    "include/dsplib/fpm.h": "817f88a5156f7936225be857dafcc0ec95df867a29ea272f512dcec0c5575823",
+    "include/dsplib/fpm_agc.h": "eb5913708610d8845e3621ebb02097c3eff559449ac1b741d2e97006e8346e60",
+    "include/dsplib/fpm_ecc.h": "7b951a3335898a8c42f4a8f28de62ac6a4a3e612188dca1b18d8b4712b8df078",
+    "include/dsplib/fpm_fsd.h": "7e78db25edd1542ff9a0070f3d3df366241163d328731e05dedafcaba75678e8",
+    "include/dsplib/fpm_fse.h": "ff7da0b30d58b3aad85655b36faedfec95a53c8d0491857d1655d62a001ad38b",
+    "include/dsplib/fpm_fsm.h": "a1269cbf725fc84bdfb2f027846645f225f9668b6a8372c3527d35ad57214029",
+    "include/dsplib/fpm_iir.h": "68f53246ebb41ba61a2570b7a3b447783cb83ccc2e8377a0648f07599102326c",
+    "include/dsplib/fpm_mrf.h": "25386f8ab624b2155871d322df3002940cba2861815700e6e39b57aa6407200a",
+    "include/dsplib/fpm_mtd.h": "a4d62b7d9b09ac7238a6edd65517ac504a12f81c9f0f6fd7907516924f47d861",
+    "include/dsplib/fpm_phasor.h": "4634ce2546b35b78422b04b606c5d8d9fd8436cef885584c07463d58851b2a3f",
+    "include/dsplib/fpm_pps.h": "849241ef7c12dc70de01401717724a43170d9211532f02a7073ea475467256fd",
+    "include/dsplib/fpm_sdm.h": "c8abe0447c5f2ba4f0611a893b92a7fdf81e0c578c7de63a97523dd0f94c23d8",
+    "include/dsplib/fpm_smc.h": "7717bcf507071812fc6c7ad12a91a95cc64cdce9363e7f2a8f61733f79022806",
+    "include/dsplib/fpm_sre.h": "d20c3e60936933d5d0146ba05cc155a9b61ac3d34c12d570b3debe6c347101a2",
+    "include/dsplib/fpm_tone.h": "d19300cb2794acd7e87cf089b4485a04a1147852f3c28bf3d7181316c618d2a6",
+    "include/dsplib/int_complex.h": "538b9165d85693d5d56d465285db2ddcc20e63cd024e75267ea86b38d4d5e396",
+    "include/dsplib/modem_params.h": "02963b3ef091627f13fc904966c1bb6c72b771c24610c723d67ebc572d5c2138",
+    "include/dsplib/mohdet.h": "dd2df186b259d95efbcd116dd5e2cf3a341cf4ad1f692666f2160edc8a407fcd",
+    "include/dsplib/mtk.h": "1d2086cefc8095e810d427b3782a905255ed70c262e444cbd80ab14c5ffeef9b",
+    "include/dsplib/notch.h": "50078f34c50db50ea38620528ac580abcbbf562b9ebf26b600c235b53f6c59f7",
+    "include/dsplib/nulldp.h": "4070a65a1b68ccd4b42001f71b2e4843b09f958cc6d5f353e5491f1929408e0c",
+    "include/dsplib/pcm.h": "c3593fd0c417429f663e2c9be635a23bc3e89d74c7aa615d0a8ac0a90cfc8087",
+    "include/dsplib/period_byte_layout.h": "580497cb9cece61ff3ededd5add551419b6be58a12958a968213f0801ada7d48",
+    "include/dsplib/pulse.h": "dfc37f8d0dd0b0bab2792124a91c17e56f1a87072a9365983c655715e45adef5",
+    "include/dsplib/ringdet.h": "2ba89953311f05c8f3358a9595c95ca2049b9963c737e04e6995eb8d168a78c8",
+    "include/dsplib/sdm.h": "da676c9c48df10e0fa130e3b81d8ed2d43bd0041a8de363e24b08908ec2cf0c2",
+    "include/dsplib/sdmv27.h": "14890b1d76ef9a1ac5cdcd6d5abd17f8f343f537eee13f8e18d841ecfaaa62a2",
+    "include/dsplib/sgd.h": "2f16289c81428e434624f064b24d64d67a1da80ecb79eab8b1b5a93cffde477d",
+    "include/dsplib/silence.h": "09f360072c1d43204c50cd615d50ae93f69d11bdf87aaf949f82c94131013da1",
+    "include/dsplib/smc.h": "39be65ba950c2f57dd060fbab217426b1ab582818b2d13cfab0a790e0eebb975",
+    "include/dsplib/sysdep.h": "1fc7a1bca190caf7eb03e375a93168da829c18cc7b4d1a67fd48108c79547076",
+    "include/dsplib/t30frame.h": "3b73d4b45fe8f84864e7bec426431af1bec83bcbe780084438798dee3f9bc450",
+    "include/dsplib/tagV90AdditionalCPinfo.h": "99dd9e8090a93c632e136b9a169542c40b7b4baf4f8888d20b9e777cb089dcfb",
+    "include/dsplib/toneiir.h": "176e5031296a26816b77a0eabc1006cf243f0763f76e61971f4bed09f23071a1",
+    "include/dsplib/v17cfg.h": "4da317ae8717d8a7572ce8f4a883e13cf29baecdd7388240bf7d9e8562e7f68f",
+    "include/dsplib/v17data.h": "b2f58164d0b056b649067d43d14808b9920067d7a7e379a5a8a7749e596c6bce",
+    "include/dsplib/v17dec.h": "35d036b815cb1167e5bc2e10fe41417733cf1037cd9cbf1c9c104239541e48d0",
+    "include/dsplib/v17fax.h": "7e371ae2645e0657e8490aa82c73252ab736440aec48195cd5d33ea1678d494c",
+    "include/dsplib/v21cfg.h": "232b3602b5191f2f536e92f0e96ef7c7dd67193a6f0acd70baad16ebcbbcb7f9",
+    "include/dsplib/v21fax.h": "9c802c6ade10013be0845ee41c3686fc925272e8e69a1da83a12fc1b0991171a",
+    "include/dsplib/v22.h": "0d86e6de995c59415666e51b285c988c398d84e6917b09ab1c3f96ffdf793323",
+    "include/dsplib/v22_fse.h": "8894571c7e155dafbefca9dc7193c448e0c36c4f5fe283ef0e0802c4ff9c8621",
+    "include/dsplib/v22_iir.h": "df09b5f900bfd6085b9d436b5d3779fcc82e832c6ae3c9590b5a7a270afb21d0",
+    "include/dsplib/v22_mrf.h": "f609700140dcf531d42a717f73ee59e1eb72c5351044ca23e4fe61afc2f714ab",
+    "include/dsplib/v22_pps.h": "2c97f8d0402eb0eafd8455a0922cd3f85c025dbb401c8fa4b3260b97ad46b2d1",
+    "include/dsplib/v22_sre.h": "ebcc8056d14b14afaaee53cf1ae83c8cb230af8e7c827d455f381ee7f5616030",
+    "include/dsplib/v22ans.h": "0bb503f9571fde8edb717b88dcb1f2bab520456f80716a24f69e4158b5882257",
+    "include/dsplib/v22conn.h": "6207cf80b87a957624b9b4a1b6c72e5ad0c060f8ab6d198f5151d1d54a4d05cf",
+    "include/dsplib/v22ctl.h": "d68399bdcda33c88ac2168d5aca9aab25ac5f5ee634c7c7887cdce670fb0b0ba",
+    "include/dsplib/v22data.h": "cc27bb73e1e739de318219dd6df9a77592196da1125cbd54765f3b0dacc9081f",
+    "include/dsplib/v22dec.h": "1f30a3db341c3a50b37c37f996e95b3f640f40e98b19b5df3551f6a9e6588dc3",
+    "include/dsplib/v22det.h": "7743a17c8da3f2a9beea10e3ac04b0c2f2df7e5fa390fa17237af91d51889af3",
+    "include/dsplib/v22fp.h": "932d309fb47a9851e95d5e754f84c199e917d342fb5a4b9aec82edfb9ec3e971",
+    "include/dsplib/v22hdx.h": "cc70f4a8c379499b5d73f022b98b7eb86034d565f3062efe2b9eba07d36f6385",
+    "include/dsplib/v22loop.h": "690823e016401fa339e1aaa9e4939bc652f53faefbd232b176e045cf359b5404",
+    "include/dsplib/v22org.h": "8533d0ad091d142d8644fe2ef273d46b4a4877c137a6372599f6521b952565f3",
+    "include/dsplib/v22prc.h": "3737ee00653e60a447036f265e4c303428c8acb86c23bbe988c0968832f482ea",
+    "include/dsplib/v22rate.h": "7cff8269579eebe28f095fc849756cf36f70b84f0a440f0bf4ba271a6974d43e",
+    "include/dsplib/v22status.h": "76494d7484719f174343822185b75ae0bff6b4b5472e4fd829dfbb47075abf58",
+    "include/dsplib/v22tab.h": "a310b8e7cb7c5ad662e6f92c05b43f014b2481de3885c90b19d9515aac204fff",
+    "include/dsplib/v22txtab.h": "ad939f87ce11817ba433e5f055f4063f4ed6205b9254c4617441423e84927a48",
+    "include/dsplib/v23.h": "5356d96ce8d56bba533c603f0375582686fa2ed7f9ec5174b1d7317ecb9044e7",
+    "include/dsplib/v23fp.h": "8a8345bbd56a62b4299e44af8a011648c6266d6ac02ea1cfaeaa853442708de9",
+    "include/dsplib/v27cfg.h": "5ec6ea3861ad4bef4777a17af1166595dcd5567d71ef73db190c370aba2e1fe0",
+    "include/dsplib/v27fax.h": "1ef978a288d5c35a8c2fe80d9d593625360e58b023bc0346693464bb0a321a09",
+    "include/dsplib/v29cfg.h": "130301e33780d0e1d8f36489fa5440e886dabec223220066a4eb650c1398131b",
+    "include/dsplib/v29data.h": "eaa56f2d2fc15ba265d9a8b169fad9babd6ddd6b2dd91d6c5682ccd0df9eb7d1",
+    "include/dsplib/v29fax.h": "c874513395f746b0da74fd8deb8705720717a34137845f2c83ae24b2c5d62485",
+    "include/dsplib/v32.h": "1cf357863961f31e8aed1ec60efb6387b4835a8aa9a6cf5ec1ee97fd137b35e4",
+    "include/dsplib/v32anstone.h": "2d4f1e4e0eaddfe38757f659a45e91ad83746d6342004156757026ec21cf3dcf",
+    "include/dsplib/v32cfg.h": "ee6ae37f3c4ee8f92501fb220221fb064d8e884a47ee25c3d04f97362bee6eea",
+    "include/dsplib/v32data.h": "4a9c1ac0783304ff8f6d53aea7327e96121859f98c09c8572c617af0c8e837f2",
+    "include/dsplib/v32dec.h": "165bb8d9ba4c302f88fb6a5694b668780eec8b93b15bc81e77ceca3a8e2d0087",
+    "include/dsplib/v32demod.h": "620f9430a893ef2c3d65118c3eb4a39fb7d50666983c006e7b24f07cee430831",
+    "include/dsplib/v32fp.h": "ae65c220e197f92f34fe221b21c101e4f9694d74121997a93426c143cde7cfac",
+    "include/dsplib/v32fpctl.h": "b65be580c3f8f910656ec1abccbdd3f6ee24c5afdfc7af4e1bcecc77016b9bce",
+    "include/dsplib/v32fpstat.h": "c4c7bd8b39edb4d08a176a9e28c5705164b04c3d0cc5e3c8805824b238fc8b6e",
+    "include/dsplib/v32fse.h": "4dfbd5b22f1ac1a4c79780771efbbbbe7b00b9cd43a4481c2f75d405b213da79",
+    "include/dsplib/v32hdx.h": "64139baa1340ca21acd881eb43e2c6ff1a1baeffadaf61fd542863b2487dcaed",
+    "include/dsplib/v32hdxst.h": "c1ed5133e4eb552b8367ec526cbbbfa5e639364be629940d180cd1d8126f2cfb",
+    "include/dsplib/v32scram.h": "796ff04926c181fdf186be08171eac5d2c1d2246f8271ad8653077a2094d32ab",
+    "include/dsplib/v32seq.h": "205290620e820311ec42312f607cf63239f9f639328ba7fb6e9395242c608340",
+    "include/dsplib/v32smc.h": "44ccddb6f0bb34729f6d5125c2d150423c8e9da553591249625f11384da3358b",
+    "include/dsplib/v32state.h": "36ccc110c6266609e99637f4d5be266eb1d42de6c622c2a9463829fd799d61b2",
+    "include/dsplib/v32struct.h": "45581d02c8b9181130fa405d1fad088a00c402d3ccf01ad6cd9338010aba9be5",
+    "include/dsplib/v34det.h": "b0cebd7674efc156a80dd278e9953b9e01508b849fdaf275423832c2228e6719",
+    "include/dsplib/v34digital.h": "beecb9876220508b577268b692ba2fb95f059af0824e8655e8acfaed5e9cef4a",
+    "include/dsplib/v34filt.h": "7ba91a41b706061384dcb92d0975c7c834f989f0b3dee370ebe20b410db24f63",
+    "include/dsplib/v34fsk.h": "e6683da6a67593e5ccc03464ae1c1368fad278d0f6de92c01ee696aa380f0e78",
+    "include/dsplib/v34hshak.h": "a43b6d5933c7abc7633d4ff63a7b388abfe4270e89e72da1f1c0d21e261369f3",
+    "include/dsplib/v34hstx1.h": "a2dd45e834044c73d052385af7796a670ce4cdecd6d0420f12798bd8c7a2de96",
+    "include/dsplib/v34hstx1_arms.h": "c6e72e1b92aa90cbd42a96ae32ddcb431ac5fe708cb5f5834436c8a368ff9a57",
+    "include/dsplib/v34info.h": "51debdd13bdb1380c9b2dc1bd82f61a7a097366078d9db4adf98447b5a4a14ed",
+    "include/dsplib/v34pcm_tables.h": "eb73491a933e2f5bb9f81657412e71a58eeee3445aa86075a47bb2bc5646c47e",
+    "include/dsplib/v34pcmif.h": "d815df8a5e4fa6c4c9a9c41a761efc7252270b354634f447d37f4dfe4fa4f8f5",
+    "include/dsplib/v34recv.h": "e2abec07d42d67fd85a36165e91072f7b91f59a85483ff31d92a5fd0ddd30b54",
+    "include/dsplib/v34rx.h": "b06d6f5fe2ab3cf03920ea55602c2dfc850cbf1cd8dc1878aa8c49dd3059d9b5",
+    "include/dsplib/v34scram.h": "0e0aa7e3630b7c8710321bab77d26dd147f8b269ec960333895ff191fe83011d",
+    "include/dsplib/v34shell.h": "ee25c1cea0d3653b42956ba16d4e3f4659fbcb756348c0fef46a78d58f983c6d",
+    "include/dsplib/v8.h": "a0bcd3f0a26001a1356fcabdddc0bd1a44027a79892c3f674b8b82b8e9adcd27",
+    "include/dsplib/v8dp.h": "e352e93d2c4da6de1fa2826f4f13fe856aa8813d59fd737293e71d02ab836a4c",
+    "include/dsplib/vce.h": "856721d1f27532725ee360c845ea914b43448e69f5f36bd70972e10fc4d2d2e9",
+    "include/dsplib/voice.h": "5462b68403650cf519a5bcf7dc1fcdd6ef1560b43b9f68f7313e5829edad8dd8",
+    "include/dsplib/voicecmd.h": "aef1d9213d02c6213aa414fe843a72c9a33518465812e8b9b93a34beb7f48cff",
+    "include/dsplib/vpcm.h": "a2eb0586356e91b99763c292d8481bca37d0e7ccd2724842d65c194334495a19",
+    "include/dsplib/vpcm_tables.h": "728b61a59a050bfed55ed56f6c585cf14442f873273841ac35853ef8a9408140",
+    "include/dsplib/vtb.h": "531e504b59d842ee66cb2cbed3510b5c9bb2a0bd1d7bcdc8d053534274847e2c",
+    "src/call/call.c": "a1129095956b42b95aeccd330ad73595384feb9c7bee48795d745a328020ca7d",
+    "tools/toolchain/period_compat.h": "49e1dbd4585703dc5f59990800133df247d0ceba439f61bfa53596040c08440a"
+  },
+  "graphs": {
+    "after": {
+      "corpus_sha256": "0f5cba318314474eaff498757ef08a5ad0442d4e1caf21fff32e80341e1d570d",
+      "selected": 2,
+      "summary": {
+        "counts": {
+          "owner_ambiguous_anchors": 4,
+          "owner_bounded": 1,
+          "owner_bounded_without_matched_anchors": 0,
+          "owner_copies_with_compared_relations": 1,
+          "owner_copies_with_matched_anchors": 1,
+          "owner_copies_with_timing_nominations": 0,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_matched_anchors": 8,
+          "owner_refused": 1,
+          "owner_relations_compared": 12,
+          "owner_timing_or_predicate_nominations": 0,
+          "owner_unpaired_anchors": 0,
+          "stack_refused": 2
+        },
+        "refusal_reasons": [
+          {
+            "count": 2,
+            "layer": "stack",
+            "reason": "single entry SUB ESP frame required",
+            "side": "candidate"
+          },
+          {
+            "count": 1,
+            "layer": "stack",
+            "reason": "single entry SUB ESP frame required",
+            "side": "native"
+          },
+          {
+            "count": 1,
+            "layer": "owner",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "side": "native"
+          },
+          {
+            "count": 1,
+            "layer": "owner",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "side": "candidate"
+          },
+          {
+            "count": 1,
+            "layer": "stack",
+            "reason": "unsupported dispatch guard",
+            "side": "native"
+          }
+        ]
+      },
+      "tool_sha256": {
+        "bootstrap.py": "530d952c51b3ff74225906dbcc0cf148e49f0a385102b3aed88b2b2218be9c48",
+        "effect_graph.py": "cde5471d1651d96597c8bbe14c6a4d386fd9a57cd867a730e5cfeb8028f82a21",
+        "screen.py": "3882522ee6bf6b249b0142381f10f3e493cdf77c4df1055c20ab372e4c0af645",
+        "stack_graph.py": "b3bffa4bc5a0d541898b8cda89b31664d30abba11cd79be66586f6383822aef2"
+      }
+    },
+    "before": {
+      "corpus_sha256": "ea649afac2a861478eaf6fc5d7cee3e415c18bfda537a8daf94d551684990940",
+      "selected": 4,
+      "summary": {
+        "counts": {
+          "owner_ambiguous_anchors": 6,
+          "owner_bounded": 3,
+          "owner_bounded_without_matched_anchors": 0,
+          "owner_copies_with_compared_relations": 3,
+          "owner_copies_with_matched_anchors": 3,
+          "owner_copies_with_timing_nominations": 0,
+          "owner_cyclic_relations_excluded": 0,
+          "owner_matched_anchors": 13,
+          "owner_refused": 1,
+          "owner_relations_compared": 15,
+          "owner_timing_or_predicate_nominations": 0,
+          "owner_unpaired_anchors": 0,
+          "stack_ambiguous_anchors": 0,
+          "stack_bounded": 1,
+          "stack_bounded_without_matched_anchors": 0,
+          "stack_copies_with_compared_relations": 1,
+          "stack_copies_with_matched_anchors": 1,
+          "stack_copies_with_timing_nominations": 0,
+          "stack_cyclic_relations_excluded": 0,
+          "stack_matched_anchors": 3,
+          "stack_refused": 3,
+          "stack_relations_compared": 2,
+          "stack_timing_or_predicate_nominations": 0,
+          "stack_unpaired_anchors": 0
+        },
+        "refusal_reasons": [
+          {
+            "count": 2,
+            "layer": "stack",
+            "reason": "single entry SUB ESP frame required",
+            "side": "native"
+          },
+          {
+            "count": 2,
+            "layer": "stack",
+            "reason": "single entry SUB ESP frame required",
+            "side": "candidate"
+          },
+          {
+            "count": 1,
+            "layer": "owner",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "side": "native"
+          },
+          {
+            "count": 1,
+            "layer": "owner",
+            "reason": "indirect/external/relocated CFG or out-of-function fallthrough",
+            "side": "candidate"
+          },
+          {
+            "count": 1,
+            "layer": "stack",
+            "reason": "unsupported dispatch guard",
+            "side": "native"
+          }
+        ]
+      },
+      "tool_sha256": {
+        "bootstrap.py": "530d952c51b3ff74225906dbcc0cf148e49f0a385102b3aed88b2b2218be9c48",
+        "effect_graph.py": "cde5471d1651d96597c8bbe14c6a4d386fd9a57cd867a730e5cfeb8028f82a21",
+        "screen.py": "3882522ee6bf6b249b0142381f10f3e493cdf77c4df1055c20ab372e4c0af645",
+        "stack_graph.py": "b3bffa4bc5a0d541898b8cda89b31664d30abba11cd79be66586f6383822aef2"
+      }
+    }
+  },
+  "image_id": "sha256:fe868cc44a48c36d1130862965729d0b384bc9e0a1908d37891aa5ae07352f16",
+  "limits": [
+    "No ordinary host-reentry or highbit countryconfiguration established",
+    "Unsigned predicates do not identify unique original fielddeclaration; noheaderchangesretained",
+    "Headerdiagnostics TUonly, not adoptedwholeheaderproof",
+    "Graphunsupported/repeatedcall effects boundcleanreports; directexactbytes+periodseparate",
+    "Intermediate no-gain cells retained; finitematrix notglobaloptimalityproof",
+    "Firstlogpreservation failed; fulloldsourcecontrol rerun and preserved withfinallyrestoredselectedsource",
+    "No mutationexecution/anchor/snapshotmaintenance or modernportabilitycampaign",
+    "Actual modeltokens/billingunknown"
+  ],
+  "native_sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+  "selected_normal_dump_production_literal": true,
+  "selected_source_fixture_hashes": {
+    "src/call/call.c": "2a3b4b24a2b3a4ff86d33f1f639627043a1788d3e96f47d054db4007f82e9adc",
+    "test/unit/t_pulse.c": "c5c1899b75eb27e2a8476a52ddbdeb71bc757abcaad6a50f3b1fc8ec2dae4937",
+    "test/unit/t_pulse.ldflags": "73fa1f80d01ae18f34b554773f154d7edcab129a712a2544706df7de26478b4b"
+  },
+  "starting_revision": "993c7a974ff2aa31565ce570f31fbde3df3add34",
+  "validation": {
+    "focused_failed": 0,
+    "focused_passed": 4,
+    "period_failed": 0,
+    "period_passed": 399,
+    "structural_passed": true
+  },
+  "whole_object_closure": {
+    "changed": [
+      "src_call_call.c.o"
+    ],
+    "comparison": {
+      "allocated_data_raw_unchanged": true,
+      "allocated_data_relocation_audit": {
+        "allocated_sections": {
+          "baseline": 5,
+          "candidate": 5
+        },
+        "changed_relocation_fields": [],
+        "code_targets": {
+          "changed": 0,
+          "compared": 21,
+          "owner_changes": 0,
+          "rows": [
+            {
+              "baseline": [
+                "code",
+                "call_create",
+                0
+              ],
+              "candidate": [
+                "code",
+                "call_create",
+                0
+              ],
+              "offset": 8,
+              "owner_equal": true,
+              "section": ".data",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_delete",
+                0
+              ],
+              "candidate": [
+                "code",
+                "call_delete",
+                0
+              ],
+              "offset": 12,
+              "owner_equal": true,
+              "section": ".data",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                0
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                0
+              ],
+              "offset": 16,
+              "owner_equal": true,
+              "section": ".data",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                368
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                368
+              ],
+              "offset": 0,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                563
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                563
+              ],
+              "offset": 4,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                593
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                593
+              ],
+              "offset": 8,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                368
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                368
+              ],
+              "offset": 12,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                368
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                368
+              ],
+              "offset": 16,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                368
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                368
+              ],
+              "offset": 20,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                563
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                563
+              ],
+              "offset": 24,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 28,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 32,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 36,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                583
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                583
+              ],
+              "offset": 40,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                583
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                583
+              ],
+              "offset": 44,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                573
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                573
+              ],
+              "offset": 48,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                563
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                563
+              ],
+              "offset": 52,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                368
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                368
+              ],
+              "offset": 56,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 60,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 64,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            },
+            {
+              "baseline": [
+                "code",
+                "call_run",
+                542
+              ],
+              "candidate": [
+                "code",
+                "call_run",
+                542
+              ],
+              "offset": 68,
+              "owner_equal": true,
+              "section": ".rodata",
+              "target_equal": true
+            }
+          ]
+        },
+        "masked_payload_and_layout_unchanged": true,
+        "relocation_fields": {
+          "baseline": 22,
+          "candidate": 22
+        },
+        "scope": "Allocated non-executable sections only. Masked payloads, code owners and function-relative targets are separate observations. Unresolved is not equal; no table bounds, CFG equivalence, string-pool normalization or adoption proof.",
+        "strict_relocation_targets_unchanged": null,
+        "unresolved_relocation_fields": [
+          {
+            "baseline": {
+              "addend": 0,
+              "offset": 0,
+              "reason": "unsupported section-relative or special-symbol destination",
+              "section": ".data",
+              "status": "unresolved",
+              "symbol": "",
+              "type": 1
+            },
+            "candidate": {
+              "addend": 0,
+              "offset": 0,
+              "reason": "unsupported section-relative or special-symbol destination",
+              "section": ".data",
+              "status": "unresolved",
+              "symbol": "",
+              "type": 1
+            },
+            "offset": 0,
+            "section": ".data"
+          }
+        ]
+      },
+      "analysis_sha256": {
+        "byteident.py": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+        "gcc3_search_compare.py": "c6f340831dcbfdedea1fdaa9e5b3ffa0ae1b1e4da7e5fd61bda16e293b832866",
+        "gcc3_search_data.py": "b4302a5af1605e77bc8105cee5539ef5922ab63f5a99eab2758051dea5727f02",
+        "gcc3_search_pilot.py": "05649cf52cb4d8c7fbfe9fc03b8476972e3718d3909c6b71e84ead93f71aea85",
+        "induction_jumptable.py": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+        "jumptable.py": "55d4106653c29e1346195414333dbd71955e4c3a1f42c6ae8dfc002341dbccb6",
+        "readonly_copy.py": "096ea58789816ab0ce1d7794d670c47ab5e98ade1ea03736d58648d3a81b4f70"
+      },
+      "changed_bodies_or_relocations": [
+        "IsPulseDialerReady",
+        "SetPulseBreakTime"
+      ],
+      "exports_unchanged": true,
+      "functions": {
+        "IsPulseDialerReady": {
+          "baseline": {
+            "grade": [
+              "SIZE",
+              68
+            ],
+            "raw": [
+              "SIZE",
+              68
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "LastPulseDigitDialed": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "PulseDialDigit": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "SetPulseBreakTime": {
+          "baseline": {
+            "grade": [
+              "BYTES",
+              19
+            ],
+            "raw": [
+              "BYTES",
+              19
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "SetPulseMakeTime": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "call_GetSRegister": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "call_create": {
+          "baseline": {
+            "grade": [
+              "SIZE",
+              2
+            ],
+            "raw": [
+              "SIZE",
+              2
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "SIZE",
+              2
+            ],
+            "raw": [
+              "SIZE",
+              2
+            ]
+          }
+        },
+        "call_delete": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "call_run": {
+          "baseline": {
+            "grade": [
+              "SIZE",
+              35
+            ],
+            "raw": [
+              "SIZE",
+              35
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "SIZE",
+              35
+            ],
+            "raw": [
+              "SIZE",
+              35
+            ]
+          }
+        },
+        "dp_call_exit": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        },
+        "dp_call_init": {
+          "baseline": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          },
+          "candidate": {
+            "grade": [
+              "EXACT",
+              0
+            ],
+            "raw": [
+              "EXACT",
+              0
+            ]
+          }
+        }
+      },
+      "grade_changes": {
+        "EXACT": {
+          "gained": [
+            "IsPulseDialerReady",
+            "SetPulseBreakTime"
+          ],
+          "lost": []
+        },
+        "REGALLOC": {
+          "gained": [],
+          "lost": []
+        }
+      },
+      "grade_transitions": {
+        "BYTES -> EXACT": [
+          "SetPulseBreakTime"
+        ],
+        "EXACT -> EXACT": [
+          "LastPulseDigitDialed",
+          "PulseDialDigit",
+          "SetPulseMakeTime",
+          "call_GetSRegister",
+          "call_delete",
+          "dp_call_exit",
+          "dp_call_init"
+        ],
+        "SIZE -> EXACT": [
+          "IsPulseDialerReady"
+        ],
+        "SIZE -> SIZE": [
+          "call_create",
+          "call_run"
+        ]
+      },
+      "inputs": {
+        "baseline": {
+          "path": "/mnt/zfs/dev/slmodem/scratch/pulse-wave-20261105/baseline/src_call_call.c.o",
+          "sha256": "3861fd63671bb01961b7ed3d9b384db2073416478eacd9a577f3824901a0fc3d"
+        },
+        "candidate": {
+          "path": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/tc_repro/src_call_call.c.o",
+          "sha256": "93df5687a56953733276ab8778de1616426476613ed0aa79fe4250e0d08b5c61"
+        },
+        "reference": {
+          "path": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/ref/slmodemd/dsplibs.o",
+          "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379"
+        }
+      },
+      "inventory": {
+        "added": [],
+        "baseline_count": 11,
+        "baseline_without_reference": [],
+        "candidate_count": 11,
+        "candidate_without_reference": [],
+        "missing": []
+      },
+      "layout": {
+        "baseline_matches_reference": true,
+        "candidate_matches_baseline": true,
+        "candidate_matches_reference": true,
+        "section_address_groups": {
+          "baseline": {
+            ".text": [
+              [
+                "call_GetSRegister"
+              ],
+              [
+                "call_create"
+              ],
+              [
+                "call_delete"
+              ],
+              [
+                "call_run"
+              ],
+              [
+                "dp_call_init"
+              ],
+              [
+                "dp_call_exit"
+              ],
+              [
+                "PulseDialDigit"
+              ],
+              [
+                "IsPulseDialerReady"
+              ],
+              [
+                "LastPulseDigitDialed"
+              ],
+              [
+                "SetPulseBreakTime"
+              ],
+              [
+                "SetPulseMakeTime"
+              ]
+            ]
+          },
+          "candidate": {
+            ".text": [
+              [
+                "call_GetSRegister"
+              ],
+              [
+                "call_create"
+              ],
+              [
+                "call_delete"
+              ],
+              [
+                "call_run"
+              ],
+              [
+                "dp_call_init"
+              ],
+              [
+                "dp_call_exit"
+              ],
+              [
+                "PulseDialDigit"
+              ],
+              [
+                "IsPulseDialerReady"
+              ],
+              [
+                "LastPulseDigitDialed"
+              ],
+              [
+                "SetPulseBreakTime"
+              ],
+              [
+                "SetPulseMakeTime"
+              ]
+            ]
+          },
+          "reference": {
+            ".text": [
+              [
+                "call_GetSRegister"
+              ],
+              [
+                "call_create"
+              ],
+              [
+                "call_delete"
+              ],
+              [
+                "call_run"
+              ],
+              [
+                "dp_call_init"
+              ],
+              [
+                "dp_call_exit"
+              ],
+              [
+                "PulseDialDigit"
+              ],
+              [
+                "IsPulseDialerReady"
+              ],
+              [
+                "LastPulseDigitDialed"
+              ],
+              [
+                "SetPulseBreakTime"
+              ],
+              [
+                "SetPulseMakeTime"
+              ]
+            ]
+          }
+        },
+        "shared_function_denominator": 11
+      },
+      "schema": "gcc3-variant-comparison-v1",
+      "scope": "Grades cover only functions shared by all three objects. Missing/added functions are reported separately. Layout compares relative address groups within sections, not absolute placement or source definition order. No adoption decision or compiler/differential provenance is inferred.",
+      "shared_sized_functions": 11,
+      "status": "valid"
+    },
+    "objects_compared": 300
+  },
+  "whole_tu_audit": {
+    "allocated_data_unchanged": true,
+    "baseline": {
+      "allocated_data": {
+        ".bss": {
+          "align": 4,
+          "flags": 3,
+          "masked_payload_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "relocations": [],
+          "size": 0,
+          "type": "SHT_NOBITS"
+        },
+        ".data": {
+          "align": 4,
+          "flags": 3,
+          "masked_payload_sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+          "relocations": [
+            [
+              0,
+              1,
+              [
+                ".rodata.str1.1",
+                0
+              ]
+            ],
+            [
+              8,
+              1,
+              [
+                "call_create",
+                0
+              ]
+            ],
+            [
+              12,
+              1,
+              [
+                "call_delete",
+                0
+              ]
+            ],
+            [
+              16,
+              1,
+              [
+                "call_run",
+                0
+              ]
+            ]
+          ],
+          "size": 24,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata": {
+          "align": 4,
+          "flags": 2,
+          "masked_payload_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+          "relocations": [
+            [
+              0,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              4,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              8,
+              1,
+              [
+                "call_run",
+                593
+              ]
+            ],
+            [
+              12,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              16,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              20,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              24,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              28,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              32,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              36,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              40,
+              1,
+              [
+                "call_run",
+                583
+              ]
+            ],
+            [
+              44,
+              1,
+              [
+                "call_run",
+                583
+              ]
+            ],
+            [
+              48,
+              1,
+              [
+                "call_run",
+                573
+              ]
+            ],
+            [
+              52,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              56,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              60,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              64,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              68,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ]
+          ],
+          "size": 72,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata.str1.1": {
+          "align": 1,
+          "flags": 50,
+          "masked_payload_sha256": "66f15e6910d9f2c86ac7422db19775c9d9ed64437f7f9631b5a1511d0b03a03a",
+          "relocations": [],
+          "size": 200,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata.str1.4": {
+          "align": 4,
+          "flags": 50,
+          "masked_payload_sha256": "20678542ca7042d3a0c85441d4d7cb4fe8c769ee2c49bce6a027fb304f34d31d",
+          "relocations": [],
+          "size": 107,
+          "type": "SHT_PROGBITS"
+        }
+      },
+      "function_order": [
+        "call_GetSRegister",
+        "call_create",
+        "call_delete",
+        "call_run",
+        "dp_call_init",
+        "dp_call_exit",
+        "PulseDialDigit",
+        "IsPulseDialerReady",
+        "LastPulseDigitDialed",
+        "SetPulseBreakTime",
+        "SetPulseMakeTime"
+      ],
+      "sha256": "3861fd63671bb01961b7ed3d9b384db2073416478eacd9a577f3824901a0fc3d",
+      "symbols": [
+        [
+          "call_op",
+          "STT_OBJECT",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".data",
+          24
+        ],
+        [
+          "call_create",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          612
+        ],
+        [
+          "call_delete",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          158
+        ],
+        [
+          "call_run",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          794
+        ],
+        [
+          "call_GetSRegister",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          14
+        ],
+        [
+          "modem_get_sreg",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dsplibs_debug_level",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_malloc",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_memset",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "modem_get_param",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Create",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Dial",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dsplibs_debug_printf",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_strlen",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_strcpy",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Create",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Delete",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_free",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Delete",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_memcpy",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Progress",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Resample",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dp_call_init",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          28
+        ],
+        [
+          "modem_dp_register",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dp_call_exit",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          28
+        ],
+        [
+          "modem_dp_deregister",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "PulseDialDigit",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          146
+        ],
+        [
+          "modem_set_param",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "IsPulseDialerReady",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          441
+        ],
+        [
+          "LastPulseDigitDialed",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          91
+        ],
+        [
+          "SetPulseBreakTime",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          88
+        ],
+        [
+          "SetPulseMakeTime",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          88
+        ]
+      ]
+    },
+    "function_order_unchanged": true,
+    "normal_dump_literal": true,
+    "selected": {
+      "allocated_data": {
+        ".bss": {
+          "align": 4,
+          "flags": 3,
+          "masked_payload_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "relocations": [],
+          "size": 0,
+          "type": "SHT_NOBITS"
+        },
+        ".data": {
+          "align": 4,
+          "flags": 3,
+          "masked_payload_sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+          "relocations": [
+            [
+              0,
+              1,
+              [
+                ".rodata.str1.1",
+                0
+              ]
+            ],
+            [
+              8,
+              1,
+              [
+                "call_create",
+                0
+              ]
+            ],
+            [
+              12,
+              1,
+              [
+                "call_delete",
+                0
+              ]
+            ],
+            [
+              16,
+              1,
+              [
+                "call_run",
+                0
+              ]
+            ]
+          ],
+          "size": 24,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata": {
+          "align": 4,
+          "flags": 2,
+          "masked_payload_sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+          "relocations": [
+            [
+              0,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              4,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              8,
+              1,
+              [
+                "call_run",
+                593
+              ]
+            ],
+            [
+              12,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              16,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              20,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              24,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              28,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              32,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              36,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              40,
+              1,
+              [
+                "call_run",
+                583
+              ]
+            ],
+            [
+              44,
+              1,
+              [
+                "call_run",
+                583
+              ]
+            ],
+            [
+              48,
+              1,
+              [
+                "call_run",
+                573
+              ]
+            ],
+            [
+              52,
+              1,
+              [
+                "call_run",
+                563
+              ]
+            ],
+            [
+              56,
+              1,
+              [
+                "call_run",
+                368
+              ]
+            ],
+            [
+              60,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              64,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ],
+            [
+              68,
+              1,
+              [
+                "call_run",
+                542
+              ]
+            ]
+          ],
+          "size": 72,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata.str1.1": {
+          "align": 1,
+          "flags": 50,
+          "masked_payload_sha256": "66f15e6910d9f2c86ac7422db19775c9d9ed64437f7f9631b5a1511d0b03a03a",
+          "relocations": [],
+          "size": 200,
+          "type": "SHT_PROGBITS"
+        },
+        ".rodata.str1.4": {
+          "align": 4,
+          "flags": 50,
+          "masked_payload_sha256": "20678542ca7042d3a0c85441d4d7cb4fe8c769ee2c49bce6a027fb304f34d31d",
+          "relocations": [],
+          "size": 107,
+          "type": "SHT_PROGBITS"
+        }
+      },
+      "function_order": [
+        "call_GetSRegister",
+        "call_create",
+        "call_delete",
+        "call_run",
+        "dp_call_init",
+        "dp_call_exit",
+        "PulseDialDigit",
+        "IsPulseDialerReady",
+        "LastPulseDigitDialed",
+        "SetPulseBreakTime",
+        "SetPulseMakeTime"
+      ],
+      "sha256": "93df5687a56953733276ab8778de1616426476613ed0aa79fe4250e0d08b5c61",
+      "symbols": [
+        [
+          "call_op",
+          "STT_OBJECT",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".data",
+          24
+        ],
+        [
+          "call_create",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          612
+        ],
+        [
+          "call_delete",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          158
+        ],
+        [
+          "call_run",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          794
+        ],
+        [
+          "call_GetSRegister",
+          "STT_FUNC",
+          "STB_LOCAL",
+          "STV_DEFAULT",
+          ".text",
+          14
+        ],
+        [
+          "modem_get_sreg",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dsplibs_debug_level",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_malloc",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_memset",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "modem_get_param",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Create",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Dial",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dsplibs_debug_printf",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_strlen",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_strcpy",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Create",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Delete",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_free",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Delete",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "sysdep_memcpy",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "CALLPROG_Progress",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "RcFixed_Resample",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dp_call_init",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          28
+        ],
+        [
+          "modem_dp_register",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "dp_call_exit",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          28
+        ],
+        [
+          "modem_dp_deregister",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "PulseDialDigit",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          146
+        ],
+        [
+          "modem_set_param",
+          "STT_NOTYPE",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          "SHN_UNDEF",
+          0
+        ],
+        [
+          "IsPulseDialerReady",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          373
+        ],
+        [
+          "LastPulseDigitDialed",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          91
+        ],
+        [
+          "SetPulseBreakTime",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          88
+        ],
+        [
+          "SetPulseMakeTime",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          88
+        ]
+      ]
+    },
+    "symbol_size_changes": [
+      [
+        [
+          "IsPulseDialerReady",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          441
+        ],
+        [
+          "IsPulseDialerReady",
+          "STT_FUNC",
+          "STB_GLOBAL",
+          "STV_DEFAULT",
+          ".text",
+          373
+        ]
+      ]
+    ],
+    "symbols_metadata_order_except_size_unchanged": true
+  }
+}

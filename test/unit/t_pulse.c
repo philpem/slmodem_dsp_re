@@ -90,12 +90,12 @@ run_setters(void)
 		harness_param_reset();
 		point_at(&obj_a);
 		ref_SetPulseMakeTime((void *)0xAAAAu, values[k]);
-		ref_SetPulseBreakTime((void *)0xAAAAu, values[k] + 1);
+		ref_SetPulseBreakTime((void *)0xAAAAu, (int)((unsigned int)values[k] + 1u));
 
 		harness_param_reset();
 		point_at(&obj_b);
 		SetPulseMakeTime((void *)0xBBBBu, values[k]);
-		SetPulseBreakTime((void *)0xBBBBu, values[k] + 1);
+		SetPulseBreakTime((void *)0xBBBBu, (int)((unsigned int)values[k] + 1u));
 
 		compare("setters", (long)k);
 	}
@@ -331,6 +331,183 @@ run_transcript(const char *label, int digit, int make, int brk, int ticks,
 	return diff_end();
 }
 
+
+/*
+ * Public pulse-component histories: the zeroed object below models only the
+ * pulse component's initialized storage, not a full call_create lifecycle.
+ * Normal 33/67 durations come from u8 country-table fields. Negative/high-bit
+ * setter inputs are explicitly exploratory API-domain probes, not normal
+ * modem configuration. No elapsed/count/phase field is planted after load.
+ *
+ * The import wrappers observe real parameter calls. In explicitly synthetic
+ * host-reentry groups they reenter the same side through PulseDialDigit once.
+ * No production host contract establishing such reentry has been found; these
+ * groups measure native value age across an external-call boundary only.
+ */
+#define PULSE_EVENTS 64
+struct pulse_event {
+	unsigned name;
+	int value, modem_matches;
+	struct call state;
+};
+static struct pulse_event pulse_events[2][PULSE_EVENTS];
+static int pulse_nevents[2], pulse_overflow[2], pulse_callbacks[2];
+static int pulse_hook_starts[2], pulse_probe_active, pulse_action;
+static int pulse_armed[2];
+
+static void
+pulse_normalise(struct call *dst, const struct call *src)
+{
+	*dst = *src;
+	dst->self = 0;
+	dst->modem = 0;
+}
+
+static void
+pulse_compare_object(long tick)
+{
+	struct call a, b;
+	diff_eq_int("reference self retained", obj_a.self == &obj_a, 1, tick);
+	diff_eq_int("source self retained", obj_b.self == &obj_b, 1, tick);
+	diff_eq_int("reference modem retained", obj_a.modem == (void *)0xAAAAu,
+		    1, tick);
+	diff_eq_int("source modem retained", obj_b.modem == (void *)0xBBBBu,
+		    1, tick);
+	pulse_normalise(&a, &obj_a);
+	pulse_normalise(&b, &obj_b);
+	diff_eq_obj("complete pulse component", struct call, &b, &a, tick);
+}
+
+static void
+pulse_observe(int side, void *modem, unsigned name, int value)
+{
+	struct call *c = side ? &obj_a : &obj_b;
+	struct pulse_event *e;
+	int fire;
+	if (!pulse_probe_active)
+		return;
+	if (pulse_nevents[side] == PULSE_EVENTS) {
+		pulse_overflow[side]++;
+		return;
+	}
+	e = &pulse_events[side][pulse_nevents[side]++];
+	memset(e, 0, sizeof *e);
+	e->name = name;
+	e->value = value;
+	e->modem_matches = modem == c->modem;
+	pulse_normalise(&e->state, c);
+	if (name == MDMPRM_HOOK_ON && value == 1)
+		pulse_hook_starts[side]++;
+	fire = pulse_armed[side] && pulse_callbacks[side] == 0 &&
+		((pulse_action == 1 && name == MDMPRM_HOOK_ON && value == 0) ||
+		 (pulse_action == 2 && name == MDMPRM_HOOK_ON && value == 1 &&
+		  pulse_hook_starts[side] == 2) ||
+		 (pulse_action == 3 && name == MDMPRM_PULSE_DIAL));
+	if (fire) {
+		pulse_callbacks[side]++;
+		if (side)
+			ref_PulseDialDigit(modem, 4);
+		else
+			PulseDialDigit(modem, 4);
+	}
+}
+
+extern long __real_modem_set_param(void *, unsigned, int);
+extern long __real_ref_modem_set_param(void *, unsigned, int);
+long
+__wrap_modem_set_param(void *modem, unsigned name, int value)
+{
+	long result = __real_modem_set_param(modem, name, value);
+	pulse_observe(0, modem, name, value);
+	return result;
+}
+long
+__wrap_ref_modem_set_param(void *modem, unsigned name, int value)
+{
+	long result = __real_ref_modem_set_param(modem, name, value);
+	pulse_observe(1, modem, name, value);
+	return result;
+}
+
+static int
+run_pulse_component(const char *label, int make, int brk, int ticks,
+		    int action, unsigned level)
+{
+	int tick, side, i, expected_callbacks = action == 1 || action == 2;
+	diff_begin(label);
+	reset_objects(0, 0);
+	memset(pulse_events, 0, sizeof pulse_events);
+	memset(pulse_nevents, 0, sizeof pulse_nevents);
+	memset(pulse_overflow, 0, sizeof pulse_overflow);
+	memset(pulse_callbacks, 0, sizeof pulse_callbacks);
+	memset(pulse_hook_starts, 0, sizeof pulse_hook_starts);
+	memset(pulse_armed, 0, sizeof pulse_armed);
+	pulse_action = action;
+	pulse_probe_active = 1;
+	harness_modem_reset(0, 0);
+	dsplibs_debug_level = ref_dsplibs_debug_level = level;
+	dsplib_debug_capture_reset();
+	dsplib_debug_capture_on = 1;
+	for (side = 0; side < 2; side++) {
+		struct call *c = side ? &obj_a : &obj_b;
+		harness_param_reset();
+		point_at(c);
+		if (side) {
+			ref_SetPulseMakeTime(c->modem, make);
+			ref_SetPulseBreakTime(c->modem, brk);
+			ref_PulseDialDigit(c->modem, 2);
+		} else {
+			SetPulseMakeTime(c->modem, make);
+			SetPulseBreakTime(c->modem, brk);
+			PulseDialDigit(c->modem, 2);
+		}
+		pulse_armed[side] = 1;
+	}
+	pulse_compare_object(-1);
+	for (tick = 0; tick < ticks; tick++) {
+		int ready[2];
+		for (side = 0; side < 2; side++) {
+			struct call *c = side ? &obj_a : &obj_b;
+			harness_param_reset();
+			point_at(c);
+			ready[side] = side ? ref_IsPulseDialerReady(c->modem) :
+					    IsPulseDialerReady(c->modem);
+		}
+		diff_eq_int("ready at public poll", ready[0], ready[1], tick);
+		pulse_compare_object(tick);
+		/* Compare the cumulative side-effect prefix at every API boundary. */
+		diff_eq_int("parameter event count", pulse_nevents[0],
+			    pulse_nevents[1], tick);
+		for (i = 0; i < pulse_nevents[0] && i < pulse_nevents[1]; i++)
+			diff_eq_obj("parameter event and boundary state",
+				    struct pulse_event, &pulse_events[0][i],
+				    &pulse_events[1][i], tick);
+	}
+	for (side = 0; side < 2; side++) {
+		diff_eq_int("bounded trace has no overflow", pulse_overflow[side],
+			    0, side);
+		diff_eq_int("host callback execution count", pulse_callbacks[side],
+			    expected_callbacks, side);
+		diff_eq_int("digit load reached host", pulse_nevents[side] > 0,
+			    1, side);
+		diff_eq_int("initial host parameter", pulse_events[side][0].name,
+			    MDMPRM_PULSE_DIAL, side);
+		diff_eq_int("initial host pulse count", pulse_events[side][0].value,
+			    2, side);
+	}
+	diff_eq_int("complete ordered debug and host transcript",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, level);
+	diff_eq_int("same debug line count", dsplib_debug_capture_lines(0),
+		    dsplib_debug_capture_lines(1), level);
+	diff_eq_int("debug threshold observed",
+		    dsplib_debug_capture_lines(1) > 0, level > 1, level);
+	pulse_probe_active = 0;
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -407,6 +584,32 @@ main(void)
 		compare("detached load", 0);
 	}
 	rc |= diff_end();
+
+
+	/* Ordinary and disjoint callback controls, then synthetic host reentry.
+	 * Action 3 is armed only after load and matches PULSE_DIAL, which an
+	 * ordinary poll never sends; this checks selection without reentry. */
+	rc |= run_pulse_component("pulse component: ordinary setter/load/poll",
+				  33, 67, 50, 0, 2);
+	rc |= run_pulse_component("pulse component: disjoint host control",
+				  33, 67, 50, 3, 2);
+	rc |= run_pulse_component("pulse exploratory: reload on restore, quiet",
+				  33, 67, 50, 1, 0);
+	rc |= run_pulse_component("pulse exploratory: reload on restore, debug",
+				  33, 67, 50, 1, 2);
+	rc |= run_pulse_component("pulse exploratory: reload on second break, quiet",
+				  33, 67, 50, 2, 0);
+	rc |= run_pulse_component("pulse exploratory: reload on second break, debug",
+				  33, 67, 50, 2, 2);
+	/* All values enter through setters. These are non-country API probes. */
+	rc |= run_pulse_component("pulse exploratory: unsigned break duration",
+				  33, -1, 8, 0, 0);
+	rc |= run_pulse_component("pulse exploratory: unsigned make duration",
+				  (int)0x80000000u, 0, 8, 0, 0);
+	rc |= run_pulse_component("pulse exploratory: unsigned sum boundary",
+				  0x7fffffff, 1, 8, 0, 0);
+	rc |= run_pulse_component("pulse exploratory: modular sum wraps",
+				  -1, 1, 8, 0, 0);
 
 	return rc;
 }

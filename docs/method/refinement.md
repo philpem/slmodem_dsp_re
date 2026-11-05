@@ -386,14 +386,74 @@ DWORD instructions do not uniquely justify widening the source local. Keep only
 the independently observed publication repair. Reopen the residual with a new
 consumed-value/owner/helper witness, not another width or expression palette.
 
-Next audit IsPulseDialerReady: native uses unsigned elapsed/break comparisons
-(0x32ef..0x32f1 and 0x3371..0x3373), while current int locals compare signed.
-It also reloads elapsed after modem_set_param at 0x3331, where source retains
-its pre-call value. Check setter/callback contracts, valid histories and the
-complete call.c/header closure before choosing signedness or recapture changes.
-This fresh source question does not reopen the old if-conversion flag controls.
-Then prioritise uninspected medium-screen rows with matched predicate/publication
-witnesses; keep the frame and packer closed palettes recorded above.
+The following section records the completed coupled pulse recovery. Prioritise
+uninspected medium-screen rows with matched predicate/publication witnesses;
+keep the frame and packer closed palettes recorded above.
+
+## Unsigned interpretation, callback ages and native joins (2026-11-05)
+
+The [pulse wave](../pulse-recovery-20261105.md) recovers IsPulseDialerReady
+EXACT373 and unchanged-source SetPulseBreakTime EXACT88. The latter improves
+from BYTES19 through a measured peephole2 scratch choice; nine other emitted
+TU bodies remain unchanged. No field declaration or interface changes are needed.
+
+Keep isolated no-gain controls. Unsigned consumption alone leaves SIZE68;
+callback ages alone and A+B give SIZE26. Native shared-advance/source-join
+controls give SIZE22/17, then native-sized BYTES145/4. Only direct unsigned
+member-consuming comparisons close the last four bytes. Initial RTL already
+shows the difference: local consumption compares break against elapsed with
+LEU, direct consumption elapsed against break with GEU. This is a source
+expression/observation boundary, not allocation. Three unsigned field-home
+diagnostics all retain BYTES4; they are unretained, TU-only controls, not
+whole-header validation. A no-gain isolated change can be required by the
+completed source graph; trace collateral before rejecting an intermediate.
+
+Cast before arithmetic. Native break+make is modulo-2^32 ADD followed by an
+unsigned comparison. Casting the result of a signed sum retains a possible
+signed-overflow expression. The selected source casts both members before ADD,
+and consumes elapsed as unsigned only at comparison/advance sites. Signed int
+setter transport and overlay declarations do not uniquely determine consumption.
+
+Preserve asymmetric callback ages. Native retains dp->self from before the
+entry diagnostic; hook-on diagnostics use entry remaining, while hook-off
+reads remaining after modem_set_param. Both transition arms join the same
+elapsed reread/advance; the returned field predicate also permits the native
+late read. Nontransition paths retain their existing values. On pulse expiry,
+clear elapsed, decrement remaining, then share the increment by five. Do not
+freshen every owner/read on entry or blindly retain every local snapshot.
+
+Country make/break values are u8; ordinary sums are at most510, with hook-flash
+u8×10 also small. Setters accept unclamped int but that does not establish
+normal high-bit configurations. Current host modem_set_param forwards hook
+requests to driver ioctl; inspected ALSA/modemap/socket/test paths establish
+no synchronous pulse API reentry. The ten new groups therefore separate two
+normal/disjoint controls from synthetic public-PulseDialDigit reentry and
+exploratory high-bit/modular-duration probes. They initialise component storage
+and use public setters/load/poll, not a full call_create lifecycle.
+
+The retained old-source control keeps all18 existing groups green and fails
+seven new groups;330 assertions include downstream trace/state consequences,
+not330 distinct defects. Compare full normalized objects, parameter-event
+prefixes and exact diagnostics at each public boundary, and assert exactly one
+synthetic callback on each side. Negative controls cover no callback, disjoint
+host activity and arithmetic wrap. Source-dependent trace lengths are reported
+with separate old/selected denominators. The fixture's own INTMAX+1 setup is
+repaired with unsigned arithmetic; apparatus overflow must not decide a source
+finding. No mutation infrastructure is used.
+
+The complete300-object/header check, period gate and final measured census are
+in the report. New source predictions require independently witnessed operand,
+owner, width or value-age differences. A finite crossed matrix is not a global
+optimum claim, and final evidence includes every protected neighbour rather
+than only aggregate gains.
+
+Next transfer expression signedness and observation placement to
+IsDialStringInvalid. Native compares the analyser result with1 using unsigned
+SETBE at0x7af89..0x7af8c, while source returns signed grade<=1. Native also
+prepares the grade-name lookup before the second debug guard; source requests
+it only inside the guard. Audit AnalyseDialString's return domain and all grade
+consumers, cross the two native-backed properties, and investigate whole-Dialer
+collateral. No negative-grade behavior bug is established by these witnesses.
 
 ## Resolving an owner declaration after an alias-contract recovery
 
