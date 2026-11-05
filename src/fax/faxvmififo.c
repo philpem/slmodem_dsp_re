@@ -54,7 +54,7 @@ faxvmi_frame_reverse(unsigned short *buf, short count)
  *
  * THE `taken` FLAG IS NOT A SPELLING CHOICE.  The object loads
  * `vmi->underrun` into a register BEFORE the loop, sets that register to zero
- * inside it, and stores it at the loop's NORMAL exit -- 0x968f6 loads,
+ * inside it, and stores it at the loop's NORMAL exit -- 0x96903 loads,
  * 0x96961 zeroes, 0x96978 stores -- while the ring-full path returns without
  * passing the store at all.  So the field is cleared when the whole request
  * was accepted, left ALONE when the ring filled part-way, and re-stored
@@ -66,19 +66,24 @@ faxvmi_frame_reverse(unsigned short *buf, short count)
 int
 faxvmi_write_fifo(struct faxvmi *vmi, unsigned short **src, short count)
 {
-	struct faxvmi_framer *fr = vmi->framer;
-	unsigned short *p = *src;
 	int taken = vmi->underrun;
+	unsigned short *p = *src;
 	short n = 0;
 	short i;
 
-	for (i = count; i != 0; i--) {
+	for (i = count; i-- != 0;) {
+		struct faxvmi_framer *fr = vmi->framer;
+
 		if (fr->count >= fr->fifo_size) {
 			*src = p;
 			return n;
 		}
-		fr->fifo[fr->wr] = *p++;
-		fr->wr = (unsigned short)(fr->wr + 1);
+		/* Publish the increment before loading the input word; it may
+		 * alias the unsigned-short write cursor. Keep the old index. */
+		{
+			unsigned short wr = fr->wr++;
+			fr->fifo[wr] = *p++;
+		}
 		if (fr->wr >= fr->fifo_size)
 			fr->wr = 0;
 		fr->count = (unsigned short)(fr->count + 1);

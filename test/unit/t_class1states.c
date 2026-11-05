@@ -299,6 +299,103 @@ run_recv_silence(void)
  * `energy` afterwards, so a search that found the wrong block fails the
  * denominator instead of quietly testing nothing.
  */
+/*
+ * Component history: zeroed storage -> real silence initializer -> one state
+ * call. The alias arm is explicitly synthetic: word8 and tx_count designate
+ * the same int object, which the C interface permits. Normal protocol callers
+ * have not been shown to use this alias. Native captures word8 before writing
+ * tx_count; the RMS callees write no caller memory. Disjoint and nonzero-entry
+ * controls distinguish this capture from an always-take/always-skip abort.
+ */
+struct silence_alias_fixture {
+	struct fax_class1 ctx;
+	short rx[CLASS1_BLOCK_SAMPLES + GUARD];
+	short tx[CLASS1_BLOCK_SAMPLES + GUARD];
+	int rx_count;
+	int tx_count;
+	int word8;
+};
+
+extern int ref__recieve_silence_state_init(struct fax_class1 *, int);
+
+static int
+run_recv_silence_alias(void)
+{
+	static struct silence_alias_fixture a, b;
+	static struct silence_alias_fixture expected;
+	unsigned level, alias, initial, loud, i;
+	long cases = 0;
+
+	diff_begin("receive silence: 16 initialized component cases, synthetic aliases");
+	for (level = 0; level <= 2; level += 2)
+	for (alias = 0; alias < 2; ++alias)
+	for (initial = 0; initial < 2; ++initial)
+	for (loud = 0; loud < 2; ++loud) {
+		int *wa, *wb;
+		int ra, rb;
+		long tag = cases++;
+
+		memset(&a, 0, sizeof(a));
+		a.ctx.status = FAX_CLASS1_ERROR;
+		for (i = 0; i < CLASS1_BLOCK_SAMPLES + GUARD; ++i) {
+			a.rx[i] = i < CLASS1_BLOCK_SAMPLES ? (loud ? 3000 : 0) : 1234;
+			a.tx[i] = (short)0x5a5a;
+		}
+		a.rx_count = CLASS1_BLOCK_SAMPLES;
+		a.tx_count = initial ? 7 : 0;
+		a.word8 = initial ? 7 : 0;
+		memcpy(&b, &a, sizeof(a));
+		ra = ref__recieve_silence_state_init(&a.ctx, 4);
+		rb = _recieve_silence_state_init(&b.ctx, 4);
+		diff_eq_int("alias history: initializer return (%ld)", rb, ra, tag);
+		diff_eq_int("alias history: half-count two (%ld)", ra, 2, tag);
+		diff_eq_obj("alias history: initialized context", struct fax_class1,
+			    &b.ctx, &a.ctx, tag);
+		memcpy(&expected, &a, sizeof(expected));
+		wa = alias ? &a.tx_count : &a.word8;
+		wb = alias ? &b.tx_count : &b.word8;
+		dsplibs_debug_level = ref_dsplibs_debug_level = level;
+		ra = ref__recieve_silence_state(&a.ctx, a.rx, a.tx, 0, 0,
+					      &a.rx_count, &a.tx_count, 0, wa);
+		rb = _recieve_silence_state(&b.ctx, b.rx, b.tx, 0, 0,
+					  &b.rx_count, &b.tx_count, 0, wb);
+		diff_eq_int("alias history: return (%ld)", rb, ra, tag);
+		diff_eq_int("alias history: native return zero (%ld)", ra, 0, tag);
+		diff_eq_obj("alias history: complete fixture", struct silence_alias_fixture,
+			    &b, &a, tag);
+		/* Independent native path obligations, including unchanged fields. */
+		expected.ctx.energy = a.ctx.energy;
+		if (initial) {
+			expected.ctx.status = FAX_CLASS1_OK_NO_CARRIER;
+			expected.ctx.state = CLASS1_IDLE_STATE;
+		} else if (loud) {
+			expected.ctx.status = FAX_CLASS1_NO_MESSAGE;
+		} else {
+			expected.ctx.silence_blocks = 1;
+		}
+		diff_eq_obj("alias history: native path and untouched context",
+			    struct fax_class1, &a.ctx, &expected.ctx, tag);
+		diff_eq_int("alias history: native energy side (%ld)",
+			    a.ctx.energy > CLASS1_SILENCE_THRESHOLD, loud, tag);
+		diff_eq_int("alias history: native count/flag publication (%ld)",
+			    a.tx_count, !initial && loud && alias ? 5 : CLASS1_BLOCK_SAMPLES, tag);
+		diff_eq_int("alias history: native flag output (%ld)",
+			    *wa, !initial && loud ? 5 : (alias ? CLASS1_BLOCK_SAMPLES : (initial ? 7 : 0)), tag);
+		diff_eq_int("alias history: native RX count unchanged (%ld)",
+			    a.rx_count, CLASS1_BLOCK_SAMPLES, tag);
+		for (i = 0; i < CLASS1_BLOCK_SAMPLES; ++i)
+			expected.tx[i] = 0;
+		expected.tx_count = !initial && loud && alias ? 5 : CLASS1_BLOCK_SAMPLES;
+		if (!initial && loud && !alias)
+			expected.word8 = 5;
+		diff_eq_obj("alias history: native full state, buffers and guards",
+			    struct silence_alias_fixture, &a, &expected, tag);
+	}
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	diff_eq_int("alias history: sixteen cases ran (%ld)", cases, 16, cases);
+	return diff_end();
+}
+
 static int
 run_recv_silence_exact(void)
 {
@@ -351,5 +448,6 @@ main(void)
 	rc |= run_send_silence();
 	rc |= run_recv_silence();
 	rc |= run_recv_silence_exact();
+	rc |= run_recv_silence_alias();
 	return rc;
 }

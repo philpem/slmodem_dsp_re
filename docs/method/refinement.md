@@ -263,11 +263,69 @@ carry guard facts across the path. Preserve independently witnessed differences
 bug. Zero supported nominations still does not prove equivalence.
 
 The selected pair passes the period and structural gate, with no protected
-grade losses. Next audit the remaining _recieve_silence_state call/read lead:
-check FPM_rms's write footprint and whether a legal alias makes the observed
-read age matter before changing source. Then transfer signed-consumption and
-post-guard acquisition together to fresh small-loop witnesses from the remaining
-inexact corpus; do not reopen the bounded V8 helper palette without new evidence.
+grade losses. The following section records the completed silence-state audit
+and small-loop transfer. Keep the bounded V8 helper palette closed without
+new evidence.
+
+## Entry snapshots, post-guard owners and cursor publication (2026-11-05)
+
+The [silence/loop wave](../silence-loop-recovery-20261105.md) recovers
+_recieve_silence_state EXACT274 and faxvmi_write_fifo EXACT157. Both expose
+source observation errors at legal component aliases; the probes remain
+explicitly synthetic and do not establish ordinary protocol histories.
+
+A call/read nomination can expose a caller publication. Native silence handling
+captures word8 before clearing TX, publishing tx_count and calling FPM_rms.
+RMS and its sqrt callee write only private stack storage, but word8 and tx_count
+can designate the same int. Entry snapshot alone gives BYTES2; a named native
+loop bound alone gives SIZE1; both close the body. Sixteen real-initializer
+component cases / 193 assertions expose four old-source failures and pass with
+the correction. Disjoint and nonzero-entry controls remain green. Replace the
+old source comment claiming strict aliasing justified the late read.
+
+Investigate collateral through actual pass decisions. Twelve EXACT class1
+neighbours remain EXACT. Two unchanged-source neighbours first differ at
+peephole2; fax_class1_command subsequently loses shared initialization tails
+at ce3 and moves BYTES49→SIZE11. Complete preceding normalized RTL is unchanged.
+Do not add a source carrier to regain that allocation accident. Review command
+case destinations and pooled string identities separately from raw section
+bytes: six switch targets retain case identity despite three offset shifts;
+37 string relocations retain their target strings.
+
+The small-loop screen covers 300 objects / 1,886 shared defining copies:
+1,302 native bodies at most 250 bytes, 244 inexact copies, 183 with backward
+jumps, seven source/native inspections. Backward layout is not a loop proof.
+Only two TUs received source matrices. Uninspected rows remain unreviewed.
+
+For FIFO writing, A is short postdecrement, B post-guard framer acquisition,
+C old-wr capture plus increment publication before the input read, D underrun
+capture before source-pointer acquisition. Baseline SIZE36, A24, B20, AB14;
+ABC is native-sized BYTES22; ABCD is EXACT157. Removing A/B/C/D gives BYTES43 /
+SIZE4 / SIZE25 / BYTES22 respectively. The final D control changes initial RTL
+capture homes and closes the remaining bytes. All three TU bodies are
+compared, including the exact frame_reverse neighbour; both neighbours remain
+unchanged.
+
+Do not collapse cursor advancement into a later publication. Native increments
+wr before loading the input sample. A one-element source can legally be &fr.wr
+while the actual FIFO is a separate two-element array. Sixteen constructed-ring
+cases / 225 assertions expose two old-source failures; zero requests, full
+rings, disjoint sources and wrap cases provide controls. All fields, buffers,
+guards and source advances are checked. Neither test aliases a FIFO buffer to
+undersized scalar storage nor claims an ordinary constructor-generated alias.
+
+FPM_iir_filt_II remains unchanged. Its short-outer-induction × inner-postdecrement
+matrix gives SIZE19/15/20/16, with no complete recovery or demonstrated behavior
+defect. These four spellings are closed; reopening requires a new native value
+observation or compiler cause. TxNoCarrierV17/V27/V29 counts already agree with
+native unsigned predicates: do not transfer signed consumption to them merely
+because another function uses signed low words.
+
+Next audit faxvmi_write_frame's postdecrement admission and post-header framer
+acquisition, native 0x969a8..0x969c2, against its current entry capture. Trace each
+header/payload cursor publication independently before transferring FIFO's
+repair. Expand the bounded loop inventory only with a fresh native witness;
+keep the IIR and V8 negative domains closed until their reopening condition holds.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

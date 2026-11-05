@@ -191,7 +191,9 @@ against native instructions and fixture domains before making source changes.
 Check selector/iteration identity and propagate known guard values across each
 nominated continuation: a raw CFG path through a nullable-result join can be
 value-infeasible. A static reachability difference alone is not an operation-age
-or behavior difference.
+or behavior difference. Audit every intervening caller publication as well as
+callee effects: a callee that writes no caller memory does not make a read move
+equivalent across a same-type alias store in the caller.
 Report compared relations, ambiguous matches and unsupported effects; a bounded
 clean subset does not establish equivalence or justify parking a function.
 

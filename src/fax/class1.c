@@ -432,10 +432,9 @@ _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 }
 
 /*
- * `*word8` is read into a register before the transmit loop in the object.
- * That is the compiler's doing rather than the author's -- `tx` is `short *`
- * and `word8` is `int *`, so strict aliasing lets the load move -- and the
- * read is written where a human puts it, at the test.
+ * Capture `*word8` on entry. The native value survives the transmit clear,
+ * `*tx_count = 160`, the RMS call and the energy publication. In particular,
+ * `word8` and `tx_count` are both `int *` and may name the same object.
  *
  * The threshold compare is SIGNED and sixteen-bit (`cmp $0x64,%ax; jle`), so
  * it is on the `short` the RMS was stored into; the silence-block compare
@@ -448,17 +447,19 @@ _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		       int word7, int *word8)
 {
 	int i;
+	int n = CLASS1_BLOCK_SAMPLES;
+	int abort_requested = *word8;
 
 	(void)word3;
 	(void)word4;
 	(void)word7;
 
-	for (i = 0; i < CLASS1_BLOCK_SAMPLES; i++)
+	for (i = 0; i < n; i++)
 		tx[i] = 0;
 	*tx_count = CLASS1_BLOCK_SAMPLES;
 	ctx->energy = FPM_rms(rx, (unsigned short)*rx_count);
 
-	if (*word8 != 0) {
+	if (abort_requested != 0) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("Abort waiting for silence!");
 		ctx->status = FAX_CLASS1_OK_NO_CARRIER;

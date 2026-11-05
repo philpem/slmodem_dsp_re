@@ -903,6 +903,103 @@ run_multicall(void)
 
 static int wf_full, wf_partial, wf_whole, wf_cleared, wf_untouched;
 
+/*
+ * Constructed ring-component boundary; the source-at-wr arm is synthetic.
+ * It is one unsigned-short scalar, requested at most once, with a real
+ * two-word destination ring. Source/field aliasing distinguishes native wr
+ * publication before the input load. No normal VMI history uses this alias.
+ */
+struct fifo_age_buffer {
+	unsigned short pre[GUARD];
+	unsigned short data[2];
+	unsigned short post[GUARD];
+};
+
+static int
+run_write_fifo_age(void)
+{
+	unsigned alias, start, full, request;
+	long cases = 0;
+
+	diff_begin("write_fifo: 16 ring-component cases, synthetic source/field aliases");
+	for (alias = 0; alias < 2; ++alias)
+	for (start = 0; start < 2; ++start)
+	for (full = 0; full < 2; ++full)
+	for (request = 0; request < 2; ++request) {
+		struct faxvmi a, b, expected_vmi, state_a, state_b;
+		struct faxvmi_framer fa, fb, expected_fr, fa_state, fb_state;
+		struct fifo_age_buffer da, db, expected_data;
+		struct fifo_age_buffer sa, sb, before_source;
+		unsigned short *pa, *pb, *base_a, *base_b;
+		int ra, rb, admitted = request && !full;
+		long tag = cases++;
+
+		memset(&a, 0, sizeof(a));
+		memset(&b, 0, sizeof(b));
+		memset(&fa, 0, sizeof(fa));
+		fa.fifo_size = 2;
+		fa.wr = (unsigned short)start;
+		fa.count = full ? 2 : 0;
+		memcpy(&fb, &fa, sizeof(fa));
+		memcpy(&expected_fr, &fa, sizeof(fa));
+		memset(&da, 0x5a, sizeof(da));
+		memcpy(&db, &da, sizeof(da));
+		memcpy(&expected_data, &da, sizeof(da));
+		memset(&sa, 0x6b, sizeof(sa));
+		sa.data[0] = 5;
+		memcpy(&sb, &sa, sizeof(sa));
+		memcpy(&before_source, &sa, sizeof(sa));
+		fa.fifo = da.data;
+		fb.fifo = db.data;
+		a.framer = &fa;
+		b.framer = &fb;
+		a.underrun = b.underrun = 7;
+		base_a = alias ? &fa.wr : sa.data;
+		base_b = alias ? &fb.wr : sb.data;
+		pa = base_a;
+		pb = base_b;
+		ra = ref_faxvmi_write_fifo(&a, &pa, (short)request);
+		rb = faxvmi_write_fifo(&b, &pb, (short)request);
+		diff_eq_int("fifo age: return (%ld)", rb, ra, tag);
+		diff_eq_int("fifo age: native accepted extent (%ld)", ra, admitted, tag);
+		diff_eq_int("fifo age: native source advance (%ld)", pa - base_a, admitted, tag);
+		diff_eq_int("fifo age: source advance (%ld)", pb - base_b, pa - base_a, tag);
+		diff_eq_int("fifo age: native owners retained (%ld)",
+			    a.framer == &fa && fa.fifo == da.data, 1, tag);
+		diff_eq_int("fifo age: owners retained (%ld)",
+			    b.framer == &fb && fb.fifo == db.data, 1, tag);
+		memcpy(&fa_state, &fa, sizeof(fa));
+		memcpy(&fb_state, &fb, sizeof(fb));
+		fa_state.fifo = fb_state.fifo = NULL;
+		diff_eq_obj("fifo age: framer differential", struct faxvmi_framer,
+			    &fb_state, &fa_state, tag);
+		memcpy(&state_a, &a, sizeof(a));
+		memcpy(&state_b, &b, sizeof(b));
+		state_a.framer = state_b.framer = NULL;
+		diff_eq_obj("fifo age: VMI differential", struct faxvmi, &state_b, &state_a, tag);
+		diff_eq_obj("fifo age: ring and guards differential", struct fifo_age_buffer,
+			    &db, &da, tag);
+		diff_eq_obj("fifo age: source differential", struct fifo_age_buffer, &sb, &sa, tag);
+		diff_eq_obj("fifo age: native separate source unchanged", struct fifo_age_buffer,
+			    &sa, &before_source, tag);
+		if (admitted) {
+			expected_fr.wr = (unsigned short)((start + 1) % 2);
+			expected_fr.count = 1;
+			expected_data.data[start] = alias ? (unsigned short)(start + 1) : 5;
+		}
+		memset(&expected_vmi, 0, sizeof(expected_vmi));
+		expected_vmi.underrun = admitted ? 0 : 7;
+		diff_eq_obj("fifo age: native full framer state", struct faxvmi_framer,
+			    &fa_state, &expected_fr, tag);
+		diff_eq_obj("fifo age: native full VMI state", struct faxvmi,
+			    &state_a, &expected_vmi, tag);
+		diff_eq_obj("fifo age: native ring and guards", struct fifo_age_buffer,
+			    &da, &expected_data, tag);
+	}
+	diff_eq_int("fifo age: sixteen cases ran (%ld)", cases, 16, cases);
+	return diff_end();
+}
+
 static int
 run_write_fifo(void)
 {
@@ -1100,6 +1197,7 @@ main(void)
 	bad |= run_hdlc_d1073();
 	bad |= run_multicall();
 	bad |= run_write_fifo();
+	bad |= run_write_fifo_age();
 	bad |= run_write_frame();
 	bad |= run_write_frame_fcs();
 
