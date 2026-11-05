@@ -36,6 +36,7 @@ identifies the evidence and tools that need adapting for another target.
 | [Mutation policy](mutation-policy.md) | Optional targeted investigations; no mandatory snapshot refreshes. |
 | [Evidence](evidence.md) | What each form of evidence establishes. |
 | [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
+| [Native graph screen](native-graph-screen.md) | Bounded owner, predicate and local-stack timing nominations with explicit coverage. |
 | [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |
 | `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Adapt after establishing your project's boundary. |
 | `tiers.md` | the five oracles and what each is structurally blind to |

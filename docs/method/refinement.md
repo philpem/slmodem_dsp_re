@@ -100,10 +100,47 @@ not described as unchanged raw data or complete CFG proof. Source/RTL narrative
 claims must be checked against actual object bytes and parsed input hashes.
 Extra High independent review added validation, not a measured efficiency win.
 
-For the next recovery turn, deep-dive v22_originate's predicate producer and
-native byte spill/frame lifetime before touching types. Reopen constructor
+The originate predicate/frame follow-up is recorded below. Reopen constructor
 sharing with a new operation/lifetime/eligibility witness, not another spelling
-or incoming-cursor palette. Read this result and its negative controls first.
+or incoming-cursor palette. Read these results and their negative controls first.
+
+## Native graph timing and the V22 originate follow-up (2026-11-05)
+
+The [originate deep dive](../v22-originate-recovery-20261105.md) retains the
+native early gap clear, absent-arm branch orientation and direct NODE3 output
+word consumption. The size distance improves SIZE160→150, with no new exact
+function.
+C × D and E × CD show why neither a flat isolated grade nor a smaller quotient
+variant settles the source graph. The candidate passes 399 period tests plus
+structural checks; only originate changes among ten TU bodies and only its
+object among 300. Code-table offset changes remain explicitly qualified.
+
+Native SETE-to-memory followed immediately by MOVZBL does not establish a
+source char. Its separate DIV numerator/quotient homes also prevent attributing
+the larger frame solely to the predicate. Gap width/consumer controls and two
+quotient families are now closed; reopen only with a new source/ABI/def-use
+witness. A closer quotient candidate was rejected for the wrong producer and
+comparison graph.
+
+Run [native/reconstruction graph screening](native-graph-screen.md) routinely
+on changed translation units and periodically over the inexact corpus. Compare
+owner, access width, predicates, value ages and branch/call relationships before
+assuming an allocation-only residual. Preserve input hashes, positive and
+negative controls, compared-relation denominators, ambiguous correspondence and
+unsupported effects. The screen nominates investigations; a clean bounded
+subset is not an equivalence verdict. Audit each nomination against native
+instructions, source and valid fixtures before changing reconstruction code.
+Keep period differential and full-TU/data/closure checks as the deciding gates.
+
+The initial 716-symbol/719-copy screen nominates 25 timing/predicate differences
+across 13 copies. Owner relations are compared in 275 copies and local-stack
+relations in 23; these are overlapping subsets. Do not describe 605 admitted
+owner graphs as 605 fully compared functions. The V22 gap positive disappears
+with the retained repair. Next transfer checks are `v22_data`'s local write
+across V22_status, and the FPM PPS/V34 echo entry-read groups. Review scheduling
+and owner identity before interpreting them as defects. The separate
+`null_process` signed-word predicate is a concrete native discrepancy whose
+high-bit count domain still needs a fixture audit.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

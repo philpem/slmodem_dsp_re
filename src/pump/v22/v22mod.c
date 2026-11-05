@@ -1813,10 +1813,9 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 		TxNOP(fp, txsym, txout, (short *)txcount);
 
-		nsym = DemodDataV22(fp, rxin, rxsym, *rxcount);
-		*rxcount = nsym;
+		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 
-		if (nsym != 0) {
+		if (*rxcount != 0) {
 			int n = Detect_1s(rxsym, rxcount,
 					  V22_ORG_DETECT_BPS,
 					  V22_ORG_DETECT_THRESH);
@@ -1901,13 +1900,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 * so nothing here needs to know whether the detector
 			 * fired on this particular block.
 			 */
-			if (detected != 0) {
+			if (detected == 0) {
+				fp->hdx->r08 = (short)(fp->hdx->r08
+						       + V22_BLOCK_MS);
+			} else {
 				if ((unsigned short)fp->hdx->r08
 				    <= V22_ORG_MIN_RUN_MS)
 					fp->hdx->r08 = 0;
-			} else {
-				fp->hdx->r08 = (short)(fp->hdx->r08
-						       + V22_BLOCK_MS);
 			}
 
 			ones = (short)Detect_1s(rxsym, rxcount,
@@ -1945,16 +1944,16 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 					  fp->dsp->rx_count);
 
 		if (*rxcount != 0 && SignalDetect(fp) == 1) {
-			if (detected != 0) {
-				gap = 0;
-				if ((unsigned short)fp->hdx->r08
-				    <= V22_ORG_MIN_RUN_MS)
-					fp->hdx->r08 = 0;
-			} else {
+			gap = 0;
+			if (detected == 0) {
 				struct v22fp_hdx *gap_hdx = fp->hdx;
 				gap = V22_BLOCK_MS;
 				gap_hdx->r08 = (short)(gap_hdx->r08
 						       + V22_BLOCK_MS);
+			} else {
+				if ((unsigned short)fp->hdx->r08
+				    <= V22_ORG_MIN_RUN_MS)
+					fp->hdx->r08 = 0;
 			}
 
 			ones = (short)Detect_1s(rxsym, rxcount,
