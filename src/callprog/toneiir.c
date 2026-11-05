@@ -412,8 +412,8 @@ _iir_filter_create(struct iir_filter *f, int n_a, int n_b, const short *a,
 	for (i = 0; i < n_b; i++)
 		f->b[i] = b[i];
 
-	f->n_b = n_b;
 	f->n_a_minus_1 = n_a - 1;
+	f->n_b = n_b;
 
 	for (i = 0; i < IIR_FILTER_SECTIONS + 1; i++)
 		f->shift[i] = shift[i];

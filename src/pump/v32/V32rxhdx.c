@@ -322,12 +322,16 @@ RxHdxTone(struct v32_modem *modem, short *in, unsigned short *out, unsigned shor
 	if (modem->params.protocol != 1
 	    || (modem->params.options & V32_OPT_0400) != 0
 	    || hdx->state_left > 180) {
+		short detected;
+
 		/* The object passes a fourth argument here; see the header. */
 		FPM_AGC_agc((&hdx->agc), in, *count, 1);
 
-		if (FPM_TONE_detect(HDX(modem)->tone0, in,
-				    (short)*count) == 0)
-			(*V32NextState[HDX(modem)->mode])(modem);
+		detected = FPM_TONE_detect(HDX(modem)->tone0, in,
+				    (short)*count);
+		hdx = HDX(modem);
+		if (detected == 0)
+			(*V32NextState[hdx->mode])(modem);
 	}
 
 	hdx = HDX(modem);

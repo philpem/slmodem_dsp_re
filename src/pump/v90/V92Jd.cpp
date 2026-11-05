@@ -319,64 +319,6 @@ V92Jd::resetCrc()
  */
 
 void
-V92Jd::packJdData()
-{
-	int i, g;
-
-	for (i = 0; i <= 16; i++)
-		bits[i] = 1;
-	bits[V90JD_GROUP1] = 0;
-	bits[V90JD_GROUP2] = 0;
-	bits[V90JD_GROUP3] = 0;
-	bits[68] = 0;
-	bits[69] = 0;
-	bits[70] = 0;
-	bits[71] = 0;
-
-	/*
-	 * And the part V90Jd::getBitVector does not do: six of the second
-	 * rate-mask run and one of the two constellation-size bits are forced
-	 * to zero before the CRC sees them.
-	 */
-	for (i = 0; i <= 5; i++)
-		bits[V90JD_GROUP2 + 7 + i] = 0;
-	bits[V90JD_GROUP2 + 14] = 0;
-
-	for (i = 0; i <= 15; i++)
-		crc[i] = 1;
-
-	for (g = 0; g <= 1; g++) {
-		int k;
-		for (k = 0; k <= 15; k++) {
-			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];
-			int tap3 = (crc[4] + t) & 1;
-			int tap10 = (crc[11] + t) & 1;
-			crc[0] = crc[1];
-			crc[1] = crc[2];
-			crc[2] = crc[3];
-			crc[3] = crc[4];
-			crc[4] = crc[5];
-			crc[5] = crc[6];
-			crc[6] = crc[7];
-			crc[7] = crc[8];
-			crc[8] = crc[9];
-			crc[9] = crc[10];
-			crc[10] = crc[11];
-			crc[11] = crc[12];
-			crc[12] = crc[13];
-			crc[13] = crc[14];
-			crc[14] = crc[15];
-			crc[3] = tap3;
-			crc[10] = tap10;
-			crc[15] = t & 1;
-		}
-	}
-
-	for (i = 0; i <= 15; i++)
-		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
-}
-
-void
 V92Jd::packJdPhaseData()
 {
 	int i, g;
@@ -436,18 +378,62 @@ V92Jd::packJdPhaseData()
 		phaseBits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
 }
 
-unsigned char *
-V92Jd::getJdBitVector()
+void
+V92Jd::packJdData()
 {
-	packJdData();
-	return bits;
-}
+	int i, g;
 
-unsigned char *
-V92Jd::getJdPhaseBitVector()
-{
-	packJdPhaseData();
-	return phaseBits;
+	for (i = 0; i <= 16; i++)
+		bits[i] = 1;
+	bits[V90JD_GROUP1] = 0;
+	bits[V90JD_GROUP2] = 0;
+	bits[V90JD_GROUP3] = 0;
+	bits[68] = 0;
+	bits[69] = 0;
+	bits[70] = 0;
+	bits[71] = 0;
+
+	/*
+	 * And the part V90Jd::getBitVector does not do: six of the second
+	 * rate-mask run and one of the two constellation-size bits are forced
+	 * to zero before the CRC sees them.
+	 */
+	for (i = 0; i <= 5; i++)
+		bits[V90JD_GROUP2 + 7 + i] = 0;
+	bits[V90JD_GROUP2 + 14] = 0;
+
+	for (i = 0; i <= 15; i++)
+		crc[i] = 1;
+
+	for (g = 0; g <= 1; g++) {
+		int k;
+		for (k = 0; k <= 15; k++) {
+			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+	}
+
+	for (i = 0; i <= 15; i++)
+		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
 }
 
 void
@@ -523,6 +509,162 @@ V92Jd::unPackJdPhaseReset()
  * two displacements changed.
  * ===========================================================================
  */
+
+int
+V92Jd::unPackJdPhaseData(int bit)
+{
+	unsigned char ones = 0;
+	unsigned char n;
+	int sum;
+	int i, k;
+
+	if (bit)
+		ones = (unsigned char)(unpack[0] + 1);
+
+	switch (unpackPhaseWord) {
+	case 0:
+		unpack[0] = ones;
+		if (ones > 16)
+			unpackPhaseWord = 1;
+		break;
+
+	case 1:
+		if (bit) {
+			unPackJdPhaseReset();
+			break;
+		}
+		unpack[0] = ones;
+		unpackPhaseWord = 2;
+		break;
+
+	case 2:
+		n = unpack[1];
+		phaseBits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 16)
+			unpackPhaseWord = 3;
+		break;
+
+	case 3:
+		if (bit) {
+			unPackJdPhaseReset();
+			break;
+		}
+		unpack[0] = ones;
+		unpackPhaseWord = 4;
+		break;
+
+	case 4:
+		/* Twelve here, as V90Jd::unPackData has it. */
+		n = unpack[1];
+		phaseBits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 28)
+			unpackPhaseWord = 5;
+		break;
+
+	case 5:
+		n = unpack[1];
+		phaseBits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 32)
+			unpackPhaseWord = 6;
+		break;
+
+	case 6:
+		if (bit) {
+			unPackJdPhaseReset();
+			break;
+		}
+		unpack[0] = ones;
+		unpackPhaseWord = 7;
+		break;
+
+	case 7:
+		n = unpack[1];
+		phaseBits[n] = (unsigned char)bit;
+		n++;
+		if (n != 48) {
+			unpack[1] = n;
+			unpack[0] = ones;
+			break;
+		}
+
+		for (i = 0; i <= 15; i++)
+			crc[i] = 1;
+
+		for (k = 0; k <= 31; k++) {
+			int t = phaseBits[k] + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+
+		sum = 0;
+		for (i = 0; i <= 15; i++) {
+			int d = crc[i] - phaseBits[32 + i];
+
+			sum += d < 0 ? -d : d;
+		}
+		if (sum != 0) {
+			unPackJdPhaseReset();
+			break;
+		}
+
+		unpack[1] = 48;
+		unpack[0] = ones;
+		unpackPhaseWord = 8;
+		break;
+
+	case 8:
+		/* The four trailing bits, then the phase message's own tag. */
+		n = unpack[1];
+		n++;
+		if (n != 0x34) {
+			unpack[1] = n;
+			unpack[0] = ones;
+			break;
+		}
+		if (phaseBits[28] != 1) {
+			unPackJdPhaseReset();
+			break;
+		}
+		unpack[1] = 0x34;
+		unpack[0] = ones;
+		return 1;
+
+	default:
+		unpack[0] = ones;
+		break;
+	}
+
+	return 0;
+}
+
 int
 V92Jd::unPackJdData(int bit)
 {
@@ -626,8 +768,21 @@ V92Jd::unPackJdData(int bit)
 			int tap3 = (crc[4] + t) & 1;
 			int tap10 = (crc[11] + t) & 1;
 
-			for (i = 0; i <= 14; i++)
-				crc[i] = crc[i + 1];
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
 			crc[3] = tap3;
 			crc[10] = tap10;
 			crc[15] = t & 1;
@@ -674,144 +829,16 @@ V92Jd::unPackJdData(int bit)
 	return 0;
 }
 
-int
-V92Jd::unPackJdPhaseData(int bit)
+unsigned char *
+V92Jd::getJdBitVector()
 {
-	unsigned char ones = 0;
-	unsigned char n;
-	int sum;
-	int i, k;
+	packJdData();
+	return bits;
+}
 
-	if (bit)
-		ones = (unsigned char)(unpack[0] + 1);
-
-	switch (unpackPhaseWord) {
-	case 0:
-		unpack[0] = ones;
-		if (ones > 16)
-			unpackPhaseWord = 1;
-		break;
-
-	case 1:
-		if (bit) {
-			unPackJdPhaseReset();
-			break;
-		}
-		unpack[0] = ones;
-		unpackPhaseWord = 2;
-		break;
-
-	case 2:
-		n = unpack[1];
-		phaseBits[n] = (unsigned char)bit;
-		unpack[0] = ones;
-		n++;
-		unpack[1] = n;
-		if (n == 16)
-			unpackPhaseWord = 3;
-		break;
-
-	case 3:
-		if (bit) {
-			unPackJdPhaseReset();
-			break;
-		}
-		unpack[0] = ones;
-		unpackPhaseWord = 4;
-		break;
-
-	case 4:
-		/* Twelve here, as V90Jd::unPackData has it. */
-		n = unpack[1];
-		phaseBits[n] = (unsigned char)bit;
-		unpack[0] = ones;
-		n++;
-		unpack[1] = n;
-		if (n == 28)
-			unpackPhaseWord = 5;
-		break;
-
-	case 5:
-		n = unpack[1];
-		phaseBits[n] = (unsigned char)bit;
-		unpack[0] = ones;
-		n++;
-		unpack[1] = n;
-		if (n == 32)
-			unpackPhaseWord = 6;
-		break;
-
-	case 6:
-		if (bit) {
-			unPackJdPhaseReset();
-			break;
-		}
-		unpack[0] = ones;
-		unpackPhaseWord = 7;
-		break;
-
-	case 7:
-		n = unpack[1];
-		phaseBits[n] = (unsigned char)bit;
-		n++;
-		if (n != 48) {
-			unpack[1] = n;
-			unpack[0] = ones;
-			break;
-		}
-
-		for (i = 0; i <= 15; i++)
-			crc[i] = 1;
-
-		for (k = 0; k <= 31; k++) {
-			int t = phaseBits[k] + crc[0];
-			int tap3 = (crc[4] + t) & 1;
-			int tap10 = (crc[11] + t) & 1;
-
-			for (i = 0; i <= 14; i++)
-				crc[i] = crc[i + 1];
-			crc[3] = tap3;
-			crc[10] = tap10;
-			crc[15] = t & 1;
-		}
-
-		sum = 0;
-		for (i = 0; i <= 15; i++) {
-			int d = crc[i] - phaseBits[32 + i];
-
-			sum += d < 0 ? -d : d;
-		}
-		if (sum != 0) {
-			unPackJdPhaseReset();
-			break;
-		}
-
-		unpack[1] = 48;
-		unpack[0] = ones;
-		unpackPhaseWord = 8;
-		break;
-
-	case 8:
-		/* The four trailing bits, then the phase message's own tag. */
-		n = unpack[1];
-		n++;
-		if (n != 0x34) {
-			unpack[1] = n;
-			unpack[0] = ones;
-			break;
-		}
-		if (phaseBits[28] != 1) {
-			unPackJdPhaseReset();
-			break;
-		}
-		unpack[1] = 0x34;
-		unpack[0] = ones;
-		return 1;
-
-	default:
-		unpack[0] = ones;
-		break;
-	}
-
-	return 0;
+unsigned char *
+V92Jd::getJdPhaseBitVector()
+{
+	packJdPhaseData();
+	return phaseBits;
 }

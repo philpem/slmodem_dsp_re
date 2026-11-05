@@ -8580,3 +8580,58 @@ there too, and demonstrate rejection without the review and acceptance with
 it. PR293's V32 unsigned-count correction initially missed this second record;
 its existing period and peephole evidence justified the record without changing
 source or weakening the comparator. Revalidate these pins when rebasing.
+
+
+## Recover the predecessor graph before interpreting scratch colour
+
+The November 5 GCC campaign recovered both `V92Jd` vector getters by combining
+two independently evidenced properties: native function emission order and
+constant-index CRC shifts in both unpackers. The blob promotes sixteen CRC
+words across the bit loop; the reconstructed indexed shift loop prevented that
+promotion. Expanding the fifteen shift assignments restores the native
+80-byte frame and reduces the unpackers' size gaps from 455 and 413 bytes to
+43 bytes each. The packers already used this form.
+
+Order and source structure must be reviewed together. Native order alone did
+not recover the getters with the old predecessor bodies. The combined change
+gains both getters, retains all twelve previous exact bodies, and changes six
+of the TU's twenty-one bodies. Two packers change first at peephole2; their
+earlier instruction graphs are unchanged. The final capture contains forty
+supported SI scratch searches. A model calibrated on the old instruction
+graph cannot simply predict a new graph's searches.
+
+Moving functions also moves anonymous jump-table targets. Raw allocated-data
+inequality is therefore a prompt to audit relocation meaning: all nineteen
+entries remain within the same two unpackers, and canonical data, bindings and
+unrelated consumers are unchanged. Native-machine probes agree on 564
+synthetic component cases; deliberately wrong table entries fail in 48 cases.
+These probes supplement the 99,446-check period fixture, whose reset and framed
+stream cases provide component lifecycle coverage. They do not establish
+public modem reachability for planted decoder states.
+
+Two smaller recoveries illustrate the boundary of the scratch model.
+`_iir_filter_create` becomes exact after publishing `n_a_minus_1` before `n_b`
+in source. Both count values already remain live through the coefficient
+copies. The complete two-order experiment changes only this 195-byte body;
+the sixteen-event TU scratch trace is identical and the function has no
+scratch searches. Its register difference belongs to ordinary allocation.
+The final machine store order still differs from the source statement order,
+so exact output establishes a valid preimage, not unique original spelling.
+
+`RxHdxTone` instead needed an owner capture: retain the detector's short
+result, reload `modem->hdx`, then test the result and dispatch through the
+captured owner's mode. The native instructions place that reload before the
+branch. Keep the subsequent reload after the optional callback too: the
+callback can replace the owner. This recovers the complete 246-byte function
+while retaining the other thirteen bodies. Focused period controls pass
+806,302 checks for the IIR consumers and 3,686 for the HDX fixture; the latter
+includes owner replacement during the callback.
+
+Reproduction evidence is under `build/gcc3-wave-jd`, `build/gcc3-wave-tu`,
+`build/gcc3-wave-fse` and `build/gcc3-overnight/checkpoint1`. Compare each
+candidate against the frozen 300-object campaign baseline before interpreting
+the aggregate exact count.
+
+The combined checkpoint passes `make phase`: 393 period tests, zero failures.
+Fresh production comparison covers all 1,852 functions and moves EXACT from
+1,110 to 1,114, with no exact losses; REGALLOC falls from 31 to 29.
