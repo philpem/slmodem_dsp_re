@@ -1445,4 +1445,9 @@ clean:
 
 # Auto-generated header dependencies (-MMD), so editing a header rebuilds
 # everything that includes it.
+# Pure variable queries do not build anything. Avoid walking experiment trees
+# for their dependency files, including period.sh's nested source-list queries.
+# A default invocation or any non-query goal still loads all dependencies.
+ifneq ($(if $(MAKECMDGOALS),$(filter-out print-%,$(MAKECMDGOALS)),default),)
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
+endif
