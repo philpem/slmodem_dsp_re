@@ -1,6 +1,6 @@
-> Current policy: mutation execution is optional and targeted. Historical
-> examples below do not require snapshot refreshes or campaigns. See the
-> [mutation policy](mutation-policy.md).
+> Current policy: mutation suites, anchors and snapshots are deprecated and
+> excluded from routine gates. The historical examples below describe earlier
+> evidence, not current maintenance requirements. See [the retirement policy](mutation-policy.md).
 
 # The five oracles, and what each cannot see
 

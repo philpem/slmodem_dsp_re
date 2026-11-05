@@ -78,15 +78,13 @@ Opt-in, off by default, and not part of `make phase`. Read
 **[docs/blobfix.md](docs/blobfix.md)** before adding a third: the mechanism
 suits a *missing value* and is actively unsafe against a *missing decision*.
 
-## Mutation maintenance
+## Retired mutation tooling
 
-Mutation execution is optional and targeted. Builds, commits and merges do not
-require snapshot refreshes or whole-tree mutation campaigns. `make phase`
-retains the period differential and structural checks; `make portability`
-retains the modern compiler, 64-bit, interop and coverage checks. The optional
-`make mutation-snapshot` inspects historical bookkeeping without running mutants.
-See the [mutation policy](docs/method/mutation-policy.md) for costs, evidence
-limits and targeted commands.
+Mutation suites, anchor checks and snapshot maintenance are deprecated and
+excluded from routine development and CI. Do not maintain or run them unless
+explicitly requested. Reconstruction validation uses the period differential
+and structural/provenance checks; portability remains a separate tier. See
+[the retirement policy](docs/method/mutation-policy.md).
 
 ## Ground rules
 

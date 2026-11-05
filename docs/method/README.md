@@ -33,7 +33,7 @@ identifies the evidence and tools that need adapting for another target.
 | [Experiment design](experiment-design.md) | Baseline controls, crossed experiments and stopping conditions. |
 | [GCC model search](gcc3-model-search.md) | Calibrated scratch-register predictions, bounded source-order search and full-TU forward verification. |
 | [Recovery tooling pilot](recovery-pilot.md) | Interaction-aware candidate checks, memory records and the Sol–Astra evaluation protocol and status. |
-| [Mutation policy](mutation-policy.md) | Optional targeted investigations; no mandatory snapshot refreshes. |
+| [Mutation retirement](mutation-policy.md) | Deprecated tooling; no routine execution, anchor or snapshot maintenance. |
 | [Evidence](evidence.md) | What each form of evidence establishes. |
 | [Equivalence](equivalence.md) | Function identity and bounded/composite proof. |
 | [Native graph screen](native-graph-screen.md) | Bounded owner, predicate and local-stack timing nominations with explicit coverage. |

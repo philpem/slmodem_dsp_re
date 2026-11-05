@@ -235,11 +235,10 @@ make phase J=4
 The focused binary is an example; choose the test for the component being
 changed. `make phase` runs the period differential and structural gates;
 `make portability` requests the separate modern compiler and interoperability
-checks. Use [targeted mutation](mutation-policy.md) optionally when it answers
-a named fixture-sensitivity question; keep uncaught, unusable and equivalent
-cases visible. No snapshot refresh or mutation campaign is a release requirement. Diagnostic transcript
-tests and independent conformance tests answer further questions; the
-[oracle guide](tiers.md) explains their boundaries.
+checks. [Mutation tooling is retired](mutation-policy.md); use meaningful
+period differential fixtures and documented construction histories. Diagnostic
+transcript tests and independent conformance tests answer further questions;
+the [oracle guide](tiers.md) explains their boundaries.
 
 Record the reference and source revisions, compiler commands, tested domain,
 results and unresolved questions with each accepted change. Count missing

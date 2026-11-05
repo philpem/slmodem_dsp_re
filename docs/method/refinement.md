@@ -36,6 +36,16 @@ witness before transferring a source change. Record where the lesson applies,
 where it fails, and the next discriminating test. Transfer a negative lesson
 as a constraint too; do not repeat the parked function's closed palette.
 
+## Mutation maintenance is retired (2026-11-05)
+
+The owner reiterated that mutation tests are deprecated. Remove them from
+routine gates and CI; do not reanchor suites or refresh snapshots unless the
+owner explicitly requests a named legacy investigation. Earlier maintenance
+accounts below are historical outcomes, not current work requirements. The
+[retirement policy](mutation-policy.md) supersedes the older retained-anchor
+rule. Period differential, valid-history regression tests and apparatus
+negative controls remain the reconstruction authority.
+
 ## V22, V92CP and HDX deep-dive outcomes (2026-11-05)
 
 Local commit `4246de2a4`
@@ -9304,7 +9314,7 @@ remain non-exact.
 | Follow an apparently handled option into the callee's request | V.17 short-training codes were recognized and logged but their request flag was omitted. | Observe the destination request/configuration, alternate long and short constructor/control histories, and demonstrate failure before correction. The added lifecycle is not proof of physical modem training. |
 | Model only captured compiler mechanisms | HI/SI general-register and QI/q searches replay; V90MP's native order predicts ESI before compilation. | Pin compiler/image/input, freeze predictions first, verify eligibility/event identity on a fresh trace, and require ordinary/repeated/observed output equality. Unsupported modes/classes fail closed. |
 | Separate data claims that often look alike | P3 tables keep owners but change 41 relative targets; V90MP keeps targets but changes string padding; reset reorders strings. | Report raw bytes, masked payload/layout, code owners, exact relative targets, and string payload/consumer audits separately. Owner equality is not target equality or CFG equivalence. |
-| Preserve a fault's scope when source calls split or merge | V.8's formerly shared diagnostic faults must cover both source arms; reset call anchors move with their branches. | Reanchor the intended fault, not just any unique substring. Report structural anchors separately from optional mutation execution and historical snapshot results. |
+| Preserve a fault's scope when source calls split or merge | V.8's formerly shared diagnostic faults must cover both source arms; reset call anchors move with their branches. | Historical detector lesson: verify the intended operation and owner. Mutation anchors and snapshots are retired from routine work. |
 
 Three operational lessons are part of the method. Pure Make variable queries
 must not recursively walk all experiment dependency files; the query guard's

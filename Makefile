@@ -367,7 +367,7 @@ TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO)
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs mutation-snapshot all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period linkexc
+.PHONY: firewall strings offsets refs all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period linkexc
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -923,28 +923,11 @@ debugcov:
 #
 #     git log --merges -1 --format=%P | tr ' ' '\n' | \
 #         xargs -I{} tools/refcheck.py --since {}
+# Mutation suites and anchor/snapshot maintenance are deprecated. This target
+# validates citations only; source recovery is gated by period differential.
 refs:
-#
-# BOTH RUN, THEN THE TARGET FAILS.  As two plain recipe lines, a red
-# refcheck aborted the target and anchorcheck never ran -- so when the V.34
-# field rename detached 33 mutation anchors AND left two dangling finding
-# references, the gate printed only the references and the 33 anchors were
-# invisible.  anchorcheck had always been able to see them (a detached
-# anchor "matches 0 time(s)", which is not exactly once); it was simply
-# never reached.  A red gate must report everything it knows, not just the
-# first thing that went wrong.  Finding 7002.
-#
 	@$(PYTHON) tools/ci/test_refcheck.py
-	@rc=0; $(PYTHON) tools/refcheck.py || rc=1; \
-	 $(PYTHON) tools/anchorcheck.py || rc=1; \
-	 exit $$rc
-#
-# Optional inspection of historical mutation records; hashing only, no builds.
-# No reconstruction, portability or merge gate requires a snapshot refresh.
-# Source-anchor validation in refs remains mandatory. See issue #296 and
-# docs/method/mutation-policy.md for targeted execution and evidence limits.
-mutation-snapshot:
-	@$(PYTHON) tools/mutsnap.py --check
+	@$(PYTHON) tools/refcheck.py
 
 # Everything the historical full boundary checked, split into the default
 # reconstruction gate (`make phase`) and the explicit portability gate

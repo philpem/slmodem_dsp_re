@@ -1092,7 +1092,7 @@ and the reviewed head body/relocation fingerprint remains unchanged.
 
 [PR #297](https://github.com/philpem/slmodem_dsp_re/pull/297) has landed the
 [mutation policy](mutation-policy.md), closing the separate policy follow-up.
-Whole-tree mutation execution and snapshot refresh are optional; period
+Mutation execution and snapshot maintenance are deprecated; period
 differential correctness and structural anchor checks remain required.
 
 Repository cleanup removed 33 unchecked-out branches whose tips are ancestors
