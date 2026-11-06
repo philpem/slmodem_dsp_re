@@ -537,12 +537,57 @@ selected source both pass. The existing 800 synthetic cases remain labelled;
 partial session backing and absence of diagnostic reentry prevent lifecycle
 or pointer-replacement claims. Retain those limits alongside the full period gate.
 
-Next transfer to VPcmV34InitiateHangUp: native captures p3548 before diagnostics
-at 0x6be1, clears rate members through obj+4, and publishes session clr before
-loading its demodulator at 0x6c0f/0x6c16. Source currently captures late and its
-machine code reverses the latter ages. Cross supported properties, check every
-intervening publication/alias and valid fixture boundary, and review the entire
-TU. Preserve intermediate collateral and attempt coupled repairs.
+The HangUp transfer below completes that next step.
+
+## HangUp: status capture among publications and explained collateral (2026-11-06)
+
+The [HangUp wave](../hangup-recovery-20261106.md) recovers EXACT258 from
+SIZE24. Early session capture and the existing interior-owner view each reach
+SIZE4; both give BYTES36 at native size. Crossing native session-before-receiver
+acquisition with explicit status capture after rate_want and before min/max
+clears closes the target. Keep all isolated and combined controls. Status capture alone leaves HangUp's
+body literal-identical but changes InitMOH, so unchanged target bytes do not
+establish an inert whole-TU control. An emitted
+load/store age can depend on the complete ownership graph rather than a missing
+source ordering statement.
+
+Native witnesses are p3548 capture at 0x6be1, the obj+4 rate owner, and status
+read between the rate publications. Source already writes clr before loading
+the demodulator; baseline sched2 reverses them and the selected graph restores
+the native order without a barrier. Genuine field offsets are disjoint; no
+behavioral old-fail or aliasing bug follows from these instruction ages alone.
+
+Keep the complete byte-view extent explicit: selected engine is complete obj
+plus offsetof(progress), not a member-derived byte pointer walked beyond that
+member. Both spellings give the same complete TU object. Nineteen period layout
+assertions preserve the resolved offsets and widths; no original engine type is
+uniquely established. AGENTS now records this extent check alongside address
+and width preservation.
+
+The full 56-body audit preserves 54 literal bodies and every protected function.
+Unchanged-source InitMOH remains SIZE32 but changes lanes. Its normalized RTL
+agrees through flow2; peephole2 first differs. Two 362-event observations show
+identical inputs for its 13 events but incoming cursor 50 versus 3; conditional
+replay explains the selected choices. The cursor later reconverges. Trace and
+retain this collateral instead of rejecting the recovered predecessor or
+inventing operations to fit the neighbor. Raw rodata 75/89 addends shift 32 bytes;
+all 89 ordered owner-relative targets and boundaries remain unchanged.
+
+The new 18 paired status-0 observations/524 checks reuse the existing 126-region
+registered-create graph, including exported reinit and repeated requests. They
+cover a constructed component boundary, not negotiated status 1/2 or diagnostic
+reentry. Mode 2's four static aliases are checked; other learned masked bytes
+are compared raw, while old all-twelve checks remain. Old and selected source
+both pass. Owner/stack target screens each pair only two anchors and compare
+zero relations, so their clean subset is not an equivalence conclusion.
+
+Next transfer to InitMOH: native joins the zeroed/argument flag at the common
+moh_path_sel store 0x6d27 (zero arm 0x6e3b) and retains obj+4 across
+v34handshakinit to publish progress 7 at 0x6d89. Current source duplicates the flag
+store and uses direct progress access. Cross those independently witnessed
+properties after checking intervening publications, aliases, argument ages and
+fixture domains. This is a fresh source graph hypothesis, not a request to fit
+its already explained scratch lanes.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

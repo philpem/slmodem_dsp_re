@@ -2780,18 +2780,20 @@ void
 VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *engine = (unsigned char *)obj + __builtin_offsetof(struct v34_object, progress);
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	struct v34_receiver *rx = &obj->receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"VPcmV34Main: VPcmV34InitiateHangUp called !\r\n");
 
-	obj->rate_want = 0;
-	obj->rate_min = 0;
-	obj->rate_max = 0;
+	VPCM_ENGINE_INT(engine, rate_want) = 0;
+	int status = obj->status;
+	VPCM_ENGINE_INT(engine, rate_min) = 0;
+	VPCM_ENGINE_INT(engine, rate_max) = 0;
 
-	if ((unsigned)(obj->status - 1) <= 1) {
-		VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	if ((unsigned)(status - 1) <= 1) {
 		V90Demodulator *demod;
 
 		sess->clr = 1;

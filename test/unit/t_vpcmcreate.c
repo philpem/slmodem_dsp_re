@@ -121,6 +121,8 @@ extern int ref_VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
  */
 extern int VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
 			 int sessionType);
+extern void VPcmV34InitiateHangUp(void *obj);
+extern void ref_VPcmV34InitiateHangUp(void *obj);
 
 /* --- the configuration, all of it derived; docs/configuration.md ---------- */
 
@@ -345,13 +347,19 @@ alias_report(void)
  * cannot be named here, which is why the contents check exists at all.
  */
 static int
-check_alias_words(void)
+check_alias_words(int hangup_only)
 {
 	int k, bad = 0;
 
 	for (k = 0; k < NALIAS; k++) {
 		const void *a, *b;
 		size_t w = (size_t)ROOT_V34 + aliasword[k].off;
+
+		if (hangup_only && aliasword[k].off != 0x0a28
+		    && aliasword[k].off != 0x0e48
+		    && aliasword[k].off != 0x2608
+		    && aliasword[k].off != 0x2a28)
+			continue;
 
 		memcpy(&a, ours[root_idx] + w, sizeof a);
 		memcpy(&b, (const unsigned char *)reg[root_idx] + w, sizeof b);
@@ -831,7 +839,7 @@ run_create(void)
 	diff_eq_int("some case changed the graph", changed > 0 ? 1 : 0, 1,
 		    changed);
 	diff_eq_int("and the twelve root alias words were still alias pairs"
-		    " after the sweep (%ld bad)", check_alias_words(), 0, 0);
+		    " after the sweep (%ld bad)", check_alias_words(0), 0, 0);
 	diff_eq_int("and no case was reported as differing (%ld)", reported, 0,
 		    reported);
 
@@ -1075,7 +1083,7 @@ run_alias_words(void)
 	diff_eq_int("v34handshakinit installs twelve alias words (%ld)", w, 12,
 		    w);
 	diff_eq_int("and every one of the twelve is really an alias pair (%ld"
-		    " bad)", check_alias_words(), 0, 0);
+		    " bad)", check_alias_words(0), 0, 0);
 	n = graph_diff_live(ours, 1);
 	diff_eq_int("and disagrees on nothing else (%ld)", n == 0 ? 1 : 0, 1,
 		    n);
@@ -1099,6 +1107,132 @@ run_alias_words(void)
 
 	graph_restore();
 
+	return diff_end();
+}
+
+/*
+ * A HangUp history on the existing registered-create graph.  No states are
+ * planted: history 0 uses ops->create's output, and histories 1/2 reinitialize
+ * it with the exported constructor for the two V.34 roles.  These histories
+ * all leave status 0.  They cover the non-PCM request boundary and a repeated
+ * request, not negotiated status 1/2, audio processing, or diagnostic reentry.
+ * Each implementation starts from the same restored, blob-created graph.
+ */
+static int
+hangup_int(unsigned off)
+{
+	int v;
+	memcpy(&v, v34obj + off, sizeof v);
+	return v;
+}
+
+static int
+hangup_short(unsigned off)
+{
+	short v;
+	memcpy(&v, v34obj + off, sizeof v);
+	return v;
+}
+
+/* Keep every learned exclusion outside preinitdigital's four words visible. */
+static long
+hangup_unchanged_alias_diff(void)
+{
+	int i;
+	size_t j;
+	long bad = 0;
+	for (i = 0; i < nreg; ++i)
+	for (j = 0; j < regsz[i]; ++j) {
+		size_t off = j - ROOT_V34;
+		if (i == root_idx
+		    && ((off >= 0x0a28 && off < 0x0a2c)
+			|| (off >= 0x0e48 && off < 0x0e4c)
+			|| (off >= 0x2608 && off < 0x260c)
+			|| (off >= 0x2a28 && off < 0x2a2c)))
+			continue;
+		if (is_alias_byte(i, j)
+		    && ours[i][j] != ((unsigned char *)reg[i])[j])
+			++bad;
+	}
+	return bad;
+}
+
+static int
+run_hangup_history(void)
+{
+	int history, level, requests, side, k;
+	int cases = 0;
+	long calls = 0;
+
+	diff_begin("VPcmV34InitiateHangUp: constructed status-0 histories");
+	for (history = 0; history < 3; ++history)
+	for (level = 0; level < 3; ++level)
+	for (requests = 1; requests <= 2; ++requests) {
+		long tag = history * 100 + level * 10 + requests;
+		for (side = 0; side < 2; ++side) {
+			int rate_now;
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0,
+						  runtime, 0);
+			diff_eq_int("HangUp constructed status", hangup_int(0),
+				    0, tag);
+			rate_now = hangup_int(0x228);
+			if (side == 0) {
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			for (k = 0; k < requests; ++k) {
+				if (side == 0)
+					VPcmV34InitiateHangUp(v34obj);
+				else
+					ref_VPcmV34InitiateHangUp(v34obj);
+				++calls;
+			}
+			diff_eq_int("HangUp progress", hangup_int(4), 6, tag);
+			diff_eq_int("HangUp mode", hangup_int(0x2218), 5, tag);
+			diff_eq_int("HangUp rate min", hangup_int(0x220), 0, tag);
+			diff_eq_int("HangUp rate max", hangup_int(0x224), 0, tag);
+			diff_eq_int("HangUp rate want", hangup_int(0x22c), 0, tag);
+			diff_eq_int("HangUp keeps current rate", hangup_int(0x228),
+				    rate_now, tag);
+			diff_eq_int("HangUp bad run", hangup_short(0x4bc), 0, tag);
+			diff_eq_int("HangUp bad long run", hangup_short(0x4be),
+				    0, tag);
+			diff_eq_int("HangUp good run", hangup_short(0x4c0), 0, tag);
+			if (side == 0)
+				graph_save_ours();
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 1) != 0)
+			report_first_diff("HangUp constructed graph", ours, 1);
+		diff_eq_int("HangUp constructed graph", graph_diff_live(ours, 1),
+			    0, tag);
+		diff_eq_int("HangUp shell static aliases", check_alias_words(1), 0,
+			    tag);
+		diff_eq_int("HangUp unchanged static aliases",
+			    hangup_unchanged_alias_diff(), 0, tag);
+		diff_eq_int("HangUp transcript complete ours",
+			    dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("HangUp transcript complete blob",
+			    dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("HangUp diagnostic call boundaries",
+			    dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("HangUp diagnostic bytes",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("HangUp diagnostics active ours",
+			    dsplib_debug_capture_lines(0) > 0, level > 1, tag);
+		diff_eq_int("HangUp diagnostics active blob",
+			    dsplib_debug_capture_lines(1) > 0, level > 1, tag);
+		++cases;
+	}
+	diff_eq_int("HangUp constructed history case denominator", cases, 18, 0);
+	diff_eq_int("HangUp constructed call denominator", calls, 54, 0);
+	graph_restore();
 	return diff_end();
 }
 
@@ -1126,6 +1260,7 @@ main(void)
 	rc |= run_alias_words();
 	rc |= run_virgin_vs_reinit();
 	rc |= run_create();
+	rc |= run_hangup_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

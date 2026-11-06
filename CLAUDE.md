@@ -340,6 +340,10 @@ before interpreting code-generation changes. A member-derived displacement
 can retain named-field evidence when native code uses an interior owner base;
 it does not identify a unique original type. Correct struct assertions alone
 do not prove that a use selected the correct member.
+For an interior byte view, start from the complete owner and add the checked
+member offset. A byte pointer obtained from a subobject does not itself establish
+the extent needed to walk the rest of its owner. Keep that extent explicit even
+when both address spellings compile to identical bytes.
 
 The V.32 status/control audit found five wrong field selections introduced by
 one typed-owner conversion: a clear moved from HDX `+0x44` to `+0x46`, and status
@@ -685,6 +689,9 @@ the previous exact set in Git history, and rebase the current ratchet explicitly
 after reviewing the complete lost/gained sets. Do not silently lower the floor,
 mask losses with gains, widen tolerances, or add a period allow-list. Unexpected
 future losses must still fail the ratchet and trigger investigation.
+
+An unchanged target body does not make a source control inert; check later
+emitted functions too.
 
 Finish structural refinement before compensating for a neighbour's register
 choices. For example, a preceding function can change the persistent peephole
