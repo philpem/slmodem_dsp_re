@@ -2,6 +2,8 @@
  * Offsets in comments are complete v34_object offsets, not prefix offsets.
  * This file intentionally has no include guard. */
 
+#include "dsplib/v34_dc_control.h"
+
 	/*
 	 * An int the shell polls: `VPcmV34InitiateHangUp`,
 	 * `VPcmV34InitiateRateRenegotiation` and `VPcmV34SetV90RateReneg` all
@@ -160,9 +162,12 @@
 	 * `dc_count` is read zero-extending only (`PROG_U16`, `movzwl`), so it
 	 * is unsigned while the other two are signed.
 	 */
-	unsigned short dc_count;				/* +0x0254 */
-	short dc_est;					/* +0x0256 */
-	int dc_acc;					/* +0x0258 */
+	union {
+		struct v34_dc_control dc_control;
+		struct {
+#include "dsplib/v34_dc_control_fields.h"
+		};
+	};
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * `dmadelay` is the base the echo filter's lag is measured from,

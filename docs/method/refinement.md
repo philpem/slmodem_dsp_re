@@ -690,6 +690,68 @@ uncompared; do not restart a type or store-order palette after a clean bounded
 subset. Component-created Retrain/direct-helper histories supplement the older
 synthetic probes without claiming negotiated PCM reachability.
 
+## Delays and typed-owner transfer: five promotions (2026-11-06)
+
+The [next wave](../delays-retrain-recovery-20261106.md) recovers SetDelays
+EXACT259, SetMaxBlockLength EXACT42, SetTimeOut REGALLOC30 and both
+MaxUpstreamRateIndex entry points REGALLOC123. Those five promotions are
+separate from Retrain's remaining BYTES31. The five-promotion source passes
+399 period tests plus structural checks before the final DC-model combination.
+Use the report's final gate/closure evidence rather than that intermediate run.
+
+Delays needs two independent properties. A reference to its actual dmadelay
+short restores narrow alias metadata across the store and the debug PRE edge.
+Repeated root-member expressions through the formal unify the first config
+read with later reads in GCSE's expression table. The cached cast pointer's
+initial owner pseudo had split that identity. Baseline, member-reference only,
+direct-root only and both give SIZE26 / BYTES116 / SIZE26 / EXACT259. Four
+ordinary/dump controls reproduce literally. Manual caching across diagnostics
+instead removes native config reloads and is rejected. A root reference or
+named embedded dmadelay spelling alone is neutral. Do not reduce this to an
+alias-set number or infer a unique original C++ reference declaration.
+
+Transfer the existing typed engine only with a fresh native root+4 witness.
+SetMaxBlockLength then becomes EXACT42 without changing any neighbour.
+SetTimeOut needs that owner *and* deadline computation before the sample clear:
+owner alone BYTES20, early product alone SIZE3, both REGALLOC30. Preserve the
+unsigned wrapped multiply. Both MaxUpstream copies become REGALLOC123, retaining
+the signed receiver comparison, fresh config/session reads and diagnostics.
+The combined five promotions do not automatically recover another neighbour.
+The exact Delays helper does repair its inline Retrain debug reuse; measure
+that effect separately from a persistent allocator-state hypothesis.
+
+Retrain exposes one genuine eight-byte DC group: count16, estimate16 and
+accumulator32 at engine+0x250/+0x252/+0x254. A real nested POD owner with flat
+compatibility retains both the interior address and field metadata. Accessing
+all three through that owner restores the native DC block; mixed flat/typed
+views do not. Header-only is literal-neutral on the tested full TU. Removing
+the redundant byte-formal copy and using the native session-before-receiver
+capture order restores request transport and frame homes. Neither is a formal
+type change. The first switch shares one widened diagnostic conversion; its
+default arm keeps the independent native conversion. All properties are crossed
+with the exact Delays helper and the five promoted functions.
+
+The final native/current Retrain pair has 64 reachable blocks, 97 edges,
+35 guards, 14 calls and 305 reachable instructions, with 30 strictly validated
+relocation fields. This is a complete CFG and residual review, not exhaustive
+value-domain equivalence. Scratch lanes and two independent scheduling groups
+remain. Root status and receiver publication occupy disjoint fields of the
+same valid complete object; swapping their compare/store order alone cannot
+change the read value. Detector y2/x1 clears are likewise disjoint. Do not call
+these demonstrated behavior defects or weaken REGALLOC to absorb scheduling.
+Snapshot/conditional/reference controls and a direct-root status control do not
+recover the native graph; the exact public reset helper does not justify a
+caller store-order palette. Reopen with a distinguishing source/alias/liveness
+constraint, not merely the remaining byte count.
+
+Two transfer boundaries matter. RateReneg's actual typed engine migration is
+whole-object neutral; session/receiver order narrows its own bytes but changes
+no later function. SetV90RateReneg's engine owner alone remains SIZE22; the
+existing txq ends before its native scalar-reset group and cannot safely stand
+in for that owner. These are recorded negative/partial controls, not retained
+promotions. Preserve complete owner extents rather than walking past a queue
+subobject or manufacturing a TX type for scratch registers.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or
@@ -836,9 +898,9 @@ decision. Check the current constructor and type home, not just the comment.
 4. Assert the period layout with checks that GCC 3.4.2 actually sees. Wider
    native pointers are a portability matter, not evidence against the
    original four-byte pointer layout.
-5. Update mutation anchors without dropping their fault cases and run the
-   period differential and structural gates before committing. An incremental
-   prefix view is a migration step, not completion of the owner model.
+5. Run the period differential and structural gates before committing;
+   mutation suites and anchor maintenance are retired. An incremental prefix
+   view is a migration step, not completion of the owner model.
 
 Initializer cleanup is a separate question from arithmetic narrowing. A
 cast on a hexadecimal constant assigned to a `short` array can be redundant

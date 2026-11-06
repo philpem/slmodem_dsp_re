@@ -311,11 +311,14 @@ typedef char v34ratecfg_size[
 
 #define V34_RATECFG	0xaa84
 
+#include "dsplib/v34_dc_control.h"
+
 /* Diagnostic owner inference: several native methods retain root +4 across
  * calls while independently accessing this measured control prefix. This
  * neutral type models that ownership/alias boundary; its name and exact
  * original declaration are not established by the instructions. All members
  * are POD and shared textually with the flat view below. */
+
 struct v34_engine_control {
 #include "dsplib/v34_engine_control_fields.h"
 };
@@ -1605,6 +1608,21 @@ V34_ENGINE_CONTROL_LAYOUT(samples_valid, 0x0262, 0x2);
 #undef V34_ENGINE_CONTROL_LAYOUT
 typedef char v34_engine_control_assert_root_offset[
  (__builtin_offsetof(struct v34_object, engine_control) == 4) ? 1 : -1];
+typedef char v34_dc_control_root_assert[
+ (__builtin_offsetof(struct v34_object, engine_control.dc_control) == 0x254
+  && __builtin_offsetof(struct v34_object, dc_control) == 0x254) ? 1 : -1];
+typedef char v34_dc_control_size_assert[
+ (sizeof(struct v34_dc_control) == 8) ? 1 : -1];
+typedef char v34_dc_control_count_assert[
+ (__builtin_offsetof(struct v34_engine_control, dc_control) == 0x250
+  && __builtin_offsetof(struct v34_dc_control, dc_count) == 0
+  && sizeof(((struct v34_dc_control *)0)->dc_count) == 2) ? 1 : -1];
+typedef char v34_dc_control_est_assert[
+ (__builtin_offsetof(struct v34_dc_control, dc_est) == 2
+  && sizeof(((struct v34_dc_control *)0)->dc_est) == 2) ? 1 : -1];
+typedef char v34_dc_control_acc_assert[
+ (__builtin_offsetof(struct v34_dc_control, dc_acc) == 4
+  && sizeof(((struct v34_dc_control *)0)->dc_acc) == 4) ? 1 : -1];
 typedef char v34_engine_control_assert_size[
  (sizeof(struct v34_engine_control) == 0x260) ? 1 : -1];
 typedef char v34_engine_control_assert_root_size[

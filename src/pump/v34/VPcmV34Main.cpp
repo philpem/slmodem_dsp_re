@@ -2400,32 +2400,32 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 void
 VPcmV34SetDelays(struct tagV34Object *objp)
 {
-	struct v34_object *obj = (struct v34_object *)objp;
-	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	VPcmFloModem *sess = (VPcmFloModem *)((struct v34_object *)objp)->p3548;
+	short &dmadelay = ((struct v34_object *)objp)->dmadelay;
 
 	{
-		int delay = obj->pac3c->hwDelay;
+		int delay = ((struct v34_object *)objp)->pac3c->hwDelay;
 		int biased = (int)((unsigned)delay + 2u);
 
-		obj->filtdelay = (short)((biased >> 2) + 0x22);
+		((struct v34_object *)objp)->filtdelay = (short)((biased >> 2) + 0x22);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 filtdelay set to %d "
 					     "(params initial delay = %d)\n",
-					     (int)obj->filtdelay,
+					     (int)((struct v34_object *)objp)->filtdelay,
 					     delay);
 	}
 
 	{
-		int ext = obj->pac3c->dmaDelay;
+		int ext = ((struct v34_object *)objp)->pac3c->dmaDelay;
 
-		obj->dmadelay = (short)(0x610u - (unsigned)ext);
+		dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
-					     (int)obj->dmadelay, ext);
+					     (int)dmadelay, ext);
 	}
 
 	sess->echoCanceller.setEchoDelay(
-		(unsigned)obj->pac3c->dmaDelay + 0x68u);
+		(unsigned)((struct v34_object *)objp)->pac3c->dmaDelay + 0x68u);
 }
 
 int
@@ -2440,7 +2440,9 @@ VPcmV34SetMaxBlockLength(void *objp, int len)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	obj->ptc = len;
+	struct v34_engine_control *engine = &obj->engine_control;
+
+	engine->ptc = len;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Max Block Length modified "
@@ -2514,13 +2516,12 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 }
 
 extern "C" void
-VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
+VPcmV34InitiateRetrain(void *objp, unsigned char dp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_engine_control *engine = &obj->engine_control;
-	struct v34_receiver *rx = &obj->receiver;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	unsigned char dp = requestedDp;
+	struct v34_receiver *rx = &obj->receiver;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Initiating retrain, "
@@ -2543,6 +2544,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 			(obj->pac3c->modeFlags | CFG_ISP_SENSITIVE);
 	}
 
+	int receiverBeforeVerification = engine->v90_receiver;
 	obj->is_short = 0;
 	obj->local_short = 0;
 	sess->verificationStatus = 0;
@@ -2552,8 +2554,8 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * entirely unless no V.90 receiver is running and something was asked
 	 * for -- see the note at the top of the function for why that matters.
 	 */
-	if (engine->v90_receiver == 0 && dp != DP_KEEP) {
-		switch (dp) {
+	if (receiverBeforeVerification == 0 && dp != DP_KEEP) {
+		switch (int modulation = dp) {
 		case DP_V34:
 			break;
 		case DP_K56FLEX:
@@ -2573,7 +2575,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 				dsplibs_debug_printf(
 					"VPcmV34InitiateRetrain: requested mod"
 					" V.%d, but params.v90 is OFF, keeping"
-					" same modulation!!!\r\n", (int)dp);
+					" same modulation!!!\r\n", modulation);
 			dp = DP_KEEP;
 			break;
 		default:
@@ -2645,10 +2647,11 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * The source short is read SIGNED, so a negative one gives a result
 	 * below 10000.
 	 */
-	engine->dc_count =
+	struct v34_dc_control *dc = &engine->dc_control;
+	dc->dc_count =
 		(short)(336 * (int)obj->short_35a4 + 10000);
-	engine->dc_est = 0;
-	engine->dc_acc = 0;
+	dc->dc_est = 0;
+	dc->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, cleared -- except for a three-short group
@@ -2763,9 +2766,6 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 void
 VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 {
-	struct v34_object *obj = (struct v34_object *)objp;
-
-	obj->sample_count = 0;
 	/*
 	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
 	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
@@ -2779,7 +2779,12 @@ VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
 	 * no caller is reconstructed, so "no real caller passes 223,696" is
 	 * not something this can rely on.
 	 */
-	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+	int deadline = (int)((unsigned)secs * 0x2580u);
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine_control *engine = &obj->engine_control;
+
+	engine->sample_count = 0;
+	engine->timeout_deadline = deadline;
 }
 
 int
@@ -3122,10 +3127,11 @@ int
 VPcmV34GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_engine_control *engine = &obj->engine_control;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && engine->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {
@@ -3150,10 +3156,11 @@ int
 V34XF_GetMaxUpstreamRateIndex(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_engine_control *engine = &obj->engine_control;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate = (int)obj->pac3c->maxRate;
 
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1) {
+	if (sess->info0Layout != 0 && engine->v90_receiver > 1) {
 		const V90Parameters *pcm = sess->modem.params;
 
 		if (pcm->SENSITIVE_ISP_DETECTED != 0) {

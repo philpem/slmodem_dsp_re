@@ -209,6 +209,14 @@ nor establishes the original source declaration. The
 [InitMOH closed audit](tools/native_graph/initmoh_flow_case/README.md) is a worked
 case, not a general corpus equivalence detector.
 
+Keep address identity, alias metadata and declaration evidence separate. A
+cached cast pointer and repeated member accesses through a formal can retain
+different period-GCC expression identities. When a compatibility view broadens
+aliasing, test references to actual declared members with checked extents before
+inventing another owner type. Cross these properties; their isolated outputs
+can miss an exact combination. Equivalent formal/local copies can also select
+different spill transport without changing the formal's type or ABI.
+
 Validate relocation type, field site, width and addend before canonicalizing
 its target. A matching symbol name can still name a different function entry
 or global word. Retain expression objects when serializing solver DAGs; a
@@ -381,11 +389,12 @@ A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.
 Everyone else forward-declares it or includes that file. A forward declaration
 is not a definition and is never a problem.
 
-`make phase` gates this through `tools/onedef.py`, which carries the duplicates
-this tree still has and the reason for each. **It is ONE today —
-`V90Phase4Demodulator`** — and the tool prints the count, so read it there
-rather than from this paragraph. Adding one needs a reason written there;
-removing one is progress.
+`make phase` gates this through `tools/onedef.py`, which reports the current
+count and requires an evidence-backed reason for any carried duplicate. Its
+known-debt register is empty. The former `V90Phase4Demodulator` duplicate is
+resolved.
+Read live counts from the tool rather than treating a historical count here as
+current evidence.
 
 It is not a style rule. Two definitions of one type is undefined behaviour the
 moment both reach a translation unit, and it fails silently -- the compiler
