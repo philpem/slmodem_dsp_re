@@ -497,11 +497,52 @@ constant stores become scratch-register operations first at peephole2; Abort's
 error diagnostic remains a tail call despite an object-identical explicit-return
 control; GetNext still has unmatched case/return-sharing relationships. Reopen
 with independent predecessor, continuation/type or join evidence, not another
-closed spelling palette. Next transfer to chkForceBaudRate (SIZE5): native captures p3548 at0xa479
-before diagnostics and uses unsigned cap predicates at0xa4e7..0xa50b; source
-loads the session afterward and compares signed. Cross those properties and
-audit t_v34pcmif inputs first. The byte-derived selector domain is0..7; no
-negative-selector bug follows. Keep the full VPcmV34Main.cpp closure.
+closed spelling palette. The baud-cap transfer below completes that next step.
+
+## Baud cap: initialization order and an interior owner (2026-11-06)
+
+The [baud-cap wave](../baud-cap-recovery-20261106.md) recovers chkForceBaudRate
+from SIZE5 to REGALLOC389. Unsigned consumption alone gives BYTES272; early
+session capture alone leaves SIZE5; both give BYTES264. The existing
+member-derived interior view acquired at the native boundary improves to
+BYTES55. Reading configuration after array initialization, together with that
+late owner acquisition, closes the instruction graph to REGALLOC. The isolated
+controls were required to distinguish the lifetime interactions.
+
+Native witnesses are the session capture at 0xa479, array initialization before
+configuration loading, obj+4 acquisition at 0xa490, and unsigned JBE/JA cap
+branches at 0xa4e7..0xa50b. Keep original field homes: receiver accesses resolve
+0x24c=4+0x248 and 0x250=4+0x24c, both 32-bit. A member-derived interior view
+preserves named fields without asserting a unique original engine type.
+The byte-derived selector is 0..7; use-site unsigned consumption establishes no
+negative-input bug or unsigned declaration. Existing code already reproduces
+the byte shift transport, so another byte-local declaration is unnecessary.
+
+The full 56-body audit retains 54 literal bodies and all exports/order. The
+sole other changed body is k56FlexPhase34's local-call distance after its
+address moves 16 bytes; its target and SIZE28 grade remain. Raw rodata also
+changes:67/89 relocated words move 16 bytes, while all owner/offset targets
+remain identical. Do not call relocation-normalized data raw-identical.
+
+Before stopping at REGALLOC, trace the residual: its scratch forms first
+appear at peephole2 and 14 observed renaming decisions explain current lanes,
+with plain/dump/observer/replay/integrated object parity. Reopen with new native
+source/lifetime/predecessor evidence, not a register-fitting spelling grid.
+The graph screen's target result pairs only one owner anchor and compares no
+relations; its clean result is not evidence against the source discrepancies.
+
+The 144 new component cases/1,873 checks cover all ordinary receiver arms with
+active and inactive diagnostics and producer-supported allow values. Old and
+selected source both pass. The existing 800 synthetic cases remain labelled;
+partial session backing and absence of diagnostic reentry prevent lifecycle
+or pointer-replacement claims. Retain those limits alongside the full period gate.
+
+Next transfer to VPcmV34InitiateHangUp: native captures p3548 before diagnostics
+at 0x6be1, clears rate members through obj+4, and publishes session clr before
+loading its demodulator at 0x6c0f/0x6c16. Source currently captures late and its
+machine code reverses the latter ages. Cross supported properties, check every
+intervening publication/alias and valid fixture boundary, and review the entire
+TU. Preserve intermediate collateral and attempt coupled repairs.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

@@ -4154,8 +4154,11 @@ void
 chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	/* Native captures the session before diagnostics and the flag stores. */
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	unsigned char allow[6] = { 0 };
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	const unsigned char *engine = (const unsigned char *)obj + OB4_ANCHOR;
 	unsigned char *sel;
 	int maxidx;
 
@@ -4171,10 +4174,10 @@ chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 	allow[3] = 1;
 	allow[4] = 1;
 
-	if (obj->v90_receiver) {
+	if (VPCM_ENGINE_INT(engine, v90_receiver)) {
 		allow[5] = 1;			/* dead -- see the note above */
-		sel = ((VPcmFloModem *)obj->p3548)->v34BaudAllow;
-	} else if (obj->k56flex_receiver) {
+		sel = sess->v34BaudAllow;
+	} else if (VPCM_ENGINE_INT(engine, k56flex_receiver)) {
 		allow[5] = 0;
 		sel = allow;
 	} else {
@@ -4188,16 +4191,17 @@ chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 	 * would hold and every rate would be barred.  So zero means "no cap
 	 * configured" and not "cap at the lowest rate".
 	 */
+	/* Native cap predicates consume this 0..7 selector as unsigned. */
 	if (maxidx != 0) {
-		if (maxidx <= 1)
+		if ((unsigned)maxidx <= 1)
 			sel[1] = 0;
-		if (maxidx <= 2)
+		if ((unsigned)maxidx <= 2)
 			sel[2] = 0;
-		if (maxidx <= 3)
+		if ((unsigned)maxidx <= 3)
 			sel[3] = 0;
-		if (maxidx <= 4)
+		if ((unsigned)maxidx <= 4)
 			sel[4] = 0;
-		if (maxidx <= 5)
+		if ((unsigned)maxidx <= 5)
 			sel[5] = 0;
 	}
 

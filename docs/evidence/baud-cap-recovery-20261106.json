@@ -1,0 +1,4808 @@
+{
+  "base_revision": "ec3e152f390c87a7045965c17cfe72433eb883c2",
+  "census": {
+    "REGALLOC_gains": [
+      "chkForceBaudRate"
+    ],
+    "REGALLOC_losses": [],
+    "baseline": {
+      "bytes": 71,
+      "compared": 1852,
+      "compared_bytes": 720125,
+      "exact": 1146,
+      "exact_bytes": 135831,
+      "nodata": 0,
+      "reference_functions": 1852,
+      "regalloc": 28,
+      "reloc": 0,
+      "size": 607,
+      "unresolved": 0
+    },
+    "exact_gains": [],
+    "exact_losses": [],
+    "selected": {
+      "bytes": 71,
+      "compared": 1852,
+      "compared_bytes": 720125,
+      "exact": 1146,
+      "exact_bytes": 135831,
+      "nodata": 0,
+      "reference_functions": 1852,
+      "regalloc": 29,
+      "reloc": 0,
+      "size": 606,
+      "unresolved": 0
+    }
+  },
+  "compiler": {
+    "config": "image ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest\nflags -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h -DDSPLIB_REPRODUCE_BUGS -DDSPLIB_REPRODUCE_BUGS\ncxx   -fno-exceptions -fno-rtti -fno-math-errno -ffast-math\ndcr   -O2 -fno-rerun-cse-after-loop\n",
+    "image_id": "sha256:fe868cc44a48c36d1130862965729d0b384bc9e0a1908d37891aa5ae07352f16",
+    "observer": {
+      "assembly_object_parity": true,
+      "commands": [
+        [
+          "/mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106/source/observer/cc1plus",
+          "-fpreprocessed",
+          "VPcmV34Main.ii",
+          "-mno-sse2",
+          "-quiet",
+          "-dumpbase",
+          "VPcmV34Main.cpp",
+          "-da",
+          "-march=i386",
+          "-mtune=i686",
+          "-mfpmath=387",
+          "-mno-ieee-fp",
+          "-maccumulate-outgoing-args",
+          "-auxbase-strip",
+          "candidate.o",
+          "-O3",
+          "-version",
+          "-frename-registers",
+          "-fomit-frame-pointer",
+          "-fno-exceptions",
+          "-fno-rtti",
+          "-fno-math-errno",
+          "-ffast-math",
+          "-o",
+          "plain.s"
+        ],
+        [
+          "gdb",
+          "-q",
+          "-batch",
+          "-ex",
+          "set pagination off",
+          "-ex",
+          "source /mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106/source/observer/rename.py",
+          "--args",
+          "/mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106/source/observer/cc1plus",
+          "-fpreprocessed",
+          "VPcmV34Main.ii",
+          "-mno-sse2",
+          "-quiet",
+          "-dumpbase",
+          "VPcmV34Main.cpp",
+          "-da",
+          "-march=i386",
+          "-mtune=i686",
+          "-mfpmath=387",
+          "-mno-ieee-fp",
+          "-maccumulate-outgoing-args",
+          "-auxbase-strip",
+          "candidate.o",
+          "-O3",
+          "-version",
+          "-frename-registers",
+          "-fomit-frame-pointer",
+          "-fno-exceptions",
+          "-fno-rtti",
+          "-fno-math-errno",
+          "-ffast-math",
+          "-o",
+          "observed.s"
+        ],
+        [
+          "/usr/lib/gcc/i386-pc-linux-gnu/3.4.2/../../../../i386-pc-linux-gnu/bin/as",
+          "-V",
+          "-Qy",
+          "-o",
+          "observed.o",
+          "observed.s"
+        ]
+      ],
+      "compiler_sha256": "b778f44bd1a5e8184ca34b11c9701d0a8d67d15406282c1a204237d03c82082d",
+      "trace": {
+        "compiler_sha256": "b778f44bd1a5e8184ca34b11c9701d0a8d67d15406282c1a204237d03c82082d",
+        "errors": [],
+        "events": [
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "Q_REGS",
+                "mode": "QImode",
+                "register": 0,
+                "uid": 43
+              },
+              {
+                "class": "Q_REGS",
+                "mode": "QImode",
+                "register": 0,
+                "uid": 44
+              },
+              {
+                "class": "Q_REGS",
+                "mode": "QImode",
+                "register": 0,
+                "uid": 44
+              },
+              {
+                "class": "Q_REGS",
+                "mode": "QImode",
+                "register": 0,
+                "uid": 318
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 0,
+            "tick": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4294967289,
+              4294967295
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 33
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 43
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 2,
+            "tick": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853171,
+              4294959135
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 1,
+                "uid": 3
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 1,
+                "uid": 18
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 1,
+                "uid": 33
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 1,
+                "uid": 317
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 1,
+            "selected": 1,
+            "tick": [
+              1,
+              0,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853175,
+              4294959135
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 5,
+                "uid": 314
+              },
+              {
+                "class": "DIREG",
+                "mode": "SImode",
+                "register": 5,
+                "uid": 27
+              },
+              {
+                "class": "DIREG",
+                "mode": "SImode",
+                "register": 5,
+                "uid": 27
+              },
+              {
+                "class": "DIREG",
+                "mode": "SImode",
+                "register": 5,
+                "uid": 27
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 5,
+                "uid": 28
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 5,
+            "selected": 5,
+            "tick": [
+              1,
+              3,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4294967295,
+              4294967295
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 2,
+                "uid": 25
+              },
+              {
+                "class": "CREG",
+                "mode": "SImode",
+                "register": 2,
+                "uid": 27
+              },
+              {
+                "class": "CREG",
+                "mode": "SImode",
+                "register": 2,
+                "uid": 27
+              },
+              {
+                "class": "CREG",
+                "mode": "SImode",
+                "register": 2,
+                "uid": 27
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 2,
+            "selected": 2,
+            "tick": [
+              1,
+              3,
+              2,
+              0,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4294967295,
+              4294967295
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 352
+              },
+              {
+                "class": "AREG",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 27
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 0,
+            "tick": [
+              1,
+              3,
+              5,
+              0,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4294967295,
+              4294967295
+            ]
+          },
+          {
+            "bb": 0,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 18
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 313
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 3,
+            "tick": [
+              6,
+              3,
+              5,
+              0,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853123,
+              4294959135
+            ]
+          },
+          {
+            "bb": 2,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 350
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 351
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 1,
+            "tick": [
+              6,
+              3,
+              5,
+              7,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853177,
+              4294959135
+            ]
+          },
+          {
+            "bb": 4,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 348
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "SImode",
+                "register": 0,
+                "uid": 349
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 2,
+            "tick": [
+              6,
+              8,
+              5,
+              7,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853177,
+              4294959135
+            ]
+          },
+          {
+            "bb": 20,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 346
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 347
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 4,
+            "tick": [
+              6,
+              8,
+              9,
+              7,
+              0,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853153,
+              4294959135
+            ]
+          },
+          {
+            "bb": 22,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 344
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 345
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 0,
+            "tick": [
+              6,
+              8,
+              9,
+              7,
+              10,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853153,
+              4294959135
+            ]
+          },
+          {
+            "bb": 24,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 342
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 0,
+                "uid": 343
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 0,
+            "selected": 3,
+            "tick": [
+              11,
+              8,
+              9,
+              7,
+              10,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853153,
+              4294959135
+            ]
+          },
+          {
+            "bb": 26,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 3,
+                "uid": 338
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 3,
+                "uid": 339
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 3,
+            "selected": 5,
+            "tick": [
+              11,
+              8,
+              9,
+              12,
+              10,
+              4,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853128,
+              4294959135
+            ]
+          },
+          {
+            "bb": 26,
+            "chain": [
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 4,
+                "uid": 340
+              },
+              {
+                "class": "GENERAL_REGS",
+                "mode": "HImode",
+                "register": 4,
+                "uid": 341
+              }
+            ],
+            "function": "chkForceBaudRate",
+            "old": 4,
+            "selected": 1,
+            "tick": [
+              11,
+              8,
+              9,
+              12,
+              10,
+              13,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "unavailable": [
+              4293853136,
+              4294959135
+            ]
+          }
+        ],
+        "exit_codes": [
+          0
+        ],
+        "inferior_calls_or_writes": false
+      }
+    }
+  },
+  "fixture_counts": {
+    "expanded_baseline": {
+      "assertions": 63365,
+      "groups": 38,
+      "new_component_line": [
+        "PASS v34 pcm interface: force cap component 144 cases 1873 checks"
+      ]
+    },
+    "original": {
+      "assertions": 61492,
+      "groups": 37,
+      "new_component_line": []
+    },
+    "selected": {
+      "assertions": 63365,
+      "groups": 38,
+      "new_component_line": [
+        "PASS v34 pcm interface: force cap component 144 cases 1873 checks"
+      ]
+    }
+  },
+  "fixture_domain": {
+    "apparatus_audit": {
+      "period_domain_defect_found": false,
+      "scope": "Only changed cap fixture path and direct diagnostic runtime audited; no whole-harness UB-freedom claim. Partial session and raw byte object model are explicit fixture limitations. Existing pointer-hole comparison is preserved."
+    },
+    "boundary": {
+      "minimal_requirements": [
+        "V34 object storage and initialized p3548/pac3c pointer fields",
+        "config readable byte at+0x50",
+        "receiver words at+0x24c and+0x250",
+        "if V90 active, six readable/writable session flag bytes+0x217..+0x21c",
+        "writable bank with25 bins and44-byte stride; six shift writes at offsets below"
+      ],
+      "not_established": [
+        "constructor-executed session",
+        "full public modem lifecycle",
+        "audio or probe measurement history",
+        "re-entrant debug host session replacement"
+      ],
+      "period_real_session_bytes": 32616,
+      "session_buffer_bytes": 25088,
+      "session_buffer_caveat": "The pre-existing seed_chain buffer is a partial fabricated session, not a VPcmFloModem allocation. It covers every consumed address for this routine. No other method may be called on it without its own access audit.",
+      "type": "component preconditions, producer-supported field snapshots",
+      "why_no_full_constructor": "The routine reads no other session or bin values. Full constructor graphs would expand dependencies without discriminating this bounded method."
+    },
+    "current_input_hashes": {
+      "include/dsplib/VPcmFloModem.h": "aef9b01f8e63a6b0cc7f5f4f80f744809b36bd3dd09e8bffe3c857c302a83c81",
+      "include/dsplib/modem_params.h": "02963b3ef091627f13fc904966c1bb6c72b771c24610c723d67ebc572d5c2138",
+      "include/dsplib/v34det.h": "b0cebd7674efc156a80dd278e9953b9e01508b849fdaf275423832c2228e6719",
+      "include/dsplib/v34fsk.h": "e6683da6a67593e5ccc03464ae1c1368fad278d0f6de92c01ee696aa380f0e78",
+      "ref/slmodemd/dsplibs.o": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379"
+    },
+    "date": "2026-11-06",
+    "existing_fixture": {
+      "factorization": "8 selectors x2 low-bit patterns x10 receiver pairs x5 session flag patterns",
+      "legacy_debug_cases": 8,
+      "legacy_debug_receiver_pair": [
+        0,
+        0
+      ],
+      "preserved": true,
+      "synthetic_cases": 800,
+      "synthetic_reasons": [
+        "receiver pairs include both active,-1,65536,INT_MAX without established producer histories",
+        "session masks include all0,alternating and0x3c without established producer histories",
+        "object/bin fill is apparatus pattern rather than measurement history"
+      ]
+    },
+    "frozen_baseline_hashes": {
+      "src/pump/v34/VPcmV34Main.cpp": "cfc65c77b068a8f94c22174b3550b5f4095a61f2e14a976026cc148eeb63aa37",
+      "test/unit/t_v34pcmif.c": "902fd770c1f7fc0a445fd3184e45902a8261f91e41f04ec5a9f7e7fb584093b2"
+    },
+    "frozen_commit": "ec3e152f390c87a7045965c17cfe72433eb883c2",
+    "memory": {
+      "qualification": "The target page was empty. The VPCM page supplied historical leads; current source/native instructions independently checked.",
+      "read_pages": [
+        "kp-a4e6d7ddea7b42658f68d3eea4dc2b0f",
+        "kp-0dbf01e1b7834a31a411d2ab4ff81198"
+      ],
+      "searched_before_changes": true
+    },
+    "new_fixture": {
+      "artifacts": {
+        "layout.cpp": "0741abe808cddcd4157de90eed96ab202f144baa11f4bc5fa4cf2c6edd08f861",
+        "layout.o": "079ed69641a35d3ccc2cb4c74b06908b80c03f77518a06c007337eb73f5f71ba",
+        "run.log": "74d31b073d8723a5d72e4a78cdfa92c3967df23a752139f39291748da04a9faf",
+        "t_v34pcmif.c": "1d03cef4df383a40673d7cd47236fed4c487289d7dbc91a53cca25e2f8ce1638",
+        "t_v34pcmif.patch": "c3fdbb886ba0fa872e952dab1e1903bda6bf2f91e5e07142ddb95304f552fc5a"
+      },
+      "bin_initialization": "All25 bin objects initialized to zero except shift=i%5 (0..4), a normalized component snapshot. These values are overwritten without being read by this routine; no sampled waveform history claimed.",
+      "cases": 144,
+      "check_count": "13 per case plus1 explicit case-denominator check",
+      "checks": 1873,
+      "coverage_improvement": "All3 ordinary receiver arms now crossed with enabled and disabled diagnostic levels and every selector; previous diagnostic sweep only covered neither receiver.",
+      "diagnostic_calls": {
+        "level1": 0,
+        "level2": 1,
+        "level3": 1
+      },
+      "factorization": "8 selectors x2 low-bit patterns x3 receiver arms xdebug levels1,2,3",
+      "old_fail_claim": false,
+      "old_source_expectation": "green; ordinary0..7 signed and unsigned comparisons agree, while the runtime diagnostic callback cannot change the session pointer",
+      "outputs": [
+        "whole V34 object excluding existing pointer holes",
+        "whole partial session excluding existing pointer holes",
+        "full bin-bank oracle comparison and independent expected-write comparison",
+        "six expected session allow bytes",
+        "full configuration buffers unchanged on both sides",
+        "complete transcripts, equal call boundaries and bytes, exact0/1 per-side diagnostic calls"
+      ],
+      "receiver_pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "session_allow": [
+        1,
+        0,
+        1,
+        1,
+        1,
+        0
+      ]
+    },
+    "observation_age": {
+      "diagnostic_call": "a5cb",
+      "functional_limit": "No valid ordinary input in the current logging apparatus distinguishes early versus late session acquisition.",
+      "native_session_load": "a479 object+0x3548, saved atstack+0x1c",
+      "runtime_host": "test/harness/runtime.c:494 and:530 only append formatted text and record boundaries/counters; no object callback hook, pointer mutation or user callback",
+      "selected_session_use": "a4d6 saved session reload; a4da add0x217"
+    },
+    "owner_width_audit": {
+      "bin_shift_stores": [
+        {
+          "bank_relative_offset": "0x42e",
+          "bin": 24,
+          "complete_object_offset_when_internal_bank": "0xa74e",
+          "width_bits": 16
+        },
+        {
+          "bank_relative_offset": "0x3d6",
+          "bin": 22,
+          "complete_object_offset_when_internal_bank": "0xa6f6",
+          "width_bits": 16
+        },
+        {
+          "bank_relative_offset": "0x66",
+          "bin": 2,
+          "complete_object_offset_when_internal_bank": "0xa386",
+          "width_bits": 16
+        },
+        {
+          "bank_relative_offset": "0x3aa",
+          "bin": 21,
+          "complete_object_offset_when_internal_bank": "0xa6ca",
+          "width_bits": 16
+        },
+        {
+          "bank_relative_offset": "0x37e",
+          "bin": 20,
+          "complete_object_offset_when_internal_bank": "0xa69e",
+          "width_bits": 16
+        },
+        {
+          "bank_relative_offset": "0x352",
+          "bin": 19,
+          "complete_object_offset_when_internal_bank": "0xa672",
+          "width_bits": 16
+        }
+      ],
+      "interpretation": "Complete offsets and widths preserved; an interior owner base is compatible with named-member evidence but does not uniquely recover an original type.",
+      "other_accesses": [
+        {
+          "complete_object_offset": "0x3548",
+          "name": "session owner pointer",
+          "old_new_difference": "capture age only",
+          "width_bits": 32
+        },
+        {
+          "complete_object_offset": "0xac3c",
+          "name": "config owner pointer",
+          "old_new_difference": "none",
+          "width_bits": 32
+        },
+        {
+          "name": "config modeFlags",
+          "offset": "0x50",
+          "old_new_difference": "none",
+          "owner": "config",
+          "width_bits": 8
+        },
+        {
+          "i": [
+            0,
+            5
+          ],
+          "name": "v34BaudAllow",
+          "offset": "0x217+i",
+          "old_new_difference": "none",
+          "owner": "session",
+          "width_bits": 8
+        }
+      ],
+      "period_compilation": "layout.cpp compiled successfully using default Gentoo3.4.2 image and project period flags",
+      "period_layout_assertions": 18,
+      "receiver_accesses": [
+        {
+          "field": "v90_receiver",
+          "new_complete_object_offset": "0x24c",
+          "new_member_offset_from_owner": "0x248",
+          "new_owner_object_offset": "0x4",
+          "old_complete_object_offset": "0x24c",
+          "operation": "read",
+          "width_bits": 32
+        },
+        {
+          "field": "k56flex_receiver",
+          "new_complete_object_offset": "0x250",
+          "new_member_offset_from_owner": "0x24c",
+          "new_owner_object_offset": "0x4",
+          "old_complete_object_offset": "0x250",
+          "operation": "read",
+          "width_bits": 32
+        }
+      ]
+    },
+    "producer_witnesses": [
+      {
+        "name": "VPcmFloModem::externalReset",
+        "native": "d6d8,d6e5,d6ec,d6f3,d6fa,d701 first stores; repeats later",
+        "source": "src/pump/v90/VpcmFloModem.cpp:768",
+        "values": [
+          1,
+          0,
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "name": "VPcmFloModem::setV34BaudForV90",
+        "native_symbol": "d490",
+        "qualification": "no incoming native relocation; do not claim an actual call history from this helper",
+        "values": [
+          1,
+          0,
+          1,
+          1,
+          1,
+          0
+        ]
+      },
+      {
+        "name": "VPcmFloModem::setV34BaudForV34",
+        "native_symbol": "d4c0",
+        "qualification": "not used by new fixture; no incoming native relocation",
+        "values": [
+          1,
+          0,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "VPcmFloModem constructor",
+        "qualification": "not used by new fixture; constructor snapshot differs from externalReset",
+        "table": ".rodata+0x3e0 v34initialbauds",
+        "values": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "VPcmV34Create",
+        "native_owner": "ESI=object+4",
+        "native_symbol": "aa70",
+        "receivers": [
+          "ac3f clear k56 (ESI+24c)",
+          "ac70 clear V90 (ESI+248) on ordinary default",
+          "afd6/b0c2 store V90=1 thenexternalReset atafdf/b0d2",
+          "b329/b363 clear V90 thenb347 sets k56=1 andb350 K56externalReset"
+        ],
+        "source": "src/pump/v34/VPcmV34Main.cpp creation dispatch"
+      }
+    ],
+    "root": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105",
+    "selector": {
+      "domain": [
+        0,
+        7
+      ],
+      "meaning": "consumption evidence, not unique local declaration or a demonstrated negative-input bug",
+      "native_witness": [
+        "a493 MOVZBL config+0x50",
+        "a497 SHR $5,%al",
+        "a49a MOVZBL %al,%ebx"
+      ],
+      "negative_selector_fixture": "forbidden: impossible from this producer",
+      "unsigned_predicates": [
+        "a4e7 JBE1",
+        "a4f0 JA2",
+        "a4f9 JA3",
+        "a502 JA4",
+        "a50b JA5"
+      ]
+    },
+    "task": "chkForceBaudRate differential-domain and owner/width audit",
+    "validation": {
+      "fixture_compile": "success using Gentoo GCC3.4.2-r2 image fe868cc44a48c36d1130862965729d0b384bc9e0a1908d37891aa5ae07352f16",
+      "parent_report": "Parent independently preserved fresh expanded baseline t_v34pcmif1passed/0failed before installing selected source. Parent owns full phase validation.",
+      "scratch_direct_link": "t_v34pcmif all38 groups pass; new block144 cases/1873 checks; cached source objects used, not an independent fresh phase gate",
+      "scratch_linked_v34main_sha256": "90b0e92b14a779cd25b80649fd7d28d340169df59d563b49e324c1cbd677950c",
+      "scratch_object_qualification": "Copied after source worker/parent activity; disassembly already contains early session and unsigned comparisons. Do not call this an old-source baseline."
+    }
+  },
+  "frozen_inputs": {
+    "config": "929f2f43cc2149a5f005aadca62b684c9b74c661e32ba26c6d5c1f6c79d223c7",
+    "include/dsplib/ANSamToneDetector.h": "8f95bbbf641ce2ab6d58073245720881da9c95ad858b2eb922ca582c090c10fa",
+    "include/dsplib/Agc.h": "b07d9f01ddf14efd2c6f4736fd444f3b7d332d9233a9254afb1a520bbd7f9410",
+    "include/dsplib/DILdescriptorPacker.h": "a2517fdb31225898a0196a262871cc8d82fd0457c3ab8f20fc82be7a409e389f",
+    "include/dsplib/DiffCoder.h": "7d52993bc1b54030c70ee5eb72db600d70182e11587b50644622b6cbb7c11628",
+    "include/dsplib/DspMath.h": "9d51b0110e4941427b9e9490dc71211689b0311e3bf46ef520a885fbcea5afec",
+    "include/dsplib/FloatARMA.h": "bfc68e5b3ec6a9d10e6fa26987cce1fee2bc4585564b726fc2fa6c25b6d5b685",
+    "include/dsplib/FloatFIR.h": "bc93072a007b17abd81b91e7cf42317bee9d525d7df41af6c76cf136a10b85ef",
+    "include/dsplib/FloatIIR.h": "017655b29e8c5ba47f4f4e0122bbc78d7c0ec29e0be18bd9344626507d3b2b49",
+    "include/dsplib/GenericIIR.h": "3113228dc5318c24a98e9d1facaa1e64dccb56ec6cd7e0a6731ad1aaeb4539c4",
+    "include/dsplib/GenericToneDetector.h": "268271b41e836ea7e4aef1045a828bca9e31c06ce89c6070fcf0a8a4855be5ac",
+    "include/dsplib/K56FlexFloModem.h": "65d25284bcc92f9e02209b1061963aeeb234a939e53b4fe107e52293e3959c59",
+    "include/dsplib/LowPassFIR.h": "526fdd02ea0df55ce5758095c14553ccf0137afebe5cd2a5bd3bff8927b02a8e",
+    "include/dsplib/ModulusCoder.h": "378fe485e7b9fc9b5cb26955a9cb5136a5b45a924a4756c74c59a72510a14f6f",
+    "include/dsplib/Psd.h": "fbe185a2606432cd11893c8e94b65f0248715ee45460ad737f369a393d7598b6",
+    "include/dsplib/Queue.h": "ee6be0578ebac903b8d46fc1e0befc719a5924e4c798c85a70985beb753764db",
+    "include/dsplib/Resampler.h": "64eb723a167e123489ca4e9983632c618540bba16b995cb3c6d23b9d76ab356f",
+    "include/dsplib/ResamplerTiming.h": "f53abda5e47014225fc02718b39e198af75650af738c93053bb566a0a482f0e8",
+    "include/dsplib/ResamplerTimingOffset.h": "9e5415f01d9db87f509676e8c70fd5adbe728a7614cf0e6f77c6775143a41e7d",
+    "include/dsplib/Scrambler.h": "ec1e94cea7e8790bd1eea07e8199a587c0d9e1f9b0f4e49238c4b2e5d62f37da",
+    "include/dsplib/SineWave.h": "0a45385318e012a93eb6561586d2e7ee20fa425de62afd8fa1587a581590b073",
+    "include/dsplib/TAG_DiagnosticResults.h": "cef7ce8bc8819876277dc805d6efb01e82645ad204f46d2a4b3b048c7596f831",
+    "include/dsplib/V90AutoDigitalImpDetector.h": "c3e8f8c11fdb3e6d5e5dd374dc51031e32254270b059e7cdf9d06ee09aafff42",
+    "include/dsplib/V90BitsToSymbol.h": "69a3ae66ba05bc68944af5246052098bad6a3c8e789e2497d65514987ffb8f61",
+    "include/dsplib/V90CP.h": "e1c0b5bbd4e31777a6c3d6291ebb482ce01019f259a331c4e9b86e8b98f797b8",
+    "include/dsplib/V90CPUnPck.h": "5b0862ff0da3c76466de22c28049c2f27af93d5e9ec8d717f99650bce8e4a154",
+    "include/dsplib/V90CPpck.h": "ec3ae80e73e196f1bc0f283ff2ca6f6efbc8e09c2cd40719990b140ec0ae7149",
+    "include/dsplib/V90CodecType.h": "b1d1f8983823e2602867caf79c2ba60b3d000cb6b64dec60e8877e49a1419e28",
+    "include/dsplib/V90ConnectionEvaluator.h": "3712b03302ce09b4de8b0bb7f46dcbf6eb4acb1fc6093d39986fe5cf51ce0a33",
+    "include/dsplib/V90ConstellationDesigner.h": "d21f35ba0efaf981562e67db48f004058a5211e5643a1e4b125ca7b05a287c32",
+    "include/dsplib/V90ConstellationPower.h": "ebd0d895a5095f1427273957aef1052fb5b62f5800c14ca9fe6f30a7836504ae",
+    "include/dsplib/V90Demapper.h": "014f536d559c0564b33c905ef0dd846447a37d9a8985d87bdd28664dca226507",
+    "include/dsplib/V90Demodulator.h": "948cae97618050dbd90366a04002ab4baf1285612c661b4150b6ea48a5dff997",
+    "include/dsplib/V90DilDescriptorSettings.h": "4e9f5774c027350982c2e1f546b3eca2c7252b1ccb4210dc1f21a3a20b876384",
+    "include/dsplib/V90Equalizer.h": "21b339e58a636def633e24ab03d74f327e3605ef9320f1ac1a2948433ce4c307",
+    "include/dsplib/V90Jd.h": "a932e4ca6940bfabf0134e0e87d8f686fed3bf1a87e96416d495ff92e53ea276",
+    "include/dsplib/V90MP.h": "e4f3b48b6ff841861babfde81895b61820644474acc8e1c148902ed69858606c",
+    "include/dsplib/V90Mapper.h": "01a58e8e1a868f91b67ebbefa4057c370d13ec9e4e72ae8df745b0f4719a1429",
+    "include/dsplib/V90MappingParams.h": "e62020471778759eaa9c2098b938141b065feae323dd192c0707c42bf62654d3",
+    "include/dsplib/V90Modem.h": "66c268c1ff247deb07f5018310ea700d6f13631c8a32f7eb852cc720ff6e58e7",
+    "include/dsplib/V90Modulator.h": "76b9dbf4449594319bf6f784ddc893989bfbbac21ee452d06fc521d306bedcd1",
+    "include/dsplib/V90Parameters.h": "c7c2a30fceaff800e4866f870e8a3c4682c33c22b79530c205d4462796082ae5",
+    "include/dsplib/V90Phase2Info.h": "1aa2e5d642b440ee4de48ef931bbd0c51fb6f0df3a3a8d7a096369bfea08c950",
+    "include/dsplib/V90Phase3Demodulator.h": "bbde7304cccbac86d8c1cecdff8860583bd0f7cac46b72e7d2bb0cd06b6afb68",
+    "include/dsplib/V90Phase3Modulator.h": "764c0ea9fc8186354d34b953e9b14cb0e073c963fe4e82989d66e75d8d80530b",
+    "include/dsplib/V90Phase4Demodulator.h": "459644cb8aa4fd401934d209a897c5bbca136aef6d224e134f68161ceb8bb878",
+    "include/dsplib/V90Phase4Modulator.h": "4d6c472dec4c7348847d7c6615f9dc78d86eea66228e1698201cb041f1978085",
+    "include/dsplib/V90PreFilter.h": "c0ab0f46e23436c511c98a129a38f4f8daf7dd6bae2fe0b79705286cf170dfc4",
+    "include/dsplib/V90RDetector.h": "6b7601bdcfcf746d1b2bba56e111536f91a2010cf5db70356eaae20a2491c663",
+    "include/dsplib/V90Resampler.h": "984fe777b944e3028e60f702cb664888adcdf2caafbb8e37524d5d6ac32f61a5",
+    "include/dsplib/V90SdDetector.h": "0997b2bcc3b217832988fd4964a22e42f8f5267651af48d32c9c7e9426661a5e",
+    "include/dsplib/V90SessionFlag.h": "6bbfe90f5eea0f504b719100a4c580606e0131ea3b555acfa473374c3135c703",
+    "include/dsplib/V90SignBitsExtractor.h": "43b45ef11600629ca107d7de36314542eb7f000ff648cfbf9faed039987fc992",
+    "include/dsplib/V90SpectralConditions.h": "e0e3db35bbc71b5aad498446430b9f7d6a8c89024e5a93caf1f548d625426579",
+    "include/dsplib/V90SpectralShaper.h": "cc31b37dd94acbbcf8769998f0ce228d25ff8b39c5e362ebf0213067c9ae1070",
+    "include/dsplib/V90SpectralShapingFilter.h": "d8824d17cd38181105ff2fc73cebb4d15d9c8dad4afe5148dc0e5503823ff31f",
+    "include/dsplib/V90SpectralVerifier.h": "6ae2bd13f3bebdafd5db5a7b654bc67eba5d2a9bf3cafa99f5bfac7a73fc6a1c",
+    "include/dsplib/V90TRN2Designer.h": "60d9a950ba1ea7f2f881e930c6e3915870e520793a70bf149c29bedce6ccb34c",
+    "include/dsplib/V92BitsToSymbol.h": "c7c343656ce0c4611eb193903043becde814721486e0fbc7cba35cfa73ea246d",
+    "include/dsplib/V92CP.h": "76853b819172043b4ad2b1196450d67c18d5d0417bd006f205fc94d2ad85fb58",
+    "include/dsplib/V92CPUnPck.h": "ed931c2009ed6445ddce16114725940d668a5368e4b6546292bf4ec953c87a83",
+    "include/dsplib/V92ConvolutionEncoder.h": "5435ea1b46fbf15affac01df74de4efb7a4628cbe9ecd21cb0db61a3dd6cde4e",
+    "include/dsplib/V92DILdescriptorPacker.h": "ffd314b4f0d4eadf58297020d80eb2dcd871993190bf961dfc8c7bc6bbe8a431",
+    "include/dsplib/V92EchoCanceller.h": "c0e807b48c4b06bd25127084ffdbbdd95cd1e06c0989834e6e5b9c652f2630f4",
+    "include/dsplib/V92Ja.h": "9558282c04f7291babf43ede0b031b08bd1eb4d811c11e59bd1697947afe2220",
+    "include/dsplib/V92Jd.h": "7e360f768d7d742d3096f79a97679a009778adc6a894f3f61252a694e427e9cd",
+    "include/dsplib/V92Mapper.h": "0d3ac36f941288b1fef3b7be707fd1bc91151adf0c15a8e3293e484802b5fb9d",
+    "include/dsplib/V92Modem.h": "d596f6341b768079356c4e2a06c881ccb023e798e71a58b38bbac17cbeb57333",
+    "include/dsplib/V92Modulator.h": "86d33eaf2eb33be4416ae6dd2f422014c1a6fefab3c2abbe75ff865202743f2e",
+    "include/dsplib/V92ModulusEncoder.h": "eaeed8a8da646f4f1324a5c6788dccce2234e13b71b373ee0d9698c67bf7f86b",
+    "include/dsplib/V92Parameters.h": "4e597c6edc6124b44350075986f180c3b334253e3c136987286868ff20a862bc",
+    "include/dsplib/V92ParamsInfo.h": "4f3a72c825232ba5bc3d524fe52bce12c39a48f55c93e31db285a7fb48ff2e1e",
+    "include/dsplib/V92Phase2Info.h": "3f238013e5cfbd8ccf7bbd653fc7dca7c5347e81330923a4a34741ef8229f3c6",
+    "include/dsplib/V92Phase3Modulator.h": "6385a8a9f28b14ded2a40dcc8d20250c52de69af0703a1e3eea4f80a989e5f5f",
+    "include/dsplib/V92Phase4Modulator.h": "72cecf180e965c313bcb3f7c9b110872bc6b69c4630018b1bbdab23a43051f4e",
+    "include/dsplib/V92PreFilter.h": "36d9f551d3deaefa2e4d964bf8484271810be2a74352987a01ad27a649e6c36a",
+    "include/dsplib/V92Precoder.h": "cbf6ad1ce38a1a2c05197eb783107c7597399e4f7f890c50e41f16a77cc55982",
+    "include/dsplib/V92Transmitter.h": "8115ecc899c40cf504165092b6d6f3d2ed1f99d62f8109826baed8f55c03805c",
+    "include/dsplib/VPcmFloModem.h": "aef9b01f8e63a6b0cc7f5f4f80f744809b36bd3dd09e8bffe3c857c302a83c81",
+    "include/dsplib/Vparser.h": "a04b60256666c791906a38edfc2d4c4dabe1e3edb450ce79da9a7eae4ac232c6",
+    "include/dsplib/b103.h": "ec227db8be429d6d819571b0738d4ef4a06857ed786e623bd1f52d141b8658a3",
+    "include/dsplib/b103fp.h": "c3d991c615cf9f8ece3003735b02b8f8ea218ec8197d4642173bbdf744c4ecb0",
+    "include/dsplib/beepgen.h": "850029fac11aea03357aee89e49da3be6d09fd20a1d49f4f7ed52afb6b0588ad",
+    "include/dsplib/cadence.h": "9b71f53951fb73dd1364abc4e51e60f68ba842903dea2e4c38db2916bed94798",
+    "include/dsplib/call.h": "1330cf2d5862d5ed6ec6a2acfb1cb6120d56647c32fc94ef178571f333af9e7e",
+    "include/dsplib/callingtone.h": "e89d9338e6f8e31ca084a5b12bcd6ea9d057db1f521a334721b7d6fa975632a0",
+    "include/dsplib/callprog.h": "6c7dfba857e05d31946f108156d985148d6c2876d4f74f268b26afc0c447873f",
+    "include/dsplib/callprog_cfg.h": "4375f45bbcf669dfc994838a49c104c3d3e2bc63ba0d12119d3a5eba931640ee",
+    "include/dsplib/callprog_state.h": "1a66d090c3a2a6a0fb90267eb61938032818ed5a64b246167dc0d701cf24570c",
+    "include/dsplib/cid.h": "9a8cdd91427ce5b77808169c29d9d1098dbb818536a891077b82a670b6bde565",
+    "include/dsplib/cid_modem.h": "b8386e2b362b69208a5bb62945e930e2ee348e39e8a67cd39619824ad6feb8a1",
+    "include/dsplib/class1.h": "f89a62a7f6b9191a30710a76a2c70276ba69cbb1168c1b8eb4d24059826a0905",
+    "include/dsplib/class1rx.h": "8f9f1d0fbe308b00211e3bcbbd47132ec5dc7eab4c0e113d2fc56f97cc75e62e",
+    "include/dsplib/class1tx.h": "1e2bfd8d65f1fa470e64c02b481b0fefd11f13e236b92366b660b35e4ef470b1",
+    "include/dsplib/cpfiltrs.h": "9d2c831d66cd12e8225611bc45de81733666efd6f3fb154654922b157dc11178",
+    "include/dsplib/dcr.h": "c5ec4377391026069d4ea41c8ab08a4dc8bbd955c8be07eb05a0b49874f1ab57",
+    "include/dsplib/debug.h": "b02ffd5f0cea840d5695677176ca6e293a42c79e72f25ac98ad6d490ec98e06d",
+    "include/dsplib/detector.h": "e208f73928042351e43a6facc11e43551463acfe1fccb982e47d7087dd82f53f",
+    "include/dsplib/dialer.h": "5d58fe7c0e50c70604cbae3cadfd0cb05d488f89a985c827724a33a1ea89ab15",
+    "include/dsplib/dialercfg.h": "c70fe25628394bb38b751edf2f1347b5cc063364e63f07a5cbc38cd6fd223e11",
+    "include/dsplib/dp.h": "acc23b284d435a88ee363376e3746248d16cacb720accb25a3ce5256239dc2e5",
+    "include/dsplib/dp_param.h": "93731bd211b4fa33a0e7ca3a9d1ac152f2b640c96cab9120fac671d42f761e5d",
+    "include/dsplib/dp_wrapper.h": "9a39b13321f8ef1ba0b38ba8606185c202e6acecfb9bd3213883cc29e74e146e",
+    "include/dsplib/dtmf.h": "ce5a82c0246c7632b671344434474a4a71cc82a611e0ffd6c984bd95fa1d69cc",
+    "include/dsplib/dtmf_rx.h": "ba8d9d04c8c5c9ad40b5198e288ad77f7683d360accb21fa4308b4bbbe344c5e",
+    "include/dsplib/dualtone.h": "827aabfe6906c7944f4990f26604a277ca4b1b323f94e126da69c5c84e62d18c",
+    "include/dsplib/elliptic.h": "3a690c68587e272d70deb76ed67fcdfdcfb43fec2c8cdf1a477cd846c4b6f65b",
+    "include/dsplib/encode.h": "daec671debd0576555cbc3036c256b8ddffc2d176ea4ba78f9abb95565617806",
+    "include/dsplib/fax.h": "64def24aa7e8e4a574295cf0aa2854859f5c5ec41a38844b55777c31478082ed",
+    "include/dsplib/faxadapt.h": "997df253db0923fc89b2deb57fe1bc5f67473c74443e92b8e5192561c6e3dae7",
+    "include/dsplib/faxcfg.h": "15c5ba4b4121a448eb0c868bc073bf24cf521468bcba46a79a60eed34f7a729b",
+    "include/dsplib/faxfifo.h": "0fc17dbcec21000774e65ab7ea50360f0d7dd9211e1d6bd8601d42fea27c30e6",
+    "include/dsplib/faxvmi.h": "ad10b39a0f8ca43c59484adf9899002ffbd6572d1339ab67aed5a81a2ce2d1fb",
+    "include/dsplib/fdspkrnl.h": "29725dfb74556ac00d51bdebd9c22cfaeef33cb68154b794a134bfa51b38ffee",
+    "include/dsplib/fft.h": "175184aaf1112944640f1e7964127444ae74e5e942fca74dab2ac6ede428b90a",
+    "include/dsplib/fifo8.h": "1089ae62ad280ca41444657bd05b02bb62c022dfe9a8148de8218dafab67e614",
+    "include/dsplib/fixedrc.h": "0ca31f251362fc0120209fffff767bc8ed39f1878f2164f2cad1685728b54339",
+    "include/dsplib/fp_math.h": "d0026da5512a2db63f455b06722e8fd4170f8ff78e4da3d024d071f93c5eff1d",
+    "include/dsplib/fpm.h": "817f88a5156f7936225be857dafcc0ec95df867a29ea272f512dcec0c5575823",
+    "include/dsplib/fpm_agc.h": "eb5913708610d8845e3621ebb02097c3eff559449ac1b741d2e97006e8346e60",
+    "include/dsplib/fpm_ecc.h": "7b951a3335898a8c42f4a8f28de62ac6a4a3e612188dca1b18d8b4712b8df078",
+    "include/dsplib/fpm_fsd.h": "7e78db25edd1542ff9a0070f3d3df366241163d328731e05dedafcaba75678e8",
+    "include/dsplib/fpm_fse.h": "ff7da0b30d58b3aad85655b36faedfec95a53c8d0491857d1655d62a001ad38b",
+    "include/dsplib/fpm_fsm.h": "a1269cbf725fc84bdfb2f027846645f225f9668b6a8372c3527d35ad57214029",
+    "include/dsplib/fpm_iir.h": "68f53246ebb41ba61a2570b7a3b447783cb83ccc2e8377a0648f07599102326c",
+    "include/dsplib/fpm_mrf.h": "25386f8ab624b2155871d322df3002940cba2861815700e6e39b57aa6407200a",
+    "include/dsplib/fpm_mtd.h": "a4d62b7d9b09ac7238a6edd65517ac504a12f81c9f0f6fd7907516924f47d861",
+    "include/dsplib/fpm_phasor.h": "4634ce2546b35b78422b04b606c5d8d9fd8436cef885584c07463d58851b2a3f",
+    "include/dsplib/fpm_pps.h": "849241ef7c12dc70de01401717724a43170d9211532f02a7073ea475467256fd",
+    "include/dsplib/fpm_sdm.h": "c8abe0447c5f2ba4f0611a893b92a7fdf81e0c578c7de63a97523dd0f94c23d8",
+    "include/dsplib/fpm_smc.h": "7717bcf507071812fc6c7ad12a91a95cc64cdce9363e7f2a8f61733f79022806",
+    "include/dsplib/fpm_sre.h": "d20c3e60936933d5d0146ba05cc155a9b61ac3d34c12d570b3debe6c347101a2",
+    "include/dsplib/fpm_tone.h": "d19300cb2794acd7e87cf089b4485a04a1147852f3c28bf3d7181316c618d2a6",
+    "include/dsplib/int_complex.h": "538b9165d85693d5d56d465285db2ddcc20e63cd024e75267ea86b38d4d5e396",
+    "include/dsplib/modem_params.h": "02963b3ef091627f13fc904966c1bb6c72b771c24610c723d67ebc572d5c2138",
+    "include/dsplib/mohdet.h": "dd2df186b259d95efbcd116dd5e2cf3a341cf4ad1f692666f2160edc8a407fcd",
+    "include/dsplib/mtk.h": "1d2086cefc8095e810d427b3782a905255ed70c262e444cbd80ab14c5ffeef9b",
+    "include/dsplib/notch.h": "50078f34c50db50ea38620528ac580abcbbf562b9ebf26b600c235b53f6c59f7",
+    "include/dsplib/nulldp.h": "4070a65a1b68ccd4b42001f71b2e4843b09f958cc6d5f353e5491f1929408e0c",
+    "include/dsplib/pcm.h": "c3593fd0c417429f663e2c9be635a23bc3e89d74c7aa615d0a8ac0a90cfc8087",
+    "include/dsplib/period_byte_layout.h": "580497cb9cece61ff3ededd5add551419b6be58a12958a968213f0801ada7d48",
+    "include/dsplib/pulse.h": "dfc37f8d0dd0b0bab2792124a91c17e56f1a87072a9365983c655715e45adef5",
+    "include/dsplib/ringdet.h": "2ba89953311f05c8f3358a9595c95ca2049b9963c737e04e6995eb8d168a78c8",
+    "include/dsplib/sdm.h": "da676c9c48df10e0fa130e3b81d8ed2d43bd0041a8de363e24b08908ec2cf0c2",
+    "include/dsplib/sdmv27.h": "14890b1d76ef9a1ac5cdcd6d5abd17f8f343f537eee13f8e18d841ecfaaa62a2",
+    "include/dsplib/sgd.h": "2f16289c81428e434624f064b24d64d67a1da80ecb79eab8b1b5a93cffde477d",
+    "include/dsplib/silence.h": "09f360072c1d43204c50cd615d50ae93f69d11bdf87aaf949f82c94131013da1",
+    "include/dsplib/smc.h": "39be65ba950c2f57dd060fbab217426b1ab582818b2d13cfab0a790e0eebb975",
+    "include/dsplib/sysdep.h": "1fc7a1bca190caf7eb03e375a93168da829c18cc7b4d1a67fd48108c79547076",
+    "include/dsplib/t30frame.h": "3b73d4b45fe8f84864e7bec426431af1bec83bcbe780084438798dee3f9bc450",
+    "include/dsplib/tagV90AdditionalCPinfo.h": "99dd9e8090a93c632e136b9a169542c40b7b4baf4f8888d20b9e777cb089dcfb",
+    "include/dsplib/toneiir.h": "176e5031296a26816b77a0eabc1006cf243f0763f76e61971f4bed09f23071a1",
+    "include/dsplib/v17cfg.h": "4da317ae8717d8a7572ce8f4a883e13cf29baecdd7388240bf7d9e8562e7f68f",
+    "include/dsplib/v17data.h": "b2f58164d0b056b649067d43d14808b9920067d7a7e379a5a8a7749e596c6bce",
+    "include/dsplib/v17dec.h": "35d036b815cb1167e5bc2e10fe41417733cf1037cd9cbf1c9c104239541e48d0",
+    "include/dsplib/v17fax.h": "7e371ae2645e0657e8490aa82c73252ab736440aec48195cd5d33ea1678d494c",
+    "include/dsplib/v21cfg.h": "232b3602b5191f2f536e92f0e96ef7c7dd67193a6f0acd70baad16ebcbbcb7f9",
+    "include/dsplib/v21fax.h": "9c802c6ade10013be0845ee41c3686fc925272e8e69a1da83a12fc1b0991171a",
+    "include/dsplib/v22.h": "0d86e6de995c59415666e51b285c988c398d84e6917b09ab1c3f96ffdf793323",
+    "include/dsplib/v22_fse.h": "8894571c7e155dafbefca9dc7193c448e0c36c4f5fe283ef0e0802c4ff9c8621",
+    "include/dsplib/v22_iir.h": "df09b5f900bfd6085b9d436b5d3779fcc82e832c6ae3c9590b5a7a270afb21d0",
+    "include/dsplib/v22_mrf.h": "f609700140dcf531d42a717f73ee59e1eb72c5351044ca23e4fe61afc2f714ab",
+    "include/dsplib/v22_pps.h": "2c97f8d0402eb0eafd8455a0922cd3f85c025dbb401c8fa4b3260b97ad46b2d1",
+    "include/dsplib/v22_sre.h": "ebcc8056d14b14afaaee53cf1ae83c8cb230af8e7c827d455f381ee7f5616030",
+    "include/dsplib/v22ans.h": "0bb503f9571fde8edb717b88dcb1f2bab520456f80716a24f69e4158b5882257",
+    "include/dsplib/v22conn.h": "6207cf80b87a957624b9b4a1b6c72e5ad0c060f8ab6d198f5151d1d54a4d05cf",
+    "include/dsplib/v22ctl.h": "d68399bdcda33c88ac2168d5aca9aab25ac5f5ee634c7c7887cdce670fb0b0ba",
+    "include/dsplib/v22data.h": "cc27bb73e1e739de318219dd6df9a77592196da1125cbd54765f3b0dacc9081f",
+    "include/dsplib/v22dec.h": "1f30a3db341c3a50b37c37f996e95b3f640f40e98b19b5df3551f6a9e6588dc3",
+    "include/dsplib/v22det.h": "7743a17c8da3f2a9beea10e3ac04b0c2f2df7e5fa390fa17237af91d51889af3",
+    "include/dsplib/v22fp.h": "932d309fb47a9851e95d5e754f84c199e917d342fb5a4b9aec82edfb9ec3e971",
+    "include/dsplib/v22hdx.h": "cc70f4a8c379499b5d73f022b98b7eb86034d565f3062efe2b9eba07d36f6385",
+    "include/dsplib/v22loop.h": "690823e016401fa339e1aaa9e4939bc652f53faefbd232b176e045cf359b5404",
+    "include/dsplib/v22org.h": "8533d0ad091d142d8644fe2ef273d46b4a4877c137a6372599f6521b952565f3",
+    "include/dsplib/v22prc.h": "3737ee00653e60a447036f265e4c303428c8acb86c23bbe988c0968832f482ea",
+    "include/dsplib/v22rate.h": "7cff8269579eebe28f095fc849756cf36f70b84f0a440f0bf4ba271a6974d43e",
+    "include/dsplib/v22status.h": "76494d7484719f174343822185b75ae0bff6b4b5472e4fd829dfbb47075abf58",
+    "include/dsplib/v22tab.h": "a310b8e7cb7c5ad662e6f92c05b43f014b2481de3885c90b19d9515aac204fff",
+    "include/dsplib/v22txtab.h": "ad939f87ce11817ba433e5f055f4063f4ed6205b9254c4617441423e84927a48",
+    "include/dsplib/v23.h": "5356d96ce8d56bba533c603f0375582686fa2ed7f9ec5174b1d7317ecb9044e7",
+    "include/dsplib/v23fp.h": "8a8345bbd56a62b4299e44af8a011648c6266d6ac02ea1cfaeaa853442708de9",
+    "include/dsplib/v27cfg.h": "5ec6ea3861ad4bef4777a17af1166595dcd5567d71ef73db190c370aba2e1fe0",
+    "include/dsplib/v27fax.h": "1ef978a288d5c35a8c2fe80d9d593625360e58b023bc0346693464bb0a321a09",
+    "include/dsplib/v29cfg.h": "130301e33780d0e1d8f36489fa5440e886dabec223220066a4eb650c1398131b",
+    "include/dsplib/v29data.h": "eaa56f2d2fc15ba265d9a8b169fad9babd6ddd6b2dd91d6c5682ccd0df9eb7d1",
+    "include/dsplib/v29fax.h": "c874513395f746b0da74fd8deb8705720717a34137845f2c83ae24b2c5d62485",
+    "include/dsplib/v32.h": "1cf357863961f31e8aed1ec60efb6387b4835a8aa9a6cf5ec1ee97fd137b35e4",
+    "include/dsplib/v32anstone.h": "2d4f1e4e0eaddfe38757f659a45e91ad83746d6342004156757026ec21cf3dcf",
+    "include/dsplib/v32cfg.h": "ee6ae37f3c4ee8f92501fb220221fb064d8e884a47ee25c3d04f97362bee6eea",
+    "include/dsplib/v32data.h": "4a9c1ac0783304ff8f6d53aea7327e96121859f98c09c8572c617af0c8e837f2",
+    "include/dsplib/v32dec.h": "165bb8d9ba4c302f88fb6a5694b668780eec8b93b15bc81e77ceca3a8e2d0087",
+    "include/dsplib/v32demod.h": "620f9430a893ef2c3d65118c3eb4a39fb7d50666983c006e7b24f07cee430831",
+    "include/dsplib/v32fp.h": "ae65c220e197f92f34fe221b21c101e4f9694d74121997a93426c143cde7cfac",
+    "include/dsplib/v32fpctl.h": "b65be580c3f8f910656ec1abccbdd3f6ee24c5afdfc7af4e1bcecc77016b9bce",
+    "include/dsplib/v32fpstat.h": "c4c7bd8b39edb4d08a176a9e28c5705164b04c3d0cc5e3c8805824b238fc8b6e",
+    "include/dsplib/v32fse.h": "4dfbd5b22f1ac1a4c79780771efbbbbe7b00b9cd43a4481c2f75d405b213da79",
+    "include/dsplib/v32hdx.h": "64139baa1340ca21acd881eb43e2c6ff1a1baeffadaf61fd542863b2487dcaed",
+    "include/dsplib/v32hdxst.h": "c1ed5133e4eb552b8367ec526cbbbfa5e639364be629940d180cd1d8126f2cfb",
+    "include/dsplib/v32scram.h": "796ff04926c181fdf186be08171eac5d2c1d2246f8271ad8653077a2094d32ab",
+    "include/dsplib/v32seq.h": "205290620e820311ec42312f607cf63239f9f639328ba7fb6e9395242c608340",
+    "include/dsplib/v32smc.h": "44ccddb6f0bb34729f6d5125c2d150423c8e9da553591249625f11384da3358b",
+    "include/dsplib/v32state.h": "36ccc110c6266609e99637f4d5be266eb1d42de6c622c2a9463829fd799d61b2",
+    "include/dsplib/v32struct.h": "45581d02c8b9181130fa405d1fad088a00c402d3ccf01ad6cd9338010aba9be5",
+    "include/dsplib/v34det.h": "b0cebd7674efc156a80dd278e9953b9e01508b849fdaf275423832c2228e6719",
+    "include/dsplib/v34digital.h": "beecb9876220508b577268b692ba2fb95f059af0824e8655e8acfaed5e9cef4a",
+    "include/dsplib/v34filt.h": "7ba91a41b706061384dcb92d0975c7c834f989f0b3dee370ebe20b410db24f63",
+    "include/dsplib/v34fsk.h": "e6683da6a67593e5ccc03464ae1c1368fad278d0f6de92c01ee696aa380f0e78",
+    "include/dsplib/v34hshak.h": "a43b6d5933c7abc7633d4ff63a7b388abfe4270e89e72da1f1c0d21e261369f3",
+    "include/dsplib/v34hstx1.h": "a2dd45e834044c73d052385af7796a670ce4cdecd6d0420f12798bd8c7a2de96",
+    "include/dsplib/v34hstx1_arms.h": "c6e72e1b92aa90cbd42a96ae32ddcb431ac5fe708cb5f5834436c8a368ff9a57",
+    "include/dsplib/v34info.h": "51debdd13bdb1380c9b2dc1bd82f61a7a097366078d9db4adf98447b5a4a14ed",
+    "include/dsplib/v34pcm_tables.h": "eb73491a933e2f5bb9f81657412e71a58eeee3445aa86075a47bb2bc5646c47e",
+    "include/dsplib/v34pcmif.h": "d815df8a5e4fa6c4c9a9c41a761efc7252270b354634f447d37f4dfe4fa4f8f5",
+    "include/dsplib/v34recv.h": "e2abec07d42d67fd85a36165e91072f7b91f59a85483ff31d92a5fd0ddd30b54",
+    "include/dsplib/v34rx.h": "b06d6f5fe2ab3cf03920ea55602c2dfc850cbf1cd8dc1878aa8c49dd3059d9b5",
+    "include/dsplib/v34scram.h": "0e0aa7e3630b7c8710321bab77d26dd147f8b269ec960333895ff191fe83011d",
+    "include/dsplib/v34shell.h": "ee25c1cea0d3653b42956ba16d4e3f4659fbcb756348c0fef46a78d58f983c6d",
+    "include/dsplib/v8.h": "a0bcd3f0a26001a1356fcabdddc0bd1a44027a79892c3f674b8b82b8e9adcd27",
+    "include/dsplib/v8dp.h": "e352e93d2c4da6de1fa2826f4f13fe856aa8813d59fd737293e71d02ab836a4c",
+    "include/dsplib/vce.h": "856721d1f27532725ee360c845ea914b43448e69f5f36bd70972e10fc4d2d2e9",
+    "include/dsplib/voice.h": "5462b68403650cf519a5bcf7dc1fcdd6ef1560b43b9f68f7313e5829edad8dd8",
+    "include/dsplib/voicecmd.h": "aef1d9213d02c6213aa414fe843a72c9a33518465812e8b9b93a34beb7f48cff",
+    "include/dsplib/vpcm.h": "a2eb0586356e91b99763c292d8481bca37d0e7ccd2724842d65c194334495a19",
+    "include/dsplib/vpcm_tables.h": "728b61a59a050bfed55ed56f6c585cf14442f873273841ac35853ef8a9408140",
+    "include/dsplib/vtb.h": "531e504b59d842ee66cb2cbed3510b5c9bb2a0bd1d7bcdc8d053534274847e2c",
+    "native.o": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+    "retained.o": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+    "src/pump/v34/VPcmV34Main.cpp": "cfc65c77b068a8f94c22174b3550b5f4095a61f2e14a976026cc148eeb63aa37",
+    "tools/toolchain/period_compat.h": "49e1dbd4585703dc5f59990800133df247d0ceba439f61bfa53596040c08440a"
+  },
+  "full_TU": {
+    "allocated": [
+      {
+        "baseline_raw_sha256": "7da947d901521b390d14d41add2332d883a6772573feeab435f1bc8189d80e60",
+        "raw_equal": true,
+        "section": ".data",
+        "selected_raw_sha256": "7da947d901521b390d14d41add2332d883a6772573feeab435f1bc8189d80e60",
+        "size": 32
+      },
+      {
+        "baseline_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "raw_equal": true,
+        "section": ".bss",
+        "selected_raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size": 0
+      },
+      {
+        "baseline_raw_sha256": "7ef9906ac0e4df6c9a2033558a0001ff490febb4cde931394c643bc08bfdceca",
+        "raw_equal": true,
+        "section": ".rodata.str1.4",
+        "selected_raw_sha256": "7ef9906ac0e4df6c9a2033558a0001ff490febb4cde931394c643bc08bfdceca",
+        "size": 4863
+      },
+      {
+        "baseline_raw_sha256": "79e991d68e94db75450354c4b16a98458032bec54f07b311a6e6339dd031be59",
+        "raw_equal": false,
+        "section": ".rodata",
+        "selected_raw_sha256": "25d12b5d4f02db66ab716a9731f93e0545b2581788573083e9c9a2e4c50cc641",
+        "size": 356
+      },
+      {
+        "baseline_raw_sha256": "0dc5ef259b3d93621771da6dd2855a31f4b3ab4b4b18eb3f83d6859c5cf35080",
+        "raw_equal": true,
+        "section": ".rodata.cst4",
+        "selected_raw_sha256": "0dc5ef259b3d93621771da6dd2855a31f4b3ab4b4b18eb3f83d6859c5cf35080",
+        "size": 20
+      },
+      {
+        "baseline_raw_sha256": "a9b671c8607230bd4db59b041d7d311dd2404fc809dfbf2a03d33b7fac5466b0",
+        "raw_equal": true,
+        "section": ".rodata.str1.1",
+        "selected_raw_sha256": "a9b671c8607230bd4db59b041d7d311dd2404fc809dfbf2a03d33b7fac5466b0",
+        "size": 133
+      }
+    ],
+    "baseline_grades": {
+      "BYTES": 2,
+      "EXACT": 26,
+      "SIZE": 28
+    },
+    "exports_equal": true,
+    "functions": 56,
+    "native_shared_functions": 56,
+    "non_target_relocations_equal": true,
+    "protected_grade_losses": [],
+    "rodata_changed_words": 67,
+    "rodata_relocations": 89,
+    "rodata_targets": [
+      {
+        "baseline_addend": 643,
+        "offset": 0,
+        "selected_addend": 643,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          131
+        ]
+      },
+      {
+        "baseline_addend": 635,
+        "offset": 4,
+        "selected_addend": 635,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          123
+        ]
+      },
+      {
+        "baseline_addend": 627,
+        "offset": 8,
+        "selected_addend": 627,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          115
+        ]
+      },
+      {
+        "baseline_addend": 619,
+        "offset": 12,
+        "selected_addend": 619,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          107
+        ]
+      },
+      {
+        "baseline_addend": 611,
+        "offset": 16,
+        "selected_addend": 611,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          99
+        ]
+      },
+      {
+        "baseline_addend": 603,
+        "offset": 20,
+        "selected_addend": 603,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          91
+        ]
+      },
+      {
+        "baseline_addend": 595,
+        "offset": 24,
+        "selected_addend": 595,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          83
+        ]
+      },
+      {
+        "baseline_addend": 587,
+        "offset": 28,
+        "selected_addend": 587,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          75
+        ]
+      },
+      {
+        "baseline_addend": 579,
+        "offset": 32,
+        "selected_addend": 579,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          67
+        ]
+      },
+      {
+        "baseline_addend": 571,
+        "offset": 36,
+        "selected_addend": 571,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          59
+        ]
+      },
+      {
+        "baseline_addend": 563,
+        "offset": 40,
+        "selected_addend": 563,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          51
+        ]
+      },
+      {
+        "baseline_addend": 555,
+        "offset": 44,
+        "selected_addend": 555,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          43
+        ]
+      },
+      {
+        "baseline_addend": 547,
+        "offset": 48,
+        "selected_addend": 547,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          35
+        ]
+      },
+      {
+        "baseline_addend": 535,
+        "offset": 52,
+        "selected_addend": 535,
+        "target": [
+          "code",
+          "_Z19interpretMohTimeouts",
+          23
+        ]
+      },
+      {
+        "baseline_addend": 8776,
+        "offset": 56,
+        "selected_addend": 8776,
+        "target": [
+          "code",
+          "v90Phase34",
+          376
+        ]
+      },
+      {
+        "baseline_addend": 8881,
+        "offset": 60,
+        "selected_addend": 8881,
+        "target": [
+          "code",
+          "v90Phase34",
+          481
+        ]
+      },
+      {
+        "baseline_addend": 9071,
+        "offset": 64,
+        "selected_addend": 9071,
+        "target": [
+          "code",
+          "v90Phase34",
+          671
+        ]
+      },
+      {
+        "baseline_addend": 8985,
+        "offset": 68,
+        "selected_addend": 8985,
+        "target": [
+          "code",
+          "v90Phase34",
+          585
+        ]
+      },
+      {
+        "baseline_addend": 9250,
+        "offset": 72,
+        "selected_addend": 9250,
+        "target": [
+          "code",
+          "v90Phase34",
+          850
+        ]
+      },
+      {
+        "baseline_addend": 9137,
+        "offset": 76,
+        "selected_addend": 9137,
+        "target": [
+          "code",
+          "v90Phase34",
+          737
+        ]
+      },
+      {
+        "baseline_addend": 9216,
+        "offset": 80,
+        "selected_addend": 9216,
+        "target": [
+          "code",
+          "v90Phase34",
+          816
+        ]
+      },
+      {
+        "baseline_addend": 8660,
+        "offset": 84,
+        "selected_addend": 8660,
+        "target": [
+          "code",
+          "v90Phase34",
+          260
+        ]
+      },
+      {
+        "baseline_addend": 15511,
+        "offset": 88,
+        "selected_addend": 15527,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1415
+        ]
+      },
+      {
+        "baseline_addend": 15361,
+        "offset": 92,
+        "selected_addend": 15377,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1265
+        ]
+      },
+      {
+        "baseline_addend": 16251,
+        "offset": 96,
+        "selected_addend": 16267,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2155
+        ]
+      },
+      {
+        "baseline_addend": 16071,
+        "offset": 100,
+        "selected_addend": 16087,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1975
+        ]
+      },
+      {
+        "baseline_addend": 16154,
+        "offset": 104,
+        "selected_addend": 16170,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2058
+        ]
+      },
+      {
+        "baseline_addend": 15924,
+        "offset": 108,
+        "selected_addend": 15940,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1828
+        ]
+      },
+      {
+        "baseline_addend": 16035,
+        "offset": 112,
+        "selected_addend": 16051,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1939
+        ]
+      },
+      {
+        "baseline_addend": 15031,
+        "offset": 116,
+        "selected_addend": 15047,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          935
+        ]
+      },
+      {
+        "baseline_addend": 15828,
+        "offset": 120,
+        "selected_addend": 15844,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1732
+        ]
+      },
+      {
+        "baseline_addend": 15758,
+        "offset": 124,
+        "selected_addend": 15774,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1662
+        ]
+      },
+      {
+        "baseline_addend": 15689,
+        "offset": 128,
+        "selected_addend": 15705,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          1593
+        ]
+      },
+      {
+        "baseline_addend": 16336,
+        "offset": 132,
+        "selected_addend": 16352,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2240
+        ]
+      },
+      {
+        "baseline_addend": 16456,
+        "offset": 136,
+        "selected_addend": 16472,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2360
+        ]
+      },
+      {
+        "baseline_addend": 16506,
+        "offset": 140,
+        "selected_addend": 16522,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2410
+        ]
+      },
+      {
+        "baseline_addend": 16469,
+        "offset": 144,
+        "selected_addend": 16485,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2373
+        ]
+      },
+      {
+        "baseline_addend": 16634,
+        "offset": 148,
+        "selected_addend": 16650,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2538
+        ]
+      },
+      {
+        "baseline_addend": 16608,
+        "offset": 152,
+        "selected_addend": 16624,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2512
+        ]
+      },
+      {
+        "baseline_addend": 16664,
+        "offset": 156,
+        "selected_addend": 16680,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2568
+        ]
+      },
+      {
+        "baseline_addend": 16560,
+        "offset": 160,
+        "selected_addend": 16576,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2464
+        ]
+      },
+      {
+        "baseline_addend": 16586,
+        "offset": 164,
+        "selected_addend": 16602,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2490
+        ]
+      },
+      {
+        "baseline_addend": 17048,
+        "offset": 168,
+        "selected_addend": 17064,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          2952
+        ]
+      },
+      {
+        "baseline_addend": 17300,
+        "offset": 172,
+        "selected_addend": 17316,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3204
+        ]
+      },
+      {
+        "baseline_addend": 17236,
+        "offset": 176,
+        "selected_addend": 17252,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3140
+        ]
+      },
+      {
+        "baseline_addend": 17225,
+        "offset": 180,
+        "selected_addend": 17241,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3129
+        ]
+      },
+      {
+        "baseline_addend": 17199,
+        "offset": 184,
+        "selected_addend": 17215,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3103
+        ]
+      },
+      {
+        "baseline_addend": 17173,
+        "offset": 188,
+        "selected_addend": 17189,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3077
+        ]
+      },
+      {
+        "baseline_addend": 17153,
+        "offset": 192,
+        "selected_addend": 17169,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3057
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 196,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 17919,
+        "offset": 200,
+        "selected_addend": 17935,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3823
+        ]
+      },
+      {
+        "baseline_addend": 17803,
+        "offset": 204,
+        "selected_addend": 17819,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3707
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 208,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 212,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 216,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 220,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 224,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 228,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 232,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 236,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 240,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 244,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 17776,
+        "offset": 248,
+        "selected_addend": 17792,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3680
+        ]
+      },
+      {
+        "baseline_addend": 14402,
+        "offset": 252,
+        "selected_addend": 14418,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          306
+        ]
+      },
+      {
+        "baseline_addend": 17683,
+        "offset": 256,
+        "selected_addend": 17699,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3587
+        ]
+      },
+      {
+        "baseline_addend": 17655,
+        "offset": 260,
+        "selected_addend": 17671,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          3559
+        ]
+      },
+      {
+        "baseline_addend": 19584,
+        "offset": 264,
+        "selected_addend": 19600,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5488
+        ]
+      },
+      {
+        "baseline_addend": 19757,
+        "offset": 268,
+        "selected_addend": 19773,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5661
+        ]
+      },
+      {
+        "baseline_addend": 19777,
+        "offset": 272,
+        "selected_addend": 19793,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5681
+        ]
+      },
+      {
+        "baseline_addend": 19767,
+        "offset": 276,
+        "selected_addend": 19783,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5671
+        ]
+      },
+      {
+        "baseline_addend": 19817,
+        "offset": 280,
+        "selected_addend": 19833,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5721
+        ]
+      },
+      {
+        "baseline_addend": 19807,
+        "offset": 284,
+        "selected_addend": 19823,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5711
+        ]
+      },
+      {
+        "baseline_addend": 19797,
+        "offset": 288,
+        "selected_addend": 19813,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5701
+        ]
+      },
+      {
+        "baseline_addend": 19787,
+        "offset": 292,
+        "selected_addend": 19803,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5691
+        ]
+      },
+      {
+        "baseline_addend": 19984,
+        "offset": 296,
+        "selected_addend": 20000,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5888
+        ]
+      },
+      {
+        "baseline_addend": 19974,
+        "offset": 300,
+        "selected_addend": 19990,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5878
+        ]
+      },
+      {
+        "baseline_addend": 19964,
+        "offset": 304,
+        "selected_addend": 19980,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5868
+        ]
+      },
+      {
+        "baseline_addend": 19954,
+        "offset": 308,
+        "selected_addend": 19970,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5858
+        ]
+      },
+      {
+        "baseline_addend": 19944,
+        "offset": 312,
+        "selected_addend": 19960,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5848
+        ]
+      },
+      {
+        "baseline_addend": 19934,
+        "offset": 316,
+        "selected_addend": 19950,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5838
+        ]
+      },
+      {
+        "baseline_addend": 19036,
+        "offset": 320,
+        "selected_addend": 19052,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          4940
+        ]
+      },
+      {
+        "baseline_addend": 20011,
+        "offset": 324,
+        "selected_addend": 20027,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          5915
+        ]
+      },
+      {
+        "baseline_addend": 20338,
+        "offset": 328,
+        "selected_addend": 20354,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6242
+        ]
+      },
+      {
+        "baseline_addend": 20301,
+        "offset": 332,
+        "selected_addend": 20317,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6205
+        ]
+      },
+      {
+        "baseline_addend": 20528,
+        "offset": 336,
+        "selected_addend": 20544,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6432
+        ]
+      },
+      {
+        "baseline_addend": 20510,
+        "offset": 340,
+        "selected_addend": 20526,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6414
+        ]
+      },
+      {
+        "baseline_addend": 19036,
+        "offset": 344,
+        "selected_addend": 19052,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          4940
+        ]
+      },
+      {
+        "baseline_addend": 20484,
+        "offset": 348,
+        "selected_addend": 20500,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6388
+        ]
+      },
+      {
+        "baseline_addend": 20461,
+        "offset": 352,
+        "selected_addend": 20477,
+        "target": [
+          "code",
+          "VPcmV34Progress",
+          6365
+        ]
+      }
+    ],
+    "selected_grades": {
+      "BYTES": 2,
+      "EXACT": 26,
+      "REGALLOC": 1,
+      "SIZE": 27
+    },
+    "symbol_order_equal": true,
+    "unchanged_literal_bodies": 54
+  },
+  "gate": {
+    "command": "make phase J=8",
+    "log_sha256": "e55594bbaf400c7eacd36df83bec39568d0b35d1ff0f758d0c9174f870e07648",
+    "period_failed": 0,
+    "period_passed": 399,
+    "returncode": 0
+  },
+  "graphs": {
+    "baseline_owner": {
+      "counts": {
+        "bounded": 49,
+        "refused": 7
+      },
+      "helper_inputs": {
+        "capture": "private helper snapshot before import",
+        "files": {
+          "gcc3_owner_trace.py": {
+            "captured_bytes": 15096,
+            "sha256": "ee03c0f5269f3f4fb37f1677243c6af917ae99bcc61fb9d077f8f0ac67ea5986",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_owner_trace.py"
+          },
+          "gcc3_search_width.py": {
+            "captured_bytes": 10262,
+            "sha256": "054e2d72b9e495b9eb200b60410500094af2cca9ce70653161647b5878ef7001",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_search_width.py"
+          },
+          "toolchain/byteident.py": {
+            "captured_bytes": 76196,
+            "sha256": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/byteident.py"
+          },
+          "toolchain/induction_jumptable.py": {
+            "captured_bytes": 15832,
+            "sha256": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/induction_jumptable.py"
+          },
+          "toolchain/jumptable.py": {
+            "captured_bytes": 36481,
+            "sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/jumptable.py"
+          },
+          "toolchain/readonly_copy.py": {
+            "captured_bytes": 15702,
+            "sha256": "096ea58789816ab0ce1d7794d670c47ab5e98ade1ea03736d58648d3a81b4f70",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/readonly_copy.py"
+          }
+        },
+        "source_tools_directory": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools"
+      },
+      "inputs": {
+        "/mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106/baseline/src_pump_v34_VPcmV34Main.cpp.o": {
+          "sha256": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+          "size": 35768
+        },
+        "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/ref/slmodemd/dsplibs.o": {
+          "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+          "size": 1233728
+        }
+      },
+      "pairs_with_anchors": 42,
+      "pairs_with_relations": 20,
+      "report_sha256": "530403213e1152caa7f8ad5b8806101ed196d55f63a39d2d858e21e409a5b3da",
+      "target": {
+        "candidate": {
+          "backedges": [
+            [
+              10673,
+              10465
+            ],
+            [
+              10685,
+              10465
+            ],
+            [
+              10706,
+              10409
+            ],
+            [
+              10715,
+              10478
+            ]
+          ],
+          "entry": 10336,
+          "events": [
+            {
+              "anchor": [
+                "call",
+                [
+                  "R_386_PC32",
+                  [
+                    "symbol",
+                    "dsplibs_debug_printf",
+                    4294967292
+                  ]
+                ]
+              ],
+              "at": 10701,
+              "kind": "call"
+            }
+          ],
+          "instruction_count": 93,
+          "mov_read_count": 14,
+          "mov_write_count": 25,
+          "reachable_instructions": 92,
+          "status": "bounded",
+          "unknown": {
+            "branch_predicate": 13,
+            "read_unknown": 14,
+            "write_unknown": 25
+          },
+          "unsupported_instructions": [
+            {
+              "at": 10336,
+              "instruction": "cld "
+            },
+            {
+              "at": 10379,
+              "instruction": "rep stos %eax,%es:(%edi)"
+            },
+            {
+              "at": 10396,
+              "instruction": "unsupported-relocation $0x1,0x0"
+            },
+            {
+              "at": 10528,
+              "instruction": "cmpb $0x0,0x5(%edi)"
+            },
+            {
+              "at": 10550,
+              "instruction": "cmpb $0x0,0x4(%edi)"
+            },
+            {
+              "at": 10572,
+              "instruction": "cmpb $0x0,0x3(%edi)"
+            },
+            {
+              "at": 10600,
+              "instruction": "cmpb $0x0,0x2(%edi)"
+            },
+            {
+              "at": 10694,
+              "instruction": "unsupported-relocation $0x924,(%esp)"
+            }
+          ]
+        },
+        "comparison": {
+          "ambiguous_anchor_count": 0,
+          "ambiguous_anchors": [],
+          "cyclic_relations_excluded": 0,
+          "findings": [],
+          "matched_anchors": 1,
+          "relations_compared": 0,
+          "semantic_proof": false,
+          "status": "bounded",
+          "unpaired": []
+        },
+        "native": {
+          "backedges": [
+            [
+              42401,
+              42208
+            ],
+            [
+              42410,
+              42221
+            ],
+            [
+              42423,
+              42208
+            ],
+            [
+              42448,
+              42154
+            ]
+          ],
+          "entry": 42064,
+          "events": [
+            {
+              "anchor": [
+                "call",
+                [
+                  "R_386_PC32",
+                  [
+                    "symbol",
+                    "dsplibs_debug_printf",
+                    4294967292
+                  ]
+                ]
+              ],
+              "at": 42443,
+              "kind": "call"
+            }
+          ],
+          "instruction_count": 107,
+          "mov_read_count": 12,
+          "mov_write_count": 26,
+          "reachable_instructions": 91,
+          "status": "bounded",
+          "unknown": {
+            "branch_predicate": 13,
+            "read_unknown": 12,
+            "write_unknown": 26
+          },
+          "unsupported_instructions": [
+            {
+              "at": 42064,
+              "instruction": "cld "
+            },
+            {
+              "at": 42115,
+              "instruction": "rep stos %eax,%es:(%edi)"
+            },
+            {
+              "at": 42141,
+              "instruction": "unsupported-relocation $0x1,0x0"
+            },
+            {
+              "at": 42272,
+              "instruction": "cmpb $0x0,0x5(%edi)"
+            },
+            {
+              "at": 42290,
+              "instruction": "cmpb $0x0,0x4(%edi)"
+            },
+            {
+              "at": 42308,
+              "instruction": "cmpb $0x0,0x3(%edi)"
+            },
+            {
+              "at": 42332,
+              "instruction": "cmpb $0x0,0x2(%edi)"
+            },
+            {
+              "at": 42436,
+              "instruction": "unsupported-relocation $0x1a24,(%esp)"
+            }
+          ]
+        },
+        "symbol": "chkForceBaudRate"
+      }
+    },
+    "baseline_stack": {
+      "counts": {
+        "bounded": 12,
+        "refused": 44
+      },
+      "helper_inputs": {
+        "capture": "private helper snapshot before import",
+        "files": {
+          "gcc3_owner_trace.py": {
+            "captured_bytes": 15096,
+            "sha256": "ee03c0f5269f3f4fb37f1677243c6af917ae99bcc61fb9d077f8f0ac67ea5986",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_owner_trace.py"
+          },
+          "gcc3_search_width.py": {
+            "captured_bytes": 10262,
+            "sha256": "054e2d72b9e495b9eb200b60410500094af2cca9ce70653161647b5878ef7001",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_search_width.py"
+          },
+          "toolchain/byteident.py": {
+            "captured_bytes": 76196,
+            "sha256": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/byteident.py"
+          },
+          "toolchain/induction_jumptable.py": {
+            "captured_bytes": 15832,
+            "sha256": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/induction_jumptable.py"
+          },
+          "toolchain/jumptable.py": {
+            "captured_bytes": 36481,
+            "sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/jumptable.py"
+          },
+          "toolchain/readonly_copy.py": {
+            "captured_bytes": 15702,
+            "sha256": "096ea58789816ab0ce1d7794d670c47ab5e98ade1ea03736d58648d3a81b4f70",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/readonly_copy.py"
+          }
+        },
+        "source_tools_directory": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools"
+      },
+      "inputs": {
+        "/mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106/baseline/src_pump_v34_VPcmV34Main.cpp.o": {
+          "sha256": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+          "size": 35768
+        },
+        "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/ref/slmodemd/dsplibs.o": {
+          "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+          "size": 1233728
+        }
+      },
+      "pairs_with_anchors": 10,
+      "pairs_with_relations": 0,
+      "report_sha256": "e82279f39d880a0fda368deb569be98ddbc9a84b8d94c441f5091165534807bb",
+      "target": {
+        "candidate": {
+          "reason": "single entry SUB ESP frame required",
+          "status": "refused"
+        },
+        "comparison": {
+          "findings": [],
+          "matched_anchors": 0,
+          "status": "refused"
+        },
+        "native": {
+          "reason": "single entry SUB ESP frame required",
+          "status": "refused"
+        },
+        "symbol": "chkForceBaudRate"
+      }
+    },
+    "selected_owner": {
+      "counts": {
+        "bounded": 49,
+        "refused": 7
+      },
+      "helper_inputs": {
+        "capture": "private helper snapshot before import",
+        "files": {
+          "gcc3_owner_trace.py": {
+            "captured_bytes": 15096,
+            "sha256": "ee03c0f5269f3f4fb37f1677243c6af917ae99bcc61fb9d077f8f0ac67ea5986",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_owner_trace.py"
+          },
+          "gcc3_search_width.py": {
+            "captured_bytes": 10262,
+            "sha256": "054e2d72b9e495b9eb200b60410500094af2cca9ce70653161647b5878ef7001",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_search_width.py"
+          },
+          "toolchain/byteident.py": {
+            "captured_bytes": 76196,
+            "sha256": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/byteident.py"
+          },
+          "toolchain/induction_jumptable.py": {
+            "captured_bytes": 15832,
+            "sha256": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/induction_jumptable.py"
+          },
+          "toolchain/jumptable.py": {
+            "captured_bytes": 36481,
+            "sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/jumptable.py"
+          },
+          "toolchain/readonly_copy.py": {
+            "captured_bytes": 15702,
+            "sha256": "096ea58789816ab0ce1d7794d670c47ab5e98ade1ea03736d58648d3a81b4f70",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/readonly_copy.py"
+          }
+        },
+        "source_tools_directory": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools"
+      },
+      "inputs": {
+        "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/ref/slmodemd/dsplibs.o": {
+          "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+          "size": 1233728
+        },
+        "build/tc_repro/src_pump_v34_VPcmV34Main.cpp.o": {
+          "sha256": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+          "size": 35768
+        }
+      },
+      "pairs_with_anchors": 42,
+      "pairs_with_relations": 20,
+      "report_sha256": "2531e6420bcfdf9715d67d19ffeeba4820c85d7c355d2f1ac1237aaeea808f04",
+      "target": {
+        "candidate": {
+          "backedges": [
+            [
+              10673,
+              10480
+            ],
+            [
+              10682,
+              10493
+            ],
+            [
+              10695,
+              10480
+            ],
+            [
+              10720,
+              10426
+            ]
+          ],
+          "entry": 10336,
+          "events": [
+            {
+              "anchor": [
+                "call",
+                [
+                  "R_386_PC32",
+                  [
+                    "symbol",
+                    "dsplibs_debug_printf",
+                    4294967292
+                  ]
+                ]
+              ],
+              "at": 10715,
+              "kind": "call"
+            }
+          ],
+          "instruction_count": 107,
+          "mov_read_count": 12,
+          "mov_write_count": 26,
+          "reachable_instructions": 91,
+          "status": "bounded",
+          "unknown": {
+            "branch_predicate": 13,
+            "read_unknown": 12,
+            "write_unknown": 26
+          },
+          "unsupported_instructions": [
+            {
+              "at": 10336,
+              "instruction": "cld "
+            },
+            {
+              "at": 10387,
+              "instruction": "rep stos %eax,%es:(%edi)"
+            },
+            {
+              "at": 10413,
+              "instruction": "unsupported-relocation $0x1,0x0"
+            },
+            {
+              "at": 10544,
+              "instruction": "cmpb $0x0,0x5(%edi)"
+            },
+            {
+              "at": 10562,
+              "instruction": "cmpb $0x0,0x4(%edi)"
+            },
+            {
+              "at": 10580,
+              "instruction": "cmpb $0x0,0x3(%edi)"
+            },
+            {
+              "at": 10604,
+              "instruction": "cmpb $0x0,0x2(%edi)"
+            },
+            {
+              "at": 10708,
+              "instruction": "unsupported-relocation $0x924,(%esp)"
+            }
+          ]
+        },
+        "comparison": {
+          "ambiguous_anchor_count": 0,
+          "ambiguous_anchors": [],
+          "cyclic_relations_excluded": 0,
+          "findings": [],
+          "matched_anchors": 1,
+          "relations_compared": 0,
+          "semantic_proof": false,
+          "status": "bounded",
+          "unpaired": []
+        },
+        "native": {
+          "backedges": [
+            [
+              42401,
+              42208
+            ],
+            [
+              42410,
+              42221
+            ],
+            [
+              42423,
+              42208
+            ],
+            [
+              42448,
+              42154
+            ]
+          ],
+          "entry": 42064,
+          "events": [
+            {
+              "anchor": [
+                "call",
+                [
+                  "R_386_PC32",
+                  [
+                    "symbol",
+                    "dsplibs_debug_printf",
+                    4294967292
+                  ]
+                ]
+              ],
+              "at": 42443,
+              "kind": "call"
+            }
+          ],
+          "instruction_count": 107,
+          "mov_read_count": 12,
+          "mov_write_count": 26,
+          "reachable_instructions": 91,
+          "status": "bounded",
+          "unknown": {
+            "branch_predicate": 13,
+            "read_unknown": 12,
+            "write_unknown": 26
+          },
+          "unsupported_instructions": [
+            {
+              "at": 42064,
+              "instruction": "cld "
+            },
+            {
+              "at": 42115,
+              "instruction": "rep stos %eax,%es:(%edi)"
+            },
+            {
+              "at": 42141,
+              "instruction": "unsupported-relocation $0x1,0x0"
+            },
+            {
+              "at": 42272,
+              "instruction": "cmpb $0x0,0x5(%edi)"
+            },
+            {
+              "at": 42290,
+              "instruction": "cmpb $0x0,0x4(%edi)"
+            },
+            {
+              "at": 42308,
+              "instruction": "cmpb $0x0,0x3(%edi)"
+            },
+            {
+              "at": 42332,
+              "instruction": "cmpb $0x0,0x2(%edi)"
+            },
+            {
+              "at": 42436,
+              "instruction": "unsupported-relocation $0x1a24,(%esp)"
+            }
+          ]
+        },
+        "symbol": "chkForceBaudRate"
+      }
+    },
+    "selected_stack": {
+      "counts": {
+        "bounded": 12,
+        "refused": 44
+      },
+      "helper_inputs": {
+        "capture": "private helper snapshot before import",
+        "files": {
+          "gcc3_owner_trace.py": {
+            "captured_bytes": 15096,
+            "sha256": "ee03c0f5269f3f4fb37f1677243c6af917ae99bcc61fb9d077f8f0ac67ea5986",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_owner_trace.py"
+          },
+          "gcc3_search_width.py": {
+            "captured_bytes": 10262,
+            "sha256": "054e2d72b9e495b9eb200b60410500094af2cca9ce70653161647b5878ef7001",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/gcc3_search_width.py"
+          },
+          "toolchain/byteident.py": {
+            "captured_bytes": 76196,
+            "sha256": "34c1d49c3638ff2d4aa23922e74417d0f882570a9271d1ff5365f689d5bbba85",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/byteident.py"
+          },
+          "toolchain/induction_jumptable.py": {
+            "captured_bytes": 15832,
+            "sha256": "6768bc9cf877ea9bd96fb0007a64add900c9c8c93be3285d41da62d8b1456dc2",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/induction_jumptable.py"
+          },
+          "toolchain/jumptable.py": {
+            "captured_bytes": 36481,
+            "sha256": "a9252d3e14ee9ec6c8a9d2102e289f02b355669410ff1a13e0f9cec0c6d744ac",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/jumptable.py"
+          },
+          "toolchain/readonly_copy.py": {
+            "captured_bytes": 15702,
+            "sha256": "096ea58789816ab0ce1d7794d670c47ab5e98ade1ea03736d58648d3a81b4f70",
+            "source": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools/toolchain/readonly_copy.py"
+          }
+        },
+        "source_tools_directory": "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/tools"
+      },
+      "inputs": {
+        "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/build/tc_repro/src_pump_v34_VPcmV34Main.cpp.o": {
+          "sha256": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+          "size": 35768
+        },
+        "/mnt/zfs/dev/slmodem/scratch/codex/worktrees/v22-transfer-20261105/ref/slmodemd/dsplibs.o": {
+          "sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+          "size": 1233728
+        }
+      },
+      "pairs_with_anchors": 10,
+      "pairs_with_relations": 0,
+      "report_sha256": "aac601c6a03d752de4e241bac6e229496fc4a27c3b19bcbdad9a29125be6097a",
+      "target": {
+        "candidate": {
+          "reason": "single entry SUB ESP frame required",
+          "status": "refused"
+        },
+        "comparison": {
+          "findings": [],
+          "matched_anchors": 0,
+          "status": "refused"
+        },
+        "native": {
+          "reason": "single entry SUB ESP frame required",
+          "status": "refused"
+        },
+        "symbol": "chkForceBaudRate"
+      }
+    }
+  },
+  "matrix": [
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [],
+      "exports_equal": true,
+      "full_TU": {
+        "GetVPcmMinimalTxPowerReduction": {
+          "baseline": [
+            "SIZE",
+            33
+          ],
+          "candidate": [
+            "SIZE",
+            33
+          ]
+        },
+        "V34GiveINFO1dBits": {
+          "baseline": [
+            "SIZE",
+            6
+          ],
+          "candidate": [
+            "SIZE",
+            6
+          ]
+        },
+        "V34XF_GetInfo0BitsPtr": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_GetMaxUpstreamRateIndex": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "V34XF_GetProbeResultsPtr": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_GetRTD": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_IndicateDilReceived": {
+          "baseline": [
+            "SIZE",
+            49
+          ],
+          "candidate": [
+            "SIZE",
+            49
+          ]
+        },
+        "V34XF_IndicateJdReceived": {
+          "baseline": [
+            "SIZE",
+            4
+          ],
+          "candidate": [
+            "SIZE",
+            4
+          ]
+        },
+        "V34XF_IndicateK56FlexJdReceived": {
+          "baseline": [
+            "SIZE",
+            30
+          ],
+          "candidate": [
+            "SIZE",
+            30
+          ]
+        },
+        "V34XF_IndicateK56FlexRateDetermined": {
+          "baseline": [
+            "SIZE",
+            1
+          ],
+          "candidate": [
+            "SIZE",
+            1
+          ]
+        },
+        "V34XF_IndicateTrn2dReceived": {
+          "baseline": [
+            "SIZE",
+            40
+          ],
+          "candidate": [
+            "SIZE",
+            40
+          ]
+        },
+        "VPcmV34Create": {
+          "baseline": [
+            "SIZE",
+            105
+          ],
+          "candidate": [
+            "SIZE",
+            105
+          ]
+        },
+        "VPcmV34Delete": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCleanedSamples": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxBaudRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxBitRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxCarrier": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentSessionDP": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentTxBaudRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentTxBitRate": {
+          "baseline": [
+            "SIZE",
+            4
+          ],
+          "candidate": [
+            "SIZE",
+            4
+          ]
+        },
+        "VPcmV34GetCurrentTxCarrier": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetMaxUpstreamRateIndex": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "VPcmV34GetQuickConnectIndication": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34IndicateLocalRRN": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34IndicateRemoteRRN": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34InitMOH": {
+          "baseline": [
+            "SIZE",
+            32
+          ],
+          "candidate": [
+            "SIZE",
+            32
+          ]
+        },
+        "VPcmV34InitiateHangUp": {
+          "baseline": [
+            "SIZE",
+            24
+          ],
+          "candidate": [
+            "SIZE",
+            24
+          ]
+        },
+        "VPcmV34InitiateRateRenegotiation": {
+          "baseline": [
+            "BYTES",
+            39
+          ],
+          "candidate": [
+            "BYTES",
+            39
+          ]
+        },
+        "VPcmV34InitiateRetrain": {
+          "baseline": [
+            "SIZE",
+            51
+          ],
+          "candidate": [
+            "SIZE",
+            51
+          ]
+        },
+        "VPcmV34LogTimingOffset": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34NotifyDP": {
+          "baseline": [
+            "SIZE",
+            16
+          ],
+          "candidate": [
+            "SIZE",
+            16
+          ]
+        },
+        "VPcmV34Progress": {
+          "baseline": [
+            "SIZE",
+            816
+          ],
+          "candidate": [
+            "SIZE",
+            816
+          ]
+        },
+        "VPcmV34ReportMiddleOfEchoAdapt": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34ReportStartOfEchoAdapt": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34RequestDPNotification": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetIndicationOfRemoteRetrain": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetMaxBlockLength": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "VPcmV34SetTxScale": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetV90RateReneg": {
+          "baseline": [
+            "SIZE",
+            46
+          ],
+          "candidate": [
+            "SIZE",
+            46
+          ]
+        },
+        "_Z14getMPrecvdBitsP12tagV34Object": {
+          "baseline": [
+            "SIZE",
+            27
+          ],
+          "candidate": [
+            "SIZE",
+            27
+          ]
+        },
+        "_Z15retrainDetectorP17tag_retrainReqDetPsi": {
+          "baseline": [
+            "SIZE",
+            11
+          ],
+          "candidate": [
+            "SIZE",
+            11
+          ]
+        },
+        "_Z16VPcmV34SetDelaysP12tagV34Object": {
+          "baseline": [
+            "BYTES",
+            116
+          ],
+          "candidate": [
+            "BYTES",
+            116
+          ]
+        },
+        "_Z17VPcmV34SetTimeOutP12tagV34Objecti": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "_Z19interpretMohTimeouts": {
+          "baseline": [
+            "SIZE",
+            34
+          ],
+          "candidate": [
+            "SIZE",
+            34
+          ]
+        },
+        "_Z20resetRetrainDetectorP17tag_retrainReqDets": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z25SetUpstreamModulationInfoP12tagV34Object": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z25VPcmV34SetMinimumSigLevelP12tagV34Object": {
+          "baseline": [
+            "SIZE",
+            6
+          ],
+          "candidate": [
+            "SIZE",
+            6
+          ]
+        },
+        "chkForceBaudRate": {
+          "baseline": [
+            "SIZE",
+            5
+          ],
+          "candidate": [
+            "SIZE",
+            5
+          ]
+        },
+        "getTimingOffset": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "getTimingPhase": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "indicateJaTransmission": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "k56FlexPhase34": {
+          "baseline": [
+            "SIZE",
+            28
+          ],
+          "candidate": [
+            "SIZE",
+            28
+          ]
+        },
+        "v90Phase34": {
+          "baseline": [
+            "SIZE",
+            98
+          ],
+          "candidate": [
+            "SIZE",
+            98
+          ]
+        },
+        "v90RateReneg": {
+          "baseline": [
+            "SIZE",
+            48
+          ],
+          "candidate": [
+            "SIZE",
+            48
+          ]
+        },
+        "v90RateRenegSilence": {
+          "baseline": [
+            "SIZE",
+            83
+          ],
+          "candidate": [
+            "SIZE",
+            83
+          ]
+        }
+      },
+      "label": "baseline",
+      "parsed_sha256": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+      "target": [
+        "SIZE",
+        5
+      ],
+      "target_size": 384
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "A-unsigned",
+      "parsed_sha256": "d27651ea42dd0ee6922d234bf86144a5b0af7c78c5565c754a801f1bea7cfd52",
+      "target": [
+        "BYTES",
+        272
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate"
+      ],
+      "exports_equal": true,
+      "label": "B-capture",
+      "parsed_sha256": "1cfdf0965fc682c640226ea0e4f7adaafbd7e832800ac790a7b6da07bafa290e",
+      "target": [
+        "SIZE",
+        5
+      ],
+      "target_size": 384
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "AB",
+      "parsed_sha256": "a56c2a271c16a14586189404c28b046a6ad5304b49bfc2942b1942388d5cc337",
+      "target": [
+        "BYTES",
+        264
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "C-interior",
+      "parsed_sha256": "f7f0b0e79699ffc0c2a48a9777b4149ffdeef304f10bd3f059b3c80d2f60afcb",
+      "target": [
+        "SIZE",
+        9
+      ],
+      "target_size": 398
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "AC",
+      "parsed_sha256": "dae15a6f917a9e773e987d2b7109cb8b32b15a7b8f4fca97d7ec263286535f93",
+      "target": [
+        "SIZE",
+        16
+      ],
+      "target_size": 405
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate"
+      ],
+      "exports_equal": true,
+      "label": "BC",
+      "parsed_sha256": "fb1b5be7c17627c1dde59127fbe87d6f0d1ec1061b1ac9ae7cfbebe4321dd7ce",
+      "target": [
+        "SIZE",
+        5
+      ],
+      "target_size": 384
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "ABC",
+      "parsed_sha256": "2186db2f130ab6ce4f978c110502d4e507d9f2dee5462f3b78ae3f094e1e8ca0",
+      "target": [
+        "BYTES",
+        264
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [],
+      "exports_equal": true,
+      "label": "baselineD",
+      "parsed_sha256": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+      "target": [
+        "SIZE",
+        5
+      ],
+      "target_size": 384
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "ABD",
+      "parsed_sha256": "a56c2a271c16a14586189404c28b046a6ad5304b49bfc2942b1942388d5cc337",
+      "target": [
+        "BYTES",
+        264
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "ABCD",
+      "parsed_sha256": "2186db2f130ab6ce4f978c110502d4e507d9f2dee5462f3b78ae3f094e1e8ca0",
+      "target": [
+        "BYTES",
+        264
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "AB-init",
+      "parsed_sha256": "e90f86917adad85ef83a974d220cfb0b61fddf8ecd63e024c718d34d58f7d85d",
+      "target": [
+        "BYTES",
+        264
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "AB-late-engine",
+      "parsed_sha256": "caf6d7a7c20106d49e609c547c494132e919c461cd42f749371d0e1cc95d8e34",
+      "target": [
+        "BYTES",
+        55
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "label": "AB-native-init",
+      "parsed_sha256": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+      "target": [
+        "REGALLOC",
+        0
+      ],
+      "target_size": 389
+    },
+    {
+      "allocated_relocation_zeroed_equal": true,
+      "changed_bodies": [
+        "chkForceBaudRate",
+        "k56FlexPhase34"
+      ],
+      "exports_equal": true,
+      "full_TU": {
+        "GetVPcmMinimalTxPowerReduction": {
+          "baseline": [
+            "SIZE",
+            33
+          ],
+          "candidate": [
+            "SIZE",
+            33
+          ]
+        },
+        "V34GiveINFO1dBits": {
+          "baseline": [
+            "SIZE",
+            6
+          ],
+          "candidate": [
+            "SIZE",
+            6
+          ]
+        },
+        "V34XF_GetInfo0BitsPtr": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_GetMaxUpstreamRateIndex": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "V34XF_GetProbeResultsPtr": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_GetRTD": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "V34XF_IndicateDilReceived": {
+          "baseline": [
+            "SIZE",
+            49
+          ],
+          "candidate": [
+            "SIZE",
+            49
+          ]
+        },
+        "V34XF_IndicateJdReceived": {
+          "baseline": [
+            "SIZE",
+            4
+          ],
+          "candidate": [
+            "SIZE",
+            4
+          ]
+        },
+        "V34XF_IndicateK56FlexJdReceived": {
+          "baseline": [
+            "SIZE",
+            30
+          ],
+          "candidate": [
+            "SIZE",
+            30
+          ]
+        },
+        "V34XF_IndicateK56FlexRateDetermined": {
+          "baseline": [
+            "SIZE",
+            1
+          ],
+          "candidate": [
+            "SIZE",
+            1
+          ]
+        },
+        "V34XF_IndicateTrn2dReceived": {
+          "baseline": [
+            "SIZE",
+            40
+          ],
+          "candidate": [
+            "SIZE",
+            40
+          ]
+        },
+        "VPcmV34Create": {
+          "baseline": [
+            "SIZE",
+            105
+          ],
+          "candidate": [
+            "SIZE",
+            105
+          ]
+        },
+        "VPcmV34Delete": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCleanedSamples": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxBaudRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxBitRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentRxCarrier": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentSessionDP": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentTxBaudRate": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetCurrentTxBitRate": {
+          "baseline": [
+            "SIZE",
+            4
+          ],
+          "candidate": [
+            "SIZE",
+            4
+          ]
+        },
+        "VPcmV34GetCurrentTxCarrier": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34GetMaxUpstreamRateIndex": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "VPcmV34GetQuickConnectIndication": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34IndicateLocalRRN": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34IndicateRemoteRRN": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34InitMOH": {
+          "baseline": [
+            "SIZE",
+            32
+          ],
+          "candidate": [
+            "SIZE",
+            32
+          ]
+        },
+        "VPcmV34InitiateHangUp": {
+          "baseline": [
+            "SIZE",
+            24
+          ],
+          "candidate": [
+            "SIZE",
+            24
+          ]
+        },
+        "VPcmV34InitiateRateRenegotiation": {
+          "baseline": [
+            "BYTES",
+            39
+          ],
+          "candidate": [
+            "BYTES",
+            39
+          ]
+        },
+        "VPcmV34InitiateRetrain": {
+          "baseline": [
+            "SIZE",
+            51
+          ],
+          "candidate": [
+            "SIZE",
+            51
+          ]
+        },
+        "VPcmV34LogTimingOffset": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34NotifyDP": {
+          "baseline": [
+            "SIZE",
+            16
+          ],
+          "candidate": [
+            "SIZE",
+            16
+          ]
+        },
+        "VPcmV34Progress": {
+          "baseline": [
+            "SIZE",
+            816
+          ],
+          "candidate": [
+            "SIZE",
+            816
+          ]
+        },
+        "VPcmV34ReportMiddleOfEchoAdapt": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34ReportStartOfEchoAdapt": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34RequestDPNotification": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetIndicationOfRemoteRetrain": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetMaxBlockLength": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "VPcmV34SetTxScale": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "VPcmV34SetV90RateReneg": {
+          "baseline": [
+            "SIZE",
+            46
+          ],
+          "candidate": [
+            "SIZE",
+            46
+          ]
+        },
+        "_Z14getMPrecvdBitsP12tagV34Object": {
+          "baseline": [
+            "SIZE",
+            27
+          ],
+          "candidate": [
+            "SIZE",
+            27
+          ]
+        },
+        "_Z15retrainDetectorP17tag_retrainReqDetPsi": {
+          "baseline": [
+            "SIZE",
+            11
+          ],
+          "candidate": [
+            "SIZE",
+            11
+          ]
+        },
+        "_Z16VPcmV34SetDelaysP12tagV34Object": {
+          "baseline": [
+            "BYTES",
+            116
+          ],
+          "candidate": [
+            "BYTES",
+            116
+          ]
+        },
+        "_Z17VPcmV34SetTimeOutP12tagV34Objecti": {
+          "baseline": [
+            "SIZE",
+            3
+          ],
+          "candidate": [
+            "SIZE",
+            3
+          ]
+        },
+        "_Z19interpretMohTimeouts": {
+          "baseline": [
+            "SIZE",
+            34
+          ],
+          "candidate": [
+            "SIZE",
+            34
+          ]
+        },
+        "_Z20resetRetrainDetectorP17tag_retrainReqDets": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z25SetUpstreamModulationInfoP12tagV34Object": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "_Z25VPcmV34SetMinimumSigLevelP12tagV34Object": {
+          "baseline": [
+            "SIZE",
+            6
+          ],
+          "candidate": [
+            "SIZE",
+            6
+          ]
+        },
+        "chkForceBaudRate": {
+          "baseline": [
+            "SIZE",
+            5
+          ],
+          "candidate": [
+            "REGALLOC",
+            0
+          ]
+        },
+        "getTimingOffset": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "getTimingPhase": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "indicateJaTransmission": {
+          "baseline": [
+            "EXACT",
+            0
+          ],
+          "candidate": [
+            "EXACT",
+            0
+          ]
+        },
+        "k56FlexPhase34": {
+          "baseline": [
+            "SIZE",
+            28
+          ],
+          "candidate": [
+            "SIZE",
+            28
+          ]
+        },
+        "v90Phase34": {
+          "baseline": [
+            "SIZE",
+            98
+          ],
+          "candidate": [
+            "SIZE",
+            98
+          ]
+        },
+        "v90RateReneg": {
+          "baseline": [
+            "SIZE",
+            48
+          ],
+          "candidate": [
+            "SIZE",
+            48
+          ]
+        },
+        "v90RateRenegSilence": {
+          "baseline": [
+            "SIZE",
+            83
+          ],
+          "candidate": [
+            "SIZE",
+            83
+          ]
+        }
+      },
+      "label": "selected",
+      "parsed_sha256": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+      "target": [
+        "REGALLOC",
+        0
+      ],
+      "target_size": 389
+    }
+  ],
+  "next_transfer": {
+    "limitation": "readonlynomination, nofollowupexperiment; audit aliases and valid construction/processing boundary",
+    "native_disassembly_sha256": "6c83db7ad51b1e08f7d03b91692a595fc6255165a883c686a5502c83b516b538",
+    "source_sha256": "e337480d27f42a096e0b67d0e8e701556875cc83ed02964e0e642e5f20e90388",
+    "symbol": "VPcmV34InitiateHangUp",
+    "witnesses": [
+      "p3548 capture at0x6be1 before diagnostics/rate clears",
+      "obj+4 rate publications",
+      "clr byte publication0x6c0f beforedemodread0x6c16"
+    ]
+  },
+  "retained_artifact_sha256": {
+    "REPORT.md": "eba5e8a2bbc737431e1b48c9a6fd0c01e3c584bb8228bc8b9af3a69298d994bc",
+    "artifact-manifest.json": "419ce1dbd742c2f60b8dd9686f79149de9af1303e778a571fd0978d163f3af8a",
+    "full-tu-audit.json": "53c6add404195b4cdb0ac598f146f1d6582f6d6f1ff2d983a213ba5336510295",
+    "inputs.json": "887f0404031f7277404a35706530470e50982f22a3adab6318ef408db1cbdf25",
+    "matrix.json": "d3f2d4f49fcff1f66664963e5e8f563306d9016d32e5cc8d993430fd348c7e8f",
+    "observer/report.json": "73766c5907d29001eb66d77060ac5b7b2fc2e41dda0dde5d5086f4bdaa0d8c66",
+    "selected/dump/candidate.o": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+    "selected/ordinary/candidate.o": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7"
+  },
+  "schema": 1,
+  "scratch_artifact_root": "/mnt/zfs/dev/slmodem/scratch/baud-cap-wave-20261106",
+  "source_files": {
+    "src/pump/v34/VPcmV34Main.cpp": "e337480d27f42a096e0b67d0e8e701556875cc83ed02964e0e642e5f20e90388",
+    "test/unit/t_v34pcmif.c": "1d03cef4df383a40673d7cd47236fed4c487289d7dbc91a53cca25e2f8ce1638"
+  },
+  "whole_object_closure": {
+    "changed": [
+      {
+        "after": "42f930b602e1341e72ab90f86bfd3d06b2ac12dfa56fdce608ae45180ba3e6d7",
+        "before": "258d60e1b2e04f2ef4c261b6dfe03de638fe236246cf6bf23cb1c354696dba7d",
+        "name": "src_pump_v34_VPcmV34Main.cpp.o"
+      }
+    ],
+    "native_sha256": "1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379",
+    "objects": 300,
+    "source_sha256": "e337480d27f42a096e0b67d0e8e701556875cc83ed02964e0e642e5f20e90388",
+    "unchanged": 299
+  }
+}

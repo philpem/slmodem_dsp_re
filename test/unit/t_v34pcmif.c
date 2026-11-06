@@ -942,6 +942,94 @@ run_force(unsigned char cfgbyte, int v90, int k56, const unsigned char *allow,
 		saw_force_capped = 1;
 }
 
+
+/*
+ * Ordinary component inputs, separate from run_force's exploratory sweep.
+ * These are producer-supported field snapshots, not constructor histories:
+ * VPcmV34Create publishes (0,0), (0,1) or (1,0) receiver words, and
+ * VPcmFloModem::externalReset publishes {1,0,1,1,1,0}.  No other session
+ * member is consumed here.  The initialized bank has normalized shifts in
+ * 0..4; chkForceBaudRate never reads the bank before writing its six shifts.
+ * This establishes the cap-method boundary, not modem/audio reachability.
+ */
+static void
+run_force_component(unsigned char cfgbyte, unsigned arm, long tag)
+{
+	typedef struct v34_dftbin force_bank[V34_PROBE_BINS];
+	typedef unsigned char force_cfg[CFG_LEN];
+	typedef unsigned char force_allow[ALLOW_LEN];
+	static const unsigned char session_allow[ALLOW_LEN] =
+		{ 1, 0, 1, 1, 1, 0 };
+	force_bank bank_want;
+	force_cfg cfg_want;
+	force_allow session_want, selected;
+	unsigned i, cap = cfgbyte >> 5;
+
+	setup();
+	seed_chain();
+	memset(cfg_a, CFG_FILL, sizeof(cfg_a));
+	memset(cfg_b, CFG_FILL, sizeof(cfg_b));
+	cfg_a[CFG_MAXBAUD] = cfg_b[CFG_MAXBAUD] = cfgbyte;
+	memcpy(cfg_want, cfg_a, sizeof(cfg_want));
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+	memcpy(sess_a + ALLOW_OFF, session_allow, ALLOW_LEN);
+	memcpy(sess_b + ALLOW_OFF, session_allow, ALLOW_LEN);
+	memcpy(session_want, session_allow, sizeof(session_want));
+	poke_int(0x24c, arm == 2);
+	poke_int(0x250, arm == 1);
+
+	memset(bank_want, 0, sizeof(bank_want));
+	for (i = 0; i < V34_PROBE_BINS; ++i)
+		bank_want[i].shift = (short)(i % 5);
+	memcpy(oa.probe_bins, bank_want, sizeof(bank_want));
+	memcpy(ob + 0xa320, bank_want, sizeof(bank_want));
+
+	/* Independent expected writes, including the otherwise-unread flag1. */
+	for (i = 0; i < ALLOW_LEN; ++i) {
+		selected[i] = arm == 2 ? session_allow[i] : 1;
+		if (arm == 1 && i == 5)
+			selected[i] = 0;
+		if (cap != 0 && i >= cap)
+			selected[i] = 0;
+		if (arm == 2)
+			session_want[i] = selected[i];
+	}
+	if (!selected[5]) bank_want[24].shift = 11;
+	if (!selected[4]) bank_want[22].shift = 7;
+	if (!selected[3]) bank_want[2].shift = bank_want[21].shift = 7;
+	if (!selected[2]) bank_want[19].shift = bank_want[20].shift = 7;
+
+	chkForceBaudRate(&oa, oa.probe_bins);
+	ref_chkForceBaudRate(ob, (struct v34_dftbin *)(ob + 0xa320));
+	compare("force component object", tag);
+	compare_sess("force component session", tag);
+	diff_eq_obj("force component bin oracle", force_bank,
+		    oa.probe_bins, ob + 0xa320, tag);
+	diff_eq_obj("force component expected bins", force_bank,
+		    oa.probe_bins, bank_want, tag);
+	diff_eq_obj("force component expected session flags", force_allow,
+		    sess_a + ALLOW_OFF, session_want, tag);
+	diff_eq_obj("force component configuration ours", force_cfg,
+		    cfg_a, cfg_want, tag);
+	diff_eq_obj("force component configuration blob", force_cfg,
+		    cfg_b, cfg_want, tag);
+	diff_eq_int("force component complete transcript ours",
+		    dsplib_debug_capture_complete(0), 1, tag);
+	diff_eq_int("force component complete transcript blob",
+		    dsplib_debug_capture_complete(1), 1, tag);
+	diff_eq_int("force component diagnostic call boundaries",
+		    dsplib_debug_capture_boundaries_equal(), 1, tag);
+	diff_eq_int("force component diagnostic bytes",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("force component diagnostic calls ours",
+		    dsplib_debug_capture_lines(0), dsplibs_debug_level > 1,
+		    tag);
+	diff_eq_int("force component diagnostic calls blob",
+		    dsplib_debug_capture_lines(1), ref_dsplibs_debug_level > 1,
+		    tag);
+}
+
 /* --- the two questions asked of the PCM configuration --------------------- */
 
 /*
@@ -2868,6 +2956,36 @@ main(void)
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;
 		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+
+	/*
+	 * 8 selectors x 2 low-bit patterns x 3 ordinary receiver arms x
+	 * levels 1/2/3 = 144 component cases.  The older 800-case sweep
+	 * above retains its synthetic receiver/allow states as exploration.
+	 * Diagnostics here cover every receiver arm, including V.90's
+	 * session-backed allow list; the logger only records and cannot
+	 * demonstrate a re-entrant session-pointer replacement.
+	 */
+	diff_begin("v34 pcm interface: force cap component 144 cases");
+	{
+		unsigned level, idx, low, arm, cases = 0;
+
+		dsplib_debug_capture_on = 1;
+		for (level = 1; level <= 3; ++level)
+		for (idx = 0; idx < 8; ++idx)
+		for (low = 0; low < 2; ++low)
+		for (arm = 0; arm < 3; ++arm) {
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			dsplib_debug_capture_reset();
+			run_force_component(
+			    (unsigned char)((idx << 5) | (low ? 0x1f : 0)),
+			    arm, 50000 + (long)cases++);
+		}
+		diff_eq_int("force cap component case denominator", cases, 144, 0);
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
