@@ -581,13 +581,58 @@ are compared raw, while old all-twelve checks remain. Old and selected source
 both pass. Owner/stack target screens each pair only two anchors and compare
 zero relations, so their clean subset is not an equivalence conclusion.
 
-Next transfer to InitMOH: native joins the zeroed/argument flag at the common
-moh_path_sel store 0x6d27 (zero arm 0x6e3b) and retains obj+4 across
-v34handshakinit to publish progress 7 at 0x6d89. Current source duplicates the flag
-store and uses direct progress access. Cross those independently witnessed
-properties after checking intervening publications, aliases, argument ages and
-fixture domains. This is a fresh source graph hypothesis, not a request to fit
-its already explained scratch lanes.
+The InitMOH transfer below records the next completed investigation.
+
+## InitMOH: shared byte transport, partial recovery and method masks (2026-11-06)
+
+The [InitMOH wave](../initmoh-recovery-20261106.md) reaches native 444-byte
+BYTES55 from SIZE32. A common flag publication alone remains SIZE32; B retained
+interior progress owner gives SIZE6 (450 bytes); A+B gives BYTES228. Keep the
+larger B control. Native 0x6cf2/0x6d89 supports the retained obj+4 address across
+handshake initialization; 0x6e3b/0x6d27 supports the shared flag continuation.
+Message publications remain separate. This is address retention, not a cached
+mutable pointer field.
+
+Extra High adds a conversion/use boundary. Native zero-extends the saved byte
+once at 0x6d32, tests CL and publishes that same CL. The earlier spilled QI range
+became a memory comparison plus a separate reload at greg. A common unsigned
+int consumed-byte value restores sharing (BYTES56); narrowing its predicate
+consumption restores TESTB (BYTES55). The formal remains unsigned char; all 256
+byte values keep the same behavior and ABI upper bits stay unconsumed. Retain
+D/E crossed with the earlier owner/continuation graph, including no-gain cells.
+No unique original local declaration is established.
+
+The existing reset helper matches the repeated algorithm and is whole-object
+neutral in the tested combinations. Share it without scoring that as a gain.
+The residual is narrower than the first reload diagnosis: actual local
+allocation assigns quantity 74 to EAX at lreg with all Q registers available.
+Read-only observer parity establishes that decision; peephole2/rnreg/sched2
+explain later scratch lanes and independent-store scheduling. Reopen with a
+new native-backed quantity/lifetime/owner/conversion constraint, not a type,
+initializer or store-order grid. This wave adds no EXACT or REGALLOC function.
+
+All 55 TU neighbors are literal unchanged, including protected HangUp and baud
+cap. All 89 ordered table targets remain equal relative to their owners, while
+75 raw addends move 32 bytes. The owner target screen compares five anchors/six
+relations; selected stack screen pairs three anchors/zero relations. Report
+those limits separately from differential and byte-category evidence.
+
+The 108 initialized component scenarios/432 calls cross late and flag independently
+on the existing 126-region registered-create graph. Native-generated words
+separate their effects. Mode 4 installs ten static aliases, not the constructor's
+twelve; initial old-source failure 108/2918 exposed that apparatus assumption.
+The corrected check validates ten pairs and compares the untouched timing
+pointers and all other excluded bytes raw. Preserve old twelve/four-word checks,
+failed-run evidence and old/selected green controls. Four saved-snapshot
+calibrations exercise both untouched-byte detection and installed-alias exclusion,
+with restoration checks. AGENTS now makes masks
+method-specific. No negotiated MOH or first-call full-graph claim is made.
+
+Next audit VPcmV34InitiateRetrain's complete retained engine group: native 0x6667
+acquires obj+4 for rate bounds, receiver flags, DC fields and progress; 0x68dd uses
+it after handshakinit 0x68d8. Source uses direct fields and an unused byte owner.
+Cross that owner lifetime with the existing reset helper after complete
+owner/offset/width and caller-publication audits. Sharing alone does not predict a byte gain.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

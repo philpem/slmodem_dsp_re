@@ -274,6 +274,11 @@ struct v34_receiver + 680  ->  pad_2a8[0]     (unsigned char, +680)
 An offset landing in a `pad_*` region is itself the answer: that part is not
 modelled as fields yet.
 
+Qualify learned pointer masks at the method boundary. Check alias pairs only
+where that method installs them, and compare every other excluded byte directly.
+A constructor's full alias set is not a method's write set; keep the installed
+and untouched denominators explicit.
+
 A loop is still right where some region must be skipped — two heap pointers
 hold two different addresses and always will. Those keep working: `diff_eq_int`
 now appends the input when the format string has no conversion for it, which

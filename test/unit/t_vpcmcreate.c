@@ -123,6 +123,10 @@ extern int VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
 			 int sessionType);
 extern void VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateHangUp(void *obj);
+extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
+			 unsigned char flag);
+extern void ref_VPcmV34InitMOH(void *obj, int message, unsigned char late,
+			     unsigned char flag);
 
 /* --- the configuration, all of it derived; docs/configuration.md ---------- */
 
@@ -347,7 +351,7 @@ alias_report(void)
  * cannot be named here, which is why the contents check exists at all.
  */
 static int
-check_alias_words(int hangup_only)
+check_alias_words(int subset)
 {
 	int k, bad = 0;
 
@@ -355,10 +359,14 @@ check_alias_words(int hangup_only)
 		const void *a, *b;
 		size_t w = (size_t)ROOT_V34 + aliasword[k].off;
 
-		if (hangup_only && aliasword[k].off != 0x0a28
+		if (subset == 1 && aliasword[k].off != 0x0a28
 		    && aliasword[k].off != 0x0e48
 		    && aliasword[k].off != 0x2608
 		    && aliasword[k].off != 0x2a28)
+			continue;
+		/* Mode 4 does not run the mode-0 timing-filter initializer. */
+		if (subset == 2 && (aliasword[k].off == 0x0620
+				    || aliasword[k].off == 0x0624))
 			continue;
 
 		memcpy(&a, ours[root_idx] + w, sizeof a);
@@ -1236,6 +1244,140 @@ run_hangup_history(void)
 	return diff_end();
 }
 
+/*
+ * InitMOH at the initialized component boundary, using the same registered
+ * graph and the two constructor roles as HangUp.  The method has no internal
+ * caller in the blob: this does not establish negotiated MOH reachability.
+ * No status, handshake state, or graph pointer is planted.  Byte arguments
+ * here are 0/1; t_v34pcmapi's patterned-state probes retain their wider byte
+ * and message domains as synthetic fidelity coverage.
+ *
+ * Mode 4 installs ten root alias words: it does not run mode 0's timing-filter
+ * initializer, so +0x620/+0x624 stay unchanged.  Check all ten pairs and require
+ * every other excluded byte to agree.  No new mask is learned for this method.
+ */
+static long
+initmoh_unchanged_alias_diff(void)
+{
+	int i, k;
+	size_t j;
+	long bad = 0;
+	for (i = 0; i < nreg; ++i)
+	for (j = 0; j < regsz[i]; ++j) {
+		int installed = 0;
+		if (i == root_idx)
+			for (k = 0; k < NALIAS; ++k)
+				if (aliasword[k].off != 0x0620
+				    && aliasword[k].off != 0x0624
+				    && j >= ROOT_V34 + aliasword[k].off
+				    && j < ROOT_V34 + aliasword[k].off + 4)
+					installed = 1;
+		if (!installed && is_alias_byte(i, j)
+		    && ours[i][j] != ((unsigned char *)reg[i])[j])
+			++bad;
+	}
+	return bad;
+}
+
+static int
+run_initmoh_history(void)
+{
+	int history, level, message, late, flag, side, request;
+	int cases = 0;
+	long calls = 0;
+
+	diff_begin("VPcmV34InitMOH: initialized component histories");
+	for (history = 0; history < 3; ++history)
+	for (level = 0; level < 3; ++level)
+	for (message = 0; message < 3; ++message)
+	for (late = 0; late < 2; ++late)
+	for (flag = 0; flag < 2; ++flag) {
+		long tag = history * 100 + level * 30 + message * 4 + late * 2 + flag;
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0,
+						  runtime, 0);
+			diff_eq_int("InitMOH constructed status", hangup_int(0),
+				    0, tag);
+			if (side == 0) {
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			/* Repeated request over the first method's own output. */
+			for (request = 0; request < 2; ++request) {
+				if (side == 0)
+					VPcmV34InitMOH(v34obj, message,
+						(unsigned char)late, (unsigned char)flag);
+				else
+					ref_VPcmV34InitMOH(v34obj, message,
+						(unsigned char)late, (unsigned char)flag);
+				++calls;
+				diff_eq_int("InitMOH progress", hangup_int(4), 7, tag);
+				diff_eq_int("InitMOH status", hangup_int(0), 0, tag);
+				diff_eq_int("InitMOH mode", hangup_int(0x2218), 2, tag);
+				/* First transmitted word, produced by the real mode-4
+				 * handshake/message builder, not a planted bit source. */
+				diff_eq_int("InitMOH generated message word",
+					    hangup_short(0xa94c),
+					    message == 2 ? (late ? 0x96 : 0x95) : 0x33,
+					    tag);
+			}
+			if (side == 0)
+				graph_save_ours();
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 1) != 0)
+			report_first_diff("InitMOH constructed graph", ours, 1);
+		diff_eq_int("InitMOH constructed graph", graph_diff_live(ours, 1),
+			    0, tag);
+		diff_eq_int("InitMOH ten static aliases", check_alias_words(2),
+			    0, tag);
+		diff_eq_int("InitMOH unchanged static aliases",
+			    initmoh_unchanged_alias_diff(), 0, tag);
+		diff_eq_int("InitMOH transcript complete ours",
+			    dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("InitMOH transcript complete blob",
+			    dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("InitMOH diagnostic call boundaries",
+			    dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("InitMOH diagnostic bytes",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("InitMOH diagnostics active ours",
+			    dsplib_debug_capture_lines(0) > 0, level > 1, tag);
+		diff_eq_int("InitMOH diagnostics active blob",
+			    dsplib_debug_capture_lines(1) > 0, level > 1, tag);
+		++cases;
+	}
+	diff_eq_int("InitMOH constructed case denominator", cases, 108, 0);
+	diff_eq_int("InitMOH constructed call denominator", calls, 432, 0);
+	/* Calibrate the new mask check on saved bytes, never live DSP state. */
+	{
+		size_t off = (size_t)ROOT_V34 + 0x620;
+		unsigned char saved = ours[root_idx][off];
+		ours[root_idx][off] ^= 1;
+		diff_eq_int("InitMOH untouched mask detects one changed byte",
+			    initmoh_unchanged_alias_diff(), 1, 0);
+		ours[root_idx][off] = saved;
+		diff_eq_int("InitMOH untouched mask restored",
+			    initmoh_unchanged_alias_diff(), 0, 0);
+		off = (size_t)ROOT_V34 + 0xa28;
+		saved = ours[root_idx][off];
+		ours[root_idx][off] ^= 1;
+		diff_eq_int("InitMOH installed alias excluded from raw mask check",
+			    initmoh_unchanged_alias_diff(), 0, 0);
+		ours[root_idx][off] = saved;
+		diff_eq_int("InitMOH saved alias bytes restored",
+			    initmoh_unchanged_alias_diff(), 0, 0);
+	}
+	graph_restore();
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1261,6 +1403,7 @@ main(void)
 	rc |= run_virgin_vs_reinit();
 	rc |= run_create();
 	rc |= run_hangup_history();
+	rc |= run_initmoh_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

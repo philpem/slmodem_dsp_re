@@ -2817,6 +2817,8 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	       unsigned char flag)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	/* Retain the native obj + 4 view across handshake initialization. */
+	unsigned char *engine = (unsigned char *)obj + __builtin_offsetof(struct v34_object, progress);
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	struct v34_receiver *rx = &obj->receiver;
 
@@ -2830,15 +2832,17 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 			    "VPcmV34Main: Special bypass - sending MOHreq "
 			    "instead of MOHFRR...\r\n");
 		obj->moh_message = 0;
-		obj->moh_path_sel = 0;
+		flag = 0;
 	} else {
 		obj->moh_message = message;
-		obj->moh_path_sel = flag;
 	}
 
+	/* The bypass and ordinary arms rejoin at this byte publication. */
+	obj->moh_path_sel = flag;
+	unsigned int late_value = late;
 	obj->moh_recvd = 5;
-	obj->moh_clrd_sel = (unsigned char)(late != 0);
-	obj->ansam_late = late;
+	obj->moh_clrd_sel = (unsigned char)((unsigned char)late_value != 0);
+	obj->ansam_late = (unsigned char)late_value;
 
 	obj->short_abe2 = 0;
 	obj->short_abe6 = 0;
@@ -2848,7 +2852,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 
 	v34handshakinit(obj, 4);
 
-	obj->progress = 7;
+	VPCM_ENGINE_INT(engine, progress) = 7;
 
 	rx->bad_run = 0;
 	rx->bad_long_run = 0;
@@ -2859,29 +2863,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 
 	sess->ansam.reset();
 
-	{
-		struct tag_retrainReqDet *st = &obj->retrainReqDet;
-		short role = obj->role;
-
-		st->y1 = 0;
-		st->y2 = 0;
-		st->x1 = 0;
-		st->x2 = 0;
-		st->notchDetectSigCnt = 0;
-		st->energyInp = 0;
-		st->energyOut = 0;
-		st->nsamples = 0;
-
-		if (role == 0x65) {
-			st->b1_q14 = 0;
-			st->a1_q14 = 0;
-			st->a2_q14 = (short)0x39c3;
-		} else if (role == 0x66) {
-			st->b1_q14 = (short)0x5a82;
-			st->a1_q14 = (short)0x55fc;
-			st->a2_q14 = (short)0x39c3;
-		}
-	}
+	resetRetrainDetector(&obj->retrainReqDet, obj->role);
 }
 
 void
