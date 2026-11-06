@@ -121,6 +121,21 @@ extern int ref_VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
  */
 extern int VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
 			 int sessionType);
+/* C fixture declarations preserve the helpers' mangled tagV34Object ABI. */
+extern void fixture_set_rates(void *obj)
+	__asm__("_Z24VPcmV34SetMinMaxBitRatesP12tagV34Object");
+extern void ref_fixture_set_rates(void *obj)
+	__asm__("ref__Z24VPcmV34SetMinMaxBitRatesP12tagV34Object");
+extern void fixture_set_floor(void *obj)
+	__asm__("_Z25VPcmV34SetMinimumSigLevelP12tagV34Object");
+extern void ref_fixture_set_floor(void *obj)
+	__asm__("ref__Z25VPcmV34SetMinimumSigLevelP12tagV34Object");
+extern void fixture_set_delays(void *obj)
+	__asm__("_Z16VPcmV34SetDelaysP12tagV34Object");
+extern void ref_fixture_set_delays(void *obj)
+	__asm__("ref__Z16VPcmV34SetDelaysP12tagV34Object");
+extern void VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
+extern void ref_VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
 extern void VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateHangUp(void *obj);
 extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
@@ -364,7 +379,7 @@ check_alias_words(int subset)
 		    && aliasword[k].off != 0x2608
 		    && aliasword[k].off != 0x2a28)
 			continue;
-		/* Mode 4 does not run the mode-0 timing-filter initializer. */
+		/* Modes 1/4 do not run the mode-0 timing-filter initializer. */
 		if (subset == 2 && (aliasword[k].off == 0x0620
 				    || aliasword[k].off == 0x0624))
 			continue;
@@ -1257,7 +1272,7 @@ run_hangup_history(void)
  * every other excluded byte to agree.  No new mask is learned for this method.
  */
 static long
-initmoh_unchanged_alias_diff(void)
+reset_unchanged_alias_diff(void)
 {
 	int i, k;
 	size_t j;
@@ -1337,7 +1352,7 @@ run_initmoh_history(void)
 		diff_eq_int("InitMOH ten static aliases", check_alias_words(2),
 			    0, tag);
 		diff_eq_int("InitMOH unchanged static aliases",
-			    initmoh_unchanged_alias_diff(), 0, tag);
+			    reset_unchanged_alias_diff(), 0, tag);
 		diff_eq_int("InitMOH transcript complete ours",
 			    dsplib_debug_capture_complete(0), 1, tag);
 		diff_eq_int("InitMOH transcript complete blob",
@@ -1361,19 +1376,247 @@ run_initmoh_history(void)
 		unsigned char saved = ours[root_idx][off];
 		ours[root_idx][off] ^= 1;
 		diff_eq_int("InitMOH untouched mask detects one changed byte",
-			    initmoh_unchanged_alias_diff(), 1, 0);
+			    reset_unchanged_alias_diff(), 1, 0);
 		ours[root_idx][off] = saved;
 		diff_eq_int("InitMOH untouched mask restored",
-			    initmoh_unchanged_alias_diff(), 0, 0);
+			    reset_unchanged_alias_diff(), 0, 0);
 		off = (size_t)ROOT_V34 + 0xa28;
 		saved = ours[root_idx][off];
 		ours[root_idx][off] ^= 1;
 		diff_eq_int("InitMOH installed alias excluded from raw mask check",
-			    initmoh_unchanged_alias_diff(), 0, 0);
+			    reset_unchanged_alias_diff(), 0, 0);
 		ours[root_idx][off] = saved;
 		diff_eq_int("InitMOH saved alias bytes restored",
-			    initmoh_unchanged_alias_diff(), 0, 0);
+			    reset_unchanged_alias_diff(), 0, 0);
 	}
+	graph_restore();
+	return diff_end();
+}
+
+
+/*
+ * Retrain on the registered-create graph, without planting status, receiver
+ * flags, state-machine values, or pointers.  Histories 0/1/2 are the factory
+ * output and the two exported-constructor roles.  Every call starts at status
+ * 0; the repeat uses the method's own output.  This is an initialized component
+ * boundary, not evidence of negotiated PCM status or a remote retrain.
+ *
+ * Mode 1, like mode 4, runs v34modeminit but not rxtiminginit: ten static
+ * aliases are installed.  The timing words +0x620/+0x624 and every other
+ * learned exclusion remain visible through reset_unchanged_alias_diff.
+ */
+static int
+run_retrain_history(void)
+{
+	static const unsigned char dp[] = { 0, 34, 56, 90, 92 };
+	int history, level, choice, requests, side, request;
+	int cases = 0;
+	long calls = 0;
+	long rate_arms[3] = { 0, 0, 0 };
+	long accepted_pcm[2] = { 0, 0 };
+	size_t graph_bytes = 0, masked_bytes = 0;
+	int region;
+
+	diff_begin("VPcmV34InitiateRetrain: initialized component histories");
+	for (history = 0; history < 3; ++history)
+	for (level = 0; level < 3; ++level)
+	for (choice = 0; choice < 5; ++choice)
+	for (requests = 1; requests <= 2; ++requests) {
+		long tag = history * 1000 + level * 100 + choice * 10 + requests;
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0,
+						  runtime, 0);
+			diff_eq_int("Retrain constructed status", hangup_int(0), 0, tag);
+			if (side == 0) {
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			for (request = 0; request < requests; ++request) {
+				if (side == 0) {
+					unsigned char *sess, *k56;
+					int gate;
+					memcpy(&sess, v34obj + OB_P3548, sizeof sess);
+					memcpy(&k56, v34obj + OB_PAC18, sizeof k56);
+					memcpy(&gate, sess + SESS_GATE, sizeof gate);
+					if (hangup_int(0x24c) != 0 && gate != 0)
+						++rate_arms[0];
+					else if (hangup_int(0x250) != 0
+						 && k56[K56_ENABLED] != 0)
+						++rate_arms[1];
+					else
+						++rate_arms[2];
+					VPcmV34InitiateRetrain(v34obj, dp[choice]);
+					if (dp[choice] == 90 || dp[choice] == 92)
+						accepted_pcm[dp[choice] == 92] +=
+							hangup_int(0x24c) != 0;
+				} else
+					ref_VPcmV34InitiateRetrain(v34obj, dp[choice]);
+				++calls;
+				diff_eq_int("Retrain progress", hangup_int(4), 7, tag);
+				diff_eq_int("Retrain status", hangup_int(0), 0, tag);
+				diff_eq_int("Retrain mode", hangup_int(0x2218), 2, tag);
+				diff_eq_int("Retrain bad run", hangup_short(0x4bc), 0, tag);
+				diff_eq_int("Retrain bad long run", hangup_short(0x4be), 0, tag);
+				diff_eq_int("Retrain good run", hangup_short(0x4c0), 0, tag);
+				diff_eq_int("Retrain DC estimate", hangup_short(0x256), 0, tag);
+				diff_eq_int("Retrain DC accumulator", hangup_int(0x258), 0, tag);
+			}
+			if (side == 0)
+				graph_save_ours();
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 1) != 0)
+			report_first_diff("Retrain constructed graph", ours, 1);
+		diff_eq_int("Retrain constructed graph", graph_diff_live(ours, 1), 0, tag);
+		diff_eq_int("Retrain ten static aliases", check_alias_words(2), 0, tag);
+		diff_eq_int("Retrain unchanged static aliases",
+			    reset_unchanged_alias_diff(), 0, tag);
+		diff_eq_int("Retrain transcript complete ours",
+			    dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("Retrain transcript complete blob",
+			    dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("Retrain diagnostic call boundaries",
+			    dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("Retrain diagnostic bytes",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("Retrain diagnostics active ours",
+			    dsplib_debug_capture_lines(0) > 0, level > 1, tag);
+		diff_eq_int("Retrain diagnostics active blob",
+			    dsplib_debug_capture_lines(1) > 0, level > 1, tag);
+		++cases;
+	}
+	diff_eq_int("Retrain constructed case denominator", cases, 90, 0);
+	diff_eq_int("Retrain constructed call denominator", calls, 270, 0);
+	diff_eq_int("Retrain rate-arm observed call denominator",
+		    rate_arms[0] + rate_arms[1] + rate_arms[2], 135, 0);
+	for (region = 0; region < nreg; ++region) {
+		size_t byte;
+		graph_bytes += regsz[region];
+		for (byte = 0; byte < regsz[region]; ++byte)
+			masked_bytes += is_alias_byte(region, byte) != 0;
+	}
+	printf("    retrain graph: %d regions, %lu bytes; %lu learned mask bytes, "
+	       "40 installed alias bytes checked as ten pairs, other masked bytes raw\n",
+	       nreg, (unsigned long)graph_bytes, (unsigned long)masked_bytes);
+	printf("    retrain component: %d cases, %ld calls, status 0 only; "
+	       "ours rate arms designer/K56/V34 %ld/%ld/%ld of 135; "
+	       "accepted V90/V92 %ld/%ld of 27 each\n", cases, calls,
+	       rate_arms[0], rate_arms[1], rate_arms[2], accepted_pcm[0], accepted_pcm[1]);
+	/* Calibrate only saved observation bytes, never live DSP state. */
+	{
+		size_t off = (size_t)ROOT_V34 + 0x620;
+		unsigned char saved = ours[root_idx][off];
+		ours[root_idx][off] ^= 1;
+		diff_eq_int("Retrain untouched mask detects changed byte",
+			    reset_unchanged_alias_diff(), 1, 0);
+		ours[root_idx][off] = saved;
+		diff_eq_int("Retrain untouched mask restored",
+			    reset_unchanged_alias_diff(), 0, 0);
+		off = (size_t)ROOT_V34 + 0xa28;
+		saved = ours[root_idx][off];
+		ours[root_idx][off] ^= 1;
+		diff_eq_int("Retrain installed alias excluded from raw mask check",
+			    reset_unchanged_alias_diff(), 0, 0);
+		ours[root_idx][off] = saved;
+		diff_eq_int("Retrain saved alias bytes restored",
+			    reset_unchanged_alias_diff(), 0, 0);
+	}
+	graph_restore();
+	return diff_end();
+}
+
+
+/*
+ * Exercise the public out-of-line helpers before any handshake can overwrite
+ * their output.  The registered graph supplies all owners and pointers.  The
+ * second configuration supplies ordinary caller-owned runtime values at this
+ * component boundary: rates 2400..14400, level -48, delays 64/200.  It does not
+ * plant negotiated state or establish that a modem call produces these values.
+ * No helper installs a static alias, so compare every graph byte without masks.
+ */
+static int
+run_retrain_helper_history(void)
+{
+	void (*const fn[2][3])(void *) = {
+		{ fixture_set_rates, fixture_set_floor, fixture_set_delays },
+		{ ref_fixture_set_rates, ref_fixture_set_floor, ref_fixture_set_delays }
+	};
+	int history, level, config, method, side;
+	int cases = 0;
+	long calls = 0, observed_changes = 0;
+
+	diff_begin("VPcmV34 retrain helpers: constructed owner/configuration boundary");
+	for (history = 0; history < 3; ++history)
+	for (level = 0; level < 3; ++level)
+	for (config = 0; config < 2; ++config)
+	for (method = 0; method < 3; ++method) {
+		long tag = history * 1000 + level * 100 + config * 10 + method;
+		for (side = 0; side < 2; ++side) {
+			int before, after;
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0, runtime, 0);
+			diff_eq_int("helper constructed status", hangup_int(0), 0, tag);
+			diff_eq_int("helper constructed V90 receiver", hangup_int(0x24c), 0, tag);
+			diff_eq_int("helper constructed K56 receiver", hangup_int(0x250), 0, tag);
+			if (config != 0) {
+				runtime->vpcmRateLimitLow = 2400;
+				runtime->vpcmRateLimitHigh = 14400;
+				runtime->unnamed_0060 = -48;
+				runtime->hwDelay = 64;
+				runtime->dmaDelay = 200;
+			}
+			before = method == 0 ? hangup_int(0x220)
+				: method == 1 ? hangup_int(0x230) : hangup_short(0xaa7c);
+			if (side == 0) {
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			fn[side][method](v34obj);
+			++calls;
+			after = method == 0 ? hangup_int(0x220)
+				: method == 1 ? hangup_int(0x230) : hangup_short(0xaa7c);
+			if (config != 0) {
+				diff_eq_int("helper configured output changed", after != before, 1, tag);
+				if (side == 0 && after != before)
+					++observed_changes;
+			}
+			if (side == 0)
+				graph_save_ours();
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 0) != 0)
+			report_first_diff("retrain helper raw graph", ours, 0);
+		diff_eq_int("retrain helper raw graph", graph_diff_live(ours, 0), 0, tag);
+		diff_eq_int("helper transcript complete ours",
+			    dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("helper transcript complete blob",
+			    dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("helper diagnostic call boundaries",
+			    dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("helper diagnostic bytes",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("helper diagnostics active ours",
+			    dsplib_debug_capture_lines(0) > 0, level > 1 && method != 0, tag);
+		diff_eq_int("helper diagnostics active blob",
+			    dsplib_debug_capture_lines(1) > 0, level > 1 && method != 0, tag);
+		++cases;
+	}
+	diff_eq_int("helper constructed case denominator", cases, 54, 0);
+	diff_eq_int("helper constructed call denominator", calls, 108, 0);
+	diff_eq_int("helper configured changed-output denominator", observed_changes, 27, 0);
+	printf("    retrain helpers: %d cases, %ld calls; all graph bytes raw; "
+	       "%ld/27 configured outputs changed\n", cases, calls, observed_changes);
 	graph_restore();
 	return diff_end();
 }
@@ -1404,6 +1647,8 @@ main(void)
 	rc |= run_create();
 	rc |= run_hangup_history();
 	rc |= run_initmoh_history();
+	rc |= run_retrain_history();
+	rc |= run_retrain_helper_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

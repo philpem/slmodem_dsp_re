@@ -17,14 +17,17 @@
  * of the function deleted: three of them write nothing the V.34 object can
  * see, and the fourth -- `setPcmSessionType` -- writes only into the session.
  *
- * AND THE HANDSHAKE IS THE REASON THE MUTATION SUITE IS NOT OPTIONAL.  Every
- * path through this function ends in `v34handshakinit(obj, 1)`, which runs
- * `v34modeminit` and rewrites a large part of the object with the SAME code
- * on both sides.  Any store this function makes before that which the
- * handshake later overwrites is invisible here whatever the sweep looks like
- * -- finding F253's trap with a bigger blast radius.  test/mutations/
- * v34retrain.json breaks each pre-handshake store in turn and finding F318
- * records which ones the differential tier can actually see.
+ * THESE ARE SYNTHETIC FIDELITY PROBES.  The patterned blocks and planted
+ * state-machine, receiver and status values below do not establish a valid
+ * construction or negotiation history.  t_vpcmcreate.c separately drives
+ * retrain from registered-create and exported-constructor output at status 0.
+ *
+ * THE HANDSHAKE LIMITS PRE-STORE OBSERVABILITY.  Every path ends in
+ * `v34handshakinit(obj, 1)`, which runs `v34modeminit` and rewrites a large
+ * part of the object with the same callee on both sides.  A preceding store
+ * overwritten there can be invisible to this sweep.  Findings F253/F318
+ * record that limitation and the historical per-store investigation;
+ * mutation suites are retired, not a current validation requirement.
  *
  * THE INPUTS ARE CROSSED WHERE THE OBJECT CROSSES THEM.  Which of three arms
  * re-reads the configured rates is decided by four inputs that are not one

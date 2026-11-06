@@ -634,6 +634,62 @@ it after handshakinit 0x68d8. Source uses direct fields and an unused byte owner
 Cross that owner lifetime with the existing reset helper after complete
 owner/offset/width and caller-publication audits. Sharing alone does not predict a byte gain.
 
+## V34 engine owner and complete caller-flow comparison (2026-11-06)
+
+The [follow-up report](../flow-retrain-recovery-20261106.md) adds one actual
+promotion: `VPcmV34SetMinimumSigLevel` is EXACT104. InitMOH remains BYTES55 and
+Retrain remains SIZE11; those are separate partial results. Report completed
+EXACT/REGALLOC functions first rather than presenting equal extents as recovery.
+
+The minimum-level helper needs both the retained root+4 address and typed
+component metadata. Raw integer access retains the address but delays the
+debug comparison across the floor publication; flat typed access restores the
+comparison age but uses the root base. A real embedded POD control-prefix view
+supplies both. Its fields have one textual home and 29 permanent offset/width
+checks for both views. The flat GNU compatibility view conservatively broadens
+alias sets. This is a qualified ownership/alias model, not a recovered original
+union or type name. Validate C89/C++98 acceptance and every affected TU.
+
+The header change exposes six changed objects among 300 and 16 changed bodies
+among 145 shared functions. Existing EXACT/REGALLOC functions survive. Delays,
+Create, ApplyBulkDelay and descrambleGPC regress within the inexact population.
+Trace these effects rather than treating them as a veto: debug PRE/HOIST first
+changes executable RTL at gcse in the first three; descrambleGPC first adds a
+reload at postreload after an alias-0 store. Native public Delays retains root,
+not root+4, so an invented interior owner is not a supported repair.
+
+Retrain's existing rate/floor/delay and reset helper algorithms match native
+inline regions and are shared. The complete diagnostic comparison pairs 64
+reachable blocks, 97 edges, 35 guards and 14 calls. Eliminating the extra
+conversion and restoring independent owner groups can match the native extent
+and instruction count while remaining BYTES225. That diagnostic spelling is
+not adopted. Equal CFG topology and byte length do not establish allocator-only
+residue; debug sampling, publications and live values still discriminate it.
+
+InitMOH now has a [replayable complete caller audit](../../tools/native_graph/initmoh_flow_case/README.md):
+95 reachable instructions, nine feasible paths and 21 call boundaries. All
+3,603 relational obligations discharge within its explicit normal-return ABI,
+address and opaque-callee model. Distinct late-byte/constant quantities explain
+why no single global register substitution applies; disjoint store schedules
+preserve complete memory at the checked boundaries. This does not promote
+BYTES55 to REGALLOC or identify the missing original allocation constraint.
+
+Parent review reproduced two false cleans in the first auditor: CALL addend
+-4→0 reaches entry+4, and a global addend 0→4 reads the next word. Checking only
+target names lost both differences. The corrected reader validates exact field
+sites/types/addends and refuses overlapping fields and alternate entries.
+A separate control reproduces solver AST-ID reuse; retaining live AST references
+keeps the serialized DAG faithful. Require intended refusal reasons and normal/
+optimized controls, not arbitrary exceptions counted as successful rejection.
+
+Transfer next to Delays' root/session/config captures and Retrain's two debug
+sampling boundaries. Carry the typed owner model through any evidence-backed
+coupled repair, preserve every intermediate loss and rerun all 300 objects.
+Use complete flow comparison where the bounded screen leaves important effects
+uncompared; do not restart a type or store-order palette after a clean bounded
+subset. Component-created Retrain/direct-helper histories supplement the older
+synthetic probes without claiming negotiated PCM reachability.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or

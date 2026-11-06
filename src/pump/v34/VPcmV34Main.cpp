@@ -2334,11 +2334,11 @@ void
 VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *engine = (unsigned char *)obj + 4;
+	struct v34_engine_control *engine = &obj->engine_control;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	K56FlexFloModem *earlyK56 = (K56FlexFloModem *)obj->pac18;
 
-	if (VPCM_ENGINE_INT(engine, v90_receiver) != 0 && sess->info0Layout != 0) {
+	if (engine->v90_receiver != 0 && sess->info0Layout != 0) {
 		V90Demodulator *demod = sess->modem.demodulator;
 		unsigned low = obj->pac3c->vpcmRateLimitLow;
 		unsigned high = obj->pac3c->vpcmRateLimitHigh;
@@ -2347,7 +2347,7 @@ VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 		return;
 	}
 
-	if (VPCM_ENGINE_INT(engine, k56flex_receiver) != 0
+	if (engine->k56flex_receiver != 0
 	    && *((const unsigned char *)earlyK56 + 8) != 0) {
 		earlyK56->setMinMaxRates(
 			(int)obj->pac3c->vpcmRateLimitLow,
@@ -2355,23 +2355,23 @@ VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
 		return;
 	}
 
-	VPCM_ENGINE_INT(engine, rate_min) = (int)(obj->pac3c->vpcmRateLimitLow
+	engine->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
 			      / (unsigned)RATE_STEP);
-	VPCM_ENGINE_INT(engine, rate_max) = (int)(obj->pac3c->vpcmRateLimitHigh
+	engine->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
 			      / (unsigned)RATE_STEP);
 
-	if (VPCM_ENGINE_INT(engine, rate_min) > 14)
-		VPCM_ENGINE_INT(engine, rate_min) = 14;
+	if (engine->rate_min > 14)
+		engine->rate_min = 14;
 
-	if (VPCM_ENGINE_INT(engine, rate_max) < VPCM_ENGINE_INT(engine, rate_min))
-		VPCM_ENGINE_INT(engine, rate_max) = VPCM_ENGINE_INT(engine, rate_min);
+	if (engine->rate_max < engine->rate_min)
+		engine->rate_max = engine->rate_min;
 
-	if (VPCM_ENGINE_INT(engine, rate_max) > 14) {
-		VPCM_ENGINE_INT(engine, rate_max) = 14;
+	if (engine->rate_max > 14) {
+		engine->rate_max = 14;
 		return;
 	}
 
-	if (VPCM_ENGINE_INT(engine, rate_max) == 1)
+	if (engine->rate_max == 1)
 		obj->force_low_baud = 1;
 }
 
@@ -2379,6 +2379,7 @@ void
 VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine_control *engine = &obj->engine_control;
 	int level = obj->pac3c->unnamed_0060;
 	unsigned idx = (unsigned)level + 0x30u;
 	int thresh;
@@ -2387,13 +2388,13 @@ VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
 		idx = 3u;
 
 	thresh = V34DisconnectThreshTable[idx];
-	obj->rx_energy_floor = thresh;
+	engine->rx_energy_floor = thresh;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
-				     "minSigLevel set to %d\n", level, thresh);
+				     "minSigLevel set to %d\n", obj->pac3c->unnamed_0060, thresh);
 
-	obj->low_energy_count = 0;
+	engine->low_energy_count = 0;
 }
 
 void
@@ -2516,7 +2517,7 @@ extern "C" void
 VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
+	struct v34_engine_control *engine = &obj->engine_control;
 	struct v34_receiver *rx = &obj->receiver;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	unsigned char dp = requestedDp;
@@ -2525,96 +2526,11 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		dsplibs_debug_printf("VPcmV34Main: Initiating retrain, "
 				     "requested DP is %d\r\n", (int)dp);
 
-	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
-		V90ConstellationDesigner *cd;
+	VPcmV34SetMinMaxBitRates((struct tagV34Object *)obj);
 
-		cd = sess->modem.demodulator->constellationDesigner;
-		cd->setMinMaxRates(obj->pac3c->vpcmRateLimitLow,
-				   obj->pac3c->vpcmRateLimitHigh);
-	} else if (obj->k56flex_receiver != 0
-		   && ((const unsigned char *)obj->pac18)[K56_ENABLED] != 0) {
-		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
-			(int)obj->pac3c->vpcmRateLimitLow,
-			(int)obj->pac3c->vpcmRateLimitHigh);
-	} else {
-		obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
-				      / RATE_STEP);
-		obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
-				      / RATE_STEP);
+	VPcmV34SetMinimumSigLevel((struct tagV34Object *)obj);
 
-		if (obj->rate_min > RATE_INDEX_MAX)
-			obj->rate_min = RATE_INDEX_MAX;
-		if (obj->rate_max < obj->rate_min)
-			obj->rate_max = obj->rate_min;
-		if (obj->rate_max > RATE_INDEX_MAX)
-			obj->rate_max = RATE_INDEX_MAX;
-		else if (obj->rate_max == 1)
-			obj->force_low_baud = 1;
-	}
-
-	/* Re-read on all three arms; the object reloads it after each. */
-
-	/*
-	 * The disconnect threshold, indexed EXACTLY as
-	 * `VPcmV34SetMinimumSigLevel` indexes the same table (finding F270):
-	 * bias by 0x30, reject the result unsigned so a negative level is out
-	 * of range too, and fall back on ENTRY 3 rather than on either end.
-	 * A `min`/`max` clamp would give entry 0 or entry 7 and be wrong at
-	 * both.
-	 *
-	 * It lands in `rx_energy_floor`, which v34fsk.h independently
-	 * describes as the floor `receiver` compares its 36-sample RMS against
-	 * before declaring the line dead -- so "disconnect threshold" and that
-	 * sentence are the same statement reached from two directions.
-	 */
-	{
-		int level = obj->pac3c->unnamed_0060;
-		unsigned idx = (unsigned)level + 0x30u;
-		int thresh;
-
-		if (idx > 7u)
-			idx = 3u;
-		thresh = V34DisconnectThreshTable[idx];
-		obj->rx_energy_floor = thresh;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmV34Main: minLevel given is "
-					     "%d , minSigLevel set to %d\n",
-					     level, thresh);
-	}
-
-	obj->low_energy_count = 0;
-
-	/*
-	 * `(delay + 2) >> 2` and NOT `(delay + 2) / 4`: the object shifts
-	 * arithmetically, so a negative configured delay rounds towards minus
-	 * infinity rather than towards zero.  The add is done unsigned for the
-	 * same reason v34pcmif.c's rate step is -- wrapping is defined there
-	 * and undefined on a signed int.
-	 */
-	{
-		int delay = obj->pac3c->hwDelay;
-		int biased = (int)((unsigned)delay + 2u);
-
-		obj->filtdelay = (short)((biased >> 2) + 0x22);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34 filtdelay set to %d "
-					     "(params initial delay = %d)\n",
-					     (int)obj->filtdelay,
-					     delay);
-	}
-
-	{
-		int ext = obj->pac3c->dmaDelay;
-
-		obj->dmadelay = (short)(0x610u - (unsigned)ext);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
-					     (int)obj->dmadelay, ext);
-	}
-
-	sess->echoCanceller.setEchoDelay(
-		(unsigned)obj->pac3c->dmaDelay + 0x68u);
+	VPcmV34SetDelays((struct tagV34Object *)obj);
 
 	/*
 	 * The sensitive-ISP notice.  Through `edprintf` and NOT through a
@@ -2636,7 +2552,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * entirely unless no V.90 receiver is running and something was asked
 	 * for -- see the note at the top of the function for why that matters.
 	 */
-	if (obj->v90_receiver == 0 && dp != DP_KEEP) {
+	if (engine->v90_receiver == 0 && dp != DP_KEEP) {
 		switch (dp) {
 		case DP_V34:
 			break;
@@ -2679,18 +2595,18 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		 * pulled up to 1.  `VPcmV34SetV90RateReneg` can assign the
 		 * field outright (D48), so negative is reachable in principle.
 		 */
-		if (obj->v90_receiver > 0)
-			obj->v90_receiver = 1;
+		if (engine->v90_receiver > 0)
+			engine->v90_receiver = 1;
 		break;
 
 	case DP_K56FLEX:
-		obj->k56flex_receiver = 1;
-		obj->v90_receiver = 0;
+		engine->k56flex_receiver = 1;
+		engine->v90_receiver = 0;
 		break;
 
 	case DP_V90:
 		sess->setPcmSessionType(0);
-		obj->v90_receiver = 1;
+		engine->v90_receiver = 1;
 		/*
 		 * The one place `status` is read here, and only on this arm.
 		 * v34pcmif.c reads 1 and 2 together as "a PCM receiver has the
@@ -2702,21 +2618,21 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 
 	case DP_V92:
 		sess->setPcmSessionType(1);
-		obj->v90_receiver = 1;
+		engine->v90_receiver = 1;
 		break;
 
 	case DP_V34:
 		obj->far_echo_enable = 1;
 		/* FALLTHROUGH -- the object shares the default arm's tail. */
 	default:
-		obj->v90_receiver = 0;
-		obj->k56flex_receiver = 0;
+		engine->v90_receiver = 0;
+		engine->k56flex_receiver = 0;
 		break;
 	}
 
 	v34handshakinit(obj, 1);
 
-	obj->progress = 7;
+	engine->progress = 7;
 	obj->status = 0;
 	obj->hs_mode = 2;
 
@@ -2729,10 +2645,10 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * The source short is read SIGNED, so a negative one gives a result
 	 * below 10000.
 	 */
-	obj->dc_count =
+	engine->dc_count =
 		(short)(336 * (int)obj->short_35a4 + 10000);
-	obj->dc_est = 0;
-	obj->dc_acc = 0;
+	engine->dc_est = 0;
+	engine->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, cleared -- except for a three-short group
@@ -2751,36 +2667,14 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 * a name.  THE BLOCK IS `struct tag_retrainReqDet` (v34fsk.h) and the
 	 * fork is `resetRetrainDetector`'s two coefficient sets.
 	 */
-	{
-		struct tag_retrainReqDet *st = &obj->retrainReqDet;
-		short role = obj->role;
-
-		st->y1 = 0;
-		st->y2 = 0;
-		st->x1 = 0;
-		st->x2 = 0;
-		st->notchDetectSigCnt = 0;
-		st->energyInp = 0;
-		st->energyOut = 0;
-		st->nsamples = 0;
-
-		if (role == 0x65) {
-			st->b1_q14 = 0;
-			st->a1_q14 = 0;
-			st->a2_q14 = (short)0x39c3;
-		} else if (role == 0x66) {
-			st->b1_q14 = (short)0x5a82;
-			st->a1_q14 = (short)0x55fc;
-			st->a2_q14 = (short)0x39c3;
-		}
-	}
+	resetRetrainDetector(&obj->retrainReqDet, obj->role);
 }
 
 void
 VPcmV34InitiateHangUp(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *engine = (unsigned char *)obj + __builtin_offsetof(struct v34_object, progress);
+	struct v34_engine_control *engine = &obj->engine_control;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	struct v34_receiver *rx = &obj->receiver;
 
@@ -2788,10 +2682,10 @@ VPcmV34InitiateHangUp(void *objp)
 		dsplibs_debug_printf(
 			"VPcmV34Main: VPcmV34InitiateHangUp called !\r\n");
 
-	VPCM_ENGINE_INT(engine, rate_want) = 0;
+	engine->rate_want = 0;
 	int status = obj->status;
-	VPCM_ENGINE_INT(engine, rate_min) = 0;
-	VPCM_ENGINE_INT(engine, rate_max) = 0;
+	engine->rate_min = 0;
+	engine->rate_max = 0;
 
 	if ((unsigned)(status - 1) <= 1) {
 		V90Demodulator *demod;

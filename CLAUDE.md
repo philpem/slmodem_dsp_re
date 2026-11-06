@@ -199,6 +199,22 @@ equivalent across a same-type alias store in the caller.
 Report compared relations, ambiguous matches and unsupported effects; a bounded
 clean subset does not establish equivalence or justify parking a function.
 
+Report EXACT/REGALLOC promotions separately from partial SIZE/BYTES progress.
+Before attributing a residual to allocation, compare complete reachable control
+flow, value/flag lanes, owner-relative effects and call-crossing live state;
+matching CFG topology alone is insufficient. State any bounded subset, manual
+instruction correspondence, alias/address assumptions and opaque-callee contract.
+A model-relative caller equivalence result neither changes the byte classifier
+nor establishes the original source declaration. The
+[InitMOH closed audit](tools/native_graph/initmoh_flow_case/README.md) is a worked
+case, not a general corpus equivalence detector.
+
+Validate relocation type, field site, width and addend before canonicalizing
+its target. A matching symbol name can still name a different function entry
+or global word. Retain expression objects when serializing solver DAGs; a
+recycled runtime identity must not silently relabel a proof node. Exercise
+both failures with known counterexamples before trusting a clean report.
+
 Before proposing a recovery experiment, query Hindsight for the symbol, TU and
 mechanism, then check the cited record against current inputs. Record the
 hypothesis, native witness, source/header/compiler hashes, tested combinations,
