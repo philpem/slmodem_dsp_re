@@ -3919,6 +3919,8 @@ void
 VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &obj->tx_control;
+	struct v34_engine_control *engine = &obj->engine_control;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -3930,12 +3932,12 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	 * compares with `cmp $1` and reads the borrow, so only zero takes the
 	 * low arm.  A negative `rrn_type` takes the high one.
 	 */
-	obj->v90_receiver = (rrn_type != 0) ? 15 : 11;
+	engine->v90_receiver = (rrn_type != 0) ? 15 : 11;
 
-	obj->prev_quadrant = 0;
-	obj->seg_symcount = 0;
-	obj->tx_scr_sr = 0;
-	obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
+	tx->prev_quadrant = 0;
+	tx->seg_symcount = 0;
+	tx->tx_scr_sr = 0;
+	tx->tx_flags = (short)((tx->tx_flags & ~0x4018) | 0x2000);
 
 	preinitdigital(obj);
 
@@ -3952,9 +3954,9 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	 * as `v34handshakinit`'s guard writes when it rejects the span, with
 	 * +0x244 left alone here and written there.
 	 */
-	obj->sample_count = 0;
-	obj->int_0248 = (int)0xfff15a00;
-	obj->timeout_deadline = 0x69780;
+	engine->sample_count = 0;
+	engine->int_0248 = (int)0xfff15a00;
+	engine->timeout_deadline = 0x69780;
 }
 
 void
@@ -4322,6 +4324,7 @@ extern "C" int
 VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_engine_control *engine = &obj->engine_control;
 	unsigned char *m = (unsigned char *)obj;
 	struct _tagModemParameters *cfg = (struct _tagModemParameters *)runtime;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
@@ -4333,7 +4336,8 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * still keeps them in stack slots across it, and the two `int`s are
 	 * re-read as SHORTS at the one place they are used.
 	 */
-	int quick = (cfg->qcFlags & CFG_QUICKCONNECT) != 0;
+	/* Narrow the shift before promotion: native SHR is byte-sized. */
+	int quick = (unsigned char)(cfg->qcFlags >> 4) & 1;
 	int ansLevel = cfg->unnamed_000c;
 	int uqts = cfg->qcIndex;
 
@@ -4414,17 +4418,18 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->v90_high_carrier = 0;
 
 	obj->status = 0;
-	obj->progress = 0;
-	obj->k56flex_receiver = 0;
+	engine->progress = 0;
+	engine->k56flex_receiver = 0;
 
 	/*
-	 * THE DISPATCH.  Not a `switch` with 0 in `default`: the object tests
-	 * `== 2`, then a SIGNED `jle`, then `== 3` and `== 4`, so 0, every
-	 * negative value and everything above 4 share one body.
+	 * THE DISPATCH.  A switch with a shared Flex tail preserves the native
+	 * `== 2`, SIGNED `jle`, then `== 3` and `== 4` decision tree.  Zero,
+	 * negative values and values above 4 share the default body.
 	 */
-	if (sessionType == 2) {
+	switch (sessionType) {
+	case 2: {
 		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 1;
+		engine->v90_receiver = 1;
 		sess->externalReset();
 
 		obj->local_v92 = 1;
@@ -4460,7 +4465,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 			obj->status = 4;
 			sess->modem.demodulator->enterChannelVerification(
 				(short)uqts, (short)ansLevel);
-			obj->progress = 10;
+			engine->progress = 10;
 		}
 
 		if (side == 0) {
@@ -4469,14 +4474,22 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 			sess->pcmSessionType = 1;
 			side = 0;
 		}
-	} else if (sessionType == 1) {
+		break;
+	}
+	case 1: {
 		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 1;
+		engine->v90_receiver = 1;
 		side = (side == 0);
 		sess->externalReset();
-	} else if (sessionType == 3 || sessionType == 4) {
-		*(int *)(k56 + K56_AORMU) = (sessionType == 4);
-		obj->v90_receiver = 0;
+		break;
+	}
+	case 3:
+		*(int *)(k56 + K56_AORMU) = 0;
+		engine->v90_receiver = 0;
+		goto flex;
+	case 4:
+		*(int *)(k56 + K56_AORMU) = 1;
+		engine->v90_receiver = 0;
 
 		/*
 		 * THE ONE UNGATED PRINT IN THE FUNCTION.  Through `edprintf`
@@ -4485,36 +4498,38 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		 * same inconsistency v34pcmif.c records for
 		 * `VPcmV34SetTxScale`, and the original's.
 		 */
+	flex:
 		edprintf("VPcmV34Main: it is K56Flex session type,"
 			 " (AorMu = %d)\r\n", *(const int *)(k56 + K56_AORMU));
 
-		obj->k56flex_receiver = 1;
+		engine->k56flex_receiver = 1;
 		((K56FlexFloModem *)k56)->externalReset();
-	} else {
+		break;
+	default:
 		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 0;
+		engine->v90_receiver = 0;
 	}
 
 	obj->role = (short)(side != 0 ? 0x66 : 0x65);
 
-	obj->ptc = ptc;
-	obj->rx_n = 0;
-	obj->tx_n = 0;
-	obj->tx_rd = 0;
-	obj->rate_min = 0;
-	obj->rate_max = RATE_INDEX_MAX;
-	obj->rate_now = 0;
-	obj->rate_want = -1;
-	obj->rx_energy_floor = 0;
-	obj->low_energy_count = 0;
-	obj->sample_count = 0;
-	obj->int_0248 = (int)0xfffe8900;
+	engine->ptc = ptc;
+	engine->rx_n = 0;
+	engine->tx_n = 0;
+	engine->tx_rd = 0;
+	engine->rate_min = 0;
+	engine->rate_max = RATE_INDEX_MAX;
+	engine->rate_now = 0;
+	engine->rate_want = -1;
+	engine->rx_energy_floor = 0;
+	engine->low_energy_count = 0;
+	engine->sample_count = 0;
+	engine->int_0248 = (int)0xfffe8900;
 	obj->force_low_baud = 0;
 	rx->agc_start_gain = 0x600;
 	rx->timing_offset = 0;
 	/* OB_F000C stays: object+0xc has no member. */
 	*(int *)(m + OB_F000C) = 0;
-	obj->nof_tx_bits = 0;
+	engine->nof_tx_bits = 0;
 
 	v34handshakinit(obj, 0);
 
@@ -4525,40 +4540,19 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
 	 * signed, so a negative one gives a result below 10000.
 	 */
-	obj->dc_count =
+	struct v34_dc_control *dc = &engine->dc_control;
+	dc->dc_count =
 		(short)(336 * (int)obj->short_35a4 + 10000);
 	obj->hist2_idx = 0;
-	obj->dc_est = 0;
-	obj->dc_acc = 0;
+	dc->dc_est = 0;
+	dc->dc_acc = 0;
 
 	/*
 	 * The 32 bytes at +0xac1c, byte for byte the same block
 	 * `VPcmV34InitiateRetrain` writes; its comment is the derivation and
 	 * is not repeated.  +0xac2e is again the one short left alone.
 	 */
-	{
-		struct tag_retrainReqDet *st = &obj->retrainReqDet;
-		short role = obj->role;
-
-		st->y1 = 0;
-		st->y2 = 0;
-		st->x1 = 0;
-		st->x2 = 0;
-		st->notchDetectSigCnt = 0;
-		st->energyInp = 0;
-		st->energyOut = 0;
-		st->nsamples = 0;
-
-		if (role == 0x65) {
-			st->b1_q14 = 0;
-			st->a1_q14 = 0;
-			st->a2_q14 = (short)0x39c3;
-		} else if (role == 0x66) {
-			st->b1_q14 = (short)0x5a82;
-			st->a1_q14 = (short)0x55fc;
-			st->a2_q14 = (short)0x39c3;
-		}
-	}
+	resetRetrainDetector(&obj->retrainReqDet, obj->role);
 
 	obj->rates_latched = 0;
 	obj->v90_timing_offset = 0;
@@ -4582,76 +4576,13 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 * of the `else` rather than being tested separately.  Two functions,
 	 * one block; see that one for why each step is the shape it is.
 	 */
-	if (obj->v90_receiver != 0 && sess->info0Layout != 0) {
-		V90ConstellationDesigner *cd;
-
-		cd = sess->modem.demodulator->constellationDesigner;
-		cd->setMinMaxRates(obj->pac3c->vpcmRateLimitLow,
-				   obj->pac3c->vpcmRateLimitHigh);
-	} else if (obj->k56flex_receiver != 0 && k56[K56_ENABLED] != 0) {
-		((K56FlexFloModem *)k56)->setMinMaxRates(
-			(int)obj->pac3c->vpcmRateLimitLow,
-			(int)obj->pac3c->vpcmRateLimitHigh);
-	} else {
-		obj->rate_min = (int)(obj->pac3c->vpcmRateLimitLow
-				      / RATE_STEP);
-		obj->rate_max = (int)(obj->pac3c->vpcmRateLimitHigh
-				      / RATE_STEP);
-
-		if (obj->rate_min > RATE_INDEX_MAX)
-			obj->rate_min = RATE_INDEX_MAX;
-		if (obj->rate_max < obj->rate_min)
-			obj->rate_max = obj->rate_min;
-		if (obj->rate_max > RATE_INDEX_MAX)
-			obj->rate_max = RATE_INDEX_MAX;
-		else if (obj->rate_max == 1)
-			obj->force_low_baud = 1;
-	}
+	VPcmV34SetMinMaxBitRates((struct tagV34Object *)obj);
 
 	/* Re-read on all three arms; the object reloads it after each. */
 
-	/* The disconnect threshold, indexed as `VPcmV34InitiateRetrain`. */
-	{
-		int level = obj->pac3c->unnamed_0060;
-		unsigned idx = (unsigned)level + 0x30u;
-		int thresh;
+	VPcmV34SetMinimumSigLevel((struct tagV34Object *)obj);
 
-		if (idx > 7u)
-			idx = 3u;
-		thresh = V34DisconnectThreshTable[idx];
-		obj->rx_energy_floor = thresh;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmV34Main: minLevel given is "
-					     "%d , minSigLevel set to %d\n",
-					     level, thresh);
-	}
-
-	obj->low_energy_count = 0;
-
-	{
-		int delay = obj->pac3c->hwDelay;
-		int biased = (int)((unsigned)delay + 2u);
-
-		obj->filtdelay = (short)((biased >> 2) + 0x22);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34 filtdelay set to %d "
-					     "(params initial delay = %d)\n",
-					     (int)obj->filtdelay,
-					     delay);
-	}
-
-	{
-		int ext = obj->pac3c->dmaDelay;
-
-		obj->dmadelay = (short)(0x610u - (unsigned)ext);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
-					     (int)obj->dmadelay, ext);
-	}
-
-	sess->echoCanceller.setEchoDelay(
-		(unsigned)obj->pac3c->dmaDelay + 0x68u);
+	VPcmV34SetDelays((struct tagV34Object *)obj);
 
 	/*
 	 * THE ENTRANCE FILTER, three ways, and only the first two are named by

@@ -466,6 +466,7 @@ void
 v34modeminit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &obj->tx_control;
 	struct v34_receiver *rx = &obj->receiver;
 	unsigned char *m = (unsigned char *)obj;
 	struct v34_modulator *mod =
@@ -501,16 +502,16 @@ v34modeminit(void *objp)
 	rx->rrn_local_dir = 0;
 	rx->baud_copy = 0;
 	obj->is_short = 0;
-	obj->tx_flags = V34_EC_FROZEN;
+	tx->tx_flags = V34_EC_FROZEN;
 	obj->echo_calls = 0;
 	obj->short_3588 = 0;
 	obj->short_358a = 0;
 	obj->short_aa78 = 0;
 	obj->tx_fill_target = 6;
 	obj->vect_idx = 0;
-	*(short *)(m + 0x25d6) = (short)0x8990;
-	*(short *)(m + 0x25d8) = 0;
-	*(short *)(m + 0x25da) = 0;
+	tx->short_25d6 = (short)0x8990;
+	tx->short_25d8 = 0;
+	tx->short_25da = 0;
 
 	/* Twelve shorts each, in two unrelated places. */
 	for (i = 0; i <= 0xb; i++) {
@@ -539,7 +540,7 @@ v34modeminit(void *objp)
 
 	originate = (obj->role == 0x65);
 
-	obj->tx_flags = (short)(originate ? V34_EC_FROZEN
+	tx->tx_flags = (short)(originate ? V34_EC_FROZEN
 					   : (V34_EC_FROZEN | V34_TXFLAG_CALLER));
 	rx->flags = (unsigned short)(originate ? 0 : V34_SCR_ANSWERER);
 
@@ -2699,34 +2700,35 @@ settxlevel(void *objp, const short *mp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
+	struct v34_tx_control *tx = &obj->tx_control;
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
-	int scale = obj->tx_scale;
+	int scale = tx->tx_scale;
 	short extra;
 	short want;
 	short n;
 
 	/* The second MP read follows this store, as in the object. */
-	obj->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
+	tx->tx_pwr_reduction = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 5) & 7), 3);
 
 	extra = (short)bitreverse((unsigned short)(((unsigned short)mp[0] >> 2) & 7), 3);
 	if (extra > 3)
 		extra = 3;
 
-	obj->tx_pwr_reduction = (short)(extra + (unsigned short)obj->tx_pwr_reduction);
+	tx->tx_pwr_reduction = (short)(extra + (unsigned short)tx->tx_pwr_reduction);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, power reduction requested "
 				     "by remote modem is %d dB\n",
-				     (int)obj->tx_pwr_reduction);
+				     (int)tx->tx_pwr_reduction);
 
 	if (obj->v90_receiver != 0) {
 		if (minpr < 0)
-			obj->tx_pwr_reduction = (short)(minpr
-					     + (unsigned short)obj->tx_pwr_reduction);
-		else if (obj->tx_pwr_reduction < minpr)
-			obj->tx_pwr_reduction = minpr;
+			tx->tx_pwr_reduction = (short)(minpr
+					     + (unsigned short)tx->tx_pwr_reduction);
+		else if (tx->tx_pwr_reduction < minpr)
+			tx->tx_pwr_reduction = minpr;
 	}
-	want = obj->tx_pwr_reduction;
+	want = tx->tx_pwr_reduction;
 
 	if (want < 0) {
 		for (n = want; n < 0; n = (short)(n + 1))
@@ -2743,10 +2745,10 @@ settxlevel(void *objp, const short *mp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
 				     "reduced txscale is %d dB," "final txscale is %d\n",
-				     (int)obj->tx_scale, (int)want,
+				     (int)tx->tx_scale, (int)want,
 				     scale);
 
-	obj->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);
+	tx->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);
 }
 
 /*
@@ -2813,12 +2815,9 @@ v34setuptxmit(void *objp)
  * distinguishable only by the number in the message and by what happens
  * next -- 144 is then bounds-checked in its turn, and can itself be
  * rejected.  The bound is an UNSIGNED comparison (`jb`, not `jl`), which is
- * the wrong way round for safety: a NEGATIVE `bulk_len` is huge unsigned and
- * accepts every delay, and the clear below then runs off the end of the ring.
- * Nothing reconstructed writes `bulk_len`, so no call site is known to reach
- * that; it is recorded rather than fixed, and the tests keep `bulk_len`
- * positive because the overrun would be identical on both sides and prove
- * nothing.
+ * native comparison. VPcmV34Create initializes bulk_len to 9600. A synthetic
+ * negative length looks huge unsigned and can admit a clear beyond the ring;
+ * it is outside the constructed fixture domain. Preserve the native guard.
  *
  * THEN THE FAR CANCELLER.  With either PCM receiver running, or with the far
  * canceller not armed to begin with, `far_echo_enable` is simply cleared.  Otherwise a
@@ -2835,9 +2834,10 @@ ApplyBulkDelay(void *objp, short delay)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
+	struct v34_engine_control *engine = &obj->engine_control;
 	int d = delay;
 
-	if (d <= 0) {
+	if (delay <= 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V34 bulk delay first estimation %d\n", d);
@@ -2855,11 +2855,9 @@ ApplyBulkDelay(void *objp, short delay)
 	obj->bulk_head = 0;
 	sysdep_memset(m + 0x35b8, 0, (size_t)(d * 2));
 
-	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0
+	if (engine->v90_receiver == 0 && engine->k56flex_receiver == 0
 	    && obj->far_echo_enable != 0) {
-		if ((short)d > 0x1d) {
-			obj->far_echo_enable = 1;
-		} else {
+		if ((short)d <= 0x1d) {
 			int back;
 
 			if (DSPLIB_DEBUG_ON())
@@ -2876,7 +2874,12 @@ ApplyBulkDelay(void *objp, short delay)
 				    "...Modifying dma delay from %d to %d\r\n",
 				    obj->dmadelay, obj->dmadelay - back);
 
-			obj->dmadelay = (short)((unsigned short)obj->dmadelay - back);
+			{
+				short *dma_delay = &obj->dmadelay;
+				*dma_delay = (short)((unsigned short)*dma_delay - back);
+			}
+		} else {
+			obj->far_echo_enable = 1;
 		}
 	} else {
 		obj->far_echo_enable = 0;
@@ -9699,11 +9702,12 @@ void
 v34FreezeEcho(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &obj->tx_control;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34HSHAK: Freeze EC\n");
 
-	obj->tx_flags = (short)(obj->tx_flags | V34_EC_FROZEN);
+	tx->tx_flags = (short)(tx->tx_flags | V34_EC_FROZEN);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(

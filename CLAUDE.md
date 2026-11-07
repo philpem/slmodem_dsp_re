@@ -217,6 +217,15 @@ inventing another owner type. Cross these properties; their isolated outputs
 can miss an exact combination. Equivalent formal/local copies can also select
 different spill transport without changing the formal's type or ABI.
 
+When a supported owner-header change regresses a consumer, trace its actual
+member metadata and inline copies before rejecting the model. The V34 TX
+recovery repaired an intermediate handshak regression by migrating FreezeEcho
+to its independently witnessed owner, gaining an EXACT public helper. Distinguish
+capturing a mutable owner pointer from scheduling a constant member-address
+addition on an already captured root; early arithmetic alone is not an earlier
+observation of mutable state. See the
+[coupled recovery](docs/create-tx-recovery-20261107.md).
+
 Validate relocation type, field site, width and addend before canonicalizing
 its target. A matching symbol name can still name a different function entry
 or global word. Retain expression objects when serializing solver DAGs; a

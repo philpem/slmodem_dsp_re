@@ -136,6 +136,11 @@ extern void ref_fixture_set_delays(void *obj)
 	__asm__("ref__Z16VPcmV34SetDelaysP12tagV34Object");
 extern void VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
 extern void ref_VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
+/* Both local bodies consume root in EAX and short delay in DX. */
+extern void ApplyBulkDelay(void *obj, short delay)
+	__attribute__((regparm(2)));
+extern void ref_ApplyBulkDelay(void *obj, short delay)
+	__attribute__((regparm(2)));
 extern void VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateHangUp(void *obj);
 extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
@@ -1621,6 +1626,75 @@ run_retrain_helper_history(void)
 	return diff_end();
 }
 
+/* Constructed component inputs, before protocol RTD negotiation. The native
+ * constructor supplies bulk_len=9600 and the real ring/echo owners. No internal
+ * state is planted. Zero and saturation are method-boundary probes, not claims
+ * that each selected delay occurs on a modem call. This helper installs no
+ * static aliases, so compare all graph bytes immediately with no masks. */
+static int
+run_bulkdelay_history(void)
+{
+	static const short delays[] = { 0, 1, 29, 30, 143, 144, 9599, 9600, 32767 };
+	int history, level, side;
+	unsigned d;
+	int cases = 0;
+	long calls = 0, active = 0;
+
+	diff_begin("ApplyBulkDelay: constructed ring and echo histories");
+	for (history = 0; history < 3; ++history)
+	for (level = 0; level < 3; ++level)
+	for (d = 0; d < sizeof(delays) / sizeof(delays[0]); ++d) {
+		long tag = history * 1000 + level * 100 + d;
+		for (side = 0; side < 2; ++side) {
+			int before_tail, before_far;
+			short before_dma;
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0, runtime, 0);
+			diff_eq_int("bulk constructed status", hangup_int(0), 0, tag);
+			diff_eq_int("bulk constructed ring length", hangup_int(0x35b4), 9600, tag);
+			before_tail = hangup_int(0x35ac);
+			before_far = hangup_short(0xa23c);
+			before_dma = hangup_short(0x25c);
+			if (side == 0) {
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			if (side == 0)
+				ApplyBulkDelay(v34obj, delays[d]);
+			else
+				ref_ApplyBulkDelay(v34obj, delays[d]);
+			++calls;
+			if (side == 0) {
+				if (hangup_int(0x35ac) != before_tail
+				    || hangup_short(0xa23c) != before_far
+				    || hangup_short(0x25c) != before_dma)
+					++active;
+				graph_save_ours();
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 0) != 0)
+			report_first_diff("bulk raw graph", ours, 0);
+		diff_eq_int("bulk raw graph", graph_diff_live(ours, 0), 0, tag);
+		diff_eq_int("bulk transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("bulk transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("bulk callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("bulk transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("bulk diagnostics active", dsplib_debug_capture_lines(1) > 0, level > 1, tag);
+		++cases;
+	}
+	diff_eq_int("bulk constructed cases", cases, 81, 0);
+	diff_eq_int("bulk constructed calls", calls, 162, 0);
+	diff_eq_int("bulk changes constructed output", active, cases, 0);
+	printf("    bulk component: %d cases, %ld calls, %ld active; all graph bytes raw\n", cases, calls, active);
+	graph_restore();
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1649,6 +1723,7 @@ main(void)
 	rc |= run_initmoh_history();
 	rc |= run_retrain_history();
 	rc |= run_retrain_helper_history();
+	rc |= run_bulkdelay_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

@@ -101,12 +101,14 @@ void
 txinit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &obj->tx_control;
+	struct v34_receiver *rx = &obj->receiver;
 
 	obj->echo_alpha = 0;
 	obj->far_echo_alpha = 0;
-	obj->tx_scr_sr = 0;
-	obj->prev_quadrant = 0;
-	obj->seg_symcount = 0;
+	tx->tx_scr_sr = 0;
+	tx->prev_quadrant = 0;
+	tx->seg_symcount = 0;
 
 	V34EchoCleanUp(&obj->echo0);
 	V34EchoCleanUp(&obj->echo1);
@@ -117,16 +119,16 @@ txinit(void *objp)
 	 * the modulator a full block of silence to draw on before the first
 	 * symbol arrives.
 	 */
-	obj->txq.count = 0x20;
-	obj->txq.rd = obj->txq.ring;
-	obj->txq.wr = obj->txq.ring + 0x20;
-	sysdep_memset(obj->txq.ring, 0, V34_TXQ_RING * sizeof(int));
+	tx->txq.count = 0x20;
+	tx->txq.rd = tx->txq.ring;
+	tx->txq.wr = tx->txq.ring + 0x20;
+	sysdep_memset(tx->txq.ring, 0, V34_TXQ_RING * sizeof(int));
 
 	/* The receive queue is emptied outright. */
-	obj->receiver.rxq.count = 0;
-	obj->receiver.rxq.rd = obj->receiver.rxq.ring;
-	obj->receiver.rxq.wr = obj->receiver.rxq.ring;
-	sysdep_memset(obj->receiver.rxq.ring, 0,
+	rx->rxq.count = 0;
+	rx->rxq.rd = rx->rxq.ring;
+	rx->rxq.wr = rx->rxq.ring;
+	sysdep_memset(rx->rxq.ring, 0,
 			      V34_RXQ_RING * sizeof(int));
 
 	/* And the pre-filter's 42-tap history. */
@@ -157,39 +159,39 @@ void
 txmit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_queue *txq = &obj->txq;
+	struct v34_tx_control *tx = &obj->tx_control;
 	short local[38];
 	int sym, n, i;
 
-	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
-		    | (unsigned short)obj->txpoint.c[0]);
+	sym = (int)(((unsigned)(unsigned short)tx->txpoint.c[1] << 16)
+		    | (unsigned short)tx->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
 		v34_object_modulator(obj), sym, local);
 
 	if (n > 0) {
-		int *wr = txq->wr;
+		int *wr = tx->txq.wr;
 
 		for (i = 0; i < n; i++) {
-			int v = (local[i] * obj->tx_scale + 0x2000) >> 14;
+			int v = (local[i] * tx->tx_scale + 0x2000) >> 14;
 
 			/*
 			 * One per sample.  txwritequeue adds four per call to
 			 * the same field; two producers, two conventions.
 			 */
-			txq->count = (short)(txq->count + 1);
+			tx->txq.count = (short)(tx->txq.count + 1);
 			((short *)wr)[0] = (short)v;
 			((short *)wr)[1] = 0;
 			wr++;
 			if ((char *)wr >= (char *)obj + 0x25c0)
-				wr = txq->ring;
+				wr = tx->txq.ring;
 		}
-		txq->wr = wr;
+		tx->txq.wr = wr;
 	}
 
 	V34EchoPreFilter(local, (short)n, &obj->prefilter);
 
 	/* Bit 9 of the short at +0x25c2; the original tests byte 0x25c3 for 2. */
-	if ((obj->tx_flags & V34_EC_FEED) == 0)
+	if ((tx->tx_flags & V34_EC_FEED) == 0)
 		return;
 
 	for (i = 0; i < n; i++) {

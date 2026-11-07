@@ -752,6 +752,61 @@ in for that owner. These are recorded negative/partial controls, not retained
 promotions. Preserve complete owner extents rather than walking past a queue
 subobject or manufacturing a TX type for scratch registers.
 
+## Bulk delay and the coupled TX-owner repair (2026-11-07)
+
+The [follow-up](../create-tx-recovery-20261107.md) adds ApplyBulkDelay
+REGALLOC467 and v34FreezeEcho EXACT222, preserving all previous EXACT/REGALLOC
+functions. Its 300-object closure changes six objects; the deciding phase
+passes 399 period tests and structural checks. Create SIZE23, SetV90 SIZE6,
+txinit BYTES8 and settxlevel SIZE2 remain explicitly partial recoveries.
+
+ApplyBulkDelay needs four native-supported properties together: the actual
+engine root+4 retained across memset, the original short formal at the entry
+comparison, the long mask/DMA arm as fallthrough, and an actual short-member
+pointer scoped to the final DMA update. Each ablation loses REGALLOC. Capturing
+that pointer at entry instead creates an unwitnessed call-crossing lifetime.
+The scoped pointer restores narrow alias metadata and native debug reuse;
+four differing bytes are independently reviewed EAX/ECX scratch lanes.
+
+The old TX queue prefix does not contain the scalar tail. Independent txinit,
+txmit, modeminit, settxlevel and FreezeEcho instructions witness one complete
+measured control group at root+0x221c, size 0x3c4, including all fields through
+root+0x25dc. This supports a checked owner model, not a unique original type
+name, union spelling or ultimate declaration boundary. Cross TX and engine
+owners: SetV90's baseline / TX / engine / both are SIZE46 / SIZE20 / SIZE22 /
+SIZE6. The last gap includes a native duplicate arm-store absent from initial
+candidate RTL; do not call it allocator-only or retry equivalent if/switch
+spellings without a distinguishing constraint.
+
+Header-only makes handshak 15 bytes worse. Two inline FreezeEcho stores acquire
+alias set zero and prevent debug PRE. Actual member use in the independently
+witnessed FreezeEcho owner restores those inline substitutions, promotes its
+public entry EXACT222 and makes handshak 38 bytes closer than baseline. This
+is a measured coupled repair across a temporary regression. Matching PRE
+counts do not establish whole-handshak equivalence.
+
+Create shares existing rate, minimum-level and delay helpers to recover native
+fresh session/config reads; it also recovers the DC owner and byte-sized quick
+extraction. A binary decision tree alone cannot distinguish an authored switch
+from if/else: the old comment ruling out a switch was wrong. The retained
+switch reproduces the native tree, but repeated formal-root access that fixed
+Delays does not recover Create's remaining engine-expression split. Test a
+transfer on its own compiler evidence rather than treating a successful spelling
+as a general rule.
+
+A bounded canonical-root control also makes the complete `v34_object` and
+native-mangled `tagV34Object` one type throughout an isolated closure. It is
+whole-Main-object neutral, with compiler type-identity checks confirming that
+the intended distinction really changed. Do not repeat this tag-rename family
+as an explanation for Create's CSE split without new declaration evidence.
+
+txinit's source through 31.bbro already has native reset-store order; 33.sched2
+first reorders the three independent clears. Another source-order palette is
+unsupported. For settxlevel, preserve the root binding captured before GetMinPR;
+moving its constant TX-member address calculation across the call alone does
+not change a mutable pointer observation. The partial residuals, full flow
+counts, fixture domains and concrete reopening conditions are in the report.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or
