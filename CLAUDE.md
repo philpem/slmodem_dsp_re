@@ -216,6 +216,9 @@ aliasing, test references to actual declared members with checked extents before
 inventing another owner type. Cross these properties; their isolated outputs
 can miss an exact combination. Equivalent formal/local copies can also select
 different spill transport without changing the formal's type or ABI.
+An explicit short local can promote to an SI pseudo while repeated declared-
+member reads common into an internal HI pseudo. Check consumption and spill
+metadata; a narrow native spill alone does not establish an original local.
 
 When a supported owner-header change regresses a consumer, trace its actual
 member metadata and inline copies before rejecting the model. The V34 TX
@@ -240,6 +243,10 @@ its target. A matching symbol name can still name a different function entry
 or global word. Retain expression objects when serializing solver DAGs; a
 recycled runtime identity must not silently relabel a proof node. Exercise
 both failures with known counterexamples before trusting a clean report.
+Keep resolved local-call distance differences in strict grades too. Measure
+intervening function extents and padding when the target identity agrees;
+recover that source/layout debt rather than fitting or masking the caller.
+See the [quadbit/Phase34 follow-up](docs/quad-phase34-recovery-20261107.md).
 
 Before proposing a recovery experiment, query Hindsight for the symbol, TU and
 mechanism, then check the cited record against current inputs. Record the

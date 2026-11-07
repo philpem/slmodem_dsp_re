@@ -1669,22 +1669,21 @@ void
 txmitquadbit(void *obj, short bits)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	short mode = tx_scrambler_mode(o);
-	unsigned sr = (unsigned)o->tx_scr_sr;
+	struct v34_tx_control *tx = &o->tx_control;
 	int d, q;
 
-	d = V34scrambler(&sr, mode, bits, 2);
-	o->tx_scr_sr = (int)sr;
-	q = (d + (unsigned short)o->prev_quadrant) & 3;
-	o->cur_quadrant = (short)q;
+	d = V34scrambler((unsigned *)&tx->tx_scr_sr,
+			(short)(~tx->tx_flags & V34_TXFLAG_CALLER), bits, 2);
+	q = (d + (unsigned short)tx->prev_quadrant) & 3;
+	tx->cur_quadrant = (short)q;
 
-	sr = (unsigned)o->tx_scr_sr;
-	d = V34scrambler(&sr, mode, (short)(bits >> 2), 2);
-	o->tx_scr_sr = (int)sr;
+	d = V34scrambler((unsigned *)&tx->tx_scr_sr,
+			(short)((tx->tx_flags & V34_TXFLAG_CALLER) == 0),
+			(short)(bits >> 2), 2);
 
-	q = (unsigned short)o->cur_quadrant;
-	o->prev_quadrant = (short)q;
-	o->txpoint.word = vect16[d + q * 4];
+	q = tx->cur_quadrant;
+	tx->prev_quadrant = (short)q;
+	tx->txpoint.word = vect16[d + q * 4];
 
 	txmit(obj);
 }

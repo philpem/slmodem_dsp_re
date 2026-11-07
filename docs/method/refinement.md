@@ -860,6 +860,51 @@ the cited historical report as well as symbol search before repeating it.
 Continue with quadbit's two-call lifetime and Phase34's remaining owner/flow
 constraints; the target-specific reopeners are in the report.
 
+## Quadbit, Phase34 and indication-owner closure (2026-11-07)
+
+The [next wave](../quad-phase34-recovery-20261107.md) adds JdReceived EXACT150,
+DilReceived EXACT150 and K56FlexRateDetermined EXACT64. Jd needs its actual
+engine owner. Dil's complete baseline/engine/TX/both cross gives SIZE42 /
+SIZE17 / SIZE9 / EXACT150. Rate is REGALLOC64 with its owner alone, then EXACT64
+when the earlier K56Jd's independently witnessed RX/TX owners are recovered.
+K56Jd itself remains SIZE15; inexactness alone is not grounds to discard that
+supported change and its coupled exact gain. The larger DC/branch experiments
+remain separate, unnecessary controls.
+
+Phase34 recovers actual TX/RX member use, the native ordered 3..10 dispatch,
+narrow counter publication/consumption and idle-dibit member transport. Its
+staged crosses matter: owner/flow alone reaches native extent but BYTES625;
+actual RX and direct count together recover native instruction count, then
+the actual idle member closes the supported family at BYTES47. It remains
+partial. The obsolete eight-entry table disappears, and the remaining Progress
+tables retain exact case identities despite shifted bases. A valid instruction
+target alone would not establish those identities.
+
+The native/selected Phase pair has 291 decoded instructions and matching 45
+branch/return sites. Remaining permutations are inside basic blocks, involving
+disjoint owner reads or immutable table reads and count stores. A strict local
+getMP call still differs because preceding source occupies 96 fewer bytes:
+getMPrecvdBits contributes +32 including padding, RateRenegSilence -80 and
+RateReneg -48. Recover these actual functions; do not canonicalize away the
+distance or add caller padding to claim REGALLOC/EXACT.
+
+Quadbit's missing lifetime was not another explicit flags snapshot. Repeated
+actual flag-member reads yield a commoned non-user HI pseudo; an explicit
+short local had become SI. Direct actual-member arguments at both scrambler
+expansions restore native frame44 and its four spill homes. Actual signed
+quadrant consumption keeps the clear source property; the selected 450-byte
+body remains SIZE3 against native453. Both have 43 blocks/64 edges, but native
+keeps a separate extension at the final join and another alignment instruction.
+Frame size/CFG agreement alone does not complete this function.
+
+The expanded initialized point histories add native public 2400/3429-baud
+modulator setups beside the existing 600-baud path, comparing full graph bytes
+and checking queue capacity. New indication histories exercise constructed
+owners too. These are component histories, not negotiated protocol reachability;
+the broad Phase34 planted-state arm sweep stays synthetic. The period/structural
+gate passes 399/0. The report records complete-TU effects, input/helper hashes,
+qualified negatives and exact stopping/reopening conditions.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or

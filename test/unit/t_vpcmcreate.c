@@ -150,8 +150,19 @@ extern void txmitdibit(void *obj, short bits);
 extern void ref_txmitdibit(void *obj, short bits);
 extern void txmitquadbit(void *obj, short bits);
 extern void ref_txmitquadbit(void *obj, short bits);
+struct v34_modulator;
+extern void ref_V34SetupModulator(struct v34_modulator *mod, short baud,
+		short carrier, short preemp, int v90, int reset);
 extern void VPcmV34SetV90RateReneg(void *obj, short rrn, unsigned char constellation);
 extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn, unsigned char constellation);
+extern void V34XF_IndicateJdReceived(void *obj, unsigned char constellation,
+		unsigned char silence);
+extern void ref_V34XF_IndicateJdReceived(void *obj, unsigned char constellation,
+		unsigned char silence);
+extern void V34XF_IndicateDilReceived(void *obj, unsigned char constellation);
+extern void ref_V34XF_IndicateDilReceived(void *obj, unsigned char constellation);
+extern void V34XF_IndicateK56FlexRateDetermined(void *obj);
+extern void ref_V34XF_IndicateK56FlexRateDetermined(void *obj);
 extern void VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateHangUp(void *obj);
 extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
@@ -1775,25 +1786,33 @@ run_tx_component_history(void)
 
 /* Training-point component histories. Native initialization sets the carrier,
  * scale, queues and polynomial; both encoders then run bounded prefixes. The
+ * Two additional public modulator setups exercise 2400/3429-baud QAM alongside
+ * the modem initializer's 600-baud setup, without planting internal state. The
  * observed queue bound is checked after every call. This does not establish
  * that these prefixes are emitted by the protocol state machine. */
 static int
 run_tx_point_history(void)
 {
-	int history, quad, debug, length, side, i;
+	int history, profile, quad, debug, length, side, i;
 	int cases = 0, calls = 0, active = 0;
 
 	diff_begin("V34 TX points: initialized scrambler and modulator histories");
 	for (history = 0; history < 2; ++history)
+	for (profile = 0; profile < 3; ++profile)
 	for (quad = 0; quad < 2; ++quad)
 	for (debug = 0; debug < 2; ++debug)
 	for (length = 1; length <= 8; ++length) {
-		long tag = history * 1000 + quad * 100 + debug * 10 + length;
+		long tag = history * 10000 + profile * 1000 + quad * 100 + debug * 10 + length;
 		for (side = 0; side < 2; ++side) {
 			graph_restore();
 			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 			ref_VPcmV34Create(v34obj, history, 0, runtime, 0);
 			ref_v34modeminit(v34obj);
+			if (profile != 0)
+				ref_V34SetupModulator(
+					(struct v34_modulator *)(v34obj + 0x1450),
+					(short)(profile == 1 ? 2400 : 3429),
+					(short)(profile == 1 ? 1600 : 1800), 0, 0, 1);
 			diff_eq_int("TX point primed queue", hangup_int(0x221c), 32, tag);
 			if (side == 0) {
 				graph_save_ours();
@@ -1830,8 +1849,8 @@ run_tx_point_history(void)
 		diff_eq_int("TX point transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
 		++cases;
 	}
-	diff_eq_int("TX point prefix cases", cases, 64, 0);
-	diff_eq_int("TX point encoded calls", calls, 576, 0);
+	diff_eq_int("TX point prefix cases", cases, 192, 0);
+	diff_eq_int("TX point encoded calls", calls, 1728, 0);
 	diff_eq_int("TX point prefixes change output", active, cases, 0);
 	printf("    TX point component: %d prefixes, %d calls, %d active; queue bounded; all graph bytes raw\n",
 	       cases, calls, active);
@@ -1899,6 +1918,70 @@ run_setv90_history(void)
 	return diff_end();
 }
 
+/* Indication component methods on a constructed graph. The byte arguments
+ * select their documented local arms; no received-protocol history is claimed.
+ * These methods install no static aliases, so all graph bytes remain visible. */
+static int
+run_indication_history(void)
+{
+	int history, method, debug, side;
+	int cases = 0, calls = 0, active = 0;
+
+	diff_begin("V34 indications: constructed component histories");
+	for (history = 0; history < 3; ++history)
+	for (method = 0; method < 7; ++method)
+	for (debug = 0; debug < 2; ++debug) {
+		long tag = history * 100 + method * 10 + debug;
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0, runtime, 0);
+			diff_eq_int("indication constructed status", hangup_int(0), 0, tag);
+			if (side == 0) {
+				graph_save_ours();
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = debug * 2;
+			if (method < 4) {
+				if (side == 0)
+					V34XF_IndicateJdReceived(v34obj, (unsigned char)(method & 1), (unsigned char)(method >> 1));
+				else
+					ref_V34XF_IndicateJdReceived(v34obj, (unsigned char)(method & 1), (unsigned char)(method >> 1));
+			} else if (method < 6) {
+				if (side == 0) V34XF_IndicateDilReceived(v34obj, (unsigned char)(method - 4));
+				else ref_V34XF_IndicateDilReceived(v34obj, (unsigned char)(method - 4));
+			} else {
+				if (side == 0) V34XF_IndicateK56FlexRateDetermined(v34obj);
+				else ref_V34XF_IndicateK56FlexRateDetermined(v34obj);
+			}
+			++calls;
+			if (side == 0) {
+				if (graph_diff_live(ours, 0) != 0) ++active;
+				graph_save_ours();
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 0) != 0)
+			report_first_diff("indication raw graph", ours, 0);
+		diff_eq_int("indication raw graph", graph_diff_live(ours, 0), 0, tag);
+		diff_eq_int("indication transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("indication transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("indication callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("indication transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("indication diagnostics active", dsplib_debug_capture_lines(1) > 0, debug != 0, tag);
+		++cases;
+	}
+	diff_eq_int("indication component cases", cases, 42, 0);
+	diff_eq_int("indication component calls", calls, 84, 0);
+	diff_eq_int("indication changes constructed output", active, cases, 0);
+	printf("    indication component: %d cases, %d calls, %d active; all graph bytes raw\n", cases, calls, active);
+	graph_restore();
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1931,6 +2014,7 @@ main(void)
 	rc |= run_tx_component_history();
 	rc |= run_tx_point_history();
 	rc |= run_setv90_history();
+	rc |= run_indication_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 
