@@ -905,6 +905,60 @@ the broad Phase34 planted-state arm sweep stays synthetic. The period/structural
 gate passes 399/0. The report records complete-TU effects, input/helper hashes,
 qualified negatives and exact stopping/reopening conditions.
 
+## getMP and rate-renegotiation layout recovery (2026-11-07)
+
+The [follow-up](../rate-layout-recovery-20261107.md) recovers getMPrecvdBits
+EXACT895. RateRenegSilence and RateReneg reach native extents 983/555 but remain
+BYTES14/13. Their real source recovery closes the preceding 96-byte extent debt;
+Phase34's strict local getMP distance now agrees with native, with BYTES46
+remaining. No additional REGALLOC/EXACT neighbour is recovered automatically.
+
+Eight interacting getMP properties matter: actual engine ownership; the existing
+max-upstream getter with a fresh post-DMA session acquisition; a checked twenty-
+byte received-MP view; narrow initial MP publication before coefficient copies;
+branch-local capability reads with short loop transport; zero-bit-first arms;
+mask initialisation between getter and rate guard; and source pointer publication
+before capability value initialisation. Every individual ablation loses EXACT.
+The input view starts at the complete session and derives each address from
+declared members; it does not walk beyond the first char subobject or establish
+an original standalone MP type. The shared getter returns a rate despite its
+historical Index name; compare its full algorithm and units before reuse.
+
+Machine store order does not uniquely determine source order. Native compares
+the narrow count before its final store; direct member preincrement nevertheless
+reproduces that graph after compiler store sinking. A named short local instead
+creates SI transport and an extra extension. In getMP, source pointer-before-
+value initialisation emits native value-before-pointer order. Its final losing
+BYTES27 control differs at rnreg and then sched2; no persistent-cursor cause is
+inferred from that function-local observation. Use defined mask multiplication
+and OR rather than left-shifting a negative signed value; the checked objects
+are literally equal.
+
+The pair's eight owner combinations preserve temporary EXACT losses, including
+SetV90 and Jd/Dil, until actual TX/RX/engine ownership repairs them together.
+All-owner × narrow-count × actual idle-member controls recover native operands
+and sizes. Crossing the independently exact helper then closes strict call
+distances. First-increment/selector spellings are raw-identical controls; they
+do not reopen the residual. Complete pair review leaves two independent vect4/
+count scheduling groups per function. Reopen with a new helper, declaration or
+liveness witness predicting those dependencies; neither same-size code nor the
+bounded graph screen establishes equivalence or allocator impossibility.
+
+The final gate passes 399 period tests plus structural checks. All 56 Main
+functions, 38 protected copies, 225 CALL identities and 81 data continuations are
+retained. New constructed fixtures add 10,918 checks: 288 bounded rate prefixes
+in setter-created states 11/15 and 16 accepted Type1 MP packet histories. They
+compare all 126 heap regions raw. Threshold transitions, closing CP, sensitive
+ISP and low-rate capability-loop histories remain outside the new domain;
+existing planted-arm coverage stays synthetic. The report records controls,
+complete-TU and 300-object evidence, compiler/helper hashes and next targets.
+
+Trn2d is a coupled follow-up, not a fresh isolated owner retry. Historical
+memory reports a reverted recovery after a K56Rate EXACT loss, but its cited
+F12052 is absent from current findings and the old variant is not reproduced
+here. Recover that control and cross it with the now-retained K56Jd/K56Rate
+owner model. Preserve and trace any intermediate loss before selecting a repair.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or

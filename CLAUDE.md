@@ -220,6 +220,13 @@ An explicit short local can promote to an SI pseudo while repeated declared-
 member reads common into an internal HI pseudo. Check consumption and spill
 metadata; a narrow native spill alone does not establish an original local.
 
+Machine publication order does not uniquely identify source statement order.
+Direct short-member preincrement can sink its store after a comparison, while
+a capability pointer initialized before its value can emit the value store
+first. Check the complete generated graph and crossed controls before rejecting
+such source forms. The [getMP/rate recovery](docs/rate-layout-recovery-20261107.md)
+records both, including temporary EXACT losses repaired by coupled owners.
+
 When a supported owner-header change regresses a consumer, trace its actual
 member metadata and inline copies before rejecting the model. The V34 TX
 recovery repaired an intermediate handshak regression by migrating FreezeEcho

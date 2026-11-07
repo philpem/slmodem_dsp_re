@@ -3293,12 +3293,22 @@ getMPrecvdBits(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	unsigned char *m = (unsigned char *)obj;
+	const struct v34_engine_control *engine = &obj->engine_control;
 	short *mp = obj->msgrec[4].word;
 	const VPcmFloModem *sess = (const VPcmFloModem *)obj->p3548;
 	int rate;
 
-	if (obj->v90_receiver > 0) {
-		int v;
+	if (engine->v90_receiver > 0) {
+		unsigned short v;
+		/* Retain the native session+0x1744 input owner.  This byte view
+		 * starts from the complete session: the checked member range is
+		 * mpType..mpH3Imag, twenty bytes, all within that owner. */
+		const unsigned char *received = (const unsigned char *)sess
+			+ __builtin_offsetof(VPcmFloModem, mpType);
+#define RECEIVED_MP_FIELD(member) \
+	(*(const __typeof__(sess->member) *)(received \
+	  + (__builtin_offsetof(VPcmFloModem, member) \
+	     - __builtin_offsetof(VPcmFloModem, mpType))))
 
 		/*
 		 * The first short of the INFO record, assembled bit by bit:
@@ -3310,14 +3320,14 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * mpType..mpCPack, copied there by copyMpInfoForInterface
 		 * and named by V90MP.h's source fields.
 		 */
-		v = (sess->mpType != 0) ? 1 : 0;
-		v |= ((unsigned char)sess->mpRate & 0xf) << 6;
-		v |= ((unsigned char)sess->mpTrellis & 3) << 11;
-		if (sess->mpNonLin != 0)
+		v = (RECEIVED_MP_FIELD(mpType) != 0) ? 1 : 0;
+		v |= ((unsigned short)RECEIVED_MP_FIELD(mpRate) & 0xf) << 6;
+		v |= ((unsigned short)RECEIVED_MP_FIELD(mpTrellis) & 3) << 11;
+		if (RECEIVED_MP_FIELD(mpNonLin) != 0)
 			v |= 0x2000;
-		if (sess->mpShaping != 0)
+		if (RECEIVED_MP_FIELD(mpShaping) != 0)
 			v |= 0x4000;
-		if (sess->mpCPack != 0)
+		if (RECEIVED_MP_FIELD(mpCPack) != 0)
 			v |= 0x8000;
 
 		/*
@@ -3327,13 +3337,14 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * v34fsk.h) is "asymmetric rates are on the table", so this
 		 * says a V.90 MP always permits them.
 		 */
-		mp[1] = (short)((unsigned short)sess->mpRateMask | 0x8000);
-		mp[2] = sess->mpH1Real;
-		mp[3] = sess->mpH1Imag;
-		mp[4] = sess->mpH2Real;
-		mp[5] = sess->mpH2Imag;
-		mp[6] = sess->mpH3Real;
-		mp[7] = sess->mpH3Imag;
+		mp[0] = v;
+		mp[1] = (short)((unsigned short)RECEIVED_MP_FIELD(mpRateMask) | 0x8000);
+		mp[2] = RECEIVED_MP_FIELD(mpH1Real);
+		mp[3] = RECEIVED_MP_FIELD(mpH1Imag);
+		mp[4] = RECEIVED_MP_FIELD(mpH2Real);
+		mp[5] = RECEIVED_MP_FIELD(mpH2Imag);
+		mp[6] = RECEIVED_MP_FIELD(mpH3Real);
+		mp[7] = RECEIVED_MP_FIELD(mpH3Imag);
 
 		/*
 		 * And the four-bit field at 6 is COPIED DOWN over bits 2..5,
@@ -3342,7 +3353,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 * one as well.  ORed, not assigned, so a bit already set
 		 * there stays set.
 		 */
-		v |= (v >> 4) & 0x3c;
+		v |= ((unsigned)v >> 4) & 0x3c;
 		obj->msgrec[4].word[0] = (short)v;
 
 		if (v & 1)
@@ -3355,29 +3366,30 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - drn = %d\r\n",
-					     (signed char)sess->mpRate);
+					     (signed char)RECEIVED_MP_FIELD(mpRate));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - type = %d\r\n",
-					     (signed char)sess->mpType);
+					     (signed char)RECEIVED_MP_FIELD(mpType));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - trellisState = %d\r\n",
-					     (signed char)sess->mpTrellis);
+					     (signed char)RECEIVED_MP_FIELD(mpTrellis));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90mp - nonlinearEncoder = %d\r\n",
-			    (signed char)sess->mpNonLin);
+			    (signed char)RECEIVED_MP_FIELD(mpNonLin));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90mp - constellationShaping = %d\r\n",
-			    (signed char)sess->mpShaping);
+			    (signed char)RECEIVED_MP_FIELD(mpShaping));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90mp - rateMask = 0x%X\r\n",
-					     sess->mpRateMask);
+					     RECEIVED_MP_FIELD(mpRateMask));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "mp->data[0] = 0x%X , mp->data[1] = 0x%X\r\n",
 			    (unsigned short)obj->msgrec[4].word[0],
 			    (unsigned short)mp[1]);
+#undef RECEIVED_MP_FIELD
 	}
 
 	/*
@@ -3397,25 +3409,13 @@ getMPrecvdBits(struct tagV34Object *objp)
 	 * which is what says this word is a message the handshake will clock
 	 * out through `getbit` -- that is the only reader of +0xaa6c.
 	 */
-	obj->info_caps = (unsigned short)0x9dc3;
-	/* Spelled as `v34handshakinit` spells the same two fields. */
 	obj->paa6c = &obj->info_caps;
+	obj->info_caps = (unsigned short)0x9dc3;
 
-	rate = (int)obj->pac3c->maxRate;
-
-	if (sess->info0Layout != 0 && obj->v90_receiver > 1
-	    && sess->modem.params->SENSITIVE_ISP_DETECTED != 0) {
-		int cap = sess->modem.params
-			  ->MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP * 0x960;
-
-		if (rate > cap)
-			rate = cap;
-		edprintf("on get max upstream rate, on sensitive ISP, "
-			 "returning %d\r\n", rate);
-	} else {
-		edprintf("on get max upstream rate, on regular ISP, "
-			 "returning %d\r\n", rate);
-	}
+	/* The shared getter reloads the session after DMA and diagnostics.
+	 * Initialize the narrow mask after it, before the outer rate guard. */
+	rate = VPcmV34GetMaxUpstreamRateIndex(obj);
+	short mask = -0x41;
 
 	if (rate <= RATE_MAX) {
 		/*
@@ -3427,18 +3427,14 @@ getMPrecvdBits(struct tagV34Object *objp)
 		 */
 		int rev = (short)bitreverse((unsigned short)((rate * 7) >> 14),
 					    4);
-		int mask = -0x41;			/* ~0x40 */
-		int k;
+		short k;
 
 		for (k = 0; k <= 3; k++) {
-			unsigned short w = obj->info_caps;
-
-			if ((rev >> k) & 1)
-				w = (unsigned short)(w | (unsigned)~mask);
+			if (((rev >> k) & 1) == 0)
+				obj->info_caps &= (unsigned short)mask;
 			else
-				w = (unsigned short)(w & (unsigned)mask);
-			obj->info_caps = w;
-			mask = (short)(mask * 2 + 1);
+				obj->info_caps |= (unsigned short)~mask;
+			mask = (short)((mask * 2) | 1);
 		}
 	}
 
@@ -3462,50 +3458,48 @@ extern "C" int
 v90RateRenegSilence(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &o->tx_control;
+	struct v34_receiver *rx = &o->receiver;
+	struct v34_engine_control *engine = &o->engine_control;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
-	short n;
+	int r = engine->v90_receiver;
 
 	if (r == 15) {
-		o->txpoint.word = vect4[0];
+		tx->txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
+		tx->txpoint.word = vect4[3];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
+		if (++tx->seg_symcount <= 0x7f) {
 			return 0;
 		}
-		o->v90_receiver = 16;
-		o->seg_symcount = 0;
+		engine->v90_receiver = 16;
+		tx->seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 16) {
-		o->txpoint.word = vect4[2];
+		tx->txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
+		tx->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
+		if (++tx->seg_symcount != 0x10) {
 			return 0;
 		}
-		o->v90_receiver = 17;
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		engine->v90_receiver = 17;
+		tx->prev_quadrant = 0;
+		tx->seg_symcount = 0;
+		tx->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 17) {
-		if (o->receiver.short_382 == OB_CONSTEL_16)
+		if (rx->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
 		return 0;
 	}
 
@@ -3517,20 +3511,20 @@ v90RateRenegSilence(void *objp)
 		 * and 19 then transmits scrambled idle symbols until something
 		 * outside moves it on.
 		 */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&tx->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, tx->cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, tx->cur_quadrant);
 		if (done == 0)
 			return 0;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("move to SCR on silence rrn "
 					     "(disabling SAS detector on " "silence)\r\n");
-		o->v90_receiver = 19;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
+		engine->v90_receiver = 19;
+		tx->tx_flags = (short)((unsigned short)tx->tx_flags & ~V34_EC_FROZEN);
 		o->pac3c->unnamed_0003 &= (unsigned char)~CFG_SAS_DETECT;
 		return 0;
 	}
@@ -3542,28 +3536,27 @@ v90RateRenegSilence(void *objp)
 		 */
 		int q;
 
-		if (o->receiver.short_382 == OB_CONSTEL_16) {
+		if (rx->short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			tx->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						0, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
+			q = tx->cur_quadrant;
+			tx->txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			tx->cur_quadrant = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
+			tx->txpoint.word = vect4[tx->cur_quadrant];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
 		/* And the quadrant DOES advance here.  See the note above. */
-		o->prev_quadrant = o->cur_quadrant;
+		tx->prev_quadrant = tx->cur_quadrant;
 		return 0;
 	}
 
@@ -3576,13 +3569,13 @@ v90RateRenegSilence(void *objp)
 		 */
 		int done;
 
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
-		done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		tx->tx_flags = (short)((unsigned short)tx->tx_flags | V34_EC_FROZEN);
+		done = (short)vp->getV90CpBits(&tx->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, tx->cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, tx->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3590,7 +3583,7 @@ v90RateRenegSilence(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->v90_receiver = 2;
+		engine->v90_receiver = 2;
 		return 0;
 	}
 
@@ -3601,67 +3594,65 @@ extern "C" int
 v90RateReneg(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_tx_control *tx = &o->tx_control;
+	struct v34_receiver *rx = &o->receiver;
+	struct v34_engine_control *engine = &o->engine_control;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
-	short n;
+	int r = engine->v90_receiver;
 
 	if (r == 11) {
 		/* `v90Phase34`'s case 6, counted to 0x7f. */
-		o->txpoint.word = vect4[0];
+		tx->txpoint.word = vect4[0];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
+		tx->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
+		if (++tx->seg_symcount <= 0x7f) {
 			return 0;
 		}
-		o->v90_receiver = 12;
-		o->seg_symcount = 0;
+		engine->v90_receiver = 12;
+		tx->seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 12) {
 		/* `v90Phase34`'s case 7, counted to 0x10. */
-		o->txpoint.word = vect4[2];
+		tx->txpoint.word = vect4[2];
 		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
+		tx->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
+		if (++tx->seg_symcount != 0x10) {
 			return 0;
 		}
-		o->v90_receiver = 13;
+		engine->v90_receiver = 13;
 		/* Reset the transmitter for the symbols that follow. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
+		tx->prev_quadrant = 0;
+		tx->seg_symcount = 0;
+		tx->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->receiver.short_382 == OB_CONSTEL_16)
+		if (rx->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		tx->seg_symcount = (short)((unsigned short)tx->seg_symcount + 1);
 		return 0;
 	}
 
 	if (r == 14) {
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+		int done = (short)vp->getV90CpBits(&tx->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, tx->cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, tx->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -3669,7 +3660,7 @@ v90RateReneg(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->v90_receiver = 2;
+		engine->v90_receiver = 2;
 		return 0;
 	}
 

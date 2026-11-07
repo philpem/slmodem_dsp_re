@@ -170,6 +170,21 @@ extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
 extern void ref_VPcmV34InitMOH(void *obj, int message, unsigned char late,
 			     unsigned char flag);
 
+/* Native and reconstruction local helper ABIs both consume root in EAX.
+ * Globalization is test-only and does not change this private method boundary. */
+extern void fixture_get_mp(void *obj) __asm__("_Z14getMPrecvdBitsP12tagV34Object")
+    __attribute__((regparm(1)));
+extern void ref_fixture_get_mp(void *obj) __asm__("ref__Z14getMPrecvdBitsP12tagV34Object")
+    __attribute__((regparm(1)));
+extern int v90RateReneg(void *obj);
+extern int ref_v90RateReneg(void *obj);
+extern int v90RateRenegSilence(void *obj);
+extern int ref_v90RateRenegSilence(void *obj);
+extern void ref_mp_reset(void *mp) __asm__("ref__ZN5V90MP5resetEv");
+extern void ref_mp_pack(void *mp) __asm__("ref__ZN5V90MP10infoToBitsEv");
+extern int ref_mp_receive(void *mp, int bit) __asm__("ref__ZN5V90MP10bitsToInfoEi");
+extern void ref_copy_mp(void *session) __asm__("ref__ZN12VPcmFloModem22copyMpInfoForInterfaceEv");
+
 /* --- the configuration, all of it derived; docs/configuration.md ---------- */
 
 #define CFG_MIN_RATE	300
@@ -1982,6 +1997,176 @@ run_indication_history(void)
 	return diff_end();
 }
 
+/* Constructed component entry, with bounded prefixes before queue exhaustion.
+ * Native Create -> modeminit -> public SetV90 establishes states 11/15 and
+ * the chosen constellation. Six calls never leave that initial state:
+ * this is useful processing coverage, not a negotiated rate-renegotiation
+ * history or coverage of states 12..14/16..20. No protocol state is planted.
+ * The setter runs AFTER modeminit, which otherwise resets its publications.
+ * Both target implementations inherit the SAME native static aliases, so the
+ * complete heap, including all previously learned exclusions, is compared raw.
+ */
+static int
+run_rate_prefix_history(void)
+{
+    int history, rrn, constellation, profile, debug, length, side, i;
+    int cases = 0, calls = 0, active = 0;
+    diff_begin("V90 rate transmitters: setter-created bounded component prefixes");
+    for (history = 0; history < 2; ++history)
+    for (rrn = 0; rrn < 2; ++rrn)
+    for (constellation = 0; constellation < 2; ++constellation)
+    for (profile = 0; profile < 3; ++profile)
+    for (debug = 0; debug < 2; ++debug)
+    for (length = 1; length <= 6; ++length) {
+        long tag = history*100000 + rrn*10000 + constellation*1000 + profile*100 + debug*10 + length;
+        for (side = 0; side < 2; ++side) {
+            graph_restore();
+            dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+            ref_VPcmV34Create(v34obj, history, 0, runtime, 0);
+            ref_v34modeminit(v34obj);
+            if (profile != 0)
+                ref_V34SetupModulator((struct v34_modulator *)(v34obj + 0x1450),
+                    (short)(profile == 1 ? 2400 : 3429),
+                    (short)(profile == 1 ? 1600 : 1800), 0, 0, 1);
+            ref_VPcmV34SetV90RateReneg(v34obj, (short)rrn, (unsigned char)constellation);
+            diff_eq_int("rate prefix native entry state", hangup_int(0x24c), rrn ? 15 : 11, tag);
+            diff_eq_int("rate prefix native entry counter", hangup_short(0x25c0), 0, tag);
+            if (side == 0) {
+                graph_save_ours();
+                dsplib_debug_capture_on = 1;
+                dsplib_debug_capture_reset();
+            }
+            dsplibs_debug_level = ref_dsplibs_debug_level = debug*2;
+            for (i = 0; i < length; ++i) {
+                int result;
+                if (rrn)
+                    result = side ? ref_v90RateRenegSilence(v34obj) : v90RateRenegSilence(v34obj);
+                else
+                    result = side ? ref_v90RateReneg(v34obj) : v90RateReneg(v34obj);
+                ++calls;
+                diff_eq_int("rate prefix return", result, 0, tag);
+                diff_eq_int("rate prefix bounded queue", hangup_short(0x221c) >= 32 && hangup_short(0x221c) <= 230, 1, tag);
+                diff_eq_int("rate prefix published counter", hangup_short(0x25c0), (i+1)*2, tag);
+                diff_eq_int("rate prefix stays in constructed entry", hangup_int(0x24c), rrn ? 15 : 11, tag);
+            }
+            if (side == 0) {
+                if (graph_diff_live(ours, 0) != 0) ++active;
+                graph_save_ours();
+            }
+        }
+        dsplib_debug_capture_on = 0;
+        dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+        if (graph_diff_live(ours, 0) != 0)
+            report_first_diff("rate prefix raw graph", ours, 0);
+        diff_eq_int("rate prefix raw graph", graph_diff_live(ours, 0), 0, tag);
+        diff_eq_int("rate prefix transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+        diff_eq_int("rate prefix transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+        diff_eq_int("rate prefix callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+        diff_eq_int("rate prefix transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+        ++cases;
+    }
+    diff_eq_int("rate prefix cases", cases, 288, 0);
+    diff_eq_int("rate prefix target calls", calls, 2016, 0);
+    diff_eq_int("rate prefixes change constructed output", active, cases, 0);
+    printf("    rate component: %d prefixes, %d target calls, %d active; states11/15 only; all graph bytes raw\n", cases, calls, active);
+    graph_restore();
+    return diff_end();
+}
+
+/* MP packet component boundary. The caller supplies the public message fields
+ * and grouping parameter of the already-owned V90MP, not its detector state.
+ * Native infoToBits builds a complete type-1 packet; native reset/bitsToInfo
+ * receives those bits from its initial detector state, and only an accepted
+ * MP/MPnot is copied through native copyMpInfoForInterface. Both helper calls
+ * then see that same owned, decoded session. Group36 is a component input;
+ * neither this packet recipe nor the setter establishes negotiated V90 PCM.
+ * Type0 is excluded because the native encoder overwrites its short CRC.
+ * No receiver/progress/provider state or internal pointer is planted.
+ */
+struct fixture_mp_payload { char flags[6]; short words[7]; };
+static int
+run_received_mp_history(void)
+{
+    int history, packet, debug, side, i, cases = 0, calls = 0, active = 0;
+    diff_begin("getMPrecvdBits: native encoded and accepted MP component packets");
+    for (history = 0; history < 2; ++history)
+    for (packet = 0; packet < 4; ++packet)
+    for (debug = 0; debug < 2; ++debug) {
+        long tag = history*100 + packet*10 + debug;
+        for (side = 0; side < 2; ++side) {
+            unsigned char bits[230];
+            unsigned char *session, *mp;
+            unsigned int group = 36;
+            struct fixture_mp_payload payload;
+            int accepted = 0;
+            graph_restore();
+            dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+            ref_VPcmV34Create(v34obj, history, 0, runtime, 0);
+            ref_v34modeminit(v34obj);
+            ref_VPcmV34SetV90RateReneg(v34obj, 0, (unsigned char)(packet & 1));
+            session = *(unsigned char **)(v34obj + 0x3548);
+            mp = session + 0x2428;
+            payload.flags[0] = 1;
+            payload.flags[1] = (char)(packet == 3 ? 14 : packet*3+1);
+            payload.flags[2] = (char)packet;
+            payload.flags[3] = (char)(packet & 1);
+            payload.flags[4] = (char)((packet >> 1) & 1);
+            payload.flags[5] = (char)(packet & 1);
+            payload.words[0] = (short)(0x2001 | (1 << (packet+1)));
+            for (i = 1; i < 7; ++i)
+                payload.words[i] = (short)((i & 1 ? 1 : -1)*(packet+1)*i*23);
+            memcpy(mp, &payload, sizeof payload);
+            memcpy(mp + 0x114, &group, sizeof group);
+            ref_mp_pack(mp);
+            diff_eq_int("MP native encoded group length", mp[0x118], 216, tag);
+            memcpy(bits, mp + 0x1c, sizeof bits);
+            ref_mp_reset(mp);
+            for (i = 0; i < 216; ++i) {
+                int result = ref_mp_receive(mp, bits[i]);
+                if (result == 1 || result == 2) {
+                    ++accepted;
+                    diff_eq_int("MP detector completion at packet end", i, 215, tag);
+                    diff_eq_int("MP detector packet identity", result, packet & 1 ? 2 : 1, tag);
+                }
+            }
+            diff_eq_int("MP packet accepted once", accepted, 1, tag);
+            diff_eq_obj("MP native decoded supplied payload", struct fixture_mp_payload,
+                        mp, &payload, tag);
+            ref_copy_mp(session);
+            if (side == 0) {
+                graph_save_ours();
+                dsplib_debug_capture_on = 1;
+                dsplib_debug_capture_reset();
+            }
+            dsplibs_debug_level = ref_dsplibs_debug_level = debug*2;
+            if (side == 0) fixture_get_mp(v34obj);
+            else ref_fixture_get_mp(v34obj);
+            ++calls;
+            if (side == 0) {
+                if (graph_diff_live(ours, 0) != 0) ++active;
+                graph_save_ours();
+            }
+        }
+        dsplib_debug_capture_on = 0;
+        dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+        if (graph_diff_live(ours, 0) != 0)
+            report_first_diff("getMP received packet raw graph", ours, 0);
+        diff_eq_int("getMP received packet raw graph", graph_diff_live(ours, 0), 0, tag);
+        diff_eq_int("getMP transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+        diff_eq_int("getMP transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+        diff_eq_int("getMP callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+        diff_eq_int("getMP transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+        diff_eq_int("getMP diagnostics active", dsplib_debug_capture_lines(1) > 0, debug != 0, tag);
+        ++cases;
+    }
+    diff_eq_int("getMP received packet cases", cases, 16, 0);
+    diff_eq_int("getMP helper calls", calls, 32, 0);
+    diff_eq_int("getMP packets change constructed output", active, cases, 0);
+    printf("    getMP component: %d packets, %d helper calls, %d active; native pack/reset/receive/copy; all graph bytes raw\n", cases, calls, active);
+    graph_restore();
+    return diff_end();
+}
+
 int
 main(void)
 {
@@ -2015,6 +2200,8 @@ main(void)
 	rc |= run_tx_point_history();
 	rc |= run_setv90_history();
 	rc |= run_indication_history();
+	rc |= run_rate_prefix_history();
+	rc |= run_received_mp_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 
