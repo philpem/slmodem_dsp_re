@@ -3681,6 +3681,7 @@ v90Phase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 	struct v34_receiver *rx = &o->receiver;
+	struct v34_engine_control *engine = &o->engine_control;
 	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
 	unsigned short fl = rx->flags;
 	short n;
@@ -3723,7 +3724,7 @@ v90Phase34(void *objp)
 		o->txpoint.c[0] = 0;
 		o->txpoint.c[1] = 0;
 		txmit(o);
-		if (o->v90_receiver <= 2)
+		if (engine->v90_receiver <= 2)
 			return 0;
 		rx->flags = (unsigned short)(rx->flags
 					     | V34_RX_FLAG_TRN_WATCH);
@@ -3731,7 +3732,7 @@ v90Phase34(void *objp)
 		return 0;
 	}
 
-	switch (o->v90_receiver) {
+	switch (engine->v90_receiver) {
 	/*
 	 * Cases 3 and 6 are the same two symbols and the same 0x7f count, and
 	 * differ only in the state they move to and in case 3's diagnostic.
@@ -3764,7 +3765,7 @@ v90Phase34(void *objp)
 					     (int)n,
 					     (int)o->ratecfg.period);
 		}
-		o->v90_receiver = 4;
+		engine->v90_receiver = 4;
 		o->seg_symcount = 0;
 		return 0;
 
@@ -3779,7 +3780,7 @@ v90Phase34(void *objp)
 			o->seg_symcount = n;
 			return 0;
 		}
-		o->v90_receiver = 7;
+		engine->v90_receiver = 7;
 		o->seg_symcount = 0;
 		return 0;
 
@@ -3794,7 +3795,7 @@ v90Phase34(void *objp)
 			o->seg_symcount = n;
 			return 0;
 		}
-		o->v90_receiver = 5;
+		engine->v90_receiver = 5;
 		/* Reset the transmitter for the idle symbols that follow. */
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
@@ -3812,7 +3813,7 @@ v90Phase34(void *objp)
 			o->seg_symcount = n;
 			return 0;
 		}
-		o->v90_receiver = 8;
+		engine->v90_receiver = 8;
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
@@ -3880,7 +3881,7 @@ v90Phase34(void *objp)
 			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
-		o->v90_receiver = 9;
+		engine->v90_receiver = 9;
 		return 0;
 	}
 
@@ -3907,7 +3908,7 @@ v90Phase34(void *objp)
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->v90_receiver = 2;
+		engine->v90_receiver = 2;
 		return 0;
 	}
 	}
@@ -3944,10 +3945,13 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	/* The `[1]` counter every handshake trace prints; see V34hshak.c. */
 	obj->vect_idx = 0;
 
-	obj->progress = 6;
+	engine->progress = 6;
 	obj->hs_mode = 5;
 
-	obj->receiver.short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+	switch (constel_size) {
+	default: obj->receiver.short_382 = (short)0x89b0; break;
+	case 0: obj->receiver.short_382 = (short)0x8990; break;
+	}
 
 	/*
 	 * The timer, reset: the same three fields and the same two constants

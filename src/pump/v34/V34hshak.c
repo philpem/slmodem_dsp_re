@@ -1640,17 +1640,18 @@ void
 txmitdibit(void *obj, short bits)
 {
 	struct v34_object *o = (struct v34_object *)obj;
-	unsigned sr = (unsigned)o->tx_scr_sr;
-	int d, q;
+	struct v34_tx_control *tx = &o->tx_control;
+	unsigned *sr = (unsigned *)&tx->tx_scr_sr;
+	int d;
+	short q;
 
-	d = V34scrambler(&sr, tx_scrambler_mode(o), bits, 2);
-	o->tx_scr_sr = (int)sr;
+	d = V34scrambler(sr, (short)((tx->tx_flags & V34_TXFLAG_CALLER) == 0), bits, 2);
 
-	q = (d + (unsigned short)o->prev_quadrant) & 3;
+	q = (d + (unsigned short)tx->prev_quadrant) & 3;
 
-	o->txpoint.word = vect4[q];
-	o->cur_quadrant = (short)q;
-	o->prev_quadrant = (short)q;
+	tx->txpoint.word = vect4[q];
+	tx->cur_quadrant = (short)q;
+	tx->prev_quadrant = (short)q;
 
 	txmit(obj);
 }
@@ -2704,7 +2705,6 @@ settxlevel(void *objp, const short *mp)
 	short minpr = GetVPcmMinimalTxPowerReduction(obj);
 	int scale = tx->tx_scale;
 	short extra;
-	short want;
 	short n;
 
 	/* The second MP read follows this store, as in the object. */
@@ -2728,13 +2728,12 @@ settxlevel(void *objp, const short *mp)
 		else if (tx->tx_pwr_reduction < minpr)
 			tx->tx_pwr_reduction = minpr;
 	}
-	want = tx->tx_pwr_reduction;
 
-	if (want < 0) {
-		for (n = want; n < 0; n = (short)(n + 1))
+	if (tx->tx_pwr_reduction < 0) {
+		for (n = tx->tx_pwr_reduction; n < 0; n = (short)(n + 1))
 			scale = (short)((scale * 0x47cf) >> 14);
 	} else {
-		for (n = 0; want > n; n = (short)(n + 1))
+		for (n = 0; tx->tx_pwr_reduction > n; n = (short)(n + 1))
 			scale = (scale * 0x390a) >> 14;
 	}
 
@@ -2745,7 +2744,7 @@ settxlevel(void *objp, const short *mp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
 				     "reduced txscale is %d dB," "final txscale is %d\n",
-				     (int)tx->tx_scale, (int)want,
+				     (int)tx->tx_scale, (int)tx->tx_pwr_reduction,
 				     scale);
 
 	tx->tx_scale = (short)((scale * 0x4b4b + 0x2000) >> 14);

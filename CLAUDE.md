@@ -226,6 +226,15 @@ addition on an already captured root; early arithmetic alone is not an earlier
 observation of mutable state. See the
 [coupled recovery](docs/create-tx-recovery-20261107.md).
 
+Follow candidate stores through late if-conversion and renaming: peephole2
+scratch choices can let `ce3` merge two stores that were separate earlier.
+Measure the complete TU's scratch searches before attributing an effect to
+the persistent cursor; `rnreg` can instead make a function-local choice that
+changes `sched2` dependencies. The
+[SetV90/TX follow-up](docs/tx-scheduler-recovery-20261107.md) observes both.
+Record transitive analysis-helper hashes separately from the front-end tool:
+an unchanged screen or comparator can still import a dirty helper.
+
 Validate relocation type, field site, width and addend before canonicalizing
 its target. A matching symbol name can still name a different function entry
 or global word. Retain expression objects when serializing solver DAGs; a

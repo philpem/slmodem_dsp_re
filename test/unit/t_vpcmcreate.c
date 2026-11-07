@@ -141,6 +141,17 @@ extern void ApplyBulkDelay(void *obj, short delay)
 	__attribute__((regparm(2)));
 extern void ref_ApplyBulkDelay(void *obj, short delay)
 	__attribute__((regparm(2)));
+extern void txinit(void *obj);
+extern void ref_txinit(void *obj);
+extern void ref_v34modeminit(void *obj);
+extern void settxlevel(void *obj, const short *mp);
+extern void ref_settxlevel(void *obj, const short *mp);
+extern void txmitdibit(void *obj, short bits);
+extern void ref_txmitdibit(void *obj, short bits);
+extern void txmitquadbit(void *obj, short bits);
+extern void ref_txmitquadbit(void *obj, short bits);
+extern void VPcmV34SetV90RateReneg(void *obj, short rrn, unsigned char constellation);
+extern void ref_VPcmV34SetV90RateReneg(void *obj, short rrn, unsigned char constellation);
 extern void VPcmV34InitiateHangUp(void *obj);
 extern void ref_VPcmV34InitiateHangUp(void *obj);
 extern void VPcmV34InitMOH(void *obj, int message, unsigned char late,
@@ -1695,6 +1706,199 @@ run_bulkdelay_history(void)
 	return diff_end();
 }
 
+/* Valid allocated component owners, with optional native modem initialization.
+ * The external MP words exercise this method's consumed power fields; this is
+ * not evidence that each word was received on a negotiated modem connection.
+ * No internal state is planted, and neither method installs static aliases. */
+static int
+run_tx_component_history(void)
+{
+	static const short mp_words[] = { 0, 0x20, 0xe0, 0xfc, (short)0xffff };
+	int history, initialized, level, method, side;
+	int cases = 0, calls = 0, active[2] = { 0, 0 };
+
+	diff_begin("V34 TX: constructed reset and power component histories");
+	for (history = 0; history < 3; ++history)
+	for (initialized = 0; initialized < 2; ++initialized)
+	for (level = 0; level < 3; ++level)
+	for (method = 0; method < 6; ++method) {
+		long tag = history * 1000 + initialized * 100 + level * 10 + method;
+		short mp = method == 0 ? 0 : mp_words[method - 1];
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0, runtime, 0);
+			if (initialized)
+				ref_v34modeminit(v34obj);
+			if (side == 0) {
+				graph_save_ours();
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+			if (method == 0) {
+				if (side == 0) txinit(v34obj);
+				else ref_txinit(v34obj);
+			} else {
+				if (side == 0) settxlevel(v34obj, &mp);
+				else ref_settxlevel(v34obj, &mp);
+			}
+			++calls;
+			if (side == 0) {
+				if (graph_diff_live(ours, 0) != 0)
+					++active[method != 0];
+				graph_save_ours();
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 0) != 0)
+			report_first_diff("TX component raw graph", ours, 0);
+		diff_eq_int("TX component raw graph", graph_diff_live(ours, 0), 0, tag);
+		diff_eq_int("TX transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("TX transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("TX callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("TX transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+		/* txinit's echo cleanup also emits diagnostics at level two. */
+		diff_eq_int("TX diagnostics active", dsplib_debug_capture_lines(1) > 0, level > 1, tag);
+		++cases;
+	}
+	diff_eq_int("TX constructed cases", cases, 108, 0);
+	diff_eq_int("TX constructed calls", calls, 216, 0);
+	diff_eq_int("power cases change constructed output", active[1] > 0, 1, 0);
+	printf("    TX component: %d cases, %d calls; active reset %d, power %d; all graph bytes raw\n",
+	       cases, calls, active[0], active[1]);
+	graph_restore();
+	return diff_end();
+}
+
+/* Training-point component histories. Native initialization sets the carrier,
+ * scale, queues and polynomial; both encoders then run bounded prefixes. The
+ * observed queue bound is checked after every call. This does not establish
+ * that these prefixes are emitted by the protocol state machine. */
+static int
+run_tx_point_history(void)
+{
+	int history, quad, debug, length, side, i;
+	int cases = 0, calls = 0, active = 0;
+
+	diff_begin("V34 TX points: initialized scrambler and modulator histories");
+	for (history = 0; history < 2; ++history)
+	for (quad = 0; quad < 2; ++quad)
+	for (debug = 0; debug < 2; ++debug)
+	for (length = 1; length <= 8; ++length) {
+		long tag = history * 1000 + quad * 100 + debug * 10 + length;
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			ref_VPcmV34Create(v34obj, history, 0, runtime, 0);
+			ref_v34modeminit(v34obj);
+			diff_eq_int("TX point primed queue", hangup_int(0x221c), 32, tag);
+			if (side == 0) {
+				graph_save_ours();
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = debug * 2;
+			for (i = 0; i < length; ++i) {
+				short bits = (short)((i * 5 + length) & (quad ? 15 : 3));
+				if (quad) {
+					if (side == 0) txmitquadbit(v34obj, bits);
+					else ref_txmitquadbit(v34obj, bits);
+				} else {
+					if (side == 0) txmitdibit(v34obj, bits);
+					else ref_txmitdibit(v34obj, bits);
+				}
+				++calls;
+				diff_eq_int("TX point queue stays within capacity",
+					    hangup_int(0x221c) >= 32 && hangup_int(0x221c) <= 230, 1, tag);
+			}
+			if (side == 0) {
+				if (graph_diff_live(ours, 0) != 0) ++active;
+				graph_save_ours();
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 0) != 0)
+			report_first_diff("TX point raw graph", ours, 0);
+		diff_eq_int("TX point raw graph", graph_diff_live(ours, 0), 0, tag);
+		diff_eq_int("TX point transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("TX point transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("TX point callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("TX point transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+		++cases;
+	}
+	diff_eq_int("TX point prefix cases", cases, 64, 0);
+	diff_eq_int("TX point encoded calls", calls, 576, 0);
+	diff_eq_int("TX point prefixes change output", active, cases, 0);
+	printf("    TX point component: %d prefixes, %d calls, %d active; queue bounded; all graph bytes raw\n",
+	       cases, calls, active);
+	graph_restore();
+	return diff_end();
+}
+
+/* Direct method boundary on constructed owners, before negotiated PCM state.
+ * preinitdigital installs the same four shell aliases as HangUp. Check their
+ * referents, and keep every other learned exclusion bytewise visible. */
+static int
+run_setv90_history(void)
+{
+	int history, rrn, constellation, debug, side;
+	int cases = 0, calls = 0, active = 0;
+
+	diff_begin("SetV90RateReneg: constructed component histories");
+	for (history = 0; history < 3; ++history)
+	for (rrn = 0; rrn < 2; ++rrn)
+	for (constellation = 0; constellation < 2; ++constellation)
+	for (debug = 0; debug < 2; ++debug) {
+		long tag = history * 100 + rrn * 10 + constellation * 2 + debug;
+		for (side = 0; side < 2; ++side) {
+			graph_restore();
+			dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+			if (history != 0)
+				ref_VPcmV34Create(v34obj, history - 1, 0, runtime, 0);
+			diff_eq_int("SetV90 constructed status", hangup_int(0), 0, tag);
+			if (side == 0) {
+				graph_save_ours();
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+			}
+			dsplibs_debug_level = ref_dsplibs_debug_level = debug * 2;
+			if (side == 0)
+				VPcmV34SetV90RateReneg(v34obj, (short)rrn, (unsigned char)constellation);
+			else
+				ref_VPcmV34SetV90RateReneg(v34obj, (short)rrn, (unsigned char)constellation);
+			++calls;
+			if (side == 0) {
+				if (graph_diff_live(ours, 1) != 0) ++active;
+				graph_save_ours();
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		if (graph_diff_live(ours, 1) != 0)
+			report_first_diff("SetV90 constructed graph", ours, 1);
+		diff_eq_int("SetV90 constructed graph", graph_diff_live(ours, 1), 0, tag);
+		diff_eq_int("SetV90 four shell aliases", check_alias_words(1), 0, tag);
+		diff_eq_int("SetV90 other aliases raw", hangup_unchanged_alias_diff(), 0, tag);
+		diff_eq_int("SetV90 transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+		diff_eq_int("SetV90 transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+		diff_eq_int("SetV90 callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+		diff_eq_int("SetV90 transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("SetV90 diagnostics active", dsplib_debug_capture_lines(1) > 0, debug != 0, tag);
+		++cases;
+	}
+	diff_eq_int("SetV90 constructed cases", cases, 24, 0);
+	diff_eq_int("SetV90 constructed calls", calls, 48, 0);
+	diff_eq_int("SetV90 changes constructed output", active, cases, 0);
+	printf("    SetV90 component: %d cases, %d calls, %d active; four shell aliases checked\n",
+	       cases, calls, active);
+	graph_restore();
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1724,6 +1928,9 @@ main(void)
 	rc |= run_retrain_history();
 	rc |= run_retrain_helper_history();
 	rc |= run_bulkdelay_history();
+	rc |= run_tx_component_history();
+	rc |= run_tx_point_history();
+	rc |= run_setv90_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

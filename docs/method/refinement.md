@@ -807,6 +807,59 @@ moving its constant TX-member address calculation across the call alone does
 not change a mutable pointer observation. The partial residuals, full flow
 counts, fixture domains and concrete reopening conditions are in the report.
 
+## SetV90: predecessor recovery changes the later branch graph (2026-11-07)
+
+The [follow-up](../tx-scheduler-recovery-20261107.md) promotes SetV90RateReneg
+EXACT274 and txmitdibit REGALLOC250, with 399 period tests plus structural
+checks passing and no prior EXACT/REGALLOC losses. Two of 300 objects change.
+settxlevel's native-sized BYTES43 is separately labelled partial progress;
+txinit remains BYTES8. These are dated measurements, not permanent counts.
+
+SetV90 needs three properties together: the independently witnessed engine
+owner in preceding v90Phase34, actual engine->progress in SetV90, and separate
+constellation arms with native nonzero fallthrough. All eight ablations are
+measured; only all three close it. Phase34 becomes SIZE99 from SIZE98 while
+gaining its native owner. Preserve and trace that one-byte loss: rejecting it
+would discard the exact SetV90 combination. Native/current emission order is
+already identical, so no function-order permutation is needed.
+
+Early expansion alone was an incomplete discriminator. A switch control keeps
+two stores through peephole2, but ce3 merges them when both use AX. Paired
+read-only captures of the complete TU each observe 360 scratch searches across
+32 functions and reproduce ordinary assembly/objects literally. The owner
+change leaves the target's pre-peephole instruction streams equal but changes
+its incoming cursor 49->50. At equal target UID/live/eligibility sets, two arm
+stores receive AX/AX versus AX/DX. Only the former can merge. The vector-clear
+scratch changes CX->BX; sched2 can then carry its zero across preinitdigital.
+No explicit zero carrier is needed. These measured current-compiler states
+explain the interaction; they do not uniquely identify the author's declaration.
+
+txmitdibit separately needs actual TX ownership, a pointer to its declared
+scrambler member and a short quadrant result. Eight ablations give no promotion
+until all three combine. The native argument is the real field, not a copied
+automatic scrambler; modulo-four bounds make the short result transport safe.
+The sole residual is a dead EDX/EAX frame-discard pop before the sibling txmit
+jump. An unchanged local pre-emphasis helper also changes at greg; its complete
+flag/value/call effects were reviewed rather than hidden by its unchanged size.
+
+settxlevel's direct short-field consumption recovers the native 23-block,
+34-edge graph and separate narrow test/widening, but initial hard-register
+dependencies still reorder the MP read. Captures, late owner formation and
+typed-formal variants do not close it. txinit's source already has native store
+order through bbro; read-only rnreg tracing shows local use-age ticks choose
+DX/AX/CX zero lanes, then sched2 reorders the independent clears. Do not transfer
+the persistent-cursor explanation indiscriminately to that function.
+
+Quadbit and EchoFilter remain bounded negatives with recorded reopening
+conditions. A shared-scrambler capture loses the existing exact public helper
+and changes the zero-iteration store graph; that particular diagnostic is not
+selected. A failed control does not exclude every legitimate helper boundary.
+The reobserved bitreverse Boolean-production difference is already covered by
+F11639's closed statement-predicate control; it is not a fresh reopener. Check
+the cited historical report as well as symbol search before repeating it.
+Continue with quadbit's two-call lifetime and Phase34's remaining owner/flow
+constraints; the target-specific reopeners are in the report.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or
