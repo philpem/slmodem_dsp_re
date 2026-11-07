@@ -1167,16 +1167,9 @@ typedef char v34pcmmain_echo_fits[
  * result.
  */
 
-/*
- * +0x25d6.  A sixteen-bit pattern shifted out as eight dibits, LSB first,
- * and the ONLY thing case 3 transmits.  `v34handshakinit` seeds it with
- * 0x8990 and the Ja completion arm below replaces it with 0x899f; both are
- * whole-word stores of a constant, and nothing in the tree reads it as
- * anything but this shift register.  Reached by offset because the region is
- * `unmapped_25d6` in `struct v34_object` -- V34hshak.c:424 writes it the same
- * way.
- */
-#define OB_TXBITS	0x25d6
+/* TX short_25d6 is the sixteen-bit pattern shifted out as eight
+ * dibits, LSB first, in K56flex state 3.  Its Ja completion arm publishes
+ * 0x899f; handshakinit seeds the same complete-object offset with 0x8990. */
 
 
 
@@ -3977,24 +3970,24 @@ void
 V34XF_IndicateTrn2dReceived(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	int v = obj->v90_receiver;
+	struct v34_engine_control *engine = &obj->engine_control;
+	int v = engine->v90_receiver;
 
 	if (v <= 9)
-		v = 10;
+		engine->v90_receiver = 10;
 	else if (v <= 14)
-		v = 14;
+		engine->v90_receiver = 14;
 	else if (v <= 17)
-		v = 18;
+		engine->v90_receiver = 18;
 	else
-		v = 20;
+		engine->v90_receiver = 20;
 
-	obj->v90_receiver = v;
 
 	/* Re-read, not `v`: the object loads the field back for the print. */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
-			obj->v90_receiver);
+			engine->v90_receiver);
 }
 
 extern "C" void
@@ -4085,33 +4078,35 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_tx_control *tx = &obj->tx_control;
-	unsigned char *m = (unsigned char *)obj;
 	struct v34_receiver *rx = &obj->receiver;
-	const struct v34_ratecfg *cfg = &obj->ratecfg;
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
-	rx->short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
+	if (constel == 0x10)
+		rx->short_382 = (short)0x89b0;
+	else
+		rx->short_382 = (short)0x8990;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"VPcmV34Main: About to setup v34 txmit, "
 			"baudrate = %d, carrier = %d, preemp = %d\r\n",
-			cfg->baud, cfg->carrier, cfg->preemp);
+			obj->ratecfg.baud, obj->ratecfg.carrier, obj->ratecfg.preemp);
 
 	v34setuptxmit(obj);
 
 	if (obj->txstate != 0x12)
 		obj->txstate = 0x12;
 
-	tx->seg_symcount = 0;
 	tx->prev_quadrant = 0;
+	tx->seg_symcount = 0;
 	tx->tx_scr_sr = 0;
 
-	*(short *)(m + 0x254) =
-		(short)(336 * (int)obj->short_35a4 + 10000);
-	*(short *)(m + 0x256) = 0;
-	*(int *)(m + 0x258) = 0;
+	struct v34_dc_control *dc = &obj->dc_control;
+	dc->dc_count =
+		(unsigned short)(336 * (int)obj->short_35a4 + 10000);
+	dc->dc_acc = 0;
+	dc->dc_est = 0;
 }
 
 void
@@ -4163,9 +4158,10 @@ int
 k56FlexPhase34(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
 	struct v34_receiver *rx = &o->receiver;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
+	struct v34_tx_control *tx = &o->tx_control;
+	struct v34_engine_control *engine = &o->engine_control;
 
 	if (!(rx->flags & V34_RX_FLAG_DATA)) {
 		/*
@@ -4175,48 +4171,36 @@ k56FlexPhase34(void *objp)
 		 * The dibit is transmitted either way, so the last one is
 		 * sent and then acted on.
 		 */
-		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
+		int done = (short)k56->getK56FlexJaBits(&tx->cur_quadrant);
 
-		txmitdibit(o, o->cur_quadrant);
+		txmitdibit(o, tx->cur_quadrant);
 		if (done == 0)
 			return 0;
 
 		/* DEAD: `getK56FlexJaBits` is a stub returning 0. */
 		rx->flags |= V34_RX_FLAG_DATA;
-		*(short *)(m + OB_TXBITS) = (short)0x899f;
+		tx->short_25d6 = (short)0x899f;
 		o->vect_idx = 0;
-		o->k56flex_receiver = 3;
+		engine->k56flex_receiver = 3;
 		return 0;
 	}
 
-	switch (o->k56flex_receiver) {
-	case 3: {
+	if (engine->k56flex_receiver == 3) {
 		/*
-		 * Eight dibits out of one word, `vect_idx` counting them.
+		 * State 3's dibit-position contract is 0..7.  Native code
+		 * doubles the signed index and shifts without an explicit
+		 * mask.  The reset and post-emitter publication preserve
+		 * that interval; the zero-return Ja provider does not establish
+		 * a dynamic history reaching this arm.
 		 *
-		 * The index is read TWICE and the second read is after
-		 * `txmitdibit`, because the object reads it twice: a call
-		 * sits between, and no compiler may assume a field survives
-		 * one.  It is written that way here for the same reason and
-		 * NOT because the value can change -- `modulatevector` is the
-		 * only other writer of +0x2aa2 in the tree and it CALLS
-		 * `txmit` rather than being reachable from it.  Using the
-		 * first read is therefore an equivalent mutation, and it is
-		 * recorded as one with that call chain named as what is held
-		 * fixed.
-		 *
-		 * The shift count comes from a SIGN-extended `vect_idx` and
-		 * the increment from a zero-extended one.  `& 31` is the x86
-		 * shift-count mask made explicit, so that an out-of-range
-		 * index -- which only the caller can produce, since the store
-		 * below masks to 0..7 -- shifts by the same amount here as in
-		 * the object instead of being undefined.
+		 * Re-read the index after txmitdibit, matching the native
+		 * call boundary before incrementing and masking it to 0..7.
 		 */
 		int idx = o->vect_idx;
-		unsigned short w = (unsigned short)*(short *)(m + OB_TXBITS);
+		unsigned short w = (unsigned short)tx->short_25d6;
 		unsigned nidx;
 
-		txmitdibit(o, (short)(w >> ((2 * idx) & 31)));
+		txmitdibit(o, (short)(w >> (2 * idx)));
 
 		nidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;
 		o->vect_idx = (short)nidx;
@@ -4224,73 +4208,64 @@ k56FlexPhase34(void *objp)
 			return 0;
 
 		/* The word is spent: reset the transmitter and advance. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		o->k56flex_receiver = 4;
+		tx->prev_quadrant = 0;
+		tx->seg_symcount = 0;
+		tx->tx_scr_sr = 0;
+		engine->k56flex_receiver = 4;
 		return 0;
 	}
 
-	case 4: {
+	if (engine->k56flex_receiver == 4) {
 		/* The idle symbol.  See the note at the top of this file. */
 		int q;
 
-		if (o->receiver.short_382 == OB_CONSTEL_16) {
+		if (rx->short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			q = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			tx->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						1, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
+			q = tx->cur_quadrant;
+			tx->txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+			tx->cur_quadrant = (short)V34scrambler((unsigned *)&tx->tx_scr_sr,
 						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
+			tx->txpoint.word = vect4[tx->cur_quadrant];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
+		tx->seg_symcount = (short)((unsigned)(unsigned short)tx->seg_symcount + 1);
 		return 0;
 	}
 
-	case 5: {
+	if (engine->k56flex_receiver == 5) {
 		/*
 		 * MP, and the only arm that uses the full emitters: the bits
 		 * are the far end's message rather than a fixed pattern, so
 		 * they are scrambled and differentially encoded the way the
 		 * rest of the handshake is.
 		 */
-		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
+		int done = (short)k56->getK56FlexMpBits(&tx->cur_quadrant);
 
-		if (o->receiver.short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
+		if (rx->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, tx->cur_quadrant);
 		else
-			txmitdibit(o, o->cur_quadrant);
+			txmitdibit(o, tx->cur_quadrant);
 
 		if (done == 0)
 			return 0;
 
-		/*
-		 * DEAD: `getK56FlexMpBits` is a stub returning 0.
-		 *
-		 * The state store is a compare-then-store in the object and
-		 * is written as one here.  It is indistinguishable from a
-		 * plain store by any test -- the value written is the value
-		 * compared against -- and the mutation that removes the
-		 * compare is listed as equivalent rather than as a gap.
-		 */
+		/* The zero-return MP provider makes this completion arm dead.
+		 * Retain its native compare-then-store state publication. */
 		getMPrecvdBits((struct tagV34Object *)objp);
 		initdigital(o);
 		if (o->txstate != V34HS_EXMIT)
 			o->txstate = V34HS_EXMIT;
-		o->k56flex_receiver = 2;
+		engine->k56flex_receiver = 2;
 		return 0;
-	}
 	}
 
 	return 0;

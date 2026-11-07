@@ -7,6 +7,24 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## The translation unit is the recovery boundary
+
+**Register allocation and code generation are coupled across the complete TU.**
+Earlier functions can change later register choices, scheduling and instruction
+layout even when the later source is untouched. Period GCC's persistent
+peephole2 scratch-search cursor is one measured mechanism. Individual passes
+can work per function while sharing state across emitted functions; do not
+interpret function-local analysis as allocator independence.
+
+This is established project knowledge. Getting a function to EXACT can recover
+later REGALLOC/BYTES functions, or temporarily regress an EXACT neighbour.
+Rebuild the complete TU in original function order, score all emitted bodies,
+preserve gains and losses, and cross independently supported source changes.
+Trace and repair collateral before selecting a candidate. An EXACT neighbour
+is not frozen, and a temporary regression alone cannot disqualify a recovery.
+The [SetV90 wave](../tx-scheduler-recovery-20261107.md) and
+[Trn2d/K56 follow-up](../trn-k56-recovery-20261107.md) are concrete examples.
+
 ## Consult, investigate, record, transfer
 
 Consult this Playbook at the start of every recovery turn. Read the applicable
@@ -953,11 +971,52 @@ ISP and low-rate capability-loop histories remain outside the new domain;
 existing planted-arm coverage stays synthetic. The report records controls,
 complete-TU and 300-object evidence, compiler/helper hashes and next targets.
 
-Trn2d is a coupled follow-up, not a fresh isolated owner retry. Historical
-memory reports a reverted recovery after a K56Rate EXACT loss, but its cited
-F12052 is absent from current findings and the old variant is not reproduced
-here. Recover that control and cross it with the now-retained K56Jd/K56Rate
-owner model. Preserve and trace any intermediate loss before selecting a repair.
+The Trn2d follow-up is now completed below. Its historical F12052 record was
+located in archived Git history, and the described source properties were
+reconstructed against current native instructions. The old rejected source
+bytes were not recovered. Its K56Rate loss is repaired by the coupled K56Jd
+owner recovery; the earlier isolated rejection does not apply to that result.
+
+## Trn2d, K56Jd and the coupled Phase34 follow-up (2026-11-07)
+
+The [follow-up](../trn-k56-recovery-20261107.md) adds Trn2d EXACT127,
+K56Jd EXACT247 and chkForceBaudRate EXACT389, preserving K56Rate EXACT64 and
+every previous EXACT/REGALLOC copy. K56Phase reaches native 721 but remains
+BYTES8. These are three exact promotions plus one partial recovery.
+
+Trn2d needs actual engine ownership and per-arm state stores together. The
+owner-only result is SIZE24; stores alone BYTES37; both EXACT127. Trn2d alone
+also promotes chkForce from REGALLOC to EXACT, but moves K56Rate to REGALLOC.
+K56Jd alone likewise loses K56Rate EXACT. Both recover it. Read-only full-TU
+peephole2 captures show identical Rate scratch eligibility with incoming cursor
+0/2/3 and AX/CX/AX selection at UID41. This confirms the established TU coupling;
+it does not mean every register mismatch has that cause.
+
+K56Jd restores its real eight-byte DC owner, complete-root diagnostic reads and
+per-arm constellation stores. Two disjoint clear pairs then interact: baseline
+combined BYTES17, DC source order only BYTES2, TX source order only BYTES15,
+both EXACT247. Native machine order is not necessarily source order. Preserve
+ordinary/dump parity and the complete bystander ledger before attributing an
+effect to a declaration or compiler cursor.
+
+K56Phase needs actual RX/TX/engine owners, ordered 3/4/5 dispatch, the native
+unmasked shift, actual idle quadrant consumption and earlier session capture.
+The bounded declaration/reset/context crosses leave only two adjacent disjoint
+zero stores reversed at sched2. Native and selected have 162 decoded instructions,
+17 matching branch/return operands and 12 CALL operands. Reopen with a new
+native-supported helper/declaration/alias/liveness constraint predicting those
+dependencies, not another mask/order/owner palette or an allocation-only label.
+
+The constructed fixtures add 7,444 checks: 20 Trn2d histories assert all four
+outputs and successive 10→14 / 18→20 transitions; 24 actual K56 session Ja prefixes
+stay within queue capacity. Native Ja/MP stubs return zero and write nothing,
+so their completion tails remain unreachable under that callee contract.
+Case 3's bounded-index induction is not a constructed entry history; planted
+arm/index probes remain synthetic. All 126 live regions are compared raw.
+The final period/structural gate passes 399/0. Only four Main bodies and one of
+300 source objects change; exports, order, 225 CALL identities and 81 data
+continuations are preserved. The report records the full corpus screen and
+the next native-backed power-reduction owner/acquisition investigation.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

@@ -374,9 +374,9 @@ sweep(int with_debug)
 	}
 
 	/*
-	 * Applied twice: the ratchet's whole point is that a second call from
-	 * the value the first produced must not move it, and calling once
-	 * cannot show that.
+	 * Apply twice to compare successive native transitions. Outputs 10
+	 * and 18 advance to 14 and 20 on the next call. Constructor/API-created
+	 * histories in t_vpcmcreate also assert those expected sequences.
 	 */
 	for (i = 0; i < sizeof(trn2d_in) / sizeof(trn2d_in[0]); i++) {
 		setup();

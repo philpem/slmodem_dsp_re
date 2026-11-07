@@ -67,6 +67,7 @@
 
 #include "dsplib/dp.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/v34recv.h"
 
 extern void ref_dp_vpcm_init(void);
 extern void *ref_dp_runtime_create(void *modem);
@@ -161,6 +162,10 @@ extern void ref_V34XF_IndicateJdReceived(void *obj, unsigned char constellation,
 		unsigned char silence);
 extern void V34XF_IndicateDilReceived(void *obj, unsigned char constellation);
 extern void ref_V34XF_IndicateDilReceived(void *obj, unsigned char constellation);
+extern void V34XF_IndicateTrn2dReceived(void *obj);
+extern void ref_V34XF_IndicateTrn2dReceived(void *obj);
+extern int k56FlexPhase34(void *obj);
+extern int ref_k56FlexPhase34(void *obj);
 extern void V34XF_IndicateK56FlexRateDetermined(void *obj);
 extern void ref_V34XF_IndicateK56FlexRateDetermined(void *obj);
 extern void VPcmV34InitiateHangUp(void *obj);
@@ -2073,6 +2078,144 @@ run_rate_prefix_history(void)
     return diff_end();
 }
 
+/* Native constructors and public indications supply these method inputs.
+ * Repetition deliberately crosses 10 -> 14 and 18 -> 20: the indication is
+ * not idempotent on every output. This is a component callback boundary;
+ * it does not establish that a modem received TRN2d over a channel.
+ */
+static int
+run_trn2d_history(void)
+{
+    static const int entry[] = { 0, 3, 6, 11, 15 };
+    static const int outputs[5][3] = {
+        { 10, 14, 14 }, { 10, 14, 14 }, { 10, 14, 14 },
+        { 14, 14, 14 }, { 18, 20, 20 }
+    };
+    int role, method, debug, side, step, region;
+    int cases = 0, calls = 0, active = 0, regions = 0;
+    diff_begin("Trn2d indication: constructed callback component histories");
+    for (role = 0; role < 2; ++role)
+    for (method = 0; method < 5; ++method)
+    for (debug = 0; debug < 2; ++debug) {
+        long tag = role*100 + method*10 + debug;
+        for (side = 0; side < 2; ++side) {
+            graph_restore();
+            dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+            ref_VPcmV34Create(v34obj, role, 0, runtime, 0);
+            ref_v34modeminit(v34obj);
+            if (method == 1) ref_V34XF_IndicateJdReceived(v34obj, 0, 0);
+            if (method == 2) ref_V34XF_IndicateDilReceived(v34obj, 1);
+            if (method >= 3) ref_VPcmV34SetV90RateReneg(v34obj, (short)(method-3), 0);
+            diff_eq_int("Trn2d native entry", hangup_int(0x24c), entry[method], tag);
+            if (side == 0) {
+                graph_save_ours();
+                dsplib_debug_capture_on = 1;
+                dsplib_debug_capture_reset();
+            }
+            dsplibs_debug_level = ref_dsplibs_debug_level = debug*2;
+            for (step = 0; step < 3; ++step) {
+                if (side) ref_V34XF_IndicateTrn2dReceived(v34obj);
+                else V34XF_IndicateTrn2dReceived(v34obj);
+                ++calls;
+                diff_eq_int("Trn2d published state", hangup_int(0x24c), outputs[method][step], tag*10+step);
+            }
+            if (side == 0) {
+                if (graph_diff_live(ours, 0) != 0) ++active;
+                graph_save_ours();
+            }
+        }
+        dsplib_debug_capture_on = 0;
+        dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+        for (region = 0; region < nreg; ++region) {
+            diff_eq_obj("Trn2d raw live region", unsigned char[regsz[region]], ours[region], reg[region], tag*nreg+region);
+            ++regions;
+        }
+        diff_eq_int("Trn2d transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+        diff_eq_int("Trn2d transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+        diff_eq_int("Trn2d callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+        diff_eq_int("Trn2d transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+        diff_eq_int("Trn2d diagnostic lines", dsplib_debug_capture_lines(1), debug ? 3 : 0, tag);
+        ++cases;
+    }
+    diff_eq_int("Trn2d case denominator", cases, 20, 0);
+    diff_eq_int("Trn2d target call denominator", calls, 120, 0);
+    diff_eq_int("Trn2d active histories", active, cases, 0);
+    diff_eq_int("Trn2d compared region denominator", regions, cases*nreg, 0);
+    printf("    Trn2d component: %d histories, %d target calls, %d active; %d raw region comparisons\n", cases, calls, active, regions);
+    graph_restore();
+    return diff_end();
+}
+
+/* Native K56 session construction -> modeminit -> optional public modulator
+ * setup -> six Ja calls. No receive flags/state or queue pointers are planted.
+ * Native Ja/MP providers return zero and write nothing, so this history cannot
+ * enter their completion tails. The queue is deliberately bounded before
+ * capacity; this does not establish a negotiated K56 handshake.
+ */
+static int
+run_k56_prefix_history(void)
+{
+    int role, session, profile, debug, side, step, region;
+    int cases = 0, calls = 0, active = 0, regions = 0;
+    diff_begin("K56 Phase34: constructed Ja component prefixes");
+    for (role = 0; role < 2; ++role)
+    for (session = 3; session <= 4; ++session)
+    for (profile = 0; profile < 3; ++profile)
+    for (debug = 0; debug < 2; ++debug) {
+        long tag = role*1000 + session*100 + profile*10 + debug;
+        for (side = 0; side < 2; ++side) {
+            graph_restore();
+            dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+            ref_VPcmV34Create(v34obj, role, 0, runtime, session);
+            ref_v34modeminit(v34obj);
+            if (profile != 0)
+                ref_V34SetupModulator((struct v34_modulator *)(v34obj + 0x1450),
+                    (short)(profile == 1 ? 2400 : 3429),
+                    (short)(profile == 1 ? 1600 : 1800), 0, 0, 1);
+            diff_eq_int("K56 constructed receiver", hangup_int(0x250), 1, tag);
+            diff_eq_int("K56 constructed Ja guard", hangup_short(0x386) & V34_RX_FLAG_DATA, 0, tag);
+            if (side == 0) {
+                graph_save_ours();
+                dsplib_debug_capture_on = 1;
+                dsplib_debug_capture_reset();
+            }
+            dsplibs_debug_level = ref_dsplibs_debug_level = debug*2;
+            for (step = 0; step < 6; ++step) {
+                int queued = hangup_short(0x221c);
+                int result = side ? ref_k56FlexPhase34(v34obj) : k56FlexPhase34(v34obj);
+                ++calls;
+                diff_eq_int("K56 Ja return", result, 0, tag*10+step);
+                diff_eq_int("K56 Ja produced samples", hangup_short(0x221c) > queued, 1, tag*10+step);
+                diff_eq_int("K56 bounded queue", hangup_short(0x221c) > 0 && hangup_short(0x221c) <= 230, 1, tag*10+step);
+                diff_eq_int("K56 no Ja completion state", hangup_int(0x250), 1, tag*10+step);
+                diff_eq_int("K56 no Ja completion guard", hangup_short(0x386) & V34_RX_FLAG_DATA, 0, tag*10+step);
+            }
+            if (side == 0) {
+                if (graph_diff_live(ours, 0) != 0) ++active;
+                graph_save_ours();
+            }
+        }
+        dsplib_debug_capture_on = 0;
+        dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+        for (region = 0; region < nreg; ++region) {
+            diff_eq_obj("K56 raw live region", unsigned char[regsz[region]], ours[region], reg[region], tag*nreg+region);
+            ++regions;
+        }
+        diff_eq_int("K56 transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+        diff_eq_int("K56 transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+        diff_eq_int("K56 callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+        diff_eq_int("K56 transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+        ++cases;
+    }
+    diff_eq_int("K56 prefix case denominator", cases, 24, 0);
+    diff_eq_int("K56 prefix call denominator", calls, 288, 0);
+    diff_eq_int("K56 active prefixes", active, cases, 0);
+    diff_eq_int("K56 compared region denominator", regions, cases*nreg, 0);
+    printf("    K56 component: %d Ja prefixes, %d target calls, %d active; %d raw region comparisons\n", cases, calls, active, regions);
+    graph_restore();
+    return diff_end();
+}
+
 /* MP packet component boundary. The caller supplies the public message fields
  * and grouping parameter of the already-owned V90MP, not its detector state.
  * Native infoToBits builds a complete type-1 packet; native reset/bitsToInfo
@@ -2201,6 +2344,8 @@ main(void)
 	rc |= run_setv90_history();
 	rc |= run_indication_history();
 	rc |= run_rate_prefix_history();
+	rc |= run_trn2d_history();
+	rc |= run_k56_prefix_history();
 	rc |= run_received_mp_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();

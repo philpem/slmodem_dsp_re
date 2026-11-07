@@ -179,6 +179,20 @@ So:
 
 ## Recovery experiments, memory and model selection
 
+**Register allocation and code generation are coupled across the translation
+unit. The complete TU, in original function order, is the recovery boundary.**
+Earlier source changes can improve or regress later functions even when their
+source is unchanged. In particular, period GCC carries peephole2 scratch-search
+state between emitted functions; register choices can then change scheduling
+and instruction layout. Individual function-local passes do not make functions
+independent. This is established project knowledge, not a hypothesis to rediscover.
+Rebuild and compare every emitted function after each candidate. Getting one
+function to EXACT may recover later REGALLOC/BYTES functions or disturb existing
+EXACTs. Preserve those intermediate states, trace the affected neighbours, and
+test supported changes together before retaining or rejecting them. Never freeze
+an EXACT neighbour or veto a promising recovery solely because it regresses.
+See the [Trn2d/K56 coupled example](docs/trn-k56-recovery-20261107.md).
+
 Treat SIZE, BYTES and REGALLOC as measured code-generation categories, not
 diagnoses of reconstruction correctness. REGALLOC does not prove semantic
 equivalence: register lanes, implicit operands, control-flow live ranges and
