@@ -223,8 +223,13 @@ nor establishes the original source declaration. The
 [InitMOH closed audit](tools/native_graph/initmoh_flow_case/README.md) is a worked
 case, not a general corpus equivalence detector.
 
-Keep address identity, alias metadata and declaration evidence separate. A
-cached cast pointer and repeated member accesses through a formal can retain
+Keep address identity, alias metadata and declaration evidence separate.
+A byte-pointer intermediate does not make a subsequent short/int dereference
+alias-safe; check the final typed access against the declared object and measured
+alias metadata. A full-word writer and low-word reader establish their consumed
+widths, not a unique original field declaration. See the
+[minimum-power audit](docs/min-power-recovery-20261108.md).
+A cached cast pointer and repeated member accesses through a formal can retain
 different period-GCC expression identities. When a compatibility view broadens
 aliasing, test references to actual declared members with checked extents before
 inventing another owner type. Cross these properties; their isolated outputs

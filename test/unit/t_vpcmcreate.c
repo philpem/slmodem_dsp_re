@@ -145,6 +145,8 @@ extern void ref_ApplyBulkDelay(void *obj, short delay)
 extern void txinit(void *obj);
 extern void ref_txinit(void *obj);
 extern void ref_v34modeminit(void *obj);
+extern short GetVPcmMinimalTxPowerReduction(void *obj);
+extern short ref_GetVPcmMinimalTxPowerReduction(void *obj);
 extern void settxlevel(void *obj, const short *mp);
 extern void ref_settxlevel(void *obj, const short *mp);
 extern void txmitdibit(void *obj, short bits);
@@ -2310,6 +2312,121 @@ run_received_mp_history(void)
     return diff_end();
 }
 
+/* Native Create and modeminit establish the real session/params graph;
+ * session types 0/1/3/4 establish disabled/V90/K56 receive selectors. The
+ * optional public SetV90 indication supplies a later, distinct V90 selector.
+ * The caller-owned runtime is configured through its declared 32-bit fields
+ * at the getter boundary. The final two rows probe low-word consumption of
+ * that transport, not values produced by dp_runtime_create (which sets 6).
+ * No private protocol/ISP flag is planted. The analog graph has info0Layout=1
+ * and native initSession has sensitivity=0; the other gates remain covered by
+ * t_v34pcmif's synthetic probes. These are component histories, not negotiated
+ * modem calls. The getter installs no aliases: compare all live bytes raw.
+ */
+static int
+run_min_power_history(void)
+{
+    static const struct {
+        int session, role, later, want, codec, expected;
+    } input[] = {
+        { 0, 0, 0, -1, 4, 0 },
+        { 1, 0, 0, -11, 4, -10 },
+        { 1, 1, 0, -10, 5, -10 },
+        { 1, 0, 0, -9, 4, -9 },
+        { 1, 1, 0, -1, 5, -1 },
+        { 1, 0, 0, 0, 4, 0 },
+        { 1, 1, 0, 1, 5, 1 },
+        { 1, 0, 0, 6, 4, 6 },
+        { 1, 1, 0, 7, 5, 7 },
+        { 1, 0, 0, 8, 4, 7 },
+        { 3, 0, 0, -11, 4, -10 },
+        { 3, 1, 0, 8, 5, 7 },
+        { 4, 0, 0, -1, 5, -1 },
+        { 0, 1, 0, 8, 5, 0 },
+        { 1, 0, 1, 0x10000, 4, 0 },
+        { 1, 1, 1, 0x1ffff, 5, -1 }
+    };
+    unsigned item;
+    int debug, side, region, cases = 0, calls = 0, active = 0, regions = 0;
+    int positive = 0, nonpositive = 0, clamped = 0, disabled = 0;
+    diff_begin("Minimum power: constructed selectors and declared configuration boundary");
+    for (item = 0; item < sizeof(input)/sizeof(input[0]); ++item)
+    for (debug = 0; debug < 2; ++debug) {
+        long tag = item*10 + debug;
+        short result[2];
+        for (side = 0; side < 2; ++side) {
+            unsigned char *session, *params;
+            int flag;
+            graph_restore();
+            dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+            ref_VPcmV34Create(v34obj, input[item].role, 0, runtime, input[item].session);
+            ref_v34modeminit(v34obj);
+            if (input[item].later)
+                ref_VPcmV34SetV90RateReneg(v34obj, 0, 0);
+            session = *(unsigned char **)(v34obj + 0x3548);
+            params = *(unsigned char **)(session + 0x610c);
+            diff_eq_int("minimum native session layout", *(int *)(session + 0x6120), 1, tag);
+            diff_eq_int("minimum native sensitivity", *(int *)(params + 0x4f8), 0, tag);
+            diff_eq_int("minimum native V90 selector", hangup_int(0x24c),
+                        input[item].later ? 11 : input[item].session == 1 ? 1 : 0, tag);
+            diff_eq_int("minimum native K56 selector", hangup_int(0x250),
+                        input[item].session >= 3 ? 1 : 0, tag);
+            runtime->unnamed_0044 = input[item].want;
+            runtime->codecType = input[item].codec;
+            if (side == 0) {
+                graph_save_ours();
+                dsplib_debug_capture_on = 1;
+                dsplib_debug_capture_reset();
+            }
+            dsplibs_debug_level = ref_dsplibs_debug_level = debug*2;
+            result[side] = side ? ref_GetVPcmMinimalTxPowerReduction(v34obj)
+                                : GetVPcmMinimalTxPowerReduction(v34obj);
+            ++calls;
+            diff_eq_int("minimum expected reduction", result[side], input[item].expected, tag);
+            memcpy(&flag, params + 0x4f4, sizeof flag);
+            diff_eq_int("minimum high-level flag", flag, input[item].expected <= 0, tag);
+            diff_eq_int("minimum echo start", hangup_int(0x3554), 2000, tag);
+            diff_eq_int("minimum echo decay", hangup_int(0x3558),
+                        input[item].expected > 0 ? 0x7fdf : 0x7fcb, tag);
+            diff_eq_int("minimum echo beta", hangup_int(0x355c),
+                        input[item].expected > 0 ? 2 : input[item].codec == 4 ? 4 : 6, tag);
+            if (side == 0) {
+                if (graph_diff_live(ours, 0) != 0) ++active;
+                graph_save_ours();
+            }
+        }
+        dsplib_debug_capture_on = 0;
+        dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+        diff_eq_int("minimum paired return", result[0], result[1], tag);
+        for (region = 0; region < nreg; ++region) {
+            diff_eq_obj("minimum raw live region", unsigned char[regsz[region]],
+                        ours[region], reg[region], tag*nreg + region);
+            ++regions;
+        }
+        diff_eq_int("minimum transcript complete ours", dsplib_debug_capture_complete(0), 1, tag);
+        diff_eq_int("minimum transcript complete blob", dsplib_debug_capture_complete(1), 1, tag);
+        diff_eq_int("minimum callback boundaries", dsplib_debug_capture_boundaries_equal(), 1, tag);
+        diff_eq_int("minimum transcript bytes", strcmp(dsplib_debug_capture_text(0), dsplib_debug_capture_text(1)) == 0, 1, tag);
+        diff_eq_int("minimum diagnostic lines", dsplib_debug_capture_lines(1), debug ? 2 : 0, tag);
+        if (input[item].expected > 0) ++positive; else ++nonpositive;
+        if (input[item].want == -11 || input[item].want == 8) ++clamped;
+        if (input[item].session == 0) ++disabled;
+        ++cases;
+    }
+    diff_eq_int("minimum case denominator", cases, 32, 0);
+    diff_eq_int("minimum target call denominator", calls, 64, 0);
+    diff_eq_int("minimum region denominator", regions, cases*nreg, 0);
+    diff_eq_int("minimum changes observed", active > 0, 1, 0);
+    diff_eq_int("minimum positive outputs", positive, 10, 0);
+    diff_eq_int("minimum nonpositive outputs", nonpositive, 22, 0);
+    diff_eq_int("minimum clamp input cases", clamped, 10, 0);
+    diff_eq_int("minimum disabled selector cases", disabled, 4, 0);
+    printf("    Minimum power component: %d cases, %d calls, %d active; %d positive/%d nonpositive, %d clamp inputs, %d disabled; %d raw region comparisons\n",
+           cases, calls, active, positive, nonpositive, clamped, disabled, regions);
+    graph_restore();
+    return diff_end();
+}
+
 int
 main(void)
 {
@@ -2347,6 +2464,7 @@ main(void)
 	rc |= run_trn2d_history();
 	rc |= run_k56_prefix_history();
 	rc |= run_received_mp_history();
+	rc |= run_min_power_history();
 	rc |= run_transcripts();
 	rc |= run_made_to_fail();
 

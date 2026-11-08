@@ -1018,6 +1018,61 @@ The final period/structural gate passes 399/0. Only four Main bodies and one of
 continuations are preserved. The report records the full corpus screen and
 the next native-backed power-reduction owner/acquisition investigation.
 
+## Minimum power: observation boundaries and arm identity (2026-11-08)
+
+The [deep dive](../min-power-recovery-20261108.md) adds no EXACT/REGALLOC
+promotion. GetVPcmMinimalTxPowerReduction reaches native 362/BYTES29 from
+SIZE33/current 329. Retain it as partial source recovery: actual engine/config
+owners, path-specific params acquisition, distinct clamped/final short values,
+and native codec-read timing. No other Main body changes.
+
+Native publishes HIGH_LEVEL_TX_ACTIVE, then reads captured config+0x54, then
+publishes the echo fields. Baseline source read codecType after the first two
+echo stores through a fresh config-pointer expression. Constructor fixtures
+have disjoint owners and do not demonstrate an alias-sensitive behaviour bug;
+the native observation boundary is independently measured. The post-diagnostic
+reload is params from the retained session, not a session-pointer reload.
+Keep config+0x44's signed low-word consumption despite its 32-bit transport.
+Neither the writer width nor a byte intermediate proves an original declaration
+or legitimises the final typed dereference.
+
+High-effort owner/acquisition/clamp and 36 echo-order controls reach a partial
+candidate whose two beta stores merge at ce3 after peephole2 assigns both AX.
+Extra High review tests a different source-arm identity: writing red<=0 first
+changes block/search order, keeps distinct scratch lanes until ce3, and preserves
+both native stores. BBRO still emits native positive fallthrough/JLE. The graph
+change justifies crossing the previously negative 36-order family again; all 36
+remain negative for EXACT/REGALLOC. A short-beta/shared-HIGH_LEVEL six-cell
+family also fails. This is an interaction result, not a licence to repeat an
+unchanged spelling palette.
+
+The final pair has 80 decoded/78 nonpadding instructions, all 11 branch/return
+sites and both diagnostic CALL sites equal. MOV/XOR scheduling and register
+transport still fail strict REGALLOC. Matching extent and CFG are insufficient.
+Read-only full-TU captures reproduce ordinary objects literally. A calibrated
+53-cursor replay of the pre-inversion beta1p0 graph permits native positive-beta
+EBP only at target entry 15; the current SetTxScale searches map every incoming
+cursor to 2 or 3. This rules out cursor-only repair of that fixed graph. It is
+not a negative result for the changed arm-inversion graph. TU-wide
+coupling remains established: changing the actual search graph or eligibility
+is outside that conditional negative, even for an already exact predecessor.
+The final orientation's separate calibrated replay confirms that target entries
+2/3 keep distinct positive/false beta scratch lanes; entry 2 is compiler-observed,
+entry 3 model-only. This is not a later-pass or whole-function proof. Bind every
+conditional exclusion to its exact source/search graph before transferring it.
+
+The new fixture supplies 32 constructed component cases/64 calls/4,808 checks,
+with 22 changed graphs, full 126-region comparisons and independent expected
+returns/flag/echo values. Sensitive-ISP/layout-zero and pointer-alias histories
+remain outside that new domain; old planted probes stay synthetic. The report
+records both effort denominators, complete-TU/300-object checks and the gate.
+Reopen with a new native-supported false-beta live-range, declaration, alias or
+helper boundary and cross it with both source-arm orientations. Do not repeat
+the closed echo-order, short-beta, shared-publication or Boolean-capture domains
+without such a constraint. Transfer the actual-member/result-lifetime lesson
+next to GetCurrentTxBitRate after its prior-control audit, crossing supported
+changes with both minimum-power arm orientations across the complete TU.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or

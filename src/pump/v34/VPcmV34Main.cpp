@@ -867,11 +867,12 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 /*
  * +0x44 of `pac3c`, `unnamed_0044` in modem_params.h: a transmit power
  * reduction in dB, written 32-bit by the host and read here as a SHORT
- * (`movswl 0x44`, clamped to [-10,+7]).  The member is the `int` the object's
- * own 32-bit store proves, so the member keeps its width and this reader
- * keeps a raw halfword read of the member's own offset (issue #260 wave 11);
- * punning through `unsigned char *` is what keeps the strict-aliasing story
- * the same as the object's.
+ * (`movswl 0x44`, clamped to [-10,+7]). The retained member models the
+ * measured 32-bit transport; that store does not uniquely establish the
+ * original declaration. This reader preserves the native signed low-halfword
+ * consumption at the complete configuration owner's checked member offset.
+ * The intervening byte view does not itself establish short-access alias
+ * legality; the original declaration and alias model remain unresolved.
  */
 #define CFG_MINPWR_DB	((int)__builtin_offsetof(struct _tagModemParameters, \
 							unnamed_0044))
@@ -3063,31 +3064,33 @@ short
 GetVPcmMinimalTxPowerReduction(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_engine_control *engine = &obj->engine_control;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	V90Parameters *pcm = sess->modem.params;
-	short want = *(const short *)(cfg + CFG_MINPWR_DB);
+	const struct _tagModemParameters *cfg = obj->pac3c;
+	V90Parameters *pcm;
+	short want = *(const short *)((const unsigned char *)cfg + CFG_MINPWR_DB);
 	short red;
 
 	if (want < -10)
-		red = -10;
+		want = -10;
 	else if (want > 7)
-		red = 7;
-	else
+		want = 7;
+
+	if (sess->info0Layout != 0 && engine->v90_receiver != 0
+	    && sess->modem.params->SENSITIVE_ISP_DETECTED == 0)
 		red = want;
-
-	if (!(sess->info0Layout != 0 && obj->v90_receiver != 0
-	      && pcm->SENSITIVE_ISP_DETECTED == 0)
-	    && obj->k56flex_receiver == 0)
+	else if (engine->k56flex_receiver != 0)
+		red = want;
+	else
 		red = 0;
+	pcm = sess->modem.params;
 
-	if (red > 0) {
-		pcm->HIGH_LEVEL_TX_ACTIVE = 0;
-		obj->echo_decay_start = 0x7d0;
-		obj->echo_decay_fact = 0x7fdf;
-		obj->echo_beta = 2;
-	} else {
+	if (red <= 0) {
 		pcm->HIGH_LEVEL_TX_ACTIVE = 1;
+		/* Native reads codecType after publishing HIGH_LEVEL_TX_ACTIVE,
+		 * before either echo-decay publication. Keep that read boundary even
+		 * when the configuration and complete object can alias. */
+		int beta = (cfg->codecType == 4) ? 4 : 6;
 		obj->echo_decay_start = 0x7d0;
 		obj->echo_decay_fact = 0x7fcb;
 		/*
@@ -3095,7 +3098,12 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->echo_beta = (obj->pac3c->codecType == 4) ? 4 : 6;
+		obj->echo_beta = beta;
+	} else {
+		pcm->HIGH_LEVEL_TX_ACTIVE = 0;
+		obj->echo_decay_start = 0x7d0;
+		obj->echo_decay_fact = 0x7fdf;
+		obj->echo_beta = 2;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
@@ -3103,11 +3111,9 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 		 (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);
 
 	/*
-	 * The session pointer is RE-LOADED for the second report rather than
-	 * kept -- `mov 0x610c(%esi),%ebp` at 0x7b67, after the first call.
-	 * Reproduced by reading it again; nothing here can change it, so the
-	 * two spellings agree, and it is written this way because the object
-	 * is.
+	 * The retained session's params pointer is loaded again after the first
+	 * diagnostic: native 0x7b67 reads session+0x610c, then +0x4f4 from that
+	 * fresh params owner. The session itself remains captured across the call.
 	 */
 	edprintf("VPcmV34Main: Get Minimal power reduction - returning %d "
 		 "(cfg flag set to %d)\r\n",
