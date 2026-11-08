@@ -2411,6 +2411,71 @@ run_progress_boundary(void)
 	return diff_end();
 }
 
+/* Constructed component probe: plant a pending offset request, without claiming
+ * a negotiated phase-3 history. A zero-length first segment preserves phase0.5;
+ * these finite offsets leave the second segment inside the normalized interval
+ * after at most one wrap. Adjacent float words straddle print truncation points.
+ */
+static int
+run_mkres_diagnostic_boundaries(void)
+{
+	static const unsigned offsets[] = {
+		0x00000000u, 0x80000000u, 0x00000001u, 0x80000001u,
+		0x3727c5abu, 0x3727c5acu, 0x3727c5adu,
+		0xb727c5abu, 0xb727c5acu, 0xb727c5adu,
+		0x3f7fffffu, 0x3f800000u, 0x3f800001u
+	};
+	unsigned trial;
+
+	diff_begin("V92Modulator offset diagnostic truncation boundaries");
+	dsplib_debug_capture_on = 1;
+	for (trial = 0; trial < sizeof(offsets) / sizeof(offsets[0]); trial++) {
+		unsigned na = 0xa5a5a5a5u, nb = 0xa5a5a5a5u;
+		float offset;
+		int s;
+
+		set_level(0);
+		build((int)trial);
+		memcpy(&offset, &offsets[trial], sizeof(offset));
+		for (s = 0; s < 2; s++) {
+			V92Modulator *m = M(s);
+
+			m->phase = V92MOD_PHASE_3;
+			m->resamplerPhaseChange = V92MOD_PHASECHG_OFFSET;
+			m->resamplerPhaseChangeAt = 0;
+			m->blockRemaining = m->blockSize;
+			m->resamplerPhaseOffset = offset;
+			m->resampler->setNormalizedPhase(0.5f);
+		}
+		fill_input((int)trial);
+		set_level(2);
+		dsplib_debug_capture_reset();
+		our_mkres(ours, &na);
+		ref_mkres(theirs, &nb);
+		diff_eq_int("offset boundary output count (%ld)", na, nb, trial);
+		diff_eq_int("offset boundary output stays in buffer (%ld)",
+			    na > 0u && na <= NSAMPLES + V92MOD_BUF_SLACK,
+			    1, trial);
+		diff_eq_int("offset boundary diagnostic is present (%ld)",
+			    strstr(dsplib_debug_capture_text(0),
+				   "V92Modulator: setPhase = ") != 0, 1, trial);
+		diff_eq_int("offset boundary transcript agrees (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("offset boundary captures are complete (%ld)",
+			    dsplib_debug_capture_complete(0)
+			    && dsplib_debug_capture_complete(1), 1, trial);
+		diff_eq_int("offset boundary callback grouping agrees (%ld)",
+			    dsplib_debug_capture_boundaries_equal(), 1, trial);
+		compare_all("after offset diagnostic boundary", trial);
+		set_level(0);
+		teardown();
+	}
+	diff_eq_int("offset boundary cases run", trial, 13, 0);
+	dsplib_debug_capture_on = 0;
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2442,6 +2507,7 @@ main(void)
 	rc |= run_enter();
 	rc |= run_exits();
 	rc |= run_mkres();
+	rc |= run_mkres_diagnostic_boundaries();
 	rc |= run_initiate();
 	rc |= run_progress();
 	rc |= run_progress_boundary();

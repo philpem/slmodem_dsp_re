@@ -970,3 +970,8 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 	for (i = 0; i < n; i++)
 		out[i] = symbolBuf[i];
 }
+
+/* Provide the shared bulk specialization declared external in V92Modulator.
+ * Its generic implementation retains one home in Scrambler.h. */
+template void Scrambler<int, unsigned char>::process(
+	const int *, unsigned char *, unsigned int);

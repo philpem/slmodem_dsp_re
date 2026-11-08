@@ -111,6 +111,14 @@ extern "C" {
 #include "dsplib/FloatFIR.h"
 #include "dsplib/sysdep.h"
 
+/* Share the out-of-line bulk specialization explicitly provided by
+ * V90Modulator.cpp. Suppressing its duplicate local instantiation preserves
+ * the native strong-method order and constructor scratch history. Surviving
+ * weak sections do not identify a unique original instantiation owner.
+ */
+extern template void Scrambler<int, unsigned char>::process(
+	const int *, unsigned char *, unsigned int);
+
 /* F11620: ordinary typed deletion keeps each evaluated child pointer. */
 inline void operator delete(void *p) { sysdep_free(p); }
 
@@ -688,42 +696,25 @@ V92Modulator::enterDataPhase()
 }
 
 /*
- * The float-as-%c%d.%05d idiom, the same three helpers
- * src/pump/v90/V92Transmitter.cpp and src/pump/v90/V92EchoCanceller.cpp carry.
+ * The float-as-%c%d.%05d idiom also occurs in V92Transmitter.cpp and
+ * V92EchoCanceller.cpp. Keep the arguments as direct expressions here: even
+ * helper calls that inline can make GCC precompute all arguments before their
+ * stack publications and common a field read that native code reloads.
  * The scale is 1e5 here: `.rodata.cst4+0xb8` is 100000.0 and the format string
  * says %05d.
  *
- * `frac_of`'s subtraction is `v - (int)v`, which is what `de e1` at
+ * The fractional subtraction is `v - (int)v`, which is what `de e1` at
  * .text+0x14bb6 does -- objdump prints it `fsubp %st,%st(1)` and it IS FSUBRP,
  * so st(1) becomes st(0) - st(1) and st(0) holds the value (finding F245).  The
  * abs() makes the operand order unobservable either way (finding F256).
  *
- * The `long double` casts are the x87's: the object loads the field once and
- * never stores the intermediate, so the subtraction and the multiply both
- * happen in extended precision.
+ * The fractional subtraction and multiply remain in extended precision without
+ * storing an intermediate; the explicit long-double arithmetic preserves this
+ * under the period compiler. The later sign comparison reloads the field.
  *
- * `sign_of` puts ZERO ON THE LEFT -- `fldz; fcomps 0x24(%ebx)` at
+ * The sign expression puts ZERO ON THE LEFT -- `fldz; fcomps 0x24(%ebx)` at
  * .text+0x14bcc -- so a phase offset of exactly 0.0f prints '-'.
  */
-static char
-sign_of(float v)
-{
-	return (0.0f < v) ? '+' : '-';
-}
-
-static int
-whole_of(float v)
-{
-	return (int)fabsf(v);
-}
-
-static int
-frac_of(float v)
-{
-	return __builtin_abs((int)(((long double)v - (long double)(int)v)
-				   * V92MOD_PHASE_PRINT_SCALE));
-}
-
 /*
  * ===========================================================================
  * V92Modulator::mkResampledSignal (.text+0x14980, 662 bytes)
@@ -779,7 +770,7 @@ frac_of(float v)
  * is; the width is the same and the value is bit-exact either way.
  *
  * ---------------------------------------------------------------------------
- * THE PHASE CHANGE ITSELF, AND WHY IT IS A `switch` AND NOT AN `if/else`
+ * THE PHASE CHANGE DISPATCH MUST PRESERVE THE FALLTHROUGH
  *
  *     HALF    phase = getNormalizedPhase() + 0.5f
  *     OFFSET  phase = getNormalizedPhase() + resamplerPhaseOffset
@@ -789,9 +780,10 @@ frac_of(float v)
  * The object dispatches `cmp $0x2; je; dec %eax; je` and FALLS THROUGH to the
  * second resample when the code is neither -- so a `resamplerPhaseChange` that
  * is not 1 or 2 still splits the block and changes no phase at all, where an
- * `if (== 2) ... else ...` would treat every such value as the HALF arm.  Only
- * `progress` writes the field and it writes only 1 and 2, so no test can
- * separate the two readings; the dispatch is what says which is right.
+ * `if (== 2) ... else ...` would treat every such value as the HALF arm.  Reset publishes NONE; progress publishes HALF and OFFSET. Synthetic component
+ * probes also cover the other-code fallthrough. A guarded if/else-if can
+ * preserve these semantics too: the native instructions do not uniquely prove
+ * switch syntax, and the current switch still lowers in a different order.
  *
  * The two arms share the wrap and the store IN THE OBJECT and not in the
  * source: the OFFSET arm's tail jumps into the HALF arm's `fld1` at
@@ -799,9 +791,9 @@ frac_of(float v)
  * identical tails.  Writing it as one shared tail after the switch would run
  * `setNormalizedPhase` on an uninitialised phase for every other code.
  *
- * `wrapped` IS ONE BYTE, and that is forced: `movb $0x0,0x1f(%esp)`,
+ * Native transports `wrapped` in one byte: `movb $0x0,0x1f(%esp)`,
  * `movb $0x1,0x1f(%esp)` and `cmpb $0x0,0x1f(%esp)` at .text+0x149de, +0x14af6
- * and +0x14a5d.  An `int` would be a register or a 32-bit slot.
+ * and +0x14a5d.  That bounds the transport width, not a unique original local type.
  *
  * `resamplerPhaseOffset` IS READ AND NEVER WRITTEN by any of the class's
  * eighteen symbols -- V92Modulator.h and D800.  This is the site that reads
@@ -853,9 +845,11 @@ V92Modulator::mkResampledSignal(unsigned int &n)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modulator: setPhase = %c%d.%05d\r\n",
-			    sign_of(resamplerPhaseOffset),
-			    whole_of(resamplerPhaseOffset),
-			    frac_of(resamplerPhaseOffset));
+			    ((0.0f < resamplerPhaseOffset) ? '+' : '-'),
+			    (int)fabsf(resamplerPhaseOffset),
+			    __builtin_abs((int)(((long double)resamplerPhaseOffset
+				- (long double)(int)resamplerPhaseOffset)
+			       * V92MOD_PHASE_PRINT_SCALE)));
 		phaseNow = resampler->getNormalizedPhase()
 			 + resamplerPhaseOffset;
 		if (phaseNow >= 1.0f) {
@@ -1029,9 +1023,10 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 			   + 0.5f);
 
 	eventCode = 0;
+	unsigned int queued = queue->count();
 	symbolCount += n;
 
-	want = queuePrime - queue->count() + n;
+	want = queuePrime - queued + n;
 	blockRemaining = want;
 
 	switch (phase) {
@@ -1112,8 +1107,9 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 	mkResampledSignal(nOut);
 
 	if (params->V92_APPLY_TX_SHAPING_FILTER) {
+		FloatFIR *filter = txFilter;
 		float *shape = resampleOut;
-		txFilter->process(shape, shape, nOut);
+		filter->process(shape, shape, nOut);
 	}
 
 	queue->write(resampleOut, nOut);
@@ -1207,8 +1203,8 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
 		dsplibs_debug_printf("V92Modulator constraction\r\n");
 
 	/*
-	 * THE ORDER OF THESE SEVEN IS DECODED AND IT IS NOT THE ORDER THE
-	 * STORES COME OUT IN.  All 5,040 orderings were compiled twice --
+	 * The historical F8064/F8065 source-order experiment is not a current
+	 * constructor grade. Source statement order differs from emitted stores.  All 5,040 orderings were compiled twice --
 	 * once with the `resampleIn` size written as a multiply and once as
 	 * the shift below -- and every one of the 10,080 cells gave a
 	 * DISTINCT object, so the generator is not the thing being measured.

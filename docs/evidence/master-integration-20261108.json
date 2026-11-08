@@ -122,7 +122,7 @@
           "reference_bytes": 734
         },
         "kind": "reviewed upstream EXACT to NONMATCH",
-        "cause": "Current-header Queue::write isFull() predicate restores native EXACT85 writer; reversing only the predicate restores EXACT734 constructor but changes writer to SIZE99 and progress BYTES55 to BYTES70. Five full 30-function TU controls isolate the header property.",
+        "cause": "Current-header Queue::write isFull() predicate restores native EXACT85 writer; reversing only the predicate restores EXACT734 constructor but changes writer to SIZE14 (71 candidate bytes versus 85 native) and progress BYTES55 to BYTES70. Five full 30-function TU controls isolate the header property.",
         "reopen": "Use the five-cell frozen packet for coupled predecessor/source recovery and compiler-stage analysis; retain the native queue predicate. Apply required Astra escalation after unsuccessful Sol High/Extra High investigations.",
         "classifier_not_weakened": true
       },
@@ -1197,5 +1197,20 @@
     "references": 12969,
     "unresolved": 0,
     "stale": 0
+  },
+  "reporting_correction_2026_11_08": {
+    "issue": "SIZE is an absolute extent delta; prior prose added14 instead of reading the71-byte ELF extent.",
+    "changes": [
+      {
+        "field": "floor_review.decisions[2].cause",
+        "previous": "Current-header Queue::write isFull() predicate restores native EXACT85 writer; reversing only the predicate restores EXACT734 constructor but changes writer to SIZE99 and progress BYTES55 to BYTES70. Five full 30-function TU controls isolate the header property.",
+        "corrected": "Current-header Queue::write isFull() predicate restores native EXACT85 writer; reversing only the predicate restores EXACT734 constructor but changes writer to SIZE14 (71 candidate bytes versus 85 native) and progress BYTES55 to BYTES70. Five full 30-function TU controls isolate the header property."
+      }
+    ],
+    "native_bytes": 85,
+    "old_predicate_bytes": 71,
+    "raw_object_sha256": "32f66627ed62b8065094090ea731a932f62caeb1f04e0bbc242f2fd36202e958",
+    "measurement_changed": false,
+    "fresh_evidence": "v92mod-coupling-20261108 baseline-inventory.json"
   }
 }

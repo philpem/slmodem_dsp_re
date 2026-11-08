@@ -188,6 +188,9 @@ source is unchanged. In particular, period GCC carries peephole2 scratch-search
 state between emitted functions; register choices can then change scheduling
 and instruction layout. Individual function-local passes do not make functions
 independent. This is established project knowledge, not a hypothesis to rediscover.
+Distinguish textual definition order, actual GCC emission order and the linked
+layout. Trace callgraph/template dependencies before interpreting order debt;
+identical emitted bodies need not carry identical scratch-search histories.
 Rebuild and compare every emitted function after each candidate. Getting one
 function to EXACT may recover later REGALLOC/BYTES functions or disturb existing
 EXACTs. Preserve those intermediate states, trace the affected neighbours, and
@@ -199,6 +202,8 @@ Treat SIZE, BYTES and REGALLOC as measured code-generation categories, not
 diagnoses of reconstruction correctness. REGALLOC does not prove semantic
 equivalence: register lanes, implicit operands, control-flow live ranges and
 ABI outputs require their own evidence. Retain the period differential gate.
+Report native and candidate extents explicitly; an unsigned SIZE delta does
+not establish which body is larger.
 A signed/unsigned branch establishes the consumed comparison semantics, not a
 unique field or formal declaration; check promotions and interpretation at use.
 
@@ -295,6 +300,9 @@ TU; do not add artificial carriers to fit register choices. Before rebuilding a
 repeated native algorithm by hand, compare it with existing helper bodies.
 Recover supported call/inline boundaries and share the implementation where
 appropriate; validate the public out-of-line entry and all affected consumers.
+Treat shared template instantiation as a coupled provider/consumer boundary.
+Account for removed duplicate weak copies separately, verify the remaining
+provider and global closure, and retain original-ownership ambiguity.
 
 Use GPT-6.1 Sol at High as the provisional default for reconstruction and
 investigation agents. **If Sol High and Extra High investigations produce no

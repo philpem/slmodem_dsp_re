@@ -225,55 +225,61 @@ Queue<T>::Queue(unsigned n)
 	reset();
 }
 
+/* The capacity guard consumes unsigned num; native copy comparisons and loops
+ * consume its signed value. Keep per-item cursor publications in the wrapped
+ * arm as well as the contiguous arm. This does not change the unsigned ABI.
+ */
 template <class T>
 int Queue<T>::read(T *p, unsigned num)
 {
-	int avail = (last - rd) + 1;
 	int i;
+	int n;
 
 	if (count() < num)
 		return -1;
 
-	if (avail < (int)num) {
-		T *q = rd;
+	n = (int)num;
 
-		for (i = 0; i < avail; i++)
-			*p++ = *q++;
-		q = buf;
-		for (; i < (int)num; i++)
-			*p++ = *q++;
-		rd = q;
-	} else {
-		for (i = 0; i < (int)num; i++)
+	int avail = (last - rd) + 1;
+
+	if (avail >= n) {
+		for (i = 0; i < n; i++)
 			*p++ = *rd++;
 		if (rd == last + 1)
 			rd = buf;
+	} else {
+		for (i = 0; i < avail; i++)
+			*p++ = *rd++;
+		rd = buf;
+		for (; i < n; i++)
+			*p++ = *rd++;
 	}
 	return 0;
 }
 template <class T>
 int Queue<T>::write(T *p, unsigned num)
 {
-	int room = (last - wr) + 1;	/* to the end of the store */
 	int i;
+	int n;
 
 	if (size - count() - 1 < num)
 		return -1;
 
-	if (room < (int)num) {
-		T *q = wr;
+	n = (int)num;
 
-		for (i = 0; i < room; i++)
-			*q++ = *p++;
-		q = buf;
-		for (; i < (int)num; i++)
-			*q++ = *p++;
-		wr = q;
-	} else {
-		for (i = 0; i < (int)num; i++)
+	int room = (last - wr) + 1;	/* to the end of the store */
+
+	if (room >= n) {
+		for (i = 0; i < n; i++)
 			*wr++ = *p++;
 		if (wr == last + 1)
 			wr = buf;
+	} else {
+		for (i = 0; i < room; i++)
+			*wr++ = *p++;
+		wr = buf;
+		for (; i < n; i++)
+			*wr++ = *p++;
 	}
 	return 0;
 }

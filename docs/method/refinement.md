@@ -1197,8 +1197,8 @@ observation boundary, rather than treating one source spelling as mandatory.
 One real upstream loss is retained explicitly: `V92Modulator` C2 is BYTES7
 instead of EXACT734. A current-input cross identifies `Queue::write`'s existing
 `isFull()` predicate as the cause. Reverting only that predicate restores the
-constructor but loses the native EXACT85 queue writer and worsens `progress`
-from BYTES55 to BYTES70. Both complete source bodies reproduce this header
+constructor but changes the native EXACT85 queue writer to SIZE14 (71 bytes
+against 85 native) and worsens `progress` from BYTES55 to BYTES70. Both complete source bodies reproduce this header
 effect. Retain the supported queue implementation and investigate the coupled
 constructor recovery next; do not restore the older expression solely to protect
 its bystander. The specific scratch/renaming cause still requires compiler dumps.
@@ -1228,6 +1228,115 @@ must read the same `.ldcontext` declarations as the link stage. The full default
 test list uses newlines; space-only substring selection silently omitted both
 context objects. Keep the failure evidence, repair apparatus, and rerun the
 period gate without changing the oracle or source to accommodate it.
+
+## V92: block copies, captured inputs and shared instantiation (2026-11-08)
+
+At baseline `9eb32e79a`, V92Modulator emits 30 shared function copies, 25 EXACT.
+The recovered Queue block read is 197/native 197 bytes (previously 215); block
+write is 211/native 211 (previously 213); progress is 1075/native 1075, from BYTES55.
+The paired template boundary also recovers C2 EXACT734. Scalar Queue write
+remains EXACT85. These are four whole-function promotions; the mk partial below
+is recorded separately.
+
+Both block entries reject capacity using the unsigned ABI argument, then consume
+a signed length for their copy comparisons and loops. Native acquires the
+contiguous bound after the guard, lays out the non-wrapping arm first and
+publishes the owner cursor after each element in both arms. Combining those
+properties and an ordinary consumed signed local recovers both complete bodies.
+The unsigned formal and object layout are unchanged. Native signed consumption
+does not identify a unique original local declaration.
+
+The intermediate losses mattered. Moving only write's bound after the guard
+recovers C2 while making block write's gap larger. The completed write repair
+keeps C2 EXACT too; adding the independently exact read changes C2 back to
+BYTES7. Preserve these controls and repair the coupled boundary rather than
+freezing either exact helper or restoring a less faithful queue algorithm.
+
+Progress needs two independently supported captures. A count-value snapshot
+between `eventCode = 0` and `symbolCount += n` admits the native queue-load group.
+Capturing `txFilter` before the buffer pointer admits the native shaping-call
+producer group. Separately these leave BYTES27 and BYTES28; together progress
+is EXACT. Whole native correspondence bounds each root, offset and width; the
+source order does not require every machine read to remain at that position.
+
+The remaining C2 cause is the local bulk Scrambler instantiation. Native has an
+out-of-line call to `Scrambler<int,unsigned char>::process` and strong-method
+order mk→progress→reset→C1→C2. Current local instantiation instead postpones
+progress until after the constructors despite the textual definitions' order.
+A per-member `extern template` declaration suppresses process and its otherwise
+local copyHistoryTail dependency and restores the complete native strong order.
+The existing V90Modulator TU explicitly provides the member; that provider's
+complete object remains literally unchanged. This is a documented G++ 3.4.2
+forward-instantiation extension, not an added assembly or compiler option.
+
+The V92 copy denominator changes 30→28: two duplicate weak bodies disappear
+locally and remain supplied, EXACT and weak/default-visible, by V90. Across
+both TUs there are 53 emitted copies and 49 unique names; the unique program
+closure must still be measured. Do not count omitted copies as promotions.
+Native coalesced weak sections do not prove uniquely original instantiation
+ownership or spelling. The specialization-declaration control is diagnostic
+only: it has no established matching specialization definition. Use the paired
+instantiation declaration/definition and check both provider and consumer.
+
+Repeated ordinary, dump, native-host and read-only-observer builds reproduce
+these objects. Constructor streams agree through flow2 after resolving emitted
+constant labels by payload, then differ at peephole2. Suppressing process moves
+progress's real searches before reset; C2 enters cursor 0 instead of 2 and becomes
+EXACT. C1 reconverges by renaming. Do not erase unresolved early constant labels
+or describe a register-renamed contiguous run as a literal suffix. A diagnostic
+no-unit-at-a-time profile changes order but leaves C2 wrong and loses exact
+neighbours; it is not retained.
+
+The mk partial restores native early FABS lifetime, full-width sign transport
+and the late float read at root+0x24. Direct argument expressions preserve the
+existing explicit extended subtraction/multiplication, fabsf whole conversion,
+integer absolute value and format. Helper-call argument trees can be precomputed
+before outgoing argument publications even when they later inline; CSE then
+reuses a field that native reloads after those stores. Matching calls.c explains
+that boundary. No volatile, new alias type or artificial use is introduced.
+The retained candidate is 648/native 662 bytes, from 653/native 662: its SIZE gap
+worsens 9→14. Its restored native operations justify the partial; it is not an
+EXACT/REGALLOC gain or a uniquely recovered macro. The residual comparison-tree
+and block-placement choices remain open. If/else controls recover CMP2/DEC1 but
+leave SIZE40; repeating case-order or helper/local/sign palettes adds no witness.
+Reopen with a discriminator for the native register-loaded scale or remaining
+block-placement/lifetime decisions, carrying the argument boundary forward.
+
+Sol High recovered the block methods and progress. Extra High's 13 scored cells
+closed no remaining target; the required Astra escalation recovered C2 and the
+mk feature boundary. Neither model identity nor these samples establish cost
+efficiency; actual token and billing measurements are unavailable. Retained
+objects are independently rebuilt and the paired boundary receives independent
+ABI, compiler and ownership review. The evidence ledger records separate trial
+and validation denominators.
+
+Focused constructor/Queue/state checks cover constructed component graphs,
+wrap/drain and signalling-NaN copies, plus labelled planted protocol states.
+The new 13-case diagnostic probe uses constructed buffers, phase 0.5 and a pending
+offset request, comparing native transcripts around signed zero and adjacent
+fractional/whole truncation boundaries. It is a synthetic component probe, not
+negotiated V.92 reachability. No tolerance or oracle is weakened.
+
+The periodic 300-object graph screen also exposes two SpectralShaper nominations
+that pair different loop guards. Audit flag origin and iteration identity before
+transferring an observation-age hypothesis; bounded graph matches are not an
+operation-age proof. The read-only next source nominee is V90Modulator progress:
+three native symbol-buffer loads at root+0x68 occur after generateSymbol calls,
+while the current assignment expressions acquire that pointer before the calls.
+Test the two mixed-loop captures, the fixed phase-4 capture and their combination
+in the full TU; retain its remaining event-tail and x87 obligations explicitly.
+
+The final `make phase J=8` passes 404 period tests with zero failures. The
+focused fixtures pass 797,129 checks across 20 sections, including 2,250 new
+diagnostic-boundary checks. Fresh classification records 1,235 EXACT, 35 REGALLOC
+and 582 NONMATCH across 1,852 symbols, zero unresolved, and 1,238 link-selected
+EXACT. No previous EXACT or matched name is lost. Only one of 300 production
+objects changes; the explicit V90 provider remains raw-neutral. The strict
+semantic/raw partial-object comparisons both remain DIFFERENT.
+
+The [wave ledger](../evidence/v92mod-coupling-20261108.json) records frozen
+inputs, individual model efforts, crossed controls, complete closure and final
+validation. Full-object byte identity remains a separate measured goal.
 
 ## Resolving an owner declaration after an alias-contract recovery
 
