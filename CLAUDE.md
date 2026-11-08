@@ -295,7 +295,13 @@ Recover supported call/inline boundaries and share the implementation where
 appropriate; validate the public out-of-line entry and all affected consumers.
 
 Use GPT-6.1 Sol at High as the provisional default for reconstruction and
-investigation agents. Use Extra High (`xhigh`) for difficult causal inference,
+investigation agents. **If Sol High and Extra High investigations produce no
+EXACT/REGALLOC recovery, escalate to Astra before parking the function.** This
+is the owner's escalation rule (2026-11-08); partial SIZE/BYTES progress alone
+does not close it. Give Astra the frozen inputs, native witnesses, tested
+families and qualified negatives, then independently validate any new source
+or coupled repair. Record what it added, including no further recovery.
+Use Extra High (`xhigh`) for difficult causal inference,
 interacting source/type changes or a high-impact negative conclusion when more
 reasoning is justified. Delegate mechanical work to cheaper models when its
 validation is well defined. Consider Astra for independent/adversarial review,
@@ -305,7 +311,8 @@ extra run before every independent review. The pilot compared both models at
 High; Sol Extra High versus Astra efficiency remains unmeasured. Record actual
 effort, usage when exposed, and cost per independently validated result rather
 than inferring efficiency from model price or effort labels alone.
-These are escalation candidates, not a claim that Astra is always better.
+Earlier Astra review remains available for those reasons; the required
+post-High/Extra-High escalation does not claim that Astra is always better.
 Record what an escalation added, including attempts that added nothing, and
 periodically sample completed or negative Sol investigations for missed fixes.
 Keep final decisions tied to independently checked evidence, not model identity.

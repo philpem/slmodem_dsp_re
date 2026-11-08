@@ -48,6 +48,14 @@ questions and the evidence that would reopen it. A smaller byte gap or an
 unexplained compiler-stage label is not a completed investigation. Deep dives
 have declared limits; this rule does not require endless source permutations.
 
+**Escalate to Astra when Sol High and Extra High have produced no EXACT/REGALLOC
+recovery before parking the function** (owner instruction, 2026-11-08). Partial
+SIZE/BYTES progress alone does not satisfy this escalation condition. Preserve
+the frozen evidence and tested negative domains, give Astra room for a fresh
+causal/source hypothesis, and validate its output against the same period and
+complete-TU obligations. Record what the escalation added, even if no recovery
+results. Model identity does not establish correctness or efficiency.
+
 On the next recovery turn, review the additions from the preceding deep dive
 and screen other functions for the same mechanism. Require a fresh native
 witness before transferring a source change. Record where the lesson applies,
@@ -1072,6 +1080,50 @@ the closed echo-order, short-beta, shared-publication or Boolean-capture domains
 without such a constraint. Transfer the actual-member/result-lifetime lesson
 next to GetCurrentTxBitRate after its prior-control audit, crossing supported
 changes with both minimum-power arm orientations across the complete TU.
+
+## TxBitRate: Astra closes the shared-result cross (2026-11-08)
+
+The [follow-up](../txrate-recovery-20261108.md) recovers
+VPcmV34GetCurrentTxBitRate EXACT213 in both minimum-power orientations. High's
+44 scored cells and Extra High's76 had no promotion; mandatory Astra escalation
+adds the missing interacting source cross. All41 protected Main copies survive.
+Minimum power remains BYTES29/current and BYTES45/alternate: the earlier exact
+getter does not automatically recover that later function.
+
+Inspect the mode of each arithmetic operation. Native FMULS keeps a float
+reciprocal, while FLDS/FADDP performs the addition wider than float. A four-byte
+constant pool entry does not establish the sum's mode. The existing
+V90Demodulator::getBitRate/F8060 product-only widening is the internal source
+control; operand commutation and whole-expression widening are not substitutes.
+Double/XF-compatible spellings do not recover a unique original declaration.
+
+Direct fallback access and wider addition alone remain inexact. The PCM status
+switch removes status/result interference; a shared integer result changes the
+return-edge predictor and places K56 before V92. The final source-role order
+then prevents rnreg moving fallback EAX to ECX. With all arithmetic/direct-
+fallback/switch properties fixed: direct returns with either role order give
+BYTES135; shared result/non-PCM-first gives BYTES2; shared result/PCM-first
+gives EXACT213. BBRO still emits native non-PCM-first machine order. Trace
+branch prediction, live ranges and source block identity before attributing
+placement to source case order alone.
+
+Astra audits54 scored cells, with original-order56 functions,103 exports,
+225 CALLs and81 data continuations preserved. Ordinary/dump controls reproduce
+literally. Float-pool raw reorders are recorded separately from canonical
+constant-target equality; they are not whole-object raw identity.
+
+The separate Astra minimum-power review has24 scored cells and no promotion.
+It does recover a better declared-member spelling: `short want =
+cfg->unnamed_0044` is raw-neutral in both orientations and eliminates the
+incompatible short-pointer read. The model stays int for32-bit transport;
+period output still consumes the signed low word. The old raw-access requirement
+in the header comment is retired. This is a source cleanup, not another grade win.
+
+The valid construction survey reaches only status0/ratecfg.txbits0, so no
+redundant zero-only permanent fixture is added. Existing arithmetic/gate probes
+remain explicitly synthetic; an actual protocol history into ready PCM is still
+unproved. The report records current period validation and full-TU/300-object
+effects, the escalation's added evidence and the next native-backed target.
 
 ## Resolving an owner declaration after an alias-contract recovery
 

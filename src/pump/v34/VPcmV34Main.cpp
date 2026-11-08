@@ -717,8 +717,9 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * FIVE ARMS.  Two of them are the same eleven instructions over two different
  * chains and two different constants, and the object SHARES THEIR TAIL --
  * 0x7073 jumps back into 0x700d, so the rounding sequence exists once.  That
- * is a code-generation fact and not a source one; what the source has to have
- * is one expression written twice, which is what is below.
+ * is a code-generation fact. The separate expressions below are one compatible
+ * source form; the shared machine tail does not determine source duplication
+ * or whether an arithmetic helper was inlined.
  *
  *   role != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
  *                                  its +0x40, one indirection, +0x04 of that,
@@ -737,9 +738,11 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  *     6fcb  74 24              je     6ff1
  *     6fcd  83 c4 14  c3       add;ret                     <- 0 goes out
  *
- * Neither object is modelled anywhere in this tree, so both are reached as
- * bytes; +0x2c is a state the two share and 3 is the only value either is
- * tested against.
+ * Both chains use declared members: V90Modulator::state and
+ * V92Modulator::phase are at +0x2c, with their frame records at +0x40/+0x4c.
+ * The count is consumed as an unsigned 32-bit value reached through
+ * mapper->bitsPerFrame or transmitter->K, each at its final owner's +0x04.
+ * PCMTX_READY names the native state comparison against 3.
  *
  * 8000/6 AND 8000/12 ARE THE TWO PCM FRAME GRANULARITIES, and they are the
  * whole reason the two arms differ -- see `V90Demodulator::getBitRate`, which
@@ -752,8 +755,8 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
  * pad_6124`, a pointer read out of a four-byte pad.  It is the SAME field
  * the V.90 arm spells `sess->modem.modulator`, one class along: +0x6124 is
  * where the `VPcmFloModem`'s `V92Modem` starts and +0x000 of a `V92Modem` is
- * its `V92Modulator *`.  The construction path named the member; the offset
- * and the read are unchanged, and nothing here was re-measured.
+ * its `V92Modulator *`. The construction path names the member; the checked
+ * owner-relative offsets agree with the native chain above.
  *
  * The conversion in and out is UNSIGNED at both ends, by the same `fildll`
  * off a zeroed high word and `fistpll` with the low half taken that settled
@@ -863,19 +866,6 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 #define CFG_FLAG3_PHASE2	2
 #define CFG_FLAG2_SAMELINE	0x20
 #define CFG_FLAG51_CLEAR	1
-
-/*
- * +0x44 of `pac3c`, `unnamed_0044` in modem_params.h: a transmit power
- * reduction in dB, written 32-bit by the host and read here as a SHORT
- * (`movswl 0x44`, clamped to [-10,+7]). The retained member models the
- * measured 32-bit transport; that store does not uniquely establish the
- * original declaration. This reader preserves the native signed low-halfword
- * consumption at the complete configuration owner's checked member offset.
- * The intervening byte view does not itself establish short-access alias
- * legality; the original declaration and alias model remain unresolved.
- */
-#define CFG_MINPWR_DB	((int)__builtin_offsetof(struct _tagModemParameters, \
-							unnamed_0044))
 
 /* The retrain detector's three thresholds and its block length. */
 #define NOTCH_BLOCK		0x40
@@ -2850,44 +2840,41 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg = &obj->ratecfg;
-	unsigned int n;
+	int rate;
 
-	/*
-	 * ONE `txbits` SITE AND NOT TWO.  The object reaches its
-	 * `movswl 0xaa88; imul $0x960` at 0x6fe0 from BOTH the role-0x66
-	 * switch falling through and the `ja` at 0x6fbd, so the arms that do
-	 * not answer fall out of the `if` rather than each returning the
-	 * configuration themselves.  Written that way here: a second copy is
-	 * a second thing to keep in step, and the mutation that made it read
-	 * `txbits` unsigned found only one of them.
-	 */
-	if (obj->role != PCM_ROLE) {
+	if (obj->role == PCM_ROLE) {
+		switch (obj->status) {
+		case 2: {
+			V92Modulator *tx = sess->v92modem.modulator;
+
+			rate = tx->phase == PCMTX_READY
+			    ? (unsigned)((double)((unsigned)tx->bitsToSymbol
+						->transmitter->K * 8000u
+						* (1.0f / 12.0f)) + 0.5f)
+			    : 0u;
+			break;
+		}
+		case 3:
+			rate = K56FLEX_TX_BITRATE;
+			break;
+		default:
+			rate = obj->ratecfg.txbits * (int)RATE_STEP;
+			break;
+		}
+	} else {
 		if ((unsigned)(obj->status - 1) <= 1) {
 			V90Modulator *tx = sess->modem.modulator;
 
-			if (tx->state != PCMTX_READY)
-				return 0;
-
-			n = tx->bitsToSymbol->mapper->bitsPerFrame;
-
-			return (int)(unsigned)(n * 8000u * (1.0f / 6.0f)
-					       + 0.5f);
+			rate = tx->state == PCMTX_READY
+			    ? (unsigned)((double)((unsigned)tx->bitsToSymbol
+						->mapper->bitsPerFrame * 8000u
+						* (1.0f / 6.0f)) + 0.5f)
+			    : 0u;
+		} else {
+			rate = obj->ratecfg.txbits * (int)RATE_STEP;
 		}
-	} else if (obj->status == 2) {
-		V92Modulator *tx = sess->v92modem.modulator;
-
-		if (tx->phase != PCMTX_READY)
-			return 0;
-
-		n = tx->bitsToSymbol->transmitter->K;
-
-		return (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);
-	} else if (obj->status == 3) {
-		return K56FLEX_TX_BITRATE;
 	}
-
-	return cfg->txbits * (int)RATE_STEP;
+	return (int)rate;
 }
 
 int
@@ -3068,7 +3055,19 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	const struct _tagModemParameters *cfg = obj->pac3c;
 	V90Parameters *pcm;
-	short want = *(const short *)((const unsigned char *)cfg + CFG_MINPWR_DB);
+
+	/*
+	 * +0x44 of `pac3c`, `unnamed_0044` in modem_params.h: a transmit power
+	 * reduction in dB, written 32-bit by the host and read here as a SHORT
+	 * (`movswl 0x44`, clamped to [-10,+7]). The retained member models the
+	 * measured 32-bit transport; that store does not uniquely establish the
+	 * original declaration. This reader preserves the native signed low-halfword
+	 * consumption at the complete configuration owner's checked member offset.
+	 * Initializing the short from the declared transport member preserves that
+	 * consumption without dereferencing an incompatible short pointer. It does
+	 * not establish a unique original field declaration.
+	 */
+	short want = cfg->unnamed_0044;
 	short red;
 
 	if (want < -10)

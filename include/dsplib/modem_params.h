@@ -291,9 +291,9 @@ struct _tagModemParameters {
 			 * power reduction in whole dB.  Written 32-bit by
 			 * loadModemParamsData but read as a `short` by
 			 * GetVPcmMinimalTxPowerReduction (movswl 0x44,
-			 * clamped to [-10,+7]) -- the widths disagree, so
-			 * the field stays `int` and that reader keeps its
-			 * raw access. */
+			 * clamped to [-10,+7]). The field stays `int` for
+			 * transport; explicit narrowing at the reader emits
+			 * the native signed low-word read. */
 	int		connectionType;		/* +0x048 */
 	int		clockDeviation;		/* +0x04c */
 	unsigned char	modeFlags;		/* +0x050 */
